@@ -51,6 +51,18 @@ docker compose --env-file .env -f deploy/compose.yaml up -d --build --wait
 
 Install the rendered Nginx site, run `nginx -t`, and only then reload Nginx. Keep the existing Certbot certificate when replacing an application behind an established domain.
 
+### Protect the first-owner bootstrap
+
+An empty public installation must not leave `POST /api/v1/bootstrap` open unattended: the first successful request creates the organization owner. Until the intended owner is ready, temporarily block that exact route in Nginx while leaving `/api/v1/bootstrap/status` available:
+
+```nginx
+location = /api/v1/bootstrap {
+    return 403;
+}
+```
+
+Remove the block only while provisioning the first owner, verify that `bootstrap/status` returns `{"bootstrapped":true}`, then keep the route unblocked; Core rejects any later bootstrap attempt with `409`.
+
 ## Verification
 
 ```bash
