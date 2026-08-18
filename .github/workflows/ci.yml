@@ -12,19 +12,20 @@ jobs:
   go:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-go@v5
         with:
           go-version-file: core/go.mod
           cache-dependency-path: core/go.sum
       - run: gofmt -w core && git diff --exit-code
+      - run: cd core && go tool oapi-codegen --config internal/api/oapi-codegen.yaml ../packages/protocol/openapi.yaml && git diff --exit-code
       - run: go test ./core/...
       - run: go build ./core/...
 
   typescript:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
         with:
           version: 10.32.1
@@ -40,6 +41,12 @@ jobs:
 
   compose:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: docker compose --env-file .env.example -f deploy/compose.yaml config --quiet
+      - run: docker compose --env-file .env.example -f deploy/compose.yaml build core web agent-runtime
+      - run: ENV_FILE=.env.example make smoke
+      - name: Stop Compose services
+        if: always()
+        run: docker compose --env-file .env.example -f deploy/compose.yaml down

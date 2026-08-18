@@ -72,7 +72,7 @@
 - Никаких gRPC между "микросервисами" в v1.
 
 ### 2.2 Стек ядра
-- Go 1.23+, стандартный `net/http` + `chi` для роутинга
+- Go 1.26.5+, стандартный `net/http` + `chi` для роутинга
 - Postgres 16 через `pgx` (без ORM; `sqlc` для типобезопасных запросов, `goose` или `atlas` для миграций)
 - WebSocket: `nhooyr.io/websocket` (или `gorilla/websocket`)
 - Очереди/фон: `river` (Postgres-backed) - позволяет не тащить Redis в базовой поставке
@@ -382,12 +382,12 @@ GET    /events?since=seq               резервный long-poll
 ## 7. Пошаговый план
 
 ### [Фаза 0. Подготовка (неделя 1)](phases/00-preparation.md)
-- [ ] Название, домен, лицензия (см. п. 8), репозитории
-- [ ] Монорепа: `core/` (Go), `packages/protocol`, `apps/web`, `apps/agent-runtime`; mobile позже
-- [ ] CI: lint, test, build, docker-образы
-- [ ] ADR-папка с решениями из раздела 2 (по одному файлу на решение)
-- [ ] Docker-compose для разработки: Postgres 16 + pgvector, MinIO, Caddy
-- [ ] OpenAPI-скелет и кодоген в обе стороны
+- [x] Название, лицензия и публичный репозиторий
+- [x] Монорепа: `core/` (Go), `packages/protocol`, `apps/web`, `apps/agent-runtime`; mobile позже
+- [x] CI: lint, test, build, кодоген, Compose smoke и docker-образы
+- [x] ADR-папка с решениями из раздела 2
+- [x] Docker Compose для разработки: Postgres 16 + pgvector и MinIO; reverse proxy перенесён в production-фазу
+- [x] OpenAPI-скелет и кодоген Go/TypeScript
 
 ### [Фаза 1. Ядро: данные и auth (недели 2-3)](phases/01-core-auth.md)
 - [ ] Миграции по схеме п. 3

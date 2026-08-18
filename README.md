@@ -22,7 +22,7 @@ docs/                Product, architecture and phase documents
 
 ## Prerequisites
 
-- Go 1.23+
+- Go 1.26.5+
 - Node.js 22+
 - pnpm 10+
 - Docker with Compose v2
@@ -41,9 +41,16 @@ The web application is available at `http://localhost:5173`, the API at `http://
 ```sh
 make test
 make build
+make generate
 docker compose --env-file .env.example -f deploy/compose.yaml config --quiet
+```
+
+To verify the complete stack without creating a local `.env`, run:
+
+```sh
+ENV_FILE=.env.example make smoke
 ```
 
 ## Status
 
-The repository is at Phase 0. Product behavior is specified, but user-facing functionality has not been implemented yet.
+Phase 0 infrastructure is implemented. The next increment is the first product slice: authentication, an organization, chats/channels and membership.

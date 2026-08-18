@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/comamessenger/comamessenger/core/internal/config"
+	"github.com/comamessenger/comamessenger/core/internal/database"
 	serverhttp "github.com/comamessenger/comamessenger/core/internal/http"
 )
 
@@ -32,9 +33,28 @@ func main() {
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	startupCtx, startupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer startupCancel()
+
+	if err := database.Migrate(startupCtx, cfg.DatabaseURL); err != nil {
+		logger.Error("database migration failed", "error", err)
+		os.Exit(1)
+	}
+	if len(os.Args) == 2 && os.Args[1] == "migrate" {
+		logger.Info("database migrations applied")
+		return
+	}
+
+	pool, err := database.NewPool(startupCtx, cfg.DatabaseURL)
+	if err != nil {
+		logger.Error("database connection failed", "error", err)
+		os.Exit(1)
+	}
+	defer pool.Close()
+
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           serverhttp.NewHandler(logger, cfg.PublicAppURL),
+		Handler:           serverhttp.NewHandler(logger, cfg.PublicAppURL, pool.Ping),
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
@@ -42,15 +62,21 @@ func main() {
 	shutdownSignals, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	serveErrors := make(chan error, 1)
 	go func() {
 		logger.Info("http server started", "address", cfg.HTTPAddr, "environment", cfg.AppEnv)
-		if serveErr := server.ListenAndServe(); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+		serveErrors <- server.ListenAndServe()
+	}()
+
+	select {
+	case serveErr := <-serveErrors:
+		if !errors.Is(serveErr, http.ErrServerClosed) {
 			logger.Error("http server failed", "error", serveErr)
 			os.Exit(1)
 		}
-	}()
-
-	<-shutdownSignals.Done()
+		return
+	case <-shutdownSignals.Done():
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

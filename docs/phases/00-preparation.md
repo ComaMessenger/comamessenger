@@ -4,6 +4,12 @@
 
 Создать воспроизводимый каркас проекта, который новый разработчик может запустить локально одной документированной последовательностью команд. В конце фазы backend отвечает на health-check, web-клиент открывается, Postgres и S3-совместимое хранилище доступны, миграции и кодоген запускаются одинаково локально и в CI.
 
+## Статус на 18 августа 2026
+
+Базовый каркас реализован и проверен полным Compose smoke-тестом на macOS: образы собираются, Postgres и MinIO становятся healthy, миграция goose применяется идемпотентно, `pgvector` доступен, приватный bucket создаётся, а `/healthz` и `/readyz` возвращают `200`. Повторный запуск с теми же volumes также проверен. Linux-проверка выполняется в GitHub Actions.
+
+Из необязательных для первого продуктового среза пунктов остаются YAML-конфигурация и клиентский router: YAML будет добавлен только при появлении настроек, которым неудобно жить в environment/secrets, а router — вместе с auth-экранами в фазе 1. Локальный Caddy не нужен; reverse proxy относится к production-профилю фазы 7.
+
 ## В scope
 
 - окончательное название репозитория и рабочих Go/JS-модулей согласно ADR-0004;
@@ -11,7 +17,7 @@
 - структура монорепозитория и правила зависимостей между пакетами;
 - Go backend, React web shell и общий пакет протокола;
 - Docker Compose для Postgres 16 + pgvector и MinIO;
-- единая конфигурация через environment variables и опциональный YAML;
+- единая конфигурация через environment variables/secrets; YAML зарезервирован для будущих сложных настроек;
 - OpenAPI-скелет, генерация Go-типов и TypeScript-клиента;
 - система миграций и пустая начальная миграция;
 - базовые health/readiness endpoints;
@@ -36,55 +42,58 @@
 
 ### Репозиторий и инструменты
 
-- [ ] Создать корневые каталоги `core`, `apps/web`, `apps/agent-runtime`, `packages/protocol`, `deploy`, `docs`.
-- [ ] Настроить `pnpm-workspace.yaml` и Turborepo для JS/TS-пакетов.
-- [ ] Зафиксировать версии Go, Node.js и pnpm в репозитории.
-- [ ] Добавить единые команды `make dev`, `make test`, `make lint`, `make generate`, `make migrate` либо эквивалентный task runner.
-- [ ] Добавить `.editorconfig`, настройки форматирования, `.gitignore` и `.env.example` без секретов.
-- [ ] Описать правила импортов: приложения могут зависеть от `packages/*`, но пакеты протокола не зависят от приложений.
+- [x] Создать корневые каталоги `core`, `apps/web`, `apps/agent-runtime`, `packages/protocol`, `deploy`, `docs`.
+- [x] Настроить `pnpm-workspace.yaml` и Turborepo для JS/TS-пакетов.
+- [x] Зафиксировать версии Go, Node.js и pnpm в репозитории.
+- [x] Добавить единые команды `make dev`, `make test`, `make lint`, `make generate`, `make migrate` и `make smoke`.
+- [x] Добавить `.editorconfig`, настройки форматирования, `.gitignore` и `.env.example` без production-секретов.
+- [x] Зафиксировать направление зависимостей: приложения могут зависеть от `packages/*`, но protocol/shared packages не зависят от приложений.
 
 ### Backend shell
 
-- [ ] Инициализировать Go-модуль и базовую структуру `cmd/server`, `internal/config`, `internal/http`, `internal/storage`, `internal/database`.
-- [ ] Добавить graceful shutdown, request ID, structured logging через `slog` и единый error envelope.
-- [ ] Реализовать `GET /healthz` для liveness и `GET /readyz` с проверкой Postgres.
-- [ ] Настроить `pgx` pool с таймаутами и диагностикой подключения.
-- [ ] Выбрать и подключить инструмент миграций; запретить неявный rollback при ошибке старта.
+- [x] Инициализировать Go-модуль и базовую структуру `cmd/server`, `internal/config`, `internal/http`, `internal/storage`, `internal/database`.
+- [x] Добавить graceful shutdown, request ID, structured logging через `slog` и единый error envelope.
+- [x] Реализовать `GET /healthz` для liveness и `GET /readyz` с проверкой Postgres.
+- [x] Настроить `pgx` pool с таймаутами и диагностикой подключения.
+- [x] Подключить `goose` с миграциями, встроенными в бинарник; при ошибке старта rollback не запускается.
 
 ### Web shell
 
-- [ ] Инициализировать React + TypeScript + Vite.
-- [ ] Подключить маршрутизацию, базовый error boundary и runtime-конфигурацию URL API.
-- [ ] Создать нейтральный экран готовности приложения с отображением состояния backend.
-- [ ] Заложить design tokens: цвета, типографика, размеры, радиусы, тени и интервалы без разработки продуктовых компонентов.
+- [x] Инициализировать React + TypeScript + Vite.
+- [ ] Подключить маршрутизацию вместе с первыми auth-маршрутами фазы 1.
+- [x] Добавить базовый error boundary и конфигурацию URL API через environment.
+- [x] Создать нейтральный экран готовности приложения с отображением состояния backend.
+- [x] Заложить design tokens: цвета, типографика, размеры, радиусы, тени и интервалы без разработки продуктовых компонентов.
 
 ### Протокол и кодоген
 
-- [ ] Создать OpenAPI 3.1 документ с `/healthz`, `/readyz`, схемами ошибки и метаданными версии.
-- [ ] Настроить детерминированную генерацию Go server types и TypeScript API client.
-- [ ] Добавить CI-проверку, что кодоген не оставляет незакоммиченный diff.
-- [ ] Зафиксировать правила совместимости `/api/v1` и формат идентификаторов/времени.
+- [x] Создать OpenAPI 3.1 документ с `/healthz`, `/readyz`, схемами ошибки и метаданными версии.
+- [x] Настроить детерминированную генерацию Go API types и TypeScript API client.
+- [x] Добавить CI-проверку, что кодоген не оставляет незакоммиченный diff.
+- [x] Зафиксировать правила совместимости `/api/v1` и формат идентификаторов/времени.
 
 ### Локальная инфраструктура
 
-- [ ] Создать Compose-сервисы `postgres`, `minio`, `core`, `web` с health-checks и именованными volumes.
-- [ ] Автоматически создавать локальный bucket без выдачи публичного доступа.
-- [ ] Разделить внутренние адреса контейнеров и публичные адреса браузера.
-- [ ] Проверить работу на macOS, Linux и Docker Desktop.
+- [x] Создать Compose-сервисы `postgres`, `minio`, `core`, `web` с health-checks и именованными volumes.
+- [x] Автоматически создавать локальный bucket без выдачи публичного доступа.
+- [x] Разделить внутренние адреса контейнеров и публичные адреса браузера.
+- [x] Проверить работу на macOS/Docker Desktop; Linux проверяется в GitHub Actions.
 
 ### CI
 
-- [ ] Проверять форматирование, lint, unit tests, OpenAPI и сборку Go/TypeScript.
-- [ ] Поднимать Postgres с pgvector, применять миграции вперёд на чистой базе.
-- [ ] Собирать Docker images без публикации в registry.
-- [ ] Добавить dependency cache без кэширования секретов и `.env`.
+- [x] Проверять форматирование, lint, unit tests, OpenAPI и сборку Go/TypeScript.
+- [x] Поднимать Postgres с pgvector и применять миграции вперёд на чистой базе через Compose smoke-test.
+- [x] Собирать Docker images без публикации в registry.
+- [x] Добавить dependency cache без кэширования секретов и `.env`.
 
 ## Контракты и данные
 
 - `GET /healthz` возвращает `200`, если процесс способен обслуживать HTTP.
 - `GET /readyz` возвращает `200` только при доступном Postgres и завершённых обязательных инициализациях.
 - Ошибка API имеет стабильную форму `{code, message, request_id, details?}`.
-- Базовые переменные: `APP_ENV`, `HTTP_ADDR`, `DATABASE_URL`, `PUBLIC_APP_URL`, `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_FORCE_PATH_STYLE`.
+- Базовые переменные: `APP_ENV`, `HTTP_ADDR`, `DATABASE_URL`, `PUBLIC_APP_URL`, `S3_ENDPOINT`, `S3_PUBLIC_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_PREFIX`, `S3_FORCE_PATH_STYLE`.
+- `S3_ENDPOINT` необязателен: пустое значение позволяет AWS SDK выбрать стандартный endpoint. Для Yandex Object Storage, Selectel, MinIO и других совместимых сервисов задаётся endpoint провайдера. Статические ключи также необязательны, чтобы production мог использовать IAM/instance credentials; если задан один ключ, второй обязателен.
+- `S3_FORCE_PATH_STYLE=false` подходит AWS и большинству virtual-hosted endpoints; `true` используется локальным MinIO и провайдерами, которым нужен path-style.
 - Секреты читаются из environment/secrets и не записываются в YAML репозитория или логи.
 
 ## Критерии приёмки
@@ -107,9 +116,9 @@
 ## Риски и открытые вопросы
 
 - Проверить корректность лицензионной карты и SPDX identifiers перед первым публичным релизом.
-- Выбрать `goose` или `atlas`; в дальнейшем не смешивать два инструмента миграций.
-- Уточнить, нужен ли Caddy уже для локальной разработки или только в production-профиле Compose.
-- Согласовать package/module name после выбора окончательного названия проекта.
+- Миграции: выбран `goose`; второй инструмент параллельно не используется.
+- Caddy: только production-профиль, локальный Compose публикует порты напрямую.
+- Идентичность: `ComaMessenger`, Go module `github.com/comamessenger/comamessenger/core`, npm scope `@comamessenger`.
 
 ## Definition of Done
 
