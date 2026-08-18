@@ -12,8 +12,8 @@ jobs:
   go:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: core/go.mod
           cache-dependency-path: core/go.sum
@@ -25,11 +25,11 @@ jobs:
   typescript:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
         with:
           version: 10.32.1
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: pnpm
@@ -43,7 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - run: docker compose --env-file .env.example -f deploy/compose.yaml config --quiet
       - run: docker compose --env-file .env.example -f deploy/compose.yaml build core web agent-runtime
       - run: ENV_FILE=.env.example make smoke
