@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: ComaMessenger API
-  version: 0.1.0
+  version: 0.2.0
 servers:
   - url: http://localhost:8080
 paths:
@@ -179,6 +179,119 @@ paths:
           description: Chat visible to the current member.
           content: { application/json: { schema: { $ref: "#/components/schemas/Chat" } } }
         "404": { $ref: "#/components/responses/Error" }
+    patch:
+      operationId: updateChat
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/ChatId" }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateChatRequest" } } }
+      responses:
+        "200":
+          description: Updated chat.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Chat" } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: archiveChat
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/ChatId" }
+      responses:
+        "204": { description: Chat archived. }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/chats/discover:
+    get:
+      operationId: discoverChats
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Public chats the current user has not joined.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [chats]
+                properties:
+                  chats: { type: array, items: { $ref: "#/components/schemas/DirectoryChat" } }
+  /api/v1/chats/{chat_id}/join:
+    post:
+      operationId: joinChat
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/ChatId" }
+      responses:
+        "200":
+          description: Joined public chat, or current membership.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Chat" } } }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v1/chats/{chat_id}/members:
+    get:
+      operationId: listChatMembers
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/ChatId" }
+      responses:
+        "200":
+          description: Active chat members.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [members]
+                properties:
+                  members: { type: array, items: { $ref: "#/components/schemas/ChatMember" } }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: addChatMember
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/ChatId" }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AddChatMemberRequest" } } }
+      responses:
+        "201":
+          description: Member added.
+          content: { application/json: { schema: { $ref: "#/components/schemas/ChatMember" } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /api/v1/chats/{chat_id}/members/{actor_id}:
+    patch:
+      operationId: updateChatMember
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/ChatId" }
+        - { $ref: "#/components/parameters/ActorId" }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateChatMemberRequest" } } }
+      responses:
+        "200":
+          description: Member role updated.
+          content: { application/json: { schema: { $ref: "#/components/schemas/ChatMember" } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: removeChatMember
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/ChatId" }
+        - { $ref: "#/components/parameters/ActorId" }
+      responses:
+        "204": { description: Member removed. }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -189,6 +302,17 @@ components:
     Tokens:
       description: Access token and user. Refresh token is set as an HttpOnly cookie.
       content: { application/json: { schema: { $ref: "#/components/schemas/TokenResponse" } } }
+  parameters:
+    ChatId:
+      name: chat_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ActorId:
+      name: actor_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
   schemas:
     Health:
       type: object
@@ -320,3 +444,42 @@ components:
         role: { type: string, enum: [owner, admin, member] }
         created_at: { type: string, format: date-time }
         archived_at: { type: [string, "null"], format: date-time }
+    UpdateChatRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        topic: { type: string, maxLength: 500 }
+        visibility: { type: string, enum: [private, public] }
+    DirectoryChat:
+      type: object
+      required: [id, kind, name, topic, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [group, channel] }
+        name: { type: string }
+        topic: { type: string }
+        created_at: { type: string, format: date-time }
+    ChatMember:
+      type: object
+      required: [actor_id, display_name, handle, role, joined_at]
+      properties:
+        actor_id: { type: string, format: uuid }
+        display_name: { type: string }
+        handle: { type: string }
+        role: { type: string, enum: [owner, admin, member] }
+        joined_at: { type: string, format: date-time }
+    AddChatMemberRequest:
+      type: object
+      additionalProperties: false
+      required: [actor_id]
+      properties:
+        actor_id: { type: string, format: uuid }
+        role: { type: string, enum: [owner, admin, member], default: member }
+    UpdateChatMemberRequest:
+      type: object
+      additionalProperties: false
+      required: [role]
+      properties:
+        role: { type: string, enum: [owner, admin, member] }

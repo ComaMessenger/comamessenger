@@ -46,3 +46,24 @@ func TestReadinessUnavailable(t *testing.T) {
 		t.Fatalf("status = %d, want %d", response.Code, standardhttp.StatusServiceUnavailable)
 	}
 }
+
+func TestCORSAllowsCredentialedWebRequests(t *testing.T) {
+	handler := NewHandler(
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		"http://localhost:5173",
+		func(_ context.Context) error { return nil },
+		Dependencies{},
+	)
+	request := httptest.NewRequest(standardhttp.MethodOptions, "/api/v1/auth/refresh", nil)
+	request.Header.Set("Origin", "http://localhost:5173")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != standardhttp.StatusNoContent {
+		t.Fatalf("status = %d, want %d", response.Code, standardhttp.StatusNoContent)
+	}
+	if response.Header().Get("Access-Control-Allow-Credentials") != "true" {
+		t.Fatal("credentialed CORS requests are not enabled")
+	}
+}

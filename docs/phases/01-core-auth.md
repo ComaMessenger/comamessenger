@@ -6,7 +6,7 @@
 
 ## Статус на 18 августа 2026
 
-Первый вертикальный инкремент реализован и проходит автоматический API smoke-test на чистом Compose:
+Два вертикальных инкремента реализованы и проходят автоматический API smoke-test на чистом Compose:
 
 - одноразовый bootstrap организации и owner;
 - Argon2id, короткоживущий JWT access token, opaque refresh cookie, rotation и обнаружение reuse с отзывом всей session family;
@@ -15,9 +15,13 @@
 - создание и membership-filtered чтение групповых чатов, каналов и дедуплицированных direct chats;
 - UUIDv7, базовая матрица `authz`, audit событий bootstrap/invitation/chat;
 - ограничения Postgres на один organization, private direct и наличие последнего активного owner;
-- OpenAPI 0.1.0 и синхронный Go/TypeScript-кодоген.
+- изменение и архивирование групповых чатов/каналов; архивированные сущности исключаются из активного списка;
+- список, добавление, удаление и роли участников с защитой последнего owner;
+- обнаружение публичных чатов и каналов и самостоятельное вступление;
+- минимальный web-flow: bootstrap, login, acceptance приглашения, sidebar, создание чата/канала и public directory;
+- OpenAPI 0.2.0 и синхронный Go/TypeScript-кодоген.
 
-Следующий инкремент этой же фазы: изменение/архивация чатов, управление membership и ролями, public discovery/join, деактивация пользователей, production email transport и минимальные auth/chat экраны web-клиента.
+Следующий инкремент этой же фазы: список пользователей, деактивация с отзывом сессий, production email transport, UI управления участниками и интеграционные тесты конкурентных транзакций. После него начинаем фазу 2 — сообщения и realtime.
 
 ## В scope
 
@@ -53,40 +57,40 @@
 
 ### Данные и доменная модель
 
-- [ ] Создать миграции `organizations`, `actors`, `users`, `sessions`, `invitations`, `chats`, `chat_members`, `audit_log`.
-- [ ] Добавить ограничения на уникальность email/handle внутри организации.
-- [ ] Обеспечить единственность direct chat для пары пользователей через нормализованный pair key или отдельную таблицу участников direct chat.
-- [ ] Запретить `visibility=public` для `kind=direct` на уровне БД и домена.
-- [ ] Гарантировать хотя бы одного owner организации и owner для группового чата/канала.
+- [x] Создать миграции `organizations`, `actors`, `users`, `sessions`, `invitations`, `chats`, `chat_members`, `audit_log`.
+- [x] Добавить ограничения на уникальность email/handle внутри организации.
+- [x] Обеспечить единственность direct chat для пары пользователей через нормализованный pair key или отдельную таблицу участников direct chat.
+- [x] Запретить `visibility=public` для `kind=direct` на уровне БД и домена.
+- [x] Гарантировать хотя бы одного owner организации и owner для группового чата/канала.
 
 ### Bootstrap и auth
 
-- [ ] Реализовать одноразовый bootstrap endpoint, доступный только до создания организации.
-- [ ] Хэшировать пароль Argon2id с параметрами из конфигурации и безопасными лимитами входа.
-- [ ] Выдавать короткоживущий access token и ротируемый refresh token.
-- [ ] Для web хранить refresh token в `HttpOnly`, `Secure`, `SameSite` cookie; в БД хранить только hash.
-- [ ] Обнаруживать повторное использование старого refresh token и отзывать цепочку сессии.
+- [x] Реализовать одноразовый bootstrap endpoint, доступный только до создания организации.
+- [x] Хэшировать пароль Argon2id с параметрами из конфигурации и безопасными лимитами входа.
+- [x] Выдавать короткоживущий access token и ротируемый refresh token.
+- [x] Для web хранить refresh token в `HttpOnly`, `Secure`, `SameSite` cookie; в БД хранить только hash.
+- [x] Обнаруживать повторное использование старого refresh token и отзывать цепочку сессии.
 - [ ] Реализовать logout текущей сессии, logout всех сессий и список устройств.
-- [ ] Добавить rate limiting на bootstrap, login, refresh и invitation acceptance.
+- [x] Добавить rate limiting на bootstrap, login, refresh и invitation acceptance.
 
 ### Приглашения и пользователи
 
-- [ ] Создавать одноразовые invitation tokens с TTL, ролью и автором приглашения.
-- [ ] Реализовать acceptance flow без раскрытия существования чужих email.
+- [x] Создавать одноразовые invitation tokens с TTL, ролью и автором приглашения.
+- [x] Реализовать acceptance flow без раскрытия существования чужих email.
 - [ ] Подготовить интерфейс email sender и dev-реализацию, выводящую ссылку в защищённый локальный sink.
-- [ ] Реализовать чтение и изменение собственного профиля.
+- [x] Реализовать чтение и изменение собственного профиля.
 - [ ] Реализовать деактивацию пользователя с отзывом сессий без физического удаления истории.
 
 ### Чаты, каналы и права
 
-- [ ] Реализовать CRUD для `group` и `channel`, создание/получение `direct`.
-- [ ] Реализовать добавление, удаление и изменение роли участника.
-- [ ] Для public group/channel разрешить обнаружение и самостоятельное вступление согласно настройкам.
-- [ ] Для private group/channel требовать invitation/member action.
+- [x] Реализовать CRUD для `group` и `channel`, создание/получение `direct`.
+- [x] Реализовать добавление, удаление и изменение роли участника.
+- [x] Для public group/channel разрешить обнаружение и самостоятельное вступление согласно настройкам.
+- [x] Для private group/channel требовать invitation/member action.
 - [ ] Централизовать проверки в `authz.Can(actor, action, resource)`.
-- [ ] Ввести отдельные действия `chat.read`, `chat.manage`, `member.manage`, `message.publish`, `thread.reply`.
-- [ ] Для `kind=channel` разрешать `message.publish` и `thread.reply` только owner/admin.
-- [ ] Записывать административные изменения в `audit_log`.
+- [x] Ввести отдельные действия `chat.read`, `chat.manage`, `member.manage`, `message.publish`, `thread.reply`.
+- [x] Для `kind=channel` разрешать `message.publish` и `thread.reply` только owner/admin.
+- [x] Записывать административные изменения в `audit_log`.
 
 ## Контракты и данные
 
@@ -106,9 +110,12 @@ POST   /api/v1/invitations
 POST   /api/v1/invitations/:token/accept
 GET    /api/v1/chats
 POST   /api/v1/chats
+GET    /api/v1/chats/discover
 GET    /api/v1/chats/:id
 PATCH  /api/v1/chats/:id
 DELETE /api/v1/chats/:id
+POST   /api/v1/chats/:id/join
+GET    /api/v1/chats/:id/members
 POST   /api/v1/chats/:id/members
 PATCH  /api/v1/chats/:id/members/:actor_id
 DELETE /api/v1/chats/:id/members/:actor_id

@@ -58,7 +58,7 @@ services:
       APP_ENV: ${APP_ENV:-development}
       HTTP_ADDR: :8080
       DATABASE_URL: ${DATABASE_URL:-postgres://comamessenger:comamessenger@postgres:5432/comamessenger?sslmode=disable}
-      PUBLIC_APP_URL: http://localhost:5173
+      PUBLIC_APP_URL: http://localhost:${WEB_PORT:-5173}
       AUTH_SIGNING_KEY: ${AUTH_SIGNING_KEY:-comamessenger-local-signing-key-change-me}
       ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL:-15m}
       REFRESH_TOKEN_TTL: ${REFRESH_TOKEN_TTL:-720h}
@@ -98,7 +98,7 @@ services:
       core:
         condition: service_started
     ports:
-      - "5173:5173"
+      - "${WEB_PORT:-5173}:5173"
 
   agent-runtime:
     profiles: ["agents"]

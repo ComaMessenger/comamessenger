@@ -222,10 +222,74 @@ export interface paths {
         get: operations["getChat"];
         put?: never;
         post?: never;
+        delete: operations["archiveChat"];
+        options?: never;
+        head?: never;
+        patch: operations["updateChat"];
+        trace?: never;
+    };
+    "/api/v1/chats/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["discoverChats"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chats/{chat_id}/join": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["joinChat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chats/{chat_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listChatMembers"];
+        put?: never;
+        post: operations["addChatMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chats/{chat_id}/members/{actor_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["removeChatMember"];
+        options?: never;
+        head?: never;
+        patch: operations["updateChatMember"];
         trace?: never;
     };
 }
@@ -361,6 +425,45 @@ export interface components {
             /** Format: date-time */
             archived_at?: string | null;
         };
+        UpdateChatRequest: {
+            name?: string;
+            topic?: string;
+            /** @enum {string} */
+            visibility?: "private" | "public";
+        };
+        DirectoryChat: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            kind: "group" | "channel";
+            name: string;
+            topic: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ChatMember: {
+            /** Format: uuid */
+            actor_id: string;
+            display_name: string;
+            handle: string;
+            /** @enum {string} */
+            role: "owner" | "admin" | "member";
+            /** Format: date-time */
+            joined_at: string;
+        };
+        AddChatMemberRequest: {
+            /** Format: uuid */
+            actor_id: string;
+            /**
+             * @default member
+             * @enum {string}
+             */
+            role: "owner" | "admin" | "member";
+        };
+        UpdateChatMemberRequest: {
+            /** @enum {string} */
+            role: "owner" | "admin" | "member";
+        };
     };
     responses: {
         /** @description Stable API error. */
@@ -382,7 +485,10 @@ export interface components {
             };
         };
     };
-    parameters: never;
+    parameters: {
+        ChatId: string;
+        ActorId: string;
+    };
     requestBodies: never;
     headers: never;
     pathItems: never;
@@ -727,6 +833,214 @@ export interface operations {
                 };
             };
             404: components["responses"]["Error"];
+        };
+    };
+    archiveChat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Chat archived. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    updateChat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated chat. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Chat"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    discoverChats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Public chats the current user has not joined. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        chats: components["schemas"]["DirectoryChat"][];
+                    };
+                };
+            };
+        };
+    };
+    joinChat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Joined public chat, or current membership. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Chat"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    listChatMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active chat members. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        members: components["schemas"]["ChatMember"][];
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    addChatMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddChatMemberRequest"];
+            };
+        };
+        responses: {
+            /** @description Member added. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatMember"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    removeChatMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+                actor_id: components["parameters"]["ActorId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Member removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    updateChatMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+                actor_id: components["parameters"]["ActorId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateChatMemberRequest"];
+            };
+        };
+        responses: {
+            /** @description Member role updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatMember"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
         };
     };
 }

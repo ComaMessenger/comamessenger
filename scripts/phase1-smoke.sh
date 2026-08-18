@@ -39,6 +39,28 @@ curl --fail --silent --show-error --output "$work_dir/group.json" --request POST
   --header 'Content-Type: application/json' --header "Authorization: Bearer $owner_token" \
   --data "{\"kind\":\"group\",\"visibility\":\"private\",\"name\":\"Team\",\"member_ids\":[\"$member_id\"]}" \
   "$api_url/api/v1/chats"
+group_id="$(jq -r .id "$work_dir/group.json")"
+
+curl --fail --silent --show-error --output "$work_dir/group-updated.json" --request PATCH \
+  --header 'Content-Type: application/json' --header "Authorization: Bearer $owner_token" \
+  --data '{"name":"Product Team","topic":"Build the messenger"}' \
+  "$api_url/api/v1/chats/$group_id"
+test "$(jq -r .name "$work_dir/group-updated.json")" = "Product Team"
+
+member_update_code="$(curl --silent --show-error --output "$work_dir/member-update-forbidden.json" --write-out '%{http_code}' \
+  --request PATCH --header 'Content-Type: application/json' --header "Authorization: Bearer $member_token" \
+  --data '{"name":"Nope"}' "$api_url/api/v1/chats/$group_id")"
+test "$member_update_code" = "403"
+
+curl --fail --silent --show-error --output "$work_dir/member-promoted.json" --request PATCH \
+  --header 'Content-Type: application/json' --header "Authorization: Bearer $owner_token" \
+  --data '{"role":"admin"}' "$api_url/api/v1/chats/$group_id/members/$member_id"
+test "$(jq -r .role "$work_dir/member-promoted.json")" = "admin"
+
+last_owner_code="$(curl --silent --show-error --output "$work_dir/last-owner.json" --write-out '%{http_code}' \
+  --request DELETE --header "Authorization: Bearer $owner_token" \
+  "$api_url/api/v1/chats/$group_id/members/$owner_id")"
+test "$last_owner_code" = "409"
 
 curl --fail --silent --show-error --output "$work_dir/direct-owner.json" --request POST \
   --header 'Content-Type: application/json' --header "Authorization: Bearer $owner_token" \
@@ -53,9 +75,30 @@ test "$(jq -r .id "$work_dir/direct-owner.json")" = "$(jq -r .id "$work_dir/dire
 curl --fail --silent --show-error --output "$work_dir/channel.json" --request POST \
   --header 'Content-Type: application/json' --header "Authorization: Bearer $owner_token" \
   --data '{"kind":"channel","visibility":"public","name":"Announcements"}' "$api_url/api/v1/chats"
+channel_id="$(jq -r .id "$work_dir/channel.json")"
+
+curl --fail --silent --show-error --output "$work_dir/discover.json" \
+  --header "Authorization: Bearer $member_token" "$api_url/api/v1/chats/discover"
+test "$(jq --arg id "$channel_id" '[.chats[].id] | index($id) != null' "$work_dir/discover.json")" = "true"
+
+curl --fail --silent --show-error --output "$work_dir/joined.json" --request POST \
+  --header "Authorization: Bearer $member_token" "$api_url/api/v1/chats/$channel_id/join"
+test "$(jq -r .role "$work_dir/joined.json")" = "member"
+
+curl --fail --silent --show-error --output "$work_dir/channel-members.json" \
+  --header "Authorization: Bearer $member_token" "$api_url/api/v1/chats/$channel_id/members"
+test "$(jq '.members | length' "$work_dir/channel-members.json")" = "2"
 member_channel_code="$(curl --silent --show-error --output "$work_dir/forbidden.json" --write-out '%{http_code}' \
   --request POST --header 'Content-Type: application/json' --header "Authorization: Bearer $member_token" \
   --data '{"kind":"channel","visibility":"public","name":"Forbidden"}' "$api_url/api/v1/chats")"
 test "$member_channel_code" = "403"
+
+archive_code="$(curl --silent --show-error --output "$work_dir/archive.json" --write-out '%{http_code}' \
+  --request DELETE --header "Authorization: Bearer $owner_token" "$api_url/api/v1/chats/$group_id")"
+test "$archive_code" = "204"
+
+curl --fail --silent --show-error --output "$work_dir/owner-chats.json" \
+  --header "Authorization: Bearer $owner_token" "$api_url/api/v1/chats"
+test "$(jq --arg id "$group_id" '[.chats[].id] | index($id) == null' "$work_dir/owner-chats.json")" = "true"
 
 echo "Phase 1 API smoke test passed."

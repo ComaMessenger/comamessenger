@@ -9,6 +9,27 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AddChatMemberRequestRole.
+const (
+	AddChatMemberRequestRoleAdmin  AddChatMemberRequestRole = "admin"
+	AddChatMemberRequestRoleMember AddChatMemberRequestRole = "member"
+	AddChatMemberRequestRoleOwner  AddChatMemberRequestRole = "owner"
+)
+
+// Valid indicates whether the value is a known member of the AddChatMemberRequestRole enum.
+func (e AddChatMemberRequestRole) Valid() bool {
+	switch e {
+	case AddChatMemberRequestRoleAdmin:
+		return true
+	case AddChatMemberRequestRoleMember:
+		return true
+	case AddChatMemberRequestRoleOwner:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ChatKind.
 const (
 	ChatKindChannel ChatKind = "channel"
@@ -63,6 +84,27 @@ func (e ChatVisibility) Valid() bool {
 	case ChatVisibilityPrivate:
 		return true
 	case ChatVisibilityPublic:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ChatMemberRole.
+const (
+	ChatMemberRoleAdmin  ChatMemberRole = "admin"
+	ChatMemberRoleMember ChatMemberRole = "member"
+	ChatMemberRoleOwner  ChatMemberRole = "owner"
+)
+
+// Valid indicates whether the value is a known member of the ChatMemberRole enum.
+func (e ChatMemberRole) Valid() bool {
+	switch e {
+	case ChatMemberRoleAdmin:
+		return true
+	case ChatMemberRoleMember:
+		return true
+	case ChatMemberRoleOwner:
 		return true
 	default:
 		return false
@@ -126,6 +168,24 @@ func (e CreateInvitationRequestRole) Valid() bool {
 	}
 }
 
+// Defines values for DirectoryChatKind.
+const (
+	DirectoryChatKindChannel DirectoryChatKind = "channel"
+	DirectoryChatKindGroup   DirectoryChatKind = "group"
+)
+
+// Valid indicates whether the value is a known member of the DirectoryChatKind enum.
+func (e DirectoryChatKind) Valid() bool {
+	switch e {
+	case DirectoryChatKindChannel:
+		return true
+	case DirectoryChatKindGroup:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InvitationRole.
 const (
 	InvitationRoleAdmin  InvitationRole = "admin"
@@ -138,6 +198,45 @@ func (e InvitationRole) Valid() bool {
 	case InvitationRoleAdmin:
 		return true
 	case InvitationRoleMember:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UpdateChatMemberRequestRole.
+const (
+	UpdateChatMemberRequestRoleAdmin  UpdateChatMemberRequestRole = "admin"
+	UpdateChatMemberRequestRoleMember UpdateChatMemberRequestRole = "member"
+	UpdateChatMemberRequestRoleOwner  UpdateChatMemberRequestRole = "owner"
+)
+
+// Valid indicates whether the value is a known member of the UpdateChatMemberRequestRole enum.
+func (e UpdateChatMemberRequestRole) Valid() bool {
+	switch e {
+	case UpdateChatMemberRequestRoleAdmin:
+		return true
+	case UpdateChatMemberRequestRoleMember:
+		return true
+	case UpdateChatMemberRequestRoleOwner:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UpdateChatRequestVisibility.
+const (
+	UpdateChatRequestVisibilityPrivate UpdateChatRequestVisibility = "private"
+	UpdateChatRequestVisibilityPublic  UpdateChatRequestVisibility = "public"
+)
+
+// Valid indicates whether the value is a known member of the UpdateChatRequestVisibility enum.
+func (e UpdateChatRequestVisibility) Valid() bool {
+	switch e {
+	case UpdateChatRequestVisibilityPrivate:
+		return true
+	case UpdateChatRequestVisibilityPublic:
 		return true
 	default:
 		return false
@@ -191,6 +290,15 @@ type AcceptInvitationRequest struct {
 	Timezone    *string `json:"timezone,omitempty"`
 }
 
+// AddChatMemberRequest defines model for AddChatMemberRequest.
+type AddChatMemberRequest struct {
+	ActorId openapi_types.UUID        `json:"actor_id"`
+	Role    *AddChatMemberRequestRole `json:"role,omitempty"`
+}
+
+// AddChatMemberRequestRole defines model for AddChatMemberRequest.Role.
+type AddChatMemberRequestRole string
+
 // BootstrapRequest defines model for BootstrapRequest.
 type BootstrapRequest struct {
 	DisplayName      string              `json:"display_name"`
@@ -228,6 +336,18 @@ type ChatRole string
 // ChatVisibility defines model for Chat.Visibility.
 type ChatVisibility string
 
+// ChatMember defines model for ChatMember.
+type ChatMember struct {
+	ActorId     openapi_types.UUID `json:"actor_id"`
+	DisplayName string             `json:"display_name"`
+	Handle      string             `json:"handle"`
+	JoinedAt    time.Time          `json:"joined_at"`
+	Role        ChatMemberRole     `json:"role"`
+}
+
+// ChatMemberRole defines model for ChatMember.Role.
+type ChatMemberRole string
+
 // CreateChatRequest defines model for CreateChatRequest.
 type CreateChatRequest struct {
 	Kind       CreateChatRequestKind        `json:"kind"`
@@ -251,6 +371,18 @@ type CreateInvitationRequest struct {
 
 // CreateInvitationRequestRole defines model for CreateInvitationRequest.Role.
 type CreateInvitationRequestRole string
+
+// DirectoryChat defines model for DirectoryChat.
+type DirectoryChat struct {
+	CreatedAt time.Time          `json:"created_at"`
+	Id        openapi_types.UUID `json:"id"`
+	Kind      DirectoryChatKind  `json:"kind"`
+	Name      string             `json:"name"`
+	Topic     string             `json:"topic"`
+}
+
+// DirectoryChatKind defines model for DirectoryChat.Kind.
+type DirectoryChatKind string
 
 // Error defines model for Error.
 type Error struct {
@@ -302,6 +434,24 @@ type TokenResponse struct {
 	User            User      `json:"user"`
 }
 
+// UpdateChatMemberRequest defines model for UpdateChatMemberRequest.
+type UpdateChatMemberRequest struct {
+	Role UpdateChatMemberRequestRole `json:"role"`
+}
+
+// UpdateChatMemberRequestRole defines model for UpdateChatMemberRequest.Role.
+type UpdateChatMemberRequestRole string
+
+// UpdateChatRequest defines model for UpdateChatRequest.
+type UpdateChatRequest struct {
+	Name       *string                      `json:"name,omitempty"`
+	Topic      *string                      `json:"topic,omitempty"`
+	Visibility *UpdateChatRequestVisibility `json:"visibility,omitempty"`
+}
+
+// UpdateChatRequestVisibility defines model for UpdateChatRequest.Visibility.
+type UpdateChatRequestVisibility string
+
 // UpdateProfileRequest defines model for UpdateProfileRequest.
 type UpdateProfileRequest struct {
 	DisplayName *string `json:"display_name,omitempty"`
@@ -328,6 +478,12 @@ type UserRole string
 // UserStatus defines model for User.Status.
 type UserStatus string
 
+// ActorId defines model for ActorId.
+type ActorId = openapi_types.UUID
+
+// ChatId defines model for ChatId.
+type ChatId = openapi_types.UUID
+
 // Tokens defines model for Tokens.
 type Tokens = TokenResponse
 
@@ -339,6 +495,15 @@ type BootstrapJSONRequestBody = BootstrapRequest
 
 // CreateChatJSONRequestBody defines body for CreateChat for application/json ContentType.
 type CreateChatJSONRequestBody = CreateChatRequest
+
+// UpdateChatJSONRequestBody defines body for UpdateChat for application/json ContentType.
+type UpdateChatJSONRequestBody = UpdateChatRequest
+
+// AddChatMemberJSONRequestBody defines body for AddChatMember for application/json ContentType.
+type AddChatMemberJSONRequestBody = AddChatMemberRequest
+
+// UpdateChatMemberJSONRequestBody defines body for UpdateChatMember for application/json ContentType.
+type UpdateChatMemberJSONRequestBody = UpdateChatMemberRequest
 
 // CreateInvitationJSONRequestBody defines body for CreateInvitation for application/json ContentType.
 type CreateInvitationJSONRequestBody = CreateInvitationRequest

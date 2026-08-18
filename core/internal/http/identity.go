@@ -75,7 +75,15 @@ func (h *identityHandlers) routes(router chi.Router) {
 		if h.chats != nil {
 			protected.Get("/chats", h.listChats)
 			protected.Post("/chats", h.createChat)
+			protected.Get("/chats/discover", h.discoverChats)
 			protected.Get("/chats/{chatID}", h.getChat)
+			protected.Patch("/chats/{chatID}", h.updateChat)
+			protected.Delete("/chats/{chatID}", h.archiveChat)
+			protected.Post("/chats/{chatID}/join", h.joinChat)
+			protected.Get("/chats/{chatID}/members", h.listChatMembers)
+			protected.Post("/chats/{chatID}/members", h.addChatMember)
+			protected.Patch("/chats/{chatID}/members/{actorID}", h.updateChatMember)
+			protected.Delete("/chats/{chatID}/members/{actorID}", h.removeChatMember)
 		}
 	})
 }
@@ -299,6 +307,110 @@ func (h *identityHandlers) getChat(w standardhttp.ResponseWriter, r *standardhtt
 		return
 	}
 	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) discoverChats(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.chats.Discover(r.Context(), authFromContext(r.Context()).User)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, map[string]any{"chats": result})
+}
+
+func (h *identityHandlers) updateChat(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input chat.UpdateInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	result, err := h.chats.Update(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "chatID"), input)
+	if err != nil {
+		h.writeChatError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) archiveChat(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	err := h.chats.Archive(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "chatID"))
+	if err != nil {
+		h.writeChatError(w, r, err)
+		return
+	}
+	w.WriteHeader(standardhttp.StatusNoContent)
+}
+
+func (h *identityHandlers) joinChat(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.chats.Join(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "chatID"))
+	if err != nil {
+		h.writeChatError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) listChatMembers(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.chats.ListMembers(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "chatID"))
+	if err != nil {
+		h.writeChatError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, map[string]any{"members": result})
+}
+
+func (h *identityHandlers) addChatMember(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input chat.MemberInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	result, err := h.chats.AddMember(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "chatID"), input)
+	if err != nil {
+		h.writeChatError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusCreated, result)
+}
+
+func (h *identityHandlers) updateChatMember(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input chat.UpdateMemberInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	result, err := h.chats.UpdateMember(r.Context(), authFromContext(r.Context()).User,
+		chi.URLParam(r, "chatID"), chi.URLParam(r, "actorID"), input)
+	if err != nil {
+		h.writeChatError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) removeChatMember(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	err := h.chats.RemoveMember(r.Context(), authFromContext(r.Context()).User,
+		chi.URLParam(r, "chatID"), chi.URLParam(r, "actorID"))
+	if err != nil {
+		h.writeChatError(w, r, err)
+		return
+	}
+	w.WriteHeader(standardhttp.StatusNoContent)
+}
+
+func (h *identityHandlers) writeChatError(w standardhttp.ResponseWriter, r *standardhttp.Request, err error) {
+	switch {
+	case errors.Is(err, chat.ErrNotFound):
+		h.writeError(w, r, standardhttp.StatusNotFound, "chat_not_found", "Chat or member was not found.")
+	case errors.Is(err, chat.ErrForbidden):
+		h.writeError(w, r, standardhttp.StatusForbidden, "forbidden", "You do not have permission for this chat action.")
+	case errors.Is(err, chat.ErrInvalid):
+		h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "validation_failed", err.Error())
+	case errors.Is(err, chat.ErrConflict):
+		h.writeError(w, r, standardhttp.StatusConflict, "chat_conflict", "The chat action conflicts with its current state.")
+	default:
+		h.internalError(w, r, err)
+	}
 }
 
 func (h *identityHandlers) authenticate(next standardhttp.Handler) standardhttp.Handler {
