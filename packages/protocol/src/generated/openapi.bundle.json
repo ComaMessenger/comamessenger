@@ -1408,6 +1408,227 @@
           }
         }
       }
+    },
+    "/api/v1/unread": {
+      "get": {
+        "operationId": "getUnreadSnapshot",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current chat and followed-thread unread counters.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnreadSnapshot"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chats/{chat_id}/read": {
+      "post": {
+        "operationId": "markChatRead",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ChatId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkReadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Monotonic chat read marker.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadMarker"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/messages/{message_id}/thread/read": {
+      "post": {
+        "operationId": "markThreadRead",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MessageId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkReadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Monotonic thread read marker.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadMarker"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/drafts": {
+      "get": {
+        "operationId": "listDrafts",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Drafts visible only to the current actor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/drafts/{chat_id}": {
+      "put": {
+        "operationId": "putDraft",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ChatId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutDraftRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Existing or updated draft.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Draft"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Draft created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Draft"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteDraft",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ChatId"
+          },
+          {
+            "name": "thread_root_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Draft is absent."
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1968,7 +2189,8 @@
               "invalid_frame",
               "not_authenticated",
               "forbidden",
-              "rate_limited"
+              "rate_limited",
+              "service_unavailable"
             ]
           },
           "message": {
@@ -2507,6 +2729,7 @@
           "type",
           "body",
           "body_format",
+          "mentioned_actor_ids",
           "version",
           "created_seq",
           "created_at"
@@ -2594,6 +2817,14 @@
                 "type": "null"
               }
             ]
+          },
+          "mentioned_actor_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "uniqueItems": true
           }
         }
       },
@@ -2652,6 +2883,14 @@
           "thread_root_id": {
             "type": "string",
             "format": "uuid"
+          },
+          "mentioned_actor_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "uniqueItems": true
           }
         }
       },
@@ -2678,6 +2917,14 @@
           "expected_version": {
             "type": "integer",
             "minimum": 1
+          },
+          "mentioned_actor_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "uniqueItems": true
           }
         }
       },
@@ -2878,6 +3125,229 @@
             ],
             "format": "int64",
             "minimum": 1
+          }
+        }
+      },
+      "MarkReadRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "last_read_seq"
+        ],
+        "properties": {
+          "last_read_seq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          }
+        }
+      },
+      "ReadMarker": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "chat_id",
+          "last_read_seq",
+          "last_read_at"
+        ],
+        "properties": {
+          "chat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "thread_root_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "last_read_seq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "last_read_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Draft": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "chat_id",
+          "body",
+          "body_format",
+          "version",
+          "updated_at"
+        ],
+        "properties": {
+          "chat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "thread_root_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "body": {
+            "type": "string"
+          },
+          "body_format": {
+            "type": "string",
+            "enum": [
+              "plain",
+              "markdown"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PutDraftRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "body",
+          "expected_version"
+        ],
+        "properties": {
+          "thread_root_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "body": {
+            "type": "string"
+          },
+          "body_format": {
+            "type": "string",
+            "enum": [
+              "plain",
+              "markdown"
+            ],
+            "default": "plain"
+          },
+          "expected_version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "DraftList": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "drafts"
+        ],
+        "properties": {
+          "drafts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Draft"
+            }
+          }
+        }
+      },
+      "ChatUnread": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "chat_id",
+          "last_read_seq",
+          "unread_count",
+          "mention_count"
+        ],
+        "properties": {
+          "chat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "last_read_seq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "unread_count": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "mention_count": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "ThreadUnread": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "thread_root_id",
+          "chat_id",
+          "last_read_seq",
+          "unread_count",
+          "mention_count"
+        ],
+        "properties": {
+          "thread_root_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "chat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "last_read_seq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "unread_count": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "mention_count": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "UnreadSnapshot": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "chats",
+          "threads"
+        ],
+        "properties": {
+          "chats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatUnread"
+            }
+          },
+          "threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ThreadUnread"
+            }
           }
         }
       }

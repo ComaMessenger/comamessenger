@@ -118,26 +118,28 @@
 - [x] Проверять, что `reply_to_id` и `thread_root_id` существуют, доступны и принадлежат тому же chat.
 - [x] Использовать root message ID как thread ID; не создавать таблицу `threads`.
 - [x] Запретить вложенные thread roots, разрешив `reply_to_id` внутри треда.
-- [x] Создать `thread_followers`; при первом ответе автоматически подписывать автора root и ответивших.
+- [x] Создать `thread_followers`; при первом ответе автоматически подписывать автора root, ответивших и структурированно упомянутых участников.
 - [x] Реализовать идемпотентные follow/unfollow и пагинируемый список followed threads.
 - [x] Создать `reactions` с уникальностью `(message_id, actor_id, emoji)`, read API и идемпотентными PUT/DELETE.
 - [x] Реализовать pins с правами `chat.manage`, read API и snapshot-forward с безопасной source attribution.
 - [x] Проверить channel posting policy для ленты и тредов.
 
-Автоподписка упомянутых и фильтр unread threads завершаются в 2.4 одновременно со структурированными mentions и durable thread read state. Парсить `@handle` эвристикой и вычислять unread без marker намеренно не стали: оба варианта дают ложные уведомления и нестабильный API.
+Структурированные mentions и фильтр unread threads завершены в 2.4 одновременно с durable thread read state. `@handle` не парсится эвристикой: клиент передаёт actor IDs, а Core проверяет active membership.
 
 Готово, когда reply/thread различаются на уровне API, а конкурентные follow/reaction операции идемпотентны.
 
 ### Инкремент 2.4 — user state и ephemeral realtime
 
-- [ ] Создать `chat_reads` и thread read state, используя root message ID.
-- [ ] Делать read marker монотонным и публиковать его только другим сессиям того же actor.
-- [ ] Рассчитывать unread по доступным сообщениям после marker; mentions и unread threads считать отдельно.
-- [ ] Создать versioned drafts с upsert/delete и actor-only events.
-- [ ] Реализовать `subscribe_active`, typing и presence без durable event log.
-- [ ] Хранить межпроцессные presence/typing leases в Redis с TTL; локальный in-memory режим допустим только при явно отключённом Redis и одном Core.
-- [ ] Ввести распределённые rate limits для ephemeral operations и документировать fail-open/fail-closed policy по типу лимита.
-- [ ] Не считать фоновые или агентские соединения online без отдельной presence policy.
+- [x] Создать `chat_reads` и thread read state, используя root message ID.
+- [x] Делать read marker монотонным и публиковать его только другим сессиям того же actor.
+- [x] Рассчитывать unread по доступным сообщениям после marker; mentions и unread threads считать отдельно.
+- [x] Создать versioned drafts с upsert/delete и actor-only events.
+- [x] Реализовать `subscribe_active`, typing и presence без durable event log.
+- [x] Хранить межпроцессные presence/typing leases в Redis с TTL; локальный in-memory режим допустим только при явно отключённом Redis и одном Core.
+- [x] Ввести распределённые rate limits для ephemeral operations и документировать fail-open/fail-closed policy по типу лимита.
+- [x] Не считать фоновые или агентские соединения online без отдельной presence policy.
+
+Read marker принимает только `created_seq` реально доступного сообщения в соответствующей ленте и поэтому не может перескочить будущие сообщения. В production ephemeral operations fail-closed при недоступном Redis и возвращают non-fatal WS error `service_unavailable`; durable REST/WS delivery продолжает работать через PostgreSQL. Presence появляется только после явного user-client frame и не выводится из самого факта WebSocket-подключения.
 
 Готово, когда два устройства одного пользователя сходятся по read state/draft, а потеря typing events безвредна.
 
@@ -175,6 +177,8 @@ PUT    /api/v1/messages/:root_id/thread/follow
 DELETE /api/v1/messages/:root_id/thread/follow
 POST   /api/v1/chats/:id/read
 POST   /api/v1/messages/:root_id/thread/read
+GET    /api/v1/unread
+GET    /api/v1/drafts
 PUT    /api/v1/drafts/:chat_id
 DELETE /api/v1/drafts/:chat_id
 GET    /api/v1/events?since=:seq

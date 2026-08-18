@@ -161,7 +161,7 @@ func (s *Service) ListFollowedThreads(ctx context.Context, user identity.User, b
 	rows, err := s.pool.Query(ctx, `
 		SELECT root.id, root.chat_id, root.actor_id, root.client_msg_id, root.type, root.body, root.body_format,
 			root.reply_to_id, root.thread_root_id, root.version, root.created_seq, root.created_at, root.edited_at,
-			root.deleted_at, root.forwarded_from, tf.followed_at, count(reply.id), max(reply.created_seq),
+			root.deleted_at, root.forwarded_from, root.mentioned_actor_ids, tf.followed_at, count(reply.id), max(reply.created_seq),
 			GREATEST(root.created_seq, COALESCE(max(reply.created_seq), root.created_seq)) AS activity_seq
 		FROM thread_followers tf
 		JOIN messages root ON root.org_id = tf.org_id AND root.id = tf.thread_root_id
@@ -185,7 +185,7 @@ func (s *Service) ListFollowedThreads(ctx context.Context, user identity.User, b
 		if err := rows.Scan(&item.Root.ID, &item.Root.ChatID, &item.Root.ActorID, &item.Root.ClientMsgID,
 			&item.Root.Type, &item.Root.Body, &item.Root.BodyFormat, &item.Root.ReplyToID, &item.Root.ThreadRootID,
 			&item.Root.Version, &item.Root.CreatedSeq, &item.Root.CreatedAt, &item.Root.EditedAt, &item.Root.DeletedAt,
-			newJSONScanner(&item.Root.ForwardedFrom), &item.FollowedAt, &item.ReplyCount, &item.LastReplySeq,
+			newJSONScanner(&item.Root.ForwardedFrom), &item.Root.MentionedActorIDs, &item.FollowedAt, &item.ReplyCount, &item.LastReplySeq,
 			&item.LastActivitySeq); err != nil {
 			return ThreadPage{}, fmt.Errorf("scan followed thread: %w", err)
 		}
@@ -539,7 +539,7 @@ func (s *Service) Forward(ctx context.Context, user identity.User, sourceMessage
 			(id, org_id, chat_id, actor_id, client_msg_id, create_fingerprint, body, body_format, created_seq, forwarded_from)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
 		RETURNING id, chat_id, actor_id, client_msg_id, type, body, body_format, reply_to_id,
-			thread_root_id, version, created_seq, created_at, edited_at, deleted_at, forwarded_from`,
+			thread_root_id, version, created_seq, created_at, edited_at, deleted_at, forwarded_from, mentioned_actor_ids`,
 		messageID, user.OrgID, input.ChatID, user.ActorID, input.ClientMsgID, fingerprint[:], source.Body,
 		source.BodyFormat, seq, string(attributionJSON)), &result)
 	if err != nil {
@@ -558,11 +558,11 @@ func (s *Service) Forward(ctx context.Context, user identity.User, sourceMessage
 	return result, true, nil
 }
 
-func autoFollowThread(ctx context.Context, tx pgx.Tx, user identity.User, rootID string, highWatermark int64) (int64, error) {
+func autoFollowThread(ctx context.Context, tx pgx.Tx, user identity.User, rootID string, mentionedActorIDs []string, highWatermark int64) (int64, error) {
 	var root Message
 	err := scanMessage(tx.QueryRow(ctx, `
 		SELECT id, chat_id, actor_id, client_msg_id, type, body, body_format, reply_to_id, thread_root_id,
-			version, created_seq, created_at, edited_at, deleted_at, forwarded_from
+			version, created_seq, created_at, edited_at, deleted_at, forwarded_from, mentioned_actor_ids
 		FROM messages WHERE org_id = $1 AND id = $2`, user.OrgID, rootID), &root)
 	if err != nil {
 		return 0, fmt.Errorf("load thread root for auto-follow: %w", err)
@@ -571,7 +571,13 @@ func autoFollowThread(ctx context.Context, tx pgx.Tx, user identity.User, rootID
 	if user.ActorID != root.ActorID {
 		actorIDs = append(actorIDs, user.ActorID)
 	}
+	actorIDs = append(actorIDs, mentionedActorIDs...)
+	seen := make(map[string]struct{}, len(actorIDs))
 	for _, actorID := range actorIDs {
+		if _, exists := seen[actorID]; exists {
+			continue
+		}
+		seen[actorID] = struct{}{}
 		_, created, next, err := followThread(ctx, tx, user, root, actorID, true, highWatermark)
 		if err != nil {
 			return 0, err

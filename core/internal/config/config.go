@@ -47,6 +47,11 @@ type RealtimeConfig struct {
 	AckInterval            time.Duration
 	AckTimeout             time.Duration
 	AckBatchSize           uint64
+	TypingTTL              time.Duration
+	PresenceTTL            time.Duration
+	ActiveSubscriptionTTL  time.Duration
+	EphemeralRateLimit     uint64
+	EphemeralRateWindow    time.Duration
 }
 
 type EventLogConfig struct {
@@ -282,6 +287,21 @@ func realtimeConfigFromEnvironment() (RealtimeConfig, error) {
 	if cfg.AckBatchSize, err = uintValueOrDefault("WS_ACK_BATCH_SIZE", 50, 16); err != nil {
 		return RealtimeConfig{}, err
 	}
+	if cfg.TypingTTL, err = durationValueOrDefault("WS_TYPING_TTL", 6*time.Second); err != nil {
+		return RealtimeConfig{}, err
+	}
+	if cfg.PresenceTTL, err = durationValueOrDefault("WS_PRESENCE_TTL", 60*time.Second); err != nil {
+		return RealtimeConfig{}, err
+	}
+	if cfg.ActiveSubscriptionTTL, err = durationValueOrDefault("WS_ACTIVE_SUBSCRIPTION_TTL", 60*time.Second); err != nil {
+		return RealtimeConfig{}, err
+	}
+	if cfg.EphemeralRateLimit, err = uintValueOrDefault("WS_EPHEMERAL_RATE_LIMIT", 30, 16); err != nil {
+		return RealtimeConfig{}, err
+	}
+	if cfg.EphemeralRateWindow, err = durationValueOrDefault("WS_EPHEMERAL_RATE_WINDOW", 10*time.Second); err != nil {
+		return RealtimeConfig{}, err
+	}
 	return cfg, nil
 }
 
@@ -350,6 +370,21 @@ func (c RealtimeConfig) validate(messageMaxBodyBytes uint64) error {
 	}
 	if c.AckBatchSize < 1 || c.AckBatchSize > c.MaxUnackedEvents {
 		return fmt.Errorf("WS_ACK_BATCH_SIZE must be between 1 and WS_MAX_UNACKED_EVENTS")
+	}
+	if c.TypingTTL < time.Second || c.TypingTTL > 30*time.Second {
+		return fmt.Errorf("WS_TYPING_TTL must be between 1s and 30s")
+	}
+	if c.PresenceTTL < 10*time.Second || c.PresenceTTL > 5*time.Minute {
+		return fmt.Errorf("WS_PRESENCE_TTL must be between 10s and 5m")
+	}
+	if c.ActiveSubscriptionTTL < 10*time.Second || c.ActiveSubscriptionTTL > 5*time.Minute {
+		return fmt.Errorf("WS_ACTIVE_SUBSCRIPTION_TTL must be between 10s and 5m")
+	}
+	if c.EphemeralRateLimit < 1 || c.EphemeralRateLimit > 1000 {
+		return fmt.Errorf("WS_EPHEMERAL_RATE_LIMIT must be between 1 and 1000")
+	}
+	if c.EphemeralRateWindow < time.Second || c.EphemeralRateWindow > time.Minute {
+		return fmt.Errorf("WS_EPHEMERAL_RATE_WINDOW must be between 1s and 1m")
 	}
 	return nil
 }

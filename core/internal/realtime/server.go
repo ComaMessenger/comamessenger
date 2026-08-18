@@ -40,10 +40,11 @@ type Server struct {
 	hub           *Hub
 	authenticate  AuthenticateFunc
 	config        config.RealtimeConfig
+	ephemeral     *Ephemeral
 }
 
-func NewServer(logger *slog.Logger, allowedOrigin string, store *eventlog.Store, hub *Hub, authenticate AuthenticateFunc, cfg config.RealtimeConfig) *Server {
-	return &Server{logger: logger, allowedOrigin: strings.TrimRight(allowedOrigin, "/"), store: store, hub: hub, authenticate: authenticate, config: cfg}
+func NewServer(logger *slog.Logger, allowedOrigin string, store *eventlog.Store, hub *Hub, authenticate AuthenticateFunc, cfg config.RealtimeConfig, ephemeral *Ephemeral) *Server {
+	return &Server{logger: logger, allowedOrigin: strings.TrimRight(allowedOrigin, "/"), store: store, hub: hub, authenticate: authenticate, config: cfg, ephemeral: ephemeral}
 }
 
 func (s *Server) Shutdown() { s.hub.Shutdown(errServiceRestart) }
@@ -88,7 +89,12 @@ func (s *Server) ServeHTTP(w standardhttp.ResponseWriter, r *standardhttp.Reques
 		_ = connection.Close(websocket.StatusInternalError, "event log unavailable")
 		return
 	}
-	subscription, err := s.hub.Register(user.OrgID, user.ActorID, initialWatermark)
+	connectionID, err := id.New()
+	if err != nil {
+		_ = connection.Close(websocket.StatusInternalError, "connection id unavailable")
+		return
+	}
+	subscription, err := s.hub.Register(user.OrgID, user.ActorID, connectionID, initialWatermark)
 	if err != nil {
 		if errors.Is(err, ErrConnectionLimit) {
 			s.writeInitialError(r.Context(), connection, "rate_limited", "The actor connection limit was reached.")
@@ -118,16 +124,13 @@ func (s *Server) ServeHTTP(w standardhttp.ResponseWriter, r *standardhttp.Reques
 		return
 	}
 
-	connectionID, err := id.New()
-	if err != nil {
-		_ = connection.Close(websocket.StatusInternalError, "connection id unavailable")
-		return
-	}
 	session := &session{
 		logger: s.logger, connection: connection, subscription: subscription, store: s.store, user: user,
 		config: s.config, connectionID: connectionID, requestID: auth.RequestID,
-		lastSeq: auth.LastSeq, backlogHigh: bounds.CurrentSeq, minRetainedSeq: bounds.MinRetainedSeq,
-		acks: make(chan int64, 32), protocolErrors: make(chan protocolErrorFrame, 1),
+		sessionID: accessIdentity.SessionID,
+		lastSeq:   auth.LastSeq, backlogHigh: bounds.CurrentSeq, minRetainedSeq: bounds.MinRetainedSeq,
+		acks: make(chan int64, 32), protocolErrors: make(chan protocolErrorFrame, 1), ephemeralErrors: make(chan protocolErrorFrame, 8),
+		ephemeral: s.ephemeral,
 	}
 	startedAt := time.Now()
 	s.logger.Info("websocket connected",
@@ -183,6 +186,36 @@ type helloFrame struct {
 type ackFrame struct {
 	Op  string `json:"op"`
 	Seq int64  `json:"seq"`
+}
+
+type subscribeActiveFrame struct {
+	Op           string  `json:"op"`
+	ChatID       *string `json:"chat_id"`
+	ThreadRootID *string `json:"thread_root_id"`
+}
+type typingFrame struct {
+	Op           string  `json:"op"`
+	ChatID       string  `json:"chat_id"`
+	ThreadRootID *string `json:"thread_root_id"`
+	Active       bool    `json:"active"`
+}
+type presenceFrame struct {
+	Op    string `json:"op"`
+	State string `json:"state"`
+}
+type typingEventFrame struct {
+	Op           string    `json:"op"`
+	ActorID      string    `json:"actor_id"`
+	ChatID       string    `json:"chat_id"`
+	ThreadRootID *string   `json:"thread_root_id"`
+	Active       bool      `json:"active"`
+	ExpiresAt    time.Time `json:"expires_at"`
+}
+type presenceEventFrame struct {
+	Op        string    `json:"op"`
+	ActorID   string    `json:"actor_id"`
+	State     string    `json:"state"`
+	ExpiresAt time.Time `json:"expires_at"`
 }
 
 type resyncFrame struct {

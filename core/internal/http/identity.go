@@ -16,6 +16,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/chat"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/message"
+	"github.com/comamessenger/comamessenger/core/internal/userstate"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
@@ -26,6 +27,7 @@ type Dependencies struct {
 	Identity        *identity.Service
 	Chats           *chat.Service
 	Messages        *message.Service
+	UserState       *userstate.Service
 	Realtime        standardhttp.Handler
 	CookieSecure    bool
 	RefreshTokenTTL time.Duration
@@ -36,6 +38,7 @@ type identityHandlers struct {
 	service        *identity.Service
 	chats          *chat.Service
 	messages       *message.Service
+	userState      *userstate.Service
 	realtime       standardhttp.Handler
 	allowedOrigin  string
 	cookieSecure   bool
@@ -55,7 +58,7 @@ type authenticated struct {
 
 func newIdentityHandlers(logger *slog.Logger, allowedOrigin string, dependencies Dependencies) *identityHandlers {
 	return &identityHandlers{
-		logger: logger, service: dependencies.Identity, chats: dependencies.Chats, messages: dependencies.Messages, realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
+		logger: logger, service: dependencies.Identity, chats: dependencies.Chats, messages: dependencies.Messages, userState: dependencies.UserState, realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
 		cookieSecure: dependencies.CookieSecure, refreshTTL: dependencies.RefreshTokenTTL,
 		bootstrapRate: newIPRateLimiter(5, 5), loginRate: newIPRateLimiter(10, 10),
 		refreshRate: newIPRateLimiter(30, 20), invitationRate: newIPRateLimiter(10, 10),
@@ -109,6 +112,14 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Get("/messages/{messageID}/thread", h.listThread)
 			protected.Put("/messages/{messageID}/thread/follow", h.followThread)
 			protected.Delete("/messages/{messageID}/thread/follow", h.unfollowThread)
+		}
+		if h.userState != nil {
+			protected.Get("/unread", h.unreadSnapshot)
+			protected.Post("/chats/{chatID}/read", h.markChatRead)
+			protected.Post("/messages/{messageID}/thread/read", h.markThreadRead)
+			protected.Get("/drafts", h.listDrafts)
+			protected.Put("/drafts/{chatID}", h.putDraft)
+			protected.Delete("/drafts/{chatID}", h.deleteDraft)
 		}
 	})
 }

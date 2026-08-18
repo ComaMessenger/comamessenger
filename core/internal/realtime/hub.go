@@ -2,6 +2,7 @@ package realtime
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"sync"
 )
@@ -9,20 +10,25 @@ import (
 var ErrConnectionLimit = errors.New("realtime actor connection limit reached")
 
 type Subscription struct {
-	OrgID   string
-	ActorID string
+	OrgID        string
+	ActorID      string
+	ConnectionID string
 
-	mu         sync.Mutex
-	latest     int64
-	notify     chan struct{}
-	ctx        context.Context
-	cancel     context.CancelCauseFunc
-	unregister func()
-	once       sync.Once
+	mu                 sync.Mutex
+	latest             int64
+	notify             chan struct{}
+	ephemeral          chan json.RawMessage
+	activeChatID       *string
+	activeThreadRootID *string
+	ctx                context.Context
+	cancel             context.CancelCauseFunc
+	unregister         func()
+	once               sync.Once
 }
 
-func (s *Subscription) Notifications() <-chan struct{} { return s.notify }
-func (s *Subscription) Context() context.Context       { return s.ctx }
+func (s *Subscription) Notifications() <-chan struct{}    { return s.notify }
+func (s *Subscription) Ephemeral() <-chan json.RawMessage { return s.ephemeral }
+func (s *Subscription) Context() context.Context          { return s.ctx }
 
 func (s *Subscription) Latest() int64 {
 	s.mu.Lock()
@@ -71,7 +77,7 @@ func NewHub(maxConnectionsPerActor int) *Hub {
 	return &Hub{organizations: make(map[string]*orgState), maxConnectionsPerActor: maxConnectionsPerActor}
 }
 
-func (h *Hub) Register(orgID, actorID string, initialWatermark int64) (*Subscription, error) {
+func (h *Hub) Register(orgID, actorID, connectionID string, initialWatermark int64) (*Subscription, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.closed {
@@ -92,12 +98,63 @@ func (h *Hub) Register(orgID, actorID string, initialWatermark int64) (*Subscrip
 	}
 	ctx, cancel := context.WithCancelCause(context.Background())
 	subscription := &Subscription{
-		OrgID: orgID, ActorID: actorID, latest: state.watermark, notify: make(chan struct{}, 1), ctx: ctx, cancel: cancel,
+		OrgID: orgID, ActorID: actorID, ConnectionID: connectionID, latest: state.watermark, notify: make(chan struct{}, 1), ephemeral: make(chan json.RawMessage, 64), ctx: ctx, cancel: cancel,
 	}
 	subscription.unregister = func() { h.unregister(subscription) }
 	state.actors[actorID]++
 	state.members[subscription] = struct{}{}
 	return subscription, nil
+}
+
+func (h *Hub) SetActive(subscription *Subscription, chatID, threadRootID *string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if state := h.organizations[subscription.OrgID]; state != nil {
+		if _, exists := state.members[subscription]; exists {
+			subscription.activeChatID = chatID
+			subscription.activeThreadRootID = threadRootID
+		}
+	}
+}
+
+func (h *Hub) IsActive(subscription *Subscription, chatID string, threadRootID *string) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if subscription.activeChatID == nil || *subscription.activeChatID != chatID {
+		return false
+	}
+	if subscription.activeThreadRootID == nil || threadRootID == nil {
+		return subscription.activeThreadRootID == nil && threadRootID == nil
+	}
+	return *subscription.activeThreadRootID == *threadRootID
+}
+
+func (h *Hub) BroadcastEphemeral(orgID string, actorIDs []string, excludeConnectionID string, payload json.RawMessage) {
+	recipients := make(map[string]struct{}, len(actorIDs))
+	for _, actorID := range actorIDs {
+		recipients[actorID] = struct{}{}
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	state := h.organizations[orgID]
+	if state == nil {
+		return
+	}
+	for subscription := range state.members {
+		if subscription.ConnectionID == excludeConnectionID {
+			continue
+		}
+		if len(recipients) > 0 {
+			if _, ok := recipients[subscription.ActorID]; !ok {
+				continue
+			}
+		}
+		copyPayload := append(json.RawMessage(nil), payload...)
+		select {
+		case subscription.ephemeral <- copyPayload:
+		default:
+		}
+	}
 }
 
 func (h *Hub) unregister(subscription *Subscription) {

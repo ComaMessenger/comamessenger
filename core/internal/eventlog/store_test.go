@@ -38,14 +38,14 @@ func TestStoreReplayHydratesAndFiltersCurrentMembership(t *testing.T) {
 	if bounds.CurrentSeq != second.CreatedSeq || bounds.MinRetainedSeq != 0 {
 		t.Fatalf("Bounds() = %+v", bounds)
 	}
-	frames, err := store.Replay(ctx, member, 0, bounds.CurrentSeq, 10)
+	frames, err := store.Replay(ctx, member, "", 0, bounds.CurrentSeq, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(frames) != 2 || frames[0].Seq != first.CreatedSeq || frames[1].Seq != second.CreatedSeq {
 		t.Fatalf("Replay() = %+v", frames)
 	}
-	limited, err := store.Replay(ctx, member, 0, bounds.CurrentSeq, 1)
+	limited, err := store.Replay(ctx, member, "", 0, bounds.CurrentSeq, 1)
 	if err != nil || len(limited) != 1 || limited[0].Seq != first.CreatedSeq {
 		t.Fatalf("bounded Replay() = %+v, %v", limited, err)
 	}
@@ -56,7 +56,7 @@ func TestStoreReplayHydratesAndFiltersCurrentMembership(t *testing.T) {
 	if hydrated.ID != first.ID || hydrated.Body != first.Body || hydrated.ClientMsgID != first.ClientMsgID {
 		t.Fatalf("hydrated message = %+v", hydrated)
 	}
-	if frames, err := store.Replay(ctx, outsider, 0, bounds.CurrentSeq, 10); err != nil || len(frames) != 0 {
+	if frames, err := store.Replay(ctx, outsider, "", 0, bounds.CurrentSeq, 10); err != nil || len(frames) != 0 {
 		t.Fatalf("outsider Replay() = %+v, %v", frames, err)
 	}
 
@@ -70,7 +70,7 @@ func TestStoreReplayHydratesAndFiltersCurrentMembership(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	actionFrames, err := store.Replay(ctx, member, second.CreatedSeq, actionBounds.CurrentSeq, 10)
+	actionFrames, err := store.Replay(ctx, member, "", second.CreatedSeq, actionBounds.CurrentSeq, 10)
 	if err != nil || len(actionFrames) != 2 || actionFrames[0].Type != "reaction.added" || actionFrames[1].Type != "reaction.removed" {
 		t.Fatalf("action Replay() = %+v, %v", actionFrames, err)
 	}
@@ -84,7 +84,7 @@ func TestStoreReplayHydratesAndFiltersCurrentMembership(t *testing.T) {
 	if _, err := pool.Exec(ctx, `DELETE FROM chat_members WHERE chat_id = $1 AND actor_id = $2`, chatID, member.ActorID); err != nil {
 		t.Fatal(err)
 	}
-	if frames, err := store.Replay(ctx, member, 0, bounds.CurrentSeq, 10); err != nil || len(frames) != 0 {
+	if frames, err := store.Replay(ctx, member, "", 0, bounds.CurrentSeq, 10); err != nil || len(frames) != 0 {
 		t.Fatalf("revoked member Replay() = %+v, %v", frames, err)
 	}
 

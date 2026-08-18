@@ -204,6 +204,24 @@ func (e DirectoryChatKind) Valid() bool {
 	}
 }
 
+// Defines values for DraftBodyFormat.
+const (
+	DraftBodyFormatMarkdown DraftBodyFormat = "markdown"
+	DraftBodyFormatPlain    DraftBodyFormat = "plain"
+)
+
+// Valid indicates whether the value is a known member of the DraftBodyFormat enum.
+func (e DraftBodyFormat) Valid() bool {
+	switch e {
+	case DraftBodyFormatMarkdown:
+		return true
+	case DraftBodyFormatPlain:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DurableEventTypeV1.
 const (
 	ChatArchived     DurableEventTypeV1 = "chat.archived"
@@ -393,6 +411,24 @@ func (e MessageType) Valid() bool {
 	}
 }
 
+// Defines values for PutDraftRequestBodyFormat.
+const (
+	PutDraftRequestBodyFormatMarkdown PutDraftRequestBodyFormat = "markdown"
+	PutDraftRequestBodyFormatPlain    PutDraftRequestBodyFormat = "plain"
+)
+
+// Valid indicates whether the value is a known member of the PutDraftRequestBodyFormat enum.
+func (e PutDraftRequestBodyFormat) Valid() bool {
+	switch e {
+	case PutDraftRequestBodyFormatMarkdown:
+		return true
+	case PutDraftRequestBodyFormatPlain:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RealtimeAckFrameV1Op.
 const (
 	Ack RealtimeAckFrameV1Op = "ack"
@@ -521,10 +557,11 @@ func (e RealtimePresenceEventFrameV1State) Valid() bool {
 
 // Defines values for RealtimeProtocolErrorFrameV1Code.
 const (
-	RealtimeProtocolErrorFrameV1CodeForbidden        RealtimeProtocolErrorFrameV1Code = "forbidden"
-	RealtimeProtocolErrorFrameV1CodeInvalidFrame     RealtimeProtocolErrorFrameV1Code = "invalid_frame"
-	RealtimeProtocolErrorFrameV1CodeNotAuthenticated RealtimeProtocolErrorFrameV1Code = "not_authenticated"
-	RealtimeProtocolErrorFrameV1CodeRateLimited      RealtimeProtocolErrorFrameV1Code = "rate_limited"
+	RealtimeProtocolErrorFrameV1CodeForbidden          RealtimeProtocolErrorFrameV1Code = "forbidden"
+	RealtimeProtocolErrorFrameV1CodeInvalidFrame       RealtimeProtocolErrorFrameV1Code = "invalid_frame"
+	RealtimeProtocolErrorFrameV1CodeNotAuthenticated   RealtimeProtocolErrorFrameV1Code = "not_authenticated"
+	RealtimeProtocolErrorFrameV1CodeRateLimited        RealtimeProtocolErrorFrameV1Code = "rate_limited"
+	RealtimeProtocolErrorFrameV1CodeServiceUnavailable RealtimeProtocolErrorFrameV1Code = "service_unavailable"
 )
 
 // Valid indicates whether the value is a known member of the RealtimeProtocolErrorFrameV1Code enum.
@@ -537,6 +574,8 @@ func (e RealtimeProtocolErrorFrameV1Code) Valid() bool {
 	case RealtimeProtocolErrorFrameV1CodeNotAuthenticated:
 		return true
 	case RealtimeProtocolErrorFrameV1CodeRateLimited:
+		return true
+	case RealtimeProtocolErrorFrameV1CodeServiceUnavailable:
 		return true
 	default:
 		return false
@@ -828,6 +867,14 @@ type ChatMember struct {
 // ChatMemberRole defines model for ChatMember.Role.
 type ChatMemberRole string
 
+// ChatUnread defines model for ChatUnread.
+type ChatUnread struct {
+	ChatId       openapi_types.UUID `json:"chat_id"`
+	LastReadSeq  int64              `json:"last_read_seq"`
+	MentionCount int64              `json:"mention_count"`
+	UnreadCount  int64              `json:"unread_count"`
+}
+
 // CreateChatRequest defines model for CreateChatRequest.
 type CreateChatRequest struct {
 	Kind       CreateChatRequestKind        `json:"kind"`
@@ -854,11 +901,12 @@ type CreateInvitationRequestRole string
 
 // CreateMessageRequest defines model for CreateMessageRequest.
 type CreateMessageRequest struct {
-	Body         string                          `json:"body"`
-	BodyFormat   *CreateMessageRequestBodyFormat `json:"body_format,omitempty"`
-	ClientMsgId  openapi_types.UUID              `json:"client_msg_id"`
-	ReplyToId    *openapi_types.UUID             `json:"reply_to_id,omitempty"`
-	ThreadRootId *openapi_types.UUID             `json:"thread_root_id,omitempty"`
+	Body              string                          `json:"body"`
+	BodyFormat        *CreateMessageRequestBodyFormat `json:"body_format,omitempty"`
+	ClientMsgId       openapi_types.UUID              `json:"client_msg_id"`
+	MentionedActorIds *[]openapi_types.UUID           `json:"mentioned_actor_ids,omitempty"`
+	ReplyToId         *openapi_types.UUID             `json:"reply_to_id,omitempty"`
+	ThreadRootId      *openapi_types.UUID             `json:"thread_root_id,omitempty"`
 }
 
 // CreateMessageRequestBodyFormat defines model for CreateMessageRequest.BodyFormat.
@@ -875,6 +923,24 @@ type DirectoryChat struct {
 
 // DirectoryChatKind defines model for DirectoryChat.Kind.
 type DirectoryChatKind string
+
+// Draft defines model for Draft.
+type Draft struct {
+	Body         string              `json:"body"`
+	BodyFormat   DraftBodyFormat     `json:"body_format"`
+	ChatId       openapi_types.UUID  `json:"chat_id"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+	UpdatedAt    time.Time           `json:"updated_at"`
+	Version      int                 `json:"version"`
+}
+
+// DraftBodyFormat defines model for Draft.BodyFormat.
+type DraftBodyFormat string
+
+// DraftList defines model for DraftList.
+type DraftList struct {
+	Drafts []Draft `json:"drafts"`
+}
 
 // DurableEventTypeV1 defines model for DurableEventTypeV1.
 type DurableEventTypeV1 string
@@ -926,23 +992,29 @@ type LoginRequest struct {
 	Password string              `json:"password"`
 }
 
+// MarkReadRequest defines model for MarkReadRequest.
+type MarkReadRequest struct {
+	LastReadSeq int64 `json:"last_read_seq"`
+}
+
 // Message defines model for Message.
 type Message struct {
-	ActorId       openapi_types.UUID  `json:"actor_id"`
-	Body          string              `json:"body"`
-	BodyFormat    MessageBodyFormat   `json:"body_format"`
-	ChatId        openapi_types.UUID  `json:"chat_id"`
-	ClientMsgId   openapi_types.UUID  `json:"client_msg_id"`
-	CreatedAt     time.Time           `json:"created_at"`
-	CreatedSeq    int64               `json:"created_seq"`
-	DeletedAt     *time.Time          `json:"deleted_at,omitempty"`
-	EditedAt      *time.Time          `json:"edited_at,omitempty"`
-	ForwardedFrom *ForwardAttribution `json:"forwarded_from,omitempty"`
-	Id            openapi_types.UUID  `json:"id"`
-	ReplyToId     *openapi_types.UUID `json:"reply_to_id,omitempty"`
-	ThreadRootId  *openapi_types.UUID `json:"thread_root_id,omitempty"`
-	Type          MessageType         `json:"type"`
-	Version       int                 `json:"version"`
+	ActorId           openapi_types.UUID   `json:"actor_id"`
+	Body              string               `json:"body"`
+	BodyFormat        MessageBodyFormat    `json:"body_format"`
+	ChatId            openapi_types.UUID   `json:"chat_id"`
+	ClientMsgId       openapi_types.UUID   `json:"client_msg_id"`
+	CreatedAt         time.Time            `json:"created_at"`
+	CreatedSeq        int64                `json:"created_seq"`
+	DeletedAt         *time.Time           `json:"deleted_at,omitempty"`
+	EditedAt          *time.Time           `json:"edited_at,omitempty"`
+	ForwardedFrom     *ForwardAttribution  `json:"forwarded_from,omitempty"`
+	Id                openapi_types.UUID   `json:"id"`
+	MentionedActorIds []openapi_types.UUID `json:"mentioned_actor_ids"`
+	ReplyToId         *openapi_types.UUID  `json:"reply_to_id,omitempty"`
+	ThreadRootId      *openapi_types.UUID  `json:"thread_root_id,omitempty"`
+	Type              MessageType          `json:"type"`
+	Version           int                  `json:"version"`
 }
 
 // MessageBodyFormat defines model for Message.BodyFormat.
@@ -969,6 +1041,17 @@ type MessagePinList struct {
 	Pins []MessagePin `json:"pins"`
 }
 
+// PutDraftRequest defines model for PutDraftRequest.
+type PutDraftRequest struct {
+	Body            string                     `json:"body"`
+	BodyFormat      *PutDraftRequestBodyFormat `json:"body_format,omitempty"`
+	ExpectedVersion int                        `json:"expected_version"`
+	ThreadRootId    *openapi_types.UUID        `json:"thread_root_id,omitempty"`
+}
+
+// PutDraftRequestBodyFormat defines model for PutDraftRequest.BodyFormat.
+type PutDraftRequestBodyFormat string
+
 // Reaction defines model for Reaction.
 type Reaction struct {
 	ActorId   openapi_types.UUID `json:"actor_id"`
@@ -980,6 +1063,14 @@ type Reaction struct {
 // ReactionList defines model for ReactionList.
 type ReactionList struct {
 	Reactions []Reaction `json:"reactions"`
+}
+
+// ReadMarker defines model for ReadMarker.
+type ReadMarker struct {
+	ChatId       openapi_types.UUID  `json:"chat_id"`
+	LastReadAt   time.Time           `json:"last_read_at"`
+	LastReadSeq  int64               `json:"last_read_seq"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
 }
 
 // RealtimeAckFrameV1 defines model for RealtimeAckFrameV1.
@@ -1157,11 +1248,26 @@ type ThreadSummary struct {
 	Root            Message   `json:"root"`
 }
 
+// ThreadUnread defines model for ThreadUnread.
+type ThreadUnread struct {
+	ChatId       openapi_types.UUID `json:"chat_id"`
+	LastReadSeq  int64              `json:"last_read_seq"`
+	MentionCount int64              `json:"mention_count"`
+	ThreadRootId openapi_types.UUID `json:"thread_root_id"`
+	UnreadCount  int64              `json:"unread_count"`
+}
+
 // TokenResponse defines model for TokenResponse.
 type TokenResponse struct {
 	AccessExpiresAt time.Time `json:"access_expires_at"`
 	AccessToken     string    `json:"access_token"`
 	User            User      `json:"user"`
+}
+
+// UnreadSnapshot defines model for UnreadSnapshot.
+type UnreadSnapshot struct {
+	Chats   []ChatUnread   `json:"chats"`
+	Threads []ThreadUnread `json:"threads"`
 }
 
 // UpdateChatMemberRequest defines model for UpdateChatMemberRequest.
@@ -1184,9 +1290,10 @@ type UpdateChatRequestVisibility string
 
 // UpdateMessageRequest defines model for UpdateMessageRequest.
 type UpdateMessageRequest struct {
-	Body            string                          `json:"body"`
-	BodyFormat      *UpdateMessageRequestBodyFormat `json:"body_format,omitempty"`
-	ExpectedVersion int                             `json:"expected_version"`
+	Body              string                          `json:"body"`
+	BodyFormat        *UpdateMessageRequestBodyFormat `json:"body_format,omitempty"`
+	ExpectedVersion   int                             `json:"expected_version"`
+	MentionedActorIds *[]openapi_types.UUID           `json:"mentioned_actor_ids,omitempty"`
 }
 
 // UpdateMessageRequestBodyFormat defines model for UpdateMessageRequest.BodyFormat.
@@ -1237,6 +1344,11 @@ type ListMessagesParams struct {
 	ThreadRootId *openapi_types.UUID `form:"thread_root_id,omitempty" json:"thread_root_id,omitempty"`
 }
 
+// DeleteDraftParams defines parameters for DeleteDraft.
+type DeleteDraftParams struct {
+	ThreadRootId *openapi_types.UUID `form:"thread_root_id,omitempty" json:"thread_root_id,omitempty"`
+}
+
 // ListThreadMessagesParams defines parameters for ListThreadMessages.
 type ListThreadMessagesParams struct {
 	BeforeSeq *int64 `form:"before_seq,omitempty" json:"before_seq,omitempty"`
@@ -1270,6 +1382,12 @@ type UpdateChatMemberJSONRequestBody = UpdateChatMemberRequest
 // CreateMessageJSONRequestBody defines body for CreateMessage for application/json ContentType.
 type CreateMessageJSONRequestBody = CreateMessageRequest
 
+// MarkChatReadJSONRequestBody defines body for MarkChatRead for application/json ContentType.
+type MarkChatReadJSONRequestBody = MarkReadRequest
+
+// PutDraftJSONRequestBody defines body for PutDraft for application/json ContentType.
+type PutDraftJSONRequestBody = PutDraftRequest
+
 // CreateInvitationJSONRequestBody defines body for CreateInvitation for application/json ContentType.
 type CreateInvitationJSONRequestBody = CreateInvitationRequest
 
@@ -1284,3 +1402,6 @@ type UpdateMessageJSONRequestBody = UpdateMessageRequest
 
 // ForwardMessageJSONRequestBody defines body for ForwardMessage for application/json ContentType.
 type ForwardMessageJSONRequestBody = ForwardMessageRequest
+
+// MarkThreadReadJSONRequestBody defines body for MarkThreadRead for application/json ContentType.
+type MarkThreadReadJSONRequestBody = MarkReadRequest

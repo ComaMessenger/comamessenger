@@ -62,7 +62,7 @@ func (s *Store) Bounds(ctx context.Context, orgID string) (Bounds, error) {
 
 // Replay returns at most limit visible events in (afterSeq, throughSeq]. Filtering
 // and message hydration happen in the same statement against current membership.
-func (s *Store) Replay(ctx context.Context, user identity.User, afterSeq, throughSeq int64, limit int) ([]Frame, error) {
+func (s *Store) Replay(ctx context.Context, user identity.User, sessionID string, afterSeq, throughSeq int64, limit int) ([]Frame, error) {
 	if throughSeq <= afterSeq || limit < 1 {
 		return []Frame{}, nil
 	}
@@ -85,7 +85,8 @@ func (s *Store) Replay(ctx context.Context, user identity.User, afterSeq, throug
 						'created_at', m.created_at,
 						'edited_at', m.edited_at,
 						'deleted_at', m.deleted_at,
-						'forwarded_from', m.forwarded_from
+						'forwarded_from', m.forwarded_from,
+						'mentioned_actor_ids', m.mentioned_actor_ids
 					)
 				ELSE e.data
 			END
@@ -93,6 +94,7 @@ func (s *Store) Replay(ctx context.Context, user identity.User, afterSeq, throug
 		LEFT JOIN messages m ON m.org_id = e.org_id AND m.id = e.subject_id
 		WHERE e.org_id = $1 AND e.seq > $2 AND e.seq <= $3
 		  AND (e.audience_actor_id IS NULL OR e.audience_actor_id = $4)
+		  AND (e.exclude_session_id IS NULL OR NULLIF($5, '') IS NULL OR e.exclude_session_id <> NULLIF($5, '')::uuid)
 		  AND (
 			e.chat_id IS NULL OR EXISTS (
 				SELECT 1
@@ -105,7 +107,7 @@ func (s *Store) Replay(ctx context.Context, user identity.User, afterSeq, throug
 			)
 		  )
 		ORDER BY e.seq
-		LIMIT $5`, user.OrgID, afterSeq, throughSeq, user.ActorID, limit)
+		LIMIT $6`, user.OrgID, afterSeq, throughSeq, user.ActorID, sessionID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("replay visible events: %w", err)
 	}

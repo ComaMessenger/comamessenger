@@ -11,12 +11,12 @@ import (
 
 func TestHubConnectionLimitAndWatermark(t *testing.T) {
 	hub := NewHub(1)
-	first, err := hub.Register("org", "actor", 4)
+	first, err := hub.Register("org", "actor", "connection-1", 4)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer first.Close()
-	if _, err := hub.Register("org", "actor", 4); !errors.Is(err, ErrConnectionLimit) {
+	if _, err := hub.Register("org", "actor", "connection-2", 4); !errors.Is(err, ErrConnectionLimit) {
 		t.Fatalf("Register() error = %v, want ErrConnectionLimit", err)
 	}
 
@@ -58,7 +58,7 @@ func TestDispatcherCoalescesWakeupsAndTracksTheirSource(t *testing.T) {
 
 func TestHubShutdownCancelsSubscriptions(t *testing.T) {
 	hub := NewHub(2)
-	subscription, err := hub.Register("org", "actor", 0)
+	subscription, err := hub.Register("org", "actor", "connection-1", 0)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -33,7 +33,12 @@ func TestMessageCoreIntegration(t *testing.T) {
 
 	t.Run("concurrent idempotent create has one write and one event", func(t *testing.T) {
 		clientID := mustID(t)
-		input := CreateInput{ClientMsgID: clientID, Body: "hello", BodyFormat: "plain"}
+		input := CreateInput{
+			ClientMsgID:       clientID,
+			Body:              "hello",
+			BodyFormat:        "plain",
+			MentionedActorIDs: []string{fixture.owner.ActorID},
+		}
 		const workers = 100
 		type outcome struct {
 			message Message
@@ -89,13 +94,15 @@ func TestMessageCoreIntegration(t *testing.T) {
 			t.Fatalf("conflicting Create() error = %v, want ErrIdempotencyConflict", err)
 		}
 
+		emptyMentions := []string{}
 		updated, err := service.Update(ctx, fixture.member, first.ID, UpdateInput{
 			Body: "hello, edited", BodyFormat: "markdown", ExpectedVersion: 1,
+			MentionedActorIDs: &emptyMentions,
 		})
 		if err != nil {
 			t.Fatalf("Update() error = %v", err)
 		}
-		if updated.Version != 2 || updated.EditedAt == nil {
+		if updated.Version != 2 || updated.EditedAt == nil || len(updated.MentionedActorIDs) != 0 {
 			t.Fatalf("updated message = %+v", updated)
 		}
 		if _, err := service.Update(ctx, fixture.member, first.ID, UpdateInput{
@@ -104,6 +111,13 @@ func TestMessageCoreIntegration(t *testing.T) {
 			t.Fatalf("stale Update() error = %v, want ErrVersionConflict", err)
 		}
 		assertCount(t, pool, `SELECT count(*) FROM message_revisions WHERE message_id = $1`, 1, first.ID)
+		var revisionMentions []string
+		if err := pool.QueryRow(ctx, `SELECT mentioned_actor_ids FROM message_revisions WHERE message_id = $1`, first.ID).Scan(&revisionMentions); err != nil {
+			t.Fatal(err)
+		}
+		if len(revisionMentions) != 1 || revisionMentions[0] != fixture.owner.ActorID {
+			t.Fatalf("revision mentioned_actor_ids = %v, want original mention", revisionMentions)
+		}
 
 		replayed, created, err := service.Create(ctx, fixture.member, fixture.groupID, input)
 		if err != nil || created || replayed.Version != 2 || replayed.Body != "hello, edited" {

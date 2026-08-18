@@ -21,6 +21,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/message"
 	"github.com/comamessenger/comamessenger/core/internal/password"
 	"github.com/comamessenger/comamessenger/core/internal/realtime"
+	"github.com/comamessenger/comamessenger/core/internal/userstate"
 )
 
 func main() {
@@ -83,9 +84,16 @@ func main() {
 	eventStore := eventlog.NewStore(pool)
 	realtimeHub := realtime.NewHub(int(cfg.Realtime.MaxConnectionsPerActor))
 	dispatcher := realtime.NewDispatcher(logger, eventStore, realtimeHub, cfg.EventLog.PollInterval, cfg.EventLog.WakeCoalesce)
-	realtimeServer := realtime.NewServer(logger, cfg.PublicAppURL, eventStore, realtimeHub, identityService.Authenticate, cfg.Realtime)
+	ephemeralService, err := realtime.NewEphemeral(logger, pool, realtimeHub, cfg.Realtime, cfg.Redis)
+	if err != nil {
+		logger.Error("ephemeral realtime initialization failed", "error", err)
+		os.Exit(1)
+	}
+	defer ephemeralService.Close()
+	realtimeServer := realtime.NewServer(logger, cfg.PublicAppURL, eventStore, realtimeHub, identityService.Authenticate, cfg.Realtime, ephemeralService)
 	realtimeCtx, stopRealtime := context.WithCancel(context.Background())
 	defer realtimeServer.Shutdown()
+	go ephemeralService.Run(realtimeCtx)
 
 	var redisCoordinator *coordination.Redis
 	if cfg.Redis.Mode == "required" {
@@ -113,12 +121,13 @@ func main() {
 	messageService := message.NewService(
 		pool, int(cfg.Messaging.MaxBodyBytes), int(cfg.Messaging.MaxPageSize), afterCommit,
 	)
+	userStateService := userstate.NewService(pool, int(cfg.Messaging.MaxBodyBytes), afterCommit)
 
 	server := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: serverhttp.NewHandler(logger, cfg.PublicAppURL, pool.Ping, serverhttp.Dependencies{
 			Identity: identityService, Chats: chat.NewService(pool),
-			Messages: messageService, Realtime: realtimeServer,
+			Messages: messageService, UserState: userStateService, Realtime: realtimeServer,
 			CookieSecure: cfg.Auth.CookieSecure, RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,

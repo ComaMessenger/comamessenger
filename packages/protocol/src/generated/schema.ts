@@ -469,6 +469,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/unread": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getUnreadSnapshot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chats/{chat_id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["markChatRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/messages/{message_id}/thread/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["markThreadRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listDrafts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/drafts/{chat_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["putDraft"];
+        post?: never;
+        delete: operations["deleteDraft"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -604,7 +684,7 @@ export interface components {
             /** Format: uuid */
             request_id?: string | null;
             /** @enum {string} */
-            code: "invalid_frame" | "not_authenticated" | "forbidden" | "rate_limited";
+            code: "invalid_frame" | "not_authenticated" | "forbidden" | "rate_limited" | "service_unavailable";
             message: string;
         };
         BootstrapStatus: {
@@ -792,6 +872,7 @@ export interface components {
             /** Format: date-time */
             deleted_at?: string | null;
             forwarded_from?: components["schemas"]["ForwardAttribution"] | null;
+            mentioned_actor_ids: string[];
         };
         MessagePage: {
             messages: components["schemas"]["Message"][];
@@ -811,6 +892,7 @@ export interface components {
             reply_to_id?: string;
             /** Format: uuid */
             thread_root_id?: string;
+            mentioned_actor_ids?: string[];
         };
         UpdateMessageRequest: {
             body: string;
@@ -820,6 +902,7 @@ export interface components {
              */
             body_format: "plain" | "markdown";
             expected_version: number;
+            mentioned_actor_ids?: string[];
         };
         ForwardAttribution: {
             author_name: string;
@@ -877,6 +960,72 @@ export interface components {
             threads: components["schemas"]["ThreadSummary"][];
             /** Format: int64 */
             next_before_seq: number | null;
+        };
+        MarkReadRequest: {
+            /** Format: int64 */
+            last_read_seq: number;
+        };
+        ReadMarker: {
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: uuid */
+            thread_root_id?: string | null;
+            /** Format: int64 */
+            last_read_seq: number;
+            /** Format: date-time */
+            last_read_at: string;
+        };
+        Draft: {
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: uuid */
+            thread_root_id?: string | null;
+            body: string;
+            /** @enum {string} */
+            body_format: "plain" | "markdown";
+            version: number;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        PutDraftRequest: {
+            /** Format: uuid */
+            thread_root_id?: string | null;
+            body: string;
+            /**
+             * @default plain
+             * @enum {string}
+             */
+            body_format: "plain" | "markdown";
+            expected_version: number;
+        };
+        DraftList: {
+            drafts: components["schemas"]["Draft"][];
+        };
+        ChatUnread: {
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: int64 */
+            last_read_seq: number;
+            /** Format: int64 */
+            unread_count: number;
+            /** Format: int64 */
+            mention_count: number;
+        };
+        ThreadUnread: {
+            /** Format: uuid */
+            thread_root_id: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: int64 */
+            last_read_seq: number;
+            /** Format: int64 */
+            unread_count: number;
+            /** Format: int64 */
+            mention_count: number;
+        };
+        UnreadSnapshot: {
+            chats: components["schemas"]["ChatUnread"][];
+            threads: components["schemas"]["ThreadUnread"][];
         };
     };
     responses: {
@@ -1907,6 +2056,165 @@ export interface operations {
                     "application/json": components["schemas"]["ThreadPage"];
                 };
             };
+            422: components["responses"]["Error"];
+        };
+    };
+    getUnreadSnapshot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current chat and followed-thread unread counters. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnreadSnapshot"];
+                };
+            };
+        };
+    };
+    markChatRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarkReadRequest"];
+            };
+        };
+        responses: {
+            /** @description Monotonic chat read marker. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadMarker"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    markThreadRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarkReadRequest"];
+            };
+        };
+        responses: {
+            /** @description Monotonic thread read marker. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadMarker"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    listDrafts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Drafts visible only to the current actor. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftList"];
+                };
+            };
+        };
+    };
+    putDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutDraftRequest"];
+            };
+        };
+        responses: {
+            /** @description Existing or updated draft. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Draft"];
+                };
+            };
+            /** @description Draft created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Draft"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    deleteDraft: {
+        parameters: {
+            query?: {
+                thread_root_id?: string;
+            };
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Draft is absent. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
             422: components["responses"]["Error"];
         };
     };

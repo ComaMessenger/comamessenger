@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -27,21 +28,22 @@ var (
 )
 
 type Message struct {
-	ID            string              `json:"id"`
-	ChatID        string              `json:"chat_id"`
-	ActorID       string              `json:"actor_id"`
-	ClientMsgID   string              `json:"client_msg_id"`
-	Type          string              `json:"type"`
-	Body          string              `json:"body"`
-	BodyFormat    string              `json:"body_format"`
-	ReplyToID     *string             `json:"reply_to_id"`
-	ThreadRootID  *string             `json:"thread_root_id"`
-	Version       int                 `json:"version"`
-	CreatedSeq    int64               `json:"created_seq"`
-	CreatedAt     time.Time           `json:"created_at"`
-	EditedAt      *time.Time          `json:"edited_at"`
-	DeletedAt     *time.Time          `json:"deleted_at"`
-	ForwardedFrom *ForwardAttribution `json:"forwarded_from,omitempty"`
+	ID                string              `json:"id"`
+	ChatID            string              `json:"chat_id"`
+	ActorID           string              `json:"actor_id"`
+	ClientMsgID       string              `json:"client_msg_id"`
+	Type              string              `json:"type"`
+	Body              string              `json:"body"`
+	BodyFormat        string              `json:"body_format"`
+	ReplyToID         *string             `json:"reply_to_id"`
+	ThreadRootID      *string             `json:"thread_root_id"`
+	Version           int                 `json:"version"`
+	CreatedSeq        int64               `json:"created_seq"`
+	CreatedAt         time.Time           `json:"created_at"`
+	EditedAt          *time.Time          `json:"edited_at"`
+	DeletedAt         *time.Time          `json:"deleted_at"`
+	ForwardedFrom     *ForwardAttribution `json:"forwarded_from,omitempty"`
+	MentionedActorIDs []string            `json:"mentioned_actor_ids"`
 }
 
 type ForwardAttribution struct {
@@ -51,17 +53,19 @@ type ForwardAttribution struct {
 }
 
 type CreateInput struct {
-	ClientMsgID  string  `json:"client_msg_id"`
-	Body         string  `json:"body"`
-	BodyFormat   string  `json:"body_format"`
-	ReplyToID    *string `json:"reply_to_id"`
-	ThreadRootID *string `json:"thread_root_id"`
+	ClientMsgID       string   `json:"client_msg_id"`
+	Body              string   `json:"body"`
+	BodyFormat        string   `json:"body_format"`
+	ReplyToID         *string  `json:"reply_to_id"`
+	ThreadRootID      *string  `json:"thread_root_id"`
+	MentionedActorIDs []string `json:"mentioned_actor_ids"`
 }
 
 type UpdateInput struct {
-	Body            string `json:"body"`
-	BodyFormat      string `json:"body_format"`
-	ExpectedVersion int    `json:"expected_version"`
+	Body              string    `json:"body"`
+	BodyFormat        string    `json:"body_format"`
+	ExpectedVersion   int       `json:"expected_version"`
+	MentionedActorIDs *[]string `json:"mentioned_actor_ids"`
 }
 
 type ListOptions struct {
@@ -129,6 +133,9 @@ func (s *Service) Create(ctx context.Context, user identity.User, chatID string,
 	if err := validateReferences(ctx, tx, user.OrgID, chatID, input.ReplyToID, input.ThreadRootID); err != nil {
 		return Message{}, false, err
 	}
+	if err := validateMentions(ctx, tx, user.OrgID, chatID, input.MentionedActorIDs); err != nil {
+		return Message{}, false, err
+	}
 
 	seq, err := nextSequence(ctx, tx, user.OrgID)
 	if err != nil {
@@ -137,12 +144,12 @@ func (s *Service) Create(ctx context.Context, user identity.User, chatID string,
 	var result Message
 	err = scanMessage(tx.QueryRow(ctx, `
 		INSERT INTO messages
-			(id, org_id, chat_id, actor_id, client_msg_id, create_fingerprint, body, body_format, reply_to_id, thread_root_id, created_seq)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			(id, org_id, chat_id, actor_id, client_msg_id, create_fingerprint, body, body_format, reply_to_id, thread_root_id, created_seq, mentioned_actor_ids)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		RETURNING id, chat_id, actor_id, client_msg_id, type, body, body_format, reply_to_id,
-			thread_root_id, version, created_seq, created_at, edited_at, deleted_at, forwarded_from`,
+			thread_root_id, version, created_seq, created_at, edited_at, deleted_at, forwarded_from, mentioned_actor_ids`,
 		messageID, user.OrgID, chatID, user.ActorID, input.ClientMsgID, fingerprint[:], input.Body, input.BodyFormat,
-		input.ReplyToID, input.ThreadRootID, seq), &result)
+		input.ReplyToID, input.ThreadRootID, seq, input.MentionedActorIDs), &result)
 	if err != nil {
 		return Message{}, false, fmt.Errorf("insert message: %w", err)
 	}
@@ -151,7 +158,7 @@ func (s *Service) Create(ctx context.Context, user identity.User, chatID string,
 	}
 	highWatermark := seq
 	if input.ThreadRootID != nil {
-		highWatermark, err = autoFollowThread(ctx, tx, user, *input.ThreadRootID, highWatermark)
+		highWatermark, err = autoFollowThread(ctx, tx, user, *input.ThreadRootID, input.MentionedActorIDs, highWatermark)
 		if err != nil {
 			return Message{}, false, err
 		}
@@ -196,7 +203,7 @@ func (s *Service) List(ctx context.Context, user identity.User, chatID string, o
 	}
 	rows, err := tx.Query(ctx, `
 		SELECT id, chat_id, actor_id, client_msg_id, type, body, body_format, reply_to_id,
-			thread_root_id, version, created_seq, created_at, edited_at, deleted_at, forwarded_from
+			thread_root_id, version, created_seq, created_at, edited_at, deleted_at, forwarded_from, mentioned_actor_ids
 		FROM messages
 		WHERE org_id = $1 AND chat_id = $2
 		  AND ($3::bigint IS NULL OR created_seq < $3)
@@ -261,6 +268,17 @@ func (s *Service) Update(ctx context.Context, user identity.User, messageID stri
 	if current.Version != input.ExpectedVersion {
 		return Message{}, ErrVersionConflict
 	}
+	mentions := current.MentionedActorIDs
+	if input.MentionedActorIDs != nil {
+		normalized, err := normalizeActorIDs(*input.MentionedActorIDs)
+		if err != nil {
+			return Message{}, err
+		}
+		if err := validateMentions(ctx, tx, user.OrgID, current.ChatID, normalized); err != nil {
+			return Message{}, err
+		}
+		mentions = normalized
+	}
 	revisionID, err := id.New()
 	if err != nil {
 		return Message{}, fmt.Errorf("generate revision id: %w", err)
@@ -270,18 +288,18 @@ func (s *Service) Update(ctx context.Context, user identity.User, messageID stri
 		return Message{}, err
 	}
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO message_revisions (id, org_id, message_id, version, body, body_format, edited_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)`, revisionID, user.OrgID, messageID, current.Version,
-		current.Body, current.BodyFormat, user.ActorID); err != nil {
+		INSERT INTO message_revisions (id, org_id, message_id, version, body, body_format, edited_by, mentioned_actor_ids)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, revisionID, user.OrgID, messageID, current.Version,
+		current.Body, current.BodyFormat, user.ActorID, current.MentionedActorIDs); err != nil {
 		return Message{}, fmt.Errorf("insert message revision: %w", err)
 	}
 	var result Message
 	err = scanMessage(tx.QueryRow(ctx, `
-		UPDATE messages SET body = $4, body_format = $5, version = version + 1, edited_at = now()
+		UPDATE messages SET body = $4, body_format = $5, mentioned_actor_ids = $6, version = version + 1, edited_at = now()
 		WHERE org_id = $1 AND id = $2 AND version = $3
 		RETURNING id, chat_id, actor_id, client_msg_id, type, body, body_format, reply_to_id,
-			thread_root_id, version, created_seq, created_at, edited_at, deleted_at, forwarded_from`,
-		user.OrgID, messageID, input.ExpectedVersion, input.Body, input.BodyFormat), &result)
+			thread_root_id, version, created_seq, created_at, edited_at, deleted_at, forwarded_from, mentioned_actor_ids`,
+		user.OrgID, messageID, input.ExpectedVersion, input.Body, input.BodyFormat, mentions), &result)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Message{}, ErrVersionConflict
 	}
@@ -331,7 +349,7 @@ func (s *Service) Delete(ctx context.Context, user identity.User, messageID stri
 		UPDATE messages SET body = '', version = version + 1, deleted_at = now()
 		WHERE org_id = $1 AND id = $2
 		RETURNING id, chat_id, actor_id, client_msg_id, type, body, body_format, reply_to_id,
-			thread_root_id, version, created_seq, created_at, edited_at, deleted_at, forwarded_from`, user.OrgID, messageID), &result)
+			thread_root_id, version, created_seq, created_at, edited_at, deleted_at, forwarded_from, mentioned_actor_ids`, user.OrgID, messageID), &result)
 	if err != nil {
 		return Message{}, fmt.Errorf("delete message: %w", err)
 	}
@@ -365,7 +383,28 @@ func (s *Service) validateCreate(chatID string, input *CreateInput) error {
 			}
 		}
 	}
+	normalized, err := normalizeActorIDs(input.MentionedActorIDs)
+	if err != nil {
+		return err
+	}
+	input.MentionedActorIDs = normalized
 	return s.validateBody(&input.Body, &input.BodyFormat)
+}
+
+func normalizeActorIDs(actorIDs []string) ([]string, error) {
+	seen := make(map[string]struct{}, len(actorIDs))
+	normalized := make([]string, 0, len(actorIDs))
+	for _, actorID := range actorIDs {
+		if _, err := uuid.Parse(actorID); err != nil {
+			return nil, fmt.Errorf("%w: mentioned_actor_ids must contain UUIDs", ErrInvalid)
+		}
+		if _, exists := seen[actorID]; !exists {
+			seen[actorID] = struct{}{}
+			normalized = append(normalized, actorID)
+		}
+	}
+	sort.Strings(normalized)
+	return normalized, nil
 }
 
 func (s *Service) validateBody(body, format *string) error {
@@ -419,7 +458,7 @@ func lockMessage(ctx context.Context, tx pgx.Tx, user identity.User, messageID s
 	var kind, role string
 	err := tx.QueryRow(ctx, `
 		SELECT m.id, m.chat_id, m.actor_id, m.client_msg_id, m.type, m.body, m.body_format, m.reply_to_id,
-			m.thread_root_id, m.version, m.created_seq, m.created_at, m.edited_at, m.deleted_at, m.forwarded_from, c.kind, cm.role
+			m.thread_root_id, m.version, m.created_seq, m.created_at, m.edited_at, m.deleted_at, m.forwarded_from, m.mentioned_actor_ids, c.kind, cm.role
 		FROM messages m
 		JOIN chats c ON c.org_id = m.org_id AND c.id = m.chat_id AND c.archived_at IS NULL
 		JOIN chat_members cm ON cm.org_id = c.org_id AND cm.chat_id = c.id AND cm.actor_id = $3
@@ -428,7 +467,7 @@ func lockMessage(ctx context.Context, tx pgx.Tx, user identity.User, messageID s
 		FOR UPDATE OF m FOR SHARE OF c, cm, a`, user.OrgID, messageID, user.ActorID).Scan(
 		&result.ID, &result.ChatID, &result.ActorID, &result.ClientMsgID, &result.Type, &result.Body,
 		&result.BodyFormat, &result.ReplyToID, &result.ThreadRootID, &result.Version, &result.CreatedSeq,
-		&result.CreatedAt, &result.EditedAt, &result.DeletedAt, newJSONScanner(&result.ForwardedFrom), &kind, &role)
+		&result.CreatedAt, &result.EditedAt, &result.DeletedAt, newJSONScanner(&result.ForwardedFrom), &result.MentionedActorIDs, &kind, &role)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Message{}, "", "", ErrNotFound
 	}
@@ -444,12 +483,12 @@ func findByClientID(ctx context.Context, tx pgx.Tx, actorID, clientMsgID string)
 	var fingerprintBytes []byte
 	err := tx.QueryRow(ctx, `
 		SELECT id, chat_id, actor_id, client_msg_id, type, body, body_format, reply_to_id,
-			thread_root_id, version, created_seq, created_at, edited_at, deleted_at, forwarded_from
+			thread_root_id, version, created_seq, created_at, edited_at, deleted_at, forwarded_from, mentioned_actor_ids
 			, create_fingerprint
 		FROM messages WHERE actor_id = $1 AND client_msg_id = $2`, actorID, clientMsgID).Scan(
 		&result.ID, &result.ChatID, &result.ActorID, &result.ClientMsgID, &result.Type, &result.Body,
 		&result.BodyFormat, &result.ReplyToID, &result.ThreadRootID, &result.Version, &result.CreatedSeq,
-		&result.CreatedAt, &result.EditedAt, &result.DeletedAt, newJSONScanner(&result.ForwardedFrom), &fingerprintBytes)
+		&result.CreatedAt, &result.EditedAt, &result.DeletedAt, newJSONScanner(&result.ForwardedFrom), &result.MentionedActorIDs, &fingerprintBytes)
 	copy(fingerprint[:], fingerprintBytes)
 	return result, fingerprint, err
 }
@@ -534,7 +573,7 @@ func commandFingerprint(chatID string, input CreateInput) [32]byte {
 	if input.ThreadRootID != nil {
 		threadRoot = "+" + *input.ThreadRootID
 	}
-	return sha256.Sum256([]byte(chatID + "\x00" + input.Body + "\x00" + input.BodyFormat + "\x00" + replyTo + "\x00" + threadRoot))
+	return sha256.Sum256([]byte(chatID + "\x00" + input.Body + "\x00" + input.BodyFormat + "\x00" + replyTo + "\x00" + threadRoot + "\x00" + strings.Join(input.MentionedActorIDs, ",")))
 }
 
 type rowScanner interface {
@@ -544,7 +583,25 @@ type rowScanner interface {
 func scanMessage(row rowScanner, result *Message) error {
 	return row.Scan(&result.ID, &result.ChatID, &result.ActorID, &result.ClientMsgID, &result.Type,
 		&result.Body, &result.BodyFormat, &result.ReplyToID, &result.ThreadRootID, &result.Version,
-		&result.CreatedSeq, &result.CreatedAt, &result.EditedAt, &result.DeletedAt, newJSONScanner(&result.ForwardedFrom))
+		&result.CreatedSeq, &result.CreatedAt, &result.EditedAt, &result.DeletedAt, newJSONScanner(&result.ForwardedFrom), &result.MentionedActorIDs)
+}
+
+func validateMentions(ctx context.Context, tx pgx.Tx, orgID, chatID string, actorIDs []string) error {
+	if len(actorIDs) == 0 {
+		return nil
+	}
+	var count int
+	if err := tx.QueryRow(ctx, `
+		SELECT count(*) FROM chat_members cm
+		JOIN actors a ON a.org_id = cm.org_id AND a.id = cm.actor_id
+		WHERE cm.org_id = $1 AND cm.chat_id = $2 AND cm.actor_id = ANY($3::uuid[])
+		  AND a.status = 'active' AND a.deleted_at IS NULL`, orgID, chatID, actorIDs).Scan(&count); err != nil {
+		return fmt.Errorf("validate message mentions: %w", err)
+	}
+	if count != len(actorIDs) {
+		return fmt.Errorf("%w: mentioned actors must be active chat members", ErrInvalid)
+	}
+	return nil
 }
 
 type jsonScanner[T any] struct{ target **T }

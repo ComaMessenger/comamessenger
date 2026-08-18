@@ -14,19 +14,22 @@ import (
 )
 
 type session struct {
-	logger         *slog.Logger
-	connection     *websocket.Conn
-	subscription   *Subscription
-	store          *eventlog.Store
-	user           identity.User
-	config         config.RealtimeConfig
-	connectionID   string
-	requestID      string
-	lastSeq        int64
-	backlogHigh    int64
-	minRetainedSeq int64
-	acks           chan int64
-	protocolErrors chan protocolErrorFrame
+	logger          *slog.Logger
+	connection      *websocket.Conn
+	subscription    *Subscription
+	store           *eventlog.Store
+	user            identity.User
+	config          config.RealtimeConfig
+	connectionID    string
+	requestID       string
+	sessionID       string
+	lastSeq         int64
+	backlogHigh     int64
+	minRetainedSeq  int64
+	acks            chan int64
+	protocolErrors  chan protocolErrorFrame
+	ephemeralErrors chan protocolErrorFrame
+	ephemeral       *Ephemeral
 }
 
 func (s *session) run(requestCtx context.Context) (websocket.StatusCode, string) {
@@ -85,9 +88,60 @@ func (s *session) readLoop(ctx context.Context) error {
 			case <-ctx.Done():
 				return context.Cause(ctx)
 			}
+		case "subscribe_active":
+			var frame subscribeActiveFrame
+			if decodeStrict(payload, &frame) != nil || s.ephemeral == nil {
+				return s.protocolFailure(ctx, "invalid_frame", "Active subscription frame is invalid.")
+			}
+			if err := s.ephemeral.SubscribeActive(ctx, s.user, s.subscription, frame.ChatID, frame.ThreadRootID); err != nil {
+				if reportErr := s.reportEphemeralError(ctx, err); reportErr != nil {
+					return reportErr
+				}
+			}
+		case "typing":
+			var frame typingFrame
+			if decodeStrict(payload, &frame) != nil || s.ephemeral == nil {
+				return s.protocolFailure(ctx, "invalid_frame", "Typing frame is invalid.")
+			}
+			if err := s.ephemeral.Typing(ctx, s.user, s.subscription, frame.ChatID, frame.ThreadRootID, frame.Active); err != nil {
+				if reportErr := s.reportEphemeralError(ctx, err); reportErr != nil {
+					return reportErr
+				}
+			}
+		case "presence":
+			var frame presenceFrame
+			if decodeStrict(payload, &frame) != nil || s.ephemeral == nil {
+				return s.protocolFailure(ctx, "invalid_frame", "Presence frame is invalid.")
+			}
+			if err := s.ephemeral.Presence(ctx, s.user, s.subscription, frame.State); err != nil {
+				if reportErr := s.reportEphemeralError(ctx, err); reportErr != nil {
+					return reportErr
+				}
+			}
 		default:
 			return s.protocolFailure(ctx, "invalid_frame", "Operation is not supported in this phase.")
 		}
+	}
+}
+
+func (s *session) reportEphemeralError(ctx context.Context, err error) error {
+	frame := protocolErrorFrame{Op: "error", Code: "invalid_frame", Message: "Ephemeral operation is invalid."}
+	switch {
+	case errors.Is(err, ErrEphemeralRateLimited):
+		frame.Code = "rate_limited"
+		frame.Message = "Ephemeral operation rate limit exceeded."
+	case errors.Is(err, ErrEphemeralForbidden):
+		frame.Code = "forbidden"
+		frame.Message = "Ephemeral scope is not accessible."
+	case errors.Is(err, ErrEphemeralUnavailable):
+		frame.Code = "service_unavailable"
+		frame.Message = "Ephemeral coordination is temporarily unavailable."
+	}
+	select {
+	case s.ephemeralErrors <- frame:
+		return nil
+	case <-ctx.Done():
+		return context.Cause(ctx)
 	}
 }
 
@@ -136,7 +190,7 @@ func (s *session) writeLoop(ctx context.Context) error {
 			if !backlog {
 				queryLimit = int(s.config.MaxQueuedEvents) + 1
 			}
-			frames, err := s.store.Replay(ctx, s.user, deliveredThrough, target, queryLimit)
+			frames, err := s.store.Replay(ctx, s.user, s.sessionID, deliveredThrough, target, queryLimit)
 			if err != nil {
 				return err
 			}
@@ -191,6 +245,14 @@ func (s *session) writeLoop(ctx context.Context) error {
 				return err
 			}
 			return &closeError{code: websocket.StatusPolicyViolation, reason: "protocol violation"}
+		case frame := <-s.ephemeralErrors:
+			if err := s.write(ctx, frame); err != nil {
+				return err
+			}
+		case frame := <-s.subscription.Ephemeral():
+			if err := s.write(ctx, frame); err != nil {
+				return err
+			}
 		case ack := <-s.acks:
 			if ack < lastAck || ack > deliveredThrough {
 				if err := s.write(ctx, protocolErrorFrame{Op: "error", Code: "invalid_frame", Message: "ACK must be monotonic and cannot exceed delivered sequence."}); err != nil {

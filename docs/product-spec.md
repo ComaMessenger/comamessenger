@@ -266,7 +266,8 @@ files(id, org_id, uploader_id, storage_key, name, mime, size, sha256,
 drafts(actor_id, chat_id, thread_root_id null, body, version, updated_at)
 
 events(org_id, seq, type, actor_id, chat_id null, subject_id,
-       audience_actor_id null, occurred_at) primary key (org_id, seq)
+       audience_actor_id null, exclude_session_id null, data jsonb, occurred_at)
+       primary key (org_id, seq)
 
 push_subscriptions(id, user_id, platform, token, created_at)
 

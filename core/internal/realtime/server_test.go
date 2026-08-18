@@ -60,6 +60,44 @@ func TestRealtimeLiveDeliveryAndResume(t *testing.T) {
 	}
 }
 
+func TestRealtimeEphemeralFramesDoNotEnterEventLog(t *testing.T) {
+	harness := newRealtimeHarness(t, realtimeTestConfig())
+	sender, _ := harness.connect(t, 0)
+	defer sender.CloseNow()
+	receiver, _ := harness.connect(t, 0)
+	defer receiver.CloseNow()
+	active := subscribeActiveFrame{Op: "subscribe_active", ChatID: &harness.chatID}
+	if err := wsjson.Write(context.Background(), sender, active); err != nil {
+		t.Fatal(err)
+	}
+	if err := wsjson.Write(context.Background(), receiver, active); err != nil {
+		t.Fatal(err)
+	}
+	if err := wsjson.Write(context.Background(), sender, typingFrame{Op: "typing", ChatID: harness.chatID, Active: true}); err != nil {
+		t.Fatal(err)
+	}
+	var typing typingEventFrame
+	readJSON(t, receiver, 3*time.Second, &typing)
+	if typing.Op != "typing" || typing.ActorID != harness.user.ActorID || !typing.Active {
+		t.Fatalf("typing frame = %+v", typing)
+	}
+	if err := wsjson.Write(context.Background(), sender, presenceFrame{Op: "presence", State: "active"}); err != nil {
+		t.Fatal(err)
+	}
+	var presence presenceEventFrame
+	readJSON(t, receiver, 3*time.Second, &presence)
+	if presence.Op != "presence" || presence.State != "online" {
+		t.Fatalf("presence frame = %+v", presence)
+	}
+	current, err := harness.store.Current(context.Background(), harness.user.OrgID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current != 0 {
+		t.Fatalf("ephemeral frames advanced durable seq to %d", current)
+	}
+}
+
 func TestRealtimePollingRecoversLostWakeup(t *testing.T) {
 	cfg := realtimeTestConfig()
 	harness := newRealtimeHarness(t, cfg)
@@ -257,7 +295,11 @@ func newRealtimeHarnessWithPoll(t *testing.T, cfg config.RealtimeConfig, pollInt
 		}
 		return user, access.Identity{ActorID: user.ActorID, OrgID: user.OrgID, SessionID: sessionID, Role: user.OrgRole}, nil
 	}
-	server := NewServer(logger, "http://example.test", store, hub, authenticate, cfg)
+	ephemeral, err := NewEphemeral(logger, pool, hub, cfg, config.RedisConfig{Mode: "disabled", Namespace: "coma:test", OperationTimeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := NewServer(logger, "http://example.test", store, hub, authenticate, cfg, ephemeral)
 	httpServer := httptest.NewServer(server)
 	ctx, cancel := context.WithCancel(context.Background())
 	go dispatcher.Run(ctx)
@@ -378,6 +420,8 @@ func realtimeTestConfig() config.RealtimeConfig {
 		MaxQueuedEvents: 256, MaxQueuedBytes: 1024 * 1024, MaxUnackedEvents: 128,
 		HeartbeatInterval: time.Hour, PongTimeout: time.Second, AckInterval: 100 * time.Millisecond,
 		AckTimeout: 2 * time.Second, AckBatchSize: 10,
+		TypingTTL: time.Second, PresenceTTL: 10 * time.Second, ActiveSubscriptionTTL: 10 * time.Second,
+		EphemeralRateLimit: 100, EphemeralRateWindow: time.Second,
 	}
 }
 
@@ -394,7 +438,7 @@ func TestRealtimeRejectsOriginAndAuthentication(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	server := NewServer(logger, "http://allowed.test", nil, NewHub(1), func(context.Context, string) (identity.User, access.Identity, error) {
 		return identity.User{}, access.Identity{}, errors.New("denied")
-	}, realtimeTestConfig())
+	}, realtimeTestConfig(), nil)
 	httpServer := httptest.NewServer(server)
 	defer httpServer.Close()
 	wsURL := "ws" + strings.TrimPrefix(httpServer.URL, "http")

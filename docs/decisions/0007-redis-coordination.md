@@ -55,6 +55,8 @@ Redis Streams сейчас не используются: они создали 
 
 - Недоступность Redis не отклоняет уже валидированную durable-команду и не откатывает PostgreSQL commit.
 - При runtime-сбое Core переходит на PostgreSQL polling; ephemeral typing/presence могут временно исчезнуть, что допустимо.
+
+Для ephemeral операций политика иная, чем для durable команд: при `REDIS_MODE=required` недоступность Redis даёт non-fatal WS error `service_unavailable` и операция не публикуется. Это fail-closed, потому что локальный fan-out при нескольких Core создал бы расходящееся presence/typing state и обошёл бы распределённый rate limit. Durable message/read/draft транзакции от Redis не зависят и продолжают доставляться PostgreSQL polling-ом.
 - Некорректная конфигурация выявляется при старте. Потеря соединения после старта отражается как degraded dependency, но не делает весь мессенджер недоступным.
 - После reconnect подписчик не пытается воспроизвести пропущенный Pub/Sub: dispatcher сверяет watermark с PostgreSQL.
 - Ключи имеют versioned namespace `coma:v1:*`, обязательный TTL и не содержат message body, access tokens или другие секреты.

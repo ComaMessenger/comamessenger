@@ -194,6 +194,10 @@ Unknown event type игнорируется по содержимому, но е
 | `EVENT_POLL_INTERVAL`                       |     200ms | recovery polling committed events          |
 | `EVENT_RETENTION`                           |       72h | временное окно delivery log                |
 | `EVENT_RETENTION_MIN_COUNT`                 |   100 000 | минимальный хвост событий организации      |
+| `WS_TYPING_TTL`                             |        6s | срок действия typing lease                  |
+| `WS_PRESENCE_TTL`                           |       60s | срок действия presence lease                |
+| `WS_ACTIVE_SUBSCRIPTION_TTL`                |       60s | срок active-screen lease                     |
+| `WS_EPHEMERAL_RATE_LIMIT/WINDOW`            |  30 / 10s | распределённый лимит ephemeral frames       |
 
 Зависимые значения валидируются при старте Core: например, unacked window не может быть больше event queue, а Pong timeout должен быть короче heartbeat interval.
 
@@ -255,7 +259,9 @@ Presence activity:
 
 Серверная presence-дельта содержит `actor_id`, вычисленное состояние `online|away|offline` и `expires_at`.
 
-Typing/presence проверяются по membership, ограничиваются rate limit и TTL, могут теряться и не влияют на correctness. `subscribe_active` используется только для ephemeral routing и подавления push в активном экране.
+Typing/presence проверяются по membership, ограничиваются rate limit и TTL, могут теряться и не влияют на correctness. `subscribe_active` используется только для ephemeral routing и подавления push в активном экране; клиент обновляет lease до истечения TTL. Сервер не считает соединение online автоматически: presence появляется только после явного frame `presence` от интерактивного user-клиента.
+
+При `REDIS_MODE=required` leases, rate counters и межпроцессный fan-out находятся в Redis. Redis outage для ephemeral frames работает fail-closed с non-fatal `service_unavailable`, но не закрывает WebSocket и не влияет на durable события. При `REDIS_MODE=disabled` тот же контракт реализуется bounded in-memory состоянием и разрешён только для одного Core.
 
 ## 10. Failure matrix
 

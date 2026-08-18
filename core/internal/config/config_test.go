@@ -16,6 +16,9 @@ func setRequiredEnvironment(t *testing.T) {
 	t.Setenv("REDIS_NAMESPACE", "")
 	t.Setenv("REDIS_CONNECT_TIMEOUT", "")
 	t.Setenv("REDIS_OPERATION_TIMEOUT", "")
+	for _, key := range []string{"WS_TYPING_TTL", "WS_PRESENCE_TTL", "WS_ACTIVE_SUBSCRIPTION_TTL", "WS_EPHEMERAL_RATE_LIMIT", "WS_EPHEMERAL_RATE_WINDOW"} {
+		t.Setenv(key, "")
+	}
 }
 
 func TestFromEnvironmentDefaults(t *testing.T) {
@@ -54,6 +57,9 @@ func TestFromEnvironmentDefaults(t *testing.T) {
 	}
 	if cfg.Realtime.HeartbeatInterval != 25*time.Second || cfg.Realtime.PongTimeout != 10*time.Second {
 		t.Fatalf("unexpected realtime heartbeat defaults: %#v", cfg.Realtime)
+	}
+	if cfg.Realtime.TypingTTL != 6*time.Second || cfg.Realtime.PresenceTTL != 60*time.Second || cfg.Realtime.EphemeralRateLimit != 30 || cfg.Realtime.EphemeralRateWindow != 10*time.Second {
+		t.Fatalf("unexpected ephemeral defaults: %#v", cfg.Realtime)
 	}
 	if cfg.EventLog.PollInterval != 200*time.Millisecond || cfg.EventLog.WakeCoalesce != 5*time.Millisecond || cfg.EventLog.Retention != 72*time.Hour || cfg.EventLog.RetentionMinCount != 100_000 {
 		t.Fatalf("unexpected event log defaults: %#v", cfg.EventLog)
@@ -217,6 +223,9 @@ func TestFromEnvironmentRejectsInvalidMessagingAndRealtimeLimits(t *testing.T) {
 		{name: "pong after heartbeat", key: "WS_PONG_TIMEOUT", value: "25s", wantErr: "WS_PONG_TIMEOUT"},
 		{name: "ack timeout before interval", key: "WS_ACK_TIMEOUT", value: "500ms", wantErr: "WS_ACK_TIMEOUT"},
 		{name: "ack batch above window", key: "WS_ACK_BATCH_SIZE", value: "129", wantErr: "WS_ACK_BATCH_SIZE"},
+		{name: "typing ttl too long", key: "WS_TYPING_TTL", value: "31s", wantErr: "WS_TYPING_TTL"},
+		{name: "presence ttl too short", key: "WS_PRESENCE_TTL", value: "5s", wantErr: "WS_PRESENCE_TTL"},
+		{name: "ephemeral limit zero", key: "WS_EPHEMERAL_RATE_LIMIT", value: "0", wantErr: "WS_EPHEMERAL_RATE_LIMIT"},
 		{name: "poll too frequent", key: "EVENT_POLL_INTERVAL", value: "1ms", wantErr: "EVENT_POLL_INTERVAL"},
 		{name: "coalesce too long", key: "EVENT_WAKE_COALESCE", value: "500ms", wantErr: "EVENT_WAKE_COALESCE"},
 		{name: "retention too short", key: "EVENT_RETENTION", value: "30m", wantErr: "EVENT_RETENTION"},
