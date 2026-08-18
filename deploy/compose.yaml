@@ -94,6 +94,7 @@ services:
       dockerfile: apps/web/Dockerfile
     environment:
       VITE_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
+      VITE_ALLOWED_HOSTS: ${WEB_ALLOWED_HOSTS:-localhost,127.0.0.1}
     depends_on:
       core:
         condition: service_started

@@ -22,6 +22,7 @@ PUBLIC_APP_URL=https://rocket.hmns-test.ru
 PUBLIC_API_URL=https://rocket.hmns-test.ru
 BIND_ADDRESS=127.0.0.1
 WEB_PORT=5173
+WEB_ALLOWED_HOSTS=rocket.hmns-test.ru
 AUTH_COOKIE_SECURE=true
 
 POSTGRES_PASSWORD=<random>
