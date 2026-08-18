@@ -26,6 +26,7 @@ type Dependencies struct {
 	Identity        *identity.Service
 	Chats           *chat.Service
 	Messages        *message.Service
+	Realtime        standardhttp.Handler
 	CookieSecure    bool
 	RefreshTokenTTL time.Duration
 }
@@ -35,6 +36,7 @@ type identityHandlers struct {
 	service        *identity.Service
 	chats          *chat.Service
 	messages       *message.Service
+	realtime       standardhttp.Handler
 	allowedOrigin  string
 	cookieSecure   bool
 	refreshTTL     time.Duration
@@ -53,7 +55,7 @@ type authenticated struct {
 
 func newIdentityHandlers(logger *slog.Logger, allowedOrigin string, dependencies Dependencies) *identityHandlers {
 	return &identityHandlers{
-		logger: logger, service: dependencies.Identity, chats: dependencies.Chats, messages: dependencies.Messages, allowedOrigin: allowedOrigin,
+		logger: logger, service: dependencies.Identity, chats: dependencies.Chats, messages: dependencies.Messages, realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
 		cookieSecure: dependencies.CookieSecure, refreshTTL: dependencies.RefreshTokenTTL,
 		bootstrapRate: newIPRateLimiter(5, 5), loginRate: newIPRateLimiter(10, 10),
 		refreshRate: newIPRateLimiter(30, 20), invitationRate: newIPRateLimiter(10, 10),
@@ -66,6 +68,9 @@ func (h *identityHandlers) routes(router chi.Router) {
 	router.With(h.rateLimit("login", h.loginRate)).Post("/auth/login", h.login)
 	router.With(h.rateLimit("refresh", h.refreshRate)).Post("/auth/refresh", h.refresh)
 	router.With(h.rateLimit("invitation-accept", h.invitationRate)).Post("/invitations/{token}/accept", h.acceptInvitation)
+	if h.realtime != nil {
+		router.Handle("/ws", h.realtime)
+	}
 
 	router.Group(func(protected chi.Router) {
 		protected.Use(h.authenticate)

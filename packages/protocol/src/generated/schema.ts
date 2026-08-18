@@ -116,6 +116,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ws": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Upgrade to the version 1 WebSocket protocol. Authentication is sent in the first WebSocket frame. */
+        get: operations["connectRealtime"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -841,6 +858,32 @@ export interface operations {
                 content?: never;
             };
             401: components["responses"]["Error"];
+        };
+    };
+    connectRealtime: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description WebSocket connection established. */
+            101: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            /** @description WebSocket upgrade is required. */
+            426: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     getMe: {

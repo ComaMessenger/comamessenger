@@ -14,10 +14,12 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/chat"
 	"github.com/comamessenger/comamessenger/core/internal/config"
 	"github.com/comamessenger/comamessenger/core/internal/database"
+	"github.com/comamessenger/comamessenger/core/internal/eventlog"
 	serverhttp "github.com/comamessenger/comamessenger/core/internal/http"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/message"
 	"github.com/comamessenger/comamessenger/core/internal/password"
+	"github.com/comamessenger/comamessenger/core/internal/realtime"
 )
 
 func main() {
@@ -77,12 +79,23 @@ func main() {
 		logger.Error("identity service initialization failed", "error", err)
 		os.Exit(1)
 	}
+	eventStore := eventlog.NewStore(pool)
+	realtimeHub := realtime.NewHub(int(cfg.Realtime.MaxConnectionsPerActor))
+	dispatcher := realtime.NewDispatcher(logger, eventStore, realtimeHub, cfg.EventLog.PollInterval)
+	realtimeServer := realtime.NewServer(logger, cfg.PublicAppURL, eventStore, realtimeHub, identityService.Authenticate, cfg.Realtime)
+	realtimeCtx, stopRealtime := context.WithCancel(context.Background())
+	defer stopRealtime()
+	defer realtimeServer.Shutdown()
+	go dispatcher.Run(realtimeCtx)
+	messageService := message.NewService(
+		pool, int(cfg.Messaging.MaxBodyBytes), int(cfg.Messaging.MaxPageSize), dispatcher.Wake,
+	)
 
 	server := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: serverhttp.NewHandler(logger, cfg.PublicAppURL, pool.Ping, serverhttp.Dependencies{
 			Identity: identityService, Chats: chat.NewService(pool),
-			Messages:     message.NewService(pool, int(cfg.Messaging.MaxBodyBytes), int(cfg.Messaging.MaxPageSize)),
+			Messages: messageService, Realtime: realtimeServer,
 			CookieSecure: cfg.Auth.CookieSecure, RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
@@ -110,6 +123,8 @@ func main() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	realtimeServer.Shutdown()
+	stopRealtime()
 	if err := server.Shutdown(ctx); err != nil {
 		logger.Error("graceful shutdown failed", "error", err)
 		os.Exit(1)

@@ -3,22 +3,17 @@ package message
 import (
 	"context"
 	"errors"
-	"fmt"
-	"net/url"
-	"os"
 	"sync"
 	"testing"
-	"time"
 
-	"github.com/comamessenger/comamessenger/core/internal/database"
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
-	"github.com/jackc/pgx/v5"
+	"github.com/comamessenger/comamessenger/core/internal/testdb"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func TestValidation(t *testing.T) {
-	service := NewService(nil, 8, 100)
+	service := NewService(nil, 8, 100, nil)
 	body := "123456789"
 	format := "plain"
 	if err := service.validateBody(&body, &format); !errors.Is(err, ErrTooLarge) {
@@ -31,9 +26,9 @@ func TestValidation(t *testing.T) {
 }
 
 func TestMessageCoreIntegration(t *testing.T) {
-	pool := temporaryDatabase(t)
+	pool := testdb.New(t)
 	fixture := seedFixture(t, pool)
-	service := NewService(pool, 64*1024, 100)
+	service := NewService(pool, 64*1024, 100, nil)
 	ctx := context.Background()
 
 	t.Run("concurrent idempotent create has one write and one event", func(t *testing.T) {
@@ -255,50 +250,6 @@ func seedFixture(t *testing.T, pool *pgxpool.Pool) fixture {
 		t.Fatal(err)
 	}
 	return result
-}
-
-func temporaryDatabase(t *testing.T) *pgxpool.Pool {
-	t.Helper()
-	rawURL := os.Getenv("TEST_DATABASE_URL")
-	if rawURL == "" {
-		t.Skip("TEST_DATABASE_URL is not set")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	admin, err := pgx.Connect(ctx, rawURL)
-	if err != nil {
-		t.Fatalf("connect to test database server: %v", err)
-	}
-	databaseName := fmt.Sprintf("coma_message_test_%d", time.Now().UnixNano())
-	if _, err := admin.Exec(ctx, `CREATE DATABASE `+databaseName); err != nil {
-		admin.Close(ctx)
-		t.Fatalf("create temporary database: %v", err)
-	}
-	parsed, err := url.Parse(rawURL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	parsed.Path = "/" + databaseName
-	testURL := parsed.String()
-	if err := database.Migrate(ctx, testURL); err != nil {
-		admin.Exec(ctx, `DROP DATABASE `+databaseName+` WITH (FORCE)`)
-		admin.Close(ctx)
-		t.Fatalf("migrate temporary database: %v", err)
-	}
-	pool, err := database.NewPool(ctx, testURL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		pool.Close()
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cleanupCancel()
-		if _, err := admin.Exec(cleanupCtx, `DROP DATABASE `+databaseName+` WITH (FORCE)`); err != nil {
-			t.Errorf("drop temporary database: %v", err)
-		}
-		admin.Close(cleanupCtx)
-	})
-	return pool
 }
 
 func mustID(t *testing.T) string {

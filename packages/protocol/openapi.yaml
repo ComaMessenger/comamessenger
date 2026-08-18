@@ -76,6 +76,14 @@ paths:
       responses:
         "204": { description: Session revoked. }
         "401": { $ref: "#/components/responses/Error" }
+  /api/v1/ws:
+    get:
+      operationId: connectRealtime
+      description: Upgrade to the version 1 WebSocket protocol. Authentication is sent in the first WebSocket frame.
+      responses:
+        "101": { description: WebSocket connection established. }
+        "403": { $ref: "#/components/responses/Error" }
+        "426": { description: WebSocket upgrade is required. }
   /api/v1/me:
     get:
       operationId: getMe

@@ -83,15 +83,15 @@
 
 ### Инкремент 2.2 — durable realtime
 
-- [ ] Подключить `github.com/coder/websocket` и реализовать `/api/v1/ws`.
-- [ ] Реализовать first-frame auth, Origin check, frame limits и connection limits.
-- [ ] Реализовать конкретные `eventlog.Store`, polling dispatcher и in-process `realtime.Hub` без общего EventBus interface.
-- [ ] Регистрировать live queue до чтения high watermark и корректно склеивать backlog/live.
-- [ ] Фильтровать replay и live delivery по актуальному membership.
-- [ ] Реализовать ACK window, bounded queue, единственный writer и `4008 slow_consumer`.
-- [ ] Реализовать Ping/Pong, deadlines, graceful shutdown и reconnect close codes.
-- [ ] Реализовать `resync_required` при checkpoint старше retention.
-- [ ] Добавить метрики connection count, queue depth, event lag, reconnect reason и dispatch latency.
+- [x] Подключить `github.com/coder/websocket` и реализовать `/api/v1/ws`.
+- [x] Реализовать first-frame auth, Origin check, frame limits и connection limits.
+- [x] Реализовать конкретные `eventlog.Store`, polling dispatcher и in-process `realtime.Hub` без общего EventBus interface.
+- [x] Регистрировать live queue до чтения high watermark и корректно склеивать backlog/live.
+- [x] Фильтровать replay и live delivery по актуальному membership.
+- [x] Реализовать ACK window, bounded queue, единственный data writer и `4008 slow_consumer`.
+- [x] Реализовать Ping/Pong, deadlines, graceful shutdown и reconnect close codes.
+- [x] Реализовать `resync_required` при checkpoint старше retention.
+- [x] Добавить структурированные operational signals для connection lifecycle, queue bytes/events, unacked window, event lag, reconnect reason и dispatch latency; Prometheus exporter остаётся в фазе 7.
 
 Готово, когда reconnect до/после commit и падение после commit до wake-up проходят автоматически.
 
