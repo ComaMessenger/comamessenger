@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: ComaMessenger API
-  version: 0.0.0
+  version: 0.1.0
 servers:
   - url: http://localhost:8080
 paths:
@@ -31,7 +31,164 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /api/v1/bootstrap/status:
+    get:
+      operationId: getBootstrapStatus
+      responses:
+        "200":
+          description: Current bootstrap state.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BootstrapStatus" }
+  /api/v1/bootstrap:
+    post:
+      operationId: bootstrap
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BootstrapRequest" }
+      responses:
+        "201": { $ref: "#/components/responses/Tokens" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /api/v1/auth/login:
+    post:
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/Tokens" }
+        "401": { $ref: "#/components/responses/Error" }
+  /api/v1/auth/refresh:
+    post:
+      operationId: refresh
+      responses:
+        "200": { $ref: "#/components/responses/Tokens" }
+        "401": { $ref: "#/components/responses/Error" }
+  /api/v1/auth/logout:
+    post:
+      operationId: logout
+      security: [{ bearerAuth: [] }]
+      responses:
+        "204": { description: Session revoked. }
+        "401": { $ref: "#/components/responses/Error" }
+  /api/v1/me:
+    get:
+      operationId: getMe
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Current user.
+          content: { application/json: { schema: { $ref: "#/components/schemas/User" } } }
+        "401": { $ref: "#/components/responses/Error" }
+    patch:
+      operationId: updateMe
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateProfileRequest" } } }
+      responses:
+        "200":
+          description: Updated user.
+          content: { application/json: { schema: { $ref: "#/components/schemas/User" } } }
+        "422": { $ref: "#/components/responses/Error" }
+  /api/v1/sessions:
+    get:
+      operationId: listSessions
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: User sessions.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessions]
+                properties:
+                  sessions: { type: array, items: { $ref: "#/components/schemas/Session" } }
+  /api/v1/sessions/{session_id}:
+    delete:
+      operationId: revokeSession
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: session_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Session revoked. }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v1/invitations:
+    post:
+      operationId: createInvitation
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CreateInvitationRequest" } } }
+      responses:
+        "201":
+          description: Invitation created.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Invitation" } } }
+        "403": { $ref: "#/components/responses/Error" }
+  /api/v1/invitations/{token}/accept:
+    post:
+      operationId: acceptInvitation
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AcceptInvitationRequest" } } }
+      responses:
+        "201": { $ref: "#/components/responses/Tokens" }
+        "410": { $ref: "#/components/responses/Error" }
+  /api/v1/chats:
+    get:
+      operationId: listChats
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Chats visible through membership.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [chats]
+                properties:
+                  chats: { type: array, items: { $ref: "#/components/schemas/Chat" } }
+    post:
+      operationId: createChat
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CreateChatRequest" } } }
+      responses:
+        "201":
+          description: Created or existing direct chat.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Chat" } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /api/v1/chats/{chat_id}:
+    get:
+      operationId: getChat
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: chat_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Chat visible to the current member.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Chat" } } }
+        "404": { $ref: "#/components/responses/Error" }
 components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  responses:
+    Error:
+      description: Stable API error.
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    Tokens:
+      description: Access token and user. Refresh token is set as an HttpOnly cookie.
+      content: { application/json: { schema: { $ref: "#/components/schemas/TokenResponse" } } }
   schemas:
     Health:
       type: object
@@ -54,3 +211,112 @@ components:
         details:
           type: object
           additionalProperties: true
+    BootstrapStatus:
+      type: object
+      required: [bootstrapped]
+      properties: { bootstrapped: { type: boolean } }
+    BootstrapRequest:
+      type: object
+      additionalProperties: false
+      required: [organization_name, organization_slug, display_name, handle, email, password]
+      properties:
+        organization_name: { type: string, minLength: 1, maxLength: 120 }
+        organization_slug: { type: string, pattern: "^[a-z0-9][a-z0-9-]{1,62}$" }
+        display_name: { type: string, minLength: 1, maxLength: 120 }
+        handle: { type: string, pattern: "^[a-z0-9][a-z0-9_.-]{1,31}$" }
+        email: { type: string, format: email }
+        password: { type: string, minLength: 10, maxLength: 1024 }
+        timezone: { type: string, default: UTC }
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+    UpdateProfileRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        display_name: { type: string, minLength: 1, maxLength: 120 }
+        handle: { type: string }
+        timezone: { type: string }
+    User:
+      type: object
+      required: [id, org_id, role, email, display_name, handle, timezone, status, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        org_id: { type: string, format: uuid }
+        role: { type: string, enum: [owner, admin, member] }
+        email: { type: string, format: email }
+        display_name: { type: string }
+        handle: { type: string }
+        timezone: { type: string }
+        status: { type: string, enum: [active, deactivated] }
+        created_at: { type: string, format: date-time }
+    TokenResponse:
+      type: object
+      required: [access_token, access_expires_at, user]
+      properties:
+        access_token: { type: string }
+        access_expires_at: { type: string, format: date-time }
+        user: { $ref: "#/components/schemas/User" }
+    Session:
+      type: object
+      required: [id, user_agent, created_at, last_seen_at, expires_at, current]
+      properties:
+        id: { type: string, format: uuid }
+        user_agent: { type: string }
+        ip_address: { type: string }
+        created_at: { type: string, format: date-time }
+        last_seen_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        revoked_at: { type: [string, "null"], format: date-time }
+        current: { type: boolean }
+    CreateInvitationRequest:
+      type: object
+      additionalProperties: false
+      required: [email]
+      properties:
+        email: { type: string, format: email }
+        role: { type: string, enum: [admin, member], default: member }
+    Invitation:
+      type: object
+      required: [id, email, role, expires_at]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        role: { type: string, enum: [admin, member] }
+        expires_at: { type: string, format: date-time }
+        accept_url: { type: string, format: uri }
+    AcceptInvitationRequest:
+      type: object
+      additionalProperties: false
+      required: [display_name, handle, password]
+      properties:
+        display_name: { type: string }
+        handle: { type: string }
+        password: { type: string, minLength: 10 }
+        timezone: { type: string, default: UTC }
+    CreateChatRequest:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [direct, group, channel] }
+        visibility: { type: string, enum: [private, public], default: private }
+        name: { type: string }
+        topic: { type: string, maxLength: 500 }
+        member_ids: { type: array, items: { type: string, format: uuid }, uniqueItems: true }
+    Chat:
+      type: object
+      required: [id, kind, visibility, topic, role, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [direct, group, channel] }
+        visibility: { type: string, enum: [private, public] }
+        name: { type: [string, "null"] }
+        topic: { type: string }
+        role: { type: string, enum: [owner, admin, member] }
+        created_at: { type: string, format: date-time }
+        archived_at: { type: [string, "null"], format: date-time }

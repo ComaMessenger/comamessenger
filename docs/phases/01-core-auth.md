@@ -4,6 +4,21 @@
 
 Реализовать безопасную основу одного организационного пространства: первоначальную настройку, пользователей, сессии, приглашения, профили, чаты, каналы и централизованную авторизацию. Сообщения и realtime в этой фазе не реализуются.
 
+## Статус на 18 августа 2026
+
+Первый вертикальный инкремент реализован и проходит автоматический API smoke-test на чистом Compose:
+
+- одноразовый bootstrap организации и owner;
+- Argon2id, короткоживущий JWT access token, opaque refresh cookie, rotation и обнаружение reuse с отзывом всей session family;
+- login, logout, профиль, список и отзыв сессий;
+- одноразовые приглашения с TTL и acceptance flow; в development ссылка возвращается только авторизованному owner/admin;
+- создание и membership-filtered чтение групповых чатов, каналов и дедуплицированных direct chats;
+- UUIDv7, базовая матрица `authz`, audit событий bootstrap/invitation/chat;
+- ограничения Postgres на один organization, private direct и наличие последнего активного owner;
+- OpenAPI 0.1.0 и синхронный Go/TypeScript-кодоген.
+
+Следующий инкремент этой же фазы: изменение/архивация чатов, управление membership и ролями, public discovery/join, деактивация пользователей, production email transport и минимальные auth/chat экраны web-клиента.
+
 ## В scope
 
 - bootstrap первой организации и owner-пользователя;

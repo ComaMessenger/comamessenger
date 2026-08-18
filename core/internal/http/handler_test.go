@@ -15,6 +15,7 @@ func TestHealth(t *testing.T) {
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
 		"http://localhost:5173",
 		func(_ context.Context) error { return nil },
+		Dependencies{},
 	)
 	request := httptest.NewRequest(standardhttp.MethodGet, "/healthz", nil)
 	response := httptest.NewRecorder()
@@ -34,6 +35,7 @@ func TestReadinessUnavailable(t *testing.T) {
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
 		"http://localhost:5173",
 		func(_ context.Context) error { return errors.New("database unavailable") },
+		Dependencies{},
 	)
 	request := httptest.NewRequest(standardhttp.MethodGet, "/readyz", nil)
 	response := httptest.NewRecorder()

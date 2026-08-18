@@ -2,12 +2,18 @@ package config
 
 import "testing"
 
+func setRequiredEnvironment(t *testing.T) {
+	t.Helper()
+	t.Setenv("DATABASE_URL", "postgres://test:test@localhost:5432/test")
+	t.Setenv("S3_BUCKET", "test")
+	t.Setenv("AUTH_SIGNING_KEY", "0123456789abcdef0123456789abcdef")
+}
+
 func TestFromEnvironmentDefaults(t *testing.T) {
+	setRequiredEnvironment(t)
 	t.Setenv("APP_ENV", "")
 	t.Setenv("HTTP_ADDR", "")
-	t.Setenv("DATABASE_URL", "postgres://test:test@localhost:5432/test")
 	t.Setenv("PUBLIC_APP_URL", "")
-	t.Setenv("S3_BUCKET", "test")
 
 	cfg, err := FromEnvironment()
 	if err != nil {
@@ -25,11 +31,14 @@ func TestFromEnvironmentDefaults(t *testing.T) {
 	if cfg.S3.ForcePathStyle {
 		t.Fatal("S3.ForcePathStyle = true, want false")
 	}
+	if cfg.Auth.CookieSecure {
+		t.Fatal("Auth.CookieSecure = true in development, want false")
+	}
 }
 
 func TestFromEnvironmentRequiresDatabaseURL(t *testing.T) {
+	setRequiredEnvironment(t)
 	t.Setenv("DATABASE_URL", "")
-	t.Setenv("S3_BUCKET", "test")
 
 	if _, err := FromEnvironment(); err == nil {
 		t.Fatal("FromEnvironment() error = nil, want DATABASE_URL validation error")
@@ -37,7 +46,7 @@ func TestFromEnvironmentRequiresDatabaseURL(t *testing.T) {
 }
 
 func TestFromEnvironmentSupportsCustomS3Endpoint(t *testing.T) {
-	t.Setenv("DATABASE_URL", "postgres://test:test@localhost:5432/test")
+	setRequiredEnvironment(t)
 	t.Setenv("S3_ENDPOINT", "https://storage.example.test")
 	t.Setenv("S3_PUBLIC_ENDPOINT", "https://cdn.example.test")
 	t.Setenv("S3_REGION", "ru-1")
@@ -63,7 +72,7 @@ func TestFromEnvironmentSupportsCustomS3Endpoint(t *testing.T) {
 }
 
 func TestFromEnvironmentAllowsCredentialChain(t *testing.T) {
-	t.Setenv("DATABASE_URL", "postgres://test:test@localhost:5432/test")
+	setRequiredEnvironment(t)
 	t.Setenv("S3_BUCKET", "messages")
 	t.Setenv("S3_ACCESS_KEY", "")
 	t.Setenv("S3_SECRET_KEY", "")
@@ -74,7 +83,7 @@ func TestFromEnvironmentAllowsCredentialChain(t *testing.T) {
 }
 
 func TestFromEnvironmentRejectsPartialS3Credentials(t *testing.T) {
-	t.Setenv("DATABASE_URL", "postgres://test:test@localhost:5432/test")
+	setRequiredEnvironment(t)
 	t.Setenv("S3_BUCKET", "messages")
 	t.Setenv("S3_ACCESS_KEY", "access")
 	t.Setenv("S3_SECRET_KEY", "")
@@ -85,9 +94,33 @@ func TestFromEnvironmentRejectsPartialS3Credentials(t *testing.T) {
 }
 
 func TestFromEnvironmentRejectsInvalidPathStyle(t *testing.T) {
+	setRequiredEnvironment(t)
 	t.Setenv("S3_FORCE_PATH_STYLE", "sometimes")
 
 	if _, err := FromEnvironment(); err == nil {
 		t.Fatal("FromEnvironment() error = nil, want boolean validation error")
+	}
+}
+
+func TestFromEnvironmentRequiresLongSigningKey(t *testing.T) {
+	setRequiredEnvironment(t)
+	t.Setenv("AUTH_SIGNING_KEY", "short")
+
+	if _, err := FromEnvironment(); err == nil {
+		t.Fatal("FromEnvironment() error = nil, want signing key validation error")
+	}
+}
+
+func TestFromEnvironmentUsesSecureCookiesOutsideDevelopment(t *testing.T) {
+	setRequiredEnvironment(t)
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("AUTH_COOKIE_SECURE", "")
+
+	cfg, err := FromEnvironment()
+	if err != nil {
+		t.Fatalf("FromEnvironment() error = %v", err)
+	}
+	if !cfg.Auth.CookieSecure {
+		t.Fatal("Auth.CookieSecure = false in production, want true")
 	}
 }

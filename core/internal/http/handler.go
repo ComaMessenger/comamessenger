@@ -14,7 +14,7 @@ import (
 
 type ReadinessCheck func(context.Context) error
 
-func NewHandler(logger *slog.Logger, allowedOrigin string, readiness ReadinessCheck) standardhttp.Handler {
+func NewHandler(logger *slog.Logger, allowedOrigin string, readiness ReadinessCheck, dependencies Dependencies) standardhttp.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)
 	router.Use(middleware.Recoverer)
@@ -23,6 +23,10 @@ func NewHandler(logger *slog.Logger, allowedOrigin string, readiness ReadinessCh
 
 	router.Get("/healthz", healthHandler(logger))
 	router.Get("/readyz", readinessHandler(logger, readiness))
+	if dependencies.Identity != nil {
+		identityAPI := newIdentityHandlers(logger, allowedOrigin, dependencies)
+		router.Route("/api/v1", identityAPI.routes)
+	}
 
 	return router
 }

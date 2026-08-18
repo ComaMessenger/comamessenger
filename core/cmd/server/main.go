@@ -10,9 +10,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/comamessenger/comamessenger/core/internal/access"
+	"github.com/comamessenger/comamessenger/core/internal/chat"
 	"github.com/comamessenger/comamessenger/core/internal/config"
 	"github.com/comamessenger/comamessenger/core/internal/database"
 	serverhttp "github.com/comamessenger/comamessenger/core/internal/http"
+	"github.com/comamessenger/comamessenger/core/internal/identity"
+	"github.com/comamessenger/comamessenger/core/internal/password"
 )
 
 func main() {
@@ -52,9 +56,33 @@ func main() {
 	}
 	defer pool.Close()
 
+	passwordHasher, err := password.NewHasher(password.Params{
+		MemoryKiB: cfg.Auth.ArgonMemoryKiB, Iterations: cfg.Auth.ArgonIterations, Parallelism: cfg.Auth.ArgonParallelism,
+	})
+	if err != nil {
+		logger.Error("password configuration failed", "error", err)
+		os.Exit(1)
+	}
+	accessManager, err := access.NewManager(cfg.Auth.SigningKey, cfg.Auth.AccessTokenTTL)
+	if err != nil {
+		logger.Error("access token configuration failed", "error", err)
+		os.Exit(1)
+	}
+	identityService, err := identity.NewService(
+		identity.NewRepository(pool), passwordHasher, accessManager,
+		cfg.Auth.RefreshTokenTTL, cfg.Auth.InvitationTTL, cfg.PublicAppURL, cfg.AppEnv == "development",
+	)
+	if err != nil {
+		logger.Error("identity service initialization failed", "error", err)
+		os.Exit(1)
+	}
+
 	server := &http.Server{
-		Addr:              cfg.HTTPAddr,
-		Handler:           serverhttp.NewHandler(logger, cfg.PublicAppURL, pool.Ping),
+		Addr: cfg.HTTPAddr,
+		Handler: serverhttp.NewHandler(logger, cfg.PublicAppURL, pool.Ping, serverhttp.Dependencies{
+			Identity: identityService, Chats: chat.NewService(pool),
+			CookieSecure: cfg.Auth.CookieSecure, RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
+		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
