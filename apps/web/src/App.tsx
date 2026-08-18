@@ -5,9 +5,9 @@ import {
   ChevronDown,
   Circle,
   Compass,
-  FilePenLine,
-  Globe2,
+  Bookmark,
   Hash,
+  Inbox,
   Info,
   Lock,
   LogOut,
@@ -21,7 +21,6 @@ import {
   Send,
   Settings,
   Smile,
-  Star,
   Users,
 } from "lucide-react";
 import {
@@ -34,6 +33,7 @@ import {
   type User,
 } from "@comamessenger/core";
 import { Avatar, Badge, Button, Dialog, Field, FormError, IconButton, SelectField, TextareaField, cx } from "./ui";
+import comaLogo from "./assets/coma-logo.svg";
 
 type Screen = "loading" | "bootstrap" | "login" | "messenger" | "invite";
 const apiURL = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
@@ -103,7 +103,7 @@ function LoginScreen({ api, error, onError, onAuthenticated }: AuthProps) {
     } catch (cause) { onError(messageOf(cause)); } finally { setPending(false); }
   }
   return (
-    <AuthLayout title="Вход в ComaMessenger" lead="Введите данные рабочего аккаунта">
+    <AuthLayout title="Вход в Coma" lead="Введите данные рабочего аккаунта">
       <form className="auth-form" onSubmit={submit}>
         <Field label="Почта" name="email" type="email" autoComplete="email" placeholder="you@company.ru" />
         <Field label="Пароль" name="password" type="password" autoComplete="current-password" placeholder="Ваш пароль" />
@@ -176,7 +176,7 @@ function AuthLayout({ title, lead, children }: { title: string; lead: string; ch
 }
 
 function Logo({ size = "normal" }: { size?: "normal" | "large" }) {
-  return <div className={cx("brand", size === "large" && "brand--large")}><span className="brand__mark"><MessagesSquare size={size === "large" ? 24 : 18} /></span><strong>ComaMessenger</strong></div>;
+  return <div className={cx("brand", size === "large" && "brand--large")}><img className="brand__mark" src={comaLogo} alt="" /><strong>Coma</strong></div>;
 }
 
 function MessengerScreen({ api, user, onLogout }: { api: MessengerAPI; user: User; onLogout: () => void }) {
@@ -206,20 +206,19 @@ function MessengerScreen({ api, user, onLogout }: { api: MessengerAPI; user: Use
   return (
     <main className="messenger-shell">
       <aside className="sidebar">
-        <button className="workspace-switcher"><Logo /><ChevronDown size={14} /><span className="workspace-switcher__grow" /><Settings size={16} /></button>
+        <div className="workspace-switcher"><Logo /><div className="workspace-copy"><span>Рабочее пространство</span><strong>Команда</strong></div><IconButton label="Настройки"><Settings size={17} /></IconButton></div>
         <div className="search-actions">
-          <Button className="search-button" size="sm"><Search size={17} /><span>Поиск</span><kbd>⌘ K</kbd></Button>
-          <IconButton className="create-button" label="Создать чат" onClick={() => setDialog("create")}><Plus size={19} /></IconButton>
+          <Button className="search-button" size="sm"><Search size={17} /><span>Найти</span><kbd>⌘ K</kbd></Button>
+          <Button className="create-button" size="sm" variant="primary" onClick={() => setDialog("create")}><Plus size={17} /><span>Создать</span></Button>
         </div>
         <nav className="sidebar-nav" aria-label="Рабочие разделы">
+          <SidebarShortcut icon={<Inbox size={18} />} label="Входящие" />
           <SidebarShortcut icon={<MessageCircle size={18} />} label="Треды" />
-          <SidebarShortcut icon={<Star size={18} />} label="Важное" />
-          <SidebarShortcut icon={<Bell size={18} />} label="Напоминания" />
+          <SidebarShortcut icon={<Bookmark size={18} />} label="Сохранённое" />
           <SidebarShortcut icon={<Users size={18} />} label="Участники" />
-          <SidebarShortcut icon={<FilePenLine size={18} />} label="Черновики" />
         </nav>
         <div className="chat-scroll">
-          <ChatFolder title="Чаты и каналы" count={sharedChats.length} action={openDirectory} actionLabel="Обзор">
+          <ChatFolder title="Командные" count={sharedChats.length} action={openDirectory} actionLabel="Все">
             {sharedChats.map((chat) => <ChatRow key={chat.id} chat={chat} active={selectedID === chat.id} onClick={() => setSelectedID(chat.id)} />)}
             {!sharedChats.length && <button className="folder-add" onClick={() => setDialog("create")}><Plus size={16} /> Добавить</button>}
           </ChatFolder>
@@ -268,27 +267,28 @@ function Conversation({ chat }: { chat: Chat }) {
   return <>
     <header className="conversation-header">
       <span className="conversation-header__glyph"><ChatGlyph kind={chat.kind} size={18} /></span>
-      <div><h2>{chatTitle(chat)}</h2><p>{chat.topic || (chat.kind === "channel" ? "Канал для объявлений" : "Рабочий чат")}</p></div>
+      <div className="conversation-header__identity"><div><h2>{chatTitle(chat)}</h2>{chat.kind === "channel" && <Badge tone="primary">Канал</Badge>}</div><p>{chat.topic || (chat.kind === "channel" ? "Канал для объявлений" : "Рабочий чат")}</p></div>
       <span className="conversation-header__grow" />
-      <button className="chat-search"><Search size={16} /><span>Поиск по чату…</span></button>
-      {chat.kind === "channel" && <Badge tone="primary">Канал</Badge>}
-      <IconButton label="Участники"><Users size={18} /></IconButton>
-      <IconButton label="Информация о чате"><Info size={18} /></IconButton>
-      <IconButton label="Ещё"><MoreHorizontal size={18} /></IconButton>
+      <div className="conversation-header__actions">
+        <IconButton label="Поиск по чату"><Search size={18} /></IconButton>
+        <IconButton label="Участники"><Users size={18} /></IconButton>
+        <IconButton label="Информация о чате"><Info size={18} /></IconButton>
+        <IconButton label="Ещё"><MoreHorizontal size={18} /></IconButton>
+      </div>
     </header>
     <div className="conversation-body">
       <div className="chat-start"><span><ChatGlyph kind={chat.kind} size={28} /></span><h1>{chatTitle(chat)}</h1><p>{chat.kind === "channel" ? "Здесь публикуют объявления владельцы и администраторы." : "Это начало чата. Сообщения появятся в следующем инкременте."}</p></div>
       <article className="message-row">
-        <Avatar name="ComaMessenger" size="md" />
+        <Avatar name="Coma" size="md" />
         <div className="message-row__content">
-          <header><strong>ComaMessenger</strong><time>сейчас</time></header>
+          <header><strong>Coma</strong><time>сейчас</time></header>
           <p>Чат создан. Здесь появятся сообщения команды, ответы в тредах и реакции.</p>
           <button className="thread-chip" disabled><MessageCircle size={15} /><span>Комментарии</span></button>
         </div>
         <div className="message-actions"><IconButton label="Реакция"><Smile size={16} /></IconButton><IconButton label="Обсудить"><MessageCircle size={16} /></IconButton><IconButton label="Ещё"><MoreHorizontal size={16} /></IconButton></div>
       </article>
     </div>
-    <div className="composer-wrap"><div className="composer"><IconButton label="Прикрепить файл" disabled><Paperclip size={19} /></IconButton><span>Написать сообщение…</span><IconButton label="Упомянуть" disabled><AtSign size={19} /></IconButton><IconButton label="Эмодзи" disabled><Smile size={19} /></IconButton><IconButton className="composer-send" label="Отправить" disabled><Send size={18} /></IconButton></div></div>
+    <div className="composer-wrap"><div className="composer"><div className="composer__input">Сообщение для {chatTitle(chat)}</div><div className="composer__toolbar"><div><IconButton label="Прикрепить файл" disabled><Paperclip size={18} /></IconButton><IconButton label="Упомянуть" disabled><AtSign size={18} /></IconButton><IconButton label="Эмодзи" disabled><Smile size={18} /></IconButton></div><IconButton className="composer-send" label="Отправить" disabled><Send size={18} /></IconButton></div></div></div>
   </>;
 }
 

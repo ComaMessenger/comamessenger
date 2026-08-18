@@ -25,7 +25,7 @@ export class ErrorBoundary extends Component<Props, State> {
         <main className="shell">
           <section className="card" role="alert">
             <span className="eyebrow">Application error</span>
-            <h1>Не удалось открыть ComaMessenger</h1>
+            <h1>Не удалось открыть Coma</h1>
             <p>Обновите страницу. Если ошибка повторится, обратитесь к администратору.</p>
           </section>
         </main>

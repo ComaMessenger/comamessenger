@@ -12,6 +12,7 @@
   "dependencies": {
     "@comamessenger/core": "workspace:*",
     "@comamessenger/protocol": "workspace:*",
+    "@fontsource-variable/onest": "5.3.0",
     "lucide-react": "1.32.0",
     "react": "19.1.1",
     "react-dom": "19.1.1"

@@ -1,12 +1,13 @@
-# ComaMessenger design system
+# Coma design system
 
 ## Direction
 
-ComaMessenger uses a dense, calm workspace UI inspired by the information architecture of Pachca, not its brand assets or product copy. The interface is full-height and mostly flat: hierarchy comes from spacing, typography, borders and state changes rather than large cards, gradients or decorative shadows.
+Coma uses a light, calm workspace UI with its own identity. Early information-architecture research included Pachca, but the production language is deliberately distinct: a pale navigation canvas, outlined content workspace, blue line selection, grouped quick navigation and a two-level composer. No Pachca brand assets or product copy are used.
 
 Primary references:
 
-- live Pachca web application inspected on 18 August 2026;
+- supplied Coma logo and brand color `#174586`;
+- live Pachca web application inspected on 18 August 2026 only as competitive research;
 - https://pachca.com/help-center/features/menu;
 - https://pachca.com/help-center/features/actions-with-messages;
 - https://pachca.com/help-center/features/papki;
@@ -16,16 +17,16 @@ Primary references:
 
 ### Layout
 
-- Desktop sidebar: `260px`, full viewport height, resizable later.
+- Desktop sidebar: `288px`, full viewport height, resizable later.
 - Primary control height: `36px`; compact control height: `32px`.
 - Sidebar row height: `34px`.
-- Conversation header: `62px`.
-- Content column: fluid; message content is capped at `820px` and centered.
-- Mobile breakpoint: `720px`; sidebar becomes a compact rail until a proper mobile navigation is built.
+- Conversation header: `70px`.
+- Content column: fluid; message content is capped at `880px` and centered.
+- Mobile breakpoint: `760px`; sidebar becomes a compact rail until a proper mobile navigation is built.
 
 ### Typography
 
-- Font: system sans stack.
+- Font: self-hosted variable Onest.
 - Base UI: `14px / 20px`, regular or medium.
 - Secondary labels: `12–13px / 16–18px`.
 - Screen headings: `18–24px`, weight `600`.
@@ -35,34 +36,30 @@ Primary references:
 
 | Token | Value | Use |
 | --- | ---: | --- |
-| `xs` | 2px | tiny indicators |
-| `sm` | 4px | compact state surfaces |
-| `md` | 6px | buttons, inputs, nav rows |
-| `lg` | 8px | composer, list icons |
-| `xl` | 12px | dialogs, large icons |
-| `2xl` | 16px | rare large surfaces |
+| `sm` | 6px | compact state surfaces |
+| `md` | 9px | buttons, inputs, nav rows |
+| `lg` | 12px | grouped controls, list icons |
+| `xl` | 16px | dialogs and the conversation surface |
 | `full` | 999px | primary CTA, status chips, reactions |
 
-### Dark color tokens
+### Light color tokens
 
-The web client stores colors in OKLCH so lightness and chroma can be adjusted predictably.
+The default product theme is light and derives its accent from the supplied logo.
 
-- background: `oklch(23.5% 0.007 271)`;
-- secondary background: `oklch(25.7% 0.009 271)`;
-- surface: `oklch(28.7% 0.011 271)`;
-- high surface: `oklch(32.7% 0.014 271)`;
-- foreground: `oklch(95% 0.008 271)`;
-- muted: `oklch(75% 0.018 271)`;
-- border: `oklch(32.6% 0.02 271)`;
-- primary: `oklch(54.8% 0.25 271)`.
-
-Light mode uses the same semantic token names. Components never hard-code theme-specific background or text colors.
+- canvas: `#f3f6fa`;
+- sidebar: `#eef3f8`;
+- background and surface: `#ffffff`;
+- foreground: `#182235`;
+- muted: `#6b788b`;
+- border: `#dce3ec`;
+- primary: `#174586`;
+- primary soft: `#e3edf9`.
 
 ## Components
 
 ### Buttons
 
-- `primary`: filled primary color and pill shape; use for one main action per surface.
+- `primary`: filled primary color with a 9px radius; use for one main action per surface.
 - `secondary`: bordered, compact rectangular control.
 - `ghost`: icon and contextual actions with transparent idle state.
 - `danger`: destructive actions only.
@@ -71,17 +68,17 @@ Light mode uses the same semantic token names. Components never hard-code theme-
 ### Inputs
 
 - Labels stay above the field.
-- Inputs are 40px high with 6px radius.
+- Inputs are 42px high with 9px radius.
 - Focus uses primary border plus a subtle 3px ring.
 - Validation is rendered next to the form, never only as a toast.
 
 ### Sidebar
 
-Order is stable: workspace switcher, global search/create, utility navigation, chat folders, profile. Group and channel chats are separated from direct conversations. Active rows use a solid primary background; unread state will later add a badge and stronger label weight.
+Order is stable: brand/workspace block, global search/create, a two-column utility area, chat groups and profile. Team chats are separated from direct conversations. Active rows use a pale surface and a blue line indicator instead of a filled selection.
 
 ### Chat header
 
-Contains chat identity and topic, contextual search, kind badge, participants, information and overflow actions. A pinned-message strip can be inserted immediately below the header without changing the message viewport.
+Contains chat identity, topic and kind plus a grouped action cluster on the right. Search is icon-only instead of occupying the center of the header. A pinned-message strip can be inserted immediately below the header without changing the message viewport.
 
 ### Message row
 
@@ -94,13 +91,13 @@ Contains chat identity and topic, contextual search, kind badge, participants, i
 
 ### Composer
 
-The composer is a bordered rectangular surface at the bottom of the conversation. Attachment actions are on the left; mentions, emoji and send are on the right. Phase 2 may grow it vertically, but the idle height remains 52px.
+The composer is a floating two-level surface: text entry occupies the upper row and tools occupy a separate lower toolbar. This gives Coma a recognisable silhouette and leaves room for formatting, attachments and AI actions in later phases.
 
 ### Dialogs and menus
 
-- Dialog width defaults to 480px with a 12px radius.
+- Dialog width defaults to 500px with a 16px radius.
 - Header and body are separated by a 1px semantic border.
-- Popover menus use 6–8px radius, compact 34–36px rows and no decorative gradients.
+- Popover menus use a 9–12px radius, compact 34–36px rows and no decorative gradients.
 - Destructive menu items form a separated group.
 
 ### Empty and loading states
@@ -116,4 +113,4 @@ Every interactive component must define idle, hover, active, focus-visible, disa
 - Primitive React components live in `apps/web/src/ui.tsx`.
 - Semantic tokens and component styles live in `apps/web/src/styles.css`.
 - Product composition lives in `apps/web/src/App.tsx` until routing and feature modules are introduced.
-- Icons come from `lucide-react`; Unicode characters are not used as interface icons.
+- Icons come from `lucide-react`; the supplied SVG is used only for the Coma brand mark. Unicode characters are not used as interface icons.
