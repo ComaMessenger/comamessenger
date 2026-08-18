@@ -9,7 +9,7 @@ This runbook describes the current single-host Docker deployment used for the pu
 - Web, Core API and MinIO bind to `127.0.0.1` through `BIND_ADDRESS`.
 - Postgres and MinIO data live in Docker named volumes.
 - Long-running services use `restart: unless-stopped` and return after a host reboot.
-- Nginx sends `/api/` to Core, the local bucket path to MinIO and all other requests to Web.
+- Nginx sends `/api/` to Core, including WebSocket upgrade headers for `/api/v1/ws`; the local bucket path goes to MinIO and all other requests go to Web.
 
 The checked-in Nginx template is `deploy/nginx/coma.conf.example`. Replace `__DOMAIN__` and `__CERT_NAME__` when installing it.
 
