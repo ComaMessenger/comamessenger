@@ -1,0 +1,14 @@
+ComaMessenger uses multiple open-source licenses.
+
+- `core/` and `apps/agent-runtime/` are licensed under the GNU Affero
+  General Public License v3.0 only (`AGPL-3.0-only`). See
+  `LICENSES/AGPL-3.0-only.txt`.
+- All other original files in this repository, including clients, `packages/`,
+  examples, deployment assets, documentation, and root build configuration,
+  are licensed under the Apache License 2.0 (`Apache-2.0`). See
+  `LICENSES/Apache-2.0.txt`.
+
+Files that explicitly declare another SPDX license identifier follow that
+identifier. Third-party dependencies remain under their respective licenses.
+
+Copyright 2026 ComaMessenger contributors.

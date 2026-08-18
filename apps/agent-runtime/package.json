@@ -1,0 +1,20 @@
+{
+  "name": "@comamessenger/agent-runtime",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsx watch src/index.ts",
+    "lint": "tsc -b --pretty false",
+    "test": "tsc -b --pretty false"
+  },
+  "dependencies": {
+    "@comamessenger/core": "workspace:*",
+    "@comamessenger/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "4.20.5",
+    "typescript": "5.9.2"
+  }
+}

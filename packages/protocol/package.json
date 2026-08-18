@@ -1,0 +1,19 @@
+{
+  "name": "@comamessenger/protocol",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/generated/schema.ts"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "generate": "openapi-typescript openapi.yaml -o src/generated/schema.ts",
+    "lint": "tsc -b --pretty false",
+    "test": "tsc -b --pretty false"
+  },
+  "devDependencies": {
+    "openapi-typescript": "7.9.1",
+    "typescript": "5.9.2"
+  }
+}
