@@ -25,10 +25,16 @@ BIND_ADDRESS=127.0.0.1
 WEB_PORT=5173
 WEB_ALLOWED_HOSTS=rocket.hmns-test.ru
 AUTH_COOKIE_SECURE=true
+BOOTSTRAP_TOKEN=<independent-random-32-byte-secret>
+TRUSTED_PROXY_CIDRS=127.0.0.1/32,::1/128,172.16.0.0/12
 
 POSTGRES_PASSWORD=<random>
 DATABASE_URL=postgres://comamessenger:<same-password>@postgres:5432/comamessenger?sslmode=disable
 AUTH_SIGNING_KEY=<random>
+
+REDIS_PASSWORD=<random>
+REDIS_URL=redis://:<same-password>@redis:6379/0
+REDIS_EPHEMERAL_SIGNING_KEY=<independent-random-32-byte-secret>
 
 S3_ENDPOINT=http://minio:9000
 S3_PUBLIC_ENDPOINT=https://rocket.hmns-test.ru
@@ -51,17 +57,13 @@ docker compose --env-file .env -f deploy/compose.yaml up -d --build --wait
 
 Install the rendered Nginx site, run `nginx -t`, and only then reload Nginx. Keep the existing Certbot certificate when replacing an application behind an established domain.
 
-### Protect the first-owner bootstrap
+### First-owner bootstrap
 
-An empty public installation must not leave `POST /api/v1/bootstrap` open unattended: the first successful request creates the organization owner. Until the intended owner is ready, temporarily block that exact route in Nginx while leaving `/api/v1/bootstrap/status` available:
+Outside development Core refuses to start without an independent `BOOTSTRAP_TOKEN` of at least 32 bytes. The setup screen asks for this value and sends it only in `X-Coma-Bootstrap-Token`; it is not persisted by the browser. The first successful request creates the organization owner, and all later attempts return `409`.
 
-```nginx
-location = /api/v1/bootstrap {
-    return 403;
-}
-```
+Keep `/opt/coma/.env` mode `0600`, copy the token from it into the setup screen once, then rotate or remove the value after ownership has been established. If it is removed, keep `APP_ENV=production` and replace it with a new random value before restarting Core because production startup validates the setting.
 
-Remove the block only while provisioning the first owner, verify that `bootstrap/status` returns `{"bootstrapped":true}`, then keep the route unblocked; Core rejects any later bootstrap attempt with `409`.
+The Nginx template disables access logging for invitation accept URLs because they contain bearer tokens. Preserve that location when customizing the site.
 
 ## Verification
 
@@ -83,6 +85,8 @@ docker compose --env-file .env -f deploy/compose.yaml up -d --build --wait
 ```
 
 After deployment, verify HTTPS and the bootstrap endpoint. Do not run `down -v` during an update: the `-v` flag deletes persistent Postgres and MinIO data.
+
+For delivery incidents use the [realtime diagnostics runbook](runbooks/realtime.md).
 
 ## Backups
 

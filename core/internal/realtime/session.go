@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"runtime"
 	"time"
 
 	"github.com/coder/websocket"
@@ -23,6 +24,7 @@ type session struct {
 	connectionID    string
 	requestID       string
 	sessionID       string
+	authExpiresAt   time.Time
 	lastSeq         int64
 	backlogHigh     int64
 	minRetainedSeq  int64
@@ -30,9 +32,10 @@ type session struct {
 	protocolErrors  chan protocolErrorFrame
 	ephemeralErrors chan protocolErrorFrame
 	ephemeral       *Ephemeral
+	writeSlots      chan struct{}
 }
 
-func (s *session) run(requestCtx context.Context) (websocket.StatusCode, string) {
+func (s *session) run(requestCtx context.Context) (websocket.StatusCode, string, error) {
 	ctx, cancel := context.WithCancelCause(requestCtx)
 	defer cancel(context.Canceled)
 
@@ -41,13 +44,20 @@ func (s *session) run(requestCtx context.Context) (websocket.StatusCode, string)
 	go func() { results <- s.writeLoop(ctx) }()
 
 	var result error
+	var expiry <-chan time.Time
+	var expiryTimer *time.Timer
+	if !s.authExpiresAt.IsZero() {
+		expiryTimer = time.NewTimer(time.Until(s.authExpiresAt))
+		expiry = expiryTimer.C
+		defer expiryTimer.Stop()
+	}
 	select {
 	case result = <-results:
 		var requested *closeError
 		if errors.As(result, &requested) {
 			_ = s.connection.Close(requested.code, requested.reason)
 			cancel(result)
-			return requested.code, requested.reason
+			return requested.code, requested.reason, result
 		}
 		cancel(result)
 	case <-s.subscription.Context().Done():
@@ -55,11 +65,15 @@ func (s *session) run(requestCtx context.Context) (websocket.StatusCode, string)
 		code, reason := closeDetails(result)
 		_ = s.connection.Close(code, reason)
 		cancel(result)
-		return code, reason
+		return code, reason, result
 	case <-ctx.Done():
 		result = context.Cause(ctx)
+	case <-expiry:
+		result = errSessionExpired
+		cancel(result)
 	}
-	return closeDetails(result)
+	code, reason := closeDetails(result)
+	return code, reason, result
 }
 
 func (s *session) readLoop(ctx context.Context) error {
@@ -184,18 +198,16 @@ func (s *session) writeLoop(ctx context.Context) error {
 	defer ackWatch.Stop()
 
 	for {
-		if deliveredThrough < target && len(pending) < int(s.config.MaxUnackedEvents) {
+		if backlog && deliveredThrough < target && len(pending) < int(s.config.MaxUnackedEvents) {
 			available := int(s.config.MaxUnackedEvents) - len(pending)
-			queryLimit := available
-			if !backlog {
-				queryLimit = int(s.config.MaxQueuedEvents) + 1
+			byteBound := int(s.config.MaxQueuedBytes / s.config.MaxFrameBytes)
+			if byteBound < 1 {
+				byteBound = 1
 			}
+			queryLimit := min(available, int(s.config.MaxQueuedEvents), byteBound)
 			frames, err := s.store.Replay(ctx, s.user, s.sessionID, deliveredThrough, target, queryLimit)
 			if err != nil {
 				return err
-			}
-			if !backlog && len(frames) > int(s.config.MaxQueuedEvents) {
-				return &closeError{code: statusSlowConsumer, reason: "outbound event queue exceeded"}
 			}
 			if len(frames) == 0 {
 				deliveredThrough = target
@@ -212,7 +224,7 @@ func (s *session) writeLoop(ctx context.Context) error {
 					"connection_id", s.connectionID, "queued_events", len(frames), "queued_bytes", queuedBytes,
 					"unacked_events", len(pending), "event_lag", target-deliveredThrough,
 				)
-				if !backlog && queuedBytes > int(s.config.MaxQueuedBytes) {
+				if queuedBytes > int(s.config.MaxQueuedBytes) {
 					return &closeError{code: statusSlowConsumer, reason: "outbound byte queue exceeded"}
 				}
 				sendCount := len(frames)
@@ -232,9 +244,15 @@ func (s *session) writeLoop(ctx context.Context) error {
 			}
 			if backlog && deliveredThrough >= s.backlogHigh {
 				backlog = false
-				target = s.subscription.Latest()
 			}
 			continue
+		}
+		if backlog && deliveredThrough >= s.backlogHigh {
+			backlog = false
+		}
+		var live <-chan liveDelivery
+		if !backlog && len(pending) < int(s.config.MaxUnackedEvents) {
+			live = s.subscription.Live()
 		}
 
 		select {
@@ -253,6 +271,16 @@ func (s *session) writeLoop(ctx context.Context) error {
 			if err := s.write(ctx, frame); err != nil {
 				return err
 			}
+		case frame := <-live:
+			s.subscription.releaseLive(len(frame.payload))
+			if frame.seq <= deliveredThrough {
+				continue
+			}
+			if err := s.writeRaw(ctx, frame.payload); err != nil {
+				return err
+			}
+			pending = append(pending, frame.seq)
+			deliveredThrough = frame.seq
 		case ack := <-s.acks:
 			if ack < lastAck || ack > deliveredThrough {
 				if err := s.write(ctx, protocolErrorFrame{Op: "error", Code: "invalid_frame", Message: "ACK must be monotonic and cannot exceed delivered sequence."}); err != nil {
@@ -269,11 +297,6 @@ func (s *session) writeLoop(ctx context.Context) error {
 				index++
 			}
 			pending = pending[index:]
-		case <-s.subscription.Notifications():
-			latest := s.subscription.Latest()
-			if latest > target {
-				target = latest
-			}
 		case <-heartbeat.C:
 			pingCtx, cancel := context.WithTimeout(ctx, s.config.PongTimeout)
 			err := s.connection.Ping(pingCtx)
@@ -297,7 +320,26 @@ func (s *session) write(ctx context.Context, frame any) error {
 	if uint64(len(payload)) > s.config.MaxFrameBytes {
 		return &closeError{code: websocket.StatusInternalError, reason: "outbound frame exceeds configured limit"}
 	}
+	return s.writeRaw(ctx, payload)
+}
+
+func (s *session) writeRaw(ctx context.Context, payload []byte) error {
+	if uint64(len(payload)) > s.config.MaxFrameBytes {
+		return &closeError{code: websocket.StatusInternalError, reason: "outbound frame exceeds configured limit"}
+	}
 	writeCtx, cancel := context.WithTimeout(ctx, s.config.PongTimeout)
 	defer cancel()
-	return s.connection.Write(writeCtx, websocket.MessageText, payload)
+	if s.writeSlots != nil {
+		select {
+		case s.writeSlots <- struct{}{}:
+			defer func() { <-s.writeSlots }()
+		case <-writeCtx.Done():
+			return context.Cause(writeCtx)
+		}
+	}
+	err := s.connection.Write(writeCtx, websocket.MessageText, payload)
+	// Large fan-outs wake many writers together. Yield after each flushed frame
+	// so socket readers can drain buffers before the next cohort writes.
+	runtime.Gosched()
+	return err
 }

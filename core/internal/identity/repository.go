@@ -359,6 +359,19 @@ func (r *Repository) RevokeSession(ctx context.Context, actorID, sessionID strin
 	return nil
 }
 
+func (r *Repository) InvitationValid(ctx context.Context, tokenHash []byte, now time.Time) (bool, error) {
+	var valid bool
+	err := r.pool.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM invitations
+			WHERE token_hash = $1 AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > $2
+		)`, tokenHash, now).Scan(&valid)
+	if err != nil {
+		return false, fmt.Errorf("validate invitation token: %w", err)
+	}
+	return valid, nil
+}
+
 func (r *Repository) ListSessions(ctx context.Context, actorID, currentSessionID string) ([]Session, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT id, actor_id, user_agent, COALESCE(host(ip_address), ''), created_at,

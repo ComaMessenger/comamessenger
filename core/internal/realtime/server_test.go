@@ -207,11 +207,11 @@ func TestRealtimeRevokedMembershipDoesNotReceiveQueuedBody(t *testing.T) {
 	connection, _ := harness.connect(t, 0)
 	defer connection.CloseNow()
 	serviceWithoutWake := message.NewService(harness.pool, 64*1024, 100, nil)
-	created := harness.createMessage(t, serviceWithoutWake, "must stay private")
+	harness.createMessage(t, serviceWithoutWake, "must stay private")
 	if _, err := harness.pool.Exec(context.Background(), `DELETE FROM chat_members WHERE chat_id = $1 AND actor_id = $2`, harness.chatID, harness.user.ActorID); err != nil {
 		t.Fatal(err)
 	}
-	harness.hub.Advance(harness.user.OrgID, created.CreatedSeq)
+	harness.dispatcher.WakeLocal()
 	readCtx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	_, _, err := connection.Read(readCtx)
@@ -286,7 +286,7 @@ func newRealtimeHarnessWithPoll(t *testing.T, cfg config.RealtimeConfig, pollInt
 	user, chatID := seedRealtimeFixture(t, pool)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	store := eventlog.NewStore(pool)
-	hub := NewHub(int(cfg.MaxConnectionsPerActor))
+	hub := NewHub(int(cfg.MaxConnectionsPerActor), int(cfg.MaxQueuedEvents), int(cfg.MaxQueuedBytes))
 	dispatcher := NewDispatcher(logger, store, hub, pollInterval, time.Millisecond)
 	sessionID := realtimeID(t)
 	authenticate := func(_ context.Context, token string) (identity.User, access.Identity, error) {

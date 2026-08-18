@@ -43,6 +43,12 @@ paths:
   /api/v1/bootstrap:
     post:
       operationId: bootstrap
+      parameters:
+        - name: X-Coma-Bootstrap-Token
+          in: header
+          required: false
+          description: Required outside development; configure it with BOOTSTRAP_TOKEN.
+          schema: { type: string, minLength: 32 }
       requestBody:
         required: true
         content:
@@ -50,6 +56,7 @@ paths:
             schema: { $ref: "#/components/schemas/BootstrapRequest" }
       responses:
         "201": { $ref: "#/components/responses/Tokens" }
+        "403": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
   /api/v1/auth/login:
@@ -91,18 +98,30 @@ paths:
       responses:
         "200":
           description: Current user.
-          content: { application/json: { schema: { $ref: "#/components/schemas/User" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/User" } },
+            }
         "401": { $ref: "#/components/responses/Error" }
     patch:
       operationId: updateMe
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateProfileRequest" } } }
+        content:
+          {
+            application/json:
+              { schema: { $ref: "#/components/schemas/UpdateProfileRequest" } },
+          }
       responses:
         "200":
           description: Updated user.
-          content: { application/json: { schema: { $ref: "#/components/schemas/User" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/User" } },
+            }
         "422": { $ref: "#/components/responses/Error" }
   /api/v1/sessions:
     get:
@@ -117,13 +136,22 @@ paths:
                 type: object
                 required: [sessions]
                 properties:
-                  sessions: { type: array, items: { $ref: "#/components/schemas/Session" } }
+                  sessions:
+                    {
+                      type: array,
+                      items: { $ref: "#/components/schemas/Session" },
+                    }
   /api/v1/sessions/{session_id}:
     delete:
       operationId: revokeSession
       security: [{ bearerAuth: [] }]
       parameters:
-        - { name: session_id, in: path, required: true, schema: { type: string, format: uuid } }
+        - {
+            name: session_id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
       responses:
         "204": { description: Session revoked. }
         "404": { $ref: "#/components/responses/Error" }
@@ -133,11 +161,22 @@ paths:
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/CreateInvitationRequest" } } }
+        content:
+          {
+            application/json:
+              {
+                schema:
+                  { $ref: "#/components/schemas/CreateInvitationRequest" },
+              },
+          }
       responses:
         "201":
           description: Invitation created.
-          content: { application/json: { schema: { $ref: "#/components/schemas/Invitation" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/Invitation" } },
+            }
         "403": { $ref: "#/components/responses/Error" }
   /api/v1/invitations/{token}/accept:
     post:
@@ -146,7 +185,14 @@ paths:
         - { name: token, in: path, required: true, schema: { type: string } }
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/AcceptInvitationRequest" } } }
+        content:
+          {
+            application/json:
+              {
+                schema:
+                  { $ref: "#/components/schemas/AcceptInvitationRequest" },
+              },
+          }
       responses:
         "201": { $ref: "#/components/responses/Tokens" }
         "410": { $ref: "#/components/responses/Error" }
@@ -163,17 +209,29 @@ paths:
                 type: object
                 required: [chats]
                 properties:
-                  chats: { type: array, items: { $ref: "#/components/schemas/Chat" } }
+                  chats:
+                    {
+                      type: array,
+                      items: { $ref: "#/components/schemas/Chat" },
+                    }
     post:
       operationId: createChat
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/CreateChatRequest" } } }
+        content:
+          {
+            application/json:
+              { schema: { $ref: "#/components/schemas/CreateChatRequest" } },
+          }
       responses:
         "201":
           description: Created or existing direct chat.
-          content: { application/json: { schema: { $ref: "#/components/schemas/Chat" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/Chat" } },
+            }
         "403": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
   /api/v1/chats/{chat_id}:
@@ -181,11 +239,20 @@ paths:
       operationId: getChat
       security: [{ bearerAuth: [] }]
       parameters:
-        - { name: chat_id, in: path, required: true, schema: { type: string, format: uuid } }
+        - {
+            name: chat_id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
       responses:
         "200":
           description: Chat visible to the current member.
-          content: { application/json: { schema: { $ref: "#/components/schemas/Chat" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/Chat" } },
+            }
         "404": { $ref: "#/components/responses/Error" }
     patch:
       operationId: updateChat
@@ -194,11 +261,19 @@ paths:
         - { $ref: "#/components/parameters/ChatId" }
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateChatRequest" } } }
+        content:
+          {
+            application/json:
+              { schema: { $ref: "#/components/schemas/UpdateChatRequest" } },
+          }
       responses:
         "200":
           description: Updated chat.
-          content: { application/json: { schema: { $ref: "#/components/schemas/Chat" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/Chat" } },
+            }
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
@@ -226,7 +301,11 @@ paths:
                 type: object
                 required: [chats]
                 properties:
-                  chats: { type: array, items: { $ref: "#/components/schemas/DirectoryChat" } }
+                  chats:
+                    {
+                      type: array,
+                      items: { $ref: "#/components/schemas/DirectoryChat" },
+                    }
   /api/v1/chats/{chat_id}/join:
     post:
       operationId: joinChat
@@ -236,7 +315,11 @@ paths:
       responses:
         "200":
           description: Joined public chat, or current membership.
-          content: { application/json: { schema: { $ref: "#/components/schemas/Chat" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/Chat" } },
+            }
         "404": { $ref: "#/components/responses/Error" }
   /api/v1/chats/{chat_id}/members:
     get:
@@ -253,7 +336,11 @@ paths:
                 type: object
                 required: [members]
                 properties:
-                  members: { type: array, items: { $ref: "#/components/schemas/ChatMember" } }
+                  members:
+                    {
+                      type: array,
+                      items: { $ref: "#/components/schemas/ChatMember" },
+                    }
         "404": { $ref: "#/components/responses/Error" }
     post:
       operationId: addChatMember
@@ -262,11 +349,19 @@ paths:
         - { $ref: "#/components/parameters/ChatId" }
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/AddChatMemberRequest" } } }
+        content:
+          {
+            application/json:
+              { schema: { $ref: "#/components/schemas/AddChatMemberRequest" } },
+          }
       responses:
         "201":
           description: Member added.
-          content: { application/json: { schema: { $ref: "#/components/schemas/ChatMember" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/ChatMember" } },
+            }
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
@@ -280,11 +375,22 @@ paths:
         - { $ref: "#/components/parameters/ActorId" }
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateChatMemberRequest" } } }
+        content:
+          {
+            application/json:
+              {
+                schema:
+                  { $ref: "#/components/schemas/UpdateChatMemberRequest" },
+              },
+          }
       responses:
         "200":
           description: Member role updated.
-          content: { application/json: { schema: { $ref: "#/components/schemas/ChatMember" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/ChatMember" } },
+            }
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
@@ -306,14 +412,31 @@ paths:
       security: [{ bearerAuth: [] }]
       parameters:
         - { $ref: "#/components/parameters/ChatId" }
-        - { name: before_seq, in: query, schema: { type: integer, format: int64, minimum: 1 } }
-        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
-        - { name: thread_root_id, in: query, schema: { type: string, format: uuid } }
+        - {
+            name: before_seq,
+            in: query,
+            schema: { type: integer, format: int64, minimum: 1 },
+          }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 100, default: 50 },
+          }
+        - {
+            name: thread_root_id,
+            in: query,
+            schema: { type: string, format: uuid },
+          }
       responses:
         "200":
           description: Messages visible to the current chat member, newest first.
-          content: { application/json: { schema: { $ref: "#/components/schemas/MessagePage" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/MessagePage" } },
+            }
         "404": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
     post:
       operationId: createMessage
@@ -322,14 +445,26 @@ paths:
         - { $ref: "#/components/parameters/ChatId" }
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/CreateMessageRequest" } } }
+        content:
+          {
+            application/json:
+              { schema: { $ref: "#/components/schemas/CreateMessageRequest" } },
+          }
       responses:
         "200":
           description: The original message for an idempotent replay.
-          content: { application/json: { schema: { $ref: "#/components/schemas/Message" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/Message" } },
+            }
         "201":
           description: Message created.
-          content: { application/json: { schema: { $ref: "#/components/schemas/Message" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/Message" } },
+            }
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
@@ -344,7 +479,11 @@ paths:
       responses:
         "200":
           description: Current pins in the chat, newest first.
-          content: { application/json: { schema: { $ref: "#/components/schemas/MessagePinList" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/MessagePinList" } },
+            }
         "404": { $ref: "#/components/responses/Error" }
   /api/v1/messages/{message_id}:
     patch:
@@ -354,11 +493,19 @@ paths:
         - { $ref: "#/components/parameters/MessageId" }
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateMessageRequest" } } }
+        content:
+          {
+            application/json:
+              { schema: { $ref: "#/components/schemas/UpdateMessageRequest" } },
+          }
       responses:
         "200":
           description: Message updated.
-          content: { application/json: { schema: { $ref: "#/components/schemas/Message" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/Message" } },
+            }
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
@@ -372,7 +519,11 @@ paths:
       responses:
         "200":
           description: Soft-deleted message, or the existing tombstone for an idempotent replay.
-          content: { application/json: { schema: { $ref: "#/components/schemas/Message" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/Message" } },
+            }
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
   /api/v1/messages/{message_id}/reactions/{emoji}:
@@ -381,22 +532,41 @@ paths:
       security: [{ bearerAuth: [] }]
       parameters:
         - { $ref: "#/components/parameters/MessageId" }
-        - { name: emoji, in: path, required: true, schema: { type: string, minLength: 1, maxLength: 64 } }
+        - {
+            name: emoji,
+            in: path,
+            required: true,
+            schema: { type: string, minLength: 1, maxLength: 64 },
+          }
       responses:
         "200":
           description: Existing reaction for an idempotent replay.
-          content: { application/json: { schema: { $ref: "#/components/schemas/Reaction" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/Reaction" } },
+            }
         "201":
           description: Reaction added.
-          content: { application/json: { schema: { $ref: "#/components/schemas/Reaction" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/Reaction" } },
+            }
         "404": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
     delete:
       operationId: deleteReaction
       security: [{ bearerAuth: [] }]
       parameters:
         - { $ref: "#/components/parameters/MessageId" }
-        - { name: emoji, in: path, required: true, schema: { type: string, minLength: 1, maxLength: 64 } }
+        - {
+            name: emoji,
+            in: path,
+            required: true,
+            schema: { type: string, minLength: 1, maxLength: 64 },
+          }
       responses:
         "204": { description: Reaction is absent. }
         "404": { $ref: "#/components/responses/Error" }
@@ -410,7 +580,11 @@ paths:
       responses:
         "200":
           description: Current reactions on the message.
-          content: { application/json: { schema: { $ref: "#/components/schemas/ReactionList" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/ReactionList" } },
+            }
         "404": { $ref: "#/components/responses/Error" }
   /api/v1/messages/{message_id}/pin:
     put:
@@ -421,10 +595,18 @@ paths:
       responses:
         "200":
           description: Existing pin for an idempotent replay.
-          content: { application/json: { schema: { $ref: "#/components/schemas/MessagePin" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/MessagePin" } },
+            }
         "201":
           description: Message pinned.
-          content: { application/json: { schema: { $ref: "#/components/schemas/MessagePin" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/MessagePin" } },
+            }
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
     delete:
@@ -444,14 +626,28 @@ paths:
         - { $ref: "#/components/parameters/MessageId" }
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/ForwardMessageRequest" } } }
+        content:
+          {
+            application/json:
+              {
+                schema: { $ref: "#/components/schemas/ForwardMessageRequest" },
+              },
+          }
       responses:
         "200":
           description: Original forwarded snapshot for an idempotent replay.
-          content: { application/json: { schema: { $ref: "#/components/schemas/Message" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/Message" } },
+            }
         "201":
           description: Forwarded snapshot created.
-          content: { application/json: { schema: { $ref: "#/components/schemas/Message" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/Message" } },
+            }
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
@@ -465,10 +661,18 @@ paths:
       responses:
         "200":
           description: Existing thread follow for an idempotent replay.
-          content: { application/json: { schema: { $ref: "#/components/schemas/ThreadFollow" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/ThreadFollow" } },
+            }
         "201":
           description: Thread followed.
-          content: { application/json: { schema: { $ref: "#/components/schemas/ThreadFollow" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/ThreadFollow" } },
+            }
         "404": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
     delete:
@@ -486,12 +690,24 @@ paths:
       security: [{ bearerAuth: [] }]
       parameters:
         - { $ref: "#/components/parameters/MessageId" }
-        - { name: before_seq, in: query, schema: { type: integer, format: int64, minimum: 1 } }
-        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+        - {
+            name: before_seq,
+            in: query,
+            schema: { type: integer, format: int64, minimum: 1 },
+          }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 100, default: 50 },
+          }
       responses:
         "200":
           description: Replies in the thread, newest first.
-          content: { application/json: { schema: { $ref: "#/components/schemas/MessagePage" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/MessagePage" } },
+            }
         "404": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
   /api/v1/threads:
@@ -499,12 +715,24 @@ paths:
       operationId: listFollowedThreads
       security: [{ bearerAuth: [] }]
       parameters:
-        - { name: before_seq, in: query, schema: { type: integer, format: int64, minimum: 1 } }
-        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+        - {
+            name: before_seq,
+            in: query,
+            schema: { type: integer, format: int64, minimum: 1 },
+          }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 100, default: 50 },
+          }
       responses:
         "200":
           description: Followed threads visible to the current member, ordered by latest activity.
-          content: { application/json: { schema: { $ref: "#/components/schemas/ThreadPage" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/ThreadPage" } },
+            }
         "422": { $ref: "#/components/responses/Error" }
   /api/v1/unread:
     get:
@@ -513,7 +741,11 @@ paths:
       responses:
         "200":
           description: Current chat and followed-thread unread counters.
-          content: { application/json: { schema: { $ref: "#/components/schemas/UnreadSnapshot" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/UnreadSnapshot" } },
+            }
   /api/v1/chats/{chat_id}/read:
     post:
       operationId: markChatRead
@@ -521,11 +753,19 @@ paths:
       parameters: [{ $ref: "#/components/parameters/ChatId" }]
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/MarkReadRequest" } } }
+        content:
+          {
+            application/json:
+              { schema: { $ref: "#/components/schemas/MarkReadRequest" } },
+          }
       responses:
         "200":
           description: Monotonic chat read marker.
-          content: { application/json: { schema: { $ref: "#/components/schemas/ReadMarker" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/ReadMarker" } },
+            }
         "404": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
   /api/v1/messages/{message_id}/thread/read:
@@ -535,11 +775,19 @@ paths:
       parameters: [{ $ref: "#/components/parameters/MessageId" }]
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/MarkReadRequest" } } }
+        content:
+          {
+            application/json:
+              { schema: { $ref: "#/components/schemas/MarkReadRequest" } },
+          }
       responses:
         "200":
           description: Monotonic thread read marker.
-          content: { application/json: { schema: { $ref: "#/components/schemas/ReadMarker" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/ReadMarker" } },
+            }
         "404": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
   /api/v1/drafts:
@@ -549,7 +797,11 @@ paths:
       responses:
         "200":
           description: Drafts visible only to the current actor.
-          content: { application/json: { schema: { $ref: "#/components/schemas/DraftList" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/DraftList" } },
+            }
   /api/v1/drafts/{chat_id}:
     put:
       operationId: putDraft
@@ -557,14 +809,26 @@ paths:
       parameters: [{ $ref: "#/components/parameters/ChatId" }]
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/PutDraftRequest" } } }
+        content:
+          {
+            application/json:
+              { schema: { $ref: "#/components/schemas/PutDraftRequest" } },
+          }
       responses:
         "200":
           description: Existing or updated draft.
-          content: { application/json: { schema: { $ref: "#/components/schemas/Draft" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/Draft" } },
+            }
         "201":
           description: Draft created.
-          content: { application/json: { schema: { $ref: "#/components/schemas/Draft" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/Draft" } },
+            }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
         "413": { $ref: "#/components/responses/Error" }
@@ -574,7 +838,11 @@ paths:
       security: [{ bearerAuth: [] }]
       parameters:
         - { $ref: "#/components/parameters/ChatId" }
-        - { name: thread_root_id, in: query, schema: { type: string, format: uuid } }
+        - {
+            name: thread_root_id,
+            in: query,
+            schema: { type: string, format: uuid },
+          }
       responses:
         "204": { description: Draft is absent. }
         "404": { $ref: "#/components/responses/Error" }
@@ -585,10 +853,15 @@ components:
   responses:
     Error:
       description: Stable API error.
-      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+      content:
+        { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
     Tokens:
       description: Access token and user. Refresh token is set as an HttpOnly cookie.
-      content: { application/json: { schema: { $ref: "#/components/schemas/TokenResponse" } } }
+      content:
+        {
+          application/json:
+            { schema: { $ref: "#/components/schemas/TokenResponse" } },
+        }
   parameters:
     ChatId:
       name: chat_id
@@ -683,10 +956,19 @@ components:
     BootstrapRequest:
       type: object
       additionalProperties: false
-      required: [organization_name, organization_slug, display_name, handle, email, password]
+      required:
+        [
+          organization_name,
+          organization_slug,
+          display_name,
+          handle,
+          email,
+          password,
+        ]
       properties:
         organization_name: { type: string, minLength: 1, maxLength: 120 }
-        organization_slug: { type: string, pattern: "^[a-z0-9][a-z0-9-]{1,62}$" }
+        organization_slug:
+          { type: string, pattern: "^[a-z0-9][a-z0-9-]{1,62}$" }
         display_name: { type: string, minLength: 1, maxLength: 120 }
         handle: { type: string, pattern: "^[a-z0-9][a-z0-9_.-]{1,31}$" }
         email: { type: string, format: email }
@@ -708,7 +990,18 @@ components:
         timezone: { type: string }
     User:
       type: object
-      required: [id, org_id, role, email, display_name, handle, timezone, status, created_at]
+      required:
+        [
+          id,
+          org_id,
+          role,
+          email,
+          display_name,
+          handle,
+          timezone,
+          status,
+          created_at,
+        ]
       properties:
         id: { type: string, format: uuid }
         org_id: { type: string, format: uuid }
@@ -772,7 +1065,12 @@ components:
         visibility: { type: string, enum: [private, public], default: private }
         name: { type: string }
         topic: { type: string, maxLength: 500 }
-        member_ids: { type: array, items: { type: string, format: uuid }, uniqueItems: true }
+        member_ids:
+          {
+            type: array,
+            items: { type: string, format: uuid },
+            uniqueItems: true,
+          }
     Chat:
       type: object
       required: [id, kind, visibility, topic, role, created_at]
@@ -827,7 +1125,20 @@ components:
     Message:
       type: object
       additionalProperties: false
-      required: [id, chat_id, actor_id, client_msg_id, type, body, body_format, mentioned_actor_ids, version, created_seq, created_at]
+      required:
+        [
+          id,
+          chat_id,
+          actor_id,
+          client_msg_id,
+          type,
+          body,
+          body_format,
+          mentioned_actor_ids,
+          version,
+          created_seq,
+          created_at,
+        ]
       properties:
         id: { type: string, format: uuid }
         chat_id: { type: string, format: uuid }
@@ -856,7 +1167,8 @@ components:
       additionalProperties: false
       required: [messages, next_before_seq]
       properties:
-        messages: { type: array, items: { $ref: "#/components/schemas/Message" } }
+        messages:
+          { type: array, items: { $ref: "#/components/schemas/Message" } }
         next_before_seq: { type: [integer, "null"], format: int64, minimum: 1 }
     CreateMessageRequest:
       type: object
@@ -913,7 +1225,8 @@ components:
       additionalProperties: false
       required: [reactions]
       properties:
-        reactions: { type: array, items: { $ref: "#/components/schemas/Reaction" } }
+        reactions:
+          { type: array, items: { $ref: "#/components/schemas/Reaction" } }
     MessagePin:
       type: object
       additionalProperties: false
@@ -927,7 +1240,8 @@ components:
       additionalProperties: false
       required: [pins]
       properties:
-        pins: { type: array, items: { $ref: "#/components/schemas/MessagePin" } }
+        pins:
+          { type: array, items: { $ref: "#/components/schemas/MessagePin" } }
     ThreadFollow:
       type: object
       additionalProperties: false
@@ -950,7 +1264,8 @@ components:
       additionalProperties: false
       required: [threads, next_before_seq]
       properties:
-        threads: { type: array, items: { $ref: "#/components/schemas/ThreadSummary" } }
+        threads:
+          { type: array, items: { $ref: "#/components/schemas/ThreadSummary" } }
         next_before_seq: { type: [integer, "null"], format: int64, minimum: 1 }
     MarkReadRequest:
       type: object
@@ -1005,7 +1320,8 @@ components:
     ThreadUnread:
       type: object
       additionalProperties: false
-      required: [thread_root_id, chat_id, last_read_seq, unread_count, mention_count]
+      required:
+        [thread_root_id, chat_id, last_read_seq, unread_count, mention_count]
       properties:
         thread_root_id: { type: string, format: uuid }
         chat_id: { type: string, format: uuid }
@@ -1017,5 +1333,7 @@ components:
       additionalProperties: false
       required: [chats, threads]
       properties:
-        chats: { type: array, items: { $ref: "#/components/schemas/ChatUnread" } }
-        threads: { type: array, items: { $ref: "#/components/schemas/ThreadUnread" } }
+        chats:
+          { type: array, items: { $ref: "#/components/schemas/ChatUnread" } }
+        threads:
+          { type: array, items: { $ref: "#/components/schemas/ThreadUnread" } }

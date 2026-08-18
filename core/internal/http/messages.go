@@ -249,6 +249,8 @@ func (h *identityHandlers) messageError(w standardhttp.ResponseWriter, r *standa
 		h.writeError(w, r, standardhttp.StatusConflict, "version_conflict", "The message was changed by another request.")
 	case errors.Is(err, message.ErrTooLarge):
 		h.writeError(w, r, standardhttp.StatusRequestEntityTooLarge, "payload_too_large", "The message body is too large.")
+	case errors.Is(err, message.ErrRateLimited):
+		h.writeError(w, r, standardhttp.StatusTooManyRequests, "rate_limited", "The message action limit was reached.")
 	case errors.Is(err, message.ErrInvalid):
 		h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "validation_failed", err.Error())
 	default:

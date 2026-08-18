@@ -10,7 +10,8 @@ export type DirectoryChat = components["schemas"]["DirectoryChat"];
 export type BootstrapRequest = components["schemas"]["BootstrapRequest"];
 export type LoginRequest = components["schemas"]["LoginRequest"];
 export type CreateChatRequest = components["schemas"]["CreateChatRequest"];
-export type AcceptInvitationRequest = components["schemas"]["AcceptInvitationRequest"];
+export type AcceptInvitationRequest =
+  components["schemas"]["AcceptInvitationRequest"];
 export type TokenResponse = components["schemas"]["TokenResponse"];
 
 type APIErrorPayload = components["schemas"]["Error"];
@@ -43,14 +44,22 @@ export class MessengerAPI {
   constructor(private readonly apiURL: string) {}
 
   async bootstrapStatus(): Promise<boolean> {
-    const result = await this.request<{ bootstrapped: boolean }>("/api/v1/bootstrap/status");
+    const result = await this.request<{ bootstrapped: boolean }>(
+      "/api/v1/bootstrap/status",
+    );
     return result.bootstrapped;
   }
 
-  async bootstrap(input: BootstrapRequest): Promise<TokenResponse> {
+  async bootstrap(
+    input: BootstrapRequest,
+    bootstrapToken = "",
+  ): Promise<TokenResponse> {
+    const headers = new Headers();
+    if (bootstrapToken) headers.set("X-Coma-Bootstrap-Token", bootstrapToken);
     return this.acceptTokens(
       await this.request<TokenResponse>("/api/v1/bootstrap", {
         method: "POST",
+        headers,
         body: JSON.stringify(input),
       }),
     );
@@ -80,12 +89,18 @@ export class MessengerAPI {
     return this.refreshRequest;
   }
 
-  async acceptInvitation(token: string, input: AcceptInvitationRequest): Promise<TokenResponse> {
+  async acceptInvitation(
+    token: string,
+    input: AcceptInvitationRequest,
+  ): Promise<TokenResponse> {
     return this.acceptTokens(
-      await this.request<TokenResponse>(`/api/v1/invitations/${encodeURIComponent(token)}/accept`, {
-        method: "POST",
-        body: JSON.stringify(input),
-      }),
+      await this.request<TokenResponse>(
+        `/api/v1/invitations/${encodeURIComponent(token)}/accept`,
+        {
+          method: "POST",
+          body: JSON.stringify(input),
+        },
+      ),
     );
   }
 
@@ -106,11 +121,15 @@ export class MessengerAPI {
   }
 
   async discoverChats(): Promise<DirectoryChat[]> {
-    return (await this.request<{ chats: DirectoryChat[] }>("/api/v1/chats/discover")).chats;
+    return (
+      await this.request<{ chats: DirectoryChat[] }>("/api/v1/chats/discover")
+    ).chats;
   }
 
   async joinChat(chatID: string): Promise<Chat> {
-    return this.request<Chat>(`/api/v1/chats/${chatID}/join`, { method: "POST" });
+    return this.request<Chat>(`/api/v1/chats/${chatID}/join`, {
+      method: "POST",
+    });
   }
 
   private acceptTokens(tokens: TokenResponse): TokenResponse {
@@ -118,10 +137,15 @@ export class MessengerAPI {
     return tokens;
   }
 
-  private async request<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
+  private async request<T>(
+    path: string,
+    init: RequestInit = {},
+    retry = true,
+  ): Promise<T> {
     const headers = new Headers(init.headers);
     if (init.body) headers.set("Content-Type", "application/json");
-    if (this.accessToken) headers.set("Authorization", `Bearer ${this.accessToken}`);
+    if (this.accessToken)
+      headers.set("Authorization", `Bearer ${this.accessToken}`);
 
     const response = await fetch(`${this.apiURL}${path}`, {
       ...init,
@@ -145,7 +169,11 @@ export class MessengerAPI {
       } catch {
         // A stable fallback is still useful when a proxy returns a non-JSON error.
       }
-      throw new APIError(response.status, payload.code ?? "request_failed", payload.message ?? "Request failed.");
+      throw new APIError(
+        response.status,
+        payload.code ?? "request_failed",
+        payload.message ?? "Request failed.",
+      );
     }
 
     if (response.status === 204) return undefined as T;

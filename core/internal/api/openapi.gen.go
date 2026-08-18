@@ -1337,6 +1337,12 @@ type MessageId = openapi_types.UUID
 // Tokens defines model for Tokens.
 type Tokens = TokenResponse
 
+// BootstrapParams defines parameters for Bootstrap.
+type BootstrapParams struct {
+	// XComaBootstrapToken Required outside development; configure it with BOOTSTRAP_TOKEN.
+	XComaBootstrapToken *string `json:"X-Coma-Bootstrap-Token,omitempty"`
+}
+
 // ListMessagesParams defines parameters for ListMessages.
 type ListMessagesParams struct {
 	BeforeSeq    *int64              `form:"before_seq,omitempty" json:"before_seq,omitempty"`

@@ -21,6 +21,7 @@ func TestIssueAndParse(t *testing.T) {
 	if !expiresAt.Equal(fixed.Add(15 * time.Minute)) {
 		t.Fatalf("expiresAt = %v", expiresAt)
 	}
+	want.ExpiresAt = expiresAt
 	got, err := manager.Parse(token)
 	if err != nil || got != want {
 		t.Fatalf("Parse() = %#v, %v; want %#v", got, err, want)

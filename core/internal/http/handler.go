@@ -68,9 +68,13 @@ func requestLogger(logger *slog.Logger) func(standardhttp.Handler) standardhttp.
 		return standardhttp.HandlerFunc(func(w standardhttp.ResponseWriter, r *standardhttp.Request) {
 			startedAt := time.Now()
 			next.ServeHTTP(w, r)
+			route := chi.RouteContext(r.Context()).RoutePattern()
+			if route == "" {
+				route = "<unmatched>"
+			}
 			logger.Info("http request",
 				"method", r.Method,
-				"path", r.URL.Path,
+				"route", route,
 				"request_id", middleware.GetReqID(r.Context()),
 				"duration", time.Since(startedAt),
 			)
@@ -85,7 +89,7 @@ func cors(allowedOrigin string) func(standardhttp.Handler) standardhttp.Handler 
 			if origin != "" && origin == allowedOrigin {
 				w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
 				w.Header().Set("Access-Control-Allow-Credentials", "true")
-				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Request-ID")
+				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Request-ID, X-Coma-Bootstrap-Token")
 				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS")
 				w.Header().Set("Vary", "Origin")
 			}

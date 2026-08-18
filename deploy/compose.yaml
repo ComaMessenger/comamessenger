@@ -34,7 +34,11 @@ services:
       - --requirepass
       - ${REDIS_PASSWORD:-comamessenger-local-redis-secret}
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$${REDIS_PASSWORD}\" ping | grep -q PONG"]
+      test:
+        [
+          "CMD-SHELL",
+          'redis-cli --no-auth-warning -a "$${REDIS_PASSWORD}" ping | grep -q PONG',
+        ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -47,8 +51,8 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-comamessenger}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-comamessenger-local-secret}
     ports:
-      - "${BIND_ADDRESS:-0.0.0.0}:9000:9000"
-      - "${BIND_ADDRESS:-0.0.0.0}:9001:9001"
+      - "${BIND_ADDRESS:-127.0.0.1}:9000:9000"
+      - "${BIND_ADDRESS:-127.0.0.1}:9001:9001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 5s
@@ -86,6 +90,8 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgres://comamessenger:comamessenger@postgres:5432/comamessenger?sslmode=disable}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:5173}
       AUTH_SIGNING_KEY: ${AUTH_SIGNING_KEY:-comamessenger-local-signing-key-change-me}
+      BOOTSTRAP_TOKEN: ${BOOTSTRAP_TOKEN:-}
+      TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-127.0.0.1/32,::1/128,172.16.0.0/12}
       ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL:-15m}
       REFRESH_TOKEN_TTL: ${REFRESH_TOKEN_TTL:-720h}
       INVITATION_TTL: ${INVITATION_TTL:-168h}
@@ -98,6 +104,8 @@ services:
       WS_AUTH_TIMEOUT: ${WS_AUTH_TIMEOUT:-5s}
       WS_MAX_FRAME_BYTES: ${WS_MAX_FRAME_BYTES:-262144}
       WS_MAX_CONNECTIONS_PER_ACTOR: ${WS_MAX_CONNECTIONS_PER_ACTOR:-10}
+      WS_MAX_PENDING_CONNECTIONS: ${WS_MAX_PENDING_CONNECTIONS:-256}
+      WS_MAX_CONCURRENT_WRITES: ${WS_MAX_CONCURRENT_WRITES:-8}
       WS_MAX_QUEUED_EVENTS: ${WS_MAX_QUEUED_EVENTS:-256}
       WS_MAX_QUEUED_BYTES: ${WS_MAX_QUEUED_BYTES:-1048576}
       WS_MAX_UNACKED_EVENTS: ${WS_MAX_UNACKED_EVENTS:-128}
@@ -110,8 +118,11 @@ services:
       EVENT_WAKE_COALESCE: ${EVENT_WAKE_COALESCE:-5ms}
       EVENT_RETENTION: ${EVENT_RETENTION:-72h}
       EVENT_RETENTION_MIN_COUNT: ${EVENT_RETENTION_MIN_COUNT:-100000}
+      EVENT_RETENTION_INTERVAL: ${EVENT_RETENTION_INTERVAL:-5m}
+      EVENT_RETENTION_BATCH_SIZE: ${EVENT_RETENTION_BATCH_SIZE:-10000}
       REDIS_MODE: ${REDIS_MODE:-required}
       REDIS_URL: ${REDIS_URL:-redis://:comamessenger-local-redis-secret@redis:6379/0}
+      REDIS_EPHEMERAL_SIGNING_KEY: ${REDIS_EPHEMERAL_SIGNING_KEY:-comamessenger-local-ephemeral-signing-key}
       REDIS_NAMESPACE: ${REDIS_NAMESPACE:-coma:v1}
       REDIS_CONNECT_TIMEOUT: ${REDIS_CONNECT_TIMEOUT:-1s}
       REDIS_OPERATION_TIMEOUT: ${REDIS_OPERATION_TIMEOUT:-500ms}
@@ -131,7 +142,7 @@ services:
       minio-init:
         condition: service_completed_successfully
     ports:
-      - "${BIND_ADDRESS:-0.0.0.0}:8080:8080"
+      - "${BIND_ADDRESS:-127.0.0.1}:8080:8080"
     healthcheck:
       test: ["CMD", "/comamessenger", "healthcheck"]
       interval: 10s
@@ -150,7 +161,7 @@ services:
       core:
         condition: service_started
     ports:
-      - "${BIND_ADDRESS:-0.0.0.0}:${WEB_PORT:-5173}:5173"
+      - "${BIND_ADDRESS:-127.0.0.1}:${WEB_PORT:-5173}:5173"
 
   agent-runtime:
     profiles: ["agents"]

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/netip"
 	"os"
 	"strconv"
 	"strings"
@@ -39,6 +40,8 @@ type RealtimeConfig struct {
 	AuthTimeout            time.Duration
 	MaxFrameBytes          uint64
 	MaxConnectionsPerActor uint64
+	MaxPendingConnections  uint64
+	MaxConcurrentWrites    uint64
 	MaxQueuedEvents        uint64
 	MaxQueuedBytes         uint64
 	MaxUnackedEvents       uint64
@@ -59,27 +62,32 @@ type EventLogConfig struct {
 	WakeCoalesce      time.Duration
 	Retention         time.Duration
 	RetentionMinCount uint64
+	RetentionInterval time.Duration
+	RetentionBatch    uint64
 }
 
 type RedisConfig struct {
-	Mode             string
-	URL              string
-	Namespace        string
-	ConnectTimeout   time.Duration
-	OperationTimeout time.Duration
+	Mode                string
+	URL                 string
+	Namespace           string
+	EphemeralSigningKey string
+	ConnectTimeout      time.Duration
+	OperationTimeout    time.Duration
 }
 
 type Config struct {
-	AppEnv       string
-	HTTPAddr     string
-	DatabaseURL  string
-	PublicAppURL string
-	S3           S3Config
-	Auth         AuthConfig
-	Messaging    MessagingConfig
-	Realtime     RealtimeConfig
-	EventLog     EventLogConfig
-	Redis        RedisConfig
+	AppEnv            string
+	HTTPAddr          string
+	DatabaseURL       string
+	PublicAppURL      string
+	BootstrapToken    string
+	TrustedProxyCIDRs []netip.Prefix
+	S3                S3Config
+	Auth              AuthConfig
+	Messaging         MessagingConfig
+	Realtime          RealtimeConfig
+	EventLog          EventLogConfig
+	Redis             RedisConfig
 }
 
 func FromEnvironment() (Config, error) {
@@ -135,12 +143,18 @@ func FromEnvironment() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	trustedProxyCIDRs, err := prefixListValue("TRUSTED_PROXY_CIDRS", "127.0.0.1/32,::1/128")
+	if err != nil {
+		return Config{}, err
+	}
 
 	cfg := Config{
-		AppEnv:       appEnv,
-		HTTPAddr:     valueOrDefault("HTTP_ADDR", ":8080"),
-		DatabaseURL:  strings.TrimSpace(os.Getenv("DATABASE_URL")),
-		PublicAppURL: valueOrDefault("PUBLIC_APP_URL", "http://localhost:5173"),
+		AppEnv:            appEnv,
+		HTTPAddr:          valueOrDefault("HTTP_ADDR", ":8080"),
+		DatabaseURL:       strings.TrimSpace(os.Getenv("DATABASE_URL")),
+		PublicAppURL:      valueOrDefault("PUBLIC_APP_URL", "http://localhost:5173"),
+		BootstrapToken:    strings.TrimSpace(os.Getenv("BOOTSTRAP_TOKEN")),
+		TrustedProxyCIDRs: trustedProxyCIDRs,
 		S3: S3Config{
 			Endpoint:       strings.TrimSpace(os.Getenv("S3_ENDPOINT")),
 			PublicEndpoint: strings.TrimSpace(os.Getenv("S3_PUBLIC_ENDPOINT")),
@@ -194,7 +208,47 @@ func FromEnvironment() (Config, error) {
 	if cfg.Auth.InvitationTTL < time.Hour || cfg.Auth.InvitationTTL > 30*24*time.Hour {
 		return Config{}, fmt.Errorf("INVITATION_TTL must be between 1h and 720h")
 	}
+	if cfg.BootstrapToken != "" && len(cfg.BootstrapToken) < 32 {
+		return Config{}, fmt.Errorf("BOOTSTRAP_TOKEN must be at least 32 bytes when set")
+	}
+	if cfg.AppEnv != "development" {
+		if len(cfg.BootstrapToken) < 32 {
+			return Config{}, fmt.Errorf("BOOTSTRAP_TOKEN must be set to at least 32 bytes outside development")
+		}
+		if cfg.Auth.SigningKey == "comamessenger-local-signing-key-change-me" {
+			return Config{}, fmt.Errorf("AUTH_SIGNING_KEY must not use the development default outside development")
+		}
+		if cfg.S3.AccessKey == "comamessenger" && cfg.S3.SecretKey == "comamessenger-local-secret" {
+			return Config{}, fmt.Errorf("S3 credentials must not use the development defaults outside development")
+		}
+		if strings.Contains(cfg.DatabaseURL, "comamessenger:comamessenger@") {
+			return Config{}, fmt.Errorf("DATABASE_URL must not use the development password outside development")
+		}
+		if cfg.Redis.Mode == "required" && strings.Contains(cfg.Redis.URL, "comamessenger-local-redis-secret") {
+			return Config{}, fmt.Errorf("REDIS_URL must not use the development password outside development")
+		}
+		if cfg.Redis.Mode == "required" && cfg.Redis.EphemeralSigningKey == "comamessenger-local-ephemeral-signing-key" {
+			return Config{}, fmt.Errorf("REDIS_EPHEMERAL_SIGNING_KEY must not use the development default outside development")
+		}
+	}
 	return cfg, nil
+}
+
+func prefixListValue(name, fallback string) ([]netip.Prefix, error) {
+	raw := valueOrDefault(name, fallback)
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	parts := strings.Split(raw, ",")
+	result := make([]netip.Prefix, 0, len(parts))
+	for _, part := range parts {
+		prefix, err := netip.ParsePrefix(strings.TrimSpace(part))
+		if err != nil {
+			return nil, fmt.Errorf("%s must contain valid comma-separated CIDRs", name)
+		}
+		result = append(result, prefix.Masked())
+	}
+	return result, nil
 }
 
 func redisConfigFromEnvironment() (RedisConfig, error) {
@@ -203,11 +257,18 @@ func redisConfigFromEnvironment() (RedisConfig, error) {
 		return RedisConfig{}, fmt.Errorf("REDIS_MODE must be required or disabled")
 	}
 	redisURL := strings.TrimSpace(os.Getenv("REDIS_URL"))
+	signingKey := strings.TrimSpace(os.Getenv("REDIS_EPHEMERAL_SIGNING_KEY"))
 	if mode == "required" && redisURL == "" {
 		return RedisConfig{}, fmt.Errorf("REDIS_URL must be set when REDIS_MODE=required")
 	}
 	if mode == "disabled" && redisURL != "" {
 		return RedisConfig{}, fmt.Errorf("REDIS_URL must be empty when REDIS_MODE=disabled")
+	}
+	if mode == "required" && len(signingKey) < 32 {
+		return RedisConfig{}, fmt.Errorf("REDIS_EPHEMERAL_SIGNING_KEY must be at least 32 bytes when REDIS_MODE=required")
+	}
+	if mode == "disabled" && signingKey != "" {
+		return RedisConfig{}, fmt.Errorf("REDIS_EPHEMERAL_SIGNING_KEY must be empty when REDIS_MODE=disabled")
 	}
 	connectTimeout, err := durationValueOrDefault("REDIS_CONNECT_TIMEOUT", time.Second)
 	if err != nil {
@@ -228,7 +289,7 @@ func redisConfigFromEnvironment() (RedisConfig, error) {
 		return RedisConfig{}, fmt.Errorf("REDIS_NAMESPACE must not be empty or contain whitespace")
 	}
 	return RedisConfig{
-		Mode: mode, URL: redisURL, Namespace: namespace,
+		Mode: mode, URL: redisURL, Namespace: namespace, EphemeralSigningKey: signingKey,
 		ConnectTimeout: connectTimeout, OperationTimeout: operationTimeout,
 	}, nil
 }
@@ -261,6 +322,12 @@ func realtimeConfigFromEnvironment() (RealtimeConfig, error) {
 		return RealtimeConfig{}, err
 	}
 	if cfg.MaxConnectionsPerActor, err = uintValueOrDefault("WS_MAX_CONNECTIONS_PER_ACTOR", 10, 16); err != nil {
+		return RealtimeConfig{}, err
+	}
+	if cfg.MaxPendingConnections, err = uintValueOrDefault("WS_MAX_PENDING_CONNECTIONS", 256, 32); err != nil {
+		return RealtimeConfig{}, err
+	}
+	if cfg.MaxConcurrentWrites, err = uintValueOrDefault("WS_MAX_CONCURRENT_WRITES", 8, 32); err != nil {
 		return RealtimeConfig{}, err
 	}
 	if cfg.MaxQueuedEvents, err = uintValueOrDefault("WS_MAX_QUEUED_EVENTS", 256, 32); err != nil {
@@ -322,6 +389,14 @@ func eventLogConfigFromEnvironment() (EventLogConfig, error) {
 	if err != nil {
 		return EventLogConfig{}, err
 	}
+	retentionInterval, err := durationValueOrDefault("EVENT_RETENTION_INTERVAL", 5*time.Minute)
+	if err != nil {
+		return EventLogConfig{}, err
+	}
+	retentionBatch, err := uintValueOrDefault("EVENT_RETENTION_BATCH_SIZE", 10_000, 64)
+	if err != nil {
+		return EventLogConfig{}, err
+	}
 	if pollInterval < 10*time.Millisecond || pollInterval > 5*time.Second {
 		return EventLogConfig{}, fmt.Errorf("EVENT_POLL_INTERVAL must be between 10ms and 5s")
 	}
@@ -334,7 +409,17 @@ func eventLogConfigFromEnvironment() (EventLogConfig, error) {
 	if retentionMinCount < 1000 || retentionMinCount > 10_000_000 {
 		return EventLogConfig{}, fmt.Errorf("EVENT_RETENTION_MIN_COUNT must be between 1000 and 10000000")
 	}
-	return EventLogConfig{PollInterval: pollInterval, WakeCoalesce: wakeCoalesce, Retention: retention, RetentionMinCount: retentionMinCount}, nil
+	if retentionInterval < 10*time.Second || retentionInterval > 24*time.Hour {
+		return EventLogConfig{}, fmt.Errorf("EVENT_RETENTION_INTERVAL must be between 10s and 24h")
+	}
+	if retentionBatch < 100 || retentionBatch > 100_000 {
+		return EventLogConfig{}, fmt.Errorf("EVENT_RETENTION_BATCH_SIZE must be between 100 and 100000")
+	}
+	return EventLogConfig{
+		PollInterval: pollInterval, WakeCoalesce: wakeCoalesce,
+		Retention: retention, RetentionMinCount: retentionMinCount,
+		RetentionInterval: retentionInterval, RetentionBatch: retentionBatch,
+	}, nil
 }
 
 func (c RealtimeConfig) validate(messageMaxBodyBytes uint64) error {
@@ -346,6 +431,12 @@ func (c RealtimeConfig) validate(messageMaxBodyBytes uint64) error {
 	}
 	if c.MaxConnectionsPerActor < 1 || c.MaxConnectionsPerActor > 100 {
 		return fmt.Errorf("WS_MAX_CONNECTIONS_PER_ACTOR must be between 1 and 100")
+	}
+	if c.MaxPendingConnections < 1 || c.MaxPendingConnections > 10000 {
+		return fmt.Errorf("WS_MAX_PENDING_CONNECTIONS must be between 1 and 10000")
+	}
+	if c.MaxConcurrentWrites < 1 || c.MaxConcurrentWrites > 4096 {
+		return fmt.Errorf("WS_MAX_CONCURRENT_WRITES must be between 1 and 4096")
 	}
 	if c.MaxUnackedEvents < 1 || c.MaxUnackedEvents > c.MaxQueuedEvents {
 		return fmt.Errorf("WS_MAX_UNACKED_EVENTS must be between 1 and WS_MAX_QUEUED_EVENTS")

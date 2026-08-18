@@ -40,10 +40,10 @@ Redis используется только для:
 
 1. Core в одной транзакции записывает доменное изменение и `events` в PostgreSQL.
 2. Только после успешного commit он публикует компактный сигнал `{org_id, high_watermark}` в Redis Pub/Sub.
-3. Каждый Core по сигналу будит локальный dispatcher, который читает разрешённые события из PostgreSQL и двигает in-process hub.
+3. Каждый Core по сигналу будит локальный dispatcher, который ограниченными батчами читает и гидратирует события из PostgreSQL, вычисляет актуальных получателей и передаёт immutable frames в in-process hub.
 4. Периодический PostgreSQL polling остаётся recovery path при потерянном сигнале, разрыве Redis или рестарте подписчика.
 
-Dispatcher хранит только watermark, а не загружает все события в память. Каждая WebSocket-сессия читает диапазон `(last_seq, high_watermark]` ограниченными батчами; размер ограничен `WS_MAX_UNACKED_EVENTS`, `WS_MAX_QUEUED_EVENTS` и `WS_MAX_QUEUED_BYTES`. После ACK берётся следующий батч. Один сигнал поэтому не превращает импорт или всплеск агентских ответов в неограниченную выборку на каждой реплике.
+Dispatcher хранит watermark и читает live-диапазон батчами по 256 событий, а не загружает весь всплеск в память. Payload гидратируется и сериализуется один раз, после чего hub раздаёт готовые bytes через bounded per-connection queues. Каждая WebSocket-сессия самостоятельно читает `Replay(last_seq)` только при подключении/reconnect; backlog ограничен `WS_MAX_UNACKED_EVENTS`, `WS_MAX_QUEUED_EVENTS` и `WS_MAX_QUEUED_BYTES`. После ACK берётся следующий батч.
 
 Wake-up коалесцируются в коротком окне `EVENT_WAKE_COALESCE`: несколько local/Redis сигналов приводят к одной проверке PostgreSQL watermark. Окно ограничивает частоту запросов при burst, но не заменяет настраиваемый `EVENT_POLL_INTERVAL` fallback.
 
@@ -57,9 +57,11 @@ Redis Streams сейчас не используются: они создали 
 - При runtime-сбое Core переходит на PostgreSQL polling; ephemeral typing/presence могут временно исчезнуть, что допустимо.
 
 Для ephemeral операций политика иная, чем для durable команд: при `REDIS_MODE=required` недоступность Redis даёт non-fatal WS error `service_unavailable` и операция не публикуется. Это fail-closed, потому что локальный fan-out при нескольких Core создал бы расходящееся presence/typing state и обошёл бы распределённый rate limit. Durable message/read/draft транзакции от Redis не зависят и продолжают доставляться PostgreSQL polling-ом.
+
 - Некорректная конфигурация выявляется при старте. Потеря соединения после старта отражается как degraded dependency, но не делает весь мессенджер недоступным.
 - После reconnect подписчик не пытается воспроизвести пропущенный Pub/Sub: dispatcher сверяет watermark с PostgreSQL.
 - Ключи имеют versioned namespace `coma:v1:*`, обязательный TTL и не содержат message body, access tokens или другие секреты.
+- Ephemeral Pub/Sub envelopes подписываются отдельным `REDIS_EPHEMERAL_SIGNING_KEY`; Core отклоняет неподписанные и изменённые payload, даже если посторонний клиент получил publish-доступ к Redis.
 - Redis запускается без требования к persistence; memory policy и лимит памяти задаются deployment-профилем для краткоживущих данных.
 
 ### Код и наблюдаемость

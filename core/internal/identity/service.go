@@ -243,6 +243,15 @@ func (s *Service) AcceptInvitation(ctx context.Context, token string, input Acce
 	if len(input.Timezone) < 1 || len(input.Timezone) > 64 {
 		return Tokens{}, validationErrorf("timezone has invalid length")
 	}
+	now := s.now().UTC()
+	tokenHash := access.HashRefreshToken(token)
+	valid, err := s.repository.InvitationValid(ctx, tokenHash[:], now)
+	if err != nil {
+		return Tokens{}, err
+	}
+	if !valid {
+		return Tokens{}, ErrInvitationInvalid
+	}
 	passwordHash, err := s.hasher.Hash(input.Password)
 	if err != nil {
 		return Tokens{}, err
@@ -255,8 +264,6 @@ func (s *Service) AcceptInvitation(ctx context.Context, token string, input Acce
 	if err != nil {
 		return Tokens{}, err
 	}
-	now := s.now().UTC()
-	tokenHash := access.HashRefreshToken(token)
 	user, err := s.repository.AcceptInvitation(ctx, InvitationAcceptance{
 		TokenHash: tokenHash[:], ActorID: ids[0], DisplayName: input.DisplayName, Handle: input.Handle,
 		PasswordHash: passwordHash, Timezone: input.Timezone, SessionID: ids[1], FamilyID: ids[2],

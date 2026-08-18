@@ -3,6 +3,7 @@ package realtime
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -13,6 +14,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/config"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/testdb"
+	"github.com/google/uuid"
 )
 
 func TestLocalEphemeralTypingPresenceAndRateLimit(t *testing.T) {
@@ -23,12 +25,12 @@ func TestLocalEphemeralTypingPresenceAndRateLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 	hub := NewHub(10)
-	sender, err := hub.Register(member.OrgID, member.ActorID, "sender", 0)
+	sender, err := hub.Register(member.OrgID, member.ActorID, "session-sender", "sender", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer sender.Close()
-	receiver, err := hub.Register(owner.OrgID, owner.ActorID, "receiver", 0)
+	receiver, err := hub.Register(owner.OrgID, owner.ActorID, "session-receiver", "receiver", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,11 +87,11 @@ func TestRedisEphemeralCrossCoreFanout(t *testing.T) {
 	cfg.PresenceTTL = 10 * time.Second
 	cfg.EphemeralRateLimit = 100
 	cfg.EphemeralRateWindow = time.Second
-	redisCfg := config.RedisConfig{Mode: "required", URL: redisURL, Namespace: fmt.Sprintf("coma:ephemeral:test:%d", time.Now().UnixNano()), ConnectTimeout: time.Second, OperationTimeout: time.Second}
+	redisCfg := config.RedisConfig{Mode: "required", URL: redisURL, Namespace: fmt.Sprintf("coma:ephemeral:test:%d", time.Now().UnixNano()), EphemeralSigningKey: "0123456789abcdef0123456789abcdef", ConnectTimeout: time.Second, OperationTimeout: time.Second}
 	hub1, hub2 := NewHub(10), NewHub(10)
-	sender, _ := hub1.Register(member.OrgID, member.ActorID, "sender", 0)
+	sender, _ := hub1.Register(member.OrgID, member.ActorID, "session-sender", uuid.NewString(), 0)
 	defer sender.Close()
-	receiver, _ := hub2.Register(owner.OrgID, owner.ActorID, "receiver", 0)
+	receiver, _ := hub2.Register(owner.OrgID, owner.ActorID, "session-receiver", "receiver", 0)
 	defer receiver.Close()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	first, err := NewEphemeral(logger, pool, hub1, cfg, redisCfg)
@@ -123,6 +125,32 @@ func TestRedisEphemeralCrossCoreFanout(t *testing.T) {
 		}
 	}
 	t.Fatal("timed out waiting for cross-core Redis ephemeral frame")
+}
+
+func TestEphemeralEnvelopeRequiresValidSignature(t *testing.T) {
+	service := &Ephemeral{signingKey: []byte("0123456789abcdef0123456789abcdef")}
+	envelope := ephemeralEnvelope{
+		OrgID:    uuid.NewString(),
+		ActorIDs: []string{uuid.NewString()},
+		Data:     json.RawMessage(`{"op":"presence","actor_id":"` + uuid.NewString() + `","state":"online","expires_at":"2030-01-01T00:00:00Z"}`),
+	}
+	envelope.Signature = service.signEnvelope(envelope)
+	payload, err := json.Marshal(envelope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.decodeEphemeralEnvelope(payload); err != nil {
+		t.Fatalf("decode signed envelope: %v", err)
+	}
+
+	envelope.Data = json.RawMessage(`{"op":"presence","actor_id":"` + uuid.NewString() + `","state":"away","expires_at":"2030-01-01T00:00:00Z"}`)
+	tampered, err := json.Marshal(envelope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.decodeEphemeralEnvelope(tampered); !errors.Is(err, ErrEphemeralInvalid) {
+		t.Fatalf("decode tampered envelope error = %v, want ErrEphemeralInvalid", err)
+	}
 }
 
 func readEphemeral(t *testing.T, subscription *Subscription, destination any) {

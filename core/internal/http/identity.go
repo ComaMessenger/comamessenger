@@ -2,12 +2,14 @@ package http
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
-	"net"
 	standardhttp "net/http"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -24,29 +26,39 @@ import (
 const refreshCookieName = "comamessenger_refresh"
 
 type Dependencies struct {
-	Identity        *identity.Service
-	Chats           *chat.Service
-	Messages        *message.Service
-	UserState       *userstate.Service
-	Realtime        standardhttp.Handler
-	CookieSecure    bool
-	RefreshTokenTTL time.Duration
+	Identity              *identity.Service
+	Chats                 *chat.Service
+	Messages              *message.Service
+	UserState             *userstate.Service
+	Realtime              standardhttp.Handler
+	CookieSecure          bool
+	RefreshTokenTTL       time.Duration
+	BootstrapToken        string
+	RequireBootstrapToken bool
+	TrustedProxyCIDRs     []netip.Prefix
+	RevokeRealtimeSession func(string)
 }
 
 type identityHandlers struct {
-	logger         *slog.Logger
-	service        *identity.Service
-	chats          *chat.Service
-	messages       *message.Service
-	userState      *userstate.Service
-	realtime       standardhttp.Handler
-	allowedOrigin  string
-	cookieSecure   bool
-	refreshTTL     time.Duration
-	bootstrapRate  *ipRateLimiter
-	loginRate      *ipRateLimiter
-	refreshRate    *ipRateLimiter
-	invitationRate *ipRateLimiter
+	logger                *slog.Logger
+	service               *identity.Service
+	chats                 *chat.Service
+	messages              *message.Service
+	userState             *userstate.Service
+	realtime              standardhttp.Handler
+	allowedOrigin         string
+	cookieSecure          bool
+	refreshTTL            time.Duration
+	bootstrapRate         *ipRateLimiter
+	loginRate             *ipRateLimiter
+	refreshRate           *ipRateLimiter
+	invitationRate        *ipRateLimiter
+	websocketRate         *ipRateLimiter
+	actorRate             *ipRateLimiter
+	bootstrapToken        string
+	requireBootstrapToken bool
+	trustedProxyCIDRs     []netip.Prefix
+	revokeRealtimeSession func(string)
 }
 
 type authContextKey struct{}
@@ -61,7 +73,9 @@ func newIdentityHandlers(logger *slog.Logger, allowedOrigin string, dependencies
 		logger: logger, service: dependencies.Identity, chats: dependencies.Chats, messages: dependencies.Messages, userState: dependencies.UserState, realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
 		cookieSecure: dependencies.CookieSecure, refreshTTL: dependencies.RefreshTokenTTL,
 		bootstrapRate: newIPRateLimiter(5, 5), loginRate: newIPRateLimiter(10, 10),
-		refreshRate: newIPRateLimiter(30, 20), invitationRate: newIPRateLimiter(10, 10),
+		refreshRate: newIPRateLimiter(30, 20), invitationRate: newIPRateLimiter(10, 10), websocketRate: newIPRateLimiter(60, 20), actorRate: newIPRateLimiter(1200, 200),
+		bootstrapToken: dependencies.BootstrapToken, requireBootstrapToken: dependencies.RequireBootstrapToken,
+		trustedProxyCIDRs: dependencies.TrustedProxyCIDRs, revokeRealtimeSession: dependencies.RevokeRealtimeSession,
 	}
 }
 
@@ -72,11 +86,12 @@ func (h *identityHandlers) routes(router chi.Router) {
 	router.With(h.rateLimit("refresh", h.refreshRate)).Post("/auth/refresh", h.refresh)
 	router.With(h.rateLimit("invitation-accept", h.invitationRate)).Post("/invitations/{token}/accept", h.acceptInvitation)
 	if h.realtime != nil {
-		router.Handle("/ws", h.realtime)
+		router.With(h.rateLimit("websocket", h.websocketRate)).Handle("/ws", h.realtime)
 	}
 
 	router.Group(func(protected chi.Router) {
 		protected.Use(h.authenticate)
+		protected.Use(h.actorRateLimit("authenticated", h.actorRate))
 		protected.Post("/auth/logout", h.logout)
 		protected.Get("/me", h.me)
 		protected.Patch("/me", h.updateMe)
@@ -134,12 +149,16 @@ func (h *identityHandlers) bootstrapStatus(w standardhttp.ResponseWriter, r *sta
 }
 
 func (h *identityHandlers) bootstrap(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	if h.requireBootstrapToken && !secureTokenEqual(h.bootstrapToken, r.Header.Get("X-Coma-Bootstrap-Token")) {
+		h.writeError(w, r, standardhttp.StatusForbidden, "forbidden", "A valid bootstrap token is required.")
+		return
+	}
 	var input identity.BootstrapInput
 	if err := decodeJSON(w, r, &input); err != nil {
 		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
-	tokens, err := h.service.Bootstrap(r.Context(), input, requestDevice(r))
+	tokens, err := h.service.Bootstrap(r.Context(), input, h.requestDevice(r))
 	if errors.Is(err, identity.ErrAlreadyBootstrapped) {
 		h.writeError(w, r, standardhttp.StatusConflict, "already_bootstrapped", "The instance has already been bootstrapped.")
 		return
@@ -162,7 +181,7 @@ func (h *identityHandlers) login(w standardhttp.ResponseWriter, r *standardhttp.
 		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
-	tokens, err := h.service.Login(r.Context(), input, requestDevice(r))
+	tokens, err := h.service.Login(r.Context(), input, h.requestDevice(r))
 	if errors.Is(err, identity.ErrInvalidCredentials) {
 		h.writeError(w, r, standardhttp.StatusUnauthorized, "invalid_credentials", "Email or password is incorrect.")
 		return
@@ -186,7 +205,7 @@ func (h *identityHandlers) refresh(w standardhttp.ResponseWriter, r *standardhtt
 		h.writeError(w, r, standardhttp.StatusUnauthorized, "invalid_refresh_token", "Refresh token is invalid.")
 		return
 	}
-	tokens, err := h.service.Refresh(r.Context(), cookie.Value, requestDevice(r))
+	tokens, err := h.service.Refresh(r.Context(), cookie.Value, h.requestDevice(r))
 	if errors.Is(err, identity.ErrInvalidRefreshToken) || errors.Is(err, identity.ErrRefreshReuse) {
 		h.clearRefreshCookie(w)
 		h.writeError(w, r, standardhttp.StatusUnauthorized, "invalid_refresh_token", "Refresh token is invalid.")
@@ -205,6 +224,9 @@ func (h *identityHandlers) logout(w standardhttp.ResponseWriter, r *standardhttp
 	if err := h.service.Logout(r.Context(), auth.User.ActorID, auth.Identity.SessionID); err != nil && !errors.Is(err, identity.ErrNotFound) {
 		h.internalError(w, r, err)
 		return
+	}
+	if h.revokeRealtimeSession != nil {
+		h.revokeRealtimeSession(auth.Identity.SessionID)
 	}
 	h.clearRefreshCookie(w)
 	w.WriteHeader(standardhttp.StatusNoContent)
@@ -256,6 +278,9 @@ func (h *identityHandlers) revokeSession(w standardhttp.ResponseWriter, r *stand
 	if sessionID == auth.Identity.SessionID {
 		h.clearRefreshCookie(w)
 	}
+	if h.revokeRealtimeSession != nil {
+		h.revokeRealtimeSession(sessionID)
+	}
 	w.WriteHeader(standardhttp.StatusNoContent)
 }
 
@@ -286,7 +311,7 @@ func (h *identityHandlers) acceptInvitation(w standardhttp.ResponseWriter, r *st
 		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
-	tokens, err := h.service.AcceptInvitation(r.Context(), chi.URLParam(r, "token"), input, requestDevice(r))
+	tokens, err := h.service.AcceptInvitation(r.Context(), chi.URLParam(r, "token"), input, h.requestDevice(r))
 	if err != nil {
 		switch {
 		case errors.Is(err, identity.ErrInvitationInvalid):
@@ -472,14 +497,24 @@ func authFromContext(ctx context.Context) authenticated {
 	return auth
 }
 
+func (h *identityHandlers) actorRateLimit(name string, limiter *ipRateLimiter) func(standardhttp.Handler) standardhttp.Handler {
+	return func(next standardhttp.Handler) standardhttp.Handler {
+		return standardhttp.HandlerFunc(func(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+			actorID := authFromContext(r.Context()).User.ActorID
+			if !limiter.Allow(name + ":" + actorID) {
+				w.Header().Set("Retry-After", "1")
+				h.writeError(w, r, standardhttp.StatusTooManyRequests, "rate_limited", "Too many requests.")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 func (h *identityHandlers) rateLimit(name string, limiter *ipRateLimiter) func(standardhttp.Handler) standardhttp.Handler {
 	return func(next standardhttp.Handler) standardhttp.Handler {
 		return standardhttp.HandlerFunc(func(w standardhttp.ResponseWriter, r *standardhttp.Request) {
-			host, _, err := net.SplitHostPort(r.RemoteAddr)
-			if err != nil {
-				host = r.RemoteAddr
-			}
-			if !limiter.Allow(name + ":" + host) {
+			if !limiter.Allow(name + ":" + h.clientIP(r)) {
 				w.Header().Set("Retry-After", "60")
 				h.writeError(w, r, standardhttp.StatusTooManyRequests, "rate_limited", "Too many requests.")
 				return
@@ -518,6 +553,10 @@ func (h *identityHandlers) internalError(w standardhttp.ResponseWriter, r *stand
 }
 
 func decodeJSON(w standardhttp.ResponseWriter, r *standardhttp.Request, destination any) error {
+	controller := standardhttp.NewResponseController(w)
+	if err := controller.SetReadDeadline(time.Now().Add(15 * time.Second)); err == nil {
+		defer controller.SetReadDeadline(time.Time{})
+	}
 	r.Body = standardhttp.MaxBytesReader(w, r.Body, 2<<20)
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
@@ -530,10 +569,48 @@ func decodeJSON(w standardhttp.ResponseWriter, r *standardhttp.Request, destinat
 	return nil
 }
 
-func requestDevice(r *standardhttp.Request) identity.Device {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host = ""
+func (h *identityHandlers) requestDevice(r *standardhttp.Request) identity.Device {
+	return identity.Device{UserAgent: r.UserAgent(), IPAddress: h.clientIP(r)}
+}
+
+func (h *identityHandlers) clientIP(r *standardhttp.Request) string {
+	peer, ok := parseRemoteAddress(r.RemoteAddr)
+	if !ok || !prefixContains(h.trustedProxyCIDRs, peer) {
+		return peer.String()
 	}
-	return identity.Device{UserAgent: r.UserAgent(), IPAddress: host}
+	parts := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
+	for index := len(parts) - 1; index >= 0; index-- {
+		candidate, err := netip.ParseAddr(strings.TrimSpace(parts[index]))
+		if err != nil {
+			continue
+		}
+		candidate = candidate.Unmap()
+		if !prefixContains(h.trustedProxyCIDRs, candidate) {
+			return candidate.String()
+		}
+	}
+	return peer.String()
+}
+
+func parseRemoteAddress(remote string) (netip.Addr, bool) {
+	if addressPort, err := netip.ParseAddrPort(remote); err == nil {
+		return addressPort.Addr().Unmap(), true
+	}
+	address, err := netip.ParseAddr(remote)
+	return address.Unmap(), err == nil
+}
+
+func prefixContains(prefixes []netip.Prefix, address netip.Addr) bool {
+	for _, prefix := range prefixes {
+		if prefix.Contains(address) {
+			return true
+		}
+	}
+	return false
+}
+
+func secureTokenEqual(expected, actual string) bool {
+	expectedHash := sha256.Sum256([]byte(expected))
+	actualHash := sha256.Sum256([]byte(actual))
+	return subtle.ConstantTimeCompare(expectedHash[:], actualHash[:]) == 1
 }

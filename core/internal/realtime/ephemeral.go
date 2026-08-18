@@ -2,6 +2,9 @@ package realtime
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,7 +32,13 @@ type ephemeralEnvelope struct {
 	ActorIDs            []string        `json:"actor_ids"`
 	ExcludeConnectionID string          `json:"exclude_connection_id"`
 	Data                json.RawMessage `json:"data"`
+	Signature           string          `json:"signature"`
 }
+
+const (
+	maxEphemeralEnvelopeBytes = 64 * 1024
+	maxEphemeralDataBytes     = 16 * 1024
+)
 
 type localRate struct {
 	count int
@@ -41,14 +50,15 @@ type localLease struct {
 }
 
 type Ephemeral struct {
-	logger    *slog.Logger
-	pool      *pgxpool.Pool
-	hub       *Hub
-	config    config.RealtimeConfig
-	redis     *redis.Client
-	channel   string
-	namespace string
-	opTimeout time.Duration
+	logger     *slog.Logger
+	pool       *pgxpool.Pool
+	hub        *Hub
+	config     config.RealtimeConfig
+	redis      *redis.Client
+	channel    string
+	namespace  string
+	opTimeout  time.Duration
+	signingKey []byte
 
 	mu          sync.Mutex
 	localRate   map[string]localRate
@@ -58,6 +68,10 @@ type Ephemeral struct {
 func NewEphemeral(logger *slog.Logger, pool *pgxpool.Pool, hub *Hub, realtimeConfig config.RealtimeConfig, redisConfig config.RedisConfig) (*Ephemeral, error) {
 	result := &Ephemeral{logger: logger, pool: pool, hub: hub, config: realtimeConfig, namespace: redisConfig.Namespace, opTimeout: redisConfig.OperationTimeout, localRate: make(map[string]localRate), localLeases: make(map[string]localLease)}
 	if redisConfig.Mode == "required" {
+		if len(redisConfig.EphemeralSigningKey) < 32 {
+			return nil, fmt.Errorf("REDIS_EPHEMERAL_SIGNING_KEY must be at least 32 bytes")
+		}
+		result.signingKey = []byte(redisConfig.EphemeralSigningKey)
 		options, err := redis.ParseURL(redisConfig.URL)
 		if err != nil {
 			return nil, fmt.Errorf("parse ephemeral REDIS_URL: %w", err)
@@ -97,8 +111,9 @@ func (e *Ephemeral) Run(ctx context.Context) {
 			if err != nil {
 				break
 			}
-			var envelope ephemeralEnvelope
-			if json.Unmarshal([]byte(message.Payload), &envelope) != nil || envelope.OrgID == "" || len(envelope.Data) == 0 {
+			envelope, err := e.decodeEphemeralEnvelope([]byte(message.Payload))
+			if err != nil {
+				e.logger.Warn("discard invalid Redis ephemeral envelope", "error", err)
 				continue
 			}
 			e.hub.BroadcastEphemeral(envelope.OrgID, envelope.ActorIDs, envelope.ExcludeConnectionID, envelope.Data)
@@ -108,6 +123,9 @@ func (e *Ephemeral) Run(ctx context.Context) {
 }
 
 func (e *Ephemeral) SubscribeActive(ctx context.Context, user identity.User, subscription *Subscription, chatID, threadRootID *string) error {
+	if err := e.allow(ctx, user, "subscribe_active"); err != nil {
+		return err
+	}
 	if chatID == nil {
 		if threadRootID != nil {
 			return ErrEphemeralInvalid
@@ -124,6 +142,72 @@ func (e *Ephemeral) SubscribeActive(ctx context.Context, user identity.User, sub
 	e.hub.SetActive(subscription, chatID, threadRootID)
 	value, _ := json.Marshal(map[string]any{"chat_id": chatID, "thread_root_id": threadRootID})
 	return e.setLease(ctx, "active", user, subscription.ConnectionID, string(value), e.config.ActiveSubscriptionTTL)
+}
+
+func (e *Ephemeral) decodeEphemeralEnvelope(payload []byte) (ephemeralEnvelope, error) {
+	if len(payload) == 0 || len(payload) > maxEphemeralEnvelopeBytes {
+		return ephemeralEnvelope{}, ErrEphemeralInvalid
+	}
+	var envelope ephemeralEnvelope
+	if err := decodeStrict(payload, &envelope); err != nil {
+		return ephemeralEnvelope{}, ErrEphemeralInvalid
+	}
+	if len(e.signingKey) == 0 || !hmac.Equal([]byte(envelope.Signature), []byte(e.signEnvelope(envelope))) {
+		return ephemeralEnvelope{}, ErrEphemeralInvalid
+	}
+	if _, err := uuid.Parse(envelope.OrgID); err != nil || len(envelope.ActorIDs) == 0 || len(envelope.ActorIDs) > 1000 || len(envelope.Data) == 0 || len(envelope.Data) > maxEphemeralDataBytes {
+		return ephemeralEnvelope{}, ErrEphemeralInvalid
+	}
+	seen := make(map[string]struct{}, len(envelope.ActorIDs))
+	for _, actorID := range envelope.ActorIDs {
+		if _, err := uuid.Parse(actorID); err != nil {
+			return ephemeralEnvelope{}, ErrEphemeralInvalid
+		}
+		if _, duplicate := seen[actorID]; duplicate {
+			return ephemeralEnvelope{}, ErrEphemeralInvalid
+		}
+		seen[actorID] = struct{}{}
+	}
+	if envelope.ExcludeConnectionID != "" {
+		if _, err := uuid.Parse(envelope.ExcludeConnectionID); err != nil {
+			return ephemeralEnvelope{}, ErrEphemeralInvalid
+		}
+	}
+	var operation struct {
+		Op string `json:"op"`
+	}
+	if err := json.Unmarshal(envelope.Data, &operation); err != nil {
+		return ephemeralEnvelope{}, ErrEphemeralInvalid
+	}
+	switch operation.Op {
+	case "typing":
+		var frame typingEventFrame
+		if decodeStrict(envelope.Data, &frame) != nil || frame.Op != "typing" || frame.ExpiresAt.IsZero() {
+			return ephemeralEnvelope{}, ErrEphemeralInvalid
+		}
+		if _, err := uuid.Parse(frame.ActorID); err != nil {
+			return ephemeralEnvelope{}, ErrEphemeralInvalid
+		}
+		if _, err := uuid.Parse(frame.ChatID); err != nil {
+			return ephemeralEnvelope{}, ErrEphemeralInvalid
+		}
+		if frame.ThreadRootID != nil {
+			if _, err := uuid.Parse(*frame.ThreadRootID); err != nil {
+				return ephemeralEnvelope{}, ErrEphemeralInvalid
+			}
+		}
+	case "presence":
+		var frame presenceEventFrame
+		if decodeStrict(envelope.Data, &frame) != nil || frame.Op != "presence" || frame.ExpiresAt.IsZero() || (frame.State != "online" && frame.State != "away") {
+			return ephemeralEnvelope{}, ErrEphemeralInvalid
+		}
+		if _, err := uuid.Parse(frame.ActorID); err != nil {
+			return ephemeralEnvelope{}, ErrEphemeralInvalid
+		}
+	default:
+		return ephemeralEnvelope{}, ErrEphemeralInvalid
+	}
+	return envelope, nil
 }
 
 func (e *Ephemeral) Typing(ctx context.Context, user identity.User, subscription *Subscription, chatID string, threadRootID *string, active bool) error {
@@ -232,9 +316,13 @@ func (e *Ephemeral) broadcast(ctx context.Context, user identity.User, excludeCo
 		e.hub.BroadcastEphemeral(envelope.OrgID, envelope.ActorIDs, envelope.ExcludeConnectionID, envelope.Data)
 		return nil
 	}
+	envelope.Signature = e.signEnvelope(envelope)
 	payload, err := json.Marshal(envelope)
 	if err != nil {
 		return err
+	}
+	if len(payload) > maxEphemeralEnvelopeBytes {
+		return ErrEphemeralInvalid
 	}
 	opCtx, cancel := context.WithTimeout(ctx, e.opTimeout)
 	defer cancel()
@@ -242,6 +330,18 @@ func (e *Ephemeral) broadcast(ctx context.Context, user identity.User, excludeCo
 		return ErrEphemeralUnavailable
 	}
 	return nil
+}
+
+func (e *Ephemeral) signEnvelope(envelope ephemeralEnvelope) string {
+	canonical, _ := json.Marshal(struct {
+		OrgID               string          `json:"org_id"`
+		ActorIDs            []string        `json:"actor_ids"`
+		ExcludeConnectionID string          `json:"exclude_connection_id"`
+		Data                json.RawMessage `json:"data"`
+	}{envelope.OrgID, envelope.ActorIDs, envelope.ExcludeConnectionID, envelope.Data})
+	mac := hmac.New(sha256.New, e.signingKey)
+	_, _ = mac.Write(canonical)
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
 func (e *Ephemeral) allow(ctx context.Context, user identity.User, operation string) error {

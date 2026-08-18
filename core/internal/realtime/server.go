@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	standardhttp "net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/coder/websocket"
@@ -29,25 +30,58 @@ const (
 	statusResyncRequired       websocket.StatusCode = 4009
 )
 
-var errServiceRestart = errors.New("realtime service restarting")
+var (
+	errServiceRestart = errors.New("realtime service restarting")
+	errSessionRevoked = errors.New("realtime session revoked")
+	errSessionExpired = errors.New("realtime session expired")
+)
 
 type AuthenticateFunc func(context.Context, string) (identity.User, access.Identity, error)
 
 type Server struct {
-	logger        *slog.Logger
-	allowedOrigin string
-	store         *eventlog.Store
-	hub           *Hub
-	authenticate  AuthenticateFunc
-	config        config.RealtimeConfig
-	ephemeral     *Ephemeral
+	logger              *slog.Logger
+	allowedOrigin       string
+	store               *eventlog.Store
+	hub                 *Hub
+	authenticate        AuthenticateFunc
+	config              config.RealtimeConfig
+	ephemeral           *Ephemeral
+	pending             chan struct{}
+	writeSlots          chan struct{}
+	statsMu             sync.Mutex
+	disconnects         map[string]uint64
+	lastDisconnectError string
 }
 
 func NewServer(logger *slog.Logger, allowedOrigin string, store *eventlog.Store, hub *Hub, authenticate AuthenticateFunc, cfg config.RealtimeConfig, ephemeral *Ephemeral) *Server {
-	return &Server{logger: logger, allowedOrigin: strings.TrimRight(allowedOrigin, "/"), store: store, hub: hub, authenticate: authenticate, config: cfg, ephemeral: ephemeral}
+	if cfg.MaxPendingConnections == 0 {
+		cfg.MaxPendingConnections = 256
+	}
+	if cfg.MaxConcurrentWrites == 0 {
+		cfg.MaxConcurrentWrites = 8
+	}
+	return &Server{logger: logger, allowedOrigin: strings.TrimRight(allowedOrigin, "/"), store: store, hub: hub, authenticate: authenticate, config: cfg, ephemeral: ephemeral, pending: make(chan struct{}, cfg.MaxPendingConnections), writeSlots: make(chan struct{}, cfg.MaxConcurrentWrites), disconnects: make(map[string]uint64)}
+}
+
+func (s *Server) DisconnectStats() map[string]uint64 {
+	s.statsMu.Lock()
+	defer s.statsMu.Unlock()
+	result := make(map[string]uint64, len(s.disconnects))
+	for reason, count := range s.disconnects {
+		result[reason] = count
+	}
+	return result
+}
+
+func (s *Server) LastDisconnectError() string {
+	s.statsMu.Lock()
+	defer s.statsMu.Unlock()
+	return s.lastDisconnectError
 }
 
 func (s *Server) Shutdown() { s.hub.Shutdown(errServiceRestart) }
+
+func (s *Server) RevokeSession(sessionID string) { s.hub.RevokeSession(sessionID) }
 
 func (s *Server) ServeHTTP(w standardhttp.ResponseWriter, r *standardhttp.Request) {
 	if !s.validOrigin(r.Header.Get("Origin")) {
@@ -58,6 +92,21 @@ func (s *Server) ServeHTTP(w standardhttp.ResponseWriter, r *standardhttp.Reques
 		})
 		return
 	}
+	select {
+	case s.pending <- struct{}{}:
+	default:
+		w.Header().Set("Retry-After", "1")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(standardhttp.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(api.Error{Code: "service_unavailable", Message: "Too many WebSocket handshakes are pending.", RequestId: middleware.GetReqID(r.Context())})
+		return
+	}
+	pending := true
+	defer func() {
+		if pending {
+			<-s.pending
+		}
+	}()
 	connection, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		InsecureSkipVerify: true,
 		CompressionMode:    websocket.CompressionDisabled,
@@ -94,7 +143,7 @@ func (s *Server) ServeHTTP(w standardhttp.ResponseWriter, r *standardhttp.Reques
 		_ = connection.Close(websocket.StatusInternalError, "connection id unavailable")
 		return
 	}
-	subscription, err := s.hub.Register(user.OrgID, user.ActorID, connectionID, initialWatermark)
+	subscription, err := s.hub.Register(user.OrgID, user.ActorID, accessIdentity.SessionID, connectionID, initialWatermark)
 	if err != nil {
 		if errors.Is(err, ErrConnectionLimit) {
 			s.writeInitialError(r.Context(), connection, "rate_limited", "The actor connection limit was reached.")
@@ -104,6 +153,8 @@ func (s *Server) ServeHTTP(w standardhttp.ResponseWriter, r *standardhttp.Reques
 		_ = connection.Close(websocket.StatusGoingAway, "service unavailable")
 		return
 	}
+	<-s.pending
+	pending = false
 	defer subscription.Close()
 
 	bounds, err := s.store.Bounds(r.Context(), user.OrgID)
@@ -127,21 +178,28 @@ func (s *Server) ServeHTTP(w standardhttp.ResponseWriter, r *standardhttp.Reques
 	session := &session{
 		logger: s.logger, connection: connection, subscription: subscription, store: s.store, user: user,
 		config: s.config, connectionID: connectionID, requestID: auth.RequestID,
-		sessionID: accessIdentity.SessionID,
-		lastSeq:   auth.LastSeq, backlogHigh: bounds.CurrentSeq, minRetainedSeq: bounds.MinRetainedSeq,
+		sessionID: accessIdentity.SessionID, authExpiresAt: accessIdentity.ExpiresAt,
+		lastSeq: auth.LastSeq, backlogHigh: bounds.CurrentSeq, minRetainedSeq: bounds.MinRetainedSeq,
 		acks: make(chan int64, 32), protocolErrors: make(chan protocolErrorFrame, 1), ephemeralErrors: make(chan protocolErrorFrame, 8),
-		ephemeral: s.ephemeral,
+		ephemeral:  s.ephemeral,
+		writeSlots: s.writeSlots,
 	}
 	startedAt := time.Now()
 	s.logger.Info("websocket connected",
 		"connection_id", connectionID, "org_id", user.OrgID, "actor_id", user.ActorID,
 		"session_id", accessIdentity.SessionID, "last_seq", auth.LastSeq, "current_seq", bounds.CurrentSeq,
 	)
-	closeCode, closeReason := session.run(r.Context())
+	closeCode, closeReason, closeCause := session.run(r.Context())
+	s.statsMu.Lock()
+	s.disconnects[fmt.Sprintf("%d:%s", closeCode, closeReason)]++
+	if closeCode == websocket.StatusInternalError && closeCause != nil {
+		s.lastDisconnectError = closeCause.Error()
+	}
+	s.statsMu.Unlock()
 	s.logger.Info("websocket disconnected",
 		"connection_id", connectionID, "org_id", user.OrgID, "actor_id", user.ActorID,
 		"session_id", accessIdentity.SessionID, "duration", time.Since(startedAt),
-		"close_code", closeCode, "close_reason", closeReason,
+		"close_code", closeCode, "close_reason", closeReason, "error", closeCause,
 	)
 	_ = connection.Close(closeCode, closeReason)
 }
@@ -279,6 +337,12 @@ func closeDetails(err error) (websocket.StatusCode, string) {
 	}
 	if errors.Is(err, errServiceRestart) {
 		return websocket.StatusServiceRestart, "service restart"
+	}
+	if errors.Is(err, errSessionRevoked) || errors.Is(err, errSessionExpired) {
+		return statusAuthenticationFailed, "authentication expired"
+	}
+	if errors.Is(err, errLiveQueueExceeded) {
+		return statusSlowConsumer, "outbound event queue exceeded"
 	}
 	if status := websocket.CloseStatus(err); status != -1 {
 		if status == websocket.StatusNormalClosure || status == websocket.StatusGoingAway {

@@ -145,13 +145,15 @@ Read marker принимает только `created_seq` реально дос�
 
 ### Инкремент 2.5 — hardening и benchmark
 
-- [ ] Реализовать retention worker: 72 часа и минимум 100 000 последних events организации.
-- [ ] Провести API-only end-to-end сценарий двух пользователей.
-- [ ] Провести failure suite и security regression.
-- [ ] Проверить Redis outage/reconnect, рост fallback polling load и отсутствие message body/secrets в Redis.
-- [ ] Провести benchmark 2 000 WebSocket и 200 сообщений/с на согласованной машине.
-- [ ] Сохранить конфигурацию машины, p50/p95/p99 latency, CPU, RAM, DB locks, queue depth и disconnect causes.
-- [ ] Обновить runbook диагностики realtime и документировать найденные пределы.
+- [x] Реализовать retention worker: 72 часа и минимум 100 000 последних events организации.
+- [x] Провести API-only end-to-end сценарий двух пользователей.
+- [x] Провести failure suite и security regression.
+- [x] Проверить Redis outage/reconnect, рост fallback polling load и отсутствие message body/secrets в Redis.
+- [x] Провести benchmark 2 000 WebSocket и 200 сообщений/с на согласованной машине.
+- [x] Сохранить конфигурацию машины, p50/p95/p99 latency, CPU, RAM, DB locks, queue depth и disconnect causes.
+- [x] Обновить runbook диагностики realtime и документировать найденные пределы.
+
+Первый benchmark обнаружил per-session PostgreSQL hydration: 83,8% fan-out за 20 секунд и p95 18,37 с. После batch hydration и in-memory fan-out повторный профиль доставил 400 000/400 000 кадров без disconnect, p95 1,532 с; решение и сохранённые инварианты закреплены в [ADR-0008](../decisions/0008-live-fanout-capacity.md). Полные числа находятся в [benchmark report](../benchmarks/phase-2.5-realtime.md), диагностика — в [realtime runbook](../runbooks/realtime.md).
 
 Готово, когда целевая нагрузка подтверждена либо ограничение измерено и принято отдельным ADR.
 
@@ -185,7 +187,7 @@ GET    /api/v1/events?since=:seq
 WS     /api/v1/ws
 ```
 
-Минимальная конфигурация Redis: `REDIS_URL`, connect/operation timeouts, namespace и явный disabled mode. Отсутствие Redis не меняет REST/WS schema.
+Минимальная конфигурация Redis: `REDIS_URL`, отдельный `REDIS_EPHEMERAL_SIGNING_KEY`, connect/operation timeouts, namespace и явный disabled mode. Отсутствие Redis не меняет REST/WS schema.
 
 Минимальные таблицы появляются по инкрементам:
 
@@ -263,15 +265,15 @@ SQL остаётся рядом с владеющим модулем и след
 
 ## Риски и контроль
 
-| Риск | Контроль |
-|---|---|
-| `organizations.event_seq` становится bottleneck | короткая транзакция, lock metrics и benchmark перед усложнением |
-| гонка backlog/live теряет event | register-before-watermark алгоритм и barrier tests |
-| событие раскрывает старый body после revoke | минимальный event log, актуальная hydration и membership filtering |
-| медленный клиент расходует память | bounded queue/window, ACK timeout, controlled disconnect |
-| Redis становится скрытым источником истины | только IDs/watermarks/TTL, PostgreSQL fallback и failure tests |
-| слишком ранняя абстракция скрывает транзакцию | concrete services и SQL рядом с модулем |
-| retention ломает давно offline клиент | явный resync contract и snapshot checkpoints |
+| Риск                                            | Контроль                                                           |
+| ----------------------------------------------- | ------------------------------------------------------------------ |
+| `organizations.event_seq` становится bottleneck | короткая транзакция, lock metrics и benchmark перед усложнением    |
+| гонка backlog/live теряет event                 | register-before-watermark алгоритм и barrier tests                 |
+| событие раскрывает старый body после revoke     | минимальный event log, актуальная hydration и membership filtering |
+| медленный клиент расходует память               | bounded queue/window, ACK timeout, controlled disconnect           |
+| Redis становится скрытым источником истины      | только IDs/watermarks/TTL, PostgreSQL fallback и failure tests     |
+| слишком ранняя абстракция скрывает транзакцию   | concrete services и SQL рядом с модулем                            |
+| retention ломает давно offline клиент           | явный resync contract и snapshot checkpoints                       |
 
 ## Definition of Done
 

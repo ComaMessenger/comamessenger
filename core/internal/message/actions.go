@@ -224,15 +224,26 @@ func (s *Service) PutReaction(ctx context.Context, user identity.User, messageID
 		return Reaction{}, false, ErrNotFound
 	}
 	result := Reaction{MessageID: messageID, ActorID: user.ActorID, Emoji: emoji}
+	err = tx.QueryRow(ctx, `SELECT created_at FROM reactions WHERE message_id = $1 AND actor_id = $2 AND emoji = $3`, messageID, user.ActorID, emoji).Scan(&result.CreatedAt)
+	if err == nil {
+		return result, false, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return Reaction{}, false, fmt.Errorf("find reaction: %w", err)
+	}
+	var reactionCount int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM reactions WHERE message_id = $1 AND actor_id = $2`, messageID, user.ActorID).Scan(&reactionCount); err != nil {
+		return Reaction{}, false, fmt.Errorf("count actor reactions: %w", err)
+	}
+	if reactionCount >= 20 {
+		return Reaction{}, false, ErrRateLimited
+	}
 	err = tx.QueryRow(ctx, `
 		INSERT INTO reactions (org_id, message_id, actor_id, emoji)
 		VALUES ($1, $2, $3, $4)
 		ON CONFLICT (message_id, actor_id, emoji) DO NOTHING
 		RETURNING created_at`, user.OrgID, messageID, user.ActorID, emoji).Scan(&result.CreatedAt)
 	created := err == nil
-	if errors.Is(err, pgx.ErrNoRows) {
-		err = tx.QueryRow(ctx, `SELECT created_at FROM reactions WHERE message_id = $1 AND actor_id = $2 AND emoji = $3`, messageID, user.ActorID, emoji).Scan(&result.CreatedAt)
-	}
 	if err != nil {
 		return Reaction{}, false, fmt.Errorf("upsert reaction: %w", err)
 	}

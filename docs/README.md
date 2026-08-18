@@ -1,10 +1,12 @@
 # Документация ComaMessenger
 
-Документация разделена на три уровня:
+Документация разделена по назначению:
 
 - [`product-spec.md`](product-spec.md) — исходное продуктовое и архитектурное ТЗ;
 - [`decisions/`](decisions/) — принятые решения, которые влияют на весь продукт;
 - [`phases/`](phases/) — отдельный scope, задачи и критерии готовности каждой фазы.
+- [`runbooks/`](runbooks/) — эксплуатация и диагностика;
+- [`benchmarks/`](benchmarks/) — воспроизводимые отчёты о производительности.
 
 ## Терминология
 
@@ -24,10 +26,16 @@
 - [ADR-0005: authentication, sessions and ownership](decisions/0005-auth-sessions-and-ownership.md)
 - [ADR-0006: надёжная доставка сообщений и realtime](decisions/0006-messaging-delivery-and-realtime.md)
 - [ADR-0007: Redis как координационный, а не долговечный слой](decisions/0007-redis-coordination.md)
+- [ADR-0008: предел live fan-out на одну реплику Core](decisions/0008-live-fanout-capacity.md)
 
 ## Протоколы
 
 - [Realtime protocol v1](protocols/realtime-v1.md)
+
+## Эксплуатация
+
+- [Диагностика realtime](runbooks/realtime.md)
+- [Phase 2.5 realtime benchmark](benchmarks/phase-2.5-realtime.md)
 
 ## Работа с фазами
 

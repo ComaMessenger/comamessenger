@@ -16,7 +16,10 @@ func setRequiredEnvironment(t *testing.T) {
 	t.Setenv("REDIS_NAMESPACE", "")
 	t.Setenv("REDIS_CONNECT_TIMEOUT", "")
 	t.Setenv("REDIS_OPERATION_TIMEOUT", "")
-	for _, key := range []string{"WS_TYPING_TTL", "WS_PRESENCE_TTL", "WS_ACTIVE_SUBSCRIPTION_TTL", "WS_EPHEMERAL_RATE_LIMIT", "WS_EPHEMERAL_RATE_WINDOW"} {
+	t.Setenv("REDIS_EPHEMERAL_SIGNING_KEY", "")
+	t.Setenv("BOOTSTRAP_TOKEN", "")
+	t.Setenv("TRUSTED_PROXY_CIDRS", "")
+	for _, key := range []string{"WS_MAX_PENDING_CONNECTIONS", "WS_MAX_CONCURRENT_WRITES", "WS_TYPING_TTL", "WS_PRESENCE_TTL", "WS_ACTIVE_SUBSCRIPTION_TTL", "WS_EPHEMERAL_RATE_LIMIT", "WS_EPHEMERAL_RATE_WINDOW"} {
 		t.Setenv(key, "")
 	}
 }
@@ -52,6 +55,12 @@ func TestFromEnvironmentDefaults(t *testing.T) {
 	if cfg.Realtime.AuthTimeout != 5*time.Second || cfg.Realtime.MaxFrameBytes != 256*1024 {
 		t.Fatalf("unexpected realtime handshake defaults: %#v", cfg.Realtime)
 	}
+	if cfg.Realtime.MaxPendingConnections != 256 {
+		t.Fatalf("MaxPendingConnections = %d, want 256", cfg.Realtime.MaxPendingConnections)
+	}
+	if cfg.Realtime.MaxConcurrentWrites != 8 {
+		t.Fatalf("MaxConcurrentWrites = %d, want 8", cfg.Realtime.MaxConcurrentWrites)
+	}
 	if cfg.Realtime.MaxQueuedEvents != 256 || cfg.Realtime.MaxQueuedBytes != 1024*1024 || cfg.Realtime.MaxUnackedEvents != 128 {
 		t.Fatalf("unexpected realtime queue defaults: %#v", cfg.Realtime)
 	}
@@ -61,7 +70,7 @@ func TestFromEnvironmentDefaults(t *testing.T) {
 	if cfg.Realtime.TypingTTL != 6*time.Second || cfg.Realtime.PresenceTTL != 60*time.Second || cfg.Realtime.EphemeralRateLimit != 30 || cfg.Realtime.EphemeralRateWindow != 10*time.Second {
 		t.Fatalf("unexpected ephemeral defaults: %#v", cfg.Realtime)
 	}
-	if cfg.EventLog.PollInterval != 200*time.Millisecond || cfg.EventLog.WakeCoalesce != 5*time.Millisecond || cfg.EventLog.Retention != 72*time.Hour || cfg.EventLog.RetentionMinCount != 100_000 {
+	if cfg.EventLog.PollInterval != 200*time.Millisecond || cfg.EventLog.WakeCoalesce != 5*time.Millisecond || cfg.EventLog.Retention != 72*time.Hour || cfg.EventLog.RetentionMinCount != 100_000 || cfg.EventLog.RetentionInterval != 5*time.Minute || cfg.EventLog.RetentionBatch != 10_000 {
 		t.Fatalf("unexpected event log defaults: %#v", cfg.EventLog)
 	}
 	if cfg.Redis.Mode != "disabled" || cfg.Redis.URL != "" || cfg.Redis.Namespace != "coma:v1" {
@@ -69,6 +78,9 @@ func TestFromEnvironmentDefaults(t *testing.T) {
 	}
 	if cfg.Redis.ConnectTimeout != time.Second || cfg.Redis.OperationTimeout != 500*time.Millisecond {
 		t.Fatalf("unexpected Redis timeouts: %#v", cfg.Redis)
+	}
+	if len(cfg.TrustedProxyCIDRs) != 2 {
+		t.Fatalf("TrustedProxyCIDRs = %v", cfg.TrustedProxyCIDRs)
 	}
 }
 
@@ -79,6 +91,7 @@ func TestFromEnvironmentSupportsRequiredRedis(t *testing.T) {
 	t.Setenv("REDIS_NAMESPACE", ":coma:test:")
 	t.Setenv("REDIS_CONNECT_TIMEOUT", "2s")
 	t.Setenv("REDIS_OPERATION_TIMEOUT", "250ms")
+	t.Setenv("REDIS_EPHEMERAL_SIGNING_KEY", "0123456789abcdef0123456789abcdef")
 
 	cfg, err := FromEnvironment()
 	if err != nil {
@@ -102,12 +115,17 @@ func TestFromEnvironmentRejectsInvalidRedisConfiguration(t *testing.T) {
 		{name: "short connect timeout", mode: "required", redisURL: "redis://localhost:6379", key: "REDIS_CONNECT_TIMEOUT", value: "10ms"},
 		{name: "long operation timeout", mode: "required", redisURL: "redis://localhost:6379", key: "REDIS_OPERATION_TIMEOUT", value: "10s"},
 		{name: "invalid namespace", mode: "required", redisURL: "redis://localhost:6379", key: "REDIS_NAMESPACE", value: "coma test"},
+		{name: "missing ephemeral signing key", mode: "required", redisURL: "redis://localhost:6379", key: "REDIS_EPHEMERAL_SIGNING_KEY", value: ""},
+		{name: "short ephemeral signing key", mode: "required", redisURL: "redis://localhost:6379", key: "REDIS_EPHEMERAL_SIGNING_KEY", value: "short"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			setRequiredEnvironment(t)
 			t.Setenv("REDIS_MODE", tt.mode)
 			t.Setenv("REDIS_URL", tt.redisURL)
+			if tt.mode == "required" {
+				t.Setenv("REDIS_EPHEMERAL_SIGNING_KEY", "0123456789abcdef0123456789abcdef")
+			}
 			if tt.key != "" {
 				t.Setenv(tt.key, tt.value)
 			}
@@ -197,6 +215,7 @@ func TestFromEnvironmentUsesSecureCookiesOutsideDevelopment(t *testing.T) {
 	setRequiredEnvironment(t)
 	t.Setenv("APP_ENV", "production")
 	t.Setenv("AUTH_COOKIE_SECURE", "")
+	t.Setenv("BOOTSTRAP_TOKEN", "0123456789abcdef0123456789abcdef")
 
 	cfg, err := FromEnvironment()
 	if err != nil {
@@ -218,6 +237,7 @@ func TestFromEnvironmentRejectsInvalidMessagingAndRealtimeLimits(t *testing.T) {
 		{name: "page too large", key: "MESSAGE_MAX_PAGE_SIZE", value: "501", wantErr: "MESSAGE_MAX_PAGE_SIZE"},
 		{name: "frame below body", key: "WS_MAX_FRAME_BYTES", value: "1024", wantErr: "WS_MAX_FRAME_BYTES"},
 		{name: "no connections", key: "WS_MAX_CONNECTIONS_PER_ACTOR", value: "0", wantErr: "WS_MAX_CONNECTIONS_PER_ACTOR"},
+		{name: "no concurrent writes", key: "WS_MAX_CONCURRENT_WRITES", value: "0", wantErr: "WS_MAX_CONCURRENT_WRITES"},
 		{name: "unacked above queue", key: "WS_MAX_UNACKED_EVENTS", value: "300", wantErr: "WS_MAX_UNACKED_EVENTS"},
 		{name: "queue bytes below frame", key: "WS_MAX_QUEUED_BYTES", value: "65536", wantErr: "WS_MAX_QUEUED_BYTES"},
 		{name: "pong after heartbeat", key: "WS_PONG_TIMEOUT", value: "25s", wantErr: "WS_PONG_TIMEOUT"},
@@ -230,6 +250,10 @@ func TestFromEnvironmentRejectsInvalidMessagingAndRealtimeLimits(t *testing.T) {
 		{name: "coalesce too long", key: "EVENT_WAKE_COALESCE", value: "500ms", wantErr: "EVENT_WAKE_COALESCE"},
 		{name: "retention too short", key: "EVENT_RETENTION", value: "30m", wantErr: "EVENT_RETENTION"},
 		{name: "retention floor too small", key: "EVENT_RETENTION_MIN_COUNT", value: "999", wantErr: "EVENT_RETENTION_MIN_COUNT"},
+		{name: "retention interval too short", key: "EVENT_RETENTION_INTERVAL", value: "1s", wantErr: "EVENT_RETENTION_INTERVAL"},
+		{name: "retention batch too large", key: "EVENT_RETENTION_BATCH_SIZE", value: "100001", wantErr: "EVENT_RETENTION_BATCH_SIZE"},
+		{name: "bootstrap token too short", key: "BOOTSTRAP_TOKEN", value: "short", wantErr: "BOOTSTRAP_TOKEN"},
+		{name: "invalid trusted proxy", key: "TRUSTED_PROXY_CIDRS", value: "not-a-cidr", wantErr: "TRUSTED_PROXY_CIDRS"},
 	}
 
 	for _, tt := range tests {
@@ -239,6 +263,27 @@ func TestFromEnvironmentRejectsInvalidMessagingAndRealtimeLimits(t *testing.T) {
 			_, err := FromEnvironment()
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("FromEnvironment() error = %v, want error containing %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestFromEnvironmentRejectsDevelopmentSecretsInProduction(t *testing.T) {
+	tests := []struct {
+		name, key, value, wantErr string
+	}{
+		{name: "signing key", key: "AUTH_SIGNING_KEY", value: "comamessenger-local-signing-key-change-me", wantErr: "AUTH_SIGNING_KEY"},
+		{name: "database password", key: "DATABASE_URL", value: "postgres://comamessenger:comamessenger@postgres:5432/comamessenger", wantErr: "DATABASE_URL"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setRequiredEnvironment(t)
+			t.Setenv("APP_ENV", "production")
+			t.Setenv("BOOTSTRAP_TOKEN", "0123456789abcdef0123456789abcdef")
+			t.Setenv(tt.key, tt.value)
+			_, err := FromEnvironment()
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("FromEnvironment() error = %v, want %q", err, tt.wantErr)
 			}
 		})
 	}

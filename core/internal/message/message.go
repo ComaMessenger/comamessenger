@@ -25,6 +25,7 @@ var (
 	ErrTooLarge            = errors.New("message body too large")
 	ErrIdempotencyConflict = errors.New("message idempotency conflict")
 	ErrVersionConflict     = errors.New("message version conflict")
+	ErrRateLimited         = errors.New("message action rate limited")
 )
 
 type Message struct {

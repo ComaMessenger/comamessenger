@@ -82,7 +82,11 @@ func main() {
 		os.Exit(1)
 	}
 	eventStore := eventlog.NewStore(pool)
-	realtimeHub := realtime.NewHub(int(cfg.Realtime.MaxConnectionsPerActor))
+	retentionWorker := eventlog.NewRetentionWorker(
+		logger, eventStore, cfg.EventLog.Retention, cfg.EventLog.RetentionInterval,
+		cfg.EventLog.RetentionMinCount, cfg.EventLog.RetentionBatch,
+	)
+	realtimeHub := realtime.NewHub(int(cfg.Realtime.MaxConnectionsPerActor), int(cfg.Realtime.MaxQueuedEvents), int(cfg.Realtime.MaxQueuedBytes))
 	dispatcher := realtime.NewDispatcher(logger, eventStore, realtimeHub, cfg.EventLog.PollInterval, cfg.EventLog.WakeCoalesce)
 	ephemeralService, err := realtime.NewEphemeral(logger, pool, realtimeHub, cfg.Realtime, cfg.Redis)
 	if err != nil {
@@ -112,6 +116,7 @@ func main() {
 	}
 	defer stopRealtime()
 	go dispatcher.Run(realtimeCtx)
+	go retentionWorker.Run(realtimeCtx)
 	afterCommit := func(orgID string, highWatermark int64) {
 		dispatcher.WakeLocal()
 		if redisCoordinator != nil {
@@ -129,6 +134,8 @@ func main() {
 			Identity: identityService, Chats: chat.NewService(pool),
 			Messages: messageService, UserState: userStateService, Realtime: realtimeServer,
 			CookieSecure: cfg.Auth.CookieSecure, RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
+			BootstrapToken: cfg.BootstrapToken, RequireBootstrapToken: cfg.AppEnv != "development",
+			TrustedProxyCIDRs: cfg.TrustedProxyCIDRs, RevokeRealtimeSession: realtimeServer.RevokeSession,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
@@ -162,6 +169,7 @@ func main() {
 		os.Exit(1)
 	}
 	logger.Info("realtime dispatcher stopped", "stats", dispatcher.Stats())
+	logger.Info("event retention worker stopped", "stats", retentionWorker.Stats())
 	if redisCoordinator != nil {
 		logger.Info("Redis coordinator stopped", "stats", redisCoordinator.Stats())
 	}

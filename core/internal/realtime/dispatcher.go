@@ -2,6 +2,7 @@ package realtime
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"sync/atomic"
 	"time"
@@ -19,9 +20,12 @@ const (
 type DispatcherStats struct {
 	LocalWakeups     uint64
 	RedisWakeups     uint64
+	RedisThrottled   uint64
 	CoalescedWakeups uint64
 	SignalPolls      uint64
 	FallbackPolls    uint64
+	LiveBatches      uint64
+	LiveEvents       uint64
 }
 
 type Dispatcher struct {
@@ -34,9 +38,13 @@ type Dispatcher struct {
 	pendingSources atomic.Uint32
 	localWakeups   atomic.Uint64
 	redisWakeups   atomic.Uint64
+	redisThrottled atomic.Uint64
+	lastRedisWake  atomic.Int64
 	coalesced      atomic.Uint64
 	signalPolls    atomic.Uint64
 	fallbackPolls  atomic.Uint64
+	liveBatches    atomic.Uint64
+	liveEvents     atomic.Uint64
 }
 
 func NewDispatcher(logger *slog.Logger, store *eventlog.Store, hub *Hub, pollInterval, wakeCoalesce time.Duration) *Dispatcher {
@@ -55,6 +63,17 @@ func (d *Dispatcher) queueWake(source wakeSource) {
 		d.localWakeups.Add(1)
 	case wakeRedis:
 		d.redisWakeups.Add(1)
+		now := time.Now().UnixNano()
+		for {
+			last := d.lastRedisWake.Load()
+			if last != 0 && time.Duration(now-last) < 50*time.Millisecond {
+				d.redisThrottled.Add(1)
+				return
+			}
+			if d.lastRedisWake.CompareAndSwap(last, now) {
+				break
+			}
+		}
 	default:
 		return
 	}
@@ -78,8 +97,9 @@ func (d *Dispatcher) queueWake(source wakeSource) {
 func (d *Dispatcher) Stats() DispatcherStats {
 	return DispatcherStats{
 		LocalWakeups: d.localWakeups.Load(), RedisWakeups: d.redisWakeups.Load(),
+		RedisThrottled:   d.redisThrottled.Load(),
 		CoalescedWakeups: d.coalesced.Load(), SignalPolls: d.signalPolls.Load(),
-		FallbackPolls: d.fallbackPolls.Load(),
+		FallbackPolls: d.fallbackPolls.Load(), LiveBatches: d.liveBatches.Load(), LiveEvents: d.liveEvents.Load(),
 	}
 }
 
@@ -130,14 +150,49 @@ func (d *Dispatcher) poll(ctx context.Context, trigger string) {
 			d.logger.Error("poll durable event watermark", "org_id", organization.OrgID, "dispatch_trigger", trigger, "error", err)
 			continue
 		}
-		if current > organization.Watermark {
-			d.hub.Advance(organization.OrgID, current)
-			d.logger.Debug("advanced durable event watermark",
-				"org_id", organization.OrgID, "from_seq", organization.Watermark, "to_seq", current,
-				"event_lag", current-organization.Watermark, "dispatch_latency", time.Since(startedAt),
-				"dispatch_trigger", trigger,
-			)
+		if current <= organization.Watermark {
+			continue
 		}
+		from := organization.Watermark
+		for from < current {
+			items, err := d.store.Live(ctx, organization.OrgID, from, current, 256)
+			if err != nil {
+				d.logger.Error("read live event batch", "org_id", organization.OrgID, "from_seq", from, "to_seq", current, "dispatch_trigger", trigger, "error", err)
+				break
+			}
+			if len(items) == 0 {
+				d.hub.Advance(organization.OrgID, current)
+				from = current
+				break
+			}
+			prepared := make([]PreparedFrame, 0, len(items))
+			for _, item := range items {
+				payload, err := json.Marshal(item.Frame)
+				if err != nil {
+					d.logger.Error("serialize live event", "org_id", organization.OrgID, "seq", item.Frame.Seq, "error", err)
+					continue
+				}
+				recipients := make(map[string]struct{}, len(item.RecipientActorIDs))
+				for _, actorID := range item.RecipientActorIDs {
+					recipients[actorID] = struct{}{}
+				}
+				excludeSessionID := ""
+				if item.ExcludeSessionID != nil {
+					excludeSessionID = *item.ExcludeSessionID
+				}
+				prepared = append(prepared, PreparedFrame{Seq: item.Frame.Seq, Payload: payload, Recipients: recipients, ExcludeSessionID: excludeSessionID})
+			}
+			through := items[len(items)-1].Frame.Seq
+			d.hub.PublishLive(organization.OrgID, through, prepared)
+			d.liveBatches.Add(1)
+			d.liveEvents.Add(uint64(len(items)))
+			from = through
+		}
+		d.logger.Debug("advanced durable event watermark",
+			"org_id", organization.OrgID, "from_seq", organization.Watermark, "to_seq", from,
+			"event_lag", current-from, "dispatch_latency", time.Since(startedAt),
+			"dispatch_trigger", trigger,
+		)
 	}
 }
 

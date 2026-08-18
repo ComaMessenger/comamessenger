@@ -30,6 +30,12 @@ type Bounds struct {
 	MinRetainedSeq int64
 }
 
+type LiveEvent struct {
+	Frame             Frame
+	RecipientActorIDs []string
+	ExcludeSessionID  *string
+}
+
 type Store struct {
 	pool *pgxpool.Pool
 }
@@ -122,6 +128,79 @@ func (s *Store) Replay(ctx context.Context, user identity.User, sessionID string
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate visible events: %w", err)
+	}
+	return result, nil
+}
+
+// Live reads and hydrates each durable event once, resolving its currently
+// authorized recipients in the same PostgreSQL snapshot. The realtime hub can
+// then fan the immutable serialized frame out without per-session SQL.
+func (s *Store) Live(ctx context.Context, orgID string, afterSeq, throughSeq int64, limit int) ([]LiveEvent, error) {
+	if throughSeq <= afterSeq || limit < 1 {
+		return []LiveEvent{}, nil
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT e.seq, e.type, e.occurred_at, e.actor_id, e.chat_id, e.subject_id,
+			CASE
+				WHEN e.type IN ('message.created', 'message.updated', 'message.deleted') AND m.id IS NOT NULL THEN
+					jsonb_build_object(
+						'id', m.id,
+						'chat_id', m.chat_id,
+						'actor_id', m.actor_id,
+						'client_msg_id', m.client_msg_id,
+						'type', m.type,
+						'body', m.body,
+						'body_format', m.body_format,
+						'reply_to_id', m.reply_to_id,
+						'thread_root_id', m.thread_root_id,
+						'version', m.version,
+						'created_seq', m.created_seq,
+						'created_at', m.created_at,
+						'edited_at', m.edited_at,
+						'deleted_at', m.deleted_at,
+						'forwarded_from', m.forwarded_from,
+						'mentioned_actor_ids', m.mentioned_actor_ids
+					)
+				ELSE e.data
+			END,
+			e.exclude_session_id,
+			COALESCE(recipients.actor_ids, '{}'::uuid[])
+		FROM events e
+		LEFT JOIN messages m ON m.org_id = e.org_id AND m.id = e.subject_id
+		LEFT JOIN LATERAL (
+			SELECT array_agg(recipient.id ORDER BY recipient.id) AS actor_ids
+			FROM actors recipient
+			WHERE recipient.org_id = e.org_id
+			  AND recipient.status = 'active' AND recipient.deleted_at IS NULL
+			  AND (e.audience_actor_id IS NULL OR recipient.id = e.audience_actor_id)
+			  AND (
+				e.chat_id IS NULL OR EXISTS (
+					SELECT 1 FROM chat_members cm
+					JOIN chats c ON c.org_id = cm.org_id AND c.id = cm.chat_id
+					WHERE cm.org_id = e.org_id AND cm.chat_id = e.chat_id
+					  AND cm.actor_id = recipient.id AND c.archived_at IS NULL
+				)
+			  )
+		) recipients ON true
+		WHERE e.org_id = $1 AND e.seq > $2 AND e.seq <= $3
+		ORDER BY e.seq
+		LIMIT $4`, orgID, afterSeq, throughSeq, limit)
+	if err != nil {
+		return nil, fmt.Errorf("read live event batch: %w", err)
+	}
+	defer rows.Close()
+	result := make([]LiveEvent, 0, limit)
+	for rows.Next() {
+		item := LiveEvent{Frame: Frame{Op: "event"}}
+		if err := rows.Scan(&item.Frame.Seq, &item.Frame.Type, &item.Frame.OccurredAt, &item.Frame.ActorID,
+			&item.Frame.ChatID, &item.Frame.SubjectID, &item.Frame.Data, &item.ExcludeSessionID,
+			&item.RecipientActorIDs); err != nil {
+			return nil, fmt.Errorf("scan live event: %w", err)
+		}
+		result = append(result, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate live events: %w", err)
 	}
 	return result, nil
 }
