@@ -71,10 +71,10 @@ type Service struct {
 	pool         *pgxpool.Pool
 	maxBodyBytes int
 	maxPageSize  int
-	afterCommit  func()
+	afterCommit  func(orgID string, highWatermark int64)
 }
 
-func NewService(pool *pgxpool.Pool, maxBodyBytes, maxPageSize int, afterCommit func()) *Service {
+func NewService(pool *pgxpool.Pool, maxBodyBytes, maxPageSize int, afterCommit func(orgID string, highWatermark int64)) *Service {
 	return &Service{pool: pool, maxBodyBytes: maxBodyBytes, maxPageSize: maxPageSize, afterCommit: afterCommit}
 }
 
@@ -147,7 +147,7 @@ func (s *Service) Create(ctx context.Context, user identity.User, chatID string,
 	if err := tx.Commit(ctx); err != nil {
 		return Message{}, false, fmt.Errorf("commit create message: %w", err)
 	}
-	s.notifyAfterCommit()
+	s.notifyAfterCommit(user.OrgID, seq)
 	return result, true, nil
 }
 
@@ -279,7 +279,7 @@ func (s *Service) Update(ctx context.Context, user identity.User, messageID stri
 	if err := tx.Commit(ctx); err != nil {
 		return Message{}, fmt.Errorf("commit update message: %w", err)
 	}
-	s.notifyAfterCommit()
+	s.notifyAfterCommit(user.OrgID, seq)
 	return result, nil
 }
 
@@ -326,13 +326,13 @@ func (s *Service) Delete(ctx context.Context, user identity.User, messageID stri
 	if err := tx.Commit(ctx); err != nil {
 		return Message{}, fmt.Errorf("commit delete message: %w", err)
 	}
-	s.notifyAfterCommit()
+	s.notifyAfterCommit(user.OrgID, seq)
 	return result, nil
 }
 
-func (s *Service) notifyAfterCommit() {
+func (s *Service) notifyAfterCommit(orgID string, highWatermark int64) {
 	if s.afterCommit != nil {
-		s.afterCommit()
+		s.afterCommit(orgID, highWatermark)
 	}
 }
 

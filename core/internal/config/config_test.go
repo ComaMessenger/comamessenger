@@ -11,6 +11,11 @@ func setRequiredEnvironment(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://test:test@localhost:5432/test")
 	t.Setenv("S3_BUCKET", "test")
 	t.Setenv("AUTH_SIGNING_KEY", "0123456789abcdef0123456789abcdef")
+	t.Setenv("REDIS_MODE", "")
+	t.Setenv("REDIS_URL", "")
+	t.Setenv("REDIS_NAMESPACE", "")
+	t.Setenv("REDIS_CONNECT_TIMEOUT", "")
+	t.Setenv("REDIS_OPERATION_TIMEOUT", "")
 }
 
 func TestFromEnvironmentDefaults(t *testing.T) {
@@ -50,8 +55,60 @@ func TestFromEnvironmentDefaults(t *testing.T) {
 	if cfg.Realtime.HeartbeatInterval != 25*time.Second || cfg.Realtime.PongTimeout != 10*time.Second {
 		t.Fatalf("unexpected realtime heartbeat defaults: %#v", cfg.Realtime)
 	}
-	if cfg.EventLog.PollInterval != 200*time.Millisecond || cfg.EventLog.Retention != 72*time.Hour || cfg.EventLog.RetentionMinCount != 100_000 {
+	if cfg.EventLog.PollInterval != 200*time.Millisecond || cfg.EventLog.WakeCoalesce != 5*time.Millisecond || cfg.EventLog.Retention != 72*time.Hour || cfg.EventLog.RetentionMinCount != 100_000 {
 		t.Fatalf("unexpected event log defaults: %#v", cfg.EventLog)
+	}
+	if cfg.Redis.Mode != "disabled" || cfg.Redis.URL != "" || cfg.Redis.Namespace != "coma:v1" {
+		t.Fatalf("unexpected Redis defaults: %#v", cfg.Redis)
+	}
+	if cfg.Redis.ConnectTimeout != time.Second || cfg.Redis.OperationTimeout != 500*time.Millisecond {
+		t.Fatalf("unexpected Redis timeouts: %#v", cfg.Redis)
+	}
+}
+
+func TestFromEnvironmentSupportsRequiredRedis(t *testing.T) {
+	setRequiredEnvironment(t)
+	t.Setenv("REDIS_MODE", "required")
+	t.Setenv("REDIS_URL", "redis://redis:6379/0")
+	t.Setenv("REDIS_NAMESPACE", ":coma:test:")
+	t.Setenv("REDIS_CONNECT_TIMEOUT", "2s")
+	t.Setenv("REDIS_OPERATION_TIMEOUT", "250ms")
+
+	cfg, err := FromEnvironment()
+	if err != nil {
+		t.Fatalf("FromEnvironment() error = %v", err)
+	}
+	if cfg.Redis.Mode != "required" || cfg.Redis.URL != "redis://redis:6379/0" || cfg.Redis.Namespace != "coma:test" {
+		t.Fatalf("unexpected Redis configuration: %#v", cfg.Redis)
+	}
+	if cfg.Redis.ConnectTimeout != 2*time.Second || cfg.Redis.OperationTimeout != 250*time.Millisecond {
+		t.Fatalf("unexpected Redis timeouts: %#v", cfg.Redis)
+	}
+}
+
+func TestFromEnvironmentRejectsInvalidRedisConfiguration(t *testing.T) {
+	tests := []struct {
+		name, mode, redisURL, key, value string
+	}{
+		{name: "unknown mode", mode: "optional"},
+		{name: "required without URL", mode: "required"},
+		{name: "disabled with URL", mode: "disabled", redisURL: "redis://localhost:6379"},
+		{name: "short connect timeout", mode: "required", redisURL: "redis://localhost:6379", key: "REDIS_CONNECT_TIMEOUT", value: "10ms"},
+		{name: "long operation timeout", mode: "required", redisURL: "redis://localhost:6379", key: "REDIS_OPERATION_TIMEOUT", value: "10s"},
+		{name: "invalid namespace", mode: "required", redisURL: "redis://localhost:6379", key: "REDIS_NAMESPACE", value: "coma test"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setRequiredEnvironment(t)
+			t.Setenv("REDIS_MODE", tt.mode)
+			t.Setenv("REDIS_URL", tt.redisURL)
+			if tt.key != "" {
+				t.Setenv(tt.key, tt.value)
+			}
+			if _, err := FromEnvironment(); err == nil {
+				t.Fatal("FromEnvironment() error = nil, want Redis configuration error")
+			}
+		})
 	}
 }
 
@@ -161,6 +218,7 @@ func TestFromEnvironmentRejectsInvalidMessagingAndRealtimeLimits(t *testing.T) {
 		{name: "ack timeout before interval", key: "WS_ACK_TIMEOUT", value: "500ms", wantErr: "WS_ACK_TIMEOUT"},
 		{name: "ack batch above window", key: "WS_ACK_BATCH_SIZE", value: "129", wantErr: "WS_ACK_BATCH_SIZE"},
 		{name: "poll too frequent", key: "EVENT_POLL_INTERVAL", value: "1ms", wantErr: "EVENT_POLL_INTERVAL"},
+		{name: "coalesce too long", key: "EVENT_WAKE_COALESCE", value: "500ms", wantErr: "EVENT_WAKE_COALESCE"},
 		{name: "retention too short", key: "EVENT_RETENTION", value: "30m", wantErr: "EVENT_RETENTION"},
 		{name: "retention floor too small", key: "EVENT_RETENTION_MIN_COUNT", value: "999", wantErr: "EVENT_RETENTION_MIN_COUNT"},
 	}

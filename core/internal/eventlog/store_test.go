@@ -45,6 +45,10 @@ func TestStoreReplayHydratesAndFiltersCurrentMembership(t *testing.T) {
 	if len(frames) != 2 || frames[0].Seq != first.CreatedSeq || frames[1].Seq != second.CreatedSeq {
 		t.Fatalf("Replay() = %+v", frames)
 	}
+	limited, err := store.Replay(ctx, member, 0, bounds.CurrentSeq, 1)
+	if err != nil || len(limited) != 1 || limited[0].Seq != first.CreatedSeq {
+		t.Fatalf("bounded Replay() = %+v, %v", limited, err)
+	}
 	var hydrated message.Message
 	if err := json.Unmarshal(frames[0].Data, &hydrated); err != nil {
 		t.Fatal(err)

@@ -4,7 +4,7 @@
 
 Построить проверяемое ядро переписки, в котором два API-клиента безопасно обмениваются сообщениями, переживают timeout, повторы запросов, разрыв WebSocket и перезапуск Core без потери закоммиченных данных и без дублей в пользовательском состоянии.
 
-Архитектурные гарантии закреплены в [ADR-0006](../decisions/0006-messaging-delivery-and-realtime.md), wire contract — в [Realtime protocol v1](../protocols/realtime-v1.md).
+Архитектурные гарантии закреплены в [ADR-0006](../decisions/0006-messaging-delivery-and-realtime.md), роль Redis — в [ADR-0007](../decisions/0007-redis-coordination.md), wire contract — в [Realtime protocol v1](../protocols/realtime-v1.md).
 
 ## В scope
 
@@ -17,6 +17,7 @@
 - синхронизируемые drafts;
 - WebSocket auth, resume, ACK, heartbeat и backpressure;
 - ephemeral typing/presence;
+- Redis Pub/Sub как быстрый wake-up поверх durable event log и Redis TTL-state для ephemeral функций;
 - durable event log как transactional outbox;
 - failure, integration, concurrency и load tests.
 
@@ -26,7 +27,7 @@
 - Web Push и Notification permission UI — они входят в фазу 3;
 - чужие read receipts вида «прочитано Алисой»;
 - offline cache/outbox браузера — контракт задаётся здесь, реализация входит в фазу 3;
-- Redis, Kafka, NATS, multi-node fan-out и несколько экземпляров Core;
+- Redis Streams, Kafka, NATS, поддерживаемый multi-node fan-out и несколько экземпляров Core;
 - универсальный EventBus, repository interface на каждую таблицу и таблица online deliveries;
 - форматирование сверх согласованного markdown-подмножества.
 
@@ -42,6 +43,7 @@
 8. Участник канала без `message.publish`/`thread.reply` не пишет ни в ленту, ни в тред.
 9. Потеря in-memory hub не приводит к потере committed event.
 10. ACK означает применение event клиентом, но не прочтение сообщения пользователем.
+11. Потеря, повтор или задержка Redis-сигнала не влияет на сохранность и порядок durable events.
 
 ## Пользовательские сценарии
 
@@ -95,6 +97,22 @@
 
 Готово, когда reconnect до/после commit и падение после commit до wake-up проходят автоматически.
 
+### Инкремент 2.2a — Redis coordination foundation
+
+- [x] Добавить Redis Open Source 8.x в development/production Compose с healthcheck, memory limit/policy и без требования к persistence.
+- [x] Добавить `REDIS_URL`, connect/operation timeouts, versioned key/channel namespace и явный single-core disabled mode.
+- [x] Реализовать маленький конкретный Redis coordinator без универсального `EventBus`/cache abstraction.
+- [x] После PostgreSQL commit публиковать только `{org_id, high_watermark}`; не помещать message body или durable payload в Pub/Sub.
+- [x] На каждом Core принимать сигнал, будить локальный dispatcher и читать события из PostgreSQL от собственного watermark.
+- [x] Коалесцировать burst local/Redis сигналов в окне `EVENT_WAKE_COALESCE`, выполняя одну проверку watermark вместо запроса на каждый PUBLISH.
+- [x] Читать backlog каждой WebSocket-сессии только ограниченными батчами с backpressure/ACK между батчами; не загружать весь диапазон до high watermark в память.
+- [x] Сохранить периодический PostgreSQL polling как fallback при lost Pub/Sub, reconnect и runtime outage Redis.
+- [x] Не блокировать durable-команду из-за publish error после commit; отражать Redis как degraded dependency и логировать/измерять fallback.
+- [x] Разделить counters/log fields для `local_commit`, `redis` и `polling_fallback`, включая число коалесцированных wake-up.
+- [x] Добавить integration tests на duplicate/lost wake-up, отключение Redis под трафиком и восстановление подписки.
+
+Готово, когда Redis ускоряет доставку, но его остановка не теряет закоммиченные события, не создаёт дубли и не нарушает resume.
+
 ### Инкремент 2.3 — replies, threads и message actions
 
 - [x] Проверять, что `reply_to_id` и `thread_root_id` существуют, доступны и принадлежат тому же chat.
@@ -115,7 +133,8 @@
 - [ ] Рассчитывать unread по доступным сообщениям после marker; mentions и unread threads считать отдельно.
 - [ ] Создать versioned drafts с upsert/delete и actor-only events.
 - [ ] Реализовать `subscribe_active`, typing и presence без durable event log.
-- [ ] Ввести TTL и rate limits для ephemeral operations.
+- [ ] Хранить межпроцессные presence/typing leases в Redis с TTL; локальный in-memory режим допустим только при явно отключённом Redis и одном Core.
+- [ ] Ввести распределённые rate limits для ephemeral operations и документировать fail-open/fail-closed policy по типу лимита.
 - [ ] Не считать фоновые или агентские соединения online без отдельной presence policy.
 
 Готово, когда два устройства одного пользователя сходятся по read state/draft, а потеря typing events безвредна.
@@ -125,6 +144,7 @@
 - [ ] Реализовать retention worker: 72 часа и минимум 100 000 последних events организации.
 - [ ] Провести API-only end-to-end сценарий двух пользователей.
 - [ ] Провести failure suite и security regression.
+- [ ] Проверить Redis outage/reconnect, рост fallback polling load и отсутствие message body/secrets в Redis.
 - [ ] Провести benchmark 2 000 WebSocket и 200 сообщений/с на согласованной машине.
 - [ ] Сохранить конфигурацию машины, p50/p95/p99 latency, CPU, RAM, DB locks, queue depth и disconnect causes.
 - [ ] Обновить runbook диагностики realtime и документировать найденные пределы.
@@ -156,6 +176,8 @@ GET    /api/v1/events?since=:seq
 WS     /api/v1/ws
 ```
 
+Минимальная конфигурация Redis: `REDIS_URL`, connect/operation timeouts, namespace и явный disabled mode. Отсутствие Redis не меняет REST/WS schema.
+
 Минимальные таблицы появляются по инкрементам:
 
 ```text
@@ -182,6 +204,7 @@ core/internal/message/service.go
 core/internal/eventlog/store.go
 core/internal/realtime/hub.go
 core/internal/realtime/connection.go
+core/internal/coordination/redis.go
 core/internal/http/messages.go
 core/internal/http/realtime.go
 ```
@@ -205,6 +228,8 @@ SQL остаётся рядом с владеющим модулем и след
 - повторная доставка не создаёт дубль состояния;
 - reconnect до commit, после commit и после получения event;
 - Core завершается после DB commit, но до hub wake-up;
+- Redis Pub/Sub теряет или дублирует wake-up, а dispatcher всё равно сходится к PostgreSQL watermark;
+- Redis отключается и возвращается во время трафика без отказа durable-команд;
 - slow consumer получает `4008` и успешно resume;
 - старый checkpoint получает `4009/resync_required`;
 - revoked membership блокирует REST, backlog и live body;
@@ -235,12 +260,13 @@ SQL остаётся рядом с владеющим модулем и след
 | гонка backlog/live теряет event | register-before-watermark алгоритм и barrier tests |
 | событие раскрывает старый body после revoke | минимальный event log, актуальная hydration и membership filtering |
 | медленный клиент расходует память | bounded queue/window, ACK timeout, controlled disconnect |
+| Redis становится скрытым источником истины | только IDs/watermarks/TTL, PostgreSQL fallback и failure tests |
 | слишком ранняя абстракция скрывает транзакцию | concrete services и SQL рядом с модулем |
 | retention ломает давно offline клиент | явный resync contract и snapshot checkpoints |
 
 ## Definition of Done
 
-- Инкременты 2.0–2.5 закрыты без пропущенных correctness-тестов.
+- Инкременты 2.0–2.5, включая 2.2a, закрыты без пропущенных correctness-тестов.
 - REST/WS schemas и сгенерированные Go/TypeScript-типы синхронизированы.
 - API-only end-to-end, failure suite, authorization и concurrency tests зелёные.
 - Benchmark report сохранён и объясняет достигнутые пределы.

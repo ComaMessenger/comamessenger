@@ -7,7 +7,7 @@
 
 Сообщение проходит через HTTP-запрос, транзакцию PostgreSQL, realtime-доставку и локальное состояние клиента. На каждом участке возможны timeout, повтор запроса, разрыв соединения или перезапуск Core. Система не должна создавать дубли, терять закоммиченные изменения или раскрывать содержимое чатов после отзыва доступа.
 
-При этом базовая self-hosted поставка должна оставаться модульным монолитом без обязательных Redis, Kafka или NATS и без абстракций под реализации, которых ещё нет.
+При этом базовая self-hosted поставка должна оставаться модульным монолитом без Kafka, NATS и абстракций под реализации, которых ещё нет. Redis принят отдельным [ADR-0007](0007-redis-coordination.md) только как координационный и краткоживущий слой.
 
 ## Решение
 
@@ -50,7 +50,7 @@
 
 Событие хранит routing metadata и идентификатор изменённой сущности, но не становится второй копией всей доменной модели. При доставке сервер строит разрешённое представление по актуальному состоянию и текущему membership.
 
-In-process hub не является источником истины. Потерянный wake-up или перезапуск Core компенсируется периодическим чтением committed events из PostgreSQL.
+In-process hub и Redis не являются источниками истины. Потерянный wake-up, разрыв Redis или перезапуск Core компенсируются периодическим чтением committed events из PostgreSQL.
 
 ### WebSocket и восстановление
 
@@ -91,11 +91,12 @@ In-process hub не является источником истины. Поте
 
 В фазе 2 официально поддерживается один экземпляр Core. Цель — 2 000 WebSocket-соединений и 200 сообщений/с на согласованной машине.
 
-Multi-node fan-out, Redis, NATS или PostgreSQL LISTEN/NOTIFY не реализуются заранее. При необходимости меняется dispatcher/fan-out, но REST/WS-контракты и durable event log сохраняются.
+Redis Pub/Sub добавляется в инкременте 2.2a как быстрый wake-up поверх PostgreSQL event log и основа для ephemeral state. Multi-node topology остаётся неподдерживаемой до phase 7; NATS, Kafka и PostgreSQL LISTEN/NOTIFY не добавляются. REST/WS-контракты и durable event log от Redis не зависят.
 
 ## Последствия
 
 - Закоммиченное сообщение восстанавливается даже при падении Core между commit и realtime-публикацией.
+- Сбой Redis может увеличить задержку до следующего PostgreSQL poll и временно убрать ephemeral signals, но не теряет durable event.
 - Повтор HTTP-команды или WebSocket-события безопасен и ожидаем.
 - Единый sequence упрощает resume, unread и диагностику, но сериализует короткий участок durable-мутаций организации; ограничение проверяется нагрузочным тестом.
 - Клиент обязан иметь idempotent reducer и долговечный checkpoint.
@@ -108,3 +109,4 @@ Multi-node fan-out, Redis, NATS или PostgreSQL LISTEN/NOTIFY не реали�
 - [MDN: WebSocket.bufferedAmount](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/bufferedAmount) — наблюдаемая очередь браузерного WebSocket не заменяет серверный backpressure.
 - [MDN: Notification.requestPermission](https://developer.mozilla.org/en-US/docs/Web/API/Notification/requestPermission_static) — permission flow после пользовательского действия.
 - [`coder/websocket`](https://github.com/coder/websocket) — выбранная Go-реализация WebSocket.
+- [ADR-0007](0007-redis-coordination.md) — роль Redis, режим деградации и отказ от второго durable log.

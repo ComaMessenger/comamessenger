@@ -13,6 +13,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/access"
 	"github.com/comamessenger/comamessenger/core/internal/chat"
 	"github.com/comamessenger/comamessenger/core/internal/config"
+	"github.com/comamessenger/comamessenger/core/internal/coordination"
 	"github.com/comamessenger/comamessenger/core/internal/database"
 	"github.com/comamessenger/comamessenger/core/internal/eventlog"
 	serverhttp "github.com/comamessenger/comamessenger/core/internal/http"
@@ -81,14 +82,36 @@ func main() {
 	}
 	eventStore := eventlog.NewStore(pool)
 	realtimeHub := realtime.NewHub(int(cfg.Realtime.MaxConnectionsPerActor))
-	dispatcher := realtime.NewDispatcher(logger, eventStore, realtimeHub, cfg.EventLog.PollInterval)
+	dispatcher := realtime.NewDispatcher(logger, eventStore, realtimeHub, cfg.EventLog.PollInterval, cfg.EventLog.WakeCoalesce)
 	realtimeServer := realtime.NewServer(logger, cfg.PublicAppURL, eventStore, realtimeHub, identityService.Authenticate, cfg.Realtime)
 	realtimeCtx, stopRealtime := context.WithCancel(context.Background())
-	defer stopRealtime()
 	defer realtimeServer.Shutdown()
+
+	var redisCoordinator *coordination.Redis
+	if cfg.Redis.Mode == "required" {
+		redisCoordinator, err = coordination.NewRedis(logger, cfg.Redis)
+		if err != nil {
+			logger.Error("Redis coordinator initialization failed", "error", err)
+			os.Exit(1)
+		}
+		defer redisCoordinator.Close()
+		if err := redisCoordinator.Ping(startupCtx); err != nil {
+			logger.Warn("Redis unavailable at startup; PostgreSQL polling fallback remains active", "error", err)
+		}
+		go redisCoordinator.Run(realtimeCtx, func(coordination.Wakeup) { dispatcher.WakeRedis() })
+	} else {
+		logger.Warn("Redis coordination disabled; only single-core realtime is supported")
+	}
+	defer stopRealtime()
 	go dispatcher.Run(realtimeCtx)
+	afterCommit := func(orgID string, highWatermark int64) {
+		dispatcher.WakeLocal()
+		if redisCoordinator != nil {
+			redisCoordinator.Notify(orgID, highWatermark)
+		}
+	}
 	messageService := message.NewService(
-		pool, int(cfg.Messaging.MaxBodyBytes), int(cfg.Messaging.MaxPageSize), dispatcher.Wake,
+		pool, int(cfg.Messaging.MaxBodyBytes), int(cfg.Messaging.MaxPageSize), afterCommit,
 	)
 
 	server := &http.Server{
@@ -128,6 +151,10 @@ func main() {
 	if err := server.Shutdown(ctx); err != nil {
 		logger.Error("graceful shutdown failed", "error", err)
 		os.Exit(1)
+	}
+	logger.Info("realtime dispatcher stopped", "stats", dispatcher.Stats())
+	if redisCoordinator != nil {
+		logger.Info("Redis coordinator stopped", "stats", redisCoordinator.Stats())
 	}
 	logger.Info("http server stopped")
 }

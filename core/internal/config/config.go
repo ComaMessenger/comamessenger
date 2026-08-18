@@ -51,8 +51,17 @@ type RealtimeConfig struct {
 
 type EventLogConfig struct {
 	PollInterval      time.Duration
+	WakeCoalesce      time.Duration
 	Retention         time.Duration
 	RetentionMinCount uint64
+}
+
+type RedisConfig struct {
+	Mode             string
+	URL              string
+	Namespace        string
+	ConnectTimeout   time.Duration
+	OperationTimeout time.Duration
 }
 
 type Config struct {
@@ -65,6 +74,7 @@ type Config struct {
 	Messaging    MessagingConfig
 	Realtime     RealtimeConfig
 	EventLog     EventLogConfig
+	Redis        RedisConfig
 }
 
 func FromEnvironment() (Config, error) {
@@ -116,6 +126,10 @@ func FromEnvironment() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	redisConfig, err := redisConfigFromEnvironment()
+	if err != nil {
+		return Config{}, err
+	}
 
 	cfg := Config{
 		AppEnv:       appEnv,
@@ -145,6 +159,7 @@ func FromEnvironment() (Config, error) {
 		Messaging: messaging,
 		Realtime:  realtime,
 		EventLog:  eventLog,
+		Redis:     redisConfig,
 	}
 
 	if cfg.HTTPAddr == "" {
@@ -175,6 +190,42 @@ func FromEnvironment() (Config, error) {
 		return Config{}, fmt.Errorf("INVITATION_TTL must be between 1h and 720h")
 	}
 	return cfg, nil
+}
+
+func redisConfigFromEnvironment() (RedisConfig, error) {
+	mode := strings.ToLower(valueOrDefault("REDIS_MODE", "disabled"))
+	if mode != "required" && mode != "disabled" {
+		return RedisConfig{}, fmt.Errorf("REDIS_MODE must be required or disabled")
+	}
+	redisURL := strings.TrimSpace(os.Getenv("REDIS_URL"))
+	if mode == "required" && redisURL == "" {
+		return RedisConfig{}, fmt.Errorf("REDIS_URL must be set when REDIS_MODE=required")
+	}
+	if mode == "disabled" && redisURL != "" {
+		return RedisConfig{}, fmt.Errorf("REDIS_URL must be empty when REDIS_MODE=disabled")
+	}
+	connectTimeout, err := durationValueOrDefault("REDIS_CONNECT_TIMEOUT", time.Second)
+	if err != nil {
+		return RedisConfig{}, err
+	}
+	operationTimeout, err := durationValueOrDefault("REDIS_OPERATION_TIMEOUT", 500*time.Millisecond)
+	if err != nil {
+		return RedisConfig{}, err
+	}
+	if connectTimeout < 100*time.Millisecond || connectTimeout > 10*time.Second {
+		return RedisConfig{}, fmt.Errorf("REDIS_CONNECT_TIMEOUT must be between 100ms and 10s")
+	}
+	if operationTimeout < 50*time.Millisecond || operationTimeout > 5*time.Second {
+		return RedisConfig{}, fmt.Errorf("REDIS_OPERATION_TIMEOUT must be between 50ms and 5s")
+	}
+	namespace := strings.Trim(strings.TrimSpace(valueOrDefault("REDIS_NAMESPACE", "coma:v1")), ":")
+	if namespace == "" || strings.ContainsAny(namespace, " \t\r\n") {
+		return RedisConfig{}, fmt.Errorf("REDIS_NAMESPACE must not be empty or contain whitespace")
+	}
+	return RedisConfig{
+		Mode: mode, URL: redisURL, Namespace: namespace,
+		ConnectTimeout: connectTimeout, OperationTimeout: operationTimeout,
+	}, nil
 }
 
 func messagingConfigFromEnvironment() (MessagingConfig, error) {
@@ -239,6 +290,10 @@ func eventLogConfigFromEnvironment() (EventLogConfig, error) {
 	if err != nil {
 		return EventLogConfig{}, err
 	}
+	wakeCoalesce, err := durationValueOrDefault("EVENT_WAKE_COALESCE", 5*time.Millisecond)
+	if err != nil {
+		return EventLogConfig{}, err
+	}
 	retention, err := durationValueOrDefault("EVENT_RETENTION", 72*time.Hour)
 	if err != nil {
 		return EventLogConfig{}, err
@@ -250,13 +305,16 @@ func eventLogConfigFromEnvironment() (EventLogConfig, error) {
 	if pollInterval < 10*time.Millisecond || pollInterval > 5*time.Second {
 		return EventLogConfig{}, fmt.Errorf("EVENT_POLL_INTERVAL must be between 10ms and 5s")
 	}
+	if wakeCoalesce < time.Millisecond || wakeCoalesce > 100*time.Millisecond {
+		return EventLogConfig{}, fmt.Errorf("EVENT_WAKE_COALESCE must be between 1ms and 100ms")
+	}
 	if retention < time.Hour || retention > 30*24*time.Hour {
 		return EventLogConfig{}, fmt.Errorf("EVENT_RETENTION must be between 1h and 720h")
 	}
 	if retentionMinCount < 1000 || retentionMinCount > 10_000_000 {
 		return EventLogConfig{}, fmt.Errorf("EVENT_RETENTION_MIN_COUNT must be between 1000 and 10000000")
 	}
-	return EventLogConfig{PollInterval: pollInterval, Retention: retention, RetentionMinCount: retentionMinCount}, nil
+	return EventLogConfig{PollInterval: pollInterval, WakeCoalesce: wakeCoalesce, Retention: retention, RetentionMinCount: retentionMinCount}, nil
 }
 
 func (c RealtimeConfig) validate(messageMaxBodyBytes uint64) error {

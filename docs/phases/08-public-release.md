@@ -64,6 +64,7 @@
 
 ### Демонстрация и запуск
 
+- [ ] Пересобрать первый экран README: короткая ценность, воспроизводимый quickstart и актуальная GIF/короткое видео реального продукта.
 - [ ] Подготовить seed workspace, демонстрирующий chat, read-only channel, thread, search, files и агента.
 - [ ] Записать короткий reproducible demo без недоступных функций.
 - [ ] Подготовить screenshots light/dark и mobile/desktop с обезличенными данными.
@@ -74,8 +75,9 @@
 
 - [ ] Настроить issue forms для bug, feature, security redirect и installation help.
 - [ ] Создать public roadmap и метки good first issue/help wanted.
+- [ ] Вести сообщество проекта в собственной Coma-инсталляции как dogfooding, сохраняя доступный резервный канал для инцидентов.
 - [ ] Подготовить каналы обратной связи и triage rotation на первые недели.
-- [ ] Анонсировать релиз на GitHub, Habr, HN/Product Hunt и профильных сообществах только после готовности support capacity.
+- [ ] Подготовить 90-дневный launch calendar и последовательно анонсировать релиз на GitHub, Habr, HN/Product Hunt и профильных self-hosted сообществах только после готовности support capacity.
 - [ ] Собирать opt-in installation/version metrics либо использовать privacy-preserving ручную обратную связь.
 
 ## Контракты и данные

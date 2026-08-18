@@ -249,7 +249,7 @@ func newRealtimeHarnessWithPoll(t *testing.T, cfg config.RealtimeConfig, pollInt
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	store := eventlog.NewStore(pool)
 	hub := NewHub(int(cfg.MaxConnectionsPerActor))
-	dispatcher := NewDispatcher(logger, store, hub, pollInterval)
+	dispatcher := NewDispatcher(logger, store, hub, pollInterval, time.Millisecond)
 	sessionID := realtimeID(t)
 	authenticate := func(_ context.Context, token string) (identity.User, access.Identity, error) {
 		if token != user.ActorID {
@@ -268,7 +268,7 @@ func newRealtimeHarnessWithPoll(t *testing.T, cfg config.RealtimeConfig, pollInt
 	})
 	return &realtimeHarness{
 		pool: pool, user: user, chatID: chatID, store: store, hub: hub, dispatcher: dispatcher,
-		server: server, httpServer: httpServer, messages: message.NewService(pool, 64*1024, 100, dispatcher.Wake),
+		server: server, httpServer: httpServer, messages: message.NewService(pool, 64*1024, 100, func(string, int64) { dispatcher.WakeLocal() }),
 	}
 }
 

@@ -2,3 +2,6 @@ services:
   postgres:
     ports:
       - "127.0.0.1:${POSTGRES_TEST_PORT:-55433}:5432"
+  redis:
+    ports:
+      - "127.0.0.1:${REDIS_TEST_PORT:-56380}:6379"

@@ -23,6 +23,7 @@
 - [ADR-0004: GitHub и Go module path](decisions/0004-repository-identity.md)
 - [ADR-0005: authentication, sessions and ownership](decisions/0005-auth-sessions-and-ownership.md)
 - [ADR-0006: надёжная доставка сообщений и realtime](decisions/0006-messaging-delivery-and-realtime.md)
+- [ADR-0007: Redis как координационный, а не долговечный слой](decisions/0007-redis-coordination.md)
 
 ## Протоколы
 

@@ -23,6 +23,7 @@
 ## Вне scope
 
 - Helm chart и Kubernetes operator;
+- unattended auto-update/Watchtower по умолчанию и self-update бинарника с повышенными правами;
 - active-active multi-region;
 - федерация и multi-tenant SaaS control plane;
 - enterprise SSO/SCIM/DLP, если не будет отдельного решения;
@@ -43,6 +44,7 @@
 ### Packaging и deployment
 
 - [ ] Создать минимальные multi-stage images с non-root user и pinned base digests/versions.
+- [ ] Публиковать GHCR images с immutable semver/digest references; плавающий tag не использовать как единственную production-инструкцию.
 - [ ] Подготовить `compose.yaml`, `.env.example`, profiles для bundled/external Postgres, MinIO, Redis и agent runtime.
 - [ ] Добавить Caddy reference config с HTTPS, WebSocket timeouts и upload limits.
 - [ ] Не публиковать admin services и Postgres/MinIO наружу по умолчанию.
@@ -55,8 +57,10 @@
 - [ ] Проверять совместимость app/schema до принятия трафика.
 - [ ] Разделять expand/migrate/contract для несовместимых больших изменений.
 - [ ] Документировать поддерживаемые пути обновления и emergency rollback.
+- [ ] Документировать ручной `docker compose pull && docker compose up -d` с обязательным backup gate и release notes; автоматическое обновление остаётся осознанным выбором администратора.
 - [ ] Запретить автоматическое разрушительное downgrade схемы.
 - [ ] Проверять upgrade на копии production-like dataset.
+- [ ] Добавить отключаемую проверку доступной версии без отправки стабильного instance ID; installation telemetry проектировать отдельно и только opt-in.
 
 ### Backup и retention
 
@@ -88,7 +92,7 @@
 - [ ] Повторить целевой load test на release-like deployment.
 - [ ] Провести soak test 24–72 часа с reconnect, messages, uploads и jobs.
 - [ ] Проверить restart core/Postgres/S3/runtime и восстановление клиентов.
-- [ ] Реализовать optional Redis pub/sub для multi-replica fan-out либо явно оставить single-core limit в v1.
+- [ ] Проверить Redis Pub/Sub fan-out на нескольких Core, bounded batch replay, coalescing и PostgreSQL polling fallback; только после этого объявлять multi-core поддерживаемым.
 - [ ] Документировать capacity guide для CPU/RAM/Postgres connections/storage.
 
 ### Desktop и пилоты
@@ -105,6 +109,7 @@
 - Backup contract включает базу, object storage и master encryption key; потеря ключа явно обозначается как невосстановимая.
 - Retention policies имеют dry-run/metrics и консервативные defaults.
 - Multi-replica считается поддерживаемым только после теста fan-out/resume; иначе документация фиксирует single-core topology.
+- Redis не входит в backup: после его полной потери durable state восстанавливается из PostgreSQL, а ephemeral state создаётся заново.
 
 ## Критерии приёмки
 
@@ -127,7 +132,6 @@
 
 ## Риски и открытые вопросы
 
-- Решить, входит ли Redis в официально поддерживаемую v1 topology или остаётся experimental.
 - Определить RPO/RTO reference targets без обещаний enterprise SLA.
 - Выбрать registry, signing и desktop update distribution.
 - Уточнить минимальные hardware requirements на результатах нагрузочных тестов.

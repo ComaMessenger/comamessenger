@@ -3,7 +3,10 @@ package realtime
 import (
 	"context"
 	"errors"
+	"io"
+	"log/slog"
 	"testing"
+	"time"
 )
 
 func TestHubConnectionLimitAndWatermark(t *testing.T) {
@@ -28,6 +31,28 @@ func TestHubConnectionLimitAndWatermark(t *testing.T) {
 	}
 	if organizations := hub.Organizations(); len(organizations) != 1 || organizations[0].Watermark != 7 {
 		t.Fatalf("Organizations() = %+v", organizations)
+	}
+}
+
+func TestDispatcherCoalescesWakeupsAndTracksTheirSource(t *testing.T) {
+	dispatcher := NewDispatcher(slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, time.Second, 5*time.Millisecond)
+	for range 10 {
+		dispatcher.WakeRedis()
+	}
+	dispatcher.WakeLocal()
+
+	stats := dispatcher.Stats()
+	if stats.RedisWakeups != 10 || stats.LocalWakeups != 1 {
+		t.Fatalf("Stats() = %+v", stats)
+	}
+	if stats.CoalescedWakeups != 10 {
+		t.Fatalf("CoalescedWakeups = %d, want 10", stats.CoalescedWakeups)
+	}
+	if len(dispatcher.wake) != 1 {
+		t.Fatalf("queued wake notifications = %d, want 1", len(dispatcher.wake))
+	}
+	if got := wakePath(wakeSource(dispatcher.pendingSources.Load())); got != "local_commit+redis" {
+		t.Fatalf("wakePath() = %q", got)
 	}
 }
 
