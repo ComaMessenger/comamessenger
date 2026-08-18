@@ -122,14 +122,16 @@ Envelope:
 
 Фаза 2 вводит типы:
 
-- `message.created`, `message.updated`, `message.deleted`;
+- `message.created`, `message.updated`, `message.deleted`, `message.pinned`, `message.unpinned`;
 - `reaction.added`, `reaction.removed`;
 - `thread.followed`, `thread.unfollowed`;
 - `read.marked` — доставляется только другим сессиям того же actor;
 - `draft.updated`, `draft.deleted` — доставляются только тому же actor;
 - необходимые `chat.*` и `member.*` события фазы 1 для корректного обновления permissions и membership.
 
-Для `message.*` поле `data` содержит текущее REST-представление сообщения без дополнительной обёртки. Журнал хранит только routing metadata и `subject_id`; Core гидратирует `data` перед доставкой. Поэтому replay старого `message.created` после редактирования может уже содержать новую `version`, а после удаления — tombstone. Это намеренно: последовательное применение событий всегда сходится к текущему состоянию, не раскрывая старый body.
+Для `message.created/updated/deleted` поле `data` содержит текущее REST-представление сообщения без дополнительной обёртки. Журнал хранит routing metadata и `subject_id`; Core гидратирует эти события перед доставкой. Поэтому replay старого `message.created` после редактирования может уже содержать новую `version`, а после удаления — tombstone. Это намеренно: последовательное применение событий всегда сходится к текущему состоянию, не раскрывая старый body.
+
+Действия, чья нормализованная строка может исчезнуть до replay (`reaction.removed`, `message.unpinned`, `thread.unfollowed`), записывают минимальную immutable дельту в `events.data` в той же PostgreSQL-транзакции. Так удаление реакции не уничтожает emoji, нужный клиенту для корректного применения события.
 
 Unknown event type игнорируется по содержимому, но его `seq` всё равно считается применённым после безопасного обновления checkpoint. Удаление обязательного поля или изменение его смысла требует новой версии протокола.
 

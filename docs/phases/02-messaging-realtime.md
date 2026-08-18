@@ -118,11 +118,13 @@
 - [x] Проверять, что `reply_to_id` и `thread_root_id` существуют, доступны и принадлежат тому же chat.
 - [x] Использовать root message ID как thread ID; не создавать таблицу `threads`.
 - [x] Запретить вложенные thread roots, разрешив `reply_to_id` внутри треда.
-- [ ] Создать `thread_followers`; автоматически подписывать автора root, ответивших и упомянутых.
-- [ ] Реализовать follow/unfollow и список followed/unread threads.
-- [ ] Создать `reactions` с уникальностью `(message_id, actor_id, emoji)` и PUT/DELETE API.
-- [ ] Реализовать pins и snapshot-forward с source attribution.
+- [x] Создать `thread_followers`; при первом ответе автоматически подписывать автора root и ответивших.
+- [x] Реализовать идемпотентные follow/unfollow и пагинируемый список followed threads.
+- [x] Создать `reactions` с уникальностью `(message_id, actor_id, emoji)`, read API и идемпотентными PUT/DELETE.
+- [x] Реализовать pins с правами `chat.manage`, read API и snapshot-forward с безопасной source attribution.
 - [x] Проверить channel posting policy для ленты и тредов.
+
+Автоподписка упомянутых и фильтр unread threads завершаются в 2.4 одновременно со структурированными mentions и durable thread read state. Парсить `@handle` эвристикой и вычислять unread без marker намеренно не стали: оба варианта дают ложные уведомления и нестабильный API.
 
 Готово, когда reply/thread различаются на уровне API, а конкурентные follow/reaction операции идемпотентны.
 
@@ -162,8 +164,11 @@ PATCH  /api/v1/messages/:id
 DELETE /api/v1/messages/:id
 PUT    /api/v1/messages/:id/reactions/:emoji
 DELETE /api/v1/messages/:id/reactions/:emoji
+GET    /api/v1/messages/:id/reactions
 PUT    /api/v1/messages/:id/pin
 DELETE /api/v1/messages/:id/pin
+GET    /api/v1/chats/:id/pins
+POST   /api/v1/messages/:id/forward
 GET    /api/v1/threads
 GET    /api/v1/messages/:root_id/thread
 PUT    /api/v1/messages/:root_id/thread/follow
@@ -193,7 +198,7 @@ thread_reads
 drafts
 ```
 
-Таблиц `threads`, `forwards`, `message_deliveries` и второй outbox нет. Forward хранится как message snapshot с source attribution.
+Таблиц `threads`, `forwards`, `message_deliveries` и второй outbox нет. Forward хранится как message snapshot с attribution автора на момент пересылки; внутренние ID и имя исходного приватного чата получателям не раскрываются.
 
 ## Структура кода
 

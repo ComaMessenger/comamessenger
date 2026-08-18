@@ -216,6 +216,8 @@ const (
 	MemberUpdated    DurableEventTypeV1 = "member.updated"
 	MessageCreated   DurableEventTypeV1 = "message.created"
 	MessageDeleted   DurableEventTypeV1 = "message.deleted"
+	MessagePinned    DurableEventTypeV1 = "message.pinned"
+	MessageUnpinned  DurableEventTypeV1 = "message.unpinned"
 	MessageUpdated   DurableEventTypeV1 = "message.updated"
 	ReactionAdded    DurableEventTypeV1 = "reaction.added"
 	ReactionRemoved  DurableEventTypeV1 = "reaction.removed"
@@ -246,6 +248,10 @@ func (e DurableEventTypeV1) Valid() bool {
 	case MessageCreated:
 		return true
 	case MessageDeleted:
+		return true
+	case MessagePinned:
+		return true
+	case MessageUnpinned:
 		return true
 	case MessageUpdated:
 		return true
@@ -884,6 +890,19 @@ type Error struct {
 // ErrorCode defines model for ErrorCode.
 type ErrorCode string
 
+// ForwardAttribution defines model for ForwardAttribution.
+type ForwardAttribution struct {
+	AuthorHandle string    `json:"author_handle"`
+	AuthorName   string    `json:"author_name"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+// ForwardMessageRequest defines model for ForwardMessageRequest.
+type ForwardMessageRequest struct {
+	ChatId      openapi_types.UUID `json:"chat_id"`
+	ClientMsgId openapi_types.UUID `json:"client_msg_id"`
+}
+
 // Health defines model for Health.
 type Health struct {
 	Status string `json:"status"`
@@ -909,20 +928,21 @@ type LoginRequest struct {
 
 // Message defines model for Message.
 type Message struct {
-	ActorId      openapi_types.UUID  `json:"actor_id"`
-	Body         string              `json:"body"`
-	BodyFormat   MessageBodyFormat   `json:"body_format"`
-	ChatId       openapi_types.UUID  `json:"chat_id"`
-	ClientMsgId  openapi_types.UUID  `json:"client_msg_id"`
-	CreatedAt    time.Time           `json:"created_at"`
-	CreatedSeq   int64               `json:"created_seq"`
-	DeletedAt    *time.Time          `json:"deleted_at,omitempty"`
-	EditedAt     *time.Time          `json:"edited_at,omitempty"`
-	Id           openapi_types.UUID  `json:"id"`
-	ReplyToId    *openapi_types.UUID `json:"reply_to_id,omitempty"`
-	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
-	Type         MessageType         `json:"type"`
-	Version      int                 `json:"version"`
+	ActorId       openapi_types.UUID  `json:"actor_id"`
+	Body          string              `json:"body"`
+	BodyFormat    MessageBodyFormat   `json:"body_format"`
+	ChatId        openapi_types.UUID  `json:"chat_id"`
+	ClientMsgId   openapi_types.UUID  `json:"client_msg_id"`
+	CreatedAt     time.Time           `json:"created_at"`
+	CreatedSeq    int64               `json:"created_seq"`
+	DeletedAt     *time.Time          `json:"deleted_at,omitempty"`
+	EditedAt      *time.Time          `json:"edited_at,omitempty"`
+	ForwardedFrom *ForwardAttribution `json:"forwarded_from,omitempty"`
+	Id            openapi_types.UUID  `json:"id"`
+	ReplyToId     *openapi_types.UUID `json:"reply_to_id,omitempty"`
+	ThreadRootId  *openapi_types.UUID `json:"thread_root_id,omitempty"`
+	Type          MessageType         `json:"type"`
+	Version       int                 `json:"version"`
 }
 
 // MessageBodyFormat defines model for Message.BodyFormat.
@@ -935,6 +955,31 @@ type MessageType string
 type MessagePage struct {
 	Messages      []Message `json:"messages"`
 	NextBeforeSeq *int64    `json:"next_before_seq"`
+}
+
+// MessagePin defines model for MessagePin.
+type MessagePin struct {
+	MessageId openapi_types.UUID `json:"message_id"`
+	PinnedAt  time.Time          `json:"pinned_at"`
+	PinnedBy  openapi_types.UUID `json:"pinned_by"`
+}
+
+// MessagePinList defines model for MessagePinList.
+type MessagePinList struct {
+	Pins []MessagePin `json:"pins"`
+}
+
+// Reaction defines model for Reaction.
+type Reaction struct {
+	ActorId   openapi_types.UUID `json:"actor_id"`
+	CreatedAt time.Time          `json:"created_at"`
+	Emoji     string             `json:"emoji"`
+	MessageId openapi_types.UUID `json:"message_id"`
+}
+
+// ReactionList defines model for ReactionList.
+type ReactionList struct {
+	Reactions []Reaction `json:"reactions"`
 }
 
 // RealtimeAckFrameV1 defines model for RealtimeAckFrameV1.
@@ -1091,6 +1136,27 @@ type Session struct {
 	UserAgent  string             `json:"user_agent"`
 }
 
+// ThreadFollow defines model for ThreadFollow.
+type ThreadFollow struct {
+	FollowedAt   time.Time          `json:"followed_at"`
+	ThreadRootId openapi_types.UUID `json:"thread_root_id"`
+}
+
+// ThreadPage defines model for ThreadPage.
+type ThreadPage struct {
+	NextBeforeSeq *int64          `json:"next_before_seq"`
+	Threads       []ThreadSummary `json:"threads"`
+}
+
+// ThreadSummary defines model for ThreadSummary.
+type ThreadSummary struct {
+	FollowedAt      time.Time `json:"followed_at"`
+	LastActivitySeq int64     `json:"last_activity_seq"`
+	LastReplySeq    *int64    `json:"last_reply_seq,omitempty"`
+	ReplyCount      int64     `json:"reply_count"`
+	Root            Message   `json:"root"`
+}
+
 // TokenResponse defines model for TokenResponse.
 type TokenResponse struct {
 	AccessExpiresAt time.Time `json:"access_expires_at"`
@@ -1171,6 +1237,18 @@ type ListMessagesParams struct {
 	ThreadRootId *openapi_types.UUID `form:"thread_root_id,omitempty" json:"thread_root_id,omitempty"`
 }
 
+// ListThreadMessagesParams defines parameters for ListThreadMessages.
+type ListThreadMessagesParams struct {
+	BeforeSeq *int64 `form:"before_seq,omitempty" json:"before_seq,omitempty"`
+	Limit     *int   `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListFollowedThreadsParams defines parameters for ListFollowedThreads.
+type ListFollowedThreadsParams struct {
+	BeforeSeq *int64 `form:"before_seq,omitempty" json:"before_seq,omitempty"`
+	Limit     *int   `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
@@ -1203,3 +1281,6 @@ type UpdateMeJSONRequestBody = UpdateProfileRequest
 
 // UpdateMessageJSONRequestBody defines body for UpdateMessage for application/json ContentType.
 type UpdateMessageJSONRequestBody = UpdateMessageRequest
+
+// ForwardMessageJSONRequestBody defines body for ForwardMessage for application/json ContentType.
+type ForwardMessageJSONRequestBody = ForwardMessageRequest

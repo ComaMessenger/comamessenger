@@ -60,6 +60,27 @@ func TestStoreReplayHydratesAndFiltersCurrentMembership(t *testing.T) {
 		t.Fatalf("outsider Replay() = %+v, %v", frames, err)
 	}
 
+	if _, created, err := service.PutReaction(ctx, member, first.ID, "👍"); err != nil || !created {
+		t.Fatalf("PutReaction() created=%v error=%v", created, err)
+	}
+	if removed, err := service.DeleteReaction(ctx, member, first.ID, "👍"); err != nil || !removed {
+		t.Fatalf("DeleteReaction() removed=%v error=%v", removed, err)
+	}
+	actionBounds, err := store.Bounds(ctx, owner.OrgID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actionFrames, err := store.Replay(ctx, member, second.CreatedSeq, actionBounds.CurrentSeq, 10)
+	if err != nil || len(actionFrames) != 2 || actionFrames[0].Type != "reaction.added" || actionFrames[1].Type != "reaction.removed" {
+		t.Fatalf("action Replay() = %+v, %v", actionFrames, err)
+	}
+	var removedPayload struct {
+		Emoji string `json:"emoji"`
+	}
+	if err := json.Unmarshal(actionFrames[1].Data, &removedPayload); err != nil || removedPayload.Emoji != "👍" {
+		t.Fatalf("removed reaction payload = %+v, %v", removedPayload, err)
+	}
+
 	if _, err := pool.Exec(ctx, `DELETE FROM chat_members WHERE chat_id = $1 AND actor_id = $2`, chatID, member.ActorID); err != nil {
 		t.Fatal(err)
 	}

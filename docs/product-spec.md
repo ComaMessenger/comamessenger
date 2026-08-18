@@ -109,9 +109,9 @@
 - Backpressure: если клиент не читает, буфер ограничен, при переполнении - разрыв и resume.
 
 ### 2.7 Транзакционный журнал событий
-- Таблица `events(org_id, seq, type, actor_id, chat_id, subject_id, audience_actor_id, occurred_at)` с минимальными routing metadata. Это не источник истины (истина в нормализованных таблицах), а лог для доставки, resume, агентов и вебхуков.
+- Таблица `events(org_id, seq, type, actor_id, chat_id, subject_id, audience_actor_id, data, occurred_at)` с routing metadata и минимальной immutable дельтой для удаляемых actions. Это не источник истины (истина в нормализованных таблицах), а лог для доставки, resume, агентов и вебхуков.
 - Транзакция: пишем в нормализованную таблицу и в `events` одной транзакцией, потом публикуем в память.
-- Типы долговечных событий: `message.created/updated/deleted`, `reaction.added/removed`, `thread.followed/unfollowed`, `chat.*`, `member.*`, `read.marked`, `agent.invoked`, `agent.replied`, `file.uploaded`.
+- Типы долговечных событий: `message.created/updated/deleted/pinned/unpinned`, `reaction.added/removed`, `thread.followed/unfollowed`, `chat.*`, `member.*`, `read.marked`, `agent.invoked`, `agent.replied`, `file.uploaded`.
 - `typing`, `presence`, streaming-дельты и другие краткоживущие сигналы передаются отдельно и не попадают в durable event log.
 - Retention `events` по умолчанию: 72 часа и минимум последние 100 000 событий организации. Долговечный аудит хранится отдельно от delivery log.
 

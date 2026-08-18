@@ -84,9 +84,10 @@ func (s *Store) Replay(ctx context.Context, user identity.User, afterSeq, throug
 						'created_seq', m.created_seq,
 						'created_at', m.created_at,
 						'edited_at', m.edited_at,
-						'deleted_at', m.deleted_at
+						'deleted_at', m.deleted_at,
+						'forwarded_from', m.forwarded_from
 					)
-				ELSE '{}'::jsonb
+				ELSE e.data
 			END
 		FROM events e
 		LEFT JOIN messages m ON m.org_id = e.org_id AND m.id = e.subject_id

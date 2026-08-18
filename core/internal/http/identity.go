@@ -94,10 +94,21 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Delete("/chats/{chatID}/members/{actorID}", h.removeChatMember)
 		}
 		if h.messages != nil {
+			protected.Get("/threads", h.listFollowedThreads)
 			protected.Get("/chats/{chatID}/messages", h.listMessages)
+			protected.Get("/chats/{chatID}/pins", h.listMessagePins)
 			protected.Post("/chats/{chatID}/messages", h.createMessage)
 			protected.Patch("/messages/{messageID}", h.updateMessage)
 			protected.Delete("/messages/{messageID}", h.deleteMessage)
+			protected.Put("/messages/{messageID}/reactions/{emoji}", h.putReaction)
+			protected.Get("/messages/{messageID}/reactions", h.listReactions)
+			protected.Delete("/messages/{messageID}/reactions/{emoji}", h.deleteReaction)
+			protected.Put("/messages/{messageID}/pin", h.putMessagePin)
+			protected.Delete("/messages/{messageID}/pin", h.deleteMessagePin)
+			protected.Post("/messages/{messageID}/forward", h.forwardMessage)
+			protected.Get("/messages/{messageID}/thread", h.listThread)
+			protected.Put("/messages/{messageID}/thread/follow", h.followThread)
+			protected.Delete("/messages/{messageID}/thread/follow", h.unfollowThread)
 		}
 	})
 }

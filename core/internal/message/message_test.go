@@ -200,6 +200,162 @@ func TestMessageCoreIntegration(t *testing.T) {
 			t.Fatalf("thread page = %+v", threadPage)
 		}
 	})
+
+	t.Run("thread replies auto-follow root author and replier", func(t *testing.T) {
+		root, _, err := service.Create(ctx, fixture.member, fixture.groupID, CreateInput{
+			ClientMsgID: mustID(t), Body: "followed root", BodyFormat: "plain",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		replyTo := root.ID
+		if _, _, err := service.Create(ctx, fixture.owner, fixture.groupID, CreateInput{
+			ClientMsgID: mustID(t), Body: "owner reply", BodyFormat: "plain",
+			ReplyToID: &replyTo, ThreadRootID: &root.ID,
+		}); err != nil {
+			t.Fatal(err)
+		}
+		assertCount(t, pool, `SELECT count(*) FROM thread_followers WHERE thread_root_id = $1`, 2, root.ID)
+		assertCount(t, pool, `SELECT count(*) FROM events WHERE subject_id = $1 AND type = 'thread.followed'`, 2, root.ID)
+
+		page, err := service.ListFollowedThreads(ctx, fixture.owner, nil, 50)
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := false
+		for _, thread := range page.Threads {
+			if thread.Root.ID == root.ID {
+				found = true
+				if thread.ReplyCount != 1 || thread.LastReplySeq == nil {
+					t.Fatalf("thread summary = %+v", thread)
+				}
+			}
+		}
+		if !found {
+			t.Fatal("auto-followed thread is absent from followed list")
+		}
+		if removed, err := service.UnfollowThread(ctx, fixture.owner, root.ID); err != nil || !removed {
+			t.Fatalf("UnfollowThread() removed=%v error=%v", removed, err)
+		}
+		if removed, err := service.UnfollowThread(ctx, fixture.owner, root.ID); err != nil || removed {
+			t.Fatalf("idempotent UnfollowThread() removed=%v error=%v", removed, err)
+		}
+		if _, created, err := service.FollowThread(ctx, fixture.owner, root.ID); err != nil || !created {
+			t.Fatalf("FollowThread() created=%v error=%v", created, err)
+		}
+		if _, created, err := service.FollowThread(ctx, fixture.owner, root.ID); err != nil || created {
+			t.Fatalf("idempotent FollowThread() created=%v error=%v", created, err)
+		}
+	})
+
+	t.Run("concurrent reaction is one row and one durable event", func(t *testing.T) {
+		item, _, err := service.Create(ctx, fixture.member, fixture.groupID, CreateInput{
+			ClientMsgID: mustID(t), Body: "react here", BodyFormat: "plain",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		const workers = 50
+		results := make(chan error, workers)
+		var wait sync.WaitGroup
+		for range workers {
+			wait.Add(1)
+			go func() {
+				defer wait.Done()
+				_, _, err := service.PutReaction(ctx, fixture.member, item.ID, "👍")
+				results <- err
+			}()
+		}
+		wait.Wait()
+		close(results)
+		for err := range results {
+			if err != nil {
+				t.Fatalf("PutReaction() error = %v", err)
+			}
+		}
+		assertCount(t, pool, `SELECT count(*) FROM reactions WHERE message_id = $1 AND emoji = '👍'`, 1, item.ID)
+		assertCount(t, pool, `SELECT count(*) FROM events WHERE subject_id = $1 AND type = 'reaction.added'`, 1, item.ID)
+		reactions, err := service.ListReactions(ctx, fixture.owner, item.ID)
+		if err != nil || len(reactions) != 1 || reactions[0].Emoji != "👍" {
+			t.Fatalf("ListReactions() reactions=%+v error=%v", reactions, err)
+		}
+		if removed, err := service.DeleteReaction(ctx, fixture.member, item.ID, "👍"); err != nil || !removed {
+			t.Fatalf("DeleteReaction() removed=%v error=%v", removed, err)
+		}
+		if removed, err := service.DeleteReaction(ctx, fixture.member, item.ID, "👍"); err != nil || removed {
+			t.Fatalf("idempotent DeleteReaction() removed=%v error=%v", removed, err)
+		}
+		var emoji string
+		if err := pool.QueryRow(ctx, `SELECT data->>'emoji' FROM events WHERE subject_id = $1 AND type = 'reaction.removed'`, item.ID).Scan(&emoji); err != nil {
+			t.Fatal(err)
+		}
+		if emoji != "👍" {
+			t.Fatalf("reaction removal payload emoji = %q", emoji)
+		}
+	})
+
+	t.Run("pins require chat management and remain idempotent", func(t *testing.T) {
+		item, _, err := service.Create(ctx, fixture.member, fixture.groupID, CreateInput{
+			ClientMsgID: mustID(t), Body: "pin me", BodyFormat: "plain",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := service.PutPin(ctx, fixture.member, item.ID); !errors.Is(err, ErrForbidden) {
+			t.Fatalf("member PutPin() error = %v, want ErrForbidden", err)
+		}
+		pin, created, err := service.PutPin(ctx, fixture.owner, item.ID)
+		if err != nil || !created || pin.PinnedBy != fixture.owner.ActorID {
+			t.Fatalf("PutPin() pin=%+v created=%v error=%v", pin, created, err)
+		}
+		if replay, created, err := service.PutPin(ctx, fixture.owner, item.ID); err != nil || created || replay.PinnedAt != pin.PinnedAt {
+			t.Fatalf("idempotent PutPin() pin=%+v created=%v error=%v", replay, created, err)
+		}
+		pins, err := service.ListPins(ctx, fixture.member, fixture.groupID)
+		if err != nil || len(pins) != 1 || pins[0].MessageID != item.ID {
+			t.Fatalf("ListPins() pins=%+v error=%v", pins, err)
+		}
+		if removed, err := service.DeletePin(ctx, fixture.owner, item.ID); err != nil || !removed {
+			t.Fatalf("DeletePin() removed=%v error=%v", removed, err)
+		}
+		if removed, err := service.DeletePin(ctx, fixture.owner, item.ID); err != nil || removed {
+			t.Fatalf("idempotent DeletePin() removed=%v error=%v", removed, err)
+		}
+	})
+
+	t.Run("forward is an immutable idempotent snapshot", func(t *testing.T) {
+		source, _, err := service.Create(ctx, fixture.member, fixture.groupID, CreateInput{
+			ClientMsgID: mustID(t), Body: "original snapshot", BodyFormat: "markdown",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		clientID := mustID(t)
+		forwarded, created, err := service.Forward(ctx, fixture.owner, source.ID, ForwardInput{ChatID: fixture.groupID, ClientMsgID: clientID})
+		if err != nil || !created {
+			t.Fatalf("Forward() created=%v error=%v", created, err)
+		}
+		if forwarded.Body != source.Body || forwarded.ForwardedFrom == nil || forwarded.ForwardedFrom.AuthorHandle != fixture.member.OrgRole {
+			t.Fatalf("forwarded message = %+v", forwarded)
+		}
+		if _, err := service.Update(ctx, fixture.member, source.ID, UpdateInput{Body: "changed later", BodyFormat: "plain", ExpectedVersion: 1}); err != nil {
+			t.Fatal(err)
+		}
+		replayed, created, err := service.Forward(ctx, fixture.owner, source.ID, ForwardInput{ChatID: fixture.groupID, ClientMsgID: clientID})
+		if err != nil || created || replayed.ID != forwarded.ID || replayed.Body != "original snapshot" {
+			t.Fatalf("idempotent Forward() message=%+v created=%v error=%v", replayed, created, err)
+		}
+		if _, err := service.Delete(ctx, fixture.member, source.ID); err != nil {
+			t.Fatal(err)
+		}
+		replayed, created, err = service.Forward(ctx, fixture.owner, source.ID, ForwardInput{ChatID: fixture.groupID, ClientMsgID: clientID})
+		if err != nil || created || replayed.ID != forwarded.ID {
+			t.Fatalf("Forward() replay after source deletion message=%+v created=%v error=%v", replayed, created, err)
+		}
+		if _, _, err := service.Forward(ctx, fixture.member, source.ID, ForwardInput{ChatID: fixture.channelID, ClientMsgID: mustID(t)}); !errors.Is(err, ErrForbidden) {
+			t.Fatalf("member forward to channel error = %v, want ErrForbidden", err)
+		}
+	})
 }
 
 type fixture struct {
