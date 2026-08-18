@@ -1,0 +1,6 @@
+{
+  "op": "resync_required",
+  "current_seq": 250000,
+  "min_retained_seq": 150000,
+  "reason": "event_history_expired"
+}

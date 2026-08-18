@@ -14,11 +14,12 @@ export type AcceptInvitationRequest = components["schemas"]["AcceptInvitationReq
 export type TokenResponse = components["schemas"]["TokenResponse"];
 
 type APIErrorPayload = components["schemas"]["Error"];
+type APIErrorCode = components["schemas"]["ErrorCode"] | "request_failed";
 
 export class APIError extends Error {
   constructor(
     readonly status: number,
-    readonly code: string,
+    readonly code: APIErrorCode,
     message: string,
   ) {
     super(message);

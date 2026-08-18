@@ -1,0 +1,2219 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ComaMessenger API",
+    "version": "0.2.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080"
+    }
+  ],
+  "paths": {
+    "/healthz": {
+      "get": {
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "description": "Process is alive.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "operationId": "getReadiness",
+        "responses": {
+          "200": {
+            "description": "Process is ready to serve traffic.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A required dependency is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bootstrap/status": {
+      "get": {
+        "operationId": "getBootstrapStatus",
+        "responses": {
+          "200": {
+            "description": "Current bootstrap state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BootstrapStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bootstrap": {
+      "post": {
+        "operationId": "bootstrap",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BootstrapRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "$ref": "#/components/responses/Tokens"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "operationId": "login",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Tokens"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "operationId": "refresh",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Tokens"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Session revoked."
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/me": {
+      "get": {
+        "operationId": "getMe",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current user.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateMe",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProfileRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated user.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/sessions": {
+      "get": {
+        "operationId": "listSessions",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User sessions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "sessions"
+                  ],
+                  "properties": {
+                    "sessions": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Session"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{session_id}": {
+      "delete": {
+        "operationId": "revokeSession",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Session revoked."
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/invitations": {
+      "post": {
+        "operationId": "createInvitation",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInvitationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Invitation created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Invitation"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/invitations/{token}/accept": {
+      "post": {
+        "operationId": "acceptInvitation",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptInvitationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "$ref": "#/components/responses/Tokens"
+          },
+          "410": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/chats": {
+      "get": {
+        "operationId": "listChats",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chats visible through membership.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "chats"
+                  ],
+                  "properties": {
+                    "chats": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Chat"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createChat",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChatRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created or existing direct chat.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Chat"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/chats/{chat_id}": {
+      "get": {
+        "operationId": "getChat",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chat visible to the current member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Chat"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateChat",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ChatId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateChatRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated chat.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Chat"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "archiveChat",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ChatId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Chat archived."
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/chats/discover": {
+      "get": {
+        "operationId": "discoverChats",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Public chats the current user has not joined.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "chats"
+                  ],
+                  "properties": {
+                    "chats": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DirectoryChat"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chats/{chat_id}/join": {
+      "post": {
+        "operationId": "joinChat",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ChatId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Joined public chat, or current membership.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Chat"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/chats/{chat_id}/members": {
+      "get": {
+        "operationId": "listChatMembers",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ChatId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Active chat members.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "members"
+                  ],
+                  "properties": {
+                    "members": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ChatMember"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "addChatMember",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ChatId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddChatMemberRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Member added.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMember"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/chats/{chat_id}/members/{actor_id}": {
+      "patch": {
+        "operationId": "updateChatMember",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ChatId"
+          },
+          {
+            "$ref": "#/components/parameters/ActorId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateChatMemberRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Member role updated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMember"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "removeChatMember",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ChatId"
+          },
+          {
+            "$ref": "#/components/parameters/ActorId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Member removed."
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/chats/{chat_id}/messages": {
+      "get": {
+        "operationId": "listMessages",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ChatId"
+          },
+          {
+            "name": "before_seq",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "thread_root_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Messages visible to the current chat member, newest first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessagePage"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createMessage",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ChatId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMessageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The original message for an idempotent replay.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Message created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/messages/{message_id}": {
+      "patch": {
+        "operationId": "updateMessage",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MessageId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMessageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Message updated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteMessage",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MessageId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Soft-deleted message, or the existing tombstone for an idempotent replay.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "Stable API error.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Tokens": {
+        "description": "Access token and user. Refresh token is set as an HttpOnly cookie.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/TokenResponse"
+            }
+          }
+        }
+      }
+    },
+    "parameters": {
+      "ChatId": {
+        "name": "chat_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "ActorId": {
+        "name": "actor_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "MessageId": {
+        "name": "message_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    },
+    "schemas": {
+      "Health": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "message",
+          "request_id"
+        ],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ErrorCode"
+          },
+          "message": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "ErrorCode": {
+        "type": "string",
+        "enum": [
+          "already_bootstrapped",
+          "chat_conflict",
+          "chat_not_found",
+          "forbidden",
+          "idempotency_conflict",
+          "internal_error",
+          "invalid_credentials",
+          "invalid_refresh_token",
+          "invalid_request",
+          "invitation_invalid",
+          "message_not_found",
+          "origin_not_allowed",
+          "payload_too_large",
+          "rate_limited",
+          "service_not_ready",
+          "session_not_found",
+          "unauthorized",
+          "unsupported_format",
+          "validation_failed",
+          "version_conflict"
+        ]
+      },
+      "DurableEventTypeV1": {
+        "type": "string",
+        "enum": [
+          "message.created",
+          "message.updated",
+          "message.deleted",
+          "reaction.added",
+          "reaction.removed",
+          "thread.followed",
+          "thread.unfollowed",
+          "read.marked",
+          "draft.updated",
+          "draft.deleted",
+          "chat.created",
+          "chat.updated",
+          "chat.archived",
+          "member.joined",
+          "member.updated",
+          "member.removed"
+        ]
+      },
+      "RealtimeCloseCodeV1": {
+        "type": "integer",
+        "format": "int32",
+        "enum": [
+          1000,
+          1008,
+          1012,
+          4001,
+          4008,
+          4009
+        ],
+        "x-enum-varnames": [
+          "NormalClosure",
+          "PolicyViolation",
+          "ServiceRestart",
+          "AuthenticationFailed",
+          "SlowConsumer",
+          "ResyncRequired"
+        ]
+      },
+      "RealtimeAuthFrameV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "op",
+          "request_id",
+          "access_token",
+          "last_seq"
+        ],
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "auth"
+            ]
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "access_token": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16384
+          },
+          "last_seq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        }
+      },
+      "RealtimeAckFrameV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "op",
+          "seq"
+        ],
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "ack"
+            ]
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        }
+      },
+      "RealtimeSubscribeActiveFrameV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "op",
+          "chat_id",
+          "thread_root_id"
+        ],
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "subscribe_active"
+            ]
+          },
+          "chat_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "thread_root_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "RealtimeTypingFrameV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "op",
+          "chat_id",
+          "thread_root_id",
+          "active"
+        ],
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "typing"
+            ]
+          },
+          "chat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "thread_root_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "active": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RealtimeSetPresenceFrameV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "op",
+          "state"
+        ],
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "presence"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "active",
+              "away"
+            ]
+          }
+        }
+      },
+      "RealtimeHelloFrameV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "op",
+          "request_id",
+          "connection_id",
+          "current_seq",
+          "min_retained_seq",
+          "heartbeat_interval_ms",
+          "ack_interval_ms",
+          "ack_batch_size",
+          "max_unacked_events"
+        ],
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "hello"
+            ]
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "connection_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "current_seq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "min_retained_seq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "heartbeat_interval_ms": {
+            "type": "integer",
+            "minimum": 1000
+          },
+          "ack_interval_ms": {
+            "type": "integer",
+            "minimum": 100
+          },
+          "ack_batch_size": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "max_unacked_events": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "RealtimeDurableEventFrameV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "op",
+          "seq",
+          "type",
+          "occurred_at",
+          "actor_id",
+          "subject_id",
+          "data"
+        ],
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "event"
+            ]
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "type": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actor_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "chat_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "subject_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "RealtimeResyncRequiredFrameV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "op",
+          "current_seq",
+          "min_retained_seq",
+          "reason"
+        ],
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "resync_required"
+            ]
+          },
+          "current_seq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "min_retained_seq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "event_history_expired"
+            ]
+          }
+        }
+      },
+      "RealtimeTypingEventFrameV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "op",
+          "actor_id",
+          "chat_id",
+          "thread_root_id",
+          "active",
+          "expires_at"
+        ],
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "typing"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "chat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "thread_root_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "RealtimePresenceEventFrameV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "op",
+          "actor_id",
+          "state",
+          "expires_at"
+        ],
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "presence"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "online",
+              "away",
+              "offline"
+            ]
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "RealtimeProtocolErrorFrameV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "op",
+          "code",
+          "message"
+        ],
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "error"
+            ]
+          },
+          "request_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "invalid_frame",
+              "not_authenticated",
+              "forbidden",
+              "rate_limited"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "BootstrapStatus": {
+        "type": "object",
+        "required": [
+          "bootstrapped"
+        ],
+        "properties": {
+          "bootstrapped": {
+            "type": "boolean"
+          }
+        }
+      },
+      "BootstrapRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "organization_name",
+          "organization_slug",
+          "display_name",
+          "handle",
+          "email",
+          "password"
+        ],
+        "properties": {
+          "organization_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "organization_slug": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{1,62}$"
+          },
+          "display_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "handle": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]{1,31}$"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 1024
+          },
+          "timezone": {
+            "type": "string",
+            "default": "UTC"
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "email",
+          "password"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "password": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateProfileRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "display_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "handle": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "required": [
+          "id",
+          "org_id",
+          "role",
+          "email",
+          "display_name",
+          "handle",
+          "timezone",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "org_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "admin",
+              "member"
+            ]
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "handle": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "deactivated"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TokenResponse": {
+        "type": "object",
+        "required": [
+          "access_token",
+          "access_expires_at",
+          "user"
+        ],
+        "properties": {
+          "access_token": {
+            "type": "string"
+          },
+          "access_expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        }
+      },
+      "Session": {
+        "type": "object",
+        "required": [
+          "id",
+          "user_agent",
+          "created_at",
+          "last_seen_at",
+          "expires_at",
+          "current"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "user_agent": {
+            "type": "string"
+          },
+          "ip_address": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "last_seen_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revoked_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "current": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CreateInvitationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "email"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "member"
+            ],
+            "default": "member"
+          }
+        }
+      },
+      "Invitation": {
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "role",
+          "expires_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "member"
+            ]
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "accept_url": {
+            "type": "string",
+            "format": "uri"
+          }
+        }
+      },
+      "AcceptInvitationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "display_name",
+          "handle",
+          "password"
+        ],
+        "properties": {
+          "display_name": {
+            "type": "string"
+          },
+          "handle": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 10
+          },
+          "timezone": {
+            "type": "string",
+            "default": "UTC"
+          }
+        }
+      },
+      "CreateChatRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "group",
+              "channel"
+            ]
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "private",
+              "public"
+            ],
+            "default": "private"
+          },
+          "name": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "member_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "uniqueItems": true
+          }
+        }
+      },
+      "Chat": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "visibility",
+          "topic",
+          "role",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "group",
+              "channel"
+            ]
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "private",
+              "public"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "topic": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "admin",
+              "member"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "archived_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "UpdateChatRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "topic": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "private",
+              "public"
+            ]
+          }
+        }
+      },
+      "DirectoryChat": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "topic",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "group",
+              "channel"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ChatMember": {
+        "type": "object",
+        "required": [
+          "actor_id",
+          "display_name",
+          "handle",
+          "role",
+          "joined_at"
+        ],
+        "properties": {
+          "actor_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "handle": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "admin",
+              "member"
+            ]
+          },
+          "joined_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AddChatMemberRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "actor_id"
+        ],
+        "properties": {
+          "actor_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "admin",
+              "member"
+            ],
+            "default": "member"
+          }
+        }
+      },
+      "UpdateChatMemberRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role"
+        ],
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "admin",
+              "member"
+            ]
+          }
+        }
+      },
+      "Message": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "chat_id",
+          "actor_id",
+          "client_msg_id",
+          "type",
+          "body",
+          "body_format",
+          "version",
+          "created_seq",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "chat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "actor_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "client_msg_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "text"
+            ]
+          },
+          "body": {
+            "type": "string"
+          },
+          "body_format": {
+            "type": "string",
+            "enum": [
+              "plain",
+              "markdown"
+            ]
+          },
+          "reply_to_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "thread_root_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "created_seq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "edited_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "deleted_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "MessagePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "messages",
+          "next_before_seq"
+        ],
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            }
+          },
+          "next_before_seq": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 1
+          }
+        }
+      },
+      "CreateMessageRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "client_msg_id",
+          "body"
+        ],
+        "properties": {
+          "client_msg_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1
+          },
+          "body_format": {
+            "type": "string",
+            "enum": [
+              "plain",
+              "markdown"
+            ],
+            "default": "plain"
+          },
+          "reply_to_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "thread_root_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "UpdateMessageRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "body",
+          "expected_version"
+        ],
+        "properties": {
+          "body": {
+            "type": "string",
+            "minLength": 1
+          },
+          "body_format": {
+            "type": "string",
+            "enum": [
+              "plain",
+              "markdown"
+            ],
+            "default": "plain"
+          },
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    }
+  }
+}

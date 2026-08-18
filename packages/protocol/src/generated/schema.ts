@@ -292,6 +292,38 @@ export interface paths {
         patch: operations["updateChatMember"];
         trace?: never;
     };
+    "/api/v1/chats/{chat_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listMessages"];
+        put?: never;
+        post: operations["createMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/messages/{message_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteMessage"];
+        options?: never;
+        head?: never;
+        patch: operations["updateMessage"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -300,12 +332,135 @@ export interface components {
             status: string;
         };
         Error: {
-            code: string;
+            code: components["schemas"]["ErrorCode"];
             message: string;
             request_id: string;
             details?: {
                 [key: string]: unknown;
             };
+        };
+        /** @enum {string} */
+        ErrorCode: "already_bootstrapped" | "chat_conflict" | "chat_not_found" | "forbidden" | "idempotency_conflict" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "rate_limited" | "service_not_ready" | "session_not_found" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict";
+        /** @enum {string} */
+        DurableEventTypeV1: "message.created" | "message.updated" | "message.deleted" | "reaction.added" | "reaction.removed" | "thread.followed" | "thread.unfollowed" | "read.marked" | "draft.updated" | "draft.deleted" | "chat.created" | "chat.updated" | "chat.archived" | "member.joined" | "member.updated" | "member.removed";
+        /**
+         * Format: int32
+         * @enum {integer}
+         */
+        RealtimeCloseCodeV1: 1000 | 1008 | 1012 | 4001 | 4008 | 4009;
+        RealtimeAuthFrameV1: {
+            /** @enum {string} */
+            op: "auth";
+            /** Format: uuid */
+            request_id: string;
+            access_token: string;
+            /** Format: int64 */
+            last_seq: number;
+        };
+        RealtimeAckFrameV1: {
+            /** @enum {string} */
+            op: "ack";
+            /** Format: int64 */
+            seq: number;
+        };
+        RealtimeSubscribeActiveFrameV1: {
+            /** @enum {string} */
+            op: "subscribe_active";
+            /** Format: uuid */
+            chat_id: string | null;
+            /** Format: uuid */
+            thread_root_id: string | null;
+        };
+        RealtimeTypingFrameV1: {
+            /** @enum {string} */
+            op: "typing";
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: uuid */
+            thread_root_id: string | null;
+            active: boolean;
+        };
+        RealtimeSetPresenceFrameV1: {
+            /** @enum {string} */
+            op: "presence";
+            /** @enum {string} */
+            state: "active" | "away";
+        };
+        RealtimeHelloFrameV1: {
+            /** @enum {string} */
+            op: "hello";
+            /** Format: uuid */
+            request_id: string;
+            /** Format: uuid */
+            connection_id: string;
+            /** Format: int64 */
+            current_seq: number;
+            /** Format: int64 */
+            min_retained_seq: number;
+            heartbeat_interval_ms: number;
+            ack_interval_ms: number;
+            ack_batch_size: number;
+            max_unacked_events: number;
+        };
+        RealtimeDurableEventFrameV1: {
+            /** @enum {string} */
+            op: "event";
+            /** Format: int64 */
+            seq: number;
+            type: string;
+            /** Format: date-time */
+            occurred_at: string;
+            /** Format: uuid */
+            actor_id: string;
+            /** Format: uuid */
+            chat_id?: string | null;
+            /** Format: uuid */
+            subject_id: string;
+            data: {
+                [key: string]: unknown;
+            };
+        };
+        RealtimeResyncRequiredFrameV1: {
+            /** @enum {string} */
+            op: "resync_required";
+            /** Format: int64 */
+            current_seq: number;
+            /** Format: int64 */
+            min_retained_seq: number;
+            /** @enum {string} */
+            reason: "event_history_expired";
+        };
+        RealtimeTypingEventFrameV1: {
+            /** @enum {string} */
+            op: "typing";
+            /** Format: uuid */
+            actor_id: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: uuid */
+            thread_root_id: string | null;
+            active: boolean;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        RealtimePresenceEventFrameV1: {
+            /** @enum {string} */
+            op: "presence";
+            /** Format: uuid */
+            actor_id: string;
+            /** @enum {string} */
+            state: "online" | "away" | "offline";
+            /** Format: date-time */
+            expires_at: string;
+        };
+        RealtimeProtocolErrorFrameV1: {
+            /** @enum {string} */
+            op: "error";
+            /** Format: uuid */
+            request_id?: string | null;
+            /** @enum {string} */
+            code: "invalid_frame" | "not_authenticated" | "forbidden" | "rate_limited";
+            message: string;
         };
         BootstrapStatus: {
             bootstrapped: boolean;
@@ -464,6 +619,62 @@ export interface components {
             /** @enum {string} */
             role: "owner" | "admin" | "member";
         };
+        Message: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: uuid */
+            actor_id: string;
+            /** Format: uuid */
+            client_msg_id: string;
+            /** @enum {string} */
+            type: "text";
+            body: string;
+            /** @enum {string} */
+            body_format: "plain" | "markdown";
+            /** Format: uuid */
+            reply_to_id?: string | null;
+            /** Format: uuid */
+            thread_root_id?: string | null;
+            version: number;
+            /** Format: int64 */
+            created_seq: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            edited_at?: string | null;
+            /** Format: date-time */
+            deleted_at?: string | null;
+        };
+        MessagePage: {
+            messages: components["schemas"]["Message"][];
+            /** Format: int64 */
+            next_before_seq: number | null;
+        };
+        CreateMessageRequest: {
+            /** Format: uuid */
+            client_msg_id: string;
+            body: string;
+            /**
+             * @default plain
+             * @enum {string}
+             */
+            body_format: "plain" | "markdown";
+            /** Format: uuid */
+            reply_to_id?: string;
+            /** Format: uuid */
+            thread_root_id?: string;
+        };
+        UpdateMessageRequest: {
+            body: string;
+            /**
+             * @default plain
+             * @enum {string}
+             */
+            body_format: "plain" | "markdown";
+            expected_version: number;
+        };
     };
     responses: {
         /** @description Stable API error. */
@@ -488,6 +699,7 @@ export interface components {
     parameters: {
         ChatId: string;
         ActorId: string;
+        MessageId: string;
     };
     requestBodies: never;
     headers: never;
@@ -1040,6 +1252,129 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    listMessages: {
+        parameters: {
+            query?: {
+                before_seq?: number;
+                limit?: number;
+                thread_root_id?: string;
+            };
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Messages visible to the current chat member, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessagePage"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    createMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description The original message for an idempotent replay. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            /** @description Message created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    deleteMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Soft-deleted message, or the existing tombstone for an idempotent replay. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    updateMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description Message updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
             422: components["responses"]["Error"];
         };
     };

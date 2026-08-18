@@ -74,7 +74,7 @@
 ### 2.2 Стек ядра
 - Go 1.26.5+, стандартный `net/http` + `chi` для роутинга
 - Postgres 16 через `pgx` (без ORM; `sqlc` для типобезопасных запросов, `goose` или `atlas` для миграций)
-- WebSocket: `nhooyr.io/websocket` (или `gorilla/websocket`)
+- WebSocket: `github.com/coder/websocket`
 - Очереди/фон: `river` (Postgres-backed) - позволяет не тащить Redis в базовой поставке
 - Кэш/пабсаб для горизонтального масштаба: Redis опционально (feature flag)
 - Логи `slog`, метрики Prometheus, трейсы OpenTelemetry
@@ -103,17 +103,17 @@
 
 Решение:
 - Один WS на клиент. Подписки на чаты управляются сервером (клиент получает всё, к чему у него есть доступ, плюс отдельно "активный чат" для typing/presence).
-- Каждое событие имеет монотонный `seq` в рамках организации (bigint из Postgres sequence). Клиент хранит `last_seq`; при реконнекте шлёт `resume(last_seq)`, сервер отдаёт дельту из таблицы `events` (хранится N дней), либо говорит `full_resync`.
-- Fan-out: in-process pub/sub в одном инстансе; при многонодовом деплое - Redis pub/sub или Postgres LISTEN/NOTIFY (для малых нагрузок хватит).
+- Каждое событие имеет монотонный `seq` в рамках организации. Он выделяется увеличением `organizations.event_seq` внутри той же транзакции, а не PostgreSQL sequence. Клиент хранит применённый `last_seq`; при реконнекте сервер отдаёт доступную дельту либо требует full resync.
+- Fan-out фазы 2: in-process hub и polling committed events из Postgres в одном экземпляре Core. Multi-node транспорт выбирается только при появлении требования горизонтального масштабирования.
 - Пуши через `river` job при отсутствии активной сессии у пользователя.
 - Backpressure: если клиент не читает, буфер ограничен, при переполнении - разрыв и resume.
 
 ### 2.7 Транзакционный журнал событий
-- Таблица `events(seq, org_id, type, actor_id, chat_id, payload jsonb, created_at)`. Это не источник истины (истина в нормализованных таблицах), а лог для доставки, resume, аудита, агентов и вебхуков.
+- Таблица `events(org_id, seq, type, actor_id, chat_id, subject_id, audience_actor_id, occurred_at)` с минимальными routing metadata. Это не источник истины (истина в нормализованных таблицах), а лог для доставки, resume, агентов и вебхуков.
 - Транзакция: пишем в нормализованную таблицу и в `events` одной транзакцией, потом публикуем в память.
-- Типы долговечных событий: `message.created/updated/deleted`, `reaction.added/removed`, `thread.created`, `chat.*`, `member.*`, `read.marked`, `agent.invoked`, `agent.replied`, `file.uploaded`.
+- Типы долговечных событий: `message.created/updated/deleted`, `reaction.added/removed`, `thread.followed/unfollowed`, `chat.*`, `member.*`, `read.marked`, `agent.invoked`, `agent.replied`, `file.uploaded`.
 - `typing`, `presence`, streaming-дельты и другие краткоживущие сигналы передаются отдельно и не попадают в durable event log.
-- Retention `events`: 7-30 дней настраиваемо; старше - только аудит-подмножество.
+- Retention `events` по умолчанию: 72 часа и минимум последние 100 000 событий организации. Долговечный аудит хранится отдельно от delivery log.
 
 ### 2.8 Чаты, каналы, сообщения, реплаи и треды
 Вопрос: как совместить Telegram-реплай и Slack-тред в одной модели.
@@ -122,14 +122,14 @@
 - Общая сущность `chats` имеет `kind`: `direct`, `group` или `channel`. Для `group` пишут все участники; для `channel` — только owner/admin. Видимость (`public`/`private`) задаётся независимо от типа.
 - В канале обычные участники могут читать и реагировать, но не могут отправлять сообщения ни в основную ленту, ни в треды. Если позже понадобятся комментарии к публикациям, они будут добавлены как отдельный режим.
 - `messages.reply_to_id` - реплай. Сообщение остаётся в основной ленте чата или канала, отображается с цитатой.
-- `messages.thread_id` - принадлежность к треду. Тред = отдельная сущность `threads(id, root_message_id, chat_id, reply_count, last_reply_at, participants)`. Ответы в треде не показываются в основной ленте (опция "также отправить в чат" для групповых чатов). В канале создавать сообщения в тредах могут только owner/admin.
-- Внутри треда тоже можно делать реплай (reply_to_id + thread_id одновременно).
-- Тред создаётся лениво при первом ответе на сообщение через действие "Открыть тред".
+- `messages.thread_root_id` указывает на root message; отдельная сущность `threads` не создаётся. Ответы в треде не показываются в основной ленте. В канале создавать сообщения в тредах могут только owner/admin.
+- Внутри треда тоже можно делать реплай (`reply_to_id` + `thread_root_id` одновременно).
+- ID корневого сообщения является стабильным ID треда с первого ответа.
 - Отдельный экран "Треды": все треды, на которые подписан пользователь, с непрочитанными.
 - Подписка на тред: автор рута, все ответившие, упомянутые; unfollow вручную.
 
 ### 2.9 Непрочитанные
-- `chat_reads(user_id, chat_id, last_read_seq, last_read_at)` и `thread_reads(user_id, thread_id, ...)`.
+- `chat_reads(user_id, chat_id, last_read_seq, last_read_at)` и `thread_reads(user_id, thread_root_id, ...)`.
 - Сообщение получает серверный `created_seq`, совпадающий с последовательностью события создания. Счётчик = число доступных сообщений после `last_read_seq`; клиентский ID и часы устройства не участвуют в порядке.
 - Счётчики можно кэшировать в памяти/Redis и инвалидировать событиями. Отдельно хранится/вычисляется флаг "есть упоминание".
 - Пометка прочитанным - явное событие с клиента (видимость последнего сообщения на экране), не по факту открытия.
@@ -137,7 +137,7 @@
 
 ### 2.10 Редактирование и удаление
 - Мягкое удаление (`deleted_at`), контент затирается, метаданные остаются для целостности тредов и реплаев.
-- История правок в `message_revisions` (для аудита и агентов).
+- История правок в `message_revisions` доступна аудиту. Автор редактирует и удаляет свои сообщения без временного окна; owner/admin может удалить любое сообщение.
 
 ### 2.11 Реакции
 - `reactions(message_id, actor_id, emoji, created_at)` с уникальным индексом по тройке. Агрегат считаем в запросе или денормализуем в `messages.reactions_summary jsonb` при высокой нагрузке.
@@ -187,7 +187,7 @@
 
 ### 2.19 Масштабирование
 - Целевая планка v1: 500 пользователей и 2000 WS на одном инстансе с 1 vCPU/1 GB.
-- Путь роста: несколько реплик ядра за балансировщиком + sticky WS не нужен благодаря resume по seq + Redis pub/sub для fan-out. Postgres - вертикально, потом read replicas для поиска/истории.
+- Путь роста: несколько реплик ядра за балансировщиком; sticky WS не нужен благодаря resume по seq. Межрепличный fan-out выбирается по измерениям на фазе production readiness, без заранее обязательного Redis. Postgres масштабируется вертикально, затем read replicas используются для поиска/истории.
 
 ### 2.20 Деплой
 - `docker compose up`: ядро, Postgres, MinIO, agent-runtime. Опционально Redis.
@@ -223,7 +223,7 @@
 ## 3. Схема данных (ядро)
 
 ```
-organizations(id, name, slug, settings jsonb, created_at)
+organizations(id, name, slug, event_seq bigint, settings jsonb, created_at)
 
 actors(id, org_id, type enum(user|agent), display_name, handle, avatar_file_id,
        status, tz, created_at, deleted_at)
@@ -243,29 +243,30 @@ chats(id, org_id, kind enum(direct|group|channel), visibility enum(private|publi
 chat_members(chat_id, actor_id, role enum(owner|admin|member), joined_at,
              notify_level, muted_until)
 
-messages(id, org_id, chat_id, thread_id null, reply_to_id null, actor_id,
+messages(id, org_id, chat_id, thread_root_id null, reply_to_id null, actor_id,
          client_msg_id, type enum(text|system|file|agent), body text, body_format,
          attachments jsonb, mentions actor_id[], edited_at, deleted_at,
-         pinned_at, created_seq bigint, created_at)
-  index (chat_id, created_seq) where thread_id is null
-  index (thread_id, created_seq)
+         version int, pinned_at, created_seq bigint, created_at)
+  unique (actor_id, client_msg_id)
+  index (chat_id, created_seq) where thread_root_id is null
+  index (thread_root_id, created_seq)
 
 message_revisions(id, message_id, body, edited_at, edited_by)
 
-threads(id, root_message_id, chat_id, reply_count, last_reply_at, participants actor_id[])
-thread_followers(thread_id, actor_id, followed_at)
+thread_followers(thread_root_id, actor_id, followed_at)
 
 reactions(message_id, actor_id, emoji, created_at) unique
 
 chat_reads(actor_id, chat_id, last_read_seq, last_read_at)
-thread_reads(actor_id, thread_id, last_read_seq, last_read_at)
+thread_reads(actor_id, thread_root_id, last_read_seq, last_read_at)
 
 files(id, org_id, uploader_id, storage_key, name, mime, size, sha256,
       preview_key, extracted_text, created_at)
 
-drafts(actor_id, chat_id, thread_id null, body, updated_at)
+drafts(actor_id, chat_id, thread_root_id null, body, version, updated_at)
 
-events(seq bigserial, org_id, type, actor_id, chat_id null, payload jsonb, created_at)
+events(org_id, seq, type, actor_id, chat_id null, subject_id,
+       audience_actor_id null, occurred_at) primary key (org_id, seq)
 
 push_subscriptions(id, user_id, platform, token, created_at)
 
@@ -287,12 +288,12 @@ GET    /me
 GET    /chats                          список чатов и каналов с unread
 POST   /chats                          {kind: direct|group|channel, visibility, name, member_ids}
 GET    /chats/:id/messages?before=&after=&limit=
-POST   /chats/:id/messages             {client_msg_id, body, reply_to_id?, thread_id?, file_ids?}
+POST   /chats/:id/messages             {client_msg_id, body, reply_to_id?, thread_root_id?, file_ids?}
 PATCH  /messages/:id
 DELETE /messages/:id
 POST   /messages/:id/reactions         {emoji}
 DELETE /messages/:id/reactions/:emoji
-POST   /messages/:id/thread            открыть/получить тред
+GET    /messages/:root_id/thread       получить тред
 GET    /threads?followed=1&unread=1
 POST   /chats/:id/read                 {last_read_seq}
 POST   /files/presign | POST /files
@@ -303,8 +304,10 @@ GET    /events?since=seq               резервный long-poll
 ```
 
 ### WebSocket
-Клиент -> сервер: `auth`, `resume{last_seq}`, `subscribe_active{chat_id}`, `typing`, `presence`.
-Сервер -> клиент: `ready{seq}`, любые события из п. 2.7, `resync_required`.
+Клиент -> сервер: `auth{access_token,last_seq}`, `ack{seq}`, `subscribe_active{chat_id}`, `typing`, `presence`.
+Сервер -> клиент: `hello{current_seq,min_retained_seq,...}`, durable events, `resync_required`.
+
+Полный контракт, backpressure и close codes: [`protocols/realtime-v1.md`](protocols/realtime-v1.md). Архитектурные гарантии: [ADR-0006](decisions/0006-messaging-delivery-and-realtime.md).
 
 ### Оптимистичный UI
 Клиент генерирует `client_msg_id`, сразу рисует временное сообщение, а после ответа связывает его с серверным UUIDv7. При ошибке сообщение помечается как неотправленное с безопасным повтором того же `client_msg_id`.

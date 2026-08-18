@@ -1,0 +1,245 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://comamessenger.dev/schemas/realtime/v1.schema.json",
+  "title": "Coma realtime protocol v1",
+  "oneOf": [
+    { "$ref": "#/$defs/ClientFrame" },
+    { "$ref": "#/$defs/ServerFrame" }
+  ],
+  "$defs": {
+    "Sequence": {
+      "type": "integer",
+      "format": "int64",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "UUID": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "NullableUUID": {
+      "type": ["string", "null"],
+      "format": "uuid"
+    },
+    "KnownDurableEventType": {
+      "type": "string",
+      "enum": [
+        "message.created",
+        "message.updated",
+        "message.deleted",
+        "reaction.added",
+        "reaction.removed",
+        "thread.followed",
+        "thread.unfollowed",
+        "read.marked",
+        "draft.updated",
+        "draft.deleted",
+        "chat.created",
+        "chat.updated",
+        "chat.archived",
+        "member.joined",
+        "member.updated",
+        "member.removed"
+      ]
+    },
+    "CloseCode": {
+      "type": "integer",
+      "format": "int32",
+      "enum": [1000, 1008, 1012, 4001, 4008, 4009],
+      "x-enum-varnames": [
+        "NormalClosure",
+        "PolicyViolation",
+        "ServiceRestart",
+        "AuthenticationFailed",
+        "SlowConsumer",
+        "ResyncRequired"
+      ]
+    },
+    "AuthFrame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "request_id", "access_token", "last_seq"],
+      "properties": {
+        "op": { "type": "string", "enum": ["auth"] },
+        "request_id": { "$ref": "#/$defs/UUID" },
+        "access_token": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16384
+        },
+        "last_seq": { "$ref": "#/$defs/Sequence" }
+      }
+    },
+    "AckFrame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "seq"],
+      "properties": {
+        "op": { "type": "string", "enum": ["ack"] },
+        "seq": { "$ref": "#/$defs/Sequence" }
+      }
+    },
+    "SubscribeActiveFrame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "chat_id", "thread_root_id"],
+      "properties": {
+        "op": { "type": "string", "enum": ["subscribe_active"] },
+        "chat_id": { "$ref": "#/$defs/NullableUUID" },
+        "thread_root_id": { "$ref": "#/$defs/NullableUUID" }
+      }
+    },
+    "TypingFrame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "chat_id", "thread_root_id", "active"],
+      "properties": {
+        "op": { "type": "string", "enum": ["typing"] },
+        "chat_id": { "$ref": "#/$defs/UUID" },
+        "thread_root_id": { "$ref": "#/$defs/NullableUUID" },
+        "active": { "type": "boolean" }
+      }
+    },
+    "SetPresenceFrame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "state"],
+      "properties": {
+        "op": { "type": "string", "enum": ["presence"] },
+        "state": { "type": "string", "enum": ["active", "away"] }
+      }
+    },
+    "ClientFrame": {
+      "oneOf": [
+        { "$ref": "#/$defs/AuthFrame" },
+        { "$ref": "#/$defs/AckFrame" },
+        { "$ref": "#/$defs/SubscribeActiveFrame" },
+        { "$ref": "#/$defs/TypingFrame" },
+        { "$ref": "#/$defs/SetPresenceFrame" }
+      ]
+    },
+    "HelloFrame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "request_id",
+        "connection_id",
+        "current_seq",
+        "min_retained_seq",
+        "heartbeat_interval_ms",
+        "ack_interval_ms",
+        "ack_batch_size",
+        "max_unacked_events"
+      ],
+      "properties": {
+        "op": { "type": "string", "enum": ["hello"] },
+        "request_id": { "$ref": "#/$defs/UUID" },
+        "connection_id": { "$ref": "#/$defs/UUID" },
+        "current_seq": { "$ref": "#/$defs/Sequence" },
+        "min_retained_seq": { "$ref": "#/$defs/Sequence" },
+        "heartbeat_interval_ms": { "type": "integer", "minimum": 1000 },
+        "ack_interval_ms": { "type": "integer", "minimum": 100 },
+        "ack_batch_size": { "type": "integer", "minimum": 1 },
+        "max_unacked_events": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "DurableEventFrame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "seq",
+        "type",
+        "occurred_at",
+        "actor_id",
+        "subject_id",
+        "data"
+      ],
+      "properties": {
+        "op": { "type": "string", "enum": ["event"] },
+        "seq": { "$ref": "#/$defs/Sequence" },
+        "type": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$"
+        },
+        "occurred_at": { "type": "string", "format": "date-time" },
+        "actor_id": { "$ref": "#/$defs/UUID" },
+        "chat_id": { "$ref": "#/$defs/NullableUUID" },
+        "subject_id": { "$ref": "#/$defs/UUID" },
+        "data": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "ResyncRequiredFrame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "current_seq", "min_retained_seq", "reason"],
+      "properties": {
+        "op": { "type": "string", "enum": ["resync_required"] },
+        "current_seq": { "$ref": "#/$defs/Sequence" },
+        "min_retained_seq": { "$ref": "#/$defs/Sequence" },
+        "reason": { "type": "string", "enum": ["event_history_expired"] }
+      }
+    },
+    "TypingEventFrame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "actor_id",
+        "chat_id",
+        "thread_root_id",
+        "active",
+        "expires_at"
+      ],
+      "properties": {
+        "op": { "type": "string", "enum": ["typing"] },
+        "actor_id": { "$ref": "#/$defs/UUID" },
+        "chat_id": { "$ref": "#/$defs/UUID" },
+        "thread_root_id": { "$ref": "#/$defs/NullableUUID" },
+        "active": { "type": "boolean" },
+        "expires_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "PresenceEventFrame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "actor_id", "state", "expires_at"],
+      "properties": {
+        "op": { "type": "string", "enum": ["presence"] },
+        "actor_id": { "$ref": "#/$defs/UUID" },
+        "state": { "type": "string", "enum": ["online", "away", "offline"] },
+        "expires_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "ProtocolErrorFrame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "code", "message"],
+      "properties": {
+        "op": { "type": "string", "enum": ["error"] },
+        "request_id": { "$ref": "#/$defs/NullableUUID" },
+        "code": {
+          "type": "string",
+          "enum": [
+            "invalid_frame",
+            "not_authenticated",
+            "forbidden",
+            "rate_limited"
+          ]
+        },
+        "message": { "type": "string" }
+      }
+    },
+    "ServerFrame": {
+      "oneOf": [
+        { "$ref": "#/$defs/HelloFrame" },
+        { "$ref": "#/$defs/DurableEventFrame" },
+        { "$ref": "#/$defs/ResyncRequiredFrame" },
+        { "$ref": "#/$defs/TypingEventFrame" },
+        { "$ref": "#/$defs/PresenceEventFrame" },
+        { "$ref": "#/$defs/ProtocolErrorFrame" }
+      ]
+    }
+  }
+}

@@ -1,6 +1,10 @@
 package config
 
-import "testing"
+import (
+	"strings"
+	"testing"
+	"time"
+)
 
 func setRequiredEnvironment(t *testing.T) {
 	t.Helper()
@@ -33,6 +37,21 @@ func TestFromEnvironmentDefaults(t *testing.T) {
 	}
 	if cfg.Auth.CookieSecure {
 		t.Fatal("Auth.CookieSecure = true in development, want false")
+	}
+	if cfg.Messaging.MaxBodyBytes != 64*1024 || cfg.Messaging.MaxPageSize != 100 {
+		t.Fatalf("unexpected messaging defaults: %#v", cfg.Messaging)
+	}
+	if cfg.Realtime.AuthTimeout != 5*time.Second || cfg.Realtime.MaxFrameBytes != 256*1024 {
+		t.Fatalf("unexpected realtime handshake defaults: %#v", cfg.Realtime)
+	}
+	if cfg.Realtime.MaxQueuedEvents != 256 || cfg.Realtime.MaxQueuedBytes != 1024*1024 || cfg.Realtime.MaxUnackedEvents != 128 {
+		t.Fatalf("unexpected realtime queue defaults: %#v", cfg.Realtime)
+	}
+	if cfg.Realtime.HeartbeatInterval != 25*time.Second || cfg.Realtime.PongTimeout != 10*time.Second {
+		t.Fatalf("unexpected realtime heartbeat defaults: %#v", cfg.Realtime)
+	}
+	if cfg.EventLog.PollInterval != 200*time.Millisecond || cfg.EventLog.Retention != 72*time.Hour || cfg.EventLog.RetentionMinCount != 100_000 {
+		t.Fatalf("unexpected event log defaults: %#v", cfg.EventLog)
 	}
 }
 
@@ -122,5 +141,38 @@ func TestFromEnvironmentUsesSecureCookiesOutsideDevelopment(t *testing.T) {
 	}
 	if !cfg.Auth.CookieSecure {
 		t.Fatal("Auth.CookieSecure = false in production, want true")
+	}
+}
+
+func TestFromEnvironmentRejectsInvalidMessagingAndRealtimeLimits(t *testing.T) {
+	tests := []struct {
+		name    string
+		key     string
+		value   string
+		wantErr string
+	}{
+		{name: "body too small", key: "MESSAGE_MAX_BODY_BYTES", value: "100", wantErr: "MESSAGE_MAX_BODY_BYTES"},
+		{name: "page too large", key: "MESSAGE_MAX_PAGE_SIZE", value: "501", wantErr: "MESSAGE_MAX_PAGE_SIZE"},
+		{name: "frame below body", key: "WS_MAX_FRAME_BYTES", value: "1024", wantErr: "WS_MAX_FRAME_BYTES"},
+		{name: "no connections", key: "WS_MAX_CONNECTIONS_PER_ACTOR", value: "0", wantErr: "WS_MAX_CONNECTIONS_PER_ACTOR"},
+		{name: "unacked above queue", key: "WS_MAX_UNACKED_EVENTS", value: "300", wantErr: "WS_MAX_UNACKED_EVENTS"},
+		{name: "queue bytes below frame", key: "WS_MAX_QUEUED_BYTES", value: "65536", wantErr: "WS_MAX_QUEUED_BYTES"},
+		{name: "pong after heartbeat", key: "WS_PONG_TIMEOUT", value: "25s", wantErr: "WS_PONG_TIMEOUT"},
+		{name: "ack timeout before interval", key: "WS_ACK_TIMEOUT", value: "500ms", wantErr: "WS_ACK_TIMEOUT"},
+		{name: "ack batch above window", key: "WS_ACK_BATCH_SIZE", value: "129", wantErr: "WS_ACK_BATCH_SIZE"},
+		{name: "poll too frequent", key: "EVENT_POLL_INTERVAL", value: "1ms", wantErr: "EVENT_POLL_INTERVAL"},
+		{name: "retention too short", key: "EVENT_RETENTION", value: "30m", wantErr: "EVENT_RETENTION"},
+		{name: "retention floor too small", key: "EVENT_RETENTION_MIN_COUNT", value: "999", wantErr: "EVENT_RETENTION_MIN_COUNT"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setRequiredEnvironment(t)
+			t.Setenv(tt.key, tt.value)
+			_, err := FromEnvironment()
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("FromEnvironment() error = %v, want error containing %q", err, tt.wantErr)
+			}
+		})
 	}
 }

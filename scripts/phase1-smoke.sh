@@ -93,6 +93,55 @@ member_channel_code="$(curl --silent --show-error --output "$work_dir/forbidden.
   --data '{"kind":"channel","visibility":"public","name":"Forbidden"}' "$api_url/api/v1/chats")"
 test "$member_channel_code" = "403"
 
+client_msg_id="$(uuidgen | tr '[:upper:]' '[:lower:]')"
+message_code="$(curl --silent --show-error --output "$work_dir/message.json" --write-out '%{http_code}' \
+  --request POST --header 'Content-Type: application/json' --header "Authorization: Bearer $member_token" \
+  --data "{\"client_msg_id\":\"$client_msg_id\",\"body\":\"Hello from the member\",\"body_format\":\"plain\"}" \
+  "$api_url/api/v1/chats/$group_id/messages")"
+test "$message_code" = "201"
+message_id="$(jq -r .id "$work_dir/message.json")"
+
+repeat_message_code="$(curl --silent --show-error --output "$work_dir/message-repeat.json" --write-out '%{http_code}' \
+  --request POST --header 'Content-Type: application/json' --header "Authorization: Bearer $member_token" \
+  --data "{\"client_msg_id\":\"$client_msg_id\",\"body\":\"Hello from the member\",\"body_format\":\"plain\"}" \
+  "$api_url/api/v1/chats/$group_id/messages")"
+test "$repeat_message_code" = "200"
+test "$(jq -r .id "$work_dir/message-repeat.json")" = "$message_id"
+
+conflicting_message_code="$(curl --silent --show-error --output "$work_dir/message-conflict.json" --write-out '%{http_code}' \
+  --request POST --header 'Content-Type: application/json' --header "Authorization: Bearer $member_token" \
+  --data "{\"client_msg_id\":\"$client_msg_id\",\"body\":\"A conflicting retry\",\"body_format\":\"plain\"}" \
+  "$api_url/api/v1/chats/$group_id/messages")"
+test "$conflicting_message_code" = "409"
+test "$(jq -r .code "$work_dir/message-conflict.json")" = "idempotency_conflict"
+
+curl --fail --silent --show-error --output "$work_dir/messages.json" \
+  --header "Authorization: Bearer $owner_token" "$api_url/api/v1/chats/$group_id/messages"
+test "$(jq --arg id "$message_id" '[.messages[].id] | index($id) != null' "$work_dir/messages.json")" = "true"
+
+curl --fail --silent --show-error --output "$work_dir/message-updated.json" --request PATCH \
+  --header 'Content-Type: application/json' --header "Authorization: Bearer $member_token" \
+  --data '{"body":"Hello, edited","body_format":"markdown","expected_version":1}' \
+  "$api_url/api/v1/messages/$message_id"
+test "$(jq -r .version "$work_dir/message-updated.json")" = "2"
+
+curl --fail --silent --show-error --output "$work_dir/message-deleted.json" --request DELETE \
+  --header "Authorization: Bearer $owner_token" "$api_url/api/v1/messages/$message_id"
+test "$(jq -r .body "$work_dir/message-deleted.json")" = ""
+test "$(jq -r '.deleted_at != null' "$work_dir/message-deleted.json")" = "true"
+
+member_channel_message_code="$(curl --silent --show-error --output "$work_dir/channel-message-forbidden.json" --write-out '%{http_code}' \
+  --request POST --header 'Content-Type: application/json' --header "Authorization: Bearer $member_token" \
+  --data "{\"client_msg_id\":\"$(uuidgen | tr '[:upper:]' '[:lower:]')\",\"body\":\"Not allowed\"}" \
+  "$api_url/api/v1/chats/$channel_id/messages")"
+test "$member_channel_message_code" = "403"
+
+owner_channel_message_code="$(curl --silent --show-error --output "$work_dir/channel-message.json" --write-out '%{http_code}' \
+  --request POST --header 'Content-Type: application/json' --header "Authorization: Bearer $owner_token" \
+  --data "{\"client_msg_id\":\"$(uuidgen | tr '[:upper:]' '[:lower:]')\",\"body\":\"Announcement\"}" \
+  "$api_url/api/v1/chats/$channel_id/messages")"
+test "$owner_channel_message_code" = "201"
+
 archive_code="$(curl --silent --show-error --output "$work_dir/archive.json" --write-out '%{http_code}' \
   --request DELETE --header "Authorization: Bearer $owner_token" "$api_url/api/v1/chats/$group_id")"
 test "$archive_code" = "204"
@@ -101,4 +150,4 @@ curl --fail --silent --show-error --output "$work_dir/owner-chats.json" \
   --header "Authorization: Bearer $owner_token" "$api_url/api/v1/chats"
 test "$(jq --arg id "$group_id" '[.chats[].id] | index($id) == null' "$work_dir/owner-chats.json")" = "true"
 
-echo "Phase 1 API smoke test passed."
+echo "Phase 1 and durable message API smoke test passed."

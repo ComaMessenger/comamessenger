@@ -168,6 +168,24 @@ func (e CreateInvitationRequestRole) Valid() bool {
 	}
 }
 
+// Defines values for CreateMessageRequestBodyFormat.
+const (
+	CreateMessageRequestBodyFormatMarkdown CreateMessageRequestBodyFormat = "markdown"
+	CreateMessageRequestBodyFormatPlain    CreateMessageRequestBodyFormat = "plain"
+)
+
+// Valid indicates whether the value is a known member of the CreateMessageRequestBodyFormat enum.
+func (e CreateMessageRequestBodyFormat) Valid() bool {
+	switch e {
+	case CreateMessageRequestBodyFormatMarkdown:
+		return true
+	case CreateMessageRequestBodyFormatPlain:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DirectoryChatKind.
 const (
 	DirectoryChatKindChannel DirectoryChatKind = "channel"
@@ -186,6 +204,138 @@ func (e DirectoryChatKind) Valid() bool {
 	}
 }
 
+// Defines values for DurableEventTypeV1.
+const (
+	ChatArchived     DurableEventTypeV1 = "chat.archived"
+	ChatCreated      DurableEventTypeV1 = "chat.created"
+	ChatUpdated      DurableEventTypeV1 = "chat.updated"
+	DraftDeleted     DurableEventTypeV1 = "draft.deleted"
+	DraftUpdated     DurableEventTypeV1 = "draft.updated"
+	MemberJoined     DurableEventTypeV1 = "member.joined"
+	MemberRemoved    DurableEventTypeV1 = "member.removed"
+	MemberUpdated    DurableEventTypeV1 = "member.updated"
+	MessageCreated   DurableEventTypeV1 = "message.created"
+	MessageDeleted   DurableEventTypeV1 = "message.deleted"
+	MessageUpdated   DurableEventTypeV1 = "message.updated"
+	ReactionAdded    DurableEventTypeV1 = "reaction.added"
+	ReactionRemoved  DurableEventTypeV1 = "reaction.removed"
+	ReadMarked       DurableEventTypeV1 = "read.marked"
+	ThreadFollowed   DurableEventTypeV1 = "thread.followed"
+	ThreadUnfollowed DurableEventTypeV1 = "thread.unfollowed"
+)
+
+// Valid indicates whether the value is a known member of the DurableEventTypeV1 enum.
+func (e DurableEventTypeV1) Valid() bool {
+	switch e {
+	case ChatArchived:
+		return true
+	case ChatCreated:
+		return true
+	case ChatUpdated:
+		return true
+	case DraftDeleted:
+		return true
+	case DraftUpdated:
+		return true
+	case MemberJoined:
+		return true
+	case MemberRemoved:
+		return true
+	case MemberUpdated:
+		return true
+	case MessageCreated:
+		return true
+	case MessageDeleted:
+		return true
+	case MessageUpdated:
+		return true
+	case ReactionAdded:
+		return true
+	case ReactionRemoved:
+		return true
+	case ReadMarked:
+		return true
+	case ThreadFollowed:
+		return true
+	case ThreadUnfollowed:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ErrorCode.
+const (
+	ErrorCodeAlreadyBootstrapped ErrorCode = "already_bootstrapped"
+	ErrorCodeChatConflict        ErrorCode = "chat_conflict"
+	ErrorCodeChatNotFound        ErrorCode = "chat_not_found"
+	ErrorCodeForbidden           ErrorCode = "forbidden"
+	ErrorCodeIdempotencyConflict ErrorCode = "idempotency_conflict"
+	ErrorCodeInternalError       ErrorCode = "internal_error"
+	ErrorCodeInvalidCredentials  ErrorCode = "invalid_credentials"
+	ErrorCodeInvalidRefreshToken ErrorCode = "invalid_refresh_token"
+	ErrorCodeInvalidRequest      ErrorCode = "invalid_request"
+	ErrorCodeInvitationInvalid   ErrorCode = "invitation_invalid"
+	ErrorCodeMessageNotFound     ErrorCode = "message_not_found"
+	ErrorCodeOriginNotAllowed    ErrorCode = "origin_not_allowed"
+	ErrorCodePayloadTooLarge     ErrorCode = "payload_too_large"
+	ErrorCodeRateLimited         ErrorCode = "rate_limited"
+	ErrorCodeServiceNotReady     ErrorCode = "service_not_ready"
+	ErrorCodeSessionNotFound     ErrorCode = "session_not_found"
+	ErrorCodeUnauthorized        ErrorCode = "unauthorized"
+	ErrorCodeUnsupportedFormat   ErrorCode = "unsupported_format"
+	ErrorCodeValidationFailed    ErrorCode = "validation_failed"
+	ErrorCodeVersionConflict     ErrorCode = "version_conflict"
+)
+
+// Valid indicates whether the value is a known member of the ErrorCode enum.
+func (e ErrorCode) Valid() bool {
+	switch e {
+	case ErrorCodeAlreadyBootstrapped:
+		return true
+	case ErrorCodeChatConflict:
+		return true
+	case ErrorCodeChatNotFound:
+		return true
+	case ErrorCodeForbidden:
+		return true
+	case ErrorCodeIdempotencyConflict:
+		return true
+	case ErrorCodeInternalError:
+		return true
+	case ErrorCodeInvalidCredentials:
+		return true
+	case ErrorCodeInvalidRefreshToken:
+		return true
+	case ErrorCodeInvalidRequest:
+		return true
+	case ErrorCodeInvitationInvalid:
+		return true
+	case ErrorCodeMessageNotFound:
+		return true
+	case ErrorCodeOriginNotAllowed:
+		return true
+	case ErrorCodePayloadTooLarge:
+		return true
+	case ErrorCodeRateLimited:
+		return true
+	case ErrorCodeServiceNotReady:
+		return true
+	case ErrorCodeSessionNotFound:
+		return true
+	case ErrorCodeUnauthorized:
+		return true
+	case ErrorCodeUnsupportedFormat:
+		return true
+	case ErrorCodeValidationFailed:
+		return true
+	case ErrorCodeVersionConflict:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InvitationRole.
 const (
 	InvitationRoleAdmin  InvitationRole = "admin"
@@ -198,6 +348,312 @@ func (e InvitationRole) Valid() bool {
 	case InvitationRoleAdmin:
 		return true
 	case InvitationRoleMember:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageBodyFormat.
+const (
+	MessageBodyFormatMarkdown MessageBodyFormat = "markdown"
+	MessageBodyFormatPlain    MessageBodyFormat = "plain"
+)
+
+// Valid indicates whether the value is a known member of the MessageBodyFormat enum.
+func (e MessageBodyFormat) Valid() bool {
+	switch e {
+	case MessageBodyFormatMarkdown:
+		return true
+	case MessageBodyFormatPlain:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageType.
+const (
+	Text MessageType = "text"
+)
+
+// Valid indicates whether the value is a known member of the MessageType enum.
+func (e MessageType) Valid() bool {
+	switch e {
+	case Text:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimeAckFrameV1Op.
+const (
+	Ack RealtimeAckFrameV1Op = "ack"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeAckFrameV1Op enum.
+func (e RealtimeAckFrameV1Op) Valid() bool {
+	switch e {
+	case Ack:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimeAuthFrameV1Op.
+const (
+	Auth RealtimeAuthFrameV1Op = "auth"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeAuthFrameV1Op enum.
+func (e RealtimeAuthFrameV1Op) Valid() bool {
+	switch e {
+	case Auth:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimeCloseCodeV1.
+const (
+	RealtimeCloseCodeV1AuthenticationFailed RealtimeCloseCodeV1 = 4001
+	RealtimeCloseCodeV1NormalClosure        RealtimeCloseCodeV1 = 1000
+	RealtimeCloseCodeV1PolicyViolation      RealtimeCloseCodeV1 = 1008
+	RealtimeCloseCodeV1ResyncRequired       RealtimeCloseCodeV1 = 4009
+	RealtimeCloseCodeV1ServiceRestart       RealtimeCloseCodeV1 = 1012
+	RealtimeCloseCodeV1SlowConsumer         RealtimeCloseCodeV1 = 4008
+)
+
+// Valid indicates whether the value is a known member of the RealtimeCloseCodeV1 enum.
+func (e RealtimeCloseCodeV1) Valid() bool {
+	switch e {
+	case RealtimeCloseCodeV1AuthenticationFailed:
+		return true
+	case RealtimeCloseCodeV1NormalClosure:
+		return true
+	case RealtimeCloseCodeV1PolicyViolation:
+		return true
+	case RealtimeCloseCodeV1ResyncRequired:
+		return true
+	case RealtimeCloseCodeV1ServiceRestart:
+		return true
+	case RealtimeCloseCodeV1SlowConsumer:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimeDurableEventFrameV1Op.
+const (
+	Event RealtimeDurableEventFrameV1Op = "event"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeDurableEventFrameV1Op enum.
+func (e RealtimeDurableEventFrameV1Op) Valid() bool {
+	switch e {
+	case Event:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimeHelloFrameV1Op.
+const (
+	Hello RealtimeHelloFrameV1Op = "hello"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeHelloFrameV1Op enum.
+func (e RealtimeHelloFrameV1Op) Valid() bool {
+	switch e {
+	case Hello:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimePresenceEventFrameV1Op.
+const (
+	RealtimePresenceEventFrameV1OpPresence RealtimePresenceEventFrameV1Op = "presence"
+)
+
+// Valid indicates whether the value is a known member of the RealtimePresenceEventFrameV1Op enum.
+func (e RealtimePresenceEventFrameV1Op) Valid() bool {
+	switch e {
+	case RealtimePresenceEventFrameV1OpPresence:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimePresenceEventFrameV1State.
+const (
+	RealtimePresenceEventFrameV1StateAway    RealtimePresenceEventFrameV1State = "away"
+	RealtimePresenceEventFrameV1StateOffline RealtimePresenceEventFrameV1State = "offline"
+	RealtimePresenceEventFrameV1StateOnline  RealtimePresenceEventFrameV1State = "online"
+)
+
+// Valid indicates whether the value is a known member of the RealtimePresenceEventFrameV1State enum.
+func (e RealtimePresenceEventFrameV1State) Valid() bool {
+	switch e {
+	case RealtimePresenceEventFrameV1StateAway:
+		return true
+	case RealtimePresenceEventFrameV1StateOffline:
+		return true
+	case RealtimePresenceEventFrameV1StateOnline:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimeProtocolErrorFrameV1Code.
+const (
+	RealtimeProtocolErrorFrameV1CodeForbidden        RealtimeProtocolErrorFrameV1Code = "forbidden"
+	RealtimeProtocolErrorFrameV1CodeInvalidFrame     RealtimeProtocolErrorFrameV1Code = "invalid_frame"
+	RealtimeProtocolErrorFrameV1CodeNotAuthenticated RealtimeProtocolErrorFrameV1Code = "not_authenticated"
+	RealtimeProtocolErrorFrameV1CodeRateLimited      RealtimeProtocolErrorFrameV1Code = "rate_limited"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeProtocolErrorFrameV1Code enum.
+func (e RealtimeProtocolErrorFrameV1Code) Valid() bool {
+	switch e {
+	case RealtimeProtocolErrorFrameV1CodeForbidden:
+		return true
+	case RealtimeProtocolErrorFrameV1CodeInvalidFrame:
+		return true
+	case RealtimeProtocolErrorFrameV1CodeNotAuthenticated:
+		return true
+	case RealtimeProtocolErrorFrameV1CodeRateLimited:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimeProtocolErrorFrameV1Op.
+const (
+	RealtimeProtocolErrorFrameV1OpError RealtimeProtocolErrorFrameV1Op = "error"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeProtocolErrorFrameV1Op enum.
+func (e RealtimeProtocolErrorFrameV1Op) Valid() bool {
+	switch e {
+	case RealtimeProtocolErrorFrameV1OpError:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimeResyncRequiredFrameV1Op.
+const (
+	RealtimeResyncRequiredFrameV1OpResyncRequired RealtimeResyncRequiredFrameV1Op = "resync_required"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeResyncRequiredFrameV1Op enum.
+func (e RealtimeResyncRequiredFrameV1Op) Valid() bool {
+	switch e {
+	case RealtimeResyncRequiredFrameV1OpResyncRequired:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimeResyncRequiredFrameV1Reason.
+const (
+	EventHistoryExpired RealtimeResyncRequiredFrameV1Reason = "event_history_expired"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeResyncRequiredFrameV1Reason enum.
+func (e RealtimeResyncRequiredFrameV1Reason) Valid() bool {
+	switch e {
+	case EventHistoryExpired:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimeSetPresenceFrameV1Op.
+const (
+	RealtimeSetPresenceFrameV1OpPresence RealtimeSetPresenceFrameV1Op = "presence"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeSetPresenceFrameV1Op enum.
+func (e RealtimeSetPresenceFrameV1Op) Valid() bool {
+	switch e {
+	case RealtimeSetPresenceFrameV1OpPresence:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimeSetPresenceFrameV1State.
+const (
+	RealtimeSetPresenceFrameV1StateActive RealtimeSetPresenceFrameV1State = "active"
+	RealtimeSetPresenceFrameV1StateAway   RealtimeSetPresenceFrameV1State = "away"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeSetPresenceFrameV1State enum.
+func (e RealtimeSetPresenceFrameV1State) Valid() bool {
+	switch e {
+	case RealtimeSetPresenceFrameV1StateActive:
+		return true
+	case RealtimeSetPresenceFrameV1StateAway:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimeSubscribeActiveFrameV1Op.
+const (
+	SubscribeActive RealtimeSubscribeActiveFrameV1Op = "subscribe_active"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeSubscribeActiveFrameV1Op enum.
+func (e RealtimeSubscribeActiveFrameV1Op) Valid() bool {
+	switch e {
+	case SubscribeActive:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimeTypingEventFrameV1Op.
+const (
+	RealtimeTypingEventFrameV1OpTyping RealtimeTypingEventFrameV1Op = "typing"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeTypingEventFrameV1Op enum.
+func (e RealtimeTypingEventFrameV1Op) Valid() bool {
+	switch e {
+	case RealtimeTypingEventFrameV1OpTyping:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimeTypingFrameV1Op.
+const (
+	RealtimeTypingFrameV1OpTyping RealtimeTypingFrameV1Op = "typing"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeTypingFrameV1Op enum.
+func (e RealtimeTypingFrameV1Op) Valid() bool {
+	switch e {
+	case RealtimeTypingFrameV1OpTyping:
 		return true
 	default:
 		return false
@@ -243,6 +699,24 @@ func (e UpdateChatRequestVisibility) Valid() bool {
 	}
 }
 
+// Defines values for UpdateMessageRequestBodyFormat.
+const (
+	UpdateMessageRequestBodyFormatMarkdown UpdateMessageRequestBodyFormat = "markdown"
+	UpdateMessageRequestBodyFormatPlain    UpdateMessageRequestBodyFormat = "plain"
+)
+
+// Valid indicates whether the value is a known member of the UpdateMessageRequestBodyFormat enum.
+func (e UpdateMessageRequestBodyFormat) Valid() bool {
+	switch e {
+	case UpdateMessageRequestBodyFormatMarkdown:
+		return true
+	case UpdateMessageRequestBodyFormatPlain:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UserRole.
 const (
 	UserRoleAdmin  UserRole = "admin"
@@ -266,16 +740,16 @@ func (e UserRole) Valid() bool {
 
 // Defines values for UserStatus.
 const (
-	Active      UserStatus = "active"
-	Deactivated UserStatus = "deactivated"
+	UserStatusActive      UserStatus = "active"
+	UserStatusDeactivated UserStatus = "deactivated"
 )
 
 // Valid indicates whether the value is a known member of the UserStatus enum.
 func (e UserStatus) Valid() bool {
 	switch e {
-	case Active:
+	case UserStatusActive:
 		return true
-	case Deactivated:
+	case UserStatusDeactivated:
 		return true
 	default:
 		return false
@@ -372,6 +846,18 @@ type CreateInvitationRequest struct {
 // CreateInvitationRequestRole defines model for CreateInvitationRequest.Role.
 type CreateInvitationRequestRole string
 
+// CreateMessageRequest defines model for CreateMessageRequest.
+type CreateMessageRequest struct {
+	Body         string                          `json:"body"`
+	BodyFormat   *CreateMessageRequestBodyFormat `json:"body_format,omitempty"`
+	ClientMsgId  openapi_types.UUID              `json:"client_msg_id"`
+	ReplyToId    *openapi_types.UUID             `json:"reply_to_id,omitempty"`
+	ThreadRootId *openapi_types.UUID             `json:"thread_root_id,omitempty"`
+}
+
+// CreateMessageRequestBodyFormat defines model for CreateMessageRequest.BodyFormat.
+type CreateMessageRequestBodyFormat string
+
 // DirectoryChat defines model for DirectoryChat.
 type DirectoryChat struct {
 	CreatedAt time.Time          `json:"created_at"`
@@ -384,13 +870,19 @@ type DirectoryChat struct {
 // DirectoryChatKind defines model for DirectoryChat.Kind.
 type DirectoryChatKind string
 
+// DurableEventTypeV1 defines model for DurableEventTypeV1.
+type DurableEventTypeV1 string
+
 // Error defines model for Error.
 type Error struct {
-	Code      string                  `json:"code"`
+	Code      ErrorCode               `json:"code"`
 	Details   *map[string]interface{} `json:"details,omitempty"`
 	Message   string                  `json:"message"`
 	RequestId string                  `json:"request_id"`
 }
+
+// ErrorCode defines model for ErrorCode.
+type ErrorCode string
 
 // Health defines model for Health.
 type Health struct {
@@ -414,6 +906,178 @@ type LoginRequest struct {
 	Email    openapi_types.Email `json:"email"`
 	Password string              `json:"password"`
 }
+
+// Message defines model for Message.
+type Message struct {
+	ActorId      openapi_types.UUID  `json:"actor_id"`
+	Body         string              `json:"body"`
+	BodyFormat   MessageBodyFormat   `json:"body_format"`
+	ChatId       openapi_types.UUID  `json:"chat_id"`
+	ClientMsgId  openapi_types.UUID  `json:"client_msg_id"`
+	CreatedAt    time.Time           `json:"created_at"`
+	CreatedSeq   int64               `json:"created_seq"`
+	DeletedAt    *time.Time          `json:"deleted_at,omitempty"`
+	EditedAt     *time.Time          `json:"edited_at,omitempty"`
+	Id           openapi_types.UUID  `json:"id"`
+	ReplyToId    *openapi_types.UUID `json:"reply_to_id,omitempty"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+	Type         MessageType         `json:"type"`
+	Version      int                 `json:"version"`
+}
+
+// MessageBodyFormat defines model for Message.BodyFormat.
+type MessageBodyFormat string
+
+// MessageType defines model for Message.Type.
+type MessageType string
+
+// MessagePage defines model for MessagePage.
+type MessagePage struct {
+	Messages      []Message `json:"messages"`
+	NextBeforeSeq *int64    `json:"next_before_seq"`
+}
+
+// RealtimeAckFrameV1 defines model for RealtimeAckFrameV1.
+type RealtimeAckFrameV1 struct {
+	Op  RealtimeAckFrameV1Op `json:"op"`
+	Seq int64                `json:"seq"`
+}
+
+// RealtimeAckFrameV1Op defines model for RealtimeAckFrameV1.Op.
+type RealtimeAckFrameV1Op string
+
+// RealtimeAuthFrameV1 defines model for RealtimeAuthFrameV1.
+type RealtimeAuthFrameV1 struct {
+	AccessToken string                `json:"access_token"`
+	LastSeq     int64                 `json:"last_seq"`
+	Op          RealtimeAuthFrameV1Op `json:"op"`
+	RequestId   openapi_types.UUID    `json:"request_id"`
+}
+
+// RealtimeAuthFrameV1Op defines model for RealtimeAuthFrameV1.Op.
+type RealtimeAuthFrameV1Op string
+
+// RealtimeCloseCodeV1 defines model for RealtimeCloseCodeV1.
+type RealtimeCloseCodeV1 int32
+
+// RealtimeDurableEventFrameV1 defines model for RealtimeDurableEventFrameV1.
+type RealtimeDurableEventFrameV1 struct {
+	ActorId    openapi_types.UUID            `json:"actor_id"`
+	ChatId     *openapi_types.UUID           `json:"chat_id,omitempty"`
+	Data       map[string]interface{}        `json:"data"`
+	OccurredAt time.Time                     `json:"occurred_at"`
+	Op         RealtimeDurableEventFrameV1Op `json:"op"`
+	Seq        int64                         `json:"seq"`
+	SubjectId  openapi_types.UUID            `json:"subject_id"`
+	Type       string                        `json:"type"`
+}
+
+// RealtimeDurableEventFrameV1Op defines model for RealtimeDurableEventFrameV1.Op.
+type RealtimeDurableEventFrameV1Op string
+
+// RealtimeHelloFrameV1 defines model for RealtimeHelloFrameV1.
+type RealtimeHelloFrameV1 struct {
+	AckBatchSize        int                    `json:"ack_batch_size"`
+	AckIntervalMs       int                    `json:"ack_interval_ms"`
+	ConnectionId        openapi_types.UUID     `json:"connection_id"`
+	CurrentSeq          int64                  `json:"current_seq"`
+	HeartbeatIntervalMs int                    `json:"heartbeat_interval_ms"`
+	MaxUnackedEvents    int                    `json:"max_unacked_events"`
+	MinRetainedSeq      int64                  `json:"min_retained_seq"`
+	Op                  RealtimeHelloFrameV1Op `json:"op"`
+	RequestId           openapi_types.UUID     `json:"request_id"`
+}
+
+// RealtimeHelloFrameV1Op defines model for RealtimeHelloFrameV1.Op.
+type RealtimeHelloFrameV1Op string
+
+// RealtimePresenceEventFrameV1 defines model for RealtimePresenceEventFrameV1.
+type RealtimePresenceEventFrameV1 struct {
+	ActorId   openapi_types.UUID                `json:"actor_id"`
+	ExpiresAt time.Time                         `json:"expires_at"`
+	Op        RealtimePresenceEventFrameV1Op    `json:"op"`
+	State     RealtimePresenceEventFrameV1State `json:"state"`
+}
+
+// RealtimePresenceEventFrameV1Op defines model for RealtimePresenceEventFrameV1.Op.
+type RealtimePresenceEventFrameV1Op string
+
+// RealtimePresenceEventFrameV1State defines model for RealtimePresenceEventFrameV1.State.
+type RealtimePresenceEventFrameV1State string
+
+// RealtimeProtocolErrorFrameV1 defines model for RealtimeProtocolErrorFrameV1.
+type RealtimeProtocolErrorFrameV1 struct {
+	Code      RealtimeProtocolErrorFrameV1Code `json:"code"`
+	Message   string                           `json:"message"`
+	Op        RealtimeProtocolErrorFrameV1Op   `json:"op"`
+	RequestId *openapi_types.UUID              `json:"request_id,omitempty"`
+}
+
+// RealtimeProtocolErrorFrameV1Code defines model for RealtimeProtocolErrorFrameV1.Code.
+type RealtimeProtocolErrorFrameV1Code string
+
+// RealtimeProtocolErrorFrameV1Op defines model for RealtimeProtocolErrorFrameV1.Op.
+type RealtimeProtocolErrorFrameV1Op string
+
+// RealtimeResyncRequiredFrameV1 defines model for RealtimeResyncRequiredFrameV1.
+type RealtimeResyncRequiredFrameV1 struct {
+	CurrentSeq     int64                               `json:"current_seq"`
+	MinRetainedSeq int64                               `json:"min_retained_seq"`
+	Op             RealtimeResyncRequiredFrameV1Op     `json:"op"`
+	Reason         RealtimeResyncRequiredFrameV1Reason `json:"reason"`
+}
+
+// RealtimeResyncRequiredFrameV1Op defines model for RealtimeResyncRequiredFrameV1.Op.
+type RealtimeResyncRequiredFrameV1Op string
+
+// RealtimeResyncRequiredFrameV1Reason defines model for RealtimeResyncRequiredFrameV1.Reason.
+type RealtimeResyncRequiredFrameV1Reason string
+
+// RealtimeSetPresenceFrameV1 defines model for RealtimeSetPresenceFrameV1.
+type RealtimeSetPresenceFrameV1 struct {
+	Op    RealtimeSetPresenceFrameV1Op    `json:"op"`
+	State RealtimeSetPresenceFrameV1State `json:"state"`
+}
+
+// RealtimeSetPresenceFrameV1Op defines model for RealtimeSetPresenceFrameV1.Op.
+type RealtimeSetPresenceFrameV1Op string
+
+// RealtimeSetPresenceFrameV1State defines model for RealtimeSetPresenceFrameV1.State.
+type RealtimeSetPresenceFrameV1State string
+
+// RealtimeSubscribeActiveFrameV1 defines model for RealtimeSubscribeActiveFrameV1.
+type RealtimeSubscribeActiveFrameV1 struct {
+	ChatId       *openapi_types.UUID              `json:"chat_id"`
+	Op           RealtimeSubscribeActiveFrameV1Op `json:"op"`
+	ThreadRootId *openapi_types.UUID              `json:"thread_root_id"`
+}
+
+// RealtimeSubscribeActiveFrameV1Op defines model for RealtimeSubscribeActiveFrameV1.Op.
+type RealtimeSubscribeActiveFrameV1Op string
+
+// RealtimeTypingEventFrameV1 defines model for RealtimeTypingEventFrameV1.
+type RealtimeTypingEventFrameV1 struct {
+	Active       bool                         `json:"active"`
+	ActorId      openapi_types.UUID           `json:"actor_id"`
+	ChatId       openapi_types.UUID           `json:"chat_id"`
+	ExpiresAt    time.Time                    `json:"expires_at"`
+	Op           RealtimeTypingEventFrameV1Op `json:"op"`
+	ThreadRootId *openapi_types.UUID          `json:"thread_root_id"`
+}
+
+// RealtimeTypingEventFrameV1Op defines model for RealtimeTypingEventFrameV1.Op.
+type RealtimeTypingEventFrameV1Op string
+
+// RealtimeTypingFrameV1 defines model for RealtimeTypingFrameV1.
+type RealtimeTypingFrameV1 struct {
+	Active       bool                    `json:"active"`
+	ChatId       openapi_types.UUID      `json:"chat_id"`
+	Op           RealtimeTypingFrameV1Op `json:"op"`
+	ThreadRootId *openapi_types.UUID     `json:"thread_root_id"`
+}
+
+// RealtimeTypingFrameV1Op defines model for RealtimeTypingFrameV1.Op.
+type RealtimeTypingFrameV1Op string
 
 // Session defines model for Session.
 type Session struct {
@@ -452,6 +1116,16 @@ type UpdateChatRequest struct {
 // UpdateChatRequestVisibility defines model for UpdateChatRequest.Visibility.
 type UpdateChatRequestVisibility string
 
+// UpdateMessageRequest defines model for UpdateMessageRequest.
+type UpdateMessageRequest struct {
+	Body            string                          `json:"body"`
+	BodyFormat      *UpdateMessageRequestBodyFormat `json:"body_format,omitempty"`
+	ExpectedVersion int                             `json:"expected_version"`
+}
+
+// UpdateMessageRequestBodyFormat defines model for UpdateMessageRequest.BodyFormat.
+type UpdateMessageRequestBodyFormat string
+
 // UpdateProfileRequest defines model for UpdateProfileRequest.
 type UpdateProfileRequest struct {
 	DisplayName *string `json:"display_name,omitempty"`
@@ -484,8 +1158,18 @@ type ActorId = openapi_types.UUID
 // ChatId defines model for ChatId.
 type ChatId = openapi_types.UUID
 
+// MessageId defines model for MessageId.
+type MessageId = openapi_types.UUID
+
 // Tokens defines model for Tokens.
 type Tokens = TokenResponse
+
+// ListMessagesParams defines parameters for ListMessages.
+type ListMessagesParams struct {
+	BeforeSeq    *int64              `form:"before_seq,omitempty" json:"before_seq,omitempty"`
+	Limit        *int                `form:"limit,omitempty" json:"limit,omitempty"`
+	ThreadRootId *openapi_types.UUID `form:"thread_root_id,omitempty" json:"thread_root_id,omitempty"`
+}
 
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
@@ -505,6 +1189,9 @@ type AddChatMemberJSONRequestBody = AddChatMemberRequest
 // UpdateChatMemberJSONRequestBody defines body for UpdateChatMember for application/json ContentType.
 type UpdateChatMemberJSONRequestBody = UpdateChatMemberRequest
 
+// CreateMessageJSONRequestBody defines body for CreateMessage for application/json ContentType.
+type CreateMessageJSONRequestBody = CreateMessageRequest
+
 // CreateInvitationJSONRequestBody defines body for CreateInvitation for application/json ContentType.
 type CreateInvitationJSONRequestBody = CreateInvitationRequest
 
@@ -513,3 +1200,6 @@ type AcceptInvitationJSONRequestBody = AcceptInvitationRequest
 
 // UpdateMeJSONRequestBody defines body for UpdateMe for application/json ContentType.
 type UpdateMeJSONRequestBody = UpdateProfileRequest
+
+// UpdateMessageJSONRequestBody defines body for UpdateMessage for application/json ContentType.
+type UpdateMessageJSONRequestBody = UpdateMessageRequest

@@ -1,0 +1,13 @@
+{
+  "op": "event",
+  "seq": 1901,
+  "type": "message.created",
+  "occurred_at": "2026-08-18T12:00:00Z",
+  "actor_id": "0198c17d-88ba-7ac2-8867-3f71d7722791",
+  "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+  "subject_id": "0198c17d-b55b-78d5-b099-f973dd1f265c",
+  "data": {
+    "client_msg_id": "0198c17d-c4af-7942-940b-cf0ea670d547",
+    "body": "Привет"
+  }
+}

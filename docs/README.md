@@ -21,6 +21,12 @@
 - [ADR-0002: лицензирование](decisions/0002-licensing.md)
 - [ADR-0003: UUIDv7](decisions/0003-uuid-v7.md)
 - [ADR-0004: GitHub и Go module path](decisions/0004-repository-identity.md)
+- [ADR-0005: authentication, sessions and ownership](decisions/0005-auth-sessions-and-ownership.md)
+- [ADR-0006: надёжная доставка сообщений и realtime](decisions/0006-messaging-delivery-and-realtime.md)
+
+## Протоколы
+
+- [Realtime protocol v1](protocols/realtime-v1.md)
 
 ## Работа с фазами
 

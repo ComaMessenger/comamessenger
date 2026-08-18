@@ -1,0 +1,11 @@
+{
+  "op": "hello",
+  "request_id": "0198c17d-2d54-7a83-a19b-4b9a1f07e3b1",
+  "connection_id": "0198c17d-5547-76da-be85-33c41f3fa104",
+  "current_seq": 1901,
+  "min_retained_seq": 1200,
+  "heartbeat_interval_ms": 25000,
+  "ack_interval_ms": 1000,
+  "ack_batch_size": 50,
+  "max_unacked_events": 128
+}

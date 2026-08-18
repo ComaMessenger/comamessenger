@@ -55,6 +55,7 @@
 - [ ] Реализовать единый realtime coordinator с reconnect, resume и дедупликацией событий.
 - [ ] Обновлять query cache детерминированно по событиям без полного refetch каждой ленты.
 - [ ] Реализовать optimistic messages с состояниями sending/sent/failed/retrying.
+- [ ] Хранить offline outbox и realtime checkpoint в IndexedDB; повтор использует исходный `client_msg_id`.
 - [ ] Сохранять минимальный локальный state без access/refresh token в небезопасном storage.
 
 ### Auth и onboarding
@@ -84,8 +85,10 @@
 
 ### Уведомления и доступность
 
-- [ ] Реализовать permission flow для Web Push без запроса при первом визите.
+- [ ] Реализовать permission flow для Web Push только после явного действия пользователя, без запроса при первом визите.
 - [ ] Создать service worker и обработку клика по уведомлению с deep link в chat/thread.
+- [ ] По умолчанию показывать в push отправителя и чат; body preview включается отдельной настройкой.
+- [ ] Подавлять push для активного chat/thread, не связывая эту оптимизацию с durable WebSocket delivery.
 - [ ] Добавить ARIA-labels, видимый focus, корректный focus trap и live region для новых сообщений.
 - [ ] Проверить клавиатурную навигацию по sidebar, ленте, меню и composer.
 - [ ] Соблюдать `prefers-reduced-motion` и достаточный contrast.
@@ -96,6 +99,7 @@
 - UI использует `kind` для названия и поведения: `group` отображается как «Чат», `channel` как «Канал».
 - Client cache keys и realtime reducers документируются рядом с protocol package.
 - Для Web Push добавляются API регистрации, обновления и удаления subscription.
+- Permission запрашивается только после готовности service worker и успешной проверки поддержки Push API.
 - Каждое optimistic сообщение связывается с серверным результатом через `client_msg_id`.
 
 ## Критерии приёмки
@@ -103,6 +107,7 @@
 - Два пользователя проходят путь invite → login → chat → realtime message только через UI.
 - Member канала видит read-only состояние; admin видит composer и публикует сообщение.
 - При offline/online и перезагрузке вкладки сообщение не дублируется и получает корректный статус.
+- Уведомления можно включить явным действием; отказ браузера не блокирует работу мессенджера и не вызывает повторных навязчивых запросов.
 - Лента с 10 000 локально смоделированных сообщений остаётся интерактивной и не теряет anchor при prepend.
 - Reply и thread визуально и поведенчески различимы без инструкции.
 - Все основные сценарии доступны в RU/EN и light/dark.
@@ -122,7 +127,7 @@
 - Выбрать Zustand или Jotai только после описания границ client state; TanStack Query остаётся источником server state.
 - Зафиксировать точный markdown subset и поведение Enter/Shift+Enter для разных платформ.
 - Уточнить, какие элементы бокового меню пользователь может переставлять или скрывать в MVP.
-- Определить продуктовые правила Web Push для mentions, muted chats и активной вкладки.
+- До реализации Push зафиксировать оставшуюся матрицу notify level для mentions и muted chats; privacy preview и active-chat suppression уже определены ADR-0006.
 
 ## Definition of Done
 

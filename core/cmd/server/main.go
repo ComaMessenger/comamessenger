@@ -16,6 +16,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/database"
 	serverhttp "github.com/comamessenger/comamessenger/core/internal/http"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
+	"github.com/comamessenger/comamessenger/core/internal/message"
 	"github.com/comamessenger/comamessenger/core/internal/password"
 )
 
@@ -81,6 +82,7 @@ func main() {
 		Addr: cfg.HTTPAddr,
 		Handler: serverhttp.NewHandler(logger, cfg.PublicAppURL, pool.Ping, serverhttp.Dependencies{
 			Identity: identityService, Chats: chat.NewService(pool),
+			Messages:     message.NewService(pool, int(cfg.Messaging.MaxBodyBytes), int(cfg.Messaging.MaxPageSize)),
 			CookieSecure: cfg.Auth.CookieSecure, RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,

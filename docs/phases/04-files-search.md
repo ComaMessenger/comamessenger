@@ -102,7 +102,7 @@ GET    /api/v1/search
 - `files` хранит `storage_driver`, `bucket`, `storage_key`, `name`, `mime`, `size`, `sha256`, `status` и производные metadata.
 - Полный provider URL не является частью долгоживущей модели.
 - Создание сообщения принимает только `file_ids` со статусом `ready` либо использует явно документированный pending flow.
-- Search response содержит ограниченный snippet и ссылки на `chat_id/message_id/thread_id`.
+- Search response содержит ограниченный snippet и ссылки на `chat_id/message_id/thread_root_id`.
 
 ## Критерии приёмки
 

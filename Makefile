@@ -16,7 +16,7 @@ fmt:
 
 generate:
 	pnpm generate
-	cd core && GOTOOLCHAIN=auto go tool oapi-codegen --config internal/api/oapi-codegen.yaml ../packages/protocol/openapi.yaml
+	cd core && GOTOOLCHAIN=auto go tool oapi-codegen --config internal/api/oapi-codegen.yaml ../packages/protocol/src/generated/openapi.bundle.json
 
 dev:
 	docker compose --env-file $(ENV_FILE) -f deploy/compose.yaml up --build

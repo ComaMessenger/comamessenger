@@ -292,6 +292,70 @@ paths:
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+  /api/v1/chats/{chat_id}/messages:
+    get:
+      operationId: listMessages
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/ChatId" }
+        - { name: before_seq, in: query, schema: { type: integer, format: int64, minimum: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+        - { name: thread_root_id, in: query, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Messages visible to the current chat member, newest first.
+          content: { application/json: { schema: { $ref: "#/components/schemas/MessagePage" } } }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createMessage
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/ChatId" }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CreateMessageRequest" } } }
+      responses:
+        "200":
+          description: The original message for an idempotent replay.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Message" } } }
+        "201":
+          description: Message created.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Message" } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /api/v1/messages/{message_id}:
+    patch:
+      operationId: updateMessage
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/MessageId" }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateMessageRequest" } } }
+      responses:
+        "200":
+          description: Message updated.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Message" } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteMessage
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/MessageId" }
+      responses:
+        "200":
+          description: Soft-deleted message, or the existing tombstone for an idempotent replay.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Message" } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -313,6 +377,11 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    MessageId:
+      name: message_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
   schemas:
     Health:
       type: object
@@ -327,7 +396,7 @@ components:
       required: [code, message, request_id]
       properties:
         code:
-          type: string
+          $ref: "#/components/schemas/ErrorCode"
         message:
           type: string
         request_id:
@@ -335,6 +404,55 @@ components:
         details:
           type: object
           additionalProperties: true
+    ErrorCode:
+      type: string
+      enum:
+        - already_bootstrapped
+        - chat_conflict
+        - chat_not_found
+        - forbidden
+        - idempotency_conflict
+        - internal_error
+        - invalid_credentials
+        - invalid_refresh_token
+        - invalid_request
+        - invitation_invalid
+        - message_not_found
+        - origin_not_allowed
+        - payload_too_large
+        - rate_limited
+        - service_not_ready
+        - session_not_found
+        - unauthorized
+        - unsupported_format
+        - validation_failed
+        - version_conflict
+    DurableEventTypeV1:
+      $ref: "./schemas/realtime/v1.schema.json#/$defs/KnownDurableEventType"
+    RealtimeCloseCodeV1:
+      $ref: "./schemas/realtime/v1.schema.json#/$defs/CloseCode"
+    RealtimeAuthFrameV1:
+      $ref: "./schemas/realtime/v1.schema.json#/$defs/AuthFrame"
+    RealtimeAckFrameV1:
+      $ref: "./schemas/realtime/v1.schema.json#/$defs/AckFrame"
+    RealtimeSubscribeActiveFrameV1:
+      $ref: "./schemas/realtime/v1.schema.json#/$defs/SubscribeActiveFrame"
+    RealtimeTypingFrameV1:
+      $ref: "./schemas/realtime/v1.schema.json#/$defs/TypingFrame"
+    RealtimeSetPresenceFrameV1:
+      $ref: "./schemas/realtime/v1.schema.json#/$defs/SetPresenceFrame"
+    RealtimeHelloFrameV1:
+      $ref: "./schemas/realtime/v1.schema.json#/$defs/HelloFrame"
+    RealtimeDurableEventFrameV1:
+      $ref: "./schemas/realtime/v1.schema.json#/$defs/DurableEventFrame"
+    RealtimeResyncRequiredFrameV1:
+      $ref: "./schemas/realtime/v1.schema.json#/$defs/ResyncRequiredFrame"
+    RealtimeTypingEventFrameV1:
+      $ref: "./schemas/realtime/v1.schema.json#/$defs/TypingEventFrame"
+    RealtimePresenceEventFrameV1:
+      $ref: "./schemas/realtime/v1.schema.json#/$defs/PresenceEventFrame"
+    RealtimeProtocolErrorFrameV1:
+      $ref: "./schemas/realtime/v1.schema.json#/$defs/ProtocolErrorFrame"
     BootstrapStatus:
       type: object
       required: [bootstrapped]
@@ -483,3 +601,47 @@ components:
       required: [role]
       properties:
         role: { type: string, enum: [owner, admin, member] }
+    Message:
+      type: object
+      additionalProperties: false
+      required: [id, chat_id, actor_id, client_msg_id, type, body, body_format, version, created_seq, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        chat_id: { type: string, format: uuid }
+        actor_id: { type: string, format: uuid }
+        client_msg_id: { type: string, format: uuid }
+        type: { type: string, enum: [text] }
+        body: { type: string }
+        body_format: { type: string, enum: [plain, markdown] }
+        reply_to_id: { type: [string, "null"], format: uuid }
+        thread_root_id: { type: [string, "null"], format: uuid }
+        version: { type: integer, minimum: 1 }
+        created_seq: { type: integer, format: int64, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        edited_at: { type: [string, "null"], format: date-time }
+        deleted_at: { type: [string, "null"], format: date-time }
+    MessagePage:
+      type: object
+      additionalProperties: false
+      required: [messages, next_before_seq]
+      properties:
+        messages: { type: array, items: { $ref: "#/components/schemas/Message" } }
+        next_before_seq: { type: [integer, "null"], format: int64, minimum: 1 }
+    CreateMessageRequest:
+      type: object
+      additionalProperties: false
+      required: [client_msg_id, body]
+      properties:
+        client_msg_id: { type: string, format: uuid }
+        body: { type: string, minLength: 1 }
+        body_format: { type: string, enum: [plain, markdown], default: plain }
+        reply_to_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+    UpdateMessageRequest:
+      type: object
+      additionalProperties: false
+      required: [body, expected_version]
+      properties:
+        body: { type: string, minLength: 1 }
+        body_format: { type: string, enum: [plain, markdown], default: plain }
+        expected_version: { type: integer, minimum: 1 }

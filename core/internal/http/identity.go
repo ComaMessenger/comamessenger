@@ -15,6 +15,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/api"
 	"github.com/comamessenger/comamessenger/core/internal/chat"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
+	"github.com/comamessenger/comamessenger/core/internal/message"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
@@ -24,6 +25,7 @@ const refreshCookieName = "comamessenger_refresh"
 type Dependencies struct {
 	Identity        *identity.Service
 	Chats           *chat.Service
+	Messages        *message.Service
 	CookieSecure    bool
 	RefreshTokenTTL time.Duration
 }
@@ -32,6 +34,7 @@ type identityHandlers struct {
 	logger         *slog.Logger
 	service        *identity.Service
 	chats          *chat.Service
+	messages       *message.Service
 	allowedOrigin  string
 	cookieSecure   bool
 	refreshTTL     time.Duration
@@ -50,7 +53,7 @@ type authenticated struct {
 
 func newIdentityHandlers(logger *slog.Logger, allowedOrigin string, dependencies Dependencies) *identityHandlers {
 	return &identityHandlers{
-		logger: logger, service: dependencies.Identity, chats: dependencies.Chats, allowedOrigin: allowedOrigin,
+		logger: logger, service: dependencies.Identity, chats: dependencies.Chats, messages: dependencies.Messages, allowedOrigin: allowedOrigin,
 		cookieSecure: dependencies.CookieSecure, refreshTTL: dependencies.RefreshTokenTTL,
 		bootstrapRate: newIPRateLimiter(5, 5), loginRate: newIPRateLimiter(10, 10),
 		refreshRate: newIPRateLimiter(30, 20), invitationRate: newIPRateLimiter(10, 10),
@@ -84,6 +87,12 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Post("/chats/{chatID}/members", h.addChatMember)
 			protected.Patch("/chats/{chatID}/members/{actorID}", h.updateChatMember)
 			protected.Delete("/chats/{chatID}/members/{actorID}", h.removeChatMember)
+		}
+		if h.messages != nil {
+			protected.Get("/chats/{chatID}/messages", h.listMessages)
+			protected.Post("/chats/{chatID}/messages", h.createMessage)
+			protected.Patch("/messages/{messageID}", h.updateMessage)
+			protected.Delete("/messages/{messageID}", h.deleteMessage)
 		}
 	})
 }
@@ -472,7 +481,7 @@ func (h *identityHandlers) validOrigin(r *standardhttp.Request) bool {
 	return origin == "" || origin == h.allowedOrigin
 }
 
-func (h *identityHandlers) writeError(w standardhttp.ResponseWriter, r *standardhttp.Request, status int, code, message string) {
+func (h *identityHandlers) writeError(w standardhttp.ResponseWriter, r *standardhttp.Request, status int, code api.ErrorCode, message string) {
 	writeJSON(h.logger, w, status, api.Error{Code: code, Message: message, RequestId: middleware.GetReqID(r.Context())})
 }
 
@@ -482,7 +491,7 @@ func (h *identityHandlers) internalError(w standardhttp.ResponseWriter, r *stand
 }
 
 func decodeJSON(w standardhttp.ResponseWriter, r *standardhttp.Request, destination any) error {
-	r.Body = standardhttp.MaxBytesReader(w, r.Body, 1<<20)
+	r.Body = standardhttp.MaxBytesReader(w, r.Body, 2<<20)
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(destination); err != nil {
