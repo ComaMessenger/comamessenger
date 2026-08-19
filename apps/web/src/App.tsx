@@ -17,6 +17,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { useStore } from "zustand";
 import { useTranslation } from "react-i18next";
 import {
+  ArrowDown,
   AtSign,
   Bell,
   BellOff,
@@ -1763,11 +1764,20 @@ function Conversation({
   const [hasMore, setHasMore] = useState(true);
   const [loadingPrevious, setLoadingPrevious] = useState(false);
   const [newBelow, setNewBelow] = useState(0);
+  const [showScrollDown, setShowScrollDown] = useState(false);
   const [info, setInfo] = useState(false);
   const [unreadAnchor, setUnreadAnchor] = useState(0);
   const scroller = useRef<HTMLDivElement>(null);
   const loadingPreviousRef = useRef(false);
   const atBottom = useRef(true);
+  const initialPositioned = useRef(false);
+  const pendingInitialPosition = useRef<{
+    chatID: string;
+    hasUnread: boolean;
+    lastReadSeq: number;
+  } | null>(null);
+  const previousVisibleLength = useRef(0);
+  const lastReadRequested = useRef(0);
   const title = titleOf(chat, members, user.id);
   const readonly = chat?.kind === "channel" && chat.role === "member";
   const visible = messages.filter((item) => !item.thread_root_id);
@@ -1784,27 +1794,38 @@ function Conversation({
   }, [chat]);
   useEffect(() => {
     if (!chat) return;
+    const unread = store
+      .getState()
+      .unread.chats.find((item) => item.chat_id === chat.id);
+    const lastReadSeq = unread?.last_read_seq ?? 0;
+    setUnreadAnchor(lastReadSeq);
+    lastReadRequested.current = lastReadSeq;
+    initialPositioned.current = false;
+    previousVisibleLength.current = 0;
+    pendingInitialPosition.current = null;
+    atBottom.current = true;
+    setNewBelow(0);
+    setShowScrollDown(false);
     let active = true;
     setHasMore(true);
     void api
       .messages(chat.id, { limit: 50 })
       .then((page) => {
         if (!active) return;
+        pendingInitialPosition.current = {
+          chatID: chat.id,
+          hasUnread: Boolean(unread?.unread_count),
+          lastReadSeq,
+        };
         store.getState().replaceMessages(chat.id, page.messages);
         setHasMore(page.next_before_seq != null);
+        if (page.messages.length === 0) initialPositioned.current = true;
       })
       .catch(() => undefined);
     return () => {
       active = false;
     };
   }, [api, chat?.id, store]);
-  useEffect(() => {
-    if (chat)
-      setUnreadAnchor(
-        store.getState().unread.chats.find((item) => item.chat_id === chat.id)
-          ?.last_read_seq ?? 0,
-      );
-  }, [chat?.id, store]);
   useEffect(() => {
     if (!chat) return;
     const timer = setTimeout(() => {
@@ -1813,30 +1834,98 @@ function Conversation({
     }, 600);
     return () => clearTimeout(timer);
   }, [api, body, chat]);
-  useEffect(() => {
-    const max = visible.at(-1)?.created_seq;
-    if (max && max < Number.MAX_SAFE_INTEGER)
-      void api.markRead(chat!.id, max).then(() =>
+  const latestSeq = visible.at(-1)?.created_seq ?? 0;
+  const markLatestRead = useCallback(() => {
+    if (
+      !chat ||
+      !latestSeq ||
+      latestSeq >= Number.MAX_SAFE_INTEGER ||
+      latestSeq <= lastReadRequested.current
+    )
+      return;
+    lastReadRequested.current = latestSeq;
+    void api
+      .markRead(chat.id, latestSeq)
+      .then(() =>
         store.getState().setUnread({
           ...store.getState().unread,
           chats: store.getState().unread.chats.map((item) =>
-            item.chat_id === chat!.id
+            item.chat_id === chat.id
               ? {
                   ...item,
                   unread_count: 0,
                   mention_count: 0,
-                  last_read_seq: max,
+                  last_read_seq: latestSeq,
                 }
               : item,
           ),
         }),
-      );
+      )
+      .catch(() => {
+        if (lastReadRequested.current === latestSeq)
+          lastReadRequested.current = unreadAnchor;
+      });
+  }, [api, chat, latestSeq, store, unreadAnchor]);
+  useEffect(() => {
+    const pending = pendingInitialPosition.current;
+    if (!chat || !pending || pending.chatID !== chat.id || !visible.length)
+      return;
+    pendingInitialPosition.current = null;
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        const element = scroller.current;
+        if (!element) return;
+        const finishPositioning = () => {
+          const distance =
+            element.scrollHeight - element.scrollTop - element.clientHeight;
+          atBottom.current = distance < 64;
+          setShowScrollDown(!atBottom.current);
+          initialPositioned.current = true;
+          if (atBottom.current) markLatestRead();
+        };
+        if (pending.hasUnread) {
+          let lastReadIndex = -1;
+          for (let index = visible.length - 1; index >= 0; index -= 1) {
+            if (visible[index]!.created_seq <= pending.lastReadSeq) {
+              lastReadIndex = index;
+              break;
+            }
+          }
+          const targetIndex = Math.max(0, lastReadIndex);
+          const targetID = visible[targetIndex]!.id;
+          virtual.scrollToIndex(targetIndex, {
+            align: pending.lastReadSeq > 0 ? "center" : "start",
+          });
+          requestAnimationFrame(() => {
+            document
+              .getElementById(`message-${targetID}`)
+              ?.scrollIntoView({ block: "center" });
+            requestAnimationFrame(finishPositioning);
+          });
+        } else {
+          element.scrollTop = element.scrollHeight;
+          requestAnimationFrame(finishPositioning);
+        }
+      }),
+    );
+  }, [chat, markLatestRead, virtual, visible]);
+  useEffect(() => {
+    const previous = previousVisibleLength.current;
+    previousVisibleLength.current = visible.length;
+    if (!initialPositioned.current || visible.length <= previous) return;
+    const added = visible.length - previous;
     if (atBottom.current)
-      requestAnimationFrame(() =>
-        scroller.current?.scrollTo({ top: scroller.current.scrollHeight }),
-      );
-    else setNewBelow((value) => value + 1);
-  }, [api, chat, store, visible.length]);
+      requestAnimationFrame(() => {
+        const element = scroller.current;
+        if (!element) return;
+        element.scrollTo({ top: element.scrollHeight });
+        markLatestRead();
+      });
+    else {
+      setNewBelow((value) => value + added);
+      setShowScrollDown(true);
+    }
+  }, [markLatestRead, visible.length]);
   useEffect(() => {
     const target = new URLSearchParams(window.location.search).get("message");
     if (!target || !chat) return;
@@ -1934,8 +2023,12 @@ function Conversation({
           if (element.scrollTop < 96) void loadPrevious();
           atBottom.current =
             element.scrollHeight - element.scrollTop - element.clientHeight <
-            96;
-          if (atBottom.current) setNewBelow(0);
+            64;
+          setShowScrollDown(!atBottom.current);
+          if (atBottom.current) {
+            setNewBelow(0);
+            markLatestRead();
+          }
         }}
       >
         {loadingPrevious && <span className="history-loader" aria-hidden />}
@@ -2028,9 +2121,10 @@ function Conversation({
           })}
         </div>
       </div>
-      {newBelow > 0 && (
+      {showScrollDown && (
         <button
           className="new-below"
+          aria-label={t("scrollToBottom")}
           onClick={() => {
             scroller.current?.scrollTo({
               top: scroller.current.scrollHeight,
@@ -2039,7 +2133,8 @@ function Conversation({
             setNewBelow(0);
           }}
         >
-          {t("newMessages")} · {newBelow}
+          <ArrowDown />
+          {newBelow > 0 && <span>{newBelow}</span>}
         </button>
       )}
       <Composer
@@ -2116,14 +2211,17 @@ function MessageRow({
   showThreadIndicator?: boolean;
 }) {
   const { t } = useTranslation();
-  const [menu, setMenu] = useState(false);
+  const [menu, setMenu] = useState<{
+    side: "above" | "below";
+    maxHeight: number;
+  } | null>(null);
   const [forwarding, setForwarding] = useState(false);
   const [reactionPicker, setReactionPicker] = useState<
     "above" | "below" | null
   >(null);
   const interactionRoot = useRef<HTMLElement>(null);
   useDismissable(interactionRoot, Boolean(menu || reactionPicker), () => {
-    setMenu(false);
+    setMenu(null);
     setReactionPicker(null);
   });
   const reactionsQuery = useQuery({
@@ -2159,12 +2257,12 @@ function MessageRow({
         mentioned_actor_ids: mentionedActorIDs(body),
       }),
     );
-    setMenu(false);
+    setMenu(null);
   }
   async function remove() {
     if (!confirm(t("deleteConfirm"))) return;
     onChanged(await api.deleteMessage(message.id));
-    setMenu(false);
+    setMenu(null);
   }
   async function toggleReaction(emoji: string) {
     const ownReaction = (reactionsQuery.data ?? []).some(
@@ -2174,23 +2272,43 @@ function MessageRow({
     if (ownReaction) await api.unreact(message.id, emoji);
     else await api.react(message.id, emoji);
     await reactionsQuery.refetch();
-    setMenu(false);
+    setMenu(null);
     setReactionPicker(null);
   }
   function openReactionPicker() {
     const bounds = interactionRoot.current?.getBoundingClientRect();
-    setMenu(false);
+    setMenu(null);
     setReactionPicker(
-      bounds && window.innerHeight - bounds.bottom < 440 ? "above" : "below",
+      bounds &&
+        window.innerHeight - bounds.bottom < 440 &&
+        bounds.top > window.innerHeight - bounds.bottom
+        ? "above"
+        : "below",
     );
   }
+  function openMessageMenu() {
+    const bounds = interactionRoot.current?.getBoundingClientRect();
+    setReactionPicker(null);
+    const below = bounds ? window.innerHeight - bounds.bottom : 430;
+    const side =
+      bounds && below < 390 && bounds.top > below ? "above" : "below";
+    const available = bounds
+      ? side === "above"
+        ? bounds.top - 24
+        : below - 24
+      : 430;
+    setMenu({
+      side,
+      maxHeight: Math.max(160, Math.min(430, available)),
+    });
+  }
   function openThread() {
-    setMenu(false);
+    setMenu(null);
     setReactionPicker(null);
     onThread();
   }
   function reply() {
-    setMenu(false);
+    setMenu(null);
     setReactionPicker(null);
     onReply();
   }
@@ -2214,6 +2332,7 @@ function MessageRow({
         "message",
         grouped && "message--grouped",
         message.delivery === "failed" && "message--failed",
+        (menu || reactionPicker) && "message--overlay-open",
       )}
     >
       <div className="message__avatar">
@@ -2286,7 +2405,7 @@ function MessageRow({
         <IconButton
           label={t("addReaction")}
           onClick={() => {
-            setMenu(false);
+            setMenu(null);
             if (reactionPicker) setReactionPicker(null);
             else openReactionPicker();
           }}
@@ -2300,7 +2419,8 @@ function MessageRow({
           label={t("openMenu")}
           onClick={() => {
             setReactionPicker(null);
-            setMenu(!menu);
+            if (menu) setMenu(null);
+            else openMessageMenu();
           }}
         >
           <MoreHorizontal />
@@ -2335,11 +2455,15 @@ function MessageRow({
         </div>
       )}
       {menu && (
-        <div className="message-menu" role="menu">
+        <div
+          className={cx("message-menu", `message-menu--${menu.side}`)}
+          role="menu"
+          style={{ maxHeight: menu.maxHeight }}
+        >
           <button
             role="menuitem"
             onClick={() => {
-              setMenu(false);
+              setMenu(null);
               openReactionPicker();
             }}
           >
@@ -2357,7 +2481,7 @@ function MessageRow({
           <div className="message-menu__divider" />
           <button
             role="menuitem"
-            onClick={() => void api.pin(message.id).then(() => setMenu(false))}
+            onClick={() => void api.pin(message.id).then(() => setMenu(null))}
           >
             <Pin />
             <span>{t("pin")}</span>
@@ -2367,7 +2491,7 @@ function MessageRow({
             onClick={() =>
               void navigator.clipboard
                 .writeText(`${location.origin}/m/${compactUUID(message.id)}`)
-                .then(() => setMenu(false))
+                .then(() => setMenu(null))
             }
           >
             <Link2 />
@@ -2378,7 +2502,7 @@ function MessageRow({
             onClick={() =>
               void navigator.clipboard
                 .writeText(messagePlainText(message.body))
-                .then(() => setMenu(false))
+                .then(() => setMenu(null))
             }
           >
             <Copy />
@@ -2387,7 +2511,7 @@ function MessageRow({
           <button
             role="menuitem"
             onClick={() => {
-              setMenu(false);
+              setMenu(null);
               setForwarding(true);
             }}
           >
@@ -4151,12 +4275,16 @@ async function syncDraft(
 }
 function setTheme(value: string) {
   localStorage.setItem("coma-theme", value);
-  document.documentElement.dataset.theme =
+  const resolved =
     value === "system"
       ? matchMedia("(prefers-color-scheme: dark)").matches
         ? "dark"
         : "light"
       : value;
+  document.documentElement.dataset.theme = resolved;
+  document
+    .querySelector('meta[name="theme-color"]')
+    ?.setAttribute("content", resolved === "dark" ? "#181a1f" : "#f3f6fa");
 }
 function useTheme() {
   useEffect(() => {
