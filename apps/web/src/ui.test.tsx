@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { Button, Dialog } from "./ui";
+import { Button, Dialog, RadioOption } from "./ui";
 describe("web primitives", () => {
   it("keeps explicit button semantics", () => {
     render(<Button variant="primary">Save</Button>);
@@ -15,5 +15,18 @@ describe("web primitives", () => {
     );
     fireEvent.keyDown(document, { key: "Escape" });
     expect(close).toHaveBeenCalledOnce();
+  });
+  it("exposes radio options through native form semantics", () => {
+    const change = vi.fn();
+    render(
+      <RadioOption
+        name="mode"
+        label="Enter sends"
+        description="Shift + Enter inserts a line"
+        onChange={change}
+      />,
+    );
+    fireEvent.click(screen.getByRole("radio", { name: /Enter sends/ }));
+    expect(change).toHaveBeenCalledOnce();
   });
 });

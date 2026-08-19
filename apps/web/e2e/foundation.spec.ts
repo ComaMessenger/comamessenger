@@ -489,6 +489,40 @@ test("the formatting toolbar writes markdown source", async ({ page }) => {
   expect(sent[0]?.body).toBe("## План");
 });
 
+test("composer send controls activate only when there is content", async ({
+  page,
+}) => {
+  await mockMessenger(page, {
+    chatPatch: { kind: "group", role: "admin" },
+  });
+  await page.goto(`/chat/${chat.id}`);
+  const composer = page.getByRole("textbox", { name: "Напишите сообщение…" });
+  const send = page.getByRole("button", { name: "Отправить" });
+  const settings = page.getByRole("button", { name: "Настройки отправки" });
+  const controls = page.locator(".composer__send");
+
+  await expect(send).toBeDisabled();
+  await expect(settings).toBeDisabled();
+  await expect(controls).not.toHaveClass(/composer__send--active/);
+
+  await composer.fill("Сообщение");
+  await expect(send).toBeEnabled();
+  await expect(settings).toBeEnabled();
+  await expect(controls).toHaveClass(/composer__send--active/);
+  await settings.click();
+  await expect(
+    page.getByRole("radio", {
+      name: "Enter — отправка сообщения Shift + Enter — перенос строки",
+      exact: true,
+    }),
+  ).toBeChecked();
+
+  await composer.fill("");
+  await expect(send).toBeDisabled();
+  await expect(settings).toBeDisabled();
+  await expect(page.getByRole("radio")).toHaveCount(0);
+});
+
 test("an expired websocket token refreshes without leaving the messenger", async ({
   page,
 }) => {

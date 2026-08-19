@@ -1075,6 +1075,16 @@ a:focus-visible {
 .composer__send > .ui-button svg {
   width: 16px;
 }
+.composer__send:not(.composer__send--active) > .ui-button,
+.composer__send:not(.composer__send--active) > .ui-button:hover {
+  border-color: transparent;
+  color: var(--coma-subtle);
+  background: transparent;
+  opacity: 1;
+}
+.composer__send:not(.composer__send--active) > .ui-button:last-child {
+  border-inline-start-color: transparent;
+}
 .composer-emoji {
   position: absolute;
   z-index: 20;
@@ -1104,7 +1114,8 @@ a:focus-visible {
   font-size: 12px;
   font-weight: 500;
 }
-.send-settings > button {
+.send-settings > button,
+.send-settings > .ui-radio {
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr);
   align-items: start;
@@ -1115,27 +1126,13 @@ a:focus-visible {
   text-align: start;
   background: transparent;
 }
-.send-settings > button:hover:not(:disabled) {
+.send-settings > button:hover:not(:disabled),
+.send-settings > .ui-radio:hover {
   background: var(--coma-sidebar);
 }
 .send-settings > button:disabled {
   cursor: default;
   opacity: 0.45;
-}
-.send-settings > button > i {
-  display: grid;
-  width: 20px;
-  height: 20px;
-  place-items: center;
-  border: 1px solid var(--coma-border-strong);
-  border-radius: 50%;
-  color: var(--coma-primary);
-}
-.send-settings > button.selected > i {
-  border-color: var(--coma-primary);
-}
-.send-settings > button > i svg {
-  width: 11px;
 }
 .send-settings > button > svg {
   width: 19px;
@@ -1564,6 +1561,67 @@ a:focus-visible {
   font-size: 12px;
 }
 .ui-button:disabled {
+  cursor: default;
+  opacity: 0.48;
+}
+.ui-radio {
+  position: relative;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  cursor: pointer;
+}
+.ui-radio > input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.ui-radio__control {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  margin-block-start: 1px;
+  place-items: center;
+  border: 1.5px solid var(--coma-border-strong);
+  border-radius: 50%;
+  background: transparent;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.ui-radio__control::after {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--coma-primary);
+  content: "";
+  scale: 0;
+  transition: scale 120ms ease;
+}
+.ui-radio > input:checked + .ui-radio__control {
+  border-color: var(--coma-primary);
+}
+.ui-radio > input:checked + .ui-radio__control::after {
+  scale: 1;
+}
+.ui-radio > input:focus-visible + .ui-radio__control {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--coma-primary) 22%, transparent);
+}
+.ui-radio__copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.ui-radio__copy strong {
+  font-size: 13px;
+  font-weight: 550;
+}
+.ui-radio__copy small {
+  color: var(--coma-muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.ui-radio--disabled {
   cursor: default;
   opacity: 0.48;
 }

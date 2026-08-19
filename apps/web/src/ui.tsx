@@ -81,6 +81,30 @@ export function Field({
   );
 }
 
+export function RadioOption({
+  label,
+  description,
+  disabled,
+  className,
+  ...props
+}: Omit<InputHTMLAttributes<HTMLInputElement>, "type"> & {
+  label: ReactNode;
+  description?: ReactNode;
+}) {
+  return (
+    <label
+      className={cx("ui-radio", disabled && "ui-radio--disabled", className)}
+    >
+      <input type="radio" disabled={disabled} {...props} />
+      <span className="ui-radio__control" aria-hidden="true" />
+      <span className="ui-radio__copy">
+        <strong>{label}</strong>
+        {description && <small>{description}</small>}
+      </span>
+    </label>
+  );
+}
+
 export function TextareaField({
   label,
   ...props

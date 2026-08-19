@@ -88,6 +88,7 @@ import {
   IconButton,
   Menu as UIMenu,
   Popover,
+  RadioOption,
   SelectField,
   Skeleton,
   TextareaField,
@@ -1781,6 +1782,10 @@ function Composer({
   const [sendOnEnter, setSendOnEnter] = useState(
     () => localStorage.getItem("coma-send-on-enter") !== "false",
   );
+  const canSend = Boolean(body.trim());
+  useEffect(() => {
+    if (!canSend) setSendSettings(false);
+  }, [canSend]);
   useDismissable(composerRoot, formatOpen || emojiOpen || sendSettings, () => {
     setFormatOpen(false);
     setEmojiOpen(false);
@@ -2033,13 +2038,18 @@ function Composer({
               Aa
             </button>
           </div>
-          <div className="composer__send">
+          <div
+            className={cx(
+              "composer__send",
+              canSend && "composer__send--active",
+            )}
+          >
             <Button
               size="icon"
               variant="primary"
               aria-label={t("send")}
               onClick={onSend}
-              disabled={!body.trim()}
+              disabled={!canSend}
             >
               <SendHorizontal />
             </Button>
@@ -2049,6 +2059,7 @@ function Composer({
                 setSendSettings((open) => !open);
                 setEmojiOpen(false);
               }}
+              disabled={!canSend}
             >
               <ChevronDown />
             </IconButton>
@@ -2082,32 +2093,26 @@ function Composer({
             aria-label={t("sendSettings")}
           >
             <strong>{t("sendSettings")}</strong>
-            <button
-              className={sendOnEnter ? "selected" : ""}
-              onClick={() => {
+            <RadioOption
+              name="send-mode"
+              checked={sendOnEnter}
+              label={t("enterSends")}
+              description={t("shiftEnterNewLine")}
+              onChange={() => {
                 setSendOnEnter(true);
                 localStorage.setItem("coma-send-on-enter", "true");
               }}
-            >
-              <i>{sendOnEnter && <Circle fill="currentColor" />}</i>
-              <span>
-                <b>{t("enterSends")}</b>
-                <small>{t("shiftEnterNewLine")}</small>
-              </span>
-            </button>
-            <button
-              className={!sendOnEnter ? "selected" : ""}
-              onClick={() => {
+            />
+            <RadioOption
+              name="send-mode"
+              checked={!sendOnEnter}
+              label={t("shiftEnterSends")}
+              description={t("enterNewLine")}
+              onChange={() => {
                 setSendOnEnter(false);
                 localStorage.setItem("coma-send-on-enter", "false");
               }}
-            >
-              <i>{!sendOnEnter && <Circle fill="currentColor" />}</i>
-              <span>
-                <b>{t("shiftEnterSends")}</b>
-                <small>{t("enterNewLine")}</small>
-              </span>
-            </button>
+            />
             <div className="send-settings__divider" />
             <button disabled>
               <Clock3 />
