@@ -121,6 +121,15 @@ func (h *identityHandlers) listReactions(w standardhttp.ResponseWriter, r *stand
 	writeJSON(h.logger, w, standardhttp.StatusOK, map[string]any{"reactions": result})
 }
 
+func (h *identityHandlers) listMessageReceipts(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.messages.ListReceipts(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "messageID"))
+	if err != nil {
+		h.messageError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, map[string]any{"receipts": result})
+}
+
 func (h *identityHandlers) deleteReaction(w standardhttp.ResponseWriter, r *standardhttp.Request) {
 	if _, err := h.messages.DeleteReaction(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "messageID"), chi.URLParam(r, "emoji")); err != nil {
 		h.messageError(w, r, err)

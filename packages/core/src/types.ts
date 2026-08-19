@@ -7,6 +7,7 @@ export type ChatMember = components["schemas"]["ChatMember"];
 export type Message = components["schemas"]["Message"];
 export type MessagePage = components["schemas"]["MessagePage"];
 export type Reaction = components["schemas"]["Reaction"];
+export type MessageReceipt = components["schemas"]["MessageReceipt"];
 export type MessagePin = components["schemas"]["MessagePin"];
 export type ThreadSummary = components["schemas"]["ThreadSummary"];
 export type ThreadPage = components["schemas"]["ThreadPage"];

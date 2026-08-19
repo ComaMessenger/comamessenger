@@ -25,7 +25,7 @@
 
 - вложения, link previews и полнотекстовый поиск;
 - Web Push и Notification permission UI — они входят в фазу 3;
-- чужие read receipts вида «прочитано Алисой»;
+- отдельный журнал персональных доставок; on-demand список прочитавших, вычисляемый из read markers, добавлен последующим UI-инкрементом без новой таблицы;
 - offline cache/outbox браузера — контракт задаётся здесь, реализация входит в фазу 3;
 - Redis Streams, Kafka, NATS, поддерживаемый multi-node fan-out и несколько экземпляров Core;
 - универсальный EventBus, repository interface на каждую таблицу и таблица online deliveries;

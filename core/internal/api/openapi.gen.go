@@ -1410,6 +1410,17 @@ type MessagePreview struct {
 	Id               openapi_types.UUID `json:"id"`
 }
 
+// MessageReceipt defines model for MessageReceipt.
+type MessageReceipt struct {
+	ActorId openapi_types.UUID `json:"actor_id"`
+	ReadAt  time.Time          `json:"read_at"`
+}
+
+// MessageReceiptList defines model for MessageReceiptList.
+type MessageReceiptList struct {
+	Receipts []MessageReceipt `json:"receipts"`
+}
+
 // MessageWindow defines model for MessageWindow.
 type MessageWindow struct {
 	HasEarlier bool               `json:"has_earlier"`

@@ -145,11 +145,13 @@ export function Dialog({
   description,
   onClose,
   children,
+  className,
 }: {
   title: string;
   description?: string;
   onClose: () => void;
   children: ReactNode;
+  className?: string;
 }) {
   const { t } = useTranslation();
   const dialog = useRef<HTMLElement>(null);
@@ -194,7 +196,7 @@ export function Dialog({
     >
       <section
         ref={dialog}
-        className="ui-dialog"
+        className={cx("ui-dialog", className)}
         role="dialog"
         aria-modal="true"
         aria-label={title}

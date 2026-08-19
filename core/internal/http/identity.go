@@ -126,6 +126,7 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Delete("/messages/{messageID}", h.deleteMessage)
 			protected.Put("/messages/{messageID}/reactions/{emoji}", h.putReaction)
 			protected.Get("/messages/{messageID}/reactions", h.listReactions)
+			protected.Get("/messages/{messageID}/receipts", h.listMessageReceipts)
 			protected.Delete("/messages/{messageID}/reactions/{emoji}", h.deleteReaction)
 			protected.Put("/messages/{messageID}/pin", h.putMessagePin)
 			protected.Delete("/messages/{messageID}/pin", h.deleteMessagePin)

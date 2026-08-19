@@ -14,6 +14,7 @@ import type {
   Message,
   MessagePage,
   MessagePin,
+  MessageReceipt,
   MessageWindow,
   PushConfig,
   PushSubscriptionRecord,
@@ -262,6 +263,13 @@ export class MessengerAPI {
         `/api/v1/messages/${id}/reactions`,
       )
     ).reactions;
+  }
+  async receipts(id: string): Promise<MessageReceipt[]> {
+    return (
+      await this.request<{ receipts: MessageReceipt[] }>(
+        `/api/v1/messages/${id}/receipts`,
+      )
+    ).receipts;
   }
   react(id: string, emoji: string): Promise<Reaction> {
     return this.request(

@@ -25,6 +25,11 @@ type Reaction struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type Receipt struct {
+	ActorID string    `json:"actor_id"`
+	ReadAt  time.Time `json:"read_at"`
+}
+
 type Pin struct {
 	MessageID string    `json:"message_id"`
 	PinnedBy  string    `json:"pinned_by"`
@@ -300,6 +305,58 @@ func (s *Service) ListReactions(ctx context.Context, user identity.User, message
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit list reactions: %w", err)
+	}
+	return result, nil
+}
+
+func (s *Service) ListReceipts(ctx context.Context, user identity.User, messageID string) ([]Receipt, error) {
+	if err := validateUUID("message_id", messageID); err != nil {
+		return nil, err
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin list message receipts: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	item, _, _, err := lockMessage(ctx, tx, user, messageID)
+	if err != nil {
+		return nil, err
+	}
+	var rows pgx.Rows
+	if item.ThreadRootID == nil {
+		rows, err = tx.Query(ctx, `
+			SELECT cr.actor_id, cr.last_read_at
+			FROM chat_reads cr
+			JOIN chat_members cm
+			  ON cm.org_id = cr.org_id AND cm.chat_id = cr.chat_id AND cm.actor_id = cr.actor_id
+			WHERE cr.org_id = $1 AND cr.chat_id = $2 AND cr.last_read_seq >= $3 AND cr.actor_id <> $4
+			ORDER BY cr.last_read_at DESC, cr.actor_id`, user.OrgID, item.ChatID, item.CreatedSeq, item.ActorID)
+	} else {
+		rows, err = tx.Query(ctx, `
+			SELECT tr.actor_id, tr.last_read_at
+			FROM thread_reads tr
+			JOIN chat_members cm
+			  ON cm.org_id = tr.org_id AND cm.chat_id = $2 AND cm.actor_id = tr.actor_id
+			WHERE tr.org_id = $1 AND tr.thread_root_id = $3 AND tr.last_read_seq >= $4 AND tr.actor_id <> $5
+			ORDER BY tr.last_read_at DESC, tr.actor_id`, user.OrgID, item.ChatID, *item.ThreadRootID, item.CreatedSeq, item.ActorID)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("list message receipts: %w", err)
+	}
+	defer rows.Close()
+	result := make([]Receipt, 0)
+	for rows.Next() {
+		var receipt Receipt
+		if err := rows.Scan(&receipt.ActorID, &receipt.ReadAt); err != nil {
+			return nil, fmt.Errorf("scan message receipt: %w", err)
+		}
+		result = append(result, receipt)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate message receipts: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit list message receipts: %w", err)
 	}
 	return result, nil
 }

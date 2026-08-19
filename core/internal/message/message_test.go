@@ -323,6 +323,53 @@ func TestMessageCoreIntegration(t *testing.T) {
 		}
 	})
 
+	t.Run("message receipts derive from read markers and exclude the author", func(t *testing.T) {
+		item, _, err := service.Create(ctx, fixture.member, fixture.groupID, CreateInput{
+			ClientMsgID: mustID(t), Body: "read this", BodyFormat: "plain",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO chat_reads (org_id, chat_id, actor_id, last_read_seq)
+			VALUES ($1, $2, $3, $4), ($1, $2, $5, $4)
+			ON CONFLICT (chat_id, actor_id) DO UPDATE
+			SET last_read_seq = EXCLUDED.last_read_seq, last_read_at = now()`,
+			fixture.owner.OrgID, fixture.groupID, fixture.owner.ActorID, item.CreatedSeq, fixture.member.ActorID); err != nil {
+			t.Fatal(err)
+		}
+		receipts, err := service.ListReceipts(ctx, fixture.member, item.ID)
+		if err != nil || len(receipts) != 1 || receipts[0].ActorID != fixture.owner.ActorID {
+			t.Fatalf("ListReceipts() receipts=%+v error=%v", receipts, err)
+		}
+
+		root, _, err := service.Create(ctx, fixture.member, fixture.groupID, CreateInput{
+			ClientMsgID: mustID(t), Body: "receipt thread", BodyFormat: "plain",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		reply, _, err := service.Create(ctx, fixture.member, fixture.groupID, CreateInput{
+			ClientMsgID: mustID(t), Body: "thread receipt", BodyFormat: "plain",
+			ReplyToID: &root.ID, ThreadRootID: &root.ID,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO thread_reads (org_id, thread_root_id, actor_id, last_read_seq)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (thread_root_id, actor_id) DO UPDATE
+			SET last_read_seq = EXCLUDED.last_read_seq, last_read_at = now()`,
+			fixture.owner.OrgID, root.ID, fixture.owner.ActorID, reply.CreatedSeq); err != nil {
+			t.Fatal(err)
+		}
+		receipts, err = service.ListReceipts(ctx, fixture.member, reply.ID)
+		if err != nil || len(receipts) != 1 || receipts[0].ActorID != fixture.owner.ActorID {
+			t.Fatalf("ListReceipts(thread) receipts=%+v error=%v", receipts, err)
+		}
+	})
+
 	t.Run("pins require chat management and remain idempotent", func(t *testing.T) {
 		item, _, err := service.Create(ctx, fixture.member, fixture.groupID, CreateInput{
 			ClientMsgID: mustID(t), Body: "pin me", BodyFormat: "plain",

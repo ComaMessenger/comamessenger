@@ -313,7 +313,27 @@ async function mockMessenger(
       };
     } else if (/\/messages\/[^/]+\/reactions$/.test(path))
       body = { reactions: runtimeReactions };
-    else if (/\/messages\/[^/]+\/reactions\/.+/.test(path)) {
+    else if (/\/messages\/[^/]+\/receipts$/.test(path))
+      body = {
+        receipts: [{ actor_id: user.id, read_at: "2026-08-19T06:40:00Z" }],
+      };
+    else if (/\/messages\/[^/]+\/forward$/.test(path)) {
+      const input = route.request().postDataJSON() as Record<string, unknown>;
+      status = 201;
+      body = {
+        ...message,
+        id: "00000000-0000-4000-8000-000000000041",
+        actor_id: user.id,
+        chat_id: input.chat_id,
+        client_msg_id: input.client_msg_id,
+        created_seq: 5,
+        forwarded_from: {
+          author_name: lev.display_name,
+          author_handle: lev.handle,
+          created_at: message.created_at,
+        },
+      };
+    } else if (/\/messages\/[^/]+\/reactions\/.+/.test(path)) {
       const emoji = decodeURIComponent(path.split("/").at(-1) ?? "");
       reactionMutations.push(`${route.request().method()} ${emoji}`);
       if (route.request().method() === "DELETE") {
@@ -546,7 +566,7 @@ test("global navigation stays stable while utility pages replace content", async
     expect(collapseButton).not.toBeNull();
     expect(viewport).not.toBeNull();
     expect(profile!.y + profile!.height).toBeGreaterThan(viewport!.height - 20);
-    expect(collapseButton!.y).toBeLessThan(100);
+    expect(collapseButton!.y).toBeGreaterThan(viewport!.height - 130);
     expect(
       collapseButton!.x +
         collapseButton!.width / 2 -
@@ -808,13 +828,15 @@ test("chat and message actions stay contextual", async ({ page }) => {
       animations: "disabled",
     },
   );
-  await page.locator(".conversation-head").click();
+  if (test.info().project.name === "phone") await page.keyboard.press("Escape");
+  else await page.locator(".conversation-head").click();
   await expect(page.getByRole("dialog", { name: "Эмодзи" })).toHaveCount(0);
   await messageRow.hover();
   await page.getByRole("button", { name: "Действия с сообщением" }).click();
   const messageMenu = page.getByRole("menu");
   await expect(messageMenu).toHaveClass(/message-menu--above/);
-  await expect(messageActions).toBeHidden();
+  await expect(messageActions).toBeVisible();
+  await expect(messageRow).toHaveClass(/message--overlay-open/);
   await expect(page.getByRole("menuitem", { name: "Ответить" })).toBeVisible();
   await expect(
     page.getByRole("menuitem", { name: "Копировать ссылку" }),
@@ -838,10 +860,40 @@ test("chat and message actions stay contextual", async ({ page }) => {
   await expect(messageMenu).toHaveScreenshot("message-menu-up.png", {
     animations: "disabled",
   });
-  await page.locator(".conversation-head").click();
-  await expect(
-    page.getByRole("menuitem", { name: "Копировать ссылку" }),
-  ).toHaveCount(0);
+  await page.getByRole("menuitem", { name: "Прочитали и реакции" }).click();
+  const details = page.getByRole("dialog", { name: "Просмотры и реакции" });
+  await expect(details).toBeVisible();
+  await expect(details.getByText(user.display_name)).toBeVisible();
+  await details.getByRole("tab", { name: "Реакции" }).click();
+  await expect(details.getByText("Реакций пока нет")).toBeVisible();
+  if (test.info().project.name === "phone") {
+    const box = await details.boundingBox();
+    const viewport = page.viewportSize();
+    expect(box).not.toBeNull();
+    expect(viewport).not.toBeNull();
+    expect(box!.width).toBe(viewport!.width);
+    expect(box!.height).toBe(viewport!.height);
+  }
+  await details.getByRole("button", { name: "Закрыть" }).click();
+  await messageRow.hover();
+  await page.getByRole("button", { name: "Действия с сообщением" }).click();
+  await page.getByRole("menuitem", { name: "Переслать" }).click();
+  const forward = page.getByRole("dialog", { name: "Переслать" });
+  await expect(forward.getByText("Пересылаемое сообщение")).toBeVisible();
+  await expect(forward.getByText("Добро пожаловать в Coma")).toBeVisible();
+  const forwardSubmit = forward.locator(".dialog-actions .ui-button--primary");
+  await expect(forwardSubmit).toBeDisabled();
+  await forward.getByRole("option", { name: /Объявления/ }).click();
+  await expect(forwardSubmit).toBeEnabled();
+  if (test.info().project.name === "phone") {
+    const box = await forward.boundingBox();
+    const viewport = page.viewportSize();
+    expect(box).not.toBeNull();
+    expect(viewport).not.toBeNull();
+    expect(box!.width).toBe(viewport!.width);
+    expect(box!.height).toBe(viewport!.height);
+  }
+  await forward.getByRole("button", { name: "Закрыть" }).click();
 });
 
 test("a thread opens beside an unchanged main feed", async ({ page }) => {
@@ -912,6 +964,21 @@ test("history uses automatic cursor pagination", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Загрузить предыдущие" }),
   ).toHaveCount(0);
+  const topRow = page.locator("article.message").first();
+  await topRow.scrollIntoViewIfNeeded();
+  await topRow.hover();
+  await topRow.getByRole("button", { name: "Действия с сообщением" }).click();
+  const topMenu = page.getByRole("menu");
+  const [topMenuBox, viewport] = await Promise.all([
+    topMenu.boundingBox(),
+    Promise.resolve(page.viewportSize()),
+  ]);
+  expect(topMenuBox).not.toBeNull();
+  expect(viewport).not.toBeNull();
+  expect(topMenuBox!.y).toBeGreaterThanOrEqual(8);
+  expect(topMenuBox!.y + topMenuBox!.height).toBeLessThanOrEqual(
+    viewport!.height - 8,
+  );
 });
 
 test("conversation opens at the read boundary and always offers jump to latest", async ({
@@ -1028,6 +1095,18 @@ test("composer send controls activate only when there is content", async ({
       ),
     ).toBeLessThanOrEqual(1);
   }
+  const oneLineHeight = await composer.evaluate(
+    (element) => element.getBoundingClientRect().height,
+  );
+  await composer.fill("1\n2\n3\n4\n5\n6\n7\n8");
+  const [sixLineHeight, lineHeight] = await Promise.all([
+    composer.evaluate((element) => element.getBoundingClientRect().height),
+    composer.evaluate((element) =>
+      Number.parseFloat(getComputedStyle(element).lineHeight),
+    ),
+  ]);
+  expect(sixLineHeight).toBeGreaterThan(oneLineHeight);
+  expect(sixLineHeight).toBeLessThanOrEqual(lineHeight * 6 + 10);
   await settings.click();
   await expect(
     page.getByRole("radio", {

@@ -10,6 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import type { EmojiStyle, Theme as EmojiTheme } from "emoji-picker-react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -32,6 +33,7 @@ import {
   Cat,
   ChartNoAxesCombined,
   Check,
+  CheckCheck,
   CheckCircle2,
   ChevronLeft,
   ChevronDown,
@@ -131,6 +133,8 @@ import {
   type ClientMessage,
   type Draft,
   type Message,
+  type Reaction,
+  type MessageReceipt,
   type TokenResponse,
   type User,
   type UserPreferences,
@@ -164,6 +168,13 @@ const EmojiPicker = lazy(() => import("emoji-picker-react"));
 type Screen = "loading" | "bootstrap" | "login" | "messenger" | "invite";
 type SystemChatFilter = "all" | "direct" | "grouped" | "channel";
 type ChatFilter = SystemChatFilter | `folder:${string}`;
+type OverlayPlacement = {
+  side: "above" | "below";
+  top?: number;
+  bottom?: number;
+  right: number;
+  maxHeight: number;
+};
 
 const folderIconOptions: Array<{
   id: ChatFolder["icon"];
@@ -397,11 +408,17 @@ function useDismissable(
   ref: RefObject<HTMLElement | null>,
   open: boolean,
   onClose: () => void,
+  secondaryRef?: RefObject<HTMLElement | null>,
 ) {
   useEffect(() => {
     if (!open) return;
     function pointer(event: PointerEvent) {
-      if (!ref.current?.contains(event.target as Node)) onClose();
+      const target = event.target as Node;
+      if (
+        !ref.current?.contains(target) &&
+        !secondaryRef?.current?.contains(target)
+      )
+        onClose();
     }
     function keyboard(event: globalThis.KeyboardEvent) {
       if (event.key === "Escape") onClose();
@@ -412,7 +429,47 @@ function useDismissable(
       document.removeEventListener("pointerdown", pointer);
       document.removeEventListener("keydown", keyboard);
     };
-  }, [onClose, open, ref]);
+  }, [onClose, open, ref, secondaryRef]);
+}
+
+function placeMessageOverlay(
+  anchor: HTMLElement | null,
+  desiredHeight: number,
+  width: number,
+): OverlayPlacement {
+  const bounds = anchor?.getBoundingClientRect();
+  const viewportHeight = window.innerHeight;
+  const viewportWidth = window.innerWidth;
+  const edge = 8;
+  const gap = 4;
+  if (!bounds)
+    return {
+      side: "below",
+      top: edge,
+      right: edge,
+      maxHeight: Math.max(160, Math.min(desiredHeight, viewportHeight - 16)),
+    };
+  const above = Math.max(0, bounds.top - edge - gap);
+  const below = Math.max(0, viewportHeight - bounds.bottom - edge - gap);
+  const side = below >= desiredHeight || below >= above ? "below" : "above";
+  const available = side === "below" ? below : above;
+  const right = Math.max(
+    edge,
+    Math.min(viewportWidth - width - edge, viewportWidth - bounds.right),
+  );
+  return {
+    side,
+    ...(side === "below"
+      ? { top: Math.min(bounds.bottom + gap, viewportHeight - edge) }
+      : {
+          bottom: Math.min(
+            viewportHeight - bounds.top + gap,
+            viewportHeight - edge,
+          ),
+        }),
+    right,
+    maxHeight: Math.max(120, Math.min(desiredHeight, available)),
+  };
 }
 
 export function App() {
@@ -1765,6 +1822,7 @@ function Conversation({
   const [loadingPrevious, setLoadingPrevious] = useState(false);
   const [newBelow, setNewBelow] = useState(0);
   const [showScrollDown, setShowScrollDown] = useState(false);
+  const [feedReady, setFeedReady] = useState(false);
   const [info, setInfo] = useState(false);
   const [unreadAnchor, setUnreadAnchor] = useState(0);
   const scroller = useRef<HTMLDivElement>(null);
@@ -1806,6 +1864,7 @@ function Conversation({
     atBottom.current = true;
     setNewBelow(0);
     setShowScrollDown(false);
+    setFeedReady(false);
     let active = true;
     setHasMore(true);
     void api
@@ -1819,9 +1878,12 @@ function Conversation({
         };
         store.getState().replaceMessages(chat.id, page.messages);
         setHasMore(page.next_before_seq != null);
-        if (page.messages.length === 0) initialPositioned.current = true;
+        if (page.messages.length === 0) {
+          initialPositioned.current = true;
+          setFeedReady(true);
+        }
       })
-      .catch(() => undefined);
+      .catch(() => setFeedReady(true));
     return () => {
       active = false;
     };
@@ -1881,6 +1943,7 @@ function Conversation({
           atBottom.current = distance < 64;
           setShowScrollDown(!atBottom.current);
           initialPositioned.current = true;
+          setFeedReady(true);
           if (atBottom.current) markLatestRead();
         };
         if (pending.hasUnread) {
@@ -2015,7 +2078,7 @@ function Conversation({
         </div>
       </header>
       <div
-        className="message-scroll"
+        className={cx("message-scroll", feedReady && "message-scroll--ready")}
         ref={scroller}
         aria-live="polite"
         onScroll={(event) => {
@@ -2031,94 +2094,98 @@ function Conversation({
           }
         }}
       >
-        {loadingPrevious && <span className="history-loader" aria-hidden />}
-        {!hasMore && (
-          <ChatIntro
-            chat={activeChat}
-            title={title}
-            onAddMembers={() => setInfo(true)}
-          />
-        )}
-        {visible.length === 0 && <Empty label={t("noMessages")} />}
-        <div
-          className="virtual-list"
-          style={{ height: virtual.getTotalSize() }}
-        >
-          {virtual.getVirtualItems().map((row) => {
-            const message = visible[row.index]!;
-            const previous = visible[row.index - 1];
-            const newDay =
-              !previous ||
-              new Date(previous.created_at).toDateString() !==
-                new Date(message.created_at).toDateString();
-            const firstUnread =
-              unreadAnchor > 0 &&
-              message.created_seq > unreadAnchor &&
-              (!previous || previous.created_seq <= unreadAnchor);
-            return (
-              <div
-                key={message.id}
-                ref={virtual.measureElement}
-                data-index={row.index}
-                className="virtual-row"
-                style={{ transform: `translateY(${row.start}px)` }}
-              >
-                {newDay && !(!hasMore && row.index === 0) && (
-                  <div className="day-separator">
-                    {new Intl.DateTimeFormat(activeLocale(), {
-                      dateStyle: "long",
-                    }).format(new Date(message.created_at))}
-                  </div>
-                )}
-                {firstUnread && (
-                  <div className="unread-separator">{t("newMessages")}</div>
-                )}
-                <MessageRow
-                  api={api}
-                  message={message}
-                  chats={Object.values(store.getState().chats)}
-                  members={members}
-                  replyMessage={
-                    message.reply_to_id
-                      ? messages.find((item) => item.id === message.reply_to_id)
-                      : undefined
-                  }
-                  author={members.find(
-                    (item) => item.actor_id === message.actor_id,
+        <div className="message-feed">
+          {loadingPrevious && <span className="history-loader" aria-hidden />}
+          {!hasMore && (
+            <ChatIntro
+              chat={activeChat}
+              title={title}
+              onAddMembers={() => setInfo(true)}
+            />
+          )}
+          {visible.length === 0 && <Empty label={t("noMessages")} />}
+          <div
+            className="virtual-list"
+            style={{ height: virtual.getTotalSize() }}
+          >
+            {virtual.getVirtualItems().map((row) => {
+              const message = visible[row.index]!;
+              const previous = visible[row.index - 1];
+              const newDay =
+                !previous ||
+                new Date(previous.created_at).toDateString() !==
+                  new Date(message.created_at).toDateString();
+              const firstUnread =
+                unreadAnchor > 0 &&
+                message.created_seq > unreadAnchor &&
+                (!previous || previous.created_seq <= unreadAnchor);
+              return (
+                <div
+                  key={message.id}
+                  ref={virtual.measureElement}
+                  data-index={row.index}
+                  className="virtual-row"
+                  style={{ transform: `translateY(${row.start}px)` }}
+                >
+                  {newDay && !(!hasMore && row.index === 0) && (
+                    <div className="day-separator">
+                      {new Intl.DateTimeFormat(activeLocale(), {
+                        dateStyle: "long",
+                      }).format(new Date(message.created_at))}
+                    </div>
                   )}
-                  currentActorID={user.id}
-                  own={message.actor_id === user.id || !message.actor_id}
-                  grouped={
-                    !newDay &&
-                    previous?.actor_id === message.actor_id &&
-                    minuteGap(previous.created_at, message.created_at) < 5
-                  }
-                  onReply={() => setReply(message)}
-                  onJump={(id) => void jump(id)}
-                  onRetry={() => void outbox.flush()}
-                  onThread={() =>
-                    onOpenThread(message.thread_root_id ?? message.id)
-                  }
-                  onChanged={(updated) => {
-                    store.getState().apply({
-                      op: "event",
-                      seq: Math.max(
-                        store.getState().checkpoint + 1,
-                        updated.created_seq,
-                      ),
-                      type: "message.updated",
-                      occurred_at: updated.created_at,
-                      actor_id: updated.actor_id,
-                      chat_id: updated.chat_id,
-                      subject_id: updated.id,
-                      data: updated,
-                    });
-                    onSummaryChanged();
-                  }}
-                />
-              </div>
-            );
-          })}
+                  {firstUnread && (
+                    <div className="unread-separator">{t("newMessages")}</div>
+                  )}
+                  <MessageRow
+                    api={api}
+                    message={message}
+                    chats={Object.values(store.getState().chats)}
+                    members={members}
+                    replyMessage={
+                      message.reply_to_id
+                        ? messages.find(
+                            (item) => item.id === message.reply_to_id,
+                          )
+                        : undefined
+                    }
+                    author={members.find(
+                      (item) => item.actor_id === message.actor_id,
+                    )}
+                    currentActorID={user.id}
+                    own={message.actor_id === user.id || !message.actor_id}
+                    grouped={
+                      !newDay &&
+                      previous?.actor_id === message.actor_id &&
+                      minuteGap(previous.created_at, message.created_at) < 5
+                    }
+                    onReply={() => setReply(message)}
+                    onJump={(id) => void jump(id)}
+                    onRetry={() => void outbox.flush()}
+                    onThread={() =>
+                      onOpenThread(message.thread_root_id ?? message.id)
+                    }
+                    onChanged={(updated) => {
+                      store.getState().apply({
+                        op: "event",
+                        seq: Math.max(
+                          store.getState().checkpoint + 1,
+                          updated.created_seq,
+                        ),
+                        type: "message.updated",
+                        occurred_at: updated.created_at,
+                        actor_id: updated.actor_id,
+                        chat_id: updated.chat_id,
+                        subject_id: updated.id,
+                        data: updated,
+                      });
+                      onSummaryChanged();
+                    }}
+                  />
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
       {showScrollDown && (
@@ -2211,19 +2278,23 @@ function MessageRow({
   showThreadIndicator?: boolean;
 }) {
   const { t } = useTranslation();
-  const [menu, setMenu] = useState<{
-    side: "above" | "below";
-    maxHeight: number;
-  } | null>(null);
+  const [menu, setMenu] = useState<OverlayPlacement | null>(null);
   const [forwarding, setForwarding] = useState(false);
-  const [reactionPicker, setReactionPicker] = useState<
-    "above" | "below" | null
-  >(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [reactionPicker, setReactionPicker] = useState<OverlayPlacement | null>(
+    null,
+  );
   const interactionRoot = useRef<HTMLElement>(null);
-  useDismissable(interactionRoot, Boolean(menu || reactionPicker), () => {
-    setMenu(null);
-    setReactionPicker(null);
-  });
+  const overlayRoot = useRef<HTMLDivElement>(null);
+  useDismissable(
+    interactionRoot,
+    Boolean(menu || reactionPicker),
+    () => {
+      setMenu(null);
+      setReactionPicker(null);
+    },
+    overlayRoot,
+  );
   const reactionsQuery = useQuery({
     queryKey: ["message-reactions", message.id],
     queryFn: () => api.reactions(message.id),
@@ -2276,31 +2347,12 @@ function MessageRow({
     setReactionPicker(null);
   }
   function openReactionPicker() {
-    const bounds = interactionRoot.current?.getBoundingClientRect();
     setMenu(null);
-    setReactionPicker(
-      bounds &&
-        window.innerHeight - bounds.bottom < 440 &&
-        bounds.top > window.innerHeight - bounds.bottom
-        ? "above"
-        : "below",
-    );
+    setReactionPicker(placeMessageOverlay(interactionRoot.current, 410, 352));
   }
   function openMessageMenu() {
-    const bounds = interactionRoot.current?.getBoundingClientRect();
     setReactionPicker(null);
-    const below = bounds ? window.innerHeight - bounds.bottom : 430;
-    const side =
-      bounds && below < 390 && bounds.top > below ? "above" : "below";
-    const available = bounds
-      ? side === "above"
-        ? bounds.top - 24
-        : below - 24
-      : 430;
-    setMenu({
-      side,
-      maxHeight: Math.max(160, Math.min(430, available)),
-    });
+    setMenu(placeMessageOverlay(interactionRoot.current, 430, 228));
   }
   function openThread() {
     setMenu(null);
@@ -2426,137 +2478,385 @@ function MessageRow({
           <MoreHorizontal />
         </IconButton>
       </div>
-      {reactionPicker && (
-        <div
-          className={cx(
-            "reaction-picker",
-            `reaction-picker--${reactionPicker}`,
-          )}
-          role="dialog"
-          aria-label={t("emoji")}
-        >
-          <Suspense fallback={<Skeleton />}>
-            <EmojiPicker
-              width="100%"
-              height={410}
-              theme={
-                (document.documentElement.dataset.theme === "dark"
-                  ? "dark"
-                  : "light") as EmojiTheme
-              }
-              emojiStyle={"native" as EmojiStyle}
-              lazyLoadEmojis
-              searchPlaceholder={t("searchEmoji")}
-              searchClearButtonLabel={t("clearSearch")}
-              previewConfig={{ showPreview: false }}
-              onEmojiClick={(emoji) => void toggleReaction(emoji.emoji)}
-            />
-          </Suspense>
-        </div>
-      )}
-      {menu && (
-        <div
-          className={cx("message-menu", `message-menu--${menu.side}`)}
-          role="menu"
-          style={{ maxHeight: menu.maxHeight }}
-        >
-          <button
-            role="menuitem"
-            onClick={() => {
-              setMenu(null);
-              openReactionPicker();
+      {reactionPicker &&
+        createPortal(
+          <div
+            ref={overlayRoot}
+            className={cx(
+              "reaction-picker",
+              `reaction-picker--${reactionPicker.side}`,
+            )}
+            role="dialog"
+            aria-label={t("emoji")}
+            style={{
+              top: reactionPicker.top,
+              bottom: reactionPicker.bottom,
+              right: reactionPicker.right,
+              maxHeight: reactionPicker.maxHeight,
             }}
           >
-            <SmilePlus />
-            <span>{t("addReaction")}</span>
-          </button>
-          <button role="menuitem" onClick={reply}>
-            <CornerUpLeft />
-            <span>{t("reply")}</span>
-          </button>
-          <button role="menuitem" onClick={openThread}>
-            <MessageSquareReply />
-            <span>{t("thread")}</span>
-          </button>
-          <div className="message-menu__divider" />
-          <button
-            role="menuitem"
-            onClick={() => void api.pin(message.id).then(() => setMenu(null))}
-          >
-            <Pin />
-            <span>{t("pin")}</span>
-          </button>
-          <button
-            role="menuitem"
-            onClick={() =>
-              void navigator.clipboard
-                .writeText(`${location.origin}/m/${compactUUID(message.id)}`)
-                .then(() => setMenu(null))
-            }
-          >
-            <Link2 />
-            <span>{t("copyLink")}</span>
-          </button>
-          <button
-            role="menuitem"
-            onClick={() =>
-              void navigator.clipboard
-                .writeText(messagePlainText(message.body))
-                .then(() => setMenu(null))
-            }
-          >
-            <Copy />
-            <span>{t("copyText")}</span>
-          </button>
-          <button
-            role="menuitem"
-            onClick={() => {
-              setMenu(null);
-              setForwarding(true);
+            <Suspense fallback={<Skeleton />}>
+              <EmojiPicker
+                width="100%"
+                height={reactionPicker.maxHeight}
+                theme={
+                  (document.documentElement.dataset.theme === "dark"
+                    ? "dark"
+                    : "light") as EmojiTheme
+                }
+                emojiStyle={"native" as EmojiStyle}
+                lazyLoadEmojis
+                searchPlaceholder={t("searchEmoji")}
+                searchClearButtonLabel={t("clearSearch")}
+                previewConfig={{ showPreview: false }}
+                onEmojiClick={(emoji) => void toggleReaction(emoji.emoji)}
+              />
+            </Suspense>
+          </div>,
+          document.body,
+        )}
+      {menu &&
+        createPortal(
+          <div
+            ref={overlayRoot}
+            className={cx("message-menu", `message-menu--${menu.side}`)}
+            role="menu"
+            style={{
+              top: menu.top,
+              bottom: menu.bottom,
+              right: menu.right,
+              maxHeight: menu.maxHeight,
             }}
           >
-            <Forward />
-            <span>{t("forward")}</span>
-          </button>
-          {own && <div className="message-menu__divider" />}
-          {own && (
-            <button role="menuitem" onClick={() => void edit()}>
-              <Pencil />
-              <span>{t("edit")}</span>
-            </button>
-          )}
-          {own && (
             <button
               role="menuitem"
-              className="danger"
-              onClick={() => void remove()}
+              onClick={() => {
+                setMenu(null);
+                openReactionPicker();
+              }}
             >
-              <Trash2 />
-              <span>{t("remove")}</span>
+              <SmilePlus />
+              <span>{t("addReaction")}</span>
             </button>
-          )}
-        </div>
-      )}
-      {forwarding && (
-        <Dialog title={t("forward")} onClose={() => setForwarding(false)}>
-          <div className="forward-picker">
-            {chats.map((chat) => (
-              <button
-                key={chat.id}
-                onClick={() =>
-                  void api
-                    .forward(message.id, chat.id, crypto.randomUUID())
-                    .then(() => setForwarding(false))
-                }
-              >
-                <Avatar name={chat.display_name} size="sm" />
-                <span>{chat.display_name}</span>
+            <button role="menuitem" onClick={reply}>
+              <CornerUpLeft />
+              <span>{t("reply")}</span>
+            </button>
+            <button role="menuitem" onClick={openThread}>
+              <MessageSquareReply />
+              <span>{t("thread")}</span>
+            </button>
+            <div className="message-menu__divider" />
+            <button
+              role="menuitem"
+              onClick={() => void api.pin(message.id).then(() => setMenu(null))}
+            >
+              <Pin />
+              <span>{t("pin")}</span>
+            </button>
+            <button
+              role="menuitem"
+              onClick={() =>
+                void navigator.clipboard
+                  .writeText(`${location.origin}/m/${compactUUID(message.id)}`)
+                  .then(() => setMenu(null))
+              }
+            >
+              <Link2 />
+              <span>{t("copyLink")}</span>
+            </button>
+            <button
+              role="menuitem"
+              onClick={() =>
+                void navigator.clipboard
+                  .writeText(messagePlainText(message.body))
+                  .then(() => setMenu(null))
+              }
+            >
+              <Copy />
+              <span>{t("copyText")}</span>
+            </button>
+            <button
+              role="menuitem"
+              onClick={() => {
+                setMenu(null);
+                setForwarding(true);
+              }}
+            >
+              <Forward />
+              <span>{t("forward")}</span>
+            </button>
+            <button
+              role="menuitem"
+              onClick={() => {
+                setMenu(null);
+                setDetailsOpen(true);
+              }}
+            >
+              <CheckCheck />
+              <span>{t("readAndReactions")}</span>
+            </button>
+            {own && <div className="message-menu__divider" />}
+            {own && (
+              <button role="menuitem" onClick={() => void edit()}>
+                <Pencil />
+                <span>{t("edit")}</span>
               </button>
-            ))}
-          </div>
-        </Dialog>
+            )}
+            {own && (
+              <button
+                role="menuitem"
+                className="danger"
+                onClick={() => void remove()}
+              >
+                <Trash2 />
+                <span>{t("remove")}</span>
+              </button>
+            )}
+          </div>,
+          document.body,
+        )}
+      {forwarding && (
+        <ForwardMessageDialog
+          api={api}
+          message={message}
+          chats={chats}
+          authorName={name}
+          onClose={() => setForwarding(false)}
+        />
+      )}
+      {detailsOpen && (
+        <MessageDetailsDialog
+          api={api}
+          message={message}
+          members={members}
+          onClose={() => setDetailsOpen(false)}
+        />
       )}
     </article>
+  );
+}
+
+function ForwardMessageDialog({
+  api,
+  message,
+  chats,
+  authorName,
+  onClose,
+}: {
+  api: MessengerAPI;
+  message: ClientMessage;
+  chats: Chat[];
+  authorName: string;
+  onClose(): void;
+}) {
+  const { t } = useTranslation();
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [comment, setComment] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const filtered = chats.filter((chat) =>
+    chat.display_name.toLowerCase().includes(query.trim().toLowerCase()),
+  );
+  async function submit() {
+    if (!selected.size || sending) return;
+    setSending(true);
+    setError("");
+    try {
+      await Promise.all(
+        [...selected].map(async (chatID) => {
+          await api.forward(message.id, chatID, crypto.randomUUID());
+          if (comment.trim())
+            await api.createMessage(chatID, {
+              client_msg_id: crypto.randomUUID(),
+              body: comment.trim(),
+              body_format: "markdown",
+              mentioned_actor_ids: [],
+            });
+        }),
+      );
+      onClose();
+    } catch {
+      setError(t("error"));
+      setSending(false);
+    }
+  }
+  return createPortal(
+    <Dialog
+      title={t("forward")}
+      onClose={onClose}
+      className="message-modal message-forward-dialog"
+    >
+      <label className="message-modal__search">
+        <Search />
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={t("searchChats")}
+          aria-label={t("searchChats")}
+        />
+      </label>
+      <div className="forward-picker" role="listbox" aria-multiselectable>
+        {filtered.map((chat) => {
+          const checked = selected.has(chat.id);
+          return (
+            <button
+              key={chat.id}
+              role="option"
+              aria-selected={checked}
+              onClick={() =>
+                setSelected((current) => {
+                  const next = new Set(current);
+                  if (next.has(chat.id)) next.delete(chat.id);
+                  else next.add(chat.id);
+                  return next;
+                })
+              }
+            >
+              <Avatar name={chat.display_name} size="sm" />
+              <span>{chat.display_name}</span>
+              <span className="forward-picker__check" aria-hidden="true">
+                {checked && <Check />}
+              </span>
+            </button>
+          );
+        })}
+        {filtered.length === 0 && <Empty label={t("nothingFound")} />}
+      </div>
+      <div className="forward-preview">
+        <span>{t("forwardedMessage")}</span>
+        <strong>{authorName}</strong>
+        <p>{messagePlainText(message.body)}</p>
+      </div>
+      <label className="forward-comment">
+        <span>{t("forwardComment")}</span>
+        <textarea
+          rows={2}
+          value={comment}
+          onChange={(event) => setComment(event.target.value)}
+          placeholder={t("forwardCommentPlaceholder")}
+        />
+      </label>
+      {error && <FormError message={error} />}
+      <div className="dialog-actions">
+        <Button onClick={onClose}>{t("cancel")}</Button>
+        <Button
+          variant="primary"
+          disabled={!selected.size || sending}
+          onClick={() => void submit()}
+        >
+          {sending
+            ? t("loading")
+            : t("forwardSelected", { count: selected.size })}
+        </Button>
+      </div>
+    </Dialog>,
+    document.body,
+  );
+}
+
+function MessageDetailsDialog({
+  api,
+  message,
+  members,
+  onClose,
+}: {
+  api: MessengerAPI;
+  message: ClientMessage;
+  members: ChatMember[];
+  onClose(): void;
+}) {
+  const { t } = useTranslation();
+  const [tab, setTab] = useState<"receipts" | "reactions">("receipts");
+  const receipts = useQuery<MessageReceipt[]>({
+    queryKey: ["message-receipts", message.id],
+    queryFn: () => api.receipts(message.id),
+  });
+  const reactions = useQuery<Reaction[]>({
+    queryKey: ["message-reactions", message.id],
+    queryFn: () => api.reactions(message.id),
+  });
+  const reactionActors = Object.values(
+    (reactions.data ?? []).reduce<
+      Record<string, { actorID: string; emojis: string[]; at: string }>
+    >((result, reaction) => {
+      const current = result[reaction.actor_id] ?? {
+        actorID: reaction.actor_id,
+        emojis: [],
+        at: reaction.created_at,
+      };
+      current.emojis.push(reaction.emoji);
+      result[reaction.actor_id] = current;
+      return result;
+    }, {}),
+  );
+  function memberName(actorID: string) {
+    return (
+      members.find((member) => member.actor_id === actorID)?.display_name ??
+      t("participant")
+    );
+  }
+  return createPortal(
+    <Dialog
+      title={t("viewsAndReactions")}
+      onClose={onClose}
+      className="message-modal message-details-dialog"
+    >
+      <div className="message-details__tabs" role="tablist">
+        <button
+          role="tab"
+          aria-selected={tab === "receipts"}
+          aria-label={t("readBy")}
+          onClick={() => setTab("receipts")}
+        >
+          <CheckCheck />
+        </button>
+        <button
+          role="tab"
+          aria-selected={tab === "reactions"}
+          aria-label={t("reactions")}
+          onClick={() => setTab("reactions")}
+        >
+          <Smile />
+        </button>
+      </div>
+      <div className="message-details__body" role="tabpanel">
+        {tab === "receipts" && receipts.isLoading && <Skeleton />}
+        {tab === "receipts" &&
+          !receipts.isLoading &&
+          !receipts.data?.length && <Empty label={t("nobodyRead")} />}
+        {tab === "receipts" &&
+          receipts.data?.map((receipt) => {
+            const name = memberName(receipt.actor_id);
+            return (
+              <div className="message-details__person" key={receipt.actor_id}>
+                <Avatar name={name} size="sm" />
+                <strong>{name}</strong>
+                <time>{formatTime(receipt.read_at)}</time>
+              </div>
+            );
+          })}
+        {tab === "reactions" && reactions.isLoading && <Skeleton />}
+        {tab === "reactions" &&
+          !reactions.isLoading &&
+          reactionActors.length === 0 && <Empty label={t("noReactions")} />}
+        {tab === "reactions" &&
+          reactionActors.map((entry) => {
+            const name = memberName(entry.actorID);
+            return (
+              <div className="message-details__person" key={entry.actorID}>
+                <Avatar name={name} size="sm" />
+                <strong>{name}</strong>
+                <span className="message-details__emojis">
+                  {entry.emojis.join(" ")}
+                </span>
+              </div>
+            );
+          })}
+      </div>
+    </Dialog>,
+    document.body,
   );
 }
 
@@ -2599,6 +2899,21 @@ function Composer({
     setSendSettings(false);
   });
   const draft = useMemo(() => decodeMentions(body), [body]);
+  useEffect(() => {
+    const element = input.current;
+    if (!element) return;
+    element.style.height = "auto";
+    const styles = getComputedStyle(element);
+    const lineHeight = Number.parseFloat(styles.lineHeight) || 21;
+    const verticalPadding =
+      (Number.parseFloat(styles.paddingTop) || 0) +
+      (Number.parseFloat(styles.paddingBottom) || 0);
+    const maxHeight = lineHeight * 6 + verticalPadding;
+    const nextHeight = Math.min(element.scrollHeight, maxHeight);
+    element.style.height = `${nextHeight}px`;
+    element.style.overflowY =
+      element.scrollHeight > maxHeight ? "auto" : "hidden";
+  }, [draft.text]);
   const mention = /@([\p{L}\p{N}_.-]*)$/u.exec(draft.text);
   const suggestions = mention
     ? members

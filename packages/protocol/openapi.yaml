@@ -628,6 +628,21 @@ paths:
                 { schema: { $ref: "#/components/schemas/ReactionList" } },
             }
         "404": { $ref: "#/components/responses/Error" }
+  /api/v1/messages/{message_id}/receipts:
+    get:
+      operationId: listMessageReceipts
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/MessageId" }
+      responses:
+        "200":
+          description: Current chat members who have read the message, excluding its author.
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/MessageReceiptList" } },
+            }
+        "404": { $ref: "#/components/responses/Error" }
   /api/v1/messages/{message_id}/pin:
     put:
       operationId: putMessagePin
@@ -1499,6 +1514,23 @@ components:
       properties:
         reactions:
           { type: array, items: { $ref: "#/components/schemas/Reaction" } }
+    MessageReceipt:
+      type: object
+      additionalProperties: false
+      required: [actor_id, read_at]
+      properties:
+        actor_id: { type: string, format: uuid }
+        read_at: { type: string, format: date-time }
+    MessageReceiptList:
+      type: object
+      additionalProperties: false
+      required: [receipts]
+      properties:
+        receipts:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/MessageReceipt" },
+          }
     MessagePin:
       type: object
       additionalProperties: false
