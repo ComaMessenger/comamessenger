@@ -205,6 +205,13 @@ test("responsive chat list opens a channel with a read-only composer", async ({
   await mockMessenger(page);
   await page.goto("/chats");
   await expect(page.getByRole("button", { name: /Объявления/ })).toBeVisible();
+  if (test.info().project.name === "phone") {
+    const header = await page.locator(".chat-sidebar__head").boundingBox();
+    expect(header?.y).toBeLessThan(4);
+    await expect(page).toHaveScreenshot("chat-list.png", {
+      animations: "disabled",
+    });
+  }
   await page.getByRole("button", { name: "Личные" }).click();
   await expect(page).toHaveURL(/filter=direct/);
   await expect(page.getByRole("button", { name: /Объявления/ })).toHaveCount(0);

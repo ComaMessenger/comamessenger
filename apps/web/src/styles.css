@@ -1126,6 +1126,9 @@ a:focus-visible {
     display: block;
     position: relative;
   }
+  .rail {
+    display: none;
+  }
   .chat-sidebar {
     width: 100%;
     height: 100%;
