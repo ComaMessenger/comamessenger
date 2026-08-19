@@ -205,6 +205,9 @@ func TestMessageCoreIntegration(t *testing.T) {
 			if item.ID == reply.ID {
 				t.Fatal("thread reply leaked into main feed")
 			}
+			if item.ID == root.ID && item.ThreadReplyCount != 1 {
+				t.Fatalf("root thread_reply_count = %d, want 1", item.ThreadReplyCount)
+			}
 		}
 		threadPage, err := service.List(ctx, fixture.member, fixture.groupID, ListOptions{Limit: 1, ThreadRootID: &root.ID})
 		if err != nil {
@@ -212,6 +215,18 @@ func TestMessageCoreIntegration(t *testing.T) {
 		}
 		if len(threadPage.Messages) != 1 || threadPage.Messages[0].ID != reply.ID {
 			t.Fatalf("thread page = %+v", threadPage)
+		}
+		if _, err := service.Delete(ctx, fixture.member, reply.ID); err != nil {
+			t.Fatalf("delete thread reply: %v", err)
+		}
+		mainPage, err = service.List(ctx, fixture.member, fixture.groupID, ListOptions{Limit: 100})
+		if err != nil {
+			t.Fatalf("list main feed after reply deletion: %v", err)
+		}
+		for _, item := range mainPage.Messages {
+			if item.ID == root.ID && item.ThreadReplyCount != 0 {
+				t.Fatalf("root thread_reply_count after deletion = %d, want 0", item.ThreadReplyCount)
+			}
 		}
 	})
 

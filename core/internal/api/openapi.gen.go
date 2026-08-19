@@ -1367,9 +1367,12 @@ type Message struct {
 	Id                openapi_types.UUID   `json:"id"`
 	MentionedActorIds []openapi_types.UUID `json:"mentioned_actor_ids"`
 	ReplyToId         *openapi_types.UUID  `json:"reply_to_id,omitempty"`
-	ThreadRootId      *openapi_types.UUID  `json:"thread_root_id,omitempty"`
-	Type              MessageType          `json:"type"`
-	Version           int                  `json:"version"`
+
+	// ThreadReplyCount Number of non-deleted replies when this message is a thread root.
+	ThreadReplyCount int64               `json:"thread_reply_count"`
+	ThreadRootId     *openapi_types.UUID `json:"thread_root_id,omitempty"`
+	Type             MessageType         `json:"type"`
+	Version          int                 `json:"version"`
 }
 
 // MessageBodyFormat defines model for Message.BodyFormat.

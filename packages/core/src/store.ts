@@ -87,7 +87,11 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
       if (event.seq <= get().checkpoint) return false;
       set((state) => {
         let messages = state.messages;
-        if (event.type.startsWith("message.")) {
+        if (
+          event.type === "message.created" ||
+          event.type === "message.updated" ||
+          event.type === "message.deleted"
+        ) {
           const incoming = event.data as unknown as ClientMessage;
           const chatID = incoming.chat_id ?? event.chat_id;
           if (chatID) {
@@ -104,7 +108,25 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
                     index === byID ? { ...item, ...delivered } : item,
                   )
                 : [...current, delivered];
-            messages = { ...messages, [chatID]: uniqueSorted(next) };
+            let withThreadCount = next;
+            if (incoming.thread_root_id && event.type !== "message.updated") {
+              const delta = event.type === "message.created" ? 1 : -1;
+              withThreadCount = next.map((item) =>
+                item.id === incoming.thread_root_id
+                  ? {
+                      ...item,
+                      thread_reply_count: Math.max(
+                        0,
+                        item.thread_reply_count + delta,
+                      ),
+                    }
+                  : item,
+              );
+            }
+            messages = {
+              ...messages,
+              [chatID]: uniqueSorted(withThreadCount),
+            };
           }
         }
         return { messages, checkpoint: event.seq };

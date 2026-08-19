@@ -70,6 +70,7 @@ const message = {
   created_seq: 3,
   created_at: "2026-08-19T06:30:00Z",
   mentioned_actor_ids: [],
+  thread_reply_count: 0,
 };
 
 async function mockMessenger(
@@ -81,6 +82,7 @@ async function mockMessenger(
     history?: Array<Record<string, unknown>>;
     paginate?: boolean;
     theme?: "light" | "dark";
+    reactions?: Array<Record<string, unknown>>;
   } = {},
 ) {
   const {
@@ -90,8 +92,12 @@ async function mockMessenger(
     history: suppliedHistory,
     paginate = false,
     theme = "light",
+    reactions: suppliedReactions = [],
   } = options;
   const runtimeChat = { ...chat, ...chatPatch };
+  let runtimeReactions = [...suppliedReactions];
+  const reactionMutations: string[] = [];
+  let chatRequests = 0;
   let remainingSendFailures = sendFailures;
   let paginationRequests = 0;
   let refreshRequests = 0;
@@ -158,6 +164,8 @@ async function mockMessenger(
     Object.assign(window, {
       WebSocket: FakeSocket,
       __expireComaSocket: () => FakeSocket.latest?.onclose?.({ code: 4001 }),
+      __emitComaEvent: (frame: unknown) =>
+        FakeSocket.latest?.onmessage?.({ data: JSON.stringify(frame) }),
     });
   });
   await page.route("**/api/v1/**", async (route) => {
@@ -173,8 +181,10 @@ async function mockMessenger(
         access_expires_at: "2026-08-20T00:00:00Z",
         user,
       };
-    } else if (path.endsWith("/chats")) body = { chats: [runtimeChat] };
-    else if (path.endsWith("/me") && route.request().method() === "PATCH")
+    } else if (path.endsWith("/chats")) {
+      chatRequests += 1;
+      body = { chats: [runtimeChat] };
+    } else if (path.endsWith("/me") && route.request().method() === "PATCH")
       body = { ...user, ...route.request().postDataJSON() };
     else if (path.endsWith("/preferences")) {
       if (route.request().method() === "PATCH")
@@ -297,15 +307,28 @@ async function mockMessenger(
         last_read_at: "2026-08-19T06:31:00Z",
       };
     else if (/\/messages\/[^/]+\/reactions$/.test(path))
-      body = { reactions: [] };
-    else if (/\/messages\/[^/]+\/reactions\/.+/.test(path))
-      body = {
-        message_id: message.id,
-        actor_id: user.id,
-        emoji: decodeURIComponent(path.split("/").at(-1) ?? ""),
-        created_at: "2026-08-19T06:34:00Z",
-      };
-    else status = 404;
+      body = { reactions: runtimeReactions };
+    else if (/\/messages\/[^/]+\/reactions\/.+/.test(path)) {
+      const emoji = decodeURIComponent(path.split("/").at(-1) ?? "");
+      reactionMutations.push(`${route.request().method()} ${emoji}`);
+      if (route.request().method() === "DELETE") {
+        runtimeReactions = runtimeReactions.filter(
+          (reaction) =>
+            reaction.emoji !== emoji || reaction.actor_id !== user.id,
+        );
+        status = 204;
+        body = undefined;
+      } else {
+        const reaction = {
+          message_id: message.id,
+          actor_id: user.id,
+          emoji,
+          created_at: "2026-08-19T06:34:00Z",
+        };
+        runtimeReactions.push(reaction);
+        body = reaction;
+      }
+    } else status = 404;
     await route.fulfill({
       status,
       contentType: "application/json",
@@ -316,6 +339,23 @@ async function mockMessenger(
     sent,
     paginationRequests: () => paginationRequests,
     refreshRequests: () => refreshRequests,
+    chatRequests: () => chatRequests,
+    reactionMutations,
+    emitEvent: async (
+      frame: Record<string, unknown>,
+      chatState?: Record<string, unknown>,
+    ) => {
+      if (chatState) Object.assign(runtimeChat, chatState);
+      await page.evaluate(
+        (value) =>
+          (
+            window as unknown as {
+              __emitComaEvent(frame: Record<string, unknown>): void;
+            }
+          ).__emitComaEvent(value),
+        frame,
+      );
+    },
   };
 }
 
@@ -361,6 +401,81 @@ test("responsive chat list opens a channel with a read-only composer", async ({
   }
 });
 
+test("message events coalesce and refresh the chat card preview", async ({
+  page,
+}) => {
+  const runtime = await mockMessenger(page);
+  await page.goto("/chats");
+  const preview = page.locator(".chat-card__preview");
+  await expect(preview).toContainText("Добро пожаловать");
+  const requestsBefore = runtime.chatRequests();
+  const remoteMessage = {
+    ...message,
+    id: "00000000-0000-4000-8000-000000000050",
+    client_msg_id: "00000000-0000-4000-8000-000000000051",
+    body: "Со второго устройства",
+    created_seq: 4,
+    created_at: "2026-08-19T06:40:00Z",
+  };
+  await runtime.emitEvent(
+    {
+      op: "event",
+      seq: 4,
+      type: "message.created",
+      occurred_at: remoteMessage.created_at,
+      actor_id: remoteMessage.actor_id,
+      chat_id: chat.id,
+      subject_id: remoteMessage.id,
+      data: remoteMessage,
+    },
+    {
+      last_message: {
+        ...chat.last_message,
+        id: remoteMessage.id,
+        actor_id: lev.actor_id,
+        actor_display_name: lev.display_name,
+        body: remoteMessage.body,
+        created_seq: remoteMessage.created_seq,
+        created_at: remoteMessage.created_at,
+      },
+      last_message_at: remoteMessage.created_at,
+      last_activity_seq: 4,
+    },
+  );
+  await runtime.emitEvent({
+    op: "event",
+    seq: 5,
+    type: "message.updated",
+    occurred_at: remoteMessage.created_at,
+    actor_id: remoteMessage.actor_id,
+    chat_id: chat.id,
+    subject_id: remoteMessage.id,
+    data: remoteMessage,
+  });
+  await expect(preview).toContainText("Лев: Со второго устройства");
+  await expect.poll(runtime.chatRequests).toBe(requestsBefore + 1);
+
+  await runtime.emitEvent(
+    {
+      op: "event",
+      seq: 6,
+      type: "message.deleted",
+      occurred_at: "2026-08-19T06:41:00Z",
+      actor_id: remoteMessage.actor_id,
+      chat_id: chat.id,
+      subject_id: remoteMessage.id,
+      data: { ...remoteMessage, body: "", deleted_at: "2026-08-19T06:41:00Z" },
+    },
+    {
+      last_message: chat.last_message,
+      last_message_at: chat.last_message_at,
+      last_activity_seq: chat.last_activity_seq,
+    },
+  );
+  await expect(preview).toContainText("Добро пожаловать");
+  await expect(preview).not.toContainText("Удалить");
+});
+
 test("global navigation stays stable while utility pages replace content", async ({
   page,
 }) => {
@@ -385,6 +500,16 @@ test("global navigation stays stable while utility pages replace content", async
         name: "Настройки пространства",
       }),
     ).toBeVisible();
+    const workspaceButtonBox = await page
+      .getByRole("button", { name: "Test space" })
+      .boundingBox();
+    const workspaceMenuBox = await workspaceMenu.boundingBox();
+    expect(workspaceButtonBox).not.toBeNull();
+    expect(workspaceMenuBox).not.toBeNull();
+    expect(
+      workspaceMenuBox!.y -
+        (workspaceButtonBox!.y + workspaceButtonBox!.height),
+    ).toBe(4);
     await page.locator(".chat-list-head").click();
     await expect(workspaceMenu).toHaveCount(0);
     await expect(
@@ -560,7 +685,17 @@ test("mentions and reply previews never expose actor or message IDs", async ({
 });
 
 test("chat and message actions stay contextual", async ({ page }) => {
-  await mockMessenger(page, { chatPatch: { kind: "group", role: "admin" } });
+  const runtime = await mockMessenger(page, {
+    chatPatch: { kind: "group", role: "admin" },
+    reactions: [
+      {
+        message_id: message.id,
+        actor_id: user.id,
+        emoji: "👍",
+        created_at: "2026-08-19T06:34:00Z",
+      },
+    ],
+  });
   await page.goto("/chats");
   if (test.info().project.name === "desktop") {
     await page.getByRole("button", { name: "Поиск" }).click();
@@ -579,17 +714,34 @@ test("chat and message actions stay contextual", async ({ page }) => {
     page.getByRole("button", { name: "Действия с чатом" }),
   ).toHaveCount(0);
   await page.getByRole("menuitem", { name: "Закрепить" }).click();
+  await expect(chatButton.locator(".ui-badge")).toHaveText("3");
+  await expect(chatButton.locator(".chat-card__pin")).toHaveCount(0);
   await chatButton.click({ button: "right" });
   await expect(page.getByRole("menuitem", { name: "Открепить" })).toBeVisible();
   await page.getByRole("menuitem", { name: "Отключить уведомления" }).click();
-  await expect(chatButton.locator(".chat-card__muted")).toBeVisible();
+  const mutedIcon = chatButton.locator(".chat-card__muted");
+  await expect(mutedIcon).toBeVisible();
+  const mutedIconBox = await mutedIcon.boundingBox();
+  expect(mutedIconBox).not.toBeNull();
+  expect(mutedIconBox!.width).toBeLessThanOrEqual(12);
   await chatButton.click();
   const messageRow = page.locator("article.message").first();
+  const ownReaction = messageRow.getByRole("button", { name: "👍 1" });
+  await expect(ownReaction).toHaveAttribute("aria-pressed", "true");
+  await ownReaction.click();
+  await expect.poll(() => runtime.reactionMutations.at(-1)).toBe("DELETE 👍");
+  await expect(ownReaction).toHaveCount(0);
   await messageRow.hover();
   await page.getByRole("button", { name: "Действия с сообщением" }).click();
   await page.getByRole("menuitem", { name: "Добавить реакцию" }).click();
   await expect(page.getByRole("dialog", { name: "Эмодзи" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Эмодзи" })).toHaveClass(
+    /reaction-picker--above/,
+  );
   await expect(page.getByPlaceholder("Поиск эмодзи…")).toBeVisible();
+  await expect(page).toHaveScreenshot("reaction-picker-up.png", {
+    animations: "disabled",
+  });
   await page.locator(".conversation-head").click();
   await expect(page.getByRole("dialog", { name: "Эмодзи" })).toHaveCount(0);
   await messageRow.hover();
@@ -606,24 +758,29 @@ test("chat and message actions stay contextual", async ({ page }) => {
 
 test("a thread opens beside an unchanged main feed", async ({ page }) => {
   await mockMessenger(page, {
-    messageCount: 2,
     chatPatch: { kind: "group", role: "admin" },
+    history: [
+      {
+        ...message,
+        id: "message-1",
+        client_msg_id: "client-1",
+        body: "Message 1",
+        thread_reply_count: 3,
+      },
+      {
+        ...message,
+        id: "message-2",
+        client_msg_id: "client-2",
+        body: "Message 2",
+        created_seq: 4,
+        created_at: "2026-08-19T06:31:00Z",
+      },
+    ],
   });
   await page.goto(`/chat/${chat.id}`);
   await expect(page.locator("#message-message-1")).toBeVisible();
   await expect(page.locator("#message-message-2")).toBeVisible();
-  await page.locator("#message-message-1").hover();
-  if (test.info().project.name === "phone") {
-    await page
-      .locator("#message-message-1")
-      .getByRole("button", { name: "Действия с сообщением" })
-      .click();
-    await page.getByRole("menuitem", { name: "В тред" }).click();
-  } else
-    await page
-      .locator("#message-message-1")
-      .getByRole("button", { name: "В тред" })
-      .click();
+  await page.getByRole("button", { name: "3 комментария" }).click();
   await expect(page.getByRole("complementary", { name: "Тред" })).toBeVisible();
   await expect(page.locator("#thread-message-message-1")).toBeVisible();
   await expect(page.getByText("Ответ внутри треда")).toBeVisible();

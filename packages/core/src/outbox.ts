@@ -42,6 +42,7 @@ export class Outbox {
       reply_to_id: input.reply_to_id ?? null,
       thread_root_id: input.thread_root_id ?? null,
       mentioned_actor_ids: input.mentioned_actor_ids ?? [],
+      thread_reply_count: 0,
       version: 1,
       created_seq: Number.MAX_SAFE_INTEGER,
       created_at: item.createdAt,

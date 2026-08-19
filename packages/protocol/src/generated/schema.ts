@@ -1024,6 +1024,11 @@ export interface components {
             deleted_at?: string | null;
             forwarded_from?: components["schemas"]["ForwardAttribution"] | null;
             mentioned_actor_ids: string[];
+            /**
+             * Format: int64
+             * @description Number of non-deleted replies when this message is a thread root.
+             */
+            thread_reply_count: number;
         };
         MessagePage: {
             messages: components["schemas"]["Message"][];

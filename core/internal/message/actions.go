@@ -168,7 +168,7 @@ func (s *Service) ListFollowedThreads(ctx context.Context, user identity.User, b
 		JOIN chats c ON c.org_id = root.org_id AND c.id = root.chat_id AND c.archived_at IS NULL
 		JOIN chat_members cm ON cm.org_id = c.org_id AND cm.chat_id = c.id AND cm.actor_id = $2
 		JOIN actors recipient ON recipient.org_id = cm.org_id AND recipient.id = cm.actor_id
-		LEFT JOIN messages reply ON reply.org_id = root.org_id AND reply.thread_root_id = root.id
+		LEFT JOIN messages reply ON reply.org_id = root.org_id AND reply.thread_root_id = root.id AND reply.deleted_at IS NULL
 		WHERE tf.org_id = $1 AND tf.actor_id = $2
 		  AND recipient.status = 'active' AND recipient.deleted_at IS NULL
 		GROUP BY root.id, tf.followed_at
@@ -189,6 +189,7 @@ func (s *Service) ListFollowedThreads(ctx context.Context, user identity.User, b
 			&item.LastActivitySeq); err != nil {
 			return ThreadPage{}, fmt.Errorf("scan followed thread: %w", err)
 		}
+		item.Root.ThreadReplyCount = item.ReplyCount
 		threads = append(threads, item)
 	}
 	if err := rows.Err(); err != nil {

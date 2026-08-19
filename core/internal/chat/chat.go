@@ -123,7 +123,7 @@ func (s *Service) List(ctx context.Context, user identity.User) ([]Chat, error) 
 			COALESCE(last.created_seq, 0), c.last_message_at
 		FROM chats c JOIN chat_members cm ON cm.chat_id = c.id
 		LEFT JOIN LATERAL (SELECT a.id,a.display_name,a.handle,a.type FROM chat_members other JOIN actors a ON a.id=other.actor_id WHERE other.chat_id=c.id AND other.actor_id<>$1 LIMIT 1) peer ON c.kind='direct'
-		LEFT JOIN LATERAL (SELECT m.id,m.actor_id,a.display_name actor_name,m.body,m.created_seq,m.created_at,m.deleted_at IS NOT NULL deleted FROM messages m JOIN actors a ON a.id=m.actor_id WHERE m.chat_id=c.id ORDER BY m.created_seq DESC LIMIT 1) last ON true
+		LEFT JOIN LATERAL (SELECT m.id,m.actor_id,a.display_name actor_name,m.body,m.created_seq,m.created_at,false deleted FROM messages m JOIN actors a ON a.id=m.actor_id WHERE m.chat_id=c.id AND m.deleted_at IS NULL ORDER BY m.created_seq DESC LIMIT 1) last ON true
 		WHERE cm.actor_id = $1 AND c.org_id = $2 AND c.archived_at IS NULL
 		ORDER BY COALESCE(c.last_message_at, c.created_at) DESC`, user.ActorID, user.OrgID)
 	if err != nil {
@@ -150,7 +150,7 @@ func (s *Service) Get(ctx context.Context, user identity.User, chatID string) (C
 			COALESCE(last.created_seq, 0), c.last_message_at
 		FROM chats c JOIN chat_members cm ON cm.chat_id = c.id
 		LEFT JOIN LATERAL (SELECT a.id,a.display_name,a.handle,a.type FROM chat_members other JOIN actors a ON a.id=other.actor_id WHERE other.chat_id=c.id AND other.actor_id<>$1 LIMIT 1) peer ON c.kind='direct'
-		LEFT JOIN LATERAL (SELECT m.id,m.actor_id,a.display_name actor_name,m.body,m.created_seq,m.created_at,m.deleted_at IS NOT NULL deleted FROM messages m JOIN actors a ON a.id=m.actor_id WHERE m.chat_id=c.id ORDER BY m.created_seq DESC LIMIT 1) last ON true
+		LEFT JOIN LATERAL (SELECT m.id,m.actor_id,a.display_name actor_name,m.body,m.created_seq,m.created_at,false deleted FROM messages m JOIN actors a ON a.id=m.actor_id WHERE m.chat_id=c.id AND m.deleted_at IS NULL ORDER BY m.created_seq DESC LIMIT 1) last ON true
 		WHERE cm.actor_id = $1 AND c.org_id = $2 AND c.id = $3 AND c.archived_at IS NULL`, user.ActorID, user.OrgID, chatID)
 	result, err := scanChat(row)
 	if errors.Is(err, pgx.ErrNoRows) {

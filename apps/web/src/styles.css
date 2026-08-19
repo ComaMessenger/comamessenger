@@ -141,7 +141,7 @@ a:focus-visible {
   position: absolute;
   z-index: 70;
   inset-inline: 0;
-  top: 54px;
+  top: calc(100% + 4px);
   display: grid;
   width: 100%;
   min-width: 0;
@@ -437,13 +437,13 @@ a:focus-visible {
 .chat-card {
   position: relative;
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr);
+  grid-template-columns: 44px minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   width: 100%;
   min-width: 0;
-  min-height: 68px;
-  padding: 8px 9px;
+  min-height: 60px;
+  padding: 5px 8px;
   border: 0;
   border-radius: 10px;
   color: var(--coma-muted);
@@ -458,8 +458,8 @@ a:focus-visible {
   color: var(--coma-primary);
 }
 .chat-list-pane .ui-avatar--lg {
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   font-size: 13px;
 }
@@ -468,6 +468,7 @@ a:focus-visible {
   align-self: stretch;
   align-content: center;
   min-width: 0;
+  padding-block: 3px;
   border-block-end: 1px solid
     color-mix(in srgb, var(--coma-border) 68%, transparent);
 }
@@ -476,6 +477,7 @@ a:focus-visible {
   align-items: center;
   gap: 6px;
   min-width: 0;
+  line-height: 1.25;
 }
 .chat-card__top strong {
   display: flex;
@@ -502,23 +504,23 @@ a:focus-visible {
   opacity: 0.72;
 }
 .chat-card__muted {
-  width: 14px;
-  height: 14px;
+  width: 11px;
+  height: 11px;
   flex: none;
   color: var(--coma-muted);
 }
 .chat-card__bottom {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 5px;
   min-width: 0;
 }
 .chat-card__bottom .ui-badge {
   flex: none;
 }
 .chat-card__pin {
-  width: 14px;
-  height: 14px;
+  width: 11px;
+  height: 11px;
   flex: none;
   color: var(--coma-muted);
 }
@@ -725,9 +727,10 @@ a:focus-visible {
   overflow: hidden;
   flex: 1;
   min-width: 0;
-  margin-block-start: 2px;
+  margin-block-start: 1px;
   color: var(--coma-muted);
   font-size: 11px;
+  line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1038,6 +1041,10 @@ a:focus-visible {
   border-radius: 12px;
   box-shadow: var(--coma-shadow);
 }
+.reaction-picker--above {
+  top: auto;
+  bottom: calc(100% - 22px);
+}
 .reaction-picker .EmojiPickerReact,
 .composer-emoji .EmojiPickerReact {
   --epr-bg-color: var(--coma-surface-raised);
@@ -1115,6 +1122,27 @@ a:focus-visible {
 .reaction-row button strong {
   font-size: 10px;
   font-weight: 600;
+}
+.message__thread-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 26px;
+  margin-block-start: 5px;
+  padding: 3px 9px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--coma-primary);
+  background: var(--coma-primary-soft);
+  font-size: 11px;
+  font-weight: 600;
+}
+.message__thread-link:hover {
+  background: color-mix(in srgb, var(--coma-primary) 18%, transparent);
+}
+.message__thread-link svg {
+  width: 13px;
+  height: 13px;
 }
 .history-loader {
   display: block;

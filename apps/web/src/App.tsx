@@ -764,6 +764,7 @@ function Messenger({
   const [searchOpen, setSearchOpen] = useState(false);
   const [workspaceMenu, setWorkspaceMenu] = useState(false);
   const workspaceMenuRoot = useRef<HTMLDivElement>(null);
+  const reloadTimer = useRef<number | null>(null);
   const [chatLoading, setChatLoading] = useState(true);
   const [chatError, setChatError] = useState("");
   const [modal, setModal] = useState<
@@ -799,6 +800,13 @@ function Messenger({
       setChatLoading(false);
     }
   }, [api, store]);
+  const scheduleReload = useCallback(() => {
+    if (reloadTimer.current !== null) return;
+    reloadTimer.current = window.setTimeout(() => {
+      reloadTimer.current = null;
+      void reload();
+    }, 80);
+  }, [reload]);
   const coordinator = useMemo(
     () =>
       new RealtimeCoordinator(
@@ -812,9 +820,10 @@ function Messenger({
             if (
               applied &&
               (event.type.startsWith("chat.") ||
-                event.type.startsWith("member."))
+                event.type.startsWith("member.") ||
+                event.type.startsWith("message."))
             )
-              void reload();
+              scheduleReload();
             return applied;
           },
           resync: async (watermark) => {
@@ -841,17 +850,20 @@ function Messenger({
           sessionExpired: onLogout,
         },
       ),
-    [api, reload, onLogout, store],
+    [api, onLogout, scheduleReload, store],
   );
   const outbox = useMemo(
     () =>
       new Outbox(api, outboxStorage, {
         optimistic: store.getState().optimistic,
-        delivered: store.getState().reconcile,
+        delivered: (message) => {
+          store.getState().reconcile(message);
+          scheduleReload();
+        },
         retrying: store.getState().retrying,
         failed: store.getState().failed,
       }),
-    [api, store],
+    [api, scheduleReload, store],
   );
 
   useEffect(() => {
@@ -868,7 +880,11 @@ function Messenger({
       .catch(() => undefined);
     coordinator.start();
     void outbox.flush();
-    return () => coordinator.stop();
+    return () => {
+      coordinator.stop();
+      if (reloadTimer.current !== null)
+        window.clearTimeout(reloadTimer.current);
+    };
   }, [api, coordinator, outbox, reload]);
   useEffect(() => {
     store.getState().setActive(selectedID);
@@ -1234,6 +1250,7 @@ function Messenger({
             onBack={() => navigate("/chats")}
             onOpenThread={(id) => navigate(`/chat/${selectedID}/thread/${id}`)}
             onCloseThread={() => navigate(`/chat/${selectedID}`)}
+            onSummaryChanged={scheduleReload}
           />
         ) : showThreads ? (
           <ThreadDirectory
@@ -1461,8 +1478,8 @@ function ChatCard({
           </span>
           <span className="chat-card__bottom">
             <span className="chat-card__preview">
-              {chat.last_message
-                ? `${chat.kind === "direct" ? "" : `${chat.last_message.actor_display_name}: `}${chat.last_message.deleted ? t("remove") : messagePlainText(chat.last_message.body)}`
+              {chat.last_message && !chat.last_message.deleted
+                ? `${chat.kind === "direct" ? "" : `${chat.last_message.actor_display_name}: `}${messagePlainText(chat.last_message.body)}`
                 : chat.topic ||
                   (chat.kind === "direct" ? t("direct") : t(chat.kind))}
             </span>
@@ -1716,6 +1733,7 @@ function Conversation({
   onBack,
   onOpenThread,
   onCloseThread,
+  onSummaryChanged,
 }: {
   api: MessengerAPI;
   store: ReturnType<typeof createMessengerStore>;
@@ -1728,6 +1746,7 @@ function Conversation({
   onBack(): void;
   onOpenThread(id: string): void;
   onCloseThread(): void;
+  onSummaryChanged(): void;
 }) {
   const { t } = useTranslation();
   const messages = useStore(
@@ -1974,6 +1993,7 @@ function Conversation({
                   author={members.find(
                     (item) => item.actor_id === message.actor_id,
                   )}
+                  currentActorID={user.id}
                   own={message.actor_id === user.id || !message.actor_id}
                   grouped={
                     !newDay &&
@@ -1986,7 +2006,7 @@ function Conversation({
                   onThread={() =>
                     onOpenThread(message.thread_root_id ?? message.id)
                   }
-                  onChanged={(updated) =>
+                  onChanged={(updated) => {
                     store.getState().apply({
                       op: "event",
                       seq: Math.max(
@@ -1999,8 +2019,9 @@ function Conversation({
                       chat_id: updated.chat_id,
                       subject_id: updated.id,
                       data: updated,
-                    })
-                  }
+                    });
+                    onSummaryChanged();
+                  }}
                 />
               </div>
             );
@@ -2066,6 +2087,7 @@ function MessageRow({
   members,
   replyMessage,
   author,
+  currentActorID,
   own,
   grouped,
   onReply,
@@ -2074,6 +2096,7 @@ function MessageRow({
   onThread,
   onChanged,
   domIDPrefix = "message",
+  showThreadIndicator = true,
 }: {
   api: MessengerAPI;
   message: ClientMessage;
@@ -2081,6 +2104,7 @@ function MessageRow({
   members: ChatMember[];
   replyMessage?: ClientMessage;
   author?: ChatMember;
+  currentActorID: string;
   own: boolean;
   grouped: boolean;
   onReply(): void;
@@ -2089,15 +2113,18 @@ function MessageRow({
   onThread(): void;
   onChanged(value: Message): void;
   domIDPrefix?: string;
+  showThreadIndicator?: boolean;
 }) {
   const { t } = useTranslation();
   const [menu, setMenu] = useState(false);
   const [forwarding, setForwarding] = useState(false);
-  const [reactionPicker, setReactionPicker] = useState(false);
+  const [reactionPicker, setReactionPicker] = useState<
+    "above" | "below" | null
+  >(null);
   const interactionRoot = useRef<HTMLElement>(null);
-  useDismissable(interactionRoot, menu || reactionPicker, () => {
+  useDismissable(interactionRoot, Boolean(menu || reactionPicker), () => {
     setMenu(false);
-    setReactionPicker(false);
+    setReactionPicker(null);
   });
   const reactionsQuery = useQuery({
     queryKey: ["message-reactions", message.id],
@@ -2139,30 +2166,45 @@ function MessageRow({
     onChanged(await api.deleteMessage(message.id));
     setMenu(false);
   }
-  async function react(emoji: string) {
-    await api.react(message.id, emoji);
+  async function toggleReaction(emoji: string) {
+    const ownReaction = (reactionsQuery.data ?? []).some(
+      (reaction) =>
+        reaction.emoji === emoji && reaction.actor_id === currentActorID,
+    );
+    if (ownReaction) await api.unreact(message.id, emoji);
+    else await api.react(message.id, emoji);
     await reactionsQuery.refetch();
     setMenu(false);
-    setReactionPicker(false);
+    setReactionPicker(null);
+  }
+  function openReactionPicker() {
+    const bounds = interactionRoot.current?.getBoundingClientRect();
+    setMenu(false);
+    setReactionPicker(
+      bounds && window.innerHeight - bounds.bottom < 440 ? "above" : "below",
+    );
   }
   function openThread() {
     setMenu(false);
-    setReactionPicker(false);
+    setReactionPicker(null);
     onThread();
   }
   function reply() {
     setMenu(false);
-    setReactionPicker(false);
+    setReactionPicker(null);
     onReply();
   }
   const reactionGroups = Object.entries(
-    (reactionsQuery.data ?? []).reduce<Record<string, number>>(
-      (groups, reaction) => ({
-        ...groups,
-        [reaction.emoji]: (groups[reaction.emoji] ?? 0) + 1,
-      }),
-      {},
-    ),
+    (reactionsQuery.data ?? []).reduce<
+      Record<string, { count: number; own: boolean }>
+    >((groups, reaction) => {
+      const current = groups[reaction.emoji] ?? { count: 0, own: false };
+      groups[reaction.emoji] = {
+        count: current.count + 1,
+        own: current.own || reaction.actor_id === currentActorID,
+      };
+      return groups;
+    }, {}),
   );
   return (
     <article
@@ -2211,13 +2253,23 @@ function MessageRow({
           </span>
         )}
         <div className="reaction-row">
-          {reactionGroups.map(([emoji, count]) => (
-            <button key={emoji} onClick={() => void react(emoji)}>
+          {reactionGroups.map(([emoji, group]) => (
+            <button
+              key={emoji}
+              aria-pressed={group.own}
+              onClick={() => void toggleReaction(emoji)}
+            >
               <span>{emoji}</span>
-              <strong>{count}</strong>
+              <strong>{group.count}</strong>
             </button>
           ))}
         </div>
+        {showThreadIndicator && message.thread_reply_count > 0 && (
+          <button className="message__thread-link" onClick={openThread}>
+            <MessageSquareReply />
+            {t("commentCount", { count: message.thread_reply_count })}
+          </button>
+        )}
         {message.delivery &&
           message.delivery !== "sent" &&
           (message.delivery === "sending" || message.delivery === "retrying" ? (
@@ -2235,7 +2287,8 @@ function MessageRow({
           label={t("addReaction")}
           onClick={() => {
             setMenu(false);
-            setReactionPicker((open) => !open);
+            if (reactionPicker) setReactionPicker(null);
+            else openReactionPicker();
           }}
         >
           <SmilePlus />
@@ -2246,7 +2299,7 @@ function MessageRow({
         <IconButton
           label={t("openMenu")}
           onClick={() => {
-            setReactionPicker(false);
+            setReactionPicker(null);
             setMenu(!menu);
           }}
         >
@@ -2254,7 +2307,14 @@ function MessageRow({
         </IconButton>
       </div>
       {reactionPicker && (
-        <div className="reaction-picker" role="dialog" aria-label={t("emoji")}>
+        <div
+          className={cx(
+            "reaction-picker",
+            `reaction-picker--${reactionPicker}`,
+          )}
+          role="dialog"
+          aria-label={t("emoji")}
+        >
           <Suspense fallback={<Skeleton />}>
             <EmojiPicker
               width="100%"
@@ -2269,7 +2329,7 @@ function MessageRow({
               searchPlaceholder={t("searchEmoji")}
               searchClearButtonLabel={t("clearSearch")}
               previewConfig={{ showPreview: false }}
-              onEmojiClick={(emoji) => void react(emoji.emoji)}
+              onEmojiClick={(emoji) => void toggleReaction(emoji.emoji)}
             />
           </Suspense>
         </div>
@@ -2280,7 +2340,7 @@ function MessageRow({
             role="menuitem"
             onClick={() => {
               setMenu(false);
-              setReactionPicker(true);
+              openReactionPicker();
             }}
           >
             <SmilePlus />
@@ -2883,6 +2943,7 @@ function ThreadPanel({
             chats={Object.values(store.getState().chats)}
             members={members}
             author={members.find((item) => item.actor_id === root.actor_id)}
+            currentActorID={user.id}
             own={root.actor_id === user.id}
             grouped={false}
             onReply={() => setReply(root)}
@@ -2891,6 +2952,7 @@ function ThreadPanel({
             onThread={() => undefined}
             onChanged={() => void query.refetch()}
             domIDPrefix="thread-message"
+            showThreadIndicator={false}
           />
         )}
         {root && replies.length > 0 && (
@@ -2913,6 +2975,7 @@ function ThreadPanel({
               author={members.find(
                 (item) => item.actor_id === message.actor_id,
               )}
+              currentActorID={user.id}
               own={message.actor_id === user.id}
               grouped={
                 previous?.actor_id === message.actor_id &&
@@ -2928,6 +2991,7 @@ function ThreadPanel({
               onThread={() => undefined}
               onChanged={() => void query.refetch()}
               domIDPrefix="thread-message"
+              showThreadIndicator={false}
             />
           );
         })}

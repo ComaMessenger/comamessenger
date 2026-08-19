@@ -45,6 +45,7 @@ type Message struct {
 	DeletedAt         *time.Time          `json:"deleted_at"`
 	ForwardedFrom     *ForwardAttribution `json:"forwarded_from,omitempty"`
 	MentionedActorIDs []string            `json:"mentioned_actor_ids"`
+	ThreadReplyCount  int64               `json:"thread_reply_count"`
 }
 
 type ForwardAttribution struct {
@@ -239,6 +240,9 @@ func (s *Service) List(ctx context.Context, user identity.User, chatID string, o
 		cursor := messages[len(messages)-1].CreatedSeq
 		next = &cursor
 	}
+	if err := hydrateThreadReplyCounts(ctx, tx, user.OrgID, messages); err != nil {
+		return Page{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return Page{}, fmt.Errorf("commit list messages: %w", err)
 	}
@@ -290,6 +294,9 @@ func (s *Service) Context(ctx context.Context, user identity.User, messageID str
 		return Window{}, err
 	}
 	sort.Slice(result.Messages, func(i, j int) bool { return result.Messages[i].CreatedSeq < result.Messages[j].CreatedSeq })
+	if err := hydrateThreadReplyCounts(ctx, tx, user.OrgID, result.Messages); err != nil {
+		return Window{}, err
+	}
 	if len(result.Messages) > 0 {
 		firstSeq := result.Messages[0].CreatedSeq
 		lastSeq := result.Messages[len(result.Messages)-1].CreatedSeq
@@ -424,6 +431,15 @@ func (s *Service) Delete(ctx context.Context, user identity.User, messageID stri
 	}
 	if err := insertEvent(ctx, tx, user, result.ChatID, result.ID, seq, "message.deleted"); err != nil {
 		return Message{}, err
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE chats
+		SET last_message_at = (
+			SELECT max(created_at) FROM messages
+			WHERE org_id = $1 AND chat_id = $2 AND deleted_at IS NULL
+		)
+		WHERE org_id = $1 AND id = $2`, user.OrgID, result.ChatID); err != nil {
+		return Message{}, fmt.Errorf("update chat activity after message deletion: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return Message{}, fmt.Errorf("commit delete message: %w", err)
@@ -658,6 +674,43 @@ func scanMessage(row rowScanner, result *Message) error {
 	return row.Scan(&result.ID, &result.ChatID, &result.ActorID, &result.ClientMsgID, &result.Type,
 		&result.Body, &result.BodyFormat, &result.ReplyToID, &result.ThreadRootID, &result.Version,
 		&result.CreatedSeq, &result.CreatedAt, &result.EditedAt, &result.DeletedAt, newJSONScanner(&result.ForwardedFrom), &result.MentionedActorIDs)
+}
+
+func hydrateThreadReplyCounts(ctx context.Context, tx pgx.Tx, orgID string, messages []Message) error {
+	rootIDs := make([]string, 0, len(messages))
+	for i := range messages {
+		if messages[i].ThreadRootID == nil && messages[i].DeletedAt == nil {
+			rootIDs = append(rootIDs, messages[i].ID)
+		}
+	}
+	if len(rootIDs) == 0 {
+		return nil
+	}
+	rows, err := tx.Query(ctx, `
+		SELECT thread_root_id, count(*)
+		FROM messages
+		WHERE org_id = $1 AND thread_root_id = ANY($2::uuid[]) AND deleted_at IS NULL
+		GROUP BY thread_root_id`, orgID, rootIDs)
+	if err != nil {
+		return fmt.Errorf("load thread reply counts: %w", err)
+	}
+	defer rows.Close()
+	counts := make(map[string]int64, len(rootIDs))
+	for rows.Next() {
+		var rootID string
+		var count int64
+		if err := rows.Scan(&rootID, &count); err != nil {
+			return fmt.Errorf("scan thread reply count: %w", err)
+		}
+		counts[rootID] = count
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate thread reply counts: %w", err)
+	}
+	for i := range messages {
+		messages[i].ThreadReplyCount = counts[messages[i].ID]
+	}
+	return nil
 }
 
 func validateMentions(ctx context.Context, tx pgx.Tx, orgID, chatID string, actorIDs []string) error {

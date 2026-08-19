@@ -3212,6 +3212,7 @@
           "body",
           "body_format",
           "mentioned_actor_ids",
+          "thread_reply_count",
           "version",
           "created_seq",
           "created_at"
@@ -3307,6 +3308,12 @@
               "format": "uuid"
             },
             "uniqueItems": true
+          },
+          "thread_reply_count": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Number of non-deleted replies when this message is a thread root."
           }
         }
       },

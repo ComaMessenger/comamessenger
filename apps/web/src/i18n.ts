@@ -141,6 +141,8 @@ const ru = {
   replies: "Ответы",
   replyCount:
     "{count, plural, one {# ответ} few {# ответа} many {# ответов} other {# ответа}}",
+  commentCount:
+    "{count, plural, one {# комментарий} few {# комментария} many {# комментариев} other {# комментария}}",
   followedThreads: "Ваши треды",
   follow: "Подписаться",
   unfollow: "Отписаться",
@@ -355,6 +357,7 @@ const en: Record<keyof typeof ru, string> = {
   public: "Public",
   replies: "Replies",
   replyCount: "{count, plural, one {# reply} other {# replies}}",
+  commentCount: "{count, plural, one {# comment} other {# comments}}",
   followedThreads: "Your threads",
   follow: "Follow",
   unfollow: "Unfollow",

@@ -27,6 +27,7 @@ const message: ClientMessage = {
   created_seq: 3,
   created_at: "2026-01-01T00:00:00Z",
   mentioned_actor_ids: [],
+  thread_reply_count: 0,
 };
 describe("domain store", () => {
   it("applies durable events idempotently and reconciles client_msg_id", () => {
@@ -64,6 +65,55 @@ describe("domain store", () => {
     expect(store.getState().messages.chat).toHaveLength(1);
     expect(store.getState().messages.chat?.[0]?.id).toBe("a");
     expect(store.getState().checkpoint).toBe(10);
+  });
+  it("tracks live thread reply counts and ignores non-message action payloads", () => {
+    const store = createMessengerStore();
+    store.getState().replaceMessages("chat", [message]);
+    const reply = {
+      ...message,
+      id: "reply",
+      client_msg_id: "reply-client",
+      thread_root_id: message.id,
+      created_seq: 4,
+    };
+    expect(
+      store.getState().apply({
+        op: "event",
+        seq: 4,
+        type: "message.created",
+        occurred_at: message.created_at,
+        actor_id: message.actor_id,
+        chat_id: message.chat_id,
+        subject_id: reply.id,
+        data: reply,
+      }),
+    ).toBe(true);
+    expect(store.getState().messages.chat?.[0]?.thread_reply_count).toBe(1);
+    expect(
+      store.getState().apply({
+        op: "event",
+        seq: 5,
+        type: "message.deleted",
+        occurred_at: message.created_at,
+        actor_id: message.actor_id,
+        chat_id: message.chat_id,
+        subject_id: reply.id,
+        data: { ...reply, deleted_at: message.created_at },
+      }),
+    ).toBe(true);
+    expect(store.getState().messages.chat?.[0]?.thread_reply_count).toBe(0);
+    const before = store.getState().messages.chat?.length;
+    store.getState().apply({
+      op: "event",
+      seq: 6,
+      type: "message.pinned",
+      occurred_at: message.created_at,
+      actor_id: message.actor_id,
+      chat_id: message.chat_id,
+      subject_id: message.id,
+      data: { message_id: message.id },
+    });
+    expect(store.getState().messages.chat).toHaveLength(before ?? 0);
   });
 });
 describe("markdown AST", () => {
