@@ -26,6 +26,13 @@ const user = {
   status: "active",
   created_at: "2026-08-19T00:00:00Z",
 };
+const lev = {
+  actor_id: "01a01612-85e4-7145-bda3-82db7b4a3075",
+  display_name: "Лев",
+  handle: "lev",
+  role: "member",
+  joined_at: "2026-08-19T00:00:00Z",
+};
 const chat = {
   id: "00000000-0000-4000-8000-000000000020",
   kind: "channel",
@@ -51,7 +58,7 @@ const chat = {
 const message = {
   id: "00000000-0000-4000-8000-000000000030",
   chat_id: chat.id,
-  actor_id: "00000000-0000-4000-8000-000000000002",
+  actor_id: lev.actor_id,
   client_msg_id: "00000000-0000-4000-8000-000000000031",
   type: "text",
   body: "Добро пожаловать в **Coma**",
@@ -68,13 +75,21 @@ async function mockMessenger(
     messageCount?: number;
     chatPatch?: Record<string, unknown>;
     sendFailures?: number;
+    history?: Array<Record<string, unknown>>;
   } = {},
 ) {
-  const { messageCount = 1, chatPatch = {}, sendFailures = 0 } = options;
+  const {
+    messageCount = 1,
+    chatPatch = {},
+    sendFailures = 0,
+    history: suppliedHistory,
+  } = options;
   const runtimeChat = { ...chat, ...chatPatch };
   let remainingSendFailures = sendFailures;
+  const sent: Array<Record<string, unknown>> = [];
   const history =
-    messageCount === 1
+    suppliedHistory ??
+    (messageCount === 1
       ? [message]
       : Array.from({ length: messageCount }, (_, index) => ({
           ...message,
@@ -85,7 +100,7 @@ async function mockMessenger(
           created_at: new Date(
             Date.UTC(2026, 7, 19, 0, 0, index),
           ).toISOString(),
-        }));
+        })));
   await page.addInitScript(() => {
     localStorage.setItem("coma-locale", "ru");
     localStorage.setItem("coma-theme", "light");
@@ -159,6 +174,7 @@ async function mockMessenger(
             role: "member",
             joined_at: "2026-08-19T00:00:00Z",
           },
+          lev,
         ],
       };
     else if (
@@ -170,7 +186,8 @@ async function mockMessenger(
         status = 503;
         body = { code: "service_unavailable", message: "offline" };
       } else {
-        const input = route.request().postDataJSON();
+        const input = route.request().postDataJSON() as Record<string, unknown>;
+        sent.push(input);
         status = 201;
         body = {
           ...message,
@@ -182,7 +199,14 @@ async function mockMessenger(
           created_at: "2026-08-19T06:32:00Z",
         };
       }
-    } else if (path.endsWith(`/chats/${chat.id}/messages`))
+    } else if (/\/messages\/[^/]+\/context$/.test(path))
+      body = {
+        messages: history,
+        target_id: path.split("/").at(-2),
+        has_earlier: false,
+        has_later: false,
+      };
+    else if (path.endsWith(`/chats/${chat.id}/messages`))
       body = { messages: history, next_before_seq: null };
     else if (path.endsWith(`/chats/${chat.id}/read`))
       body = {
@@ -197,6 +221,7 @@ async function mockMessenger(
       body: JSON.stringify(body),
     });
   });
+  return { sent };
 }
 
 test("responsive chat list opens a channel with a read-only composer", async ({
@@ -206,16 +231,20 @@ test("responsive chat list opens a channel with a read-only composer", async ({
   await page.goto("/chats");
   await expect(page.getByRole("button", { name: /Объявления/ })).toBeVisible();
   if (test.info().project.name === "phone") {
-    const header = await page.locator(".chat-sidebar__head").boundingBox();
+    const header = await page.locator(".workspace-switcher").boundingBox();
     expect(header?.y).toBeLessThan(4);
     await expect(page).toHaveScreenshot("chat-list.png", {
       animations: "disabled",
     });
   }
-  await page.getByRole("button", { name: "Личные" }).click();
-  await expect(page).toHaveURL(/filter=direct/);
-  await expect(page.getByRole("button", { name: /Объявления/ })).toHaveCount(0);
-  await page.getByRole("button", { name: "Все" }).click();
+  if (test.info().project.name === "phone") {
+    await page.getByRole("button", { name: "Личные" }).click();
+    await expect(page).toHaveURL(/filter=direct/);
+    await expect(page.getByRole("button", { name: /Объявления/ })).toHaveCount(
+      0,
+    );
+    await page.getByRole("button", { name: "Все" }).click();
+  }
   await page.getByRole("button", { name: /Объявления/ }).click();
   await expect(
     page.getByText("Добро пожаловать в Coma", { exact: true }),
@@ -235,6 +264,59 @@ test("responsive chat list opens a channel with a read-only composer", async ({
       page.getByRole("button", { name: /Объявления/ }),
     ).toBeVisible();
   }
+});
+
+test("mentions and reply previews never expose actor or message IDs", async ({
+  page,
+}) => {
+  const reply = {
+    ...message,
+    id: "00000000-0000-4000-8000-000000000041",
+    client_msg_id: "00000000-0000-4000-8000-000000000042",
+    actor_id: user.id,
+    body: `@[Лев](${lev.actor_id}) ты как`,
+    reply_to_id: message.id,
+    mentioned_actor_ids: [lev.actor_id],
+    created_seq: 4,
+    created_at: "2026-08-19T06:31:00Z",
+  };
+  const { sent } = await mockMessenger(page, {
+    chatPatch: {
+      kind: "group",
+      role: "owner",
+      last_message: {
+        ...chat.last_message,
+        actor_display_name: "Лев",
+        body: `@[Лев](${lev.actor_id}) привет`,
+      },
+    },
+    history: [message, reply],
+  });
+  await page.goto("/chats");
+  if (test.info().project.name === "phone")
+    await expect(
+      page.locator(".mobile-chat-list .chat-card__preview"),
+    ).toContainText("Лев: @Лев привет");
+  await expect(page.getByText(lev.actor_id)).toHaveCount(0);
+  await page.getByRole("button", { name: /Объявления/ }).click();
+  await expect(page.locator(".message__quote")).toContainText(
+    "Добро пожаловать в Coma",
+  );
+  await expect(page.locator(".message__quote")).not.toContainText(
+    message.id.slice(0, 8),
+  );
+  const composer = page.getByRole("textbox", { name: "Напишите сообщение…" });
+  await composer.fill("@ле");
+  await page.getByRole("button", { name: /Лев.*@lev/ }).click();
+  await expect(composer).toHaveValue("@Лев ");
+  await expect(page).toHaveScreenshot("mention-reply.png", {
+    animations: "disabled",
+  });
+  await composer.pressSequentially("привет");
+  await page.getByRole("button", { name: "Отправить" }).click();
+  await expect.poll(() => sent.length).toBe(1);
+  expect(sent[0]?.body).toBe(`@[Лев](${lev.actor_id}) привет`);
+  expect(sent[0]?.mentioned_actor_ids).toEqual([lev.actor_id]);
 });
 
 test("a 10k-message history stays virtualized", async ({ page }) => {

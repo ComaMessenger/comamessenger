@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { createMessengerStore } from "./store";
 import { parseMarkdown } from "./markdown";
+import {
+  decodeMentions,
+  encodeMentions,
+  insertMention,
+  messagePlainText,
+  mentionedActorIDs,
+  updateMentionText,
+} from "./mentions";
+import { compactUUID, expandUUID } from "./links";
 import { RealtimeCoordinator, type CheckpointStorage } from "./realtime";
 import { Outbox, type OutboxItem, type OutboxStorage } from "./outbox";
 import type { ClientMessage, Message } from "./types";
@@ -67,6 +76,47 @@ describe("markdown AST", () => {
       "text",
     ]);
     expect(JSON.stringify(tree)).toContain("<script>");
+  });
+});
+
+describe("structured mentions", () => {
+  const actorID = "01a01612-85e4-7145-bda3-82db7b4a3075";
+
+  it("keeps actor IDs out of editable and preview text", () => {
+    const source = `Привет @[Лев](${actorID})`;
+    expect(decodeMentions(source).text).toBe("Привет @Лев");
+    expect(messagePlainText(source)).toBe("Привет @Лев");
+    expect(mentionedActorIDs(source)).toEqual([actorID]);
+  });
+
+  it("round-trips a selected mention while text changes around it", () => {
+    const selected = insertMention(
+      { text: "Привет @ле", mentions: [] },
+      7,
+      10,
+      actorID,
+      "Лев",
+    );
+    const edited = updateMentionText(selected, `${selected.text}как дела?`);
+    expect(encodeMentions(edited)).toBe(`Привет @[Лев](${actorID}) как дела?`);
+  });
+
+  it("drops mention metadata when its visible label is edited", () => {
+    const source = `@[Лев](${actorID}) привет`;
+    const draft = decodeMentions(source);
+    const edited = updateMentionText(draft, "@Леон привет");
+    expect(encodeMentions(edited)).toBe("@Леон привет");
+    expect(mentionedActorIDs(encodeMentions(edited))).toEqual([]);
+  });
+});
+
+describe("compact deep links", () => {
+  it("round-trips UUIDs through a 22-character URL-safe key", () => {
+    const id = "01a01855-2aaf-75f0-b24d-0685817a51af";
+    const compact = compactUUID(id);
+    expect(compact).toHaveLength(22);
+    expect(compact).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(expandUUID(compact)).toBe(id);
   });
 });
 

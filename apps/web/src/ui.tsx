@@ -199,7 +199,6 @@ export function Avatar({
   size?: "sm" | "md" | "lg";
   online?: boolean;
 }) {
-  const { t } = useTranslation();
   const initials = name
     .split(/\s+/)
     .slice(0, 2)
@@ -209,7 +208,7 @@ export function Avatar({
   return (
     <span className={cx("ui-avatar", `ui-avatar--${size}`)}>
       {initials || "U"}
-      {online && <i aria-label={t("online")} />}
+      {online && <i aria-hidden="true" />}
     </span>
   );
 }

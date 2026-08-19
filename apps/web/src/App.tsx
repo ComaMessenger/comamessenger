@@ -15,17 +15,13 @@ import { useTranslation } from "react-i18next";
 import {
   Bell,
   Bookmark,
-  ChevronDown,
   ChevronLeft,
   Circle,
-  Compass,
-  Hash,
   Inbox,
   Info,
   Languages,
   LogOut,
   Megaphone,
-  Menu,
   MessageCircle,
   MessagesSquare,
   Moon,
@@ -37,7 +33,6 @@ import {
   Settings,
   Smile,
   Sun,
-  Users,
   X,
 } from "lucide-react";
 import {
@@ -45,7 +40,15 @@ import {
   MessengerAPI,
   Outbox,
   RealtimeCoordinator,
+  compactUUID,
   createMessengerStore,
+  decodeMentions,
+  encodeMentions,
+  expandUUID,
+  insertMention,
+  messagePlainText,
+  mentionedActorIDs,
+  updateMentionText,
   type AcceptInvitationRequest,
   type BootstrapRequest,
   type Chat,
@@ -505,6 +508,23 @@ function Messenger({
     if (selectedID) void loadMessages(api, store, selectedID);
   }, [api, coordinator, selectedID, store, threadID]);
   useEffect(() => {
+    const key = /^\/m\/([^/]+)$/.exec(path)?.[1];
+    if (!key) return;
+    try {
+      const messageID = expandUUID(key);
+      void api
+        .messageContext(messageID, 3)
+        .then((context) => {
+          const target = context.messages.find((item) => item.id === messageID);
+          if (!target) throw new Error("message not found");
+          navigate(`/chat/${target.chat_id}?message=${messageID}`);
+        })
+        .catch((cause) => setChatError(messageOf(cause)));
+    } catch (cause) {
+      setChatError(messageOf(cause));
+    }
+  }, [api, navigate, path]);
+  useEffect(() => {
     channel.onmessage = (event) => {
       if (event.data === "logout") {
         api.clearToken();
@@ -527,15 +547,24 @@ function Messenger({
     return () => window.removeEventListener("online", flush);
   }, [outbox]);
 
-  const filtered = chats
-    .filter(
-      (chat) =>
-        filter === "all" ||
-        (filter === "direct" ? chat.kind === "direct" : chat.kind !== "direct"),
-    )
-    .filter((chat) =>
-      titleOf(chat, [], user.id).toLowerCase().includes(query.toLowerCase()),
-    );
+  const searched = chats.filter((chat) =>
+    titleOf(chat, [], user.id).toLowerCase().includes(query.toLowerCase()),
+  );
+  const filtered = searched.filter(
+    (chat) =>
+      filter === "all" ||
+      (filter === "direct" ? chat.kind === "direct" : chat.kind !== "direct"),
+  );
+  const sections = (["direct", "group", "channel"] as const).map((kind) => ({
+    kind,
+    label:
+      kind === "direct"
+        ? t("direct")
+        : kind === "group"
+          ? t("chats")
+          : t("channels"),
+    chats: searched.filter((chat) => chat.kind === kind),
+  }));
   async function logout() {
     await api.logout();
     channel.postMessage("logout");
@@ -556,49 +585,12 @@ function Messenger({
         threadID && "messenger--thread-open",
       )}
     >
-      <aside className="rail" aria-label={t("primaryNavigation")}>
-        <Logo size="small" />
-        <nav>
-          <RailButton
-            icon={<MessageCircle />}
-            active
-            label={t("chats")}
-            onClick={() => navigate("/chats")}
-          />
-          <RailButton
-            icon={<Inbox />}
-            label={t("threads")}
-            onClick={() => navigate("/threads")}
-          />
-          <RailButton
-            icon={<Bookmark />}
-            label={t("saved")}
-            onClick={() => {
-              if (selectedID) setModal("pinned");
-            }}
-          />
-        </nav>
-        <div className="rail__bottom">
-          <IconButton
-            label={t("settings")}
-            onClick={() => setModal("settings")}
-          >
-            <Settings />
-          </IconButton>
-          <button
-            className="profile-dot"
-            title={user.display_name}
-            onClick={() => setModal("settings")}
-          >
-            <Avatar name={user.display_name} size="sm" online />
-          </button>
-        </div>
-      </aside>
       <aside className="chat-sidebar" aria-label={t("chatNavigation")}>
-        <header className="chat-sidebar__head">
-          <div>
-            <span className="eyebrow">Coma</span>
-            <h1>{showThreads ? t("threads") : t("chats")}</h1>
+        <header className="workspace-switcher">
+          <Logo size="small" />
+          <div className="workspace-copy">
+            <span>Coma</span>
+            <strong>{showThreads ? t("threads") : t("chats")}</strong>
           </div>
           <IconButton label={t("newChat")} onClick={() => setModal("new")}>
             <Plus />
@@ -606,15 +598,41 @@ function Messenger({
         </header>
         {!showThreads && (
           <>
-            <label className="search-field">
-              <Search size={17} />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={t("search")}
-                aria-label={t("search")}
-              />
-            </label>
+            <div className="search-actions">
+              <label className="search-field">
+                <Search size={16} />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={t("search")}
+                  aria-label={t("search")}
+                />
+              </label>
+              <IconButton label={t("newChat")} onClick={() => setModal("new")}>
+                <Plus />
+              </IconButton>
+            </div>
+            <nav className="sidebar-nav" aria-label={t("primaryNavigation")}>
+              <button className="active" onClick={() => navigate("/chats")}>
+                <MessageCircle />
+                <span>{t("chats")}</span>
+              </button>
+              <button onClick={() => navigate("/threads")}>
+                <Inbox />
+                <span>{t("threads")}</span>
+              </button>
+              <button
+                disabled={!selectedID}
+                onClick={() => selectedID && setModal("pinned")}
+              >
+                <Bookmark />
+                <span>{t("saved")}</span>
+              </button>
+              <button onClick={() => setModal("settings")}>
+                <Settings />
+                <span>{t("settings")}</span>
+              </button>
+            </nav>
             <div className="filter-chips" role="group" aria-label={t("chats")}>
               {(["all", "direct", "grouped"] as const).map((item) => (
                 <button
@@ -630,26 +648,83 @@ function Messenger({
               {chatError && <FormError message={chatError} />}
               {chatLoading ? (
                 <Skeleton />
-              ) : filtered.length ? (
-                filtered.map((chat) => (
-                  <ChatCard
-                    key={chat.id}
-                    chat={chat}
-                    title={titleOf(chat, [], user.id)}
-                    selected={chat.id === selectedID}
-                    unread={unread.chats.find(
-                      (item) => item.chat_id === chat.id,
-                    )}
-                    onClick={() => navigate(`/chat/${chat.id}`)}
-                  />
-                ))
+              ) : searched.length ? (
+                <>
+                  <div className="desktop-chat-groups">
+                    {sections.map((section) => (
+                      <section className="chat-folder" key={section.kind}>
+                        <header className="chat-folder__head">
+                          <span>{section.label}</span>
+                          <small>{section.chats.length}</small>
+                        </header>
+                        <div className="chat-folder__items">
+                          {section.chats.map((chat) => (
+                            <ChatCard
+                              key={chat.id}
+                              chat={chat}
+                              title={titleOf(chat, [], user.id)}
+                              selected={chat.id === selectedID}
+                              unread={unread.chats.find(
+                                (item) => item.chat_id === chat.id,
+                              )}
+                              onClick={() => navigate(`/chat/${chat.id}`)}
+                            />
+                          ))}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                  <div className="mobile-chat-list">
+                    {filtered.map((chat) => (
+                      <ChatCard
+                        key={chat.id}
+                        chat={chat}
+                        title={titleOf(chat, [], user.id)}
+                        selected={chat.id === selectedID}
+                        unread={unread.chats.find(
+                          (item) => item.chat_id === chat.id,
+                        )}
+                        onClick={() => navigate(`/chat/${chat.id}`)}
+                      />
+                    ))}
+                  </div>
+                </>
               ) : (
                 <Empty label={t("emptyChats")} />
               )}
             </div>
           </>
         )}
-        {showThreads && <ThreadDirectory api={api} navigate={navigate} />}
+        {showThreads && (
+          <>
+            <button
+              className="sidebar-return"
+              onClick={() => navigate("/chats")}
+            >
+              <ChevronLeft /> {t("chats")}
+            </button>
+            <ThreadDirectory api={api} navigate={navigate} />
+          </>
+        )}
+        <footer className="sidebar-profile">
+          <Avatar name={user.display_name} size="sm" online />
+          <div>
+            <strong>{user.display_name}</strong>
+            <span>@{user.handle}</span>
+          </div>
+          <IconButton
+            label={t("notifications")}
+            onClick={() => setModal("notify")}
+          >
+            <Bell />
+          </IconButton>
+          <IconButton
+            label={t("settings")}
+            onClick={() => setModal("settings")}
+          >
+            <Settings />
+          </IconButton>
+        </footer>
       </aside>
       <main className="conversation">
         {selectedID ? (
@@ -751,7 +826,7 @@ function ChatCard({
         </span>
         <span className="chat-card__preview">
           {chat.last_message
-            ? `${chat.last_message.actor_display_name}: ${chat.last_message.deleted ? t("remove") : chat.last_message.body}`
+            ? `${chat.last_message.actor_display_name}: ${chat.last_message.deleted ? t("remove") : messagePlainText(chat.last_message.body)}`
             : chat.topic ||
               (chat.kind === "direct" ? t("direct") : t(chat.kind))}
         </span>
@@ -892,7 +967,7 @@ function Conversation({
       body_format: "markdown",
       reply_to_id: reply?.id,
       thread_root_id: threadID ?? undefined,
-      mentioned_actor_ids: extractMentions(content),
+      mentioned_actor_ids: mentionedActorIDs(content),
     });
   }
   async function loadPrevious() {
@@ -930,7 +1005,7 @@ function Conversation({
         </IconButton>
         <Avatar name={title} />
         <div className="conversation-head__title">
-          <strong>{title}</strong>
+          <h1>{title}</h1>
           <span>
             {typing.length
               ? `${typing.length} ${t("typing")}`
@@ -1005,6 +1080,12 @@ function Conversation({
                   api={api}
                   message={message}
                   chats={Object.values(store.getState().chats)}
+                  members={members}
+                  replyMessage={
+                    message.reply_to_id
+                      ? messages.find((item) => item.id === message.reply_to_id)
+                      : undefined
+                  }
                   author={members.find(
                     (item) => item.actor_id === message.actor_id,
                   )}
@@ -1092,6 +1173,8 @@ function MessageRow({
   api,
   message,
   chats,
+  members,
+  replyMessage,
   author,
   own,
   grouped,
@@ -1104,6 +1187,8 @@ function MessageRow({
   api: MessengerAPI;
   message: ClientMessage;
   chats: Chat[];
+  members: ChatMember[];
+  replyMessage?: ClientMessage;
   author?: ChatMember;
   own: boolean;
   grouped: boolean;
@@ -1117,17 +1202,32 @@ function MessageRow({
   const [menu, setMenu] = useState(false);
   const [forwarding, setForwarding] = useState(false);
   const [reactions, setReactions] = useState<string[]>([]);
+  const replyQuery = useQuery({
+    queryKey: ["message-context", message.reply_to_id],
+    queryFn: () => api.messageContext(message.reply_to_id!),
+    enabled: Boolean(message.reply_to_id && !replyMessage),
+    staleTime: 5 * 60_000,
+  });
+  const resolvedReply =
+    replyMessage ??
+    replyQuery.data?.messages.find((item) => item.id === message.reply_to_id);
+  const replyAuthor = members.find(
+    (item) => item.actor_id === resolvedReply?.actor_id,
+  );
   const name = own
     ? (author?.display_name ?? t("you"))
     : (author?.display_name ?? t("participant"));
   async function edit() {
-    const body = prompt(t("edit"), message.body);
-    if (!body || body === message.body) return;
+    const original = decodeMentions(message.body);
+    const visibleBody = prompt(t("edit"), original.text);
+    if (!visibleBody || visibleBody === original.text) return;
+    const body = encodeMentions(updateMentionText(original, visibleBody));
     onChanged(
       await api.updateMessage(message.id, {
         body,
         body_format: "markdown",
         expected_version: message.version,
+        mentioned_actor_ids: mentionedActorIDs(body),
       }),
     );
     setMenu(false);
@@ -1167,7 +1267,12 @@ function MessageRow({
             className="message__quote"
             onClick={() => onJump(message.reply_to_id!)}
           >
-            {t("reply")} · {message.reply_to_id.slice(0, 8)}
+            <strong>{replyAuthor?.display_name ?? t("reply")}</strong>
+            <span>
+              {resolvedReply
+                ? messagePlainText(resolvedReply.body).slice(0, 120)
+                : t("loading")}
+            </span>
           </button>
         )}
         <div className="message__body">
@@ -1219,9 +1324,7 @@ function MessageRow({
           <button
             onClick={() =>
               void navigator.clipboard
-                .writeText(
-                  `${location.origin}/chat/${message.chat_id}?message=${message.id}`,
-                )
+                .writeText(`${location.origin}/m/${compactUUID(message.id)}`)
                 .then(() => setMenu(false))
             }
           >
@@ -1286,7 +1389,9 @@ function Composer({
   readonly: boolean;
 }) {
   const { t } = useTranslation();
-  const mention = /@([\p{L}\p{N}_.-]*)$/u.exec(body);
+  const input = useRef<HTMLTextAreaElement>(null);
+  const draft = useMemo(() => decodeMentions(body), [body]);
+  const mention = /@([\p{L}\p{N}_.-]*)$/u.exec(draft.text);
   const suggestions = mention
     ? members
         .filter(
@@ -1309,10 +1414,21 @@ function Composer({
     }
   }
   function insert(member: ChatMember) {
-    setBody(
-      body.slice(0, mention!.index) +
-        `@[${member.display_name}](${member.actor_id}) `,
+    const next = insertMention(
+      draft,
+      mention!.index,
+      draft.text.length,
+      member.actor_id,
+      member.display_name,
     );
+    setBody(encodeMentions(next));
+    const cursor =
+      (next.mentions.find((item) => item.start === mention!.index)?.end ??
+        mention!.index) + 1;
+    requestAnimationFrame(() => {
+      input.current?.focus();
+      input.current?.setSelectionRange(cursor, cursor);
+    });
   }
   if (readonly)
     return (
@@ -1327,7 +1443,7 @@ function Composer({
         <div className="reply-strip">
           <span>
             <strong>{t("reply")}</strong>
-            {reply.body.slice(0, 120)}
+            {messagePlainText(reply.body).slice(0, 120)}
           </span>
           <IconButton label={t("cancel")} onClick={onCancelReply}>
             <X />
@@ -1337,7 +1453,12 @@ function Composer({
       {suggestions.length > 0 && (
         <div className="mention-menu">
           {suggestions.map((member) => (
-            <button key={member.actor_id} onClick={() => insert(member)}>
+            <button
+              type="button"
+              key={member.actor_id}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => insert(member)}
+            >
               <Avatar name={member.display_name} size="sm" />
               <span>
                 {member.display_name}
@@ -1352,9 +1473,14 @@ function Composer({
           <Paperclip />
         </IconButton>
         <textarea
+          ref={input}
           rows={1}
-          value={body}
-          onChange={(event) => setBody(event.target.value)}
+          value={draft.text}
+          onChange={(event) =>
+            setBody(
+              encodeMentions(updateMentionText(draft, event.target.value)),
+            )
+          }
           onBlur={onBlur}
           onKeyDown={keys}
           placeholder={t("messagePlaceholder")}
@@ -1934,24 +2060,6 @@ function Empty({ label }: { label: string }) {
     </div>
   );
 }
-function RailButton({
-  icon,
-  label,
-  active,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  active?: boolean;
-  onClick?(): void;
-}) {
-  return (
-    <button className={active ? "active" : ""} onClick={onClick}>
-      {icon}
-      <span>{label}</span>
-    </button>
-  );
-}
 function Logo({ size }: { size: "small" | "medium" | "large" }) {
   return (
     <div className={cx("brand-logo", `brand-logo--${size}`)}>
@@ -2098,11 +2206,6 @@ function base64Key(value: string) {
   const padding = "=".repeat((4 - (value.length % 4)) % 4);
   const raw = atob((value + padding).replace(/-/g, "+").replace(/_/g, "/"));
   return Uint8Array.from([...raw].map((char) => char.charCodeAt(0)));
-}
-function extractMentions(value: string) {
-  return [...value.matchAll(/@\[[^\]]+\]\(([0-9a-f-]{36})\)/gi)]
-    .map((match) => match[1]!)
-    .filter((item, index, all) => all.indexOf(item) === index);
 }
 function chatFilterFromURL(): "all" | "direct" | "grouped" {
   const value = new URLSearchParams(window.location.search).get("filter");

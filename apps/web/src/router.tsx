@@ -37,6 +37,11 @@ const routes = [
   }),
   createRoute({
     getParentRoute: () => root,
+    path: "/m/$messageKey",
+    component: marker,
+  }),
+  createRoute({
+    getParentRoute: () => root,
     path: "/invite/$token",
     component: marker,
   }),

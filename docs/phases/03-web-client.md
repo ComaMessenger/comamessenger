@@ -161,8 +161,9 @@
 
 ## Контракты и данные
 
-- Маршруты приложения имеют стабильные deep links: `/chats`, `/chat/:chatId`, `/chat/:chatId/thread/:threadId`, `/threads`; chat filter хранится как typed search param `all|direct|grouped` с default `all`.
+- Маршруты приложения имеют стабильные deep links: `/chats`, `/chat/:chatId`, `/chat/:chatId/thread/:threadId`, `/threads`; публично копируемая ссылка сообщения использует компактный stateless-маршрут `/m/:messageKey`, который восстанавливает UUID и разрешает chat через `messageContext`. Старые полные ссылки остаются совместимыми. Chat filter хранится как typed search param `all|direct|grouped` с default `all`.
 - UI использует `kind` для названия и поведения: `group` отображается как «Чат», `channel` как «Канал».
+- Structured mentions хранят actor UUID только в transport-формате `@[label](actor_id)`. Composer, лента, reply preview и chat preview всегда показывают только `@Имя`/`@handle`; внутренние ID не являются пользовательским текстом.
 - Client cache keys и realtime reducers документируются рядом с protocol package.
 - Для Web Push добавляются API регистрации, обновления и удаления subscription.
 - Permission запрашивается только после готовности service worker и успешной проверки поддержки Push API.

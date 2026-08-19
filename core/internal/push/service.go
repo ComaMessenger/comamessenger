@@ -80,14 +80,14 @@ func (s *Service) Unsubscribe(ctx context.Context, user identity.User, subscript
 	return nil
 }
 func (s *Service) GetPreferences(ctx context.Context, user identity.User) (Preferences, error) {
-	result := Preferences{Theme: "system", Locale: "ru", PushEnabled: true}
+	result := Preferences{Theme: "light", Locale: "ru", PushEnabled: true}
 	var raw []byte
 	if err := s.pool.QueryRow(ctx, `SELECT preferences FROM users WHERE org_id=$1 AND actor_id=$2`, user.OrgID, user.ActorID).Scan(&raw); err != nil {
 		return result, err
 	}
 	_ = json.Unmarshal(raw, &result)
 	if result.Theme == "" {
-		result.Theme = "system"
+		result.Theme = "light"
 	}
 	if result.Locale == "" {
 		result.Locale = "ru"
