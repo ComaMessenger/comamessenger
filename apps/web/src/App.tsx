@@ -13,26 +13,38 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { useStore } from "zustand";
 import { useTranslation } from "react-i18next";
 import {
+  AtSign,
   Bell,
   Bookmark,
   ChevronLeft,
+  ChevronDown,
   Circle,
+  Copy,
+  CornerUpLeft,
+  Forward,
   Inbox,
   Info,
+  Link2,
   Languages,
   LogOut,
   Megaphone,
   MessageCircle,
+  MessageSquareReply,
   MessagesSquare,
   Moon,
   MoreHorizontal,
   Paperclip,
+  Pencil,
+  Pin,
   Plus,
   Search,
   Send,
   Settings,
   Smile,
+  SmilePlus,
   Sun,
+  Trash2,
+  VolumeX,
   X,
 } from "lucide-react";
 import {
@@ -654,6 +666,7 @@ function Messenger({
                     {sections.map((section) => (
                       <section className="chat-folder" key={section.kind}>
                         <header className="chat-folder__head">
+                          <ChevronDown size={13} />
                           <span>{section.label}</span>
                           <small>{section.chats.length}</small>
                         </header>
@@ -661,6 +674,7 @@ function Messenger({
                           {section.chats.map((chat) => (
                             <ChatCard
                               key={chat.id}
+                              api={api}
                               chat={chat}
                               title={titleOf(chat, [], user.id)}
                               selected={chat.id === selectedID}
@@ -670,6 +684,13 @@ function Messenger({
                               onClick={() => navigate(`/chat/${chat.id}`)}
                             />
                           ))}
+                          <button
+                            className="chat-folder__add"
+                            onClick={() => setModal("new")}
+                          >
+                            <Plus size={15} />
+                            <span>{t("create")}</span>
+                          </button>
                         </div>
                       </section>
                     ))}
@@ -678,6 +699,7 @@ function Messenger({
                     {filtered.map((chat) => (
                       <ChatCard
                         key={chat.id}
+                        api={api}
                         chat={chat}
                         title={titleOf(chat, [], user.id)}
                         selected={chat.id === selectedID}
@@ -793,12 +815,14 @@ function Messenger({
 }
 
 function ChatCard({
+  api,
   chat,
   title,
   selected,
   unread,
   onClick,
 }: {
+  api: MessengerAPI;
   chat: Chat;
   title: string;
   selected: boolean;
@@ -806,37 +830,94 @@ function ChatCard({
   onClick(): void;
 }) {
   const { t } = useTranslation();
+  const [menu, setMenu] = useState(false);
+  const notificationQuery = useQuery({
+    queryKey: ["chat-notifications", chat.id],
+    queryFn: () => api.chatNotifications(chat.id),
+    enabled: menu,
+    staleTime: 30_000,
+  });
+  const muted = notificationQuery.data?.notify_level === "none";
+  function toggleMenu(event: React.MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    setMenu((open) => !open);
+  }
   return (
-    <button
-      className={cx("chat-card", selected && "selected")}
-      onClick={onClick}
-    >
-      <Avatar name={title} size="lg" />
-      <span className="chat-card__body">
-        <span className="chat-card__top">
-          <strong>
-            {chat.kind === "channel" && <Megaphone size={14} />}
-            {title}
-          </strong>
-          <time>
-            {chat.last_message_at
-              ? formatTime(chat.last_message_at)
-              : formatDay(chat.created_at)}
-          </time>
+    <div className="chat-card-wrap">
+      <button
+        className={cx(
+          "chat-card",
+          selected && "selected",
+          muted && "chat-card--muted",
+        )}
+        onClick={onClick}
+        onContextMenu={toggleMenu}
+      >
+        <Avatar name={title} size="lg" online={chat.kind === "direct"} />
+        <span className="chat-card__body">
+          <span className="chat-card__top">
+            <strong>
+              {chat.kind === "channel" && <Megaphone size={14} />}
+              {title}
+            </strong>
+            <time>
+              {chat.last_message_at
+                ? formatTime(chat.last_message_at)
+                : formatDay(chat.created_at)}
+            </time>
+          </span>
+          <span className="chat-card__preview">
+            {chat.last_message
+              ? `${chat.last_message.actor_display_name}: ${chat.last_message.deleted ? t("remove") : messagePlainText(chat.last_message.body)}`
+              : chat.topic ||
+                (chat.kind === "direct" ? t("direct") : t(chat.kind))}
+          </span>
         </span>
-        <span className="chat-card__preview">
-          {chat.last_message
-            ? `${chat.last_message.actor_display_name}: ${chat.last_message.deleted ? t("remove") : messagePlainText(chat.last_message.body)}`
-            : chat.topic ||
-              (chat.kind === "direct" ? t("direct") : t(chat.kind))}
-        </span>
-      </span>
-      {Boolean(unread?.unread_count) && (
-        <Badge tone={unread?.mention_count ? "primary" : "neutral"}>
-          {unread!.unread_count > 99 ? "99+" : unread!.unread_count}
-        </Badge>
+        {Boolean(unread?.unread_count) && (
+          <Badge tone={unread?.mention_count ? "primary" : "neutral"}>
+            {unread!.unread_count > 99 ? "99+" : unread!.unread_count}
+          </Badge>
+        )}
+      </button>
+      <button
+        className="chat-card__more"
+        aria-label={t("chatActions")}
+        aria-expanded={menu}
+        onClick={toggleMenu}
+      >
+        <MoreHorizontal size={16} />
+      </button>
+      {menu && (
+        <div className="chat-context-menu" role="menu">
+          <button
+            role="menuitem"
+            onClick={() => {
+              setMenu(false);
+              onClick();
+            }}
+          >
+            <MessageCircle />
+            <span>{t("openChat")}</span>
+          </button>
+          <button
+            role="menuitem"
+            onClick={() =>
+              void api
+                .updateChatNotifications(chat.id, {
+                  notify_level: muted ? "all" : "none",
+                  muted_until: null,
+                })
+                .then(() => notificationQuery.refetch())
+                .then(() => setMenu(false))
+            }
+          >
+            <VolumeX />
+            <span>{muted ? t("unmuteChat") : t("muteChat")}</span>
+          </button>
+        </div>
       )}
-    </button>
+    </div>
   );
 }
 
@@ -1201,7 +1282,12 @@ function MessageRow({
   const { t } = useTranslation();
   const [menu, setMenu] = useState(false);
   const [forwarding, setForwarding] = useState(false);
-  const [reactions, setReactions] = useState<string[]>([]);
+  const [reactionPicker, setReactionPicker] = useState(false);
+  const reactionsQuery = useQuery({
+    queryKey: ["message-reactions", message.id],
+    queryFn: () => api.reactions(message.id),
+    staleTime: 15_000,
+  });
   const replyQuery = useQuery({
     queryKey: ["message-context", message.reply_to_id],
     queryFn: () => api.messageContext(message.reply_to_id!),
@@ -1239,9 +1325,19 @@ function MessageRow({
   }
   async function react(emoji: string) {
     await api.react(message.id, emoji);
-    setReactions((items) => [...new Set([...items, emoji])]);
+    await reactionsQuery.refetch();
     setMenu(false);
+    setReactionPicker(false);
   }
+  const reactionGroups = Object.entries(
+    (reactionsQuery.data ?? []).reduce<Record<string, number>>(
+      (groups, reaction) => ({
+        ...groups,
+        [reaction.emoji]: (groups[reaction.emoji] ?? 0) + 1,
+      }),
+      {},
+    ),
+  );
   return (
     <article
       id={`message-${message.id}`}
@@ -1288,8 +1384,11 @@ function MessageRow({
           </span>
         )}
         <div className="reaction-row">
-          {reactions.map((emoji) => (
-            <button key={emoji}>{emoji} 1</button>
+          {reactionGroups.map(([emoji, count]) => (
+            <button key={emoji} onClick={() => void react(emoji)}>
+              <span>{emoji}</span>
+              <strong>{count}</strong>
+            </button>
           ))}
         </div>
         {message.delivery &&
@@ -1304,44 +1403,117 @@ function MessageRow({
             </button>
           ))}
       </div>
-      <IconButton
-        className="message__menu"
-        label={t("openMenu")}
-        onClick={() => setMenu(!menu)}
-      >
-        <MoreHorizontal />
-      </IconButton>
+      <div className="message__actions" aria-label={t("messageActions")}>
+        <IconButton
+          label={t("addReaction")}
+          onClick={() => {
+            setMenu(false);
+            setReactionPicker((open) => !open);
+          }}
+        >
+          <SmilePlus />
+        </IconButton>
+        <IconButton label={t("thread")} onClick={onThread}>
+          <MessageSquareReply />
+        </IconButton>
+        <IconButton
+          label={t("openMenu")}
+          onClick={() => {
+            setReactionPicker(false);
+            setMenu(!menu);
+          }}
+        >
+          <MoreHorizontal />
+        </IconButton>
+      </div>
+      {reactionPicker && (
+        <div className="reaction-picker" role="dialog" aria-label={t("emoji")}>
+          {["👍", "❤️", "😂", "🔥", "👏", "🎉", "🤔", "👀"].map((emoji) => (
+            <button
+              key={emoji}
+              aria-label={`${t("addReaction")} ${emoji}`}
+              onClick={() => void react(emoji)}
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+      )}
       {menu && (
-        <div className="message-menu">
-          <button onClick={onReply}>{t("reply")}</button>
-          <button onClick={onThread}>{t("thread")}</button>
-          <button onClick={() => void react("👍")}>👍</button>
+        <div className="message-menu" role="menu">
           <button
+            role="menuitem"
+            onClick={() => {
+              setMenu(false);
+              setReactionPicker(true);
+            }}
+          >
+            <SmilePlus />
+            <span>{t("addReaction")}</span>
+          </button>
+          <button role="menuitem" onClick={onReply}>
+            <CornerUpLeft />
+            <span>{t("reply")}</span>
+          </button>
+          <button role="menuitem" onClick={onThread}>
+            <MessageSquareReply />
+            <span>{t("thread")}</span>
+          </button>
+          <div className="message-menu__divider" />
+          <button
+            role="menuitem"
             onClick={() => void api.pin(message.id).then(() => setMenu(false))}
           >
-            {t("pin")}
+            <Pin />
+            <span>{t("pin")}</span>
           </button>
           <button
+            role="menuitem"
             onClick={() =>
               void navigator.clipboard
                 .writeText(`${location.origin}/m/${compactUUID(message.id)}`)
                 .then(() => setMenu(false))
             }
           >
-            {t("copyLink")}
+            <Link2 />
+            <span>{t("copyLink")}</span>
           </button>
           <button
+            role="menuitem"
+            onClick={() =>
+              void navigator.clipboard
+                .writeText(messagePlainText(message.body))
+                .then(() => setMenu(false))
+            }
+          >
+            <Copy />
+            <span>{t("copyText")}</span>
+          </button>
+          <button
+            role="menuitem"
             onClick={() => {
               setMenu(false);
               setForwarding(true);
             }}
           >
-            {t("forward")}
+            <Forward />
+            <span>{t("forward")}</span>
           </button>
-          {own && <button onClick={() => void edit()}>{t("edit")}</button>}
+          {own && <div className="message-menu__divider" />}
           {own && (
-            <button className="danger" onClick={() => void remove()}>
-              {t("remove")}
+            <button role="menuitem" onClick={() => void edit()}>
+              <Pencil />
+              <span>{t("edit")}</span>
+            </button>
+          )}
+          {own && (
+            <button
+              role="menuitem"
+              className="danger"
+              onClick={() => void remove()}
+            >
+              <Trash2 />
+              <span>{t("remove")}</span>
             </button>
           )}
         </div>
@@ -1469,9 +1641,6 @@ function Composer({
         </div>
       )}
       <div className="composer">
-        <IconButton label={t("attach")} disabled>
-          <Paperclip />
-        </IconButton>
         <textarea
           ref={input}
           rows={1}
@@ -1486,18 +1655,37 @@ function Composer({
           placeholder={t("messagePlaceholder")}
           aria-label={t("messagePlaceholder")}
         />
-        <IconButton label={t("emoji")} disabled>
-          <Smile />
-        </IconButton>
-        <Button
-          size="icon"
-          variant="primary"
-          aria-label={t("send")}
-          onClick={onSend}
-          disabled={!body.trim()}
-        >
-          <Send />
-        </Button>
+        <div className="composer__toolbar">
+          <div className="composer__tools">
+            <IconButton label={t("attach")} disabled>
+              <Paperclip />
+            </IconButton>
+            <IconButton label={t("emoji")} disabled>
+              <Smile />
+            </IconButton>
+            <IconButton
+              label={t("mention")}
+              onClick={() => {
+                setBody(`${draft.text}@`);
+                requestAnimationFrame(() => input.current?.focus());
+              }}
+            >
+              <AtSign />
+            </IconButton>
+            <button className="composer__format" aria-label={t("formatting")}>
+              Aa
+            </button>
+          </div>
+          <Button
+            size="icon"
+            variant="primary"
+            aria-label={t("send")}
+            onClick={onSend}
+            disabled={!body.trim()}
+          >
+            <Send />
+          </Button>
+        </div>
       </div>
       <span className="composer-hint">{t("composerHint")}</span>
     </div>

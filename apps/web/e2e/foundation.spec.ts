@@ -177,6 +177,11 @@ async function mockMessenger(
           lev,
         ],
       };
+    else if (path.endsWith(`/chats/${chat.id}/notification-preferences`))
+      body =
+        route.request().method() === "PATCH"
+          ? route.request().postDataJSON()
+          : { notify_level: "all", muted_until: null };
     else if (
       path.endsWith(`/chats/${chat.id}/messages`) &&
       route.request().method() === "POST"
@@ -213,6 +218,15 @@ async function mockMessenger(
         chat_id: chat.id,
         last_read_seq: 3,
         last_read_at: "2026-08-19T06:31:00Z",
+      };
+    else if (/\/messages\/[^/]+\/reactions$/.test(path))
+      body = { reactions: [] };
+    else if (/\/messages\/[^/]+\/reactions\/.+/.test(path))
+      body = {
+        message_id: message.id,
+        actor_id: user.id,
+        emoji: decodeURIComponent(path.split("/").at(-1) ?? ""),
+        created_at: "2026-08-19T06:34:00Z",
       };
     else status = 404;
     await route.fulfill({
@@ -317,6 +331,29 @@ test("mentions and reply previews never expose actor or message IDs", async ({
   await expect.poll(() => sent.length).toBe(1);
   expect(sent[0]?.body).toBe(`@[Лев](${lev.actor_id}) привет`);
   expect(sent[0]?.mentioned_actor_ids).toEqual([lev.actor_id]);
+});
+
+test("chat and message actions stay contextual", async ({ page }) => {
+  await mockMessenger(page, { chatPatch: { kind: "group", role: "admin" } });
+  await page.goto("/chats");
+  const chatButton = page.getByRole("button", { name: /Объявления/ });
+  await chatButton.click({ button: "right" });
+  await expect(
+    page.getByRole("menuitem", { name: "Открыть чат" }),
+  ).toBeVisible();
+  await page.getByRole("menuitem", { name: "Открыть чат" }).click();
+  const messageRow = page.locator("article.message").first();
+  await messageRow.hover();
+  await page.getByRole("button", { name: "Действия с сообщением" }).click();
+  await page.getByRole("menuitem", { name: "Добавить реакцию" }).click();
+  await expect(page.getByRole("dialog", { name: "Эмодзи" })).toBeVisible();
+  await page.getByRole("button", { name: "Добавить реакцию 👍" }).click();
+  await messageRow.hover();
+  await page.getByRole("button", { name: "Действия с сообщением" }).click();
+  await expect(page.getByRole("menuitem", { name: "Ответить" })).toBeVisible();
+  await expect(
+    page.getByRole("menuitem", { name: "Копировать ссылку" }),
+  ).toBeVisible();
 });
 
 test("a 10k-message history stays virtualized", async ({ page }) => {
