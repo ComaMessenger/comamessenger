@@ -117,7 +117,11 @@ export function mentionedActorIDs(source: string): string[] {
 export function messagePlainText(source: string): string {
   return decodeMentions(source)
     .text.replace(/```([\s\S]*?)```/g, "$1")
+    .replace(/^#{1,3}\s+/gm, "")
+    .replace(/^\s*(?:[-+*]|\d+\.)\s+/gm, "")
     .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/~~([^~]+)~~/g, "$1")
+    .replace(/\+\+([^+]+)\+\+/g, "$1")
     .replace(/_([^_]+)_/g, "$1")
     .replace(/`([^`]+)`/g, "$1")
     .replace(/\[([^\]]+)\]\(https?:\/\/[^\s)]+\)/g, "$1")

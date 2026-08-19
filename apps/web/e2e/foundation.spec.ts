@@ -76,6 +76,7 @@ async function mockMessenger(
     chatPatch?: Record<string, unknown>;
     sendFailures?: number;
     history?: Array<Record<string, unknown>>;
+    paginate?: boolean;
   } = {},
 ) {
   const {
@@ -83,9 +84,11 @@ async function mockMessenger(
     chatPatch = {},
     sendFailures = 0,
     history: suppliedHistory,
+    paginate = false,
   } = options;
   const runtimeChat = { ...chat, ...chatPatch };
   let remainingSendFailures = sendFailures;
+  let paginationRequests = 0;
   const sent: Array<Record<string, unknown>> = [];
   const history =
     suppliedHistory ??
@@ -211,9 +214,37 @@ async function mockMessenger(
         has_earlier: false,
         has_later: false,
       };
-    else if (path.endsWith(`/chats/${chat.id}/messages`))
-      body = { messages: history, next_before_seq: null };
-    else if (path.endsWith(`/chats/${chat.id}/read`))
+    else if (/\/messages\/[^/]+\/thread$/.test(path)) {
+      const rootID = path.split("/").at(-2);
+      const root = history.find((item) => item.id === rootID) ?? history[0];
+      body = {
+        messages: [
+          root,
+          {
+            ...message,
+            id: "thread-reply-1",
+            client_msg_id: "thread-client-1",
+            body: "Ответ внутри треда",
+            thread_root_id: rootID,
+            created_seq: 100,
+            created_at: "2026-08-19T06:35:00Z",
+          },
+        ],
+        next_before_seq: null,
+      };
+    } else if (path.endsWith(`/chats/${chat.id}/messages`)) {
+      if (paginate) {
+        const middle = Math.floor(history.length / 2);
+        if (url.searchParams.has("before_seq")) {
+          paginationRequests += 1;
+          body = { messages: history.slice(0, middle), next_before_seq: null };
+        } else
+          body = {
+            messages: history.slice(middle),
+            next_before_seq: history[middle]?.created_seq ?? null,
+          };
+      } else body = { messages: history, next_before_seq: null };
+    } else if (path.endsWith(`/chats/${chat.id}/read`))
       body = {
         chat_id: chat.id,
         last_read_seq: 3,
@@ -235,7 +266,7 @@ async function mockMessenger(
       body: JSON.stringify(body),
     });
   });
-  return { sent };
+  return { sent, paginationRequests: () => paginationRequests };
 }
 
 test("responsive chat list opens a channel with a read-only composer", async ({
@@ -336,6 +367,10 @@ test("mentions and reply previews never expose actor or message IDs", async ({
 test("chat and message actions stay contextual", async ({ page }) => {
   await mockMessenger(page, { chatPatch: { kind: "group", role: "admin" } });
   await page.goto("/chats");
+  await page.getByRole("button", { name: "Поиск" }).click();
+  await expect(page.getByRole("dialog", { name: "Поиск" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "Поиск" })).toHaveCount(0);
   const chatButton = page.getByRole("button", { name: /Объявления/ });
   await chatButton.click({ button: "right" });
   await expect(
@@ -347,13 +382,100 @@ test("chat and message actions stay contextual", async ({ page }) => {
   await page.getByRole("button", { name: "Действия с сообщением" }).click();
   await page.getByRole("menuitem", { name: "Добавить реакцию" }).click();
   await expect(page.getByRole("dialog", { name: "Эмодзи" })).toBeVisible();
-  await page.getByRole("button", { name: "Добавить реакцию 👍" }).click();
+  await expect(page.getByPlaceholder("Поиск эмодзи…")).toBeVisible();
+  await page.locator(".conversation-head").click();
+  await expect(page.getByRole("dialog", { name: "Эмодзи" })).toHaveCount(0);
   await messageRow.hover();
   await page.getByRole("button", { name: "Действия с сообщением" }).click();
   await expect(page.getByRole("menuitem", { name: "Ответить" })).toBeVisible();
   await expect(
     page.getByRole("menuitem", { name: "Копировать ссылку" }),
   ).toBeVisible();
+  await page.locator(".conversation-head").click();
+  await expect(
+    page.getByRole("menuitem", { name: "Копировать ссылку" }),
+  ).toHaveCount(0);
+});
+
+test("a thread opens beside an unchanged main feed", async ({ page }) => {
+  await mockMessenger(page, {
+    messageCount: 2,
+    chatPatch: { kind: "group", role: "admin" },
+  });
+  await page.goto(`/chat/${chat.id}`);
+  await expect(page.locator("#message-message-1")).toBeVisible();
+  await expect(page.locator("#message-message-2")).toBeVisible();
+  await page.locator("#message-message-1").hover();
+  if (test.info().project.name === "phone") {
+    await page
+      .locator("#message-message-1")
+      .getByRole("button", { name: "Действия с сообщением" })
+      .click();
+    await page.getByRole("menuitem", { name: "В тред" }).click();
+  } else
+    await page
+      .locator("#message-message-1")
+      .getByRole("button", { name: "В тред" })
+      .click();
+  await expect(page.getByRole("complementary", { name: "Тред" })).toBeVisible();
+  await expect(page.locator("#thread-message-message-1")).toBeVisible();
+  await expect(page.getByText("Ответ внутри треда")).toBeVisible();
+  await expect(page.locator("#message-message-1")).toBeVisible();
+  await expect(page.locator("#message-message-2")).toBeVisible();
+  await expect(
+    page.getByRole("textbox", { name: "Напишите сообщение…" }),
+  ).toHaveCount(2);
+  await expect(page).toHaveScreenshot("thread-panel.png", {
+    animations: "disabled",
+  });
+  if (test.info().project.name === "phone") {
+    const panel = await page
+      .getByRole("complementary", { name: "Тред" })
+      .boundingBox();
+    expect(panel?.x).toBe(0);
+    expect(panel?.width).toBe(page.viewportSize()?.width);
+  }
+  await page
+    .getByRole("complementary", { name: "Тред" })
+    .getByRole("button", { name: "Закрыть" })
+    .click();
+  await expect(page.getByRole("complementary", { name: "Тред" })).toHaveCount(
+    0,
+  );
+});
+
+test("history uses automatic cursor pagination", async ({ page }) => {
+  const mock = await mockMessenger(page, {
+    messageCount: 60,
+    paginate: true,
+    chatPatch: { kind: "group", role: "admin" },
+  });
+  await page.goto(`/chat/${chat.id}`);
+  await expect(page.locator("article.message").first()).toBeVisible();
+  await page.locator(".message-scroll").evaluate((element) => {
+    element.scrollTop = 0;
+    element.dispatchEvent(new Event("scroll"));
+  });
+  await expect.poll(mock.paginationRequests).toBeGreaterThan(0);
+  await expect(
+    page.getByRole("button", { name: "Загрузить предыдущие" }),
+  ).toHaveCount(0);
+});
+
+test("the formatting toolbar writes markdown source", async ({ page }) => {
+  const { sent } = await mockMessenger(page, {
+    chatPatch: { kind: "group", role: "admin" },
+  });
+  await page.goto(`/chat/${chat.id}`);
+  const composer = page.getByRole("textbox", { name: "Напишите сообщение…" });
+  await composer.fill("План");
+  await composer.selectText();
+  await page.getByRole("button", { name: "Форматирование" }).click();
+  await page.getByRole("button", { name: "Заголовок" }).click();
+  await expect(composer).toHaveValue("## План");
+  await page.getByRole("button", { name: "Отправить" }).click();
+  await expect.poll(() => sent.length).toBe(1);
+  expect(sent[0]?.body).toBe("## План");
 });
 
 test("a 10k-message history stays virtualized", async ({ page }) => {

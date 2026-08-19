@@ -28,27 +28,27 @@
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --coma-canvas: #111722;
-  --coma-sidebar: #161e2b;
-  --coma-surface: #1b2533;
-  --coma-surface-raised: #222e3e;
-  --coma-foreground: #edf3fb;
-  --coma-muted: #9aa8ba;
-  --coma-subtle: #7f8da0;
-  --coma-border: #2c394a;
-  --coma-border-strong: #405068;
-  --coma-primary: #7ea9e6;
-  --coma-primary-hover: #9bbded;
-  --coma-primary-soft: #213957;
-  --coma-on-primary: #111722;
-  --coma-avatar-start: #315f9d;
-  --coma-avatar-end: #6392ce;
-  --coma-online: #78d5a5;
-  --coma-tooltip: #edf3fb;
+  --coma-canvas: #181a1f;
+  --coma-sidebar: #1d2026;
+  --coma-surface: #202329;
+  --coma-surface-raised: #292d36;
+  --coma-foreground: #f0f1f5;
+  --coma-muted: #a9adbb;
+  --coma-subtle: #838896;
+  --coma-border: #343844;
+  --coma-border-strong: #4b5263;
+  --coma-primary: #7f91ff;
+  --coma-primary-hover: #9aa8ff;
+  --coma-primary-soft: #2c3250;
+  --coma-on-primary: #fff;
+  --coma-avatar-start: #22589d;
+  --coma-avatar-end: #3d83d3;
+  --coma-online: #48d59b;
+  --coma-tooltip: #f0f1f5;
   --coma-danger: #ff8a99;
-  --coma-danger-soft: #4a2530;
-  --coma-success: #78d5a5;
+  --coma-danger-soft: #49272f;
+  --coma-success: #48d59b;
   --coma-overlay: rgba(0, 0, 0, 0.62);
-  --coma-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
-  --coma-thread-shadow: -12px 0 30px rgba(0, 0, 0, 0.24);
+  --coma-shadow: 0 18px 48px rgba(0, 0, 0, 0.38);
+  --coma-thread-shadow: -12px 0 30px rgba(0, 0, 0, 0.3);
 }

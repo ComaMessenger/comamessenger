@@ -77,6 +77,23 @@ describe("markdown AST", () => {
     ]);
     expect(JSON.stringify(tree)).toContain("<script>");
   });
+  it("parses headings, lists, contextual mentions and inline formatting", () => {
+    const tree = parseMarkdown(
+      "## План\n- первый\n- второй\nПривет, @all: ++важно++ и ~~устарело~~",
+    );
+    expect(tree.map((node) => node.type)).toEqual([
+      "heading",
+      "break",
+      "list",
+      "break",
+      "text",
+      "contextMention",
+      "text",
+      "underline",
+      "text",
+      "strike",
+    ]);
+  });
 });
 
 describe("structured mentions", () => {

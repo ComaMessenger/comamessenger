@@ -196,7 +196,7 @@ export function Avatar({
   online = false,
 }: {
   name: string;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
   online?: boolean;
 }) {
   const initials = name

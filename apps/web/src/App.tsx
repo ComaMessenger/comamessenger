@@ -1,12 +1,16 @@
 import {
   type FormEvent,
   type KeyboardEvent,
+  type RefObject,
+  Suspense,
+  lazy,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
+import type { EmojiStyle, Theme as EmojiTheme } from "emoji-picker-react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -19,6 +23,7 @@ import {
   ChevronLeft,
   ChevronDown,
   Circle,
+  Clock3,
   Copy,
   CornerUpLeft,
   Forward,
@@ -38,12 +43,13 @@ import {
   Pin,
   Plus,
   Search,
-  Send,
+  SendHorizontal,
   Settings,
   Smile,
   SmilePlus,
   Sun,
   Trash2,
+  UserPlus,
   VolumeX,
   X,
 } from "lucide-react";
@@ -93,10 +99,34 @@ import { checkpointStorage, outboxStorage } from "./persistence";
 import i18n, { setLocale } from "./i18n";
 import comaLogo from "./assets/coma-logo.svg";
 
+const EmojiPicker = lazy(() => import("emoji-picker-react"));
+
 type Screen = "loading" | "bootstrap" | "login" | "messenger" | "invite";
 const apiURL = import.meta.env.VITE_API_URL ?? window.location.origin;
 const emptyMessages: ClientMessage[] = [];
 const emptyActorIDs: string[] = [];
+
+function useDismissable(
+  ref: RefObject<HTMLElement | null>,
+  open: boolean,
+  onClose: () => void,
+) {
+  useEffect(() => {
+    if (!open) return;
+    function pointer(event: PointerEvent) {
+      if (!ref.current?.contains(event.target as Node)) onClose();
+    }
+    function keyboard(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    document.addEventListener("pointerdown", pointer);
+    document.addEventListener("keydown", keyboard);
+    return () => {
+      document.removeEventListener("pointerdown", pointer);
+      document.removeEventListener("keydown", keyboard);
+    };
+  }, [onClose, open, ref]);
+}
 
 export function App() {
   const { t } = useTranslation();
@@ -417,7 +447,7 @@ function Messenger({
   const [filter, setFilter] = useState<"all" | "direct" | "grouped">(
     chatFilterFromURL,
   );
-  const [query, setQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
   const [chatLoading, setChatLoading] = useState(true);
   const [chatError, setChatError] = useState("");
   const [modal, setModal] = useState<
@@ -517,7 +547,6 @@ function Messenger({
   useEffect(() => {
     store.getState().setActive(selectedID);
     coordinator.subscribe(selectedID, threadID);
-    if (selectedID) void loadMessages(api, store, selectedID);
   }, [api, coordinator, selectedID, store, threadID]);
   useEffect(() => {
     const key = /^\/m\/([^/]+)$/.exec(path)?.[1];
@@ -559,9 +588,7 @@ function Messenger({
     return () => window.removeEventListener("online", flush);
   }, [outbox]);
 
-  const searched = chats.filter((chat) =>
-    titleOf(chat, [], user.id).toLowerCase().includes(query.toLowerCase()),
-  );
+  const searched = chats;
   const filtered = searched.filter(
     (chat) =>
       filter === "all" ||
@@ -611,15 +638,13 @@ function Messenger({
         {!showThreads && (
           <>
             <div className="search-actions">
-              <label className="search-field">
+              <button
+                className="search-field"
+                onClick={() => setSearchOpen(true)}
+              >
                 <Search size={16} />
-                <input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder={t("search")}
-                  aria-label={t("search")}
-                />
-              </label>
+                <span>{t("search")}</span>
+              </button>
               <IconButton label={t("newChat")} onClick={() => setModal("new")}>
                 <Plus />
               </IconButton>
@@ -803,6 +828,18 @@ function Messenger({
           }}
         />
       )}
+      {searchOpen && (
+        <SearchPalette
+          chats={chats}
+          members={membersQuery.data ?? []}
+          ownID={user.id}
+          onClose={() => setSearchOpen(false)}
+          onOpen={(chatID) => {
+            setSearchOpen(false);
+            navigate(`/chat/${chatID}`);
+          }}
+        />
+      )}
       <div
         className={cx("connection-pill", realtime === "live" && "live")}
         role="status"
@@ -831,6 +868,8 @@ function ChatCard({
 }) {
   const { t } = useTranslation();
   const [menu, setMenu] = useState(false);
+  const menuRoot = useRef<HTMLDivElement>(null);
+  useDismissable(menuRoot, menu, () => setMenu(false));
   const notificationQuery = useQuery({
     queryKey: ["chat-notifications", chat.id],
     queryFn: () => api.chatNotifications(chat.id),
@@ -844,7 +883,7 @@ function ChatCard({
     setMenu((open) => !open);
   }
   return (
-    <div className="chat-card-wrap">
+    <div className="chat-card-wrap" ref={menuRoot}>
       <button
         className={cx(
           "chat-card",
@@ -921,6 +960,134 @@ function ChatCard({
   );
 }
 
+function SearchPalette({
+  chats,
+  members,
+  ownID,
+  onClose,
+  onOpen,
+}: {
+  chats: Chat[];
+  members: ChatMember[];
+  ownID: string;
+  onClose(): void;
+  onOpen(chatID: string): void;
+}) {
+  const { t } = useTranslation();
+  const [query, setQuery] = useState("");
+  const [tab, setTab] = useState<"people" | "messages">("people");
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    input.current?.focus();
+    function keyboard(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", keyboard);
+    return () => document.removeEventListener("keydown", keyboard);
+  }, [onClose]);
+  const value = query.trim().toLowerCase();
+  const chatResults = chats.filter((chat) =>
+    titleOf(chat, members, ownID).toLowerCase().includes(value),
+  );
+  const memberResults = members.filter(
+    (member) =>
+      member.actor_id !== ownID &&
+      (member.display_name.toLowerCase().includes(value) ||
+        member.handle.toLowerCase().includes(value)),
+  );
+  return (
+    <div
+      className="search-palette-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section
+        className="search-palette"
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("search")}
+      >
+        <label className="search-palette__field">
+          <Search />
+          <input
+            ref={input}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={t("searchInWorkspace")}
+          />
+        </label>
+        <div className="search-palette__tabs" role="tablist">
+          <button
+            role="tab"
+            aria-selected={tab === "people"}
+            onClick={() => setTab("people")}
+          >
+            {t("chatsAndPeople")}
+          </button>
+          <button
+            role="tab"
+            aria-selected={tab === "messages"}
+            onClick={() => setTab("messages")}
+          >
+            {t("messagesAndThreads")}
+          </button>
+        </div>
+        <div className="search-palette__results">
+          {tab === "people" ? (
+            <>
+              {chatResults.map((chat) => (
+                <button key={chat.id} onClick={() => onOpen(chat.id)}>
+                  <Avatar name={titleOf(chat, members, ownID)} size="sm" />
+                  <span>
+                    <strong>{titleOf(chat, members, ownID)}</strong>
+                    <small>
+                      {chat.kind === "direct"
+                        ? t("direct")
+                        : chat.topic || t(chat.kind)}
+                    </small>
+                  </span>
+                </button>
+              ))}
+              {memberResults.map((member) => {
+                const direct = chats.find(
+                  (chat) =>
+                    chat.kind === "direct" &&
+                    titleOf(chat, members, ownID) === member.display_name,
+                );
+                return (
+                  <button
+                    key={member.actor_id}
+                    disabled={!direct}
+                    onClick={() => direct && onOpen(direct.id)}
+                  >
+                    <Avatar name={member.display_name} size="sm" online />
+                    <span>
+                      <strong>{member.display_name}</strong>
+                      <small>@{member.handle}</small>
+                    </span>
+                  </button>
+                );
+              })}
+              {!chatResults.length && !memberResults.length && (
+                <Empty label={t("nothingFound")} />
+              )}
+            </>
+          ) : (
+            <Empty label={t("searchMessagesUnavailable")} />
+          )}
+        </div>
+        <footer className="search-palette__footer" aria-hidden="true">
+          <span>↑ ↓ {t("choose")}</span>
+          <span>↵ {t("open")}</span>
+          <span>Esc {t("close")}</span>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
 function Conversation({
   api,
   store,
@@ -955,21 +1122,20 @@ function Conversation({
     store,
     (state) => state.typing[chat?.id ?? ""] ?? emptyActorIDs,
   );
+  const presence = useStore(store, (state) => state.presence);
   const [reply, setReply] = useState<Message | null>(null);
   const [body, setBody] = useState("");
   const [hasMore, setHasMore] = useState(true);
+  const [loadingPrevious, setLoadingPrevious] = useState(false);
   const [newBelow, setNewBelow] = useState(0);
   const [info, setInfo] = useState(false);
   const [unreadAnchor, setUnreadAnchor] = useState(0);
   const scroller = useRef<HTMLDivElement>(null);
+  const loadingPreviousRef = useRef(false);
   const atBottom = useRef(true);
   const title = titleOf(chat, members, user.id);
   const readonly = chat?.kind === "channel" && chat.role === "member";
-  const visible = threadID
-    ? messages.filter(
-        (item) => item.id === threadID || item.thread_root_id === threadID,
-      )
-    : messages.filter((item) => !item.thread_root_id);
+  const visible = messages.filter((item) => !item.thread_root_id);
   const virtual = useVirtualizer({
     count: visible.length,
     getScrollElement: () => scroller.current,
@@ -978,9 +1144,25 @@ function Conversation({
   });
   useEffect(() => {
     if (!chat) return;
-    const saved = getLocalDraft(chat.id, threadID);
+    const saved = getLocalDraft(chat.id, null);
     setBody(saved);
-  }, [chat, threadID]);
+  }, [chat]);
+  useEffect(() => {
+    if (!chat) return;
+    let active = true;
+    setHasMore(true);
+    void api
+      .messages(chat.id, { limit: 50 })
+      .then((page) => {
+        if (!active) return;
+        store.getState().replaceMessages(chat.id, page.messages);
+        setHasMore(page.next_before_seq != null);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [api, chat?.id, store]);
   useEffect(() => {
     if (chat)
       setUnreadAnchor(
@@ -991,11 +1173,11 @@ function Conversation({
   useEffect(() => {
     if (!chat) return;
     const timer = setTimeout(() => {
-      setLocalDraft(chat.id, threadID, body);
-      void syncDraft(api, chat.id, threadID, body);
+      setLocalDraft(chat.id, null, body);
+      void syncDraft(api, chat.id, null, body);
     }, 600);
     return () => clearTimeout(timer);
-  }, [api, body, chat, threadID]);
+  }, [api, body, chat]);
   useEffect(() => {
     const max = visible.at(-1)?.created_seq;
     if (max && max < Number.MAX_SAFE_INTEGER)
@@ -1040,34 +1222,40 @@ function Conversation({
     const client_msg_id = crypto.randomUUID();
     setBody("");
     setReply(null);
-    setLocalDraft(activeChat.id, threadID, "");
-    coordinator.typing(activeChat.id, false, threadID);
+    setLocalDraft(activeChat.id, null, "");
+    coordinator.typing(activeChat.id, false, null);
     await outbox.enqueue(activeChat.id, {
       client_msg_id,
       body: content,
       body_format: "markdown",
       reply_to_id: reply?.id,
-      thread_root_id: threadID ?? undefined,
-      mentioned_actor_ids: mentionedActorIDs(content),
+      mentioned_actor_ids: resolvedMentionActorIDs(content, members, presence),
     });
   }
   async function loadPrevious() {
+    if (loadingPreviousRef.current || !hasMore) return;
     const first = visible.find(
       (item) => item.created_seq < Number.MAX_SAFE_INTEGER,
     );
     if (!first) return;
+    loadingPreviousRef.current = true;
+    setLoadingPrevious(true);
     const previousHeight = scroller.current?.scrollHeight ?? 0;
-    const page = await api.messages(activeChat.id, {
-      beforeSeq: first.created_seq,
-      threadRootID: threadID ?? undefined,
-    });
-    store.getState().prependMessages(activeChat.id, page.messages);
-    setHasMore(page.next_before_seq != null);
-    requestAnimationFrame(() => {
-      if (scroller.current)
-        scroller.current.scrollTop +=
-          scroller.current.scrollHeight - previousHeight;
-    });
+    try {
+      const page = await api.messages(activeChat.id, {
+        beforeSeq: first.created_seq,
+      });
+      store.getState().prependMessages(activeChat.id, page.messages);
+      setHasMore(page.next_before_seq != null);
+      requestAnimationFrame(() => {
+        if (scroller.current)
+          scroller.current.scrollTop +=
+            scroller.current.scrollHeight - previousHeight;
+      });
+    } finally {
+      loadingPreviousRef.current = false;
+      setLoadingPrevious(false);
+    }
   }
   async function jump(messageID: string) {
     const window = await api.messageContext(messageID);
@@ -1108,20 +1296,20 @@ function Conversation({
         aria-live="polite"
         onScroll={(event) => {
           const element = event.currentTarget;
+          if (element.scrollTop < 96) void loadPrevious();
           atBottom.current =
             element.scrollHeight - element.scrollTop - element.clientHeight <
             96;
           if (atBottom.current) setNewBelow(0);
         }}
       >
-        {hasMore && (
-          <Button
-            className="load-earlier"
-            size="sm"
-            onClick={() => void loadPrevious()}
-          >
-            {t("loadEarlier")}
-          </Button>
+        {loadingPrevious && <span className="history-loader" aria-hidden />}
+        {!hasMore && (
+          <ChatIntro
+            chat={activeChat}
+            title={title}
+            onAddMembers={() => setInfo(true)}
+          />
         )}
         {visible.length === 0 && <Empty label={t("noMessages")} />}
         <div
@@ -1147,7 +1335,7 @@ function Conversation({
                 className="virtual-row"
                 style={{ transform: `translateY(${row.start}px)` }}
               >
-                {newDay && (
+                {newDay && !(!hasMore && row.index === 0) && (
                   <div className="day-separator">
                     {new Intl.DateTimeFormat(activeLocale(), {
                       dateStyle: "long",
@@ -1222,9 +1410,9 @@ function Conversation({
         body={body}
         setBody={(next) => {
           setBody(next);
-          coordinator.typing(chat.id, Boolean(next), threadID);
+          coordinator.typing(chat.id, Boolean(next), null);
         }}
-        onBlur={() => void syncDraft(api, chat.id, threadID, body)}
+        onBlur={() => void syncDraft(api, chat.id, null, body)}
         onSend={() => void send()}
         reply={reply}
         onCancelReply={() => setReply(null)}
@@ -1233,8 +1421,13 @@ function Conversation({
       {threadID && (
         <ThreadPanel
           api={api}
+          store={store}
+          user={user}
+          chat={activeChat}
+          members={members}
+          coordinator={coordinator}
+          outbox={outbox}
           rootID={threadID}
-          messages={visible}
           onClose={onCloseThread}
         />
       )}
@@ -1264,6 +1457,7 @@ function MessageRow({
   onRetry,
   onThread,
   onChanged,
+  domIDPrefix = "message",
 }: {
   api: MessengerAPI;
   message: ClientMessage;
@@ -1278,11 +1472,17 @@ function MessageRow({
   onRetry(): void;
   onThread(): void;
   onChanged(value: Message): void;
+  domIDPrefix?: string;
 }) {
   const { t } = useTranslation();
   const [menu, setMenu] = useState(false);
   const [forwarding, setForwarding] = useState(false);
   const [reactionPicker, setReactionPicker] = useState(false);
+  const interactionRoot = useRef<HTMLElement>(null);
+  useDismissable(interactionRoot, menu || reactionPicker, () => {
+    setMenu(false);
+    setReactionPicker(false);
+  });
   const reactionsQuery = useQuery({
     queryKey: ["message-reactions", message.id],
     queryFn: () => api.reactions(message.id),
@@ -1340,7 +1540,8 @@ function MessageRow({
   );
   return (
     <article
-      id={`message-${message.id}`}
+      ref={interactionRoot}
+      id={`${domIDPrefix}-${message.id}`}
       className={cx(
         "message",
         grouped && "message--grouped",
@@ -1428,15 +1629,23 @@ function MessageRow({
       </div>
       {reactionPicker && (
         <div className="reaction-picker" role="dialog" aria-label={t("emoji")}>
-          {["👍", "❤️", "😂", "🔥", "👏", "🎉", "🤔", "👀"].map((emoji) => (
-            <button
-              key={emoji}
-              aria-label={`${t("addReaction")} ${emoji}`}
-              onClick={() => void react(emoji)}
-            >
-              {emoji}
-            </button>
-          ))}
+          <Suspense fallback={<Skeleton />}>
+            <EmojiPicker
+              width="100%"
+              height={410}
+              theme={
+                (document.documentElement.dataset.theme === "dark"
+                  ? "dark"
+                  : "light") as EmojiTheme
+              }
+              emojiStyle={"native" as EmojiStyle}
+              lazyLoadEmojis
+              searchPlaceholder={t("searchEmoji")}
+              searchClearButtonLabel={t("clearSearch")}
+              previewConfig={{ showPreview: false }}
+              onEmojiClick={(emoji) => void react(emoji.emoji)}
+            />
+          </Suspense>
         </div>
       )}
       {menu && (
@@ -1562,6 +1771,19 @@ function Composer({
 }) {
   const { t } = useTranslation();
   const input = useRef<HTMLTextAreaElement>(null);
+  const composerRoot = useRef<HTMLDivElement>(null);
+  const [formatOpen, setFormatOpen] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [sendSettings, setSendSettings] = useState(false);
+  const [composerFocused, setComposerFocused] = useState(false);
+  const [sendOnEnter, setSendOnEnter] = useState(
+    () => localStorage.getItem("coma-send-on-enter") !== "false",
+  );
+  useDismissable(composerRoot, formatOpen || emojiOpen || sendSettings, () => {
+    setFormatOpen(false);
+    setEmojiOpen(false);
+    setSendSettings(false);
+  });
   const draft = useMemo(() => decodeMentions(body), [body]);
   const mention = /@([\p{L}\p{N}_.-]*)$/u.exec(draft.text);
   const suggestions = mention
@@ -1576,14 +1798,53 @@ function Composer({
         .slice(0, 6)
     : [];
   function keys(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (
-      event.key === "Enter" &&
-      !event.shiftKey &&
-      !event.nativeEvent.isComposing
-    ) {
+    const shouldSend = sendOnEnter ? !event.shiftKey : event.shiftKey;
+    if (event.key === "Enter" && shouldSend && !event.nativeEvent.isComposing) {
       event.preventDefault();
       onSend();
     }
+  }
+  function setVisibleText(nextText: string, cursor: number) {
+    setBody(encodeMentions(updateMentionText(draft, nextText)));
+    requestAnimationFrame(() => {
+      input.current?.focus();
+      input.current?.setSelectionRange(cursor, cursor);
+    });
+  }
+  function wrap(prefix: string, suffix = prefix, fallback = t("formatText")) {
+    const start = input.current?.selectionStart ?? draft.text.length;
+    const end = input.current?.selectionEnd ?? start;
+    const selected = draft.text.slice(start, end) || fallback;
+    const replacement = `${prefix}${selected}${suffix}`;
+    setVisibleText(
+      draft.text.slice(0, start) + replacement + draft.text.slice(end),
+      start + replacement.length,
+    );
+  }
+  function prefixLines(prefix: string) {
+    const start = input.current?.selectionStart ?? draft.text.length;
+    const end = input.current?.selectionEnd ?? start;
+    const lineStart = draft.text.lastIndexOf("\n", Math.max(0, start - 1)) + 1;
+    const selected = draft.text.slice(lineStart, end) || t("formatText");
+    const replacement = selected
+      .split("\n")
+      .map((line, index) =>
+        prefix === "ordered" ? `${index + 1}. ${line}` : `${prefix}${line}`,
+      )
+      .join("\n");
+    setVisibleText(
+      draft.text.slice(0, lineStart) + replacement + draft.text.slice(end),
+      lineStart + replacement.length,
+    );
+  }
+  function insertEmoji(emoji: string) {
+    const start = input.current?.selectionStart ?? draft.text.length;
+    const end = input.current?.selectionEnd ?? start;
+    setVisibleText(
+      draft.text.slice(0, start) + emoji + draft.text.slice(end),
+      start + emoji.length,
+    );
+    setEmojiOpen(false);
   }
   function insert(member: ChatMember) {
     const next = insertMention(
@@ -1602,6 +1863,14 @@ function Composer({
       input.current?.setSelectionRange(cursor, cursor);
     });
   }
+  function insertContextual(value: "all" | "here") {
+    if (!mention) return;
+    const replacement = `@${value} `;
+    setVisibleText(
+      draft.text.slice(0, mention.index) + replacement,
+      mention.index + replacement.length,
+    );
+  }
   if (readonly)
     return (
       <div className="composer composer--readonly">
@@ -1610,7 +1879,7 @@ function Composer({
       </div>
     );
   return (
-    <div className="composer-wrap">
+    <div className="composer-wrap" ref={composerRoot}>
       {reply && (
         <div className="reply-strip">
           <span>
@@ -1622,8 +1891,9 @@ function Composer({
           </IconButton>
         </div>
       )}
-      {suggestions.length > 0 && (
+      {composerFocused && mention && (
         <div className="mention-menu">
+          <span className="mention-menu__label">{t("participants")}</span>
           {suggestions.map((member) => (
             <button
               type="button"
@@ -1638,9 +1908,74 @@ function Composer({
               </span>
             </button>
           ))}
+          <span className="mention-menu__label">{t("contextMentions")}</span>
+          <button
+            type="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => insertContextual("all")}
+          >
+            <Megaphone />
+            <span>
+              @all
+              <small>{t("mentionAllHint")}</small>
+            </span>
+          </button>
+          <button
+            type="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => insertContextual("here")}
+          >
+            <Megaphone />
+            <span>
+              @here
+              <small>{t("mentionHereHint")}</small>
+            </span>
+          </button>
         </div>
       )}
       <div className="composer">
+        {formatOpen && (
+          <div className="composer__formatbar" aria-label={t("formatting")}>
+            <button aria-label={t("bold")} onClick={() => wrap("**")}>
+              <strong>B</strong>
+            </button>
+            <button aria-label={t("italic")} onClick={() => wrap("_")}>
+              <em>I</em>
+            </button>
+            <button aria-label={t("underline")} onClick={() => wrap("++")}>
+              <span className="format-underline">U</span>
+            </button>
+            <button aria-label={t("strike")} onClick={() => wrap("~~")}>
+              <s>S</s>
+            </button>
+            <span className="composer__format-divider" />
+            <button
+              aria-label={t("link")}
+              onClick={() => wrap("[", "](https://)", t("linkText"))}
+            >
+              <Link2 />
+            </button>
+            <span className="composer__format-divider" />
+            <button
+              aria-label={t("heading")}
+              onClick={() => prefixLines("## ")}
+            >
+              H
+            </button>
+            <button
+              aria-label={t("orderedList")}
+              onClick={() => prefixLines("ordered")}
+            >
+              1.
+            </button>
+            <button
+              aria-label={t("bulletList")}
+              onClick={() => prefixLines("- ")}
+            >
+              •
+            </button>
+          </div>
+        )}
         <textarea
           ref={input}
           rows={1}
@@ -1650,7 +1985,14 @@ function Composer({
               encodeMentions(updateMentionText(draft, event.target.value)),
             )
           }
-          onBlur={onBlur}
+          onFocus={() => setComposerFocused(true)}
+          onBlur={() => {
+            onBlur();
+            requestAnimationFrame(() => {
+              if (!composerRoot.current?.contains(document.activeElement))
+                setComposerFocused(false);
+            });
+          }}
           onKeyDown={keys}
           placeholder={t("messagePlaceholder")}
           aria-label={t("messagePlaceholder")}
@@ -1660,7 +2002,13 @@ function Composer({
             <IconButton label={t("attach")} disabled>
               <Paperclip />
             </IconButton>
-            <IconButton label={t("emoji")} disabled>
+            <IconButton
+              label={t("emoji")}
+              onClick={() => {
+                setEmojiOpen((open) => !open);
+                setSendSettings(false);
+              }}
+            >
               <Smile />
             </IconButton>
             <IconButton
@@ -1672,50 +2020,220 @@ function Composer({
             >
               <AtSign />
             </IconButton>
-            <button className="composer__format" aria-label={t("formatting")}>
+            <button
+              className={cx("composer__format", formatOpen && "active")}
+              aria-label={t("formatting")}
+              onClick={() => {
+                setFormatOpen((open) => !open);
+                setSendSettings(false);
+              }}
+            >
               Aa
             </button>
           </div>
-          <Button
-            size="icon"
-            variant="primary"
-            aria-label={t("send")}
-            onClick={onSend}
-            disabled={!body.trim()}
-          >
-            <Send />
-          </Button>
+          <div className="composer__send">
+            <Button
+              size="icon"
+              variant="primary"
+              aria-label={t("send")}
+              onClick={onSend}
+              disabled={!body.trim()}
+            >
+              <SendHorizontal />
+            </Button>
+            <IconButton
+              label={t("sendSettings")}
+              onClick={() => {
+                setSendSettings((open) => !open);
+                setEmojiOpen(false);
+              }}
+            >
+              <ChevronDown />
+            </IconButton>
+          </div>
         </div>
+        {emojiOpen && (
+          <div className="composer-emoji" role="dialog" aria-label={t("emoji")}>
+            <Suspense fallback={<Skeleton />}>
+              <EmojiPicker
+                width="100%"
+                height={380}
+                theme={
+                  (document.documentElement.dataset.theme === "dark"
+                    ? "dark"
+                    : "light") as EmojiTheme
+                }
+                emojiStyle={"native" as EmojiStyle}
+                lazyLoadEmojis
+                searchPlaceholder={t("searchEmoji")}
+                searchClearButtonLabel={t("clearSearch")}
+                previewConfig={{ showPreview: false }}
+                onEmojiClick={(emoji) => insertEmoji(emoji.emoji)}
+              />
+            </Suspense>
+          </div>
+        )}
+        {sendSettings && (
+          <div
+            className="send-settings"
+            role="dialog"
+            aria-label={t("sendSettings")}
+          >
+            <strong>{t("sendSettings")}</strong>
+            <button
+              className={sendOnEnter ? "selected" : ""}
+              onClick={() => {
+                setSendOnEnter(true);
+                localStorage.setItem("coma-send-on-enter", "true");
+              }}
+            >
+              <i>{sendOnEnter && <Circle fill="currentColor" />}</i>
+              <span>
+                <b>{t("enterSends")}</b>
+                <small>{t("shiftEnterNewLine")}</small>
+              </span>
+            </button>
+            <button
+              className={!sendOnEnter ? "selected" : ""}
+              onClick={() => {
+                setSendOnEnter(false);
+                localStorage.setItem("coma-send-on-enter", "false");
+              }}
+            >
+              <i>{!sendOnEnter && <Circle fill="currentColor" />}</i>
+              <span>
+                <b>{t("shiftEnterSends")}</b>
+                <small>{t("enterNewLine")}</small>
+              </span>
+            </button>
+            <div className="send-settings__divider" />
+            <button disabled>
+              <Clock3 />
+              <span>
+                <b>{t("scheduleMessage")}</b>
+                <small>{t("comingLater")}</small>
+              </span>
+            </button>
+          </div>
+        )}
       </div>
-      <span className="composer-hint">{t("composerHint")}</span>
+      <span className="composer-hint">
+        {sendOnEnter ? t("composerHint") : t("composerHintReverse")}
+      </span>
     </div>
+  );
+}
+
+function ChatIntro({
+  chat,
+  title,
+  onAddMembers,
+}: {
+  chat: Chat;
+  title: string;
+  onAddMembers(): void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <section className="chat-intro">
+      <Avatar name={title} size="xl" />
+      <h2>{title}</h2>
+      <p>{chat.topic || t("chatBeginning")}</p>
+      {chat.kind !== "direct" && (
+        <Button onClick={onAddMembers}>
+          <UserPlus />
+          {t("addMembers")}
+        </Button>
+      )}
+      <time>{formatLongDate(chat.created_at)}</time>
+      <span className="chat-intro__created">{t("chatCreated")}</span>
+    </section>
   );
 }
 
 function ThreadPanel({
   api,
+  store,
+  user,
+  chat,
+  members,
+  coordinator,
+  outbox,
   rootID,
-  messages,
   onClose,
 }: {
   api: MessengerAPI;
+  store: ReturnType<typeof createMessengerStore>;
+  user: User;
+  chat: Chat;
+  members: ChatMember[];
+  coordinator: RealtimeCoordinator;
+  outbox: Outbox;
   rootID: string;
-  messages: Message[];
   onClose(): void;
 }) {
   const { t } = useTranslation();
+  const storedMessages = useStore(
+    store,
+    (state) => state.messages[chat.id] ?? emptyMessages,
+  );
+  const presence = useStore(store, (state) => state.presence);
+  const query = useQuery({
+    queryKey: ["thread", rootID],
+    queryFn: () => api.thread(rootID),
+  });
   const [following, setFollowing] = useState(false);
+  const [body, setBody] = useState(() => getLocalDraft(chat.id, rootID));
+  const [reply, setReply] = useState<Message | null>(null);
+  const messages = useMemo(() => {
+    const values = [
+      ...(query.data?.messages ?? []),
+      ...storedMessages.filter(
+        (message) => message.id === rootID || message.thread_root_id === rootID,
+      ),
+    ];
+    return [
+      ...new Map(values.map((message) => [message.id, message])).values(),
+    ].sort((left, right) => left.created_seq - right.created_seq);
+  }, [query.data?.messages, rootID, storedMessages]);
+  const root = messages.find((message) => message.id === rootID);
+  const replies = messages.filter(
+    (message) => message.thread_root_id === rootID,
+  );
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLocalDraft(chat.id, rootID, body);
+      void syncDraft(api, chat.id, rootID, body);
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [api, body, chat.id, rootID]);
   async function toggle() {
     if (following) await api.unfollowThread(rootID);
     else await api.followThread(rootID);
     setFollowing(!following);
   }
+  async function send() {
+    const content = body.trim();
+    if (!content) return;
+    setBody("");
+    setReply(null);
+    setLocalDraft(chat.id, rootID, "");
+    coordinator.typing(chat.id, false, rootID);
+    await outbox.enqueue(chat.id, {
+      client_msg_id: crypto.randomUUID(),
+      body: content,
+      body_format: "markdown",
+      reply_to_id: reply?.id,
+      thread_root_id: rootID,
+      mentioned_actor_ids: resolvedMentionActorIDs(content, members, presence),
+    });
+  }
   return (
-    <aside className="thread-panel">
+    <aside className="thread-panel" aria-label={t("threadTitle")}>
       <header>
         <div>
-          <strong>{t("thread")}</strong>
-          <span>{t("replyCount", { count: messages.length - 1 })}</span>
+          <strong>{t("threadTitle")}</strong>
+          <span>{t("replyCount", { count: replies.length })}</span>
         </div>
         <div className="thread-panel__actions">
           <Button size="sm" onClick={() => void toggle()}>
@@ -1726,7 +2244,77 @@ function ThreadPanel({
           </IconButton>
         </div>
       </header>
-      <p>{messages[0]?.body}</p>
+      <div className="thread-panel__messages">
+        {query.isLoading && <Skeleton />}
+        {root && (
+          <MessageRow
+            api={api}
+            message={root}
+            chats={Object.values(store.getState().chats)}
+            members={members}
+            author={members.find((item) => item.actor_id === root.actor_id)}
+            own={root.actor_id === user.id}
+            grouped={false}
+            onReply={() => setReply(root)}
+            onJump={() => undefined}
+            onRetry={() => void outbox.flush()}
+            onThread={() => undefined}
+            onChanged={() => void query.refetch()}
+            domIDPrefix="thread-message"
+          />
+        )}
+        {root && replies.length > 0 && (
+          <div className="thread-panel__separator">
+            {t("replyCount", { count: replies.length })}
+          </div>
+        )}
+        {replies.map((message, index) => {
+          const previous = replies[index - 1];
+          return (
+            <MessageRow
+              key={message.id}
+              api={api}
+              message={message}
+              chats={Object.values(store.getState().chats)}
+              members={members}
+              replyMessage={messages.find(
+                (item) => item.id === message.reply_to_id,
+              )}
+              author={members.find(
+                (item) => item.actor_id === message.actor_id,
+              )}
+              own={message.actor_id === user.id}
+              grouped={
+                previous?.actor_id === message.actor_id &&
+                minuteGap(previous.created_at, message.created_at) < 5
+              }
+              onReply={() => setReply(message)}
+              onJump={(id) =>
+                document
+                  .getElementById(`thread-message-${id}`)
+                  ?.scrollIntoView({ block: "center" })
+              }
+              onRetry={() => void outbox.flush()}
+              onThread={() => undefined}
+              onChanged={() => void query.refetch()}
+              domIDPrefix="thread-message"
+            />
+          );
+        })}
+      </div>
+      <Composer
+        members={members}
+        body={body}
+        setBody={(next) => {
+          setBody(next);
+          coordinator.typing(chat.id, Boolean(next), rootID);
+        }}
+        onBlur={() => void syncDraft(api, chat.id, rootID, body)}
+        onSend={() => void send()}
+        reply={reply}
+        onCancelReply={() => setReply(null)}
+        readonly={chat.kind === "channel" && chat.role === "member"}
+      />
     </aside>
   );
 }
@@ -2297,6 +2885,26 @@ function formatDay(value: string) {
     day: "2-digit",
     month: "2-digit",
   }).format(new Date(value));
+}
+function formatLongDate(value: string) {
+  return new Intl.DateTimeFormat(activeLocale(), { dateStyle: "long" }).format(
+    new Date(value),
+  );
+}
+function resolvedMentionActorIDs(
+  source: string,
+  members: ChatMember[],
+  presence: Record<string, "online" | "away" | "offline">,
+) {
+  const ids = new Set(mentionedActorIDs(source));
+  const text = decodeMentions(source).text;
+  if (/(^|\s)@all\b/i.test(text))
+    members.forEach((member) => ids.add(member.actor_id));
+  if (/(^|\s)@here\b/i.test(text))
+    members
+      .filter((member) => presence[member.actor_id] === "online")
+      .forEach((member) => ids.add(member.actor_id));
+  return [...ids];
 }
 function activeLocale() {
   return i18n.language === "pseudo" ? "en" : i18n.language;
