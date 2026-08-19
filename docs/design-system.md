@@ -93,9 +93,15 @@ The desktop shell has three independent regions:
 
 Global navigation order is stable: Coma logo plus ellipsized workspace name, flat search plus accent create button, `Чаты`, `Треды`, `Важные`, `Участники`, then the current profile. It never turns into a chat list and never changes when a utility section opens. Workspace settings and sign-out live in the workspace switcher menu; `Настройки` is not a navigation item.
 
+The profile block is anchored to the viewport bottom rather than following navigation content. On desktop the global navigation can collapse to a `58px` icon rail; the preference is local to the browser and expanding the workspace switcher restores the full rail before opening its menu. Collapse never changes the chat stream, selected route or conversation state.
+
 Search uses a flat semantic surface with no inner/outer shadow. The adjacent create button uses the primary accent. The workspace menu shows account identity, the current workspace and role-gated workspace settings.
 
-The chat stream is continuous, compact and independently scrollable. Its first filters are always `Все`, `Личные`, `Групповые`, `Каналы`; user-created folders follow them. A folder has a name, icon and explicit set of chats and is persisted in user preferences. Chat context menus expose folder membership without moving global navigation.
+The chat stream is continuous, compact and independently scrollable. Rows follow a familiar Telegram-like information hierarchy without copying its assets: circular avatar, title and notification state, time, two-line preview and unread count. There is no visible overflow button. The chat menu opens by right click, keyboard context-menu command or touch long press, and provides pinning, notification state, read state, personal folder membership and leave actions. A muted chat shows `BellOff` beside its title; channel kind is not repeated with a megaphone icon.
+
+Its first filters are always `Все`, `Личные`, `Групповые`, `Каналы`; user-created folders follow them. A folder has a name, one of the curated semantic icons, a semantic color and an explicit set of chats, all persisted in user preferences. Icon selection is a searchable grid rather than a native select. Chat search filters the currently selected system filter or personal folder.
+
+A user may pin at most ten chats. Folder membership is resolved before pin ordering: a pinned chat rises to the top of every filter it belongs to, but never appears in a personal folder that does not contain it. Pinning is personal and does not alter organization-wide chat metadata.
 
 ### Phone chat list
 

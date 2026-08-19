@@ -34,6 +34,8 @@ type Chat struct {
 	ArchivedAt      *time.Time `json:"archived_at,omitempty"`
 	DisplayName     string     `json:"display_name"`
 	AvatarSeed      string     `json:"avatar_seed"`
+	NotifyLevel     string     `json:"notify_level"`
+	MutedUntil      *time.Time `json:"muted_until"`
 	DirectPeer      *Actor     `json:"direct_peer,omitempty"`
 	LastMessage     *Preview   `json:"last_message,omitempty"`
 	LastActivitySeq int64      `json:"last_activity_seq"`
@@ -115,7 +117,7 @@ func NewService(pool *pgxpool.Pool, callbacks ...func(string, int64)) *Service {
 func (s *Service) List(ctx context.Context, user identity.User) ([]Chat, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT c.id, c.kind, c.visibility, c.name, c.topic, cm.role, c.created_at, c.archived_at,
-			COALESCE(c.name, peer.display_name, 'Direct chat'), COALESCE(peer.id::text, c.id::text),
+			COALESCE(c.name, peer.display_name, 'Direct chat'), COALESCE(peer.id::text, c.id::text), cm.notify_level, cm.muted_until,
 			peer.id, peer.display_name, peer.handle::text, peer.type,
 			last.id, last.actor_id, last.actor_name, left(last.body, 280), last.created_seq, last.created_at, last.deleted,
 			COALESCE(last.created_seq, 0), c.last_message_at
@@ -142,7 +144,7 @@ func (s *Service) List(ctx context.Context, user identity.User) ([]Chat, error) 
 func (s *Service) Get(ctx context.Context, user identity.User, chatID string) (Chat, error) {
 	row := s.pool.QueryRow(ctx, `
 		SELECT c.id, c.kind, c.visibility, c.name, c.topic, cm.role, c.created_at, c.archived_at,
-			COALESCE(c.name, peer.display_name, 'Direct chat'), COALESCE(peer.id::text, c.id::text),
+			COALESCE(c.name, peer.display_name, 'Direct chat'), COALESCE(peer.id::text, c.id::text), cm.notify_level, cm.muted_until,
 			peer.id, peer.display_name, peer.handle::text, peer.type,
 			last.id, last.actor_id, last.actor_name, left(last.body, 280), last.created_seq, last.created_at, last.deleted,
 			COALESCE(last.created_seq, 0), c.last_message_at
@@ -169,7 +171,7 @@ func scanChat(row rowScanner) (Chat, error) {
 	var lastAt *time.Time
 	var deleted *bool
 	if err := row.Scan(&chat.ID, &chat.Kind, &chat.Visibility, &chat.Name, &chat.Topic,
-		&chat.Role, &chat.CreatedAt, &chat.ArchivedAt, &chat.DisplayName, &chat.AvatarSeed,
+		&chat.Role, &chat.CreatedAt, &chat.ArchivedAt, &chat.DisplayName, &chat.AvatarSeed, &chat.NotifyLevel, &chat.MutedUntil,
 		&peerID, &peerName, &peerHandle, &peerType, &lastID, &lastActorID, &lastActorName, &lastBody, &lastSeq, &lastAt, &deleted, &chat.LastActivitySeq, &chat.LastMessageAt); err != nil {
 		return Chat{}, err
 	}
@@ -624,14 +626,15 @@ func (s *Service) RemoveMember(ctx context.Context, user identity.User, chatID, 
 	if err != nil {
 		return err
 	}
-	if current.Kind == "direct" || !canManage(user, current) {
+	selfLeave := actorID == user.ActorID
+	if current.Kind == "direct" || (!selfLeave && !canManage(user, current)) {
 		return ErrForbidden
 	}
 	target, err := s.member(ctx, chatID, actorID)
 	if err != nil {
 		return err
 	}
-	if target.Role == "owner" && current.Role != "owner" {
+	if !selfLeave && target.Role == "owner" && current.Role != "owner" {
 		return ErrForbidden
 	}
 	if target.Role == "owner" {
@@ -660,9 +663,10 @@ func (s *Service) RemoveMember(ctx context.Context, user identity.User, chatID, 
 		WHERE target.chat_id = $1 AND target.actor_id = $2
 		  AND EXISTS (
 			SELECT 1 FROM chat_members manager JOIN chats c ON c.id = manager.chat_id
-			WHERE manager.chat_id = $1 AND manager.actor_id = $3 AND manager.role IN ('owner', 'admin')
+			WHERE manager.chat_id = $1 AND manager.actor_id = $3
 			  AND c.kind IN ('group', 'channel') AND c.archived_at IS NULL
-			  AND (target.role <> 'owner' OR manager.role = 'owner')
+			  AND (target.actor_id = manager.actor_id OR manager.role IN ('owner', 'admin'))
+			  AND (target.actor_id = manager.actor_id OR target.role <> 'owner' OR manager.role = 'owner')
 		  )`, chatID, actorID, user.ActorID)
 	if err != nil {
 		return fmt.Errorf("remove chat member: %w", err)

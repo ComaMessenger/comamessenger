@@ -919,6 +919,10 @@ export interface components {
             archived_at?: string | null;
             display_name: string;
             avatar_seed: string;
+            /** @enum {string} */
+            notify_level: "all" | "mentions" | "none";
+            /** Format: date-time */
+            muted_until: string | null;
             direct_peer?: components["schemas"]["ActorSummary"] | null;
             last_message?: components["schemas"]["MessagePreview"] | null;
             /** Format: int64 */
@@ -1209,13 +1213,16 @@ export interface components {
             push_enabled: boolean;
             push_preview: boolean;
             chat_folders: components["schemas"]["ChatFolder"][];
+            pinned_chat_ids: string[];
         };
         ChatFolder: {
             /** Format: uuid */
             id: string;
             name: string;
             /** @enum {string} */
-            icon: "folder" | "briefcase" | "heart" | "star" | "users" | "hash";
+            icon: "folder" | "briefcase" | "heart" | "star" | "users" | "hash" | "bookmark" | "home" | "rocket" | "zap" | "flame" | "sun" | "moon" | "cloud" | "umbrella" | "coffee" | "music" | "camera" | "image" | "gamepad" | "dumbbell" | "trophy" | "target" | "gift" | "shopping-bag" | "wallet" | "plane" | "car" | "map" | "globe" | "book" | "graduation" | "code" | "terminal" | "database" | "chart" | "calendar" | "clock" | "check" | "lightbulb" | "palette" | "smile" | "bot" | "cat" | "dog" | "leaf" | "flower" | "mountain" | "waves" | "party";
+            /** @enum {string} */
+            color: "blue" | "violet" | "pink" | "red" | "orange" | "amber" | "green" | "teal" | "cyan" | "slate";
             chat_ids: string[];
         };
         ChatNotificationPreferences: {

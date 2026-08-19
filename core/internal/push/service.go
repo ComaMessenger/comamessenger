@@ -34,16 +34,18 @@ type Subscription struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 type Preferences struct {
-	Theme       string       `json:"theme"`
-	Locale      string       `json:"locale"`
-	PushEnabled bool         `json:"push_enabled"`
-	PushPreview bool         `json:"push_preview"`
-	ChatFolders []ChatFolder `json:"chat_folders"`
+	Theme         string       `json:"theme"`
+	Locale        string       `json:"locale"`
+	PushEnabled   bool         `json:"push_enabled"`
+	PushPreview   bool         `json:"push_preview"`
+	ChatFolders   []ChatFolder `json:"chat_folders"`
+	PinnedChatIDs []string     `json:"pinned_chat_ids"`
 }
 type ChatFolder struct {
 	ID      string   `json:"id"`
 	Name    string   `json:"name"`
 	Icon    string   `json:"icon"`
+	Color   string   `json:"color"`
 	ChatIDs []string `json:"chat_ids"`
 }
 type ChatPreferences struct {
@@ -88,7 +90,7 @@ func (s *Service) Unsubscribe(ctx context.Context, user identity.User, subscript
 	return nil
 }
 func (s *Service) GetPreferences(ctx context.Context, user identity.User) (Preferences, error) {
-	result := Preferences{Theme: "light", Locale: "ru", PushEnabled: true, ChatFolders: []ChatFolder{}}
+	result := Preferences{Theme: "light", Locale: "ru", PushEnabled: true, ChatFolders: []ChatFolder{}, PinnedChatIDs: []string{}}
 	var raw []byte
 	if err := s.pool.QueryRow(ctx, `SELECT preferences FROM users WHERE org_id=$1 AND actor_id=$2`, user.OrgID, user.ActorID).Scan(&raw); err != nil {
 		return result, err
@@ -103,6 +105,14 @@ func (s *Service) GetPreferences(ctx context.Context, user identity.User) (Prefe
 	if result.ChatFolders == nil {
 		result.ChatFolders = []ChatFolder{}
 	}
+	for index := range result.ChatFolders {
+		if result.ChatFolders[index].Color == "" {
+			result.ChatFolders[index].Color = "blue"
+		}
+	}
+	if result.PinnedChatIDs == nil {
+		result.PinnedChatIDs = []string{}
+	}
 	return result, nil
 }
 func (s *Service) UpdatePreferences(ctx context.Context, user identity.User, input Preferences) (Preferences, error) {
@@ -115,6 +125,9 @@ func (s *Service) UpdatePreferences(ctx context.Context, user identity.User, inp
 	if !validChatFolders(input.ChatFolders) {
 		return Preferences{}, ErrInvalid
 	}
+	if !validPinnedChats(input.PinnedChatIDs) {
+		return Preferences{}, ErrInvalid
+	}
 	payload, _ := json.Marshal(input)
 	_, err := s.pool.Exec(ctx, `UPDATE users SET preferences=preferences||$3::jsonb WHERE org_id=$1 AND actor_id=$2`, user.OrgID, user.ActorID, string(payload))
 	return input, err
@@ -124,12 +137,23 @@ func validChatFolders(folders []ChatFolder) bool {
 	if len(folders) > 12 {
 		return false
 	}
-	icons := map[string]bool{"folder": true, "briefcase": true, "heart": true, "star": true, "users": true, "hash": true}
+	icons := map[string]bool{
+		"folder": true, "briefcase": true, "heart": true, "star": true, "users": true, "hash": true,
+		"bookmark": true, "home": true, "rocket": true, "zap": true, "flame": true, "sun": true,
+		"moon": true, "cloud": true, "umbrella": true, "coffee": true, "music": true, "camera": true,
+		"image": true, "gamepad": true, "dumbbell": true, "trophy": true, "target": true, "gift": true,
+		"shopping-bag": true, "wallet": true, "plane": true, "car": true, "map": true, "globe": true,
+		"book": true, "graduation": true, "code": true, "terminal": true, "database": true, "chart": true,
+		"calendar": true, "clock": true, "check": true, "lightbulb": true, "palette": true, "smile": true,
+		"bot": true, "cat": true, "dog": true, "leaf": true, "flower": true, "mountain": true,
+		"waves": true, "party": true,
+	}
+	colors := map[string]bool{"blue": true, "violet": true, "pink": true, "red": true, "orange": true, "amber": true, "green": true, "teal": true, "cyan": true, "slate": true}
 	seenFolders := make(map[string]bool, len(folders))
 	for index := range folders {
 		folder := &folders[index]
 		folder.Name = strings.TrimSpace(folder.Name)
-		if _, err := uuid.Parse(folder.ID); err != nil || seenFolders[folder.ID] || len([]rune(folder.Name)) < 1 || len([]rune(folder.Name)) > 40 || !icons[folder.Icon] || len(folder.ChatIDs) > 200 {
+		if _, err := uuid.Parse(folder.ID); err != nil || seenFolders[folder.ID] || len([]rune(folder.Name)) < 1 || len([]rune(folder.Name)) > 40 || !icons[folder.Icon] || !colors[folder.Color] || len(folder.ChatIDs) > 200 {
 			return false
 		}
 		seenFolders[folder.ID] = true
@@ -140,6 +164,20 @@ func validChatFolders(folders []ChatFolder) bool {
 			}
 			seenChats[chatID] = true
 		}
+	}
+	return true
+}
+
+func validPinnedChats(chatIDs []string) bool {
+	if len(chatIDs) > 10 {
+		return false
+	}
+	seen := make(map[string]bool, len(chatIDs))
+	for _, chatID := range chatIDs {
+		if _, err := uuid.Parse(chatID); err != nil || seen[chatID] {
+			return false
+		}
+		seen[chatID] = true
 	}
 	return true
 }

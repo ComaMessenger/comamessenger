@@ -44,6 +44,8 @@ const chat = {
   created_at: "2026-08-19T00:00:00Z",
   display_name: "Объявления",
   avatar_seed: "announcements",
+  notify_level: "all",
+  muted_until: null,
   last_activity_seq: 3,
   last_message_at: "2026-08-19T06:30:00Z",
   last_message: {
@@ -99,6 +101,7 @@ async function mockMessenger(
     push_enabled: false,
     push_preview: false,
     chat_folders: [] as Array<Record<string, unknown>>,
+    pinned_chat_ids: [] as string[],
   };
   const sent: Array<Record<string, unknown>> = [];
   const history =
@@ -218,10 +221,14 @@ async function mockMessenger(
         ],
       };
     else if (path.endsWith(`/chats/${chat.id}/notification-preferences`))
-      body =
-        route.request().method() === "PATCH"
-          ? route.request().postDataJSON()
-          : { notify_level: "all", muted_until: null };
+      if (route.request().method() === "PATCH") {
+        body = route.request().postDataJSON();
+        Object.assign(runtimeChat, body);
+      } else
+        body = {
+          notify_level: runtimeChat.notify_level,
+          muted_until: runtimeChat.muted_until,
+        };
     else if (
       path.endsWith(`/chats/${chat.id}/messages`) &&
       route.request().method() === "POST"
@@ -381,6 +388,18 @@ test("global navigation stays stable while utility pages replace content", async
     await expect(
       page.locator(".sidebar-nav").getByText("Настройки", { exact: true }),
     ).toHaveCount(0);
+    const profile = await page.locator(".sidebar-profile").boundingBox();
+    const viewport = page.viewportSize();
+    expect(profile).not.toBeNull();
+    expect(viewport).not.toBeNull();
+    expect(profile!.y + profile!.height).toBeGreaterThan(viewport!.height - 20);
+    await page.getByRole("button", { name: "Свернуть боковую панель" }).click();
+    await expect(page.locator(".messenger")).toHaveClass(
+      /messenger--sidebar-collapsed/,
+    );
+    await page
+      .getByRole("button", { name: "Развернуть боковую панель" })
+      .click();
   }
 
   await page.getByRole("button", { name: "Треды", exact: true }).click();
@@ -432,10 +451,14 @@ test("chat folders are persisted in preferences and become filters", async ({
   await expect(page.getByRole("button", { name: /Объявления/ })).toBeVisible();
   await page.getByRole("button", { name: "Создать папку" }).click();
   const dialog = page.getByRole("dialog", { name: "Создать папку" });
+  await expect(dialog.locator(".folder-icon-grid button")).toHaveCount(50);
   await dialog.getByRole("checkbox", { name: /Объявления/ }).click();
   await expect(
     dialog.getByRole("checkbox", { name: /Объявления/ }),
   ).toHaveAttribute("aria-checked", "true");
+  await dialog.getByLabel("Поиск иконок по смыслу").fill("ракета");
+  await dialog.getByRole("button", { name: "Запуски" }).click();
+  await dialog.getByRole("button", { name: "Цвет папки: violet" }).click();
   const folderName = dialog.getByLabel("Название папки");
   await folderName.pressSequentially("Работа");
   await expect(folderName).toHaveValue("Работа");
@@ -501,16 +524,28 @@ test("mentions and reply previews never expose actor or message IDs", async ({
 test("chat and message actions stay contextual", async ({ page }) => {
   await mockMessenger(page, { chatPatch: { kind: "group", role: "admin" } });
   await page.goto("/chats");
-  await page.getByRole("button", { name: "Поиск" }).click();
-  await expect(page.getByRole("dialog", { name: "Поиск" })).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("dialog", { name: "Поиск" })).toHaveCount(0);
+  if (test.info().project.name === "desktop") {
+    await page.getByRole("button", { name: "Поиск" }).click();
+    await expect(page.getByRole("dialog", { name: "Поиск" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog", { name: "Поиск" })).toHaveCount(0);
+  } else {
+    await expect(page.getByPlaceholder("Поиск чатов")).toBeVisible();
+  }
   const chatButton = page.getByRole("button", { name: /Объявления/ });
   await chatButton.click({ button: "right" });
   await expect(
-    page.getByRole("menuitem", { name: "Открыть чат" }),
+    page.getByRole("menuitem", { name: "Открыть в новом окне" }),
   ).toBeVisible();
-  await page.getByRole("menuitem", { name: "Открыть чат" }).click();
+  await expect(
+    page.getByRole("button", { name: "Действия с чатом" }),
+  ).toHaveCount(0);
+  await page.getByRole("menuitem", { name: "Закрепить" }).click();
+  await chatButton.click({ button: "right" });
+  await expect(page.getByRole("menuitem", { name: "Открепить" })).toBeVisible();
+  await page.getByRole("menuitem", { name: "Отключить уведомления" }).click();
+  await expect(chatButton.locator(".chat-card__muted")).toBeVisible();
+  await chatButton.click();
   const messageRow = page.locator("article.message").first();
   await messageRow.hover();
   await page.getByRole("button", { name: "Действия с сообщением" }).click();

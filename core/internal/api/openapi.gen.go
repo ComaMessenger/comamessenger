@@ -69,6 +69,27 @@ func (e ChatKind) Valid() bool {
 	}
 }
 
+// Defines values for ChatNotifyLevel.
+const (
+	ChatNotifyLevelAll      ChatNotifyLevel = "all"
+	ChatNotifyLevelMentions ChatNotifyLevel = "mentions"
+	ChatNotifyLevelNone     ChatNotifyLevel = "none"
+)
+
+// Valid indicates whether the value is a known member of the ChatNotifyLevel enum.
+func (e ChatNotifyLevel) Valid() bool {
+	switch e {
+	case ChatNotifyLevelAll:
+		return true
+	case ChatNotifyLevelMentions:
+		return true
+	case ChatNotifyLevelNone:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ChatRole.
 const (
 	ChatRoleAdmin  ChatRole = "admin"
@@ -108,30 +129,204 @@ func (e ChatVisibility) Valid() bool {
 	}
 }
 
+// Defines values for ChatFolderColor.
+const (
+	Amber  ChatFolderColor = "amber"
+	Blue   ChatFolderColor = "blue"
+	Cyan   ChatFolderColor = "cyan"
+	Green  ChatFolderColor = "green"
+	Orange ChatFolderColor = "orange"
+	Pink   ChatFolderColor = "pink"
+	Red    ChatFolderColor = "red"
+	Slate  ChatFolderColor = "slate"
+	Teal   ChatFolderColor = "teal"
+	Violet ChatFolderColor = "violet"
+)
+
+// Valid indicates whether the value is a known member of the ChatFolderColor enum.
+func (e ChatFolderColor) Valid() bool {
+	switch e {
+	case Amber:
+		return true
+	case Blue:
+		return true
+	case Cyan:
+		return true
+	case Green:
+		return true
+	case Orange:
+		return true
+	case Pink:
+		return true
+	case Red:
+		return true
+	case Slate:
+		return true
+	case Teal:
+		return true
+	case Violet:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ChatFolderIcon.
 const (
-	Briefcase ChatFolderIcon = "briefcase"
-	Folder    ChatFolderIcon = "folder"
-	Hash      ChatFolderIcon = "hash"
-	Heart     ChatFolderIcon = "heart"
-	Star      ChatFolderIcon = "star"
-	Users     ChatFolderIcon = "users"
+	Book        ChatFolderIcon = "book"
+	Bookmark    ChatFolderIcon = "bookmark"
+	Bot         ChatFolderIcon = "bot"
+	Briefcase   ChatFolderIcon = "briefcase"
+	Calendar    ChatFolderIcon = "calendar"
+	Camera      ChatFolderIcon = "camera"
+	Car         ChatFolderIcon = "car"
+	Cat         ChatFolderIcon = "cat"
+	Chart       ChatFolderIcon = "chart"
+	Check       ChatFolderIcon = "check"
+	Clock       ChatFolderIcon = "clock"
+	Cloud       ChatFolderIcon = "cloud"
+	Code        ChatFolderIcon = "code"
+	Coffee      ChatFolderIcon = "coffee"
+	Database    ChatFolderIcon = "database"
+	Dog         ChatFolderIcon = "dog"
+	Dumbbell    ChatFolderIcon = "dumbbell"
+	Flame       ChatFolderIcon = "flame"
+	Flower      ChatFolderIcon = "flower"
+	Folder      ChatFolderIcon = "folder"
+	Gamepad     ChatFolderIcon = "gamepad"
+	Gift        ChatFolderIcon = "gift"
+	Globe       ChatFolderIcon = "globe"
+	Graduation  ChatFolderIcon = "graduation"
+	Hash        ChatFolderIcon = "hash"
+	Heart       ChatFolderIcon = "heart"
+	Home        ChatFolderIcon = "home"
+	Image       ChatFolderIcon = "image"
+	Leaf        ChatFolderIcon = "leaf"
+	Lightbulb   ChatFolderIcon = "lightbulb"
+	Map         ChatFolderIcon = "map"
+	Moon        ChatFolderIcon = "moon"
+	Mountain    ChatFolderIcon = "mountain"
+	Music       ChatFolderIcon = "music"
+	Palette     ChatFolderIcon = "palette"
+	Party       ChatFolderIcon = "party"
+	Plane       ChatFolderIcon = "plane"
+	Rocket      ChatFolderIcon = "rocket"
+	ShoppingBag ChatFolderIcon = "shopping-bag"
+	Smile       ChatFolderIcon = "smile"
+	Star        ChatFolderIcon = "star"
+	Sun         ChatFolderIcon = "sun"
+	Target      ChatFolderIcon = "target"
+	Terminal    ChatFolderIcon = "terminal"
+	Trophy      ChatFolderIcon = "trophy"
+	Umbrella    ChatFolderIcon = "umbrella"
+	Users       ChatFolderIcon = "users"
+	Wallet      ChatFolderIcon = "wallet"
+	Waves       ChatFolderIcon = "waves"
+	Zap         ChatFolderIcon = "zap"
 )
 
 // Valid indicates whether the value is a known member of the ChatFolderIcon enum.
 func (e ChatFolderIcon) Valid() bool {
 	switch e {
+	case Book:
+		return true
+	case Bookmark:
+		return true
+	case Bot:
+		return true
 	case Briefcase:
 		return true
+	case Calendar:
+		return true
+	case Camera:
+		return true
+	case Car:
+		return true
+	case Cat:
+		return true
+	case Chart:
+		return true
+	case Check:
+		return true
+	case Clock:
+		return true
+	case Cloud:
+		return true
+	case Code:
+		return true
+	case Coffee:
+		return true
+	case Database:
+		return true
+	case Dog:
+		return true
+	case Dumbbell:
+		return true
+	case Flame:
+		return true
+	case Flower:
+		return true
 	case Folder:
+		return true
+	case Gamepad:
+		return true
+	case Gift:
+		return true
+	case Globe:
+		return true
+	case Graduation:
 		return true
 	case Hash:
 		return true
 	case Heart:
 		return true
+	case Home:
+		return true
+	case Image:
+		return true
+	case Leaf:
+		return true
+	case Lightbulb:
+		return true
+	case Map:
+		return true
+	case Moon:
+		return true
+	case Mountain:
+		return true
+	case Music:
+		return true
+	case Palette:
+		return true
+	case Party:
+		return true
+	case Plane:
+		return true
+	case Rocket:
+		return true
+	case ShoppingBag:
+		return true
+	case Smile:
+		return true
 	case Star:
 		return true
+	case Sun:
+		return true
+	case Target:
+		return true
+	case Terminal:
+		return true
+	case Trophy:
+		return true
+	case Umbrella:
+		return true
 	case Users:
+		return true
+	case Wallet:
+		return true
+	case Waves:
+		return true
+	case Zap:
 		return true
 	default:
 		return false
@@ -161,19 +356,19 @@ func (e ChatMemberRole) Valid() bool {
 
 // Defines values for ChatNotificationPreferencesNotifyLevel.
 const (
-	All      ChatNotificationPreferencesNotifyLevel = "all"
-	Mentions ChatNotificationPreferencesNotifyLevel = "mentions"
-	None     ChatNotificationPreferencesNotifyLevel = "none"
+	ChatNotificationPreferencesNotifyLevelAll      ChatNotificationPreferencesNotifyLevel = "all"
+	ChatNotificationPreferencesNotifyLevelMentions ChatNotificationPreferencesNotifyLevel = "mentions"
+	ChatNotificationPreferencesNotifyLevelNone     ChatNotificationPreferencesNotifyLevel = "none"
 )
 
 // Valid indicates whether the value is a known member of the ChatNotificationPreferencesNotifyLevel enum.
 func (e ChatNotificationPreferencesNotifyLevel) Valid() bool {
 	switch e {
-	case All:
+	case ChatNotificationPreferencesNotifyLevelAll:
 		return true
-	case Mentions:
+	case ChatNotificationPreferencesNotifyLevelMentions:
 		return true
-	case None:
+	case ChatNotificationPreferencesNotifyLevelNone:
 		return true
 	default:
 		return false
@@ -971,7 +1166,9 @@ type Chat struct {
 	LastActivitySeq int64              `json:"last_activity_seq"`
 	LastMessage     *MessagePreview    `json:"last_message,omitempty"`
 	LastMessageAt   *time.Time         `json:"last_message_at,omitempty"`
+	MutedUntil      *time.Time         `json:"muted_until"`
 	Name            *string            `json:"name,omitempty"`
+	NotifyLevel     ChatNotifyLevel    `json:"notify_level"`
 	Role            ChatRole           `json:"role"`
 	Topic           string             `json:"topic"`
 	Visibility      ChatVisibility     `json:"visibility"`
@@ -979,6 +1176,9 @@ type Chat struct {
 
 // ChatKind defines model for Chat.Kind.
 type ChatKind string
+
+// ChatNotifyLevel defines model for Chat.NotifyLevel.
+type ChatNotifyLevel string
 
 // ChatRole defines model for Chat.Role.
 type ChatRole string
@@ -989,10 +1189,14 @@ type ChatVisibility string
 // ChatFolder defines model for ChatFolder.
 type ChatFolder struct {
 	ChatIds []openapi_types.UUID `json:"chat_ids"`
+	Color   ChatFolderColor      `json:"color"`
 	Icon    ChatFolderIcon       `json:"icon"`
 	Id      openapi_types.UUID   `json:"id"`
 	Name    string               `json:"name"`
 }
+
+// ChatFolderColor defines model for ChatFolder.Color.
+type ChatFolderColor string
 
 // ChatFolderIcon defines model for ChatFolder.Icon.
 type ChatFolderIcon string
@@ -1520,11 +1724,12 @@ type UserStatus string
 
 // UserPreferences defines model for UserPreferences.
 type UserPreferences struct {
-	ChatFolders []ChatFolder          `json:"chat_folders"`
-	Locale      UserPreferencesLocale `json:"locale"`
-	PushEnabled bool                  `json:"push_enabled"`
-	PushPreview bool                  `json:"push_preview"`
-	Theme       UserPreferencesTheme  `json:"theme"`
+	ChatFolders   []ChatFolder          `json:"chat_folders"`
+	Locale        UserPreferencesLocale `json:"locale"`
+	PinnedChatIds []openapi_types.UUID  `json:"pinned_chat_ids"`
+	PushEnabled   bool                  `json:"push_enabled"`
+	PushPreview   bool                  `json:"push_preview"`
+	Theme         UserPreferencesTheme  `json:"theme"`
 }
 
 // UserPreferencesLocale defines model for UserPreferences.Locale.

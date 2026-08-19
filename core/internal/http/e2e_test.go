@@ -110,9 +110,10 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	var preferences push.Preferences
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/preferences", owner.AccessToken, nil, standardhttp.StatusOK, &preferences)
 	preferences.Theme, preferences.Locale, preferences.PushEnabled, preferences.PushPreview = "light", "en", true, true
-	preferences.ChatFolders = []push.ChatFolder{{ID: "00000000-0000-4000-8000-000000000080", Name: "Work", Icon: "briefcase", ChatIDs: []string{group.ID}}}
+	preferences.ChatFolders = []push.ChatFolder{{ID: "00000000-0000-4000-8000-000000000080", Name: "Work", Icon: "briefcase", Color: "violet", ChatIDs: []string{group.ID}}}
+	preferences.PinnedChatIDs = []string{group.ID}
 	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/preferences", owner.AccessToken, preferences, standardhttp.StatusOK, &preferences)
-	if len(preferences.ChatFolders) != 1 || preferences.ChatFolders[0].ChatIDs[0] != group.ID {
+	if len(preferences.ChatFolders) != 1 || preferences.ChatFolders[0].ChatIDs[0] != group.ID || preferences.PinnedChatIDs[0] != group.ID {
 		t.Fatalf("chat folders = %+v", preferences.ChatFolders)
 	}
 	var chatPreferences push.ChatPreferences
@@ -120,6 +121,11 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/chats/"+group.ID+"/notification-preferences", owner.AccessToken, map[string]any{"notify_level": "mentions", "muted_until": nil}, standardhttp.StatusOK, &chatPreferences)
 	if chatPreferences.NotifyLevel != "mentions" {
 		t.Fatalf("chat notification preferences = %+v", chatPreferences)
+	}
+	var chatWithPreferences chat.Chat
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/chats/"+group.ID, owner.AccessToken, nil, standardhttp.StatusOK, &chatWithPreferences)
+	if chatWithPreferences.NotifyLevel != "mentions" || chatWithPreferences.MutedUntil != nil {
+		t.Fatalf("chat list notification state = %+v", chatWithPreferences)
 	}
 	var subscription push.Subscription
 	e2eRequest(t, server.Client(), standardhttp.MethodPut, baseURL+"/api/v1/push/subscriptions", owner.AccessToken, map[string]any{"endpoint": "https://push.example.test/subscription/owner", "keys": map[string]string{"p256dh": "0123456789abcdef", "auth": "0123456789abcdef"}}, standardhttp.StatusCreated, &subscription)

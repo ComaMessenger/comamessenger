@@ -1276,6 +1276,8 @@ components:
           created_at,
           display_name,
           avatar_seed,
+          notify_level,
+          muted_until,
           last_activity_seq,
         ]
       properties:
@@ -1289,6 +1291,8 @@ components:
         archived_at: { type: [string, "null"], format: date-time }
         display_name: { type: string }
         avatar_seed: { type: string }
+        notify_level: { type: string, enum: [all, mentions, none] }
+        muted_until: { type: [string, "null"], format: date-time }
         direct_peer:
           oneOf:
             [{ $ref: "#/components/schemas/ActorSummary" }, { type: "null" }]
@@ -1628,7 +1632,15 @@ components:
     UserPreferences:
       type: object
       additionalProperties: false
-      required: [theme, locale, push_enabled, push_preview, chat_folders]
+      required:
+        [
+          theme,
+          locale,
+          push_enabled,
+          push_preview,
+          chat_folders,
+          pinned_chat_ids,
+        ]
       properties:
         theme: { type: string, enum: [system, light, dark] }
         locale: { type: string, enum: [ru, en] }
@@ -1638,16 +1650,75 @@ components:
           type: array
           maxItems: 12
           items: { $ref: "#/components/schemas/ChatFolder" }
+        pinned_chat_ids:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          items: { type: string, format: uuid }
     ChatFolder:
       type: object
       additionalProperties: false
-      required: [id, name, icon, chat_ids]
+      required: [id, name, icon, color, chat_ids]
       properties:
         id: { type: string, format: uuid }
         name: { type: string, minLength: 1, maxLength: 40 }
         icon:
           type: string
-          enum: [folder, briefcase, heart, star, users, hash]
+          enum:
+            - folder
+            - briefcase
+            - heart
+            - star
+            - users
+            - hash
+            - bookmark
+            - home
+            - rocket
+            - zap
+            - flame
+            - sun
+            - moon
+            - cloud
+            - umbrella
+            - coffee
+            - music
+            - camera
+            - image
+            - gamepad
+            - dumbbell
+            - trophy
+            - target
+            - gift
+            - shopping-bag
+            - wallet
+            - plane
+            - car
+            - map
+            - globe
+            - book
+            - graduation
+            - code
+            - terminal
+            - database
+            - chart
+            - calendar
+            - clock
+            - check
+            - lightbulb
+            - palette
+            - smile
+            - bot
+            - cat
+            - dog
+            - leaf
+            - flower
+            - mountain
+            - waves
+            - party
+        color:
+          type: string
+          enum:
+            [blue, violet, pink, red, orange, amber, green, teal, cyan, slate]
         chat_ids:
           type: array
           maxItems: 200

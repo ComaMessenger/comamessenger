@@ -19,48 +19,92 @@ import { useTranslation } from "react-i18next";
 import {
   AtSign,
   Bell,
+  BellOff,
+  BookOpen,
   Bookmark,
+  Bot,
   BriefcaseBusiness,
   Building2,
+  CalendarDays,
+  Camera,
+  Car,
+  Cat,
+  ChartNoAxesCombined,
   Check,
+  CheckCircle2,
   ChevronLeft,
   ChevronDown,
   Circle,
   Clock3,
+  Cloud,
+  Code2,
+  Coffee,
   Copy,
   CornerUpLeft,
   Forward,
   Folder,
   FolderPlus,
+  Flower2,
+  Flame,
+  Gamepad2,
+  Gift,
+  Globe2,
+  GraduationCap,
   Hash,
   Heart,
+  Home,
+  Image,
   Inbox,
   Info,
   Link2,
   Languages,
+  Leaf,
+  Lightbulb,
   LogOut,
+  Map as MapIcon,
   Megaphone,
   MessageCircle,
   MessageSquareReply,
   MessagesSquare,
   Moon,
+  Mountain,
+  Music,
   MoreHorizontal,
   Paperclip,
   Pencil,
   Pin,
   Plus,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Palette,
+  PartyPopper,
+  Plane,
   Search,
+  ShoppingBag,
   SendHorizontal,
   Settings,
   Smile,
   SmilePlus,
   Star,
   Sun,
+  Target,
+  Terminal,
+  Trophy,
   Trash2,
+  Umbrella,
   UserPlus,
   Users,
   VolumeX,
+  Wallet,
+  Waves,
   X,
+  Zap,
+  Rocket,
+  Dumbbell,
+  Database,
+  ExternalLink,
+  Dog,
+  type LucideIcon,
 } from "lucide-react";
 import {
   APIError,
@@ -117,6 +161,231 @@ const EmojiPicker = lazy(() => import("emoji-picker-react"));
 type Screen = "loading" | "bootstrap" | "login" | "messenger" | "invite";
 type SystemChatFilter = "all" | "direct" | "grouped" | "channel";
 type ChatFilter = SystemChatFilter | `folder:${string}`;
+
+const folderIconOptions: Array<{
+  id: ChatFolder["icon"];
+  icon: LucideIcon;
+  label: string;
+  terms: string;
+}> = [
+  { id: "folder", icon: Folder, label: "Папка", terms: "folder папка каталог" },
+  {
+    id: "briefcase",
+    icon: BriefcaseBusiness,
+    label: "Работа",
+    terms: "work работа офис briefcase",
+  },
+  {
+    id: "heart",
+    icon: Heart,
+    label: "Любимое",
+    terms: "heart любовь любимое сердце",
+  },
+  {
+    id: "star",
+    icon: Star,
+    label: "Важное",
+    terms: "star звезда важное избранное",
+  },
+  {
+    id: "users",
+    icon: Users,
+    label: "Команда",
+    terms: "users люди команда семья группа",
+  },
+  { id: "hash", icon: Hash, label: "Каналы", terms: "hash канал тема" },
+  {
+    id: "bookmark",
+    icon: Bookmark,
+    label: "Закладки",
+    terms: "bookmark закладка сохранить",
+  },
+  { id: "home", icon: Home, label: "Дом", terms: "home дом семья" },
+  {
+    id: "rocket",
+    icon: Rocket,
+    label: "Запуски",
+    terms: "rocket ракета запуск стартап",
+  },
+  {
+    id: "zap",
+    icon: Zap,
+    label: "Быстрое",
+    terms: "zap молния быстро энергия",
+  },
+  {
+    id: "flame",
+    icon: Flame,
+    label: "Горящее",
+    terms: "flame огонь горячее срочное",
+  },
+  { id: "sun", icon: Sun, label: "Солнце", terms: "sun солнце день" },
+  { id: "moon", icon: Moon, label: "Луна", terms: "moon луна ночь" },
+  {
+    id: "cloud",
+    icon: Cloud,
+    label: "Облако",
+    terms: "cloud облако инфраструктура",
+  },
+  {
+    id: "umbrella",
+    icon: Umbrella,
+    label: "Отдых",
+    terms: "umbrella зонт отдых отпуск",
+  },
+  { id: "coffee", icon: Coffee, label: "Кофе", terms: "coffee кофе перерыв" },
+  { id: "music", icon: Music, label: "Музыка", terms: "music музыка аудио" },
+  { id: "camera", icon: Camera, label: "Фото", terms: "camera камера фото" },
+  {
+    id: "image",
+    icon: Image,
+    label: "Картинки",
+    terms: "image картинка дизайн фото",
+  },
+  { id: "gamepad", icon: Gamepad2, label: "Игры", terms: "game игра геймпад" },
+  {
+    id: "dumbbell",
+    icon: Dumbbell,
+    label: "Спорт",
+    terms: "sport спорт фитнес гантель",
+  },
+  {
+    id: "trophy",
+    icon: Trophy,
+    label: "Достижения",
+    terms: "trophy кубок победа достижения",
+  },
+  { id: "target", icon: Target, label: "Цели", terms: "target цель планы" },
+  { id: "gift", icon: Gift, label: "Подарки", terms: "gift подарок праздник" },
+  {
+    id: "shopping-bag",
+    icon: ShoppingBag,
+    label: "Покупки",
+    terms: "shopping покупки магазин",
+  },
+  {
+    id: "wallet",
+    icon: Wallet,
+    label: "Финансы",
+    terms: "wallet кошелек финансы деньги",
+  },
+  {
+    id: "plane",
+    icon: Plane,
+    label: "Путешествия",
+    terms: "plane самолет путешествия отпуск",
+  },
+  { id: "car", icon: Car, label: "Авто", terms: "car машина автомобиль" },
+  {
+    id: "map",
+    icon: MapIcon,
+    label: "Места",
+    terms: "map карта места география",
+  },
+  {
+    id: "globe",
+    icon: Globe2,
+    label: "Мир",
+    terms: "globe мир интернет международное",
+  },
+  {
+    id: "book",
+    icon: BookOpen,
+    label: "Книги",
+    terms: "book книга знания читать",
+  },
+  {
+    id: "graduation",
+    icon: GraduationCap,
+    label: "Учёба",
+    terms: "education учеба университет обучение",
+  },
+  {
+    id: "code",
+    icon: Code2,
+    label: "Разработка",
+    terms: "code код разработка engineering",
+  },
+  {
+    id: "terminal",
+    icon: Terminal,
+    label: "Терминал",
+    terms: "terminal консоль devops",
+  },
+  {
+    id: "database",
+    icon: Database,
+    label: "Данные",
+    terms: "database база данные sql",
+  },
+  {
+    id: "chart",
+    icon: ChartNoAxesCombined,
+    label: "Аналитика",
+    terms: "chart график аналитика метрики",
+  },
+  {
+    id: "calendar",
+    icon: CalendarDays,
+    label: "Календарь",
+    terms: "calendar календарь встречи даты",
+  },
+  {
+    id: "clock",
+    icon: Clock3,
+    label: "Время",
+    terms: "clock часы время дедлайн",
+  },
+  {
+    id: "check",
+    icon: CheckCircle2,
+    label: "Задачи",
+    terms: "check задачи готово todo",
+  },
+  { id: "lightbulb", icon: Lightbulb, label: "Идеи", terms: "idea идеи лампа" },
+  {
+    id: "palette",
+    icon: Palette,
+    label: "Дизайн",
+    terms: "palette палитра дизайн творчество",
+  },
+  { id: "smile", icon: Smile, label: "Общение", terms: "smile улыбка общение" },
+  { id: "bot", icon: Bot, label: "Боты", terms: "bot бот агент ai" },
+  { id: "cat", icon: Cat, label: "Коты", terms: "cat кот кошка питомцы" },
+  { id: "dog", icon: Dog, label: "Собаки", terms: "dog собака питомцы" },
+  {
+    id: "leaf",
+    icon: Leaf,
+    label: "Природа",
+    terms: "leaf лист природа экология",
+  },
+  { id: "flower", icon: Flower2, label: "Цветы", terms: "flower цветок сад" },
+  {
+    id: "mountain",
+    icon: Mountain,
+    label: "Горы",
+    terms: "mountain гора туризм",
+  },
+  { id: "waves", icon: Waves, label: "Море", terms: "waves волны море вода" },
+  {
+    id: "party",
+    icon: PartyPopper,
+    label: "Праздники",
+    terms: "party праздник вечеринка",
+  },
+];
+const folderColors: ChatFolder["color"][] = [
+  "blue",
+  "violet",
+  "pink",
+  "red",
+  "orange",
+  "amber",
+  "green",
+  "teal",
+  "cyan",
+  "slate",
+];
 const apiURL = import.meta.env.VITE_API_URL ?? window.location.origin;
 const emptyMessages: ClientMessage[] = [];
 const emptyActorIDs: string[] = [];
@@ -482,6 +751,11 @@ function Messenger({
   const realtime = useStore(store, (state) => state.realtime);
   const [filter, setFilter] = useState<ChatFilter>(chatFilterFromURL);
   const [folders, setFolders] = useState<ChatFolder[]>([]);
+  const [pinnedChatIDs, setPinnedChatIDs] = useState<string[]>([]);
+  const [chatSearch, setChatSearch] = useState("");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem("coma-sidebar-collapsed") === "true",
+  );
   const [searchOpen, setSearchOpen] = useState(false);
   const [workspaceMenu, setWorkspaceMenu] = useState(false);
   const workspaceMenuRoot = useRef<HTMLDivElement>(null);
@@ -580,6 +854,7 @@ function Messenger({
       .then((preferences) => {
         setTheme(preferences.theme);
         setFolders(preferences.chat_folders);
+        setPinnedChatIDs(preferences.pinned_chat_ids);
         void setLocale(preferences.locale);
       })
       .catch(() => undefined);
@@ -623,13 +898,36 @@ function Messenger({
   const activeFolder = filter.startsWith("folder:")
     ? folders.find((folder) => `folder:${folder.id}` === filter)
     : undefined;
-  const filtered = chats.filter((chat) => {
-    if (filter === "all") return true;
-    if (filter === "direct") return chat.kind === "direct";
-    if (filter === "grouped") return chat.kind === "group";
-    if (filter === "channel") return chat.kind === "channel";
-    return activeFolder?.chat_ids.includes(chat.id) ?? false;
-  });
+  const normalizedChatSearch = chatSearch.trim().toLocaleLowerCase();
+  const pinnedOrder = new Map(
+    pinnedChatIDs.map((chatID, index) => [chatID, index]),
+  );
+  const filtered = chats
+    .filter((chat) => {
+      const inFilter =
+        filter === "all"
+          ? true
+          : filter === "direct"
+            ? chat.kind === "direct"
+            : filter === "grouped"
+              ? chat.kind === "group"
+              : filter === "channel"
+                ? chat.kind === "channel"
+                : (activeFolder?.chat_ids.includes(chat.id) ?? false);
+      if (!inFilter || !normalizedChatSearch) return inFilter;
+      return `${titleOf(chat, [], user.id)} ${chat.last_message?.body ?? ""}`
+        .toLocaleLowerCase()
+        .includes(normalizedChatSearch);
+    })
+    .sort((left, right) => {
+      const leftPin = pinnedOrder.get(left.id);
+      const rightPin = pinnedOrder.get(right.id);
+      if (leftPin !== undefined && rightPin !== undefined)
+        return leftPin - rightPin;
+      if (leftPin !== undefined) return -1;
+      if (rightPin !== undefined) return 1;
+      return 0;
+    });
   async function logout() {
     await api.logout();
     onLogout();
@@ -653,6 +951,31 @@ function Messenger({
     });
     setFolders(updated.chat_folders);
   }
+  async function savePinnedChats(next: string[]) {
+    const preferences = await api.preferences();
+    const updated = await api.updatePreferences({
+      ...preferences,
+      pinned_chat_ids: next,
+    });
+    setPinnedChatIDs(updated.pinned_chat_ids);
+  }
+  async function togglePinnedChat(chatID: string) {
+    if (pinnedChatIDs.includes(chatID)) {
+      await savePinnedChats(pinnedChatIDs.filter((id) => id !== chatID));
+      return;
+    }
+    if (pinnedChatIDs.length >= 10) {
+      setChatError(t("pinLimit"));
+      return;
+    }
+    await savePinnedChats([...pinnedChatIDs, chatID]);
+  }
+  function toggleSidebar() {
+    setSidebarCollapsed((collapsed) => {
+      localStorage.setItem("coma-sidebar-collapsed", String(!collapsed));
+      return !collapsed;
+    });
+  }
   async function toggleChatFolder(folderID: string, chatID: string) {
     await saveFolders(
       folders.map((folder) =>
@@ -671,6 +994,7 @@ function Messenger({
     <div
       className={cx(
         "messenger",
+        sidebarCollapsed && "messenger--sidebar-collapsed",
         !showChatList && "messenger--utility",
         selectedID && "messenger--chat-open",
         threadID && "messenger--thread-open",
@@ -681,7 +1005,13 @@ function Messenger({
           <button
             className="workspace-switcher"
             aria-expanded={workspaceMenu}
-            onClick={() => setWorkspaceMenu((open) => !open)}
+            onClick={() => {
+              if (sidebarCollapsed) {
+                localStorage.setItem("coma-sidebar-collapsed", "false");
+                setSidebarCollapsed(false);
+              }
+              setWorkspaceMenu((open) => !open);
+            }}
           >
             <Logo size="small" />
             <strong title={user.organization_name}>
@@ -759,6 +1089,13 @@ function Messenger({
             <span>{t("members")}</span>
           </button>
         </nav>
+        <IconButton
+          className="sidebar-collapse"
+          label={sidebarCollapsed ? t("expandSidebar") : t("collapseSidebar")}
+          onClick={toggleSidebar}
+        >
+          {sidebarCollapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
+        </IconButton>
         <footer className="sidebar-profile">
           <Avatar name={user.display_name} size="sm" online />
           <button onClick={() => setModal("settings")}>
@@ -802,13 +1139,16 @@ function Messenger({
               <Users /> {t("members")}
             </button>
           </nav>
-          <button
-            className="mobile-chat-search"
-            onClick={() => setSearchOpen(true)}
-          >
+          <label className="chat-list-search">
             <Search />
-            <span>{t("search")}</span>
-          </button>
+            <input
+              type="search"
+              value={chatSearch}
+              onChange={(event) => setChatSearch(event.currentTarget.value)}
+              placeholder={t("searchChats")}
+              aria-label={t("searchChats")}
+            />
+          </label>
           <div className="filter-chips" role="group" aria-label={t("chats")}>
             {(["all", "direct", "grouped", "channel"] as const).map((item) => (
               <button
@@ -823,6 +1163,7 @@ function Messenger({
               <button
                 key={folder.id}
                 className={filter === `folder:${folder.id}` ? "active" : ""}
+                data-folder-color={folder.color}
                 onClick={() => selectFilter(`folder:${folder.id}`)}
               >
                 <FolderGlyph icon={folder.icon} />
@@ -854,8 +1195,26 @@ function Messenger({
                       (item) => item.chat_id === chat.id,
                     )}
                     folders={folders}
+                    pinned={pinnedChatIDs.includes(chat.id)}
+                    canPin={
+                      pinnedChatIDs.includes(chat.id) ||
+                      pinnedChatIDs.length < 10
+                    }
                     onToggleFolder={(folderID) =>
                       void toggleChatFolder(folderID, chat.id)
+                    }
+                    onTogglePin={() => void togglePinnedChat(chat.id)}
+                    onMarkRead={() =>
+                      void api
+                        .markRead(chat.id, chat.last_activity_seq)
+                        .then(reload)
+                    }
+                    onNotificationChanged={() => void reload()}
+                    onLeave={() =>
+                      void api.removeMember(chat.id, user.id).then(async () => {
+                        await reload();
+                        if (selectedID === chat.id) navigate("/chats");
+                      })
                     }
                     onClick={() => navigate(`/chat/${chat.id}`)}
                   />
@@ -1012,7 +1371,13 @@ function ChatCard({
   selected,
   unread,
   folders = [],
+  pinned,
+  canPin,
   onToggleFolder,
+  onTogglePin,
+  onMarkRead,
+  onNotificationChanged,
+  onLeave,
   onClick,
 }: {
   api: MessengerAPI;
@@ -1021,24 +1386,40 @@ function ChatCard({
   selected: boolean;
   unread?: { unread_count: number; mention_count: number };
   folders?: ChatFolder[];
+  pinned: boolean;
+  canPin: boolean;
   onToggleFolder?(folderID: string): void;
+  onTogglePin(): void;
+  onMarkRead(): void;
+  onNotificationChanged(): void;
+  onLeave(): void;
   onClick(): void;
 }) {
   const { t } = useTranslation();
-  const [menu, setMenu] = useState(false);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const menuRoot = useRef<HTMLDivElement>(null);
-  useDismissable(menuRoot, menu, () => setMenu(false));
-  const notificationQuery = useQuery({
-    queryKey: ["chat-notifications", chat.id],
-    queryFn: () => api.chatNotifications(chat.id),
-    enabled: menu,
-    staleTime: 30_000,
-  });
-  const muted = notificationQuery.data?.notify_level === "none";
-  function toggleMenu(event: React.MouseEvent) {
+  const longPress = useRef<number | null>(null);
+  const longPressed = useRef(false);
+  useDismissable(menuRoot, Boolean(menu), () => setMenu(null));
+  const muted =
+    chat.notify_level === "none" ||
+    Boolean(
+      chat.muted_until && new Date(chat.muted_until).getTime() > Date.now(),
+    );
+  function openMenuAt(clientX: number, clientY: number) {
+    setMenu({
+      x: Math.max(8, Math.min(clientX, window.innerWidth - 250)),
+      y: Math.max(8, Math.min(clientY, window.innerHeight - 360)),
+    });
+  }
+  function openContextMenu(event: React.MouseEvent) {
     event.preventDefault();
     event.stopPropagation();
-    setMenu((open) => !open);
+    openMenuAt(event.clientX, event.clientY);
+  }
+  function clearLongPress() {
+    if (longPress.current !== null) window.clearTimeout(longPress.current);
+    longPress.current = null;
   }
   return (
     <div className="chat-card-wrap" ref={menuRoot}>
@@ -1048,15 +1429,45 @@ function ChatCard({
           selected && "selected",
           muted && "chat-card--muted",
         )}
-        onClick={onClick}
-        onContextMenu={toggleMenu}
+        onClick={(event) => {
+          if (longPressed.current) {
+            event.preventDefault();
+            longPressed.current = false;
+            return;
+          }
+          onClick();
+        }}
+        onContextMenu={openContextMenu}
+        onKeyDown={(event) => {
+          if (
+            event.key !== "ContextMenu" &&
+            !(event.shiftKey && event.key === "F10")
+          )
+            return;
+          event.preventDefault();
+          const bounds = event.currentTarget.getBoundingClientRect();
+          openMenuAt(bounds.left + 28, bounds.top + 28);
+        }}
+        onPointerDown={(event) => {
+          if (event.pointerType !== "touch") return;
+          const { clientX, clientY } = event;
+          longPress.current = window.setTimeout(() => {
+            longPressed.current = true;
+            openMenuAt(clientX, clientY);
+          }, 520);
+        }}
+        onPointerUp={clearLongPress}
+        onPointerCancel={clearLongPress}
+        onPointerMove={clearLongPress}
+        aria-haspopup="menu"
+        aria-expanded={Boolean(menu)}
       >
         <Avatar name={title} size="lg" online={chat.kind === "direct"} />
         <span className="chat-card__body">
           <span className="chat-card__top">
             <strong>
-              {chat.kind === "channel" && <Megaphone size={14} />}
-              {title}
+              <span>{title}</span>
+              {muted && <BellOff className="chat-card__muted" />}
             </strong>
             <time>
               {chat.last_message_at
@@ -1064,38 +1475,53 @@ function ChatCard({
                 : formatDay(chat.created_at)}
             </time>
           </span>
-          <span className="chat-card__preview">
-            {chat.last_message
-              ? `${chat.last_message.actor_display_name}: ${chat.last_message.deleted ? t("remove") : messagePlainText(chat.last_message.body)}`
-              : chat.topic ||
-                (chat.kind === "direct" ? t("direct") : t(chat.kind))}
+          <span className="chat-card__bottom">
+            <span className="chat-card__preview">
+              {chat.last_message
+                ? `${chat.kind === "direct" ? "" : `${chat.last_message.actor_display_name}: `}${chat.last_message.deleted ? t("remove") : messagePlainText(chat.last_message.body)}`
+                : chat.topic ||
+                  (chat.kind === "direct" ? t("direct") : t(chat.kind))}
+            </span>
+            {Boolean(unread?.unread_count) ? (
+              <Badge tone={unread?.mention_count ? "primary" : "neutral"}>
+                {unread!.unread_count > 99 ? "99+" : unread!.unread_count}
+              </Badge>
+            ) : (
+              pinned && <Pin className="chat-card__pin" fill="currentColor" />
+            )}
           </span>
         </span>
-        {Boolean(unread?.unread_count) && (
-          <Badge tone={unread?.mention_count ? "primary" : "neutral"}>
-            {unread!.unread_count > 99 ? "99+" : unread!.unread_count}
-          </Badge>
-        )}
-      </button>
-      <button
-        className="chat-card__more"
-        aria-label={t("chatActions")}
-        aria-expanded={menu}
-        onClick={toggleMenu}
-      >
-        <MoreHorizontal size={16} />
       </button>
       {menu && (
-        <div className="chat-context-menu" role="menu">
+        <div
+          className="chat-context-menu"
+          role="menu"
+          style={{ insetInlineStart: menu.x, top: menu.y }}
+        >
           <button
             role="menuitem"
             onClick={() => {
-              setMenu(false);
-              onClick();
+              setMenu(null);
+              window.open(
+                new URL(`/chat/${chat.id}`, window.location.origin),
+                "_blank",
+                "noopener,noreferrer",
+              );
             }}
           >
-            <MessageCircle />
-            <span>{t("openChat")}</span>
+            <ExternalLink />
+            <span>{t("openNewWindow")}</span>
+          </button>
+          <button
+            role="menuitem"
+            disabled={!canPin}
+            onClick={() => {
+              setMenu(null);
+              onTogglePin();
+            }}
+          >
+            <Pin />
+            <span>{pinned ? t("unpinChat") : t("pinChat")}</span>
           </button>
           <button
             role="menuitem"
@@ -1105,13 +1531,25 @@ function ChatCard({
                   notify_level: muted ? "all" : "none",
                   muted_until: null,
                 })
-                .then(() => notificationQuery.refetch())
-                .then(() => setMenu(false))
+                .then(onNotificationChanged)
+                .then(() => setMenu(null))
             }
           >
-            <VolumeX />
+            {muted ? <Bell /> : <BellOff />}
             <span>{muted ? t("unmuteChat") : t("muteChat")}</span>
           </button>
+          {Boolean(unread?.unread_count) && (
+            <button
+              role="menuitem"
+              onClick={() => {
+                setMenu(null);
+                onMarkRead();
+              }}
+            >
+              <MessageCircle />
+              <span>{t("markAsRead")}</span>
+            </button>
+          )}
           {folders.length > 0 && (
             <span className="chat-context-menu__label">{t("folders")}</span>
           )}
@@ -1122,14 +1560,32 @@ function ChatCard({
               aria-checked={folder.chat_ids.includes(chat.id)}
               onClick={() => {
                 onToggleFolder?.(folder.id);
-                setMenu(false);
+                setMenu(null);
               }}
             >
-              <FolderGlyph icon={folder.icon} />
+              <span data-folder-color={folder.color}>
+                <FolderGlyph icon={folder.icon} />
+              </span>
               <span>{folder.name}</span>
               {folder.chat_ids.includes(chat.id) && <Check />}
             </button>
           ))}
+          {chat.kind !== "direct" && (
+            <button
+              className="chat-context-menu__danger"
+              role="menuitem"
+              onClick={() => {
+                if (!window.confirm(t("leaveChatConfirm"))) return;
+                setMenu(null);
+                onLeave();
+              }}
+            >
+              <LogOut />
+              <span>
+                {t(chat.kind === "channel" ? "leaveChannel" : "leaveChat")}
+              </span>
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -2673,12 +3129,9 @@ function UtilityPageHeader({
 }
 
 function FolderGlyph({ icon }: { icon: ChatFolder["icon"] }) {
-  if (icon === "briefcase") return <BriefcaseBusiness />;
-  if (icon === "heart") return <Heart />;
-  if (icon === "star") return <Star />;
-  if (icon === "users") return <Users />;
-  if (icon === "hash") return <Hash />;
-  return <Folder />;
+  const Glyph =
+    folderIconOptions.find((option) => option.id === icon)?.icon ?? Folder;
+  return <Glyph />;
 }
 
 function ChatFolderDialog({
@@ -2693,7 +3146,20 @@ function ChatFolderDialog({
   const { t } = useTranslation();
   const [name, setName] = useState("");
   const [icon, setIcon] = useState<ChatFolder["icon"]>("folder");
+  const [color, setColor] = useState<ChatFolder["color"]>("blue");
+  const [iconQuery, setIconQuery] = useState("");
+  const [chatQuery, setChatQuery] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
+  const visibleIcons = folderIconOptions.filter((option) =>
+    `${option.label} ${option.terms}`
+      .toLocaleLowerCase()
+      .includes(iconQuery.trim().toLocaleLowerCase()),
+  );
+  const visibleChats = chats.filter((chat) =>
+    chat.display_name
+      .toLocaleLowerCase()
+      .includes(chatQuery.trim().toLocaleLowerCase()),
+  );
   return (
     <Dialog
       title={t("newFolder")}
@@ -2708,24 +3174,68 @@ function ChatFolderDialog({
           maxLength={40}
           onInput={(event) => setName(event.currentTarget.value)}
         />
-        <SelectField
-          label={t("folderIcon")}
-          name="folder_icon"
-          value={icon}
-          onChange={(event) =>
-            setIcon(event.target.value as ChatFolder["icon"])
-          }
-        >
-          <option value="folder">{t("folderIconFolder")}</option>
-          <option value="briefcase">{t("folderIconWork")}</option>
-          <option value="heart">{t("folderIconHeart")}</option>
-          <option value="star">{t("folderIconStar")}</option>
-          <option value="users">{t("folderIconPeople")}</option>
-          <option value="hash">{t("folderIconChannel")}</option>
-        </SelectField>
+        <fieldset className="folder-icon-picker" data-folder-color={color}>
+          <legend>{t("folderIcon")}</legend>
+          <label className="folder-picker-search">
+            <Search />
+            <input
+              type="search"
+              value={iconQuery}
+              onChange={(event) => setIconQuery(event.currentTarget.value)}
+              placeholder={t("searchIcons")}
+              aria-label={t("searchIcons")}
+            />
+          </label>
+          <div className="folder-icon-grid">
+            {visibleIcons.map((option) => {
+              const Glyph = option.icon;
+              return (
+                <button
+                  type="button"
+                  key={option.id}
+                  className={icon === option.id ? "active" : ""}
+                  aria-pressed={icon === option.id}
+                  aria-label={option.label}
+                  title={option.label}
+                  onClick={() => setIcon(option.id)}
+                >
+                  <Glyph />
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+        <fieldset className="folder-color-picker">
+          <legend>{t("folderColor")}</legend>
+          <div>
+            {folderColors.map((value) => (
+              <button
+                type="button"
+                key={value}
+                data-folder-color={value}
+                className={color === value ? "active" : ""}
+                aria-pressed={color === value}
+                aria-label={t("chooseFolderColor", { color: value })}
+                onClick={() => setColor(value)}
+              >
+                {color === value && <Check />}
+              </button>
+            ))}
+          </div>
+        </fieldset>
         <div className="folder-chat-picker">
           <strong>{t("folderChats")}</strong>
-          {chats.map((chat) => (
+          <label className="folder-picker-search">
+            <Search />
+            <input
+              type="search"
+              value={chatQuery}
+              onChange={(event) => setChatQuery(event.currentTarget.value)}
+              placeholder={t("searchChats")}
+              aria-label={t("searchChats")}
+            />
+          </label>
+          {visibleChats.map((chat) => (
             <button
               type="button"
               role="checkbox"
@@ -2758,6 +3268,7 @@ function ChatFolderDialog({
                 id: crypto.randomUUID(),
                 name: name.trim(),
                 icon,
+                color,
                 chat_ids: selected,
               })
             }
@@ -2904,6 +3415,7 @@ function SettingsDialog({
         push_enabled: query.data?.push_enabled ?? false,
         push_preview: pushPreview,
         chat_folders: query.data?.chat_folders ?? [],
+        pinned_chat_ids: query.data?.pinned_chat_ids ?? [],
       }),
     ]);
     setTheme(theme);
