@@ -69,8 +69,8 @@ export const themes = {
     dangerSoft: "#49272f",
     success: "#48d59b",
     overlay: "rgba(0, 0, 0, 0.62)",
-    shadow: "0 18px 48px rgba(0, 0, 0, 0.38)",
-    threadShadow: "-12px 0 30px rgba(0, 0, 0, 0.3)",
+    shadow: "none",
+    threadShadow: "none",
   },
 } as const;
 

@@ -18,6 +18,7 @@ test("component catalog supports light, dark and phone", async ({ page }) => {
 const user = {
   id: "00000000-0000-4000-8000-000000000001",
   org_id: "00000000-0000-4000-8000-000000000010",
+  organization_name: "Test space",
   role: "owner",
   email: "owner@example.com",
   display_name: "Анна",
@@ -77,6 +78,7 @@ async function mockMessenger(
     sendFailures?: number;
     history?: Array<Record<string, unknown>>;
     paginate?: boolean;
+    theme?: "light" | "dark";
   } = {},
 ) {
   const {
@@ -85,11 +87,19 @@ async function mockMessenger(
     sendFailures = 0,
     history: suppliedHistory,
     paginate = false,
+    theme = "light",
   } = options;
   const runtimeChat = { ...chat, ...chatPatch };
   let remainingSendFailures = sendFailures;
   let paginationRequests = 0;
   let refreshRequests = 0;
+  let preferences = {
+    theme,
+    locale: "ru",
+    push_enabled: false,
+    push_preview: false,
+    chat_folders: [] as Array<Record<string, unknown>>,
+  };
   const sent: Array<Record<string, unknown>> = [];
   const history =
     suppliedHistory ??
@@ -161,6 +171,26 @@ async function mockMessenger(
         user,
       };
     } else if (path.endsWith("/chats")) body = { chats: [runtimeChat] };
+    else if (path.endsWith("/preferences")) {
+      if (route.request().method() === "PATCH")
+        preferences = route.request().postDataJSON() as typeof preferences;
+      body = preferences;
+    } else if (path.endsWith("/actors"))
+      body = {
+        actors: [
+          {
+            actor_id: user.id,
+            display_name: user.display_name,
+            handle: user.handle,
+            type: "user",
+          },
+          { ...lev, type: "user" },
+        ],
+        next_after_id: null,
+      };
+    else if (path.endsWith("/threads"))
+      body = { threads: [], next_before_seq: null };
+    else if (path.endsWith(`/chats/${chat.id}/pins`)) body = { pins: [] };
     else if (path.endsWith("/unread"))
       body = {
         chats: [
@@ -287,8 +317,8 @@ test("responsive chat list opens a channel with a read-only composer", async ({
   await page.goto("/chats");
   await expect(page.getByRole("button", { name: /Объявления/ })).toBeVisible();
   if (test.info().project.name === "phone") {
-    const header = await page.locator(".workspace-switcher").boundingBox();
-    expect(header?.y).toBeLessThan(4);
+    const listPane = await page.locator(".chat-list-pane").boundingBox();
+    expect(listPane?.y).toBeLessThan(1);
     await expect(page).toHaveScreenshot("chat-list.png", {
       animations: "disabled",
     });
@@ -322,6 +352,99 @@ test("responsive chat list opens a channel with a read-only composer", async ({
   }
 });
 
+test("global navigation stays stable while utility pages replace content", async ({
+  page,
+}) => {
+  await mockMessenger(page);
+  await page.goto("/chats");
+  const phone = test.info().project.name === "phone";
+  if (phone) await expect(page.locator(".global-sidebar")).toBeHidden();
+  else await expect(page.locator(".global-sidebar")).toBeVisible();
+  await expect(page.locator(".chat-list-pane")).toBeVisible();
+  if (phone)
+    await expect(
+      page.locator(".chat-list-head__workspace").getByText("Test space"),
+    ).toBeVisible();
+  else {
+    await expect(
+      page.getByRole("button", { name: "Test space" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Test space" }).click();
+    const workspaceMenu = page.getByRole("menu");
+    await expect(
+      workspaceMenu.getByRole("menuitem", {
+        name: "Настройки пространства",
+      }),
+    ).toBeVisible();
+    await page.locator(".chat-list-head").click();
+    await expect(workspaceMenu).toHaveCount(0);
+    await expect(
+      page.locator(".sidebar-nav").getByText("Настройки", { exact: true }),
+    ).toHaveCount(0);
+  }
+
+  await page.getByRole("button", { name: "Треды", exact: true }).click();
+  await expect(page).toHaveURL(/\/threads$/);
+  if (phone) await expect(page.locator(".global-sidebar")).toBeHidden();
+  else await expect(page.locator(".global-sidebar")).toBeVisible();
+  await expect(page.locator(".chat-list-pane")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Треды" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Важные", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Важные" })).toBeVisible();
+  await page.getByRole("button", { name: "Участники", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Участники" })).toBeVisible();
+});
+
+test("dark messenger shell uses flat charcoal elevation without glow", async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === "phone", "desktop theme probe");
+  await mockMessenger(page, { theme: "dark" });
+  await page.goto("/chats");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.getByRole("button", { name: /Объявления/ })).toBeVisible();
+  const glowing = await page.locator(".messenger *").evaluateAll((elements) =>
+    elements
+      .map((element) => {
+        const style = getComputedStyle(element);
+        return {
+          tag: element.tagName,
+          boxShadow: style.boxShadow,
+          textShadow: style.textShadow,
+        };
+      })
+      .filter(
+        (style) => style.boxShadow !== "none" || style.textShadow !== "none",
+      ),
+  );
+  expect(glowing).toEqual([]);
+  await expect(page).toHaveScreenshot("messenger-dark.png", {
+    animations: "disabled",
+  });
+});
+
+test("chat folders are persisted in preferences and become filters", async ({
+  page,
+}) => {
+  await mockMessenger(page);
+  await page.goto("/chats");
+  await expect(page.getByRole("button", { name: /Объявления/ })).toBeVisible();
+  await page.getByRole("button", { name: "Создать папку" }).click();
+  const dialog = page.getByRole("dialog", { name: "Создать папку" });
+  await dialog.getByRole("checkbox", { name: /Объявления/ }).click();
+  await expect(
+    dialog.getByRole("checkbox", { name: /Объявления/ }),
+  ).toHaveAttribute("aria-checked", "true");
+  const folderName = dialog.getByLabel("Название папки");
+  await folderName.pressSequentially("Работа");
+  await expect(folderName).toHaveValue("Работа");
+  await dialog.getByRole("button", { name: "Создать", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Работа" })).toBeVisible();
+  await expect(page).toHaveURL(/folder=/);
+  await expect(page.getByRole("button", { name: /Объявления/ })).toBeVisible();
+});
+
 test("mentions and reply previews never expose actor or message IDs", async ({
   page,
 }) => {
@@ -351,7 +474,7 @@ test("mentions and reply previews never expose actor or message IDs", async ({
   await page.goto("/chats");
   if (test.info().project.name === "phone")
     await expect(
-      page.locator(".mobile-chat-list .chat-card__preview"),
+      page.locator(".chat-list-pane .chat-card__preview"),
     ).toContainText("Лев: @Лев привет");
   await expect(page.getByText(lev.actor_id)).toHaveCount(0);
   await page.getByRole("button", { name: /Объявления/ }).click();

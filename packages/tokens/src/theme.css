@@ -49,6 +49,6 @@
   --coma-danger-soft: #49272f;
   --coma-success: #48d59b;
   --coma-overlay: rgba(0, 0, 0, 0.62);
-  --coma-shadow: 0 18px 48px rgba(0, 0, 0, 0.38);
-  --coma-thread-shadow: -12px 0 30px rgba(0, 0, 0, 0.3);
+  --coma-shadow: none;
+  --coma-thread-shadow: none;
 }

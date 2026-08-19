@@ -15,9 +15,12 @@ const routes = [
     component: marker,
     validateSearch: (search: Record<string, unknown>) => ({
       filter:
-        search.filter === "direct" || search.filter === "grouped"
+        search.filter === "direct" ||
+        search.filter === "grouped" ||
+        search.filter === "channel"
           ? search.filter
           : "all",
+      folder: typeof search.folder === "string" ? search.folder : undefined,
     }),
   }),
   createRoute({
@@ -33,6 +36,16 @@ const routes = [
   createRoute({
     getParentRoute: () => root,
     path: "/threads",
+    component: marker,
+  }),
+  createRoute({
+    getParentRoute: () => root,
+    path: "/important",
+    component: marker,
+  }),
+  createRoute({
+    getParentRoute: () => root,
+    path: "/members",
     component: marker,
   }),
   createRoute({

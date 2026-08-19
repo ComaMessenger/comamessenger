@@ -14,6 +14,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/config"
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -33,10 +34,17 @@ type Subscription struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 type Preferences struct {
-	Theme       string `json:"theme"`
-	Locale      string `json:"locale"`
-	PushEnabled bool   `json:"push_enabled"`
-	PushPreview bool   `json:"push_preview"`
+	Theme       string       `json:"theme"`
+	Locale      string       `json:"locale"`
+	PushEnabled bool         `json:"push_enabled"`
+	PushPreview bool         `json:"push_preview"`
+	ChatFolders []ChatFolder `json:"chat_folders"`
+}
+type ChatFolder struct {
+	ID      string   `json:"id"`
+	Name    string   `json:"name"`
+	Icon    string   `json:"icon"`
+	ChatIDs []string `json:"chat_ids"`
 }
 type ChatPreferences struct {
 	NotifyLevel string     `json:"notify_level"`
@@ -80,7 +88,7 @@ func (s *Service) Unsubscribe(ctx context.Context, user identity.User, subscript
 	return nil
 }
 func (s *Service) GetPreferences(ctx context.Context, user identity.User) (Preferences, error) {
-	result := Preferences{Theme: "light", Locale: "ru", PushEnabled: true}
+	result := Preferences{Theme: "light", Locale: "ru", PushEnabled: true, ChatFolders: []ChatFolder{}}
 	var raw []byte
 	if err := s.pool.QueryRow(ctx, `SELECT preferences FROM users WHERE org_id=$1 AND actor_id=$2`, user.OrgID, user.ActorID).Scan(&raw); err != nil {
 		return result, err
@@ -92,6 +100,9 @@ func (s *Service) GetPreferences(ctx context.Context, user identity.User) (Prefe
 	if result.Locale == "" {
 		result.Locale = "ru"
 	}
+	if result.ChatFolders == nil {
+		result.ChatFolders = []ChatFolder{}
+	}
 	return result, nil
 }
 func (s *Service) UpdatePreferences(ctx context.Context, user identity.User, input Preferences) (Preferences, error) {
@@ -101,9 +112,36 @@ func (s *Service) UpdatePreferences(ctx context.Context, user identity.User, inp
 	if input.Locale != "ru" && input.Locale != "en" {
 		return Preferences{}, ErrInvalid
 	}
+	if !validChatFolders(input.ChatFolders) {
+		return Preferences{}, ErrInvalid
+	}
 	payload, _ := json.Marshal(input)
 	_, err := s.pool.Exec(ctx, `UPDATE users SET preferences=preferences||$3::jsonb WHERE org_id=$1 AND actor_id=$2`, user.OrgID, user.ActorID, string(payload))
 	return input, err
+}
+
+func validChatFolders(folders []ChatFolder) bool {
+	if len(folders) > 12 {
+		return false
+	}
+	icons := map[string]bool{"folder": true, "briefcase": true, "heart": true, "star": true, "users": true, "hash": true}
+	seenFolders := make(map[string]bool, len(folders))
+	for index := range folders {
+		folder := &folders[index]
+		folder.Name = strings.TrimSpace(folder.Name)
+		if _, err := uuid.Parse(folder.ID); err != nil || seenFolders[folder.ID] || len([]rune(folder.Name)) < 1 || len([]rune(folder.Name)) > 40 || !icons[folder.Icon] || len(folder.ChatIDs) > 200 {
+			return false
+		}
+		seenFolders[folder.ID] = true
+		seenChats := make(map[string]bool, len(folder.ChatIDs))
+		for _, chatID := range folder.ChatIDs {
+			if _, err := uuid.Parse(chatID); err != nil || seenChats[chatID] {
+				return false
+			}
+			seenChats[chatID] = true
+		}
+	}
+	return true
 }
 func (s *Service) GetChatPreferences(ctx context.Context, user identity.User, chatID string) (ChatPreferences, error) {
 	var result ChatPreferences

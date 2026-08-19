@@ -19,6 +19,7 @@ export type MessageWindow = components["schemas"]["MessageWindow"];
 export type PushConfig = components["schemas"]["PushConfig"];
 export type PushSubscriptionRecord = components["schemas"]["PushSubscription"];
 export type UserPreferences = components["schemas"]["UserPreferences"];
+export type ChatFolder = components["schemas"]["ChatFolder"];
 export type ChatNotificationPreferences =
   components["schemas"]["ChatNotificationPreferences"];
 export type BootstrapRequest = components["schemas"]["BootstrapRequest"];

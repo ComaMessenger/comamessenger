@@ -9,6 +9,24 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for ActorSummaryType.
+const (
+	ActorSummaryTypeAgent ActorSummaryType = "agent"
+	ActorSummaryTypeUser  ActorSummaryType = "user"
+)
+
+// Valid indicates whether the value is a known member of the ActorSummaryType enum.
+func (e ActorSummaryType) Valid() bool {
+	switch e {
+	case ActorSummaryTypeAgent:
+		return true
+	case ActorSummaryTypeUser:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AddChatMemberRequestRole.
 const (
 	AddChatMemberRequestRoleAdmin  AddChatMemberRequestRole = "admin"
@@ -90,6 +108,36 @@ func (e ChatVisibility) Valid() bool {
 	}
 }
 
+// Defines values for ChatFolderIcon.
+const (
+	Briefcase ChatFolderIcon = "briefcase"
+	Folder    ChatFolderIcon = "folder"
+	Hash      ChatFolderIcon = "hash"
+	Heart     ChatFolderIcon = "heart"
+	Star      ChatFolderIcon = "star"
+	Users     ChatFolderIcon = "users"
+)
+
+// Valid indicates whether the value is a known member of the ChatFolderIcon enum.
+func (e ChatFolderIcon) Valid() bool {
+	switch e {
+	case Briefcase:
+		return true
+	case Folder:
+		return true
+	case Hash:
+		return true
+	case Heart:
+		return true
+	case Star:
+		return true
+	case Users:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ChatMemberRole.
 const (
 	ChatMemberRoleAdmin  ChatMemberRole = "admin"
@@ -105,6 +153,27 @@ func (e ChatMemberRole) Valid() bool {
 	case ChatMemberRoleMember:
 		return true
 	case ChatMemberRoleOwner:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ChatNotificationPreferencesNotifyLevel.
+const (
+	All      ChatNotificationPreferencesNotifyLevel = "all"
+	Mentions ChatNotificationPreferencesNotifyLevel = "mentions"
+	None     ChatNotificationPreferencesNotifyLevel = "none"
+)
+
+// Valid indicates whether the value is a known member of the ChatNotificationPreferencesNotifyLevel enum.
+func (e ChatNotificationPreferencesNotifyLevel) Valid() bool {
+	switch e {
+	case All:
+		return true
+	case Mentions:
+		return true
+	case None:
 		return true
 	default:
 		return false
@@ -801,6 +870,45 @@ func (e UserStatus) Valid() bool {
 	}
 }
 
+// Defines values for UserPreferencesLocale.
+const (
+	En UserPreferencesLocale = "en"
+	Ru UserPreferencesLocale = "ru"
+)
+
+// Valid indicates whether the value is a known member of the UserPreferencesLocale enum.
+func (e UserPreferencesLocale) Valid() bool {
+	switch e {
+	case En:
+		return true
+	case Ru:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UserPreferencesTheme.
+const (
+	Dark   UserPreferencesTheme = "dark"
+	Light  UserPreferencesTheme = "light"
+	System UserPreferencesTheme = "system"
+)
+
+// Valid indicates whether the value is a known member of the UserPreferencesTheme enum.
+func (e UserPreferencesTheme) Valid() bool {
+	switch e {
+	case Dark:
+		return true
+	case Light:
+		return true
+	case System:
+		return true
+	default:
+		return false
+	}
+}
+
 // AcceptInvitationRequest defines model for AcceptInvitationRequest.
 type AcceptInvitationRequest struct {
 	DisplayName string  `json:"display_name"`
@@ -808,6 +916,23 @@ type AcceptInvitationRequest struct {
 	Password    string  `json:"password"`
 	Timezone    *string `json:"timezone,omitempty"`
 }
+
+// ActorPage defines model for ActorPage.
+type ActorPage struct {
+	Actors      []ActorSummary      `json:"actors"`
+	NextAfterId *openapi_types.UUID `json:"next_after_id"`
+}
+
+// ActorSummary defines model for ActorSummary.
+type ActorSummary struct {
+	ActorId     openapi_types.UUID `json:"actor_id"`
+	DisplayName string             `json:"display_name"`
+	Handle      string             `json:"handle"`
+	Type        ActorSummaryType   `json:"type"`
+}
+
+// ActorSummaryType defines model for ActorSummary.Type.
+type ActorSummaryType string
 
 // AddChatMemberRequest defines model for AddChatMemberRequest.
 type AddChatMemberRequest struct {
@@ -836,14 +961,20 @@ type BootstrapStatus struct {
 
 // Chat defines model for Chat.
 type Chat struct {
-	ArchivedAt *time.Time         `json:"archived_at,omitempty"`
-	CreatedAt  time.Time          `json:"created_at"`
-	Id         openapi_types.UUID `json:"id"`
-	Kind       ChatKind           `json:"kind"`
-	Name       *string            `json:"name,omitempty"`
-	Role       ChatRole           `json:"role"`
-	Topic      string             `json:"topic"`
-	Visibility ChatVisibility     `json:"visibility"`
+	ArchivedAt      *time.Time         `json:"archived_at,omitempty"`
+	AvatarSeed      string             `json:"avatar_seed"`
+	CreatedAt       time.Time          `json:"created_at"`
+	DirectPeer      *ActorSummary      `json:"direct_peer,omitempty"`
+	DisplayName     string             `json:"display_name"`
+	Id              openapi_types.UUID `json:"id"`
+	Kind            ChatKind           `json:"kind"`
+	LastActivitySeq int64              `json:"last_activity_seq"`
+	LastMessage     *MessagePreview    `json:"last_message,omitempty"`
+	LastMessageAt   *time.Time         `json:"last_message_at,omitempty"`
+	Name            *string            `json:"name,omitempty"`
+	Role            ChatRole           `json:"role"`
+	Topic           string             `json:"topic"`
+	Visibility      ChatVisibility     `json:"visibility"`
 }
 
 // ChatKind defines model for Chat.Kind.
@@ -854,6 +985,17 @@ type ChatRole string
 
 // ChatVisibility defines model for Chat.Visibility.
 type ChatVisibility string
+
+// ChatFolder defines model for ChatFolder.
+type ChatFolder struct {
+	ChatIds []openapi_types.UUID `json:"chat_ids"`
+	Icon    ChatFolderIcon       `json:"icon"`
+	Id      openapi_types.UUID   `json:"id"`
+	Name    string               `json:"name"`
+}
+
+// ChatFolderIcon defines model for ChatFolder.Icon.
+type ChatFolderIcon string
 
 // ChatMember defines model for ChatMember.
 type ChatMember struct {
@@ -866,6 +1008,15 @@ type ChatMember struct {
 
 // ChatMemberRole defines model for ChatMember.Role.
 type ChatMemberRole string
+
+// ChatNotificationPreferences defines model for ChatNotificationPreferences.
+type ChatNotificationPreferences struct {
+	MutedUntil  *time.Time                             `json:"muted_until,omitempty"`
+	NotifyLevel ChatNotificationPreferencesNotifyLevel `json:"notify_level"`
+}
+
+// ChatNotificationPreferencesNotifyLevel defines model for ChatNotificationPreferences.NotifyLevel.
+type ChatNotificationPreferencesNotifyLevel string
 
 // ChatUnread defines model for ChatUnread.
 type ChatUnread struct {
@@ -1039,6 +1190,47 @@ type MessagePin struct {
 // MessagePinList defines model for MessagePinList.
 type MessagePinList struct {
 	Pins []MessagePin `json:"pins"`
+}
+
+// MessagePreview defines model for MessagePreview.
+type MessagePreview struct {
+	ActorDisplayName string             `json:"actor_display_name"`
+	ActorId          openapi_types.UUID `json:"actor_id"`
+	Body             string             `json:"body"`
+	CreatedAt        time.Time          `json:"created_at"`
+	CreatedSeq       int64              `json:"created_seq"`
+	Deleted          bool               `json:"deleted"`
+	Id               openapi_types.UUID `json:"id"`
+}
+
+// MessageWindow defines model for MessageWindow.
+type MessageWindow struct {
+	HasEarlier bool               `json:"has_earlier"`
+	HasLater   bool               `json:"has_later"`
+	Messages   []Message          `json:"messages"`
+	TargetId   openapi_types.UUID `json:"target_id"`
+}
+
+// PushConfig defines model for PushConfig.
+type PushConfig struct {
+	Enabled   bool   `json:"enabled"`
+	PublicKey string `json:"public_key"`
+}
+
+// PushSubscription defines model for PushSubscription.
+type PushSubscription struct {
+	CreatedAt time.Time          `json:"created_at"`
+	Endpoint  string             `json:"endpoint"`
+	Id        openapi_types.UUID `json:"id"`
+}
+
+// PushSubscriptionRequest defines model for PushSubscriptionRequest.
+type PushSubscriptionRequest struct {
+	Endpoint string `json:"endpoint"`
+	Keys     struct {
+		Auth   string `json:"auth"`
+		P256dh string `json:"p256dh"`
+	} `json:"keys"`
 }
 
 // PutDraftRequest defines model for PutDraftRequest.
@@ -1308,15 +1500,16 @@ type UpdateProfileRequest struct {
 
 // User defines model for User.
 type User struct {
-	CreatedAt   time.Time           `json:"created_at"`
-	DisplayName string              `json:"display_name"`
-	Email       openapi_types.Email `json:"email"`
-	Handle      string              `json:"handle"`
-	Id          openapi_types.UUID  `json:"id"`
-	OrgId       openapi_types.UUID  `json:"org_id"`
-	Role        UserRole            `json:"role"`
-	Status      UserStatus          `json:"status"`
-	Timezone    string              `json:"timezone"`
+	CreatedAt        time.Time           `json:"created_at"`
+	DisplayName      string              `json:"display_name"`
+	Email            openapi_types.Email `json:"email"`
+	Handle           string              `json:"handle"`
+	Id               openapi_types.UUID  `json:"id"`
+	OrgId            openapi_types.UUID  `json:"org_id"`
+	OrganizationName string              `json:"organization_name"`
+	Role             UserRole            `json:"role"`
+	Status           UserStatus          `json:"status"`
+	Timezone         string              `json:"timezone"`
 }
 
 // UserRole defines model for User.Role.
@@ -1324,6 +1517,21 @@ type UserRole string
 
 // UserStatus defines model for User.Status.
 type UserStatus string
+
+// UserPreferences defines model for UserPreferences.
+type UserPreferences struct {
+	ChatFolders []ChatFolder          `json:"chat_folders"`
+	Locale      UserPreferencesLocale `json:"locale"`
+	PushEnabled bool                  `json:"push_enabled"`
+	PushPreview bool                  `json:"push_preview"`
+	Theme       UserPreferencesTheme  `json:"theme"`
+}
+
+// UserPreferencesLocale defines model for UserPreferences.Locale.
+type UserPreferencesLocale string
+
+// UserPreferencesTheme defines model for UserPreferences.Theme.
+type UserPreferencesTheme string
 
 // ActorId defines model for ActorId.
 type ActorId = openapi_types.UUID
@@ -1336,6 +1544,13 @@ type MessageId = openapi_types.UUID
 
 // Tokens defines model for Tokens.
 type Tokens = TokenResponse
+
+// ListActorsParams defines parameters for ListActors.
+type ListActorsParams struct {
+	Q       *string             `form:"q,omitempty" json:"q,omitempty"`
+	AfterId *openapi_types.UUID `form:"after_id,omitempty" json:"after_id,omitempty"`
+	Limit   *int                `form:"limit,omitempty" json:"limit,omitempty"`
+}
 
 // BootstrapParams defines parameters for Bootstrap.
 type BootstrapParams struct {
@@ -1353,6 +1568,11 @@ type ListMessagesParams struct {
 // DeleteDraftParams defines parameters for DeleteDraft.
 type DeleteDraftParams struct {
 	ThreadRootId *openapi_types.UUID `form:"thread_root_id,omitempty" json:"thread_root_id,omitempty"`
+}
+
+// GetMessageContextParams defines parameters for GetMessageContext.
+type GetMessageContextParams struct {
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListThreadMessagesParams defines parameters for ListThreadMessages.
@@ -1388,6 +1608,9 @@ type UpdateChatMemberJSONRequestBody = UpdateChatMemberRequest
 // CreateMessageJSONRequestBody defines body for CreateMessage for application/json ContentType.
 type CreateMessageJSONRequestBody = CreateMessageRequest
 
+// UpdateChatNotificationPreferencesJSONRequestBody defines body for UpdateChatNotificationPreferences for application/json ContentType.
+type UpdateChatNotificationPreferencesJSONRequestBody = ChatNotificationPreferences
+
 // MarkChatReadJSONRequestBody defines body for MarkChatRead for application/json ContentType.
 type MarkChatReadJSONRequestBody = MarkReadRequest
 
@@ -1411,3 +1634,9 @@ type ForwardMessageJSONRequestBody = ForwardMessageRequest
 
 // MarkThreadReadJSONRequestBody defines body for MarkThreadRead for application/json ContentType.
 type MarkThreadReadJSONRequestBody = MarkReadRequest
+
+// UpdatePreferencesJSONRequestBody defines body for UpdatePreferences for application/json ContentType.
+type UpdatePreferencesJSONRequestBody = UserPreferences
+
+// PutPushSubscriptionJSONRequestBody defines body for PutPushSubscription for application/json ContentType.
+type PutPushSubscriptionJSONRequestBody = PushSubscriptionRequest

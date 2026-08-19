@@ -2619,6 +2619,7 @@
         "required": [
           "id",
           "org_id",
+          "organization_name",
           "role",
           "email",
           "display_name",
@@ -2635,6 +2636,9 @@
           "org_id": {
             "type": "string",
             "format": "uuid"
+          },
+          "organization_name": {
+            "type": "string"
           },
           "role": {
             "type": "string",
@@ -3916,7 +3920,8 @@
           "theme",
           "locale",
           "push_enabled",
-          "push_preview"
+          "push_preview",
+          "chat_folders"
         ],
         "properties": {
           "theme": {
@@ -3939,6 +3944,54 @@
           },
           "push_preview": {
             "type": "boolean"
+          },
+          "chat_folders": {
+            "type": "array",
+            "maxItems": 12,
+            "items": {
+              "$ref": "#/components/schemas/ChatFolder"
+            }
+          }
+        }
+      },
+      "ChatFolder": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "icon",
+          "chat_ids"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "icon": {
+            "type": "string",
+            "enum": [
+              "folder",
+              "briefcase",
+              "heart",
+              "star",
+              "users",
+              "hash"
+            ]
+          },
+          "chat_ids": {
+            "type": "array",
+            "maxItems": 200,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         }
       },

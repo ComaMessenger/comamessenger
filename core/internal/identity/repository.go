@@ -78,7 +78,7 @@ func (r *Repository) Bootstrap(ctx context.Context, record BootstrapRecord) (Use
 		return User{}, fmt.Errorf("commit bootstrap: %w", err)
 	}
 	return User{
-		ActorID: record.ActorID, OrgID: record.OrganizationID, OrgRole: "owner",
+		ActorID: record.ActorID, OrgID: record.OrganizationID, OrganizationName: record.OrganizationName, OrgRole: "owner",
 		Email: record.Email, DisplayName: record.DisplayName, Handle: record.Handle,
 		Timezone: record.Timezone, Status: "active", CreatedAt: time.Now().UTC(),
 	}, nil
@@ -87,12 +87,13 @@ func (r *Repository) Bootstrap(ctx context.Context, record BootstrapRecord) (Use
 func (r *Repository) FindUserByEmail(ctx context.Context, email string) (User, error) {
 	var user User
 	err := r.pool.QueryRow(ctx, `
-		SELECT a.id, a.org_id, a.org_role, u.email::text, a.display_name, a.handle::text,
+		SELECT a.id, a.org_id, o.name, a.org_role, u.email::text, a.display_name, a.handle::text,
 		       a.timezone, a.status, a.created_at, u.password_hash
 		FROM users u
 		JOIN actors a ON a.id = u.actor_id
+		JOIN organizations o ON o.id = a.org_id
 		WHERE u.email = $1`, email).Scan(
-		&user.ActorID, &user.OrgID, &user.OrgRole, &user.Email, &user.DisplayName,
+		&user.ActorID, &user.OrgID, &user.OrganizationName, &user.OrgRole, &user.Email, &user.DisplayName,
 		&user.Handle, &user.Timezone, &user.Status, &user.CreatedAt, &user.PasswordHash,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -142,15 +143,16 @@ func (r *Repository) RotateSession(ctx context.Context, refreshHash []byte, repl
 	var replacedBy *string
 	err = tx.QueryRow(ctx, `
 		SELECT s.id, s.family_id, s.expires_at, s.revoked_at, s.replaced_by,
-		       a.id, a.org_id, a.org_role, u.email::text, a.display_name, a.handle::text,
+		       a.id, a.org_id, o.name, a.org_role, u.email::text, a.display_name, a.handle::text,
 		       a.timezone, a.status, a.created_at
 		FROM sessions s
 		JOIN actors a ON a.id = s.actor_id
 		JOIN users u ON u.actor_id = a.id
+		JOIN organizations o ON o.id = a.org_id
 		WHERE s.refresh_hash = $1
 		FOR UPDATE OF s`, refreshHash).Scan(
 		&sessionID, &familyID, &expiresAt, &revokedAt, &replacedBy,
-		&user.ActorID, &user.OrgID, &user.OrgRole, &user.Email, &user.DisplayName,
+		&user.ActorID, &user.OrgID, &user.OrganizationName, &user.OrgRole, &user.Email, &user.DisplayName,
 		&user.Handle, &user.Timezone, &user.Status, &user.CreatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -201,15 +203,16 @@ func (r *Repository) RotateSession(ctx context.Context, refreshHash []byte, repl
 func (r *Repository) ResolveSession(ctx context.Context, sessionID, actorID string, now time.Time) (User, error) {
 	var user User
 	err := r.pool.QueryRow(ctx, `
-		SELECT a.id, a.org_id, a.org_role, u.email::text, a.display_name, a.handle::text,
+		SELECT a.id, a.org_id, o.name, a.org_role, u.email::text, a.display_name, a.handle::text,
 		       a.timezone, a.status, a.created_at
 		FROM sessions s
 		JOIN actors a ON a.id = s.actor_id
 		JOIN users u ON u.actor_id = a.id
+		JOIN organizations o ON o.id = a.org_id
 		WHERE s.id = $1 AND s.actor_id = $2 AND s.revoked_at IS NULL
 		  AND s.expires_at > $3 AND a.status = 'active' AND a.deleted_at IS NULL`,
 		sessionID, actorID, now).Scan(
-		&user.ActorID, &user.OrgID, &user.OrgRole, &user.Email, &user.DisplayName,
+		&user.ActorID, &user.OrgID, &user.OrganizationName, &user.OrgRole, &user.Email, &user.DisplayName,
 		&user.Handle, &user.Timezone, &user.Status, &user.CreatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -230,11 +233,12 @@ func (r *Repository) UpdateProfile(ctx context.Context, actorID, displayName, ha
 			WHERE id = $1 AND status = 'active' AND deleted_at IS NULL
 			RETURNING id, org_id, org_role, display_name, handle, timezone, status, created_at
 		)
-		SELECT updated.id, updated.org_id, updated.org_role, u.email::text, updated.display_name,
+		SELECT updated.id, updated.org_id, o.name, updated.org_role, u.email::text, updated.display_name,
 		       updated.handle::text, updated.timezone, updated.status, updated.created_at
-		FROM updated JOIN users u ON u.actor_id = updated.id`,
+		FROM updated JOIN users u ON u.actor_id = updated.id
+		JOIN organizations o ON o.id = updated.org_id`,
 		actorID, displayName, handle, timezone).Scan(
-		&user.ActorID, &user.OrgID, &user.OrgRole, &user.Email, &user.DisplayName,
+		&user.ActorID, &user.OrgID, &user.OrganizationName, &user.OrgRole, &user.Email, &user.DisplayName,
 		&user.Handle, &user.Timezone, &user.Status, &user.CreatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -287,13 +291,14 @@ func (r *Repository) AcceptInvitation(ctx context.Context, acceptance Invitation
 		return User{}, fmt.Errorf("begin invitation acceptance: %w", err)
 	}
 	defer tx.Rollback(ctx)
-	var invitationID, orgID, email, role string
+	var invitationID, orgID, organizationName, email, role string
 	var expiresAt time.Time
 	var acceptedAt, revokedAt *time.Time
 	err = tx.QueryRow(ctx, `
-		SELECT id, org_id, email::text, org_role, expires_at, accepted_at, revoked_at
-		FROM invitations WHERE token_hash = $1 FOR UPDATE`, acceptance.TokenHash).Scan(
-		&invitationID, &orgID, &email, &role, &expiresAt, &acceptedAt, &revokedAt)
+		SELECT i.id, i.org_id, o.name, i.email::text, i.org_role, i.expires_at, i.accepted_at, i.revoked_at
+		FROM invitations i JOIN organizations o ON o.id = i.org_id
+		WHERE i.token_hash = $1 FOR UPDATE OF i`, acceptance.TokenHash).Scan(
+		&invitationID, &orgID, &organizationName, &email, &role, &expiresAt, &acceptedAt, &revokedAt)
 	if errors.Is(err, pgx.ErrNoRows) || acceptedAt != nil || revokedAt != nil || !expiresAt.After(now) {
 		return User{}, ErrInvitationInvalid
 	}
@@ -341,7 +346,7 @@ func (r *Repository) AcceptInvitation(ctx context.Context, acceptance Invitation
 	if err := tx.Commit(ctx); err != nil {
 		return User{}, fmt.Errorf("commit invitation acceptance: %w", err)
 	}
-	return User{ActorID: acceptance.ActorID, OrgID: orgID, OrgRole: role, Email: email,
+	return User{ActorID: acceptance.ActorID, OrgID: orgID, OrganizationName: organizationName, OrgRole: role, Email: email,
 		DisplayName: acceptance.DisplayName, Handle: acceptance.Handle, Timezone: acceptance.Timezone,
 		Status: "active", CreatedAt: now}, nil
 }

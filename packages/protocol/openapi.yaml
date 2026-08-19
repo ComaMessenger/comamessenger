@@ -1185,6 +1185,7 @@ components:
         [
           id,
           org_id,
+          organization_name,
           role,
           email,
           display_name,
@@ -1196,6 +1197,7 @@ components:
       properties:
         id: { type: string, format: uuid }
         org_id: { type: string, format: uuid }
+        organization_name: { type: string }
         role: { type: string, enum: [owner, admin, member] }
         email: { type: string, format: email }
         display_name: { type: string }
@@ -1626,12 +1628,31 @@ components:
     UserPreferences:
       type: object
       additionalProperties: false
-      required: [theme, locale, push_enabled, push_preview]
+      required: [theme, locale, push_enabled, push_preview, chat_folders]
       properties:
         theme: { type: string, enum: [system, light, dark] }
         locale: { type: string, enum: [ru, en] }
         push_enabled: { type: boolean }
         push_preview: { type: boolean }
+        chat_folders:
+          type: array
+          maxItems: 12
+          items: { $ref: "#/components/schemas/ChatFolder" }
+    ChatFolder:
+      type: object
+      additionalProperties: false
+      required: [id, name, icon, chat_ids]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 40 }
+        icon:
+          type: string
+          enum: [folder, briefcase, heart, star, users, hash]
+        chat_ids:
+          type: array
+          maxItems: 200
+          uniqueItems: true
+          items: { type: string, format: uuid }
     ChatNotificationPreferences:
       type: object
       additionalProperties: false

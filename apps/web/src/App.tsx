@@ -20,6 +20,9 @@ import {
   AtSign,
   Bell,
   Bookmark,
+  BriefcaseBusiness,
+  Building2,
+  Check,
   ChevronLeft,
   ChevronDown,
   Circle,
@@ -27,6 +30,10 @@ import {
   Copy,
   CornerUpLeft,
   Forward,
+  Folder,
+  FolderPlus,
+  Hash,
+  Heart,
   Inbox,
   Info,
   Link2,
@@ -47,9 +54,11 @@ import {
   Settings,
   Smile,
   SmilePlus,
+  Star,
   Sun,
   Trash2,
   UserPlus,
+  Users,
   VolumeX,
   X,
 } from "lucide-react";
@@ -70,6 +79,7 @@ import {
   type AcceptInvitationRequest,
   type BootstrapRequest,
   type Chat,
+  type ChatFolder,
   type ChatMember,
   type ClientMessage,
   type Draft,
@@ -105,6 +115,8 @@ import { BrowserSessionCoordinator } from "./session";
 const EmojiPicker = lazy(() => import("emoji-picker-react"));
 
 type Screen = "loading" | "bootstrap" | "login" | "messenger" | "invite";
+type SystemChatFilter = "all" | "direct" | "grouped" | "channel";
+type ChatFilter = SystemChatFilter | `folder:${string}`;
 const apiURL = import.meta.env.VITE_API_URL ?? window.location.origin;
 const emptyMessages: ClientMessage[] = [];
 const emptyActorIDs: string[] = [];
@@ -135,6 +147,7 @@ export function App() {
   const { t } = useTranslation();
   const path = useRouterState({ select: (state) => state.location.pathname });
   const initialPath = useRef(path).current;
+  const initialized = useRef(false);
   const navigate = useNavigate();
   const sessions = useMemo(() => new BrowserSessionCoordinator(), []);
   const api = useMemo(
@@ -150,6 +163,11 @@ export function App() {
     setUser(null);
     setScreen("login");
   }, []);
+  const navigateTo = useCallback(
+    (to: string) => void navigate({ to }),
+    [navigate],
+  );
+  const logout = useCallback(() => sessions.publishLogout(), [sessions]);
 
   useEffect(() => {
     const unsubscribe = sessions.subscribe((message) => {
@@ -167,6 +185,8 @@ export function App() {
   }, [api, sessions, signedOut]);
 
   useEffect(() => {
+    if (initialized.current) return;
+    initialized.current = true;
     if (initialPath.startsWith("/invite/")) {
       setScreen("invite");
       return;
@@ -185,7 +205,7 @@ export function App() {
           if (initialPath === "/")
             await navigate({
               to: "/chats",
-              search: { filter: "all" },
+              search: { filter: "all", folder: undefined },
               replace: true,
             });
         } catch {
@@ -203,7 +223,7 @@ export function App() {
     if (path === "/" || path.startsWith("/invite/"))
       await navigate({
         to: "/chats",
-        search: { filter: "all" },
+        search: { filter: "all", folder: undefined },
         replace: true,
       });
   };
@@ -249,8 +269,8 @@ export function App() {
       api={api}
       user={user}
       path={path}
-      navigate={(to) => void navigate({ to })}
-      onLogout={() => sessions.publishLogout()}
+      navigate={navigateTo}
+      onLogout={logout}
     />
   );
 }
@@ -460,18 +480,25 @@ function Messenger({
   const chats = useMemo(() => Object.values(chatMap), [chatMap]);
   const unread = useStore(store, (state) => state.unread);
   const realtime = useStore(store, (state) => state.realtime);
-  const [filter, setFilter] = useState<"all" | "direct" | "grouped">(
-    chatFilterFromURL,
-  );
+  const [filter, setFilter] = useState<ChatFilter>(chatFilterFromURL);
+  const [folders, setFolders] = useState<ChatFolder[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [workspaceMenu, setWorkspaceMenu] = useState(false);
+  const workspaceMenuRoot = useRef<HTMLDivElement>(null);
   const [chatLoading, setChatLoading] = useState(true);
   const [chatError, setChatError] = useState("");
   const [modal, setModal] = useState<
-    "new" | "settings" | "notify" | "pinned" | null
+    "new" | "folder" | "settings" | "notify" | "pinned" | null
   >(null);
   const selectedID = /^\/chat\/([^/]+)/.exec(path)?.[1] ?? null;
   const threadID = /\/thread\/([^/]+)/.exec(path)?.[1] ?? null;
   const showThreads = path === "/threads";
+  const showImportant = path === "/important";
+  const showMembers = path === "/members";
+  const showChatList = Boolean(selectedID) || path === "/chats";
+  useDismissable(workspaceMenuRoot, workspaceMenu, () =>
+    setWorkspaceMenu(false),
+  );
   const membersQuery = useQuery({
     queryKey: ["chat-members", selectedID],
     queryFn: () => api.members(selectedID!),
@@ -552,6 +579,7 @@ function Messenger({
       .preferences()
       .then((preferences) => {
         setTheme(preferences.theme);
+        setFolders(preferences.chat_folders);
         void setLocale(preferences.locale);
       })
       .catch(() => undefined);
@@ -592,190 +620,286 @@ function Messenger({
     return () => window.removeEventListener("online", flush);
   }, [outbox]);
 
-  const searched = chats;
-  const filtered = searched.filter(
-    (chat) =>
-      filter === "all" ||
-      (filter === "direct" ? chat.kind === "direct" : chat.kind !== "direct"),
-  );
-  const sections = (["direct", "group", "channel"] as const).map((kind) => ({
-    kind,
-    label:
-      kind === "direct"
-        ? t("direct")
-        : kind === "group"
-          ? t("chats")
-          : t("channels"),
-    chats: searched.filter((chat) => chat.kind === kind),
-  }));
+  const activeFolder = filter.startsWith("folder:")
+    ? folders.find((folder) => `folder:${folder.id}` === filter)
+    : undefined;
+  const filtered = chats.filter((chat) => {
+    if (filter === "all") return true;
+    if (filter === "direct") return chat.kind === "direct";
+    if (filter === "grouped") return chat.kind === "group";
+    if (filter === "channel") return chat.kind === "channel";
+    return activeFolder?.chat_ids.includes(chat.id) ?? false;
+  });
   async function logout() {
     await api.logout();
     onLogout();
   }
-  function selectFilter(next: "all" | "direct" | "grouped") {
+  function selectFilter(next: ChatFilter) {
     setFilter(next);
     const url = new URL(window.location.href);
-    if (next === "all") url.searchParams.delete("filter");
+    url.searchParams.delete("folder");
+    if (next.startsWith("folder:")) {
+      url.searchParams.delete("filter");
+      url.searchParams.set("folder", next.slice("folder:".length));
+    } else if (next === "all") url.searchParams.delete("filter");
     else url.searchParams.set("filter", next);
     window.history.replaceState(window.history.state, "", url);
+  }
+  async function saveFolders(next: ChatFolder[]) {
+    const preferences = await api.preferences();
+    const updated = await api.updatePreferences({
+      ...preferences,
+      chat_folders: next,
+    });
+    setFolders(updated.chat_folders);
+  }
+  async function toggleChatFolder(folderID: string, chatID: string) {
+    await saveFolders(
+      folders.map((folder) =>
+        folder.id !== folderID
+          ? folder
+          : {
+              ...folder,
+              chat_ids: folder.chat_ids.includes(chatID)
+                ? folder.chat_ids.filter((id) => id !== chatID)
+                : [...folder.chat_ids, chatID],
+            },
+      ),
+    );
   }
   return (
     <div
       className={cx(
         "messenger",
+        !showChatList && "messenger--utility",
         selectedID && "messenger--chat-open",
         threadID && "messenger--thread-open",
       )}
     >
-      <aside className="chat-sidebar" aria-label={t("chatNavigation")}>
-        <header className="workspace-switcher">
-          <Logo size="small" />
-          <div className="workspace-copy">
-            <span>Coma</span>
-            <strong>{showThreads ? t("threads") : t("chats")}</strong>
-          </div>
-          <IconButton label={t("newChat")} onClick={() => setModal("new")}>
+      <aside className="global-sidebar" aria-label={t("primaryNavigation")}>
+        <div className="workspace-menu-root" ref={workspaceMenuRoot}>
+          <button
+            className="workspace-switcher"
+            aria-expanded={workspaceMenu}
+            onClick={() => setWorkspaceMenu((open) => !open)}
+          >
+            <Logo size="small" />
+            <strong title={user.organization_name}>
+              {user.organization_name}
+            </strong>
+            <ChevronDown />
+          </button>
+          {workspaceMenu && (
+            <div className="workspace-menu" role="menu">
+              <span>{user.email}</span>
+              <div className="workspace-menu__current">
+                <Building2 />
+                <strong>{user.organization_name}</strong>
+                <Check />
+              </div>
+              {user.role !== "member" && (
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    setWorkspaceMenu(false);
+                    setModal("settings");
+                  }}
+                >
+                  <Settings />
+                  <span>{t("workspaceSettings")}</span>
+                </button>
+              )}
+              <button role="menuitem" onClick={() => void logout()}>
+                <LogOut />
+                <span>{t("logout")}</span>
+              </button>
+            </div>
+          )}
+        </div>
+        <div className="search-actions">
+          <button className="search-field" onClick={() => setSearchOpen(true)}>
+            <Search size={16} />
+            <span>{t("search")}</span>
+          </button>
+          <IconButton
+            className="new-chat-action"
+            label={t("newChat")}
+            onClick={() => setModal("new")}
+          >
             <Plus />
           </IconButton>
-        </header>
-        {!showThreads && (
-          <>
-            <div className="search-actions">
-              <button
-                className="search-field"
-                onClick={() => setSearchOpen(true)}
-              >
-                <Search size={16} />
-                <span>{t("search")}</span>
-              </button>
-              <IconButton label={t("newChat")} onClick={() => setModal("new")}>
-                <Plus />
-              </IconButton>
-            </div>
-            <nav className="sidebar-nav" aria-label={t("primaryNavigation")}>
-              <button className="active" onClick={() => navigate("/chats")}>
-                <MessageCircle />
-                <span>{t("chats")}</span>
-              </button>
-              <button onClick={() => navigate("/threads")}>
-                <Inbox />
-                <span>{t("threads")}</span>
-              </button>
-              <button
-                disabled={!selectedID}
-                onClick={() => selectedID && setModal("pinned")}
-              >
-                <Bookmark />
-                <span>{t("saved")}</span>
-              </button>
-              <button onClick={() => setModal("settings")}>
-                <Settings />
-                <span>{t("settings")}</span>
-              </button>
-            </nav>
-            <div className="filter-chips" role="group" aria-label={t("chats")}>
-              {(["all", "direct", "grouped"] as const).map((item) => (
-                <button
-                  key={item}
-                  className={filter === item ? "active" : ""}
-                  onClick={() => selectFilter(item)}
-                >
-                  {t(item)}
-                </button>
-              ))}
-            </div>
-            <div className="chat-list">
-              {chatError && <FormError message={chatError} />}
-              {chatLoading ? (
-                <Skeleton />
-              ) : searched.length ? (
-                <>
-                  <div className="desktop-chat-groups">
-                    {sections.map((section) => (
-                      <section className="chat-folder" key={section.kind}>
-                        <header className="chat-folder__head">
-                          <ChevronDown size={13} />
-                          <span>{section.label}</span>
-                          <small>{section.chats.length}</small>
-                        </header>
-                        <div className="chat-folder__items">
-                          {section.chats.map((chat) => (
-                            <ChatCard
-                              key={chat.id}
-                              api={api}
-                              chat={chat}
-                              title={titleOf(chat, [], user.id)}
-                              selected={chat.id === selectedID}
-                              unread={unread.chats.find(
-                                (item) => item.chat_id === chat.id,
-                              )}
-                              onClick={() => navigate(`/chat/${chat.id}`)}
-                            />
-                          ))}
-                          <button
-                            className="chat-folder__add"
-                            onClick={() => setModal("new")}
-                          >
-                            <Plus size={15} />
-                            <span>{t("create")}</span>
-                          </button>
-                        </div>
-                      </section>
-                    ))}
-                  </div>
-                  <div className="mobile-chat-list">
-                    {filtered.map((chat) => (
-                      <ChatCard
-                        key={chat.id}
-                        api={api}
-                        chat={chat}
-                        title={titleOf(chat, [], user.id)}
-                        selected={chat.id === selectedID}
-                        unread={unread.chats.find(
-                          (item) => item.chat_id === chat.id,
-                        )}
-                        onClick={() => navigate(`/chat/${chat.id}`)}
-                      />
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <Empty label={t("emptyChats")} />
-              )}
-            </div>
-          </>
-        )}
-        {showThreads && (
-          <>
-            <button
-              className="sidebar-return"
-              onClick={() => navigate("/chats")}
-            >
-              <ChevronLeft /> {t("chats")}
-            </button>
-            <ThreadDirectory api={api} navigate={navigate} />
-          </>
-        )}
+        </div>
+        <nav className="sidebar-nav" aria-label={t("primaryNavigation")}>
+          <button
+            className={showChatList ? "active" : ""}
+            onClick={() => navigate("/chats")}
+          >
+            <MessageCircle />
+            <span>{t("chats")}</span>
+          </button>
+          <button
+            className={showThreads ? "active" : ""}
+            onClick={() => navigate("/threads")}
+          >
+            <Inbox />
+            <span>{t("threads")}</span>
+          </button>
+          <button
+            className={showImportant ? "active" : ""}
+            onClick={() => navigate("/important")}
+          >
+            <Star />
+            <span>{t("important")}</span>
+          </button>
+          <button
+            className={showMembers ? "active" : ""}
+            onClick={() => navigate("/members")}
+          >
+            <Users />
+            <span>{t("members")}</span>
+          </button>
+        </nav>
         <footer className="sidebar-profile">
           <Avatar name={user.display_name} size="sm" online />
-          <div>
+          <button onClick={() => setModal("settings")}>
             <strong>{user.display_name}</strong>
             <span>@{user.handle}</span>
-          </div>
+          </button>
           <IconButton
             label={t("notifications")}
             onClick={() => setModal("notify")}
           >
             <Bell />
           </IconButton>
-          <IconButton
-            label={t("settings")}
-            onClick={() => setModal("settings")}
-          >
-            <Settings />
-          </IconButton>
         </footer>
       </aside>
+      {showChatList && (
+        <aside className="chat-list-pane" aria-label={t("chatNavigation")}>
+          <header className="chat-list-head">
+            <div className="chat-list-head__workspace">
+              <Logo size="small" />
+              <strong>{user.organization_name}</strong>
+            </div>
+            <div>
+              <h1>{t("chats")}</h1>
+              <span>{t("chatCount", { count: chats.length })}</span>
+            </div>
+            <IconButton label={t("newChat")} onClick={() => setModal("new")}>
+              <Plus />
+            </IconButton>
+          </header>
+          <nav
+            className="mobile-utility-nav"
+            aria-label={t("primaryNavigation")}
+          >
+            <button onClick={() => navigate("/threads")}>
+              <Inbox /> {t("threads")}
+            </button>
+            <button onClick={() => navigate("/important")}>
+              <Star /> {t("important")}
+            </button>
+            <button onClick={() => navigate("/members")}>
+              <Users /> {t("members")}
+            </button>
+          </nav>
+          <button
+            className="mobile-chat-search"
+            onClick={() => setSearchOpen(true)}
+          >
+            <Search />
+            <span>{t("search")}</span>
+          </button>
+          <div className="filter-chips" role="group" aria-label={t("chats")}>
+            {(["all", "direct", "grouped", "channel"] as const).map((item) => (
+              <button
+                key={item}
+                className={filter === item ? "active" : ""}
+                onClick={() => selectFilter(item)}
+              >
+                {t(item)}
+              </button>
+            ))}
+            {folders.map((folder) => (
+              <button
+                key={folder.id}
+                className={filter === `folder:${folder.id}` ? "active" : ""}
+                onClick={() => selectFilter(`folder:${folder.id}`)}
+              >
+                <FolderGlyph icon={folder.icon} />
+                {folder.name}
+              </button>
+            ))}
+            <button
+              className="filter-chips__add"
+              aria-label={t("newFolder")}
+              onClick={() => setModal("folder")}
+            >
+              <FolderPlus />
+            </button>
+          </div>
+          <div className="chat-list">
+            {chatError && <FormError message={chatError} />}
+            {chatLoading ? (
+              <Skeleton />
+            ) : filtered.length ? (
+              <div className="chat-stream">
+                {filtered.map((chat) => (
+                  <ChatCard
+                    key={chat.id}
+                    api={api}
+                    chat={chat}
+                    title={titleOf(chat, [], user.id)}
+                    selected={chat.id === selectedID}
+                    unread={unread.chats.find(
+                      (item) => item.chat_id === chat.id,
+                    )}
+                    folders={folders}
+                    onToggleFolder={(folderID) =>
+                      void toggleChatFolder(folderID, chat.id)
+                    }
+                    onClick={() => navigate(`/chat/${chat.id}`)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <Empty label={t("emptyChats")} />
+            )}
+          </div>
+        </aside>
+      )}
+      {!showChatList && (
+        <header className="mobile-utility-shell">
+          <div className="mobile-utility-shell__workspace">
+            <Logo size="small" />
+            <strong title={user.organization_name}>
+              {user.organization_name}
+            </strong>
+          </div>
+          <nav aria-label={t("primaryNavigation")}>
+            <button onClick={() => navigate("/chats")}>
+              <MessageCircle /> {t("chats")}
+            </button>
+            <button
+              className={showThreads ? "active" : ""}
+              onClick={() => navigate("/threads")}
+            >
+              <Inbox /> {t("threads")}
+            </button>
+            <button
+              className={showImportant ? "active" : ""}
+              onClick={() => navigate("/important")}
+            >
+              <Star /> {t("important")}
+            </button>
+            <button
+              className={showMembers ? "active" : ""}
+              onClick={() => navigate("/members")}
+            >
+              <Users /> {t("members")}
+            </button>
+          </nav>
+        </header>
+      )}
       <main className="conversation">
         {selectedID ? (
           <Conversation
@@ -791,6 +915,21 @@ function Messenger({
             onOpenThread={(id) => navigate(`/chat/${selectedID}/thread/${id}`)}
             onCloseThread={() => navigate(`/chat/${selectedID}`)}
           />
+        ) : showThreads ? (
+          <ThreadDirectory
+            api={api}
+            navigate={navigate}
+            onBack={() => navigate("/chats")}
+          />
+        ) : showImportant ? (
+          <ImportantDirectory
+            api={api}
+            chats={chats}
+            navigate={navigate}
+            onBack={() => navigate("/chats")}
+          />
+        ) : showMembers ? (
+          <MembersDirectory api={api} onBack={() => navigate("/chats")} />
         ) : (
           <Welcome />
         )}
@@ -815,6 +954,18 @@ function Messenger({
           onClose={() => setModal(null)}
           onLogout={() => void logout()}
           onNotify={() => setModal("notify")}
+        />
+      )}
+      {modal === "folder" && (
+        <ChatFolderDialog
+          chats={chats}
+          onClose={() => setModal(null)}
+          onSave={(folder) =>
+            void saveFolders([...folders, folder]).then(() => {
+              setModal(null);
+              selectFilter(`folder:${folder.id}`);
+            })
+          }
         />
       )}
       {modal === "notify" && (
@@ -860,6 +1011,8 @@ function ChatCard({
   title,
   selected,
   unread,
+  folders = [],
+  onToggleFolder,
   onClick,
 }: {
   api: MessengerAPI;
@@ -867,6 +1020,8 @@ function ChatCard({
   title: string;
   selected: boolean;
   unread?: { unread_count: number; mention_count: number };
+  folders?: ChatFolder[];
+  onToggleFolder?(folderID: string): void;
   onClick(): void;
 }) {
   const { t } = useTranslation();
@@ -957,6 +1112,24 @@ function ChatCard({
             <VolumeX />
             <span>{muted ? t("unmuteChat") : t("muteChat")}</span>
           </button>
+          {folders.length > 0 && (
+            <span className="chat-context-menu__label">{t("folders")}</span>
+          )}
+          {folders.map((folder) => (
+            <button
+              key={folder.id}
+              role="menuitemcheckbox"
+              aria-checked={folder.chat_ids.includes(chat.id)}
+              onClick={() => {
+                onToggleFolder?.(folder.id);
+                setMenu(false);
+              }}
+            >
+              <FolderGlyph icon={folder.icon} />
+              <span>{folder.name}</span>
+              {folder.chat_ids.includes(chat.id) && <Check />}
+            </button>
+          ))}
         </div>
       )}
     </div>
@@ -2328,9 +2501,11 @@ function ThreadPanel({
 function ThreadDirectory({
   api,
   navigate,
+  onBack,
 }: {
   api: MessengerAPI;
   navigate(value: string): void;
+  onBack(): void;
 }) {
   const { t } = useTranslation();
   const query = useQuery({
@@ -2339,31 +2514,259 @@ function ThreadDirectory({
   });
   const threads = query.data?.threads ?? [];
   return (
-    <div className="thread-directory">
-      <p>{t("followedThreads")}</p>
-      {query.isLoading ? (
-        <Skeleton />
-      ) : query.isError ? (
-        <FormError message={t("errorNetwork")} />
-      ) : threads.length ? (
-        threads.map((item) => (
-          <button
-            key={item.root.id}
+    <section className="utility-page">
+      <UtilityPageHeader title={t("threads")} onBack={onBack} />
+      <div className="utility-page__lead">{t("followedThreads")}</div>
+      <div className="utility-list">
+        {query.isLoading ? (
+          <Skeleton />
+        ) : query.isError ? (
+          <FormError message={t("errorNetwork")} />
+        ) : threads.length ? (
+          threads.map((item) => (
+            <button
+              key={item.root.id}
+              onClick={() =>
+                navigate(`/chat/${item.root.chat_id}/thread/${item.root.id}`)
+              }
+            >
+              <Avatar name={item.root.body} />
+              <span>
+                <strong>{messagePlainText(item.root.body).slice(0, 90)}</strong>
+                <small>{t("replyCount", { count: item.reply_count })}</small>
+              </span>
+              <ChevronDown className="utility-list__open" />
+            </button>
+          ))
+        ) : (
+          <Empty label={t("noThreads")} />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function ImportantDirectory({
+  api,
+  chats,
+  navigate,
+  onBack,
+}: {
+  api: MessengerAPI;
+  chats: Chat[];
+  navigate(value: string): void;
+  onBack(): void;
+}) {
+  const { t } = useTranslation();
+  const query = useQuery({
+    queryKey: ["important", chats.map((chat) => chat.id).join(":")],
+    enabled: chats.length > 0,
+    queryFn: async () => {
+      const pinned = (
+        await Promise.all(
+          chats.map(async (chat) =>
+            (await api.pins(chat.id)).map((pin) => ({ chat, pin })),
+          ),
+        )
+      ).flat();
+      return Promise.all(
+        pinned.map(async ({ chat, pin }) => {
+          const context = await api.messageContext(pin.message_id, 1);
+          return {
+            chat,
+            message: context.messages.find(
+              (message) => message.id === pin.message_id,
+            ),
+          };
+        }),
+      );
+    },
+  });
+  const items = (query.data ?? []).filter(
+    (item): item is { chat: Chat; message: Message } => Boolean(item.message),
+  );
+  return (
+    <section className="utility-page">
+      <UtilityPageHeader title={t("important")} onBack={onBack} />
+      <div className="utility-page__lead">{t("importantHint")}</div>
+      <div className="utility-list">
+        {query.isLoading ? (
+          <Skeleton />
+        ) : query.isError ? (
+          <FormError message={t("errorNetwork")} />
+        ) : items.length ? (
+          items.map(({ chat, message }) => (
+            <button
+              key={message.id}
+              onClick={() => navigate(`/chat/${chat.id}?message=${message.id}`)}
+            >
+              <Avatar name={chat.display_name} />
+              <span>
+                <strong>{messagePlainText(message.body).slice(0, 120)}</strong>
+                <small>{chat.display_name}</small>
+              </span>
+              <Star className="utility-list__important" fill="currentColor" />
+            </button>
+          ))
+        ) : (
+          <Empty label={t("noImportant")} />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function MembersDirectory({
+  api,
+  onBack,
+}: {
+  api: MessengerAPI;
+  onBack(): void;
+}) {
+  const { t } = useTranslation();
+  const query = useQuery({ queryKey: ["actors"], queryFn: () => api.actors() });
+  const actors = query.data?.actors ?? [];
+  return (
+    <section className="utility-page">
+      <UtilityPageHeader title={t("members")} onBack={onBack} />
+      <div className="utility-page__lead">
+        {t("memberCount", { count: actors.length })}
+      </div>
+      <div className="member-directory">
+        {query.isLoading ? (
+          <Skeleton />
+        ) : query.isError ? (
+          <FormError message={t("errorNetwork")} />
+        ) : (
+          actors.map((actor) => (
+            <article key={actor.actor_id}>
+              <Avatar name={actor.display_name} size="lg" online />
+              <span>
+                <strong>{actor.display_name}</strong>
+                <small>@{actor.handle}</small>
+              </span>
+              <Badge>{actor.type}</Badge>
+            </article>
+          ))
+        )}
+      </div>
+    </section>
+  );
+}
+
+function UtilityPageHeader({
+  title,
+  onBack,
+}: {
+  title: string;
+  onBack(): void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <header className="utility-page__header">
+      <IconButton className="mobile-back" label={t("back")} onClick={onBack}>
+        <ChevronLeft />
+      </IconButton>
+      <h1>{title}</h1>
+    </header>
+  );
+}
+
+function FolderGlyph({ icon }: { icon: ChatFolder["icon"] }) {
+  if (icon === "briefcase") return <BriefcaseBusiness />;
+  if (icon === "heart") return <Heart />;
+  if (icon === "star") return <Star />;
+  if (icon === "users") return <Users />;
+  if (icon === "hash") return <Hash />;
+  return <Folder />;
+}
+
+function ChatFolderDialog({
+  chats,
+  onClose,
+  onSave,
+}: {
+  chats: Chat[];
+  onClose(): void;
+  onSave(folder: ChatFolder): void;
+}) {
+  const { t } = useTranslation();
+  const [name, setName] = useState("");
+  const [icon, setIcon] = useState<ChatFolder["icon"]>("folder");
+  const [selected, setSelected] = useState<string[]>([]);
+  return (
+    <Dialog
+      title={t("newFolder")}
+      description={t("folderHint")}
+      onClose={onClose}
+    >
+      <div className="dialog-form">
+        <Field
+          label={t("folderName")}
+          name="folder_name"
+          defaultValue=""
+          maxLength={40}
+          onInput={(event) => setName(event.currentTarget.value)}
+        />
+        <SelectField
+          label={t("folderIcon")}
+          name="folder_icon"
+          value={icon}
+          onChange={(event) =>
+            setIcon(event.target.value as ChatFolder["icon"])
+          }
+        >
+          <option value="folder">{t("folderIconFolder")}</option>
+          <option value="briefcase">{t("folderIconWork")}</option>
+          <option value="heart">{t("folderIconHeart")}</option>
+          <option value="star">{t("folderIconStar")}</option>
+          <option value="users">{t("folderIconPeople")}</option>
+          <option value="hash">{t("folderIconChannel")}</option>
+        </SelectField>
+        <div className="folder-chat-picker">
+          <strong>{t("folderChats")}</strong>
+          {chats.map((chat) => (
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={selected.includes(chat.id)}
+              aria-label={chat.display_name}
+              key={chat.id}
+              onClick={() =>
+                setSelected((items) =>
+                  items.includes(chat.id)
+                    ? items.filter((id) => id !== chat.id)
+                    : [...items, chat.id],
+                )
+              }
+            >
+              <span className="folder-chat-picker__check" aria-hidden="true">
+                {selected.includes(chat.id) && <Check />}
+              </span>
+              <Avatar name={chat.display_name} size="sm" />
+              <span>{chat.display_name}</span>
+            </button>
+          ))}
+        </div>
+        <div className="dialog-actions">
+          <Button onClick={onClose}>{t("cancel")}</Button>
+          <Button
+            variant="primary"
+            disabled={!name.trim()}
             onClick={() =>
-              navigate(`/chat/${item.root.chat_id}/thread/${item.root.id}`)
+              onSave({
+                id: crypto.randomUUID(),
+                name: name.trim(),
+                icon,
+                chat_ids: selected,
+              })
             }
           >
-            <Avatar name={item.root.body} />
-            <span>
-              <strong>{item.root.body.slice(0, 60)}</strong>
-              <small>{t("replyCount", { count: item.reply_count })}</small>
-            </span>
-          </button>
-        ))
-      ) : (
-        <Empty label={t("noThreads")} />
-      )}
-    </div>
+            {t("create")}
+          </Button>
+        </div>
+      </div>
+    </Dialog>
   );
 }
 
@@ -2500,6 +2903,7 @@ function SettingsDialog({
         locale: i18n.language === "ru" ? "ru" : "en",
         push_enabled: query.data?.push_enabled ?? false,
         push_preview: pushPreview,
+        chat_folders: query.data?.chat_folders ?? [],
       }),
     ]);
     setTheme(theme);
@@ -3010,7 +3414,12 @@ function base64Key(value: string) {
   const raw = atob((value + padding).replace(/-/g, "+").replace(/_/g, "/"));
   return Uint8Array.from([...raw].map((char) => char.charCodeAt(0)));
 }
-function chatFilterFromURL(): "all" | "direct" | "grouped" {
-  const value = new URLSearchParams(window.location.search).get("filter");
-  return value === "direct" || value === "grouped" ? value : "all";
+function chatFilterFromURL(): ChatFilter {
+  const search = new URLSearchParams(window.location.search);
+  const folder = search.get("folder");
+  if (folder) return `folder:${folder}`;
+  const value = search.get("filter");
+  return value === "direct" || value === "grouped" || value === "channel"
+    ? value
+    : "all";
 }

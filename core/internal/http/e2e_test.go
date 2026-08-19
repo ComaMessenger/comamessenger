@@ -85,6 +85,9 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 		"organization_name": "E2E", "organization_slug": "e2e", "display_name": "Owner",
 		"handle": "owner", "email": "owner@example.test", "password": "correct horse battery staple", "timezone": "UTC",
 	}, standardhttp.StatusCreated, &owner)
+	if owner.User.OrganizationName != "E2E" {
+		t.Fatalf("bootstrap organization name = %q", owner.User.OrganizationName)
+	}
 
 	var invitation identity.Invitation
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/invitations", owner.AccessToken, map[string]any{
@@ -107,7 +110,11 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	var preferences push.Preferences
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/preferences", owner.AccessToken, nil, standardhttp.StatusOK, &preferences)
 	preferences.Theme, preferences.Locale, preferences.PushEnabled, preferences.PushPreview = "light", "en", true, true
+	preferences.ChatFolders = []push.ChatFolder{{ID: "00000000-0000-4000-8000-000000000080", Name: "Work", Icon: "briefcase", ChatIDs: []string{group.ID}}}
 	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/preferences", owner.AccessToken, preferences, standardhttp.StatusOK, &preferences)
+	if len(preferences.ChatFolders) != 1 || preferences.ChatFolders[0].ChatIDs[0] != group.ID {
+		t.Fatalf("chat folders = %+v", preferences.ChatFolders)
+	}
 	var chatPreferences push.ChatPreferences
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/chats/"+group.ID+"/notification-preferences", owner.AccessToken, nil, standardhttp.StatusOK, &chatPreferences)
 	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/chats/"+group.ID+"/notification-preferences", owner.AccessToken, map[string]any{"notify_level": "mentions", "muted_until": nil}, standardhttp.StatusOK, &chatPreferences)

@@ -2,7 +2,7 @@
 
 ## Direction
 
-Coma uses a light, calm workspace UI with its own identity. Early information-architecture research included Pachca, but the production language is deliberately distinct: a pale navigation canvas, outlined content workspace, blue line selection, grouped quick navigation and a two-level composer. No Pachca brand assets or product copy are used.
+Coma uses a calm workspace UI with its own identity. Early information-architecture research included Pachca, but the production language is deliberately distinct: a permanent compact navigation rail, a Telegram-like chat stream, an inset content workspace and a two-level composer. No Pachca brand assets or product copy are used.
 
 Primary references:
 
@@ -17,12 +17,13 @@ Primary references:
 
 ### Layout
 
-- Desktop sidebar: `288px`, full viewport height, resizable later.
+- Desktop global navigation: `220px`, full viewport height.
+- Desktop chat stream: `320px`; it is a separate region rather than part of global navigation.
 - Primary control height: `36px`; compact control height: `32px`.
 - Sidebar row height: `34px`.
 - Conversation header: `70px`.
 - Content column: fluid; message content is capped at `880px` and centered.
-- Phone breakpoint: `760px`; desktop columns заменяются navigation stack, а не сжимаются в compact rail.
+- Phone breakpoint: `640px`; desktop columns заменяются navigation stack, а не сжимаются в compact rail.
 - Tablet может временно скрывать sidebar по route/state; phone одновременно показывает ровно один основной экран: chat list, conversation или thread.
 
 ### Typography
@@ -59,6 +60,12 @@ The default product theme is light and derives its accent from the supplied logo
 - primary: `#174586`;
 - primary soft: `#e3edf9`.
 
+### Dark color and elevation policy
+
+- Dark mode uses neutral charcoal surfaces; blue remains an action/selection accent rather than tinting the canvas.
+- Dark mode does not use decorative glow, text glow or luminous drop shadows. Depth is communicated by surface contrast and semantic borders.
+- Focus visibility remains mandatory, but uses an outline/ring with bounded opacity instead of a diffuse glow.
+
 ## Components
 
 ### Buttons
@@ -78,24 +85,34 @@ The default product theme is light and derives its accent from the supplied logo
 
 ### Sidebar
 
-Order is stable: brand/workspace block, global search/create, a two-column utility area, chat groups and profile. Team chats are separated from direct conversations. Active rows use a pale surface and a blue line indicator instead of a filled selection.
+The desktop shell has three independent regions:
+
+1. permanent global navigation;
+2. chat stream, present only on chat routes;
+3. the working area, where a conversation, Threads, Important or Members is rendered.
+
+Global navigation order is stable: Coma logo plus ellipsized workspace name, flat search plus accent create button, `Чаты`, `Треды`, `Важные`, `Участники`, then the current profile. It never turns into a chat list and never changes when a utility section opens. Workspace settings and sign-out live in the workspace switcher menu; `Настройки` is not a navigation item.
+
+Search uses a flat semantic surface with no inner/outer shadow. The adjacent create button uses the primary accent. The workspace menu shows account identity, the current workspace and role-gated workspace settings.
+
+The chat stream is continuous, compact and independently scrollable. Its first filters are always `Все`, `Личные`, `Групповые`, `Каналы`; user-created folders follow them. A folder has a name, icon and explicit set of chats and is persisted in user preferences. Chat context menus expose folder membership without moving global navigation.
 
 ### Phone chat list
 
 Phone Web uses a familiar messenger list pattern without copying Telegram assets, spacing or chrome:
 
 - a full-width screen replaces the desktop sidebar;
-- filter chips are `Все`, `Личные`, `Групповые`, with `Все` selected by default;
-- `Личные` maps to `kind=direct`; `Групповые` combines `group` and `channel`, while channels retain a clear kind marker;
+- filter chips start with `Все`, `Личные`, `Групповые`, `Каналы`, with `Все` selected by default; personal folders continue the same horizontal row;
+- `Личные` maps to `kind=direct`, `Групповые` to `kind=group`, and `Каналы` to `kind=channel`;
 - each card is at least `72px` high and contains a `48px` avatar, title, bounded preview, locale-formatted time and unread/mention state;
 - until file avatars ship in phase 4, avatar uses initials and a stable semantic color seed, not a random color per render;
 - title and time occupy one row; preview and unread badge occupy the second row; text containers have `min-width: 0`;
 - touch targets are at least `44px`, and the list respects `safe-area-inset-*`;
 - opening a card navigates to the conversation screen; conversation and thread have an explicit Back action and preserve list scroll/filter state.
 
-Phone filter state lives in the typed `/chats?filter=all|direct|grouped` route search. A direct deep link to a conversation returns to `/chats` when browser history has no in-app list entry. Desktop and phone use the same route tree and data store; only layout composition changes at the breakpoint.
+Phone filter state lives in the typed `/chats?filter=all|direct|grouped|channel` route search; a personal folder uses `/chats?folder=<uuid>`. A direct deep link to a conversation returns to `/chats` when browser history has no in-app list entry. Desktop and phone use the same route tree and data store; only layout composition changes at the breakpoint. Utility pages retain a compact mobile navigation header, so moving between Threads, Important, Members and Chats never strands the user.
 
-Large cards are a phone-only density choice. Desktop retains the current compact Coma sidebar and visual direction.
+Large cards are a phone-only density choice. Desktop uses the same chat-stream information hierarchy at compact density.
 
 ### Chat header
 

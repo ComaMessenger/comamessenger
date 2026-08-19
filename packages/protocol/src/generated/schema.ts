@@ -828,6 +828,7 @@ export interface components {
             id: string;
             /** Format: uuid */
             org_id: string;
+            organization_name: string;
             /** @enum {string} */
             role: "owner" | "admin" | "member";
             /** Format: email */
@@ -1207,6 +1208,15 @@ export interface components {
             locale: "ru" | "en";
             push_enabled: boolean;
             push_preview: boolean;
+            chat_folders: components["schemas"]["ChatFolder"][];
+        };
+        ChatFolder: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @enum {string} */
+            icon: "folder" | "briefcase" | "heart" | "star" | "users" | "hash";
+            chat_ids: string[];
         };
         ChatNotificationPreferences: {
             /** @enum {string} */
