@@ -50,6 +50,21 @@ const routes = [
   }),
   createRoute({
     getParentRoute: () => root,
+    path: "/more",
+    component: marker,
+  }),
+  createRoute({
+    getParentRoute: () => root,
+    path: "/settings/profile",
+    component: marker,
+  }),
+  createRoute({
+    getParentRoute: () => root,
+    path: "/settings/workspace",
+    component: marker,
+  }),
+  createRoute({
+    getParentRoute: () => root,
     path: "/m/$messageKey",
     component: marker,
   }),

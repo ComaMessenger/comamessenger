@@ -174,6 +174,8 @@ async function mockMessenger(
         user,
       };
     } else if (path.endsWith("/chats")) body = { chats: [runtimeChat] };
+    else if (path.endsWith("/me") && route.request().method() === "PATCH")
+      body = { ...user, ...route.request().postDataJSON() };
     else if (path.endsWith("/preferences")) {
       if (route.request().method() === "PATCH")
         preferences = route.request().postDataJSON() as typeof preferences;
@@ -415,6 +417,42 @@ test("global navigation stays stable while utility pages replace content", async
   await expect(page.getByRole("heading", { name: "Участники" })).toBeVisible();
 });
 
+test("phone tabbar keeps navigation and settings in the main field", async ({
+  page,
+}) => {
+  test.skip(test.info().project.name !== "phone");
+  await mockMessenger(page);
+  await page.goto("/chats");
+  const tabbar = page.locator(".mobile-tabbar");
+  await expect(tabbar).toBeVisible();
+  for (const label of ["Чаты", "Треды", "Важные", "Участники", "Ещё"])
+    await expect(tabbar.getByRole("button", { name: label })).toBeVisible();
+  await tabbar.getByRole("button", { name: "Ещё" }).click();
+  await expect(page).toHaveURL(/\/more$/);
+  await expect(page.getByText("Текущее пространство")).toBeVisible();
+  await expect(page).toHaveScreenshot("mobile-more.png", {
+    animations: "disabled",
+  });
+  await page.getByRole("button", { name: /Настройки профиля/ }).click();
+  await expect(page).toHaveURL(/\/settings\/profile$/);
+  await expect(
+    page.getByRole("heading", { name: "Настройки профиля" }),
+  ).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByLabel("Ваше имя").fill("Анна Новая");
+  await page.getByRole("button", { name: "Сохранить" }).click();
+  await expect(
+    page.getByRole("button", { name: "Изменения сохранены" }),
+  ).toBeVisible();
+  await tabbar.getByRole("button", { name: "Ещё" }).click();
+  await page.getByRole("button", { name: /Настройки пространства/ }).click();
+  await expect(page).toHaveURL(/\/settings\/workspace$/);
+  await expect(
+    page.getByRole("heading", { name: "Настройки пространства" }),
+  ).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
 test("dark messenger shell uses flat charcoal elevation without glow", async ({
   page,
 }) => {
@@ -593,7 +631,7 @@ test("a thread opens beside an unchanged main feed", async ({ page }) => {
   await expect(page.locator("#message-message-2")).toBeVisible();
   await expect(
     page.getByRole("textbox", { name: "Напишите сообщение…" }),
-  ).toHaveCount(2);
+  ).toHaveCount(test.info().project.name === "phone" ? 1 : 2);
   await expect(page).toHaveScreenshot("thread-panel.png", {
     animations: "disabled",
   });

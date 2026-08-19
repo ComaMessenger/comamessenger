@@ -120,6 +120,12 @@ Phone filter state lives in the typed `/chats?filter=all|direct|grouped|channel`
 
 Large cards are a phone-only density choice. Desktop uses the same chat-stream information hierarchy at compact density.
 
+### Phone tabbar and settings
+
+At phone width the global sidebar becomes a fixed five-item bottom tabbar: Chats, Threads, Important, Members and More. It is route-driven, icon-only with accessible names, and reserves its own safe-area space instead of overlaying list rows or the composer. Opening a chat or thread does not discard the tabbar; Back still returns to the previous list context.
+
+More is a full-height scrollable route, not a floating menu. Profile and workspace settings also render in the inset working area on desktop and as full screens above the tabbar on phone. Dialogs are reserved for bounded confirmations and browser permission flows, not application settings.
+
 ### Chat header
 
 Contains chat identity, topic and kind plus a grouped action cluster on the right. Search is icon-only instead of occupying the center of the header. A pinned-message strip can be inserted immediately below the header without changing the message viewport.

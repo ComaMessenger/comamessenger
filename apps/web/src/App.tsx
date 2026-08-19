@@ -62,6 +62,7 @@ import {
   Lightbulb,
   LogOut,
   Map as MapIcon,
+  Menu,
   Megaphone,
   MessageCircle,
   MessageSquareReply,
@@ -92,6 +93,7 @@ import {
   Trophy,
   Trash2,
   Umbrella,
+  UserRound,
   UserPlus,
   Users,
   VolumeX,
@@ -540,6 +542,7 @@ export function App() {
       path={path}
       navigate={navigateTo}
       onLogout={logout}
+      onUserUpdated={setUser}
     />
   );
 }
@@ -736,12 +739,14 @@ function Messenger({
   path,
   navigate,
   onLogout,
+  onUserUpdated,
 }: {
   api: MessengerAPI;
   user: User;
   path: string;
   navigate(to: string): void;
   onLogout(): void;
+  onUserUpdated(user: User): void;
 }) {
   const { t } = useTranslation();
   const store = useMemo(() => createMessengerStore(), []);
@@ -762,13 +767,16 @@ function Messenger({
   const [chatLoading, setChatLoading] = useState(true);
   const [chatError, setChatError] = useState("");
   const [modal, setModal] = useState<
-    "new" | "folder" | "settings" | "notify" | "pinned" | null
+    "new" | "folder" | "notify" | "pinned" | null
   >(null);
   const selectedID = /^\/chat\/([^/]+)/.exec(path)?.[1] ?? null;
   const threadID = /\/thread\/([^/]+)/.exec(path)?.[1] ?? null;
   const showThreads = path === "/threads";
   const showImportant = path === "/important";
   const showMembers = path === "/members";
+  const showMore = path === "/more";
+  const showProfileSettings = path === "/settings/profile";
+  const showWorkspaceSettings = path === "/settings/workspace";
   const showChatList = Boolean(selectedID) || path === "/chats";
   useDismissable(workspaceMenuRoot, workspaceMenu, () =>
     setWorkspaceMenu(false),
@@ -1032,7 +1040,7 @@ function Messenger({
                   role="menuitem"
                   onClick={() => {
                     setWorkspaceMenu(false);
-                    setModal("settings");
+                    navigate("/settings/workspace");
                   }}
                 >
                   <Settings />
@@ -1098,7 +1106,7 @@ function Messenger({
         </IconButton>
         <footer className="sidebar-profile">
           <Avatar name={user.display_name} size="sm" online />
-          <button onClick={() => setModal("settings")}>
+          <button onClick={() => navigate("/settings/profile")}>
             <strong>{user.display_name}</strong>
             <span>@{user.handle}</span>
           </button>
@@ -1125,20 +1133,6 @@ function Messenger({
               <Plus />
             </IconButton>
           </header>
-          <nav
-            className="mobile-utility-nav"
-            aria-label={t("primaryNavigation")}
-          >
-            <button onClick={() => navigate("/threads")}>
-              <Inbox /> {t("threads")}
-            </button>
-            <button onClick={() => navigate("/important")}>
-              <Star /> {t("important")}
-            </button>
-            <button onClick={() => navigate("/members")}>
-              <Users /> {t("members")}
-            </button>
-          </nav>
           <label className="chat-list-search">
             <Search />
             <input
@@ -1226,39 +1220,6 @@ function Messenger({
           </div>
         </aside>
       )}
-      {!showChatList && (
-        <header className="mobile-utility-shell">
-          <div className="mobile-utility-shell__workspace">
-            <Logo size="small" />
-            <strong title={user.organization_name}>
-              {user.organization_name}
-            </strong>
-          </div>
-          <nav aria-label={t("primaryNavigation")}>
-            <button onClick={() => navigate("/chats")}>
-              <MessageCircle /> {t("chats")}
-            </button>
-            <button
-              className={showThreads ? "active" : ""}
-              onClick={() => navigate("/threads")}
-            >
-              <Inbox /> {t("threads")}
-            </button>
-            <button
-              className={showImportant ? "active" : ""}
-              onClick={() => navigate("/important")}
-            >
-              <Star /> {t("important")}
-            </button>
-            <button
-              className={showMembers ? "active" : ""}
-              onClick={() => navigate("/members")}
-            >
-              <Users /> {t("members")}
-            </button>
-          </nav>
-        </header>
-      )}
       <main className="conversation">
         {selectedID ? (
           <Conversation
@@ -1289,10 +1250,42 @@ function Messenger({
           />
         ) : showMembers ? (
           <MembersDirectory api={api} onBack={() => navigate("/chats")} />
+        ) : showMore ? (
+          <MobileMorePage
+            user={user}
+            navigate={navigate}
+            onLogout={() => void logout()}
+            onNotify={() => setModal("notify")}
+          />
+        ) : showProfileSettings ? (
+          <ProfileSettingsPage
+            api={api}
+            user={user}
+            navigate={navigate}
+            onLogout={() => void logout()}
+            onNotify={() => setModal("notify")}
+            onUserUpdated={onUserUpdated}
+          />
+        ) : showWorkspaceSettings ? (
+          <WorkspaceSettingsPage user={user} navigate={navigate} />
         ) : (
           <Welcome />
         )}
       </main>
+      <MobileTabBar
+        active={
+          showThreads
+            ? "threads"
+            : showImportant
+              ? "important"
+              : showMembers
+                ? "members"
+                : showMore || showProfileSettings || showWorkspaceSettings
+                  ? "more"
+                  : "chats"
+        }
+        navigate={navigate}
+      />
       {modal === "new" && (
         <CreateChatDialog
           api={api}
@@ -1304,15 +1297,6 @@ function Messenger({
             setModal(null);
             navigate(`/chat/${chat.id}`);
           }}
-        />
-      )}
-      {modal === "settings" && (
-        <SettingsDialog
-          api={api}
-          user={user}
-          onClose={() => setModal(null)}
-          onLogout={() => void logout()}
-          onNotify={() => setModal("notify")}
         />
       )}
       {modal === "folder" && (
@@ -2161,6 +2145,16 @@ function MessageRow({
     setMenu(false);
     setReactionPicker(false);
   }
+  function openThread() {
+    setMenu(false);
+    setReactionPicker(false);
+    onThread();
+  }
+  function reply() {
+    setMenu(false);
+    setReactionPicker(false);
+    onReply();
+  }
   const reactionGroups = Object.entries(
     (reactionsQuery.data ?? []).reduce<Record<string, number>>(
       (groups, reaction) => ({
@@ -2246,7 +2240,7 @@ function MessageRow({
         >
           <SmilePlus />
         </IconButton>
-        <IconButton label={t("thread")} onClick={onThread}>
+        <IconButton label={t("thread")} onClick={openThread}>
           <MessageSquareReply />
         </IconButton>
         <IconButton
@@ -2292,11 +2286,11 @@ function MessageRow({
             <SmilePlus />
             <span>{t("addReaction")}</span>
           </button>
-          <button role="menuitem" onClick={onReply}>
+          <button role="menuitem" onClick={reply}>
             <CornerUpLeft />
             <span>{t("reply")}</span>
           </button>
-          <button role="menuitem" onClick={onThread}>
+          <button role="menuitem" onClick={openThread}>
             <MessageSquareReply />
             <span>{t("thread")}</span>
           </button>
@@ -3372,18 +3366,149 @@ function CreateChatDialog({
     </Dialog>
   );
 }
-function SettingsDialog({
-  api,
+function MobileTabBar({
+  active,
+  navigate,
+}: {
+  active: "chats" | "threads" | "important" | "members" | "more";
+  navigate(to: string): void;
+}) {
+  const { t } = useTranslation();
+  const items = [
+    {
+      id: "chats" as const,
+      path: "/chats",
+      label: t("chats"),
+      icon: MessageCircle,
+    },
+    {
+      id: "threads" as const,
+      path: "/threads",
+      label: t("threads"),
+      icon: MessagesSquare,
+    },
+    {
+      id: "important" as const,
+      path: "/important",
+      label: t("important"),
+      icon: Star,
+    },
+    {
+      id: "members" as const,
+      path: "/members",
+      label: t("members"),
+      icon: Users,
+    },
+    { id: "more" as const, path: "/more", label: t("more"), icon: Menu },
+  ];
+  return (
+    <nav className="mobile-tabbar" aria-label={t("primaryNavigation")}>
+      {items.map((item) => {
+        const Icon = item.icon;
+        return (
+          <button
+            key={item.id}
+            className={active === item.id ? "active" : ""}
+            aria-current={active === item.id ? "page" : undefined}
+            aria-label={item.label}
+            title={item.label}
+            onClick={() => navigate(item.path)}
+          >
+            <Icon />
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+function MobileMorePage({
   user,
-  onClose,
+  navigate,
   onLogout,
   onNotify,
 }: {
-  api: MessengerAPI;
   user: User;
-  onClose(): void;
+  navigate(to: string): void;
   onLogout(): void;
   onNotify(): void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <section className="mobile-more-page utility-page">
+      <header className="mobile-more-page__identity">
+        <Avatar name={user.display_name} size="lg" online />
+        <span>
+          <strong>{user.display_name}</strong>
+          <small>@{user.handle}</small>
+        </span>
+      </header>
+      <div className="mobile-more-page__workspace">
+        <Logo size="small" />
+        <span>
+          <strong title={user.organization_name}>
+            {user.organization_name}
+          </strong>
+          <small>{t("currentWorkspace")}</small>
+        </span>
+      </div>
+      <div className="mobile-more-list">
+        <button onClick={() => navigate("/settings/profile")}>
+          <UserRound />
+          <span>
+            <strong>{t("profileSettings")}</strong>
+            <small>{t("profileSettingsHint")}</small>
+          </span>
+        </button>
+        {user.role !== "member" && (
+          <button onClick={() => navigate("/settings/workspace")}>
+            <Building2 />
+            <span>
+              <strong>{t("workspaceSettings")}</strong>
+              <small>{t("workspaceSettingsHint")}</small>
+            </span>
+          </button>
+        )}
+        <button onClick={() => navigate("/members")}>
+          <Users />
+          <span>
+            <strong>{t("members")}</strong>
+            <small>{t("membersHint")}</small>
+          </span>
+        </button>
+        <button onClick={onNotify}>
+          <Bell />
+          <span>
+            <strong>{t("notifications")}</strong>
+            <small>{t("notificationsHint")}</small>
+          </span>
+        </button>
+        <button className="danger" onClick={onLogout}>
+          <LogOut />
+          <span>
+            <strong>{t("logout")}</strong>
+            <small>{user.email}</small>
+          </span>
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function ProfileSettingsPage({
+  api,
+  user,
+  navigate,
+  onLogout,
+  onNotify,
+  onUserUpdated,
+}: {
+  api: MessengerAPI;
+  user: User;
+  navigate(to: string): void;
+  onLogout(): void;
+  onNotify(): void;
+  onUserUpdated(user: User): void;
 }) {
   const { t, i18n } = useTranslation();
   const query = useQuery({
@@ -3397,13 +3522,14 @@ function SettingsDialog({
   const [name, setName] = useState(user.display_name);
   const [handle, setHandle] = useState(user.handle);
   const [pushPreview, setPushPreview] = useState(false);
+  const [saved, setSaved] = useState(false);
   useEffect(() => {
     if (!query.data) return;
     setThemeValue(query.data.theme);
     setPushPreview(query.data.push_preview);
   }, [query.data]);
   async function save() {
-    await Promise.all([
+    const [updatedUser] = await Promise.all([
       api.updateMe({
         display_name: name,
         handle,
@@ -3419,79 +3545,131 @@ function SettingsDialog({
       }),
     ]);
     setTheme(theme);
-    onClose();
+    onUserUpdated(updatedUser);
+    setSaved(true);
   }
   return (
-    <Dialog title={t("settings")} description={user.email} onClose={onClose}>
-      <div className="settings-list">
-        <label>
-          <span>{t("name")}</span>
-          <input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-          />
-        </label>
-        <label>
-          <span>{t("handle")}</span>
-          <input
-            value={handle}
-            onChange={(event) => setHandle(event.target.value)}
-          />
-        </label>
-        <label>
-          <span>
-            <Sun />
-            {t("theme")}
-          </span>
-          <select
-            value={theme}
-            onChange={(event) => {
-              const next = event.target.value as UserPreferences["theme"];
-              setThemeValue(next);
-              setTheme(next);
-            }}
-          >
-            <option value="system">{t("system")}</option>
-            <option value="light">{t("light")}</option>
-            <option value="dark">{t("dark")}</option>
-          </select>
-        </label>
-        <label>
-          <span>
-            <Languages />
-            {t("language")}
-          </span>
-          <select
-            value={i18n.language}
-            onChange={(event) => void setLocale(event.target.value)}
-          >
-            <option value="ru">{t("russian")}</option>
-            <option value="en">{t("english")}</option>
-            <option value="pseudo">{t("pseudoLocale")}</option>
-          </select>
-        </label>
-        <label>
-          <span>
+    <section className="settings-page utility-page">
+      <UtilityPageHeader
+        title={t("profileSettings")}
+        onBack={() => navigate("/more")}
+      />
+      <p className="utility-page__lead">{user.email}</p>
+      <div className="settings-page__body">
+        <div className="settings-list">
+          <label>
+            <span>{t("name")}</span>
+            <input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </label>
+          <label>
+            <span>{t("handle")}</span>
+            <input
+              value={handle}
+              onChange={(event) => setHandle(event.target.value)}
+            />
+          </label>
+          <label>
+            <span>
+              <Sun />
+              {t("theme")}
+            </span>
+            <select
+              value={theme}
+              onChange={(event) => {
+                const next = event.target.value as UserPreferences["theme"];
+                setThemeValue(next);
+                setTheme(next);
+              }}
+            >
+              <option value="system">{t("system")}</option>
+              <option value="light">{t("light")}</option>
+              <option value="dark">{t("dark")}</option>
+            </select>
+          </label>
+          <label>
+            <span>
+              <Languages />
+              {t("language")}
+            </span>
+            <select
+              value={i18n.language}
+              onChange={(event) => void setLocale(event.target.value)}
+            >
+              <option value="ru">{t("russian")}</option>
+              <option value="en">{t("english")}</option>
+              <option value="pseudo">{t("pseudoLocale")}</option>
+            </select>
+          </label>
+          <label>
+            <span>
+              <Bell />
+              {t("notificationPreview")}
+            </span>
+            <input
+              type="checkbox"
+              checked={pushPreview}
+              onChange={(event) => setPushPreview(event.target.checked)}
+            />
+          </label>
+          <button onClick={onNotify}>
             <Bell />
-            {t("notificationPreview")}
-          </span>
-          <input
-            type="checkbox"
-            checked={pushPreview}
-            onChange={(event) => setPushPreview(event.target.checked)}
-          />
-        </label>
-        <button onClick={onNotify}>
-          <Bell />
-          {t("notificationEnable")}
-        </button>
-        <button onClick={() => void save()}>{t("save")}</button>
-        <button className="danger" onClick={onLogout}>
-          <LogOut />
-          {t("logout")}
-        </button>
+            {t("notificationEnable")}
+          </button>
+          <button className="settings-list__save" onClick={() => void save()}>
+            <Check />
+            {saved ? t("changesSaved") : t("save")}
+          </button>
+          <button className="danger" onClick={onLogout}>
+            <LogOut />
+            {t("logout")}
+          </button>
+        </div>
       </div>
-    </Dialog>
+    </section>
+  );
+}
+
+function WorkspaceSettingsPage({
+  user,
+  navigate,
+}: {
+  user: User;
+  navigate(to: string): void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <section className="settings-page utility-page">
+      <UtilityPageHeader
+        title={t("workspaceSettings")}
+        onBack={() => navigate("/more")}
+      />
+      <p className="utility-page__lead">{t("workspaceSettingsLead")}</p>
+      <div className="settings-page__body">
+        <article className="workspace-settings-card">
+          <Logo size="small" />
+          <span>
+            <strong>{user.organization_name}</strong>
+            <small>{t("workspaceRole", { role: user.role })}</small>
+          </span>
+        </article>
+        <div className="settings-list">
+          <button onClick={() => navigate("/members")}>
+            <Users />
+            <span>{t("membersAndAccess")}</span>
+          </button>
+          <button onClick={() => navigate("/settings/profile")}>
+            <UserRound />
+            <span>{t("personalPreferences")}</span>
+          </button>
+        </div>
+        <p className="settings-page__roadmap">
+          {t("workspaceSettingsRoadmap")}
+        </p>
+      </div>
+    </section>
   );
 }
 function NotificationDialog({

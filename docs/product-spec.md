@@ -472,6 +472,14 @@ GET    /events?since=seq               резервный long-poll
 - [ ] Поиск (после Фазы 4)
 - [ ] i18n RU/EN
 
+### [Фаза 3.1. Навигация и настройки](phases/03.1-navigation-settings.md)
+
+- [x] Нижний Web tabbar на phone: чаты, треды, важные, участники и `Ещё`
+- [x] Route-based базовые страницы профиля и пространства вместо dialogs
+- [ ] Сессии и безопасность аккаунта
+- [ ] Участники, приглашения и organization policies
+- [ ] Настройка bundled/external S3 без раскрытия secrets клиенту
+
 ### [Фаза 4. Файлы и поиск (недели 8-9)](phases/04-files-search.md)
 
 - [ ] Presigned upload в MinIO/S3, локальный режим
