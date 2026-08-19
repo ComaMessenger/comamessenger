@@ -13,7 +13,7 @@ import { compactUUID, expandUUID } from "./links";
 import { RealtimeCoordinator, type CheckpointStorage } from "./realtime";
 import { Outbox, type OutboxItem, type OutboxStorage } from "./outbox";
 import type { ClientMessage, Message } from "./types";
-import type { MessengerAPI } from "./api";
+import { APIError, type MessengerAPI } from "./api";
 
 const message: ClientMessage = {
   id: "a",
@@ -201,6 +201,124 @@ describe("realtime coordinator", () => {
         .map((value) => JSON.parse(value))
         .some((frame) => frame.op === "ack" && frame.seq === 5),
     ).toBe(true);
+    coordinator.stop();
+  });
+
+  it("refreshes and reconnects when the websocket access token expires", async () => {
+    let token: string | null = "expired";
+    let refreshes = 0;
+    let sessionExpired = 0;
+    const sockets: Array<{
+      readyState: number;
+      send(value: string): void;
+      close(): void;
+      onopen: ((event: unknown) => void) | null;
+      onmessage: ((event: { data: string }) => void) | null;
+      onclose: ((event: { code: number }) => void) | null;
+    }> = [];
+    const api = {
+      token: () => token,
+      clearToken: (expected: string | null) => {
+        if (token !== expected) return false;
+        token = null;
+        return true;
+      },
+      refresh: async () => {
+        refreshes += 1;
+        token = "fresh";
+        return {};
+      },
+      websocketURL: () => "ws://test",
+    } as unknown as MessengerAPI;
+    const coordinator = new RealtimeCoordinator(
+      api,
+      {
+        get: async () => 0,
+        set: async () => undefined,
+        clear: async () => undefined,
+      },
+      () => {
+        const socket = {
+          readyState: 1,
+          send: () => undefined,
+          close: () => undefined,
+          onopen: null as ((event: unknown) => void) | null,
+          onmessage: null as ((event: { data: string }) => void) | null,
+          onclose: null as ((event: { code: number }) => void) | null,
+        };
+        sockets.push(socket);
+        queueMicrotask(() => socket.onopen?.({}));
+        return socket;
+      },
+      {
+        state: () => undefined,
+        event: () => false,
+        resync: async () => undefined,
+        sessionExpired: () => {
+          sessionExpired += 1;
+        },
+      },
+    );
+    coordinator.start();
+    await nextTask();
+    sockets[0]!.onclose?.({ code: 4001 });
+    await nextTask();
+    await nextTask();
+    expect(refreshes).toBe(1);
+    expect(sockets).toHaveLength(2);
+    expect(token).toBe("fresh");
+    expect(sessionExpired).toBe(0);
+    coordinator.stop();
+  });
+
+  it("ends the session only when refresh itself is unauthorized", async () => {
+    let token: string | null = "expired";
+    let sessionExpired = 0;
+    const socket = {
+      readyState: 1,
+      send: () => undefined,
+      close: () => undefined,
+      onopen: null as ((event: unknown) => void) | null,
+      onmessage: null as ((event: { data: string }) => void) | null,
+      onclose: null as ((event: { code: number }) => void) | null,
+    };
+    const api = {
+      token: () => token,
+      clearToken: (expected: string | null) => {
+        if (token !== expected) return false;
+        token = null;
+        return true;
+      },
+      refresh: async () => {
+        throw new APIError(401, "invalid_refresh_token", "expired");
+      },
+      websocketURL: () => "ws://test",
+    } as unknown as MessengerAPI;
+    const coordinator = new RealtimeCoordinator(
+      api,
+      {
+        get: async () => 0,
+        set: async () => undefined,
+        clear: async () => undefined,
+      },
+      () => {
+        queueMicrotask(() => socket.onopen?.({}));
+        return socket;
+      },
+      {
+        state: () => undefined,
+        event: () => false,
+        resync: async () => undefined,
+        sessionExpired: () => {
+          sessionExpired += 1;
+        },
+      },
+    );
+    coordinator.start();
+    await nextTask();
+    socket.onclose?.({ code: 4001 });
+    await nextTask();
+    expect(sessionExpired).toBe(1);
     coordinator.stop();
   });
 });

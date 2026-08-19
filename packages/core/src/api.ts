@@ -30,6 +30,9 @@ import type {
 
 type APIErrorPayload = components["schemas"]["Error"];
 type APIErrorCode = components["schemas"]["ErrorCode"] | "request_failed";
+export type RefreshStrategy = (
+  request: () => Promise<TokenResponse>,
+) => Promise<TokenResponse>;
 export class APIError extends Error {
   constructor(
     readonly status: number,
@@ -52,12 +55,20 @@ export async function getHealth(apiURL: string): Promise<ServiceHealth> {
 export class MessengerAPI {
   private accessToken: string | null = null;
   private refreshRequest: Promise<TokenResponse> | null = null;
-  constructor(readonly apiURL: string) {}
+  constructor(
+    readonly apiURL: string,
+    private readonly refreshStrategy?: RefreshStrategy,
+  ) {}
   token(): string | null {
     return this.accessToken;
   }
-  clearToken(): void {
+  clearToken(expected?: string | null): boolean {
+    if (expected !== undefined && this.accessToken !== expected) return false;
     this.accessToken = null;
+    return true;
+  }
+  adoptTokens(tokens: TokenResponse): TokenResponse {
+    return this.acceptTokens(tokens);
   }
   websocketURL(): string {
     const url = new URL("/api/v1/ws", this.apiURL);
@@ -89,16 +100,21 @@ export class MessengerAPI {
     );
   }
   refresh(): Promise<TokenResponse> {
-    if (!this.refreshRequest)
-      this.refreshRequest = this.request<TokenResponse>(
-        "/api/v1/auth/refresh",
-        { method: "POST" },
-        false,
+    if (!this.refreshRequest) {
+      const request = () =>
+        this.request<TokenResponse>(
+          "/api/v1/auth/refresh",
+          { method: "POST" },
+          false,
+        );
+      this.refreshRequest = (
+        this.refreshStrategy ? this.refreshStrategy(request) : request()
       )
         .then((value) => this.acceptTokens(value))
         .finally(() => {
           this.refreshRequest = null;
         });
+    }
     return this.refreshRequest;
   }
   async logout(): Promise<void> {

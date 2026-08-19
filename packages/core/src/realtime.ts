@@ -1,4 +1,4 @@
-import type { MessengerAPI } from "./api";
+import { APIError, type MessengerAPI } from "./api";
 import type { DurableEvent, RealtimeState } from "./types";
 export interface CheckpointStorage {
   get(): Promise<number>;
@@ -79,6 +79,7 @@ export class RealtimeCoordinator {
       if (!this.api.token()) await this.api.refresh();
       const checkpoint = await this.storage.get();
       const socket = this.sockets(this.api.websocketURL());
+      const socketToken = this.api.token();
       this.socket = socket;
       socket.onopen = () => {
         this.callbacks.state("authenticating");
@@ -95,8 +96,7 @@ export class RealtimeCoordinator {
       socket.onclose = (event) => {
         if (this.stopped) return;
         if (event.code === 4001) {
-          this.callbacks.state("session_expired");
-          this.callbacks.sessionExpired?.();
+          void this.reauthenticate(socketToken);
           return;
         }
         const delay =
@@ -106,6 +106,24 @@ export class RealtimeCoordinator {
       };
     } catch {
       if (!this.stopped) setTimeout(() => void this.connect(true), 1000);
+    }
+  }
+  private async reauthenticate(expiredToken: string | null): Promise<void> {
+    if (this.stopped) return;
+    this.callbacks.state("reconnecting");
+    try {
+      // Another tab may already have refreshed and broadcast a newer token.
+      // Never erase that token in response to an older socket expiring.
+      if (this.api.clearToken(expiredToken)) await this.api.refresh();
+      if (!this.stopped) void this.connect(true);
+    } catch (cause) {
+      if (this.stopped) return;
+      if (cause instanceof APIError && cause.status === 401) {
+        this.callbacks.state("session_expired");
+        this.callbacks.sessionExpired?.();
+        return;
+      }
+      setTimeout(() => void this.connect(true), 1000);
     }
   }
   private async receive(raw: string): Promise<void> {

@@ -89,6 +89,7 @@ async function mockMessenger(
   const runtimeChat = { ...chat, ...chatPatch };
   let remainingSendFailures = sendFailures;
   let paginationRequests = 0;
+  let refreshRequests = 0;
   const sent: Array<Record<string, unknown>> = [];
   const history =
     suppliedHistory ??
@@ -109,11 +110,13 @@ async function mockMessenger(
     localStorage.setItem("coma-theme", "light");
     class FakeSocket {
       static OPEN = 1;
+      static latest: FakeSocket | null = null;
       readyState = 1;
       onopen: null | (() => void) = null;
       onmessage: null | ((event: { data: string }) => void) = null;
-      onclose = null;
+      onclose: null | ((event: { code: number }) => void) = null;
       constructor() {
+        FakeSocket.latest = this;
         setTimeout(() => this.onopen?.(), 0);
       }
       send(raw: string) {
@@ -139,7 +142,10 @@ async function mockMessenger(
       }
       close() {}
     }
-    Object.assign(window, { WebSocket: FakeSocket });
+    Object.assign(window, {
+      WebSocket: FakeSocket,
+      __expireComaSocket: () => FakeSocket.latest?.onclose?.({ code: 4001 }),
+    });
   });
   await page.route("**/api/v1/**", async (route) => {
     const url = new URL(route.request().url());
@@ -147,13 +153,14 @@ async function mockMessenger(
     let status = 200;
     let body: unknown = {};
     if (path.endsWith("/bootstrap/status")) body = { bootstrapped: true };
-    else if (path.endsWith("/auth/refresh"))
+    else if (path.endsWith("/auth/refresh")) {
+      refreshRequests += 1;
       body = {
         access_token: "test",
         access_expires_at: "2026-08-20T00:00:00Z",
         user,
       };
-    else if (path.endsWith("/chats")) body = { chats: [runtimeChat] };
+    } else if (path.endsWith("/chats")) body = { chats: [runtimeChat] };
     else if (path.endsWith("/unread"))
       body = {
         chats: [
@@ -266,7 +273,11 @@ async function mockMessenger(
       body: JSON.stringify(body),
     });
   });
-  return { sent, paginationRequests: () => paginationRequests };
+  return {
+    sent,
+    paginationRequests: () => paginationRequests,
+    refreshRequests: () => refreshRequests,
+  };
 }
 
 test("responsive chat list opens a channel with a read-only composer", async ({
@@ -476,6 +487,27 @@ test("the formatting toolbar writes markdown source", async ({ page }) => {
   await page.getByRole("button", { name: "Отправить" }).click();
   await expect.poll(() => sent.length).toBe(1);
   expect(sent[0]?.body).toBe("## План");
+});
+
+test("an expired websocket token refreshes without leaving the messenger", async ({
+  page,
+}) => {
+  const mock = await mockMessenger(page, {
+    chatPatch: { kind: "group", role: "admin" },
+  });
+  await page.goto(`/chat/${chat.id}`);
+  await expect(
+    page.getByRole("heading", { name: "Объявления", level: 1 }),
+  ).toBeVisible();
+  const before = mock.refreshRequests();
+  await page.evaluate(() =>
+    (window as Window & { __expireComaSocket(): void }).__expireComaSocket(),
+  );
+  await expect.poll(mock.refreshRequests).toBeGreaterThan(before);
+  await expect(
+    page.getByRole("heading", { name: "Объявления", level: 1 }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Войти" })).toHaveCount(0);
 });
 
 test("a 10k-message history stays virtualized", async ({ page }) => {

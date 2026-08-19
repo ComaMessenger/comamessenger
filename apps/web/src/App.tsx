@@ -74,6 +74,7 @@ import {
   type ClientMessage,
   type Draft,
   type Message,
+  type TokenResponse,
   type User,
   type UserPreferences,
 } from "@comamessenger/core";
@@ -98,6 +99,7 @@ import { Markdown } from "./markdown";
 import { checkpointStorage, outboxStorage } from "./persistence";
 import i18n, { setLocale } from "./i18n";
 import comaLogo from "./assets/coma-logo.svg";
+import { BrowserSessionCoordinator } from "./session";
 
 const EmojiPicker = lazy(() => import("emoji-picker-react"));
 
@@ -133,11 +135,35 @@ export function App() {
   const path = useRouterState({ select: (state) => state.location.pathname });
   const initialPath = useRef(path).current;
   const navigate = useNavigate();
-  const api = useMemo(() => new MessengerAPI(apiURL), []);
+  const sessions = useMemo(() => new BrowserSessionCoordinator(), []);
+  const api = useMemo(
+    () => new MessengerAPI(apiURL, (request) => sessions.refresh(request)),
+    [sessions],
+  );
   const [screen, setScreen] = useState<Screen>("loading");
   const [user, setUser] = useState<User | null>(null);
   const [error, setError] = useState("");
   useTheme();
+
+  const signedOut = useCallback(() => {
+    setUser(null);
+    setScreen("login");
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = sessions.subscribe((message) => {
+      if (message.type === "tokens") {
+        api.adoptTokens(message.tokens);
+        setUser(message.tokens.user);
+        setError("");
+        setScreen("messenger");
+      } else {
+        api.clearToken();
+        signedOut();
+      }
+    });
+    return unsubscribe;
+  }, [api, sessions, signedOut]);
 
   useEffect(() => {
     if (initialPath.startsWith("/invite/")) {
@@ -171,13 +197,8 @@ export function App() {
       });
   }, [api, initialPath, navigate]);
 
-  const authenticated = async (next: User) => {
-    setUser(next);
-    setError("");
-    setScreen("messenger");
-    const signal = new BroadcastChannel("coma-session");
-    signal.postMessage("auth_changed");
-    signal.close();
+  const authenticated = async (session: TokenResponse) => {
+    sessions.publishTokens(session);
     if (path === "/" || path.startsWith("/invite/"))
       await navigate({
         to: "/chats",
@@ -185,10 +206,6 @@ export function App() {
         replace: true,
       });
   };
-  const signedOut = useCallback(() => {
-    setUser(null);
-    setScreen("login");
-  }, []);
   if (path === "/dev/components" && import.meta.env.DEV)
     return <ComponentCatalog />;
   if (screen === "loading")
@@ -232,7 +249,7 @@ export function App() {
       user={user}
       path={path}
       navigate={(to) => void navigate({ to })}
-      onLogout={signedOut}
+      onLogout={() => sessions.publishLogout()}
     />
   );
 }
@@ -241,7 +258,7 @@ type AuthProps = {
   api: MessengerAPI;
   error: string;
   onError(value: string): void;
-  onAuthenticated(user: User): void;
+  onAuthenticated(session: TokenResponse): void;
 };
 function LoginScreen({ api, error, onError, onAuthenticated }: AuthProps) {
   const { t } = useTranslation();
@@ -253,12 +270,10 @@ function LoginScreen({ api, error, onError, onAuthenticated }: AuthProps) {
     const data = new FormData(event.currentTarget);
     try {
       onAuthenticated(
-        (
-          await api.login({
-            email: value(data, "email"),
-            password: value(data, "password"),
-          })
-        ).user,
+        await api.login({
+          email: value(data, "email"),
+          password: value(data, "password"),
+        }),
       );
     } catch (cause) {
       onError(messageOf(cause));
@@ -308,7 +323,7 @@ function BootstrapScreen({ api, error, onError, onAuthenticated }: AuthProps) {
     };
     try {
       onAuthenticated(
-        (await api.bootstrap(input, value(data, "bootstrap_token"))).user,
+        await api.bootstrap(input, value(data, "bootstrap_token")),
       );
     } catch (cause) {
       onError(messageOf(cause));
@@ -375,7 +390,7 @@ function InviteScreen({
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
     };
     try {
-      onAuthenticated((await api.acceptInvitation(token, input)).user);
+      onAuthenticated(await api.acceptInvitation(token, input));
     } catch (cause) {
       onError(messageOf(cause));
     } finally {
@@ -456,7 +471,6 @@ function Messenger({
   const selectedID = /^\/chat\/([^/]+)/.exec(path)?.[1] ?? null;
   const threadID = /\/thread\/([^/]+)/.exec(path)?.[1] ?? null;
   const showThreads = path === "/threads";
-  const channel = useMemo(() => new BroadcastChannel("coma-session"), []);
   const membersQuery = useQuery({
     queryKey: ["chat-members", selectedID],
     queryFn: () => api.members(selectedID!),
@@ -566,17 +580,6 @@ function Messenger({
     }
   }, [api, navigate, path]);
   useEffect(() => {
-    channel.onmessage = (event) => {
-      if (event.data === "logout") {
-        api.clearToken();
-        onLogout();
-      } else if (event.data === "auth_changed") {
-        void api.refresh().catch(onLogout);
-      }
-    };
-    return () => channel.close();
-  }, [api, channel, onLogout]);
-  useEffect(() => {
     const visible = () =>
       coordinator.presence(document.hidden ? "away" : "active");
     document.addEventListener("visibilitychange", visible);
@@ -606,7 +609,6 @@ function Messenger({
   }));
   async function logout() {
     await api.logout();
-    channel.postMessage("logout");
     onLogout();
   }
   function selectFilter(next: "all" | "direct" | "grouped") {
