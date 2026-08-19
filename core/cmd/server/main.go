@@ -20,11 +20,20 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/message"
 	"github.com/comamessenger/comamessenger/core/internal/password"
+	"github.com/comamessenger/comamessenger/core/internal/push"
 	"github.com/comamessenger/comamessenger/core/internal/realtime"
 	"github.com/comamessenger/comamessenger/core/internal/userstate"
 )
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "vapid" {
+		publicKey, privateKey, err := push.GenerateVAPIDKeys()
+		if err != nil {
+			os.Exit(1)
+		}
+		_, _ = os.Stdout.WriteString("VAPID_PUBLIC_KEY=" + publicKey + "\nVAPID_PRIVATE_KEY=" + privateKey + "\n")
+		return
+	}
 	if len(os.Args) == 2 && os.Args[1] == "healthcheck" {
 		client := &http.Client{Timeout: 2 * time.Second}
 		response, err := client.Get("http://localhost:8080/healthz")
@@ -127,12 +136,15 @@ func main() {
 		pool, int(cfg.Messaging.MaxBodyBytes), int(cfg.Messaging.MaxPageSize), afterCommit,
 	)
 	userStateService := userstate.NewService(pool, int(cfg.Messaging.MaxBodyBytes), afterCommit)
+	pushService := push.NewService(pool, cfg.Push)
+	pushWorker := push.NewWorker(logger, pool, cfg.Push, realtimeHub.ActorActiveIn)
+	go pushWorker.Run(realtimeCtx)
 
 	server := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: serverhttp.NewHandler(logger, cfg.PublicAppURL, pool.Ping, serverhttp.Dependencies{
-			Identity: identityService, Chats: chat.NewService(pool),
-			Messages: messageService, UserState: userStateService, Realtime: realtimeServer,
+			Identity: identityService, Chats: chat.NewService(pool, afterCommit),
+			Messages: messageService, UserState: userStateService, Push: pushService, Realtime: realtimeServer,
 			CookieSecure: cfg.Auth.CookieSecure, RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
 			BootstrapToken: cfg.BootstrapToken, RequireBootstrapToken: cfg.AppEnv != "development",
 			TrustedProxyCIDRs: cfg.TrustedProxyCIDRs, RevokeRealtimeSession: realtimeServer.RevokeSession,

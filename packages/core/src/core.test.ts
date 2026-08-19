@@ -1,0 +1,187 @@
+import { describe, expect, it } from "vitest";
+import { createMessengerStore } from "./store";
+import { parseMarkdown } from "./markdown";
+import { RealtimeCoordinator, type CheckpointStorage } from "./realtime";
+import { Outbox, type OutboxItem, type OutboxStorage } from "./outbox";
+import type { ClientMessage, Message } from "./types";
+import type { MessengerAPI } from "./api";
+
+const message: ClientMessage = {
+  id: "a",
+  chat_id: "chat",
+  actor_id: "actor",
+  client_msg_id: "client",
+  type: "text",
+  body: "hello",
+  body_format: "plain",
+  version: 1,
+  created_seq: 3,
+  created_at: "2026-01-01T00:00:00Z",
+  mentioned_actor_ids: [],
+};
+describe("domain store", () => {
+  it("applies durable events idempotently and reconciles client_msg_id", () => {
+    const store = createMessengerStore();
+    store.getState().optimistic({
+      ...message,
+      id: "client",
+      created_seq: Number.MAX_SAFE_INTEGER,
+      delivery: "sending",
+    });
+    const event = {
+      op: "event" as const,
+      seq: 3,
+      type: "message.created",
+      occurred_at: message.created_at,
+      actor_id: message.actor_id,
+      chat_id: message.chat_id,
+      subject_id: message.id,
+      data: message,
+    };
+    expect(store.getState().apply(event)).toBe(true);
+    expect(store.getState().apply(event)).toBe(false);
+    expect(store.getState().messages.chat).toHaveLength(1);
+    expect(store.getState().messages.chat?.[0]?.delivery).toBe("sent");
+  });
+  it("reconciles a REST response even when the event checkpoint is newer", () => {
+    const store = createMessengerStore(10);
+    store.getState().optimistic({
+      ...message,
+      id: "client",
+      created_seq: Number.MAX_SAFE_INTEGER,
+      delivery: "sending",
+    });
+    store.getState().reconcile(message);
+    expect(store.getState().messages.chat).toHaveLength(1);
+    expect(store.getState().messages.chat?.[0]?.id).toBe("a");
+    expect(store.getState().checkpoint).toBe(10);
+  });
+});
+describe("markdown AST", () => {
+  it("recognizes only the agreed safe subset", () => {
+    const tree = parseMarkdown("**bold** [site](https://example.com) <script>");
+    expect(tree.map((node) => node.type)).toEqual([
+      "strong",
+      "text",
+      "link",
+      "text",
+    ]);
+    expect(JSON.stringify(tree)).toContain("<script>");
+  });
+});
+
+describe("realtime coordinator", () => {
+  it("authenticates from the persisted checkpoint and ACKs duplicate delivery", async () => {
+    let checkpoint = 5;
+    const sent: string[] = [];
+    const storage: CheckpointStorage = {
+      get: async () => checkpoint,
+      set: async (value) => {
+        checkpoint = value;
+      },
+      clear: async () => {
+        checkpoint = 0;
+      },
+    };
+    const socket = {
+      readyState: 1,
+      send: (value: string) => sent.push(value),
+      close: () => undefined,
+      onopen: null as ((event: unknown) => void) | null,
+      onmessage: null as ((event: { data: string }) => void) | null,
+      onclose: null as ((event: unknown) => void) | null,
+    };
+    const api = {
+      token: () => "token",
+      refresh: async () => undefined,
+      websocketURL: () => "ws://test",
+    } as unknown as MessengerAPI;
+    const coordinator = new RealtimeCoordinator(
+      api,
+      storage,
+      () => {
+        queueMicrotask(() => socket.onopen?.({}));
+        return socket;
+      },
+      {
+        state: () => undefined,
+        event: () => false,
+        resync: async () => undefined,
+      },
+    );
+    coordinator.start();
+    await nextTask();
+    expect(JSON.parse(sent[0]!).last_seq).toBe(5);
+    socket.onmessage?.({
+      data: JSON.stringify({
+        op: "hello",
+        current_seq: 5,
+        ack_interval_ms: 1,
+        ack_batch_size: 50,
+      }),
+    });
+    socket.onmessage?.({
+      data: JSON.stringify({
+        op: "event",
+        seq: 5,
+        type: "message.created",
+        data: {},
+      }),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(
+      sent
+        .map((value) => JSON.parse(value))
+        .some((frame) => frame.op === "ack" && frame.seq === 5),
+    ).toBe(true);
+    coordinator.stop();
+  });
+});
+
+describe("persistent outbox", () => {
+  it("retries the original client_msg_id without creating another command", async () => {
+    const values = new Map<string, OutboxItem>();
+    const calls: string[] = [];
+    let attempt = 0;
+    const storage: OutboxStorage = {
+      list: async () => [...values.values()],
+      put: async (item) => {
+        values.set(item.input.client_msg_id, item);
+      },
+      delete: async (id) => {
+        values.delete(id);
+      },
+    };
+    const api = {
+      token: () => "token",
+      createMessage: async (
+        _chat: string,
+        input: { client_msg_id: string },
+      ) => {
+        calls.push(input.client_msg_id);
+        if (attempt++ === 0) throw new Error("offline");
+        return { ...message, client_msg_id: input.client_msg_id } as Message;
+      },
+    } as unknown as MessengerAPI;
+    const states: string[] = [];
+    const outbox = new Outbox(api, storage, {
+      optimistic: () => states.push("sending"),
+      retrying: () => states.push("retrying"),
+      delivered: () => states.push("sent"),
+      failed: () => states.push("failed"),
+    });
+    await outbox.enqueue("chat", {
+      client_msg_id: "stable",
+      body: "hello",
+      body_format: "plain",
+    });
+    await outbox.flush();
+    expect(calls).toEqual(["stable", "stable"]);
+    expect(states).toEqual(["sending", "failed", "retrying", "sent"]);
+    expect(values.size).toBe(0);
+  });
+});
+
+function nextTask() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}

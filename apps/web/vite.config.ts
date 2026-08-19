@@ -15,5 +15,6 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       allowedHosts,
     },
+    preview: { host: "0.0.0.0", port: 5173, allowedHosts },
   };
 });

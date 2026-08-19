@@ -1,0 +1,18 @@
+{
+  "name": "@comamessenger/tokens",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./theme.css": "./src/theme.css"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "lint": "tsc -b --pretty false",
+    "test": "tsc -b --pretty false"
+  },
+  "devDependencies": {
+    "typescript": "5.9.2"
+  }
+}

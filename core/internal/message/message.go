@@ -80,6 +80,13 @@ type Page struct {
 	NextBeforeSeq *int64    `json:"next_before_seq"`
 }
 
+type Window struct {
+	Messages   []Message `json:"messages"`
+	TargetID   string    `json:"target_id"`
+	HasEarlier bool      `json:"has_earlier"`
+	HasLater   bool      `json:"has_later"`
+}
+
 type Service struct {
 	pool         *pgxpool.Pool
 	maxBodyBytes int
@@ -236,6 +243,67 @@ func (s *Service) List(ctx context.Context, user identity.User, chatID string, o
 		return Page{}, fmt.Errorf("commit list messages: %w", err)
 	}
 	return Page{Messages: messages, NextBeforeSeq: next}, nil
+}
+
+func (s *Service) Context(ctx context.Context, user identity.User, messageID string, limit int) (Window, error) {
+	if _, err := uuid.Parse(messageID); err != nil {
+		return Window{}, fmt.Errorf("%w: message_id must be a UUID", ErrInvalid)
+	}
+	if limit == 0 {
+		limit = 51
+	}
+	if limit < 3 || limit > s.maxPageSize {
+		return Window{}, fmt.Errorf("%w: limit must be between 3 and %d", ErrInvalid, s.maxPageSize)
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return Window{}, err
+	}
+	defer tx.Rollback(ctx)
+	var chatID string
+	var targetSeq int64
+	var threadRootID *string
+	err = tx.QueryRow(ctx, `SELECT chat_id,created_seq,thread_root_id FROM messages WHERE org_id=$1 AND id=$2`, user.OrgID, messageID).Scan(&chatID, &targetSeq, &threadRootID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Window{}, ErrNotFound
+	}
+	if err != nil {
+		return Window{}, fmt.Errorf("find target message: %w", err)
+	}
+	if _, _, err = requireMembership(ctx, tx, user, chatID); err != nil {
+		return Window{}, err
+	}
+	rows, err := tx.Query(ctx, `SELECT id,chat_id,actor_id,client_msg_id,type,body,body_format,reply_to_id,thread_root_id,version,created_seq,created_at,edited_at,deleted_at,forwarded_from,mentioned_actor_ids FROM messages WHERE org_id=$1 AND chat_id=$2 AND ((thread_root_id IS NULL AND $3::uuid IS NULL) OR thread_root_id=$3 OR id=$4) ORDER BY abs(created_seq-$5) LIMIT $6`, user.OrgID, chatID, threadRootID, messageID, targetSeq, limit)
+	if err != nil {
+		return Window{}, fmt.Errorf("load message context: %w", err)
+	}
+	defer rows.Close()
+	result := Window{Messages: make([]Message, 0, limit), TargetID: messageID}
+	for rows.Next() {
+		var item Message
+		if err := scanMessage(rows, &item); err != nil {
+			return Window{}, err
+		}
+		result.Messages = append(result.Messages, item)
+	}
+	if err := rows.Err(); err != nil {
+		return Window{}, err
+	}
+	sort.Slice(result.Messages, func(i, j int) bool { return result.Messages[i].CreatedSeq < result.Messages[j].CreatedSeq })
+	if len(result.Messages) > 0 {
+		firstSeq := result.Messages[0].CreatedSeq
+		lastSeq := result.Messages[len(result.Messages)-1].CreatedSeq
+		if err := tx.QueryRow(ctx, `SELECT
+			EXISTS(SELECT 1 FROM messages WHERE org_id=$1 AND chat_id=$2 AND created_seq<$5 AND ((thread_root_id IS NULL AND $3::uuid IS NULL) OR thread_root_id=$3 OR id=$4)),
+			EXISTS(SELECT 1 FROM messages WHERE org_id=$1 AND chat_id=$2 AND created_seq>$6 AND ((thread_root_id IS NULL AND $3::uuid IS NULL) OR thread_root_id=$3 OR id=$4))`,
+			user.OrgID, chatID, threadRootID, messageID, firstSeq, lastSeq).Scan(&result.HasEarlier, &result.HasLater); err != nil {
+			return Window{}, fmt.Errorf("read message context bounds: %w", err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Window{}, err
+	}
+	return result, nil
 }
 
 func (s *Service) Update(ctx context.Context, user identity.User, messageID string, input UpdateInput) (Message, error) {
@@ -554,6 +622,11 @@ func insertEventData(ctx context.Context, tx pgx.Tx, user identity.User, chatID,
 		INSERT INTO events (org_id, seq, type, actor_id, chat_id, subject_id, audience_actor_id, data)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)`, user.OrgID, seq, eventType, user.ActorID, chatID, subjectID, audienceActorID, string(payload)); err != nil {
 		return fmt.Errorf("insert durable event: %w", err)
+	}
+	if eventType == "message.created" {
+		if _, err := tx.Exec(ctx, `INSERT INTO notification_jobs (org_id, event_seq) VALUES ($1, $2) ON CONFLICT DO NOTHING`, user.OrgID, seq); err != nil {
+			return fmt.Errorf("enqueue notification job: %w", err)
+		}
 	}
 	return nil
 }

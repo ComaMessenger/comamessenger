@@ -8,6 +8,7 @@
 
 - React Native + Expo приложение для iOS/Android;
 - общий protocol/API package и переиспользуемая доменная логика;
+- общие semantic design tokens при отдельной React Native вёрстке;
 - login, invitation deep link, безопасное хранение сессии;
 - списки личных чатов, чатов, каналов и тредов;
 - виртуализированная лента, composer, reply, треды, реакции и действия;
@@ -43,6 +44,7 @@
 - [ ] Инициализировать Expo-проект и выбрать поддерживаемую стратегию managed/prebuild.
 - [ ] Настроить app variants, environment config, bundle IDs и signing без хранения секретов в репозитории.
 - [ ] Переиспользовать generated protocol client; выделить transport/session adapters для web/mobile.
+- [ ] Переиспользовать `packages/core` engine и `packages/tokens`, не переносить DOM/Web primitives в Native.
 - [ ] Хранить refresh/session material в SecureStore/Keychain/Keystore, не в AsyncStorage.
 - [ ] Настроить crash boundary, structured diagnostics и безопасный redaction.
 
@@ -110,6 +112,7 @@
 ## Риски и открытые вопросы
 
 - Подтвердить Expo managed/prebuild после проверки background uploads и нативных push требований.
+- В начале фазы пересмотреть решение об универсальном UI-пакете по фактическому пересечению Web/Native; default по ADR-0009 — общие tokens/engine и отдельные components.
 - Выбрать локальную БД и политику максимального cache size.
 - Определить минимальные версии iOS/Android.
 - Решить, допускается ли показывать message preview на lock screen по умолчанию.

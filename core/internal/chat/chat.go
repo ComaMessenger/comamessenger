@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -23,14 +24,40 @@ var (
 )
 
 type Chat struct {
-	ID         string     `json:"id"`
-	Kind       string     `json:"kind"`
-	Visibility string     `json:"visibility"`
-	Name       *string    `json:"name"`
-	Topic      string     `json:"topic"`
-	Role       string     `json:"role"`
-	CreatedAt  time.Time  `json:"created_at"`
-	ArchivedAt *time.Time `json:"archived_at,omitempty"`
+	ID              string     `json:"id"`
+	Kind            string     `json:"kind"`
+	Visibility      string     `json:"visibility"`
+	Name            *string    `json:"name"`
+	Topic           string     `json:"topic"`
+	Role            string     `json:"role"`
+	CreatedAt       time.Time  `json:"created_at"`
+	ArchivedAt      *time.Time `json:"archived_at,omitempty"`
+	DisplayName     string     `json:"display_name"`
+	AvatarSeed      string     `json:"avatar_seed"`
+	DirectPeer      *Actor     `json:"direct_peer,omitempty"`
+	LastMessage     *Preview   `json:"last_message,omitempty"`
+	LastActivitySeq int64      `json:"last_activity_seq"`
+	LastMessageAt   *time.Time `json:"last_message_at,omitempty"`
+}
+
+type Actor struct {
+	ID          string `json:"actor_id"`
+	DisplayName string `json:"display_name"`
+	Handle      string `json:"handle"`
+	Type        string `json:"type"`
+}
+type ActorPage struct {
+	Actors      []Actor `json:"actors"`
+	NextAfterID *string `json:"next_after_id"`
+}
+type Preview struct {
+	ID               string    `json:"id"`
+	ActorID          string    `json:"actor_id"`
+	ActorDisplayName string    `json:"actor_display_name"`
+	Body             string    `json:"body"`
+	CreatedSeq       int64     `json:"created_seq"`
+	CreatedAt        time.Time `json:"created_at"`
+	Deleted          bool      `json:"deleted"`
 }
 
 type CreateInput struct {
@@ -73,15 +100,28 @@ type DirectoryChat struct {
 }
 
 type Service struct {
-	pool *pgxpool.Pool
+	pool        *pgxpool.Pool
+	afterCommit func(string, int64)
 }
 
-func NewService(pool *pgxpool.Pool) *Service { return &Service{pool: pool} }
+func NewService(pool *pgxpool.Pool, callbacks ...func(string, int64)) *Service {
+	var callback func(string, int64)
+	if len(callbacks) > 0 {
+		callback = callbacks[0]
+	}
+	return &Service{pool: pool, afterCommit: callback}
+}
 
 func (s *Service) List(ctx context.Context, user identity.User) ([]Chat, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT c.id, c.kind, c.visibility, c.name, c.topic, cm.role, c.created_at, c.archived_at
+		SELECT c.id, c.kind, c.visibility, c.name, c.topic, cm.role, c.created_at, c.archived_at,
+			COALESCE(c.name, peer.display_name, 'Direct chat'), COALESCE(peer.id::text, c.id::text),
+			peer.id, peer.display_name, peer.handle::text, peer.type,
+			last.id, last.actor_id, last.actor_name, left(last.body, 280), last.created_seq, last.created_at, last.deleted,
+			COALESCE(last.created_seq, 0), c.last_message_at
 		FROM chats c JOIN chat_members cm ON cm.chat_id = c.id
+		LEFT JOIN LATERAL (SELECT a.id,a.display_name,a.handle,a.type FROM chat_members other JOIN actors a ON a.id=other.actor_id WHERE other.chat_id=c.id AND other.actor_id<>$1 LIMIT 1) peer ON c.kind='direct'
+		LEFT JOIN LATERAL (SELECT m.id,m.actor_id,a.display_name actor_name,m.body,m.created_seq,m.created_at,m.deleted_at IS NOT NULL deleted FROM messages m JOIN actors a ON a.id=m.actor_id WHERE m.chat_id=c.id ORDER BY m.created_seq DESC LIMIT 1) last ON true
 		WHERE cm.actor_id = $1 AND c.org_id = $2 AND c.archived_at IS NULL
 		ORDER BY COALESCE(c.last_message_at, c.created_at) DESC`, user.ActorID, user.OrgID)
 	if err != nil {
@@ -90,9 +130,8 @@ func (s *Service) List(ctx context.Context, user identity.User) ([]Chat, error) 
 	defer rows.Close()
 	chats := make([]Chat, 0)
 	for rows.Next() {
-		var chat Chat
-		if err := rows.Scan(&chat.ID, &chat.Kind, &chat.Visibility, &chat.Name, &chat.Topic,
-			&chat.Role, &chat.CreatedAt, &chat.ArchivedAt); err != nil {
+		chat, err := scanChat(rows)
+		if err != nil {
 			return nil, fmt.Errorf("scan chat: %w", err)
 		}
 		chats = append(chats, chat)
@@ -101,20 +140,75 @@ func (s *Service) List(ctx context.Context, user identity.User) ([]Chat, error) 
 }
 
 func (s *Service) Get(ctx context.Context, user identity.User, chatID string) (Chat, error) {
-	var chat Chat
-	err := s.pool.QueryRow(ctx, `
-		SELECT c.id, c.kind, c.visibility, c.name, c.topic, cm.role, c.created_at, c.archived_at
-		FROM chats c JOIN chat_members cm ON cm.chat_id = c.id AND cm.actor_id = $2
-		WHERE c.id = $1 AND c.org_id = $3`, chatID, user.ActorID, user.OrgID).Scan(
-		&chat.ID, &chat.Kind, &chat.Visibility, &chat.Name, &chat.Topic,
-		&chat.Role, &chat.CreatedAt, &chat.ArchivedAt)
+	row := s.pool.QueryRow(ctx, `
+		SELECT c.id, c.kind, c.visibility, c.name, c.topic, cm.role, c.created_at, c.archived_at,
+			COALESCE(c.name, peer.display_name, 'Direct chat'), COALESCE(peer.id::text, c.id::text),
+			peer.id, peer.display_name, peer.handle::text, peer.type,
+			last.id, last.actor_id, last.actor_name, left(last.body, 280), last.created_seq, last.created_at, last.deleted,
+			COALESCE(last.created_seq, 0), c.last_message_at
+		FROM chats c JOIN chat_members cm ON cm.chat_id = c.id
+		LEFT JOIN LATERAL (SELECT a.id,a.display_name,a.handle,a.type FROM chat_members other JOIN actors a ON a.id=other.actor_id WHERE other.chat_id=c.id AND other.actor_id<>$1 LIMIT 1) peer ON c.kind='direct'
+		LEFT JOIN LATERAL (SELECT m.id,m.actor_id,a.display_name actor_name,m.body,m.created_seq,m.created_at,m.deleted_at IS NOT NULL deleted FROM messages m JOIN actors a ON a.id=m.actor_id WHERE m.chat_id=c.id ORDER BY m.created_seq DESC LIMIT 1) last ON true
+		WHERE cm.actor_id = $1 AND c.org_id = $2 AND c.id = $3 AND c.archived_at IS NULL`, user.ActorID, user.OrgID, chatID)
+	result, err := scanChat(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Chat{}, ErrNotFound
 	}
 	if err != nil {
 		return Chat{}, fmt.Errorf("get chat: %w", err)
 	}
+	return result, nil
+}
+
+type rowScanner interface{ Scan(...any) error }
+
+func scanChat(row rowScanner) (Chat, error) {
+	var chat Chat
+	var peerID, peerName, peerHandle, peerType, lastID, lastActorID, lastActorName, lastBody *string
+	var lastSeq *int64
+	var lastAt *time.Time
+	var deleted *bool
+	if err := row.Scan(&chat.ID, &chat.Kind, &chat.Visibility, &chat.Name, &chat.Topic,
+		&chat.Role, &chat.CreatedAt, &chat.ArchivedAt, &chat.DisplayName, &chat.AvatarSeed,
+		&peerID, &peerName, &peerHandle, &peerType, &lastID, &lastActorID, &lastActorName, &lastBody, &lastSeq, &lastAt, &deleted, &chat.LastActivitySeq, &chat.LastMessageAt); err != nil {
+		return Chat{}, err
+	}
+	if peerID != nil {
+		chat.DirectPeer = &Actor{ID: *peerID, DisplayName: *peerName, Handle: *peerHandle, Type: *peerType}
+	}
+	if lastID != nil {
+		chat.LastMessage = &Preview{ID: *lastID, ActorID: *lastActorID, ActorDisplayName: *lastActorName, Body: *lastBody, CreatedSeq: *lastSeq, CreatedAt: *lastAt, Deleted: *deleted}
+	}
 	return chat, nil
+}
+
+func (s *Service) ListActors(ctx context.Context, user identity.User, query, afterID string, limit int) (ActorPage, error) {
+	query = strings.TrimSpace(query)
+	if limit == 0 {
+		limit = 30
+	}
+	if limit < 1 || limit > 100 {
+		return ActorPage{}, fmt.Errorf("%w: limit must be between 1 and 100", ErrInvalid)
+	}
+	rows, err := s.pool.Query(ctx, `SELECT id,display_name,handle::text,type FROM actors WHERE org_id=$1 AND status='active' AND deleted_at IS NULL AND ($2='' OR display_name ILIKE '%'||$2||'%' OR handle::text ILIKE '%'||$2||'%') AND (NULLIF($3,'') IS NULL OR id>NULLIF($3,'')::uuid) ORDER BY id LIMIT $4`, user.OrgID, query, afterID, limit+1)
+	if err != nil {
+		return ActorPage{}, fmt.Errorf("list actors: %w", err)
+	}
+	defer rows.Close()
+	result := ActorPage{Actors: make([]Actor, 0, limit)}
+	for rows.Next() {
+		var actor Actor
+		if err := rows.Scan(&actor.ID, &actor.DisplayName, &actor.Handle, &actor.Type); err != nil {
+			return ActorPage{}, err
+		}
+		result.Actors = append(result.Actors, actor)
+	}
+	if len(result.Actors) > limit {
+		result.Actors = result.Actors[:limit]
+		next := result.Actors[len(result.Actors)-1].ID
+		result.NextAfterID = &next
+	}
+	return result, rows.Err()
 }
 
 func (s *Service) Discover(ctx context.Context, user identity.User) ([]DirectoryChat, error) {
@@ -174,6 +268,9 @@ func (s *Service) Create(ctx context.Context, user identity.User, input CreateIn
 		return Chat{}, err
 	}
 	defer tx.Rollback(ctx)
+	if err := lockOrganization(ctx, tx, user.OrgID); err != nil {
+		return Chat{}, err
+	}
 	_, err = tx.Exec(ctx, `
 		INSERT INTO chats (id, org_id, kind, visibility, name, topic, created_by)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)`, chatID, user.OrgID, input.Kind, input.Visibility, input.Name, input.Topic, user.ActorID)
@@ -206,9 +303,14 @@ func (s *Service) Create(ctx context.Context, user identity.User, input CreateIn
 	if err != nil {
 		return Chat{}, fmt.Errorf("audit chat creation: %w", err)
 	}
+	seq, err := appendDurableEvent(ctx, tx, user, chatID, "chat.created", nil, map[string]any{"chat_id": chatID, "kind": input.Kind})
+	if err != nil {
+		return Chat{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return Chat{}, fmt.Errorf("commit chat creation: %w", err)
 	}
+	s.notify(user.OrgID, seq)
 	return s.Get(ctx, user, chatID)
 }
 
@@ -240,6 +342,9 @@ func (s *Service) Update(ctx context.Context, user identity.User, chatID string,
 		return Chat{}, err
 	}
 	defer tx.Rollback(ctx)
+	if err := lockOrganization(ctx, tx, user.OrgID); err != nil {
+		return Chat{}, err
+	}
 	command, err := tx.Exec(ctx, `
 		UPDATE chats SET name = $4, topic = $5, visibility = $6
 		WHERE id = $1 AND org_id = $2 AND archived_at IS NULL
@@ -255,9 +360,14 @@ func (s *Service) Update(ctx context.Context, user identity.User, chatID string,
 	if err := audit(ctx, tx, auditID, user, "chat.update", "chat", chatID); err != nil {
 		return Chat{}, err
 	}
+	seq, err := appendDurableEvent(ctx, tx, user, chatID, "chat.updated", nil, map[string]any{"name": name, "topic": topic, "visibility": visibility})
+	if err != nil {
+		return Chat{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return Chat{}, fmt.Errorf("commit chat update: %w", err)
 	}
+	s.notify(user.OrgID, seq)
 	return s.Get(ctx, user, chatID)
 }
 
@@ -278,6 +388,9 @@ func (s *Service) Archive(ctx context.Context, user identity.User, chatID string
 		return err
 	}
 	defer tx.Rollback(ctx)
+	if err := lockOrganization(ctx, tx, user.OrgID); err != nil {
+		return err
+	}
 	command, err := tx.Exec(ctx, `
 		UPDATE chats SET archived_at = now()
 		WHERE id = $1 AND org_id = $2 AND archived_at IS NULL
@@ -293,9 +406,14 @@ func (s *Service) Archive(ctx context.Context, user identity.User, chatID string
 	if err := audit(ctx, tx, auditID, user, "chat.archive", "chat", chatID); err != nil {
 		return err
 	}
+	seq, err := appendDurableEvent(ctx, tx, user, chatID, "chat.archived", nil, map[string]any{"chat_id": chatID})
+	if err != nil {
+		return err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit chat archive: %w", err)
 	}
+	s.notify(user.OrgID, seq)
 	return nil
 }
 
@@ -309,6 +427,9 @@ func (s *Service) Join(ctx context.Context, user identity.User, chatID string) (
 		return Chat{}, err
 	}
 	defer tx.Rollback(ctx)
+	if err := lockOrganization(ctx, tx, user.OrgID); err != nil {
+		return Chat{}, err
+	}
 	command, err := tx.Exec(ctx, `
 		INSERT INTO chat_members (chat_id, actor_id, org_id, role)
 		SELECT id, $2, org_id, 'member' FROM chats
@@ -329,8 +450,18 @@ func (s *Service) Join(ctx context.Context, user identity.User, chatID string) (
 	} else if err := audit(ctx, tx, auditID, user, "chat.join", "chat", chatID); err != nil {
 		return Chat{}, err
 	}
+	seq := int64(0)
+	if command.RowsAffected() == 1 {
+		seq, err = appendDurableEvent(ctx, tx, user, chatID, "member.joined", nil, map[string]any{"actor_id": user.ActorID, "role": "member"})
+		if err != nil {
+			return Chat{}, err
+		}
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return Chat{}, fmt.Errorf("commit chat join: %w", err)
+	}
+	if seq > 0 {
+		s.notify(user.OrgID, seq)
 	}
 	return s.Get(ctx, user, chatID)
 }
@@ -384,6 +515,9 @@ func (s *Service) AddMember(ctx context.Context, user identity.User, chatID stri
 		return Member{}, err
 	}
 	defer tx.Rollback(ctx)
+	if err := lockOrganization(ctx, tx, user.OrgID); err != nil {
+		return Member{}, err
+	}
 	command, err := tx.Exec(ctx, `
 		INSERT INTO chat_members (chat_id, actor_id, org_id, role)
 		SELECT $1, target.id, target.org_id, $4 FROM actors target
@@ -404,9 +538,14 @@ func (s *Service) AddMember(ctx context.Context, user identity.User, chatID stri
 	if err := audit(ctx, tx, auditID, user, "chat.member.add", "actor", input.ActorID); err != nil {
 		return Member{}, err
 	}
+	seq, err := appendDurableEvent(ctx, tx, user, chatID, "member.joined", nil, map[string]any{"actor_id": input.ActorID, "role": input.Role})
+	if err != nil {
+		return Member{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return Member{}, fmt.Errorf("commit chat member addition: %w", err)
 	}
+	s.notify(user.OrgID, seq)
 	return s.member(ctx, chatID, input.ActorID)
 }
 
@@ -447,6 +586,9 @@ func (s *Service) UpdateMember(ctx context.Context, user identity.User, chatID, 
 		return Member{}, err
 	}
 	defer tx.Rollback(ctx)
+	if err := lockOrganization(ctx, tx, user.OrgID); err != nil {
+		return Member{}, err
+	}
 	command, err := tx.Exec(ctx, `
 		UPDATE chat_members target SET role = $3
 		WHERE target.chat_id = $1 AND target.actor_id = $2
@@ -466,9 +608,14 @@ func (s *Service) UpdateMember(ctx context.Context, user identity.User, chatID, 
 	if err := audit(ctx, tx, auditID, user, "chat.member.update", "actor", actorID); err != nil {
 		return Member{}, err
 	}
+	seq, err := appendDurableEvent(ctx, tx, user, chatID, "member.updated", nil, map[string]any{"actor_id": actorID, "role": input.Role})
+	if err != nil {
+		return Member{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return Member{}, fmt.Errorf("commit chat member update: %w", err)
 	}
+	s.notify(user.OrgID, seq)
 	return s.member(ctx, chatID, actorID)
 }
 
@@ -505,6 +652,9 @@ func (s *Service) RemoveMember(ctx context.Context, user identity.User, chatID, 
 		return err
 	}
 	defer tx.Rollback(ctx)
+	if err := lockOrganization(ctx, tx, user.OrgID); err != nil {
+		return err
+	}
 	command, err := tx.Exec(ctx, `
 		DELETE FROM chat_members target
 		WHERE target.chat_id = $1 AND target.actor_id = $2
@@ -523,9 +673,18 @@ func (s *Service) RemoveMember(ctx context.Context, user identity.User, chatID, 
 	if err := audit(ctx, tx, auditID, user, "chat.member.remove", "actor", actorID); err != nil {
 		return err
 	}
+	seq, err := appendDurableEvent(ctx, tx, user, chatID, "member.removed", nil, map[string]any{"actor_id": actorID})
+	if err != nil {
+		return err
+	}
+	seq, err = appendDurableEvent(ctx, tx, user, "", "member.removed", &actorID, map[string]any{"chat_id": chatID, "actor_id": actorID})
+	if err != nil {
+		return err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit chat member removal: %w", err)
 	}
+	s.notify(user.OrgID, seq)
 	return nil
 }
 
@@ -545,6 +704,9 @@ func (s *Service) createDirect(ctx context.Context, user identity.User, input Cr
 		return Chat{}, err
 	}
 	defer tx.Rollback(ctx)
+	if err := lockOrganization(ctx, tx, user.OrgID); err != nil {
+		return Chat{}, err
+	}
 	var actualID string
 	var created bool
 	err = tx.QueryRow(ctx, `
@@ -576,10 +738,60 @@ func (s *Service) createDirect(ctx context.Context, user identity.User, input Cr
 			return Chat{}, fmt.Errorf("audit direct creation: %w", err)
 		}
 	}
+	seq := int64(0)
+	if created {
+		seq, err = appendDurableEvent(ctx, tx, user, actualID, "chat.created", nil, map[string]any{"chat_id": actualID, "kind": "direct"})
+		if err != nil {
+			return Chat{}, err
+		}
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return Chat{}, fmt.Errorf("commit direct chat: %w", err)
 	}
+	if seq > 0 {
+		s.notify(user.OrgID, seq)
+	}
 	return s.Get(ctx, user, actualID)
+}
+
+func lockOrganization(ctx context.Context, tx pgx.Tx, orgID string) error {
+	var seq int64
+	if err := tx.QueryRow(ctx, `UPDATE organizations SET event_seq=event_seq WHERE id=$1 RETURNING event_seq`, orgID).Scan(&seq); err != nil {
+		return fmt.Errorf("lock organization: %w", err)
+	}
+	return nil
+}
+func appendDurableEvent(ctx context.Context, tx pgx.Tx, user identity.User, chatID, eventType string, audience *string, data any) (int64, error) {
+	encoded, err := json.Marshal(data)
+	if err != nil {
+		return 0, err
+	}
+	var seq int64
+	if err := tx.QueryRow(ctx, `UPDATE organizations SET event_seq=event_seq+1 WHERE id=$1 RETURNING event_seq`, user.OrgID).Scan(&seq); err != nil {
+		return 0, fmt.Errorf("advance sequence: %w", err)
+	}
+	var chat *string
+	if chatID != "" {
+		chat = &chatID
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO events(org_id,seq,type,actor_id,chat_id,subject_id,audience_actor_id,data) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, user.OrgID, seq, eventType, user.ActorID, chat, func() string {
+		if audience != nil {
+			return *audience
+		}
+		if chat != nil {
+			return *chat
+		}
+		return user.ActorID
+	}(), audience, encoded)
+	if err != nil {
+		return 0, fmt.Errorf("append chat event: %w", err)
+	}
+	return seq, nil
+}
+func (s *Service) notify(orgID string, seq int64) {
+	if s.afterCommit != nil {
+		s.afterCommit(orgID, seq)
+	}
 }
 
 func twoIDs() (string, string, error) {

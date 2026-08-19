@@ -75,6 +75,13 @@ type RedisConfig struct {
 	OperationTimeout    time.Duration
 }
 
+type PushConfig struct {
+	VAPIDPublicKey  string
+	VAPIDPrivateKey string
+	VAPIDSubject    string
+	PollInterval    time.Duration
+}
+
 type Config struct {
 	AppEnv            string
 	HTTPAddr          string
@@ -88,6 +95,7 @@ type Config struct {
 	Realtime          RealtimeConfig
 	EventLog          EventLogConfig
 	Redis             RedisConfig
+	Push              PushConfig
 }
 
 func FromEnvironment() (Config, error) {
@@ -143,6 +151,10 @@ func FromEnvironment() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	pushInterval, err := durationValueOrDefault("PUSH_POLL_INTERVAL", time.Second)
+	if err != nil {
+		return Config{}, err
+	}
 	trustedProxyCIDRs, err := prefixListValue("TRUSTED_PROXY_CIDRS", "127.0.0.1/32,::1/128")
 	if err != nil {
 		return Config{}, err
@@ -179,6 +191,7 @@ func FromEnvironment() (Config, error) {
 		Realtime:  realtime,
 		EventLog:  eventLog,
 		Redis:     redisConfig,
+		Push:      PushConfig{VAPIDPublicKey: strings.TrimSpace(os.Getenv("VAPID_PUBLIC_KEY")), VAPIDPrivateKey: strings.TrimSpace(os.Getenv("VAPID_PRIVATE_KEY")), VAPIDSubject: valueOrDefault("VAPID_SUBJECT", "mailto:admin@localhost"), PollInterval: pushInterval},
 	}
 
 	if cfg.HTTPAddr == "" {
@@ -210,6 +223,12 @@ func FromEnvironment() (Config, error) {
 	}
 	if cfg.BootstrapToken != "" && len(cfg.BootstrapToken) < 32 {
 		return Config{}, fmt.Errorf("BOOTSTRAP_TOKEN must be at least 32 bytes when set")
+	}
+	if (cfg.Push.VAPIDPublicKey == "") != (cfg.Push.VAPIDPrivateKey == "") {
+		return Config{}, fmt.Errorf("VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY must be set together")
+	}
+	if cfg.Push.PollInterval < 100*time.Millisecond || cfg.Push.PollInterval > time.Minute {
+		return Config{}, fmt.Errorf("PUSH_POLL_INTERVAL must be between 100ms and 1m")
 	}
 	if cfg.AppEnv != "development" {
 		if len(cfg.BootstrapToken) < 32 {

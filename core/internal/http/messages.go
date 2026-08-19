@@ -58,6 +58,24 @@ func (h *identityHandlers) createMessage(w standardhttp.ResponseWriter, r *stand
 	writeJSON(h.logger, w, status, result)
 }
 
+func (h *identityHandlers) messageContext(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	limit := 0
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil {
+			h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "validation_failed", "limit must be an integer.")
+			return
+		}
+		limit = value
+	}
+	result, err := h.messages.Context(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "messageID"), limit)
+	if err != nil {
+		h.messageError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
 func (h *identityHandlers) updateMessage(w standardhttp.ResponseWriter, r *standardhttp.Request) {
 	var input message.UpdateInput
 	if err := decodeJSON(w, r, &input); err != nil {

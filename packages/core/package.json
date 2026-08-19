@@ -8,13 +8,15 @@
   },
   "scripts": {
     "build": "tsc -b",
-    "lint": "tsc -b --pretty false",
-    "test": "tsc -b --pretty false"
+    "lint": "tsc -b --pretty false && node scripts/check-boundaries.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@comamessenger/protocol": "workspace:*"
+    "@comamessenger/protocol": "workspace:*",
+    "zustand": "5.0.8"
   },
   "devDependencies": {
-    "typescript": "5.9.2"
+    "typescript": "5.9.2",
+    "vitest": "3.2.4"
   }
 }

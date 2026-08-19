@@ -256,7 +256,9 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["sessions"],
+                  "required": [
+                    "sessions"
+                  ],
                   "properties": {
                     "sessions": {
                       "type": "array",
@@ -384,7 +386,9 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["chats"],
+                  "required": [
+                    "chats"
+                  ],
                   "properties": {
                     "chats": {
                       "type": "array",
@@ -429,6 +433,59 @@
           },
           "403": {
             "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/actors": {
+      "get": {
+        "operationId": "listActors",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 120
+            }
+          },
+          {
+            "name": "after_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 30
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Active organization actors ordered by id.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActorPage"
+                }
+              }
+            }
           },
           "422": {
             "$ref": "#/components/responses/Error"
@@ -561,7 +618,9 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["chats"],
+                  "required": [
+                    "chats"
+                  ],
                   "properties": {
                     "chats": {
                       "type": "array",
@@ -627,7 +686,9 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["members"],
+                  "required": [
+                    "members"
+                  ],
                   "properties": {
                     "members": {
                       "type": "array",
@@ -1006,6 +1067,49 @@
             "$ref": "#/components/responses/Error"
           },
           "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/messages/{message_id}/context": {
+      "get": {
+        "operationId": "getMessageContext",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MessageId"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 3,
+              "maximum": 200,
+              "default": 51
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded ordered window around a visible target message.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageWindow"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
             "$ref": "#/components/responses/Error"
           }
         }
@@ -1642,6 +1746,215 @@
           }
         }
       }
+    },
+    "/api/v1/push/config": {
+      "get": {
+        "operationId": "getPushConfig",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Push capability and VAPID public key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushConfig"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/push/subscriptions": {
+      "put": {
+        "operationId": "putPushSubscription",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushSubscriptionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Registered browser subscription.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushSubscription"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/push/subscriptions/{subscription_id}": {
+      "delete": {
+        "operationId": "deletePushSubscription",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "subscription_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Subscription removed."
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/preferences": {
+      "get": {
+        "operationId": "getPreferences",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Client preferences.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPreferences"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updatePreferences",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserPreferences"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated preferences.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPreferences"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/chats/{chat_id}/notification-preferences": {
+      "get": {
+        "operationId": "getChatNotificationPreferences",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ChatId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current chat notification policy.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatNotificationPreferences"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateChatNotificationPreferences",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ChatId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatNotificationPreferences"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated chat notification policy.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatNotificationPreferences"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1707,7 +2020,9 @@
       "Health": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["status"],
+        "required": [
+          "status"
+        ],
         "properties": {
           "status": {
             "type": "string"
@@ -1717,7 +2032,11 @@
       "Error": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["code", "message", "request_id"],
+        "required": [
+          "code",
+          "message",
+          "request_id"
+        ],
         "properties": {
           "code": {
             "$ref": "#/components/schemas/ErrorCode"
@@ -1785,7 +2104,14 @@
       "RealtimeCloseCodeV1": {
         "type": "integer",
         "format": "int32",
-        "enum": [1000, 1008, 1012, 4001, 4008, 4009],
+        "enum": [
+          1000,
+          1008,
+          1012,
+          4001,
+          4008,
+          4009
+        ],
         "x-enum-varnames": [
           "NormalClosure",
           "PolicyViolation",
@@ -1798,11 +2124,18 @@
       "RealtimeAuthFrameV1": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["op", "request_id", "access_token", "last_seq"],
+        "required": [
+          "op",
+          "request_id",
+          "access_token",
+          "last_seq"
+        ],
         "properties": {
           "op": {
             "type": "string",
-            "enum": ["auth"]
+            "enum": [
+              "auth"
+            ]
           },
           "request_id": {
             "type": "string",
@@ -1824,11 +2157,16 @@
       "RealtimeAckFrameV1": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["op", "seq"],
+        "required": [
+          "op",
+          "seq"
+        ],
         "properties": {
           "op": {
             "type": "string",
-            "enum": ["ack"]
+            "enum": [
+              "ack"
+            ]
           },
           "seq": {
             "type": "integer",
@@ -1841,18 +2179,30 @@
       "RealtimeSubscribeActiveFrameV1": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["op", "chat_id", "thread_root_id"],
+        "required": [
+          "op",
+          "chat_id",
+          "thread_root_id"
+        ],
         "properties": {
           "op": {
             "type": "string",
-            "enum": ["subscribe_active"]
+            "enum": [
+              "subscribe_active"
+            ]
           },
           "chat_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid"
           },
           "thread_root_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid"
           }
         }
@@ -1860,18 +2210,28 @@
       "RealtimeTypingFrameV1": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["op", "chat_id", "thread_root_id", "active"],
+        "required": [
+          "op",
+          "chat_id",
+          "thread_root_id",
+          "active"
+        ],
         "properties": {
           "op": {
             "type": "string",
-            "enum": ["typing"]
+            "enum": [
+              "typing"
+            ]
           },
           "chat_id": {
             "type": "string",
             "format": "uuid"
           },
           "thread_root_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid"
           },
           "active": {
@@ -1882,15 +2242,23 @@
       "RealtimeSetPresenceFrameV1": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["op", "state"],
+        "required": [
+          "op",
+          "state"
+        ],
         "properties": {
           "op": {
             "type": "string",
-            "enum": ["presence"]
+            "enum": [
+              "presence"
+            ]
           },
           "state": {
             "type": "string",
-            "enum": ["active", "away"]
+            "enum": [
+              "active",
+              "away"
+            ]
           }
         }
       },
@@ -1911,7 +2279,9 @@
         "properties": {
           "op": {
             "type": "string",
-            "enum": ["hello"]
+            "enum": [
+              "hello"
+            ]
           },
           "request_id": {
             "type": "string",
@@ -1966,7 +2336,9 @@
         "properties": {
           "op": {
             "type": "string",
-            "enum": ["event"]
+            "enum": [
+              "event"
+            ]
           },
           "seq": {
             "type": "integer",
@@ -1987,7 +2359,10 @@
             "format": "uuid"
           },
           "chat_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid"
           },
           "subject_id": {
@@ -2003,11 +2378,18 @@
       "RealtimeResyncRequiredFrameV1": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["op", "current_seq", "min_retained_seq", "reason"],
+        "required": [
+          "op",
+          "current_seq",
+          "min_retained_seq",
+          "reason"
+        ],
         "properties": {
           "op": {
             "type": "string",
-            "enum": ["resync_required"]
+            "enum": [
+              "resync_required"
+            ]
           },
           "current_seq": {
             "type": "integer",
@@ -2023,7 +2405,9 @@
           },
           "reason": {
             "type": "string",
-            "enum": ["event_history_expired"]
+            "enum": [
+              "event_history_expired"
+            ]
           }
         }
       },
@@ -2041,7 +2425,9 @@
         "properties": {
           "op": {
             "type": "string",
-            "enum": ["typing"]
+            "enum": [
+              "typing"
+            ]
           },
           "actor_id": {
             "type": "string",
@@ -2052,7 +2438,10 @@
             "format": "uuid"
           },
           "thread_root_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid"
           },
           "active": {
@@ -2067,11 +2456,18 @@
       "RealtimePresenceEventFrameV1": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["op", "actor_id", "state", "expires_at"],
+        "required": [
+          "op",
+          "actor_id",
+          "state",
+          "expires_at"
+        ],
         "properties": {
           "op": {
             "type": "string",
-            "enum": ["presence"]
+            "enum": [
+              "presence"
+            ]
           },
           "actor_id": {
             "type": "string",
@@ -2079,7 +2475,11 @@
           },
           "state": {
             "type": "string",
-            "enum": ["online", "away", "offline"]
+            "enum": [
+              "online",
+              "away",
+              "offline"
+            ]
           },
           "expires_at": {
             "type": "string",
@@ -2090,14 +2490,23 @@
       "RealtimeProtocolErrorFrameV1": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["op", "code", "message"],
+        "required": [
+          "op",
+          "code",
+          "message"
+        ],
         "properties": {
           "op": {
             "type": "string",
-            "enum": ["error"]
+            "enum": [
+              "error"
+            ]
           },
           "request_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid"
           },
           "code": {
@@ -2117,7 +2526,9 @@
       },
       "BootstrapStatus": {
         "type": "object",
-        "required": ["bootstrapped"],
+        "required": [
+          "bootstrapped"
+        ],
         "properties": {
           "bootstrapped": {
             "type": "boolean"
@@ -2172,7 +2583,10 @@
       "LoginRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["email", "password"],
+        "required": [
+          "email",
+          "password"
+        ],
         "properties": {
           "email": {
             "type": "string",
@@ -2224,7 +2638,11 @@
           },
           "role": {
             "type": "string",
-            "enum": ["owner", "admin", "member"]
+            "enum": [
+              "owner",
+              "admin",
+              "member"
+            ]
           },
           "email": {
             "type": "string",
@@ -2241,7 +2659,10 @@
           },
           "status": {
             "type": "string",
-            "enum": ["active", "deactivated"]
+            "enum": [
+              "active",
+              "deactivated"
+            ]
           },
           "created_at": {
             "type": "string",
@@ -2251,7 +2672,11 @@
       },
       "TokenResponse": {
         "type": "object",
-        "required": ["access_token", "access_expires_at", "user"],
+        "required": [
+          "access_token",
+          "access_expires_at",
+          "user"
+        ],
         "properties": {
           "access_token": {
             "type": "string"
@@ -2299,7 +2724,10 @@
             "format": "date-time"
           },
           "revoked_at": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "current": {
@@ -2310,7 +2738,9 @@
       "CreateInvitationRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["email"],
+        "required": [
+          "email"
+        ],
         "properties": {
           "email": {
             "type": "string",
@@ -2318,14 +2748,22 @@
           },
           "role": {
             "type": "string",
-            "enum": ["admin", "member"],
+            "enum": [
+              "admin",
+              "member"
+            ],
             "default": "member"
           }
         }
       },
       "Invitation": {
         "type": "object",
-        "required": ["id", "email", "role", "expires_at"],
+        "required": [
+          "id",
+          "email",
+          "role",
+          "expires_at"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -2337,7 +2775,10 @@
           },
           "role": {
             "type": "string",
-            "enum": ["admin", "member"]
+            "enum": [
+              "admin",
+              "member"
+            ]
           },
           "expires_at": {
             "type": "string",
@@ -2352,7 +2793,11 @@
       "AcceptInvitationRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["display_name", "handle", "password"],
+        "required": [
+          "display_name",
+          "handle",
+          "password"
+        ],
         "properties": {
           "display_name": {
             "type": "string"
@@ -2373,15 +2818,24 @@
       "CreateChatRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["kind"],
+        "required": [
+          "kind"
+        ],
         "properties": {
           "kind": {
             "type": "string",
-            "enum": ["direct", "group", "channel"]
+            "enum": [
+              "direct",
+              "group",
+              "channel"
+            ]
           },
           "visibility": {
             "type": "string",
-            "enum": ["private", "public"],
+            "enum": [
+              "private",
+              "public"
+            ],
             "default": "private"
           },
           "name": {
@@ -2403,7 +2857,17 @@
       },
       "Chat": {
         "type": "object",
-        "required": ["id", "kind", "visibility", "topic", "role", "created_at"],
+        "required": [
+          "id",
+          "kind",
+          "visibility",
+          "topic",
+          "role",
+          "created_at",
+          "display_name",
+          "avatar_seed",
+          "last_activity_seq"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -2411,29 +2875,178 @@
           },
           "kind": {
             "type": "string",
-            "enum": ["direct", "group", "channel"]
+            "enum": [
+              "direct",
+              "group",
+              "channel"
+            ]
           },
           "visibility": {
             "type": "string",
-            "enum": ["private", "public"]
+            "enum": [
+              "private",
+              "public"
+            ]
           },
           "name": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "topic": {
             "type": "string"
           },
           "role": {
             "type": "string",
-            "enum": ["owner", "admin", "member"]
+            "enum": [
+              "owner",
+              "admin",
+              "member"
+            ]
           },
           "created_at": {
             "type": "string",
             "format": "date-time"
           },
           "archived_at": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "avatar_seed": {
+            "type": "string"
+          },
+          "direct_peer": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ActorSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_message": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MessagePreview"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_activity_seq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "last_message_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "ActorSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "actor_id",
+          "display_name",
+          "handle",
+          "type"
+        ],
+        "properties": {
+          "actor_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "handle": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "user",
+              "agent"
+            ]
+          }
+        }
+      },
+      "ActorPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "actors",
+          "next_after_id"
+        ],
+        "properties": {
+          "actors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActorSummary"
+            }
+          },
+          "next_after_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "MessagePreview": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "actor_id",
+          "actor_display_name",
+          "body",
+          "created_seq",
+          "created_at",
+          "deleted"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "actor_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "actor_display_name": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 280
+          },
+          "created_seq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deleted": {
+            "type": "boolean"
           }
         }
       },
@@ -2453,13 +3066,22 @@
           },
           "visibility": {
             "type": "string",
-            "enum": ["private", "public"]
+            "enum": [
+              "private",
+              "public"
+            ]
           }
         }
       },
       "DirectoryChat": {
         "type": "object",
-        "required": ["id", "kind", "name", "topic", "created_at"],
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "topic",
+          "created_at"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -2467,7 +3089,10 @@
           },
           "kind": {
             "type": "string",
-            "enum": ["group", "channel"]
+            "enum": [
+              "group",
+              "channel"
+            ]
           },
           "name": {
             "type": "string"
@@ -2483,7 +3108,13 @@
       },
       "ChatMember": {
         "type": "object",
-        "required": ["actor_id", "display_name", "handle", "role", "joined_at"],
+        "required": [
+          "actor_id",
+          "display_name",
+          "handle",
+          "role",
+          "joined_at"
+        ],
         "properties": {
           "actor_id": {
             "type": "string",
@@ -2497,7 +3128,11 @@
           },
           "role": {
             "type": "string",
-            "enum": ["owner", "admin", "member"]
+            "enum": [
+              "owner",
+              "admin",
+              "member"
+            ]
           },
           "joined_at": {
             "type": "string",
@@ -2508,7 +3143,9 @@
       "AddChatMemberRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["actor_id"],
+        "required": [
+          "actor_id"
+        ],
         "properties": {
           "actor_id": {
             "type": "string",
@@ -2516,7 +3153,11 @@
           },
           "role": {
             "type": "string",
-            "enum": ["owner", "admin", "member"],
+            "enum": [
+              "owner",
+              "admin",
+              "member"
+            ],
             "default": "member"
           }
         }
@@ -2524,11 +3165,17 @@
       "UpdateChatMemberRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["role"],
+        "required": [
+          "role"
+        ],
         "properties": {
           "role": {
             "type": "string",
-            "enum": ["owner", "admin", "member"]
+            "enum": [
+              "owner",
+              "admin",
+              "member"
+            ]
           }
         }
       },
@@ -2567,21 +3214,32 @@
           },
           "type": {
             "type": "string",
-            "enum": ["text"]
+            "enum": [
+              "text"
+            ]
           },
           "body": {
             "type": "string"
           },
           "body_format": {
             "type": "string",
-            "enum": ["plain", "markdown"]
+            "enum": [
+              "plain",
+              "markdown"
+            ]
           },
           "reply_to_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid"
           },
           "thread_root_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid"
           },
           "version": {
@@ -2598,11 +3256,17 @@
             "format": "date-time"
           },
           "edited_at": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "deleted_at": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           },
           "forwarded_from": {
@@ -2628,7 +3292,10 @@
       "MessagePage": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["messages", "next_before_seq"],
+        "required": [
+          "messages",
+          "next_before_seq"
+        ],
         "properties": {
           "messages": {
             "type": "array",
@@ -2637,16 +3304,50 @@
             }
           },
           "next_before_seq": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "minimum": 1
+          }
+        }
+      },
+      "MessageWindow": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "messages",
+          "target_id",
+          "has_earlier",
+          "has_later"
+        ],
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            }
+          },
+          "target_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "has_earlier": {
+            "type": "boolean"
+          },
+          "has_later": {
+            "type": "boolean"
           }
         }
       },
       "CreateMessageRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["client_msg_id", "body"],
+        "required": [
+          "client_msg_id",
+          "body"
+        ],
         "properties": {
           "client_msg_id": {
             "type": "string",
@@ -2658,7 +3359,10 @@
           },
           "body_format": {
             "type": "string",
-            "enum": ["plain", "markdown"],
+            "enum": [
+              "plain",
+              "markdown"
+            ],
             "default": "plain"
           },
           "reply_to_id": {
@@ -2682,7 +3386,10 @@
       "UpdateMessageRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["body", "expected_version"],
+        "required": [
+          "body",
+          "expected_version"
+        ],
         "properties": {
           "body": {
             "type": "string",
@@ -2690,7 +3397,10 @@
           },
           "body_format": {
             "type": "string",
-            "enum": ["plain", "markdown"],
+            "enum": [
+              "plain",
+              "markdown"
+            ],
             "default": "plain"
           },
           "expected_version": {
@@ -2710,7 +3420,11 @@
       "ForwardAttribution": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["author_name", "author_handle", "created_at"],
+        "required": [
+          "author_name",
+          "author_handle",
+          "created_at"
+        ],
         "properties": {
           "author_name": {
             "type": "string"
@@ -2727,7 +3441,10 @@
       "ForwardMessageRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["chat_id", "client_msg_id"],
+        "required": [
+          "chat_id",
+          "client_msg_id"
+        ],
         "properties": {
           "chat_id": {
             "type": "string",
@@ -2742,7 +3459,12 @@
       "Reaction": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["message_id", "actor_id", "emoji", "created_at"],
+        "required": [
+          "message_id",
+          "actor_id",
+          "emoji",
+          "created_at"
+        ],
         "properties": {
           "message_id": {
             "type": "string",
@@ -2766,7 +3488,9 @@
       "ReactionList": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["reactions"],
+        "required": [
+          "reactions"
+        ],
         "properties": {
           "reactions": {
             "type": "array",
@@ -2779,7 +3503,11 @@
       "MessagePin": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["message_id", "pinned_by", "pinned_at"],
+        "required": [
+          "message_id",
+          "pinned_by",
+          "pinned_at"
+        ],
         "properties": {
           "message_id": {
             "type": "string",
@@ -2798,7 +3526,9 @@
       "MessagePinList": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["pins"],
+        "required": [
+          "pins"
+        ],
         "properties": {
           "pins": {
             "type": "array",
@@ -2811,7 +3541,10 @@
       "ThreadFollow": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["thread_root_id", "followed_at"],
+        "required": [
+          "thread_root_id",
+          "followed_at"
+        ],
         "properties": {
           "thread_root_id": {
             "type": "string",
@@ -2826,7 +3559,12 @@
       "ThreadSummary": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["root", "reply_count", "last_activity_seq", "followed_at"],
+        "required": [
+          "root",
+          "reply_count",
+          "last_activity_seq",
+          "followed_at"
+        ],
         "properties": {
           "root": {
             "$ref": "#/components/schemas/Message"
@@ -2837,7 +3575,10 @@
             "minimum": 0
           },
           "last_reply_seq": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "minimum": 1
           },
@@ -2855,7 +3596,10 @@
       "ThreadPage": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["threads", "next_before_seq"],
+        "required": [
+          "threads",
+          "next_before_seq"
+        ],
         "properties": {
           "threads": {
             "type": "array",
@@ -2864,7 +3608,10 @@
             }
           },
           "next_before_seq": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "minimum": 1
           }
@@ -2873,7 +3620,9 @@
       "MarkReadRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["last_read_seq"],
+        "required": [
+          "last_read_seq"
+        ],
         "properties": {
           "last_read_seq": {
             "type": "integer",
@@ -2885,14 +3634,21 @@
       "ReadMarker": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["chat_id", "last_read_seq", "last_read_at"],
+        "required": [
+          "chat_id",
+          "last_read_seq",
+          "last_read_at"
+        ],
         "properties": {
           "chat_id": {
             "type": "string",
             "format": "uuid"
           },
           "thread_root_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid"
           },
           "last_read_seq": {
@@ -2909,14 +3665,23 @@
       "Draft": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["chat_id", "body", "body_format", "version", "updated_at"],
+        "required": [
+          "chat_id",
+          "body",
+          "body_format",
+          "version",
+          "updated_at"
+        ],
         "properties": {
           "chat_id": {
             "type": "string",
             "format": "uuid"
           },
           "thread_root_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid"
           },
           "body": {
@@ -2924,7 +3689,10 @@
           },
           "body_format": {
             "type": "string",
-            "enum": ["plain", "markdown"]
+            "enum": [
+              "plain",
+              "markdown"
+            ]
           },
           "version": {
             "type": "integer",
@@ -2939,10 +3707,16 @@
       "PutDraftRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["body", "expected_version"],
+        "required": [
+          "body",
+          "expected_version"
+        ],
         "properties": {
           "thread_root_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uuid"
           },
           "body": {
@@ -2950,7 +3724,10 @@
           },
           "body_format": {
             "type": "string",
-            "enum": ["plain", "markdown"],
+            "enum": [
+              "plain",
+              "markdown"
+            ],
             "default": "plain"
           },
           "expected_version": {
@@ -2962,7 +3739,9 @@
       "DraftList": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["drafts"],
+        "required": [
+          "drafts"
+        ],
         "properties": {
           "drafts": {
             "type": "array",
@@ -3042,7 +3821,10 @@
       "UnreadSnapshot": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["chats", "threads"],
+        "required": [
+          "chats",
+          "threads"
+        ],
         "properties": {
           "chats": {
             "type": "array",
@@ -3055,6 +3837,132 @@
             "items": {
               "$ref": "#/components/schemas/ThreadUnread"
             }
+          }
+        }
+      },
+      "PushConfig": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "enabled",
+          "public_key"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "public_key": {
+            "type": "string"
+          }
+        }
+      },
+      "PushSubscriptionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "endpoint",
+          "keys"
+        ],
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "format": "uri"
+          },
+          "keys": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "p256dh",
+              "auth"
+            ],
+            "properties": {
+              "p256dh": {
+                "type": "string"
+              },
+              "auth": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "PushSubscription": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "endpoint",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "endpoint": {
+            "type": "string",
+            "format": "uri"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "UserPreferences": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "theme",
+          "locale",
+          "push_enabled",
+          "push_preview"
+        ],
+        "properties": {
+          "theme": {
+            "type": "string",
+            "enum": [
+              "system",
+              "light",
+              "dark"
+            ]
+          },
+          "locale": {
+            "type": "string",
+            "enum": [
+              "ru",
+              "en"
+            ]
+          },
+          "push_enabled": {
+            "type": "boolean"
+          },
+          "push_preview": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ChatNotificationPreferences": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "notify_level"
+        ],
+        "properties": {
+          "notify_level": {
+            "type": "string",
+            "enum": [
+              "all",
+              "mentions",
+              "none"
+            ]
+          },
+          "muted_until": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
           }
         }
       }

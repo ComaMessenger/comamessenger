@@ -4,2267 +4,2623 @@
  */
 
 export interface paths {
-  "/healthz": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/healthz": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getHealth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations["getHealth"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/readyz": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/readyz": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getReadiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations["getReadiness"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/bootstrap/status": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/bootstrap/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getBootstrapStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations["getBootstrapStatus"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/bootstrap": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/bootstrap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["bootstrap"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post: operations["bootstrap"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/auth/login": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post: operations["login"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/auth/refresh": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/auth/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["refresh"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post: operations["refresh"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/auth/logout": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post: operations["logout"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/ws": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/ws": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Upgrade to the version 1 WebSocket protocol. Authentication is sent in the first WebSocket frame. */
+        get: operations["connectRealtime"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** @description Upgrade to the version 1 WebSocket protocol. Authentication is sent in the first WebSocket frame. */
-    get: operations["connectRealtime"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/me": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateMe"];
+        trace?: never;
     };
-    get: operations["getMe"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch: operations["updateMe"];
-    trace?: never;
-  };
-  "/api/v1/sessions": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations["listSessions"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/sessions/{session_id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["revokeSession"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post?: never;
-    delete: operations["revokeSession"];
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/invitations": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post: operations["createInvitation"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/invitations/{token}/accept": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/invitations/{token}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["acceptInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post: operations["acceptInvitation"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/chats": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/chats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listChats"];
+        put?: never;
+        post: operations["createChat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations["listChats"];
-    put?: never;
-    post: operations["createChat"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/chats/{chat_id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/actors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listActors"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations["getChat"];
-    put?: never;
-    post?: never;
-    delete: operations["archiveChat"];
-    options?: never;
-    head?: never;
-    patch: operations["updateChat"];
-    trace?: never;
-  };
-  "/api/v1/chats/discover": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/chats/{chat_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getChat"];
+        put?: never;
+        post?: never;
+        delete: operations["archiveChat"];
+        options?: never;
+        head?: never;
+        patch: operations["updateChat"];
+        trace?: never;
     };
-    get: operations["discoverChats"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/chats/{chat_id}/join": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/chats/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["discoverChats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post: operations["joinChat"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/chats/{chat_id}/members": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/chats/{chat_id}/join": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["joinChat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations["listChatMembers"];
-    put?: never;
-    post: operations["addChatMember"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/chats/{chat_id}/members/{actor_id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/chats/{chat_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listChatMembers"];
+        put?: never;
+        post: operations["addChatMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post?: never;
-    delete: operations["removeChatMember"];
-    options?: never;
-    head?: never;
-    patch: operations["updateChatMember"];
-    trace?: never;
-  };
-  "/api/v1/chats/{chat_id}/messages": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/chats/{chat_id}/members/{actor_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["removeChatMember"];
+        options?: never;
+        head?: never;
+        patch: operations["updateChatMember"];
+        trace?: never;
     };
-    get: operations["listMessages"];
-    put?: never;
-    post: operations["createMessage"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/chats/{chat_id}/pins": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/chats/{chat_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listMessages"];
+        put?: never;
+        post: operations["createMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations["listMessagePins"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/messages/{message_id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/chats/{chat_id}/pins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listMessagePins"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post?: never;
-    delete: operations["deleteMessage"];
-    options?: never;
-    head?: never;
-    patch: operations["updateMessage"];
-    trace?: never;
-  };
-  "/api/v1/messages/{message_id}/reactions/{emoji}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/messages/{message_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteMessage"];
+        options?: never;
+        head?: never;
+        patch: operations["updateMessage"];
+        trace?: never;
     };
-    get?: never;
-    put: operations["putReaction"];
-    post?: never;
-    delete: operations["deleteReaction"];
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/messages/{message_id}/reactions": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/messages/{message_id}/context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getMessageContext"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations["listReactions"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/messages/{message_id}/pin": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/messages/{message_id}/reactions/{emoji}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["putReaction"];
+        post?: never;
+        delete: operations["deleteReaction"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put: operations["putMessagePin"];
-    post?: never;
-    delete: operations["deleteMessagePin"];
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/messages/{message_id}/forward": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/messages/{message_id}/reactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listReactions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post: operations["forwardMessage"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/messages/{message_id}/thread/follow": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/messages/{message_id}/pin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["putMessagePin"];
+        post?: never;
+        delete: operations["deleteMessagePin"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put: operations["followThread"];
-    post?: never;
-    delete: operations["unfollowThread"];
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/messages/{message_id}/thread": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/messages/{message_id}/forward": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["forwardMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations["listThreadMessages"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/threads": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/messages/{message_id}/thread/follow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["followThread"];
+        post?: never;
+        delete: operations["unfollowThread"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations["listFollowedThreads"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/unread": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/messages/{message_id}/thread": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listThreadMessages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations["getUnreadSnapshot"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/chats/{chat_id}/read": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listFollowedThreads"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post: operations["markChatRead"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/messages/{message_id}/thread/read": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/unread": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getUnreadSnapshot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post: operations["markThreadRead"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/drafts": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/chats/{chat_id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["markChatRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get: operations["listDrafts"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/drafts/{chat_id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/messages/{message_id}/thread/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["markThreadRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put: operations["putDraft"];
-    post?: never;
-    delete: operations["deleteDraft"];
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
+    "/api/v1/drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listDrafts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/drafts/{chat_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["putDraft"];
+        post?: never;
+        delete: operations["deleteDraft"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/push/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getPushConfig"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/push/subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["putPushSubscription"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/push/subscriptions/{subscription_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deletePushSubscription"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getPreferences"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updatePreferences"];
+        trace?: never;
+    };
+    "/api/v1/chats/{chat_id}/notification-preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getChatNotificationPreferences"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateChatNotificationPreferences"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
-  schemas: {
-    Health: {
-      status: string;
+    schemas: {
+        Health: {
+            status: string;
+        };
+        Error: {
+            code: components["schemas"]["ErrorCode"];
+            message: string;
+            request_id: string;
+            details?: {
+                [key: string]: unknown;
+            };
+        };
+        /** @enum {string} */
+        ErrorCode: "already_bootstrapped" | "chat_conflict" | "chat_not_found" | "forbidden" | "idempotency_conflict" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "rate_limited" | "service_not_ready" | "session_not_found" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict";
+        /** @enum {string} */
+        DurableEventTypeV1: "message.created" | "message.updated" | "message.deleted" | "message.pinned" | "message.unpinned" | "reaction.added" | "reaction.removed" | "thread.followed" | "thread.unfollowed" | "read.marked" | "draft.updated" | "draft.deleted" | "chat.created" | "chat.updated" | "chat.archived" | "member.joined" | "member.updated" | "member.removed";
+        /**
+         * Format: int32
+         * @enum {integer}
+         */
+        RealtimeCloseCodeV1: 1000 | 1008 | 1012 | 4001 | 4008 | 4009;
+        RealtimeAuthFrameV1: {
+            /** @enum {string} */
+            op: "auth";
+            /** Format: uuid */
+            request_id: string;
+            access_token: string;
+            /** Format: int64 */
+            last_seq: number;
+        };
+        RealtimeAckFrameV1: {
+            /** @enum {string} */
+            op: "ack";
+            /** Format: int64 */
+            seq: number;
+        };
+        RealtimeSubscribeActiveFrameV1: {
+            /** @enum {string} */
+            op: "subscribe_active";
+            /** Format: uuid */
+            chat_id: string | null;
+            /** Format: uuid */
+            thread_root_id: string | null;
+        };
+        RealtimeTypingFrameV1: {
+            /** @enum {string} */
+            op: "typing";
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: uuid */
+            thread_root_id: string | null;
+            active: boolean;
+        };
+        RealtimeSetPresenceFrameV1: {
+            /** @enum {string} */
+            op: "presence";
+            /** @enum {string} */
+            state: "active" | "away";
+        };
+        RealtimeHelloFrameV1: {
+            /** @enum {string} */
+            op: "hello";
+            /** Format: uuid */
+            request_id: string;
+            /** Format: uuid */
+            connection_id: string;
+            /** Format: int64 */
+            current_seq: number;
+            /** Format: int64 */
+            min_retained_seq: number;
+            heartbeat_interval_ms: number;
+            ack_interval_ms: number;
+            ack_batch_size: number;
+            max_unacked_events: number;
+        };
+        RealtimeDurableEventFrameV1: {
+            /** @enum {string} */
+            op: "event";
+            /** Format: int64 */
+            seq: number;
+            type: string;
+            /** Format: date-time */
+            occurred_at: string;
+            /** Format: uuid */
+            actor_id: string;
+            /** Format: uuid */
+            chat_id?: string | null;
+            /** Format: uuid */
+            subject_id: string;
+            data: {
+                [key: string]: unknown;
+            };
+        };
+        RealtimeResyncRequiredFrameV1: {
+            /** @enum {string} */
+            op: "resync_required";
+            /** Format: int64 */
+            current_seq: number;
+            /** Format: int64 */
+            min_retained_seq: number;
+            /** @enum {string} */
+            reason: "event_history_expired";
+        };
+        RealtimeTypingEventFrameV1: {
+            /** @enum {string} */
+            op: "typing";
+            /** Format: uuid */
+            actor_id: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: uuid */
+            thread_root_id: string | null;
+            active: boolean;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        RealtimePresenceEventFrameV1: {
+            /** @enum {string} */
+            op: "presence";
+            /** Format: uuid */
+            actor_id: string;
+            /** @enum {string} */
+            state: "online" | "away" | "offline";
+            /** Format: date-time */
+            expires_at: string;
+        };
+        RealtimeProtocolErrorFrameV1: {
+            /** @enum {string} */
+            op: "error";
+            /** Format: uuid */
+            request_id?: string | null;
+            /** @enum {string} */
+            code: "invalid_frame" | "not_authenticated" | "forbidden" | "rate_limited" | "service_unavailable";
+            message: string;
+        };
+        BootstrapStatus: {
+            bootstrapped: boolean;
+        };
+        BootstrapRequest: {
+            organization_name: string;
+            organization_slug: string;
+            display_name: string;
+            handle: string;
+            /** Format: email */
+            email: string;
+            password: string;
+            /** @default UTC */
+            timezone: string;
+        };
+        LoginRequest: {
+            /** Format: email */
+            email: string;
+            password: string;
+        };
+        UpdateProfileRequest: {
+            display_name?: string;
+            handle?: string;
+            timezone?: string;
+        };
+        User: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            org_id: string;
+            /** @enum {string} */
+            role: "owner" | "admin" | "member";
+            /** Format: email */
+            email: string;
+            display_name: string;
+            handle: string;
+            timezone: string;
+            /** @enum {string} */
+            status: "active" | "deactivated";
+            /** Format: date-time */
+            created_at: string;
+        };
+        TokenResponse: {
+            access_token: string;
+            /** Format: date-time */
+            access_expires_at: string;
+            user: components["schemas"]["User"];
+        };
+        Session: {
+            /** Format: uuid */
+            id: string;
+            user_agent: string;
+            ip_address?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            last_seen_at: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: date-time */
+            revoked_at?: string | null;
+            current: boolean;
+        };
+        CreateInvitationRequest: {
+            /** Format: email */
+            email: string;
+            /**
+             * @default member
+             * @enum {string}
+             */
+            role: "admin" | "member";
+        };
+        Invitation: {
+            /** Format: uuid */
+            id: string;
+            /** Format: email */
+            email: string;
+            /** @enum {string} */
+            role: "admin" | "member";
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: uri */
+            accept_url?: string;
+        };
+        AcceptInvitationRequest: {
+            display_name: string;
+            handle: string;
+            password: string;
+            /** @default UTC */
+            timezone: string;
+        };
+        CreateChatRequest: {
+            /** @enum {string} */
+            kind: "direct" | "group" | "channel";
+            /**
+             * @default private
+             * @enum {string}
+             */
+            visibility: "private" | "public";
+            name?: string;
+            topic?: string;
+            member_ids?: string[];
+        };
+        Chat: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            kind: "direct" | "group" | "channel";
+            /** @enum {string} */
+            visibility: "private" | "public";
+            name?: string | null;
+            topic: string;
+            /** @enum {string} */
+            role: "owner" | "admin" | "member";
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            archived_at?: string | null;
+            display_name: string;
+            avatar_seed: string;
+            direct_peer?: components["schemas"]["ActorSummary"] | null;
+            last_message?: components["schemas"]["MessagePreview"] | null;
+            /** Format: int64 */
+            last_activity_seq: number;
+            /** Format: date-time */
+            last_message_at?: string | null;
+        };
+        ActorSummary: {
+            /** Format: uuid */
+            actor_id: string;
+            display_name: string;
+            handle: string;
+            /** @enum {string} */
+            type: "user" | "agent";
+        };
+        ActorPage: {
+            actors: components["schemas"]["ActorSummary"][];
+            /** Format: uuid */
+            next_after_id: string | null;
+        };
+        MessagePreview: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            actor_id: string;
+            actor_display_name: string;
+            body: string;
+            /** Format: int64 */
+            created_seq: number;
+            /** Format: date-time */
+            created_at: string;
+            deleted: boolean;
+        };
+        UpdateChatRequest: {
+            name?: string;
+            topic?: string;
+            /** @enum {string} */
+            visibility?: "private" | "public";
+        };
+        DirectoryChat: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            kind: "group" | "channel";
+            name: string;
+            topic: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ChatMember: {
+            /** Format: uuid */
+            actor_id: string;
+            display_name: string;
+            handle: string;
+            /** @enum {string} */
+            role: "owner" | "admin" | "member";
+            /** Format: date-time */
+            joined_at: string;
+        };
+        AddChatMemberRequest: {
+            /** Format: uuid */
+            actor_id: string;
+            /**
+             * @default member
+             * @enum {string}
+             */
+            role: "owner" | "admin" | "member";
+        };
+        UpdateChatMemberRequest: {
+            /** @enum {string} */
+            role: "owner" | "admin" | "member";
+        };
+        Message: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: uuid */
+            actor_id: string;
+            /** Format: uuid */
+            client_msg_id: string;
+            /** @enum {string} */
+            type: "text";
+            body: string;
+            /** @enum {string} */
+            body_format: "plain" | "markdown";
+            /** Format: uuid */
+            reply_to_id?: string | null;
+            /** Format: uuid */
+            thread_root_id?: string | null;
+            version: number;
+            /** Format: int64 */
+            created_seq: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            edited_at?: string | null;
+            /** Format: date-time */
+            deleted_at?: string | null;
+            forwarded_from?: components["schemas"]["ForwardAttribution"] | null;
+            mentioned_actor_ids: string[];
+        };
+        MessagePage: {
+            messages: components["schemas"]["Message"][];
+            /** Format: int64 */
+            next_before_seq: number | null;
+        };
+        MessageWindow: {
+            messages: components["schemas"]["Message"][];
+            /** Format: uuid */
+            target_id: string;
+            has_earlier: boolean;
+            has_later: boolean;
+        };
+        CreateMessageRequest: {
+            /** Format: uuid */
+            client_msg_id: string;
+            body: string;
+            /**
+             * @default plain
+             * @enum {string}
+             */
+            body_format: "plain" | "markdown";
+            /** Format: uuid */
+            reply_to_id?: string;
+            /** Format: uuid */
+            thread_root_id?: string;
+            mentioned_actor_ids?: string[];
+        };
+        UpdateMessageRequest: {
+            body: string;
+            /**
+             * @default plain
+             * @enum {string}
+             */
+            body_format: "plain" | "markdown";
+            expected_version: number;
+            mentioned_actor_ids?: string[];
+        };
+        ForwardAttribution: {
+            author_name: string;
+            author_handle: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ForwardMessageRequest: {
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: uuid */
+            client_msg_id: string;
+        };
+        Reaction: {
+            /** Format: uuid */
+            message_id: string;
+            /** Format: uuid */
+            actor_id: string;
+            emoji: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ReactionList: {
+            reactions: components["schemas"]["Reaction"][];
+        };
+        MessagePin: {
+            /** Format: uuid */
+            message_id: string;
+            /** Format: uuid */
+            pinned_by: string;
+            /** Format: date-time */
+            pinned_at: string;
+        };
+        MessagePinList: {
+            pins: components["schemas"]["MessagePin"][];
+        };
+        ThreadFollow: {
+            /** Format: uuid */
+            thread_root_id: string;
+            /** Format: date-time */
+            followed_at: string;
+        };
+        ThreadSummary: {
+            root: components["schemas"]["Message"];
+            /** Format: int64 */
+            reply_count: number;
+            /** Format: int64 */
+            last_reply_seq?: number | null;
+            /** Format: int64 */
+            last_activity_seq: number;
+            /** Format: date-time */
+            followed_at: string;
+        };
+        ThreadPage: {
+            threads: components["schemas"]["ThreadSummary"][];
+            /** Format: int64 */
+            next_before_seq: number | null;
+        };
+        MarkReadRequest: {
+            /** Format: int64 */
+            last_read_seq: number;
+        };
+        ReadMarker: {
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: uuid */
+            thread_root_id?: string | null;
+            /** Format: int64 */
+            last_read_seq: number;
+            /** Format: date-time */
+            last_read_at: string;
+        };
+        Draft: {
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: uuid */
+            thread_root_id?: string | null;
+            body: string;
+            /** @enum {string} */
+            body_format: "plain" | "markdown";
+            version: number;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        PutDraftRequest: {
+            /** Format: uuid */
+            thread_root_id?: string | null;
+            body: string;
+            /**
+             * @default plain
+             * @enum {string}
+             */
+            body_format: "plain" | "markdown";
+            expected_version: number;
+        };
+        DraftList: {
+            drafts: components["schemas"]["Draft"][];
+        };
+        ChatUnread: {
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: int64 */
+            last_read_seq: number;
+            /** Format: int64 */
+            unread_count: number;
+            /** Format: int64 */
+            mention_count: number;
+        };
+        ThreadUnread: {
+            /** Format: uuid */
+            thread_root_id: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: int64 */
+            last_read_seq: number;
+            /** Format: int64 */
+            unread_count: number;
+            /** Format: int64 */
+            mention_count: number;
+        };
+        UnreadSnapshot: {
+            chats: components["schemas"]["ChatUnread"][];
+            threads: components["schemas"]["ThreadUnread"][];
+        };
+        PushConfig: {
+            enabled: boolean;
+            public_key: string;
+        };
+        PushSubscriptionRequest: {
+            /** Format: uri */
+            endpoint: string;
+            keys: {
+                p256dh: string;
+                auth: string;
+            };
+        };
+        PushSubscription: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uri */
+            endpoint: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        UserPreferences: {
+            /** @enum {string} */
+            theme: "system" | "light" | "dark";
+            /** @enum {string} */
+            locale: "ru" | "en";
+            push_enabled: boolean;
+            push_preview: boolean;
+        };
+        ChatNotificationPreferences: {
+            /** @enum {string} */
+            notify_level: "all" | "mentions" | "none";
+            /** Format: date-time */
+            muted_until?: string | null;
+        };
     };
-    Error: {
-      code: components["schemas"]["ErrorCode"];
-      message: string;
-      request_id: string;
-      details?: {
-        [key: string]: unknown;
-      };
+    responses: {
+        /** @description Stable API error. */
+        Error: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description Access token and user. Refresh token is set as an HttpOnly cookie. */
+        Tokens: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["TokenResponse"];
+            };
+        };
     };
-    /** @enum {string} */
-    ErrorCode:
-      | "already_bootstrapped"
-      | "chat_conflict"
-      | "chat_not_found"
-      | "forbidden"
-      | "idempotency_conflict"
-      | "internal_error"
-      | "invalid_credentials"
-      | "invalid_refresh_token"
-      | "invalid_request"
-      | "invitation_invalid"
-      | "message_not_found"
-      | "origin_not_allowed"
-      | "payload_too_large"
-      | "rate_limited"
-      | "service_not_ready"
-      | "session_not_found"
-      | "unauthorized"
-      | "unsupported_format"
-      | "validation_failed"
-      | "version_conflict";
-    /** @enum {string} */
-    DurableEventTypeV1:
-      | "message.created"
-      | "message.updated"
-      | "message.deleted"
-      | "message.pinned"
-      | "message.unpinned"
-      | "reaction.added"
-      | "reaction.removed"
-      | "thread.followed"
-      | "thread.unfollowed"
-      | "read.marked"
-      | "draft.updated"
-      | "draft.deleted"
-      | "chat.created"
-      | "chat.updated"
-      | "chat.archived"
-      | "member.joined"
-      | "member.updated"
-      | "member.removed";
-    /**
-     * Format: int32
-     * @enum {integer}
-     */
-    RealtimeCloseCodeV1: 1000 | 1008 | 1012 | 4001 | 4008 | 4009;
-    RealtimeAuthFrameV1: {
-      /** @enum {string} */
-      op: "auth";
-      /** Format: uuid */
-      request_id: string;
-      access_token: string;
-      /** Format: int64 */
-      last_seq: number;
+    parameters: {
+        ChatId: string;
+        ActorId: string;
+        MessageId: string;
     };
-    RealtimeAckFrameV1: {
-      /** @enum {string} */
-      op: "ack";
-      /** Format: int64 */
-      seq: number;
-    };
-    RealtimeSubscribeActiveFrameV1: {
-      /** @enum {string} */
-      op: "subscribe_active";
-      /** Format: uuid */
-      chat_id: string | null;
-      /** Format: uuid */
-      thread_root_id: string | null;
-    };
-    RealtimeTypingFrameV1: {
-      /** @enum {string} */
-      op: "typing";
-      /** Format: uuid */
-      chat_id: string;
-      /** Format: uuid */
-      thread_root_id: string | null;
-      active: boolean;
-    };
-    RealtimeSetPresenceFrameV1: {
-      /** @enum {string} */
-      op: "presence";
-      /** @enum {string} */
-      state: "active" | "away";
-    };
-    RealtimeHelloFrameV1: {
-      /** @enum {string} */
-      op: "hello";
-      /** Format: uuid */
-      request_id: string;
-      /** Format: uuid */
-      connection_id: string;
-      /** Format: int64 */
-      current_seq: number;
-      /** Format: int64 */
-      min_retained_seq: number;
-      heartbeat_interval_ms: number;
-      ack_interval_ms: number;
-      ack_batch_size: number;
-      max_unacked_events: number;
-    };
-    RealtimeDurableEventFrameV1: {
-      /** @enum {string} */
-      op: "event";
-      /** Format: int64 */
-      seq: number;
-      type: string;
-      /** Format: date-time */
-      occurred_at: string;
-      /** Format: uuid */
-      actor_id: string;
-      /** Format: uuid */
-      chat_id?: string | null;
-      /** Format: uuid */
-      subject_id: string;
-      data: {
-        [key: string]: unknown;
-      };
-    };
-    RealtimeResyncRequiredFrameV1: {
-      /** @enum {string} */
-      op: "resync_required";
-      /** Format: int64 */
-      current_seq: number;
-      /** Format: int64 */
-      min_retained_seq: number;
-      /** @enum {string} */
-      reason: "event_history_expired";
-    };
-    RealtimeTypingEventFrameV1: {
-      /** @enum {string} */
-      op: "typing";
-      /** Format: uuid */
-      actor_id: string;
-      /** Format: uuid */
-      chat_id: string;
-      /** Format: uuid */
-      thread_root_id: string | null;
-      active: boolean;
-      /** Format: date-time */
-      expires_at: string;
-    };
-    RealtimePresenceEventFrameV1: {
-      /** @enum {string} */
-      op: "presence";
-      /** Format: uuid */
-      actor_id: string;
-      /** @enum {string} */
-      state: "online" | "away" | "offline";
-      /** Format: date-time */
-      expires_at: string;
-    };
-    RealtimeProtocolErrorFrameV1: {
-      /** @enum {string} */
-      op: "error";
-      /** Format: uuid */
-      request_id?: string | null;
-      /** @enum {string} */
-      code:
-        | "invalid_frame"
-        | "not_authenticated"
-        | "forbidden"
-        | "rate_limited"
-        | "service_unavailable";
-      message: string;
-    };
-    BootstrapStatus: {
-      bootstrapped: boolean;
-    };
-    BootstrapRequest: {
-      organization_name: string;
-      organization_slug: string;
-      display_name: string;
-      handle: string;
-      /** Format: email */
-      email: string;
-      password: string;
-      /** @default UTC */
-      timezone: string;
-    };
-    LoginRequest: {
-      /** Format: email */
-      email: string;
-      password: string;
-    };
-    UpdateProfileRequest: {
-      display_name?: string;
-      handle?: string;
-      timezone?: string;
-    };
-    User: {
-      /** Format: uuid */
-      id: string;
-      /** Format: uuid */
-      org_id: string;
-      /** @enum {string} */
-      role: "owner" | "admin" | "member";
-      /** Format: email */
-      email: string;
-      display_name: string;
-      handle: string;
-      timezone: string;
-      /** @enum {string} */
-      status: "active" | "deactivated";
-      /** Format: date-time */
-      created_at: string;
-    };
-    TokenResponse: {
-      access_token: string;
-      /** Format: date-time */
-      access_expires_at: string;
-      user: components["schemas"]["User"];
-    };
-    Session: {
-      /** Format: uuid */
-      id: string;
-      user_agent: string;
-      ip_address?: string;
-      /** Format: date-time */
-      created_at: string;
-      /** Format: date-time */
-      last_seen_at: string;
-      /** Format: date-time */
-      expires_at: string;
-      /** Format: date-time */
-      revoked_at?: string | null;
-      current: boolean;
-    };
-    CreateInvitationRequest: {
-      /** Format: email */
-      email: string;
-      /**
-       * @default member
-       * @enum {string}
-       */
-      role: "admin" | "member";
-    };
-    Invitation: {
-      /** Format: uuid */
-      id: string;
-      /** Format: email */
-      email: string;
-      /** @enum {string} */
-      role: "admin" | "member";
-      /** Format: date-time */
-      expires_at: string;
-      /** Format: uri */
-      accept_url?: string;
-    };
-    AcceptInvitationRequest: {
-      display_name: string;
-      handle: string;
-      password: string;
-      /** @default UTC */
-      timezone: string;
-    };
-    CreateChatRequest: {
-      /** @enum {string} */
-      kind: "direct" | "group" | "channel";
-      /**
-       * @default private
-       * @enum {string}
-       */
-      visibility: "private" | "public";
-      name?: string;
-      topic?: string;
-      member_ids?: string[];
-    };
-    Chat: {
-      /** Format: uuid */
-      id: string;
-      /** @enum {string} */
-      kind: "direct" | "group" | "channel";
-      /** @enum {string} */
-      visibility: "private" | "public";
-      name?: string | null;
-      topic: string;
-      /** @enum {string} */
-      role: "owner" | "admin" | "member";
-      /** Format: date-time */
-      created_at: string;
-      /** Format: date-time */
-      archived_at?: string | null;
-    };
-    UpdateChatRequest: {
-      name?: string;
-      topic?: string;
-      /** @enum {string} */
-      visibility?: "private" | "public";
-    };
-    DirectoryChat: {
-      /** Format: uuid */
-      id: string;
-      /** @enum {string} */
-      kind: "group" | "channel";
-      name: string;
-      topic: string;
-      /** Format: date-time */
-      created_at: string;
-    };
-    ChatMember: {
-      /** Format: uuid */
-      actor_id: string;
-      display_name: string;
-      handle: string;
-      /** @enum {string} */
-      role: "owner" | "admin" | "member";
-      /** Format: date-time */
-      joined_at: string;
-    };
-    AddChatMemberRequest: {
-      /** Format: uuid */
-      actor_id: string;
-      /**
-       * @default member
-       * @enum {string}
-       */
-      role: "owner" | "admin" | "member";
-    };
-    UpdateChatMemberRequest: {
-      /** @enum {string} */
-      role: "owner" | "admin" | "member";
-    };
-    Message: {
-      /** Format: uuid */
-      id: string;
-      /** Format: uuid */
-      chat_id: string;
-      /** Format: uuid */
-      actor_id: string;
-      /** Format: uuid */
-      client_msg_id: string;
-      /** @enum {string} */
-      type: "text";
-      body: string;
-      /** @enum {string} */
-      body_format: "plain" | "markdown";
-      /** Format: uuid */
-      reply_to_id?: string | null;
-      /** Format: uuid */
-      thread_root_id?: string | null;
-      version: number;
-      /** Format: int64 */
-      created_seq: number;
-      /** Format: date-time */
-      created_at: string;
-      /** Format: date-time */
-      edited_at?: string | null;
-      /** Format: date-time */
-      deleted_at?: string | null;
-      forwarded_from?: components["schemas"]["ForwardAttribution"] | null;
-      mentioned_actor_ids: string[];
-    };
-    MessagePage: {
-      messages: components["schemas"]["Message"][];
-      /** Format: int64 */
-      next_before_seq: number | null;
-    };
-    CreateMessageRequest: {
-      /** Format: uuid */
-      client_msg_id: string;
-      body: string;
-      /**
-       * @default plain
-       * @enum {string}
-       */
-      body_format: "plain" | "markdown";
-      /** Format: uuid */
-      reply_to_id?: string;
-      /** Format: uuid */
-      thread_root_id?: string;
-      mentioned_actor_ids?: string[];
-    };
-    UpdateMessageRequest: {
-      body: string;
-      /**
-       * @default plain
-       * @enum {string}
-       */
-      body_format: "plain" | "markdown";
-      expected_version: number;
-      mentioned_actor_ids?: string[];
-    };
-    ForwardAttribution: {
-      author_name: string;
-      author_handle: string;
-      /** Format: date-time */
-      created_at: string;
-    };
-    ForwardMessageRequest: {
-      /** Format: uuid */
-      chat_id: string;
-      /** Format: uuid */
-      client_msg_id: string;
-    };
-    Reaction: {
-      /** Format: uuid */
-      message_id: string;
-      /** Format: uuid */
-      actor_id: string;
-      emoji: string;
-      /** Format: date-time */
-      created_at: string;
-    };
-    ReactionList: {
-      reactions: components["schemas"]["Reaction"][];
-    };
-    MessagePin: {
-      /** Format: uuid */
-      message_id: string;
-      /** Format: uuid */
-      pinned_by: string;
-      /** Format: date-time */
-      pinned_at: string;
-    };
-    MessagePinList: {
-      pins: components["schemas"]["MessagePin"][];
-    };
-    ThreadFollow: {
-      /** Format: uuid */
-      thread_root_id: string;
-      /** Format: date-time */
-      followed_at: string;
-    };
-    ThreadSummary: {
-      root: components["schemas"]["Message"];
-      /** Format: int64 */
-      reply_count: number;
-      /** Format: int64 */
-      last_reply_seq?: number | null;
-      /** Format: int64 */
-      last_activity_seq: number;
-      /** Format: date-time */
-      followed_at: string;
-    };
-    ThreadPage: {
-      threads: components["schemas"]["ThreadSummary"][];
-      /** Format: int64 */
-      next_before_seq: number | null;
-    };
-    MarkReadRequest: {
-      /** Format: int64 */
-      last_read_seq: number;
-    };
-    ReadMarker: {
-      /** Format: uuid */
-      chat_id: string;
-      /** Format: uuid */
-      thread_root_id?: string | null;
-      /** Format: int64 */
-      last_read_seq: number;
-      /** Format: date-time */
-      last_read_at: string;
-    };
-    Draft: {
-      /** Format: uuid */
-      chat_id: string;
-      /** Format: uuid */
-      thread_root_id?: string | null;
-      body: string;
-      /** @enum {string} */
-      body_format: "plain" | "markdown";
-      version: number;
-      /** Format: date-time */
-      updated_at: string;
-    };
-    PutDraftRequest: {
-      /** Format: uuid */
-      thread_root_id?: string | null;
-      body: string;
-      /**
-       * @default plain
-       * @enum {string}
-       */
-      body_format: "plain" | "markdown";
-      expected_version: number;
-    };
-    DraftList: {
-      drafts: components["schemas"]["Draft"][];
-    };
-    ChatUnread: {
-      /** Format: uuid */
-      chat_id: string;
-      /** Format: int64 */
-      last_read_seq: number;
-      /** Format: int64 */
-      unread_count: number;
-      /** Format: int64 */
-      mention_count: number;
-    };
-    ThreadUnread: {
-      /** Format: uuid */
-      thread_root_id: string;
-      /** Format: uuid */
-      chat_id: string;
-      /** Format: int64 */
-      last_read_seq: number;
-      /** Format: int64 */
-      unread_count: number;
-      /** Format: int64 */
-      mention_count: number;
-    };
-    UnreadSnapshot: {
-      chats: components["schemas"]["ChatUnread"][];
-      threads: components["schemas"]["ThreadUnread"][];
-    };
-  };
-  responses: {
-    /** @description Stable API error. */
-    Error: {
-      headers: {
-        [name: string]: unknown;
-      };
-      content: {
-        "application/json": components["schemas"]["Error"];
-      };
-    };
-    /** @description Access token and user. Refresh token is set as an HttpOnly cookie. */
-    Tokens: {
-      headers: {
-        [name: string]: unknown;
-      };
-      content: {
-        "application/json": components["schemas"]["TokenResponse"];
-      };
-    };
-  };
-  parameters: {
-    ChatId: string;
-    ActorId: string;
-    MessageId: string;
-  };
-  requestBodies: never;
-  headers: never;
-  pathItems: never;
+    requestBodies: never;
+    headers: never;
+    pathItems: never;
 }
 export type $defs = Record<string, never>;
 export interface operations {
-  getHealth: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Process is alive. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["Health"];
-        };
-      };
-    };
-  };
-  getReadiness: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Process is ready to serve traffic. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["Health"];
-        };
-      };
-      /** @description A required dependency is unavailable. */
-      503: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["Error"];
-        };
-      };
-    };
-  };
-  getBootstrapStatus: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Current bootstrap state. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["BootstrapStatus"];
-        };
-      };
-    };
-  };
-  bootstrap: {
-    parameters: {
-      query?: never;
-      header?: {
-        /** @description Required outside development; configure it with BOOTSTRAP_TOKEN. */
-        "X-Coma-Bootstrap-Token"?: string;
-      };
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["BootstrapRequest"];
-      };
-    };
-    responses: {
-      201: components["responses"]["Tokens"];
-      403: components["responses"]["Error"];
-      409: components["responses"]["Error"];
-      422: components["responses"]["Error"];
-    };
-  };
-  login: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["LoginRequest"];
-      };
-    };
-    responses: {
-      200: components["responses"]["Tokens"];
-      401: components["responses"]["Error"];
-    };
-  };
-  refresh: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      200: components["responses"]["Tokens"];
-      401: components["responses"]["Error"];
-    };
-  };
-  logout: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Session revoked. */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      401: components["responses"]["Error"];
-    };
-  };
-  connectRealtime: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description WebSocket connection established. */
-      101: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      403: components["responses"]["Error"];
-      /** @description WebSocket upgrade is required. */
-      426: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
-  getMe: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Current user. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["User"];
-        };
-      };
-      401: components["responses"]["Error"];
-    };
-  };
-  updateMe: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["UpdateProfileRequest"];
-      };
-    };
-    responses: {
-      /** @description Updated user. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["User"];
-        };
-      };
-      422: components["responses"]["Error"];
-    };
-  };
-  listSessions: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description User sessions. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            sessions: components["schemas"]["Session"][];
-          };
-        };
-      };
-    };
-  };
-  revokeSession: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        session_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Session revoked. */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      404: components["responses"]["Error"];
-    };
-  };
-  createInvitation: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["CreateInvitationRequest"];
-      };
-    };
-    responses: {
-      /** @description Invitation created. */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["Invitation"];
-        };
-      };
-      403: components["responses"]["Error"];
-    };
-  };
-  acceptInvitation: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        token: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["AcceptInvitationRequest"];
-      };
-    };
-    responses: {
-      201: components["responses"]["Tokens"];
-      410: components["responses"]["Error"];
-    };
-  };
-  listChats: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Chats visible through membership. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            chats: components["schemas"]["Chat"][];
-          };
-        };
-      };
-    };
-  };
-  createChat: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["CreateChatRequest"];
-      };
-    };
-    responses: {
-      /** @description Created or existing direct chat. */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["Chat"];
-        };
-      };
-      403: components["responses"]["Error"];
-      422: components["responses"]["Error"];
-    };
-  };
-  getChat: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        chat_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Chat visible to the current member. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["Chat"];
-        };
-      };
-      404: components["responses"]["Error"];
-    };
-  };
-  archiveChat: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        chat_id: components["parameters"]["ChatId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Chat archived. */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      403: components["responses"]["Error"];
-      404: components["responses"]["Error"];
-      409: components["responses"]["Error"];
-    };
-  };
-  updateChat: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        chat_id: components["parameters"]["ChatId"];
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["UpdateChatRequest"];
-      };
-    };
-    responses: {
-      /** @description Updated chat. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["Chat"];
-        };
-      };
-      403: components["responses"]["Error"];
-      404: components["responses"]["Error"];
-      409: components["responses"]["Error"];
-      422: components["responses"]["Error"];
-    };
-  };
-  discoverChats: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Public chats the current user has not joined. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            chats: components["schemas"]["DirectoryChat"][];
-          };
-        };
-      };
-    };
-  };
-  joinChat: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        chat_id: components["parameters"]["ChatId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Joined public chat, or current membership. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["Chat"];
-        };
-      };
-      404: components["responses"]["Error"];
-    };
-  };
-  listChatMembers: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        chat_id: components["parameters"]["ChatId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Active chat members. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            members: components["schemas"]["ChatMember"][];
-          };
-        };
-      };
-      404: components["responses"]["Error"];
-    };
-  };
-  addChatMember: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        chat_id: components["parameters"]["ChatId"];
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["AddChatMemberRequest"];
-      };
-    };
-    responses: {
-      /** @description Member added. */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ChatMember"];
-        };
-      };
-      403: components["responses"]["Error"];
-      404: components["responses"]["Error"];
-      409: components["responses"]["Error"];
-      422: components["responses"]["Error"];
-    };
-  };
-  removeChatMember: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        chat_id: components["parameters"]["ChatId"];
-        actor_id: components["parameters"]["ActorId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Member removed. */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      403: components["responses"]["Error"];
-      404: components["responses"]["Error"];
-      409: components["responses"]["Error"];
-    };
-  };
-  updateChatMember: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        chat_id: components["parameters"]["ChatId"];
-        actor_id: components["parameters"]["ActorId"];
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["UpdateChatMemberRequest"];
-      };
-    };
-    responses: {
-      /** @description Member role updated. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ChatMember"];
-        };
-      };
-      403: components["responses"]["Error"];
-      404: components["responses"]["Error"];
-      409: components["responses"]["Error"];
-      422: components["responses"]["Error"];
-    };
-  };
-  listMessages: {
-    parameters: {
-      query?: {
-        before_seq?: number;
-        limit?: number;
-        thread_root_id?: string;
-      };
-      header?: never;
-      path: {
-        chat_id: components["parameters"]["ChatId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Messages visible to the current chat member, newest first. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["MessagePage"];
-        };
-      };
-      404: components["responses"]["Error"];
-      422: components["responses"]["Error"];
-      429: components["responses"]["Error"];
-    };
-  };
-  createMessage: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        chat_id: components["parameters"]["ChatId"];
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["CreateMessageRequest"];
-      };
-    };
-    responses: {
-      /** @description The original message for an idempotent replay. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["Message"];
-        };
-      };
-      /** @description Message created. */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["Message"];
-        };
-      };
-      403: components["responses"]["Error"];
-      404: components["responses"]["Error"];
-      409: components["responses"]["Error"];
-      413: components["responses"]["Error"];
-      422: components["responses"]["Error"];
-    };
-  };
-  listMessagePins: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        chat_id: components["parameters"]["ChatId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Current pins in the chat, newest first. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["MessagePinList"];
-        };
-      };
-      404: components["responses"]["Error"];
-    };
-  };
-  deleteMessage: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        message_id: components["parameters"]["MessageId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Soft-deleted message, or the existing tombstone for an idempotent replay. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["Message"];
-        };
-      };
-      403: components["responses"]["Error"];
-      404: components["responses"]["Error"];
-    };
-  };
-  updateMessage: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        message_id: components["parameters"]["MessageId"];
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["UpdateMessageRequest"];
-      };
-    };
-    responses: {
-      /** @description Message updated. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["Message"];
-        };
-      };
-      403: components["responses"]["Error"];
-      404: components["responses"]["Error"];
-      409: components["responses"]["Error"];
-      413: components["responses"]["Error"];
-      422: components["responses"]["Error"];
-    };
-  };
-  putReaction: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        message_id: components["parameters"]["MessageId"];
-        emoji: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Existing reaction for an idempotent replay. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["Reaction"];
-        };
-      };
-      /** @description Reaction added. */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["Reaction"];
-        };
-      };
-      404: components["responses"]["Error"];
-      422: components["responses"]["Error"];
-      429: components["responses"]["Error"];
-    };
-  };
-  deleteReaction: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        message_id: components["parameters"]["MessageId"];
-        emoji: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Reaction is absent. */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      404: components["responses"]["Error"];
-      422: components["responses"]["Error"];
-    };
-  };
-  listReactions: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        message_id: components["parameters"]["MessageId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Current reactions on the message. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ReactionList"];
-        };
-      };
-      404: components["responses"]["Error"];
-    };
-  };
-  putMessagePin: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        message_id: components["parameters"]["MessageId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Existing pin for an idempotent replay. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["MessagePin"];
-        };
-      };
-      /** @description Message pinned. */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["MessagePin"];
-        };
-      };
-      403: components["responses"]["Error"];
-      404: components["responses"]["Error"];
-    };
-  };
-  deleteMessagePin: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        message_id: components["parameters"]["MessageId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Message pin is absent. */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      403: components["responses"]["Error"];
-      404: components["responses"]["Error"];
-    };
-  };
-  forwardMessage: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        message_id: components["parameters"]["MessageId"];
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ForwardMessageRequest"];
-      };
-    };
-    responses: {
-      /** @description Original forwarded snapshot for an idempotent replay. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["Message"];
-        };
-      };
-      /** @description Forwarded snapshot created. */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["Message"];
-        };
-      };
-      403: components["responses"]["Error"];
-      404: components["responses"]["Error"];
-      409: components["responses"]["Error"];
-      422: components["responses"]["Error"];
-    };
-  };
-  followThread: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        message_id: components["parameters"]["MessageId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Existing thread follow for an idempotent replay. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ThreadFollow"];
-        };
-      };
-      /** @description Thread followed. */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ThreadFollow"];
-        };
-      };
-      404: components["responses"]["Error"];
-      422: components["responses"]["Error"];
-    };
-  };
-  unfollowThread: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        message_id: components["parameters"]["MessageId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Thread follow is absent. */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      404: components["responses"]["Error"];
-      422: components["responses"]["Error"];
-    };
-  };
-  listThreadMessages: {
-    parameters: {
-      query?: {
-        before_seq?: number;
-        limit?: number;
-      };
-      header?: never;
-      path: {
-        message_id: components["parameters"]["MessageId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Replies in the thread, newest first. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["MessagePage"];
-        };
-      };
-      404: components["responses"]["Error"];
-      422: components["responses"]["Error"];
-    };
-  };
-  listFollowedThreads: {
-    parameters: {
-      query?: {
-        before_seq?: number;
-        limit?: number;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Followed threads visible to the current member, ordered by latest activity. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ThreadPage"];
-        };
-      };
-      422: components["responses"]["Error"];
-    };
-  };
-  getUnreadSnapshot: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Current chat and followed-thread unread counters. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["UnreadSnapshot"];
-        };
-      };
-    };
-  };
-  markChatRead: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        chat_id: components["parameters"]["ChatId"];
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["MarkReadRequest"];
-      };
-    };
-    responses: {
-      /** @description Monotonic chat read marker. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ReadMarker"];
-        };
-      };
-      404: components["responses"]["Error"];
-      422: components["responses"]["Error"];
-    };
-  };
-  markThreadRead: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        message_id: components["parameters"]["MessageId"];
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["MarkReadRequest"];
-      };
-    };
-    responses: {
-      /** @description Monotonic thread read marker. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ReadMarker"];
-        };
-      };
-      404: components["responses"]["Error"];
-      422: components["responses"]["Error"];
-    };
-  };
-  listDrafts: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Drafts visible only to the current actor. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["DraftList"];
-        };
-      };
-    };
-  };
-  putDraft: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        chat_id: components["parameters"]["ChatId"];
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["PutDraftRequest"];
-      };
-    };
-    responses: {
-      /** @description Existing or updated draft. */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["Draft"];
-        };
-      };
-      /** @description Draft created. */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["Draft"];
-        };
-      };
-      404: components["responses"]["Error"];
-      409: components["responses"]["Error"];
-      413: components["responses"]["Error"];
-      422: components["responses"]["Error"];
-    };
-  };
-  deleteDraft: {
-    parameters: {
-      query?: {
-        thread_root_id?: string;
-      };
-      header?: never;
-      path: {
-        chat_id: components["parameters"]["ChatId"];
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Draft is absent. */
-      204: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      404: components["responses"]["Error"];
-      422: components["responses"]["Error"];
-    };
-  };
+    getHealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Process is alive. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Health"];
+                };
+            };
+        };
+    };
+    getReadiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Process is ready to serve traffic. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Health"];
+                };
+            };
+            /** @description A required dependency is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getBootstrapStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current bootstrap state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BootstrapStatus"];
+                };
+            };
+        };
+    };
+    bootstrap: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required outside development; configure it with BOOTSTRAP_TOKEN. */
+                "X-Coma-Bootstrap-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BootstrapRequest"];
+            };
+        };
+        responses: {
+            201: components["responses"]["Tokens"];
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            200: components["responses"]["Tokens"];
+            401: components["responses"]["Error"];
+        };
+    };
+    refresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Tokens"];
+            401: components["responses"]["Error"];
+        };
+    };
+    logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+        };
+    };
+    connectRealtime: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description WebSocket connection established. */
+            101: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            /** @description WebSocket upgrade is required. */
+            426: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current user. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            401: components["responses"]["Error"];
+        };
+    };
+    updateMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated user. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            422: components["responses"]["Error"];
+        };
+    };
+    listSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description User sessions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        sessions: components["schemas"]["Session"][];
+                    };
+                };
+            };
+        };
+    };
+    revokeSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    createInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateInvitationRequest"];
+            };
+        };
+        responses: {
+            /** @description Invitation created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Invitation"];
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    acceptInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptInvitationRequest"];
+            };
+        };
+        responses: {
+            201: components["responses"]["Tokens"];
+            410: components["responses"]["Error"];
+        };
+    };
+    listChats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Chats visible through membership. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        chats: components["schemas"]["Chat"][];
+                    };
+                };
+            };
+        };
+    };
+    createChat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Created or existing direct chat. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Chat"];
+                };
+            };
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    listActors: {
+        parameters: {
+            query?: {
+                q?: string;
+                after_id?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active organization actors ordered by id. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActorPage"];
+                };
+            };
+            422: components["responses"]["Error"];
+        };
+    };
+    getChat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Chat visible to the current member. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Chat"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    archiveChat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Chat archived. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    updateChat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated chat. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Chat"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    discoverChats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Public chats the current user has not joined. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        chats: components["schemas"]["DirectoryChat"][];
+                    };
+                };
+            };
+        };
+    };
+    joinChat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Joined public chat, or current membership. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Chat"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    listChatMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active chat members. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        members: components["schemas"]["ChatMember"][];
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    addChatMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddChatMemberRequest"];
+            };
+        };
+        responses: {
+            /** @description Member added. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatMember"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    removeChatMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+                actor_id: components["parameters"]["ActorId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Member removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    updateChatMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+                actor_id: components["parameters"]["ActorId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateChatMemberRequest"];
+            };
+        };
+        responses: {
+            /** @description Member role updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatMember"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    listMessages: {
+        parameters: {
+            query?: {
+                before_seq?: number;
+                limit?: number;
+                thread_root_id?: string;
+            };
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Messages visible to the current chat member, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessagePage"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+        };
+    };
+    createMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description The original message for an idempotent replay. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            /** @description Message created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    listMessagePins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current pins in the chat, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessagePinList"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    deleteMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Soft-deleted message, or the existing tombstone for an idempotent replay. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    updateMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description Message updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    getMessageContext: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded ordered window around a visible target message. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageWindow"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    putReaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+                emoji: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Existing reaction for an idempotent replay. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reaction"];
+                };
+            };
+            /** @description Reaction added. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reaction"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+        };
+    };
+    deleteReaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+                emoji: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reaction is absent. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    listReactions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current reactions on the message. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReactionList"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    putMessagePin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Existing pin for an idempotent replay. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessagePin"];
+                };
+            };
+            /** @description Message pinned. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessagePin"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    deleteMessagePin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Message pin is absent. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    forwardMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForwardMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description Original forwarded snapshot for an idempotent replay. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            /** @description Forwarded snapshot created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    followThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Existing thread follow for an idempotent replay. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadFollow"];
+                };
+            };
+            /** @description Thread followed. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadFollow"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    unfollowThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thread follow is absent. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    listThreadMessages: {
+        parameters: {
+            query?: {
+                before_seq?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Replies in the thread, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessagePage"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    listFollowedThreads: {
+        parameters: {
+            query?: {
+                before_seq?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Followed threads visible to the current member, ordered by latest activity. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadPage"];
+                };
+            };
+            422: components["responses"]["Error"];
+        };
+    };
+    getUnreadSnapshot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current chat and followed-thread unread counters. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnreadSnapshot"];
+                };
+            };
+        };
+    };
+    markChatRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarkReadRequest"];
+            };
+        };
+        responses: {
+            /** @description Monotonic chat read marker. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadMarker"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    markThreadRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarkReadRequest"];
+            };
+        };
+        responses: {
+            /** @description Monotonic thread read marker. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadMarker"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    listDrafts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Drafts visible only to the current actor. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftList"];
+                };
+            };
+        };
+    };
+    putDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutDraftRequest"];
+            };
+        };
+        responses: {
+            /** @description Existing or updated draft. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Draft"];
+                };
+            };
+            /** @description Draft created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Draft"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    deleteDraft: {
+        parameters: {
+            query?: {
+                thread_root_id?: string;
+            };
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Draft is absent. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    getPushConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Push capability and VAPID public key. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushConfig"];
+                };
+            };
+        };
+    };
+    putPushSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushSubscriptionRequest"];
+            };
+        };
+        responses: {
+            /** @description Registered browser subscription. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushSubscription"];
+                };
+            };
+            422: components["responses"]["Error"];
+        };
+    };
+    deletePushSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subscription_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Subscription removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["Error"];
+        };
+    };
+    getPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Client preferences. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPreferences"];
+                };
+            };
+        };
+    };
+    updatePreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserPreferences"];
+            };
+        };
+        responses: {
+            /** @description Updated preferences. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserPreferences"];
+                };
+            };
+            422: components["responses"]["Error"];
+        };
+    };
+    getChatNotificationPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current chat notification policy. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatNotificationPreferences"];
+                };
+            };
+            422: components["responses"]["Error"];
+        };
+    };
+    updateChatNotificationPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatNotificationPreferences"];
+            };
+        };
+        responses: {
+            /** @description Updated chat notification policy. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatNotificationPreferences"];
+                };
+            };
+            422: components["responses"]["Error"];
+        };
+    };
 }

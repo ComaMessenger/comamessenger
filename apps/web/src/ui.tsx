@@ -2,9 +2,12 @@ import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
   ReactNode,
+  SelectHTMLAttributes,
   TextareaHTMLAttributes,
 } from "react";
+import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 export function cx(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
@@ -97,7 +100,8 @@ export function SelectField({
   label,
   name,
   children,
-}: {
+  ...props
+}: SelectHTMLAttributes<HTMLSelectElement> & {
   label: string;
   name: string;
   children: ReactNode;
@@ -105,7 +109,9 @@ export function SelectField({
   return (
     <label className="ui-field">
       <span className="ui-field__label">{label}</span>
-      <select name={name}>{children}</select>
+      <select name={name} {...props}>
+        {children}
+      </select>
     </label>
   );
 }
@@ -121,6 +127,39 @@ export function Dialog({
   onClose: () => void;
   children: ReactNode;
 }) {
+  const { t } = useTranslation();
+  const dialog = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    const first = dialog.current?.querySelector<HTMLElement>(
+      "button, input, textarea, select, [href], [tabindex]:not([tabindex='-1'])",
+    );
+    first?.focus();
+    function keyboard(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+      if (event.key !== "Tab" || !dialog.current) return;
+      const focusable = [
+        ...dialog.current.querySelectorAll<HTMLElement>(
+          "button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [href], [tabindex]:not([tabindex='-1'])",
+        ),
+      ];
+      if (!focusable.length) return;
+      const firstItem = focusable[0]!;
+      const lastItem = focusable.at(-1)!;
+      if (event.shiftKey && document.activeElement === firstItem) {
+        event.preventDefault();
+        lastItem.focus();
+      } else if (!event.shiftKey && document.activeElement === lastItem) {
+        event.preventDefault();
+        firstItem.focus();
+      }
+    }
+    document.addEventListener("keydown", keyboard);
+    return () => {
+      document.removeEventListener("keydown", keyboard);
+      previous?.focus();
+    };
+  }, [onClose]);
   return (
     <div
       className="ui-dialog-backdrop"
@@ -130,6 +169,7 @@ export function Dialog({
       }}
     >
       <section
+        ref={dialog}
         className="ui-dialog"
         role="dialog"
         aria-modal="true"
@@ -140,7 +180,7 @@ export function Dialog({
             <h2>{title}</h2>
             {description && <p>{description}</p>}
           </div>
-          <IconButton label="Закрыть" onClick={onClose}>
+          <IconButton label={t("close")} onClick={onClose}>
             <X size={18} />
           </IconButton>
         </header>
@@ -159,6 +199,7 @@ export function Avatar({
   size?: "sm" | "md" | "lg";
   online?: boolean;
 }) {
+  const { t } = useTranslation();
   const initials = name
     .split(/\s+/)
     .slice(0, 2)
@@ -168,7 +209,7 @@ export function Avatar({
   return (
     <span className={cx("ui-avatar", `ui-avatar--${size}`)}>
       {initials || "U"}
-      {online && <i aria-label="В сети" />}
+      {online && <i aria-label={t("online")} />}
     </span>
   );
 }
@@ -191,4 +232,54 @@ export function FormError({ message }: { message: string }) {
       {message}
     </div>
   ) : null;
+}
+
+export function Menu({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="ui-menu" role="menu" aria-label={label}>
+      {children}
+    </div>
+  );
+}
+
+export function Popover({ children }: { children: ReactNode }) {
+  return <div className="ui-popover">{children}</div>;
+}
+
+export function Tooltip({
+  text,
+  children,
+}: {
+  text: string;
+  children: ReactNode;
+}) {
+  return (
+    <span className="ui-tooltip" data-tooltip={text}>
+      {children}
+    </span>
+  );
+}
+
+export function Toast({
+  children,
+  tone = "neutral",
+}: {
+  children: ReactNode;
+  tone?: "neutral" | "danger" | "success";
+}) {
+  return (
+    <div className={cx("ui-toast", `ui-toast--${tone}`)} role="status">
+      {children}
+    </div>
+  );
+}
+
+export function Skeleton() {
+  return <span className="ui-skeleton" aria-hidden="true" />;
 }

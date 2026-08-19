@@ -23,6 +23,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/message"
 	"github.com/comamessenger/comamessenger/core/internal/password"
+	"github.com/comamessenger/comamessenger/core/internal/push"
 	"github.com/comamessenger/comamessenger/core/internal/realtime"
 	"github.com/comamessenger/comamessenger/core/internal/testdb"
 	"github.com/comamessenger/comamessenger/core/internal/userstate"
@@ -73,6 +74,7 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 		Identity: identityService, Chats: chat.NewService(pool),
 		Messages:  message.NewService(pool, 64*1024, 100, afterCommit),
 		UserState: userstate.NewService(pool, 64*1024, afterCommit), Realtime: realtimeServer,
+		Push:            push.NewService(pool, config.PushConfig{}),
 		RefreshTokenTTL: 24 * time.Hour, RevokeRealtimeSession: realtimeServer.RevokeSession,
 	})
 	server.Start()
@@ -102,6 +104,18 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/chats", owner.AccessToken, map[string]any{
 		"kind": "group", "visibility": "private", "name": "E2E room", "member_ids": []string{member.User.ActorID},
 	}, standardhttp.StatusCreated, &group)
+	var preferences push.Preferences
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/preferences", owner.AccessToken, nil, standardhttp.StatusOK, &preferences)
+	preferences.Theme, preferences.Locale, preferences.PushEnabled, preferences.PushPreview = "light", "en", true, true
+	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/preferences", owner.AccessToken, preferences, standardhttp.StatusOK, &preferences)
+	var chatPreferences push.ChatPreferences
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/chats/"+group.ID+"/notification-preferences", owner.AccessToken, nil, standardhttp.StatusOK, &chatPreferences)
+	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/chats/"+group.ID+"/notification-preferences", owner.AccessToken, map[string]any{"notify_level": "mentions", "muted_until": nil}, standardhttp.StatusOK, &chatPreferences)
+	if chatPreferences.NotifyLevel != "mentions" {
+		t.Fatalf("chat notification preferences = %+v", chatPreferences)
+	}
+	var subscription push.Subscription
+	e2eRequest(t, server.Client(), standardhttp.MethodPut, baseURL+"/api/v1/push/subscriptions", owner.AccessToken, map[string]any{"endpoint": "https://push.example.test/subscription/owner", "keys": map[string]string{"p256dh": "0123456789abcdef", "auth": "0123456789abcdef"}}, standardhttp.StatusCreated, &subscription)
 
 	ownerSocket := e2eSocket(t, baseURL, owner.AccessToken, 0)
 	memberSocket := e2eSocket(t, baseURL, member.AccessToken, 0)
@@ -115,6 +129,10 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 		"client_msg_id": e2eID(t), "body": "hello owner", "body_format": "plain",
 		"mentioned_actor_ids": []string{owner.User.ActorID},
 	}, standardhttp.StatusCreated, &first)
+	var notificationJobs int
+	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM notification_jobs WHERE org_id=$1 AND event_seq=$2`, owner.User.OrgID, first.CreatedSeq).Scan(&notificationJobs); err != nil || notificationJobs != 1 {
+		t.Fatalf("notification job count=%d error=%v", notificationJobs, err)
+	}
 	ownerFirst := e2eEvent(t, ownerSocket)
 	memberFirst := e2eEvent(t, memberSocket)
 	if ownerFirst.Seq != first.CreatedSeq || memberFirst.Seq != first.CreatedSeq || ownerFirst.Type != "message.created" {

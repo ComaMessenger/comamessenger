@@ -15,7 +15,8 @@ core/                Go server
 apps/web/            React web client
 apps/agent-runtime/  TypeScript agent runtime
 packages/protocol/   OpenAPI contract and generated clients
-packages/core/       Shared TypeScript domain utilities
+packages/core/       Platform-neutral client engine (API/realtime/store/outbox/markdown)
+packages/tokens/     Shared light/dark design tokens
 deploy/              Local and production deployment assets
 docs/                Product, architecture and phase documents
 ```
@@ -36,12 +37,15 @@ docker compose --env-file .env -f deploy/compose.yaml up --build
 
 The web application is available at `http://localhost:5173`, the API at `http://localhost:8080`, and the MinIO console at `http://localhost:9001`. PostgreSQL is the source of truth; the bundled Redis process provides realtime coordination and is not exposed outside the Compose network. If port 5173 is occupied, set `WEB_PORT` in `.env` before starting Compose.
 
+Web Push is optional. Generate VAPID keys with `docker compose --env-file .env -f deploy/compose.yaml run --rm --no-deps core vapid`, copy the two emitted variables into `.env`, set `VAPID_SUBJECT`, and restart Core.
+
 ## Local checks
 
 ```sh
 make test
 make build
 make generate
+pnpm --filter @comamessenger/web test:e2e
 docker compose --env-file .env.example -f deploy/compose.yaml config --quiet
 ```
 
@@ -53,4 +57,4 @@ ENV_FILE=.env.example make smoke
 
 ## Status
 
-Phases 0–1 and messaging increments 2.0–2.2a are implemented: authentication, organizations, chats/channels, durable idempotent messages, resumable WebSocket delivery and Redis-assisted realtime with PostgreSQL fallback. The next increment completes thread subscriptions, reactions, pins and snapshot forwarding.
+Phases 0–3 are implemented: authentication and organizations; chats, channels, messages and threads; durable resumable realtime with Redis coordination; and the responsive RU/EN Web client with offline outbox, drafts, actions, accessibility, themes and Web Push. The next planned phase adds S3-backed files and search.

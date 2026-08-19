@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import i18n from "./i18n";
 
 type Props = {
   children: ReactNode;
@@ -24,9 +25,9 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <main className="shell">
           <section className="card" role="alert">
-            <span className="eyebrow">Application error</span>
-            <h1>Не удалось открыть Coma</h1>
-            <p>Обновите страницу. Если ошибка повторится, обратитесь к администратору.</p>
+            <span className="eyebrow">{i18n.t("applicationError")}</span>
+            <h1>{i18n.t("errorTitle")}</h1>
+            <p>{i18n.t("errorHelp")}</p>
           </section>
         </main>
       );

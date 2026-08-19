@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	standardhttp "net/http"
 	"net/netip"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/chat"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/message"
+	"github.com/comamessenger/comamessenger/core/internal/push"
 	"github.com/comamessenger/comamessenger/core/internal/userstate"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -30,6 +32,7 @@ type Dependencies struct {
 	Chats                 *chat.Service
 	Messages              *message.Service
 	UserState             *userstate.Service
+	Push                  *push.Service
 	Realtime              standardhttp.Handler
 	CookieSecure          bool
 	RefreshTokenTTL       time.Duration
@@ -45,6 +48,7 @@ type identityHandlers struct {
 	chats                 *chat.Service
 	messages              *message.Service
 	userState             *userstate.Service
+	push                  *push.Service
 	realtime              standardhttp.Handler
 	allowedOrigin         string
 	cookieSecure          bool
@@ -70,7 +74,7 @@ type authenticated struct {
 
 func newIdentityHandlers(logger *slog.Logger, allowedOrigin string, dependencies Dependencies) *identityHandlers {
 	return &identityHandlers{
-		logger: logger, service: dependencies.Identity, chats: dependencies.Chats, messages: dependencies.Messages, userState: dependencies.UserState, realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
+		logger: logger, service: dependencies.Identity, chats: dependencies.Chats, messages: dependencies.Messages, userState: dependencies.UserState, push: dependencies.Push, realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
 		cookieSecure: dependencies.CookieSecure, refreshTTL: dependencies.RefreshTokenTTL,
 		bootstrapRate: newIPRateLimiter(5, 5), loginRate: newIPRateLimiter(10, 10),
 		refreshRate: newIPRateLimiter(30, 20), invitationRate: newIPRateLimiter(10, 10), websocketRate: newIPRateLimiter(60, 20), actorRate: newIPRateLimiter(1200, 200),
@@ -99,6 +103,7 @@ func (h *identityHandlers) routes(router chi.Router) {
 		protected.Delete("/sessions/{sessionID}", h.revokeSession)
 		protected.Post("/invitations", h.createInvitation)
 		if h.chats != nil {
+			protected.Get("/actors", h.listActors)
 			protected.Get("/chats", h.listChats)
 			protected.Post("/chats", h.createChat)
 			protected.Get("/chats/discover", h.discoverChats)
@@ -117,6 +122,7 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Get("/chats/{chatID}/pins", h.listMessagePins)
 			protected.Post("/chats/{chatID}/messages", h.createMessage)
 			protected.Patch("/messages/{messageID}", h.updateMessage)
+			protected.Get("/messages/{messageID}/context", h.messageContext)
 			protected.Delete("/messages/{messageID}", h.deleteMessage)
 			protected.Put("/messages/{messageID}/reactions/{emoji}", h.putReaction)
 			protected.Get("/messages/{messageID}/reactions", h.listReactions)
@@ -136,7 +142,38 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Put("/drafts/{chatID}", h.putDraft)
 			protected.Delete("/drafts/{chatID}", h.deleteDraft)
 		}
+		if h.push != nil {
+			protected.Get("/push/config", h.pushConfig)
+			protected.Put("/push/subscriptions", h.putPushSubscription)
+			protected.Delete("/push/subscriptions/{subscriptionID}", h.deletePushSubscription)
+			protected.Get("/preferences", h.getPreferences)
+			protected.Patch("/preferences", h.patchPreferences)
+			protected.Get("/chats/{chatID}/notification-preferences", h.getChatPreferences)
+			protected.Patch("/chats/{chatID}/notification-preferences", h.patchChatPreferences)
+		}
 	})
+}
+
+func (h *identityHandlers) listActors(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	limit := 0
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "validation_failed", "limit must be an integer.")
+			return
+		}
+		limit = parsed
+	}
+	result, err := h.chats.ListActors(r.Context(), authFromContext(r.Context()).User, r.URL.Query().Get("q"), r.URL.Query().Get("after_id"), limit)
+	if err != nil {
+		if errors.Is(err, chat.ErrInvalid) {
+			h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "validation_failed", err.Error())
+			return
+		}
+		h.internalError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
 }
 
 func (h *identityHandlers) bootstrapStatus(w standardhttp.ResponseWriter, r *standardhttp.Request) {

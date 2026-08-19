@@ -109,7 +109,7 @@ func (s *Store) Replay(ctx context.Context, user identity.User, sessionID string
 				JOIN chats c ON c.org_id = cm.org_id AND c.id = cm.chat_id
 				WHERE cm.org_id = e.org_id AND cm.chat_id = e.chat_id AND cm.actor_id = $4
 				  AND recipient.status = 'active' AND recipient.deleted_at IS NULL
-				  AND c.archived_at IS NULL
+				  AND (c.archived_at IS NULL OR e.type = 'chat.archived')
 			)
 		  )
 		ORDER BY e.seq
@@ -178,7 +178,8 @@ func (s *Store) Live(ctx context.Context, orgID string, afterSeq, throughSeq int
 					SELECT 1 FROM chat_members cm
 					JOIN chats c ON c.org_id = cm.org_id AND c.id = cm.chat_id
 					WHERE cm.org_id = e.org_id AND cm.chat_id = e.chat_id
-					  AND cm.actor_id = recipient.id AND c.archived_at IS NULL
+					  AND cm.actor_id = recipient.id
+					  AND (c.archived_at IS NULL OR e.type = 'chat.archived')
 				)
 			  )
 		) recipients ON true

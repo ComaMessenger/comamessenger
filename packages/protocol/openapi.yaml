@@ -234,6 +234,27 @@ paths:
             }
         "403": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
+  /api/v1/actors:
+    get:
+      operationId: listActors
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 120 } }
+        - { name: after_id, in: query, schema: { type: string, format: uuid } }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 100, default: 30 },
+          }
+      responses:
+        "200":
+          description: Active organization actors ordered by id.
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/ActorPage" } },
+            }
+        "422": { $ref: "#/components/responses/Error" }
   /api/v1/chats/{chat_id}:
     get:
       operationId: getChat
@@ -526,6 +547,27 @@ paths:
             }
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
+  /api/v1/messages/{message_id}/context:
+    get:
+      operationId: getMessageContext
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/MessageId" }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 3, maximum: 200, default: 51 },
+          }
+      responses:
+        "200":
+          description: Bounded ordered window around a visible target message.
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/MessageWindow" } },
+            }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
   /api/v1/messages/{message_id}/reactions/{emoji}:
     put:
       operationId: putReaction
@@ -847,6 +889,155 @@ paths:
         "204": { description: Draft is absent. }
         "404": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
+  /api/v1/push/config:
+    get:
+      operationId: getPushConfig
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          {
+            description: Push capability and VAPID public key.,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: "#/components/schemas/PushConfig" } },
+              },
+          }
+  /api/v1/push/subscriptions:
+    put:
+      operationId: putPushSubscription
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    { $ref: "#/components/schemas/PushSubscriptionRequest" },
+                },
+            },
+        }
+      responses:
+        "201":
+          {
+            description: Registered browser subscription.,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: "#/components/schemas/PushSubscription" } },
+              },
+          }
+        "422": { $ref: "#/components/responses/Error" }
+  /api/v1/push/subscriptions/{subscription_id}:
+    delete:
+      operationId: deletePushSubscription
+      security: [{ bearerAuth: [] }]
+      parameters:
+        [
+          {
+            name: subscription_id,
+            in: path,
+            required: true,
+            schema: { type: string, format: uuid },
+          },
+        ]
+      responses:
+        "204": { description: Subscription removed. }
+        "422": { $ref: "#/components/responses/Error" }
+  /api/v1/preferences:
+    get:
+      operationId: getPreferences
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          {
+            description: Client preferences.,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: "#/components/schemas/UserPreferences" } },
+              },
+          }
+    patch:
+      operationId: updatePreferences
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/UserPreferences" } },
+            },
+        }
+      responses:
+        "200":
+          {
+            description: Updated preferences.,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: "#/components/schemas/UserPreferences" } },
+              },
+          }
+        "422": { $ref: "#/components/responses/Error" }
+  /api/v1/chats/{chat_id}/notification-preferences:
+    get:
+      operationId: getChatNotificationPreferences
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: "#/components/parameters/ChatId" }]
+      responses:
+        "200":
+          {
+            description: Current chat notification policy.,
+            content:
+              {
+                application/json:
+                  {
+                    schema:
+                      {
+                        $ref: "#/components/schemas/ChatNotificationPreferences",
+                      },
+                  },
+              },
+          }
+        "422": { $ref: "#/components/responses/Error" }
+    patch:
+      operationId: updateChatNotificationPreferences
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: "#/components/parameters/ChatId" }]
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                {
+                  schema:
+                    {
+                      $ref: "#/components/schemas/ChatNotificationPreferences",
+                    },
+                },
+            },
+        }
+      responses:
+        "200":
+          {
+            description: Updated chat notification policy.,
+            content:
+              {
+                application/json:
+                  {
+                    schema:
+                      {
+                        $ref: "#/components/schemas/ChatNotificationPreferences",
+                      },
+                  },
+              },
+          }
+        "422": { $ref: "#/components/responses/Error" }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -1073,7 +1264,18 @@ components:
           }
     Chat:
       type: object
-      required: [id, kind, visibility, topic, role, created_at]
+      required:
+        [
+          id,
+          kind,
+          visibility,
+          topic,
+          role,
+          created_at,
+          display_name,
+          avatar_seed,
+          last_activity_seq,
+        ]
       properties:
         id: { type: string, format: uuid }
         kind: { type: string, enum: [direct, group, channel] }
@@ -1083,6 +1285,54 @@ components:
         role: { type: string, enum: [owner, admin, member] }
         created_at: { type: string, format: date-time }
         archived_at: { type: [string, "null"], format: date-time }
+        display_name: { type: string }
+        avatar_seed: { type: string }
+        direct_peer:
+          oneOf:
+            [{ $ref: "#/components/schemas/ActorSummary" }, { type: "null" }]
+        last_message:
+          oneOf:
+            [{ $ref: "#/components/schemas/MessagePreview" }, { type: "null" }]
+        last_activity_seq: { type: integer, format: int64, minimum: 0 }
+        last_message_at: { type: [string, "null"], format: date-time }
+    ActorSummary:
+      type: object
+      additionalProperties: false
+      required: [actor_id, display_name, handle, type]
+      properties:
+        actor_id: { type: string, format: uuid }
+        display_name: { type: string }
+        handle: { type: string }
+        type: { type: string, enum: [user, agent] }
+    ActorPage:
+      type: object
+      additionalProperties: false
+      required: [actors, next_after_id]
+      properties:
+        actors:
+          { type: array, items: { $ref: "#/components/schemas/ActorSummary" } }
+        next_after_id: { type: [string, "null"], format: uuid }
+    MessagePreview:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          actor_id,
+          actor_display_name,
+          body,
+          created_seq,
+          created_at,
+          deleted,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        actor_id: { type: string, format: uuid }
+        actor_display_name: { type: string }
+        body: { type: string, maxLength: 280 }
+        created_seq: { type: integer, format: int64, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        deleted: { type: boolean }
     UpdateChatRequest:
       type: object
       additionalProperties: false
@@ -1170,6 +1420,16 @@ components:
         messages:
           { type: array, items: { $ref: "#/components/schemas/Message" } }
         next_before_seq: { type: [integer, "null"], format: int64, minimum: 1 }
+    MessageWindow:
+      type: object
+      additionalProperties: false
+      required: [messages, target_id, has_earlier, has_later]
+      properties:
+        messages:
+          { type: array, items: { $ref: "#/components/schemas/Message" } }
+        target_id: { type: string, format: uuid }
+        has_earlier: { type: boolean }
+        has_later: { type: boolean }
     CreateMessageRequest:
       type: object
       additionalProperties: false
@@ -1337,3 +1597,45 @@ components:
           { type: array, items: { $ref: "#/components/schemas/ChatUnread" } }
         threads:
           { type: array, items: { $ref: "#/components/schemas/ThreadUnread" } }
+    PushConfig:
+      type: object
+      additionalProperties: false
+      required: [enabled, public_key]
+      properties:
+        enabled: { type: boolean }
+        public_key: { type: string }
+    PushSubscriptionRequest:
+      type: object
+      additionalProperties: false
+      required: [endpoint, keys]
+      properties:
+        endpoint: { type: string, format: uri }
+        keys:
+          type: object
+          additionalProperties: false
+          required: [p256dh, auth]
+          properties: { p256dh: { type: string }, auth: { type: string } }
+    PushSubscription:
+      type: object
+      additionalProperties: false
+      required: [id, endpoint, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        endpoint: { type: string, format: uri }
+        created_at: { type: string, format: date-time }
+    UserPreferences:
+      type: object
+      additionalProperties: false
+      required: [theme, locale, push_enabled, push_preview]
+      properties:
+        theme: { type: string, enum: [system, light, dark] }
+        locale: { type: string, enum: [ru, en] }
+        push_enabled: { type: boolean }
+        push_preview: { type: boolean }
+    ChatNotificationPreferences:
+      type: object
+      additionalProperties: false
+      required: [notify_level]
+      properties:
+        notify_level: { type: string, enum: [all, mentions, none] }
+        muted_until: { type: [string, "null"], format: date-time }

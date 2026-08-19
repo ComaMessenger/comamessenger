@@ -214,6 +214,21 @@ func (h *Hub) IsActive(subscription *Subscription, chatID string, threadRootID *
 	return *subscription.activeThreadRootID == *threadRootID
 }
 
+func (h *Hub) ActorActiveIn(orgID, actorID, chatID string) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	state := h.organizations[orgID]
+	if state == nil {
+		return false
+	}
+	for subscription := range state.members {
+		if subscription.ActorID == actorID && subscription.activeChatID != nil && *subscription.activeChatID == chatID {
+			return true
+		}
+	}
+	return false
+}
+
 func (h *Hub) BroadcastEphemeral(orgID string, actorIDs []string, excludeConnectionID string, payload json.RawMessage) {
 	recipients := make(map[string]struct{}, len(actorIDs))
 	for _, actorID := range actorIDs {

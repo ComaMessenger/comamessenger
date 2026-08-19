@@ -26,11 +26,14 @@
 - [ADR-0005: authentication, sessions and ownership](decisions/0005-auth-sessions-and-ownership.md)
 - [ADR-0006: надёжная доставка сообщений и realtime](decisions/0006-messaging-delivery-and-realtime.md)
 - [ADR-0007: Redis как координационный, а не долговечный слой](decisions/0007-redis-coordination.md)
-- [ADR-0008: предел live fan-out на одну реплику Core](decisions/0008-live-fanout-capacity.md)
+- [ADR-0008: batch hydration и in-memory live fan-out](decisions/0008-live-fanout-capacity.md)
+- [ADR-0009: общий клиентский движок, общие токены и платформенный UI](decisions/0009-client-engine-and-platform-ui.md)
+- [ADR-0010: надёжная доставка Web Push](decisions/0010-web-push-delivery.md)
 
 ## Протоколы
 
 - [Realtime protocol v1](protocols/realtime-v1.md)
+- [Phase 3.0: инвентаризация клиентских контрактов](phases/03-web-client-contracts.md)
 
 ## Эксплуатация
 
