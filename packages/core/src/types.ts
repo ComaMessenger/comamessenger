@@ -40,6 +40,8 @@ export type UpdateOrganizationMemberRequest =
   components["schemas"]["UpdateOrganizationMemberRequest"];
 export type TransferOwnershipRequest =
   components["schemas"]["TransferOwnershipRequest"];
+export type ChangePasswordRequest =
+  components["schemas"]["ChangePasswordRequest"];
 export type AuditPage = components["schemas"]["AuditPage"];
 export type Session = components["schemas"]["Session"];
 export type BootstrapRequest = components["schemas"]["BootstrapRequest"];

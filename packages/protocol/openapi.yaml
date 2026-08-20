@@ -123,6 +123,20 @@ paths:
                 { schema: { $ref: "#/components/schemas/User" } },
             }
         "422": { $ref: "#/components/responses/Error" }
+  /api/v1/me/password:
+    post:
+      operationId: changePassword
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChangePasswordRequest" }
+      responses:
+        "204":
+          { description: Password changed and other sessions revoked. }
+        "403": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
   /api/v1/sessions:
     get:
       operationId: listSessions
@@ -1412,7 +1426,16 @@ components:
       properties:
         display_name: { type: string, minLength: 1, maxLength: 120 }
         handle: { type: string }
+        title: { type: string, maxLength: 120 }
+        about: { type: string, maxLength: 280 }
         timezone: { type: string }
+    ChangePasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [current_password, new_password]
+      properties:
+        current_password: { type: string, minLength: 1, maxLength: 1024 }
+        new_password: { type: string, minLength: 10, maxLength: 1024 }
     User:
       type: object
       required:
@@ -1424,6 +1447,8 @@ components:
           email,
           display_name,
           handle,
+          title,
+          about,
           timezone,
           status,
           permissions,
@@ -1437,6 +1462,8 @@ components:
         email: { type: string, format: email }
         display_name: { type: string }
         handle: { type: string }
+        title: { type: string }
+        about: { type: string }
         timezone: { type: string }
         status: { type: string, enum: [active, deactivated] }
         permissions:
@@ -1652,16 +1679,19 @@ components:
           email,
           display_name,
           handle,
+          title,
           role,
           status,
           permissions,
           created_at,
+          last_seen_at,
         ]
       properties:
         actor_id: { type: string, format: uuid }
         email: { type: string, format: email }
         display_name: { type: string }
         handle: { type: string }
+        title: { type: string }
         role: { type: string, enum: [owner, admin, member] }
         status: { type: string, enum: [active, deactivated] }
         permissions:
@@ -1669,6 +1699,7 @@ components:
           uniqueItems: true
           items: { $ref: "#/components/schemas/Permission" }
         created_at: { type: string, format: date-time }
+        last_seen_at: { type: [string, "null"], format: date-time }
     UpdateOrganizationMemberRequest:
       type: object
       additionalProperties: false
@@ -1797,11 +1828,13 @@ components:
     ActorSummary:
       type: object
       additionalProperties: false
-      required: [actor_id, display_name, handle, type]
+      required: [actor_id, display_name, handle, title, about, type]
       properties:
         actor_id: { type: string, format: uuid }
         display_name: { type: string }
         handle: { type: string }
+        title: { type: string }
+        about: { type: string }
         type: { type: string, enum: [user, agent] }
     ActorPage:
       type: object
@@ -1851,11 +1884,12 @@ components:
         created_at: { type: string, format: date-time }
     ChatMember:
       type: object
-      required: [actor_id, display_name, handle, role, joined_at]
+      required: [actor_id, display_name, handle, title, role, joined_at]
       properties:
         actor_id: { type: string, format: uuid }
         display_name: { type: string }
         handle: { type: string }
+        title: { type: string }
         role: { type: string, enum: [owner, admin, member] }
         joined_at: { type: string, format: date-time }
     AddChatMemberRequest:

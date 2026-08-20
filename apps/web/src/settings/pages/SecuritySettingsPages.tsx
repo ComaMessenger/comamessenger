@@ -4,7 +4,7 @@ import type { MessengerAPI, Session, User } from "@comamessenger/core";
 import { History, KeyRound, MonitorSmartphone } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { messageOf } from "../../errors";
-import { Badge, Button } from "../../ui";
+import { Badge, Button, Field } from "../../ui";
 import {
   SettingsAccessDenied,
   SettingsSection,
@@ -14,6 +14,7 @@ import {
   type SettingsNavigate,
 } from "../components/SettingsShell";
 import { canAccessSettingsPage } from "../registry";
+import { sessionLabel } from "../sessionLabel";
 
 export function SecuritySettingsPage({
   api,
@@ -32,6 +33,10 @@ export function SecuritySettingsPage({
   const [message, setMessage] = useState("");
   const [revokedIDs, setRevokedIDs] = useState<Set<string>>(() => new Set());
   const [pendingSession, setPendingSession] = useState<string | null>(null);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordPending, setPasswordPending] = useState(false);
   async function revoke(session: Session) {
     setPendingSession(session.id);
     try {
@@ -63,6 +68,27 @@ export function SecuritySettingsPage({
       setPendingSession(null);
     }
   }
+  async function changePassword() {
+    if (!currentPassword || !newPassword || newPassword !== confirmPassword)
+      return;
+    setMessage("");
+    setPasswordPending(true);
+    try {
+      await api.changePassword({
+        current_password: currentPassword,
+        new_password: newPassword,
+      });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      await query.refetch();
+      setMessage(t("passwordChanged"));
+    } catch (cause) {
+      setMessage(messageOf(cause));
+    } finally {
+      setPasswordPending(false);
+    }
+  }
   const activeSessions = (query.data ?? []).filter(
     (session) =>
       !session.revoked_at &&
@@ -78,6 +104,56 @@ export function SecuritySettingsPage({
     >
       <div className="settings-page__body">
         <SettingsSection
+          title={t("changePassword")}
+          description={t("changePasswordHint")}
+          icon={<KeyRound />}
+        >
+          <div className="settings-form-grid">
+            <Field
+              label={t("currentPassword")}
+              name="current-password"
+              type="password"
+              autoComplete="current-password"
+              value={currentPassword}
+              onChange={(event) => setCurrentPassword(event.target.value)}
+            />
+            <Field
+              label={t("newPassword")}
+              name="new-password"
+              type="password"
+              minLength={10}
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+            />
+            <Field
+              label={t("confirmNewPassword")}
+              name="confirm-new-password"
+              type="password"
+              minLength={10}
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+            />
+          </div>
+          {confirmPassword && newPassword !== confirmPassword && (
+            <small className="settings-error">{t("passwordsDoNotMatch")}</small>
+          )}
+          <Button
+            variant="primary"
+            disabled={
+              passwordPending ||
+              !currentPassword ||
+              newPassword.length < 10 ||
+              newPassword !== confirmPassword
+            }
+            onClick={() => void changePassword()}
+          >
+            <KeyRound />
+            {passwordPending ? t("saving") : t("changePassword")}
+          </Button>
+        </SettingsSection>
+        <SettingsSection
           title={t("activeSessions")}
           description={t("activeSessionsHint")}
           icon={<MonitorSmartphone />}
@@ -90,7 +166,7 @@ export function SecuritySettingsPage({
                   <strong>
                     {session.current
                       ? t("currentSession")
-                      : session.user_agent || t("unknownDevice")}
+                      : sessionLabel(session.user_agent, t("unknownDevice"))}
                   </strong>
                   <small>
                     {new Date(session.last_seen_at).toLocaleString()} ·{" "}

@@ -117,6 +117,13 @@ export function WorkspaceMembersPage({
                     <small>
                       @{member.handle} · {member.email}
                     </small>
+                    {member.title && <small>{member.title}</small>}
+                    {member.last_seen_at && (
+                      <small>
+                        {t("lastSeen")}:{" "}
+                        {new Date(member.last_seen_at).toLocaleString()}
+                      </small>
+                    )}
                   </span>
                   <select
                     aria-label={t("defaultRole")}

@@ -149,6 +149,22 @@ export interface paths {
         patch: operations["updateMe"];
         trace?: never;
     };
+    "/api/v1/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["changePassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions": {
         parameters: {
             query?: never;
@@ -1013,7 +1029,13 @@ export interface components {
         UpdateProfileRequest: {
             display_name?: string;
             handle?: string;
+            title?: string;
+            about?: string;
             timezone?: string;
+        };
+        ChangePasswordRequest: {
+            current_password: string;
+            new_password: string;
         };
         User: {
             /** Format: uuid */
@@ -1027,6 +1049,8 @@ export interface components {
             email: string;
             display_name: string;
             handle: string;
+            title: string;
+            about: string;
             timezone: string;
             /** @enum {string} */
             status: "active" | "deactivated";
@@ -1162,6 +1186,7 @@ export interface components {
             email: string;
             display_name: string;
             handle: string;
+            title: string;
             /** @enum {string} */
             role: "owner" | "admin" | "member";
             /** @enum {string} */
@@ -1169,6 +1194,8 @@ export interface components {
             permissions: components["schemas"]["Permission"][];
             /** Format: date-time */
             created_at: string;
+            /** Format: date-time */
+            last_seen_at: string | null;
         };
         UpdateOrganizationMemberRequest: {
             /** @enum {string|null} */
@@ -1273,6 +1300,8 @@ export interface components {
             actor_id: string;
             display_name: string;
             handle: string;
+            title: string;
+            about: string;
             /** @enum {string} */
             type: "user" | "agent";
         };
@@ -1315,6 +1344,7 @@ export interface components {
             actor_id: string;
             display_name: string;
             handle: string;
+            title: string;
             /** @enum {string} */
             role: "owner" | "admin" | "member";
             /** Format: date-time */
@@ -1824,6 +1854,30 @@ export interface operations {
                     "application/json": components["schemas"]["User"];
                 };
             };
+            422: components["responses"]["Error"];
+        };
+    };
+    changePassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Password changed and other sessions revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
             422: components["responses"]["Error"];
         };
     };

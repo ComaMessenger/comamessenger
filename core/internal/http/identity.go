@@ -108,6 +108,7 @@ func (h *identityHandlers) routes(router chi.Router) {
 		protected.Post("/auth/logout", h.logout)
 		protected.Get("/me", h.me)
 		protected.Patch("/me", h.updateMe)
+		protected.Post("/me/password", h.changePassword)
 		protected.Get("/sessions", h.sessions)
 		protected.Delete("/sessions/{sessionID}", h.revokeSession)
 		protected.Post("/sessions/revoke-others", h.revokeOtherSessions)
@@ -313,6 +314,33 @@ func (h *identityHandlers) updateMe(w standardhttp.ResponseWriter, r *standardht
 		return
 	}
 	writeJSON(h.logger, w, standardhttp.StatusOK, user)
+}
+
+func (h *identityHandlers) changePassword(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input identity.ChangePasswordInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	auth := authFromContext(r.Context())
+	revoked, err := h.service.ChangePassword(r.Context(), auth.User, auth.Identity.SessionID, input)
+	if err != nil {
+		switch {
+		case errors.Is(err, identity.ErrReauthentication):
+			h.writeError(w, r, standardhttp.StatusForbidden, "reauthentication_failed", "Current password is incorrect.")
+		case identity.IsValidationError(err):
+			h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "validation_failed", err.Error())
+		default:
+			h.internalError(w, r, err)
+		}
+		return
+	}
+	if h.revokeRealtimeSession != nil {
+		for _, sessionID := range revoked {
+			h.revokeRealtimeSession(sessionID)
+		}
+	}
+	w.WriteHeader(standardhttp.StatusNoContent)
 }
 
 func (h *identityHandlers) transferOwnership(w standardhttp.ResponseWriter, r *standardhttp.Request) {

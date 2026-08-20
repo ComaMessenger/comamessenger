@@ -19,6 +19,8 @@ function user(role: User["role"], permissions: Permission[] = []): User {
     email: "user@example.test",
     display_name: "User",
     handle: "user",
+    title: "",
+    about: "",
     timezone: "UTC",
     status: "active",
     permissions,

@@ -50,7 +50,7 @@ export function WorkspaceOverviewPage({
             </span>
           </article>
           <SettingsSection
-            title={t("workspaceSettings")}
+            title={t("currentWorkspace")}
             description={t("workspaceSettingsHint")}
           >
             <div className="workspace-settings-links">

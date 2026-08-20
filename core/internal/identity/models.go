@@ -44,6 +44,8 @@ type User struct {
 	Email            string            `json:"email"`
 	DisplayName      string            `json:"display_name"`
 	Handle           string            `json:"handle"`
+	Title            string            `json:"title"`
+	About            string            `json:"about"`
 	Timezone         string            `json:"timezone"`
 	Status           string            `json:"status"`
 	Permissions      []permission.Code `json:"permissions"`
@@ -93,7 +95,14 @@ type LoginInput struct {
 type UpdateProfileInput struct {
 	DisplayName *string `json:"display_name"`
 	Handle      *string `json:"handle"`
+	Title       *string `json:"title"`
+	About       *string `json:"about"`
 	Timezone    *string `json:"timezone"`
+}
+
+type ChangePasswordInput struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
 }
 
 type TransferOwnershipInput struct {

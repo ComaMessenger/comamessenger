@@ -1988,6 +1988,11 @@ function Conversation({
   const previousVisibleLength = useRef(0);
   const lastReadRequested = useRef(0);
   const title = titleOf(chat, members, user.id);
+  const directPeer =
+    chat?.kind === "direct"
+      ? (chat.direct_peer ??
+        members.find((member) => member.actor_id !== user.id))
+      : undefined;
   const readonly = chat?.kind === "channel" && chat.role === "member";
   const visible = messages.filter((item) => !item.thread_root_id);
   const virtual = useVirtualizer({
@@ -2216,7 +2221,9 @@ function Conversation({
           <span>
             {typing.length
               ? `${typing.length} ${t("typing")}`
-              : chat.topic || t("memberCount", { count: members.length })}
+              : directPeer?.title ||
+                chat.topic ||
+                t("memberCount", { count: members.length })}
           </span>
         </div>
         <div className="conversation-head__actions">
@@ -3802,7 +3809,11 @@ function MembersDirectory({
               />
               <span>
                 <strong>{actor.display_name}</strong>
-                <small>@{actor.handle}</small>
+                <small>
+                  @{actor.handle}
+                  {actor.title ? ` · ${actor.title}` : ""}
+                </small>
+                {actor.about && <small>{actor.about}</small>}
               </span>
               <Badge>{actor.type}</Badge>
             </article>
@@ -4368,7 +4379,8 @@ function ChatInfoDialog({
               <span>
                 <strong>{member.display_name}</strong>
                 <small>
-                  @{member.handle} · {member.role}
+                  @{member.handle}
+                  {member.title ? ` · ${member.title}` : ""} · {member.role}
                 </small>
               </span>
             </div>

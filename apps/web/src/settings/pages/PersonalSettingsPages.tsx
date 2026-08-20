@@ -3,7 +3,14 @@ import { useQuery } from "@tanstack/react-query";
 import type { MessengerAPI, User, UserPreferences } from "@comamessenger/core";
 import { Bell, LogOut, MessageCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Avatar, Button, Field, SelectField, Skeleton } from "../../ui";
+import {
+  Avatar,
+  Button,
+  Field,
+  SelectField,
+  Skeleton,
+  TextareaField,
+} from "../../ui";
 import { setLocale } from "../../i18n";
 import { setTheme } from "../../theme";
 import { AutosaveStatus } from "../components/AutosaveStatus";
@@ -20,6 +27,9 @@ import { useAutosave } from "../hooks/useAutosave";
 type ProfileDraft = {
   displayName: string;
   handle: string;
+  title: string;
+  about: string;
+  timezone: string;
   theme: UserPreferences["theme"];
   locale: "ru" | "en";
 };
@@ -50,11 +60,14 @@ export function ProfileSettingsPage({
         current ?? {
           displayName: user.display_name,
           handle: user.handle,
+          title: user.title,
+          about: user.about,
+          timezone: user.timezone,
           theme: query.data.theme,
           locale: query.data.locale,
         },
     );
-  }, [query.data, user.display_name, user.handle]);
+  }, [query.data, user]);
   const autosave = useAutosave({
     value: draft,
     save: async (snapshot) => {
@@ -62,7 +75,9 @@ export function ProfileSettingsPage({
         api.updateMe({
           display_name: snapshot.displayName,
           handle: snapshot.handle,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          title: snapshot.title,
+          about: snapshot.about,
+          timezone: snapshot.timezone,
         }),
         api.updatePreferences({
           ...(query.data ?? {
@@ -87,13 +102,14 @@ export function ProfileSettingsPage({
       title={t("profileSettings")}
       navigate={navigate}
     >
-      <div className="settings-page__body settings-page__body--columns">
+      <div className="settings-page__body">
         <AutosaveStatus {...autosave} onRetry={autosave.retry} />
         <article className="profile-settings-card">
           <Avatar name={draft.displayName} seed={user.id} size="lg" online />
           <span>
             <strong>{draft.displayName}</strong>
             <small>@{draft.handle}</small>
+            {draft.title && <small>{draft.title}</small>}
             <small>{user.email}</small>
           </span>
         </article>
@@ -118,7 +134,42 @@ export function ProfileSettingsPage({
                 setDraft({ ...draft, handle: event.target.value })
               }
             />
+            <Field
+              label={t("jobTitle")}
+              name="profile-title"
+              maxLength={120}
+              value={draft.title}
+              onChange={(event) =>
+                setDraft({ ...draft, title: event.target.value })
+              }
+            />
+            <SelectField
+              label={t("timezone")}
+              name="profile-timezone"
+              value={draft.timezone}
+              onChange={(event) =>
+                setDraft({ ...draft, timezone: event.target.value })
+              }
+            >
+              {!commonTimezones.some(
+                (timezone) => timezone === draft.timezone,
+              ) && <option value={draft.timezone}>{draft.timezone}</option>}
+              {commonTimezones.map((timezone) => (
+                <option key={timezone} value={timezone}>
+                  {timezone}
+                </option>
+              ))}
+            </SelectField>
           </div>
+          <TextareaField
+            label={t("about")}
+            name="profile-about"
+            maxLength={280}
+            value={draft.about}
+            onChange={(event) =>
+              setDraft({ ...draft, about: event.target.value })
+            }
+          />
         </SettingsSection>
         <SettingsSection
           title={t("appearance")}
@@ -168,6 +219,21 @@ export function ProfileSettingsPage({
     </SettingsShell>
   );
 }
+
+const commonTimezones = [
+  "UTC",
+  "Europe/Kaliningrad",
+  "Europe/Moscow",
+  "Europe/Samara",
+  "Asia/Yekaterinburg",
+  "Asia/Omsk",
+  "Asia/Novosibirsk",
+  "Asia/Irkutsk",
+  "Asia/Yakutsk",
+  "Asia/Vladivostok",
+  "Asia/Magadan",
+  "Asia/Kamchatka",
+] as const;
 
 export function NotificationSettingsPage({
   api,

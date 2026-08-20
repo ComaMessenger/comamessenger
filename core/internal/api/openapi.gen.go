@@ -1390,9 +1390,11 @@ type ActorPage struct {
 
 // ActorSummary defines model for ActorSummary.
 type ActorSummary struct {
+	About       string             `json:"about"`
 	ActorId     openapi_types.UUID `json:"actor_id"`
 	DisplayName string             `json:"display_name"`
 	Handle      string             `json:"handle"`
+	Title       string             `json:"title"`
 	Type        ActorSummaryType   `json:"type"`
 }
 
@@ -1439,6 +1441,12 @@ type BootstrapRequest struct {
 // BootstrapStatus defines model for BootstrapStatus.
 type BootstrapStatus struct {
 	Bootstrapped bool `json:"bootstrapped"`
+}
+
+// ChangePasswordRequest defines model for ChangePasswordRequest.
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
 }
 
 // Chat defines model for Chat.
@@ -1495,6 +1503,7 @@ type ChatMember struct {
 	Handle      string             `json:"handle"`
 	JoinedAt    time.Time          `json:"joined_at"`
 	Role        ChatMemberRole     `json:"role"`
+	Title       string             `json:"title"`
 }
 
 // ChatMemberRole defines model for ChatMember.Role.
@@ -1745,9 +1754,11 @@ type OrganizationMember struct {
 	DisplayName string                   `json:"display_name"`
 	Email       openapi_types.Email      `json:"email"`
 	Handle      string                   `json:"handle"`
+	LastSeenAt  *time.Time               `json:"last_seen_at"`
 	Permissions []Permission             `json:"permissions"`
 	Role        OrganizationMemberRole   `json:"role"`
 	Status      OrganizationMemberStatus `json:"status"`
+	Title       string                   `json:"title"`
 }
 
 // OrganizationMemberRole defines model for OrganizationMember.Role.
@@ -2161,13 +2172,16 @@ type UpdateOrganizationSettingsRequestInvitationDefaultRole string
 
 // UpdateProfileRequest defines model for UpdateProfileRequest.
 type UpdateProfileRequest struct {
+	About       *string `json:"about,omitempty"`
 	DisplayName *string `json:"display_name,omitempty"`
 	Handle      *string `json:"handle,omitempty"`
 	Timezone    *string `json:"timezone,omitempty"`
+	Title       *string `json:"title,omitempty"`
 }
 
 // User defines model for User.
 type User struct {
+	About            string              `json:"about"`
 	CreatedAt        time.Time           `json:"created_at"`
 	DisplayName      string              `json:"display_name"`
 	Email            openapi_types.Email `json:"email"`
@@ -2179,6 +2193,7 @@ type User struct {
 	Role             UserRole            `json:"role"`
 	Status           UserStatus          `json:"status"`
 	Timezone         string              `json:"timezone"`
+	Title            string              `json:"title"`
 }
 
 // UserRole defines model for User.Role.
@@ -2309,6 +2324,9 @@ type AcceptInvitationJSONRequestBody = AcceptInvitationRequest
 
 // UpdateMeJSONRequestBody defines body for UpdateMe for application/json ContentType.
 type UpdateMeJSONRequestBody = UpdateProfileRequest
+
+// ChangePasswordJSONRequestBody defines body for ChangePassword for application/json ContentType.
+type ChangePasswordJSONRequestBody = ChangePasswordRequest
 
 // UpdateMessageJSONRequestBody defines body for UpdateMessage for application/json ContentType.
 type UpdateMessageJSONRequestBody = UpdateMessageRequest

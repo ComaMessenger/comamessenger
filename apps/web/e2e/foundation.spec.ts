@@ -23,6 +23,8 @@ const user = {
   email: "owner@example.com",
   display_name: "Анна",
   handle: "anna",
+  title: "Главный администратор",
+  about: "",
   timezone: "UTC",
   status: "active",
   created_at: "2026-08-19T00:00:00Z",
@@ -31,6 +33,7 @@ const lev = {
   actor_id: "01a01612-85e4-7145-bda3-82db7b4a3075",
   display_name: "Лев",
   handle: "lev",
+  title: "Дизайнер",
   role: "member",
   joined_at: "2026-08-19T00:00:00Z",
 };
@@ -252,6 +255,9 @@ async function mockMessenger(
     } else if (path.endsWith("/chats")) {
       chatRequests += 1;
       body = { chats: [runtimeChat] };
+    } else if (path.endsWith("/me/password")) {
+      status = 204;
+      body = undefined;
     } else if (path.endsWith("/me") && route.request().method() === "PATCH")
       body = { ...user, ...route.request().postDataJSON() };
     else if (path.endsWith("/preferences")) {
@@ -282,9 +288,12 @@ async function mockMessenger(
             email: user.email,
             display_name: user.display_name,
             handle: user.handle,
+            title: user.title,
             role: user.role,
             status: "active",
+            permissions: [],
             created_at: user.created_at,
+            last_seen_at: "2026-08-20T00:00:00Z",
           },
         ],
       };
@@ -295,7 +304,9 @@ async function mockMessenger(
         email: user.email,
         display_name: user.display_name,
         handle: user.handle,
+        title: user.title,
         created_at: user.created_at,
+        last_seen_at: "2026-08-20T00:00:00Z",
       };
     else if (path.endsWith("/organization/infrastructure/test"))
       body = {
@@ -397,9 +408,11 @@ async function mockMessenger(
             actor_id: user.id,
             display_name: user.display_name,
             handle: user.handle,
+            title: user.title,
+            about: user.about,
             type: "user",
           },
-          { ...lev, type: "user" },
+          { ...lev, about: "", type: "user" },
         ],
         next_after_id: null,
       };
@@ -424,6 +437,7 @@ async function mockMessenger(
             actor_id: user.id,
             display_name: user.display_name,
             handle: user.handle,
+            title: user.title,
             role: "member",
             joined_at: "2026-08-19T00:00:00Z",
           },
@@ -845,7 +859,14 @@ test("phase 3.1 settings cover workspace branding infrastructure sessions and au
   await expect(
     page.getByRole("heading", { name: "Настройки пространства" }),
   ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Основные сведения", exact: true })
+    .click();
   await page.getByLabel("Название организации").fill("Новая команда");
+  await expect(page.getByText("Сохранено")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Приглашения", exact: true })
+    .click();
   await page.getByLabel("Срок приглашения, часов").fill("72");
   await expect(page.getByText("Сохранено")).toBeVisible();
   await page.getByLabel("Почта участника").fill("new@example.com");
@@ -904,12 +925,21 @@ test("phase 3.1 settings cover workspace branding infrastructure sessions and au
   await expect(
     page.getByRole("heading", { name: "Безопасность и сессии" }),
   ).toBeVisible();
-  await expect(page.getByText("Mobile Safari")).toBeVisible();
+  await page.getByLabel("Текущий пароль").fill("current password");
+  await page
+    .getByLabel("Новый пароль", { exact: true })
+    .fill("new secure password");
+  await page.getByLabel("Повторите новый пароль").fill("new secure password");
+  await page.getByRole("button", { name: "Сменить пароль" }).click();
+  await expect(
+    page.getByText("Пароль изменён, остальные сессии завершены"),
+  ).toBeVisible();
+  await expect(page.getByText("Safari", { exact: true })).toBeVisible();
   await page
     .getByRole("button", { name: "Выйти на остальных устройствах" })
     .click();
   await expect(page.getByText("Остальные сессии завершены")).toBeVisible();
-  await expect(page.getByText("Mobile Safari")).toHaveCount(0);
+  await expect(page.getByText("Safari", { exact: true })).toHaveCount(0);
 
   await page.getByRole("button", { name: "Аудит", exact: true }).click();
   await expect(page.getByText("organization.settings.update")).toBeVisible();

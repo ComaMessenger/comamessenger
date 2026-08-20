@@ -115,6 +115,32 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	if member.User.Permissions == nil || len(member.User.Permissions) != 0 {
 		t.Fatalf("member permissions = %#v", member.User.Permissions)
 	}
+	var memberOtherSession identity.Tokens
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/auth/login", "", map[string]any{
+		"email": "member@example.test", "password": "another correct password",
+	}, standardhttp.StatusOK, &memberOtherSession)
+	var updatedMember identity.User
+	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/me", member.AccessToken, map[string]any{
+		"display_name": "Member", "handle": "member", "title": "Product designer",
+		"about": "Designs Coma", "timezone": "Asia/Yekaterinburg",
+	}, standardhttp.StatusOK, &updatedMember)
+	if updatedMember.Title != "Product designer" || updatedMember.About != "Designs Coma" || updatedMember.Timezone != "Asia/Yekaterinburg" {
+		t.Fatalf("updated profile = %+v", updatedMember)
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/me/password", member.AccessToken, map[string]any{
+		"current_password": "wrong password", "new_password": "new member password",
+	}, standardhttp.StatusForbidden, nil)
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/me/password", member.AccessToken, map[string]any{
+		"current_password": "another correct password", "new_password": "new member password",
+	}, standardhttp.StatusNoContent, nil)
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/me", memberOtherSession.AccessToken, nil, standardhttp.StatusUnauthorized, nil)
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/auth/login", "", map[string]any{
+		"email": "member@example.test", "password": "another correct password",
+	}, standardhttp.StatusUnauthorized, nil)
+	var memberNewLogin identity.Tokens
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/auth/login", "", map[string]any{
+		"email": "member@example.test", "password": "new member password",
+	}, standardhttp.StatusOK, &memberNewLogin)
 
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/invitations", owner.AccessToken, map[string]any{
 		"email": "admin@example.test", "role": "admin",

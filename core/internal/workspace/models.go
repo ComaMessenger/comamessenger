@@ -146,10 +146,12 @@ type Member struct {
 	Email       string            `json:"email"`
 	DisplayName string            `json:"display_name"`
 	Handle      string            `json:"handle"`
+	Title       string            `json:"title"`
 	Role        string            `json:"role"`
 	Status      string            `json:"status"`
 	Permissions []permission.Code `json:"permissions"`
 	CreatedAt   time.Time         `json:"created_at"`
+	LastSeenAt  *time.Time        `json:"last_seen_at"`
 }
 
 type UpdateMemberInput struct {

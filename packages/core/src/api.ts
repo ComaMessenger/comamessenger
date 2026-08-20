@@ -36,6 +36,7 @@ import type {
   UpdateInfrastructureSettingsRequest,
   UpdateOrganizationMemberRequest,
   TransferOwnershipRequest,
+  ChangePasswordRequest,
   UpdateOrganizationSettingsRequest,
   User,
   UserPreferences,
@@ -153,10 +154,18 @@ export class MessengerAPI {
     return this.request("/api/v1/me");
   }
   updateMe(
-    input: Partial<Pick<User, "display_name" | "handle" | "timezone">>,
+    input: Partial<
+      Pick<User, "display_name" | "handle" | "title" | "about" | "timezone">
+    >,
   ): Promise<User> {
     return this.request("/api/v1/me", {
       method: "PATCH",
+      body: JSON.stringify(input),
+    });
+  }
+  changePassword(input: ChangePasswordRequest): Promise<void> {
+    return this.request("/api/v1/me/password", {
+      method: "POST",
       body: JSON.stringify(input),
     });
   }

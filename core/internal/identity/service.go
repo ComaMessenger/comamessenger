@@ -167,6 +167,8 @@ func (s *Service) RevokeOtherSessions(ctx context.Context, actorID, currentSessi
 func (s *Service) UpdateProfile(ctx context.Context, current User, input UpdateProfileInput) (User, error) {
 	displayName := current.DisplayName
 	handle := current.Handle
+	title := current.Title
+	about := current.About
 	timezone := current.Timezone
 	if input.DisplayName != nil {
 		displayName = strings.TrimSpace(*input.DisplayName)
@@ -180,13 +182,58 @@ func (s *Service) UpdateProfile(ctx context.Context, current User, input UpdateP
 			return User{}, validationErrorf("handle has invalid format")
 		}
 	}
+	if input.Title != nil {
+		title = strings.TrimSpace(*input.Title)
+		if len([]rune(title)) > 120 {
+			return User{}, validationErrorf("title must contain at most 120 characters")
+		}
+	}
+	if input.About != nil {
+		about = strings.TrimSpace(*input.About)
+		if len([]rune(about)) > 280 {
+			return User{}, validationErrorf("about must contain at most 280 characters")
+		}
+	}
 	if input.Timezone != nil {
 		timezone = strings.TrimSpace(*input.Timezone)
 		if len(timezone) < 1 || len(timezone) > 64 {
 			return User{}, validationErrorf("timezone has invalid length")
 		}
 	}
-	return s.repository.UpdateProfile(ctx, current.ActorID, displayName, handle, timezone)
+	return s.repository.UpdateProfile(ctx, current.ActorID, displayName, handle, title, about, timezone)
+}
+
+func (s *Service) ChangePassword(ctx context.Context, current User, currentSessionID string, input ChangePasswordInput) ([]string, error) {
+	if len(input.CurrentPassword) < 1 || len(input.CurrentPassword) > 1024 {
+		return nil, validationErrorf("current_password length must be between 1 and 1024 bytes")
+	}
+	if len(input.NewPassword) < 10 || len(input.NewPassword) > 1024 {
+		return nil, validationErrorf("new_password length must be between 10 and 1024 bytes")
+	}
+	passwordHash, err := s.repository.PasswordHash(ctx, current.OrgID, current.ActorID)
+	if err != nil {
+		return nil, err
+	}
+	matched, err := s.hasher.Verify(passwordHash, input.CurrentPassword)
+	if err != nil || !matched {
+		return nil, ErrReauthentication
+	}
+	unchanged, err := s.hasher.Verify(passwordHash, input.NewPassword)
+	if err != nil {
+		return nil, err
+	}
+	if unchanged {
+		return nil, validationErrorf("new_password must differ from current_password")
+	}
+	newHash, err := s.hasher.Hash(input.NewPassword)
+	if err != nil {
+		return nil, err
+	}
+	auditID, err := id.New()
+	if err != nil {
+		return nil, fmt.Errorf("generate password change audit identifier: %w", err)
+	}
+	return s.repository.ChangePassword(ctx, current.OrgID, current.ActorID, currentSessionID, newHash, auditID, s.now().UTC())
 }
 
 func (s *Service) TransferOwnership(ctx context.Context, current User, input TransferOwnershipInput) (User, error) {

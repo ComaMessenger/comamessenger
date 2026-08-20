@@ -241,6 +241,37 @@
         }
       }
     },
+    "/api/v1/me/password": {
+      "post": {
+        "operationId": "changePassword",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Password changed and other sessions revoked."
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/v1/sessions": {
       "get": {
         "operationId": "listSessions",
@@ -3155,8 +3186,36 @@
           "handle": {
             "type": "string"
           },
+          "title": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "about": {
+            "type": "string",
+            "maxLength": 280
+          },
           "timezone": {
             "type": "string"
+          }
+        }
+      },
+      "ChangePasswordRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "properties": {
+          "current_password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "new_password": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 1024
           }
         }
       },
@@ -3170,6 +3229,8 @@
           "email",
           "display_name",
           "handle",
+          "title",
+          "about",
           "timezone",
           "status",
           "permissions",
@@ -3203,6 +3264,12 @@
             "type": "string"
           },
           "handle": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "about": {
             "type": "string"
           },
           "timezone": {
@@ -3706,10 +3773,12 @@
           "email",
           "display_name",
           "handle",
+          "title",
           "role",
           "status",
           "permissions",
-          "created_at"
+          "created_at",
+          "last_seen_at"
         ],
         "properties": {
           "actor_id": {
@@ -3724,6 +3793,9 @@
             "type": "string"
           },
           "handle": {
+            "type": "string"
+          },
+          "title": {
             "type": "string"
           },
           "role": {
@@ -3750,6 +3822,13 @@
           },
           "created_at": {
             "type": "string",
+            "format": "date-time"
+          },
+          "last_seen_at": {
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           }
         }
@@ -4124,6 +4203,8 @@
           "actor_id",
           "display_name",
           "handle",
+          "title",
+          "about",
           "type"
         ],
         "properties": {
@@ -4135,6 +4216,12 @@
             "type": "string"
           },
           "handle": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "about": {
             "type": "string"
           },
           "type": {
@@ -4273,6 +4360,7 @@
           "actor_id",
           "display_name",
           "handle",
+          "title",
           "role",
           "joined_at"
         ],
@@ -4285,6 +4373,9 @@
             "type": "string"
           },
           "handle": {
+            "type": "string"
+          },
+          "title": {
             "type": "string"
           },
           "role": {

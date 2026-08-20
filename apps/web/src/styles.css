@@ -2383,6 +2383,9 @@ a:focus-visible {
   background: color-mix(in srgb, var(--coma-surface-raised) 68%, transparent);
   scrollbar-width: none;
 }
+.settings-page--nested {
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+}
 .settings-subnavigation button {
   flex: none;
   min-height: 34px;

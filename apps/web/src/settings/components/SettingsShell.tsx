@@ -30,7 +30,9 @@ export function SettingsShell({
   const childPages = visibleChildSettings(user, primaryActive);
 
   return (
-    <section className="settings-page utility-page">
+    <section
+      className={`settings-page utility-page${childPages.length ? " settings-page--nested" : ""}`}
+    >
       <header className="utility-page__header">
         <IconButton
           className="mobile-back"

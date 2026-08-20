@@ -190,7 +190,8 @@ func (r *Repository) PutIntegration(ctx context.Context, orgID, actorID string, 
 
 func (r *Repository) Members(ctx context.Context, orgID string) ([]Member, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT a.id,u.email::text,a.display_name,a.handle::text,a.org_role,a.status,a.created_at,
+		SELECT a.id,u.email::text,a.display_name,a.handle::text,a.title,a.org_role,a.status,a.created_at,
+		       (SELECT max(s.last_seen_at) FROM sessions s WHERE s.actor_id=a.id),
 		       ARRAY(SELECT ap.permission FROM actor_permissions ap WHERE ap.org_id=a.org_id AND ap.actor_id=a.id ORDER BY ap.permission)
 		FROM actors a
 		JOIN users u ON u.actor_id=a.id
@@ -204,7 +205,7 @@ func (r *Repository) Members(ctx context.Context, orgID string) ([]Member, error
 	for rows.Next() {
 		var item Member
 		var stored []string
-		if err := rows.Scan(&item.ActorID, &item.Email, &item.DisplayName, &item.Handle, &item.Role, &item.Status, &item.CreatedAt, &stored); err != nil {
+		if err := rows.Scan(&item.ActorID, &item.Email, &item.DisplayName, &item.Handle, &item.Title, &item.Role, &item.Status, &item.CreatedAt, &item.LastSeenAt, &stored); err != nil {
 			return nil, err
 		}
 		item.Permissions = effectivePermissions(item.Role, stored)
@@ -291,11 +292,12 @@ func (r *Repository) UpdateMember(ctx context.Context, orgID, currentActorID, ta
 	var result Member
 	var stored []string
 	err = r.pool.QueryRow(ctx, `
-		SELECT a.id,u.email::text,a.display_name,a.handle::text,a.org_role,a.status,a.created_at,
+		SELECT a.id,u.email::text,a.display_name,a.handle::text,a.title,a.org_role,a.status,a.created_at,
+		       (SELECT max(s.last_seen_at) FROM sessions s WHERE s.actor_id=a.id),
 		       ARRAY(SELECT ap.permission FROM actor_permissions ap WHERE ap.org_id=a.org_id AND ap.actor_id=a.id ORDER BY ap.permission)
 		FROM actors a
 		JOIN users u ON u.actor_id=a.id
-		WHERE a.id=$1`, targetActorID).Scan(&result.ActorID, &result.Email, &result.DisplayName, &result.Handle, &result.Role, &result.Status, &result.CreatedAt, &stored)
+		WHERE a.id=$1`, targetActorID).Scan(&result.ActorID, &result.Email, &result.DisplayName, &result.Handle, &result.Title, &result.Role, &result.Status, &result.CreatedAt, &result.LastSeenAt, &stored)
 	if err != nil {
 		return Member{}, err
 	}
