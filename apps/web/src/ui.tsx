@@ -239,7 +239,7 @@ export function Avatar({
       className={cx("ui-avatar", `ui-avatar--${size}`)}
       data-avatar-color={stableAvatarIndex(seed || name)}
     >
-      {initials || "U"}
+      <span className="ui-avatar__face">{initials || "U"}</span>
       {online && <i aria-hidden="true" />}
     </span>
   );
