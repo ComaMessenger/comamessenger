@@ -3,6 +3,8 @@ package workspace
 import (
 	"errors"
 	"time"
+
+	"github.com/comamessenger/comamessenger/core/internal/permission"
 )
 
 var (
@@ -140,18 +142,20 @@ type ConnectionTestResult struct {
 }
 
 type Member struct {
-	ActorID     string    `json:"actor_id"`
-	Email       string    `json:"email"`
-	DisplayName string    `json:"display_name"`
-	Handle      string    `json:"handle"`
-	Role        string    `json:"role"`
-	Status      string    `json:"status"`
-	CreatedAt   time.Time `json:"created_at"`
+	ActorID     string            `json:"actor_id"`
+	Email       string            `json:"email"`
+	DisplayName string            `json:"display_name"`
+	Handle      string            `json:"handle"`
+	Role        string            `json:"role"`
+	Status      string            `json:"status"`
+	Permissions []permission.Code `json:"permissions"`
+	CreatedAt   time.Time         `json:"created_at"`
 }
 
 type UpdateMemberInput struct {
-	Role   *string `json:"role"`
-	Status *string `json:"status"`
+	Role        *string            `json:"role"`
+	Status      *string            `json:"status"`
+	Permissions *[]permission.Code `json:"permissions"`
 }
 
 type AuditEntry struct {

@@ -8,7 +8,7 @@
 
 - production Docker images и versioned Compose bundle;
 - reverse proxy/TLS reference configuration;
-- внешние Postgres и S3-compatible services;
+- встроенный local storage volume, внешние Postgres и S3-compatible services;
 - миграции, rolling-compatible upgrade policy и rollback procedure;
 - backup/restore Postgres и object storage metadata/process;
 - Prometheus metrics, structured logs и optional OpenTelemetry;
@@ -45,7 +45,7 @@
 
 - [ ] Создать минимальные multi-stage images с non-root user и pinned base digests/versions.
 - [ ] Публиковать GHCR images с immutable semver/digest references; плавающий tag не использовать как единственную production-инструкцию.
-- [ ] Подготовить `compose.yaml`, `.env.example`, profiles для bundled/external Postgres, MinIO, Redis и agent runtime.
+- [ ] Подготовить `compose.yaml`, `.env.example`, default local file volume и profiles для external/bundled S3-compatible storage, Postgres, Redis и agent runtime.
 - [ ] Добавить Caddy reference config с HTTPS, WebSocket timeouts и upload limits.
 - [ ] Не публиковать admin services и Postgres/MinIO наружу по умолчанию.
 - [ ] Добавить startup validation обязательных секретов, public URLs и storage connectivity.
@@ -114,7 +114,7 @@
 ## Критерии приёмки
 
 - Чистая production-like VM разворачивает систему по документации без изменения исходников.
-- Установка работает с bundled MinIO и минимум одним внешним S3-compatible provider.
+- Установка работает без S3 на local volume, а optional S3 profile — с MinIO и минимум одним внешним S3-compatible provider.
 - Backup восстанавливается в отдельное окружение, пользователи входят и открывают выборочные сообщения/файлы.
 - Обновление с предыдущей release candidate версии сохраняет данные и имеет проверенную процедуру отката приложения.
 - Перезапуск core не создаёт дубли сообщений и клиенты восстанавливаются через resume/full resync.

@@ -1,6 +1,7 @@
 import type { components } from "@comamessenger/protocol";
 
 export type User = components["schemas"]["User"];
+export type Permission = components["schemas"]["Permission"];
 export type Chat = components["schemas"]["Chat"];
 export type DirectoryChat = components["schemas"]["DirectoryChat"];
 export type ChatMember = components["schemas"]["ChatMember"];
@@ -37,6 +38,8 @@ export type ConnectionTestResult =
 export type OrganizationMember = components["schemas"]["OrganizationMember"];
 export type UpdateOrganizationMemberRequest =
   components["schemas"]["UpdateOrganizationMemberRequest"];
+export type TransferOwnershipRequest =
+  components["schemas"]["TransferOwnershipRequest"];
 export type AuditPage = components["schemas"]["AuditPage"];
 export type Session = components["schemas"]["Session"];
 export type BootstrapRequest = components["schemas"]["BootstrapRequest"];

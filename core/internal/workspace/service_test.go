@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/comamessenger/comamessenger/core/internal/identity"
+	"github.com/comamessenger/comamessenger/core/internal/permission"
 )
 
 func TestIntegrationSecretsAreEncryptedAndBoundToOrganization(t *testing.T) {
@@ -75,6 +76,43 @@ func TestMembersCannotMutateWorkspace(t *testing.T) {
 	}
 	if err := service.PutAsset(t.Context(), member, "logo", "image/png", []byte("png")); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("member asset update should be forbidden, got %v", err)
+	}
+}
+
+func TestAdministratorRequiresSpecificPermission(t *testing.T) {
+	service, err := NewService(nil, "test-secret", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin := identity.User{OrgRole: "admin"}
+	if err := service.PutAsset(t.Context(), admin, "invalid", "image/png", []byte("png")); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("admin without branding permission should be forbidden, got %v", err)
+	}
+	admin.Permissions = []permission.Code{permission.BrandingManage}
+	if err := service.PutAsset(t.Context(), admin, "invalid", "image/png", []byte("png")); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("admin with branding permission should reach validation, got %v", err)
+	}
+}
+
+func TestOnlyOwnerCanChangeAdministratorPermissions(t *testing.T) {
+	service, err := NewService(nil, "test-secret", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	permissions := []permission.Code{permission.AuditRead}
+	admin := identity.User{
+		OrgRole:     "admin",
+		Permissions: []permission.Code{permission.MembersManage},
+	}
+	_, err = service.UpdateMember(t.Context(), admin, "target", UpdateMemberInput{Permissions: &permissions})
+	if !errors.Is(err, ErrForbidden) {
+		t.Fatalf("admin permission update should be forbidden, got %v", err)
+	}
+	unknown := []permission.Code{"unknown"}
+	owner := identity.User{OrgRole: "owner"}
+	_, err = service.UpdateMember(t.Context(), owner, "target", UpdateMemberInput{Permissions: &unknown})
+	if !errors.Is(err, ErrInvalid) {
+		t.Fatalf("unknown permission should be invalid, got %v", err)
 	}
 }
 

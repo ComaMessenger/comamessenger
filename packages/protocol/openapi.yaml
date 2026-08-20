@@ -338,6 +338,25 @@ paths:
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
+  /api/v1/organization/transfer-ownership:
+    post:
+      operationId: transferOrganizationOwnership
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransferOwnershipRequest" }
+      responses:
+        "200":
+          description: The authenticated previous owner, now an administrator with full explicit permissions.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
   /api/v1/organization/audit:
     get:
       operationId: listOrganizationAudit
@@ -503,7 +522,8 @@ paths:
       parameters:
         - { $ref: "#/components/parameters/ChatId" }
       responses:
-        "204": { description: Chat archived. }
+        "204":
+          description: Group or channel archived by its manager or a workspace moderator.
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
@@ -548,7 +568,7 @@ paths:
         - { $ref: "#/components/parameters/ChatId" }
       responses:
         "200":
-          description: Active chat members.
+          description: Active chat members, including workspace-moderator access to groups and channels they have not joined.
           content:
             application/json:
               schema:
@@ -737,7 +757,7 @@ paths:
         - { $ref: "#/components/parameters/MessageId" }
       responses:
         "200":
-          description: Soft-deleted message, or the existing tombstone for an idempotent replay.
+          description: Soft-deleted own or moderated message, or the existing tombstone for an idempotent replay.
           content:
             {
               application/json:
@@ -1406,6 +1426,7 @@ components:
           handle,
           timezone,
           status,
+          permissions,
           created_at,
         ]
       properties:
@@ -1418,7 +1439,22 @@ components:
         handle: { type: string }
         timezone: { type: string }
         status: { type: string, enum: [active, deactivated] }
+        permissions:
+          type: array
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/Permission" }
         created_at: { type: string, format: date-time }
+    Permission:
+      type: string
+      enum:
+        - members.manage
+        - invitations.manage
+        - workspace.settings
+        - workspace.policies
+        - branding.manage
+        - integrations.manage
+        - audit.read
+        - chats.moderate
     TokenResponse:
       type: object
       required: [access_token, access_expires_at, user]
@@ -1611,7 +1647,16 @@ components:
       type: object
       additionalProperties: false
       required:
-        [actor_id, email, display_name, handle, role, status, created_at]
+        [
+          actor_id,
+          email,
+          display_name,
+          handle,
+          role,
+          status,
+          permissions,
+          created_at,
+        ]
       properties:
         actor_id: { type: string, format: uuid }
         email: { type: string, format: email }
@@ -1619,13 +1664,28 @@ components:
         handle: { type: string }
         role: { type: string, enum: [owner, admin, member] }
         status: { type: string, enum: [active, deactivated] }
+        permissions:
+          type: array
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/Permission" }
         created_at: { type: string, format: date-time }
     UpdateOrganizationMemberRequest:
       type: object
       additionalProperties: false
       properties:
-        role: { type: [string, "null"], enum: [owner, admin, member, null] }
+        role: { type: [string, "null"], enum: [admin, member, null] }
         status: { type: [string, "null"], enum: [active, deactivated, null] }
+        permissions:
+          type: [array, "null"]
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/Permission" }
+    TransferOwnershipRequest:
+      type: object
+      additionalProperties: false
+      required: [target_actor_id, current_password]
+      properties:
+        target_actor_id: { type: string, format: uuid }
+        current_password: { type: string, minLength: 1, maxLength: 1024 }
     AuditEntry:
       type: object
       additionalProperties: false

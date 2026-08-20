@@ -35,6 +35,7 @@ import type {
   UpdateMessageRequest,
   UpdateInfrastructureSettingsRequest,
   UpdateOrganizationMemberRequest,
+  TransferOwnershipRequest,
   UpdateOrganizationSettingsRequest,
   User,
   UserPreferences,
@@ -235,6 +236,14 @@ export class MessengerAPI {
       `/api/v1/organization/members/${encodeURIComponent(actorID)}`,
       { method: "PATCH", body: JSON.stringify(input) },
     );
+  }
+  transferOrganizationOwnership(
+    input: TransferOwnershipRequest,
+  ): Promise<User> {
+    return this.request("/api/v1/organization/transfer-ownership", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
   }
   organizationAudit(limit = 50): Promise<AuditPage> {
     return this.request(`/api/v1/organization/audit?limit=${limit}`);

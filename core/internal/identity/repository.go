@@ -9,6 +9,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/comamessenger/comamessenger/core/internal/permission"
 )
 
 type Repository struct {
@@ -93,7 +95,7 @@ func (r *Repository) Bootstrap(ctx context.Context, record BootstrapRecord) (Use
 	return User{
 		ActorID: record.ActorID, OrgID: record.OrganizationID, OrganizationName: record.OrganizationName, OrgRole: "owner",
 		Email: record.Email, DisplayName: record.DisplayName, Handle: record.Handle,
-		Timezone: record.Timezone, Status: "active", CreatedAt: time.Now().UTC(),
+		Timezone: record.Timezone, Status: "active", Permissions: permission.All(), CreatedAt: time.Now().UTC(),
 	}, nil
 }
 
@@ -115,7 +117,136 @@ func (r *Repository) FindUserByEmail(ctx context.Context, email string) (User, e
 	if err != nil {
 		return User{}, fmt.Errorf("find user by email: %w", err)
 	}
+	if err := loadPermissions(ctx, r.pool, &user); err != nil {
+		return User{}, err
+	}
 	return user, nil
+}
+
+func (r *Repository) PasswordHash(ctx context.Context, orgID, actorID string) (string, error) {
+	var passwordHash string
+	err := r.pool.QueryRow(ctx, `
+		SELECT u.password_hash
+		FROM users u
+		JOIN actors a ON a.id = u.actor_id AND a.org_id = u.org_id
+		WHERE u.org_id = $1 AND u.actor_id = $2
+		  AND a.status = 'active' AND a.deleted_at IS NULL`, orgID, actorID).Scan(&passwordHash)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("load password hash: %w", err)
+	}
+	return passwordHash, nil
+}
+
+func (r *Repository) TransferOwnership(ctx context.Context, transfer OwnershipTransfer) (User, error) {
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	if err != nil {
+		return User{}, fmt.Errorf("begin ownership transfer: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var currentRole, currentStatus string
+	err = tx.QueryRow(ctx, `
+		SELECT org_role, status
+		FROM actors
+		WHERE org_id = $1 AND id = $2 AND deleted_at IS NULL
+		FOR UPDATE`, transfer.OrgID, transfer.CurrentActorID).Scan(&currentRole, &currentStatus)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return User{}, ErrForbidden
+	}
+	if err != nil {
+		if isSerializationFailure(err) {
+			return User{}, ErrConflict
+		}
+		return User{}, fmt.Errorf("lock current owner: %w", err)
+	}
+	if currentRole != "owner" || currentStatus != "active" {
+		return User{}, ErrForbidden
+	}
+
+	var targetRole, targetStatus string
+	err = tx.QueryRow(ctx, `
+		SELECT a.org_role, a.status
+		FROM actors a
+		JOIN users u ON u.org_id = a.org_id AND u.actor_id = a.id
+		WHERE a.org_id = $1 AND a.id = $2 AND a.deleted_at IS NULL
+		FOR UPDATE OF a`, transfer.OrgID, transfer.TargetActorID).Scan(&targetRole, &targetStatus)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return User{}, ErrNotFound
+	}
+	if err != nil {
+		if isSerializationFailure(err) {
+			return User{}, ErrConflict
+		}
+		return User{}, fmt.Errorf("lock ownership target: %w", err)
+	}
+	if targetStatus != "active" || targetRole == "owner" {
+		return User{}, validationErrorf("target_actor_id must identify another active non-owner user")
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM actor_permissions WHERE org_id=$1 AND actor_id=$2`, transfer.OrgID, transfer.TargetActorID); err != nil {
+		return User{}, fmt.Errorf("clear new owner permissions: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE actors SET org_role='admin' WHERE org_id=$1 AND id=$2`, transfer.OrgID, transfer.CurrentActorID); err != nil {
+		if isSerializationFailure(err) {
+			return User{}, ErrConflict
+		}
+		return User{}, fmt.Errorf("demote previous owner: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE actors SET org_role='owner' WHERE org_id=$1 AND id=$2`, transfer.OrgID, transfer.TargetActorID); err != nil {
+		if isSerializationFailure(err) || isUniqueViolation(err) {
+			return User{}, ErrConflict
+		}
+		return User{}, fmt.Errorf("promote new owner: %w", err)
+	}
+	for _, code := range permission.All() {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO actor_permissions(org_id,actor_id,permission,granted_by)
+			VALUES($1,$2,$3,$4)`, transfer.OrgID, transfer.CurrentActorID, code, transfer.TargetActorID); err != nil {
+			return User{}, fmt.Errorf("grant previous owner administrator permissions: %w", err)
+		}
+	}
+	_, err = tx.Exec(ctx, `
+		INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata)
+		VALUES($1,$2,$3,'organization.ownership.transfer','actor',$4,
+		       jsonb_build_object('from_actor_id',$3::uuid,'to_actor_id',$4::uuid,
+		                          'previous_target_role',$5::text))`,
+		transfer.AuditID, transfer.OrgID, transfer.CurrentActorID, transfer.TargetActorID, targetRole)
+	if err != nil {
+		return User{}, fmt.Errorf("audit ownership transfer: %w", err)
+	}
+
+	var user User
+	err = tx.QueryRow(ctx, `
+		SELECT a.id, a.org_id, o.name, a.org_role, u.email::text, a.display_name, a.handle::text,
+		       a.timezone, a.status, a.created_at
+		FROM actors a
+		JOIN users u ON u.actor_id = a.id
+		JOIN organizations o ON o.id = a.org_id
+		WHERE a.org_id = $1 AND a.id = $2`, transfer.OrgID, transfer.CurrentActorID).Scan(
+		&user.ActorID, &user.OrgID, &user.OrganizationName, &user.OrgRole, &user.Email, &user.DisplayName,
+		&user.Handle, &user.Timezone, &user.Status, &user.CreatedAt,
+	)
+	if err != nil {
+		return User{}, fmt.Errorf("load previous owner after transfer: %w", err)
+	}
+	if err := loadPermissions(ctx, tx, &user); err != nil {
+		return User{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		if isSerializationFailure(err) || isUniqueViolation(err) {
+			return User{}, ErrConflict
+		}
+		return User{}, fmt.Errorf("commit ownership transfer: %w", err)
+	}
+	return user, nil
+}
+
+func isSerializationFailure(err error) bool {
+	var databaseError *pgconn.PgError
+	return errors.As(err, &databaseError) && databaseError.Code == "40001"
 }
 
 func (r *Repository) CreateSession(ctx context.Context, orgID, actorID string, session NewSession) error {
@@ -207,6 +338,9 @@ func (r *Repository) RotateSession(ctx context.Context, refreshHash []byte, repl
 	if command.RowsAffected() != 1 {
 		return User{}, ErrInvalidRefreshToken
 	}
+	if err := loadPermissions(ctx, tx, &user); err != nil {
+		return User{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return User{}, fmt.Errorf("commit refresh rotation: %w", err)
 	}
@@ -233,6 +367,9 @@ func (r *Repository) ResolveSession(ctx context.Context, sessionID, actorID stri
 	}
 	if err != nil {
 		return User{}, fmt.Errorf("resolve session: %w", err)
+	}
+	if err := loadPermissions(ctx, r.pool, &user); err != nil {
+		return User{}, err
 	}
 	return user, nil
 }
@@ -262,6 +399,9 @@ func (r *Repository) UpdateProfile(ctx context.Context, actorID, displayName, ha
 	}
 	if err != nil {
 		return User{}, fmt.Errorf("update profile: %w", err)
+	}
+	if err := loadPermissions(ctx, r.pool, &user); err != nil {
+		return User{}, err
 	}
 	return user, nil
 }
@@ -361,7 +501,31 @@ func (r *Repository) AcceptInvitation(ctx context.Context, acceptance Invitation
 	}
 	return User{ActorID: acceptance.ActorID, OrgID: orgID, OrganizationName: organizationName, OrgRole: role, Email: email,
 		DisplayName: acceptance.DisplayName, Handle: acceptance.Handle, Timezone: acceptance.Timezone,
-		Status: "active", CreatedAt: now}, nil
+		Status: "active", Permissions: permission.Effective(role, nil), CreatedAt: now}, nil
+}
+
+type permissionQueryRower interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
+func loadPermissions(ctx context.Context, db permissionQueryRower, user *User) error {
+	if user.OrgRole != "admin" {
+		user.Permissions = permission.Effective(user.OrgRole, nil)
+		return nil
+	}
+	var stored []string
+	if err := db.QueryRow(ctx, `
+		SELECT COALESCE(array_agg(permission ORDER BY permission), ARRAY[]::text[])
+		FROM actor_permissions
+		WHERE org_id = $1 AND actor_id = $2`, user.OrgID, user.ActorID).Scan(&stored); err != nil {
+		return fmt.Errorf("load actor permissions: %w", err)
+	}
+	granted := make([]permission.Code, len(stored))
+	for index, code := range stored {
+		granted[index] = permission.Code(code)
+	}
+	user.Permissions = permission.Effective(user.OrgRole, granted)
+	return nil
 }
 
 func (r *Repository) RevokeSession(ctx context.Context, actorID, sessionID string, now time.Time) error {

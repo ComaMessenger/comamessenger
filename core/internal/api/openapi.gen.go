@@ -753,6 +753,42 @@ func (e OrganizationSettingsInvitationDefaultRole) Valid() bool {
 	}
 }
 
+// Defines values for Permission.
+const (
+	AuditRead          Permission = "audit.read"
+	BrandingManage     Permission = "branding.manage"
+	ChatsModerate      Permission = "chats.moderate"
+	IntegrationsManage Permission = "integrations.manage"
+	InvitationsManage  Permission = "invitations.manage"
+	MembersManage      Permission = "members.manage"
+	WorkspacePolicies  Permission = "workspace.policies"
+	WorkspaceSettings  Permission = "workspace.settings"
+)
+
+// Valid indicates whether the value is a known member of the Permission enum.
+func (e Permission) Valid() bool {
+	switch e {
+	case AuditRead:
+		return true
+	case BrandingManage:
+		return true
+	case ChatsModerate:
+		return true
+	case IntegrationsManage:
+		return true
+	case InvitationsManage:
+		return true
+	case MembersManage:
+		return true
+	case WorkspacePolicies:
+		return true
+	case WorkspaceSettings:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PutDraftRequestBodyFormat.
 const (
 	PutDraftRequestBodyFormatMarkdown PutDraftRequestBodyFormat = "markdown"
@@ -1151,7 +1187,6 @@ const (
 	UpdateOrganizationMemberRequestRoleAdmin       UpdateOrganizationMemberRequestRole = "admin"
 	UpdateOrganizationMemberRequestRoleLessThannil UpdateOrganizationMemberRequestRole = "<nil>"
 	UpdateOrganizationMemberRequestRoleMember      UpdateOrganizationMemberRequestRole = "member"
-	UpdateOrganizationMemberRequestRoleOwner       UpdateOrganizationMemberRequestRole = "owner"
 )
 
 // Valid indicates whether the value is a known member of the UpdateOrganizationMemberRequestRole enum.
@@ -1162,8 +1197,6 @@ func (e UpdateOrganizationMemberRequestRole) Valid() bool {
 	case UpdateOrganizationMemberRequestRoleLessThannil:
 		return true
 	case UpdateOrganizationMemberRequestRoleMember:
-		return true
-	case UpdateOrganizationMemberRequestRoleOwner:
 		return true
 	default:
 		return false
@@ -1712,6 +1745,7 @@ type OrganizationMember struct {
 	DisplayName string                   `json:"display_name"`
 	Email       openapi_types.Email      `json:"email"`
 	Handle      string                   `json:"handle"`
+	Permissions []Permission             `json:"permissions"`
 	Role        OrganizationMemberRole   `json:"role"`
 	Status      OrganizationMemberStatus `json:"status"`
 }
@@ -1739,6 +1773,9 @@ type OrganizationSettings struct {
 
 // OrganizationSettingsInvitationDefaultRole defines model for OrganizationSettings.InvitationDefaultRole.
 type OrganizationSettingsInvitationDefaultRole string
+
+// Permission defines model for Permission.
+type Permission string
 
 // PublicBranding defines model for PublicBranding.
 type PublicBranding struct {
@@ -2046,6 +2083,12 @@ type TokenResponse struct {
 	User            User      `json:"user"`
 }
 
+// TransferOwnershipRequest defines model for TransferOwnershipRequest.
+type TransferOwnershipRequest struct {
+	CurrentPassword string             `json:"current_password"`
+	TargetActorId   openapi_types.UUID `json:"target_actor_id"`
+}
+
 // UnreadSnapshot defines model for UnreadSnapshot.
 type UnreadSnapshot struct {
 	Chats   []ChatUnread   `json:"chats"`
@@ -2090,8 +2133,9 @@ type UpdateMessageRequestBodyFormat string
 
 // UpdateOrganizationMemberRequest defines model for UpdateOrganizationMemberRequest.
 type UpdateOrganizationMemberRequest struct {
-	Role   *UpdateOrganizationMemberRequestRole   `json:"role,omitempty"`
-	Status *UpdateOrganizationMemberRequestStatus `json:"status,omitempty"`
+	Permissions *[]Permission                          `json:"permissions,omitempty"`
+	Role        *UpdateOrganizationMemberRequestRole   `json:"role,omitempty"`
+	Status      *UpdateOrganizationMemberRequestStatus `json:"status,omitempty"`
 }
 
 // UpdateOrganizationMemberRequestRole defines model for UpdateOrganizationMemberRequest.Role.
@@ -2131,6 +2175,7 @@ type User struct {
 	Id               openapi_types.UUID  `json:"id"`
 	OrgId            openapi_types.UUID  `json:"org_id"`
 	OrganizationName string              `json:"organization_name"`
+	Permissions      []Permission        `json:"permissions"`
 	Role             UserRole            `json:"role"`
 	Status           UserStatus          `json:"status"`
 	Timezone         string              `json:"timezone"`
@@ -2285,6 +2330,9 @@ type TestInfrastructureConnectionJSONRequestBody = ConnectionTestRequest
 
 // UpdateOrganizationMemberJSONRequestBody defines body for UpdateOrganizationMember for application/json ContentType.
 type UpdateOrganizationMemberJSONRequestBody = UpdateOrganizationMemberRequest
+
+// TransferOrganizationOwnershipJSONRequestBody defines body for TransferOrganizationOwnership for application/json ContentType.
+type TransferOrganizationOwnershipJSONRequestBody = TransferOwnershipRequest
 
 // UpdatePreferencesJSONRequestBody defines body for UpdatePreferences for application/json ContentType.
 type UpdatePreferencesJSONRequestBody = UserPreferences

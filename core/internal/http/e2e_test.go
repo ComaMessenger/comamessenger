@@ -23,6 +23,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/message"
 	"github.com/comamessenger/comamessenger/core/internal/password"
+	"github.com/comamessenger/comamessenger/core/internal/permission"
 	"github.com/comamessenger/comamessenger/core/internal/push"
 	"github.com/comamessenger/comamessenger/core/internal/realtime"
 	"github.com/comamessenger/comamessenger/core/internal/testdb"
@@ -94,6 +95,9 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	if owner.User.OrganizationName != "E2E" {
 		t.Fatalf("bootstrap organization name = %q", owner.User.OrganizationName)
 	}
+	if len(owner.User.Permissions) != len(permission.All()) {
+		t.Fatalf("owner permissions = %#v", owner.User.Permissions)
+	}
 
 	var invitation identity.Invitation
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/invitations", owner.AccessToken, map[string]any{
@@ -108,6 +112,36 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/invitations/"+invitationToken+"/accept", "", map[string]any{
 		"display_name": "Member", "handle": "member", "password": "another correct password", "timezone": "UTC",
 	}, standardhttp.StatusCreated, &member)
+	if member.User.Permissions == nil || len(member.User.Permissions) != 0 {
+		t.Fatalf("member permissions = %#v", member.User.Permissions)
+	}
+
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/invitations", owner.AccessToken, map[string]any{
+		"email": "admin@example.test", "role": "admin",
+	}, standardhttp.StatusCreated, &invitation)
+	acceptURL, err = url.Parse(invitation.AcceptURL)
+	if err != nil || path.Base(acceptURL.Path) == "" {
+		t.Fatalf("admin invitation accept URL = %q, error = %v", invitation.AcceptURL, err)
+	}
+	var admin identity.Tokens
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/invitations/"+path.Base(acceptURL.Path)+"/accept", "", map[string]any{
+		"display_name": "Admin", "handle": "admin", "password": "admin correct password", "timezone": "UTC",
+	}, standardhttp.StatusCreated, &admin)
+	var updatedAdmin workspace.Member
+	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/organization/members/"+admin.User.ActorID, owner.AccessToken, map[string]any{
+		"permissions": []string{"audit.read"},
+	}, standardhttp.StatusOK, &updatedAdmin)
+	if len(updatedAdmin.Permissions) != 1 || updatedAdmin.Permissions[0] != permission.AuditRead {
+		t.Fatalf("updated admin permissions = %#v", updatedAdmin.Permissions)
+	}
+	var adminMe identity.User
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/me", admin.AccessToken, nil, standardhttp.StatusOK, &adminMe)
+	if len(adminMe.Permissions) != 1 || adminMe.Permissions[0] != permission.AuditRead {
+		t.Fatalf("admin /me permissions = %#v", adminMe.Permissions)
+	}
+	if _, err := pool.Exec(context.Background(), `UPDATE actors SET org_role='member' WHERE id=$1`, admin.User.ActorID); err == nil {
+		t.Fatal("database allowed an administrator with explicit permissions to become a member")
+	}
 
 	var organization workspace.Settings
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/organization", owner.AccessToken, nil, standardhttp.StatusOK, &organization)
@@ -153,13 +187,91 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 		Members []workspace.Member `json:"members"`
 	}
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/organization/members", owner.AccessToken, nil, standardhttp.StatusOK, &organizationMembers)
-	if len(organizationMembers.Members) != 2 {
+	if len(organizationMembers.Members) != 3 {
 		t.Fatalf("organization members = %+v", organizationMembers.Members)
 	}
 	var audit workspace.AuditPage
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/organization/audit", owner.AccessToken, nil, standardhttp.StatusOK, &audit)
 	if len(audit.Events) < 2 {
 		t.Fatalf("audit events = %+v", audit.Events)
+	}
+	permissionAuditFound := false
+	for _, event := range audit.Events {
+		if event.Action == "organization.member.permissions.update" {
+			permissionAuditFound = true
+			break
+		}
+	}
+	if !permissionAuditFound {
+		t.Fatalf("permission update audit event is missing: %+v", audit.Events)
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/organization/audit", admin.AccessToken, nil, standardhttp.StatusOK, &audit)
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/organization/members", admin.AccessToken, nil, standardhttp.StatusForbidden, nil)
+	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/organization/members/"+admin.User.ActorID, owner.AccessToken, map[string]any{
+		"permissions": []string{"branding.manage"},
+	}, standardhttp.StatusOK, &updatedAdmin)
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/organization", admin.AccessToken, nil, standardhttp.StatusOK, &organization)
+	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/organization", admin.AccessToken, map[string]any{
+		"name": organization.Name, "slug": organization.Slug, "expected_version": organization.Version,
+		"invitation_default_role": organization.InvitationDefaultRole, "invitation_ttl_hours": organization.InvitationTTLHours,
+		"allow_public_chat_creation": organization.AllowPublicChatCreation, "allow_channel_creation": organization.AllowChannelCreation, "accent_color": "#2255AA",
+	}, standardhttp.StatusOK, &organization)
+	if organization.AccentColor != "#2255AA" {
+		t.Fatalf("branding administrator accent color = %q", organization.AccentColor)
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/organization/audit", admin.AccessToken, nil, standardhttp.StatusForbidden, nil)
+	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/organization/members/"+admin.User.ActorID, owner.AccessToken, map[string]any{
+		"role": "owner",
+	}, standardhttp.StatusUnprocessableEntity, nil)
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/organization/transfer-ownership", member.AccessToken, map[string]any{
+		"target_actor_id": admin.User.ActorID, "current_password": "another correct password",
+	}, standardhttp.StatusForbidden, nil)
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/organization/transfer-ownership", owner.AccessToken, map[string]any{
+		"target_actor_id": owner.User.ActorID, "current_password": "correct horse battery staple",
+	}, standardhttp.StatusUnprocessableEntity, nil)
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/organization/transfer-ownership", owner.AccessToken, map[string]any{
+		"target_actor_id": admin.User.ActorID, "current_password": "incorrect password",
+	}, standardhttp.StatusForbidden, nil)
+	var previousOwner identity.User
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/organization/transfer-ownership", owner.AccessToken, map[string]any{
+		"target_actor_id": admin.User.ActorID, "current_password": "correct horse battery staple",
+	}, standardhttp.StatusOK, &previousOwner)
+	if previousOwner.OrgRole != "admin" || len(previousOwner.Permissions) != len(permission.All()) {
+		t.Fatalf("previous owner after ownership transfer = %+v", previousOwner)
+	}
+	var newOwner identity.User
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/me", admin.AccessToken, nil, standardhttp.StatusOK, &newOwner)
+	if newOwner.OrgRole != "owner" || len(newOwner.Permissions) != len(permission.All()) {
+		t.Fatalf("new owner after ownership transfer = %+v", newOwner)
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/me", owner.AccessToken, nil, standardhttp.StatusOK, &previousOwner)
+	if previousOwner.OrgRole != "admin" || len(previousOwner.Permissions) != len(permission.All()) {
+		t.Fatalf("previous owner /me after ownership transfer = %+v", previousOwner)
+	}
+	var activeOwners, previousOwnerPermissions, newOwnerPermissions int
+	if err := pool.QueryRow(context.Background(), `
+		SELECT
+		  count(*) FILTER (WHERE org_role='owner' AND status='active' AND deleted_at IS NULL),
+		  (SELECT count(*) FROM actor_permissions WHERE actor_id=$2),
+		  (SELECT count(*) FROM actor_permissions WHERE actor_id=$3)
+		FROM actors WHERE org_id=$1`, owner.User.OrgID, owner.User.ActorID, admin.User.ActorID).Scan(
+		&activeOwners, &previousOwnerPermissions, &newOwnerPermissions,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if activeOwners != 1 || previousOwnerPermissions != len(permission.All()) || newOwnerPermissions != 0 {
+		t.Fatalf("ownership database state owners=%d previous_permissions=%d new_permissions=%d", activeOwners, previousOwnerPermissions, newOwnerPermissions)
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/organization/audit", admin.AccessToken, nil, standardhttp.StatusOK, &audit)
+	ownershipAuditFound := false
+	for _, event := range audit.Events {
+		if event.Action == "organization.ownership.transfer" && event.TargetID != nil && *event.TargetID == admin.User.ActorID {
+			ownershipAuditFound = true
+			break
+		}
+	}
+	if !ownershipAuditFound {
+		t.Fatalf("ownership transfer audit event is missing: %+v", audit.Events)
 	}
 
 	var group chat.Chat
@@ -195,6 +307,13 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 		_ = ownerSocket.Close(websocket.StatusNormalClosure, "test complete")
 		_ = memberSocket.Close(websocket.StatusNormalClosure, "test complete")
 	})
+	ownerChatCreated := e2eEvent(t, ownerSocket)
+	memberChatCreated := e2eEvent(t, memberSocket)
+	if ownerChatCreated.Type != "chat.created" || memberChatCreated.Type != "chat.created" {
+		t.Fatalf("initial websocket events owner=%+v member=%+v", ownerChatCreated, memberChatCreated)
+	}
+	e2eAck(t, ownerSocket, ownerChatCreated.Seq)
+	e2eAck(t, memberSocket, memberChatCreated.Seq)
 
 	var first message.Message
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/chats/"+group.ID+"/messages", member.AccessToken, map[string]any{

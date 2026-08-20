@@ -62,6 +62,7 @@ type identityHandlers struct {
 	invitationRate        *ipRateLimiter
 	websocketRate         *ipRateLimiter
 	actorRate             *ipRateLimiter
+	ownershipRate         *ipRateLimiter
 	bootstrapToken        string
 	requireBootstrapToken bool
 	trustedProxyCIDRs     []netip.Prefix
@@ -81,6 +82,7 @@ func newIdentityHandlers(logger *slog.Logger, allowedOrigin string, dependencies
 		cookieSecure: dependencies.CookieSecure, refreshTTL: dependencies.RefreshTokenTTL,
 		bootstrapRate: newIPRateLimiter(5, 5), loginRate: newIPRateLimiter(10, 10),
 		refreshRate: newIPRateLimiter(30, 20), invitationRate: newIPRateLimiter(10, 10), websocketRate: newIPRateLimiter(60, 20), actorRate: newIPRateLimiter(1200, 200),
+		ownershipRate:  newIPRateLimiter(5, 5),
 		bootstrapToken: dependencies.BootstrapToken, requireBootstrapToken: dependencies.RequireBootstrapToken,
 		trustedProxyCIDRs: dependencies.TrustedProxyCIDRs, revokeRealtimeSession: dependencies.RevokeRealtimeSession,
 	}
@@ -110,6 +112,7 @@ func (h *identityHandlers) routes(router chi.Router) {
 		protected.Delete("/sessions/{sessionID}", h.revokeSession)
 		protected.Post("/sessions/revoke-others", h.revokeOtherSessions)
 		protected.Post("/invitations", h.createInvitation)
+		protected.With(h.actorRateLimit("ownership-transfer", h.ownershipRate)).Post("/organization/transfer-ownership", h.transferOwnership)
 		if h.workspace != nil {
 			protected.Get("/organization", h.workspaceSettings)
 			protected.Patch("/organization", h.updateWorkspaceSettings)
@@ -307,6 +310,33 @@ func (h *identityHandlers) updateMe(w standardhttp.ResponseWriter, r *standardht
 			return
 		}
 		h.internalError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, user)
+}
+
+func (h *identityHandlers) transferOwnership(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input identity.TransferOwnershipInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	user, err := h.service.TransferOwnership(r.Context(), authFromContext(r.Context()).User, input)
+	if err != nil {
+		switch {
+		case errors.Is(err, identity.ErrForbidden):
+			h.writeError(w, r, standardhttp.StatusForbidden, "forbidden", "Only the current workspace owner can transfer ownership.")
+		case errors.Is(err, identity.ErrReauthentication):
+			h.writeError(w, r, standardhttp.StatusForbidden, "forbidden", "Current password is incorrect.")
+		case errors.Is(err, identity.ErrNotFound):
+			h.writeError(w, r, standardhttp.StatusNotFound, "workspace_not_found", "Ownership target was not found.")
+		case errors.Is(err, identity.ErrConflict):
+			h.writeError(w, r, standardhttp.StatusConflict, "version_conflict", "Workspace ownership changed. Reload and try again.")
+		case identity.IsValidationError(err):
+			h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "validation_failed", err.Error())
+		default:
+			h.internalError(w, r, err)
+		}
 		return
 	}
 	writeJSON(h.logger, w, standardhttp.StatusOK, user)

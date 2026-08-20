@@ -8,6 +8,7 @@ import (
 
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
+	"github.com/comamessenger/comamessenger/core/internal/permission"
 	"github.com/comamessenger/comamessenger/core/internal/testdb"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -154,6 +155,28 @@ func TestMessageCoreIntegration(t *testing.T) {
 		}); err != nil || !created {
 			t.Fatalf("owner channel Create() created=%v error=%v", created, err)
 		}
+	})
+
+	t.Run("workspace moderator deletes a foreign message without chat membership", func(t *testing.T) {
+		item, _, err := service.Create(ctx, fixture.member, fixture.groupID, CreateInput{
+			ClientMsgID: mustID(t), Body: "remove by workspace policy", BodyFormat: "plain",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		plainAdmin := fixture.moderator
+		plainAdmin.Permissions = []permission.Code{}
+		if _, err := service.Delete(ctx, plainAdmin, item.ID); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("plain admin Delete() error = %v, want ErrNotFound", err)
+		}
+		deleted, err := service.Delete(ctx, fixture.moderator, item.ID)
+		if err != nil || deleted.DeletedAt == nil {
+			t.Fatalf("workspace moderator Delete() = %+v, %v", deleted, err)
+		}
+		assertCount(t, pool, `
+			SELECT count(*) FROM audit_log
+			WHERE actor_id=$1 AND action='message.moderate.delete' AND target_id=$2`,
+			1, fixture.moderator.ActorID, item.ID)
 	})
 
 	t.Run("event is invisible before commit and rollback restores sequence", func(t *testing.T) {
@@ -437,6 +460,7 @@ func TestMessageCoreIntegration(t *testing.T) {
 type fixture struct {
 	owner     identity.User
 	member    identity.User
+	moderator identity.User
 	groupID   string
 	channelID string
 }
@@ -444,11 +468,14 @@ type fixture struct {
 func seedFixture(t *testing.T, pool *pgxpool.Pool) fixture {
 	t.Helper()
 	result := fixture{
-		owner:   identity.User{ActorID: mustID(t), OrgID: mustID(t), OrgRole: "owner", Status: "active"},
-		member:  identity.User{ActorID: mustID(t), OrgRole: "member", Status: "active"},
+		owner:  identity.User{ActorID: mustID(t), OrgID: mustID(t), OrgRole: "owner", Status: "active"},
+		member: identity.User{ActorID: mustID(t), OrgRole: "member", Status: "active"},
+		moderator: identity.User{ActorID: mustID(t), OrgRole: "admin", Status: "active",
+			Permissions: []permission.Code{permission.ChatsModerate}},
 		groupID: mustID(t), channelID: mustID(t),
 	}
 	result.member.OrgID = result.owner.OrgID
+	result.moderator.OrgID = result.owner.OrgID
 	tx, err := pool.Begin(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -457,13 +484,18 @@ func seedFixture(t *testing.T, pool *pgxpool.Pool) fixture {
 	if _, err := tx.Exec(context.Background(), `INSERT INTO organizations (id, name, slug) VALUES ($1, 'Test', 'test')`, result.owner.OrgID); err != nil {
 		t.Fatal(err)
 	}
-	for _, actor := range []identity.User{result.owner, result.member} {
+	for _, actor := range []identity.User{result.owner, result.member, result.moderator} {
 		if _, err := tx.Exec(context.Background(), `
 			INSERT INTO actors (id, org_id, type, org_role, display_name, handle)
 			VALUES ($1, $2, 'user', $3, $4, $5)`, actor.ActorID, actor.OrgID, actor.OrgRole,
 			actor.OrgRole, actor.OrgRole); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if _, err := tx.Exec(context.Background(), `
+		INSERT INTO actor_permissions(org_id,actor_id,permission,granted_by)
+		VALUES($1,$2,'chats.moderate',$3)`, result.owner.OrgID, result.moderator.ActorID, result.owner.ActorID); err != nil {
+		t.Fatal(err)
 	}
 	for _, chat := range []struct{ id, kind string }{{result.groupID, "group"}, {result.channelID, "channel"}} {
 		if _, err := tx.Exec(context.Background(), `

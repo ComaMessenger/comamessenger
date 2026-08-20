@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/comamessenger/comamessenger/core/internal/id"
+	"github.com/comamessenger/comamessenger/core/internal/permission"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -188,7 +189,13 @@ func (r *Repository) PutIntegration(ctx context.Context, orgID, actorID string, 
 }
 
 func (r *Repository) Members(ctx context.Context, orgID string) ([]Member, error) {
-	rows, err := r.pool.Query(ctx, `SELECT a.id,u.email::text,a.display_name,a.handle::text,a.org_role,a.status,a.created_at FROM actors a JOIN users u ON u.actor_id=a.id WHERE a.org_id=$1 AND a.deleted_at IS NULL ORDER BY a.display_name,a.id`, orgID)
+	rows, err := r.pool.Query(ctx, `
+		SELECT a.id,u.email::text,a.display_name,a.handle::text,a.org_role,a.status,a.created_at,
+		       ARRAY(SELECT ap.permission FROM actor_permissions ap WHERE ap.org_id=a.org_id AND ap.actor_id=a.id ORDER BY ap.permission)
+		FROM actors a
+		JOIN users u ON u.actor_id=a.id
+		WHERE a.org_id=$1 AND a.deleted_at IS NULL
+		ORDER BY a.display_name,a.id`, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -196,9 +203,11 @@ func (r *Repository) Members(ctx context.Context, orgID string) ([]Member, error
 	result := make([]Member, 0)
 	for rows.Next() {
 		var item Member
-		if err := rows.Scan(&item.ActorID, &item.Email, &item.DisplayName, &item.Handle, &item.Role, &item.Status, &item.CreatedAt); err != nil {
+		var stored []string
+		if err := rows.Scan(&item.ActorID, &item.Email, &item.DisplayName, &item.Handle, &item.Role, &item.Status, &item.CreatedAt, &stored); err != nil {
 			return nil, err
 		}
+		item.Permissions = effectivePermissions(item.Role, stored)
 		result = append(result, item)
 	}
 	return result, rows.Err()
@@ -219,8 +228,15 @@ func (r *Repository) UpdateMember(ctx context.Context, orgID, currentActorID, ta
 	} else if err != nil {
 		return Member{}, err
 	}
+	var previousPermissions []string
+	if err := tx.QueryRow(ctx, `SELECT ARRAY(SELECT permission FROM actor_permissions WHERE org_id=$1 AND actor_id=$2 ORDER BY permission)`, orgID, targetActorID).Scan(&previousPermissions); err != nil {
+		return Member{}, fmt.Errorf("load previous actor permissions: %w", err)
+	}
 	if currentRole != "owner" && (targetRole != "member" || input.Role != nil && *input.Role != "member") {
 		return Member{}, ErrForbidden
+	}
+	if targetRole == "owner" {
+		return Member{}, fmt.Errorf("%w: use the ownership transfer operation to change the owner", ErrInvalid)
 	}
 	role, status := targetRole, targetStatus
 	if input.Role != nil {
@@ -232,11 +248,37 @@ func (r *Repository) UpdateMember(ctx context.Context, orgID, currentActorID, ta
 	if targetActorID == currentActorID && status != "active" {
 		return Member{}, fmt.Errorf("%w: current user cannot deactivate themselves", ErrInvalid)
 	}
+	if input.Permissions != nil && (role != "admin" || status != "active") {
+		return Member{}, fmt.Errorf("%w: only active administrators may have explicit permissions", ErrInvalid)
+	}
 	_, err = tx.Exec(ctx, `UPDATE actors SET org_role=$3,status=$4 WHERE id=$1 AND org_id=$2`, targetActorID, orgID, role, status)
 	if err != nil {
 		return Member{}, fmt.Errorf("update organization member: %w", err)
 	}
-	if err := insertAudit(ctx, tx, orgID, currentActorID, "organization.member.update", "actor", &targetActorID, map[string]any{"role": role, "status": status}); err != nil {
+	if role != "admin" || status != "active" || input.Permissions != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM actor_permissions WHERE org_id=$1 AND actor_id=$2`, orgID, targetActorID); err != nil {
+			return Member{}, fmt.Errorf("clear actor permissions: %w", err)
+		}
+	}
+	if role == "admin" && status == "active" && input.Permissions != nil {
+		for _, code := range *input.Permissions {
+			if _, err := tx.Exec(ctx, `INSERT INTO actor_permissions(org_id,actor_id,permission,granted_by) VALUES($1,$2,$3,$4)`, orgID, targetActorID, code, currentActorID); err != nil {
+				return Member{}, fmt.Errorf("grant actor permission: %w", err)
+			}
+		}
+	}
+	auditAction := "organization.member.update"
+	auditMetadata := map[string]any{"role": role, "status": status}
+	if input.Permissions != nil {
+		auditAction = "organization.member.permissions.update"
+		auditMetadata["changes"] = map[string]any{
+			"permissions": map[string]any{
+				"from": effectivePermissions(targetRole, previousPermissions),
+				"to":   *input.Permissions,
+			},
+		}
+	}
+	if err := insertAudit(ctx, tx, orgID, currentActorID, auditAction, "actor", &targetActorID, auditMetadata); err != nil {
 		return Member{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -247,8 +289,26 @@ func (r *Repository) UpdateMember(ctx context.Context, orgID, currentActorID, ta
 		return Member{}, fmt.Errorf("commit member update: %w", err)
 	}
 	var result Member
-	err = r.pool.QueryRow(ctx, `SELECT a.id,u.email::text,a.display_name,a.handle::text,a.org_role,a.status,a.created_at FROM actors a JOIN users u ON u.actor_id=a.id WHERE a.id=$1`, targetActorID).Scan(&result.ActorID, &result.Email, &result.DisplayName, &result.Handle, &result.Role, &result.Status, &result.CreatedAt)
-	return result, err
+	var stored []string
+	err = r.pool.QueryRow(ctx, `
+		SELECT a.id,u.email::text,a.display_name,a.handle::text,a.org_role,a.status,a.created_at,
+		       ARRAY(SELECT ap.permission FROM actor_permissions ap WHERE ap.org_id=a.org_id AND ap.actor_id=a.id ORDER BY ap.permission)
+		FROM actors a
+		JOIN users u ON u.actor_id=a.id
+		WHERE a.id=$1`, targetActorID).Scan(&result.ActorID, &result.Email, &result.DisplayName, &result.Handle, &result.Role, &result.Status, &result.CreatedAt, &stored)
+	if err != nil {
+		return Member{}, err
+	}
+	result.Permissions = effectivePermissions(result.Role, stored)
+	return result, nil
+}
+
+func effectivePermissions(role string, stored []string) []permission.Code {
+	granted := make([]permission.Code, len(stored))
+	for index, code := range stored {
+		granted[index] = permission.Code(code)
+	}
+	return permission.Effective(role, granted)
 }
 
 func (r *Repository) Audit(ctx context.Context, orgID string, limit int) (AuditPage, error) {

@@ -12,6 +12,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/authz"
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
+	"github.com/comamessenger/comamessenger/core/internal/permission"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -397,11 +398,15 @@ func (s *Service) Update(ctx context.Context, user identity.User, chatID string,
 }
 
 func (s *Service) Archive(ctx context.Context, user identity.User, chatID string) error {
-	current, err := s.Get(ctx, user, chatID)
+	kind, role, err := s.managementContext(ctx, user, chatID)
 	if err != nil {
 		return err
 	}
-	if current.Kind == "direct" || !canManage(user, current) {
+	moderator := canModerate(user)
+	if role == "" && (!moderator || kind == "direct") {
+		return ErrNotFound
+	}
+	if kind == "direct" || !canManageContext(kind, role, moderator) {
 		return ErrForbidden
 	}
 	auditID, err := id.New()
@@ -419,9 +424,9 @@ func (s *Service) Archive(ctx context.Context, user identity.User, chatID string
 	command, err := tx.Exec(ctx, `
 		UPDATE chats SET archived_at = now()
 		WHERE id = $1 AND org_id = $2 AND archived_at IS NULL
-		  AND EXISTS (
+		  AND ($4::boolean OR EXISTS (
 			SELECT 1 FROM chat_members WHERE chat_id = $1 AND actor_id = $3 AND role IN ('owner', 'admin')
-		  )`, chatID, user.OrgID, user.ActorID)
+		  ))`, chatID, user.OrgID, user.ActorID, moderator)
 	if err != nil {
 		return fmt.Errorf("archive chat: %w", err)
 	}
@@ -492,8 +497,12 @@ func (s *Service) Join(ctx context.Context, user identity.User, chatID string) (
 }
 
 func (s *Service) ListMembers(ctx context.Context, user identity.User, chatID string) ([]Member, error) {
-	if _, err := s.Get(ctx, user, chatID); err != nil {
+	kind, role, err := s.managementContext(ctx, user, chatID)
+	if err != nil {
 		return nil, err
+	}
+	if role == "" && (kind == "direct" || !canModerate(user)) {
+		return nil, ErrNotFound
 	}
 	rows, err := s.pool.Query(ctx, `
 		SELECT a.id, a.display_name, a.handle::text, cm.role, cm.joined_at
@@ -516,19 +525,23 @@ func (s *Service) ListMembers(ctx context.Context, user identity.User, chatID st
 }
 
 func (s *Service) AddMember(ctx context.Context, user identity.User, chatID string, input MemberInput) (Member, error) {
-	current, err := s.Get(ctx, user, chatID)
+	kind, role, err := s.managementContext(ctx, user, chatID)
 	if err != nil {
 		return Member{}, err
 	}
 	input.ActorID = strings.TrimSpace(input.ActorID)
 	input.Role = normalizedRole(input.Role)
-	if current.Kind == "direct" || !canManage(user, current) {
+	moderator := canModerate(user)
+	if role == "" && (!moderator || kind == "direct") {
+		return Member{}, ErrNotFound
+	}
+	if kind == "direct" || !canManageContext(kind, role, moderator) {
 		return Member{}, ErrForbidden
 	}
 	if input.ActorID == "" || !validRole(input.Role) {
 		return Member{}, fmt.Errorf("%w: actor_id and a valid role are required", ErrInvalid)
 	}
-	if input.Role == "owner" && current.Role != "owner" {
+	if input.Role == "owner" && role != "owner" {
 		return Member{}, ErrForbidden
 	}
 	auditID, err := id.New()
@@ -547,13 +560,13 @@ func (s *Service) AddMember(ctx context.Context, user identity.User, chatID stri
 		INSERT INTO chat_members (chat_id, actor_id, org_id, role)
 		SELECT $1, target.id, target.org_id, $4 FROM actors target
 		WHERE target.id = $2 AND target.org_id = $3 AND target.status = 'active' AND target.deleted_at IS NULL
-		  AND EXISTS (
+		  AND (EXISTS (
 			SELECT 1 FROM chat_members manager JOIN chats c ON c.id = manager.chat_id
 			WHERE manager.chat_id = $1 AND manager.actor_id = $5 AND manager.role IN ('owner', 'admin')
 			  AND c.kind IN ('group', 'channel') AND c.archived_at IS NULL
 			  AND ($4::text <> 'owner' OR manager.role = 'owner')
-		  )
-		ON CONFLICT (chat_id, actor_id) DO NOTHING`, chatID, input.ActorID, user.OrgID, input.Role, user.ActorID)
+		  ) OR ($6::boolean AND $4::text <> 'owner'))
+		ON CONFLICT (chat_id, actor_id) DO NOTHING`, chatID, input.ActorID, user.OrgID, input.Role, user.ActorID, moderator)
 	if err != nil {
 		return Member{}, fmt.Errorf("add chat member: %w", err)
 	}
@@ -575,12 +588,16 @@ func (s *Service) AddMember(ctx context.Context, user identity.User, chatID stri
 }
 
 func (s *Service) UpdateMember(ctx context.Context, user identity.User, chatID, actorID string, input UpdateMemberInput) (Member, error) {
-	current, err := s.Get(ctx, user, chatID)
+	kind, role, err := s.managementContext(ctx, user, chatID)
 	if err != nil {
 		return Member{}, err
 	}
 	input.Role = normalizedRole(input.Role)
-	if current.Kind == "direct" || !canManage(user, current) {
+	moderator := canModerate(user)
+	if role == "" && (!moderator || kind == "direct") {
+		return Member{}, ErrNotFound
+	}
+	if kind == "direct" || !canManageContext(kind, role, moderator) {
 		return Member{}, ErrForbidden
 	}
 	if !validRole(input.Role) {
@@ -590,7 +607,7 @@ func (s *Service) UpdateMember(ctx context.Context, user identity.User, chatID, 
 	if err != nil {
 		return Member{}, err
 	}
-	if (target.Role == "owner" || input.Role == "owner") && current.Role != "owner" {
+	if (target.Role == "owner" || input.Role == "owner") && role != "owner" {
 		return Member{}, ErrForbidden
 	}
 	if target.Role == "owner" && input.Role != "owner" {
@@ -617,13 +634,13 @@ func (s *Service) UpdateMember(ctx context.Context, user identity.User, chatID, 
 	command, err := tx.Exec(ctx, `
 		UPDATE chat_members target SET role = $3
 		WHERE target.chat_id = $1 AND target.actor_id = $2
-		  AND EXISTS (
+		  AND (EXISTS (
 			SELECT 1 FROM chat_members manager JOIN chats c ON c.id = manager.chat_id
 			WHERE manager.chat_id = $1 AND manager.actor_id = $4 AND manager.role IN ('owner', 'admin')
 			  AND c.kind IN ('group', 'channel') AND c.archived_at IS NULL
 			  AND (target.role <> 'owner' OR manager.role = 'owner')
 			  AND ($3::text <> 'owner' OR manager.role = 'owner')
-		  )`, chatID, actorID, input.Role, user.ActorID)
+		  ) OR ($5::boolean AND target.role <> 'owner' AND $3::text <> 'owner'))`, chatID, actorID, input.Role, user.ActorID, moderator)
 	if err != nil {
 		return Member{}, fmt.Errorf("update chat member: %w", err)
 	}
@@ -645,19 +662,23 @@ func (s *Service) UpdateMember(ctx context.Context, user identity.User, chatID, 
 }
 
 func (s *Service) RemoveMember(ctx context.Context, user identity.User, chatID, actorID string) error {
-	current, err := s.Get(ctx, user, chatID)
+	kind, role, err := s.managementContext(ctx, user, chatID)
 	if err != nil {
 		return err
 	}
 	selfLeave := actorID == user.ActorID
-	if current.Kind == "direct" || (!selfLeave && !canManage(user, current)) {
+	moderator := canModerate(user)
+	if role == "" && (!moderator || kind == "direct") {
+		return ErrNotFound
+	}
+	if kind == "direct" || (!selfLeave && !canManageContext(kind, role, moderator)) {
 		return ErrForbidden
 	}
 	target, err := s.member(ctx, chatID, actorID)
 	if err != nil {
 		return err
 	}
-	if !selfLeave && target.Role == "owner" && current.Role != "owner" {
+	if !selfLeave && target.Role == "owner" && role != "owner" {
 		return ErrForbidden
 	}
 	if target.Role == "owner" {
@@ -684,13 +705,13 @@ func (s *Service) RemoveMember(ctx context.Context, user identity.User, chatID, 
 	command, err := tx.Exec(ctx, `
 		DELETE FROM chat_members target
 		WHERE target.chat_id = $1 AND target.actor_id = $2
-		  AND EXISTS (
+		  AND (EXISTS (
 			SELECT 1 FROM chat_members manager JOIN chats c ON c.id = manager.chat_id
 			WHERE manager.chat_id = $1 AND manager.actor_id = $3
 			  AND c.kind IN ('group', 'channel') AND c.archived_at IS NULL
 			  AND (target.actor_id = manager.actor_id OR manager.role IN ('owner', 'admin'))
 			  AND (target.actor_id = manager.actor_id OR target.role <> 'owner' OR manager.role = 'owner')
-		  )`, chatID, actorID, user.ActorID)
+		  ) OR ($4::boolean AND target.role <> 'owner'))`, chatID, actorID, user.ActorID, moderator)
 	if err != nil {
 		return fmt.Errorf("remove chat member: %w", err)
 	}
@@ -852,6 +873,35 @@ func (s *Service) ownerCount(ctx context.Context, chatID string) (int, error) {
 		return 0, fmt.Errorf("count chat owners: %w", err)
 	}
 	return count, nil
+}
+
+func (s *Service) managementContext(ctx context.Context, user identity.User, chatID string) (string, string, error) {
+	var kind, role string
+	err := s.pool.QueryRow(ctx, `
+		SELECT c.kind, COALESCE(cm.role, '')
+		FROM chats c
+		LEFT JOIN chat_members cm
+		  ON cm.org_id = c.org_id AND cm.chat_id = c.id AND cm.actor_id = $3
+		WHERE c.org_id = $1 AND c.id = $2 AND c.archived_at IS NULL`,
+		user.OrgID, chatID, user.ActorID).Scan(&kind, &role)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", ErrNotFound
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("load chat management context: %w", err)
+	}
+	return kind, role, nil
+}
+
+func canManageContext(kind, role string, moderator bool) bool {
+	if moderator {
+		return kind == "group" || kind == "channel"
+	}
+	return role == "owner" || role == "admin"
+}
+
+func canModerate(user identity.User) bool {
+	return permission.Allows(user.OrgRole, user.Permissions, permission.ChatsModerate)
 }
 
 func canManage(user identity.User, chat Chat) bool {

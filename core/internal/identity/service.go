@@ -12,6 +12,8 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/access"
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/password"
+	"github.com/comamessenger/comamessenger/core/internal/permission"
+	"github.com/google/uuid"
 )
 
 var (
@@ -187,8 +189,40 @@ func (s *Service) UpdateProfile(ctx context.Context, current User, input UpdateP
 	return s.repository.UpdateProfile(ctx, current.ActorID, displayName, handle, timezone)
 }
 
+func (s *Service) TransferOwnership(ctx context.Context, current User, input TransferOwnershipInput) (User, error) {
+	if current.OrgRole != "owner" {
+		return User{}, ErrForbidden
+	}
+	input.TargetActorID = strings.TrimSpace(input.TargetActorID)
+	if _, err := uuid.Parse(input.TargetActorID); err != nil {
+		return User{}, validationErrorf("target_actor_id must be a valid UUID")
+	}
+	if input.TargetActorID == current.ActorID {
+		return User{}, validationErrorf("target_actor_id must identify another active user")
+	}
+	if len(input.CurrentPassword) < 1 || len(input.CurrentPassword) > 1024 {
+		return User{}, validationErrorf("current_password length must be between 1 and 1024 bytes")
+	}
+	passwordHash, err := s.repository.PasswordHash(ctx, current.OrgID, current.ActorID)
+	if err != nil {
+		return User{}, err
+	}
+	matched, err := s.hasher.Verify(passwordHash, input.CurrentPassword)
+	if err != nil || !matched {
+		return User{}, ErrReauthentication
+	}
+	auditID, err := id.New()
+	if err != nil {
+		return User{}, fmt.Errorf("generate ownership transfer audit identifier: %w", err)
+	}
+	return s.repository.TransferOwnership(ctx, OwnershipTransfer{
+		OrgID: current.OrgID, CurrentActorID: current.ActorID,
+		TargetActorID: input.TargetActorID, AuditID: auditID,
+	})
+}
+
 func (s *Service) CreateInvitation(ctx context.Context, current User, input CreateInvitationInput) (Invitation, error) {
-	if current.OrgRole != "owner" && current.OrgRole != "admin" {
+	if !permission.Allows(current.OrgRole, current.Permissions, permission.InvitationsManage) {
 		return Invitation{}, ErrForbidden
 	}
 	email := strings.ToLower(strings.TrimSpace(input.Email))

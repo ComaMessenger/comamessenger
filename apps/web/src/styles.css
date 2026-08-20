@@ -2534,6 +2534,12 @@ a:focus-visible {
   padding-block-end: 12px;
   border-block-end: 1px solid var(--coma-border);
 }
+.ownership-transfer-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+}
 .invitation-result {
   display: grid;
   grid-template-columns: minmax(150px, 0.7fr) minmax(220px, 1fr) auto;
@@ -2585,6 +2591,26 @@ a:focus-visible {
   border: 1px solid var(--coma-border-strong);
   border-radius: 8px;
   background: var(--coma-surface);
+}
+.organization-member__permissions {
+  grid-column: 2 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin: 0;
+  padding: 10px 0 0;
+  border: 0;
+}
+.organization-member__permissions legend {
+  width: 100%;
+  color: var(--coma-muted);
+  font-size: 11px;
+}
+.organization-member__permissions label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
 }
 .branding-assets {
   display: grid;
@@ -3247,6 +3273,9 @@ a:focus-visible {
   .accent-editor,
   .invitation-form,
   .invitation-result {
+    grid-template-columns: 1fr;
+  }
+  .ownership-transfer-form {
     grid-template-columns: 1fr;
   }
   .accent-editor > input[type="color"] {

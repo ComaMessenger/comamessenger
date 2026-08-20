@@ -325,6 +325,22 @@ export interface paths {
         patch: operations["updateOrganizationMember"];
         trace?: never;
     };
+    "/api/v1/organization/transfer-ownership": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["transferOrganizationOwnership"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/organization/audit": {
         parameters: {
             query?: never;
@@ -1014,9 +1030,12 @@ export interface components {
             timezone: string;
             /** @enum {string} */
             status: "active" | "deactivated";
+            permissions: components["schemas"]["Permission"][];
             /** Format: date-time */
             created_at: string;
         };
+        /** @enum {string} */
+        Permission: "members.manage" | "invitations.manage" | "workspace.settings" | "workspace.policies" | "branding.manage" | "integrations.manage" | "audit.read" | "chats.moderate";
         TokenResponse: {
             access_token: string;
             /** Format: date-time */
@@ -1147,14 +1166,21 @@ export interface components {
             role: "owner" | "admin" | "member";
             /** @enum {string} */
             status: "active" | "deactivated";
+            permissions: components["schemas"]["Permission"][];
             /** Format: date-time */
             created_at: string;
         };
         UpdateOrganizationMemberRequest: {
             /** @enum {string|null} */
-            role?: "owner" | "admin" | "member" | null;
+            role?: "admin" | "member" | null;
             /** @enum {string|null} */
             status?: "active" | "deactivated" | null;
+            permissions?: components["schemas"]["Permission"][] | null;
+        };
+        TransferOwnershipRequest: {
+            /** Format: uuid */
+            target_actor_id: string;
+            current_password: string;
         };
         AuditEntry: {
             /** Format: uuid */
@@ -2133,6 +2159,34 @@ export interface operations {
             422: components["responses"]["Error"];
         };
     };
+    transferOrganizationOwnership: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferOwnershipRequest"];
+            };
+        };
+        responses: {
+            /** @description The authenticated previous owner, now an administrator with full explicit permissions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
     listOrganizationAudit: {
         parameters: {
             query?: {
@@ -2307,7 +2361,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Chat archived. */
+            /** @description Group or channel archived by its manager or a workspace moderator. */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -2405,7 +2459,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Active chat members. */
+            /** @description Active chat members, including workspace-moderator access to groups and channels they have not joined. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2607,7 +2661,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Soft-deleted message, or the existing tombstone for an idempotent replay. */
+            /** @description Soft-deleted own or moderated message, or the existing tombstone for an idempotent replay. */
             200: {
                 headers: {
                     [name: string]: unknown;

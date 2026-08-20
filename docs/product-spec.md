@@ -164,8 +164,9 @@
 
 ### 2.12 Файлы
 
-- Хранилище: любое S3-совместимое object storage (AWS S3, Yandex Object Storage, Selectel, MinIO и другие) или локальный диск для маленьких инсталляций.
-- S3-провайдер задаётся конфигурацией: `endpoint`, `region`, `bucket`, `access_key`, `secret_key`, `prefix`, TLS и `force_path_style`. MinIO используется только как локальный провайдер по умолчанию в docker-compose.
+- Хранилище: единый `storage.BlobStore`; local filesystem на persistent volume используется по умолчанию для небольших инсталляций, внешний S3-compatible backend (AWS S3, Yandex Object Storage, Selectel, MinIO и другие) подключается конфигурацией.
+- Local backend имеет настраиваемую логическую квоту (default 2 GiB), minimum-free-space guard и поддерживает один Core instance. Multi-Core требует S3 или явно поддерживаемое shared storage. Отдельный S3-compatible контейнер доступен как optional Compose profile, но не является зависимостью default install.
+- S3-провайдер задаётся конфигурацией: `endpoint`, `region`, `bucket`, `access_key`, `secret_key`, `prefix`, TLS и `force_path_style`.
 - В БД хранится стабильный `storage_key`, а не URL провайдера. Это позволяет менять endpoint и выдавать временные ссылки без миграции записей.
 - Загрузка: клиент запрашивает presigned URL, грузит напрямую, потом создаёт сообщение с `file_ids`. Для локального режима - upload через ядро. CORS, multipart upload и presigned download проверяются контрактными тестами минимум на MinIO и одном внешнем S3-провайдере.
 - Превью картинок/видео и извлечение текста из PDF/docx - фоновые job'ы. Извлечённый текст индексируется в поиск и доступен агентам.
@@ -218,7 +219,7 @@
 
 ### 2.20 Деплой
 
-- `docker compose up`: ядро, Postgres, Redis, MinIO; agent-runtime включается profile. Redis disposable и не входит в backup contract.
+- `docker compose up`: ядро, Postgres и Redis; файлы лежат в отдельном local persistent volume. S3-compatible storage и agent-runtime включаются profiles. Redis disposable и не входит в backup contract.
 - Одиночный бинарник с флагом `--sqlite` для демо/личного использования (позже; сначала только Postgres).
 - Helm-чарт после стабилизации.
 - Автомиграции при старте (с флагом отключения).

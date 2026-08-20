@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/comamessenger/comamessenger/core/internal/identity"
+	"github.com/comamessenger/comamessenger/core/internal/permission"
 )
 
 const maxBrandingAssetBytes = 512 * 1024
@@ -59,7 +60,10 @@ func (s *Service) Settings(ctx context.Context, current identity.User) (Settings
 }
 
 func (s *Service) UpdateSettings(ctx context.Context, current identity.User, input UpdateSettingsInput) (Settings, error) {
-	if !administrator(current) {
+	if !allows(current, permission.WorkspaceSettings) &&
+		!allows(current, permission.InvitationsManage) &&
+		!allows(current, permission.WorkspacePolicies) &&
+		!allows(current, permission.BrandingManage) {
 		return Settings{}, ErrForbidden
 	}
 	input.Name = strings.TrimSpace(input.Name)
@@ -84,6 +88,28 @@ func (s *Service) UpdateSettings(ctx context.Context, current identity.User, inp
 	if !colorPattern.MatchString(input.AccentColor) {
 		return Settings{}, fmt.Errorf("%w: accent color must be a six-digit hex color", ErrInvalid)
 	}
+	existing, err := s.repository.Settings(ctx, current.OrgID)
+	if err != nil {
+		return Settings{}, err
+	}
+	if input.ExpectedVersion != existing.Version {
+		return Settings{}, ErrVersionConflict
+	}
+	if (input.Name != existing.Name || input.Slug != existing.Slug) &&
+		!allows(current, permission.WorkspaceSettings) {
+		return Settings{}, ErrForbidden
+	}
+	if (input.InvitationDefaultRole != existing.InvitationDefaultRole || input.InvitationTTLHours != existing.InvitationTTLHours) &&
+		!allows(current, permission.InvitationsManage) {
+		return Settings{}, ErrForbidden
+	}
+	if (input.AllowPublicChatCreation != existing.AllowPublicChatCreation || input.AllowChannelCreation != existing.AllowChannelCreation) &&
+		!allows(current, permission.WorkspacePolicies) {
+		return Settings{}, ErrForbidden
+	}
+	if input.AccentColor != existing.AccentColor && !allows(current, permission.BrandingManage) {
+		return Settings{}, ErrForbidden
+	}
 	return s.repository.UpdateSettings(ctx, current.OrgID, current.ActorID, input)
 }
 
@@ -99,7 +125,7 @@ func (s *Service) Asset(ctx context.Context, kind string) (Asset, error) {
 }
 
 func (s *Service) PutAsset(ctx context.Context, current identity.User, kind, contentType string, content []byte) error {
-	if !administrator(current) {
+	if !allows(current, permission.BrandingManage) {
 		return ErrForbidden
 	}
 	if kind != "logo" && kind != "favicon" {
@@ -124,7 +150,7 @@ func (s *Service) PutAsset(ctx context.Context, current identity.User, kind, con
 }
 
 func (s *Service) DeleteAsset(ctx context.Context, current identity.User, kind string) error {
-	if !administrator(current) {
+	if !allows(current, permission.BrandingManage) {
 		return ErrForbidden
 	}
 	if kind != "logo" && kind != "favicon" {
@@ -134,7 +160,7 @@ func (s *Service) DeleteAsset(ctx context.Context, current identity.User, kind s
 }
 
 func (s *Service) Infrastructure(ctx context.Context, current identity.User) (Infrastructure, error) {
-	if !administrator(current) {
+	if !allows(current, permission.IntegrationsManage) {
 		return Infrastructure{}, ErrForbidden
 	}
 	version, encrypted, err := s.repository.Integration(ctx, current.OrgID)
@@ -152,7 +178,7 @@ func (s *Service) Infrastructure(ctx context.Context, current identity.User) (In
 }
 
 func (s *Service) UpdateInfrastructure(ctx context.Context, current identity.User, input UpdateInfrastructureInput) (Infrastructure, error) {
-	if !administrator(current) {
+	if !allows(current, permission.IntegrationsManage) {
 		return Infrastructure{}, ErrForbidden
 	}
 	version, encrypted, err := s.repository.Integration(ctx, current.OrgID)
@@ -204,7 +230,7 @@ func (s *Service) UpdateInfrastructure(ctx context.Context, current identity.Use
 
 func (s *Service) TestConnection(ctx context.Context, current identity.User, input ConnectionTestInput) (ConnectionTestResult, error) {
 	result := ConnectionTestResult{CheckedAt: s.now().UTC()}
-	if !administrator(current) {
+	if !allows(current, permission.IntegrationsManage) {
 		return result, ErrForbidden
 	}
 	_, encrypted, err := s.repository.Integration(ctx, current.OrgID)
@@ -236,30 +262,48 @@ func (s *Service) TestConnection(ctx context.Context, current identity.User, inp
 }
 
 func (s *Service) Members(ctx context.Context, current identity.User) ([]Member, error) {
-	if !administrator(current) {
+	if !allows(current, permission.MembersManage) {
 		return nil, ErrForbidden
 	}
 	return s.repository.Members(ctx, current.OrgID)
 }
 
 func (s *Service) UpdateMember(ctx context.Context, current identity.User, actorID string, input UpdateMemberInput) (Member, error) {
-	if !administrator(current) {
+	if !allows(current, permission.MembersManage) {
 		return Member{}, ErrForbidden
 	}
-	if input.Role != nil && *input.Role != "owner" && *input.Role != "admin" && *input.Role != "member" {
+	if input.Role != nil && *input.Role != "admin" && *input.Role != "member" {
 		return Member{}, fmt.Errorf("%w: invalid role", ErrInvalid)
 	}
 	if input.Status != nil && *input.Status != "active" && *input.Status != "deactivated" {
 		return Member{}, fmt.Errorf("%w: invalid status", ErrInvalid)
 	}
-	if input.Role == nil && input.Status == nil {
+	if input.Role == nil && input.Status == nil && input.Permissions == nil {
 		return Member{}, fmt.Errorf("%w: no member changes supplied", ErrInvalid)
+	}
+	if input.Permissions != nil {
+		if current.OrgRole != "owner" {
+			return Member{}, ErrForbidden
+		}
+		if input.Role != nil && *input.Role != "admin" {
+			return Member{}, fmt.Errorf("%w: only administrators may have explicit permissions", ErrInvalid)
+		}
+		seen := make(map[permission.Code]struct{}, len(*input.Permissions))
+		for _, code := range *input.Permissions {
+			if !permission.Valid(code) {
+				return Member{}, fmt.Errorf("%w: invalid permission %q", ErrInvalid, code)
+			}
+			if _, duplicate := seen[code]; duplicate {
+				return Member{}, fmt.Errorf("%w: duplicate permission %q", ErrInvalid, code)
+			}
+			seen[code] = struct{}{}
+		}
 	}
 	return s.repository.UpdateMember(ctx, current.OrgID, current.ActorID, actorID, input)
 }
 
 func (s *Service) Audit(ctx context.Context, current identity.User, limit int) (AuditPage, error) {
-	if !administrator(current) {
+	if !allows(current, permission.AuditRead) {
 		return AuditPage{}, ErrForbidden
 	}
 	if limit == 0 {
@@ -342,8 +386,8 @@ func validateIntegrations(value integrationSecrets) error {
 	return nil
 }
 
-func administrator(user identity.User) bool {
-	return user.OrgRole == "owner" || user.OrgRole == "admin"
+func allows(user identity.User, required permission.Code) bool {
+	return permission.Allows(user.OrgRole, user.Permissions, required)
 }
 
 func mask(value string) string {

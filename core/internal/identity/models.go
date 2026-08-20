@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/comamessenger/comamessenger/core/internal/permission"
 )
 
 var (
@@ -15,6 +17,8 @@ var (
 	ErrNotFound            = errors.New("not found")
 	ErrInvitationInvalid   = errors.New("invitation is invalid")
 	ErrForbidden           = errors.New("forbidden")
+	ErrReauthentication    = errors.New("reauthentication failed")
+	ErrConflict            = errors.New("conflict")
 )
 
 type ValidationError struct {
@@ -33,17 +37,18 @@ func IsValidationError(err error) bool {
 }
 
 type User struct {
-	ActorID          string    `json:"id"`
-	OrgID            string    `json:"org_id"`
-	OrganizationName string    `json:"organization_name"`
-	OrgRole          string    `json:"role"`
-	Email            string    `json:"email"`
-	DisplayName      string    `json:"display_name"`
-	Handle           string    `json:"handle"`
-	Timezone         string    `json:"timezone"`
-	Status           string    `json:"status"`
-	CreatedAt        time.Time `json:"created_at"`
-	PasswordHash     string    `json:"-"`
+	ActorID          string            `json:"id"`
+	OrgID            string            `json:"org_id"`
+	OrganizationName string            `json:"organization_name"`
+	OrgRole          string            `json:"role"`
+	Email            string            `json:"email"`
+	DisplayName      string            `json:"display_name"`
+	Handle           string            `json:"handle"`
+	Timezone         string            `json:"timezone"`
+	Status           string            `json:"status"`
+	Permissions      []permission.Code `json:"permissions"`
+	CreatedAt        time.Time         `json:"created_at"`
+	PasswordHash     string            `json:"-"`
 }
 
 type Session struct {
@@ -89,6 +94,18 @@ type UpdateProfileInput struct {
 	DisplayName *string `json:"display_name"`
 	Handle      *string `json:"handle"`
 	Timezone    *string `json:"timezone"`
+}
+
+type TransferOwnershipInput struct {
+	TargetActorID   string `json:"target_actor_id"`
+	CurrentPassword string `json:"current_password"`
+}
+
+type OwnershipTransfer struct {
+	OrgID          string
+	CurrentActorID string
+	TargetActorID  string
+	AuditID        string
 }
 
 type CreateInvitationInput struct {

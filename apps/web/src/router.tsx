@@ -4,9 +4,17 @@ import {
   createRouter,
 } from "@tanstack/react-router";
 import { App } from "./App";
+import { settingsRegistry } from "./settings";
 
 const root = createRootRoute({ component: App });
 const marker = () => null;
+const settingsRoutes = settingsRegistry.map((entry) =>
+  createRoute({
+    getParentRoute: () => root,
+    path: entry.path,
+    component: marker,
+  }),
+);
 const routes = [
   createRoute({ getParentRoute: () => root, path: "/", component: marker }),
   createRoute({
@@ -53,36 +61,7 @@ const routes = [
     path: "/more",
     component: marker,
   }),
-  createRoute({
-    getParentRoute: () => root,
-    path: "/settings/profile",
-    component: marker,
-  }),
-  createRoute({
-    getParentRoute: () => root,
-    path: "/settings/workspace",
-    component: marker,
-  }),
-  createRoute({
-    getParentRoute: () => root,
-    path: "/settings/customization",
-    component: marker,
-  }),
-  createRoute({
-    getParentRoute: () => root,
-    path: "/settings/infrastructure",
-    component: marker,
-  }),
-  createRoute({
-    getParentRoute: () => root,
-    path: "/settings/security",
-    component: marker,
-  }),
-  createRoute({
-    getParentRoute: () => root,
-    path: "/settings/audit",
-    component: marker,
-  }),
+  ...settingsRoutes,
   createRoute({
     getParentRoute: () => root,
     path: "/m/$messageKey",

@@ -13,6 +13,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/authz"
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
+	"github.com/comamessenger/comamessenger/core/internal/permission"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -404,13 +405,17 @@ func (s *Service) Delete(ctx context.Context, user identity.User, messageID stri
 	if err := lockOrganization(ctx, tx, user.OrgID); err != nil {
 		return Message{}, err
 	}
-	current, kind, role, err := lockMessage(ctx, tx, user, messageID)
+	current, kind, role, member, err := lockMessageForDelete(ctx, tx, user, messageID)
 	if err != nil {
 		return Message{}, err
 	}
-	canDelete := current.ActorID == user.ActorID && can(user, kind, role, authz.MessagePublish)
-	canModerate := can(user, kind, role, authz.ChatManage)
-	if !canDelete && !canModerate {
+	globalModerator := permission.Allows(user.OrgRole, user.Permissions, permission.ChatsModerate)
+	if !member && !globalModerator {
+		return Message{}, ErrNotFound
+	}
+	canDelete := member && current.ActorID == user.ActorID && can(user, kind, role, authz.MessagePublish)
+	canModerate := member && can(user, kind, role, authz.ChatManage)
+	if !canDelete && !canModerate && !globalModerator {
 		return Message{}, ErrForbidden
 	}
 	if current.DeletedAt != nil {
@@ -431,6 +436,19 @@ func (s *Service) Delete(ctx context.Context, user identity.User, messageID stri
 	}
 	if err := insertEvent(ctx, tx, user, result.ChatID, result.ID, seq, "message.deleted"); err != nil {
 		return Message{}, err
+	}
+	if current.ActorID != user.ActorID {
+		auditID, err := id.New()
+		if err != nil {
+			return Message{}, fmt.Errorf("generate message moderation audit id: %w", err)
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata)
+			VALUES($1,$2,$3,'message.moderate.delete','message',$4,
+			       jsonb_build_object('chat_id',$5::uuid,'author_id',$6::uuid))`,
+			auditID, user.OrgID, user.ActorID, result.ID, result.ChatID, current.ActorID); err != nil {
+			return Message{}, fmt.Errorf("audit moderated message deletion: %w", err)
+		}
 	}
 	if _, err := tx.Exec(ctx, `
 		UPDATE chats
@@ -560,6 +578,33 @@ func lockMessage(ctx context.Context, tx pgx.Tx, user identity.User, messageID s
 		return Message{}, "", "", fmt.Errorf("lock message: %w", err)
 	}
 	return result, kind, role, nil
+}
+
+func lockMessageForDelete(ctx context.Context, tx pgx.Tx, user identity.User, messageID string) (Message, string, string, bool, error) {
+	var result Message
+	var kind, role string
+	var member bool
+	err := tx.QueryRow(ctx, `
+		SELECT m.id, m.chat_id, m.actor_id, m.client_msg_id, m.type, m.body, m.body_format, m.reply_to_id,
+			m.thread_root_id, m.version, m.created_seq, m.created_at, m.edited_at, m.deleted_at, m.forwarded_from,
+			m.mentioned_actor_ids, c.kind, COALESCE(cm.role, ''), cm.actor_id IS NOT NULL
+		FROM messages m
+		JOIN chats c ON c.org_id = m.org_id AND c.id = m.chat_id AND c.archived_at IS NULL
+		LEFT JOIN chat_members cm
+		  ON cm.org_id = c.org_id AND cm.chat_id = c.id AND cm.actor_id = $3
+		WHERE m.org_id = $1 AND m.id = $2
+		FOR UPDATE OF m FOR SHARE OF c`, user.OrgID, messageID, user.ActorID).Scan(
+		&result.ID, &result.ChatID, &result.ActorID, &result.ClientMsgID, &result.Type, &result.Body,
+		&result.BodyFormat, &result.ReplyToID, &result.ThreadRootID, &result.Version, &result.CreatedSeq,
+		&result.CreatedAt, &result.EditedAt, &result.DeletedAt, newJSONScanner(&result.ForwardedFrom),
+		&result.MentionedActorIDs, &kind, &role, &member)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Message{}, "", "", false, ErrNotFound
+	}
+	if err != nil {
+		return Message{}, "", "", false, fmt.Errorf("lock message for deletion: %w", err)
+	}
+	return result, kind, role, member, nil
 }
 
 func findByClientID(ctx context.Context, tx pgx.Tx, actorID, clientMsgID string) (Message, [32]byte, error) {
