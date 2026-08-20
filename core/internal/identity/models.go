@@ -19,6 +19,8 @@ var (
 	ErrForbidden           = errors.New("forbidden")
 	ErrReauthentication    = errors.New("reauthentication failed")
 	ErrConflict            = errors.New("conflict")
+	ErrEmailTaken          = errors.New("email is already in use")
+	ErrTokenInvalid        = errors.New("token is invalid")
 )
 
 type ValidationError struct {
@@ -103,6 +105,30 @@ type UpdateProfileInput struct {
 type ChangePasswordInput struct {
 	CurrentPassword string `json:"current_password"`
 	NewPassword     string `json:"new_password"`
+}
+
+type ChangeEmailInput struct {
+	NewEmail        string `json:"new_email"`
+	CurrentPassword string `json:"current_password"`
+}
+
+type ConfirmEmailInput struct {
+	Token string `json:"token"`
+}
+
+type EmailChangeResult struct {
+	PendingConfirmation bool  `json:"pending_confirmation"`
+	User                *User `json:"user"`
+}
+
+type EmailChangeRecord struct {
+	ID        string
+	OrgID     string
+	ActorID   string
+	NewEmail  string
+	TokenHash []byte
+	ExpiresAt time.Time
+	AuditID   string
 }
 
 type TransferOwnershipInput struct {

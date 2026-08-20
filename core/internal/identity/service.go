@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"net/mail"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -31,16 +32,26 @@ type Service struct {
 	development   bool
 	dummyHash     string
 	now           func() time.Time
+	emailSender   EmailSender
 }
 
-func NewService(repository *Repository, hasher *password.Hasher, tokens *access.Manager, refreshTTL, invitationTTL time.Duration, publicAppURL string, development bool) (*Service, error) {
+type EmailSender interface {
+	EmailConfigured(context.Context, string) (bool, error)
+	SendEmail(context.Context, string, string, string, string) error
+}
+
+func NewService(repository *Repository, hasher *password.Hasher, tokens *access.Manager, refreshTTL, invitationTTL time.Duration, publicAppURL string, development bool, emailSenders ...EmailSender) (*Service, error) {
 	dummyHash, err := hasher.Hash("comamessenger dummy password")
 	if err != nil {
 		return nil, fmt.Errorf("create dummy password hash: %w", err)
 	}
+	var emailSender EmailSender
+	if len(emailSenders) > 0 {
+		emailSender = emailSenders[0]
+	}
 	return &Service{repository: repository, hasher: hasher, tokens: tokens, refreshTTL: refreshTTL,
 		invitationTTL: invitationTTL, publicAppURL: strings.TrimRight(publicAppURL, "/"), development: development,
-		dummyHash: dummyHash, now: time.Now}, nil
+		dummyHash: dummyHash, now: time.Now, emailSender: emailSender}, nil
 }
 
 func (s *Service) BootstrapStatus(ctx context.Context) (bool, error) {
@@ -234,6 +245,75 @@ func (s *Service) ChangePassword(ctx context.Context, current User, currentSessi
 		return nil, fmt.Errorf("generate password change audit identifier: %w", err)
 	}
 	return s.repository.ChangePassword(ctx, current.OrgID, current.ActorID, currentSessionID, newHash, auditID, s.now().UTC())
+}
+
+func (s *Service) ChangeEmail(ctx context.Context, current User, currentSessionID string, input ChangeEmailInput) (EmailChangeResult, []string, error) {
+	newEmail := strings.ToLower(strings.TrimSpace(input.NewEmail))
+	parsedEmail, err := mail.ParseAddress(newEmail)
+	if err != nil || parsedEmail.Address != newEmail || len(newEmail) > 254 {
+		return EmailChangeResult{}, nil, validationErrorf("new_email has invalid format")
+	}
+	if newEmail == strings.ToLower(current.Email) {
+		return EmailChangeResult{}, nil, validationErrorf("new_email must differ from the current email")
+	}
+	if len(input.CurrentPassword) < 1 || len(input.CurrentPassword) > 1024 {
+		return EmailChangeResult{}, nil, validationErrorf("current_password length must be between 1 and 1024 bytes")
+	}
+	passwordHash, err := s.repository.PasswordHash(ctx, current.OrgID, current.ActorID)
+	if err != nil {
+		return EmailChangeResult{}, nil, err
+	}
+	matched, err := s.hasher.Verify(passwordHash, input.CurrentPassword)
+	if err != nil || !matched {
+		return EmailChangeResult{}, nil, ErrReauthentication
+	}
+	configured := false
+	if s.emailSender != nil {
+		configured, err = s.emailSender.EmailConfigured(ctx, current.OrgID)
+		if err != nil {
+			return EmailChangeResult{}, nil, err
+		}
+	}
+	now := s.now().UTC()
+	ids, err := newIDs(2)
+	if err != nil {
+		return EmailChangeResult{}, nil, err
+	}
+	if !configured {
+		updated, revoked, err := s.repository.ChangeEmailImmediate(ctx, current.OrgID, current.ActorID, currentSessionID, newEmail, ids[0], now)
+		if err != nil {
+			return EmailChangeResult{}, nil, err
+		}
+		return EmailChangeResult{User: &updated}, revoked, nil
+	}
+	token, tokenHash, err := access.NewRefreshToken()
+	if err != nil {
+		return EmailChangeResult{}, nil, err
+	}
+	record := EmailChangeRecord{ID: ids[0], OrgID: current.OrgID, ActorID: current.ActorID, NewEmail: newEmail, TokenHash: tokenHash[:], ExpiresAt: now.Add(time.Hour), AuditID: ids[1]}
+	if err := s.repository.CreateEmailChange(ctx, record, now); err != nil {
+		return EmailChangeResult{}, nil, err
+	}
+	confirmationURL := s.publicAppURL + "/settings/security?email_token=" + url.QueryEscape(token)
+	body := "Confirm your Coma email change within one hour:\n" + confirmationURL
+	if err := s.emailSender.SendEmail(ctx, current.OrgID, newEmail, "Confirm your Coma email change", body); err != nil {
+		_ = s.repository.CancelEmailChange(ctx, record.ID, current.ActorID, now)
+		return EmailChangeResult{}, nil, fmt.Errorf("send email confirmation: %w", err)
+	}
+	_ = s.emailSender.SendEmail(ctx, current.OrgID, current.Email, "Coma email change requested", "A change of your Coma account email was requested. If this was not you, change your password and revoke other sessions.")
+	return EmailChangeResult{PendingConfirmation: true}, nil, nil
+}
+
+func (s *Service) ConfirmEmail(ctx context.Context, current User, currentSessionID string, input ConfirmEmailInput) (User, []string, error) {
+	if input.Token == "" || len(input.Token) > 1024 {
+		return User{}, nil, ErrTokenInvalid
+	}
+	hash := sha256.Sum256([]byte(input.Token))
+	auditID, err := id.New()
+	if err != nil {
+		return User{}, nil, err
+	}
+	return s.repository.ConfirmEmailChange(ctx, current.OrgID, current.ActorID, currentSessionID, hash[:], auditID, s.now().UTC())
 }
 
 func (s *Service) TransferOwnership(ctx context.Context, current User, input TransferOwnershipInput) (User, error) {

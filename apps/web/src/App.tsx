@@ -1477,7 +1477,12 @@ function Messenger({
             navigate={navigate}
           />
         ) : showSecuritySettings ? (
-          <SecuritySettingsPage api={api} user={user} navigate={navigate} />
+          <SecuritySettingsPage
+            api={api}
+            user={user}
+            navigate={navigate}
+            onUserUpdated={onUserUpdated}
+          />
         ) : showAuditSettings ? (
           <AuditSettingsPage api={api} user={user} navigate={navigate} />
         ) : (

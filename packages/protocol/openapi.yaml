@@ -137,6 +137,41 @@ paths:
           { description: Password changed and other sessions revoked. }
         "403": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
+  /api/v1/me/email/change:
+    post:
+      operationId: changeEmail
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChangeEmailRequest" }
+      responses:
+        "200":
+          description: Email changed or confirmation requested.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EmailChangeResponse" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /api/v1/me/email/confirm:
+    post:
+      operationId: confirmEmail
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConfirmEmailRequest" }
+      responses:
+        "200":
+          description: Confirmed user email.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
   /api/v1/sessions:
     get:
       operationId: listSessions
@@ -1357,6 +1392,9 @@ components:
         - rate_limited
         - service_not_ready
         - session_not_found
+        - email_taken
+        - reauthentication_failed
+        - token_invalid
         - unauthorized
         - unsupported_format
         - validation_failed
@@ -1436,6 +1474,29 @@ components:
       properties:
         current_password: { type: string, minLength: 1, maxLength: 1024 }
         new_password: { type: string, minLength: 10, maxLength: 1024 }
+    ChangeEmailRequest:
+      type: object
+      additionalProperties: false
+      required: [new_email, current_password]
+      properties:
+        new_email: { type: string, format: email }
+        current_password: { type: string, minLength: 1, maxLength: 1024 }
+    ConfirmEmailRequest:
+      type: object
+      additionalProperties: false
+      required: [token]
+      properties:
+        token: { type: string, minLength: 1, maxLength: 1024 }
+    EmailChangeResponse:
+      type: object
+      additionalProperties: false
+      required: [pending_confirmation, user]
+      properties:
+        pending_confirmation: { type: boolean }
+        user:
+          oneOf:
+            - { $ref: "#/components/schemas/User" }
+            - { type: "null" }
     User:
       type: object
       required:

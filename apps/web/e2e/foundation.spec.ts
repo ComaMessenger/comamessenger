@@ -255,6 +255,12 @@ async function mockMessenger(
     } else if (path.endsWith("/chats")) {
       chatRequests += 1;
       body = { chats: [runtimeChat] };
+    } else if (path.endsWith("/me/email/change")) {
+      const input = route.request().postDataJSON() as { new_email: string };
+      body = {
+        pending_confirmation: false,
+        user: { ...user, email: input.new_email },
+      };
     } else if (path.endsWith("/me/password")) {
       status = 204;
       body = undefined;
@@ -864,9 +870,7 @@ test("phase 3.1 settings cover workspace branding infrastructure sessions and au
     .click();
   await page.getByLabel("Название организации").fill("Новая команда");
   await expect(page.getByText("Сохранено")).toBeVisible();
-  await page
-    .getByRole("button", { name: "Приглашения", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Приглашения", exact: true }).click();
   await page.getByLabel("Срок приглашения, часов").fill("72");
   await expect(page.getByText("Сохранено")).toBeVisible();
   await page.getByLabel("Почта участника").fill("new@example.com");
@@ -925,12 +929,30 @@ test("phase 3.1 settings cover workspace branding infrastructure sessions and au
   await expect(
     page.getByRole("heading", { name: "Безопасность и сессии" }),
   ).toBeVisible();
-  await page.getByLabel("Текущий пароль").fill("current password");
-  await page
+  const emailSection = page
+    .locator(".settings-section")
+    .filter({ has: page.getByRole("heading", { name: "Сменить email" }) });
+  await emailSection.getByLabel("Новый email").fill("new@example.com");
+  await emailSection.getByLabel("Текущий пароль").fill("current password");
+  await emailSection.getByRole("button", { name: "Сменить email" }).click();
+  await expect(
+    page.getByText("Email изменён, остальные сессии завершены"),
+  ).toBeVisible();
+  const passwordSection = page
+    .locator(".settings-section")
+    .filter({ has: page.getByRole("heading", { name: "Сменить пароль" }) });
+  await passwordSection
+    .getByLabel("Текущий пароль")
+    .fill("current password");
+  await passwordSection
     .getByLabel("Новый пароль", { exact: true })
     .fill("new secure password");
-  await page.getByLabel("Повторите новый пароль").fill("new secure password");
-  await page.getByRole("button", { name: "Сменить пароль" }).click();
+  await passwordSection
+    .getByLabel("Повторите новый пароль")
+    .fill("new secure password");
+  await passwordSection
+    .getByRole("button", { name: "Сменить пароль" })
+    .click();
   await expect(
     page.getByText("Пароль изменён, остальные сессии завершены"),
   ).toBeVisible();

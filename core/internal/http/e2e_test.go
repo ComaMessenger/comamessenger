@@ -45,9 +45,10 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	emailSender := &e2eEmailSender{}
 	identityService, err := identity.NewService(
 		identity.NewRepository(pool), hasher, tokenManager,
-		24*time.Hour, 24*time.Hour, baseURL, true,
+		24*time.Hour, 24*time.Hour, baseURL, true, emailSender,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -141,6 +142,52 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/auth/login", "", map[string]any{
 		"email": "member@example.test", "password": "new member password",
 	}, standardhttp.StatusOK, &memberNewLogin)
+	var emailChange identity.EmailChangeResult
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/me/email/change", member.AccessToken, map[string]any{
+		"new_email": "member-new@example.test", "current_password": "wrong password",
+	}, standardhttp.StatusForbidden, nil)
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/me/email/change", member.AccessToken, map[string]any{
+		"new_email": "owner@example.test", "current_password": "new member password",
+	}, standardhttp.StatusConflict, nil)
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/me/email/change", member.AccessToken, map[string]any{
+		"new_email": "member-new@example.test", "current_password": "new member password",
+	}, standardhttp.StatusOK, &emailChange)
+	if emailChange.PendingConfirmation || emailChange.User == nil || emailChange.User.Email != "member-new@example.test" {
+		t.Fatalf("immediate email change = %+v", emailChange)
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/me", memberNewLogin.AccessToken, nil, standardhttp.StatusUnauthorized, nil)
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/auth/login", "", map[string]any{
+		"email": "member@example.test", "password": "new member password",
+	}, standardhttp.StatusUnauthorized, nil)
+	var memberEmailLogin identity.Tokens
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/auth/login", "", map[string]any{
+		"email": "member-new@example.test", "password": "new member password",
+	}, standardhttp.StatusOK, &memberEmailLogin)
+	emailSender.configured = true
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/me/email/change", member.AccessToken, map[string]any{
+		"new_email": "member-final@example.test", "current_password": "new member password",
+	}, standardhttp.StatusOK, &emailChange)
+	if !emailChange.PendingConfirmation || emailChange.User != nil || len(emailSender.messages) != 2 {
+		t.Fatalf("confirmed email change request = %+v messages=%+v", emailChange, emailSender.messages)
+	}
+	confirmationURL, err := url.Parse(strings.TrimSpace(strings.Split(emailSender.messages[0].body, "\n")[1]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	emailToken := confirmationURL.Query().Get("email_token")
+	if emailToken == "" {
+		t.Fatalf("email confirmation URL = %q", confirmationURL.String())
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/me/email/confirm", member.AccessToken, map[string]any{
+		"token": emailToken,
+	}, standardhttp.StatusOK, &updatedMember)
+	if updatedMember.Email != "member-final@example.test" {
+		t.Fatalf("confirmed email = %+v", updatedMember)
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/me/email/confirm", member.AccessToken, map[string]any{
+		"token": emailToken,
+	}, standardhttp.StatusUnprocessableEntity, nil)
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/me", memberEmailLogin.AccessToken, nil, standardhttp.StatusUnauthorized, nil)
 
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/invitations", owner.AccessToken, map[string]any{
 		"email": "admin@example.test", "role": "admin",
@@ -558,4 +605,24 @@ func e2eID(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return value
+}
+
+type e2eEmailMessage struct {
+	recipient string
+	subject   string
+	body      string
+}
+
+type e2eEmailSender struct {
+	configured bool
+	messages   []e2eEmailMessage
+}
+
+func (s *e2eEmailSender) EmailConfigured(context.Context, string) (bool, error) {
+	return s.configured, nil
+}
+
+func (s *e2eEmailSender) SendEmail(_ context.Context, _ string, recipient, subject, body string) error {
+	s.messages = append(s.messages, e2eEmailMessage{recipient: recipient, subject: subject, body: body})
+	return nil
 }

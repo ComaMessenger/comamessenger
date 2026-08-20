@@ -83,9 +83,14 @@ func main() {
 		logger.Error("access token configuration failed", "error", err)
 		os.Exit(1)
 	}
+	workspaceService, err := workspace.NewService(workspace.NewRepository(pool), cfg.IntegrationEncryptionKey, nil)
+	if err != nil {
+		logger.Error("workspace service initialization failed", "error", err)
+		os.Exit(1)
+	}
 	identityService, err := identity.NewService(
 		identity.NewRepository(pool), passwordHasher, accessManager,
-		cfg.Auth.RefreshTokenTTL, cfg.Auth.InvitationTTL, cfg.PublicAppURL, cfg.AppEnv == "development",
+		cfg.Auth.RefreshTokenTTL, cfg.Auth.InvitationTTL, cfg.PublicAppURL, cfg.AppEnv == "development", workspaceService,
 	)
 	if err != nil {
 		logger.Error("identity service initialization failed", "error", err)
@@ -140,12 +145,6 @@ func main() {
 	pushService := push.NewService(pool, cfg.Push)
 	pushWorker := push.NewWorker(logger, pool, cfg.Push, realtimeHub.ActorActiveIn)
 	go pushWorker.Run(realtimeCtx)
-	workspaceService, err := workspace.NewService(workspace.NewRepository(pool), cfg.IntegrationEncryptionKey, nil)
-	if err != nil {
-		logger.Error("workspace service initialization failed", "error", err)
-		os.Exit(1)
-	}
-
 	server := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: serverhttp.NewHandler(logger, cfg.PublicAppURL, pool.Ping, serverhttp.Dependencies{

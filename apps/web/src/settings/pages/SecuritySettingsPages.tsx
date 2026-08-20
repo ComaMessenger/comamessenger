@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { MessengerAPI, Session, User } from "@comamessenger/core";
 import { History, KeyRound, MonitorSmartphone } from "lucide-react";
@@ -20,10 +20,12 @@ export function SecuritySettingsPage({
   api,
   user,
   navigate,
+  onUserUpdated,
 }: {
   api: MessengerAPI;
   user: User;
   navigate: SettingsNavigate;
+  onUserUpdated(user: User): void;
 }) {
   const { t } = useTranslation();
   const query = useQuery({
@@ -37,6 +39,27 @@ export function SecuritySettingsPage({
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordPending, setPasswordPending] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [emailPassword, setEmailPassword] = useState("");
+  const [emailPending, setEmailPending] = useState(false);
+  const confirmationStarted = useRef(false);
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get(
+      "email_token",
+    );
+    if (!token || confirmationStarted.current) return;
+    confirmationStarted.current = true;
+    setEmailPending(true);
+    void api
+      .confirmEmail({ token })
+      .then((updated) => {
+        onUserUpdated(updated);
+        setMessage(t("emailChanged"));
+        window.history.replaceState({}, "", window.location.pathname);
+      })
+      .catch((cause) => setMessage(messageOf(cause)))
+      .finally(() => setEmailPending(false));
+  }, [api, onUserUpdated, t]);
   async function revoke(session: Session) {
     setPendingSession(session.id);
     try {
@@ -89,6 +112,29 @@ export function SecuritySettingsPage({
       setPasswordPending(false);
     }
   }
+  async function changeEmail() {
+    if (!newEmail || !emailPassword) return;
+    setMessage("");
+    setEmailPending(true);
+    try {
+      const result = await api.changeEmail({
+        new_email: newEmail,
+        current_password: emailPassword,
+      });
+      setNewEmail("");
+      setEmailPassword("");
+      if (result.user) {
+        onUserUpdated(result.user);
+        setMessage(t("emailChanged"));
+      } else {
+        setMessage(t("emailConfirmationSent"));
+      }
+    } catch (cause) {
+      setMessage(messageOf(cause));
+    } finally {
+      setEmailPending(false);
+    }
+  }
   const activeSessions = (query.data ?? []).filter(
     (session) =>
       !session.revoked_at &&
@@ -103,6 +149,33 @@ export function SecuritySettingsPage({
       navigate={navigate}
     >
       <div className="settings-page__body">
+        <SettingsSection title={t("changeEmail")} description={user.email}>
+          <div className="settings-form-grid">
+            <Field
+              label={t("newEmail")}
+              name="new-email"
+              type="email"
+              autoComplete="email"
+              value={newEmail}
+              onChange={(event) => setNewEmail(event.target.value)}
+            />
+            <Field
+              label={t("currentPassword")}
+              name="email-current-password"
+              type="password"
+              autoComplete="current-password"
+              value={emailPassword}
+              onChange={(event) => setEmailPassword(event.target.value)}
+            />
+          </div>
+          <Button
+            variant="primary"
+            disabled={emailPending || !newEmail || !emailPassword}
+            onClick={() => void changeEmail()}
+          >
+            {emailPending ? t("saving") : t("changeEmail")}
+          </Button>
+        </SettingsSection>
         <SettingsSection
           title={t("changePassword")}
           description={t("changePasswordHint")}

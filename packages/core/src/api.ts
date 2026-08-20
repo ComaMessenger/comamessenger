@@ -37,6 +37,9 @@ import type {
   UpdateOrganizationMemberRequest,
   TransferOwnershipRequest,
   ChangePasswordRequest,
+  ChangeEmailRequest,
+  ConfirmEmailRequest,
+  EmailChangeResponse,
   UpdateOrganizationSettingsRequest,
   User,
   UserPreferences,
@@ -165,6 +168,18 @@ export class MessengerAPI {
   }
   changePassword(input: ChangePasswordRequest): Promise<void> {
     return this.request("/api/v1/me/password", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+  changeEmail(input: ChangeEmailRequest): Promise<EmailChangeResponse> {
+    return this.request("/api/v1/me/email/change", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+  confirmEmail(input: ConfirmEmailRequest): Promise<User> {
+    return this.request("/api/v1/me/email/confirm", {
       method: "POST",
       body: JSON.stringify(input),
     });

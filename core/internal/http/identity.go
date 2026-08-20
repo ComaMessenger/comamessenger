@@ -109,6 +109,8 @@ func (h *identityHandlers) routes(router chi.Router) {
 		protected.Get("/me", h.me)
 		protected.Patch("/me", h.updateMe)
 		protected.Post("/me/password", h.changePassword)
+		protected.Post("/me/email/change", h.changeEmail)
+		protected.Post("/me/email/confirm", h.confirmEmail)
 		protected.Get("/sessions", h.sessions)
 		protected.Delete("/sessions/{sessionID}", h.revokeSession)
 		protected.Post("/sessions/revoke-others", h.revokeOtherSessions)
@@ -341,6 +343,61 @@ func (h *identityHandlers) changePassword(w standardhttp.ResponseWriter, r *stan
 		}
 	}
 	w.WriteHeader(standardhttp.StatusNoContent)
+}
+
+func (h *identityHandlers) changeEmail(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input identity.ChangeEmailInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	auth := authFromContext(r.Context())
+	result, revoked, err := h.service.ChangeEmail(r.Context(), auth.User, auth.Identity.SessionID, input)
+	if err != nil {
+		h.writeEmailChangeError(w, r, err)
+		return
+	}
+	if h.revokeRealtimeSession != nil {
+		for _, sessionID := range revoked {
+			h.revokeRealtimeSession(sessionID)
+		}
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) confirmEmail(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input identity.ConfirmEmailInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	auth := authFromContext(r.Context())
+	user, revoked, err := h.service.ConfirmEmail(r.Context(), auth.User, auth.Identity.SessionID, input)
+	if err != nil {
+		h.writeEmailChangeError(w, r, err)
+		return
+	}
+	if h.revokeRealtimeSession != nil {
+		for _, sessionID := range revoked {
+			h.revokeRealtimeSession(sessionID)
+		}
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, user)
+}
+
+func (h *identityHandlers) writeEmailChangeError(w standardhttp.ResponseWriter, r *standardhttp.Request, err error) {
+	switch {
+	case errors.Is(err, identity.ErrReauthentication):
+		h.writeError(w, r, standardhttp.StatusForbidden, "reauthentication_failed", "Current password is incorrect.")
+	case errors.Is(err, identity.ErrEmailTaken):
+		h.writeError(w, r, standardhttp.StatusConflict, "email_taken", "Email is already in use in this workspace.")
+	case errors.Is(err, identity.ErrTokenInvalid):
+		h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "token_invalid", "Email confirmation token is invalid or expired.")
+	case identity.IsValidationError(err):
+		h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "validation_failed", err.Error())
+	default:
+		h.internalError(w, r, err)
+	}
 }
 
 func (h *identityHandlers) transferOwnership(w standardhttp.ResponseWriter, r *standardhttp.Request) {

@@ -4,8 +4,11 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"net"
+	"net/mail"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -45,17 +48,28 @@ func (NetworkConnectionTester) TestS3(ctx context.Context, value S3Config) error
 }
 
 func (NetworkConnectionTester) TestSMTP(ctx context.Context, value SMTPConfig) error {
+	client, err := dialSMTP(ctx, value)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	if err := client.Noop(); err != nil {
+		return fmt.Errorf("SMTP NOOP failed: %w", err)
+	}
+	return client.Quit()
+}
+
+func dialSMTP(ctx context.Context, value SMTPConfig) (*smtp.Client, error) {
 	if value.Host == "" || value.Port == 0 {
-		return fmt.Errorf("SMTP host and port are not configured")
+		return nil, fmt.Errorf("SMTP host and port are not configured")
 	}
 	dialer := &net.Dialer{Timeout: 8 * time.Second}
 	address := net.JoinHostPort(value.Host, strconv.Itoa(value.Port))
 	connection, err := dialer.DialContext(ctx, "tcp", address)
 	if err != nil {
-		return fmt.Errorf("SMTP connection failed: %w", err)
+		return nil, fmt.Errorf("SMTP connection failed: %w", err)
 	}
 	tlsConfig := &tls.Config{ServerName: value.Host, MinVersion: tls.VersionTLS12}
-	defer connection.Close()
 	deadline := time.Now().Add(10 * time.Second)
 	if contextDeadline, ok := ctx.Deadline(); ok && contextDeadline.Before(deadline) {
 		deadline = contextDeadline
@@ -65,13 +79,15 @@ func (NetworkConnectionTester) TestSMTP(ctx context.Context, value SMTPConfig) e
 	if value.Security == "tls" {
 		tlsConnection := tls.Client(connection, tlsConfig)
 		if err := tlsConnection.HandshakeContext(ctx); err != nil {
-			return fmt.Errorf("SMTP TLS handshake failed: %w", err)
+			connection.Close()
+			return nil, fmt.Errorf("SMTP TLS handshake failed: %w", err)
 		}
 		client = smtp.NewClient(tlsConnection)
 	} else if value.Security == "starttls" {
 		client, err = smtp.NewClientStartTLS(connection, tlsConfig)
 		if err != nil {
-			return fmt.Errorf("SMTP STARTTLS failed: %w", err)
+			connection.Close()
+			return nil, fmt.Errorf("SMTP STARTTLS failed: %w", err)
 		}
 	} else {
 		client = smtp.NewClient(connection)
@@ -79,14 +95,36 @@ func (NetworkConnectionTester) TestSMTP(ctx context.Context, value SMTPConfig) e
 	defer client.Close()
 	if value.Username != "" {
 		if ok, _ := client.Extension("AUTH"); !ok {
-			return fmt.Errorf("SMTP server does not advertise AUTH")
+			client.Close()
+			return nil, fmt.Errorf("SMTP server does not advertise AUTH")
 		}
 		if err := client.Auth(sasl.NewPlainClient("", value.Username, value.Password)); err != nil {
-			return fmt.Errorf("SMTP authentication failed: %w", err)
+			client.Close()
+			return nil, fmt.Errorf("SMTP authentication failed: %w", err)
 		}
 	}
-	if err := client.Noop(); err != nil {
-		return fmt.Errorf("SMTP NOOP failed: %w", err)
+	return client, nil
+}
+
+func sendSMTP(ctx context.Context, value SMTPConfig, recipient, subject, body string) error {
+	client, err := dialSMTP(ctx, value)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	from := (&mail.Address{Name: value.FromName, Address: value.FromAddress}).String()
+	message := strings.Join([]string{
+		"From: " + from,
+		"To: " + recipient,
+		"Subject: " + subject,
+		"MIME-Version: 1.0",
+		"Content-Type: text/plain; charset=UTF-8",
+		"Content-Transfer-Encoding: 8bit",
+		"",
+		body,
+	}, "\r\n")
+	if err := client.SendMail(value.FromAddress, []string{recipient}, io.NopCloser(strings.NewReader(message))); err != nil {
+		return fmt.Errorf("send SMTP message: %w", err)
 	}
 	return client.Quit()
 }

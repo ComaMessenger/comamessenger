@@ -177,6 +177,37 @@ func (s *Service) Infrastructure(ctx context.Context, current identity.User) (In
 	return infrastructureView(version, secrets), nil
 }
 
+func (s *Service) EmailConfigured(ctx context.Context, orgID string) (bool, error) {
+	config, err := s.emailConfiguration(ctx, orgID)
+	if err != nil {
+		return false, err
+	}
+	return config.Host != "" && config.FromAddress != "", nil
+}
+
+func (s *Service) SendEmail(ctx context.Context, orgID, recipient, subject, body string) error {
+	config, err := s.emailConfiguration(ctx, orgID)
+	if err != nil {
+		return err
+	}
+	return sendSMTP(ctx, config, recipient, subject, body)
+}
+
+func (s *Service) emailConfiguration(ctx context.Context, orgID string) (SMTPConfig, error) {
+	_, encrypted, err := s.repository.Integration(ctx, orgID)
+	if err != nil {
+		return SMTPConfig{}, err
+	}
+	if len(encrypted) == 0 {
+		return SMTPConfig{}, nil
+	}
+	secrets, err := s.decrypt(orgID, encrypted)
+	if err != nil {
+		return SMTPConfig{}, err
+	}
+	return secrets.SMTP, nil
+}
+
 func (s *Service) UpdateInfrastructure(ctx context.Context, current identity.User, input UpdateInfrastructureInput) (Infrastructure, error) {
 	if !allows(current, permission.IntegrationsManage) {
 		return Infrastructure{}, ErrForbidden

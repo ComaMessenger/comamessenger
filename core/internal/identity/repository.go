@@ -189,6 +189,143 @@ func (r *Repository) ChangePassword(ctx context.Context, orgID, actorID, current
 	return revoked, nil
 }
 
+func (r *Repository) ChangeEmailImmediate(ctx context.Context, orgID, actorID, currentSessionID, newEmail, auditID string, now time.Time) (User, []string, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return User{}, nil, fmt.Errorf("begin email change: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	command, err := tx.Exec(ctx, `
+		UPDATE users SET email=$3,email_verified_at=NULL
+		WHERE org_id=$1 AND actor_id=$2`, orgID, actorID, newEmail)
+	if isUniqueViolation(err) {
+		return User{}, nil, ErrEmailTaken
+	}
+	if err != nil {
+		return User{}, nil, fmt.Errorf("change email: %w", err)
+	}
+	if command.RowsAffected() != 1 {
+		return User{}, nil, ErrNotFound
+	}
+	revoked, err := revokeOtherSessionsTx(ctx, tx, orgID, actorID, currentSessionID, now)
+	if err != nil {
+		return User{}, nil, err
+	}
+	_, err = tx.Exec(ctx, `
+		INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata)
+		VALUES($1,$2,$3,'member.email.change','actor',$3,
+		       jsonb_build_object('delivery','immediate','new_email',$4::text,'revoked_sessions',$5::int))`,
+		auditID, orgID, actorID, newEmail, len(revoked))
+	if err != nil {
+		return User{}, nil, fmt.Errorf("audit email change: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return User{}, nil, fmt.Errorf("commit email change: %w", err)
+	}
+	user, err := r.ResolveSession(ctx, currentSessionID, actorID, now)
+	return user, revoked, err
+}
+
+func (r *Repository) CreateEmailChange(ctx context.Context, record EmailChangeRecord, now time.Time) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin email change request: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	var taken bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE org_id=$1 AND email=$2 AND actor_id<>$3)`, record.OrgID, record.NewEmail, record.ActorID).Scan(&taken); err != nil {
+		return fmt.Errorf("check email availability: %w", err)
+	}
+	if taken {
+		return ErrEmailTaken
+	}
+	if _, err := tx.Exec(ctx, `UPDATE email_change_tokens SET used_at=$3 WHERE org_id=$1 AND actor_id=$2 AND used_at IS NULL`, record.OrgID, record.ActorID, now); err != nil {
+		return fmt.Errorf("expire previous email change: %w", err)
+	}
+	_, err = tx.Exec(ctx, `
+		INSERT INTO email_change_tokens(id,org_id,actor_id,new_email,token_hash,expires_at)
+		VALUES($1,$2,$3,$4,$5,$6)`, record.ID, record.OrgID, record.ActorID, record.NewEmail, record.TokenHash, record.ExpiresAt)
+	if err != nil {
+		return fmt.Errorf("store email change token: %w", err)
+	}
+	_, err = tx.Exec(ctx, `
+		INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata)
+		VALUES($1,$2,$3,'member.email.change.request','actor',$3,
+		       jsonb_build_object('delivery','email','new_email',$4::text))`, record.AuditID, record.OrgID, record.ActorID, record.NewEmail)
+	if err != nil {
+		return fmt.Errorf("audit email change request: %w", err)
+	}
+	return tx.Commit(ctx)
+}
+
+func (r *Repository) CancelEmailChange(ctx context.Context, tokenID, actorID string, now time.Time) error {
+	_, err := r.pool.Exec(ctx, `UPDATE email_change_tokens SET used_at=$3 WHERE id=$1 AND actor_id=$2 AND used_at IS NULL`, tokenID, actorID, now)
+	return err
+}
+
+func (r *Repository) ConfirmEmailChange(ctx context.Context, orgID, actorID, currentSessionID string, tokenHash []byte, auditID string, now time.Time) (User, []string, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return User{}, nil, fmt.Errorf("begin email confirmation: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	var tokenID, newEmail string
+	err = tx.QueryRow(ctx, `
+		SELECT id,new_email::text FROM email_change_tokens
+		WHERE org_id=$1 AND actor_id=$2 AND token_hash=$3 AND used_at IS NULL AND expires_at>$4
+		FOR UPDATE`, orgID, actorID, tokenHash, now).Scan(&tokenID, &newEmail)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return User{}, nil, ErrTokenInvalid
+	}
+	if err != nil {
+		return User{}, nil, fmt.Errorf("load email change token: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE users SET email=$3,email_verified_at=$4 WHERE org_id=$1 AND actor_id=$2`, orgID, actorID, newEmail, now); err != nil {
+		if isUniqueViolation(err) {
+			return User{}, nil, ErrEmailTaken
+		}
+		return User{}, nil, fmt.Errorf("confirm email change: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE email_change_tokens SET used_at=$2 WHERE id=$1`, tokenID, now); err != nil {
+		return User{}, nil, fmt.Errorf("consume email change token: %w", err)
+	}
+	revoked, err := revokeOtherSessionsTx(ctx, tx, orgID, actorID, currentSessionID, now)
+	if err != nil {
+		return User{}, nil, err
+	}
+	_, err = tx.Exec(ctx, `
+		INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata)
+		VALUES($1,$2,$3,'member.email.change','actor',$3,
+		       jsonb_build_object('delivery','email','new_email',$4::text,'revoked_sessions',$5::int))`, auditID, orgID, actorID, newEmail, len(revoked))
+	if err != nil {
+		return User{}, nil, fmt.Errorf("audit email confirmation: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return User{}, nil, fmt.Errorf("commit email confirmation: %w", err)
+	}
+	user, err := r.ResolveSession(ctx, currentSessionID, actorID, now)
+	return user, revoked, err
+}
+
+func revokeOtherSessionsTx(ctx context.Context, tx pgx.Tx, orgID, actorID, currentSessionID string, now time.Time) ([]string, error) {
+	rows, err := tx.Query(ctx, `
+		UPDATE sessions SET revoked_at=COALESCE(revoked_at,$4)
+		WHERE org_id=$1 AND actor_id=$2 AND id<>$3 AND revoked_at IS NULL RETURNING id`, orgID, actorID, currentSessionID, now)
+	if err != nil {
+		return nil, fmt.Errorf("revoke other sessions: %w", err)
+	}
+	defer rows.Close()
+	result := make([]string, 0)
+	for rows.Next() {
+		var sessionID string
+		if err := rows.Scan(&sessionID); err != nil {
+			return nil, err
+		}
+		result = append(result, sessionID)
+	}
+	return result, rows.Err()
+}
+
 func (r *Repository) TransferOwnership(ctx context.Context, transfer OwnershipTransfer) (User, error) {
 	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {

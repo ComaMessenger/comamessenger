@@ -336,6 +336,11 @@ const ru = {
   passwordsDoNotMatch: "Пароли не совпадают",
   passwordChanged: "Пароль изменён, остальные сессии завершены",
   lastSeen: "Последняя активность",
+  changeEmail: "Сменить email",
+  newEmail: "Новый email",
+  emailChanged: "Email изменён, остальные сессии завершены",
+  emailConfirmationSent:
+    "Ссылка подтверждения отправлена на новый адрес и действует один час",
   confirmOwnershipTransfer: "Передать владение",
   transferringOwnership: "Передаём…",
   ownershipTransferred: "Владение пространством передано",
@@ -745,6 +750,11 @@ const en: Record<keyof typeof ru, string> = {
   passwordsDoNotMatch: "Passwords do not match",
   passwordChanged: "Password changed and other sessions signed out",
   lastSeen: "Last active",
+  changeEmail: "Change email",
+  newEmail: "New email",
+  emailChanged: "Email changed and other sessions signed out",
+  emailConfirmationSent:
+    "A confirmation link was sent to the new address and is valid for one hour",
   confirmOwnershipTransfer: "Transfer ownership",
   transferringOwnership: "Transferring…",
   ownershipTransferred: "Workspace ownership transferred",

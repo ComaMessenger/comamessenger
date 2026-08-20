@@ -572,27 +572,30 @@ func (e DurableEventTypeV1) Valid() bool {
 
 // Defines values for ErrorCode.
 const (
-	ErrorCodeAlreadyBootstrapped ErrorCode = "already_bootstrapped"
-	ErrorCodeChatConflict        ErrorCode = "chat_conflict"
-	ErrorCodeChatNotFound        ErrorCode = "chat_not_found"
-	ErrorCodeForbidden           ErrorCode = "forbidden"
-	ErrorCodeIdempotencyConflict ErrorCode = "idempotency_conflict"
-	ErrorCodeInternalError       ErrorCode = "internal_error"
-	ErrorCodeInvalidCredentials  ErrorCode = "invalid_credentials"
-	ErrorCodeInvalidRefreshToken ErrorCode = "invalid_refresh_token"
-	ErrorCodeInvalidRequest      ErrorCode = "invalid_request"
-	ErrorCodeInvitationInvalid   ErrorCode = "invitation_invalid"
-	ErrorCodeMessageNotFound     ErrorCode = "message_not_found"
-	ErrorCodeOriginNotAllowed    ErrorCode = "origin_not_allowed"
-	ErrorCodePayloadTooLarge     ErrorCode = "payload_too_large"
-	ErrorCodeRateLimited         ErrorCode = "rate_limited"
-	ErrorCodeServiceNotReady     ErrorCode = "service_not_ready"
-	ErrorCodeSessionNotFound     ErrorCode = "session_not_found"
-	ErrorCodeUnauthorized        ErrorCode = "unauthorized"
-	ErrorCodeUnsupportedFormat   ErrorCode = "unsupported_format"
-	ErrorCodeValidationFailed    ErrorCode = "validation_failed"
-	ErrorCodeVersionConflict     ErrorCode = "version_conflict"
-	ErrorCodeWorkspaceNotFound   ErrorCode = "workspace_not_found"
+	ErrorCodeAlreadyBootstrapped    ErrorCode = "already_bootstrapped"
+	ErrorCodeChatConflict           ErrorCode = "chat_conflict"
+	ErrorCodeChatNotFound           ErrorCode = "chat_not_found"
+	ErrorCodeEmailTaken             ErrorCode = "email_taken"
+	ErrorCodeForbidden              ErrorCode = "forbidden"
+	ErrorCodeIdempotencyConflict    ErrorCode = "idempotency_conflict"
+	ErrorCodeInternalError          ErrorCode = "internal_error"
+	ErrorCodeInvalidCredentials     ErrorCode = "invalid_credentials"
+	ErrorCodeInvalidRefreshToken    ErrorCode = "invalid_refresh_token"
+	ErrorCodeInvalidRequest         ErrorCode = "invalid_request"
+	ErrorCodeInvitationInvalid      ErrorCode = "invitation_invalid"
+	ErrorCodeMessageNotFound        ErrorCode = "message_not_found"
+	ErrorCodeOriginNotAllowed       ErrorCode = "origin_not_allowed"
+	ErrorCodePayloadTooLarge        ErrorCode = "payload_too_large"
+	ErrorCodeRateLimited            ErrorCode = "rate_limited"
+	ErrorCodeReauthenticationFailed ErrorCode = "reauthentication_failed"
+	ErrorCodeServiceNotReady        ErrorCode = "service_not_ready"
+	ErrorCodeSessionNotFound        ErrorCode = "session_not_found"
+	ErrorCodeTokenInvalid           ErrorCode = "token_invalid"
+	ErrorCodeUnauthorized           ErrorCode = "unauthorized"
+	ErrorCodeUnsupportedFormat      ErrorCode = "unsupported_format"
+	ErrorCodeValidationFailed       ErrorCode = "validation_failed"
+	ErrorCodeVersionConflict        ErrorCode = "version_conflict"
+	ErrorCodeWorkspaceNotFound      ErrorCode = "workspace_not_found"
 )
 
 // Valid indicates whether the value is a known member of the ErrorCode enum.
@@ -603,6 +606,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeChatConflict:
 		return true
 	case ErrorCodeChatNotFound:
+		return true
+	case ErrorCodeEmailTaken:
 		return true
 	case ErrorCodeForbidden:
 		return true
@@ -626,9 +631,13 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeRateLimited:
 		return true
+	case ErrorCodeReauthenticationFailed:
+		return true
 	case ErrorCodeServiceNotReady:
 		return true
 	case ErrorCodeSessionNotFound:
+		return true
+	case ErrorCodeTokenInvalid:
 		return true
 	case ErrorCodeUnauthorized:
 		return true
@@ -1443,6 +1452,12 @@ type BootstrapStatus struct {
 	Bootstrapped bool `json:"bootstrapped"`
 }
 
+// ChangeEmailRequest defines model for ChangeEmailRequest.
+type ChangeEmailRequest struct {
+	CurrentPassword string              `json:"current_password"`
+	NewEmail        openapi_types.Email `json:"new_email"`
+}
+
 // ChangePasswordRequest defines model for ChangePasswordRequest.
 type ChangePasswordRequest struct {
 	CurrentPassword string `json:"current_password"`
@@ -1524,6 +1539,11 @@ type ChatUnread struct {
 	LastReadSeq  int64              `json:"last_read_seq"`
 	MentionCount int64              `json:"mention_count"`
 	UnreadCount  int64              `json:"unread_count"`
+}
+
+// ConfirmEmailRequest defines model for ConfirmEmailRequest.
+type ConfirmEmailRequest struct {
+	Token string `json:"token"`
 }
 
 // ConnectionTestRequest defines model for ConnectionTestRequest.
@@ -1610,6 +1630,12 @@ type DraftList struct {
 
 // DurableEventTypeV1 defines model for DurableEventTypeV1.
 type DurableEventTypeV1 string
+
+// EmailChangeResponse defines model for EmailChangeResponse.
+type EmailChangeResponse struct {
+	PendingConfirmation bool  `json:"pending_confirmation"`
+	User                *User `json:"user"`
+}
 
 // Error defines model for Error.
 type Error struct {
@@ -2324,6 +2350,12 @@ type AcceptInvitationJSONRequestBody = AcceptInvitationRequest
 
 // UpdateMeJSONRequestBody defines body for UpdateMe for application/json ContentType.
 type UpdateMeJSONRequestBody = UpdateProfileRequest
+
+// ChangeEmailJSONRequestBody defines body for ChangeEmail for application/json ContentType.
+type ChangeEmailJSONRequestBody = ChangeEmailRequest
+
+// ConfirmEmailJSONRequestBody defines body for ConfirmEmail for application/json ContentType.
+type ConfirmEmailJSONRequestBody = ConfirmEmailRequest
 
 // ChangePasswordJSONRequestBody defines body for ChangePassword for application/json ContentType.
 type ChangePasswordJSONRequestBody = ChangePasswordRequest

@@ -165,6 +165,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/email/change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["changeEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/email/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["confirmEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions": {
         parameters: {
             query?: never;
@@ -885,7 +917,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "already_bootstrapped" | "chat_conflict" | "chat_not_found" | "forbidden" | "idempotency_conflict" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "rate_limited" | "service_not_ready" | "session_not_found" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "workspace_not_found";
+        ErrorCode: "already_bootstrapped" | "chat_conflict" | "chat_not_found" | "forbidden" | "idempotency_conflict" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "rate_limited" | "service_not_ready" | "session_not_found" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "workspace_not_found";
         /** @enum {string} */
         DurableEventTypeV1: "message.created" | "message.updated" | "message.deleted" | "message.pinned" | "message.unpinned" | "reaction.added" | "reaction.removed" | "thread.followed" | "thread.unfollowed" | "read.marked" | "draft.updated" | "draft.deleted" | "chat.created" | "chat.updated" | "chat.archived" | "member.joined" | "member.updated" | "member.removed";
         /**
@@ -1036,6 +1068,18 @@ export interface components {
         ChangePasswordRequest: {
             current_password: string;
             new_password: string;
+        };
+        ChangeEmailRequest: {
+            /** Format: email */
+            new_email: string;
+            current_password: string;
+        };
+        ConfirmEmailRequest: {
+            token: string;
+        };
+        EmailChangeResponse: {
+            pending_confirmation: boolean;
+            user: components["schemas"]["User"] | null;
         };
         User: {
             /** Format: uuid */
@@ -1878,6 +1922,59 @@ export interface operations {
                 content?: never;
             };
             403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    changeEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeEmailRequest"];
+            };
+        };
+        responses: {
+            /** @description Email changed or confirmation requested. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailChangeResponse"];
+                };
+            };
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    confirmEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmEmailRequest"];
+            };
+        };
+        responses: {
+            /** @description Confirmed user email. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            409: components["responses"]["Error"];
             422: components["responses"]["Error"];
         };
     };
