@@ -170,7 +170,11 @@ import {
   NotificationSettingsPage,
   ProfileSettingsPage,
   SecuritySettingsPage,
-  WorkspaceSettingsPage,
+  WorkspaceGeneralPage,
+  WorkspaceInvitationsPage,
+  WorkspaceMembersPage,
+  WorkspaceOverviewPage,
+  WorkspacePoliciesPage,
   hasPermission,
   settingForPath,
 } from "./settings";
@@ -919,7 +923,12 @@ function Messenger({
   const activeSettings = settingForPath(path);
   const showProfileSettings = activeSettings?.id === "profile";
   const showNotificationSettings = activeSettings?.id === "notifications";
-  const showWorkspaceSettings = activeSettings?.id === "workspace";
+  const showWorkspaceOverview = activeSettings?.id === "workspace";
+  const showWorkspaceGeneral = activeSettings?.id === "workspace-general";
+  const showWorkspaceMembers = activeSettings?.id === "workspace-members";
+  const showWorkspaceInvitations =
+    activeSettings?.id === "workspace-invitations";
+  const showWorkspacePolicies = activeSettings?.id === "workspace-policies";
   const showCustomizationSettings = activeSettings?.id === "customization";
   const showInfrastructureSettings = activeSettings?.id === "infrastructure";
   const showSecuritySettings = activeSettings?.id === "security";
@@ -1435,14 +1444,25 @@ function Messenger({
             navigate={navigate}
             onEnable={() => setModal("notify")}
           />
-        ) : showWorkspaceSettings ? (
-          <WorkspaceSettingsPage
+        ) : showWorkspaceOverview ? (
+          <WorkspaceOverviewPage
+            user={user}
+            navigate={navigate}
+            renderLogo={(size) => <Logo size={size} />}
+          />
+        ) : showWorkspaceGeneral ? (
+          <WorkspaceGeneralPage api={api} user={user} navigate={navigate} />
+        ) : showWorkspaceMembers ? (
+          <WorkspaceMembersPage
             api={api}
             user={user}
             navigate={navigate}
             onUserUpdated={onUserUpdated}
-            renderLogo={(size) => <Logo size={size} />}
           />
+        ) : showWorkspaceInvitations ? (
+          <WorkspaceInvitationsPage api={api} user={user} navigate={navigate} />
+        ) : showWorkspacePolicies ? (
+          <WorkspacePoliciesPage api={api} user={user} navigate={navigate} />
         ) : showCustomizationSettings ? (
           <CustomizationSettingsPage
             api={api}

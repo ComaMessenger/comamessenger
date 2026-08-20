@@ -6,6 +6,7 @@ import {
   hasPermission,
   settingForPath,
   settingsRegistry,
+  visibleChildSettings,
   visibleSettings,
 } from "./registry";
 
@@ -64,5 +65,23 @@ describe("settings registry", () => {
     expect(
       canAccessSettingsPage(user("admin", ["invitations.manage"]), "workspace"),
     ).toBe(true);
+  });
+
+  it("exposes only permitted workspace subpages", () => {
+    const admin = user("admin", ["members.manage", "workspace.policies"]);
+    expect(
+      visibleChildSettings(admin, "workspace").map((entry) => entry.id),
+    ).toEqual(["workspace-members", "workspace-policies"]);
+    expect(canAccessSettingsPage(admin, "workspace-members")).toBe(true);
+    expect(canAccessSettingsPage(admin, "workspace-general")).toBe(false);
+  });
+
+  it("registers workspace subpages as direct routes", () => {
+    expect(settingForPath("/settings/workspace/general")?.id).toBe(
+      "workspace-general",
+    );
+    expect(settingForPath("/settings/workspace/invitations")?.id).toBe(
+      "workspace-invitations",
+    );
   });
 });

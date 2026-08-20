@@ -3,7 +3,12 @@ import type { User } from "@comamessenger/core";
 import { ChevronLeft } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { IconButton } from "../../ui";
-import { visibleSettings, type SettingsPageID } from "../registry";
+import {
+  parentSettingsPage,
+  visibleChildSettings,
+  visibleSettings,
+  type SettingsPageID,
+} from "../registry";
 
 export type SettingsNavigate = (to: string) => void;
 
@@ -21,6 +26,8 @@ export function SettingsShell({
   children: ReactNode;
 }) {
   const { t } = useTranslation();
+  const primaryActive = parentSettingsPage(active);
+  const childPages = visibleChildSettings(user, primaryActive);
 
   return (
     <section className="settings-page utility-page">
@@ -38,14 +45,31 @@ export function SettingsShell({
         {visibleSettings(user).map((item) => (
           <button
             key={item.id}
-            className={active === item.id ? "active" : ""}
-            aria-current={active === item.id ? "page" : undefined}
+            className={primaryActive === item.id ? "active" : ""}
+            aria-current={primaryActive === item.id ? "page" : undefined}
             onClick={() => navigate(item.path)}
           >
             {t(item.labelKey)}
           </button>
         ))}
       </nav>
+      {childPages.length > 0 && (
+        <nav
+          className="settings-subnavigation"
+          aria-label={t("workspaceSettingsNavigation")}
+        >
+          {childPages.map((item) => (
+            <button
+              key={item.id}
+              className={active === item.id ? "active" : ""}
+              aria-current={active === item.id ? "page" : undefined}
+              onClick={() => navigate(item.path)}
+            >
+              {t(item.labelKey)}
+            </button>
+          ))}
+        </nav>
+      )}
       {children}
     </section>
   );

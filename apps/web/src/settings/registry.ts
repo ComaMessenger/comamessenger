@@ -29,6 +29,10 @@ export type SettingsPageID =
   | "notifications"
   | "security"
   | "workspace"
+  | "workspace-general"
+  | "workspace-members"
+  | "workspace-invitations"
+  | "workspace-policies"
   | "customization"
   | "infrastructure"
   | "audit";
@@ -38,6 +42,7 @@ export type SettingsEntry = {
   path: `/settings/${string}`;
   group: "personal" | "workspace";
   labelKey: string;
+  parent?: SettingsPageID;
   access?: {
     permission?: Permission;
     anyOf?: readonly Permission[];
@@ -45,7 +50,7 @@ export type SettingsEntry = {
   };
 };
 
-export const settingsRegistry = [
+export const settingsRegistry: readonly SettingsEntry[] = [
   {
     id: "profile",
     path: "/settings/profile",
@@ -79,6 +84,38 @@ export const settingsRegistry = [
     },
   },
   {
+    id: "workspace-general",
+    path: "/settings/workspace/general",
+    group: "workspace",
+    parent: "workspace",
+    labelKey: "workspaceGeneral",
+    access: { permission: "workspace.settings" },
+  },
+  {
+    id: "workspace-members",
+    path: "/settings/workspace/members",
+    group: "workspace",
+    parent: "workspace",
+    labelKey: "membersAndAccess",
+    access: { permission: "members.manage" },
+  },
+  {
+    id: "workspace-invitations",
+    path: "/settings/workspace/invitations",
+    group: "workspace",
+    parent: "workspace",
+    labelKey: "invitationPolicy",
+    access: { permission: "invitations.manage" },
+  },
+  {
+    id: "workspace-policies",
+    path: "/settings/workspace/policies",
+    group: "workspace",
+    parent: "workspace",
+    labelKey: "creationPolicy",
+    access: { permission: "workspace.policies" },
+  },
+  {
     id: "customization",
     path: "/settings/customization",
     group: "workspace",
@@ -99,7 +136,7 @@ export const settingsRegistry = [
     labelKey: "audit",
     access: { permission: "audit.read" },
   },
-] as const satisfies readonly SettingsEntry[];
+] as const;
 
 export function permissionsOf(user: User): ReadonlySet<Permission> {
   return new Set(user.permissions);
@@ -128,7 +165,24 @@ export function canAccessSettingsPage(
 }
 
 export function visibleSettings(user: User): readonly SettingsEntry[] {
-  return settingsRegistry.filter((entry) => canAccessSettings(user, entry));
+  return settingsRegistry.filter(
+    (entry) => !entry.parent && canAccessSettings(user, entry),
+  );
+}
+
+export function visibleChildSettings(
+  user: User,
+  parent: SettingsPageID,
+): readonly SettingsEntry[] {
+  return settingsRegistry.filter(
+    (entry) => entry.parent === parent && canAccessSettings(user, entry),
+  );
+}
+
+export function parentSettingsPage(pageID: SettingsPageID): SettingsPageID {
+  return (
+    settingsRegistry.find((entry) => entry.id === pageID)?.parent ?? pageID
+  );
 }
 
 export function settingForPath(path: string): SettingsEntry | undefined {

@@ -2374,6 +2374,34 @@ a:focus-visible {
   width: 16px;
   height: 16px;
 }
+.settings-subnavigation {
+  display: flex;
+  gap: 8px;
+  padding: 10px 20px;
+  overflow-x: auto;
+  border-block-end: 1px solid var(--coma-border);
+  background: color-mix(in srgb, var(--coma-surface-raised) 68%, transparent);
+  scrollbar-width: none;
+}
+.settings-subnavigation button {
+  flex: none;
+  min-height: 34px;
+  padding: 6px 11px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--coma-muted);
+  background: transparent;
+  white-space: nowrap;
+}
+.settings-subnavigation button:hover {
+  color: var(--coma-text);
+  background: var(--coma-surface-hover);
+}
+.settings-subnavigation button.active {
+  border-color: var(--coma-border);
+  color: var(--coma-text);
+  background: var(--coma-surface-raised);
+}
 .settings-page__body {
   display: grid;
   grid-auto-rows: max-content;
@@ -2400,6 +2428,28 @@ a:focus-visible {
 .settings-section--wide,
 .settings-autosave {
   grid-column: 1 / -1;
+}
+.workspace-settings-links {
+  display: grid;
+  gap: 8px;
+}
+.workspace-settings-links button {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--coma-border);
+  border-radius: 9px;
+  color: var(--coma-text);
+  background: var(--coma-surface);
+  text-align: start;
+}
+.workspace-settings-links button:hover {
+  border-color: color-mix(in srgb, var(--coma-primary) 45%, var(--coma-border));
+  background: var(--coma-surface-hover);
+}
+.workspace-settings-links small {
+  color: var(--coma-muted);
 }
 .settings-section > header {
   display: flex;
@@ -3261,6 +3311,9 @@ a:focus-visible {
   }
   .settings-navigation button {
     min-height: 48px;
+  }
+  .settings-subnavigation {
+    padding-inline: 12px;
   }
   .settings-state-row {
     grid-template-columns: 1fr;

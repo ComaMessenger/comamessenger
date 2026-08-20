@@ -39,7 +39,7 @@ export function SettingsToggle({
   onChange,
 }: {
   label: string;
-  hint: string;
+  hint?: string;
   checked: boolean;
   onChange(value: boolean): void;
 }) {
@@ -47,7 +47,7 @@ export function SettingsToggle({
     <label className="settings-toggle">
       <span>
         <strong>{label}</strong>
-        <small>{hint}</small>
+        {hint && <small>{hint}</small>}
       </span>
       <input
         type="checkbox"

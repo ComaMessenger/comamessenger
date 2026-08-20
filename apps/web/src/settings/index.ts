@@ -7,6 +7,8 @@ export {
   permissionsOf,
   settingForPath,
   settingsRegistry,
+  parentSettingsPage,
+  visibleChildSettings,
   visibleSettings,
   type Permission,
   type SettingsEntry,
@@ -31,6 +33,12 @@ export {
   AuditSettingsPage,
   SecuritySettingsPage,
 } from "./pages/SecuritySettingsPages";
-export { WorkspaceSettingsPage } from "./pages/WorkspaceSettingsPage";
+export {
+  WorkspaceGeneralPage,
+  WorkspaceInvitationsPage,
+  WorkspaceMembersPage,
+  WorkspaceOverviewPage,
+  WorkspacePoliciesPage,
+} from "./pages/workspace";
 export { CustomizationSettingsPage } from "./pages/CustomizationSettingsPage";
 export { InfrastructureSettingsPage } from "./pages/InfrastructureSettingsPage";
