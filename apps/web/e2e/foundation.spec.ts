@@ -817,35 +817,74 @@ test("chat and message actions stay contextual", async ({ page }) => {
     .toBe("1");
   await page.getByRole("button", { name: "Действия с сообщением" }).click();
   await page.getByRole("menuitem", { name: "Добавить реакцию" }).click();
-  await expect(page.getByRole("dialog", { name: "Эмодзи" })).toBeVisible();
-  await expect(page.getByRole("dialog", { name: "Эмодзи" })).toHaveClass(
-    /reaction-picker--above/,
-  );
+  const reactionPicker = page.getByRole("dialog", { name: "Эмодзи" });
+  await expect(reactionPicker).toBeVisible();
   await expect(page.getByPlaceholder("Поиск эмодзи…")).toBeVisible();
-  await expect(page.getByRole("dialog", { name: "Эмодзи" })).toHaveScreenshot(
-    "reaction-picker-up.png",
-    {
-      animations: "disabled",
-    },
+  const [pickerBox, pickerActionsBox, pickerHeight] = await Promise.all([
+    reactionPicker.boundingBox(),
+    messageActions.boundingBox(),
+    reactionPicker.evaluate((element) => element.scrollHeight),
+  ]);
+  const pickerViewport = page.viewportSize();
+  expect(pickerBox).not.toBeNull();
+  expect(pickerActionsBox).not.toBeNull();
+  expect(pickerViewport).not.toBeNull();
+  const pickerFitsBelow =
+    pickerViewport!.height -
+      (pickerActionsBox!.y + pickerActionsBox!.height) -
+      8 -
+      4 >=
+    pickerHeight;
+  await expect(reactionPicker).toHaveClass(
+    pickerFitsBelow ? /reaction-picker--below/ : /reaction-picker--above/,
   );
+  const pickerGap = pickerFitsBelow
+    ? pickerBox!.y - (pickerActionsBox!.y + pickerActionsBox!.height)
+    : pickerActionsBox!.y - (pickerBox!.y + pickerBox!.height);
+  expect(pickerGap).toBeCloseTo(4, 0);
+  await expect(reactionPicker).toHaveScreenshot("reaction-picker-up.png", {
+    animations: "disabled",
+    // Native emoji glyph rasterization varies slightly between WebKit runs.
+    maxDiffPixels: 128,
+  });
   if (test.info().project.name === "phone") await page.keyboard.press("Escape");
   else await page.locator(".conversation-head").click();
   await expect(page.getByRole("dialog", { name: "Эмодзи" })).toHaveCount(0);
   await messageRow.hover();
   await page.getByRole("button", { name: "Действия с сообщением" }).click();
   const messageMenu = page.getByRole("menu");
-  await expect(messageMenu).toHaveClass(/message-menu--above/);
   await expect(messageActions).toBeVisible();
   await expect(messageRow).toHaveClass(/message--overlay-open/);
   await expect(page.getByRole("menuitem", { name: "Ответить" })).toBeVisible();
   await expect(
     page.getByRole("menuitem", { name: "Копировать ссылку" }),
   ).toBeVisible();
-  const menuBox = await messageMenu.boundingBox();
-  const rowBox = await messageRow.boundingBox();
+  const [menuBox, actionsBox, menuHeight] = await Promise.all([
+    messageMenu.boundingBox(),
+    messageActions.boundingBox(),
+    messageMenu.evaluate((element) => element.scrollHeight),
+  ]);
+  const menuViewport = page.viewportSize();
   expect(menuBox).not.toBeNull();
-  expect(rowBox).not.toBeNull();
-  expect(menuBox!.y + menuBox!.height).toBeLessThanOrEqual(rowBox!.y);
+  expect(actionsBox).not.toBeNull();
+  expect(menuViewport).not.toBeNull();
+  const menuFitsBelow =
+    menuViewport!.height - (actionsBox!.y + actionsBox!.height) - 8 - 4 >=
+    menuHeight;
+  await expect(messageMenu).toHaveClass(
+    menuFitsBelow ? /message-menu--below/ : /message-menu--above/,
+  );
+  const menuGap = menuFitsBelow
+    ? menuBox!.y - (actionsBox!.y + actionsBox!.height)
+    : actionsBox!.y - (menuBox!.y + menuBox!.height);
+  expect(menuGap).toBeCloseTo(4, 0);
+  await expect
+    .poll(() =>
+      page
+        .locator(".message-scroll")
+        .evaluate((element) => getComputedStyle(element).overflowY),
+    )
+    .toBe("hidden");
   const layers = await page.evaluate(() => ({
     menu: Number.parseInt(
       getComputedStyle(document.querySelector(".message-menu")!).zIndex,
@@ -969,16 +1008,54 @@ test("history uses automatic cursor pagination", async ({ page }) => {
   await topRow.hover();
   await topRow.getByRole("button", { name: "Действия с сообщением" }).click();
   const topMenu = page.getByRole("menu");
-  const [topMenuBox, viewport] = await Promise.all([
+  const [topMenuBox, viewport, topMenuHeight] = await Promise.all([
     topMenu.boundingBox(),
     Promise.resolve(page.viewportSize()),
+    topMenu.evaluate((element) => element.scrollHeight),
   ]);
+  const topActionsBox = await page
+    .locator(".message--overlay-open .message__actions")
+    .boundingBox();
   expect(topMenuBox).not.toBeNull();
+  expect(topActionsBox).not.toBeNull();
   expect(viewport).not.toBeNull();
+  const topMenuFitsBelow =
+    viewport!.height - (topActionsBox!.y + topActionsBox!.height) - 8 - 4 >=
+    topMenuHeight;
+  await expect(topMenu).toHaveClass(
+    topMenuFitsBelow ? /message-menu--below/ : /message-menu--above/,
+  );
+  const topMenuGap = topMenuFitsBelow
+    ? topMenuBox!.y - (topActionsBox!.y + topActionsBox!.height)
+    : topActionsBox!.y - (topMenuBox!.y + topMenuBox!.height);
+  expect(topMenuGap).toBeCloseTo(4, 0);
   expect(topMenuBox!.y).toBeGreaterThanOrEqual(8);
   expect(topMenuBox!.y + topMenuBox!.height).toBeLessThanOrEqual(
     viewport!.height - 8,
   );
+  if (test.info().project.name === "desktop") {
+    const scrollTopBeforeWheel = await page
+      .locator(".message-scroll")
+      .evaluate((element) => element.scrollTop);
+    await page.locator(".message-scroll").hover();
+    await page.mouse.wheel(0, 500);
+    await expect
+      .poll(() =>
+        page
+          .locator(".message-scroll")
+          .evaluate((element) => element.scrollTop),
+      )
+      .toBe(scrollTopBeforeWheel);
+  }
+  await page.mouse.click(8, 8);
+  await expect(topMenu).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page
+        .locator(".message-scroll")
+        .evaluate((element) => getComputedStyle(element).overflowY),
+    )
+    .toBe("auto");
 });
 
 test("conversation opens at the read boundary and always offers jump to latest", async ({
@@ -1081,12 +1158,15 @@ test("composer send controls activate only when there is content", async ({
   await expect(settings).toBeEnabled();
   await expect(controls).toHaveClass(/composer__send--active/);
   if (test.info().project.name === "desktop") {
-    const [hintBox, statusBox] = await Promise.all([
-      page.locator(".composer-hint").boundingBox(),
+    const [fieldBox, hintBox, statusBox] = await Promise.all([
+      page.locator(".conversation > .composer-wrap .composer").boundingBox(),
+      page.locator(".composer-hint > span").boundingBox(),
       page.locator(".connection-pill").boundingBox(),
     ]);
+    expect(fieldBox).not.toBeNull();
     expect(hintBox).not.toBeNull();
     expect(statusBox).not.toBeNull();
+    expect(statusBox!.y - (fieldBox!.y + fieldBox!.height)).toBeCloseTo(8, 0);
     expect(
       Math.abs(
         hintBox!.y +

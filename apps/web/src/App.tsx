@@ -6,6 +6,7 @@ import {
   lazy,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -451,7 +452,7 @@ function placeMessageOverlay(
     };
   const above = Math.max(0, bounds.top - edge - gap);
   const below = Math.max(0, viewportHeight - bounds.bottom - edge - gap);
-  const side = below >= desiredHeight || below >= above ? "below" : "above";
+  const side = below >= desiredHeight ? "below" : "above";
   const available = side === "below" ? below : above;
   const right = Math.max(
     edge,
@@ -2285,9 +2286,10 @@ function MessageRow({
     null,
   );
   const interactionRoot = useRef<HTMLElement>(null);
+  const actionsRoot = useRef<HTMLDivElement>(null);
   const overlayRoot = useRef<HTMLDivElement>(null);
   useDismissable(
-    interactionRoot,
+    actionsRoot,
     Boolean(menu || reactionPicker),
     () => {
       setMenu(null);
@@ -2295,6 +2297,26 @@ function MessageRow({
     },
     overlayRoot,
   );
+  useLayoutEffect(() => {
+    if (!menu) return;
+    const overlay = overlayRoot.current;
+    if (!overlay) return;
+    const height = Math.ceil(overlay.scrollHeight);
+    const width = Math.ceil(overlay.getBoundingClientRect().width);
+    setMenu(placeMessageOverlay(actionsRoot.current, height, width));
+  }, [Boolean(menu)]);
+  useEffect(() => {
+    if (!menu && !reactionPicker) return;
+    const scroller = interactionRoot.current?.closest<HTMLElement>(
+      ".message-scroll, .thread-panel__messages",
+    );
+    if (!scroller) return;
+    const previousOverflow = scroller.style.overflowY;
+    scroller.style.overflowY = "hidden";
+    return () => {
+      scroller.style.overflowY = previousOverflow;
+    };
+  }, [Boolean(menu), Boolean(reactionPicker)]);
   const reactionsQuery = useQuery({
     queryKey: ["message-reactions", message.id],
     queryFn: () => api.reactions(message.id),
@@ -2348,11 +2370,11 @@ function MessageRow({
   }
   function openReactionPicker() {
     setMenu(null);
-    setReactionPicker(placeMessageOverlay(interactionRoot.current, 410, 352));
+    setReactionPicker(placeMessageOverlay(actionsRoot.current, 410, 352));
   }
   function openMessageMenu() {
     setReactionPicker(null);
-    setMenu(placeMessageOverlay(interactionRoot.current, 430, 228));
+    setMenu(placeMessageOverlay(actionsRoot.current, 430, 228));
   }
   function openThread() {
     setMenu(null);
@@ -2453,7 +2475,11 @@ function MessageRow({
             </button>
           ))}
       </div>
-      <div className="message__actions" aria-label={t("messageActions")}>
+      <div
+        ref={actionsRoot}
+        className="message__actions"
+        aria-label={t("messageActions")}
+      >
         <IconButton
           label={t("addReaction")}
           onClick={() => {
@@ -3247,7 +3273,9 @@ function Composer({
         )}
       </div>
       <span className="composer-hint">
-        {sendOnEnter ? t("composerHint") : t("composerHintReverse")}
+        <span>
+          {sendOnEnter ? t("composerHint") : t("composerHintReverse")}
+        </span>
       </span>
     </div>
   );

@@ -998,22 +998,17 @@ a:focus-visible {
     color-mix(in srgb, var(--coma-foreground) 10%, transparent);
   opacity: 0;
   pointer-events: none;
-  translate: 0 2px;
-  transition:
-    opacity 120ms ease,
-    translate 120ms ease;
+  transition: opacity 120ms ease;
 }
 .message:hover .message__actions,
 .message__actions:focus-within {
   opacity: 1;
   pointer-events: auto;
-  translate: 0 0;
 }
 .message.message--overlay-open .message__actions {
   visibility: visible;
   opacity: 1 !important;
   pointer-events: auto;
-  translate: 0 0;
 }
 .message--overlay-open {
   background: color-mix(in srgb, var(--coma-sidebar) 72%, transparent);
@@ -1488,11 +1483,14 @@ a:focus-visible {
 .composer-hint {
   display: flex;
   align-items: center;
-  min-height: 16px;
+  min-height: 20px;
   padding: 8px 4px 0;
   color: var(--coma-subtle);
   font-size: 10px;
   line-height: 12px;
+}
+.composer-hint > span {
+  translate: 0 2px;
 }
 .reply-strip {
   display: flex;
@@ -1902,7 +1900,7 @@ a:focus-visible {
   position: fixed;
   z-index: 20;
   inset-inline-end: 14px;
-  bottom: 19px;
+  bottom: 13px;
   display: flex;
   align-items: center;
   gap: 6px;
