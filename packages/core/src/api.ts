@@ -261,6 +261,12 @@ export class MessengerAPI {
       { method: "PATCH", body: JSON.stringify(input) },
     );
   }
+  requireMemberPasswordChange(actorID: string): Promise<void> {
+    return this.request(
+      `/api/v1/organization/members/${encodeURIComponent(actorID)}/require-password-change`,
+      { method: "POST" },
+    );
+  }
   transferOrganizationOwnership(
     input: TransferOwnershipRequest,
   ): Promise<User> {

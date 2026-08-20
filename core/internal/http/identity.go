@@ -104,6 +104,7 @@ func (h *identityHandlers) routes(router chi.Router) {
 
 	router.Group(func(protected chi.Router) {
 		protected.Use(h.authenticate)
+		protected.Use(h.requireCompletedPasswordChange)
 		protected.Use(h.actorRateLimit("authenticated", h.actorRate))
 		protected.Post("/auth/logout", h.logout)
 		protected.Get("/me", h.me)
@@ -126,6 +127,7 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Post("/organization/infrastructure/test", h.testInfrastructureConnection)
 			protected.Get("/organization/members", h.organizationMembers)
 			protected.Patch("/organization/members/{actorID}", h.updateOrganizationMember)
+			protected.Post("/organization/members/{actorID}/require-password-change", h.requireMemberPasswordChange)
 			protected.Get("/organization/audit", h.organizationAudit)
 		}
 		if h.chats != nil {
@@ -178,6 +180,20 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Get("/chats/{chatID}/notification-preferences", h.getChatPreferences)
 			protected.Patch("/chats/{chatID}/notification-preferences", h.patchChatPreferences)
 		}
+	})
+}
+
+func (h *identityHandlers) requireCompletedPasswordChange(next standardhttp.Handler) standardhttp.Handler {
+	return standardhttp.HandlerFunc(func(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+		if authFromContext(r.Context()).User.MustChangePassword {
+			allowed := (r.Method == standardhttp.MethodGet && r.URL.Path == "/api/v1/me") ||
+				(r.Method == standardhttp.MethodPost && (r.URL.Path == "/api/v1/me/password" || r.URL.Path == "/api/v1/auth/logout"))
+			if !allowed {
+				h.writeError(w, r, standardhttp.StatusForbidden, "password_change_required", "Password change is required before continuing.")
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 

@@ -341,6 +341,10 @@ const ru = {
   emailChanged: "Email изменён, остальные сессии завершены",
   emailConfirmationSent:
     "Ссылка подтверждения отправлена на новый адрес и действует один час",
+  requirePasswordChange: "Потребовать смену пароля",
+  passwordChangeRequired: "При следующем входе участник должен сменить пароль",
+  passwordChangeRequiredHint:
+    "Администратор потребовал сменить пароль. Задайте новый пароль, чтобы продолжить работу.",
   confirmOwnershipTransfer: "Передать владение",
   transferringOwnership: "Передаём…",
   ownershipTransferred: "Владение пространством передано",
@@ -755,6 +759,11 @@ const en: Record<keyof typeof ru, string> = {
   emailChanged: "Email changed and other sessions signed out",
   emailConfirmationSent:
     "A confirmation link was sent to the new address and is valid for one hour",
+  requirePasswordChange: "Require password change",
+  passwordChangeRequired:
+    "The member must change their password at the next sign-in",
+  passwordChangeRequiredHint:
+    "An administrator required a password change. Set a new password to continue.",
   confirmOwnershipTransfer: "Transfer ownership",
   transferringOwnership: "Transferring…",
   ownershipTransferred: "Workspace ownership transferred",

@@ -188,6 +188,25 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 		"token": emailToken,
 	}, standardhttp.StatusUnprocessableEntity, nil)
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/me", memberEmailLogin.AccessToken, nil, standardhttp.StatusUnauthorized, nil)
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/organization/members/"+member.User.ActorID+"/require-password-change", owner.AccessToken, nil, standardhttp.StatusNoContent, nil)
+	var forcedLogin identity.Tokens
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/auth/login", "", map[string]any{
+		"email": "member-final@example.test", "password": "new member password",
+	}, standardhttp.StatusOK, &forcedLogin)
+	if !forcedLogin.User.MustChangePassword {
+		t.Fatalf("mandatory password flag = %+v", forcedLogin.User)
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/chats", forcedLogin.AccessToken, nil, standardhttp.StatusForbidden, nil)
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/me", forcedLogin.AccessToken, nil, standardhttp.StatusOK, &updatedMember)
+	e2ePasswordChangeRequiredSocket(t, baseURL, forcedLogin.AccessToken)
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/me/password", forcedLogin.AccessToken, map[string]any{
+		"current_password": "new member password", "new_password": "final member password",
+	}, standardhttp.StatusNoContent, nil)
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/me", forcedLogin.AccessToken, nil, standardhttp.StatusOK, &updatedMember)
+	if updatedMember.MustChangePassword {
+		t.Fatalf("mandatory password flag was not cleared: %+v", updatedMember)
+	}
+	member = forcedLogin
 
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/invitations", owner.AccessToken, map[string]any{
 		"email": "admin@example.test", "role": "admin",
@@ -555,6 +574,38 @@ func e2eSocket(t *testing.T, baseURL, token string, lastSeq int64) *websocket.Co
 		t.Fatalf("hello = %+v", hello)
 	}
 	return connection
+}
+
+func e2ePasswordChangeRequiredSocket(t *testing.T, baseURL, token string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	header := standardhttp.Header{"Origin": []string{baseURL}}
+	connection, response, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(baseURL, "http")+"/api/v1/ws", &websocket.DialOptions{HTTPHeader: header})
+	if err != nil {
+		if response != nil {
+			t.Fatalf("dial websocket status=%d error=%v", response.StatusCode, err)
+		}
+		t.Fatal(err)
+	}
+	defer connection.CloseNow()
+	if err := connection.Write(ctx, websocket.MessageText, mustJSON(t, map[string]any{
+		"op": "auth", "request_id": e2eID(t), "access_token": token, "last_seq": 0,
+	})); err != nil {
+		t.Fatal(err)
+	}
+	var frame struct {
+		Op   string `json:"op"`
+		Code string `json:"code"`
+	}
+	e2eReadSocket(t, connection, &frame)
+	if frame.Op != "error" || frame.Code != "password_change_required" {
+		t.Fatalf("password change websocket frame = %+v", frame)
+	}
+	_, _, err = connection.Read(ctx)
+	if websocket.CloseStatus(err) != websocket.StatusCode(4001) {
+		t.Fatalf("password change websocket close = %v", err)
+	}
 }
 
 func e2eEvent(t *testing.T, connection *websocket.Conn) eventlog.Frame {

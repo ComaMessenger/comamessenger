@@ -103,13 +103,14 @@ func (r *Repository) FindUserByEmail(ctx context.Context, email string) (User, e
 	var user User
 	err := r.pool.QueryRow(ctx, `
 		SELECT a.id, a.org_id, o.name, a.org_role, u.email::text, a.display_name, a.handle::text,
-		       a.title, a.about, a.timezone, a.status, a.created_at, u.password_hash
+		       a.title, a.about, a.timezone, a.status, a.created_at, u.password_hash,
+		       u.must_change_password_at IS NOT NULL
 		FROM users u
 		JOIN actors a ON a.id = u.actor_id
 		JOIN organizations o ON o.id = a.org_id
 		WHERE u.email = $1`, email).Scan(
 		&user.ActorID, &user.OrgID, &user.OrganizationName, &user.OrgRole, &user.Email, &user.DisplayName,
-		&user.Handle, &user.Title, &user.About, &user.Timezone, &user.Status, &user.CreatedAt, &user.PasswordHash,
+		&user.Handle, &user.Title, &user.About, &user.Timezone, &user.Status, &user.CreatedAt, &user.PasswordHash, &user.MustChangePassword,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return User{}, ErrInvalidCredentials
@@ -147,7 +148,7 @@ func (r *Repository) ChangePassword(ctx context.Context, orgID, actorID, current
 	}
 	defer tx.Rollback(ctx)
 	command, err := tx.Exec(ctx, `
-		UPDATE users SET password_hash=$3
+		UPDATE users SET password_hash=$3,must_change_password_at=NULL
 		WHERE org_id=$1 AND actor_id=$2`, orgID, actorID, passwordHash)
 	if err != nil {
 		return nil, fmt.Errorf("update password: %w", err)
@@ -407,13 +408,14 @@ func (r *Repository) TransferOwnership(ctx context.Context, transfer OwnershipTr
 	var user User
 	err = tx.QueryRow(ctx, `
 		SELECT a.id, a.org_id, o.name, a.org_role, u.email::text, a.display_name, a.handle::text,
-		       a.title, a.about, a.timezone, a.status, a.created_at
+		       a.title, a.about, a.timezone, a.status, a.created_at,
+		       u.must_change_password_at IS NOT NULL
 		FROM actors a
 		JOIN users u ON u.actor_id = a.id
 		JOIN organizations o ON o.id = a.org_id
 		WHERE a.org_id = $1 AND a.id = $2`, transfer.OrgID, transfer.CurrentActorID).Scan(
 		&user.ActorID, &user.OrgID, &user.OrganizationName, &user.OrgRole, &user.Email, &user.DisplayName,
-		&user.Handle, &user.Title, &user.About, &user.Timezone, &user.Status, &user.CreatedAt,
+		&user.Handle, &user.Title, &user.About, &user.Timezone, &user.Status, &user.CreatedAt, &user.MustChangePassword,
 	)
 	if err != nil {
 		return User{}, fmt.Errorf("load previous owner after transfer: %w", err)
@@ -474,7 +476,8 @@ func (r *Repository) RotateSession(ctx context.Context, refreshHash []byte, repl
 	err = tx.QueryRow(ctx, `
 		SELECT s.id, s.family_id, s.expires_at, s.revoked_at, s.replaced_by,
 		       a.id, a.org_id, o.name, a.org_role, u.email::text, a.display_name, a.handle::text,
-		       a.title, a.about, a.timezone, a.status, a.created_at
+		       a.title, a.about, a.timezone, a.status, a.created_at,
+		       u.must_change_password_at IS NOT NULL
 		FROM sessions s
 		JOIN actors a ON a.id = s.actor_id
 		JOIN users u ON u.actor_id = a.id
@@ -483,7 +486,7 @@ func (r *Repository) RotateSession(ctx context.Context, refreshHash []byte, repl
 		FOR UPDATE OF s`, refreshHash).Scan(
 		&sessionID, &familyID, &expiresAt, &revokedAt, &replacedBy,
 		&user.ActorID, &user.OrgID, &user.OrganizationName, &user.OrgRole, &user.Email, &user.DisplayName,
-		&user.Handle, &user.Title, &user.About, &user.Timezone, &user.Status, &user.CreatedAt,
+		&user.Handle, &user.Title, &user.About, &user.Timezone, &user.Status, &user.CreatedAt, &user.MustChangePassword,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return User{}, ErrInvalidRefreshToken
@@ -537,7 +540,8 @@ func (r *Repository) ResolveSession(ctx context.Context, sessionID, actorID stri
 	var user User
 	err := r.pool.QueryRow(ctx, `
 		SELECT a.id, a.org_id, o.name, a.org_role, u.email::text, a.display_name, a.handle::text,
-		       a.title, a.about, a.timezone, a.status, a.created_at
+		       a.title, a.about, a.timezone, a.status, a.created_at,
+		       u.must_change_password_at IS NOT NULL
 		FROM sessions s
 		JOIN actors a ON a.id = s.actor_id
 		JOIN users u ON u.actor_id = a.id
@@ -546,7 +550,7 @@ func (r *Repository) ResolveSession(ctx context.Context, sessionID, actorID stri
 		  AND s.expires_at > $3 AND a.status = 'active' AND a.deleted_at IS NULL`,
 		sessionID, actorID, now).Scan(
 		&user.ActorID, &user.OrgID, &user.OrganizationName, &user.OrgRole, &user.Email, &user.DisplayName,
-		&user.Handle, &user.Title, &user.About, &user.Timezone, &user.Status, &user.CreatedAt,
+		&user.Handle, &user.Title, &user.About, &user.Timezone, &user.Status, &user.CreatedAt, &user.MustChangePassword,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return User{}, ErrUnauthorized
@@ -570,12 +574,13 @@ func (r *Repository) UpdateProfile(ctx context.Context, actorID, displayName, ha
 			RETURNING id, org_id, org_role, display_name, handle, title, about, timezone, status, created_at
 		)
 		SELECT updated.id, updated.org_id, o.name, updated.org_role, u.email::text, updated.display_name,
-		       updated.handle::text, updated.title, updated.about, updated.timezone, updated.status, updated.created_at
+		       updated.handle::text, updated.title, updated.about, updated.timezone, updated.status, updated.created_at,
+		       u.must_change_password_at IS NOT NULL
 		FROM updated JOIN users u ON u.actor_id = updated.id
 		JOIN organizations o ON o.id = updated.org_id`,
 		actorID, displayName, handle, title, about, timezone).Scan(
 		&user.ActorID, &user.OrgID, &user.OrganizationName, &user.OrgRole, &user.Email, &user.DisplayName,
-		&user.Handle, &user.Title, &user.About, &user.Timezone, &user.Status, &user.CreatedAt,
+		&user.Handle, &user.Title, &user.About, &user.Timezone, &user.Status, &user.CreatedAt, &user.MustChangePassword,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return User{}, ErrNotFound

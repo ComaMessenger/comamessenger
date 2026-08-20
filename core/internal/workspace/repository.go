@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/permission"
@@ -303,6 +304,54 @@ func (r *Repository) UpdateMember(ctx context.Context, orgID, currentActorID, ta
 	}
 	result.Permissions = effectivePermissions(result.Role, stored)
 	return result, nil
+}
+
+func (r *Repository) RequirePasswordChange(ctx context.Context, orgID, currentActorID, targetActorID, currentRole string, now time.Time) ([]string, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	var targetRole, targetStatus string
+	err = tx.QueryRow(ctx, `SELECT org_role,status FROM actors WHERE org_id=$1 AND id=$2 AND deleted_at IS NULL FOR UPDATE`, orgID, targetActorID).Scan(&targetRole, &targetStatus)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if targetStatus != "active" || targetRole == "owner" || (currentRole != "owner" && targetRole != "member") {
+		return nil, ErrForbidden
+	}
+	command, err := tx.Exec(ctx, `UPDATE users SET must_change_password_at=$3 WHERE org_id=$1 AND actor_id=$2`, orgID, targetActorID, now)
+	if err != nil || command.RowsAffected() != 1 {
+		return nil, ErrNotFound
+	}
+	rows, err := tx.Query(ctx, `UPDATE sessions SET revoked_at=COALESCE(revoked_at,$3) WHERE org_id=$1 AND actor_id=$2 AND revoked_at IS NULL RETURNING id`, orgID, targetActorID, now)
+	if err != nil {
+		return nil, err
+	}
+	var revoked []string
+	for rows.Next() {
+		var sessionID string
+		if err := rows.Scan(&sessionID); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		revoked = append(revoked, sessionID)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+	if err := insertAudit(ctx, tx, orgID, currentActorID, "member.password_change.require", "actor", &targetActorID, map[string]any{"revoked_sessions": len(revoked)}); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return revoked, nil
 }
 
 func effectivePermissions(role string, stored []string) []permission.Code {

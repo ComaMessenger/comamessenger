@@ -131,6 +131,11 @@ func (s *Server) ServeHTTP(w standardhttp.ResponseWriter, r *standardhttp.Reques
 		_ = connection.Close(statusAuthenticationFailed, "authentication failed")
 		return
 	}
+	if user.MustChangePassword {
+		s.writeInitialError(r.Context(), connection, "password_change_required", "Change your password before connecting to realtime.")
+		_ = connection.Close(statusAuthenticationFailed, "password change required")
+		return
+	}
 
 	initialWatermark, err := s.store.Current(r.Context(), user.OrgID)
 	if err != nil {

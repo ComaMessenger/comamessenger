@@ -18,6 +18,7 @@ export class RealtimeCoordinator {
   private socket: SocketLike | null = null;
   private stopped = true;
   private reconnectAttempt = 0;
+  private passwordChangeRequired = false;
   private ackTimer: ReturnType<typeof setTimeout> | null = null;
   private lastAck = 0;
   private ackInterval = 1000;
@@ -36,6 +37,7 @@ export class RealtimeCoordinator {
       resync(highWatermark: number): Promise<void>;
       typing?(value: Record<string, unknown>): void;
       presence?(value: Record<string, unknown>): void;
+      passwordChangeRequired?(): void;
       sessionExpired?(): void;
     },
   ) {}
@@ -80,6 +82,7 @@ export class RealtimeCoordinator {
       const checkpoint = await this.storage.get();
       const socket = this.sockets(this.api.websocketURL());
       const socketToken = this.api.token();
+      this.passwordChangeRequired = false;
       this.socket = socket;
       socket.onopen = () => {
         this.callbacks.state("authenticating");
@@ -96,6 +99,7 @@ export class RealtimeCoordinator {
       socket.onclose = (event) => {
         if (this.stopped) return;
         if (event.code === 4001) {
+          if (this.passwordChangeRequired) return;
           void this.reauthenticate(socketToken);
           return;
         }
@@ -153,6 +157,12 @@ export class RealtimeCoordinator {
       await this.callbacks.resync(high);
       await this.storage.set(high);
       this.socket?.close();
+      return;
+    }
+    if (frame.op === "error" && frame.code === "password_change_required") {
+      this.passwordChangeRequired = true;
+      this.callbacks.state("password_change_required");
+      this.callbacks.passwordChangeRequired?.();
       return;
     }
     if (frame.op === "typing") this.callbacks.typing?.(frame);

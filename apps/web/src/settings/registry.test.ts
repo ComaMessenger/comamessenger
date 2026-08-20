@@ -24,6 +24,7 @@ function user(role: User["role"], permissions: Permission[] = []): User {
     timezone: "UTC",
     status: "active",
     permissions,
+    must_change_password: false,
     created_at: "2026-08-21T00:00:00Z",
   };
 }

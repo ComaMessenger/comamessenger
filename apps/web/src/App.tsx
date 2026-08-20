@@ -1003,10 +1003,13 @@ function Messenger({
                 String(frame.actor_id),
                 frame.state as "online" | "away" | "offline",
               ),
+          passwordChangeRequired: () => {
+            void api.me().then(onUserUpdated);
+          },
           sessionExpired: onLogout,
         },
       ),
-    [api, onLogout, scheduleReload, store],
+    [api, onLogout, onUserUpdated, scheduleReload, store],
   );
   const outbox = useMemo(
     () =>
@@ -1393,7 +1396,14 @@ function Messenger({
         </aside>
       )}
       <main className="conversation">
-        {selectedID ? (
+        {user.must_change_password ? (
+          <SecuritySettingsPage
+            api={api}
+            user={user}
+            navigate={navigate}
+            onUserUpdated={onUserUpdated}
+          />
+        ) : selectedID ? (
           <Conversation
             api={api}
             store={store}

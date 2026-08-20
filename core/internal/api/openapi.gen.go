@@ -585,6 +585,7 @@ const (
 	ErrorCodeInvitationInvalid      ErrorCode = "invitation_invalid"
 	ErrorCodeMessageNotFound        ErrorCode = "message_not_found"
 	ErrorCodeOriginNotAllowed       ErrorCode = "origin_not_allowed"
+	ErrorCodePasswordChangeRequired ErrorCode = "password_change_required"
 	ErrorCodePayloadTooLarge        ErrorCode = "payload_too_large"
 	ErrorCodeRateLimited            ErrorCode = "rate_limited"
 	ErrorCodeReauthenticationFailed ErrorCode = "reauthentication_failed"
@@ -626,6 +627,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeMessageNotFound:
 		return true
 	case ErrorCodeOriginNotAllowed:
+		return true
+	case ErrorCodePasswordChangeRequired:
 		return true
 	case ErrorCodePayloadTooLarge:
 		return true
@@ -2207,19 +2210,20 @@ type UpdateProfileRequest struct {
 
 // User defines model for User.
 type User struct {
-	About            string              `json:"about"`
-	CreatedAt        time.Time           `json:"created_at"`
-	DisplayName      string              `json:"display_name"`
-	Email            openapi_types.Email `json:"email"`
-	Handle           string              `json:"handle"`
-	Id               openapi_types.UUID  `json:"id"`
-	OrgId            openapi_types.UUID  `json:"org_id"`
-	OrganizationName string              `json:"organization_name"`
-	Permissions      []Permission        `json:"permissions"`
-	Role             UserRole            `json:"role"`
-	Status           UserStatus          `json:"status"`
-	Timezone         string              `json:"timezone"`
-	Title            string              `json:"title"`
+	About              string              `json:"about"`
+	CreatedAt          time.Time           `json:"created_at"`
+	DisplayName        string              `json:"display_name"`
+	Email              openapi_types.Email `json:"email"`
+	Handle             string              `json:"handle"`
+	Id                 openapi_types.UUID  `json:"id"`
+	MustChangePassword bool                `json:"must_change_password"`
+	OrgId              openapi_types.UUID  `json:"org_id"`
+	OrganizationName   string              `json:"organization_name"`
+	Permissions        []Permission        `json:"permissions"`
+	Role               UserRole            `json:"role"`
+	Status             UserStatus          `json:"status"`
+	Timezone           string              `json:"timezone"`
+	Title              string              `json:"title"`
 }
 
 // UserRole defines model for User.Role.

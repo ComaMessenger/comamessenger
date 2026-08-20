@@ -148,6 +148,20 @@ func (h *identityHandlers) updateOrganizationMember(w standardhttp.ResponseWrite
 	writeJSON(h.logger, w, standardhttp.StatusOK, value)
 }
 
+func (h *identityHandlers) requireMemberPasswordChange(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	revoked, err := h.workspace.RequirePasswordChange(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "actorID"))
+	if err != nil {
+		h.workspaceError(w, r, err)
+		return
+	}
+	if h.revokeRealtimeSession != nil {
+		for _, sessionID := range revoked {
+			h.revokeRealtimeSession(sessionID)
+		}
+	}
+	w.WriteHeader(standardhttp.StatusNoContent)
+}
+
 func (h *identityHandlers) organizationAudit(w standardhttp.ResponseWriter, r *standardhttp.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	value, err := h.workspace.Audit(r.Context(), authFromContext(r.Context()).User, limit)

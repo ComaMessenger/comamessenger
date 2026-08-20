@@ -27,6 +27,7 @@ const user = {
   about: "",
   timezone: "UTC",
   status: "active",
+  must_change_password: false,
   created_at: "2026-08-19T00:00:00Z",
 };
 const lev = {
@@ -85,6 +86,7 @@ async function mockMessenger(
     history?: Array<Record<string, unknown>>;
     paginate?: boolean;
     theme?: "light" | "dark";
+    mustChangePassword?: boolean;
     reactions?: Array<Record<string, unknown>>;
     unread?: {
       last_read_seq: number;
@@ -100,9 +102,11 @@ async function mockMessenger(
     history: suppliedHistory,
     paginate = false,
     theme = "light",
+    mustChangePassword = false,
     reactions: suppliedReactions = [],
     unread = { last_read_seq: 0, unread_count: 3, mention_count: 1 },
   } = options;
+  let runtimeUser = { ...user, must_change_password: mustChangePassword };
   const runtimeChat = { ...chat, ...chatPatch };
   let runtimeReactions = [...suppliedReactions];
   const reactionMutations: string[] = [];
@@ -250,7 +254,7 @@ async function mockMessenger(
       body = {
         access_token: "test",
         access_expires_at: "2026-08-20T00:00:00Z",
-        user,
+        user: runtimeUser,
       };
     } else if (path.endsWith("/chats")) {
       chatRequests += 1;
@@ -262,10 +266,16 @@ async function mockMessenger(
         user: { ...user, email: input.new_email },
       };
     } else if (path.endsWith("/me/password")) {
+      runtimeUser = { ...runtimeUser, must_change_password: false };
       status = 204;
       body = undefined;
+    } else if (path.endsWith("/me") && route.request().method() === "GET") {
+      body = runtimeUser;
     } else if (path.endsWith("/me") && route.request().method() === "PATCH")
-      body = { ...user, ...route.request().postDataJSON() };
+      body = runtimeUser = {
+        ...runtimeUser,
+        ...route.request().postDataJSON(),
+      };
     else if (path.endsWith("/preferences")) {
       if (route.request().method() === "PATCH")
         preferences = route.request().postDataJSON() as typeof preferences;
@@ -290,12 +300,12 @@ async function mockMessenger(
       body = {
         members: [
           {
-            actor_id: user.id,
-            email: user.email,
-            display_name: user.display_name,
-            handle: user.handle,
-            title: user.title,
-            role: user.role,
+            actor_id: runtimeUser.id,
+            email: runtimeUser.email,
+            display_name: runtimeUser.display_name,
+            handle: runtimeUser.handle,
+            title: runtimeUser.title,
+            role: runtimeUser.role,
             status: "active",
             permissions: [],
             created_at: user.created_at,
@@ -303,14 +313,17 @@ async function mockMessenger(
           },
         ],
       };
-    else if (/\/organization\/members\/[^/]+$/.test(path))
+    else if (path.endsWith("/require-password-change")) {
+      status = 204;
+      body = undefined;
+    } else if (/\/organization\/members\/[^/]+$/.test(path))
       body = {
         ...(route.request().postDataJSON() as object),
-        actor_id: user.id,
-        email: user.email,
-        display_name: user.display_name,
-        handle: user.handle,
-        title: user.title,
+        actor_id: runtimeUser.id,
+        email: runtimeUser.email,
+        display_name: runtimeUser.display_name,
+        handle: runtimeUser.handle,
+        title: runtimeUser.title,
         created_at: user.created_at,
         last_seen_at: "2026-08-20T00:00:00Z",
       };
@@ -941,18 +954,14 @@ test("phase 3.1 settings cover workspace branding infrastructure sessions and au
   const passwordSection = page
     .locator(".settings-section")
     .filter({ has: page.getByRole("heading", { name: "Сменить пароль" }) });
-  await passwordSection
-    .getByLabel("Текущий пароль")
-    .fill("current password");
+  await passwordSection.getByLabel("Текущий пароль").fill("current password");
   await passwordSection
     .getByLabel("Новый пароль", { exact: true })
     .fill("new secure password");
   await passwordSection
     .getByLabel("Повторите новый пароль")
     .fill("new secure password");
-  await passwordSection
-    .getByRole("button", { name: "Сменить пароль" })
-    .click();
+  await passwordSection.getByRole("button", { name: "Сменить пароль" }).click();
   await expect(
     page.getByText("Пароль изменён, остальные сессии завершены"),
   ).toBeVisible();
@@ -1558,6 +1567,36 @@ test("an expired websocket token refreshes without leaving the messenger", async
     page.getByRole("heading", { name: "Объявления", level: 1 }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Войти" })).toHaveCount(0);
+});
+
+test("mandatory password change blocks the messenger until completion", async ({
+  page,
+}) => {
+  await mockMessenger(page, { mustChangePassword: true });
+  await page.goto("/chats");
+  await expect(
+    page.getByText(
+      "Администратор потребовал сменить пароль. Задайте новый пароль, чтобы продолжить работу.",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Сменить email" }),
+  ).toHaveCount(0);
+  await expect(page.getByText("Активные сессии")).toHaveCount(0);
+
+  await page.getByLabel("Текущий пароль").fill("current password");
+  await page
+    .getByLabel("Новый пароль", { exact: true })
+    .fill("new secure password");
+  await page.getByLabel("Повторите новый пароль").fill("new secure password");
+  await page.getByRole("button", { name: "Сменить пароль" }).click();
+
+  await expect(
+    page.getByText(
+      "Администратор потребовал сменить пароль. Задайте новый пароль, чтобы продолжить работу.",
+    ),
+  ).toHaveCount(0);
+  await expect(page.getByText("Выберите чат")).toBeVisible();
 });
 
 test("a 10k-message history stays virtualized", async ({ page }) => {

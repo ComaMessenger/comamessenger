@@ -84,4 +84,5 @@ export type RealtimeState =
   | "live"
   | "reconnecting"
   | "resync_required"
+  | "password_change_required"
   | "session_expired";

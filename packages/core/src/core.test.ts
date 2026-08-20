@@ -12,7 +12,7 @@ import {
 import { compactUUID, expandUUID } from "./links";
 import { RealtimeCoordinator, type CheckpointStorage } from "./realtime";
 import { Outbox, type OutboxItem, type OutboxStorage } from "./outbox";
-import type { ClientMessage, Message } from "./types";
+import type { ClientMessage, Message, RealtimeState } from "./types";
 import { APIError, type MessengerAPI } from "./api";
 
 const message: ClientMessage = {
@@ -318,6 +318,74 @@ describe("realtime coordinator", () => {
     expect(sockets).toHaveLength(2);
     expect(token).toBe("fresh");
     expect(sessionExpired).toBe(0);
+    coordinator.stop();
+  });
+
+  it("stops reconnecting when the server requires a password change", async () => {
+    let refreshes = 0;
+    let required = 0;
+    const states: RealtimeState[] = [];
+    const sockets: Array<{
+      readyState: number;
+      send(value: string): void;
+      close(): void;
+      onopen: ((event: unknown) => void) | null;
+      onmessage: ((event: { data: string }) => void) | null;
+      onclose: ((event: { code: number }) => void) | null;
+    }> = [];
+    const api = {
+      token: () => "token",
+      clearToken: () => true,
+      refresh: async () => {
+        refreshes += 1;
+        return {};
+      },
+      websocketURL: () => "ws://test",
+    } as unknown as MessengerAPI;
+    const coordinator = new RealtimeCoordinator(
+      api,
+      {
+        get: async () => 0,
+        set: async () => undefined,
+        clear: async () => undefined,
+      },
+      () => {
+        const socket = {
+          readyState: 1,
+          send: () => undefined,
+          close: () => undefined,
+          onopen: null as ((event: unknown) => void) | null,
+          onmessage: null as ((event: { data: string }) => void) | null,
+          onclose: null as ((event: { code: number }) => void) | null,
+        };
+        sockets.push(socket);
+        queueMicrotask(() => socket.onopen?.({}));
+        return socket;
+      },
+      {
+        state: (state) => states.push(state),
+        event: () => false,
+        resync: async () => undefined,
+        passwordChangeRequired: () => {
+          required += 1;
+        },
+      },
+    );
+    coordinator.start();
+    await nextTask();
+    sockets[0]!.onmessage?.({
+      data: JSON.stringify({
+        op: "error",
+        code: "password_change_required",
+      }),
+    });
+    await nextTask();
+    sockets[0]!.onclose?.({ code: 4001 });
+    await nextTask();
+    expect(refreshes).toBe(0);
+    expect(sockets).toHaveLength(1);
+    expect(required).toBe(1);
+    expect(states).toContain("password_change_required");
     coordinator.stop();
   });
 

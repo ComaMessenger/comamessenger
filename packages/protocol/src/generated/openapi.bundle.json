@@ -847,6 +847,35 @@
         }
       }
     },
+    "/api/v1/organization/members/{actor_id}/require-password-change": {
+      "post": {
+        "operationId": "requireMemberPasswordChange",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActorId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Password change required and all sessions revoked."
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/v1/organization/transfer-ownership": {
       "post": {
         "operationId": "transferOrganizationOwnership",
@@ -2724,6 +2753,7 @@
           "message_not_found",
           "origin_not_allowed",
           "payload_too_large",
+          "password_change_required",
           "rate_limited",
           "service_not_ready",
           "session_not_found",
@@ -3372,6 +3402,7 @@
           "timezone",
           "status",
           "permissions",
+          "must_change_password",
           "created_at"
         ],
         "properties": {
@@ -3426,6 +3457,9 @@
             "items": {
               "$ref": "#/components/schemas/Permission"
             }
+          },
+          "must_change_password": {
+            "type": "boolean"
           },
           "created_at": {
             "type": "string",

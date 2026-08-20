@@ -31,6 +31,7 @@ export function SecuritySettingsPage({
   const query = useQuery({
     queryKey: ["sessions"],
     queryFn: () => api.sessions(),
+    enabled: !user.must_change_password,
   });
   const [message, setMessage] = useState("");
   const [revokedIDs, setRevokedIDs] = useState<Set<string>>(() => new Set());
@@ -101,6 +102,8 @@ export function SecuritySettingsPage({
         current_password: currentPassword,
         new_password: newPassword,
       });
+      const updated = await api.me();
+      onUserUpdated(updated);
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
@@ -149,36 +152,42 @@ export function SecuritySettingsPage({
       navigate={navigate}
     >
       <div className="settings-page__body">
-        <SettingsSection title={t("changeEmail")} description={user.email}>
-          <div className="settings-form-grid">
-            <Field
-              label={t("newEmail")}
-              name="new-email"
-              type="email"
-              autoComplete="email"
-              value={newEmail}
-              onChange={(event) => setNewEmail(event.target.value)}
-            />
-            <Field
-              label={t("currentPassword")}
-              name="email-current-password"
-              type="password"
-              autoComplete="current-password"
-              value={emailPassword}
-              onChange={(event) => setEmailPassword(event.target.value)}
-            />
-          </div>
-          <Button
-            variant="primary"
-            disabled={emailPending || !newEmail || !emailPassword}
-            onClick={() => void changeEmail()}
-          >
-            {emailPending ? t("saving") : t("changeEmail")}
-          </Button>
-        </SettingsSection>
+        {!user.must_change_password && (
+          <SettingsSection title={t("changeEmail")} description={user.email}>
+            <div className="settings-form-grid">
+              <Field
+                label={t("newEmail")}
+                name="new-email"
+                type="email"
+                autoComplete="email"
+                value={newEmail}
+                onChange={(event) => setNewEmail(event.target.value)}
+              />
+              <Field
+                label={t("currentPassword")}
+                name="email-current-password"
+                type="password"
+                autoComplete="current-password"
+                value={emailPassword}
+                onChange={(event) => setEmailPassword(event.target.value)}
+              />
+            </div>
+            <Button
+              variant="primary"
+              disabled={emailPending || !newEmail || !emailPassword}
+              onClick={() => void changeEmail()}
+            >
+              {emailPending ? t("saving") : t("changeEmail")}
+            </Button>
+          </SettingsSection>
+        )}
         <SettingsSection
           title={t("changePassword")}
-          description={t("changePasswordHint")}
+          description={
+            user.must_change_password
+              ? t("passwordChangeRequiredHint")
+              : t("changePasswordHint")
+          }
           icon={<KeyRound />}
         >
           <div className="settings-form-grid">
@@ -226,51 +235,53 @@ export function SecuritySettingsPage({
             {passwordPending ? t("saving") : t("changePassword")}
           </Button>
         </SettingsSection>
-        <SettingsSection
-          title={t("activeSessions")}
-          description={t("activeSessionsHint")}
-          icon={<MonitorSmartphone />}
-        >
-          <div className="session-list">
-            {activeSessions.map((session) => (
-              <article key={session.id} className="session-card">
-                <MonitorSmartphone />
-                <span>
-                  <strong>
-                    {session.current
-                      ? t("currentSession")
-                      : sessionLabel(session.user_agent, t("unknownDevice"))}
-                  </strong>
-                  <small>
-                    {new Date(session.last_seen_at).toLocaleString()} ·{" "}
-                    {session.ip_address || t("unknownAddress")}
-                  </small>
-                </span>
-                {session.current ? (
-                  <Badge tone="primary">{t("current")}</Badge>
-                ) : (
-                  <Button
-                    size="sm"
-                    disabled={pendingSession !== null}
-                    onClick={() => void revoke(session)}
-                  >
-                    {t("revoke")}
-                  </Button>
-                )}
-              </article>
-            ))}
-          </div>
-          <Button
-            disabled={
-              pendingSession !== null ||
-              activeSessions.every((session) => session.current)
-            }
-            onClick={() => void revokeOthers()}
+        {!user.must_change_password && (
+          <SettingsSection
+            title={t("activeSessions")}
+            description={t("activeSessionsHint")}
+            icon={<MonitorSmartphone />}
           >
-            <KeyRound />
-            {t("logoutOtherDevices")}
-          </Button>
-        </SettingsSection>
+            <div className="session-list">
+              {activeSessions.map((session) => (
+                <article key={session.id} className="session-card">
+                  <MonitorSmartphone />
+                  <span>
+                    <strong>
+                      {session.current
+                        ? t("currentSession")
+                        : sessionLabel(session.user_agent, t("unknownDevice"))}
+                    </strong>
+                    <small>
+                      {new Date(session.last_seen_at).toLocaleString()} ·{" "}
+                      {session.ip_address || t("unknownAddress")}
+                    </small>
+                  </span>
+                  {session.current ? (
+                    <Badge tone="primary">{t("current")}</Badge>
+                  ) : (
+                    <Button
+                      size="sm"
+                      disabled={pendingSession !== null}
+                      onClick={() => void revoke(session)}
+                    >
+                      {t("revoke")}
+                    </Button>
+                  )}
+                </article>
+              ))}
+            </div>
+            <Button
+              disabled={
+                pendingSession !== null ||
+                activeSessions.every((session) => session.current)
+              }
+              onClick={() => void revokeOthers()}
+            >
+              <KeyRound />
+              {t("logoutOtherDevices")}
+            </Button>
+          </SettingsSection>
+        )}
         <span className="settings-success">{message}</span>
       </div>
     </SettingsShell>

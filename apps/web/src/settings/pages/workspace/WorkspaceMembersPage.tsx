@@ -86,6 +86,16 @@ export function WorkspaceMembersPage({
     }
   }
 
+  async function requirePasswordChange(member: OrganizationMember) {
+    setMessage("");
+    try {
+      await api.requireMemberPasswordChange(member.actor_id);
+      setMessage(t("passwordChangeRequired"));
+    } catch (cause) {
+      setMessage(messageOf(cause));
+    }
+  }
+
   return (
     <SettingsShell
       user={user}
@@ -157,6 +167,17 @@ export function WorkspaceMembersPage({
                     {member.status === "active"
                       ? t("deactivate")
                       : t("activate")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={
+                      member.actor_id === user.id ||
+                      member.role === "owner" ||
+                      (user.role !== "owner" && member.role !== "member")
+                    }
+                    onClick={() => void requirePasswordChange(member)}
+                  >
+                    {t("requirePasswordChange")}
                   </Button>
                   {member.role === "admin" && user.role === "owner" && (
                     <fieldset className="organization-member__permissions">

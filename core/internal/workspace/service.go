@@ -333,6 +333,16 @@ func (s *Service) UpdateMember(ctx context.Context, current identity.User, actor
 	return s.repository.UpdateMember(ctx, current.OrgID, current.ActorID, actorID, input)
 }
 
+func (s *Service) RequirePasswordChange(ctx context.Context, current identity.User, actorID string) ([]string, error) {
+	if !allows(current, permission.MembersManage) {
+		return nil, ErrForbidden
+	}
+	if actorID == current.ActorID {
+		return nil, fmt.Errorf("%w: use the personal security page to change your own password", ErrInvalid)
+	}
+	return s.repository.RequirePasswordChange(ctx, current.OrgID, current.ActorID, actorID, current.OrgRole, s.now().UTC())
+}
+
 func (s *Service) Audit(ctx context.Context, current identity.User, limit int) (AuditPage, error) {
 	if !allows(current, permission.AuditRead) {
 		return AuditPage{}, ErrForbidden

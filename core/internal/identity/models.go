@@ -39,20 +39,21 @@ func IsValidationError(err error) bool {
 }
 
 type User struct {
-	ActorID          string            `json:"id"`
-	OrgID            string            `json:"org_id"`
-	OrganizationName string            `json:"organization_name"`
-	OrgRole          string            `json:"role"`
-	Email            string            `json:"email"`
-	DisplayName      string            `json:"display_name"`
-	Handle           string            `json:"handle"`
-	Title            string            `json:"title"`
-	About            string            `json:"about"`
-	Timezone         string            `json:"timezone"`
-	Status           string            `json:"status"`
-	Permissions      []permission.Code `json:"permissions"`
-	CreatedAt        time.Time         `json:"created_at"`
-	PasswordHash     string            `json:"-"`
+	ActorID            string            `json:"id"`
+	OrgID              string            `json:"org_id"`
+	OrganizationName   string            `json:"organization_name"`
+	OrgRole            string            `json:"role"`
+	Email              string            `json:"email"`
+	DisplayName        string            `json:"display_name"`
+	Handle             string            `json:"handle"`
+	Title              string            `json:"title"`
+	About              string            `json:"about"`
+	Timezone           string            `json:"timezone"`
+	Status             string            `json:"status"`
+	Permissions        []permission.Code `json:"permissions"`
+	CreatedAt          time.Time         `json:"created_at"`
+	PasswordHash       string            `json:"-"`
+	MustChangePassword bool              `json:"must_change_password"`
 }
 
 type Session struct {
