@@ -158,6 +158,10 @@ func (s *Service) ListSessions(ctx context.Context, actorID, currentSessionID st
 	return s.repository.ListSessions(ctx, actorID, currentSessionID)
 }
 
+func (s *Service) RevokeOtherSessions(ctx context.Context, actorID, currentSessionID string) ([]string, error) {
+	return s.repository.RevokeOtherSessions(ctx, actorID, currentSessionID, s.now().UTC())
+}
+
 func (s *Service) UpdateProfile(ctx context.Context, current User, input UpdateProfileInput) (User, error) {
 	displayName := current.DisplayName
 	handle := current.Handle
@@ -193,8 +197,12 @@ func (s *Service) CreateInvitation(ctx context.Context, current User, input Crea
 		return Invitation{}, validationErrorf("email has invalid format")
 	}
 	role := strings.ToLower(strings.TrimSpace(input.Role))
+	policyRole, policyTTL, err := s.repository.InvitationPolicy(ctx, current.OrgID)
+	if err != nil {
+		return Invitation{}, err
+	}
 	if role == "" {
-		role = "member"
+		role = policyRole
 	}
 	if role != "member" && role != "admin" {
 		return Invitation{}, validationErrorf("role must be admin or member")
@@ -207,7 +215,10 @@ func (s *Service) CreateInvitation(ctx context.Context, current User, input Crea
 	if err != nil {
 		return Invitation{}, err
 	}
-	expiresAt := s.now().UTC().Add(s.invitationTTL)
+	if policyTTL <= 0 {
+		policyTTL = s.invitationTTL
+	}
+	expiresAt := s.now().UTC().Add(policyTTL)
 	invitation, err := s.repository.CreateInvitation(ctx, InvitationRecord{
 		ID: ids[0], OrgID: current.OrgID, Email: email, Role: role, TokenHash: tokenHash[:],
 		CreatedBy: current.ActorID, ExpiresAt: expiresAt, AuditID: ids[1],
@@ -215,9 +226,7 @@ func (s *Service) CreateInvitation(ctx context.Context, current User, input Crea
 	if err != nil {
 		return Invitation{}, err
 	}
-	if s.development {
-		invitation.AcceptURL = s.publicAppURL + "/invite/" + token
-	}
+	invitation.AcceptURL = s.publicAppURL + "/invite/" + token
 	return invitation, nil
 }
 

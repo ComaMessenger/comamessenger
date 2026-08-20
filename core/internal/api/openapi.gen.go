@@ -375,6 +375,24 @@ func (e ChatNotificationPreferencesNotifyLevel) Valid() bool {
 	}
 }
 
+// Defines values for ConnectionTestRequestKind.
+const (
+	S3   ConnectionTestRequestKind = "s3"
+	Smtp ConnectionTestRequestKind = "smtp"
+)
+
+// Valid indicates whether the value is a known member of the ConnectionTestRequestKind enum.
+func (e ConnectionTestRequestKind) Valid() bool {
+	switch e {
+	case S3:
+		return true
+	case Smtp:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CreateChatRequestKind.
 const (
 	CreateChatRequestKindChannel CreateChatRequestKind = "channel"
@@ -574,6 +592,7 @@ const (
 	ErrorCodeUnsupportedFormat   ErrorCode = "unsupported_format"
 	ErrorCodeValidationFailed    ErrorCode = "validation_failed"
 	ErrorCodeVersionConflict     ErrorCode = "version_conflict"
+	ErrorCodeWorkspaceNotFound   ErrorCode = "workspace_not_found"
 )
 
 // Valid indicates whether the value is a known member of the ErrorCode enum.
@@ -618,6 +637,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeValidationFailed:
 		return true
 	case ErrorCodeVersionConflict:
+		return true
+	case ErrorCodeWorkspaceNotFound:
 		return true
 	default:
 		return false
@@ -669,6 +690,63 @@ const (
 func (e MessageType) Valid() bool {
 	switch e {
 	case Text:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OrganizationMemberRole.
+const (
+	OrganizationMemberRoleAdmin  OrganizationMemberRole = "admin"
+	OrganizationMemberRoleMember OrganizationMemberRole = "member"
+	OrganizationMemberRoleOwner  OrganizationMemberRole = "owner"
+)
+
+// Valid indicates whether the value is a known member of the OrganizationMemberRole enum.
+func (e OrganizationMemberRole) Valid() bool {
+	switch e {
+	case OrganizationMemberRoleAdmin:
+		return true
+	case OrganizationMemberRoleMember:
+		return true
+	case OrganizationMemberRoleOwner:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OrganizationMemberStatus.
+const (
+	OrganizationMemberStatusActive      OrganizationMemberStatus = "active"
+	OrganizationMemberStatusDeactivated OrganizationMemberStatus = "deactivated"
+)
+
+// Valid indicates whether the value is a known member of the OrganizationMemberStatus enum.
+func (e OrganizationMemberStatus) Valid() bool {
+	switch e {
+	case OrganizationMemberStatusActive:
+		return true
+	case OrganizationMemberStatusDeactivated:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OrganizationSettingsInvitationDefaultRole.
+const (
+	OrganizationSettingsInvitationDefaultRoleAdmin  OrganizationSettingsInvitationDefaultRole = "admin"
+	OrganizationSettingsInvitationDefaultRoleMember OrganizationSettingsInvitationDefaultRole = "member"
+)
+
+// Valid indicates whether the value is a known member of the OrganizationSettingsInvitationDefaultRole enum.
+func (e OrganizationSettingsInvitationDefaultRole) Valid() bool {
+	switch e {
+	case OrganizationSettingsInvitationDefaultRoleAdmin:
+		return true
+	case OrganizationSettingsInvitationDefaultRoleMember:
 		return true
 	default:
 		return false
@@ -969,6 +1047,48 @@ func (e RealtimeTypingFrameV1Op) Valid() bool {
 	}
 }
 
+// Defines values for SMTPConfigurationSecurity.
+const (
+	SMTPConfigurationSecurityNone     SMTPConfigurationSecurity = "none"
+	SMTPConfigurationSecurityStarttls SMTPConfigurationSecurity = "starttls"
+	SMTPConfigurationSecurityTls      SMTPConfigurationSecurity = "tls"
+)
+
+// Valid indicates whether the value is a known member of the SMTPConfigurationSecurity enum.
+func (e SMTPConfigurationSecurity) Valid() bool {
+	switch e {
+	case SMTPConfigurationSecurityNone:
+		return true
+	case SMTPConfigurationSecurityStarttls:
+		return true
+	case SMTPConfigurationSecurityTls:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SMTPConfigurationUpdateSecurity.
+const (
+	SMTPConfigurationUpdateSecurityNone     SMTPConfigurationUpdateSecurity = "none"
+	SMTPConfigurationUpdateSecurityStarttls SMTPConfigurationUpdateSecurity = "starttls"
+	SMTPConfigurationUpdateSecurityTls      SMTPConfigurationUpdateSecurity = "tls"
+)
+
+// Valid indicates whether the value is a known member of the SMTPConfigurationUpdateSecurity enum.
+func (e SMTPConfigurationUpdateSecurity) Valid() bool {
+	switch e {
+	case SMTPConfigurationUpdateSecurityNone:
+		return true
+	case SMTPConfigurationUpdateSecurityStarttls:
+		return true
+	case SMTPConfigurationUpdateSecurityTls:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UpdateChatMemberRequestRole.
 const (
 	UpdateChatMemberRequestRoleAdmin  UpdateChatMemberRequestRole = "admin"
@@ -1020,6 +1140,69 @@ func (e UpdateMessageRequestBodyFormat) Valid() bool {
 	case UpdateMessageRequestBodyFormatMarkdown:
 		return true
 	case UpdateMessageRequestBodyFormatPlain:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UpdateOrganizationMemberRequestRole.
+const (
+	UpdateOrganizationMemberRequestRoleAdmin       UpdateOrganizationMemberRequestRole = "admin"
+	UpdateOrganizationMemberRequestRoleLessThannil UpdateOrganizationMemberRequestRole = "<nil>"
+	UpdateOrganizationMemberRequestRoleMember      UpdateOrganizationMemberRequestRole = "member"
+	UpdateOrganizationMemberRequestRoleOwner       UpdateOrganizationMemberRequestRole = "owner"
+)
+
+// Valid indicates whether the value is a known member of the UpdateOrganizationMemberRequestRole enum.
+func (e UpdateOrganizationMemberRequestRole) Valid() bool {
+	switch e {
+	case UpdateOrganizationMemberRequestRoleAdmin:
+		return true
+	case UpdateOrganizationMemberRequestRoleLessThannil:
+		return true
+	case UpdateOrganizationMemberRequestRoleMember:
+		return true
+	case UpdateOrganizationMemberRequestRoleOwner:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UpdateOrganizationMemberRequestStatus.
+const (
+	UpdateOrganizationMemberRequestStatusActive      UpdateOrganizationMemberRequestStatus = "active"
+	UpdateOrganizationMemberRequestStatusDeactivated UpdateOrganizationMemberRequestStatus = "deactivated"
+	UpdateOrganizationMemberRequestStatusLessThannil UpdateOrganizationMemberRequestStatus = "<nil>"
+)
+
+// Valid indicates whether the value is a known member of the UpdateOrganizationMemberRequestStatus enum.
+func (e UpdateOrganizationMemberRequestStatus) Valid() bool {
+	switch e {
+	case UpdateOrganizationMemberRequestStatusActive:
+		return true
+	case UpdateOrganizationMemberRequestStatusDeactivated:
+		return true
+	case UpdateOrganizationMemberRequestStatusLessThannil:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UpdateOrganizationSettingsRequestInvitationDefaultRole.
+const (
+	UpdateOrganizationSettingsRequestInvitationDefaultRoleAdmin  UpdateOrganizationSettingsRequestInvitationDefaultRole = "admin"
+	UpdateOrganizationSettingsRequestInvitationDefaultRoleMember UpdateOrganizationSettingsRequestInvitationDefaultRole = "member"
+)
+
+// Valid indicates whether the value is a known member of the UpdateOrganizationSettingsRequestInvitationDefaultRole enum.
+func (e UpdateOrganizationSettingsRequestInvitationDefaultRole) Valid() bool {
+	switch e {
+	case UpdateOrganizationSettingsRequestInvitationDefaultRoleAdmin:
+		return true
+	case UpdateOrganizationSettingsRequestInvitationDefaultRoleMember:
 		return true
 	default:
 		return false
@@ -1104,6 +1287,60 @@ func (e UserPreferencesTheme) Valid() bool {
 	}
 }
 
+// Defines values for GetBrandingAssetParamsKind.
+const (
+	GetBrandingAssetParamsKindFavicon GetBrandingAssetParamsKind = "favicon"
+	GetBrandingAssetParamsKindLogo    GetBrandingAssetParamsKind = "logo"
+)
+
+// Valid indicates whether the value is a known member of the GetBrandingAssetParamsKind enum.
+func (e GetBrandingAssetParamsKind) Valid() bool {
+	switch e {
+	case GetBrandingAssetParamsKindFavicon:
+		return true
+	case GetBrandingAssetParamsKindLogo:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DeleteBrandingAssetParamsKind.
+const (
+	DeleteBrandingAssetParamsKindFavicon DeleteBrandingAssetParamsKind = "favicon"
+	DeleteBrandingAssetParamsKindLogo    DeleteBrandingAssetParamsKind = "logo"
+)
+
+// Valid indicates whether the value is a known member of the DeleteBrandingAssetParamsKind enum.
+func (e DeleteBrandingAssetParamsKind) Valid() bool {
+	switch e {
+	case DeleteBrandingAssetParamsKindFavicon:
+		return true
+	case DeleteBrandingAssetParamsKindLogo:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PutBrandingAssetParamsKind.
+const (
+	PutBrandingAssetParamsKindFavicon PutBrandingAssetParamsKind = "favicon"
+	PutBrandingAssetParamsKindLogo    PutBrandingAssetParamsKind = "logo"
+)
+
+// Valid indicates whether the value is a known member of the PutBrandingAssetParamsKind enum.
+func (e PutBrandingAssetParamsKind) Valid() bool {
+	switch e {
+	case PutBrandingAssetParamsKindFavicon:
+		return true
+	case PutBrandingAssetParamsKindLogo:
+		return true
+	default:
+		return false
+	}
+}
+
 // AcceptInvitationRequest defines model for AcceptInvitationRequest.
 type AcceptInvitationRequest struct {
 	DisplayName string  `json:"display_name"`
@@ -1137,6 +1374,23 @@ type AddChatMemberRequest struct {
 
 // AddChatMemberRequestRole defines model for AddChatMemberRequest.Role.
 type AddChatMemberRequestRole string
+
+// AuditEntry defines model for AuditEntry.
+type AuditEntry struct {
+	Action     string                 `json:"action"`
+	ActorId    *openapi_types.UUID    `json:"actor_id"`
+	ActorName  *string                `json:"actor_name"`
+	CreatedAt  time.Time              `json:"created_at"`
+	Id         openapi_types.UUID     `json:"id"`
+	Metadata   map[string]interface{} `json:"metadata"`
+	TargetId   *string                `json:"target_id"`
+	TargetType string                 `json:"target_type"`
+}
+
+// AuditPage defines model for AuditPage.
+type AuditPage struct {
+	Events []AuditEntry `json:"events"`
+}
 
 // BootstrapRequest defines model for BootstrapRequest.
 type BootstrapRequest struct {
@@ -1228,6 +1482,21 @@ type ChatUnread struct {
 	LastReadSeq  int64              `json:"last_read_seq"`
 	MentionCount int64              `json:"mention_count"`
 	UnreadCount  int64              `json:"unread_count"`
+}
+
+// ConnectionTestRequest defines model for ConnectionTestRequest.
+type ConnectionTestRequest struct {
+	Kind ConnectionTestRequestKind `json:"kind"`
+}
+
+// ConnectionTestRequestKind defines model for ConnectionTestRequest.Kind.
+type ConnectionTestRequestKind string
+
+// ConnectionTestResult defines model for ConnectionTestResult.
+type ConnectionTestResult struct {
+	CheckedAt time.Time `json:"checked_at"`
+	Message   string    `json:"message"`
+	Ok        bool      `json:"ok"`
 }
 
 // CreateChatRequest defines model for CreateChatRequest.
@@ -1329,6 +1598,13 @@ type Health struct {
 	Status string `json:"status"`
 }
 
+// InfrastructureSettings defines model for InfrastructureSettings.
+type InfrastructureSettings struct {
+	S3      S3Configuration   `json:"s3"`
+	Smtp    SMTPConfiguration `json:"smtp"`
+	Version int64             `json:"version"`
+}
+
 // Invitation defines model for Invitation.
 type Invitation struct {
 	AcceptUrl *string             `json:"accept_url,omitempty"`
@@ -1427,6 +1703,50 @@ type MessageWindow struct {
 	HasLater   bool               `json:"has_later"`
 	Messages   []Message          `json:"messages"`
 	TargetId   openapi_types.UUID `json:"target_id"`
+}
+
+// OrganizationMember defines model for OrganizationMember.
+type OrganizationMember struct {
+	ActorId     openapi_types.UUID       `json:"actor_id"`
+	CreatedAt   time.Time                `json:"created_at"`
+	DisplayName string                   `json:"display_name"`
+	Email       openapi_types.Email      `json:"email"`
+	Handle      string                   `json:"handle"`
+	Role        OrganizationMemberRole   `json:"role"`
+	Status      OrganizationMemberStatus `json:"status"`
+}
+
+// OrganizationMemberRole defines model for OrganizationMember.Role.
+type OrganizationMemberRole string
+
+// OrganizationMemberStatus defines model for OrganizationMember.Status.
+type OrganizationMemberStatus string
+
+// OrganizationSettings defines model for OrganizationSettings.
+type OrganizationSettings struct {
+	AccentColor             string                                    `json:"accent_color"`
+	AllowChannelCreation    bool                                      `json:"allow_channel_creation"`
+	AllowPublicChatCreation bool                                      `json:"allow_public_chat_creation"`
+	HasFavicon              bool                                      `json:"has_favicon"`
+	HasLogo                 bool                                      `json:"has_logo"`
+	Id                      openapi_types.UUID                        `json:"id"`
+	InvitationDefaultRole   OrganizationSettingsInvitationDefaultRole `json:"invitation_default_role"`
+	InvitationTtlHours      int                                       `json:"invitation_ttl_hours"`
+	Name                    string                                    `json:"name"`
+	Slug                    string                                    `json:"slug"`
+	Version                 int64                                     `json:"version"`
+}
+
+// OrganizationSettingsInvitationDefaultRole defines model for OrganizationSettings.InvitationDefaultRole.
+type OrganizationSettingsInvitationDefaultRole string
+
+// PublicBranding defines model for PublicBranding.
+type PublicBranding struct {
+	AccentColor   string  `json:"accent_color"`
+	FaviconUrl    *string `json:"favicon_url,omitempty"`
+	LogoUrl       *string `json:"logo_url,omitempty"`
+	Version       int64   `json:"version"`
+	WorkspaceName string  `json:"workspace_name"`
 }
 
 // PushConfig defines model for PushConfig.
@@ -1625,6 +1945,58 @@ type RealtimeTypingFrameV1 struct {
 // RealtimeTypingFrameV1Op defines model for RealtimeTypingFrameV1.Op.
 type RealtimeTypingFrameV1Op string
 
+// S3Configuration defines model for S3Configuration.
+type S3Configuration struct {
+	AccessKeyHint         *string `json:"access_key_hint,omitempty"`
+	Bucket                string  `json:"bucket"`
+	CredentialsConfigured bool    `json:"credentials_configured"`
+	Endpoint              string  `json:"endpoint"`
+	ForcePathStyle        bool    `json:"force_path_style"`
+	Prefix                string  `json:"prefix"`
+	Region                string  `json:"region"`
+}
+
+// S3ConfigurationUpdate defines model for S3ConfigurationUpdate.
+type S3ConfigurationUpdate struct {
+	AccessKey        *string `json:"access_key,omitempty"`
+	Bucket           string  `json:"bucket"`
+	ClearCredentials bool    `json:"clear_credentials"`
+	Endpoint         string  `json:"endpoint"`
+	ForcePathStyle   bool    `json:"force_path_style"`
+	Prefix           string  `json:"prefix"`
+	Region           string  `json:"region"`
+	SecretKey        *string `json:"secret_key,omitempty"`
+}
+
+// SMTPConfiguration defines model for SMTPConfiguration.
+type SMTPConfiguration struct {
+	CredentialsConfigured bool                      `json:"credentials_configured"`
+	FromAddress           string                    `json:"from_address"`
+	FromName              string                    `json:"from_name"`
+	Host                  string                    `json:"host"`
+	Port                  int                       `json:"port"`
+	Security              SMTPConfigurationSecurity `json:"security"`
+	Username              string                    `json:"username"`
+}
+
+// SMTPConfigurationSecurity defines model for SMTPConfiguration.Security.
+type SMTPConfigurationSecurity string
+
+// SMTPConfigurationUpdate defines model for SMTPConfigurationUpdate.
+type SMTPConfigurationUpdate struct {
+	ClearCredentials bool                            `json:"clear_credentials"`
+	FromAddress      string                          `json:"from_address"`
+	FromName         string                          `json:"from_name"`
+	Host             string                          `json:"host"`
+	Password         *string                         `json:"password,omitempty"`
+	Port             int                             `json:"port"`
+	Security         SMTPConfigurationUpdateSecurity `json:"security"`
+	Username         string                          `json:"username"`
+}
+
+// SMTPConfigurationUpdateSecurity defines model for SMTPConfigurationUpdate.Security.
+type SMTPConfigurationUpdateSecurity string
+
 // Session defines model for Session.
 type Session struct {
 	CreatedAt  time.Time          `json:"created_at"`
@@ -1698,6 +2070,13 @@ type UpdateChatRequest struct {
 // UpdateChatRequestVisibility defines model for UpdateChatRequest.Visibility.
 type UpdateChatRequestVisibility string
 
+// UpdateInfrastructureSettingsRequest defines model for UpdateInfrastructureSettingsRequest.
+type UpdateInfrastructureSettingsRequest struct {
+	ExpectedVersion int64                   `json:"expected_version"`
+	S3              S3ConfigurationUpdate   `json:"s3"`
+	Smtp            SMTPConfigurationUpdate `json:"smtp"`
+}
+
 // UpdateMessageRequest defines model for UpdateMessageRequest.
 type UpdateMessageRequest struct {
 	Body              string                          `json:"body"`
@@ -1708,6 +2087,33 @@ type UpdateMessageRequest struct {
 
 // UpdateMessageRequestBodyFormat defines model for UpdateMessageRequest.BodyFormat.
 type UpdateMessageRequestBodyFormat string
+
+// UpdateOrganizationMemberRequest defines model for UpdateOrganizationMemberRequest.
+type UpdateOrganizationMemberRequest struct {
+	Role   *UpdateOrganizationMemberRequestRole   `json:"role,omitempty"`
+	Status *UpdateOrganizationMemberRequestStatus `json:"status,omitempty"`
+}
+
+// UpdateOrganizationMemberRequestRole defines model for UpdateOrganizationMemberRequest.Role.
+type UpdateOrganizationMemberRequestRole string
+
+// UpdateOrganizationMemberRequestStatus defines model for UpdateOrganizationMemberRequest.Status.
+type UpdateOrganizationMemberRequestStatus string
+
+// UpdateOrganizationSettingsRequest defines model for UpdateOrganizationSettingsRequest.
+type UpdateOrganizationSettingsRequest struct {
+	AccentColor             string                                                 `json:"accent_color"`
+	AllowChannelCreation    bool                                                   `json:"allow_channel_creation"`
+	AllowPublicChatCreation bool                                                   `json:"allow_public_chat_creation"`
+	ExpectedVersion         int64                                                  `json:"expected_version"`
+	InvitationDefaultRole   UpdateOrganizationSettingsRequestInvitationDefaultRole `json:"invitation_default_role"`
+	InvitationTtlHours      int                                                    `json:"invitation_ttl_hours"`
+	Name                    string                                                 `json:"name"`
+	Slug                    string                                                 `json:"slug"`
+}
+
+// UpdateOrganizationSettingsRequestInvitationDefaultRole defines model for UpdateOrganizationSettingsRequest.InvitationDefaultRole.
+type UpdateOrganizationSettingsRequestInvitationDefaultRole string
 
 // UpdateProfileRequest defines model for UpdateProfileRequest.
 type UpdateProfileRequest struct {
@@ -1777,6 +2183,9 @@ type BootstrapParams struct {
 	XComaBootstrapToken *string `json:"X-Coma-Bootstrap-Token,omitempty"`
 }
 
+// GetBrandingAssetParamsKind defines parameters for GetBrandingAsset.
+type GetBrandingAssetParamsKind string
+
 // ListMessagesParams defines parameters for ListMessages.
 type ListMessagesParams struct {
 	BeforeSeq    *int64              `form:"before_seq,omitempty" json:"before_seq,omitempty"`
@@ -1799,6 +2208,17 @@ type ListThreadMessagesParams struct {
 	BeforeSeq *int64 `form:"before_seq,omitempty" json:"before_seq,omitempty"`
 	Limit     *int   `form:"limit,omitempty" json:"limit,omitempty"`
 }
+
+// ListOrganizationAuditParams defines parameters for ListOrganizationAudit.
+type ListOrganizationAuditParams struct {
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// DeleteBrandingAssetParamsKind defines parameters for DeleteBrandingAsset.
+type DeleteBrandingAssetParamsKind string
+
+// PutBrandingAssetParamsKind defines parameters for PutBrandingAsset.
+type PutBrandingAssetParamsKind string
 
 // ListFollowedThreadsParams defines parameters for ListFollowedThreads.
 type ListFollowedThreadsParams struct {
@@ -1853,6 +2273,18 @@ type ForwardMessageJSONRequestBody = ForwardMessageRequest
 
 // MarkThreadReadJSONRequestBody defines body for MarkThreadRead for application/json ContentType.
 type MarkThreadReadJSONRequestBody = MarkReadRequest
+
+// UpdateOrganizationSettingsJSONRequestBody defines body for UpdateOrganizationSettings for application/json ContentType.
+type UpdateOrganizationSettingsJSONRequestBody = UpdateOrganizationSettingsRequest
+
+// UpdateInfrastructureSettingsJSONRequestBody defines body for UpdateInfrastructureSettings for application/json ContentType.
+type UpdateInfrastructureSettingsJSONRequestBody = UpdateInfrastructureSettingsRequest
+
+// TestInfrastructureConnectionJSONRequestBody defines body for TestInfrastructureConnection for application/json ContentType.
+type TestInfrastructureConnectionJSONRequestBody = ConnectionTestRequest
+
+// UpdateOrganizationMemberJSONRequestBody defines body for UpdateOrganizationMember for application/json ContentType.
+type UpdateOrganizationMemberJSONRequestBody = UpdateOrganizationMemberRequest
 
 // UpdatePreferencesJSONRequestBody defines body for UpdatePreferences for application/json ContentType.
 type UpdatePreferencesJSONRequestBody = UserPreferences

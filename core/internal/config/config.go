@@ -83,23 +83,29 @@ type PushConfig struct {
 }
 
 type Config struct {
-	AppEnv            string
-	HTTPAddr          string
-	DatabaseURL       string
-	PublicAppURL      string
-	BootstrapToken    string
-	TrustedProxyCIDRs []netip.Prefix
-	S3                S3Config
-	Auth              AuthConfig
-	Messaging         MessagingConfig
-	Realtime          RealtimeConfig
-	EventLog          EventLogConfig
-	Redis             RedisConfig
-	Push              PushConfig
+	AppEnv                   string
+	HTTPAddr                 string
+	DatabaseURL              string
+	PublicAppURL             string
+	BootstrapToken           string
+	IntegrationEncryptionKey string
+	TrustedProxyCIDRs        []netip.Prefix
+	S3                       S3Config
+	Auth                     AuthConfig
+	Messaging                MessagingConfig
+	Realtime                 RealtimeConfig
+	EventLog                 EventLogConfig
+	Redis                    RedisConfig
+	Push                     PushConfig
 }
 
 func FromEnvironment() (Config, error) {
 	appEnv := valueOrDefault("APP_ENV", "development")
+	signingKey := strings.TrimSpace(os.Getenv("AUTH_SIGNING_KEY"))
+	integrationEncryptionKey := strings.TrimSpace(os.Getenv("INTEGRATION_ENCRYPTION_KEY"))
+	if integrationEncryptionKey == "" {
+		integrationEncryptionKey = signingKey
+	}
 	forcePathStyle, err := boolValueOrDefault("S3_FORCE_PATH_STYLE", false)
 	if err != nil {
 		return Config{}, err
@@ -161,12 +167,13 @@ func FromEnvironment() (Config, error) {
 	}
 
 	cfg := Config{
-		AppEnv:            appEnv,
-		HTTPAddr:          valueOrDefault("HTTP_ADDR", ":8080"),
-		DatabaseURL:       strings.TrimSpace(os.Getenv("DATABASE_URL")),
-		PublicAppURL:      valueOrDefault("PUBLIC_APP_URL", "http://localhost:5173"),
-		BootstrapToken:    strings.TrimSpace(os.Getenv("BOOTSTRAP_TOKEN")),
-		TrustedProxyCIDRs: trustedProxyCIDRs,
+		AppEnv:                   appEnv,
+		HTTPAddr:                 valueOrDefault("HTTP_ADDR", ":8080"),
+		DatabaseURL:              strings.TrimSpace(os.Getenv("DATABASE_URL")),
+		PublicAppURL:             valueOrDefault("PUBLIC_APP_URL", "http://localhost:5173"),
+		BootstrapToken:           strings.TrimSpace(os.Getenv("BOOTSTRAP_TOKEN")),
+		IntegrationEncryptionKey: integrationEncryptionKey,
+		TrustedProxyCIDRs:        trustedProxyCIDRs,
 		S3: S3Config{
 			Endpoint:       strings.TrimSpace(os.Getenv("S3_ENDPOINT")),
 			PublicEndpoint: strings.TrimSpace(os.Getenv("S3_PUBLIC_ENDPOINT")),
@@ -178,7 +185,7 @@ func FromEnvironment() (Config, error) {
 			ForcePathStyle: forcePathStyle,
 		},
 		Auth: AuthConfig{
-			SigningKey:       strings.TrimSpace(os.Getenv("AUTH_SIGNING_KEY")),
+			SigningKey:       signingKey,
 			AccessTokenTTL:   accessTTL,
 			RefreshTokenTTL:  refreshTTL,
 			InvitationTTL:    invitationTTL,
@@ -212,6 +219,9 @@ func FromEnvironment() (Config, error) {
 	if len(cfg.Auth.SigningKey) < 32 {
 		return Config{}, fmt.Errorf("AUTH_SIGNING_KEY must be at least 32 bytes")
 	}
+	if len(cfg.IntegrationEncryptionKey) < 32 {
+		return Config{}, fmt.Errorf("INTEGRATION_ENCRYPTION_KEY must be at least 32 bytes")
+	}
 	if cfg.Auth.AccessTokenTTL < time.Minute || cfg.Auth.AccessTokenTTL > time.Hour {
 		return Config{}, fmt.Errorf("ACCESS_TOKEN_TTL must be between 1m and 1h")
 	}
@@ -236,6 +246,9 @@ func FromEnvironment() (Config, error) {
 		}
 		if cfg.Auth.SigningKey == "comamessenger-local-signing-key-change-me" {
 			return Config{}, fmt.Errorf("AUTH_SIGNING_KEY must not use the development default outside development")
+		}
+		if cfg.IntegrationEncryptionKey == "comamessenger-local-integration-key-change-me" {
+			return Config{}, fmt.Errorf("INTEGRATION_ENCRYPTION_KEY must not use the development default outside development")
 		}
 		if cfg.S3.AccessKey == "comamessenger" && cfg.S3.SecretKey == "comamessenger-local-secret" {
 			return Config{}, fmt.Errorf("S3 credentials must not use the development defaults outside development")

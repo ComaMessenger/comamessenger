@@ -252,11 +252,22 @@ func (s *Service) Create(ctx context.Context, user identity.User, input CreateIn
 	if input.Kind != "group" && input.Kind != "channel" {
 		return Chat{}, fmt.Errorf("%w: kind must be direct, group or channel", ErrInvalid)
 	}
-	if input.Kind == "channel" && !authz.Can(authz.Context{Active: true, OrgRole: authz.Role(user.OrgRole)}, authz.ChannelCreate) {
-		return Chat{}, ErrForbidden
-	}
 	if input.Visibility != "private" && input.Visibility != "public" {
 		return Chat{}, fmt.Errorf("%w: visibility must be private or public", ErrInvalid)
+	}
+	if user.OrgRole == "member" {
+		allowPublicChat, allowChannel, err := s.creationPolicy(ctx, user.OrgID)
+		if err != nil {
+			return Chat{}, err
+		}
+		if input.Kind == "channel" && !allowChannel {
+			return Chat{}, ErrForbidden
+		}
+		if input.Kind == "group" && input.Visibility == "public" && !allowPublicChat {
+			return Chat{}, ErrForbidden
+		}
+	} else if input.Kind == "channel" && !authz.Can(authz.Context{Active: true, OrgRole: authz.Role(user.OrgRole)}, authz.ChannelCreate) {
+		return Chat{}, ErrForbidden
 	}
 	if len(input.Name) < 1 || len(input.Name) > 120 || len(input.Topic) > 500 {
 		return Chat{}, fmt.Errorf("%w: invalid name or topic", ErrInvalid)
@@ -314,6 +325,18 @@ func (s *Service) Create(ctx context.Context, user identity.User, input CreateIn
 	}
 	s.notify(user.OrgID, seq)
 	return s.Get(ctx, user, chatID)
+}
+
+func (s *Service) creationPolicy(ctx context.Context, orgID string) (bool, bool, error) {
+	var allowPublicChat, allowChannel bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE((settings->>'allow_public_chat_creation')::boolean, true),
+		       COALESCE((settings->>'allow_channel_creation')::boolean, false)
+		FROM organizations WHERE id = $1`, orgID).Scan(&allowPublicChat, &allowChannel)
+	if err != nil {
+		return false, false, fmt.Errorf("query chat creation policy: %w", err)
+	}
+	return allowPublicChat, allowChannel, nil
 }
 
 func (s *Service) Update(ctx context.Context, user identity.User, chatID string, input UpdateInput) (Chat, error) {

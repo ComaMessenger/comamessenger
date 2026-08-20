@@ -115,6 +115,40 @@ async function mockMessenger(
     chat_folders: [] as Array<Record<string, unknown>>,
     pinned_chat_ids: [] as string[],
   };
+  let organizationSettings = {
+    id: user.org_id,
+    name: user.organization_name,
+    slug: "test-space",
+    version: 1,
+    invitation_default_role: "member",
+    invitation_ttl_hours: 168,
+    allow_public_chat_creation: true,
+    allow_channel_creation: false,
+    accent_color: "#174586",
+    has_logo: false,
+    has_favicon: false,
+  };
+  let infrastructure = {
+    version: 0,
+    s3: {
+      endpoint: "",
+      region: "",
+      bucket: "",
+      prefix: "",
+      force_path_style: false,
+      credentials_configured: false,
+      access_key_hint: "",
+    },
+    smtp: {
+      host: "",
+      port: 587,
+      username: "",
+      from_address: "",
+      from_name: "",
+      security: "starttls",
+      credentials_configured: false,
+    },
+  };
   const sent: Array<Record<string, unknown>> = [];
   const history =
     suppliedHistory ??
@@ -180,6 +214,12 @@ async function mockMessenger(
     let status = 200;
     let body: unknown = {};
     if (path.endsWith("/bootstrap/status")) body = { bootstrapped: true };
+    else if (path.endsWith("/branding"))
+      body = {
+        workspace_name: organizationSettings.name,
+        accent_color: organizationSettings.accent_color,
+        version: organizationSettings.version,
+      };
     else if (path.endsWith("/auth/refresh")) {
       refreshRequests += 1;
       body = {
@@ -196,6 +236,148 @@ async function mockMessenger(
       if (route.request().method() === "PATCH")
         preferences = route.request().postDataJSON() as typeof preferences;
       body = preferences;
+    } else if (
+      path.endsWith("/organization") &&
+      route.request().method() === "PATCH"
+    ) {
+      const input = route
+        .request()
+        .postDataJSON() as typeof organizationSettings & {
+        expected_version: number;
+      };
+      organizationSettings = {
+        ...organizationSettings,
+        ...input,
+        version: input.expected_version + 1,
+      };
+      body = organizationSettings;
+    } else if (path.endsWith("/organization")) body = organizationSettings;
+    else if (path.endsWith("/organization/members"))
+      body = {
+        members: [
+          {
+            actor_id: user.id,
+            email: user.email,
+            display_name: user.display_name,
+            handle: user.handle,
+            role: user.role,
+            status: "active",
+            created_at: user.created_at,
+          },
+        ],
+      };
+    else if (/\/organization\/members\/[^/]+$/.test(path))
+      body = {
+        ...(route.request().postDataJSON() as object),
+        actor_id: user.id,
+        email: user.email,
+        display_name: user.display_name,
+        handle: user.handle,
+        created_at: user.created_at,
+      };
+    else if (path.endsWith("/organization/infrastructure/test"))
+      body = {
+        ok: true,
+        message: "connection successful",
+        checked_at: "2026-08-20T00:00:00Z",
+      };
+    else if (
+      path.endsWith("/organization/infrastructure") &&
+      route.request().method() === "PATCH"
+    ) {
+      infrastructure = {
+        version: infrastructure.version + 1,
+        s3: {
+          ...infrastructure.s3,
+          endpoint: "https://storage.yandexcloud.net",
+          region: "ru-central1",
+          bucket: "coma-files",
+          credentials_configured: true,
+          access_key_hint: "••••1234",
+        },
+        smtp: {
+          ...infrastructure.smtp,
+          host: "smtp.example.com",
+          from_address: "coma@example.com",
+          credentials_configured: true,
+        },
+      };
+      body = infrastructure;
+    } else if (path.endsWith("/organization/infrastructure"))
+      body = infrastructure;
+    else if (path.endsWith("/organization/audit"))
+      body = {
+        events: [
+          {
+            id: "audit-1",
+            actor_id: user.id,
+            actor_name: user.display_name,
+            action: "organization.settings.update",
+            target_type: "organization",
+            target_id: user.org_id,
+            metadata: {},
+            created_at: "2026-08-20T00:00:00Z",
+          },
+        ],
+      };
+    else if (path.endsWith("/sessions/revoke-others")) {
+      status = 204;
+      body = undefined;
+    } else if (
+      /\/sessions\/[^/]+$/.test(path) &&
+      route.request().method() === "DELETE"
+    ) {
+      status = 204;
+      body = undefined;
+    } else if (path.endsWith("/sessions"))
+      body = {
+        sessions: [
+          {
+            id: "session-current",
+            user_agent: "Playwright",
+            ip_address: "127.0.0.1",
+            created_at: "2026-08-19T00:00:00Z",
+            last_seen_at: "2026-08-20T00:00:00Z",
+            expires_at: "2026-09-20T00:00:00Z",
+            revoked_at: null,
+            current: true,
+          },
+          {
+            id: "session-other",
+            user_agent: "Mobile Safari",
+            ip_address: "10.0.0.2",
+            created_at: "2026-08-19T00:00:00Z",
+            last_seen_at: "2026-08-19T23:00:00Z",
+            expires_at: "2026-09-20T00:00:00Z",
+            revoked_at: null,
+            current: false,
+          },
+        ],
+      };
+    else if (
+      path.endsWith("/invitations") &&
+      route.request().method() === "POST"
+    )
+      body = {
+        id: "invitation-1",
+        email: "new@example.com",
+        role: "member",
+        expires_at: "2026-08-23T00:00:00Z",
+        accept_url: "https://coma.example/invite/test-token",
+      };
+    else if (/\/organization\/branding\/(logo|favicon)$/.test(path)) {
+      const kind = path.endsWith("/logo") ? "logo" : "favicon";
+      if (route.request().method() === "PUT") {
+        organizationSettings = {
+          ...organizationSettings,
+          has_logo: kind === "logo" ? true : organizationSettings.has_logo,
+          has_favicon:
+            kind === "favicon" ? true : organizationSettings.has_favicon,
+          version: organizationSettings.version + 1,
+        };
+      }
+      status = 204;
+      body = undefined;
     } else if (path.endsWith("/actors"))
       body = {
         actors: [
@@ -627,6 +809,73 @@ test("phone tabbar keeps navigation and settings in the main field", async ({
   await expect(
     page.getByRole("heading", { name: "Настройки пространства" }),
   ).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+test("phase 3.1 settings cover workspace branding infrastructure sessions and audit", async ({
+  page,
+}) => {
+  await mockMessenger(page);
+  await page.goto("/settings/workspace");
+  await expect(
+    page.getByRole("heading", { name: "Настройки пространства" }),
+  ).toBeVisible();
+  await page.getByLabel("Название организации").fill("Новая команда");
+  await page.getByLabel("Срок приглашения, часов").fill("72");
+  await page.getByRole("button", { name: "Сохранить", exact: true }).click();
+  await expect(page.getByText("Изменения сохранены")).toBeVisible();
+  await page.getByLabel("Почта участника").fill("new@example.com");
+  await page.getByRole("button", { name: "Создать приглашение" }).click();
+  await expect(page.getByLabel("Ссылка приглашения")).toHaveValue(
+    /\/invite\/test-token$/,
+  );
+
+  await page.getByRole("button", { name: "Оформление", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Оформление пространства" }),
+  ).toBeVisible();
+  await page.getByLabel("HEX-значение").fill("#6D5EF5");
+  await page
+    .locator('input[type="file"]')
+    .first()
+    .setInputFiles({
+      name: "logo.png",
+      mimeType: "image/png",
+      buffer: Buffer.from("test-logo"),
+    });
+  await expect(page.getByText("Изображение сохранено")).toBeVisible();
+
+  await page.getByRole("button", { name: "Подключения", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Подключения" }),
+  ).toBeVisible();
+  await page.getByLabel("Endpoint").fill("https://storage.yandexcloud.net");
+  await page.getByLabel("Регион").fill("ru-central1");
+  await page.getByLabel("Bucket").fill("coma-files");
+  await page.getByLabel("Access key").fill("ACCESS-1234");
+  await page.getByLabel("Secret key").fill("secret");
+  await page.getByLabel("Хост").fill("smtp.example.com");
+  await page.getByLabel("Адрес отправителя").fill("coma@example.com");
+  await page.getByRole("button", { name: "Сохранить подключения" }).click();
+  await expect(page.getByText("Изменения сохранены")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Проверить подключение" })
+    .first()
+    .click();
+  await expect(page.getByText("Подключение успешно")).toBeVisible();
+
+  await page.getByRole("button", { name: "Безопасность", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Безопасность и сессии" }),
+  ).toBeVisible();
+  await expect(page.getByText("Mobile Safari")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Выйти на остальных устройствах" })
+    .click();
+  await expect(page.getByText("Остальные сессии завершены")).toBeVisible();
+
+  await page.getByRole("button", { name: "Аудит", exact: true }).click();
+  await expect(page.getByText("organization.settings.update")).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 

@@ -181,6 +181,166 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/revoke-others": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["revokeOtherSessions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/branding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getPublicBranding"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/branding/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getBrandingAsset"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organization": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getOrganizationSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateOrganizationSettings"];
+        trace?: never;
+    };
+    "/api/v1/organization/branding/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["putBrandingAsset"];
+        post?: never;
+        delete: operations["deleteBrandingAsset"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organization/infrastructure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getInfrastructureSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateInfrastructureSettings"];
+        trace?: never;
+    };
+    "/api/v1/organization/infrastructure/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["testInfrastructureConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organization/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listOrganizationMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organization/members/{actor_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateOrganizationMember"];
+        trace?: never;
+    };
+    "/api/v1/organization/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listOrganizationAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/invitations": {
         parameters: {
             query?: never;
@@ -693,7 +853,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "already_bootstrapped" | "chat_conflict" | "chat_not_found" | "forbidden" | "idempotency_conflict" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "rate_limited" | "service_not_ready" | "session_not_found" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict";
+        ErrorCode: "already_bootstrapped" | "chat_conflict" | "chat_not_found" | "forbidden" | "idempotency_conflict" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "rate_limited" | "service_not_ready" | "session_not_found" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "workspace_not_found";
         /** @enum {string} */
         DurableEventTypeV1: "message.created" | "message.updated" | "message.deleted" | "message.pinned" | "message.unpinned" | "reaction.added" | "reaction.removed" | "thread.followed" | "thread.unfollowed" | "read.marked" | "draft.updated" | "draft.deleted" | "chat.created" | "chat.updated" | "chat.archived" | "member.joined" | "member.updated" | "member.removed";
         /**
@@ -877,6 +1037,142 @@ export interface components {
             /** Format: date-time */
             revoked_at?: string | null;
             current: boolean;
+        };
+        PublicBranding: {
+            workspace_name: string;
+            accent_color: string;
+            /** Format: int64 */
+            version: number;
+            logo_url?: string;
+            favicon_url?: string;
+        };
+        OrganizationSettings: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            slug: string;
+            /** Format: int64 */
+            version: number;
+            /** @enum {string} */
+            invitation_default_role: "admin" | "member";
+            invitation_ttl_hours: number;
+            allow_public_chat_creation: boolean;
+            allow_channel_creation: boolean;
+            accent_color: string;
+            has_logo: boolean;
+            has_favicon: boolean;
+        };
+        UpdateOrganizationSettingsRequest: {
+            name: string;
+            slug: string;
+            /** Format: int64 */
+            expected_version: number;
+            /** @enum {string} */
+            invitation_default_role: "admin" | "member";
+            invitation_ttl_hours: number;
+            allow_public_chat_creation: boolean;
+            allow_channel_creation: boolean;
+            accent_color: string;
+        };
+        S3Configuration: {
+            endpoint: string;
+            region: string;
+            bucket: string;
+            prefix: string;
+            force_path_style: boolean;
+            credentials_configured: boolean;
+            access_key_hint?: string;
+        };
+        SMTPConfiguration: {
+            host: string;
+            port: number;
+            username: string;
+            from_address: string;
+            from_name: string;
+            /** @enum {string} */
+            security: "none" | "starttls" | "tls";
+            credentials_configured: boolean;
+        };
+        InfrastructureSettings: {
+            /** Format: int64 */
+            version: number;
+            s3: components["schemas"]["S3Configuration"];
+            smtp: components["schemas"]["SMTPConfiguration"];
+        };
+        S3ConfigurationUpdate: {
+            endpoint: string;
+            region: string;
+            bucket: string;
+            prefix: string;
+            force_path_style: boolean;
+            access_key?: string | null;
+            secret_key?: string | null;
+            clear_credentials: boolean;
+        };
+        SMTPConfigurationUpdate: {
+            host: string;
+            port: number;
+            username: string;
+            password?: string | null;
+            from_address: string;
+            from_name: string;
+            /** @enum {string} */
+            security: "none" | "starttls" | "tls";
+            clear_credentials: boolean;
+        };
+        UpdateInfrastructureSettingsRequest: {
+            /** Format: int64 */
+            expected_version: number;
+            s3: components["schemas"]["S3ConfigurationUpdate"];
+            smtp: components["schemas"]["SMTPConfigurationUpdate"];
+        };
+        ConnectionTestRequest: {
+            /** @enum {string} */
+            kind: "s3" | "smtp";
+        };
+        ConnectionTestResult: {
+            ok: boolean;
+            message: string;
+            /** Format: date-time */
+            checked_at: string;
+        };
+        OrganizationMember: {
+            /** Format: uuid */
+            actor_id: string;
+            /** Format: email */
+            email: string;
+            display_name: string;
+            handle: string;
+            /** @enum {string} */
+            role: "owner" | "admin" | "member";
+            /** @enum {string} */
+            status: "active" | "deactivated";
+            /** Format: date-time */
+            created_at: string;
+        };
+        UpdateOrganizationMemberRequest: {
+            /** @enum {string|null} */
+            role?: "owner" | "admin" | "member" | null;
+            /** @enum {string|null} */
+            status?: "active" | "deactivated" | null;
+        };
+        AuditEntry: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            actor_id: string | null;
+            actor_name: string | null;
+            action: string;
+            target_type: string;
+            target_id: string | null;
+            metadata: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            created_at: string;
+        };
+        AuditPage: {
+            events: components["schemas"]["AuditEntry"][];
         };
         CreateInvitationRequest: {
             /** Format: email */
@@ -1546,6 +1842,318 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["Error"];
+        };
+    };
+    revokeOtherSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every session except the current one was revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getPublicBranding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Public workspace branding used before authentication. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicBranding"];
+                };
+            };
+        };
+    };
+    getBrandingAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: "logo" | "favicon";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A workspace branding image. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                    "image/webp": string;
+                    "image/x-icon": string;
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    getOrganizationSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Workspace settings visible to a member. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationSettings"];
+                };
+            };
+        };
+    };
+    updateOrganizationSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateOrganizationSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated workspace settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationSettings"];
+                };
+            };
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    putBrandingAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: "logo" | "favicon";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "image/png": string;
+                "image/jpeg": string;
+                "image/webp": string;
+                "image/x-icon": string;
+            };
+        };
+        responses: {
+            /** @description Branding image saved. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+            415: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    deleteBrandingAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: "logo" | "favicon";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Branding image removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    getInfrastructureSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Masked S3 and SMTP configuration. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InfrastructureSettings"];
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    updateInfrastructureSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateInfrastructureSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated masked infrastructure configuration. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InfrastructureSettings"];
+                };
+            };
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    testInfrastructureConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectionTestRequest"];
+            };
+        };
+        responses: {
+            /** @description Server-side connection test result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionTestResult"];
+                };
+            };
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    listOrganizationMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Workspace members and access state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        members: components["schemas"]["OrganizationMember"][];
+                    };
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    updateOrganizationMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                actor_id: components["parameters"]["ActorId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateOrganizationMemberRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated workspace member. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationMember"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    listOrganizationAudit: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Most recent administrative audit events. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditPage"];
+                };
+            };
+            403: components["responses"]["Error"];
         };
     };
     createInvitation: {

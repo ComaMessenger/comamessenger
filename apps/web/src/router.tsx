@@ -65,6 +65,26 @@ const routes = [
   }),
   createRoute({
     getParentRoute: () => root,
+    path: "/settings/customization",
+    component: marker,
+  }),
+  createRoute({
+    getParentRoute: () => root,
+    path: "/settings/infrastructure",
+    component: marker,
+  }),
+  createRoute({
+    getParentRoute: () => root,
+    path: "/settings/security",
+    component: marker,
+  }),
+  createRoute({
+    getParentRoute: () => root,
+    path: "/settings/audit",
+    component: marker,
+  }),
+  createRoute({
+    getParentRoute: () => root,
     path: "/m/$messageKey",
     component: marker,
   }),

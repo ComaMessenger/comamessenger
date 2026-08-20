@@ -31,6 +31,7 @@ TRUSTED_PROXY_CIDRS=127.0.0.1/32,::1/128,172.16.0.0/12
 POSTGRES_PASSWORD=<random>
 DATABASE_URL=postgres://comamessenger:<same-password>@postgres:5432/comamessenger?sslmode=disable
 AUTH_SIGNING_KEY=<random>
+INTEGRATION_ENCRYPTION_KEY=<independent-random-32-byte-secret>
 
 REDIS_PASSWORD=<random>
 REDIS_URL=redis://:<same-password>@redis:6379/0

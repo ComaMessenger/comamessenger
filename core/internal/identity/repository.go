@@ -15,6 +15,19 @@ type Repository struct {
 	pool *pgxpool.Pool
 }
 
+func (r *Repository) InvitationPolicy(ctx context.Context, orgID string) (string, time.Duration, error) {
+	var role string
+	var ttlHours int
+	err := r.pool.QueryRow(ctx, `
+		SELECT COALESCE(settings->>'invitation_default_role', 'member'),
+		       COALESCE((settings->>'invitation_ttl_hours')::int, 168)
+		FROM organizations WHERE id = $1`, orgID).Scan(&role, &ttlHours)
+	if err != nil {
+		return "", 0, fmt.Errorf("query invitation policy: %w", err)
+	}
+	return role, time.Duration(ttlHours) * time.Hour, nil
+}
+
 func NewRepository(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool}
 }
@@ -401,6 +414,25 @@ func (r *Repository) ListSessions(ctx context.Context, actorID, currentSessionID
 		return nil, fmt.Errorf("iterate sessions: %w", err)
 	}
 	return sessions, nil
+}
+
+func (r *Repository) RevokeOtherSessions(ctx context.Context, actorID, currentSessionID string, now time.Time) ([]string, error) {
+	rows, err := r.pool.Query(ctx, `
+		UPDATE sessions SET revoked_at=COALESCE(revoked_at,$3)
+		WHERE actor_id=$1 AND id<>$2 AND revoked_at IS NULL RETURNING id`, actorID, currentSessionID, now)
+	if err != nil {
+		return nil, fmt.Errorf("revoke other sessions: %w", err)
+	}
+	defer rows.Close()
+	result := make([]string, 0)
+	for rows.Next() {
+		var sessionID string
+		if err := rows.Scan(&sessionID); err != nil {
+			return nil, err
+		}
+		result = append(result, sessionID)
+	}
+	return result, rows.Err()
 }
 
 func isUniqueViolation(err error) bool {

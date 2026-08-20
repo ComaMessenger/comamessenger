@@ -21,6 +21,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/message"
 	"github.com/comamessenger/comamessenger/core/internal/push"
 	"github.com/comamessenger/comamessenger/core/internal/userstate"
+	"github.com/comamessenger/comamessenger/core/internal/workspace"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
@@ -33,6 +34,7 @@ type Dependencies struct {
 	Messages              *message.Service
 	UserState             *userstate.Service
 	Push                  *push.Service
+	Workspace             *workspace.Service
 	Realtime              standardhttp.Handler
 	CookieSecure          bool
 	RefreshTokenTTL       time.Duration
@@ -49,6 +51,7 @@ type identityHandlers struct {
 	messages              *message.Service
 	userState             *userstate.Service
 	push                  *push.Service
+	workspace             *workspace.Service
 	realtime              standardhttp.Handler
 	allowedOrigin         string
 	cookieSecure          bool
@@ -74,7 +77,7 @@ type authenticated struct {
 
 func newIdentityHandlers(logger *slog.Logger, allowedOrigin string, dependencies Dependencies) *identityHandlers {
 	return &identityHandlers{
-		logger: logger, service: dependencies.Identity, chats: dependencies.Chats, messages: dependencies.Messages, userState: dependencies.UserState, push: dependencies.Push, realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
+		logger: logger, service: dependencies.Identity, chats: dependencies.Chats, messages: dependencies.Messages, userState: dependencies.UserState, push: dependencies.Push, workspace: dependencies.Workspace, realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
 		cookieSecure: dependencies.CookieSecure, refreshTTL: dependencies.RefreshTokenTTL,
 		bootstrapRate: newIPRateLimiter(5, 5), loginRate: newIPRateLimiter(10, 10),
 		refreshRate: newIPRateLimiter(30, 20), invitationRate: newIPRateLimiter(10, 10), websocketRate: newIPRateLimiter(60, 20), actorRate: newIPRateLimiter(1200, 200),
@@ -89,6 +92,10 @@ func (h *identityHandlers) routes(router chi.Router) {
 	router.With(h.rateLimit("login", h.loginRate)).Post("/auth/login", h.login)
 	router.With(h.rateLimit("refresh", h.refreshRate)).Post("/auth/refresh", h.refresh)
 	router.With(h.rateLimit("invitation-accept", h.invitationRate)).Post("/invitations/{token}/accept", h.acceptInvitation)
+	if h.workspace != nil {
+		router.Get("/branding", h.publicBranding)
+		router.Get("/branding/{kind}", h.brandingAsset)
+	}
 	if h.realtime != nil {
 		router.With(h.rateLimit("websocket", h.websocketRate)).Handle("/ws", h.realtime)
 	}
@@ -101,7 +108,20 @@ func (h *identityHandlers) routes(router chi.Router) {
 		protected.Patch("/me", h.updateMe)
 		protected.Get("/sessions", h.sessions)
 		protected.Delete("/sessions/{sessionID}", h.revokeSession)
+		protected.Post("/sessions/revoke-others", h.revokeOtherSessions)
 		protected.Post("/invitations", h.createInvitation)
+		if h.workspace != nil {
+			protected.Get("/organization", h.workspaceSettings)
+			protected.Patch("/organization", h.updateWorkspaceSettings)
+			protected.Put("/organization/branding/{kind}", h.putBrandingAsset)
+			protected.Delete("/organization/branding/{kind}", h.deleteBrandingAsset)
+			protected.Get("/organization/infrastructure", h.infrastructureSettings)
+			protected.Patch("/organization/infrastructure", h.updateInfrastructureSettings)
+			protected.Post("/organization/infrastructure/test", h.testInfrastructureConnection)
+			protected.Get("/organization/members", h.organizationMembers)
+			protected.Patch("/organization/members/{actorID}", h.updateOrganizationMember)
+			protected.Get("/organization/audit", h.organizationAudit)
+		}
 		if h.chats != nil {
 			protected.Get("/actors", h.listActors)
 			protected.Get("/chats", h.listChats)
@@ -320,6 +340,21 @@ func (h *identityHandlers) revokeSession(w standardhttp.ResponseWriter, r *stand
 		h.revokeRealtimeSession(sessionID)
 	}
 	w.WriteHeader(standardhttp.StatusNoContent)
+}
+
+func (h *identityHandlers) revokeOtherSessions(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	auth := authFromContext(r.Context())
+	revoked, err := h.service.RevokeOtherSessions(r.Context(), auth.User.ActorID, auth.Identity.SessionID)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	if h.revokeRealtimeSession != nil {
+		for _, sessionID := range revoked {
+			h.revokeRealtimeSession(sessionID)
+		}
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, map[string]int{"revoked": len(revoked)})
 }
 
 func (h *identityHandlers) createInvitation(w standardhttp.ResponseWriter, r *standardhttp.Request) {

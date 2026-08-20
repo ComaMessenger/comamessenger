@@ -1,6 +1,8 @@
 import {
+  type CSSProperties,
   type FormEvent,
   type KeyboardEvent,
+  type ReactNode,
   type RefObject,
   Suspense,
   lazy,
@@ -108,6 +110,16 @@ import {
   Rocket,
   Dumbbell,
   Database,
+  HardDrive,
+  History,
+  KeyRound,
+  Mail,
+  MonitorSmartphone,
+  Paintbrush,
+  RefreshCw,
+  Server,
+  ShieldCheck,
+  Upload,
   ExternalLink,
   Dog,
   type LucideIcon,
@@ -136,6 +148,11 @@ import {
   type Message,
   type Reaction,
   type MessageReceipt,
+  type InfrastructureSettings,
+  type OrganizationSettings,
+  type OrganizationMember,
+  type PublicBranding,
+  type Session,
   type TokenResponse,
   type User,
   type UserPreferences,
@@ -180,213 +197,263 @@ type OverlayPlacement = {
 const folderIconOptions: Array<{
   id: ChatFolder["icon"];
   icon: LucideIcon;
-  label: string;
+  labelKey: string;
   terms: string;
 }> = [
-  { id: "folder", icon: Folder, label: "Папка", terms: "folder папка каталог" },
+  {
+    id: "folder",
+    icon: Folder,
+    labelKey: "folderIconFolder",
+    terms: "folder directory",
+  },
   {
     id: "briefcase",
     icon: BriefcaseBusiness,
-    label: "Работа",
-    terms: "work работа офис briefcase",
+    labelKey: "folderIconWork",
+    terms: "work office briefcase",
   },
   {
     id: "heart",
     icon: Heart,
-    label: "Любимое",
-    terms: "heart любовь любимое сердце",
+    labelKey: "folderIconHeart",
+    terms: "heart love favorite",
   },
   {
     id: "star",
     icon: Star,
-    label: "Важное",
-    terms: "star звезда важное избранное",
+    labelKey: "folderIconStar",
+    terms: "star important favorite",
   },
   {
     id: "users",
     icon: Users,
-    label: "Команда",
-    terms: "users люди команда семья группа",
+    labelKey: "folderIconPeople",
+    terms: "users people team family group",
   },
-  { id: "hash", icon: Hash, label: "Каналы", terms: "hash канал тема" },
+  {
+    id: "hash",
+    icon: Hash,
+    labelKey: "folderIconChannel",
+    terms: "hash channel topic",
+  },
   {
     id: "bookmark",
     icon: Bookmark,
-    label: "Закладки",
-    terms: "bookmark закладка сохранить",
+    labelKey: "folderIconBookmark",
+    terms: "bookmark save",
   },
-  { id: "home", icon: Home, label: "Дом", terms: "home дом семья" },
+  { id: "home", icon: Home, labelKey: "folderIconHome", terms: "home family" },
   {
     id: "rocket",
     icon: Rocket,
-    label: "Запуски",
-    terms: "rocket ракета запуск стартап",
+    labelKey: "folderIconRocket",
+    terms: "rocket launch startup",
   },
-  {
-    id: "zap",
-    icon: Zap,
-    label: "Быстрое",
-    terms: "zap молния быстро энергия",
-  },
+  { id: "zap", icon: Zap, labelKey: "folderIconZap", terms: "zap fast energy" },
   {
     id: "flame",
     icon: Flame,
-    label: "Горящее",
-    terms: "flame огонь горячее срочное",
+    labelKey: "folderIconFlame",
+    terms: "flame hot urgent",
   },
-  { id: "sun", icon: Sun, label: "Солнце", terms: "sun солнце день" },
-  { id: "moon", icon: Moon, label: "Луна", terms: "moon луна ночь" },
+  { id: "sun", icon: Sun, labelKey: "folderIconSun", terms: "sun day" },
+  { id: "moon", icon: Moon, labelKey: "folderIconMoon", terms: "moon night" },
   {
     id: "cloud",
     icon: Cloud,
-    label: "Облако",
-    terms: "cloud облако инфраструктура",
+    labelKey: "folderIconCloud",
+    terms: "cloud infrastructure",
   },
   {
     id: "umbrella",
     icon: Umbrella,
-    label: "Отдых",
-    terms: "umbrella зонт отдых отпуск",
+    labelKey: "folderIconUmbrella",
+    terms: "umbrella vacation rest",
   },
-  { id: "coffee", icon: Coffee, label: "Кофе", terms: "coffee кофе перерыв" },
-  { id: "music", icon: Music, label: "Музыка", terms: "music музыка аудио" },
-  { id: "camera", icon: Camera, label: "Фото", terms: "camera камера фото" },
+  {
+    id: "coffee",
+    icon: Coffee,
+    labelKey: "folderIconCoffee",
+    terms: "coffee break",
+  },
+  {
+    id: "music",
+    icon: Music,
+    labelKey: "folderIconMusic",
+    terms: "music audio",
+  },
+  {
+    id: "camera",
+    icon: Camera,
+    labelKey: "folderIconCamera",
+    terms: "camera photo",
+  },
   {
     id: "image",
     icon: Image,
-    label: "Картинки",
-    terms: "image картинка дизайн фото",
+    labelKey: "folderIconImage",
+    terms: "image design photo",
   },
-  { id: "gamepad", icon: Gamepad2, label: "Игры", terms: "game игра геймпад" },
+  {
+    id: "gamepad",
+    icon: Gamepad2,
+    labelKey: "folderIconGamepad",
+    terms: "game play",
+  },
   {
     id: "dumbbell",
     icon: Dumbbell,
-    label: "Спорт",
-    terms: "sport спорт фитнес гантель",
+    labelKey: "folderIconSport",
+    terms: "sport fitness gym",
   },
   {
     id: "trophy",
     icon: Trophy,
-    label: "Достижения",
-    terms: "trophy кубок победа достижения",
+    labelKey: "folderIconTrophy",
+    terms: "trophy win achievement",
   },
-  { id: "target", icon: Target, label: "Цели", terms: "target цель планы" },
-  { id: "gift", icon: Gift, label: "Подарки", terms: "gift подарок праздник" },
+  {
+    id: "target",
+    icon: Target,
+    labelKey: "folderIconTarget",
+    terms: "target goal plan",
+  },
+  { id: "gift", icon: Gift, labelKey: "folderIconGift", terms: "gift holiday" },
   {
     id: "shopping-bag",
     icon: ShoppingBag,
-    label: "Покупки",
-    terms: "shopping покупки магазин",
+    labelKey: "folderIconShopping",
+    terms: "shopping store",
   },
   {
     id: "wallet",
     icon: Wallet,
-    label: "Финансы",
-    terms: "wallet кошелек финансы деньги",
+    labelKey: "folderIconWallet",
+    terms: "wallet finance money",
   },
   {
     id: "plane",
     icon: Plane,
-    label: "Путешествия",
-    terms: "plane самолет путешествия отпуск",
+    labelKey: "folderIconTravel",
+    terms: "plane travel vacation",
   },
-  { id: "car", icon: Car, label: "Авто", terms: "car машина автомобиль" },
+  { id: "car", icon: Car, labelKey: "folderIconCar", terms: "car auto" },
   {
     id: "map",
     icon: MapIcon,
-    label: "Места",
-    terms: "map карта места география",
+    labelKey: "folderIconMap",
+    terms: "map place geography",
   },
   {
     id: "globe",
     icon: Globe2,
-    label: "Мир",
-    terms: "globe мир интернет международное",
+    labelKey: "folderIconGlobe",
+    terms: "globe world internet international",
   },
   {
     id: "book",
     icon: BookOpen,
-    label: "Книги",
-    terms: "book книга знания читать",
+    labelKey: "folderIconBook",
+    terms: "book knowledge read",
   },
   {
     id: "graduation",
     icon: GraduationCap,
-    label: "Учёба",
-    terms: "education учеба университет обучение",
+    labelKey: "folderIconEducation",
+    terms: "education university study",
   },
   {
     id: "code",
     icon: Code2,
-    label: "Разработка",
-    terms: "code код разработка engineering",
+    labelKey: "folderIconCode",
+    terms: "code development engineering",
   },
   {
     id: "terminal",
     icon: Terminal,
-    label: "Терминал",
-    terms: "terminal консоль devops",
+    labelKey: "folderIconTerminal",
+    terms: "terminal console devops",
   },
   {
     id: "database",
     icon: Database,
-    label: "Данные",
-    terms: "database база данные sql",
+    labelKey: "folderIconDatabase",
+    terms: "database data sql",
   },
   {
     id: "chart",
     icon: ChartNoAxesCombined,
-    label: "Аналитика",
-    terms: "chart график аналитика метрики",
+    labelKey: "folderIconAnalytics",
+    terms: "chart analytics metrics",
   },
   {
     id: "calendar",
     icon: CalendarDays,
-    label: "Календарь",
-    terms: "calendar календарь встречи даты",
+    labelKey: "folderIconCalendar",
+    terms: "calendar meeting date",
   },
   {
     id: "clock",
     icon: Clock3,
-    label: "Время",
-    terms: "clock часы время дедлайн",
+    labelKey: "folderIconClock",
+    terms: "clock time deadline",
   },
   {
     id: "check",
     icon: CheckCircle2,
-    label: "Задачи",
-    terms: "check задачи готово todo",
+    labelKey: "folderIconTasks",
+    terms: "check task done todo",
   },
-  { id: "lightbulb", icon: Lightbulb, label: "Идеи", terms: "idea идеи лампа" },
+  {
+    id: "lightbulb",
+    icon: Lightbulb,
+    labelKey: "folderIconIdeas",
+    terms: "idea lightbulb",
+  },
   {
     id: "palette",
     icon: Palette,
-    label: "Дизайн",
-    terms: "palette палитра дизайн творчество",
+    labelKey: "folderIconDesign",
+    terms: "palette design creative",
   },
-  { id: "smile", icon: Smile, label: "Общение", terms: "smile улыбка общение" },
-  { id: "bot", icon: Bot, label: "Боты", terms: "bot бот агент ai" },
-  { id: "cat", icon: Cat, label: "Коты", terms: "cat кот кошка питомцы" },
-  { id: "dog", icon: Dog, label: "Собаки", terms: "dog собака питомцы" },
+  {
+    id: "smile",
+    icon: Smile,
+    labelKey: "folderIconSocial",
+    terms: "smile social chat",
+  },
+  { id: "bot", icon: Bot, labelKey: "folderIconBots", terms: "bot agent ai" },
+  { id: "cat", icon: Cat, labelKey: "folderIconCats", terms: "cat pet" },
+  { id: "dog", icon: Dog, labelKey: "folderIconDogs", terms: "dog pet" },
   {
     id: "leaf",
     icon: Leaf,
-    label: "Природа",
-    terms: "leaf лист природа экология",
+    labelKey: "folderIconNature",
+    terms: "leaf nature ecology",
   },
-  { id: "flower", icon: Flower2, label: "Цветы", terms: "flower цветок сад" },
+  {
+    id: "flower",
+    icon: Flower2,
+    labelKey: "folderIconFlowers",
+    terms: "flower garden",
+  },
   {
     id: "mountain",
     icon: Mountain,
-    label: "Горы",
-    terms: "mountain гора туризм",
+    labelKey: "folderIconMountain",
+    terms: "mountain hiking",
   },
-  { id: "waves", icon: Waves, label: "Море", terms: "waves волны море вода" },
+  {
+    id: "waves",
+    icon: Waves,
+    labelKey: "folderIconSea",
+    terms: "waves sea water",
+  },
   {
     id: "party",
     icon: PartyPopper,
-    label: "Праздники",
-    terms: "party праздник вечеринка",
+    labelKey: "folderIconParty",
+    terms: "party holiday",
   },
 ];
 const folderColors: ChatFolder["color"][] = [
@@ -488,6 +555,24 @@ export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [error, setError] = useState("");
   useTheme();
+
+  useEffect(() => {
+    let active = true;
+    const refresh = () => {
+      void api
+        .branding()
+        .then((branding) => {
+          if (active) applyPublicBranding(branding, api.apiURL);
+        })
+        .catch(() => undefined);
+    };
+    refresh();
+    window.addEventListener("coma-branding-changed", refresh);
+    return () => {
+      active = false;
+      window.removeEventListener("coma-branding-changed", refresh);
+    };
+  }, [api]);
 
   const signedOut = useCallback(() => {
     setUser(null);
@@ -837,6 +922,17 @@ function Messenger({
   const showMore = path === "/more";
   const showProfileSettings = path === "/settings/profile";
   const showWorkspaceSettings = path === "/settings/workspace";
+  const showCustomizationSettings = path === "/settings/customization";
+  const showInfrastructureSettings = path === "/settings/infrastructure";
+  const showSecuritySettings = path === "/settings/security";
+  const showAuditSettings = path === "/settings/audit";
+  const showAnySettings =
+    showProfileSettings ||
+    showWorkspaceSettings ||
+    showCustomizationSettings ||
+    showInfrastructureSettings ||
+    showSecuritySettings ||
+    showAuditSettings;
   const showChatList = Boolean(selectedID) || path === "/chats";
   useDismissable(workspaceMenuRoot, workspaceMenu, () =>
     setWorkspaceMenu(false),
@@ -860,11 +956,11 @@ function Messenger({
     }
   }, [api, store]);
   const scheduleReload = useCallback(() => {
-    if (reloadTimer.current !== null) return;
+    if (reloadTimer.current !== null) window.clearTimeout(reloadTimer.current);
     reloadTimer.current = window.setTimeout(() => {
       reloadTimer.current = null;
       void reload();
-    }, 80);
+    }, 120);
   }, [reload]);
   const coordinator = useMemo(
     () =>
@@ -1343,7 +1439,23 @@ function Messenger({
             onUserUpdated={onUserUpdated}
           />
         ) : showWorkspaceSettings ? (
-          <WorkspaceSettingsPage user={user} navigate={navigate} />
+          <WorkspaceSettingsPage api={api} user={user} navigate={navigate} />
+        ) : showCustomizationSettings ? (
+          <CustomizationSettingsPage
+            api={api}
+            user={user}
+            navigate={navigate}
+          />
+        ) : showInfrastructureSettings ? (
+          <InfrastructureSettingsPage
+            api={api}
+            user={user}
+            navigate={navigate}
+          />
+        ) : showSecuritySettings ? (
+          <SecuritySettingsPage api={api} user={user} navigate={navigate} />
+        ) : showAuditSettings ? (
+          <AuditSettingsPage api={api} user={user} navigate={navigate} />
         ) : (
           <Welcome />
         )}
@@ -1356,7 +1468,7 @@ function Messenger({
               ? "important"
               : showMembers
                 ? "members"
-                : showMore || showProfileSettings || showWorkspaceSettings
+                : showMore || showAnySettings
                   ? "more"
                   : "chats"
         }
@@ -3675,8 +3787,16 @@ function ChatFolderDialog({
   const [iconQuery, setIconQuery] = useState("");
   const [chatQuery, setChatQuery] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
+  const localizedIconTerms = new Map(
+    t("folderIconSearchTerms")
+      .split("|")
+      .map((entry) => {
+        const separator = entry.indexOf(":");
+        return [entry.slice(0, separator), entry.slice(separator + 1)];
+      }),
+  );
   const visibleIcons = folderIconOptions.filter((option) =>
-    `${option.label} ${option.terms}`
+    `${t(option.labelKey)} ${option.terms} ${localizedIconTerms.get(option.id) ?? ""}`
       .toLocaleLowerCase()
       .includes(iconQuery.trim().toLocaleLowerCase()),
   );
@@ -3714,14 +3834,15 @@ function ChatFolderDialog({
           <div className="folder-icon-grid">
             {visibleIcons.map((option) => {
               const Glyph = option.icon;
+              const label = t(option.labelKey);
               return (
                 <button
                   type="button"
                   key={option.id}
                   className={icon === option.id ? "active" : ""}
                   aria-pressed={icon === option.id}
-                  aria-label={option.label}
-                  title={option.label}
+                  aria-label={label}
+                  title={label}
                   onClick={() => setIcon(option.id)}
                 >
                   <Glyph />
@@ -4085,8 +4206,9 @@ function ProfileSettingsPage({
         title={t("profileSettings")}
         onBack={() => navigate("/more")}
       />
-      <p className="utility-page__lead">{user.email}</p>
+      <SettingsNavigation user={user} active="profile" navigate={navigate} />
       <div className="settings-page__body">
+        <p className="settings-page__email">{user.email}</p>
         <div className="settings-list">
           <label>
             <span>{t("name")}</span>
@@ -4164,43 +4286,1091 @@ function ProfileSettingsPage({
 }
 
 function WorkspaceSettingsPage({
+  api,
   user,
   navigate,
 }: {
+  api: MessengerAPI;
   user: User;
   navigate(to: string): void;
 }) {
   const { t } = useTranslation();
+  const allowed = user.role !== "member";
+  const query = useQuery({
+    queryKey: ["organization-settings"],
+    queryFn: () => api.organization(),
+    enabled: allowed,
+  });
+  const members = useQuery({
+    queryKey: ["organization-members"],
+    queryFn: () => api.organizationMembers(),
+    enabled: allowed,
+  });
+  const [draft, setDraft] = useState<OrganizationSettings | null>(null);
+  const [message, setMessage] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"member" | "admin">("member");
+  const [inviteURL, setInviteURL] = useState("");
+  useEffect(() => {
+    if (query.data) setDraft(query.data);
+  }, [query.data]);
+  async function save() {
+    if (!draft) return;
+    try {
+      const updated = await api.updateOrganization({
+        name: draft.name,
+        slug: draft.slug,
+        expected_version: draft.version,
+        invitation_default_role: draft.invitation_default_role,
+        invitation_ttl_hours: draft.invitation_ttl_hours,
+        allow_public_chat_creation: draft.allow_public_chat_creation,
+        allow_channel_creation: draft.allow_channel_creation,
+        accent_color: draft.accent_color,
+      });
+      setDraft(updated);
+      setMessage(t("changesSaved"));
+      window.dispatchEvent(new Event("coma-branding-changed"));
+    } catch (cause) {
+      setMessage(messageOf(cause));
+    }
+  }
+  async function updateMember(
+    member: OrganizationMember,
+    patch: {
+      role?: "owner" | "admin" | "member";
+      status?: "active" | "deactivated";
+    },
+  ) {
+    setMessage("");
+    try {
+      await api.updateOrganizationMember(member.actor_id, patch);
+      await members.refetch();
+      setMessage(t("changesSaved"));
+    } catch (cause) {
+      setMessage(messageOf(cause));
+    }
+  }
+  async function invite() {
+    try {
+      const invitation = await api.createInvitation({
+        email: inviteEmail,
+        role: inviteRole,
+      });
+      setInviteURL(invitation.accept_url ?? "");
+      setInviteEmail("");
+      setMessage(t("invitationCreated"));
+    } catch (cause) {
+      setMessage(messageOf(cause));
+    }
+  }
   return (
     <section className="settings-page utility-page">
       <UtilityPageHeader
         title={t("workspaceSettings")}
         onBack={() => navigate("/more")}
       />
-      <p className="utility-page__lead">{t("workspaceSettingsLead")}</p>
-      <div className="settings-page__body">
-        <article className="workspace-settings-card">
-          <Logo size="small" />
-          <span>
-            <strong>{user.organization_name}</strong>
-            <small>{t("workspaceRole", { role: user.role })}</small>
-          </span>
-        </article>
-        <div className="settings-list">
-          <button onClick={() => navigate("/members")}>
-            <Users />
-            <span>{t("membersAndAccess")}</span>
-          </button>
-          <button onClick={() => navigate("/settings/profile")}>
-            <UserRound />
-            <span>{t("personalPreferences")}</span>
-          </button>
+      <SettingsNavigation user={user} active="workspace" navigate={navigate} />
+      {!allowed ? (
+        <SettingsAccessDenied />
+      ) : query.isLoading || !draft ? (
+        <Skeleton />
+      ) : (
+        <div className="settings-page__body">
+          <article className="workspace-settings-card">
+            <Logo size="small" />
+            <span>
+              <strong>{user.organization_name}</strong>
+              <small>{t("workspaceRole", { role: user.role })}</small>
+            </span>
+          </article>
+          <SettingsSection
+            title={t("workspaceGeneral")}
+            description={t("workspaceGeneralHint")}
+          >
+            <div className="settings-form-grid">
+              <Field
+                label={t("organization")}
+                name="workspace-name"
+                value={draft.name}
+                onChange={(event) =>
+                  setDraft({ ...draft, name: event.target.value })
+                }
+              />
+              <Field
+                label={t("slug")}
+                name="workspace-slug"
+                value={draft.slug}
+                onChange={(event) =>
+                  setDraft({ ...draft, slug: event.target.value.toLowerCase() })
+                }
+              />
+            </div>
+          </SettingsSection>
+          <SettingsSection
+            title={t("invitationPolicy")}
+            description={t("invitationPolicyHint")}
+          >
+            <div className="settings-form-grid">
+              <SelectField
+                label={t("defaultRole")}
+                name="default-role"
+                value={draft.invitation_default_role}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    invitation_default_role: event.target.value as
+                      | "admin"
+                      | "member",
+                  })
+                }
+              >
+                <option value="member">{t("roleMember")}</option>
+                <option value="admin">{t("roleAdmin")}</option>
+              </SelectField>
+              <Field
+                label={t("invitationTTL")}
+                name="invitation-ttl"
+                type="number"
+                min={1}
+                max={720}
+                value={String(draft.invitation_ttl_hours)}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    invitation_ttl_hours: Number(event.target.value),
+                  })
+                }
+              />
+            </div>
+          </SettingsSection>
+          <SettingsSection
+            title={t("creationPolicy")}
+            description={t("creationPolicyHint")}
+          >
+            <SettingsToggle
+              label={t("allowPublicChats")}
+              hint={t("allowPublicChatsHint")}
+              checked={draft.allow_public_chat_creation}
+              onChange={(checked) =>
+                setDraft({ ...draft, allow_public_chat_creation: checked })
+              }
+            />
+            <SettingsToggle
+              label={t("allowChannels")}
+              hint={t("allowChannelsHint")}
+              checked={draft.allow_channel_creation}
+              onChange={(checked) =>
+                setDraft({ ...draft, allow_channel_creation: checked })
+              }
+            />
+          </SettingsSection>
+          <div className="settings-actions">
+            <Button variant="primary" onClick={() => void save()}>
+              <Check />
+              {t("save")}
+            </Button>
+            <FormError
+              message={message && message !== t("changesSaved") ? message : ""}
+            />
+            {message === t("changesSaved") && (
+              <span className="settings-success">{message}</span>
+            )}
+          </div>
+          <SettingsSection
+            title={t("membersAndAccess")}
+            description={t("membersAccessHint")}
+          >
+            <div className="invitation-form">
+              <Field
+                label={t("inviteEmail")}
+                name="invite-email"
+                type="email"
+                value={inviteEmail}
+                onChange={(event) => setInviteEmail(event.target.value)}
+              />
+              <SelectField
+                label={t("defaultRole")}
+                name="invite-role"
+                value={inviteRole}
+                onChange={(event) =>
+                  setInviteRole(event.target.value as "member" | "admin")
+                }
+              >
+                <option value="member">{t("roleMember")}</option>
+                <option value="admin">{t("roleAdmin")}</option>
+              </SelectField>
+              <Button
+                variant="primary"
+                disabled={!inviteEmail}
+                onClick={() => void invite()}
+              >
+                <UserPlus />
+                {t("createInvitation")}
+              </Button>
+            </div>
+            {inviteURL && (
+              <div className="invitation-result">
+                <span>
+                  <strong>{t("invitationLink")}</strong>
+                  <small>{t("invitationLinkHint")}</small>
+                </span>
+                <input
+                  readOnly
+                  value={inviteURL}
+                  aria-label={t("invitationLink")}
+                />
+                <Button
+                  onClick={() => void navigator.clipboard.writeText(inviteURL)}
+                >
+                  <Copy />
+                  {t("copyLink")}
+                </Button>
+              </div>
+            )}
+            <div className="organization-members">
+              {(members.data ?? []).map((member) => (
+                <article key={member.actor_id} className="organization-member">
+                  <Avatar
+                    name={member.display_name}
+                    size="md"
+                    online={member.status === "active"}
+                  />
+                  <span>
+                    <strong>{member.display_name}</strong>
+                    <small>
+                      @{member.handle} · {member.email}
+                    </small>
+                  </span>
+                  <select
+                    aria-label={t("defaultRole")}
+                    value={member.role}
+                    disabled={
+                      member.actor_id === user.id ||
+                      (user.role !== "owner" && member.role !== "member")
+                    }
+                    onChange={(event) =>
+                      void updateMember(member, {
+                        role: event.target.value as
+                          | "owner"
+                          | "admin"
+                          | "member",
+                      })
+                    }
+                  >
+                    <option value="owner">{t("roleOwner")}</option>
+                    <option value="admin">{t("roleAdmin")}</option>
+                    <option value="member">{t("roleMember")}</option>
+                  </select>
+                  <Button
+                    size="sm"
+                    disabled={member.actor_id === user.id}
+                    onClick={() =>
+                      void updateMember(member, {
+                        status:
+                          member.status === "active" ? "deactivated" : "active",
+                      })
+                    }
+                  >
+                    {member.status === "active"
+                      ? t("deactivate")
+                      : t("activate")}
+                  </Button>
+                </article>
+              ))}
+            </div>
+          </SettingsSection>
         </div>
-        <p className="settings-page__roadmap">
-          {t("workspaceSettingsRoadmap")}
-        </p>
+      )}
+    </section>
+  );
+}
+
+function CustomizationSettingsPage({
+  api,
+  user,
+  navigate,
+}: {
+  api: MessengerAPI;
+  user: User;
+  navigate(to: string): void;
+}) {
+  const { t } = useTranslation();
+  const allowed = user.role !== "member";
+  const query = useQuery({
+    queryKey: ["organization-settings"],
+    queryFn: () => api.organization(),
+    enabled: allowed,
+  });
+  const [settings, setSettings] = useState<OrganizationSettings | null>(null);
+  const [message, setMessage] = useState("");
+  const [assetVersion, setAssetVersion] = useState(Date.now());
+  useEffect(() => {
+    if (query.data) setSettings(query.data);
+  }, [query.data]);
+  async function saveAccent() {
+    if (!settings) return;
+    try {
+      const updated = await api.updateOrganization({
+        name: settings.name,
+        slug: settings.slug,
+        expected_version: settings.version,
+        invitation_default_role: settings.invitation_default_role,
+        invitation_ttl_hours: settings.invitation_ttl_hours,
+        allow_public_chat_creation: settings.allow_public_chat_creation,
+        allow_channel_creation: settings.allow_channel_creation,
+        accent_color: settings.accent_color,
+      });
+      setSettings(updated);
+      setMessage(t("changesSaved"));
+      window.dispatchEvent(new Event("coma-branding-changed"));
+    } catch (cause) {
+      setMessage(messageOf(cause));
+    }
+  }
+  async function upload(kind: "logo" | "favicon", files: FileList | null) {
+    const file = files?.[0];
+    if (!file) return;
+    try {
+      await api.putBrandingAsset(kind, file);
+      setAssetVersion(Date.now());
+      await query.refetch();
+      setMessage(t("assetSaved"));
+      window.dispatchEvent(new Event("coma-branding-changed"));
+    } catch (cause) {
+      setMessage(messageOf(cause));
+    }
+  }
+  async function removeAsset(kind: "logo" | "favicon") {
+    try {
+      await api.deleteBrandingAsset(kind);
+      setAssetVersion(Date.now());
+      await query.refetch();
+      setMessage(t("assetRemoved"));
+      window.dispatchEvent(new Event("coma-branding-changed"));
+    } catch (cause) {
+      setMessage(messageOf(cause));
+    }
+  }
+  return (
+    <section className="settings-page utility-page">
+      <UtilityPageHeader
+        title={t("customizationSettings")}
+        onBack={() => navigate("/more")}
+      />
+      <SettingsNavigation
+        user={user}
+        active="customization"
+        navigate={navigate}
+      />
+      {!allowed ? (
+        <SettingsAccessDenied />
+      ) : !settings ? (
+        <Skeleton />
+      ) : (
+        <div className="settings-page__body">
+          <SettingsSection
+            title={t("brandIdentity")}
+            description={t("brandIdentityHint")}
+          >
+            <div className="branding-assets">
+              <BrandingAssetCard
+                title={t("workspaceLogo")}
+                hint={t("workspaceLogoHint")}
+                imageURL={
+                  settings.has_logo
+                    ? `${api.apiURL}/api/v1/branding/logo?v=${assetVersion}`
+                    : ""
+                }
+                accept="image/png,image/jpeg,image/webp"
+                onUpload={(files) => void upload("logo", files)}
+                onRemove={
+                  settings.has_logo ? () => void removeAsset("logo") : undefined
+                }
+              />
+              <BrandingAssetCard
+                title={t("workspaceFavicon")}
+                hint={t("workspaceFaviconHint")}
+                imageURL={
+                  settings.has_favicon
+                    ? `${api.apiURL}/api/v1/branding/favicon?v=${assetVersion}`
+                    : ""
+                }
+                accept="image/png,image/x-icon,image/vnd.microsoft.icon"
+                onUpload={(files) => void upload("favicon", files)}
+                onRemove={
+                  settings.has_favicon
+                    ? () => void removeAsset("favicon")
+                    : undefined
+                }
+              />
+            </div>
+          </SettingsSection>
+          <SettingsSection
+            title={t("accentColor")}
+            description={t("accentColorHint")}
+          >
+            <div className="accent-editor">
+              <input
+                type="color"
+                aria-label={t("accentColor")}
+                value={settings.accent_color}
+                onChange={(event) =>
+                  setSettings({
+                    ...settings,
+                    accent_color: event.target.value.toUpperCase(),
+                  })
+                }
+              />
+              <Field
+                label={t("hexColor")}
+                name="accent-hex"
+                value={settings.accent_color}
+                onChange={(event) =>
+                  setSettings({
+                    ...settings,
+                    accent_color: event.target.value.toUpperCase(),
+                  })
+                }
+              />
+              <div
+                className="accent-preview"
+                style={
+                  { "--preview-accent": settings.accent_color } as CSSProperties
+                }
+              >
+                <Logo size="small" />
+                <button>{t("previewAction")}</button>
+              </div>
+            </div>
+          </SettingsSection>
+          <div className="settings-actions">
+            <Button variant="primary" onClick={() => void saveAccent()}>
+              <Check />
+              {t("save")}
+            </Button>
+            <span className="settings-success">{message}</span>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function InfrastructureSettingsPage({
+  api,
+  user,
+  navigate,
+}: {
+  api: MessengerAPI;
+  user: User;
+  navigate(to: string): void;
+}) {
+  const { t } = useTranslation();
+  const allowed = user.role !== "member";
+  const query = useQuery({
+    queryKey: ["infrastructure-settings"],
+    queryFn: () => api.infrastructure(),
+    enabled: allowed,
+  });
+  const [value, setValue] = useState<InfrastructureSettings | null>(null);
+  const [s3AccessKey, setS3AccessKey] = useState("");
+  const [s3SecretKey, setS3SecretKey] = useState("");
+  const [smtpPassword, setSMTPPassword] = useState("");
+  const [message, setMessage] = useState("");
+  useEffect(() => {
+    if (query.data)
+      setValue({
+        ...query.data,
+        smtp: {
+          ...query.data.smtp,
+          security: query.data.smtp.security || "starttls",
+          port: query.data.smtp.port || 587,
+        },
+      });
+  }, [query.data]);
+  async function save() {
+    if (!value) return;
+    try {
+      const updated = await api.updateInfrastructure({
+        expected_version: value.version,
+        s3: {
+          endpoint: value.s3.endpoint,
+          region: value.s3.region,
+          bucket: value.s3.bucket,
+          prefix: value.s3.prefix,
+          force_path_style: value.s3.force_path_style,
+          access_key: s3AccessKey || null,
+          secret_key: s3SecretKey || null,
+          clear_credentials: false,
+        },
+        smtp: {
+          host: value.smtp.host,
+          port: value.smtp.port,
+          username: value.smtp.username,
+          password: smtpPassword || null,
+          from_address: value.smtp.from_address,
+          from_name: value.smtp.from_name,
+          security: value.smtp.security,
+          clear_credentials: false,
+        },
+      });
+      setValue(updated);
+      setS3AccessKey("");
+      setS3SecretKey("");
+      setSMTPPassword("");
+      setMessage(t("changesSaved"));
+    } catch (cause) {
+      setMessage(messageOf(cause));
+    }
+  }
+  async function test(kind: "s3" | "smtp") {
+    try {
+      const result = await api.testInfrastructure(kind);
+      setMessage(result.ok ? t("connectionSuccessful") : result.message);
+    } catch (cause) {
+      setMessage(messageOf(cause));
+    }
+  }
+  return (
+    <section className="settings-page utility-page">
+      <UtilityPageHeader
+        title={t("infrastructureSettings")}
+        onBack={() => navigate("/more")}
+      />
+      <SettingsNavigation
+        user={user}
+        active="infrastructure"
+        navigate={navigate}
+      />
+      {!allowed ? (
+        <SettingsAccessDenied />
+      ) : !value ? (
+        <Skeleton />
+      ) : (
+        <div className="settings-page__body">
+          <SettingsSection
+            title={t("s3Storage")}
+            description={t("s3StorageHint")}
+            icon={<HardDrive />}
+          >
+            <div className="settings-form-grid">
+              <Field
+                label={t("endpoint")}
+                name="s3-endpoint"
+                placeholder="https://s3.example.com"
+                value={value.s3.endpoint}
+                onChange={(e) =>
+                  setValue({
+                    ...value,
+                    s3: { ...value.s3, endpoint: e.target.value },
+                  })
+                }
+              />
+              <Field
+                label={t("region")}
+                name="s3-region"
+                placeholder="ru-central1"
+                value={value.s3.region}
+                onChange={(e) =>
+                  setValue({
+                    ...value,
+                    s3: { ...value.s3, region: e.target.value },
+                  })
+                }
+              />
+              <Field
+                label={t("bucket")}
+                name="s3-bucket"
+                value={value.s3.bucket}
+                onChange={(e) =>
+                  setValue({
+                    ...value,
+                    s3: { ...value.s3, bucket: e.target.value },
+                  })
+                }
+              />
+              <Field
+                label={t("prefix")}
+                name="s3-prefix"
+                placeholder="coma"
+                value={value.s3.prefix}
+                onChange={(e) =>
+                  setValue({
+                    ...value,
+                    s3: { ...value.s3, prefix: e.target.value },
+                  })
+                }
+              />
+              <Field
+                label={t("accessKey")}
+                name="s3-access"
+                placeholder={value.s3.access_key_hint || t("notConfigured")}
+                value={s3AccessKey}
+                onChange={(e) => setS3AccessKey(e.target.value)}
+              />
+              <Field
+                label={t("secretKey")}
+                name="s3-secret"
+                type="password"
+                placeholder={
+                  value.s3.credentials_configured
+                    ? "••••••••"
+                    : t("notConfigured")
+                }
+                value={s3SecretKey}
+                onChange={(e) => setS3SecretKey(e.target.value)}
+              />
+            </div>
+            <SettingsToggle
+              label={t("forcePathStyle")}
+              hint={t("forcePathStyleHint")}
+              checked={value.s3.force_path_style}
+              onChange={(checked) =>
+                setValue({
+                  ...value,
+                  s3: { ...value.s3, force_path_style: checked },
+                })
+              }
+            />
+            <Button onClick={() => void test("s3")}>
+              <RefreshCw />
+              {t("testConnection")}
+            </Button>
+          </SettingsSection>
+          <SettingsSection
+            title={t("smtpDelivery")}
+            description={t("smtpDeliveryHint")}
+            icon={<Mail />}
+          >
+            <div className="settings-form-grid">
+              <Field
+                label={t("host")}
+                name="smtp-host"
+                value={value.smtp.host}
+                onChange={(e) =>
+                  setValue({
+                    ...value,
+                    smtp: { ...value.smtp, host: e.target.value },
+                  })
+                }
+              />
+              <Field
+                label={t("port")}
+                name="smtp-port"
+                type="number"
+                min={1}
+                max={65535}
+                value={String(value.smtp.port)}
+                onChange={(e) =>
+                  setValue({
+                    ...value,
+                    smtp: { ...value.smtp, port: Number(e.target.value) },
+                  })
+                }
+              />
+              <Field
+                label={t("username")}
+                name="smtp-user"
+                value={value.smtp.username}
+                onChange={(e) =>
+                  setValue({
+                    ...value,
+                    smtp: { ...value.smtp, username: e.target.value },
+                  })
+                }
+              />
+              <Field
+                label={t("password")}
+                name="smtp-password"
+                type="password"
+                placeholder={
+                  value.smtp.credentials_configured
+                    ? "••••••••"
+                    : t("notConfigured")
+                }
+                value={smtpPassword}
+                onChange={(e) => setSMTPPassword(e.target.value)}
+              />
+              <Field
+                label={t("fromAddress")}
+                name="smtp-from"
+                value={value.smtp.from_address}
+                onChange={(e) =>
+                  setValue({
+                    ...value,
+                    smtp: { ...value.smtp, from_address: e.target.value },
+                  })
+                }
+              />
+              <Field
+                label={t("fromName")}
+                name="smtp-name"
+                value={value.smtp.from_name}
+                onChange={(e) =>
+                  setValue({
+                    ...value,
+                    smtp: { ...value.smtp, from_name: e.target.value },
+                  })
+                }
+              />
+              <SelectField
+                label={t("security")}
+                name="smtp-security"
+                value={value.smtp.security}
+                onChange={(e) =>
+                  setValue({
+                    ...value,
+                    smtp: {
+                      ...value.smtp,
+                      security: e.target.value as "none" | "starttls" | "tls",
+                    },
+                  })
+                }
+              >
+                <option value="starttls">STARTTLS</option>
+                <option value="tls">TLS</option>
+                <option value="none">{t("noEncryption")}</option>
+              </SelectField>
+            </div>
+            <Button onClick={() => void test("smtp")}>
+              <RefreshCw />
+              {t("testConnection")}
+            </Button>
+          </SettingsSection>
+          <div className="settings-actions">
+            <Button variant="primary" onClick={() => void save()}>
+              <Check />
+              {t("saveInfrastructure")}
+            </Button>
+            <span className="settings-success">{message}</span>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SecuritySettingsPage({
+  api,
+  user,
+  navigate,
+}: {
+  api: MessengerAPI;
+  user: User;
+  navigate(to: string): void;
+}) {
+  const { t } = useTranslation();
+  const query = useQuery({
+    queryKey: ["sessions"],
+    queryFn: () => api.sessions(),
+  });
+  const [message, setMessage] = useState("");
+  async function revoke(session: Session) {
+    try {
+      await api.revokeSession(session.id);
+      await query.refetch();
+      setMessage(t("sessionRevoked"));
+    } catch (cause) {
+      setMessage(messageOf(cause));
+    }
+  }
+  async function revokeOthers() {
+    try {
+      await api.revokeOtherSessions();
+      await query.refetch();
+      setMessage(t("otherSessionsRevoked"));
+    } catch (cause) {
+      setMessage(messageOf(cause));
+    }
+  }
+  return (
+    <section className="settings-page utility-page">
+      <UtilityPageHeader
+        title={t("securitySettings")}
+        onBack={() => navigate("/more")}
+      />
+      <SettingsNavigation user={user} active="security" navigate={navigate} />
+      <div className="settings-page__body">
+        <SettingsSection
+          title={t("activeSessions")}
+          description={t("activeSessionsHint")}
+          icon={<MonitorSmartphone />}
+        >
+          <div className="session-list">
+            {(query.data ?? []).map((session) => (
+              <article key={session.id} className="session-card">
+                <MonitorSmartphone />
+                <span>
+                  <strong>
+                    {session.current
+                      ? t("currentSession")
+                      : session.user_agent || t("unknownDevice")}
+                  </strong>
+                  <small>
+                    {new Date(session.last_seen_at).toLocaleString()} ·{" "}
+                    {session.ip_address || t("unknownAddress")}
+                  </small>
+                </span>
+                {session.current ? (
+                  <Badge tone="primary">{t("current")}</Badge>
+                ) : (
+                  <Button size="sm" onClick={() => void revoke(session)}>
+                    {t("revoke")}
+                  </Button>
+                )}
+              </article>
+            ))}
+          </div>
+          <Button onClick={() => void revokeOthers()}>
+            <KeyRound />
+            {t("logoutOtherDevices")}
+          </Button>
+        </SettingsSection>
+        <span className="settings-success">{message}</span>
       </div>
     </section>
+  );
+}
+
+function AuditSettingsPage({
+  api,
+  user,
+  navigate,
+}: {
+  api: MessengerAPI;
+  user: User;
+  navigate(to: string): void;
+}) {
+  const { t } = useTranslation();
+  const allowed = user.role !== "member";
+  const query = useQuery({
+    queryKey: ["organization-audit"],
+    queryFn: () => api.organizationAudit(),
+    enabled: allowed,
+  });
+  return (
+    <section className="settings-page utility-page">
+      <UtilityPageHeader
+        title={t("auditSettings")}
+        onBack={() => navigate("/more")}
+      />
+      <SettingsNavigation user={user} active="audit" navigate={navigate} />
+      {!allowed ? (
+        <SettingsAccessDenied />
+      ) : (
+        <div className="settings-page__body">
+          <SettingsSection
+            title={t("auditLog")}
+            description={t("auditLogHint")}
+            icon={<History />}
+          >
+            <div className="audit-list">
+              {(query.data?.events ?? []).map((entry) => (
+                <article key={entry.id}>
+                  <span>
+                    <strong>{entry.action}</strong>
+                    <small>
+                      {entry.actor_name || t("systemActor")} ·{" "}
+                      {entry.target_type}
+                    </small>
+                  </span>
+                  <time>{new Date(entry.created_at).toLocaleString()}</time>
+                </article>
+              ))}
+            </div>
+          </SettingsSection>
+        </div>
+      )}
+    </section>
+  );
+}
+
+type SettingsPageID =
+  | "profile"
+  | "workspace"
+  | "customization"
+  | "infrastructure"
+  | "security"
+  | "audit";
+function SettingsNavigation({
+  user,
+  active,
+  navigate,
+}: {
+  user: User;
+  active: SettingsPageID;
+  navigate(to: string): void;
+}) {
+  const { t } = useTranslation();
+  const admin = user.role !== "member";
+  const items: {
+    id: SettingsPageID;
+    path: string;
+    label: string;
+    icon: LucideIcon;
+    admin?: boolean;
+  }[] = [
+    {
+      id: "profile",
+      path: "/settings/profile",
+      label: t("profile"),
+      icon: UserRound,
+    },
+    {
+      id: "security",
+      path: "/settings/security",
+      label: t("security"),
+      icon: ShieldCheck,
+    },
+    {
+      id: "workspace",
+      path: "/settings/workspace",
+      label: t("workspace"),
+      icon: Building2,
+      admin: true,
+    },
+    {
+      id: "customization",
+      path: "/settings/customization",
+      label: t("customization"),
+      icon: Paintbrush,
+      admin: true,
+    },
+    {
+      id: "infrastructure",
+      path: "/settings/infrastructure",
+      label: t("connections"),
+      icon: Server,
+      admin: true,
+    },
+    {
+      id: "audit",
+      path: "/settings/audit",
+      label: t("audit"),
+      icon: History,
+      admin: true,
+    },
+  ];
+  return (
+    <nav className="settings-navigation" aria-label={t("settingsNavigation")}>
+      {items
+        .filter((item) => !item.admin || admin)
+        .map((item) => {
+          const Icon = item.icon;
+          return (
+            <button
+              key={item.id}
+              className={active === item.id ? "active" : ""}
+              onClick={() => navigate(item.path)}
+            >
+              <Icon />
+              {item.label}
+            </button>
+          );
+        })}
+    </nav>
+  );
+}
+function SettingsSection({
+  title,
+  description,
+  icon,
+  children,
+}: {
+  title: string;
+  description: string;
+  icon?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="settings-section">
+      <header>
+        {icon}
+        <span>
+          <h2>{title}</h2>
+          <p>{description}</p>
+        </span>
+      </header>
+      <div className="settings-section__content">{children}</div>
+    </section>
+  );
+}
+function SettingsToggle({
+  label,
+  hint,
+  checked,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  checked: boolean;
+  onChange(value: boolean): void;
+}) {
+  return (
+    <label className="settings-toggle">
+      <span>
+        <strong>{label}</strong>
+        <small>{hint}</small>
+      </span>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+    </label>
+  );
+}
+function SettingsAccessDenied() {
+  const { t } = useTranslation();
+  return (
+    <div className="settings-access-denied">
+      <ShieldCheck />
+      <h2>{t("adminOnly")}</h2>
+      <p>{t("adminOnlyHint")}</p>
+    </div>
+  );
+}
+function BrandingAssetCard({
+  title,
+  hint,
+  imageURL,
+  accept,
+  onUpload,
+  onRemove,
+}: {
+  title: string;
+  hint: string;
+  imageURL: string;
+  accept: string;
+  onUpload(files: FileList | null): void;
+  onRemove?: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <article className="branding-asset-card">
+      <div className="branding-asset-preview">
+        {imageURL ? <img src={imageURL} alt="" /> : <Image />}
+      </div>
+      <span>
+        <strong>{title}</strong>
+        <small>{hint}</small>
+      </span>
+      <label className="ui-button ui-button--sm">
+        <Upload />
+        {t("upload")}
+        <input
+          type="file"
+          accept={accept}
+          onChange={(event) => onUpload(event.target.files)}
+        />
+      </label>
+      {onRemove && (
+        <Button size="sm" onClick={onRemove}>
+          <Trash2 />
+          {t("remove")}
+        </Button>
+      )}
+    </article>
   );
 }
 function NotificationDialog({
@@ -4469,12 +5639,58 @@ function Empty({ label }: { label: string }) {
   );
 }
 function Logo({ size }: { size: "small" | "medium" | "large" }) {
+  const [source, setSource] = useState(
+    `${apiURL}/api/v1/branding/logo?v=${Date.now()}`,
+  );
+  useEffect(() => {
+    const refresh = () =>
+      setSource(`${apiURL}/api/v1/branding/logo?v=${Date.now()}`);
+    window.addEventListener("coma-branding-changed", refresh);
+    return () => window.removeEventListener("coma-branding-changed", refresh);
+  }, []);
   return (
     <div className={cx("brand-logo", `brand-logo--${size}`)}>
-      <img src={comaLogo} alt="" />
+      <img
+        src={source}
+        alt=""
+        onError={(event) => {
+          if (!event.currentTarget.src.endsWith(comaLogo))
+            event.currentTarget.src = comaLogo;
+        }}
+      />
       <span>Coma</span>
     </div>
   );
+}
+function applyPublicBranding(branding: PublicBranding, baseURL: string) {
+  if (/^#[0-9A-Fa-f]{6}$/.test(branding.accent_color)) {
+    const root = document.documentElement.style;
+    root.setProperty("--coma-primary", branding.accent_color);
+    root.setProperty(
+      "--coma-primary-hover",
+      `color-mix(in srgb, ${branding.accent_color} 82%, black)`,
+    );
+    root.setProperty(
+      "--coma-primary-soft",
+      `color-mix(in srgb, ${branding.accent_color} 16%, transparent)`,
+    );
+    root.setProperty("--coma-avatar-start", branding.accent_color);
+  }
+  document.title = branding.workspace_name
+    ? `${branding.workspace_name} — Coma`
+    : "Coma";
+  let favicon = document.querySelector<HTMLLinkElement>(
+    "link[rel='icon'][data-coma-branding]",
+  );
+  if (!favicon) {
+    favicon = document.createElement("link");
+    favicon.rel = "icon";
+    favicon.dataset.comaBranding = "true";
+    document.head.append(favicon);
+  }
+  favicon.href = branding.favicon_url
+    ? `${baseURL}${branding.favicon_url}`
+    : comaLogo;
 }
 async function loadMessages(
   api: MessengerAPI,

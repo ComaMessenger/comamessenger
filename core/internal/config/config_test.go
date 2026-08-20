@@ -273,6 +273,7 @@ func TestFromEnvironmentRejectsDevelopmentSecretsInProduction(t *testing.T) {
 		name, key, value, wantErr string
 	}{
 		{name: "signing key", key: "AUTH_SIGNING_KEY", value: "comamessenger-local-signing-key-change-me", wantErr: "AUTH_SIGNING_KEY"},
+		{name: "integration key", key: "INTEGRATION_ENCRYPTION_KEY", value: "comamessenger-local-integration-key-change-me", wantErr: "INTEGRATION_ENCRYPTION_KEY"},
 		{name: "database password", key: "DATABASE_URL", value: "postgres://comamessenger:comamessenger@postgres:5432/comamessenger", wantErr: "DATABASE_URL"},
 	}
 	for _, tt := range tests {

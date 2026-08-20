@@ -155,6 +155,204 @@ paths:
       responses:
         "204": { description: Session revoked. }
         "404": { $ref: "#/components/responses/Error" }
+  /api/v1/sessions/revoke-others:
+    post:
+      operationId: revokeOtherSessions
+      security: [{ bearerAuth: [] }]
+      responses:
+        "204":
+          { description: Every session except the current one was revoked. }
+  /api/v1/branding:
+    get:
+      operationId: getPublicBranding
+      responses:
+        "200":
+          description: Public workspace branding used before authentication.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicBranding" }
+  /api/v1/branding/{kind}:
+    get:
+      operationId: getBrandingAsset
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema: { type: string, enum: [logo, favicon] }
+      responses:
+        "200":
+          description: A workspace branding image.
+          content:
+            image/png: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+            image/x-icon: { schema: { type: string, format: binary } }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v1/organization:
+    get:
+      operationId: getOrganizationSettings
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Workspace settings visible to a member.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrganizationSettings" }
+    patch:
+      operationId: updateOrganizationSettings
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: "#/components/schemas/UpdateOrganizationSettingsRequest" }
+      responses:
+        "200":
+          description: Updated workspace settings.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrganizationSettings" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /api/v1/organization/branding/{kind}:
+    put:
+      operationId: putBrandingAsset
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema: { type: string, enum: [logo, favicon] }
+      requestBody:
+        required: true
+        content:
+          image/png:
+            { schema: { type: string, format: binary, maxLength: 524288 } }
+          image/jpeg:
+            { schema: { type: string, format: binary, maxLength: 524288 } }
+          image/webp:
+            { schema: { type: string, format: binary, maxLength: 524288 } }
+          image/x-icon:
+            { schema: { type: string, format: binary, maxLength: 524288 } }
+      responses:
+        "204": { description: Branding image saved. }
+        "403": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+        "415": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteBrandingAsset
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema: { type: string, enum: [logo, favicon] }
+      responses:
+        "204": { description: Branding image removed. }
+        "403": { $ref: "#/components/responses/Error" }
+  /api/v1/organization/infrastructure:
+    get:
+      operationId: getInfrastructureSettings
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Masked S3 and SMTP configuration.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InfrastructureSettings" }
+        "403": { $ref: "#/components/responses/Error" }
+    patch:
+      operationId: updateInfrastructureSettings
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              {
+                $ref: "#/components/schemas/UpdateInfrastructureSettingsRequest",
+              }
+      responses:
+        "200":
+          description: Updated masked infrastructure configuration.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InfrastructureSettings" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /api/v1/organization/infrastructure/test:
+    post:
+      operationId: testInfrastructureConnection
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConnectionTestRequest" }
+      responses:
+        "200":
+          description: Server-side connection test result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConnectionTestResult" }
+        "403": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /api/v1/organization/members:
+    get:
+      operationId: listOrganizationMembers
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Workspace members and access state.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [members]
+                properties:
+                  members:
+                    type: array
+                    items: { $ref: "#/components/schemas/OrganizationMember" }
+        "403": { $ref: "#/components/responses/Error" }
+  /api/v1/organization/members/{actor_id}:
+    patch:
+      operationId: updateOrganizationMember
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: "#/components/parameters/ActorId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: "#/components/schemas/UpdateOrganizationMemberRequest" }
+      responses:
+        "200":
+          description: Updated workspace member.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrganizationMember" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /api/v1/organization/audit:
+    get:
+      operationId: listOrganizationAudit
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        "200":
+          description: Most recent administrative audit events.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuditPage" }
+        "403": { $ref: "#/components/responses/Error" }
   /api/v1/invitations:
     post:
       operationId: createInvitation
@@ -1129,6 +1327,7 @@ components:
         - unsupported_format
         - validation_failed
         - version_conflict
+        - workspace_not_found
     DurableEventTypeV1:
       $ref: "./schemas/realtime/v1.schema.json#/$defs/KnownDurableEventType"
     RealtimeCloseCodeV1:
@@ -1239,6 +1438,225 @@ components:
         expires_at: { type: string, format: date-time }
         revoked_at: { type: [string, "null"], format: date-time }
         current: { type: boolean }
+    PublicBranding:
+      type: object
+      additionalProperties: false
+      required: [workspace_name, accent_color, version]
+      properties:
+        workspace_name: { type: string }
+        accent_color: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
+        version: { type: integer, format: int64 }
+        logo_url: { type: string }
+        favicon_url: { type: string }
+    OrganizationSettings:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          name,
+          slug,
+          version,
+          invitation_default_role,
+          invitation_ttl_hours,
+          allow_public_chat_creation,
+          allow_channel_creation,
+          accent_color,
+          has_logo,
+          has_favicon,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        version: { type: integer, format: int64 }
+        invitation_default_role: { type: string, enum: [admin, member] }
+        invitation_ttl_hours: { type: integer, minimum: 1, maximum: 720 }
+        allow_public_chat_creation: { type: boolean }
+        allow_channel_creation: { type: boolean }
+        accent_color: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
+        has_logo: { type: boolean }
+        has_favicon: { type: boolean }
+    UpdateOrganizationSettingsRequest:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          name,
+          slug,
+          expected_version,
+          invitation_default_role,
+          invitation_ttl_hours,
+          allow_public_chat_creation,
+          allow_channel_creation,
+          accent_color,
+        ]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        slug: { type: string, pattern: "^[a-z0-9][a-z0-9-]{1,62}$" }
+        expected_version: { type: integer, format: int64, minimum: 1 }
+        invitation_default_role: { type: string, enum: [admin, member] }
+        invitation_ttl_hours: { type: integer, minimum: 1, maximum: 720 }
+        allow_public_chat_creation: { type: boolean }
+        allow_channel_creation: { type: boolean }
+        accent_color: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
+    S3Configuration:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          endpoint,
+          region,
+          bucket,
+          prefix,
+          force_path_style,
+          credentials_configured,
+        ]
+      properties:
+        endpoint: { type: string }
+        region: { type: string }
+        bucket: { type: string }
+        prefix: { type: string }
+        force_path_style: { type: boolean }
+        credentials_configured: { type: boolean }
+        access_key_hint: { type: string }
+    SMTPConfiguration:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          host,
+          port,
+          username,
+          from_address,
+          from_name,
+          security,
+          credentials_configured,
+        ]
+      properties:
+        host: { type: string }
+        port: { type: integer, minimum: 0, maximum: 65535 }
+        username: { type: string }
+        from_address: { type: string }
+        from_name: { type: string }
+        security: { type: string, enum: [none, starttls, tls] }
+        credentials_configured: { type: boolean }
+    InfrastructureSettings:
+      type: object
+      additionalProperties: false
+      required: [version, s3, smtp]
+      properties:
+        version: { type: integer, format: int64 }
+        s3: { $ref: "#/components/schemas/S3Configuration" }
+        smtp: { $ref: "#/components/schemas/SMTPConfiguration" }
+    S3ConfigurationUpdate:
+      type: object
+      additionalProperties: false
+      required:
+        [endpoint, region, bucket, prefix, force_path_style, clear_credentials]
+      properties:
+        endpoint: { type: string }
+        region: { type: string }
+        bucket: { type: string }
+        prefix: { type: string }
+        force_path_style: { type: boolean }
+        access_key: { type: [string, "null"] }
+        secret_key: { type: [string, "null"] }
+        clear_credentials: { type: boolean }
+    SMTPConfigurationUpdate:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          host,
+          port,
+          username,
+          from_address,
+          from_name,
+          security,
+          clear_credentials,
+        ]
+      properties:
+        host: { type: string }
+        port: { type: integer, minimum: 0, maximum: 65535 }
+        username: { type: string }
+        password: { type: [string, "null"] }
+        from_address: { type: string }
+        from_name: { type: string }
+        security: { type: string, enum: [none, starttls, tls] }
+        clear_credentials: { type: boolean }
+    UpdateInfrastructureSettingsRequest:
+      type: object
+      additionalProperties: false
+      required: [expected_version, s3, smtp]
+      properties:
+        expected_version: { type: integer, format: int64, minimum: 0 }
+        s3: { $ref: "#/components/schemas/S3ConfigurationUpdate" }
+        smtp: { $ref: "#/components/schemas/SMTPConfigurationUpdate" }
+    ConnectionTestRequest:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [s3, smtp] }
+    ConnectionTestResult:
+      type: object
+      additionalProperties: false
+      required: [ok, message, checked_at]
+      properties:
+        ok: { type: boolean }
+        message: { type: string }
+        checked_at: { type: string, format: date-time }
+    OrganizationMember:
+      type: object
+      additionalProperties: false
+      required:
+        [actor_id, email, display_name, handle, role, status, created_at]
+      properties:
+        actor_id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        display_name: { type: string }
+        handle: { type: string }
+        role: { type: string, enum: [owner, admin, member] }
+        status: { type: string, enum: [active, deactivated] }
+        created_at: { type: string, format: date-time }
+    UpdateOrganizationMemberRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        role: { type: [string, "null"], enum: [owner, admin, member, null] }
+        status: { type: [string, "null"], enum: [active, deactivated, null] }
+    AuditEntry:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          actor_id,
+          actor_name,
+          action,
+          target_type,
+          target_id,
+          metadata,
+          created_at,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        actor_id: { type: [string, "null"], format: uuid }
+        actor_name: { type: [string, "null"] }
+        action: { type: string }
+        target_type: { type: string }
+        target_id: { type: [string, "null"] }
+        metadata: { type: object, additionalProperties: true }
+        created_at: { type: string, format: date-time }
+    AuditPage:
+      type: object
+      additionalProperties: false
+      required: [events]
+      properties:
+        events:
+          type: array
+          items: { $ref: "#/components/schemas/AuditEntry" }
     CreateInvitationRequest:
       type: object
       additionalProperties: false

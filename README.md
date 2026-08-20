@@ -57,4 +57,4 @@ ENV_FILE=.env.example make smoke
 
 ## Status
 
-Phases 0–3 are implemented: authentication and organizations; chats, channels, messages and threads; durable resumable realtime with Redis coordination; and the responsive RU/EN Web client with offline outbox, drafts, actions, accessibility, themes and Web Push. The next planned phase adds S3-backed files and search.
+Phases 0–3.1 are implemented: authentication and organizations; chats, channels, messages and threads; durable resumable realtime with Redis coordination; the responsive RU/EN Web client; and full-screen profile, workspace, branding, infrastructure, sessions and audit settings. The next planned phase connects the configured S3-compatible storage to attachments and adds search.

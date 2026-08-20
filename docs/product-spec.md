@@ -476,9 +476,11 @@ GET    /events?since=seq               резервный long-poll
 
 - [x] Нижний Web tabbar на phone: чаты, треды, важные, участники и `Ещё`
 - [x] Route-based базовые страницы профиля и пространства вместо dialogs
-- [ ] Сессии и безопасность аккаунта
-- [ ] Участники, приглашения и organization policies
-- [ ] Настройка bundled/external S3 без раскрытия secrets клиенту
+- [x] Сессии и безопасность аккаунта
+- [x] Участники, приглашения и organization policies
+- [x] Кастомизация логотипа, favicon и accent color
+- [x] Настройка bundled/external S3 и SMTP без раскрытия secrets клиенту
+- [x] Серверные connection tests и журнал административного аудита
 
 ### [Фаза 4. Файлы и поиск (недели 8-9)](phases/04-files-search.md)
 

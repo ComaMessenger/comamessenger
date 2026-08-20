@@ -6,7 +6,9 @@ import type {
   Chat,
   ChatMember,
   ChatNotificationPreferences,
+  ConnectionTestResult,
   CreateChatRequest,
+  CreateInvitationRequest,
   CreateMessageRequest,
   DirectoryChat,
   Draft,
@@ -16,17 +18,27 @@ import type {
   MessagePin,
   MessageReceipt,
   MessageWindow,
+  InfrastructureSettings,
+  Invitation,
+  OrganizationMember,
+  OrganizationSettings,
+  PublicBranding,
   PushConfig,
   PushSubscriptionRecord,
   Reaction,
   ReadMarker,
   ServiceHealth,
+  Session,
   ThreadPage,
   TokenResponse,
   UnreadSnapshot,
   UpdateMessageRequest,
+  UpdateInfrastructureSettingsRequest,
+  UpdateOrganizationMemberRequest,
+  UpdateOrganizationSettingsRequest,
   User,
   UserPreferences,
+  AuditPage,
 } from "./types";
 
 type APIErrorPayload = components["schemas"]["Error"];
@@ -146,6 +158,86 @@ export class MessengerAPI {
       method: "PATCH",
       body: JSON.stringify(input),
     });
+  }
+  createInvitation(input: CreateInvitationRequest): Promise<Invitation> {
+    return this.request("/api/v1/invitations", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+  branding(): Promise<PublicBranding> {
+    return this.request("/api/v1/branding");
+  }
+  async sessions(): Promise<Session[]> {
+    return (await this.request<{ sessions: Session[] }>("/api/v1/sessions"))
+      .sessions;
+  }
+  revokeSession(id: string): Promise<void> {
+    return this.request(`/api/v1/sessions/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+  }
+  revokeOtherSessions(): Promise<void> {
+    return this.request("/api/v1/sessions/revoke-others", { method: "POST" });
+  }
+  organization(): Promise<OrganizationSettings> {
+    return this.request("/api/v1/organization");
+  }
+  updateOrganization(
+    input: UpdateOrganizationSettingsRequest,
+  ): Promise<OrganizationSettings> {
+    return this.request("/api/v1/organization", {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+  }
+  putBrandingAsset(kind: "logo" | "favicon", file: Blob): Promise<void> {
+    return this.request(`/api/v1/organization/branding/${kind}`, {
+      method: "PUT",
+      headers: { "Content-Type": file.type },
+      body: file,
+    });
+  }
+  deleteBrandingAsset(kind: "logo" | "favicon"): Promise<void> {
+    return this.request(`/api/v1/organization/branding/${kind}`, {
+      method: "DELETE",
+    });
+  }
+  infrastructure(): Promise<InfrastructureSettings> {
+    return this.request("/api/v1/organization/infrastructure");
+  }
+  updateInfrastructure(
+    input: UpdateInfrastructureSettingsRequest,
+  ): Promise<InfrastructureSettings> {
+    return this.request("/api/v1/organization/infrastructure", {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+  }
+  testInfrastructure(kind: "s3" | "smtp"): Promise<ConnectionTestResult> {
+    return this.request("/api/v1/organization/infrastructure/test", {
+      method: "POST",
+      body: JSON.stringify({ kind }),
+    });
+  }
+  async organizationMembers(): Promise<OrganizationMember[]> {
+    return (
+      await this.request<{ members: OrganizationMember[] }>(
+        "/api/v1/organization/members",
+      )
+    ).members;
+  }
+  updateOrganizationMember(
+    actorID: string,
+    input: UpdateOrganizationMemberRequest,
+  ): Promise<OrganizationMember> {
+    return this.request(
+      `/api/v1/organization/members/${encodeURIComponent(actorID)}`,
+      { method: "PATCH", body: JSON.stringify(input) },
+    );
+  }
+  organizationAudit(limit = 50): Promise<AuditPage> {
+    return this.request(`/api/v1/organization/audit?limit=${limit}`);
   }
   async chats(): Promise<Chat[]> {
     return (await this.request<{ chats: Chat[] }>("/api/v1/chats")).chats;
@@ -398,7 +490,8 @@ export class MessengerAPI {
     retry = true,
   ): Promise<T> {
     const headers = new Headers(init.headers);
-    if (init.body) headers.set("Content-Type", "application/json");
+    if (init.body && !headers.has("Content-Type"))
+      headers.set("Content-Type", "application/json");
     if (this.accessToken)
       headers.set("Authorization", `Bearer ${this.accessToken}`);
     const response = await fetch(`${this.apiURL}${path}`, {

@@ -23,6 +23,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/push"
 	"github.com/comamessenger/comamessenger/core/internal/realtime"
 	"github.com/comamessenger/comamessenger/core/internal/userstate"
+	"github.com/comamessenger/comamessenger/core/internal/workspace"
 )
 
 func main() {
@@ -139,12 +140,17 @@ func main() {
 	pushService := push.NewService(pool, cfg.Push)
 	pushWorker := push.NewWorker(logger, pool, cfg.Push, realtimeHub.ActorActiveIn)
 	go pushWorker.Run(realtimeCtx)
+	workspaceService, err := workspace.NewService(workspace.NewRepository(pool), cfg.IntegrationEncryptionKey, nil)
+	if err != nil {
+		logger.Error("workspace service initialization failed", "error", err)
+		os.Exit(1)
+	}
 
 	server := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: serverhttp.NewHandler(logger, cfg.PublicAppURL, pool.Ping, serverhttp.Dependencies{
 			Identity: identityService, Chats: chat.NewService(pool, afterCommit),
-			Messages: messageService, UserState: userStateService, Push: pushService, Realtime: realtimeServer,
+			Messages: messageService, UserState: userStateService, Push: pushService, Workspace: workspaceService, Realtime: realtimeServer,
 			CookieSecure: cfg.Auth.CookieSecure, RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
 			BootstrapToken: cfg.BootstrapToken, RequireBootstrapToken: cfg.AppEnv != "development",
 			TrustedProxyCIDRs: cfg.TrustedProxyCIDRs, RevokeRealtimeSession: realtimeServer.RevokeSession,

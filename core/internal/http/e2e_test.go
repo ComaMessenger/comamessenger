@@ -27,6 +27,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/realtime"
 	"github.com/comamessenger/comamessenger/core/internal/testdb"
 	"github.com/comamessenger/comamessenger/core/internal/userstate"
+	"github.com/comamessenger/comamessenger/core/internal/workspace"
 )
 
 func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
@@ -70,11 +71,16 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	go ephemeral.Run(ctx)
 	afterCommit := func(_ string, _ int64) { dispatcher.WakeLocal() }
 	realtimeServer := realtime.NewServer(logger, baseURL, eventStore, hub, identityService.Authenticate, realtimeConfig, ephemeral)
+	workspaceService, err := workspace.NewService(workspace.NewRepository(pool), "e2e-encryption-secret", e2eConnectionTester{})
+	if err != nil {
+		t.Fatal(err)
+	}
 	server.Config.Handler = NewHandler(logger, baseURL, pool.Ping, Dependencies{
 		Identity: identityService, Chats: chat.NewService(pool),
 		Messages:  message.NewService(pool, 64*1024, 100, afterCommit),
 		UserState: userstate.NewService(pool, 64*1024, afterCommit), Realtime: realtimeServer,
 		Push:            push.NewService(pool, config.PushConfig{}),
+		Workspace:       workspaceService,
 		RefreshTokenTTL: 24 * time.Hour, RevokeRealtimeSession: realtimeServer.RevokeSession,
 	})
 	server.Start()
@@ -102,6 +108,59 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/invitations/"+invitationToken+"/accept", "", map[string]any{
 		"display_name": "Member", "handle": "member", "password": "another correct password", "timezone": "UTC",
 	}, standardhttp.StatusCreated, &member)
+
+	var organization workspace.Settings
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/organization", owner.AccessToken, nil, standardhttp.StatusOK, &organization)
+	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/organization", member.AccessToken, map[string]any{
+		"name": "Forbidden", "slug": "forbidden", "expected_version": organization.Version,
+		"invitation_default_role": "member", "invitation_ttl_hours": 24,
+		"allow_public_chat_creation": true, "allow_channel_creation": false, "accent_color": "#174586",
+	}, standardhttp.StatusForbidden, nil)
+	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/organization", owner.AccessToken, map[string]any{
+		"name": "E2E Team", "slug": "e2e-team", "expected_version": organization.Version,
+		"invitation_default_role": "member", "invitation_ttl_hours": 48,
+		"allow_public_chat_creation": false, "allow_channel_creation": false, "accent_color": "#6D5EF5",
+	}, standardhttp.StatusOK, &organization)
+	if organization.Name != "E2E Team" || organization.AccentColor != "#6D5EF5" || organization.Version < 2 {
+		t.Fatalf("organization settings = %+v", organization)
+	}
+	var branding workspace.PublicBranding
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/branding", "", nil, standardhttp.StatusOK, &branding)
+	if branding.WorkspaceName != "E2E Team" || branding.AccentColor != "#6D5EF5" {
+		t.Fatalf("public branding = %+v", branding)
+	}
+	e2eBinaryRequest(t, server.Client(), standardhttp.MethodPut, baseURL+"/api/v1/organization/branding/logo", owner.AccessToken, "image/png", []byte{'\x89', 'P', 'N', 'G', '\r', '\n', '\x1a', '\n'}, standardhttp.StatusNoContent)
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/branding", "", nil, standardhttp.StatusOK, &branding)
+	if branding.LogoURL == "" {
+		t.Fatalf("branding logo URL = %+v", branding)
+	}
+	e2eBinaryRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/branding/logo", "", "", nil, standardhttp.StatusOK)
+	var infrastructure workspace.Infrastructure
+	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/organization/infrastructure", owner.AccessToken, map[string]any{
+		"expected_version": 0,
+		"s3":               map[string]any{"endpoint": "https://storage.yandexcloud.net", "region": "ru-central1", "bucket": "coma-e2e", "prefix": "uploads", "force_path_style": false, "access_key": "ACCESS-1234", "secret_key": "s3-secret", "clear_credentials": false},
+		"smtp":             map[string]any{"host": "smtp.example.test", "port": 587, "username": "coma", "password": "smtp-secret", "from_address": "coma@example.test", "from_name": "Coma", "security": "starttls", "clear_credentials": false},
+	}, standardhttp.StatusOK, &infrastructure)
+	if !infrastructure.S3.CredentialsConfigured || infrastructure.S3.AccessKeyHint != "••••1234" || !infrastructure.SMTP.CredentialsConfigured {
+		t.Fatalf("masked infrastructure = %+v", infrastructure)
+	}
+	var connection workspace.ConnectionTestResult
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/organization/infrastructure/test", owner.AccessToken, map[string]any{"kind": "s3"}, standardhttp.StatusOK, &connection)
+	if !connection.OK {
+		t.Fatalf("S3 connection result = %+v", connection)
+	}
+	var organizationMembers struct {
+		Members []workspace.Member `json:"members"`
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/organization/members", owner.AccessToken, nil, standardhttp.StatusOK, &organizationMembers)
+	if len(organizationMembers.Members) != 2 {
+		t.Fatalf("organization members = %+v", organizationMembers.Members)
+	}
+	var audit workspace.AuditPage
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/organization/audit", owner.AccessToken, nil, standardhttp.StatusOK, &audit)
+	if len(audit.Events) < 2 {
+		t.Fatalf("audit events = %+v", audit.Events)
+	}
 
 	var group chat.Chat
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/chats", owner.AccessToken, map[string]any{
@@ -204,6 +263,11 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	}
 }
 
+type e2eConnectionTester struct{}
+
+func (e2eConnectionTester) TestS3(context.Context, workspace.S3Config) error     { return nil }
+func (e2eConnectionTester) TestSMTP(context.Context, workspace.SMTPConfig) error { return nil }
+
 func e2eRealtimeConfig() config.RealtimeConfig {
 	return config.RealtimeConfig{
 		AuthTimeout: 2 * time.Second, MaxFrameBytes: 256 * 1024, MaxConnectionsPerActor: 10,
@@ -246,6 +310,29 @@ func e2eRequest(t *testing.T, client *standardhttp.Client, method, endpoint, tok
 		if err := json.NewDecoder(response.Body).Decode(output); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func e2eBinaryRequest(t *testing.T, client *standardhttp.Client, method, endpoint, token, contentType string, body []byte, wantStatus int) {
+	t.Helper()
+	request, err := standardhttp.NewRequestWithContext(context.Background(), method, endpoint, bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if contentType != "" {
+		request.Header.Set("Content-Type", contentType)
+	}
+	if token != "" {
+		request.Header.Set("Authorization", "Bearer "+token)
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != wantStatus {
+		data, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
+		t.Fatalf("%s %s status = %d, want %d: %s", method, endpoint, response.StatusCode, wantStatus, data)
 	}
 }
 
