@@ -921,6 +921,7 @@ function Messenger({
   const showMembers = path === "/members";
   const showMore = path === "/more";
   const showProfileSettings = path === "/settings/profile";
+  const showNotificationSettings = path === "/settings/notifications";
   const showWorkspaceSettings = path === "/settings/workspace";
   const showCustomizationSettings = path === "/settings/customization";
   const showInfrastructureSettings = path === "/settings/infrastructure";
@@ -928,6 +929,7 @@ function Messenger({
   const showAuditSettings = path === "/settings/audit";
   const showAnySettings =
     showProfileSettings ||
+    showNotificationSettings ||
     showWorkspaceSettings ||
     showCustomizationSettings ||
     showInfrastructureSettings ||
@@ -1276,12 +1278,7 @@ function Messenger({
           {sidebarCollapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
         </IconButton>
         <footer className="sidebar-profile">
-          <Avatar
-            name={user.display_name}
-            seed={user.id}
-            size="sm"
-            online
-          />
+          <Avatar name={user.display_name} seed={user.id} size="sm" online />
           <button onClick={() => navigate("/settings/profile")}>
             <strong>{user.display_name}</strong>
             <span>@{user.handle}</span>
@@ -1432,7 +1429,6 @@ function Messenger({
             user={user}
             navigate={navigate}
             onLogout={() => void logout()}
-            onNotify={() => setModal("notify")}
           />
         ) : showProfileSettings ? (
           <ProfileSettingsPage
@@ -1440,8 +1436,14 @@ function Messenger({
             user={user}
             navigate={navigate}
             onLogout={() => void logout()}
-            onNotify={() => setModal("notify")}
             onUserUpdated={onUserUpdated}
+          />
+        ) : showNotificationSettings ? (
+          <NotificationSettingsPage
+            api={api}
+            user={user}
+            navigate={navigate}
+            onEnable={() => setModal("notify")}
           />
         ) : showWorkspaceSettings ? (
           <WorkspaceSettingsPage api={api} user={user} navigate={navigate} />
@@ -4118,23 +4120,16 @@ function MobileMorePage({
   user,
   navigate,
   onLogout,
-  onNotify,
 }: {
   user: User;
   navigate(to: string): void;
   onLogout(): void;
-  onNotify(): void;
 }) {
   const { t } = useTranslation();
   return (
     <section className="mobile-more-page utility-page">
       <header className="mobile-more-page__identity">
-        <Avatar
-          name={user.display_name}
-          seed={user.id}
-          size="lg"
-          online
-        />
+        <Avatar name={user.display_name} seed={user.id} size="lg" online />
         <span>
           <strong>{user.display_name}</strong>
           <small>@{user.handle}</small>
@@ -4173,7 +4168,7 @@ function MobileMorePage({
             <small>{t("membersHint")}</small>
           </span>
         </button>
-        <button onClick={onNotify}>
+        <button onClick={() => navigate("/settings/notifications")}>
           <Bell />
           <span>
             <strong>{t("notifications")}</strong>
@@ -4192,59 +4187,208 @@ function MobileMorePage({
   );
 }
 
+type AutosavePhase = "idle" | "dirty" | "saving" | "saved" | "error";
+
+function useAutosave<T>({
+  value,
+  save,
+  fingerprint = (item) => JSON.stringify(item),
+  onSaved,
+  delay = 650,
+}: {
+  value: T | null;
+  save(value: T): Promise<T>;
+  fingerprint?(value: T): string;
+  onSaved?(result: T, snapshot: T): void;
+  delay?: number;
+}) {
+  const [phase, setPhase] = useState<AutosavePhase>("idle");
+  const [error, setError] = useState("");
+  const initialized = useRef(false);
+  const committed = useRef("");
+  const timer = useRef<number | null>(null);
+  const inFlight = useRef(false);
+  const latest = useRef(value);
+  const saveRef = useRef(save);
+  const onSavedRef = useRef(onSaved);
+  const fingerprintRef = useRef(fingerprint);
+  latest.current = value;
+  saveRef.current = save;
+  onSavedRef.current = onSaved;
+  fingerprintRef.current = fingerprint;
+  const signature = value ? fingerprint(value) : null;
+
+  const persist = useCallback(
+    async (snapshot: T) => {
+      if (inFlight.current) return;
+      inFlight.current = true;
+      let succeeded = false;
+      setPhase("saving");
+      setError("");
+      try {
+        const result = await saveRef.current(snapshot);
+        succeeded = true;
+        committed.current = fingerprintRef.current(result);
+        onSavedRef.current?.(result, snapshot);
+        window.setTimeout(() => {
+          if (!inFlight.current && timer.current === null) setPhase("saved");
+        }, 50);
+      } catch (cause) {
+        setError(messageOf(cause));
+        setPhase("error");
+      } finally {
+        inFlight.current = false;
+        const current = latest.current;
+        if (
+          succeeded &&
+          current &&
+          fingerprintRef.current(current) !== committed.current
+        ) {
+          if (timer.current) window.clearTimeout(timer.current);
+          timer.current = window.setTimeout(() => {
+            timer.current = null;
+            void persist(current);
+          }, delay);
+          setPhase((currentPhase) =>
+            currentPhase === "error" ? currentPhase : "dirty",
+          );
+        }
+      }
+    },
+    [delay],
+  );
+
+  useEffect(() => {
+    if (!value || signature === null) return;
+    const current = signature;
+    if (!initialized.current) {
+      initialized.current = true;
+      committed.current = current;
+      return;
+    }
+    if (current === committed.current) return;
+    if (timer.current) window.clearTimeout(timer.current);
+    setPhase("dirty");
+    timer.current = window.setTimeout(() => {
+      timer.current = null;
+      void persist(value);
+    }, delay);
+    return () => {
+      if (timer.current) window.clearTimeout(timer.current);
+      timer.current = null;
+    };
+  }, [delay, persist, signature]);
+
+  useEffect(
+    () => () => {
+      if (timer.current) window.clearTimeout(timer.current);
+      timer.current = null;
+    },
+    [],
+  );
+
+  return {
+    phase,
+    error,
+    retry: () => {
+      if (latest.current) void persist(latest.current);
+    },
+  };
+}
+
+function AutosaveStatus({
+  phase,
+  error,
+  onRetry,
+}: {
+  phase: AutosavePhase;
+  error: string;
+  onRetry(): void;
+}) {
+  const { t } = useTranslation();
+  if (phase === "idle") return null;
+  return (
+    <div
+      className={cx("settings-autosave", phase === "error" && "error")}
+      aria-live="polite"
+    >
+      {phase === "error" ? (
+        <>
+          <span>{error || t("autosaveError")}</span>
+          <button onClick={onRetry}>{t("retry")}</button>
+        </>
+      ) : (
+        <span>
+          {phase === "saved" ? t("autosaveSaved") : t("autosaveSaving")}
+        </span>
+      )}
+    </div>
+  );
+}
+
+type ProfileDraft = {
+  displayName: string;
+  handle: string;
+  theme: UserPreferences["theme"];
+  locale: "ru" | "en";
+};
+
 function ProfileSettingsPage({
   api,
   user,
   navigate,
   onLogout,
-  onNotify,
   onUserUpdated,
 }: {
   api: MessengerAPI;
   user: User;
   navigate(to: string): void;
   onLogout(): void;
-  onNotify(): void;
   onUserUpdated(user: User): void;
 }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const query = useQuery({
     queryKey: ["preferences"],
     queryFn: () => api.preferences(),
   });
-  const [theme, setThemeValue] = useState<UserPreferences["theme"]>(
-    (localStorage.getItem("coma-theme") as UserPreferences["theme"] | null) ??
-      "system",
-  );
-  const [name, setName] = useState(user.display_name);
-  const [handle, setHandle] = useState(user.handle);
-  const [pushPreview, setPushPreview] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [draft, setDraft] = useState<ProfileDraft | null>(null);
   useEffect(() => {
     if (!query.data) return;
-    setThemeValue(query.data.theme);
-    setPushPreview(query.data.push_preview);
-  }, [query.data]);
-  async function save() {
-    const [updatedUser] = await Promise.all([
-      api.updateMe({
-        display_name: name,
-        handle,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      }),
-      api.updatePreferences({
-        theme,
-        locale: i18n.language === "ru" ? "ru" : "en",
-        push_enabled: query.data?.push_enabled ?? false,
-        push_preview: pushPreview,
-        chat_folders: query.data?.chat_folders ?? [],
-        pinned_chat_ids: query.data?.pinned_chat_ids ?? [],
-      }),
-    ]);
-    setTheme(theme);
-    onUserUpdated(updatedUser);
-    setSaved(true);
-  }
+    setDraft(
+      (current) =>
+        current ?? {
+          displayName: user.display_name,
+          handle: user.handle,
+          theme: query.data.theme,
+          locale: query.data.locale,
+        },
+    );
+  }, [query.data, user.display_name, user.handle]);
+  const autosave = useAutosave({
+    value: draft,
+    save: async (snapshot) => {
+      const [updatedUser] = await Promise.all([
+        api.updateMe({
+          display_name: snapshot.displayName,
+          handle: snapshot.handle,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        }),
+        api.updatePreferences({
+          ...(query.data ?? {
+            push_enabled: false,
+            push_preview: false,
+            chat_folders: [],
+            pinned_chat_ids: [],
+          }),
+          theme: snapshot.theme,
+          locale: snapshot.locale,
+        }),
+      ]);
+      onUserUpdated(updatedUser);
+      return snapshot;
+    },
+  });
+  if (!draft) return <Skeleton />;
   return (
     <section className="settings-page utility-page">
       <UtilityPageHeader
@@ -4252,79 +4396,190 @@ function ProfileSettingsPage({
         onBack={() => navigate("/more")}
       />
       <SettingsNavigation user={user} active="profile" navigate={navigate} />
-      <div className="settings-page__body">
-        <p className="settings-page__email">{user.email}</p>
-        <div className="settings-list">
-          <label>
-            <span>{t("name")}</span>
-            <input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
+      <div className="settings-page__body settings-page__body--columns">
+        <AutosaveStatus {...autosave} onRetry={autosave.retry} />
+        <article className="profile-settings-card">
+          <Avatar name={draft.displayName} seed={user.id} size="lg" online />
+          <span>
+            <strong>{draft.displayName}</strong>
+            <small>@{draft.handle}</small>
+            <small>{user.email}</small>
+          </span>
+        </article>
+        <SettingsSection
+          title={t("personalPreferences")}
+          description={t("profileSettingsHint")}
+        >
+          <div className="settings-form-grid">
+            <Field
+              label={t("name")}
+              name="profile-name"
+              value={draft.displayName}
+              onChange={(event) =>
+                setDraft({ ...draft, displayName: event.target.value })
+              }
             />
-          </label>
-          <label>
-            <span>{t("handle")}</span>
-            <input
-              value={handle}
-              onChange={(event) => setHandle(event.target.value)}
+            <Field
+              label={t("handle")}
+              name="profile-handle"
+              value={draft.handle}
+              onChange={(event) =>
+                setDraft({ ...draft, handle: event.target.value })
+              }
             />
-          </label>
-          <label>
-            <span>
-              <Sun />
-              {t("theme")}
-            </span>
-            <select
-              value={theme}
+          </div>
+        </SettingsSection>
+        <SettingsSection
+          title={t("appearance")}
+          description={t("appearanceHint")}
+        >
+          <div className="settings-form-grid">
+            <SelectField
+              label={t("theme")}
+              name="profile-theme"
+              value={draft.theme}
               onChange={(event) => {
-                const next = event.target.value as UserPreferences["theme"];
-                setThemeValue(next);
-                setTheme(next);
+                const theme = event.target.value as UserPreferences["theme"];
+                setDraft({ ...draft, theme });
+                setTheme(theme);
               }}
             >
               <option value="system">{t("system")}</option>
               <option value="light">{t("light")}</option>
               <option value="dark">{t("dark")}</option>
-            </select>
-          </label>
-          <label>
-            <span>
-              <Languages />
-              {t("language")}
-            </span>
-            <select
-              value={i18n.language}
-              onChange={(event) => void setLocale(event.target.value)}
+            </SelectField>
+            <SelectField
+              label={t("language")}
+              name="profile-language"
+              value={draft.locale}
+              onChange={(event) => {
+                const locale = event.target.value as "ru" | "en";
+                setDraft({ ...draft, locale });
+                void setLocale(locale);
+              }}
             >
               <option value="ru">{t("russian")}</option>
               <option value="en">{t("english")}</option>
-              <option value="pseudo">{t("pseudoLocale")}</option>
-            </select>
-          </label>
-          <label>
-            <span>
-              <Bell />
-              {t("notificationPreview")}
-            </span>
-            <input
-              type="checkbox"
-              checked={pushPreview}
-              onChange={(event) => setPushPreview(event.target.checked)}
-            />
-          </label>
-          <button onClick={onNotify}>
-            <Bell />
-            {t("notificationEnable")}
-          </button>
-          <button className="settings-list__save" onClick={() => void save()}>
-            <Check />
-            {saved ? t("changesSaved") : t("save")}
-          </button>
-          <button className="danger" onClick={onLogout}>
+            </SelectField>
+          </div>
+        </SettingsSection>
+        <SettingsSection
+          wide
+          title={t("accountActions")}
+          description={user.email}
+        >
+          <Button variant="danger" onClick={onLogout}>
             <LogOut />
             {t("logout")}
-          </button>
-        </div>
+          </Button>
+        </SettingsSection>
+      </div>
+    </section>
+  );
+}
+
+function NotificationSettingsPage({
+  api,
+  user,
+  navigate,
+  onEnable,
+}: {
+  api: MessengerAPI;
+  user: User;
+  navigate(to: string): void;
+  onEnable(): void;
+}) {
+  const { t } = useTranslation();
+  const query = useQuery({
+    queryKey: ["preferences"],
+    queryFn: () => api.preferences(),
+  });
+  const [draft, setDraft] = useState<UserPreferences | null>(null);
+  useEffect(() => {
+    if (query.data) setDraft((current) => current ?? query.data);
+  }, [query.data]);
+  useEffect(() => {
+    const refresh = () =>
+      void query
+        .refetch()
+        .then((result) => result.data && setDraft(result.data));
+    window.addEventListener("coma-notifications-changed", refresh);
+    return () =>
+      window.removeEventListener("coma-notifications-changed", refresh);
+  }, [query]);
+  const autosave = useAutosave({
+    value: draft,
+    save: (snapshot) => api.updatePreferences(snapshot),
+    onSaved: (result, snapshot) =>
+      setDraft((current) =>
+        current && JSON.stringify(current) !== JSON.stringify(snapshot)
+          ? current
+          : result,
+      ),
+  });
+  if (!draft) return <Skeleton />;
+  const permission =
+    "Notification" in window ? Notification.permission : "denied";
+  return (
+    <section className="settings-page utility-page">
+      <UtilityPageHeader
+        title={t("notificationSettings")}
+        onBack={() => navigate("/more")}
+      />
+      <SettingsNavigation
+        user={user}
+        active="notifications"
+        navigate={navigate}
+      />
+      <div className="settings-page__body settings-page__body--columns">
+        <AutosaveStatus {...autosave} onRetry={autosave.retry} />
+        <SettingsSection
+          title={t("browserNotifications")}
+          description={t("browserNotificationsHint")}
+          icon={<Bell />}
+        >
+          <div className="settings-state-row">
+            <span>
+              <strong>
+                {draft.push_enabled
+                  ? t("notificationsEnabled")
+                  : t("notificationsDisabled")}
+              </strong>
+              <small>
+                {permission === "granted"
+                  ? t("browserPermissionGranted")
+                  : t("browserPermissionMissing")}
+              </small>
+            </span>
+            {draft.push_enabled ? (
+              <SettingsToggle
+                label={t("notifications")}
+                hint={t("notificationsHint")}
+                checked={draft.push_enabled}
+                onChange={(push_enabled) =>
+                  setDraft({ ...draft, push_enabled })
+                }
+              />
+            ) : (
+              <Button variant="primary" onClick={onEnable}>
+                <Bell />
+                {t("notificationEnable")}
+              </Button>
+            )}
+          </div>
+        </SettingsSection>
+        <SettingsSection
+          title={t("notificationPreview")}
+          description={t("notificationPreviewHint")}
+          icon={<MessageCircle />}
+        >
+          <SettingsToggle
+            label={t("notificationPreview")}
+            hint={t("notificationPreviewHint")}
+            checked={draft.push_preview}
+            onChange={(push_preview) => setDraft({ ...draft, push_preview })}
+          />
+        </SettingsSection>
       </div>
     </section>
   );
@@ -4359,26 +4614,43 @@ function WorkspaceSettingsPage({
   useEffect(() => {
     if (query.data) setDraft(query.data);
   }, [query.data]);
-  async function save() {
-    if (!draft) return;
-    try {
-      const updated = await api.updateOrganization({
-        name: draft.name,
-        slug: draft.slug,
-        expected_version: draft.version,
-        invitation_default_role: draft.invitation_default_role,
-        invitation_ttl_hours: draft.invitation_ttl_hours,
-        allow_public_chat_creation: draft.allow_public_chat_creation,
-        allow_channel_creation: draft.allow_channel_creation,
-        accent_color: draft.accent_color,
-      });
-      setDraft(updated);
-      setMessage(t("changesSaved"));
+  const organizationFingerprint = useCallback(
+    (value: OrganizationSettings) =>
+      JSON.stringify({
+        name: value.name,
+        slug: value.slug,
+        invitation_default_role: value.invitation_default_role,
+        invitation_ttl_hours: value.invitation_ttl_hours,
+        allow_public_chat_creation: value.allow_public_chat_creation,
+        allow_channel_creation: value.allow_channel_creation,
+        accent_color: value.accent_color,
+      }),
+    [],
+  );
+  const autosave = useAutosave({
+    value: draft,
+    fingerprint: organizationFingerprint,
+    save: (snapshot) =>
+      api.updateOrganization({
+        name: snapshot.name,
+        slug: snapshot.slug,
+        expected_version: snapshot.version,
+        invitation_default_role: snapshot.invitation_default_role,
+        invitation_ttl_hours: snapshot.invitation_ttl_hours,
+        allow_public_chat_creation: snapshot.allow_public_chat_creation,
+        allow_channel_creation: snapshot.allow_channel_creation,
+        accent_color: snapshot.accent_color,
+      }),
+    onSaved: (updated, snapshot) => {
+      setDraft((current) =>
+        current &&
+        organizationFingerprint(current) !== organizationFingerprint(snapshot)
+          ? { ...current, version: updated.version }
+          : updated,
+      );
       window.dispatchEvent(new Event("coma-branding-changed"));
-    } catch (cause) {
-      setMessage(messageOf(cause));
-    }
-  }
+    },
+  });
   async function updateMember(
     member: OrganizationMember,
     patch: {
@@ -4420,7 +4692,12 @@ function WorkspaceSettingsPage({
       ) : query.isLoading || !draft ? (
         <Skeleton />
       ) : (
-        <div className="settings-page__body">
+        <div className="settings-page__body settings-page__body--columns">
+          <AutosaveStatus
+            phase={autosave.phase}
+            error={autosave.error}
+            onRetry={autosave.retry}
+          />
           <article className="workspace-settings-card">
             <Logo size="small" />
             <span>
@@ -4509,19 +4786,8 @@ function WorkspaceSettingsPage({
               }
             />
           </SettingsSection>
-          <div className="settings-actions">
-            <Button variant="primary" onClick={() => void save()}>
-              <Check />
-              {t("save")}
-            </Button>
-            <FormError
-              message={message && message !== t("changesSaved") ? message : ""}
-            />
-            {message === t("changesSaved") && (
-              <span className="settings-success">{message}</span>
-            )}
-          </div>
           <SettingsSection
+            wide
             title={t("membersAndAccess")}
             description={t("membersAccessHint")}
           >
@@ -4625,6 +4891,11 @@ function WorkspaceSettingsPage({
               ))}
             </div>
           </SettingsSection>
+          {message && (
+            <span className="settings-success settings-section--wide">
+              {message}
+            </span>
+          )}
         </div>
       )}
     </section>
@@ -4653,26 +4924,33 @@ function CustomizationSettingsPage({
   useEffect(() => {
     if (query.data) setSettings(query.data);
   }, [query.data]);
-  async function saveAccent() {
-    if (!settings) return;
-    try {
-      const updated = await api.updateOrganization({
-        name: settings.name,
-        slug: settings.slug,
-        expected_version: settings.version,
-        invitation_default_role: settings.invitation_default_role,
-        invitation_ttl_hours: settings.invitation_ttl_hours,
-        allow_public_chat_creation: settings.allow_public_chat_creation,
-        allow_channel_creation: settings.allow_channel_creation,
-        accent_color: settings.accent_color,
-      });
-      setSettings(updated);
-      setMessage(t("changesSaved"));
+  const accentFingerprint = useCallback(
+    (value: OrganizationSettings) => value.accent_color,
+    [],
+  );
+  const autosave = useAutosave({
+    value: settings,
+    fingerprint: accentFingerprint,
+    save: (snapshot) =>
+      api.updateOrganization({
+        name: snapshot.name,
+        slug: snapshot.slug,
+        expected_version: snapshot.version,
+        invitation_default_role: snapshot.invitation_default_role,
+        invitation_ttl_hours: snapshot.invitation_ttl_hours,
+        allow_public_chat_creation: snapshot.allow_public_chat_creation,
+        allow_channel_creation: snapshot.allow_channel_creation,
+        accent_color: snapshot.accent_color,
+      }),
+    onSaved: (updated, snapshot) => {
+      setSettings((current) =>
+        current && accentFingerprint(current) !== accentFingerprint(snapshot)
+          ? { ...current, version: updated.version }
+          : updated,
+      );
       window.dispatchEvent(new Event("coma-branding-changed"));
-    } catch (cause) {
-      setMessage(messageOf(cause));
-    }
-  }
+    },
+  });
   async function upload(kind: "logo" | "favicon", files: FileList | null) {
     const file = files?.[0];
     if (!file) return;
@@ -4713,7 +4991,12 @@ function CustomizationSettingsPage({
       ) : !settings ? (
         <Skeleton />
       ) : (
-        <div className="settings-page__body">
+        <div className="settings-page__body settings-page__body--columns">
+          <AutosaveStatus
+            phase={autosave.phase}
+            error={autosave.error}
+            onRetry={autosave.retry}
+          />
           <SettingsSection
             title={t("brandIdentity")}
             description={t("brandIdentityHint")}
@@ -4789,13 +5072,11 @@ function CustomizationSettingsPage({
               </div>
             </div>
           </SettingsSection>
-          <div className="settings-actions">
-            <Button variant="primary" onClick={() => void saveAccent()}>
-              <Check />
-              {t("save")}
-            </Button>
-            <span className="settings-success">{message}</span>
-          </div>
+          {message && (
+            <span className="settings-success settings-section--wide">
+              {message}
+            </span>
+          )}
         </div>
       )}
     </section>
@@ -4834,41 +5115,111 @@ function InfrastructureSettingsPage({
         },
       });
   }, [query.data]);
-  async function save() {
-    if (!value) return;
-    try {
-      const updated = await api.updateInfrastructure({
-        expected_version: value.version,
+  type InfrastructureDraft = {
+    settings: InfrastructureSettings;
+    s3AccessKey: string;
+    s3SecretKey: string;
+    smtpPassword: string;
+  };
+  const draft: InfrastructureDraft | null = value
+    ? {
+        settings: value,
+        s3AccessKey,
+        s3SecretKey,
+        smtpPassword,
+      }
+    : null;
+  const infrastructureFingerprint = useCallback(
+    (item: InfrastructureDraft) =>
+      JSON.stringify({
         s3: {
-          endpoint: value.s3.endpoint,
-          region: value.s3.region,
-          bucket: value.s3.bucket,
-          prefix: value.s3.prefix,
-          force_path_style: value.s3.force_path_style,
-          access_key: s3AccessKey || null,
-          secret_key: s3SecretKey || null,
+          endpoint: item.settings.s3.endpoint,
+          region: item.settings.s3.region,
+          bucket: item.settings.s3.bucket,
+          prefix: item.settings.s3.prefix,
+          force_path_style: item.settings.s3.force_path_style,
+          access_key: item.s3AccessKey,
+          secret_key: item.s3SecretKey,
+        },
+        smtp: {
+          host: item.settings.smtp.host,
+          port: item.settings.smtp.port,
+          username: item.settings.smtp.username,
+          password: item.smtpPassword,
+          from_address: item.settings.smtp.from_address,
+          from_name: item.settings.smtp.from_name,
+          security: item.settings.smtp.security,
+        },
+      }),
+    [],
+  );
+  const autosave = useAutosave({
+    value: draft,
+    fingerprint: infrastructureFingerprint,
+    save: async (snapshot) => {
+      const updated = await api.updateInfrastructure({
+        expected_version: snapshot.settings.version,
+        s3: {
+          endpoint: snapshot.settings.s3.endpoint,
+          region: snapshot.settings.s3.region,
+          bucket: snapshot.settings.s3.bucket,
+          prefix: snapshot.settings.s3.prefix,
+          force_path_style: snapshot.settings.s3.force_path_style,
+          access_key: snapshot.s3AccessKey || null,
+          secret_key: snapshot.s3SecretKey || null,
           clear_credentials: false,
         },
         smtp: {
-          host: value.smtp.host,
-          port: value.smtp.port,
-          username: value.smtp.username,
-          password: smtpPassword || null,
-          from_address: value.smtp.from_address,
-          from_name: value.smtp.from_name,
-          security: value.smtp.security,
+          host: snapshot.settings.smtp.host,
+          port: snapshot.settings.smtp.port,
+          username: snapshot.settings.smtp.username,
+          password: snapshot.smtpPassword || null,
+          from_address: snapshot.settings.smtp.from_address,
+          from_name: snapshot.settings.smtp.from_name,
+          security: snapshot.settings.smtp.security,
           clear_credentials: false,
         },
       });
-      setValue(updated);
-      setS3AccessKey("");
-      setS3SecretKey("");
-      setSMTPPassword("");
-      setMessage(t("changesSaved"));
-    } catch (cause) {
-      setMessage(messageOf(cause));
-    }
-  }
+      return {
+        settings: updated,
+        s3AccessKey: "",
+        s3SecretKey: "",
+        smtpPassword: "",
+      };
+    },
+    onSaved: (result, snapshot) => {
+      const unchanged =
+        draft &&
+        infrastructureFingerprint(draft) ===
+          infrastructureFingerprint(snapshot);
+      if (unchanged) {
+        setValue(result.settings);
+      } else {
+        setValue((current) =>
+          current
+            ? {
+                ...current,
+                version: result.settings.version,
+                s3: {
+                  ...current.s3,
+                  credentials_configured:
+                    result.settings.s3.credentials_configured,
+                  access_key_hint: result.settings.s3.access_key_hint,
+                },
+                smtp: {
+                  ...current.smtp,
+                  credentials_configured:
+                    result.settings.smtp.credentials_configured,
+                },
+              }
+            : result.settings,
+        );
+      }
+      if (s3AccessKey === snapshot.s3AccessKey) setS3AccessKey("");
+      if (s3SecretKey === snapshot.s3SecretKey) setS3SecretKey("");
+      if (smtpPassword === snapshot.smtpPassword) setSMTPPassword("");
+    },
+  });
   async function test(kind: "s3" | "smtp") {
     try {
       const result = await api.testInfrastructure(kind);
@@ -4893,7 +5244,12 @@ function InfrastructureSettingsPage({
       ) : !value ? (
         <Skeleton />
       ) : (
-        <div className="settings-page__body">
+        <div className="settings-page__body settings-page__body--columns">
+          <AutosaveStatus
+            phase={autosave.phase}
+            error={autosave.error}
+            onRetry={autosave.retry}
+          />
           <SettingsSection
             title={t("s3Storage")}
             description={t("s3StorageHint")}
@@ -5083,13 +5439,11 @@ function InfrastructureSettingsPage({
               {t("testConnection")}
             </Button>
           </SettingsSection>
-          <div className="settings-actions">
-            <Button variant="primary" onClick={() => void save()}>
-              <Check />
-              {t("saveInfrastructure")}
-            </Button>
-            <span className="settings-success">{message}</span>
-          </div>
+          {message && (
+            <span className="settings-success settings-section--wide">
+              {message}
+            </span>
+          )}
         </div>
       )}
     </section>
@@ -5111,24 +5465,45 @@ function SecuritySettingsPage({
     queryFn: () => api.sessions(),
   });
   const [message, setMessage] = useState("");
+  const [revokedIDs, setRevokedIDs] = useState<Set<string>>(() => new Set());
+  const [pendingSession, setPendingSession] = useState<string | null>(null);
   async function revoke(session: Session) {
+    setPendingSession(session.id);
     try {
       await api.revokeSession(session.id);
+      setRevokedIDs((current) => new Set(current).add(session.id));
       await query.refetch();
       setMessage(t("sessionRevoked"));
     } catch (cause) {
       setMessage(messageOf(cause));
+    } finally {
+      setPendingSession(null);
     }
   }
   async function revokeOthers() {
+    setPendingSession("others");
     try {
       await api.revokeOtherSessions();
+      setRevokedIDs((current) => {
+        const next = new Set(current);
+        for (const session of query.data ?? [])
+          if (!session.current) next.add(session.id);
+        return next;
+      });
       await query.refetch();
       setMessage(t("otherSessionsRevoked"));
     } catch (cause) {
       setMessage(messageOf(cause));
+    } finally {
+      setPendingSession(null);
     }
   }
+  const activeSessions = (query.data ?? []).filter(
+    (session) =>
+      !session.revoked_at &&
+      !revokedIDs.has(session.id) &&
+      Date.parse(session.expires_at) > Date.now(),
+  );
   return (
     <section className="settings-page utility-page">
       <UtilityPageHeader
@@ -5143,7 +5518,7 @@ function SecuritySettingsPage({
           icon={<MonitorSmartphone />}
         >
           <div className="session-list">
-            {(query.data ?? []).map((session) => (
+            {activeSessions.map((session) => (
               <article key={session.id} className="session-card">
                 <MonitorSmartphone />
                 <span>
@@ -5160,14 +5535,24 @@ function SecuritySettingsPage({
                 {session.current ? (
                   <Badge tone="primary">{t("current")}</Badge>
                 ) : (
-                  <Button size="sm" onClick={() => void revoke(session)}>
+                  <Button
+                    size="sm"
+                    disabled={pendingSession !== null}
+                    onClick={() => void revoke(session)}
+                  >
                     {t("revoke")}
                   </Button>
                 )}
               </article>
             ))}
           </div>
-          <Button onClick={() => void revokeOthers()}>
+          <Button
+            disabled={
+              pendingSession !== null ||
+              activeSessions.every((session) => session.current)
+            }
+            onClick={() => void revokeOthers()}
+          >
             <KeyRound />
             {t("logoutOtherDevices")}
           </Button>
@@ -5233,6 +5618,7 @@ function AuditSettingsPage({
 
 type SettingsPageID =
   | "profile"
+  | "notifications"
   | "workspace"
   | "customization"
   | "infrastructure"
@@ -5253,47 +5639,45 @@ function SettingsNavigation({
     id: SettingsPageID;
     path: string;
     label: string;
-    icon: LucideIcon;
     admin?: boolean;
   }[] = [
     {
       id: "profile",
       path: "/settings/profile",
       label: t("profile"),
-      icon: UserRound,
+    },
+    {
+      id: "notifications",
+      path: "/settings/notifications",
+      label: t("notifications"),
     },
     {
       id: "security",
       path: "/settings/security",
       label: t("security"),
-      icon: ShieldCheck,
     },
     {
       id: "workspace",
       path: "/settings/workspace",
       label: t("workspace"),
-      icon: Building2,
       admin: true,
     },
     {
       id: "customization",
       path: "/settings/customization",
       label: t("customization"),
-      icon: Paintbrush,
       admin: true,
     },
     {
       id: "infrastructure",
       path: "/settings/infrastructure",
       label: t("connections"),
-      icon: Server,
       admin: true,
     },
     {
       id: "audit",
       path: "/settings/audit",
       label: t("audit"),
-      icon: History,
       admin: true,
     },
   ];
@@ -5302,14 +5686,12 @@ function SettingsNavigation({
       {items
         .filter((item) => !item.admin || admin)
         .map((item) => {
-          const Icon = item.icon;
           return (
             <button
               key={item.id}
               className={active === item.id ? "active" : ""}
               onClick={() => navigate(item.path)}
             >
-              <Icon />
               {item.label}
             </button>
           );
@@ -5321,15 +5703,19 @@ function SettingsSection({
   title,
   description,
   icon,
+  wide = false,
   children,
 }: {
   title: string;
   description: string;
   icon?: ReactNode;
+  wide?: boolean;
   children: ReactNode;
 }) {
   return (
-    <section className="settings-section">
+    <section
+      className={cx("settings-section", wide && "settings-section--wide")}
+    >
       <header>
         {icon}
         <span>
@@ -5456,6 +5842,7 @@ function NotificationDialog({
       });
       const preferences = await api.preferences();
       await api.updatePreferences({ ...preferences, push_enabled: true });
+      window.dispatchEvent(new Event("coma-notifications-changed"));
       onClose();
     } catch (cause) {
       setError(messageOf(cause));

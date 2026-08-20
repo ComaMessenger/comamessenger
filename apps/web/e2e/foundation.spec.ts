@@ -149,6 +149,28 @@ async function mockMessenger(
       credentials_configured: false,
     },
   };
+  let runtimeSessions = [
+    {
+      id: "session-current",
+      user_agent: "Playwright",
+      ip_address: "127.0.0.1",
+      created_at: "2026-08-19T00:00:00Z",
+      last_seen_at: "2026-08-20T00:00:00Z",
+      expires_at: "2026-09-20T00:00:00Z",
+      revoked_at: null as string | null,
+      current: true,
+    },
+    {
+      id: "session-other",
+      user_agent: "Mobile Safari",
+      ip_address: "10.0.0.2",
+      created_at: "2026-08-19T00:00:00Z",
+      last_seen_at: "2026-08-19T23:00:00Z",
+      expires_at: "2026-09-20T00:00:00Z",
+      revoked_at: null as string | null,
+      current: false,
+    },
+  ];
   const sent: Array<Record<string, unknown>> = [];
   const history =
     suppliedHistory ??
@@ -321,38 +343,28 @@ async function mockMessenger(
         ],
       };
     else if (path.endsWith("/sessions/revoke-others")) {
+      runtimeSessions = runtimeSessions.map((session) =>
+        session.current
+          ? session
+          : { ...session, revoked_at: "2026-08-21T00:00:00Z" },
+      );
       status = 204;
       body = undefined;
     } else if (
       /\/sessions\/[^/]+$/.test(path) &&
       route.request().method() === "DELETE"
     ) {
+      const sessionID = path.split("/").at(-1);
+      runtimeSessions = runtimeSessions.map((session) =>
+        session.id === sessionID
+          ? { ...session, revoked_at: "2026-08-21T00:00:00Z" }
+          : session,
+      );
       status = 204;
       body = undefined;
     } else if (path.endsWith("/sessions"))
       body = {
-        sessions: [
-          {
-            id: "session-current",
-            user_agent: "Playwright",
-            ip_address: "127.0.0.1",
-            created_at: "2026-08-19T00:00:00Z",
-            last_seen_at: "2026-08-20T00:00:00Z",
-            expires_at: "2026-09-20T00:00:00Z",
-            revoked_at: null,
-            current: true,
-          },
-          {
-            id: "session-other",
-            user_agent: "Mobile Safari",
-            ip_address: "10.0.0.2",
-            created_at: "2026-08-19T00:00:00Z",
-            last_seen_at: "2026-08-19T23:00:00Z",
-            expires_at: "2026-09-20T00:00:00Z",
-            revoked_at: null,
-            current: false,
-          },
-        ],
+        sessions: runtimeSessions,
       };
     else if (
       path.endsWith("/invitations") &&
@@ -799,16 +811,29 @@ test("phone tabbar keeps navigation and settings in the main field", async ({
   ).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.getByLabel("Ваше имя").fill("Анна Новая");
-  await page.getByRole("button", { name: "Сохранить" }).click();
-  await expect(
-    page.getByRole("button", { name: "Изменения сохранены" }),
-  ).toBeVisible();
+  await expect(page.getByText("Сохранено")).toBeVisible();
   await tabbar.getByRole("button", { name: "Ещё" }).click();
   await page.getByRole("button", { name: /Настройки пространства/ }).click();
   await expect(page).toHaveURL(/\/settings\/workspace$/);
   await expect(
     page.getByRole("heading", { name: "Настройки пространства" }),
   ).toBeVisible();
+  const settingsBody = page.locator(".settings-page__body");
+  if (test.info().project.name === "phone") {
+    const scrollMetrics = await settingsBody.evaluate((element) => ({
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight,
+    }));
+    expect(scrollMetrics.scrollHeight).toBeGreaterThan(
+      scrollMetrics.clientHeight,
+    );
+    await settingsBody.evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+    await expect
+      .poll(() => settingsBody.evaluate((element) => element.scrollTop))
+      .toBeGreaterThan(0);
+  }
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
@@ -822,19 +847,31 @@ test("phase 3.1 settings cover workspace branding infrastructure sessions and au
   ).toBeVisible();
   await page.getByLabel("Название организации").fill("Новая команда");
   await page.getByLabel("Срок приглашения, часов").fill("72");
-  await page.getByRole("button", { name: "Сохранить", exact: true }).click();
-  await expect(page.getByText("Изменения сохранены")).toBeVisible();
+  await expect(page.getByText("Сохранено")).toBeVisible();
   await page.getByLabel("Почта участника").fill("new@example.com");
   await page.getByRole("button", { name: "Создать приглашение" }).click();
   await expect(page.getByLabel("Ссылка приглашения")).toHaveValue(
     /\/invite\/test-token$/,
   );
 
+  await page
+    .getByRole("navigation", { name: "Разделы настроек" })
+    .getByRole("button", { name: "Уведомления" })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Настройки уведомлений" }),
+  ).toBeVisible();
+  await page
+    .getByRole("checkbox", { name: /Показывать текст сообщения/ })
+    .check();
+  await expect(page.getByText("Сохранено")).toBeVisible();
+
   await page.getByRole("button", { name: "Оформление", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Оформление пространства" }),
   ).toBeVisible();
   await page.getByLabel("HEX-значение").fill("#6D5EF5");
+  await expect(page.getByText("Сохранено")).toBeVisible();
   await page
     .locator('input[type="file"]')
     .first()
@@ -856,8 +893,7 @@ test("phase 3.1 settings cover workspace branding infrastructure sessions and au
   await page.getByLabel("Secret key").fill("secret");
   await page.getByLabel("Хост").fill("smtp.example.com");
   await page.getByLabel("Адрес отправителя").fill("coma@example.com");
-  await page.getByRole("button", { name: "Сохранить подключения" }).click();
-  await expect(page.getByText("Изменения сохранены")).toBeVisible();
+  await expect(page.getByText("Сохранено")).toBeVisible();
   await page
     .getByRole("button", { name: "Проверить подключение" })
     .first()
@@ -873,6 +909,7 @@ test("phase 3.1 settings cover workspace branding infrastructure sessions and au
     .getByRole("button", { name: "Выйти на остальных устройствах" })
     .click();
   await expect(page.getByText("Остальные сессии завершены")).toBeVisible();
+  await expect(page.getByText("Mobile Safari")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Аудит", exact: true }).click();
   await expect(page.getByText("organization.settings.update")).toBeVisible();

@@ -2332,34 +2332,43 @@ a:focus-visible {
 }
 .settings-navigation {
   display: flex;
-  gap: 4px;
+  gap: 24px;
   min-width: 0;
-  min-height: 50px;
-  padding: 7px 14px;
+  min-height: 52px;
+  padding: 0 20px;
   overflow-x: auto;
   border-block-end: 1px solid var(--coma-border);
   scrollbar-width: none;
 }
 .settings-navigation button {
+  position: relative;
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 7px;
-  min-height: 36px;
-  padding: 7px 10px;
+  min-height: 52px;
+  padding: 0;
   border: 0;
-  border-radius: 9px;
+  border-radius: 0;
   color: var(--coma-muted);
   background: transparent;
   white-space: nowrap;
 }
 .settings-navigation button:hover {
   color: var(--coma-text);
-  background: var(--coma-sidebar);
+  background: transparent;
 }
 .settings-navigation button.active {
-  color: var(--coma-primary);
-  background: var(--coma-primary-soft);
+  color: var(--coma-text);
+  background: transparent;
+}
+.settings-navigation button.active::after {
+  position: absolute;
+  inset-inline: 0;
+  bottom: -1px;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--coma-primary);
+  content: "";
 }
 .settings-navigation svg {
   width: 16px;
@@ -2367,15 +2376,30 @@ a:focus-visible {
 }
 .settings-page__body {
   display: grid;
+  grid-auto-rows: max-content;
   align-content: start;
   gap: 14px;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+.settings-page__body--columns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
+  max-width: 1040px;
+}
+.settings-page__body--columns > * {
+  max-width: none;
 }
 .settings-section {
-  width: min(100%, 820px);
+  width: 100%;
   overflow: hidden;
-  border: 1px solid var(--coma-border);
-  border-radius: 14px;
-  background: var(--coma-surface);
+  border: 1px solid color-mix(in srgb, var(--coma-border) 72%, transparent);
+  border-radius: 12px;
+  background: var(--coma-surface-raised);
+}
+.settings-section--wide,
+.settings-autosave {
+  grid-column: 1 / -1;
 }
 .settings-section > header {
   display: flex;
@@ -2387,7 +2411,7 @@ a:focus-visible {
 .settings-section > header > svg {
   width: 19px;
   margin-block-start: 2px;
-  color: var(--coma-primary);
+  color: var(--coma-muted);
 }
 .settings-section > header h2 {
   margin: 0;
@@ -2403,6 +2427,53 @@ a:focus-visible {
   display: grid;
   gap: 12px;
   padding: 14px 16px;
+}
+.settings-autosave {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-height: 20px;
+  color: var(--coma-muted);
+  font-size: 11px;
+}
+.settings-autosave.error {
+  color: var(--coma-danger);
+}
+.settings-autosave button {
+  padding: 0;
+  border: 0;
+  color: currentColor;
+  text-decoration: underline;
+  background: transparent;
+}
+.profile-settings-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 112px;
+  padding: 18px;
+  border-radius: 12px;
+  background: var(--coma-surface-raised);
+}
+.profile-settings-card > span,
+.settings-state-row > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.profile-settings-card small,
+.settings-state-row small {
+  color: var(--coma-muted);
+}
+.settings-state-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+}
+.settings-state-row .settings-toggle {
+  min-width: 230px;
 }
 .settings-form-grid {
   display: grid;
@@ -3141,6 +3212,14 @@ a:focus-visible {
   .settings-page__body {
     padding: 14px 12px;
   }
+  .settings-page__body--columns {
+    grid-template-columns: 1fr;
+  }
+  .settings-page__body--columns > *,
+  .settings-section--wide,
+  .settings-autosave {
+    grid-column: 1;
+  }
   .settings-page .settings-list label {
     display: grid;
     justify-content: stretch;
@@ -3151,10 +3230,17 @@ a:focus-visible {
     max-width: none;
   }
   .settings-navigation {
-    padding-inline: 8px;
+    gap: 20px;
+    padding-inline: 12px;
   }
   .settings-navigation button {
-    min-height: 40px;
+    min-height: 48px;
+  }
+  .settings-state-row {
+    grid-template-columns: 1fr;
+  }
+  .settings-state-row .settings-toggle {
+    min-width: 0;
   }
   .settings-form-grid,
   .branding-assets,
