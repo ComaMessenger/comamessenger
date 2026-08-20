@@ -8,6 +8,7 @@ import type {
 import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { stableAvatarIndex } from "@comamessenger/tokens";
 
 export function cx(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
@@ -218,10 +219,12 @@ export function Dialog({
 
 export function Avatar({
   name,
+  seed,
   size = "md",
   online = false,
 }: {
   name: string;
+  seed?: string;
   size?: "sm" | "md" | "lg" | "xl";
   online?: boolean;
 }) {
@@ -232,7 +235,10 @@ export function Avatar({
     .join("")
     .toUpperCase();
   return (
-    <span className={cx("ui-avatar", `ui-avatar--${size}`)}>
+    <span
+      className={cx("ui-avatar", `ui-avatar--${size}`)}
+      data-avatar-color={stableAvatarIndex(seed || name)}
+    >
       {initials || "U"}
       {online && <i aria-hidden="true" />}
     </span>

@@ -265,8 +265,11 @@ a:focus-visible {
   background: var(--coma-surface);
 }
 .sidebar-nav button.active {
-  color: var(--coma-primary);
+  color: var(--coma-foreground);
   font-weight: 600;
+}
+.sidebar-nav button.active svg {
+  color: var(--coma-primary);
 }
 .sidebar-nav button:disabled {
   cursor: default;
@@ -465,8 +468,8 @@ a:focus-visible {
   background: color-mix(in srgb, var(--coma-surface) 76%, transparent);
 }
 .chat-card.selected {
-  background: var(--coma-primary-soft);
-  color: var(--coma-primary);
+  background: var(--coma-surface-selected);
+  color: var(--coma-muted);
 }
 .chat-list-pane .ui-avatar--lg {
   width: 42px;
@@ -510,7 +513,10 @@ a:focus-visible {
 .chat-card.selected .chat-card__top strong,
 .chat-card.selected time,
 .chat-card.selected .chat-card__preview {
-  color: var(--coma-primary);
+  color: inherit;
+}
+.chat-card.selected .chat-card__top strong {
+  color: var(--coma-foreground);
 }
 .chat-card--muted .chat-card__preview {
   opacity: 0.72;
@@ -1961,13 +1967,24 @@ a:focus-visible {
   height: 38px;
   border-radius: 50%;
   color: var(--coma-on-primary);
-  background: linear-gradient(
-    145deg,
-    var(--coma-avatar-start),
-    var(--coma-avatar-end)
-  );
+  background: var(--coma-avatar-1);
   font-size: 12px;
   font-weight: 700;
+}
+.ui-avatar[data-avatar-color="1"] {
+  background: var(--coma-avatar-2);
+}
+.ui-avatar[data-avatar-color="2"] {
+  background: var(--coma-avatar-3);
+}
+.ui-avatar[data-avatar-color="3"] {
+  background: var(--coma-avatar-4);
+}
+.ui-avatar[data-avatar-color="4"] {
+  background: var(--coma-avatar-5);
+}
+.ui-avatar[data-avatar-color="5"] {
+  background: var(--coma-avatar-6);
 }
 .ui-avatar--sm {
   width: 30px;
@@ -1986,11 +2003,11 @@ a:focus-visible {
 }
 .ui-avatar i {
   position: absolute;
-  inset-inline-end: 0;
-  bottom: 0;
-  width: 12px;
-  height: 12px;
-  border: 3px solid var(--coma-surface);
+  inset-inline-end: -2px;
+  bottom: -1px;
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--coma-surface);
   border-radius: 50%;
   background: var(--coma-online);
 }
@@ -1998,7 +2015,7 @@ a:focus-visible {
   border-color: var(--coma-sidebar);
 }
 .chat-card.selected .ui-avatar i {
-  border-color: var(--coma-primary);
+  border-color: var(--coma-surface-selected);
 }
 .ui-button {
   display: inline-flex;
@@ -3225,10 +3242,10 @@ a:focus-visible {
     font-variant-numeric: tabular-nums;
   }
   .chat-card.selected {
-    background: color-mix(in srgb, var(--coma-primary-soft) 72%, transparent);
+    background: var(--coma-surface-selected);
   }
   .chat-card.selected .chat-card__top strong {
-    color: var(--coma-primary);
+    color: var(--coma-foreground);
   }
   .chat-card.selected time,
   .chat-card.selected .chat-card__preview {

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { Button, Dialog, RadioOption } from "./ui";
+import { Avatar, Button, Dialog, RadioOption } from "./ui";
 describe("web primitives", () => {
   it("keeps explicit button semantics", () => {
     render(<Button variant="primary">Save</Button>);
@@ -28,5 +28,16 @@ describe("web primitives", () => {
     );
     fireEvent.click(screen.getByRole("radio", { name: /Enter sends/ }));
     expect(change).toHaveBeenCalledOnce();
+  });
+  it("keeps an avatar color stable when its label changes", () => {
+    const view = render(<Avatar name="First name" seed="chat-01" />);
+    const before =
+      view.container.firstElementChild?.getAttribute("data-avatar-color");
+    view.rerender(<Avatar name="Renamed chat" seed="chat-01" />);
+    expect(before).toMatch(/^[0-5]$/);
+    expect(view.container.firstElementChild).toHaveAttribute(
+      "data-avatar-color",
+      before,
+    );
   });
 });

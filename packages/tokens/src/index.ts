@@ -27,6 +27,7 @@ export const themes = {
     sidebar: "#eef3f8",
     surface: "#ffffff",
     surfaceRaised: "#ffffff",
+    surfaceSelected: "#e7edf4",
     foreground: "#182235",
     muted: "#566477",
     subtle: "#566477",
@@ -38,7 +39,13 @@ export const themes = {
     onPrimary: "#ffffff",
     avatarStart: "#174586",
     avatarEnd: "#3e76bc",
-    online: "#247a54",
+    avatar1: "#3978c7",
+    avatar2: "#7458bd",
+    avatar3: "#b64f86",
+    avatar4: "#c65555",
+    avatar5: "#b96a28",
+    avatar6: "#278b7d",
+    online: "#13b96f",
     tooltip: "#182235",
     danger: "#bd3346",
     dangerSoft: "#fce8eb",
@@ -62,6 +69,7 @@ export const themes = {
     sidebar: "#1d2026",
     surface: "#202329",
     surfaceRaised: "#292d36",
+    surfaceSelected: "#2a2e36",
     foreground: "#f0f1f5",
     muted: "#a9adbb",
     subtle: "#838896",
@@ -73,7 +81,13 @@ export const themes = {
     onPrimary: "#ffffff",
     avatarStart: "#22589d",
     avatarEnd: "#3d83d3",
-    online: "#48d59b",
+    avatar1: "#4b8ddd",
+    avatar2: "#8a6dd3",
+    avatar3: "#cf649d",
+    avatar4: "#d56868",
+    avatar5: "#c77b38",
+    avatar6: "#39a393",
+    online: "#2ee58d",
     tooltip: "#f0f1f5",
     danger: "#ff8a99",
     dangerSoft: "#49272f",
@@ -97,7 +111,7 @@ export const themes = {
 export type ThemeName = keyof typeof themes;
 export type ThemeTokens = (typeof themes)[ThemeName];
 
-export function stableAvatarIndex(seed: string, paletteSize = 8): number {
+export function stableAvatarIndex(seed: string, paletteSize = 6): number {
   let hash = 2166136261;
   for (let index = 0; index < seed.length; index += 1) {
     hash ^= seed.charCodeAt(index);

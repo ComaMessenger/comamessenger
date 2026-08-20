@@ -1276,7 +1276,12 @@ function Messenger({
           {sidebarCollapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
         </IconButton>
         <footer className="sidebar-profile">
-          <Avatar name={user.display_name} size="sm" online />
+          <Avatar
+            name={user.display_name}
+            seed={user.id}
+            size="sm"
+            online
+          />
           <button onClick={() => navigate("/settings/profile")}>
             <strong>{user.display_name}</strong>
             <span>@{user.handle}</span>
@@ -1634,7 +1639,12 @@ function ChatCard({
         aria-haspopup="menu"
         aria-expanded={Boolean(menu)}
       >
-        <Avatar name={title} size="lg" online={chat.kind === "direct"} />
+        <Avatar
+          name={title}
+          seed={chat.avatar_seed}
+          size="lg"
+          online={chat.kind === "direct"}
+        />
         <span className="chat-card__body">
           <span className="chat-card__top">
             <strong>
@@ -1843,7 +1853,11 @@ function SearchPalette({
             <>
               {chatResults.map((chat) => (
                 <button key={chat.id} onClick={() => onOpen(chat.id)}>
-                  <Avatar name={titleOf(chat, members, ownID)} size="sm" />
+                  <Avatar
+                    name={titleOf(chat, members, ownID)}
+                    seed={chat.avatar_seed}
+                    size="sm"
+                  />
                   <span>
                     <strong>{titleOf(chat, members, ownID)}</strong>
                     <small>
@@ -1866,7 +1880,12 @@ function SearchPalette({
                     disabled={!direct}
                     onClick={() => direct && onOpen(direct.id)}
                   >
-                    <Avatar name={member.display_name} size="sm" online />
+                    <Avatar
+                      name={member.display_name}
+                      seed={member.actor_id}
+                      size="sm"
+                      online
+                    />
                     <span>
                       <strong>{member.display_name}</strong>
                       <small>@{member.handle}</small>
@@ -2172,7 +2191,7 @@ function Conversation({
         <IconButton className="mobile-back" label={t("back")} onClick={onBack}>
           <ChevronLeft />
         </IconButton>
-        <Avatar name={title} />
+        <Avatar name={title} seed={activeChat.avatar_seed} />
         <div className="conversation-head__title">
           <h1>{title}</h1>
           <span>
@@ -2522,7 +2541,7 @@ function MessageRow({
       )}
     >
       <div className="message__avatar">
-        {!grouped && <Avatar name={name} size="sm" />}
+        {!grouped && <Avatar name={name} seed={message.actor_id} size="sm" />}
       </div>
       <div className="message__content">
         {!grouped && (
@@ -2852,7 +2871,11 @@ function ForwardMessageDialog({
                 })
               }
             >
-              <Avatar name={chat.display_name} size="sm" />
+              <Avatar
+                name={chat.display_name}
+                seed={chat.avatar_seed}
+                size="sm"
+              />
               <span>{chat.display_name}</span>
               <span className="forward-picker__check" aria-hidden="true">
                 {checked && <Check />}
@@ -2969,7 +2992,7 @@ function MessageDetailsDialog({
             const name = memberName(receipt.actor_id);
             return (
               <div className="message-details__person" key={receipt.actor_id}>
-                <Avatar name={name} size="sm" />
+                <Avatar name={name} seed={receipt.actor_id} size="sm" />
                 <strong>{name}</strong>
                 <time>{formatTime(receipt.read_at)}</time>
               </div>
@@ -2984,7 +3007,7 @@ function MessageDetailsDialog({
             const name = memberName(entry.actorID);
             return (
               <div className="message-details__person" key={entry.actorID}>
-                <Avatar name={name} size="sm" />
+                <Avatar name={name} seed={entry.actorID} size="sm" />
                 <strong>{name}</strong>
                 <span className="message-details__emojis">
                   {entry.emojis.join(" ")}
@@ -3168,7 +3191,11 @@ function Composer({
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => insert(member)}
             >
-              <Avatar name={member.display_name} size="sm" />
+              <Avatar
+                name={member.display_name}
+                seed={member.actor_id}
+                size="sm"
+              />
               <span>
                 {member.display_name}
                 <small>@{member.handle}</small>
@@ -3405,7 +3432,7 @@ function ChatIntro({
   const { t } = useTranslation();
   return (
     <section className="chat-intro">
-      <Avatar name={title} size="xl" />
+      <Avatar name={title} seed={chat.avatar_seed} size="xl" />
       <h2>{title}</h2>
       <p>{chat.topic || t("chatBeginning")}</p>
       {chat.kind !== "direct" && (
@@ -3693,7 +3720,7 @@ function ImportantDirectory({
               key={message.id}
               onClick={() => navigate(`/chat/${chat.id}?message=${message.id}`)}
             >
-              <Avatar name={chat.display_name} />
+              <Avatar name={chat.display_name} seed={chat.avatar_seed} />
               <span>
                 <strong>{messagePlainText(message.body).slice(0, 120)}</strong>
                 <small>{chat.display_name}</small>
@@ -3733,7 +3760,12 @@ function MembersDirectory({
         ) : (
           actors.map((actor) => (
             <article key={actor.actor_id}>
-              <Avatar name={actor.display_name} size="lg" online />
+              <Avatar
+                name={actor.display_name}
+                seed={actor.actor_id}
+                size="lg"
+                online
+              />
               <span>
                 <strong>{actor.display_name}</strong>
                 <small>@{actor.handle}</small>
@@ -3899,7 +3931,11 @@ function ChatFolderDialog({
               <span className="folder-chat-picker__check" aria-hidden="true">
                 {selected.includes(chat.id) && <Check />}
               </span>
-              <Avatar name={chat.display_name} size="sm" />
+              <Avatar
+                name={chat.display_name}
+                seed={chat.avatar_seed}
+                size="sm"
+              />
               <span>{chat.display_name}</span>
             </button>
           ))}
@@ -3994,7 +4030,11 @@ function CreateChatDialog({
                     )
                   }
                 />
-                <Avatar name={actor.display_name} size="sm" />
+                <Avatar
+                  name={actor.display_name}
+                  seed={actor.actor_id}
+                  size="sm"
+                />
                 <span>
                   <strong>{actor.display_name}</strong>
                   <small>@{actor.handle}</small>
@@ -4089,7 +4129,12 @@ function MobileMorePage({
   return (
     <section className="mobile-more-page utility-page">
       <header className="mobile-more-page__identity">
-        <Avatar name={user.display_name} size="lg" online />
+        <Avatar
+          name={user.display_name}
+          seed={user.id}
+          size="lg"
+          online
+        />
         <span>
           <strong>{user.display_name}</strong>
           <small>@{user.handle}</small>
@@ -4532,6 +4577,7 @@ function WorkspaceSettingsPage({
                 <article key={member.actor_id} className="organization-member">
                   <Avatar
                     name={member.display_name}
+                    seed={member.actor_id}
                     size="md"
                     online={member.status === "active"}
                   />
@@ -5513,7 +5559,11 @@ function ChatInfoDialog({
         <div className="member-list">
           {members.map((member) => (
             <div key={member.actor_id}>
-              <Avatar name={member.display_name} size="sm" />
+              <Avatar
+                name={member.display_name}
+                seed={member.actor_id}
+                size="sm"
+              />
               <span>
                 <strong>{member.display_name}</strong>
                 <small>
@@ -5674,7 +5724,6 @@ function applyPublicBranding(branding: PublicBranding, baseURL: string) {
       "--coma-primary-soft",
       `color-mix(in srgb, ${branding.accent_color} 16%, transparent)`,
     );
-    root.setProperty("--coma-avatar-start", branding.accent_color);
   }
   document.title = branding.workspace_name
     ? `${branding.workspace_name} — Coma`

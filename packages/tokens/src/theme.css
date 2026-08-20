@@ -5,6 +5,7 @@
   --coma-sidebar: #eef3f8;
   --coma-surface: #fff;
   --coma-surface-raised: #fff;
+  --coma-surface-selected: #e7edf4;
   --coma-foreground: #182235;
   --coma-muted: #566477;
   --coma-subtle: #566477;
@@ -16,7 +17,13 @@
   --coma-on-primary: #fff;
   --coma-avatar-start: #174586;
   --coma-avatar-end: #3e76bc;
-  --coma-online: #247a54;
+  --coma-avatar-1: #3978c7;
+  --coma-avatar-2: #7458bd;
+  --coma-avatar-3: #b64f86;
+  --coma-avatar-4: #c65555;
+  --coma-avatar-5: #b96a28;
+  --coma-avatar-6: #278b7d;
+  --coma-online: #13b96f;
   --coma-tooltip: #182235;
   --coma-danger: #bd3346;
   --coma-danger-soft: #fce8eb;
@@ -42,6 +49,7 @@
   --coma-sidebar: #1d2026;
   --coma-surface: #202329;
   --coma-surface-raised: #292d36;
+  --coma-surface-selected: #2a2e36;
   --coma-foreground: #f0f1f5;
   --coma-muted: #a9adbb;
   --coma-subtle: #838896;
@@ -53,7 +61,13 @@
   --coma-on-primary: #fff;
   --coma-avatar-start: #22589d;
   --coma-avatar-end: #3d83d3;
-  --coma-online: #48d59b;
+  --coma-avatar-1: #4b8ddd;
+  --coma-avatar-2: #8a6dd3;
+  --coma-avatar-3: #cf649d;
+  --coma-avatar-4: #d56868;
+  --coma-avatar-5: #c77b38;
+  --coma-avatar-6: #39a393;
+  --coma-online: #2ee58d;
   --coma-tooltip: #f0f1f5;
   --coma-danger: #ff8a99;
   --coma-danger-soft: #49272f;
