@@ -1018,6 +1018,7 @@ func (e OrganizationSettingsInvitationDefaultRole) Valid() bool {
 
 // Defines values for Permission.
 const (
+	AgentsManage       Permission = "agents.manage"
 	AuditRead          Permission = "audit.read"
 	BrandingManage     Permission = "branding.manage"
 	ChatsModerate      Permission = "chats.moderate"
@@ -1031,6 +1032,8 @@ const (
 // Valid indicates whether the value is a known member of the Permission enum.
 func (e Permission) Valid() bool {
 	switch e {
+	case AgentsManage:
+		return true
 	case AuditRead:
 		return true
 	case BrandingManage:

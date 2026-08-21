@@ -9,6 +9,7 @@ export const permissions = [
   "workspace.policies",
   "branding.manage",
   "integrations.manage",
+  "agents.manage",
   "audit.read",
   "chats.moderate",
 ] as const satisfies readonly Permission[];
@@ -20,6 +21,7 @@ export const permissionLabelKeys: Record<Permission, string> = {
   "workspace.policies": "permissionWorkspacePolicies",
   "branding.manage": "permissionBrandingManage",
   "integrations.manage": "permissionIntegrationsManage",
+  "agents.manage": "permissionAgentsManage",
   "audit.read": "permissionAuditRead",
   "chats.moderate": "permissionChatsModerate",
 };

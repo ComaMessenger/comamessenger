@@ -9,6 +9,7 @@ const (
 	WorkspacePolicies  Code = "workspace.policies"
 	BrandingManage     Code = "branding.manage"
 	IntegrationsManage Code = "integrations.manage"
+	AgentsManage       Code = "agents.manage"
 	AuditRead          Code = "audit.read"
 	ChatsModerate      Code = "chats.moderate"
 )
@@ -20,6 +21,7 @@ var all = [...]Code{
 	WorkspacePolicies,
 	BrandingManage,
 	IntegrationsManage,
+	AgentsManage,
 	AuditRead,
 	ChatsModerate,
 }

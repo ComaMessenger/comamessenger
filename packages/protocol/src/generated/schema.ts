@@ -1575,7 +1575,7 @@ export interface components {
             expires_at: string | null;
         };
         /** @enum {string} */
-        Permission: "members.manage" | "invitations.manage" | "workspace.settings" | "workspace.policies" | "branding.manage" | "integrations.manage" | "audit.read" | "chats.moderate";
+        Permission: "members.manage" | "invitations.manage" | "workspace.settings" | "workspace.policies" | "branding.manage" | "integrations.manage" | "agents.manage" | "audit.read" | "chats.moderate";
         TokenResponse: {
             access_token: string;
             /** Format: date-time */
