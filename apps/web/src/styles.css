@@ -847,6 +847,44 @@ a:focus-visible {
   background: color-mix(in srgb, var(--coma-accent) 14%, transparent);
   color: var(--coma-accent);
 }
+.settings-inline-result {
+  margin: 0;
+  padding: 9px 11px;
+  border-radius: 9px;
+  background: var(--coma-surface);
+  color: var(--coma-muted);
+  font-size: 13px;
+}
+.settings-diagnostic-list {
+  display: grid;
+  gap: 8px;
+}
+.settings-diagnostic-list > div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--coma-border);
+  border-radius: 10px;
+  background: var(--coma-surface);
+}
+.settings-diagnostic-list > div > svg {
+  width: 18px;
+  color: var(--coma-muted);
+}
+.settings-diagnostic-list span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.settings-diagnostic-list small,
+.settings-diagnostic-list > p {
+  color: var(--coma-muted);
+}
+.settings-diagnostic-list > p {
+  margin: 0;
+}
 .mobile-status-form {
   display: grid;
   gap: 10px;

@@ -20,6 +20,7 @@ import (
 )
 
 var ErrInvalid = errors.New("invalid push input")
+var ErrUnavailable = errors.New("web push is not configured")
 
 type SubscriptionInput struct {
 	Endpoint string `json:"endpoint"`
@@ -32,6 +33,17 @@ type Subscription struct {
 	ID        string    `json:"id"`
 	Endpoint  string    `json:"endpoint"`
 	CreatedAt time.Time `json:"created_at"`
+}
+type SubscriptionInfo struct {
+	ID        string    `json:"id"`
+	UserAgent string    `json:"user_agent"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Current   bool      `json:"current"`
+}
+type TestResult struct {
+	Sent   int `json:"sent"`
+	Failed int `json:"failed"`
 }
 type Preferences struct {
 	Theme           string                `json:"theme"`
@@ -119,6 +131,13 @@ type ChatPreferences struct {
 	NotifyLevel string     `json:"notify_level"`
 	MutedUntil  *time.Time `json:"muted_until"`
 }
+type ChatOverride struct {
+	ChatID      string     `json:"chat_id"`
+	Name        string     `json:"name"`
+	Kind        string     `json:"kind"`
+	NotifyLevel string     `json:"notify_level"`
+	MutedUntil  *time.Time `json:"muted_until"`
+}
 
 type Service struct {
 	pool   *pgxpool.Pool
@@ -155,6 +174,74 @@ func (s *Service) Unsubscribe(ctx context.Context, user identity.User, subscript
 		return ErrInvalid
 	}
 	return nil
+}
+func (s *Service) ListSubscriptions(ctx context.Context, user identity.User, currentSessionID string) ([]SubscriptionInfo, error) {
+	rows, err := s.pool.Query(ctx, `SELECT id,user_agent,created_at,updated_at,session_id=$3 FROM web_push_subscriptions WHERE org_id=$1 AND actor_id=$2 ORDER BY updated_at DESC,id`, user.OrgID, user.ActorID, currentSessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := []SubscriptionInfo{}
+	for rows.Next() {
+		var item SubscriptionInfo
+		if err := rows.Scan(&item.ID, &item.UserAgent, &item.CreatedAt, &item.UpdatedAt, &item.Current); err != nil {
+			return nil, err
+		}
+		result = append(result, item)
+	}
+	return result, rows.Err()
+}
+func (s *Service) Test(ctx context.Context, user identity.User) (TestResult, error) {
+	if s.config.VAPIDPublicKey == "" || s.config.VAPIDPrivateKey == "" {
+		return TestResult{}, ErrUnavailable
+	}
+	rows, err := s.pool.Query(ctx, `SELECT id,endpoint,p256dh,auth FROM web_push_subscriptions WHERE org_id=$1 AND actor_id=$2 ORDER BY id`, user.OrgID, user.ActorID)
+	if err != nil {
+		return TestResult{}, err
+	}
+	type target struct{ id, endpoint, p256dh, auth string }
+	targets := []target{}
+	for rows.Next() {
+		var item target
+		if err := rows.Scan(&item.id, &item.endpoint, &item.p256dh, &item.auth); err != nil {
+			rows.Close()
+			return TestResult{}, err
+		}
+		targets = append(targets, item)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return TestResult{}, err
+	}
+	if len(targets) == 0 {
+		return TestResult{}, ErrInvalid
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"title": "Coma", "body": "Test notification", "url": "/settings/notifications",
+	})
+	result := TestResult{}
+	for _, item := range targets {
+		response, sendErr := webpush.SendNotificationWithContext(ctx, payload, &webpush.Subscription{
+			Endpoint: item.endpoint, Keys: webpush.Keys{P256dh: item.p256dh, Auth: item.auth},
+		}, &webpush.Options{
+			Subscriber: s.config.VAPIDSubject, VAPIDPublicKey: s.config.VAPIDPublicKey,
+			VAPIDPrivateKey: s.config.VAPIDPrivateKey, TTL: 120,
+		})
+		status := 0
+		if response != nil {
+			status = response.StatusCode
+			response.Body.Close()
+		}
+		if sendErr == nil && status >= 200 && status < 300 {
+			result.Sent++
+			continue
+		}
+		result.Failed++
+		if status == http.StatusNotFound || status == http.StatusGone {
+			_, _ = s.pool.Exec(ctx, `DELETE FROM web_push_subscriptions WHERE id=$1 AND org_id=$2 AND actor_id=$3`, item.id, user.OrgID, user.ActorID)
+		}
+	}
+	return result, nil
 }
 func (s *Service) GetPreferences(ctx context.Context, user identity.User) (Preferences, error) {
 	result := Preferences{
@@ -459,7 +546,7 @@ func (s *Service) GetChatPreferences(ctx context.Context, user identity.User, ch
 	return result, err
 }
 func (s *Service) UpdateChatPreferences(ctx context.Context, user identity.User, chatID string, input ChatPreferences) (ChatPreferences, error) {
-	if input.NotifyLevel != "all" && input.NotifyLevel != "mentions" && input.NotifyLevel != "none" {
+	if input.NotifyLevel != "default" && input.NotifyLevel != "all" && input.NotifyLevel != "mentions" && input.NotifyLevel != "none" {
 		return ChatPreferences{}, ErrInvalid
 	}
 	err := s.pool.QueryRow(ctx, `UPDATE chat_members SET notify_level=$4,muted_until=$5 WHERE org_id=$1 AND actor_id=$2 AND chat_id=$3 RETURNING notify_level,muted_until`, user.OrgID, user.ActorID, chatID, input.NotifyLevel, input.MutedUntil).Scan(&input.NotifyLevel, &input.MutedUntil)
@@ -467,6 +554,42 @@ func (s *Service) UpdateChatPreferences(ctx context.Context, user identity.User,
 		return ChatPreferences{}, ErrInvalid
 	}
 	return input, err
+}
+
+func (s *Service) ResetChatPreferences(ctx context.Context, user identity.User, chatID string) (ChatPreferences, error) {
+	return s.UpdateChatPreferences(ctx, user, chatID, ChatPreferences{NotifyLevel: "default"})
+}
+
+func (s *Service) ListChatOverrides(ctx context.Context, user identity.User) ([]ChatOverride, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT c.id,
+		       COALESCE(c.name,peer.display_name,'Direct chat'),
+		       c.kind,cm.notify_level,cm.muted_until
+		FROM chat_members cm
+		JOIN chats c ON c.org_id=cm.org_id AND c.id=cm.chat_id
+		LEFT JOIN LATERAL (
+		  SELECT a.display_name
+		  FROM chat_members other
+		  JOIN actors a ON a.org_id=other.org_id AND a.id=other.actor_id
+		  WHERE other.org_id=cm.org_id AND other.chat_id=cm.chat_id AND other.actor_id<>cm.actor_id
+		  ORDER BY a.display_name LIMIT 1
+		) peer ON c.kind='direct'
+		WHERE cm.org_id=$1 AND cm.actor_id=$2
+		  AND (cm.notify_level<>'default' OR (cm.muted_until IS NOT NULL AND cm.muted_until>now()))
+		ORDER BY COALESCE(c.name,peer.display_name,'Direct chat'),c.id`, user.OrgID, user.ActorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := []ChatOverride{}
+	for rows.Next() {
+		var item ChatOverride
+		if err := rows.Scan(&item.ChatID, &item.Name, &item.Kind, &item.NotifyLevel, &item.MutedUntil); err != nil {
+			return nil, err
+		}
+		result = append(result, item)
+	}
+	return result, rows.Err()
 }
 
 type ActiveCheck func(orgID, actorID, chatID string) bool
@@ -548,17 +671,22 @@ func (w *Worker) materialize(ctx context.Context) error {
 			    WHERE ns.org_id=cm.org_id AND ns.actor_id=cm.actor_id
 			      AND e.occurred_at>=ns.starts_at AND e.occurred_at<ns.ends_at
 			  )
-			  AND CASE COALESCE(u.preferences->>'notify_messages','all')
-			        WHEN 'all' THEN true
-			        WHEN 'direct_and_mentions' THEN c.kind='direct' OR cm.actor_id=ANY(m.mentioned_actor_ids)
-			        ELSE false
-			      END
-			  AND (m.thread_root_id IS NULL OR CASE COALESCE(u.preferences->>'notify_threads','all')
+			  AND CASE cm.notify_level
 			        WHEN 'all' THEN true
 			        WHEN 'mentions' THEN cm.actor_id=ANY(m.mentioned_actor_ids)
-			        ELSE false
-			      END)
-			  AND (cm.notify_level='all' OR (cm.notify_level='mentions' AND cm.actor_id=ANY(m.mentioned_actor_ids)))
+			        WHEN 'none' THEN false
+			        ELSE
+			          CASE COALESCE(u.preferences->>'notify_messages','all')
+			            WHEN 'all' THEN true
+			            WHEN 'direct_and_mentions' THEN c.kind='direct' OR cm.actor_id=ANY(m.mentioned_actor_ids)
+			            ELSE false
+			          END
+			          AND (m.thread_root_id IS NULL OR CASE COALESCE(u.preferences->>'notify_threads','all')
+			            WHEN 'all' THEN true
+			            WHEN 'mentions' THEN cm.actor_id=ANY(m.mentioned_actor_ids)
+			            ELSE false
+			          END)
+			      END
 			  AND (
 			    u.preferences->'schedule' IS NULL OR jsonb_typeof(u.preferences->'schedule')='null' OR (
 			      CASE

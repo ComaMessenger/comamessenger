@@ -20,12 +20,17 @@ export type ActorPage = components["schemas"]["ActorPage"];
 export type MessageWindow = components["schemas"]["MessageWindow"];
 export type PushConfig = components["schemas"]["PushConfig"];
 export type PushSubscriptionRecord = components["schemas"]["PushSubscription"];
+export type PushSubscriptionInfo =
+  components["schemas"]["PushSubscriptionInfo"];
+export type PushTestResult = components["schemas"]["PushTestResult"];
 export type UserPreferences = components["schemas"]["UserPreferences"];
 export type UpdatePreferencesRequest =
   components["schemas"]["UpdatePreferencesRequest"];
 export type ChatFolder = components["schemas"]["ChatFolder"];
 export type ChatNotificationPreferences =
   components["schemas"]["ChatNotificationPreferences"];
+export type ChatNotificationOverride =
+  components["schemas"]["ChatNotificationOverride"];
 export type PublicBranding = components["schemas"]["PublicBranding"];
 export type OrganizationSettings =
   components["schemas"]["OrganizationSettings"];

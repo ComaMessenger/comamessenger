@@ -51,7 +51,7 @@ const chat = {
   created_at: "2026-08-19T00:00:00Z",
   display_name: "Объявления",
   avatar_seed: "announcements",
-  notify_level: "all",
+  notify_level: "default",
   muted_until: null,
   last_activity_seq: 3,
   last_message_at: "2026-08-19T06:30:00Z",
@@ -350,6 +350,21 @@ async function mockMessenger(
           ...(route.request().postDataJSON() as Partial<typeof preferences>),
         };
       body = preferences;
+    } else if (path.endsWith("/push/config")) {
+      body = { enabled: true, public_key: "test-public-key" };
+    } else if (path.endsWith("/push/test")) {
+      body = { sent: 1, failed: 0 };
+    } else if (path.endsWith("/push/subscriptions")) {
+      body = [
+        {
+          id: "00000000-0000-4000-8000-000000000090",
+          user_agent:
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/140.0.0.0 Safari/537.36",
+          created_at: "2026-08-20T08:00:00Z",
+          updated_at: "2026-08-21T08:00:00Z",
+          current: true,
+        },
+      ];
     } else if (
       path.endsWith("/organization") &&
       route.request().method() === "PATCH"
@@ -533,10 +548,30 @@ async function mockMessenger(
           lev,
         ],
       };
+    else if (path.endsWith("/chats/notification-overrides"))
+      body =
+        runtimeChat.notify_level !== "default" || runtimeChat.muted_until
+          ? [
+              {
+                chat_id: runtimeChat.id,
+                name: runtimeChat.name,
+                kind: runtimeChat.kind,
+                notify_level: runtimeChat.notify_level,
+                muted_until: runtimeChat.muted_until,
+              },
+            ]
+          : [];
     else if (path.endsWith(`/chats/${chat.id}/notification-preferences`))
       if (route.request().method() === "PATCH") {
         body = route.request().postDataJSON();
         Object.assign(runtimeChat, body);
+      } else if (route.request().method() === "DELETE") {
+        runtimeChat.notify_level = "default";
+        runtimeChat.muted_until = null;
+        body = {
+          notify_level: runtimeChat.notify_level,
+          muted_until: runtimeChat.muted_until,
+        };
       } else
         body = {
           notify_level: runtimeChat.notify_level,
@@ -1808,6 +1843,22 @@ test("notification rules and schedule autosave", async ({ page }) => {
     "true",
   );
   await expect(page.getByText("Email-дайджест")).toHaveCount(0);
+});
+
+test("push diagnostics lists devices and resets chat overrides", async ({
+  page,
+}) => {
+  await mockMessenger(page, { chatPatch: { notify_level: "mentions" } });
+  await page.goto("/settings/notifications");
+  await expect(page.getByText("Push-сервер настроен")).toBeVisible();
+  await expect(page.getByText("Chrome · macOS")).toBeVisible();
+  await page.getByRole("button", { name: "Отправить тест" }).click();
+  await expect(page.getByText("Тест отправлен на устройств: 1")).toBeVisible();
+  await expect(page.getByText(chat.name)).toBeVisible();
+  await page.getByRole("button", { name: "Сбросить" }).click();
+  await expect(
+    page.getByText(/Исключений пока нет/),
+  ).toBeVisible();
 });
 
 test("a 10k-message history stays virtualized", async ({ page }) => {

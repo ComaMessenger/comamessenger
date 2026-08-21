@@ -178,6 +178,8 @@ func (h *identityHandlers) routes(router chi.Router) {
 		}
 		if h.push != nil {
 			protected.Get("/push/config", h.pushConfig)
+			protected.Post("/push/test", h.testPush)
+			protected.Get("/push/subscriptions", h.listPushSubscriptions)
 			protected.Put("/push/subscriptions", h.putPushSubscription)
 			protected.Delete("/push/subscriptions/{subscriptionID}", h.deletePushSubscription)
 			protected.Get("/preferences", h.getPreferences)
@@ -186,8 +188,10 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Put("/preferences/chat-folders", h.putChatFolders)
 			protected.Get("/preferences/pinned-chats", h.getPinnedChats)
 			protected.Put("/preferences/pinned-chats", h.putPinnedChats)
+			protected.Get("/chats/notification-overrides", h.listChatOverrides)
 			protected.Get("/chats/{chatID}/notification-preferences", h.getChatPreferences)
 			protected.Patch("/chats/{chatID}/notification-preferences", h.patchChatPreferences)
+			protected.Delete("/chats/{chatID}/notification-preferences", h.resetChatPreferences)
 		}
 	})
 }

@@ -7,6 +7,7 @@ import type {
   ChatFolder,
   ChatMember,
   ChatNotificationPreferences,
+  ChatNotificationOverride,
   ConnectionTestResult,
   CreateChatRequest,
   CreateInvitationRequest,
@@ -26,6 +27,8 @@ import type {
   PublicBranding,
   PushConfig,
   PushSubscriptionRecord,
+  PushSubscriptionInfo,
+  PushTestResult,
   Reaction,
   ReadMarker,
   ServiceHealth,
@@ -526,6 +529,12 @@ export class MessengerAPI {
       body: JSON.stringify(input),
     });
   }
+  pushSubscriptions(): Promise<PushSubscriptionInfo[]> {
+    return this.request("/api/v1/push/subscriptions");
+  }
+  testPush(): Promise<PushTestResult> {
+    return this.request("/api/v1/push/test", { method: "POST" });
+  }
   removePush(id: string): Promise<void> {
     return this.request(`/api/v1/push/subscriptions/${id}`, {
       method: "DELETE",
@@ -569,6 +578,16 @@ export class MessengerAPI {
       method: "PATCH",
       body: JSON.stringify(input),
     });
+  }
+  resetChatNotifications(
+    chatID: string,
+  ): Promise<ChatNotificationPreferences> {
+    return this.request(`/api/v1/chats/${chatID}/notification-preferences`, {
+      method: "DELETE",
+    });
+  }
+  chatNotificationOverrides(): Promise<ChatNotificationOverride[]> {
+    return this.request("/api/v1/chats/notification-overrides");
   }
   private acceptTokens(tokens: TokenResponse): TokenResponse {
     this.accessToken = tokens.access_token;

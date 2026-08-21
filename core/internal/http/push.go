@@ -11,6 +11,14 @@ import (
 func (h *identityHandlers) pushConfig(w standardhttp.ResponseWriter, r *standardhttp.Request) {
 	writeJSON(h.logger, w, standardhttp.StatusOK, h.push.Config())
 }
+func (h *identityHandlers) testPush(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.push.Test(r.Context(), authFromContext(r.Context()).User)
+	if err != nil {
+		h.pushError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
 func (h *identityHandlers) putPushSubscription(w standardhttp.ResponseWriter, r *standardhttp.Request) {
 	var input push.SubscriptionInput
 	if err := decodeJSON(w, r, &input); err != nil {
@@ -24,6 +32,15 @@ func (h *identityHandlers) putPushSubscription(w standardhttp.ResponseWriter, r 
 		return
 	}
 	writeJSON(h.logger, w, standardhttp.StatusCreated, result)
+}
+func (h *identityHandlers) listPushSubscriptions(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	auth := authFromContext(r.Context())
+	result, err := h.push.ListSubscriptions(r.Context(), auth.User, auth.Identity.SessionID)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
 }
 func (h *identityHandlers) deletePushSubscription(w standardhttp.ResponseWriter, r *standardhttp.Request) {
 	auth := authFromContext(r.Context())
@@ -117,7 +134,27 @@ func (h *identityHandlers) patchChatPreferences(w standardhttp.ResponseWriter, r
 	}
 	writeJSON(h.logger, w, standardhttp.StatusOK, result)
 }
+func (h *identityHandlers) resetChatPreferences(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.push.ResetChatPreferences(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "chatID"))
+	if err != nil {
+		h.pushError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+func (h *identityHandlers) listChatOverrides(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.push.ListChatOverrides(r.Context(), authFromContext(r.Context()).User)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
 func (h *identityHandlers) pushError(w standardhttp.ResponseWriter, r *standardhttp.Request, err error) {
+	if errors.Is(err, push.ErrUnavailable) {
+		h.writeError(w, r, standardhttp.StatusServiceUnavailable, "push_unavailable", err.Error())
+		return
+	}
 	if errors.Is(err, push.ErrInvalid) {
 		h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "validation_failed", err.Error())
 		return

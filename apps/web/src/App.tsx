@@ -2109,7 +2109,7 @@ function ChatCard({
             onClick={() =>
               void api
                 .updateChatNotifications(chat.id, {
-                  notify_level: muted ? "all" : "none",
+                  notify_level: muted ? "default" : "none",
                   muted_until: null,
                 })
                 .then(onNotificationChanged)
@@ -4846,9 +4846,9 @@ function ChatInfoDialog({
   const { t } = useTranslation();
   const [name, setName] = useState(chat.name ?? chat.display_name);
   const [topic, setTopic] = useState(chat.topic);
-  const [notifyLevel, setNotifyLevel] = useState<"all" | "mentions" | "none">(
-    "all",
-  );
+  const [notifyLevel, setNotifyLevel] = useState<
+    "default" | "all" | "mentions" | "none"
+  >("default");
   const notificationQuery = useQuery({
     queryKey: ["chat-notifications", chat.id],
     queryFn: () => api.chatNotifications(chat.id),
@@ -4896,9 +4896,12 @@ function ChatInfoDialog({
           name="notification_level"
           value={notifyLevel}
           onChange={(event) =>
-            setNotifyLevel(event.target.value as "all" | "mentions" | "none")
+            setNotifyLevel(
+              event.target.value as "default" | "all" | "mentions" | "none",
+            )
           }
         >
+          <option value="default">{t("notificationDefault")}</option>
           <option value="all">{t("allMessages")}</option>
           <option value="mentions">{t("mentionsOnly")}</option>
           <option value="none">{t("notificationsOff")}</option>

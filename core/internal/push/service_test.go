@@ -3,6 +3,7 @@ package push
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/comamessenger/comamessenger/core/internal/config"
+	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/testdb"
 	"github.com/google/uuid"
 )
@@ -20,6 +22,13 @@ func TestTruncateUsesRunes(t *testing.T) {
 	}
 	if got := truncate("Coma", 10); got != "Coma" {
 		t.Fatalf("short truncate() = %q", got)
+	}
+}
+
+func TestPushTestRequiresVAPIDConfiguration(t *testing.T) {
+	_, err := NewService(nil, config.PushConfig{}).Test(context.Background(), identity.User{})
+	if !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("Test() error = %v", err)
 	}
 }
 

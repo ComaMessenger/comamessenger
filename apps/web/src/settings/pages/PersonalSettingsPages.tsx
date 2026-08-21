@@ -1,7 +1,16 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { MessengerAPI, User, UserPreferences } from "@comamessenger/core";
-import { Bell, Clock3, LogOut, MessageCircle, Volume2 } from "lucide-react";
+import {
+  Bell,
+  Clock3,
+  LogOut,
+  MessageCircle,
+  MonitorSmartphone,
+  RotateCcw,
+  Send,
+  Volume2,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   Avatar,
@@ -13,6 +22,7 @@ import {
 } from "../../ui";
 import { setLocale } from "../../i18n";
 import { setTheme } from "../../theme";
+import { messageOf } from "../../errors";
 import { AutosaveStatus } from "../components/AutosaveStatus";
 import {
   SettingsSection,
@@ -23,6 +33,7 @@ import {
   type SettingsNavigate,
 } from "../components/SettingsShell";
 import { useAutosave } from "../hooks/useAutosave";
+import { sessionLabel } from "../sessionLabel";
 
 type ProfileDraft = {
   displayName: string;
@@ -249,8 +260,22 @@ export function NotificationSettingsPage({
     queryKey: ["public-branding"],
     queryFn: () => api.branding(),
   });
+  const pushConfigQuery = useQuery({
+    queryKey: ["push-config"],
+    queryFn: () => api.pushConfig(),
+  });
+  const subscriptionsQuery = useQuery({
+    queryKey: ["push-subscriptions"],
+    queryFn: () => api.pushSubscriptions(),
+  });
+  const overridesQuery = useQuery({
+    queryKey: ["notification-overrides"],
+    queryFn: () => api.chatNotificationOverrides(),
+  });
   const [draft, setDraft] = useState<UserPreferences | null>(null);
   const [snoozePending, setSnoozePending] = useState(false);
+  const [testPending, setTestPending] = useState(false);
+  const [testResult, setTestResult] = useState("");
   useEffect(() => {
     if (query.data) setDraft((current) => current ?? query.data);
   }, [query.data]);
@@ -303,6 +328,22 @@ export function NotificationSettingsPage({
     setDraft((current) =>
       current ? { ...current, schedule: { ...schedule, days } } : current,
     );
+  }
+  async function sendTestNotification() {
+    setTestPending(true);
+    setTestResult("");
+    try {
+      const result = await api.testPush();
+      setTestResult(
+        result.failed
+          ? t("testNotificationPartial", result)
+          : t("testNotificationSent", result),
+      );
+    } catch (cause) {
+      setTestResult(messageOf(cause));
+    } finally {
+      setTestPending(false);
+    }
   }
   return (
     <SettingsShell
@@ -590,6 +631,106 @@ export function NotificationSettingsPage({
             />
           </SettingsSection>
         )}
+        <SettingsSection
+          title={t("pushDiagnostics")}
+          description={t("pushDiagnosticsHint")}
+          icon={<MonitorSmartphone />}
+        >
+          <div className="settings-state-row">
+            <span>
+              <strong>
+                {pushConfigQuery.data?.enabled
+                  ? t("pushServerReady")
+                  : t("pushServerUnavailable")}
+              </strong>
+              <small>
+                {permission === "granted"
+                  ? t("browserPermissionGranted")
+                  : t("browserPermissionMissing")}
+              </small>
+            </span>
+            <Button
+              size="sm"
+              variant="primary"
+              disabled={
+                !pushConfigQuery.data?.enabled ||
+                !subscriptionsQuery.data?.length ||
+                testPending
+              }
+              onClick={() => void sendTestNotification()}
+            >
+              <Send />
+              {t("sendTestNotification")}
+            </Button>
+          </div>
+          {testResult && <p className="settings-inline-result">{testResult}</p>}
+          <div className="settings-diagnostic-list">
+            {subscriptionsQuery.data?.length ? (
+              subscriptionsQuery.data.map((subscription) => (
+                <div key={subscription.id}>
+                  <MonitorSmartphone />
+                  <span>
+                    <strong>
+                      {sessionLabel(subscription.user_agent, t("unknownDevice"))}
+                    </strong>
+                    <small>
+                      {subscription.current ? `${t("currentSession")} · ` : ""}
+                      {new Intl.DateTimeFormat(undefined, {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      }).format(new Date(subscription.updated_at))}
+                    </small>
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      void api
+                        .removePush(subscription.id)
+                        .then(() => subscriptionsQuery.refetch())
+                    }
+                  >
+                    {t("disconnect")}
+                  </Button>
+                </div>
+              ))
+            ) : (
+              <p>{t("noPushSubscriptions")}</p>
+            )}
+          </div>
+        </SettingsSection>
+        <SettingsSection
+          title={t("notificationOverrides")}
+          description={t("notificationOverridesHint")}
+        >
+          <div className="settings-diagnostic-list">
+            {overridesQuery.data?.length ? (
+              overridesQuery.data.map((override) => (
+                <div key={override.chat_id}>
+                  <Bell />
+                  <span>
+                    <strong>{override.name}</strong>
+                    <small>{t(`notificationOverride_${override.notify_level}`)}</small>
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      void api
+                        .resetChatNotifications(override.chat_id)
+                        .then(() => overridesQuery.refetch())
+                    }
+                  >
+                    <RotateCcw />
+                    {t("resetToDefault")}
+                  </Button>
+                </div>
+              ))
+            ) : (
+              <p>{t("noNotificationOverrides")}</p>
+            )}
+          </div>
+        </SettingsSection>
       </div>
     </SettingsShell>
   );

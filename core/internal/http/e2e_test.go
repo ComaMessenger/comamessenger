@@ -463,8 +463,27 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	if chatWithPreferences.NotifyLevel != "mentions" || chatWithPreferences.MutedUntil != nil {
 		t.Fatalf("chat list notification state = %+v", chatWithPreferences)
 	}
+	var overrides []push.ChatOverride
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/chats/notification-overrides", owner.AccessToken, nil, standardhttp.StatusOK, &overrides)
+	if len(overrides) != 1 || overrides[0].ChatID != group.ID || overrides[0].NotifyLevel != "mentions" {
+		t.Fatalf("chat notification overrides = %+v", overrides)
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodDelete, baseURL+"/api/v1/chats/"+group.ID+"/notification-preferences", owner.AccessToken, nil, standardhttp.StatusOK, &chatPreferences)
+	if chatPreferences.NotifyLevel != "default" {
+		t.Fatalf("reset chat notification preferences = %+v", chatPreferences)
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/chats/notification-overrides", owner.AccessToken, nil, standardhttp.StatusOK, &overrides)
+	if len(overrides) != 0 {
+		t.Fatalf("chat notification overrides after reset = %+v", overrides)
+	}
 	var subscription push.Subscription
 	e2eRequest(t, server.Client(), standardhttp.MethodPut, baseURL+"/api/v1/push/subscriptions", owner.AccessToken, map[string]any{"endpoint": "https://push.example.test/subscription/owner", "keys": map[string]string{"p256dh": "0123456789abcdef", "auth": "0123456789abcdef"}}, standardhttp.StatusCreated, &subscription)
+	var subscriptions []push.SubscriptionInfo
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/push/subscriptions", owner.AccessToken, nil, standardhttp.StatusOK, &subscriptions)
+	if len(subscriptions) != 1 || subscriptions[0].ID != subscription.ID || !subscriptions[0].Current {
+		t.Fatalf("push subscriptions = %+v", subscriptions)
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/push/test", owner.AccessToken, nil, standardhttp.StatusServiceUnavailable, nil)
 
 	ownerSocket := e2eSocket(t, baseURL, owner.AccessToken, 0)
 	memberSocket := e2eSocket(t, baseURL, member.AccessToken, 0)

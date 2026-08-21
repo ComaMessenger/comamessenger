@@ -919,7 +919,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/push/subscriptions": {
+    "/api/v1/push/test": {
         parameters: {
             query?: never;
             header?: never;
@@ -927,6 +927,22 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        put?: never;
+        post: operations["testPushNotification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/push/subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listPushSubscriptions"];
         put: operations["putPushSubscription"];
         post?: never;
         delete?: never;
@@ -1009,10 +1025,26 @@ export interface paths {
         get: operations["getChatNotificationPreferences"];
         put?: never;
         post?: never;
-        delete?: never;
+        delete: operations["resetChatNotificationPreferences"];
         options?: never;
         head?: never;
         patch: operations["updateChatNotificationPreferences"];
+        trace?: never;
+    };
+    "/api/v1/chats/notification-overrides": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listChatNotificationOverrides"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
 }
@@ -1031,7 +1063,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "already_bootstrapped" | "chat_conflict" | "chat_not_found" | "forbidden" | "idempotency_conflict" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "rate_limited" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "workspace_not_found";
+        ErrorCode: "already_bootstrapped" | "chat_conflict" | "chat_not_found" | "forbidden" | "idempotency_conflict" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "workspace_not_found";
         /** @enum {string} */
         DurableEventTypeV1: "message.created" | "message.updated" | "message.deleted" | "message.pinned" | "message.unpinned" | "reaction.added" | "reaction.removed" | "thread.followed" | "thread.unfollowed" | "read.marked" | "draft.updated" | "draft.deleted" | "chat.created" | "chat.updated" | "chat.archived" | "member.joined" | "member.updated" | "member.removed" | "actor.status.updated";
         /**
@@ -1474,7 +1506,7 @@ export interface components {
             display_name: string;
             avatar_seed: string;
             /** @enum {string} */
-            notify_level: "all" | "mentions" | "none";
+            notify_level: "default" | "all" | "mentions" | "none";
             /** Format: date-time */
             muted_until: string | null;
             direct_peer?: components["schemas"]["ActorSummary"] | null;
@@ -1784,6 +1816,20 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
+        PushSubscriptionInfo: {
+            /** Format: uuid */
+            id: string;
+            user_agent: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            current: boolean;
+        };
+        PushTestResult: {
+            sent: number;
+            failed: number;
+        };
         UserPreferences: {
             /** @enum {string} */
             theme: "system" | "light" | "dark";
@@ -1847,9 +1893,20 @@ export interface components {
         };
         ChatNotificationPreferences: {
             /** @enum {string} */
-            notify_level: "all" | "mentions" | "none";
+            notify_level: "default" | "all" | "mentions" | "none";
             /** Format: date-time */
             muted_until?: string | null;
+        };
+        ChatNotificationOverride: {
+            /** Format: uuid */
+            chat_id: string;
+            name: string;
+            /** @enum {string} */
+            kind: "direct" | "group" | "channel";
+            /** @enum {string} */
+            notify_level: "all" | "mentions" | "none";
+            /** Format: date-time */
+            muted_until: string | null;
         };
     };
     responses: {
@@ -3698,6 +3755,48 @@ export interface operations {
             };
         };
     };
+    testPushNotification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Result of sending a test notification to registered subscriptions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushTestResult"];
+                };
+            };
+            422: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    listPushSubscriptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Registered push subscriptions for the current user. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushSubscriptionInfo"][];
+                };
+            };
+        };
+    };
     putPushSubscription: {
         parameters: {
             query?: never;
@@ -3902,6 +4001,29 @@ export interface operations {
             422: components["responses"]["Error"];
         };
     };
+    resetChatNotificationPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Chat notification policy reset to the global default. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatNotificationPreferences"];
+                };
+            };
+            422: components["responses"]["Error"];
+        };
+    };
     updateChatNotificationPreferences: {
         parameters: {
             query?: never;
@@ -3927,6 +4049,26 @@ export interface operations {
                 };
             };
             422: components["responses"]["Error"];
+        };
+    };
+    listChatNotificationOverrides: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Chats with notification settings that differ from the global defaults. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatNotificationOverride"][];
+                };
+            };
         };
     };
 }

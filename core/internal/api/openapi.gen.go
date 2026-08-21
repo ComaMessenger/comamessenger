@@ -74,6 +74,7 @@ func (e ChatKind) Valid() bool {
 // Defines values for ChatNotifyLevel.
 const (
 	ChatNotifyLevelAll      ChatNotifyLevel = "all"
+	ChatNotifyLevelDefault  ChatNotifyLevel = "default"
 	ChatNotifyLevelMentions ChatNotifyLevel = "mentions"
 	ChatNotifyLevelNone     ChatNotifyLevel = "none"
 )
@@ -82,6 +83,8 @@ const (
 func (e ChatNotifyLevel) Valid() bool {
 	switch e {
 	case ChatNotifyLevelAll:
+		return true
+	case ChatNotifyLevelDefault:
 		return true
 	case ChatNotifyLevelMentions:
 		return true
@@ -356,9 +359,52 @@ func (e ChatMemberRole) Valid() bool {
 	}
 }
 
+// Defines values for ChatNotificationOverrideKind.
+const (
+	ChatNotificationOverrideKindChannel ChatNotificationOverrideKind = "channel"
+	ChatNotificationOverrideKindDirect  ChatNotificationOverrideKind = "direct"
+	ChatNotificationOverrideKindGroup   ChatNotificationOverrideKind = "group"
+)
+
+// Valid indicates whether the value is a known member of the ChatNotificationOverrideKind enum.
+func (e ChatNotificationOverrideKind) Valid() bool {
+	switch e {
+	case ChatNotificationOverrideKindChannel:
+		return true
+	case ChatNotificationOverrideKindDirect:
+		return true
+	case ChatNotificationOverrideKindGroup:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ChatNotificationOverrideNotifyLevel.
+const (
+	ChatNotificationOverrideNotifyLevelAll      ChatNotificationOverrideNotifyLevel = "all"
+	ChatNotificationOverrideNotifyLevelMentions ChatNotificationOverrideNotifyLevel = "mentions"
+	ChatNotificationOverrideNotifyLevelNone     ChatNotificationOverrideNotifyLevel = "none"
+)
+
+// Valid indicates whether the value is a known member of the ChatNotificationOverrideNotifyLevel enum.
+func (e ChatNotificationOverrideNotifyLevel) Valid() bool {
+	switch e {
+	case ChatNotificationOverrideNotifyLevelAll:
+		return true
+	case ChatNotificationOverrideNotifyLevelMentions:
+		return true
+	case ChatNotificationOverrideNotifyLevelNone:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ChatNotificationPreferencesNotifyLevel.
 const (
 	ChatNotificationPreferencesNotifyLevelAll      ChatNotificationPreferencesNotifyLevel = "all"
+	ChatNotificationPreferencesNotifyLevelDefault  ChatNotificationPreferencesNotifyLevel = "default"
 	ChatNotificationPreferencesNotifyLevelMentions ChatNotificationPreferencesNotifyLevel = "mentions"
 	ChatNotificationPreferencesNotifyLevelNone     ChatNotificationPreferencesNotifyLevel = "none"
 )
@@ -367,6 +413,8 @@ const (
 func (e ChatNotificationPreferencesNotifyLevel) Valid() bool {
 	switch e {
 	case ChatNotificationPreferencesNotifyLevelAll:
+		return true
+	case ChatNotificationPreferencesNotifyLevelDefault:
 		return true
 	case ChatNotificationPreferencesNotifyLevelMentions:
 		return true
@@ -592,6 +640,7 @@ const (
 	ErrorCodeOriginNotAllowed       ErrorCode = "origin_not_allowed"
 	ErrorCodePasswordChangeRequired ErrorCode = "password_change_required"
 	ErrorCodePayloadTooLarge        ErrorCode = "payload_too_large"
+	ErrorCodePushUnavailable        ErrorCode = "push_unavailable"
 	ErrorCodeRateLimited            ErrorCode = "rate_limited"
 	ErrorCodeReauthenticationFailed ErrorCode = "reauthentication_failed"
 	ErrorCodeServiceNotReady        ErrorCode = "service_not_ready"
@@ -637,6 +686,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodePasswordChangeRequired:
 		return true
 	case ErrorCodePayloadTooLarge:
+		return true
+	case ErrorCodePushUnavailable:
 		return true
 	case ErrorCodeRateLimited:
 		return true
@@ -1715,6 +1766,21 @@ type ChatMember struct {
 // ChatMemberRole defines model for ChatMember.Role.
 type ChatMemberRole string
 
+// ChatNotificationOverride defines model for ChatNotificationOverride.
+type ChatNotificationOverride struct {
+	ChatId      openapi_types.UUID                  `json:"chat_id"`
+	Kind        ChatNotificationOverrideKind        `json:"kind"`
+	MutedUntil  *time.Time                          `json:"muted_until"`
+	Name        string                              `json:"name"`
+	NotifyLevel ChatNotificationOverrideNotifyLevel `json:"notify_level"`
+}
+
+// ChatNotificationOverrideKind defines model for ChatNotificationOverride.Kind.
+type ChatNotificationOverrideKind string
+
+// ChatNotificationOverrideNotifyLevel defines model for ChatNotificationOverride.NotifyLevel.
+type ChatNotificationOverrideNotifyLevel string
+
 // ChatNotificationPreferences defines model for ChatNotificationPreferences.
 type ChatNotificationPreferences struct {
 	MutedUntil  *time.Time                             `json:"muted_until,omitempty"`
@@ -2065,6 +2131,15 @@ type PushSubscription struct {
 	Id        openapi_types.UUID `json:"id"`
 }
 
+// PushSubscriptionInfo defines model for PushSubscriptionInfo.
+type PushSubscriptionInfo struct {
+	CreatedAt time.Time          `json:"created_at"`
+	Current   bool               `json:"current"`
+	Id        openapi_types.UUID `json:"id"`
+	UpdatedAt time.Time          `json:"updated_at"`
+	UserAgent string             `json:"user_agent"`
+}
+
 // PushSubscriptionRequest defines model for PushSubscriptionRequest.
 type PushSubscriptionRequest struct {
 	Endpoint string `json:"endpoint"`
@@ -2072,6 +2147,12 @@ type PushSubscriptionRequest struct {
 		Auth   string `json:"auth"`
 		P256dh string `json:"p256dh"`
 	} `json:"keys"`
+}
+
+// PushTestResult defines model for PushTestResult.
+type PushTestResult struct {
+	Failed int `json:"failed"`
+	Sent   int `json:"sent"`
 }
 
 // PutDraftRequest defines model for PutDraftRequest.
