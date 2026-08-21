@@ -9,6 +9,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/access"
 	"github.com/comamessenger/comamessenger/core/internal/agent"
 	"github.com/comamessenger/comamessenger/core/internal/agentconfig"
+	"github.com/comamessenger/comamessenger/core/internal/agentmemory"
 	"github.com/comamessenger/comamessenger/core/internal/agentrun"
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
@@ -46,6 +47,17 @@ func TestAgentWorkerLeaseAndCheckpointContract(t *testing.T) {
 	agentUser, authentication, err := agents.AuthenticateKey(t.Context(), key.Secret)
 	if err != nil {
 		t.Fatal(err)
+	}
+	memory := agentmemory.NewService(pool)
+	if _, err := memory.Remember(t.Context(), agentUser, agentmemory.RememberInput{Namespace: "knowledge", Key: "release", Value: json.RawMessage(`{"text":"release process"}`), EmbeddingModel: "test-embedding", Embedding: []float64{1, 0}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := memory.Remember(t.Context(), agentUser, agentmemory.RememberInput{Namespace: "knowledge", Key: "onboarding", Value: json.RawMessage(`{"text":"welcome guide"}`), EmbeddingModel: "test-embedding", Embedding: []float64{0, 1}}); err != nil {
+		t.Fatal(err)
+	}
+	recalled, err := memory.Recall(t.Context(), agentUser, agentmemory.RecallInput{Namespace: "knowledge", EmbeddingModel: "test-embedding", QueryEmbedding: []float64{0.9, 0.1}, Limit: 1})
+	if err != nil || len(recalled) != 1 || recalled[0].Key != "release" || recalled[0].Similarity == nil {
+		t.Fatalf("vector recall = %+v, err=%v", recalled, err)
 	}
 	configService, err := agentconfig.NewService(pool, "0123456789abcdef0123456789abcdef")
 	if err != nil {

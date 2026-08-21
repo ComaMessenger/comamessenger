@@ -211,21 +211,25 @@ func (executor *Executor) execute(ctx context.Context, invocation Invocation) (a
 		return executor.services.Chats.ListMembers(ctx, invocation.User, input.ChatID)
 	case "remember":
 		var input struct {
-			Namespace string          `json:"namespace"`
-			Key       string          `json:"key"`
-			Value     json.RawMessage `json:"value"`
+			Namespace      string          `json:"namespace"`
+			Key            string          `json:"key"`
+			Value          json.RawMessage `json:"value"`
+			EmbeddingModel string          `json:"embedding_model"`
+			Embedding      []float64       `json:"embedding"`
 		}
 		_ = json.Unmarshal(invocation.Arguments, &input)
-		return executor.services.Memory.Remember(ctx, invocation.User, input.Namespace, input.Key, input.Value)
+		return executor.services.Memory.Remember(ctx, invocation.User, agentmemory.RememberInput{Namespace: input.Namespace, Key: input.Key, Value: input.Value, EmbeddingModel: input.EmbeddingModel, Embedding: input.Embedding})
 	case "recall":
 		var input struct {
-			Namespace string   `json:"namespace"`
-			Keys      []string `json:"keys"`
-			Prefix    string   `json:"prefix"`
-			Limit     int      `json:"limit"`
+			Namespace      string    `json:"namespace"`
+			Keys           []string  `json:"keys"`
+			Prefix         string    `json:"prefix"`
+			Limit          int       `json:"limit"`
+			EmbeddingModel string    `json:"embedding_model"`
+			QueryEmbedding []float64 `json:"query_embedding"`
 		}
 		_ = json.Unmarshal(invocation.Arguments, &input)
-		return executor.services.Memory.Recall(ctx, invocation.User, agentmemory.RecallInput{Namespace: input.Namespace, Keys: input.Keys, Prefix: input.Prefix, Limit: input.Limit})
+		return executor.services.Memory.Recall(ctx, invocation.User, agentmemory.RecallInput{Namespace: input.Namespace, Keys: input.Keys, Prefix: input.Prefix, Limit: input.Limit, EmbeddingModel: input.EmbeddingModel, QueryEmbedding: input.QueryEmbedding})
 	default:
 		return nil, ErrInvalid
 	}
@@ -346,9 +350,13 @@ func rawDefinitions() []Definition {
 		{Name: "add_reaction", Description: "Add a reaction to a message.", Mode: "write", RequiredScope: agent.ScopeReactionsWrite, InputSchema: object([]string{"message_id", "emoji"}, map[string]any{"message_id": uuidSchema, "emoji": map[string]any{"type": "string", "minLength": 1, "maxLength": 16}})},
 		{Name: "get_file_text", Description: "Read bounded extracted text from an accessible file.", Mode: "read", RequiredScope: agent.ScopeFilesRead, InputSchema: object([]string{"file_id"}, map[string]any{"file_id": uuidSchema, "max_chars": map[string]any{"type": "integer", "minimum": 1, "maximum": 100000}})},
 		{Name: "list_members", Description: "List active members of a chat.", Mode: "read", RequiredScope: agent.ScopeMembersRead, InputSchema: object([]string{"chat_id"}, map[string]any{"chat_id": uuidSchema})},
-		{Name: "remember", Description: "Store a namespaced JSON memory value.", Mode: "write", RequiredScope: agent.ScopeMemoryWrite, InputSchema: object([]string{"key", "value"}, map[string]any{"namespace": map[string]any{"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"}, "key": map[string]any{"type": "string", "minLength": 1, "maxLength": 255}, "value": map[string]any{}})},
-		{Name: "recall", Description: "Recall namespaced memory values by key or prefix.", Mode: "read", RequiredScope: agent.ScopeMemoryRead, InputSchema: object(nil, map[string]any{"namespace": map[string]any{"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"}, "keys": map[string]any{"type": "array", "maxItems": 100, "uniqueItems": true, "items": map[string]any{"type": "string", "minLength": 1, "maxLength": 255}}, "prefix": map[string]any{"type": "string", "maxLength": 255}, "limit": limit})},
+		{Name: "remember", Description: "Store a namespaced JSON memory value with an optional vector embedding.", Mode: "write", RequiredScope: agent.ScopeMemoryWrite, InputSchema: object([]string{"key", "value"}, map[string]any{"namespace": map[string]any{"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"}, "key": map[string]any{"type": "string", "minLength": 1, "maxLength": 255}, "value": map[string]any{}, "embedding_model": map[string]any{"type": "string", "minLength": 1, "maxLength": 200}, "embedding": embeddingSchema()})},
+		{Name: "recall", Description: "Recall namespaced memory by key/prefix or nearest vector using the same embedding model.", Mode: "read", RequiredScope: agent.ScopeMemoryRead, InputSchema: object(nil, map[string]any{"namespace": map[string]any{"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"}, "keys": map[string]any{"type": "array", "maxItems": 100, "uniqueItems": true, "items": map[string]any{"type": "string", "minLength": 1, "maxLength": 255}}, "prefix": map[string]any{"type": "string", "maxLength": 255}, "limit": limit, "embedding_model": map[string]any{"type": "string", "minLength": 1, "maxLength": 200}, "query_embedding": embeddingSchema()})},
 	}
+}
+
+func embeddingSchema() map[string]any {
+	return map[string]any{"type": "array", "minItems": 1, "maxItems": 4096, "items": map[string]any{"type": "number"}}
 }
 
 func messageSchema(object func([]string, map[string]any) map[string]any, uuidSchema map[string]any, thread bool) map[string]any {

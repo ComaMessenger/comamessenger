@@ -64,7 +64,7 @@
 - [x] Реализовать адаптеры OpenAI, Anthropic и OpenAI-compatible endpoint.
 - [x] Собирать контекст только через доступные публичные read APIs/search.
 - [x] Ограничивать размер контекста, количество search/tool iterations и max output tokens.
-- [ ] Реализовать key-value memory и vector retrieval с namespace по organization/agent.
+- [x] Реализовать key-value memory и vector retrieval с namespace по organization/agent.
 - [x] Помечать untrusted message/file content и защищать system/tool policy от prompt injection.
 - [x] Не передавать содержимое внешнему provider без явной конфигурации организации.
 
@@ -138,6 +138,7 @@ message.streaming
 - Секретные MCP headers шифруются отдельным AEAD domain и возвращаются только runtime-ключу самого агента через `no-store`; admin API показывает лишь факт их настройки. Runtime запрещает redirects, не включает неразрешённые tools, ограничивает каждый ответ по времени и размеру и наружу возвращает только стабильные redacted error codes.
 - MCP tools с `annotations.readOnlyHint=true` считаются read; остальные считаются write. При `require_write_confirmation=true` write tools не передаются автономной модели, а core дополнительно отклоняет попытку начать такой вызов без разрешённой политики. Каждый MCP-вызов записывается и аудируется с run correlation ID.
 - Usage сохраняет provider/model/tokens/cost/currency и источник расчёта стоимости.
+- Memory key/value и pgvector embedding используют составную границу `(organization, agent, namespace, key)`; vector recall требует совпадающий embedding model и размерность, а raw embedding не возвращается в tool output.
 - Перед provider call runtime атомарно резервирует оценочную стоимость под advisory lock; дневной и месячный лимиты учитывают завершённый usage и незавершённые reservations, поэтому конкурентные runs не обходят budget gate.
 
 ## Критерии приёмки
