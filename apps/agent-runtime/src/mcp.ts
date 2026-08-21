@@ -1,4 +1,8 @@
 import type { AgentRuntimeMcpServer } from "@comamessenger/core";
+import { lookup } from "node:dns";
+import type { LookupAddress, LookupOptions } from "node:dns";
+import type { LookupFunction } from "node:net";
+import { Agent as UndiciAgent } from "undici";
 
 import type { ProviderTool } from "./providers.js";
 
@@ -76,11 +80,14 @@ export class MCPClient {
   private sessionID: string | null = null;
   private initialized = false;
   private requestID = 0;
+  private readonly dispatcher: UndiciAgent | null;
 
   constructor(
     private readonly configuration: AgentRuntimeMcpServer,
     private readonly fetcher: Fetcher = fetch,
-  ) {}
+  ) {
+    this.dispatcher = fetcher === fetch ? secureMCPDispatcher() : null;
+  }
 
   async listTools(signal: AbortSignal): Promise<MCPTool[]> {
     await this.initialize(signal);
@@ -155,6 +162,7 @@ export class MCPClient {
         method: "POST",
         redirect: "error",
         signal: controller.signal,
+        ...(this.dispatcher ? { dispatcher: this.dispatcher } : {}),
         headers: {
           ...this.configuration.headers,
           Accept: "application/json, text/event-stream",
@@ -163,7 +171,7 @@ export class MCPClient {
           ...(this.sessionID ? { "Mcp-Session-Id": this.sessionID } : {}),
         },
         body: JSON.stringify(payload),
-      });
+      } as RequestInit);
       const sessionID = response.headers.get("Mcp-Session-Id");
       if (sessionID) this.sessionID = sessionID;
       if (
@@ -225,9 +233,59 @@ function assertSafeMCPEndpoint(endpoint: string): void {
   }
 }
 
+function secureMCPDispatcher(): UndiciAgent {
+  return new UndiciAgent({ connect: { lookup: safeMCPLookup } });
+}
+
+const safeMCPLookup: LookupFunction = (
+  hostname: string,
+  options: LookupOptions,
+  callback,
+) => {
+  lookup(
+    hostname,
+    { ...options, all: true, verbatim: true },
+    (error, addresses) => {
+      if (error) {
+        callback(error, "", 0);
+        return;
+      }
+      try {
+        const allowed = publicMCPAddresses(addresses);
+        if (options.all) callback(null, allowed);
+        else callback(null, allowed[0]!.address, allowed[0]!.family);
+      } catch {
+        const denied = new Error(
+          "MCP endpoint resolved to a forbidden address",
+        );
+        Object.assign(denied, { code: "EACCES" });
+        callback(denied, "", 0);
+      }
+    },
+  );
+};
+
+export function publicMCPAddresses(
+  addresses: readonly LookupAddress[],
+): LookupAddress[] {
+  const allowed = addresses.filter(
+    ({ address }) => !isPrivateLiteralAddress(address),
+  );
+  if (allowed.length === 0) throw new MCPError("mcp_endpoint_forbidden");
+  return allowed;
+}
+
 function isPrivateLiteralAddress(hostname: string): boolean {
   const host = hostname.replace(/^\[|\]$/g, "");
-  if (host === "::" || host === "::1" || /^f[cd][0-9a-f]:/i.test(host))
+  const mapped = host.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
+  if (mapped) return isPrivateLiteralAddress(mapped[1]!);
+  if (
+    host === "::" ||
+    host === "::1" ||
+    /^f[cd][0-9a-f]:/i.test(host) ||
+    /^fe[89ab][0-9a-f]:/i.test(host) ||
+    /^ff[0-9a-f]{2}:/i.test(host)
+  )
     return true;
   const octets = host.split(".").map(Number);
   if (

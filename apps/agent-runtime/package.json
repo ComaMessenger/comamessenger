@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@comamessenger/core": "workspace:*",
-    "@comamessenger/protocol": "workspace:*"
+    "@comamessenger/protocol": "workspace:*",
+    "undici": "7.16.0"
   },
   "devDependencies": {
     "tsx": "4.20.5",

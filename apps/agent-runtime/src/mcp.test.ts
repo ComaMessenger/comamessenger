@@ -2,7 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { AgentRuntimeMcpServer } from "@comamessenger/core";
 
-import { MCPClient, MCPError, resolveMCPTools } from "./mcp.js";
+import {
+  MCPClient,
+  MCPError,
+  publicMCPAddresses,
+  resolveMCPTools,
+} from "./mcp.js";
 
 const configuration: AgentRuntimeMcpServer = {
   id: "01900000-0000-7000-8000-000000000001",
@@ -89,6 +94,22 @@ describe("MCP security boundaries", () => {
     expect(
       (firstRequest?.[1]?.headers as Record<string, string>).Authorization,
     ).toBe("Bearer top-secret");
+  });
+
+  it("pins DNS results to public addresses only", () => {
+    expect(
+      publicMCPAddresses([
+        { address: "10.0.0.5", family: 4 },
+        { address: "93.184.216.34", family: 4 },
+        { address: "::ffff:127.0.0.1", family: 6 },
+      ]),
+    ).toEqual([{ address: "93.184.216.34", family: 4 }]);
+    expect(() =>
+      publicMCPAddresses([
+        { address: "127.0.0.1", family: 4 },
+        { address: "fe80::1", family: 6 },
+      ]),
+    ).toThrow("mcp_endpoint_forbidden");
   });
 
   it("rejects oversized output before parsing", async () => {
