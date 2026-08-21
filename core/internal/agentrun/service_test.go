@@ -78,6 +78,16 @@ func TestAgentWorkerLeaseAndCheckpointContract(t *testing.T) {
 	if bytes.Contains(ciphertext, []byte("provider-secret-value")) {
 		t.Fatal("provider credential persisted as plaintext")
 	}
+	if _, err := pool.Exec(t.Context(), `UPDATE agent_provider_credentials SET ciphertext='broken' WHERE agent_id=$1`, created.ID); err != nil {
+		t.Fatal(err)
+	}
+	credential, err = configService.Credential(t.Context(), owner, created.ID)
+	if err != nil || credential.KeyHint == "" {
+		t.Fatalf("credential hint should not require decryption: %+v, err=%v", credential, err)
+	}
+	if _, err := pool.Exec(t.Context(), `UPDATE agent_provider_credentials SET ciphertext=$2 WHERE agent_id=$1`, created.ID, ciphertext); err != nil {
+		t.Fatal(err)
+	}
 	requireConfirmation := true
 	mcpServer, err := configService.CreateMCPServer(t.Context(), owner, created.ID, agentconfig.CreateMCPServerInput{
 		Name: "knowledge", EndpointURL: "https://mcp.example.test/rpc", Enabled: true,
@@ -161,14 +171,14 @@ func TestAgentWorkerLeaseAndCheckpointContract(t *testing.T) {
 		t.Fatalf("over-budget provider call error = %v", err)
 	}
 	completed, err := service.CompleteForAgent(t.Context(), agentUser, authentication, invoked.ID, agentrun.RuntimeCompletion{
-		LeaseToken: claimed.LeaseToken, InputTokens: 10, OutputTokens: 5, Cost: "0.01000000", Currency: "USD",
-		ResultSummary: json.RawMessage(`{"message_id":"00000000-0000-7000-8000-000000000299"}`), PriceSource: "provider",
+		LeaseToken: claimed.LeaseToken, InputTokens: 999999, OutputTokens: 999999, Cost: "0", Currency: "USD",
+		ResultSummary: json.RawMessage(`{"message_id":"00000000-0000-7000-8000-000000000299"}`), PriceSource: "unknown",
 	})
-	if err != nil || completed.Status != "completed" {
+	if err != nil || completed.Status != "completed" || completed.InputTokens != 10 || completed.OutputTokens != 5 || completed.Cost != "0.01000000" {
 		t.Fatalf("completed run = %+v, err=%v", completed, err)
 	}
 	var usageCount int
-	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM agent_usage WHERE run_id=$1 AND price_source='provider'`, invoked.ID).Scan(&usageCount); err != nil || usageCount != 1 {
+	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM agent_usage WHERE run_id=$1 AND price_source='estimated'`, invoked.ID).Scan(&usageCount); err != nil || usageCount != 1 {
 		t.Fatalf("usage count = %d, err=%v", usageCount, err)
 	}
 	usageReport, err := agents.Usage(t.Context(), owner, created.ID)

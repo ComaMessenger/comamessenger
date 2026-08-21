@@ -204,6 +204,8 @@ func (h *identityHandlers) writeAgentRunError(w standardhttp.ResponseWriter, r *
 		h.writeError(w, r, standardhttp.StatusConflict, "agent_conflict", "The agent run state has already changed.")
 	case errors.Is(err, agentrun.ErrBudget):
 		h.writeError(w, r, standardhttp.StatusPaymentRequired, "agent_budget_exceeded", "The agent cost budget has been reached.")
+	case errors.Is(err, agentrun.ErrRateLimited):
+		h.writeError(w, r, standardhttp.StatusTooManyRequests, "agent_provider_rate_limited", "The agent provider rate limit has been reached.")
 	default:
 		h.internalError(w, r, err)
 	}

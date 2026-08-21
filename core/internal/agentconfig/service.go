@@ -130,11 +130,11 @@ func (service *Service) Credential(ctx context.Context, current identity.User, a
 	if uuid.Validate(agentID) != nil {
 		return CredentialView{}, ErrNotFound
 	}
-	var nonce, ciphertext []byte
+	var keyHint string
 	var updatedAt time.Time
-	err := service.pool.QueryRow(ctx, `SELECT credential.nonce,credential.ciphertext,credential.updated_at
+	err := service.pool.QueryRow(ctx, `SELECT credential.key_hint,credential.updated_at
 		FROM agent_provider_credentials credential JOIN agents agent ON agent.org_id=credential.org_id AND agent.actor_id=credential.agent_id
-		WHERE credential.org_id=$1 AND credential.agent_id=$2`, current.OrgID, agentID).Scan(&nonce, &ciphertext, &updatedAt)
+		WHERE credential.org_id=$1 AND credential.agent_id=$2`, current.OrgID, agentID).Scan(&keyHint, &updatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		var exists bool
 		if err := service.pool.QueryRow(ctx, `SELECT true FROM agents WHERE org_id=$1 AND actor_id=$2`, current.OrgID, agentID).Scan(&exists); errors.Is(err, pgx.ErrNoRows) {
@@ -147,11 +147,7 @@ func (service *Service) Credential(ctx context.Context, current identity.User, a
 	if err != nil {
 		return CredentialView{}, err
 	}
-	plain, err := service.open(current.OrgID, agentID, nonce, ciphertext)
-	if err != nil {
-		return CredentialView{}, err
-	}
-	return CredentialView{Configured: true, KeyHint: mask(plain), UpdatedAt: &updatedAt}, nil
+	return CredentialView{Configured: true, KeyHint: keyHint, UpdatedAt: &updatedAt}, nil
 }
 
 func (service *Service) UpdateCredential(ctx context.Context, current identity.User, agentID string, input UpdateCredentialInput) (CredentialView, error) {
@@ -184,10 +180,10 @@ func (service *Service) UpdateCredential(ctx context.Context, current identity.U
 		if _, err := tx.Exec(ctx, `DELETE FROM agent_provider_credentials WHERE org_id=$1 AND agent_id=$2`, current.OrgID, agentID); err != nil {
 			return CredentialView{}, err
 		}
-	} else if _, err := tx.Exec(ctx, `INSERT INTO agent_provider_credentials(agent_id,org_id,nonce,ciphertext,updated_by)
-		VALUES($1,$2,$3,$4,$5)
-		ON CONFLICT(agent_id) DO UPDATE SET nonce=EXCLUDED.nonce,ciphertext=EXCLUDED.ciphertext,updated_by=EXCLUDED.updated_by,updated_at=now()`,
-		agentID, current.OrgID, nonce, ciphertext, current.ActorID); err != nil {
+	} else if _, err := tx.Exec(ctx, `INSERT INTO agent_provider_credentials(agent_id,org_id,nonce,ciphertext,key_hint,updated_by)
+		VALUES($1,$2,$3,$4,$5,$6)
+		ON CONFLICT(agent_id) DO UPDATE SET nonce=EXCLUDED.nonce,ciphertext=EXCLUDED.ciphertext,key_hint=EXCLUDED.key_hint,updated_by=EXCLUDED.updated_by,updated_at=now()`,
+		agentID, current.OrgID, nonce, ciphertext, mask(strings.TrimSpace(input.APIKey)), current.ActorID); err != nil {
 		return CredentialView{}, err
 	}
 	if err := auditCredential(ctx, tx, current, agentID, !input.Clear); err != nil {
