@@ -323,7 +323,7 @@ func (e *Ephemeral) authorizeAgentRun(ctx context.Context, user identity.User, a
 	}
 	var agentID string
 	err := e.pool.QueryRow(ctx, `SELECT run.agent_id FROM agent_runs run
-		JOIN chat_members member ON member.org_id=run.org_id AND member.chat_id=run.chat_id AND member.actor_id=run.agent_id AND member.removed_at IS NULL
+		JOIN chat_members member ON member.org_id=run.org_id AND member.chat_id=run.chat_id AND member.actor_id=run.agent_id
 		WHERE run.org_id=$1 AND run.id=$2 AND run.lease_token=$3 AND run.chat_id=$4
 		AND run.thread_root_id IS NOT DISTINCT FROM $5::uuid AND run.status='running' AND run.lease_expires_at>now()
 		AND ($6::boolean OR run.agent_id=$7)`, user.OrgID, runID, leaseToken, chatID, threadRootID, authorizer.IsOrganizationWorker(user, authentication), user.ActorID).Scan(&agentID)

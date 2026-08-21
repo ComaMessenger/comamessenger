@@ -736,9 +736,19 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 		t.Fatalf("agent platform settings = %+v", agentSettings)
 	}
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agents", owner.AccessToken, map[string]any{
-		"display_name": "E2E agent", "handle": "e2e-agent", "kind": "builtin", "enabled": true,
+		"display_name": "E2E agent", "handle": "e2e-agent", "kind": "external", "enabled": false, "endpoint_url": "https://agent.example.test/runtime",
 		"allowed_scopes": []string{"chats:read", "messages:read", "memory:read", "memory:write", "runtime:execute"}, "chat_ids": []string{group.ID},
 	}, standardhttp.StatusCreated, &createdAgent)
+	var runtimeKey agent.CreatedAPIKey
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agents/"+createdAgent.ID+"/keys", owner.AccessToken, map[string]any{
+		"name": "e2e runtime", "scopes": []string{"messages:read", "runtime:execute"}, "rate_limit_per_minute": 100,
+	}, standardhttp.StatusCreated, &runtimeKey)
+	if runtimeKey.Secret == "" {
+		t.Fatal("agent runtime key was not returned")
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/agents/"+createdAgent.ID, owner.AccessToken, map[string]any{
+		"enabled": true,
+	}, standardhttp.StatusOK, &createdAgent)
 	var queuedRun agentrun.Run
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agents/"+createdAgent.ID+"/invoke", owner.AccessToken, map[string]any{"chat_id": group.ID, "client_run_id": e2eID(t), "chain_depth": 0, "timeout_seconds": 60, "max_attempts": 2, "input": map[string]any{"prompt": "manual e2e"}}, standardhttp.StatusAccepted, &queuedRun)
 	if queuedRun.Status != "queued" {
@@ -775,7 +785,7 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	}
 	var createdAgentKey agent.CreatedAPIKey
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agents/"+createdAgent.ID+"/keys", owner.AccessToken, map[string]any{
-		"name": "e2e runtime", "scopes": []string{"chats:read", "messages:read", "memory:read", "memory:write", "runtime:execute"}, "rate_limit_per_minute": 7,
+		"name": "e2e runtime", "scopes": []string{"chats:read", "messages:read", "memory:read", "memory:write", "runtime:execute"}, "rate_limit_per_minute": 8,
 	}, standardhttp.StatusCreated, &createdAgentKey)
 	var agentMe identity.User
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/me", createdAgentKey.Secret, nil, standardhttp.StatusOK, &agentMe)
@@ -786,6 +796,9 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/agent-runtime/checkpoints/e2e-example", createdAgentKey.Secret, nil, standardhttp.StatusOK, &runtimeCheckpoint)
 	if runtimeCheckpoint.Consumer != "e2e-example" {
 		t.Fatalf("agent runtime checkpoint = %+v", runtimeCheckpoint)
+	}
+	if _, err := agentRunService.Invoke(t.Context(), owner.User, createdAgent.ID, agentrun.InvokeInput{ChatID: group.ID, ClientRunID: e2eID(t), CorrelationID: e2eID(t), TimeoutSeconds: 60, MaxAttempts: 2, Input: json.RawMessage(`{"source":"runtime-api-test"}`)}); err != nil {
+		t.Fatal(err)
 	}
 	var runtimeRun agentrun.ClaimedRun
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agent-runtime/runs/claim", createdAgentKey.Secret, map[string]any{"worker_id": e2eID(t), "lease_seconds": 60}, standardhttp.StatusOK, &runtimeRun)

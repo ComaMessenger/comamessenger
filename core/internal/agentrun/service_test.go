@@ -85,7 +85,7 @@ func TestAgentWorkerLeaseAndCheckpointContract(t *testing.T) {
 	if bytes.Contains(ciphertext, []byte("provider-secret-value")) {
 		t.Fatal("provider credential persisted as plaintext")
 	}
-	if _, err := pool.Exec(t.Context(), `UPDATE agent_provider_credentials SET ciphertext='broken' WHERE agent_id=$1`, created.ID); err != nil {
+	if _, err := pool.Exec(t.Context(), `UPDATE agent_provider_credentials SET ciphertext=$2 WHERE agent_id=$1`, created.ID, []byte("invalid-ciphertext")); err != nil {
 		t.Fatal(err)
 	}
 	credential, err = configService.Credential(t.Context(), owner, created.ID)
@@ -239,8 +239,12 @@ func TestAgentWorkerLeaseAndCheckpointContract(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	var currentEventSeq int64
+	if err := pool.QueryRow(t.Context(), `SELECT event_seq FROM organizations WHERE id=$1`, runTestOrgID).Scan(&currentEventSeq); err != nil {
+		t.Fatal(err)
+	}
 	checkpoint, err := service.GetRuntimeCheckpoint(t.Context(), agentUser, authentication, "builtin-runtime")
-	if err != nil || checkpoint.LastEventSeq != 0 {
+	if err != nil || checkpoint.LastEventSeq != currentEventSeq {
 		t.Fatalf("initial checkpoint = %+v, err=%v", checkpoint, err)
 	}
 	if _, err := pool.Exec(t.Context(), `UPDATE organizations SET event_seq=5 WHERE id=$1`, runTestOrgID); err != nil {

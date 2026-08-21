@@ -595,9 +595,17 @@ func (service *Service) startProviderCall(ctx context.Context, current identity.
 	var dailyAllowed, monthlyAllowed, providerRateAllowed bool
 	err = tx.QueryRow(ctx, `SELECT
 		(agent.daily_cost_limit IS NULL OR COALESCE((SELECT sum(usage.cost) FROM agent_usage usage WHERE usage.agent_id=agent.actor_id AND usage.created_at>=date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'),0)
-			 + COALESCE((SELECT sum(call.reserved_cost) FROM agent_provider_calls call WHERE call.agent_id=agent.actor_id AND call.created_at>=date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AND call.status='started'),0) + $2::numeric <= agent.daily_cost_limit),
+			 + COALESCE((SELECT sum(CASE call.status WHEN 'started' THEN call.reserved_cost ELSE call.actual_cost END) FROM agent_provider_calls call
+				WHERE call.agent_id=agent.actor_id AND call.created_at>=date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
+				AND call.status IN ('started','completed') AND NOT EXISTS (
+					SELECT 1 FROM agent_usage accounted WHERE accounted.provider_call_id=call.id OR (accounted.provider_call_id IS NULL AND accounted.run_id=call.run_id)
+				)),0) + $2::numeric <= agent.daily_cost_limit),
 		(agent.monthly_cost_limit IS NULL OR COALESCE((SELECT sum(usage.cost) FROM agent_usage usage WHERE usage.agent_id=agent.actor_id AND usage.created_at>=date_trunc('month',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'),0)
-			 + COALESCE((SELECT sum(call.reserved_cost) FROM agent_provider_calls call WHERE call.agent_id=agent.actor_id AND call.created_at>=date_trunc('month',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AND call.status='started'),0) + $2::numeric <= agent.monthly_cost_limit)
+			 + COALESCE((SELECT sum(CASE call.status WHEN 'started' THEN call.reserved_cost ELSE call.actual_cost END) FROM agent_provider_calls call
+				WHERE call.agent_id=agent.actor_id AND call.created_at>=date_trunc('month',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
+				AND call.status IN ('started','completed') AND NOT EXISTS (
+					SELECT 1 FROM agent_usage accounted WHERE accounted.provider_call_id=call.id OR (accounted.provider_call_id IS NULL AND accounted.run_id=call.run_id)
+				)),0) + $2::numeric <= agent.monthly_cost_limit)
 		,((SELECT count(*) FROM agent_provider_calls recent WHERE recent.agent_id=agent.actor_id AND recent.created_at>=now()-interval '1 minute') < agent.provider_rate_limit_per_minute)
 		FROM agents agent WHERE agent.actor_id=$1`, agentID, input.ReservedCost).Scan(&dailyAllowed, &monthlyAllowed, &providerRateAllowed)
 	if err != nil {

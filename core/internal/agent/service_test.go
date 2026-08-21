@@ -88,7 +88,8 @@ func TestAgentModelKeyHashScopesVisibilityAndAudit(t *testing.T) {
 		t.Fatalf("platform settings = %+v, err=%v", settings, err)
 	}
 	narrowed := []Scope{ScopeSearchRead}
-	updated, err := service.Update(t.Context(), owner, created.ID, UpdateInput{AllowedScopes: &narrowed})
+	disabled := false
+	updated, err := service.Update(t.Context(), owner, created.ID, UpdateInput{Enabled: &disabled, AllowedScopes: &narrowed})
 	if err != nil || len(updated.AllowedScopes) != 1 || updated.AllowedScopes[0] != ScopeSearchRead {
 		t.Fatalf("updated agent = %+v, err=%v", updated, err)
 	}
@@ -167,7 +168,7 @@ func TestAgentCreateValidationAndManagerPermission(t *testing.T) {
 	if err != nil || compatible.EndpointURL != "http://llm.internal.test/v1" {
 		t.Fatalf("OpenAI-compatible agent=%+v err=%v", compatible, err)
 	}
-	created, err := service.Create(t.Context(), manager, CreateInput{DisplayName: "Disabled", Handle: "disabled-agent", Kind: "builtin", Enabled: false})
+	created, err := service.Create(t.Context(), manager, CreateInput{DisplayName: "Disabled", Handle: "disabled-agent", Kind: "builtin", Provider: "openai", Enabled: false})
 	if err != nil {
 		t.Fatal(err)
 	}

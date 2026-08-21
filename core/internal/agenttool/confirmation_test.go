@@ -20,18 +20,26 @@ import (
 func TestWriteToolRequiresServerConfirmation(t *testing.T) {
 	pool := testdb.New(t)
 	orgID, ownerID, agentID, runID, leaseToken, correlationID := uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString()
-	if _, err := pool.Exec(t.Context(), `INSERT INTO organizations(id,name,slug) VALUES($1,'Confirmation','confirmation-' || substr($1::text,1,8))`, orgID); err != nil {
+	tx, err := pool.Begin(t.Context())
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(t.Context(), `INSERT INTO actors(id,org_id,type,org_role,display_name,handle) VALUES
-		($1,$3,'user','owner','Owner','owner_' || substr($1::text,1,8)),
-		($2,$3,'agent','member','Agent','agent_' || substr($2::text,1,8))`, ownerID, agentID, orgID); err != nil {
+	defer tx.Rollback(t.Context())
+	if _, err := tx.Exec(t.Context(), `INSERT INTO organizations(id,name,slug) VALUES($1::uuid,'Confirmation','confirmation-' || substr($1::text,1,8))`, orgID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(t.Context(), `INSERT INTO agents(actor_id,org_id,owner_actor_id,kind,enabled,allowed_scopes) VALUES($1,$2,$3,'builtin',true,ARRAY['memory:write','runtime:execute'])`, agentID, orgID, ownerID); err != nil {
+	if _, err := tx.Exec(t.Context(), `INSERT INTO actors(id,org_id,type,org_role,display_name,handle) VALUES
+		($1::uuid,$3::uuid,'user','owner','Owner','owner_' || substr($1::text,1,8)),
+		($2::uuid,$3::uuid,'agent','member','Agent','agent_' || substr($2::text,1,8))`, ownerID, agentID, orgID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(t.Context(), `INSERT INTO agent_runs(id,org_id,agent_id,correlation_id,status,lease_token,lease_expires_at,timeout_at) VALUES($1,$2,$3,$4,'running',$5,now()+interval '1 minute',now()+interval '5 minutes')`, runID, orgID, agentID, correlationID, leaseToken); err != nil {
+	if _, err := tx.Exec(t.Context(), `INSERT INTO agents(actor_id,org_id,owner_actor_id,kind,enabled,allowed_scopes) VALUES($1,$2,$3,'builtin',true,ARRAY['memory:write','runtime:execute'])`, agentID, orgID, ownerID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(t.Context(), `INSERT INTO agent_runs(id,org_id,agent_id,correlation_id,status,lease_token,lease_expires_at,started_at,timeout_at) VALUES($1,$2,$3,$4,'running',$5,now()+interval '1 minute',now(),now()+interval '5 minutes')`, runID, orgID, agentID, correlationID, leaseToken); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	executor, err := NewExecutor(pool, Services{Chats: &chat.Service{}, Messages: &message.Service{}, Search: &search.Service{}, Files: &files.Service{}, Memory: agentmemory.NewService(pool)}, true)
