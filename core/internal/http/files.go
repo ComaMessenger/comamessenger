@@ -28,6 +28,62 @@ func (h *identityHandlers) createFileUpload(w standardhttp.ResponseWriter, r *st
 	writeJSON(h.logger, w, standardhttp.StatusCreated, result)
 }
 
+func (h *identityHandlers) putMyAvatar(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	auth := authFromContext(r.Context()).User
+	h.putAvatar(w, r, auth.ActorID)
+}
+
+func (h *identityHandlers) deleteMyAvatar(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	auth := authFromContext(r.Context()).User
+	h.deleteAvatar(w, r, auth.ActorID)
+}
+
+func (h *identityHandlers) putMemberAvatar(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	h.putAvatar(w, r, chi.URLParam(r, "actorID"))
+}
+
+func (h *identityHandlers) deleteMemberAvatar(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	h.deleteAvatar(w, r, chi.URLParam(r, "actorID"))
+}
+
+func (h *identityHandlers) putAvatar(w standardhttp.ResponseWriter, r *standardhttp.Request, actorID string) {
+	result, err := h.files.PutAvatar(r.Context(), authFromContext(r.Context()).User, actorID, r.Header.Get("Content-Type"), r.Body)
+	if err != nil {
+		h.fileError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) deleteAvatar(w standardhttp.ResponseWriter, r *standardhttp.Request, actorID string) {
+	result, err := h.files.DeleteAvatar(r.Context(), authFromContext(r.Context()).User, actorID)
+	if err != nil {
+		h.fileError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) getActorAvatar(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.files.Avatar(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "actorID"))
+	if err != nil {
+		h.fileError(w, r, err)
+		return
+	}
+	if result.Reader == nil {
+		standardhttp.Redirect(w, r, result.URL, standardhttp.StatusTemporaryRedirect)
+		return
+	}
+	defer result.Reader.Close()
+	w.Header().Set("Content-Type", result.File.MIME)
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", result.File.Size))
+	w.Header().Set("Content-Disposition", "inline")
+	w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'")
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	_, _ = io.Copy(w, result.Reader)
+}
+
 func (h *identityHandlers) putFileUploadContent(w standardhttp.ResponseWriter, r *standardhttp.Request) {
 	result, err := h.files.PutContent(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "uploadID"), r.Body)
 	if err != nil {

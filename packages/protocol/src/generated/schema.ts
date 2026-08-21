@@ -182,6 +182,22 @@ export interface paths {
         patch: operations["updateMe"];
         trace?: never;
     };
+    "/api/v1/me/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["putMyAvatar"];
+        post?: never;
+        delete: operations["deleteMyAvatar"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/password": {
         parameters: {
             query?: never;
@@ -422,6 +438,22 @@ export interface paths {
         patch: operations["updateOrganizationMember"];
         trace?: never;
     };
+    "/api/v1/organization/members/{actor_id}/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["putOrganizationMemberAvatar"];
+        post?: never;
+        delete: operations["deleteOrganizationMemberAvatar"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/organization/members/{actor_id}/require-password-change": {
         parameters: {
             query?: never;
@@ -575,6 +607,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["listActors"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/actors/{actor_id}/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getActorAvatar"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1266,7 +1314,7 @@ export interface components {
             parts?: components["schemas"]["CompletedFilePart"][];
         };
         /** @enum {string} */
-        DurableEventTypeV1: "message.created" | "message.updated" | "message.deleted" | "message.pinned" | "message.unpinned" | "reaction.added" | "reaction.removed" | "thread.followed" | "thread.unfollowed" | "read.marked" | "draft.updated" | "draft.deleted" | "chat.created" | "chat.updated" | "chat.archived" | "member.joined" | "member.updated" | "member.removed" | "actor.status.updated";
+        DurableEventTypeV1: "message.created" | "message.updated" | "message.deleted" | "message.pinned" | "message.unpinned" | "reaction.added" | "reaction.removed" | "thread.followed" | "thread.unfollowed" | "read.marked" | "draft.updated" | "draft.deleted" | "chat.created" | "chat.updated" | "chat.archived" | "member.joined" | "member.updated" | "member.removed" | "actor.status.updated" | "actor.avatar.updated";
         /**
          * Format: int32
          * @enum {integer}
@@ -1460,8 +1508,16 @@ export interface components {
             status_text: string;
             /** Format: date-time */
             status_expires_at: string | null;
+            /** Format: int64 */
+            avatar_version: number;
             /** Format: date-time */
             created_at: string;
+        };
+        AvatarUpdate: {
+            /** Format: uuid */
+            actor_id: string;
+            /** Format: int64 */
+            avatar_version: number;
         };
         SetStatusRequest: {
             emoji: string;
@@ -1623,6 +1679,8 @@ export interface components {
             status_text: string;
             /** Format: date-time */
             status_expires_at: string | null;
+            /** Format: int64 */
+            avatar_version: number;
         };
         UpdateOrganizationMemberRequest: {
             /** @enum {string|null} */
@@ -1738,6 +1796,8 @@ export interface components {
             archived_at?: string | null;
             display_name: string;
             avatar_seed: string;
+            /** Format: int64 */
+            avatar_version: number;
             /** @enum {string} */
             notify_level: "default" | "all" | "mentions" | "none";
             /** Format: date-time */
@@ -1762,6 +1822,8 @@ export interface components {
             status_text: string;
             /** Format: date-time */
             status_expires_at: string | null;
+            /** Format: int64 */
+            avatar_version: number;
         };
         ActorPage: {
             actors: components["schemas"]["ActorSummary"][];
@@ -1811,6 +1873,8 @@ export interface components {
             status_text: string;
             /** Format: date-time */
             status_expires_at: string | null;
+            /** Format: int64 */
+            avatar_version: number;
         };
         AddChatMemberRequest: {
             /** Format: uuid */
@@ -2436,6 +2500,55 @@ export interface operations {
             422: components["responses"]["Error"];
         };
     };
+    putMyAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "image/png": string;
+                "image/jpeg": string;
+                "image/webp": string;
+            };
+        };
+        responses: {
+            /** @description Avatar replaced. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvatarUpdate"];
+                };
+            };
+            422: components["responses"]["Error"];
+            507: components["responses"]["Error"];
+        };
+    };
+    deleteMyAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Avatar removed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvatarUpdate"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
     changePassword: {
         parameters: {
             query?: never;
@@ -2890,6 +3003,62 @@ export interface operations {
             422: components["responses"]["Error"];
         };
     };
+    putOrganizationMemberAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                actor_id: components["parameters"]["ActorId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "image/png": string;
+                "image/jpeg": string;
+                "image/webp": string;
+            };
+        };
+        responses: {
+            /** @description Member avatar replaced. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvatarUpdate"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            507: components["responses"]["Error"];
+        };
+    };
+    deleteOrganizationMemberAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                actor_id: components["parameters"]["ActorId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Member avatar removed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvatarUpdate"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
     requireMemberPasswordChange: {
         parameters: {
             query?: never;
@@ -3175,6 +3344,32 @@ export interface operations {
                 };
             };
             422: components["responses"]["Error"];
+        };
+    };
+    getActorAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                actor_id: components["parameters"]["ActorId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized actor avatar. */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                    "image/webp": string;
+                };
+            };
+            404: components["responses"]["Error"];
         };
     };
     getChat: {

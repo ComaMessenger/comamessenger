@@ -110,14 +110,15 @@ func (r *Repository) FindUserByEmail(ctx context.Context, email string) (User, e
 		       u.must_change_password_at IS NOT NULL,
 		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_emoji ELSE '' END,
 		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_text ELSE '' END,
-		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_expires_at END
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_expires_at END,
+		       a.avatar_version
 		FROM users u
 		JOIN actors a ON a.id = u.actor_id
 		JOIN organizations o ON o.id = a.org_id
 		WHERE u.email = $1`, email).Scan(
 		&user.ActorID, &user.OrgID, &user.OrganizationName, &user.OrgRole, &user.Email, &user.DisplayName,
 		&user.Handle, &user.Title, &user.About, &user.Timezone, &user.Status, &user.CreatedAt, &user.PasswordHash, &user.MustChangePassword,
-		&user.StatusEmoji, &user.StatusText, &user.StatusExpiresAt,
+		&user.StatusEmoji, &user.StatusText, &user.StatusExpiresAt, &user.AvatarVersion,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return User{}, ErrInvalidCredentials
@@ -546,14 +547,15 @@ func (r *Repository) TransferOwnership(ctx context.Context, transfer OwnershipTr
 		       u.must_change_password_at IS NOT NULL,
 		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_emoji ELSE '' END,
 		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_text ELSE '' END,
-		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_expires_at END
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_expires_at END,
+		       a.avatar_version
 		FROM actors a
 		JOIN users u ON u.actor_id = a.id
 		JOIN organizations o ON o.id = a.org_id
 		WHERE a.org_id = $1 AND a.id = $2`, transfer.OrgID, transfer.CurrentActorID).Scan(
 		&user.ActorID, &user.OrgID, &user.OrganizationName, &user.OrgRole, &user.Email, &user.DisplayName,
 		&user.Handle, &user.Title, &user.About, &user.Timezone, &user.Status, &user.CreatedAt, &user.MustChangePassword,
-		&user.StatusEmoji, &user.StatusText, &user.StatusExpiresAt,
+		&user.StatusEmoji, &user.StatusText, &user.StatusExpiresAt, &user.AvatarVersion,
 	)
 	if err != nil {
 		return User{}, fmt.Errorf("load previous owner after transfer: %w", err)
@@ -618,7 +620,8 @@ func (r *Repository) RotateSession(ctx context.Context, refreshHash []byte, repl
 		       u.must_change_password_at IS NOT NULL,
 		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_emoji ELSE '' END,
 		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_text ELSE '' END,
-		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_expires_at END
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_expires_at END,
+		       a.avatar_version
 		FROM sessions s
 		JOIN actors a ON a.id = s.actor_id
 		JOIN users u ON u.actor_id = a.id
@@ -628,7 +631,7 @@ func (r *Repository) RotateSession(ctx context.Context, refreshHash []byte, repl
 		&sessionID, &familyID, &expiresAt, &revokedAt, &replacedBy,
 		&user.ActorID, &user.OrgID, &user.OrganizationName, &user.OrgRole, &user.Email, &user.DisplayName,
 		&user.Handle, &user.Title, &user.About, &user.Timezone, &user.Status, &user.CreatedAt, &user.MustChangePassword,
-		&user.StatusEmoji, &user.StatusText, &user.StatusExpiresAt,
+		&user.StatusEmoji, &user.StatusText, &user.StatusExpiresAt, &user.AvatarVersion,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return User{}, ErrInvalidRefreshToken
@@ -686,7 +689,8 @@ func (r *Repository) ResolveSession(ctx context.Context, sessionID, actorID stri
 		       u.must_change_password_at IS NOT NULL,
 		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>$3 THEN a.status_emoji ELSE '' END,
 		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>$3 THEN a.status_text ELSE '' END,
-		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>$3 THEN a.status_expires_at END
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>$3 THEN a.status_expires_at END,
+		       a.avatar_version
 		FROM sessions s
 		JOIN actors a ON a.id = s.actor_id
 		JOIN users u ON u.actor_id = a.id
@@ -696,7 +700,7 @@ func (r *Repository) ResolveSession(ctx context.Context, sessionID, actorID stri
 		sessionID, actorID, now).Scan(
 		&user.ActorID, &user.OrgID, &user.OrganizationName, &user.OrgRole, &user.Email, &user.DisplayName,
 		&user.Handle, &user.Title, &user.About, &user.Timezone, &user.Status, &user.CreatedAt, &user.MustChangePassword,
-		&user.StatusEmoji, &user.StatusText, &user.StatusExpiresAt,
+		&user.StatusEmoji, &user.StatusText, &user.StatusExpiresAt, &user.AvatarVersion,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return User{}, ErrUnauthorized
@@ -718,20 +722,21 @@ func (r *Repository) UpdateProfile(ctx context.Context, actorID, displayName, ha
 			SET display_name = $2, handle = $3, title = $4, about = $5, timezone = $6
 			WHERE id = $1 AND status = 'active' AND deleted_at IS NULL
 			RETURNING id, org_id, org_role, display_name, handle, title, about, timezone, status, created_at,
-			          status_emoji,status_text,status_expires_at
+			          status_emoji,status_text,status_expires_at,avatar_version
 		)
 		SELECT updated.id, updated.org_id, o.name, updated.org_role, u.email::text, updated.display_name,
 		       updated.handle::text, updated.title, updated.about, updated.timezone, updated.status, updated.created_at,
 		       u.must_change_password_at IS NOT NULL,
 		       CASE WHEN updated.status_expires_at IS NULL OR updated.status_expires_at>now() THEN updated.status_emoji ELSE '' END,
 		       CASE WHEN updated.status_expires_at IS NULL OR updated.status_expires_at>now() THEN updated.status_text ELSE '' END,
-		       CASE WHEN updated.status_expires_at IS NULL OR updated.status_expires_at>now() THEN updated.status_expires_at END
+		       CASE WHEN updated.status_expires_at IS NULL OR updated.status_expires_at>now() THEN updated.status_expires_at END,
+		       updated.avatar_version
 		FROM updated JOIN users u ON u.actor_id = updated.id
 		JOIN organizations o ON o.id = updated.org_id`,
 		actorID, displayName, handle, title, about, timezone).Scan(
 		&user.ActorID, &user.OrgID, &user.OrganizationName, &user.OrgRole, &user.Email, &user.DisplayName,
 		&user.Handle, &user.Title, &user.About, &user.Timezone, &user.Status, &user.CreatedAt, &user.MustChangePassword,
-		&user.StatusEmoji, &user.StatusText, &user.StatusExpiresAt,
+		&user.StatusEmoji, &user.StatusText, &user.StatusExpiresAt, &user.AvatarVersion,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return User{}, ErrNotFound

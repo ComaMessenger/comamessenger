@@ -111,6 +111,11 @@ func main() {
 		logger.Error("file service initialization failed", "error", err)
 		os.Exit(1)
 	}
+	processingClient, err := files.NewProcessingClient(pool, fileService, logger)
+	if err != nil {
+		logger.Error("file processing initialization failed", "error", err)
+		os.Exit(1)
+	}
 	identityService, err := identity.NewService(
 		identity.NewRepository(pool), passwordHasher, accessManager,
 		cfg.Auth.RefreshTokenTTL, cfg.Auth.InvitationTTL, cfg.PublicAppURL, cfg.AppEnv == "development", workspaceService,
@@ -141,6 +146,10 @@ func main() {
 	defer ephemeralService.Close()
 	realtimeServer := realtime.NewServer(logger, cfg.PublicAppURL, eventStore, realtimeHub, identityService.Authenticate, cfg.Realtime, ephemeralService)
 	realtimeCtx, stopRealtime := context.WithCancel(context.Background())
+	if err := processingClient.Start(realtimeCtx); err != nil {
+		logger.Error("file processing startup failed", "error", err)
+		os.Exit(1)
+	}
 	defer realtimeServer.Shutdown()
 	go ephemeralService.Run(realtimeCtx)
 
@@ -169,6 +178,7 @@ func main() {
 		}
 	}
 	identityService.SetAfterCommit(afterCommit)
+	fileService.SetAfterCommit(afterCommit)
 	go identityService.RunStatusExpiry(realtimeCtx, time.Minute)
 	messageService := message.NewService(
 		pool, int(cfg.Messaging.MaxBodyBytes), int(cfg.Messaging.MaxPageSize), afterCommit,
@@ -215,6 +225,9 @@ func main() {
 	defer cancel()
 	realtimeServer.Shutdown()
 	stopRealtime()
+	if err := processingClient.Stop(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		logger.Error("file processing shutdown failed", "error", err)
+	}
 	if err := server.Shutdown(ctx); err != nil {
 		logger.Error("graceful shutdown failed", "error", err)
 		os.Exit(1)

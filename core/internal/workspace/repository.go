@@ -200,7 +200,8 @@ func (r *Repository) Members(ctx context.Context, orgID string) ([]Member, error
 		       ARRAY(SELECT ap.permission FROM actor_permissions ap WHERE ap.org_id=a.org_id AND ap.actor_id=a.id ORDER BY ap.permission),
 		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_emoji ELSE '' END,
 		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_text ELSE '' END,
-		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_expires_at END
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_expires_at END,
+		       a.avatar_version
 		FROM actors a
 		JOIN users u ON u.actor_id=a.id
 		WHERE a.org_id=$1 AND a.deleted_at IS NULL
@@ -213,7 +214,7 @@ func (r *Repository) Members(ctx context.Context, orgID string) ([]Member, error
 	for rows.Next() {
 		var item Member
 		var stored []string
-		if err := rows.Scan(&item.ActorID, &item.Email, &item.DisplayName, &item.Handle, &item.Title, &item.Role, &item.Status, &item.CreatedAt, &item.LastSeenAt, &stored, &item.StatusEmoji, &item.StatusText, &item.StatusExpiresAt); err != nil {
+		if err := rows.Scan(&item.ActorID, &item.Email, &item.DisplayName, &item.Handle, &item.Title, &item.Role, &item.Status, &item.CreatedAt, &item.LastSeenAt, &stored, &item.StatusEmoji, &item.StatusText, &item.StatusExpiresAt, &item.AvatarVersion); err != nil {
 			return nil, err
 		}
 		item.Permissions = effectivePermissions(item.Role, stored)
@@ -305,10 +306,11 @@ func (r *Repository) UpdateMember(ctx context.Context, orgID, currentActorID, ta
 		       ARRAY(SELECT ap.permission FROM actor_permissions ap WHERE ap.org_id=a.org_id AND ap.actor_id=a.id ORDER BY ap.permission),
 		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_emoji ELSE '' END,
 		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_text ELSE '' END,
-		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_expires_at END
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_expires_at END,
+		       a.avatar_version
 		FROM actors a
 		JOIN users u ON u.actor_id=a.id
-		WHERE a.id=$1`, targetActorID).Scan(&result.ActorID, &result.Email, &result.DisplayName, &result.Handle, &result.Title, &result.Role, &result.Status, &result.CreatedAt, &result.LastSeenAt, &stored, &result.StatusEmoji, &result.StatusText, &result.StatusExpiresAt)
+	WHERE a.id=$1`, targetActorID).Scan(&result.ActorID, &result.Email, &result.DisplayName, &result.Handle, &result.Title, &result.Role, &result.Status, &result.CreatedAt, &result.LastSeenAt, &stored, &result.StatusEmoji, &result.StatusText, &result.StatusExpiresAt, &result.AvatarVersion)
 	if err != nil {
 		return Member{}, err
 	}

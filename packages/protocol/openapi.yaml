@@ -147,6 +147,34 @@ paths:
                 { schema: { $ref: "#/components/schemas/User" } },
             }
         "422": { $ref: "#/components/responses/Error" }
+  /api/v1/me/avatar:
+    put:
+      operationId: putMyAvatar
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          image/png: { schema: { type: string, format: binary } }
+          image/jpeg: { schema: { type: string, format: binary } }
+          image/webp: { schema: { type: string, format: binary } }
+      responses:
+        "200":
+          description: Avatar replaced.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AvatarUpdate" }
+        "422": { $ref: "#/components/responses/Error" }
+        "507": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteMyAvatar
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Avatar removed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AvatarUpdate" }
+        "404": { $ref: "#/components/responses/Error" }
   /api/v1/me/password:
     post:
       operationId: changePassword
@@ -436,6 +464,39 @@ paths:
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
+  /api/v1/organization/members/{actor_id}/avatar:
+    put:
+      operationId: putOrganizationMemberAvatar
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: "#/components/parameters/ActorId" }]
+      requestBody:
+        required: true
+        content:
+          image/png: { schema: { type: string, format: binary } }
+          image/jpeg: { schema: { type: string, format: binary } }
+          image/webp: { schema: { type: string, format: binary } }
+      responses:
+        "200":
+          description: Member avatar replaced.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AvatarUpdate" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "507": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteOrganizationMemberAvatar
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: "#/components/parameters/ActorId" }]
+      responses:
+        "200":
+          description: Member avatar removed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AvatarUpdate" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
   /api/v1/organization/members/{actor_id}/require-password-change:
     post:
       operationId: requireMemberPasswordChange
@@ -644,6 +705,21 @@ paths:
                 { schema: { $ref: "#/components/schemas/ActorPage" } },
             }
         "422": { $ref: "#/components/responses/Error" }
+  /api/v1/actors/{actor_id}/avatar:
+    get:
+      operationId: getActorAvatar
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: "#/components/parameters/ActorId" }]
+      responses:
+        "200":
+          description: Authorized actor avatar.
+          headers:
+            Cache-Control: { schema: { type: string } }
+          content:
+            image/png: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+        "404": { $ref: "#/components/responses/Error" }
   /api/v1/chats/{chat_id}:
     get:
       operationId: getChat
@@ -1973,6 +2049,7 @@ components:
           status_emoji,
           status_text,
           status_expires_at,
+          avatar_version,
           created_at,
         ]
       properties:
@@ -1996,7 +2073,15 @@ components:
         status_emoji: { type: string, maxLength: 16 }
         status_text: { type: string, maxLength: 100 }
         status_expires_at: { type: [string, "null"], format: date-time }
+        avatar_version: { type: integer, format: int64, minimum: 0 }
         created_at: { type: string, format: date-time }
+    AvatarUpdate:
+      type: object
+      additionalProperties: false
+      required: [actor_id, avatar_version]
+      properties:
+        actor_id: { type: string, format: uuid }
+        avatar_version: { type: integer, format: int64, minimum: 0 }
     SetStatusRequest:
       type: object
       additionalProperties: false
@@ -2247,6 +2332,7 @@ components:
           status_emoji,
           status_text,
           status_expires_at,
+          avatar_version,
         ]
       properties:
         actor_id: { type: string, format: uuid }
@@ -2265,6 +2351,7 @@ components:
         status_emoji: { type: string, maxLength: 16 }
         status_text: { type: string, maxLength: 100 }
         status_expires_at: { type: [string, "null"], format: date-time }
+        avatar_version: { type: integer, format: int64, minimum: 0 }
     UpdateOrganizationMemberRequest:
       type: object
       additionalProperties: false
@@ -2390,6 +2477,7 @@ components:
           created_at,
           display_name,
           avatar_seed,
+          avatar_version,
           notify_level,
           muted_until,
           last_activity_seq,
@@ -2405,6 +2493,7 @@ components:
         archived_at: { type: [string, "null"], format: date-time }
         display_name: { type: string }
         avatar_seed: { type: string }
+        avatar_version: { type: integer, format: int64, minimum: 0 }
         notify_level: { type: string, enum: [default, all, mentions, none] }
         muted_until: { type: [string, "null"], format: date-time }
         direct_peer:
@@ -2419,7 +2508,7 @@ components:
       type: object
       additionalProperties: false
       required:
-        [actor_id, display_name, handle, title, about, type, status_emoji, status_text, status_expires_at]
+        [actor_id, display_name, handle, title, about, type, status_emoji, status_text, status_expires_at, avatar_version]
       properties:
         actor_id: { type: string, format: uuid }
         display_name: { type: string }
@@ -2430,6 +2519,7 @@ components:
         status_emoji: { type: string, maxLength: 16 }
         status_text: { type: string, maxLength: 100 }
         status_expires_at: { type: [string, "null"], format: date-time }
+        avatar_version: { type: integer, format: int64, minimum: 0 }
     ActorPage:
       type: object
       additionalProperties: false
@@ -2479,7 +2569,7 @@ components:
     ChatMember:
       type: object
       required:
-        [actor_id, display_name, handle, title, role, joined_at, status_emoji, status_text, status_expires_at]
+        [actor_id, display_name, handle, title, role, joined_at, status_emoji, status_text, status_expires_at, avatar_version]
       properties:
         actor_id: { type: string, format: uuid }
         display_name: { type: string }
@@ -2490,6 +2580,7 @@ components:
         status_emoji: { type: string, maxLength: 16 }
         status_text: { type: string, maxLength: 100 }
         status_expires_at: { type: [string, "null"], format: date-time }
+        avatar_version: { type: integer, format: int64, minimum: 0 }
     AddChatMemberRequest:
       type: object
       additionalProperties: false

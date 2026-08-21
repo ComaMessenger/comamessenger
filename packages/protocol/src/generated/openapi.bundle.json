@@ -291,6 +291,80 @@
         }
       }
     },
+    "/api/v1/me/avatar": {
+      "put": {
+        "operationId": "putMyAvatar",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/webp": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Avatar replaced.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvatarUpdate"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "507": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteMyAvatar",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Avatar removed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvatarUpdate"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/v1/me/password": {
       "post": {
         "operationId": "changePassword",
@@ -952,6 +1026,99 @@
         }
       }
     },
+    "/api/v1/organization/members/{actor_id}/avatar": {
+      "put": {
+        "operationId": "putOrganizationMemberAvatar",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActorId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/webp": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Member avatar replaced.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvatarUpdate"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "507": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteOrganizationMemberAvatar",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActorId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Member avatar removed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvatarUpdate"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/v1/organization/members/{actor_id}/require-password-change": {
       "post": {
         "operationId": "requireMemberPasswordChange",
@@ -1424,6 +1591,56 @@
             }
           },
           "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/actors/{actor_id}/avatar": {
+      "get": {
+        "operationId": "getActorAvatar",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActorId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized actor avatar.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
             "$ref": "#/components/responses/Error"
           }
         }
@@ -3810,7 +4027,8 @@
           "member.joined",
           "member.updated",
           "member.removed",
-          "actor.status.updated"
+          "actor.status.updated",
+          "actor.avatar.updated"
         ]
       },
       "RealtimeCloseCodeV1": {
@@ -4463,6 +4681,7 @@
           "status_emoji",
           "status_text",
           "status_expires_at",
+          "avatar_version",
           "created_at"
         ],
         "properties": {
@@ -4539,9 +4758,33 @@
             ],
             "format": "date-time"
           },
+          "avatar_version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "AvatarUpdate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "actor_id",
+          "avatar_version"
+        ],
+        "properties": {
+          "actor_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "avatar_version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
           }
         }
       },
@@ -5111,7 +5354,8 @@
           "last_seen_at",
           "status_emoji",
           "status_text",
-          "status_expires_at"
+          "status_expires_at",
+          "avatar_version"
         ],
         "properties": {
           "actor_id": {
@@ -5178,6 +5422,11 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "avatar_version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
           }
         }
       },
@@ -5546,6 +5795,7 @@
           "created_at",
           "display_name",
           "avatar_seed",
+          "avatar_version",
           "notify_level",
           "muted_until",
           "last_activity_seq"
@@ -5603,6 +5853,11 @@
           },
           "avatar_seed": {
             "type": "string"
+          },
+          "avatar_version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
           },
           "notify_level": {
             "type": "string",
@@ -5666,7 +5921,8 @@
           "type",
           "status_emoji",
           "status_text",
-          "status_expires_at"
+          "status_expires_at",
+          "avatar_version"
         ],
         "properties": {
           "actor_id": {
@@ -5706,6 +5962,11 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "avatar_version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
           }
         }
       },
@@ -5841,7 +6102,8 @@
           "joined_at",
           "status_emoji",
           "status_text",
-          "status_expires_at"
+          "status_expires_at",
+          "avatar_version"
         ],
         "properties": {
           "actor_id": {
@@ -5883,6 +6145,11 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "avatar_version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
           }
         }
       },

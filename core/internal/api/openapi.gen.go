@@ -610,6 +610,7 @@ func (e DraftBodyFormat) Valid() bool {
 
 // Defines values for DurableEventTypeV1.
 const (
+	ActorAvatarUpdated DurableEventTypeV1 = "actor.avatar.updated"
 	ActorStatusUpdated DurableEventTypeV1 = "actor.status.updated"
 	ChatArchived       DurableEventTypeV1 = "chat.archived"
 	ChatCreated        DurableEventTypeV1 = "chat.created"
@@ -634,6 +635,8 @@ const (
 // Valid indicates whether the value is a known member of the DurableEventTypeV1 enum.
 func (e DurableEventTypeV1) Valid() bool {
 	switch e {
+	case ActorAvatarUpdated:
+		return true
 	case ActorStatusUpdated:
 		return true
 	case ChatArchived:
@@ -1835,6 +1838,7 @@ type ActorPage struct {
 type ActorSummary struct {
 	About           string             `json:"about"`
 	ActorId         openapi_types.UUID `json:"actor_id"`
+	AvatarVersion   int64              `json:"avatar_version"`
 	DisplayName     string             `json:"display_name"`
 	Handle          string             `json:"handle"`
 	StatusEmoji     string             `json:"status_emoji"`
@@ -1884,6 +1888,12 @@ type AuditPage struct {
 	NextAfterId *openapi_types.UUID `json:"next_after_id"`
 }
 
+// AvatarUpdate defines model for AvatarUpdate.
+type AvatarUpdate struct {
+	ActorId       openapi_types.UUID `json:"actor_id"`
+	AvatarVersion int64              `json:"avatar_version"`
+}
+
 // BootstrapRequest defines model for BootstrapRequest.
 type BootstrapRequest struct {
 	DisplayName      string              `json:"display_name"`
@@ -1916,6 +1926,7 @@ type ChangePasswordRequest struct {
 type Chat struct {
 	ArchivedAt      *time.Time         `json:"archived_at,omitempty"`
 	AvatarSeed      string             `json:"avatar_seed"`
+	AvatarVersion   int64              `json:"avatar_version"`
 	CreatedAt       time.Time          `json:"created_at"`
 	DirectPeer      *ActorSummary      `json:"direct_peer,omitempty"`
 	DisplayName     string             `json:"display_name"`
@@ -1965,6 +1976,7 @@ type ChatFolders = []ChatFolder
 // ChatMember defines model for ChatMember.
 type ChatMember struct {
 	ActorId         openapi_types.UUID `json:"actor_id"`
+	AvatarVersion   int64              `json:"avatar_version"`
 	DisplayName     string             `json:"display_name"`
 	Handle          string             `json:"handle"`
 	JoinedAt        time.Time          `json:"joined_at"`
@@ -2357,6 +2369,7 @@ type NotificationSchedule_Days struct {
 // OrganizationMember defines model for OrganizationMember.
 type OrganizationMember struct {
 	ActorId         openapi_types.UUID       `json:"actor_id"`
+	AvatarVersion   int64                    `json:"avatar_version"`
 	CreatedAt       time.Time                `json:"created_at"`
 	DisplayName     string                   `json:"display_name"`
 	Email           openapi_types.Email      `json:"email"`
@@ -2867,6 +2880,7 @@ type UpdateProfileRequest struct {
 // User defines model for User.
 type User struct {
 	About                string              `json:"about"`
+	AvatarVersion        int64               `json:"avatar_version"`
 	CanCreateInvitations bool                `json:"can_create_invitations"`
 	CreatedAt            time.Time           `json:"created_at"`
 	DisplayName          string              `json:"display_name"`

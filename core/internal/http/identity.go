@@ -175,6 +175,11 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Delete("/messages/{messageID}/thread/follow", h.unfollowThread)
 		}
 		if h.files != nil {
+			protected.Put("/me/avatar", h.putMyAvatar)
+			protected.Delete("/me/avatar", h.deleteMyAvatar)
+			protected.Put("/organization/members/{actorID}/avatar", h.putMemberAvatar)
+			protected.Delete("/organization/members/{actorID}/avatar", h.deleteMemberAvatar)
+			protected.Get("/actors/{actorID}/avatar", h.getActorAvatar)
 			protected.Post("/files/uploads", h.createFileUpload)
 			protected.Put("/files/uploads/{uploadID}/content", h.putFileUploadContent)
 			protected.Post("/files/uploads/{uploadID}/parts", h.signFileUploadParts)

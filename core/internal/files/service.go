@@ -89,13 +89,24 @@ type Service struct {
 	multipartThreshold int64
 	uploadTTL          time.Duration
 	presignTTL         time.Duration
+	processingEnqueue  func(context.Context, pgx.Tx, string) error
+	afterCommit        func(string, int64)
 }
+
+func (s *Service) SetAfterCommit(callback func(string, int64)) { s.afterCommit = callback }
 
 func NewService(pool *pgxpool.Pool, store storage.BlobStore, bucket string, quotaBytes, maxFileBytes, multipartThreshold uint64, uploadTTL, presignTTL time.Duration) (*Service, error) {
 	if pool == nil || store == nil || quotaBytes == 0 || maxFileBytes == 0 || maxFileBytes > quotaBytes {
 		return nil, fmt.Errorf("invalid file service configuration")
 	}
 	return &Service{pool: pool, store: store, bucket: bucket, quotaBytes: int64(quotaBytes), maxFileBytes: int64(maxFileBytes), multipartThreshold: int64(multipartThreshold), uploadTTL: uploadTTL, presignTTL: presignTTL}, nil
+}
+
+// SetProcessingEnqueuer wires the durable job queue without coupling the file
+// domain service to a specific queue implementation. The callback is invoked
+// before the upload transaction commits.
+func (s *Service) SetProcessingEnqueuer(enqueue func(context.Context, pgx.Tx, string) error) {
+	s.processingEnqueue = enqueue
 }
 
 func (s *Service) CreateUpload(ctx context.Context, user identity.User, input CreateUploadInput) (Upload, error) {
@@ -411,6 +422,11 @@ func (s *Service) completeClaim(ctx context.Context, claim uploadClaim, blob sto
 		WHERE org_id = $1`, claim.OrgID, claim.ReservedBytes, blob.Size); err != nil {
 		return File{}, fmt.Errorf("commit storage usage: %w", err)
 	}
+	if s.processingEnqueue != nil {
+		if err := s.processingEnqueue(ctx, tx, claim.File.ID); err != nil {
+			return File{}, fmt.Errorf("enqueue file processing: %w", err)
+		}
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return File{}, fmt.Errorf("commit completed upload: %w", err)
 	}
@@ -505,7 +521,7 @@ func safeName(value string) string {
 func forbiddenExtension(name string) bool {
 	extension := strings.ToLower(filepath.Ext(name))
 	switch extension {
-	case ".exe", ".dll", ".msi", ".bat", ".cmd", ".com", ".scr", ".ps1", ".vbs", ".jar", ".app", ".dmg":
+	case ".exe", ".dll", ".msi", ".bat", ".cmd", ".com", ".scr", ".ps1", ".vbs", ".jar", ".app", ".dmg", ".docm", ".xlsm", ".pptm":
 		return true
 	default:
 		return false

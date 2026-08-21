@@ -42,7 +42,8 @@
         "member.joined",
         "member.updated",
         "member.removed",
-        "actor.status.updated"
+        "actor.status.updated",
+        "actor.avatar.updated"
       ]
     },
     "CloseCode": {

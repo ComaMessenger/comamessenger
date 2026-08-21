@@ -162,6 +162,7 @@ type Member struct {
 	StatusEmoji     string            `json:"status_emoji"`
 	StatusText      string            `json:"status_text"`
 	StatusExpiresAt *time.Time        `json:"status_expires_at"`
+	AvatarVersion   int64             `json:"avatar_version"`
 }
 
 type UpdateMemberInput struct {
