@@ -43,7 +43,7 @@
 - [x] Создать `agents`, `api_keys`, `agent_usage`, `agent_memory`, `agent_runs`, `agent_triggers` либо согласованную нормализованную модель.
 - [x] Хранить API keys только как hash; показывать plaintext один раз при создании.
 - [x] Пересекать actor permissions, API-key scopes и chat membership при каждом действии.
-- [ ] Записывать tool calls, administrative changes и чувствительные агентские действия в audit log без сохранения provider secrets.
+- [x] Записывать tool calls, administrative changes и чувствительные агентские действия в audit log без сохранения provider secrets.
 - [ ] Зашифровать provider credentials envelope encryption/AES-GCM с master key из environment или внешнего secret store.
 - [x] Реализовать rotation/revocation ключей без рестарта core.
 - [x] Добавить rate limits по agent, key, provider и organization.
@@ -70,8 +70,8 @@
 
 ### Tools и MCP
 
-- [ ] Реализовать tools `get_chat_messages`, `get_thread`, `search_messages`, `post_message`, `reply_in_thread`, `add_reaction`, `get_file_text`, `list_members`, `remember`, `recall`.
-- [ ] Валидировать аргументы tools по JSON Schema и применять те же authz/scopes, что и REST.
+- [x] Реализовать tools `get_chat_messages`, `get_thread`, `search_messages`, `post_message`, `reply_in_thread`, `add_reaction`, `get_file_text`, `list_members`, `remember`, `recall`.
+- [x] Валидировать аргументы tools по JSON Schema и применять те же authz/scopes, что и REST.
 - [ ] Добавить allowlist внешних MCP servers, timeout, output size limits и redaction секретов.
 - [ ] Разделить read и write tools; потенциально значимые действия могут требовать configurable user confirmation.
 - [ ] Записывать correlation IDs run → provider call → tool call → message.

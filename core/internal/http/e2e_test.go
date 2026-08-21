@@ -20,6 +20,8 @@ import (
 	"github.com/coder/websocket"
 	"github.com/comamessenger/comamessenger/core/internal/access"
 	"github.com/comamessenger/comamessenger/core/internal/agent"
+	"github.com/comamessenger/comamessenger/core/internal/agentmemory"
+	"github.com/comamessenger/comamessenger/core/internal/agenttool"
 	"github.com/comamessenger/comamessenger/core/internal/chat"
 	"github.com/comamessenger/comamessenger/core/internal/config"
 	"github.com/comamessenger/comamessenger/core/internal/eventlog"
@@ -97,14 +99,21 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 		t.Fatal(err)
 	}
 	fileService.SetAfterCommit(afterCommit)
+	chatService := chat.NewService(pool)
+	messageService := message.NewService(pool, 64*1024, 100, afterCommit)
+	searchService := search.NewService(pool)
+	agentToolExecutor, err := agenttool.NewExecutor(pool, agenttool.Services{Chats: chatService, Messages: messageService, Search: searchService, Files: fileService, Memory: agentmemory.NewService(pool)}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
 	server.Config.Handler = NewHandler(logger, baseURL, pool.Ping, Dependencies{
-		Identity: identityService, Agents: agentService, Chats: chat.NewService(pool),
-		Messages:  message.NewService(pool, 64*1024, 100, afterCommit),
+		Identity: identityService, Agents: agentService, AgentTools: agentToolExecutor, Chats: chatService,
+		Messages:  messageService,
 		UserState: userstate.NewService(pool, 64*1024, afterCommit), Realtime: realtimeServer,
 		Push:            push.NewService(pool, config.PushConfig{}),
 		Workspace:       workspaceService,
 		Files:           fileService,
-		Search:          search.NewService(pool),
+		Search:          searchService,
 		RefreshTokenTTL: 24 * time.Hour, RevokeRealtimeSession: realtimeServer.RevokeSession,
 	})
 	server.Start()
@@ -725,12 +734,30 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	}
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agents", owner.AccessToken, map[string]any{
 		"display_name": "E2E agent", "handle": "e2e-agent", "kind": "builtin", "enabled": true,
-		"allowed_scopes": []string{"chats:read", "messages:read"}, "chat_ids": []string{group.ID},
+		"allowed_scopes": []string{"chats:read", "messages:read", "memory:read", "memory:write"}, "chat_ids": []string{group.ID},
 	}, standardhttp.StatusCreated, &createdAgent)
 	var createdAgentKey agent.CreatedAPIKey
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agents/"+createdAgent.ID+"/keys", owner.AccessToken, map[string]any{
-		"name": "e2e runtime", "scopes": []string{"chats:read", "messages:read"}, "rate_limit_per_minute": 3,
+		"name": "e2e runtime", "scopes": []string{"chats:read", "messages:read", "memory:read", "memory:write"}, "rate_limit_per_minute": 5,
 	}, standardhttp.StatusCreated, &createdAgentKey)
+	var remembered agentmemory.Entry
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agent-tools/remember", createdAgentKey.Secret, map[string]any{"correlation_id": e2eID(t), "arguments": map[string]any{"namespace": "e2e", "key": "preference", "value": map[string]any{"theme": "dark"}}}, standardhttp.StatusOK, &remembered)
+	if remembered.Key != "preference" {
+		t.Fatalf("remembered memory = %+v", remembered)
+	}
+	var recalled []agentmemory.Entry
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agent-tools/recall", createdAgentKey.Secret, map[string]any{"correlation_id": e2eID(t), "arguments": map[string]any{"namespace": "e2e", "keys": []string{"preference"}}}, standardhttp.StatusOK, &recalled)
+	if len(recalled) != 1 || recalled[0].Key != "preference" {
+		t.Fatalf("recalled memory = %+v", recalled)
+	}
+	var toolCalls int
+	var leakedToolAudit bool
+	if err := pool.QueryRow(t.Context(), `SELECT count(*),bool_or(metadata::text LIKE '%dark%' OR metadata::text LIKE '%preference%') FROM audit_log WHERE actor_id=$1 AND action='agent.tool.call'`, createdAgent.ID).Scan(&toolCalls, &leakedToolAudit); err != nil {
+		t.Fatal(err)
+	}
+	if toolCalls != 2 || leakedToolAudit {
+		t.Fatalf("tool audit count=%d leaked=%v", toolCalls, leakedToolAudit)
+	}
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/chats/"+group.ID+"/messages", createdAgentKey.Secret, nil, standardhttp.StatusOK, &page)
 	agentSocket := e2eSocket(t, baseURL, createdAgentKey.Secret, 0)
 	defer agentSocket.CloseNow()

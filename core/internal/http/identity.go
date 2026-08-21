@@ -16,6 +16,7 @@ import (
 
 	"github.com/comamessenger/comamessenger/core/internal/access"
 	"github.com/comamessenger/comamessenger/core/internal/agent"
+	"github.com/comamessenger/comamessenger/core/internal/agenttool"
 	"github.com/comamessenger/comamessenger/core/internal/api"
 	"github.com/comamessenger/comamessenger/core/internal/chat"
 	"github.com/comamessenger/comamessenger/core/internal/files"
@@ -34,6 +35,7 @@ const refreshCookieName = "comamessenger_refresh"
 type Dependencies struct {
 	Identity              *identity.Service
 	Agents                *agent.Service
+	AgentTools            *agenttool.Executor
 	Chats                 *chat.Service
 	Messages              *message.Service
 	UserState             *userstate.Service
@@ -54,6 +56,7 @@ type identityHandlers struct {
 	logger                *slog.Logger
 	service               *identity.Service
 	agents                *agent.Service
+	agentTools            *agenttool.Executor
 	chats                 *chat.Service
 	messages              *message.Service
 	userState             *userstate.Service
@@ -87,7 +90,7 @@ type authenticated struct {
 
 func newIdentityHandlers(logger *slog.Logger, allowedOrigin string, dependencies Dependencies) *identityHandlers {
 	return &identityHandlers{
-		logger: logger, service: dependencies.Identity, agents: dependencies.Agents, chats: dependencies.Chats, messages: dependencies.Messages, userState: dependencies.UserState, push: dependencies.Push, workspace: dependencies.Workspace, files: dependencies.Files, search: dependencies.Search, realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
+		logger: logger, service: dependencies.Identity, agents: dependencies.Agents, agentTools: dependencies.AgentTools, chats: dependencies.Chats, messages: dependencies.Messages, userState: dependencies.UserState, push: dependencies.Push, workspace: dependencies.Workspace, files: dependencies.Files, search: dependencies.Search, realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
 		cookieSecure: dependencies.CookieSecure, refreshTTL: dependencies.RefreshTokenTTL,
 		bootstrapRate: newIPRateLimiter(5, 5), loginRate: newIPRateLimiter(10, 10),
 		refreshRate: newIPRateLimiter(30, 20), invitationRate: newIPRateLimiter(10, 10), websocketRate: newIPRateLimiter(60, 20), actorRate: newIPRateLimiter(1200, 200),
@@ -142,6 +145,10 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Get("/agents/{agentID}/keys", h.listAgentKeys)
 			protected.Post("/agents/{agentID}/keys", h.createAgentKey)
 			protected.Delete("/agents/{agentID}/keys/{keyID}", h.revokeAgentKey)
+		}
+		if h.agentTools != nil {
+			protected.Get("/agent-tools", h.listAgentTools)
+			protected.Post("/agent-tools/{toolName}", h.invokeAgentTool)
 		}
 		protected.With(h.actorRateLimit("ownership-transfer", h.ownershipRate)).Post("/organization/transfer-ownership", h.transferOwnership)
 		if h.workspace != nil {
@@ -862,7 +869,7 @@ func (h *identityHandlers) authenticate(next standardhttp.Handler) standardhttp.
 		}
 		if accessIdentity.AuthenticationKind == "api_key" {
 			required, allowed := requiredAgentScope(r.Method, r.URL.Path)
-			if !allowed || !containsString(accessIdentity.Scopes, required) {
+			if !allowed || (required != "" && !containsString(accessIdentity.Scopes, required)) {
 				h.writeError(w, r, standardhttp.StatusForbidden, "agent_scope_required", "The agent key does not allow this API operation.")
 				return
 			}
@@ -880,6 +887,9 @@ func requiredAgentScope(method, path string) (string, bool) {
 	}
 	if method == standardhttp.MethodGet && parts[0] == "actors" {
 		return string(agent.ScopeMembersRead), true
+	}
+	if parts[0] == "agent-tools" && ((method == standardhttp.MethodGet && len(parts) == 1) || (method == standardhttp.MethodPost && len(parts) == 2)) {
+		return "", true
 	}
 	if method == standardhttp.MethodGet && parts[0] == "search" {
 		return string(agent.ScopeSearchRead), true

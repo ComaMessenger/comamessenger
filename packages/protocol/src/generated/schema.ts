@@ -1340,6 +1340,40 @@ export interface paths {
         patch: operations["updateAgentPlatformSettings"];
         trace?: never;
     };
+    "/api/v1/agent-tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns the published JSON Schema contract for every built-in agent tool. */
+        get: operations["listAgentTools"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent-tools/{tool_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Invokes a tool through the same scope and membership checks as its REST operations. */
+        post: operations["invokeAgentTool"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1728,6 +1762,27 @@ export interface components {
         AgentPlatformSettings: {
             organization_rate_limit_per_minute: number;
         };
+        AgentToolDefinition: {
+            name: string;
+            description: string;
+            /** @enum {string} */
+            mode: "read" | "write";
+            required_scope: components["schemas"]["AgentScope"];
+            input_schema: {
+                [key: string]: unknown;
+            };
+        };
+        InvokeAgentToolRequest: {
+            arguments: {
+                [key: string]: unknown;
+            };
+            /** Format: uuid */
+            run_id?: string;
+            /** Format: uuid */
+            correlation_id: string;
+            /** @default false */
+            confirmed: boolean;
+        };
         UpdateAgentPlatformSettingsRequest: {
             organization_rate_limit_per_minute: number;
         };
@@ -1932,7 +1987,7 @@ export interface components {
             actor_role: "owner" | "admin" | "member" | null;
             action: string;
             /** @enum {string} */
-            category: "organization" | "members" | "invitations" | "security" | "chats" | "infrastructure";
+            category: "organization" | "members" | "invitations" | "security" | "chats" | "infrastructure" | "agents";
             target_type: string;
             target_id: string | null;
             target_name: string | null;
@@ -3368,7 +3423,7 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
-                category?: "organization" | "members" | "invitations" | "security" | "chats" | "infrastructure";
+                category?: "organization" | "members" | "invitations" | "security" | "chats" | "infrastructure" | "agents";
                 actor_id?: string;
                 from?: string;
                 to?: string;
@@ -5248,6 +5303,56 @@ export interface operations {
                 };
             };
             403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    listAgentTools: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Built-in agent tool definitions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentToolDefinition"][];
+                };
+            };
+            401: components["responses"]["Error"];
+        };
+    };
+    invokeAgentTool: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tool_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvokeAgentToolRequest"];
+            };
+        };
+        responses: {
+            /** @description Tool-specific JSON result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
             422: components["responses"]["Error"];
         };
     };

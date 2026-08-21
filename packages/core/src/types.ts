@@ -77,6 +77,9 @@ export type AgentPlatformSettings =
   components["schemas"]["AgentPlatformSettings"];
 export type UpdateAgentPlatformSettingsRequest =
   components["schemas"]["UpdateAgentPlatformSettingsRequest"];
+export type AgentToolDefinition = components["schemas"]["AgentToolDefinition"];
+export type InvokeAgentToolRequest =
+  components["schemas"]["InvokeAgentToolRequest"];
 export type Session = components["schemas"]["Session"];
 export type BootstrapRequest = components["schemas"]["BootstrapRequest"];
 export type LoginRequest = components["schemas"]["LoginRequest"];

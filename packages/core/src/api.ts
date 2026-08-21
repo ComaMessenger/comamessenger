@@ -67,6 +67,8 @@ import type {
   CreateAgentKeyRequest,
   AgentPlatformSettings,
   UpdateAgentPlatformSettingsRequest,
+  AgentToolDefinition,
+  InvokeAgentToolRequest,
 } from "./types";
 
 type APIErrorPayload = components["schemas"]["Error"];
@@ -259,6 +261,15 @@ export class MessengerAPI {
   ): Promise<AgentPlatformSettings> {
     return this.request("/api/v1/agents/settings", {
       method: "PATCH",
+      body: JSON.stringify(input),
+    });
+  }
+  agentTools(): Promise<AgentToolDefinition[]> {
+    return this.request("/api/v1/agent-tools");
+  }
+  invokeAgentTool<T>(name: string, input: InvokeAgentToolRequest): Promise<T> {
+    return this.request(`/api/v1/agent-tools/${encodeURIComponent(name)}`, {
+      method: "POST",
       body: JSON.stringify(input),
     });
   }

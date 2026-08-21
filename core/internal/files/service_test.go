@@ -75,6 +75,10 @@ func TestProcessingExtractsTextCreatesPreviewAndEnqueuesDurably(t *testing.T) {
 	if extracted != "searchable русский text" || status != "ready" {
 		t.Fatalf("processed text = %q, status = %q", extracted, status)
 	}
+	content, err := service.GetText(t.Context(), owner, textFile.ID, 10)
+	if err != nil || content.Text != "searchable" || !content.Truncated {
+		t.Fatalf("bounded extracted text = %+v, err=%v", content, err)
+	}
 	if err := service.ProcessFile(t.Context(), textFile.ID); err != nil {
 		t.Fatalf("idempotent processing: %v", err)
 	}

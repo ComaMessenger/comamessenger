@@ -386,6 +386,7 @@ func (r *Repository) Audit(ctx context.Context, orgID string, filter AuditFilter
 		      WHEN l.action LIKE 'member.password%' OR l.action LIKE 'member.email.%' THEN 'security'
 		      WHEN l.action LIKE 'member.%' OR l.action LIKE 'organization.member.%' THEN 'members'
 		      WHEN l.action LIKE 'organization.infrastructure.%' THEN 'infrastructure'
+		      WHEN l.action LIKE 'agent.%' THEN 'agents'
 		      ELSE 'organization'
 		    END AS category
 		  FROM audit_log l

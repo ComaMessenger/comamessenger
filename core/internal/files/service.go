@@ -80,6 +80,12 @@ type Download struct {
 	URL    string
 }
 
+type TextContent struct {
+	FileID    string `json:"file_id"`
+	Text      string `json:"text"`
+	Truncated bool   `json:"truncated"`
+}
+
 type Service struct {
 	pool               *pgxpool.Pool
 	store              storage.BlobStore
@@ -342,6 +348,36 @@ func (s *Service) AbortUpload(ctx context.Context, user identity.User, uploadID 
 
 func (s *Service) Get(ctx context.Context, user identity.User, fileID string) (File, error) {
 	return s.getAccessible(ctx, user, fileID)
+}
+
+func (s *Service) GetText(ctx context.Context, user identity.User, fileID string, maxChars int) (TextContent, error) {
+	if maxChars == 0 {
+		maxChars = 20000
+	}
+	if maxChars < 1 || maxChars > 100000 {
+		return TextContent{}, fmt.Errorf("%w: max_chars must be between 1 and 100000", ErrInvalid)
+	}
+	file, err := s.getAccessible(ctx, user, fileID)
+	if err != nil {
+		return TextContent{}, err
+	}
+	if file.ProcessingStatus != "ready" {
+		return TextContent{}, ErrConflict
+	}
+	var text *string
+	if err := s.pool.QueryRow(ctx, `SELECT extracted_text FROM files WHERE org_id=$1 AND id=$2`, user.OrgID, fileID).Scan(&text); err != nil {
+		return TextContent{}, fmt.Errorf("load file text: %w", err)
+	}
+	if text == nil {
+		return TextContent{}, ErrConflict
+	}
+	runes := []rune(*text)
+	result := TextContent{FileID: fileID, Text: *text}
+	if len(runes) > maxChars {
+		result.Text = string(runes[:maxChars])
+		result.Truncated = true
+	}
+	return result, nil
 }
 
 func (s *Service) Download(ctx context.Context, user identity.User, fileID string) (Download, error) {

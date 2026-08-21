@@ -107,6 +107,24 @@ func (e AgentScope) Valid() bool {
 	}
 }
 
+// Defines values for AgentToolDefinitionMode.
+const (
+	Read  AgentToolDefinitionMode = "read"
+	Write AgentToolDefinitionMode = "write"
+)
+
+// Valid indicates whether the value is a known member of the AgentToolDefinitionMode enum.
+func (e AgentToolDefinitionMode) Valid() bool {
+	switch e {
+	case Read:
+		return true
+	case Write:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AuditEntryActorRole.
 const (
 	AuditEntryActorRoleAdmin       AuditEntryActorRole = "admin"
@@ -133,6 +151,7 @@ func (e AuditEntryActorRole) Valid() bool {
 
 // Defines values for AuditEntryCategory.
 const (
+	AuditEntryCategoryAgents         AuditEntryCategory = "agents"
 	AuditEntryCategoryChats          AuditEntryCategory = "chats"
 	AuditEntryCategoryInfrastructure AuditEntryCategory = "infrastructure"
 	AuditEntryCategoryInvitations    AuditEntryCategory = "invitations"
@@ -144,6 +163,8 @@ const (
 // Valid indicates whether the value is a known member of the AuditEntryCategory enum.
 func (e AuditEntryCategory) Valid() bool {
 	switch e {
+	case AuditEntryCategoryAgents:
+		return true
 	case AuditEntryCategoryChats:
 		return true
 	case AuditEntryCategoryInfrastructure:
@@ -1852,6 +1873,7 @@ func (e GetBrandingAssetParamsKind) Valid() bool {
 
 // Defines values for ListOrganizationAuditParamsCategory.
 const (
+	ListOrganizationAuditParamsCategoryAgents         ListOrganizationAuditParamsCategory = "agents"
 	ListOrganizationAuditParamsCategoryChats          ListOrganizationAuditParamsCategory = "chats"
 	ListOrganizationAuditParamsCategoryInfrastructure ListOrganizationAuditParamsCategory = "infrastructure"
 	ListOrganizationAuditParamsCategoryInvitations    ListOrganizationAuditParamsCategory = "invitations"
@@ -1863,6 +1885,8 @@ const (
 // Valid indicates whether the value is a known member of the ListOrganizationAuditParamsCategory enum.
 func (e ListOrganizationAuditParamsCategory) Valid() bool {
 	switch e {
+	case ListOrganizationAuditParamsCategoryAgents:
+		return true
 	case ListOrganizationAuditParamsCategoryChats:
 		return true
 	case ListOrganizationAuditParamsCategoryInfrastructure:
@@ -2028,6 +2052,18 @@ type AgentPlatformSettings struct {
 
 // AgentScope defines model for AgentScope.
 type AgentScope string
+
+// AgentToolDefinition defines model for AgentToolDefinition.
+type AgentToolDefinition struct {
+	Description   string                  `json:"description"`
+	InputSchema   map[string]interface{}  `json:"input_schema"`
+	Mode          AgentToolDefinitionMode `json:"mode"`
+	Name          string                  `json:"name"`
+	RequiredScope AgentScope              `json:"required_scope"`
+}
+
+// AgentToolDefinitionMode defines model for AgentToolDefinition.Mode.
+type AgentToolDefinitionMode string
 
 // AuditEntry defines model for AuditEntry.
 type AuditEntry struct {
@@ -2470,6 +2506,14 @@ type InvitationSummaryRole string
 
 // InvitationSummaryStatus defines model for InvitationSummary.Status.
 type InvitationSummaryStatus string
+
+// InvokeAgentToolRequest defines model for InvokeAgentToolRequest.
+type InvokeAgentToolRequest struct {
+	Arguments     map[string]interface{} `json:"arguments"`
+	Confirmed     *bool                  `json:"confirmed,omitempty"`
+	CorrelationId openapi_types.UUID     `json:"correlation_id"`
+	RunId         *openapi_types.UUID    `json:"run_id,omitempty"`
+}
 
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
@@ -3300,6 +3344,9 @@ type ListFollowedThreadsParams struct {
 	BeforeSeq *int64 `form:"before_seq,omitempty" json:"before_seq,omitempty"`
 	Limit     *int   `form:"limit,omitempty" json:"limit,omitempty"`
 }
+
+// InvokeAgentToolJSONRequestBody defines body for InvokeAgentTool for application/json ContentType.
+type InvokeAgentToolJSONRequestBody = InvokeAgentToolRequest
 
 // CreateAgentJSONRequestBody defines body for CreateAgent for application/json ContentType.
 type CreateAgentJSONRequestBody = CreateAgentRequest

@@ -382,7 +382,7 @@ func (s *Service) Audit(ctx context.Context, current identity.User, filter Audit
 	if filter.Limit < 1 || filter.Limit > 100 {
 		return AuditPage{}, fmt.Errorf("%w: audit limit must be between 1 and 100", ErrInvalid)
 	}
-	validCategory := filter.Category == "" || filter.Category == "organization" || filter.Category == "members" || filter.Category == "invitations" || filter.Category == "security" || filter.Category == "chats" || filter.Category == "infrastructure"
+	validCategory := filter.Category == "" || filter.Category == "organization" || filter.Category == "members" || filter.Category == "invitations" || filter.Category == "security" || filter.Category == "chats" || filter.Category == "infrastructure" || filter.Category == "agents"
 	if !validCategory || filter.ActorID != "" && uuid.Validate(filter.ActorID) != nil || filter.AfterID != "" && uuid.Validate(filter.AfterID) != nil || filter.From != nil && filter.To != nil && !filter.From.Before(*filter.To) {
 		return AuditPage{}, fmt.Errorf("%w: audit filters are invalid", ErrInvalid)
 	}

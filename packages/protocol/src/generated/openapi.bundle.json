@@ -1255,7 +1255,8 @@
                 "invitations",
                 "security",
                 "chats",
-                "infrastructure"
+                "infrastructure",
+                "agents"
               ]
             }
           },
@@ -4045,6 +4046,87 @@
           }
         }
       }
+    },
+    "/api/v1/agent-tools": {
+      "get": {
+        "operationId": "listAgentTools",
+        "description": "Returns the published JSON Schema contract for every built-in agent tool.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Built-in agent tool definitions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AgentToolDefinition"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/agent-tools/{tool_name}": {
+      "post": {
+        "operationId": "invokeAgentTool",
+        "description": "Invokes a tool through the same scope and membership checks as its REST operations.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tool_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvokeAgentToolRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tool-specific JSON result.",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5671,6 +5753,67 @@
           }
         }
       },
+      "AgentToolDefinition": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "description",
+          "mode",
+          "required_scope",
+          "input_schema"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "read",
+              "write"
+            ]
+          },
+          "required_scope": {
+            "$ref": "#/components/schemas/AgentScope"
+          },
+          "input_schema": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "InvokeAgentToolRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "arguments",
+          "correlation_id"
+        ],
+        "properties": {
+          "arguments": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "correlation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "confirmed": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
       "UpdateAgentPlatformSettingsRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -6517,7 +6660,8 @@
               "invitations",
               "security",
               "chats",
-              "infrastructure"
+              "infrastructure",
+              "agents"
             ]
           },
           "target_type": {
