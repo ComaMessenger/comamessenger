@@ -27,6 +27,8 @@ func setRequiredEnvironment(t *testing.T) {
 	t.Setenv("REDIS_EPHEMERAL_SIGNING_KEY", "")
 	t.Setenv("BOOTSTRAP_TOKEN", "")
 	t.Setenv("TRUSTED_PROXY_CIDRS", "")
+	t.Setenv("AGENT_TRIGGER_SHARD_INDEX", "")
+	t.Setenv("AGENT_TRIGGER_SHARD_COUNT", "")
 	for _, key := range []string{"WS_MAX_PENDING_CONNECTIONS", "WS_MAX_CONCURRENT_WRITES", "WS_TYPING_TTL", "WS_PRESENCE_TTL", "WS_ACTIVE_SUBSCRIPTION_TTL", "WS_EPHEMERAL_RATE_LIMIT", "WS_EPHEMERAL_RATE_WINDOW"} {
 		t.Setenv(key, "")
 	}
@@ -95,6 +97,27 @@ func TestFromEnvironmentDefaults(t *testing.T) {
 	}
 	if len(cfg.TrustedProxyCIDRs) != 2 {
 		t.Fatalf("TrustedProxyCIDRs = %v", cfg.TrustedProxyCIDRs)
+	}
+	if cfg.Agents.TriggerShardIndex != 0 || cfg.Agents.TriggerShardCount != 1 {
+		t.Fatalf("unexpected agent trigger shard defaults: %#v", cfg.Agents)
+	}
+}
+
+func TestFromEnvironmentValidatesAgentTriggerShard(t *testing.T) {
+	setRequiredEnvironment(t)
+	t.Setenv("AGENT_TRIGGER_SHARD_INDEX", "2")
+	t.Setenv("AGENT_TRIGGER_SHARD_COUNT", "4")
+	cfg, err := FromEnvironment()
+	if err != nil {
+		t.Fatalf("FromEnvironment() error = %v", err)
+	}
+	if cfg.Agents.TriggerShardIndex != 2 || cfg.Agents.TriggerShardCount != 4 {
+		t.Fatalf("unexpected shard: %#v", cfg.Agents)
+	}
+
+	t.Setenv("AGENT_TRIGGER_SHARD_INDEX", "4")
+	if _, err := FromEnvironment(); err == nil {
+		t.Fatal("FromEnvironment() accepted shard index equal to shard count")
 	}
 }
 

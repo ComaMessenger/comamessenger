@@ -210,6 +210,10 @@ func main() {
 	agentRunService := agentrun.NewService(pool)
 	agentProviderService := agentprovider.NewService(pool, agentConfigService, agentRunService)
 	agentTriggerService := agenttrigger.NewService(pool, logger)
+	if err := agentTriggerService.ConfigureShard(cfg.Agents.TriggerShardIndex, cfg.Agents.TriggerShardCount); err != nil {
+		logger.Error("agent trigger shard configuration failed", "error", err)
+		os.Exit(1)
+	}
 	go agentTriggerService.Run(realtimeCtx, time.Second)
 	userStateService := userstate.NewService(pool, int(cfg.Messaging.MaxBodyBytes), afterCommit)
 	pushService := push.NewService(pool, cfg.Push)

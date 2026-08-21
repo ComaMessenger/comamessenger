@@ -72,16 +72,26 @@ type event struct {
 }
 
 type Service struct {
-	pool   *pgxpool.Pool
-	logger *slog.Logger
-	now    func() time.Time
+	pool       *pgxpool.Pool
+	logger     *slog.Logger
+	now        func() time.Time
+	shardIndex uint64
+	shardCount uint64
 }
 
 func NewService(pool *pgxpool.Pool, logger *slog.Logger) *Service {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Service{pool: pool, logger: logger, now: time.Now}
+	return &Service{pool: pool, logger: logger, now: time.Now, shardCount: 1}
+}
+
+func (service *Service) ConfigureShard(index, count uint64) error {
+	if count < 1 || count > 1024 || index >= count {
+		return fmt.Errorf("%w: invalid trigger shard", ErrInvalid)
+	}
+	service.shardIndex, service.shardCount = index, count
+	return nil
 }
 
 func (service *Service) Create(ctx context.Context, current identity.User, agentID string, input CreateInput) (Trigger, error) {
@@ -273,7 +283,9 @@ func validateAgentAndScheduleChat(ctx context.Context, tx pgx.Tx, orgID, agentID
 func (service *Service) DispatchEvents(ctx context.Context) error {
 	rows, err := service.pool.Query(ctx, `SELECT agent.actor_id,agent.org_id,agent.max_chain_depth
 		FROM agents agent JOIN actors actor ON actor.org_id=agent.org_id AND actor.id=agent.actor_id
-		WHERE agent.enabled AND actor.status='active' AND actor.deleted_at IS NULL ORDER BY agent.actor_id`)
+		WHERE agent.enabled AND actor.status='active' AND actor.deleted_at IS NULL
+		AND (hashtextextended(agent.actor_id::text,0) & 9223372036854775807) % $2 = $1
+		ORDER BY agent.actor_id`, int64(service.shardIndex), int64(service.shardCount))
 	if err != nil {
 		return err
 	}
@@ -417,7 +429,8 @@ func (service *Service) DispatchSchedules(ctx context.Context) error {
 	now := service.now().UTC()
 	rows, err := service.pool.Query(ctx, `SELECT trigger.id FROM agent_triggers trigger
 		WHERE trigger.enabled AND trigger.superseded_at IS NULL AND trigger.type='schedule' AND trigger.next_run_at<=$1
-		ORDER BY trigger.next_run_at LIMIT 100`, now)
+		AND (hashtextextended(trigger.agent_id::text,0) & 9223372036854775807) % $3 = $2
+		ORDER BY trigger.next_run_at LIMIT 100`, now, int64(service.shardIndex), int64(service.shardCount))
 	if err != nil {
 		return err
 	}
@@ -449,7 +462,7 @@ func (service *Service) dispatchSchedule(ctx context.Context, triggerID string, 
 		return err
 	}
 	defer tx.Rollback(ctx)
-	trigger, err := scanTrigger(tx.QueryRow(ctx, triggerSelect+` WHERE trigger.id=$1 AND trigger.enabled AND trigger.type='schedule'
+	trigger, err := scanTrigger(tx.QueryRow(ctx, triggerSelect+` WHERE trigger.id=$1 AND trigger.enabled AND trigger.superseded_at IS NULL AND trigger.type='schedule'
 		AND trigger.next_run_at<=$2 FOR UPDATE OF trigger SKIP LOCKED`, triggerID, now))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil

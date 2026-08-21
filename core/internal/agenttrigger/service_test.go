@@ -21,6 +21,18 @@ const (
 	triggerTestChatID  = "00000000-0000-7000-8000-000000000273"
 )
 
+func TestConfigureShardRejectsInvalidRanges(t *testing.T) {
+	service := agenttrigger.NewService(nil, nil)
+	if err := service.ConfigureShard(0, 1); err != nil {
+		t.Fatalf("ConfigureShard(0,1) error = %v", err)
+	}
+	for _, test := range [][2]uint64{{0, 0}, {1, 1}, {0, 1025}} {
+		if err := service.ConfigureShard(test[0], test[1]); err == nil {
+			t.Fatalf("ConfigureShard(%d,%d) accepted invalid range", test[0], test[1])
+		}
+	}
+}
+
 func TestDurableEventAndScheduleDispatch(t *testing.T) {
 	pool := testdb.New(t)
 	seedTriggerModel(t, pool)
@@ -28,7 +40,7 @@ func TestDurableEventAndScheduleDispatch(t *testing.T) {
 	agentService := agent.NewService(pool)
 	createdAgent, err := agentService.Create(t.Context(), owner, agent.CreateInput{
 		DisplayName: "Trigger agent", Handle: "trigger-agent", Kind: "builtin", Enabled: true,
-		ChatIDs: []string{triggerTestChatID}, Provider: "test", Model: "test-model",
+		ChatIDs: []string{triggerTestChatID}, Provider: "openai", Model: "test-model",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -51,6 +63,20 @@ func TestDurableEventAndScheduleDispatch(t *testing.T) {
 	if _, _, err := messageService.Create(t.Context(), owner, triggerTestChatID, message.CreateInput{
 		ClientMsgID: clientID, Body: "hello trigger", BodyFormat: "plain",
 	}); err != nil {
+		t.Fatal(err)
+	}
+	var agentShard int64
+	if err := pool.QueryRow(t.Context(), `SELECT (hashtextextended($1::text,0) & 9223372036854775807) % 2`, createdAgent.ID).Scan(&agentShard); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.ConfigureShard(uint64((agentShard+1)%2), 2); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.DispatchEvents(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	assertTriggerRuns(t, pool, everyMessage.ID, 0)
+	if err := service.ConfigureShard(uint64(agentShard), 2); err != nil {
 		t.Fatal(err)
 	}
 	if err := service.DispatchEvents(t.Context()); err != nil {

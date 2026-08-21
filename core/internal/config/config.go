@@ -93,6 +93,11 @@ type PushConfig struct {
 	PollInterval    time.Duration
 }
 
+type AgentConfig struct {
+	TriggerShardIndex uint64
+	TriggerShardCount uint64
+}
+
 type Config struct {
 	AppEnv                   string
 	HTTPAddr                 string
@@ -109,6 +114,7 @@ type Config struct {
 	EventLog                 EventLogConfig
 	Redis                    RedisConfig
 	Push                     PushConfig
+	Agents                   AgentConfig
 }
 
 func FromEnvironment() (Config, error) {
@@ -181,6 +187,17 @@ func FromEnvironment() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	triggerShardIndex, err := uintValueOrDefault("AGENT_TRIGGER_SHARD_INDEX", 0, 32)
+	if err != nil {
+		return Config{}, err
+	}
+	triggerShardCount, err := uintValueOrDefault("AGENT_TRIGGER_SHARD_COUNT", 1, 32)
+	if err != nil {
+		return Config{}, err
+	}
+	if triggerShardCount < 1 || triggerShardCount > 1024 || triggerShardIndex >= triggerShardCount {
+		return Config{}, fmt.Errorf("AGENT_TRIGGER_SHARD_INDEX must be below AGENT_TRIGGER_SHARD_COUNT (1-1024)")
+	}
 
 	cfg := Config{
 		AppEnv:                   appEnv,
@@ -216,6 +233,7 @@ func FromEnvironment() (Config, error) {
 		EventLog:  eventLog,
 		Redis:     redisConfig,
 		Push:      PushConfig{VAPIDPublicKey: strings.TrimSpace(os.Getenv("VAPID_PUBLIC_KEY")), VAPIDPrivateKey: strings.TrimSpace(os.Getenv("VAPID_PRIVATE_KEY")), VAPIDSubject: valueOrDefault("VAPID_SUBJECT", "mailto:admin@localhost"), PollInterval: pushInterval},
+		Agents:    AgentConfig{TriggerShardIndex: triggerShardIndex, TriggerShardCount: triggerShardCount},
 	}
 
 	if cfg.HTTPAddr == "" {
