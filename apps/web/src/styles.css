@@ -1745,6 +1745,68 @@ a:focus-visible {
   max-width: 72ch;
   color: var(--coma-muted);
 }
+
+.agent-approvals {
+  display: grid;
+  gap: 16px;
+}
+
+.agent-approvals > header,
+.agent-approval-list article > div,
+.agent-approval-list article footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.agent-approvals h2,
+.agent-approvals p,
+.agent-approval-list small {
+  margin: 0;
+}
+
+.agent-approvals p,
+.agent-approval-list small {
+  color: var(--coma-muted);
+}
+
+.agent-approval-list {
+  display: grid;
+  gap: 12px;
+}
+
+.agent-approval-list article {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--coma-border);
+  border-radius: var(--coma-radius-md);
+  background: var(--coma-surface);
+}
+
+.agent-approval-list article > div {
+  display: grid;
+  align-items: flex-start;
+  justify-content: initial;
+  gap: 4px;
+}
+
+.agent-approval-list pre {
+  max-height: 240px;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border-radius: var(--coma-radius-sm);
+  background: var(--coma-canvas);
+  color: var(--coma-foreground);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.agent-approval-list footer {
+  justify-content: flex-end;
+}
 .agent-run-detail dl {
   display: grid;
   gap: 8px;

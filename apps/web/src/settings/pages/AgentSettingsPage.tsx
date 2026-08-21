@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import type {
   Agent,
   AgentRun,
+  AgentToolConfirmation,
   AgentScope,
   Chat,
   CreateAgentRequest,
@@ -12,6 +13,7 @@ import type {
 import {
   Activity,
   Bot,
+  Check,
   FlaskConical,
   KeyRound,
   LayoutGrid,
@@ -19,7 +21,9 @@ import {
   Plug,
   Plus,
   Save,
+  ShieldCheck,
   Trash2,
+  X,
   Zap,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -159,6 +163,8 @@ export function AgentSettingsPage({
   const allowed = hasPermission(user, "agents.manage");
   const tab = path.endsWith("/sandbox")
     ? "sandbox"
+    : path.endsWith("/approvals")
+      ? "approvals"
     : path.endsWith("/runs")
       ? "runs"
       : path.endsWith("/connections")
@@ -261,6 +267,7 @@ export function AgentSettingsPage({
             [
               ["overview", "/agents", LayoutGrid],
               ["sandbox", "/agents/sandbox", FlaskConical],
+              ["approvals", "/agents/approvals", ShieldCheck],
               ["runs", "/agents/runs", Activity],
               ["connections", "/agents/connections", Plug],
             ] as const
@@ -287,6 +294,8 @@ export function AgentSettingsPage({
             agents={agents.data ?? []}
             chats={chats.data ?? []}
           />
+        ) : tab === "approvals" ? (
+          <AgentApprovals api={api} agents={agents.data ?? []} />
         ) : (
           <div className="agent-settings">
             <aside className="agent-catalog">
@@ -748,6 +757,82 @@ function AgentConfiguration({
         </div>
       </SettingsSection>
     </>
+  );
+}
+
+function AgentApprovals({
+  api,
+  agents,
+}: {
+  api: MessengerAPI;
+  agents: Agent[];
+}) {
+  const { t } = useTranslation();
+  const confirmations = useQuery({
+    queryKey: ["agent-tool-confirmations"],
+    queryFn: () => api.agentToolConfirmations("pending"),
+    refetchInterval: 5_000,
+  });
+  const [error, setError] = useState("");
+  async function decide(
+    confirmation: AgentToolConfirmation,
+    approve: boolean,
+  ) {
+    setError("");
+    try {
+      if (approve) await api.approveAgentToolConfirmation(confirmation.id);
+      else await api.denyAgentToolConfirmation(confirmation.id);
+      await confirmations.refetch();
+    } catch (cause) {
+      setError(messageOf(cause));
+    }
+  }
+  return (
+    <div className="agent-approvals">
+      <header>
+        <div>
+          <h2>{t("agentApprovalsTitle")}</h2>
+          <p>{t("agentApprovalsHint")}</p>
+        </div>
+        <Badge>{confirmations.data?.length ?? 0}</Badge>
+      </header>
+      {error && <FormError message={error} />}
+      {confirmations.isLoading ? (
+        <Skeleton />
+      ) : confirmations.data?.length ? (
+        <div className="agent-approval-list">
+          {confirmations.data.map((confirmation) => (
+            <article key={confirmation.id}>
+              <div>
+                <strong>{t(`agentTool_${confirmation.tool_name}`)}</strong>
+                <small>
+                  {agents.find((item) => item.id === confirmation.agent_id)
+                    ?.display_name ?? confirmation.agent_id}
+                  {" · "}
+                  {new Date(confirmation.requested_at).toLocaleString()}
+                </small>
+              </div>
+              <pre>{JSON.stringify(confirmation.arguments, null, 2)}</pre>
+              <footer>
+                <Button
+                  variant="secondary"
+                  onClick={() => void decide(confirmation, false)}
+                >
+                  <X />
+                  {t("deny")}
+                </Button>
+                <Button onClick={() => void decide(confirmation, true)}>
+                  <Check />
+                  {t("approve")}
+                </Button>
+              </footer>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p className="agent-empty-state">{t("agentApprovalsEmpty")}</p>
+      )}
+    </div>
   );
 }
 

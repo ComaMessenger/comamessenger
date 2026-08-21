@@ -2180,9 +2180,60 @@ paths:
           content:
             application/json:
               schema: {}
+        "202":
+          description: A server-side write confirmation was created; no side effect has executed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentToolConfirmation" }
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
+  /api/v1/agents/tool-confirmations:
+    get:
+      operationId: listAgentToolConfirmations
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            { type: string, enum: [pending, approved, denied, completed, failed, expired, all], default: pending }
+      responses:
+        "200":
+          description: Tool confirmations visible to agent managers.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AgentToolConfirmation" }
+        "403": { $ref: "#/components/responses/Error" }
+  /api/v1/agents/tool-confirmations/{confirmation_id}/approve:
+    post:
+      operationId: approveAgentToolConfirmation
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: "#/components/parameters/AgentToolConfirmationId" }]
+      responses:
+        "200":
+          description: Confirmation approved and its immutable tool call executed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentToolConfirmation" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/agents/tool-confirmations/{confirmation_id}/deny:
+    post:
+      operationId: denyAgentToolConfirmation
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: "#/components/parameters/AgentToolConfirmationId" }]
+      responses:
+        "200":
+          description: Confirmation denied without executing its tool call.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentToolConfirmation" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
   /api/v1/agents/{agent_id}/invoke:
     post:
       operationId: invokeAgent
@@ -2277,6 +2328,25 @@ paths:
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+  /api/v1/agent-runtime/runs/{run_id}/publish:
+    post:
+      operationId: publishAgentRuntimeRun
+      description: Publishes the single durable final response for an active leased run with server-derived agent/chat/thread provenance.
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: "#/components/parameters/AgentRunId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            { schema: { $ref: "#/components/schemas/PublishAgentRunRequest" } }
+      responses:
+        "200":
+          description: Durable final message.
+          content:
+            application/json: { schema: { $ref: "#/components/schemas/Message" } }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
   /api/v1/agent-runtime/runs/{run_id}/complete:
     post:
       operationId: completeAgentRuntimeRun
@@ -2544,6 +2614,11 @@ components:
       schema: { type: string, format: uuid }
     AgentRunId:
       name: run_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    AgentToolConfirmationId:
+      name: confirmation_id
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -3205,7 +3280,7 @@ components:
     InvokeAgentToolRequest:
       type: object
       additionalProperties: false
-      required: [arguments, run_id, lease_token, correlation_id]
+      required: [arguments, run_id, lease_token, correlation_id, tool_call_id]
       properties:
         arguments:
           type: object
@@ -3213,7 +3288,28 @@ components:
         run_id: { type: string, format: uuid }
         lease_token: { type: string, format: uuid }
         correlation_id: { type: string, format: uuid }
-        confirmed: { type: boolean, default: false }
+        tool_call_id: { type: string, format: uuid }
+    AgentToolConfirmation:
+      type: object
+      additionalProperties: false
+      required: [id, agent_id, run_id, tool_call_id, correlation_id, tool_name, required_scope, arguments, status, requested_at, expires_at]
+      properties:
+        id: { type: string, format: uuid }
+        agent_id: { type: string, format: uuid }
+        run_id: { type: string, format: uuid }
+        tool_call_id: { type: string, format: uuid }
+        correlation_id: { type: string, format: uuid }
+        tool_name: { type: string, minLength: 1, maxLength: 120 }
+        required_scope: { $ref: "#/components/schemas/AgentScope" }
+        arguments: { type: object, additionalProperties: true }
+        status: { type: string, enum: [pending, approved, denied, completed, failed, expired] }
+        result: { type: object, additionalProperties: true }
+        error_code: { type: string, maxLength: 120 }
+        requested_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        decided_at: { type: string, format: date-time }
+        decided_by: { type: string, format: uuid }
+        completed_at: { type: string, format: date-time }
     InvokeAgentRequest:
       type: object
       additionalProperties: false
@@ -3246,6 +3342,23 @@ components:
       properties:
         lease_token: { type: string, format: uuid }
         lease_seconds: { type: integer, minimum: 5, maximum: 300, default: 60 }
+    PublishAgentRunRequest:
+      type: object
+      additionalProperties: false
+      required: [lease_token, client_msg_id, body, body_format, mentioned_actor_ids, file_ids]
+      properties:
+        lease_token: { type: string, format: uuid }
+        client_msg_id: { type: string, format: uuid }
+        body: { type: string, minLength: 1, maxLength: 65536 }
+        body_format: { type: string, enum: [plain, markdown] }
+        mentioned_actor_ids:
+          type: array
+          uniqueItems: true
+          items: { type: string, format: uuid }
+        file_ids:
+          type: array
+          uniqueItems: true
+          items: { type: string, format: uuid }
     AgentRuntimeRunLeaseRequest:
       type: object
       additionalProperties: false

@@ -3,9 +3,20 @@ package http
 import (
 	"errors"
 	"github.com/comamessenger/comamessenger/core/internal/agentrun"
+	"github.com/comamessenger/comamessenger/core/internal/identity"
+	"github.com/comamessenger/comamessenger/core/internal/message"
 	"github.com/go-chi/chi/v5"
 	standardhttp "net/http"
 )
+
+type publishAgentRunInput struct {
+	LeaseToken        string   `json:"lease_token"`
+	ClientMsgID       string   `json:"client_msg_id"`
+	Body              string   `json:"body"`
+	BodyFormat        string   `json:"body_format"`
+	MentionedActorIDs []string `json:"mentioned_actor_ids"`
+	FileIDs           []string `json:"file_ids"`
+}
 
 func (h *identityHandlers) invokeAgent(w standardhttp.ResponseWriter, r *standardhttp.Request) {
 	var input agentrun.InvokeInput
@@ -77,6 +88,31 @@ func (h *identityHandlers) heartbeatAgentRun(w standardhttp.ResponseWriter, r *s
 		return
 	}
 	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) publishAgentRun(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input publishAgentRunInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	auth := authFromContext(r.Context())
+	runID := chi.URLParam(r, "runID")
+	target, err := h.agentRuns.RuntimeTarget(r.Context(), auth.User, auth.Identity, runID, input.LeaseToken)
+	if err != nil {
+		h.writeAgentRunError(w, r, err)
+		return
+	}
+	created, _, err := h.messages.CreateFinalForAgentRun(r.Context(), identity.User{ActorID: target.AgentID, OrgID: auth.User.OrgID, OrgRole: "member"}, target.ChatID, message.CreateInput{
+		ClientMsgID: input.ClientMsgID, Body: input.Body, BodyFormat: input.BodyFormat,
+		ReplyToID: target.ThreadRootID, ThreadRootID: target.ThreadRootID,
+		MentionedActorIDs: input.MentionedActorIDs, FileIDs: input.FileIDs,
+	}, message.AgentProvenance{RunID: runID})
+	if err != nil {
+		h.writeAgentToolError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, created)
 }
 
 func (h *identityHandlers) completeAgentRun(w standardhttp.ResponseWriter, r *standardhttp.Request) {

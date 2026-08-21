@@ -110,6 +110,12 @@ type RuntimeCheckpoint struct {
 	LastEventSeq int64     `json:"last_event_seq"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
+
+type RuntimeTarget struct {
+	AgentID      string
+	ChatID       string
+	ThreadRootID *string
+}
 type UpdateRuntimeCheckpoint struct {
 	LastEventSeq int64 `json:"last_event_seq"`
 }
@@ -903,17 +909,22 @@ func canManage(current identity.User) bool {
 	return agentauthz.New().CanManage(current)
 }
 func (service *Service) runtimeAgentID(ctx context.Context, current identity.User, authentication access.Identity, runID, leaseToken string) (string, error) {
+	target, err := service.RuntimeTarget(ctx, current, authentication, runID, leaseToken)
+	return target.AgentID, err
+}
+
+func (service *Service) RuntimeTarget(ctx context.Context, current identity.User, authentication access.Identity, runID, leaseToken string) (RuntimeTarget, error) {
 	authorizer := agentauthz.New()
 	if !authorizer.CanWork(current, authentication) {
-		return "", ErrForbidden
+		return RuntimeTarget{}, ErrForbidden
 	}
-	var agentID string
-	err := service.pool.QueryRow(ctx, `SELECT agent_id FROM agent_runs WHERE org_id=$1 AND id=$2 AND lease_token=$3 AND status='running' AND lease_expires_at>now()
-		AND ($4::boolean OR agent_id=$5)`, current.OrgID, runID, leaseToken, authorizer.IsOrganizationWorker(current, authentication), current.ActorID).Scan(&agentID)
+	var target RuntimeTarget
+	err := service.pool.QueryRow(ctx, `SELECT agent_id,chat_id,thread_root_id FROM agent_runs WHERE org_id=$1 AND id=$2 AND lease_token=$3 AND status='running' AND lease_expires_at>now() AND chat_id IS NOT NULL
+		AND ($4::boolean OR agent_id=$5)`, current.OrgID, runID, leaseToken, authorizer.IsOrganizationWorker(current, authentication), current.ActorID).Scan(&target.AgentID, &target.ChatID, &target.ThreadRootID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", ErrConflict
+		return RuntimeTarget{}, ErrConflict
 	}
-	return agentID, err
+	return target, err
 }
 
 func (service *Service) RuntimeAgentID(ctx context.Context, current identity.User, authentication access.Identity, runID, leaseToken string) (string, error) {

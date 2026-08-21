@@ -125,7 +125,7 @@ export class AgentClient {
         run_id: run.id,
         lease_token: run.lease_token,
         correlation_id: run.correlation_id,
-        confirmed: false,
+        tool_call_id: crypto.randomUUID(),
         arguments: arguments_,
       }),
     });
@@ -231,6 +231,7 @@ export class RuntimeSocket {
     this.send({
       op: "agent.status",
       run_id: run.id,
+      lease_token: run.lease_token,
       chat_id: run.chat_id,
       thread_root_id: run.thread_root_id ?? null,
       state,
@@ -250,6 +251,7 @@ export class RuntimeSocket {
     this.send({
       op: "message.streaming",
       run_id: run.id,
+      lease_token: run.lease_token,
       chat_id: run.chat_id,
       thread_root_id: run.thread_root_id ?? null,
       stream_id: input.streamID,

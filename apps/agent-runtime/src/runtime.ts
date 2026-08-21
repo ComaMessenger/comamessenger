@@ -151,24 +151,14 @@ export class AgentRuntime {
       const sandbox = run.input.sandbox === true && run.input.publish === false;
       const posted = sandbox
         ? null
-        : await this.options.api.invokeAgentTool<Message>(
-            run.thread_root_id ? "reply_in_thread" : "post_message",
-            {
-              run_id: run.id,
-              lease_token: run.lease_token,
-              correlation_id: run.correlation_id,
-              confirmed: true,
-              arguments: {
-                chat_id: run.chat_id,
-                client_msg_id: crypto.randomUUID(),
-                body: result.content,
-                body_format: "markdown",
-                thread_root_id: run.thread_root_id,
-                mentioned_actor_ids: [],
-                file_ids: [],
-              },
-            },
-          );
+        : await this.options.api.publishAgentRun(run.id, {
+            lease_token: run.lease_token,
+            client_msg_id: crypto.randomUUID(),
+            body: result.content,
+            body_format: "markdown",
+            mentioned_actor_ids: [],
+            file_ids: [],
+          });
       this.emitStreaming(run, streamID, ++streamIndex, "", false, true);
       this.emitStatus(run, "completed");
       await this.options.api.completeAgentRun(run.id, {
@@ -225,7 +215,7 @@ export class AgentRuntime {
           run_id: run.id,
           lease_token: run.lease_token,
           correlation_id: run.correlation_id,
-          confirmed: true,
+          tool_call_id: crypto.randomUUID(),
           arguments: run.thread_root_id
             ? { message_id: run.thread_root_id, limit: 50 }
             : { chat_id: run.chat_id, limit: 50 },
@@ -346,15 +336,20 @@ export class AgentRuntime {
       for (const call of finished.toolCalls) {
         totalToolCalls++;
         const mcpTool = mcpTools.get(call.name);
-        const output = mcpTool
-          ? await this.invokeMCPTool(run, mcpTool, call.arguments, signal)
-          : await this.options.api.invokeAgentTool<unknown>(call.name, {
-              run_id: run.id,
-              lease_token: run.lease_token,
-              correlation_id: run.correlation_id,
-              confirmed: true,
-              arguments: call.arguments,
-            });
+        let output: unknown;
+        try {
+          output = mcpTool
+            ? await this.invokeMCPTool(run, mcpTool, call.arguments, signal)
+            : await this.options.api.invokeAgentTool<unknown>(call.name, {
+                run_id: run.id,
+                lease_token: run.lease_token,
+                correlation_id: run.correlation_id,
+                tool_call_id: call.id,
+                arguments: call.arguments,
+              });
+        } catch (cause) {
+          output = toolErrorResult(cause);
+        }
         messages.push({
           role: "tool",
           toolCallID: call.id,
@@ -487,6 +482,20 @@ function safeJSON(value: unknown): string {
   const bounded =
     encoded.length > 262_144 ? encoded.slice(0, 262_144) : encoded;
   return escapeUntrustedContent(bounded);
+}
+
+function toolErrorResult(cause: unknown): Record<string, unknown> {
+  if (cause instanceof APIError) {
+    return {
+      ok: false,
+      error: cause.code,
+      retryable: cause.status === 429 || cause.status >= 500,
+    };
+  }
+  if (cause instanceof MCPError) {
+    return { ok: false, error: cause.code, retryable: false };
+  }
+  return { ok: false, error: "tool_failed", retryable: false };
 }
 
 export function escapeUntrustedContent(value: string): string {

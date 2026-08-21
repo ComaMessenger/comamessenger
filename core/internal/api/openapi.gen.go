@@ -284,6 +284,36 @@ func (e AgentScope) Valid() bool {
 	}
 }
 
+// Defines values for AgentToolConfirmationStatus.
+const (
+	AgentToolConfirmationStatusApproved  AgentToolConfirmationStatus = "approved"
+	AgentToolConfirmationStatusCompleted AgentToolConfirmationStatus = "completed"
+	AgentToolConfirmationStatusDenied    AgentToolConfirmationStatus = "denied"
+	AgentToolConfirmationStatusExpired   AgentToolConfirmationStatus = "expired"
+	AgentToolConfirmationStatusFailed    AgentToolConfirmationStatus = "failed"
+	AgentToolConfirmationStatusPending   AgentToolConfirmationStatus = "pending"
+)
+
+// Valid indicates whether the value is a known member of the AgentToolConfirmationStatus enum.
+func (e AgentToolConfirmationStatus) Valid() bool {
+	switch e {
+	case AgentToolConfirmationStatusApproved:
+		return true
+	case AgentToolConfirmationStatusCompleted:
+		return true
+	case AgentToolConfirmationStatusDenied:
+		return true
+	case AgentToolConfirmationStatusExpired:
+		return true
+	case AgentToolConfirmationStatusFailed:
+		return true
+	case AgentToolConfirmationStatusPending:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentToolDefinitionMode.
 const (
 	AgentToolDefinitionModeRead  AgentToolDefinitionMode = "read"
@@ -1652,6 +1682,24 @@ func (e Permission) Valid() bool {
 	}
 }
 
+// Defines values for PublishAgentRunRequestBodyFormat.
+const (
+	PublishAgentRunRequestBodyFormatMarkdown PublishAgentRunRequestBodyFormat = "markdown"
+	PublishAgentRunRequestBodyFormatPlain    PublishAgentRunRequestBodyFormat = "plain"
+)
+
+// Valid indicates whether the value is a known member of the PublishAgentRunRequestBodyFormat enum.
+func (e PublishAgentRunRequestBodyFormat) Valid() bool {
+	switch e {
+	case PublishAgentRunRequestBodyFormatMarkdown:
+		return true
+	case PublishAgentRunRequestBodyFormatPlain:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PutDraftRequestBodyFormat.
 const (
 	PutDraftRequestBodyFormatMarkdown PutDraftRequestBodyFormat = "markdown"
@@ -2510,6 +2558,39 @@ func (e UserPreferencesTheme) Valid() bool {
 	}
 }
 
+// Defines values for ListAgentToolConfirmationsParamsStatus.
+const (
+	ListAgentToolConfirmationsParamsStatusAll       ListAgentToolConfirmationsParamsStatus = "all"
+	ListAgentToolConfirmationsParamsStatusApproved  ListAgentToolConfirmationsParamsStatus = "approved"
+	ListAgentToolConfirmationsParamsStatusCompleted ListAgentToolConfirmationsParamsStatus = "completed"
+	ListAgentToolConfirmationsParamsStatusDenied    ListAgentToolConfirmationsParamsStatus = "denied"
+	ListAgentToolConfirmationsParamsStatusExpired   ListAgentToolConfirmationsParamsStatus = "expired"
+	ListAgentToolConfirmationsParamsStatusFailed    ListAgentToolConfirmationsParamsStatus = "failed"
+	ListAgentToolConfirmationsParamsStatusPending   ListAgentToolConfirmationsParamsStatus = "pending"
+)
+
+// Valid indicates whether the value is a known member of the ListAgentToolConfirmationsParamsStatus enum.
+func (e ListAgentToolConfirmationsParamsStatus) Valid() bool {
+	switch e {
+	case ListAgentToolConfirmationsParamsStatusAll:
+		return true
+	case ListAgentToolConfirmationsParamsStatusApproved:
+		return true
+	case ListAgentToolConfirmationsParamsStatusCompleted:
+		return true
+	case ListAgentToolConfirmationsParamsStatusDenied:
+		return true
+	case ListAgentToolConfirmationsParamsStatusExpired:
+		return true
+	case ListAgentToolConfirmationsParamsStatusFailed:
+		return true
+	case ListAgentToolConfirmationsParamsStatusPending:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GetBrandingAssetParamsKind.
 const (
 	GetBrandingAssetParamsKindFavicon GetBrandingAssetParamsKind = "favicon"
@@ -2874,6 +2955,29 @@ type AgentRuntimeRunLeaseRequest struct {
 
 // AgentScope defines model for AgentScope.
 type AgentScope string
+
+// AgentToolConfirmation defines model for AgentToolConfirmation.
+type AgentToolConfirmation struct {
+	AgentId       openapi_types.UUID          `json:"agent_id"`
+	Arguments     map[string]interface{}      `json:"arguments"`
+	CompletedAt   *time.Time                  `json:"completed_at,omitempty"`
+	CorrelationId openapi_types.UUID          `json:"correlation_id"`
+	DecidedAt     *time.Time                  `json:"decided_at,omitempty"`
+	DecidedBy     *openapi_types.UUID         `json:"decided_by,omitempty"`
+	ErrorCode     *string                     `json:"error_code,omitempty"`
+	ExpiresAt     time.Time                   `json:"expires_at"`
+	Id            openapi_types.UUID          `json:"id"`
+	RequestedAt   time.Time                   `json:"requested_at"`
+	RequiredScope AgentScope                  `json:"required_scope"`
+	Result        *map[string]interface{}     `json:"result,omitempty"`
+	RunId         openapi_types.UUID          `json:"run_id"`
+	Status        AgentToolConfirmationStatus `json:"status"`
+	ToolCallId    openapi_types.UUID          `json:"tool_call_id"`
+	ToolName      string                      `json:"tool_name"`
+}
+
+// AgentToolConfirmationStatus defines model for AgentToolConfirmation.Status.
+type AgentToolConfirmationStatus string
 
 // AgentToolDefinition defines model for AgentToolDefinition.
 type AgentToolDefinition struct {
@@ -3539,10 +3643,10 @@ type InvokeAgentRequest struct {
 // InvokeAgentToolRequest defines model for InvokeAgentToolRequest.
 type InvokeAgentToolRequest struct {
 	Arguments     map[string]interface{} `json:"arguments"`
-	Confirmed     *bool                  `json:"confirmed,omitempty"`
 	CorrelationId openapi_types.UUID     `json:"correlation_id"`
 	LeaseToken    openapi_types.UUID     `json:"lease_token"`
 	RunId         openapi_types.UUID     `json:"run_id"`
+	ToolCallId    openapi_types.UUID     `json:"tool_call_id"`
 }
 
 // LoginRequest defines model for LoginRequest.
@@ -3712,6 +3816,19 @@ type PublicBranding struct {
 	Version                   int64   `json:"version"`
 	WorkspaceName             string  `json:"workspace_name"`
 }
+
+// PublishAgentRunRequest defines model for PublishAgentRunRequest.
+type PublishAgentRunRequest struct {
+	Body              string                           `json:"body"`
+	BodyFormat        PublishAgentRunRequestBodyFormat `json:"body_format"`
+	ClientMsgId       openapi_types.UUID               `json:"client_msg_id"`
+	FileIds           []openapi_types.UUID             `json:"file_ids"`
+	LeaseToken        openapi_types.UUID               `json:"lease_token"`
+	MentionedActorIds []openapi_types.UUID             `json:"mentioned_actor_ids"`
+}
+
+// PublishAgentRunRequestBodyFormat defines model for PublishAgentRunRequest.BodyFormat.
+type PublishAgentRunRequestBodyFormat string
 
 // PushConfig defines model for PushConfig.
 type PushConfig struct {
@@ -4419,6 +4536,9 @@ type AgentKeyId = openapi_types.UUID
 // AgentRunId defines model for AgentRunId.
 type AgentRunId = openapi_types.UUID
 
+// AgentToolConfirmationId defines model for AgentToolConfirmationId.
+type AgentToolConfirmationId = openapi_types.UUID
+
 // AgentTriggerId defines model for AgentTriggerId.
 type AgentTriggerId = openapi_types.UUID
 
@@ -4443,6 +4563,14 @@ type ListActorsParams struct {
 	AfterId *openapi_types.UUID `form:"after_id,omitempty" json:"after_id,omitempty"`
 	Limit   *int                `form:"limit,omitempty" json:"limit,omitempty"`
 }
+
+// ListAgentToolConfirmationsParams defines parameters for ListAgentToolConfirmations.
+type ListAgentToolConfirmationsParams struct {
+	Status *ListAgentToolConfirmationsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
+}
+
+// ListAgentToolConfirmationsParamsStatus defines parameters for ListAgentToolConfirmations.
+type ListAgentToolConfirmationsParamsStatus string
 
 // BootstrapParams defines parameters for Bootstrap.
 type BootstrapParams struct {
@@ -4549,6 +4677,9 @@ type FailAgentRuntimeRunJSONRequestBody = FailAgentRunRequest
 
 // HeartbeatAgentRuntimeRunJSONRequestBody defines body for HeartbeatAgentRuntimeRun for application/json ContentType.
 type HeartbeatAgentRuntimeRunJSONRequestBody = AgentRunLeaseRequest
+
+// PublishAgentRuntimeRunJSONRequestBody defines body for PublishAgentRuntimeRun for application/json ContentType.
+type PublishAgentRuntimeRunJSONRequestBody = PublishAgentRunRequest
 
 // InvokeAgentToolJSONRequestBody defines body for InvokeAgentTool for application/json ContentType.
 type InvokeAgentToolJSONRequestBody = InvokeAgentToolRequest

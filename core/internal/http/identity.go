@@ -173,6 +173,9 @@ func (h *identityHandlers) routes(router chi.Router) {
 		if h.agentTools != nil {
 			protected.Get("/agent-tools", h.listAgentTools)
 			protected.Post("/agent-tools/{toolName}", h.invokeAgentTool)
+			protected.Get("/agents/tool-confirmations", h.listAgentToolConfirmations)
+			protected.Post("/agents/tool-confirmations/{confirmationID}/approve", h.approveAgentToolConfirmation)
+			protected.Post("/agents/tool-confirmations/{confirmationID}/deny", h.denyAgentToolConfirmation)
 		}
 		if h.agentRuns != nil {
 			protected.Post("/agents/{agentID}/invoke", h.invokeAgent)
@@ -181,6 +184,7 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Post("/agent-runs/{runID}/cancel", h.cancelAgentRun)
 			protected.Post("/agent-runtime/runs/claim", h.claimAgentRun)
 			protected.Post("/agent-runtime/runs/{runID}/heartbeat", h.heartbeatAgentRun)
+			protected.Post("/agent-runtime/runs/{runID}/publish", h.publishAgentRun)
 			protected.Post("/agent-runtime/runs/{runID}/complete", h.completeAgentRun)
 			protected.Post("/agent-runtime/runs/{runID}/fail", h.failAgentRun)
 			protected.Get("/agent-runtime/checkpoints/{consumer}", h.getAgentRuntimeCheckpoint)
@@ -998,7 +1002,7 @@ func runtimeAgentRoute(method string, parts []string) bool {
 		return false
 	}
 	return (len(parts) == 2 && parts[0] == "runs" && parts[1] == "claim") ||
-		(len(parts) == 3 && parts[0] == "runs" && (parts[2] == "heartbeat" || parts[2] == "complete" || parts[2] == "fail")) ||
+		(len(parts) == 3 && parts[0] == "runs" && (parts[2] == "heartbeat" || parts[2] == "publish" || parts[2] == "complete" || parts[2] == "fail")) ||
 		(len(parts) == 2 && parts[0] == "provider" && parts[1] == "chat") ||
 		(len(parts) == 1 && parts[0] == "mcp-servers") ||
 		(len(parts) == 1 && (parts[0] == "provider-calls" || parts[0] == "mcp-tool-calls")) ||

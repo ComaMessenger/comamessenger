@@ -1487,6 +1487,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agents/tool-confirmations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAgentToolConfirmations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/tool-confirmations/{confirmation_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["approveAgentToolConfirmation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/tool-confirmations/{confirmation_id}/deny": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["denyAgentToolConfirmation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents/{agent_id}/invoke": {
         parameters: {
             query?: never;
@@ -1578,6 +1626,23 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["heartbeatAgentRuntimeRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent-runtime/runs/{run_id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Publishes the single durable final response for an active leased run with server-derived agent/chat/thread provenance. */
+        post: operations["publishAgentRuntimeRun"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2284,8 +2349,41 @@ export interface components {
             lease_token: string;
             /** Format: uuid */
             correlation_id: string;
-            /** @default false */
-            confirmed: boolean;
+            /** Format: uuid */
+            tool_call_id: string;
+        };
+        AgentToolConfirmation: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            agent_id: string;
+            /** Format: uuid */
+            run_id: string;
+            /** Format: uuid */
+            tool_call_id: string;
+            /** Format: uuid */
+            correlation_id: string;
+            tool_name: string;
+            required_scope: components["schemas"]["AgentScope"];
+            arguments: {
+                [key: string]: unknown;
+            };
+            /** @enum {string} */
+            status: "pending" | "approved" | "denied" | "completed" | "failed" | "expired";
+            result?: {
+                [key: string]: unknown;
+            };
+            error_code?: string;
+            /** Format: date-time */
+            requested_at: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: date-time */
+            decided_at?: string;
+            /** Format: uuid */
+            decided_by?: string;
+            /** Format: date-time */
+            completed_at?: string;
         };
         InvokeAgentRequest: {
             /** Format: uuid */
@@ -2319,6 +2417,17 @@ export interface components {
             lease_token: string;
             /** @default 60 */
             lease_seconds: number;
+        };
+        PublishAgentRunRequest: {
+            /** Format: uuid */
+            lease_token: string;
+            /** Format: uuid */
+            client_msg_id: string;
+            body: string;
+            /** @enum {string} */
+            body_format: "plain" | "markdown";
+            mentioned_actor_ids: string[];
+            file_ids: string[];
         };
         AgentRuntimeRunLeaseRequest: {
             /** Format: uuid */
@@ -3377,6 +3486,7 @@ export interface components {
         AgentId: string;
         AgentKeyId: string;
         AgentRunId: string;
+        AgentToolConfirmationId: string;
         AgentTriggerId: string;
     };
     requestBodies: never;
@@ -6520,9 +6630,91 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description A server-side write confirmation was created; no side effect has executed. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentToolConfirmation"];
+                };
+            };
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             422: components["responses"]["Error"];
+        };
+    };
+    listAgentToolConfirmations: {
+        parameters: {
+            query?: {
+                status?: "pending" | "approved" | "denied" | "completed" | "failed" | "expired" | "all";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tool confirmations visible to agent managers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentToolConfirmation"][];
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    approveAgentToolConfirmation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                confirmation_id: components["parameters"]["AgentToolConfirmationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Confirmation approved and its immutable tool call executed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentToolConfirmation"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    denyAgentToolConfirmation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                confirmation_id: components["parameters"]["AgentToolConfirmationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Confirmation denied without executing its tool call. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentToolConfirmation"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
         };
     };
     invokeAgent: {
@@ -6684,6 +6876,35 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+        };
+    };
+    publishAgentRuntimeRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: components["parameters"]["AgentRunId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishAgentRunRequest"];
+            };
+        };
+        responses: {
+            /** @description Durable final message. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
         };
     };
     completeAgentRuntimeRun: {

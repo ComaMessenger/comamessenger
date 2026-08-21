@@ -104,7 +104,7 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	chatService := chat.NewService(pool)
 	messageService := message.NewService(pool, 64*1024, 100, afterCommit)
 	searchService := search.NewService(pool)
-	agentToolExecutor, err := agenttool.NewExecutor(pool, agenttool.Services{Chats: chatService, Messages: messageService, Search: searchService, Files: fileService, Memory: agentmemory.NewService(pool)}, false)
+	agentToolExecutor, err := agenttool.NewExecutor(pool, agenttool.Services{Chats: chatService, Messages: messageService, Search: searchService, Files: fileService, Memory: agentmemory.NewService(pool)}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -787,13 +787,19 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	if runtimeCheckpoint.Consumer != "e2e-example" {
 		t.Fatalf("agent runtime checkpoint = %+v", runtimeCheckpoint)
 	}
-	var remembered agentmemory.Entry
-	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agent-tools/remember", createdAgentKey.Secret, map[string]any{"correlation_id": e2eID(t), "arguments": map[string]any{"namespace": "e2e", "key": "preference", "value": map[string]any{"theme": "dark"}}}, standardhttp.StatusOK, &remembered)
-	if remembered.Key != "preference" {
-		t.Fatalf("remembered memory = %+v", remembered)
+	var runtimeRun agentrun.ClaimedRun
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agent-runtime/runs/claim", createdAgentKey.Secret, map[string]any{"worker_id": e2eID(t), "lease_seconds": 60}, standardhttp.StatusOK, &runtimeRun)
+	var confirmation agenttool.Confirmation
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agent-tools/remember", createdAgentKey.Secret, map[string]any{"run_id": runtimeRun.ID, "lease_token": runtimeRun.LeaseToken, "correlation_id": runtimeRun.CorrelationID, "tool_call_id": e2eID(t), "arguments": map[string]any{"namespace": "e2e", "key": "preference", "value": map[string]any{"theme": "dark"}}}, standardhttp.StatusAccepted, &confirmation)
+	if confirmation.Status != "pending" {
+		t.Fatalf("pending confirmation = %+v", confirmation)
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agents/tool-confirmations/"+confirmation.ID+"/approve", owner.AccessToken, nil, standardhttp.StatusOK, &confirmation)
+	if confirmation.Status != "completed" {
+		t.Fatalf("approved confirmation = %+v", confirmation)
 	}
 	var recalled []agentmemory.Entry
-	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agent-tools/recall", createdAgentKey.Secret, map[string]any{"correlation_id": e2eID(t), "arguments": map[string]any{"namespace": "e2e", "keys": []string{"preference"}}}, standardhttp.StatusOK, &recalled)
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agent-tools/recall", createdAgentKey.Secret, map[string]any{"run_id": runtimeRun.ID, "lease_token": runtimeRun.LeaseToken, "correlation_id": runtimeRun.CorrelationID, "tool_call_id": e2eID(t), "arguments": map[string]any{"namespace": "e2e", "keys": []string{"preference"}}}, standardhttp.StatusOK, &recalled)
 	if len(recalled) != 1 || recalled[0].Key != "preference" {
 		t.Fatalf("recalled memory = %+v", recalled)
 	}

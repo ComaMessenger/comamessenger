@@ -13,6 +13,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/agentrun"
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
+	"github.com/comamessenger/comamessenger/core/internal/message"
 	"github.com/comamessenger/comamessenger/core/internal/testdb"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -135,6 +136,18 @@ func TestAgentWorkerLeaseAndCheckpointContract(t *testing.T) {
 	}
 	if bytes.Contains(adminJSON, []byte(claimed.LeaseToken)) || bytes.Contains(adminJSON, []byte("lease_token")) {
 		t.Fatalf("ordinary run leaked lease capability: %s", adminJSON)
+	}
+	messages := message.NewService(pool, 64*1024, 100, nil)
+	finalClientID := mustRunID(t)
+	finalMessage, createdFinal, err := messages.CreateFinalForAgentRun(t.Context(), agentUser, runTestChatID, message.CreateInput{ClientMsgID: finalClientID, Body: "final", BodyFormat: "plain"}, message.AgentProvenance{RunID: invoked.ID})
+	if err != nil || !createdFinal {
+		t.Fatalf("final message=%+v created=%v err=%v", finalMessage, createdFinal, err)
+	}
+	if repeated, created, err := messages.CreateFinalForAgentRun(t.Context(), agentUser, runTestChatID, message.CreateInput{ClientMsgID: finalClientID, Body: "final", BodyFormat: "plain"}, message.AgentProvenance{RunID: invoked.ID}); err != nil || created || repeated.ID != finalMessage.ID {
+		t.Fatalf("idempotent final message=%+v created=%v err=%v", repeated, created, err)
+	}
+	if _, _, err := messages.CreateFinalForAgentRun(t.Context(), agentUser, runTestChatID, message.CreateInput{ClientMsgID: mustRunID(t), Body: "second final", BodyFormat: "plain"}, message.AgentProvenance{RunID: invoked.ID}); !errors.Is(err, message.ErrIdempotencyConflict) {
+		t.Fatalf("second final message error=%v", err)
 	}
 	if _, err := service.HeartbeatForAgent(t.Context(), agentUser, authentication, invoked.ID, agentrun.LeaseInput{
 		LeaseToken: claimed.LeaseToken, LeaseSeconds: 45,

@@ -17,9 +17,10 @@
 2. `204` означает, что очередь пуста; `200` возвращает run и `lease_token`.
 3. Пока работа идёт, worker обновляет lease через `/heartbeat` примерно раз в треть TTL.
 4. Provider calls и tools выполняются только в контексте `run_id + lease_token/correlation_id`.
-5. `/complete` переводит run в `completed`; usage и стоимость берутся из записанных provider calls, а не из self-reported итогов runtime.
-6. `/fail` принимает стабильный `error_code`. Retryable run возвращается в очередь до `max_attempts` и общего execution deadline.
-7. `409 agent_conflict` означает потерю lease, отмену или уже завершённый run. Worker не должен повторять side effect после такого ответа.
+5. Финальный ответ публикуется через `/agent-runtime/runs/{run_id}/publish`: core сам выводит agent/chat/thread из lease и допускает только одно durable сообщение (повтор того же `client_msg_id` идемпотентен).
+6. `/complete` переводит run в `completed`; usage и стоимость берутся из записанных provider calls, а не из self-reported итогов runtime.
+7. `/fail` принимает стабильный `error_code`. Retryable run возвращается в очередь до `max_attempts` и общего execution deadline.
+8. `409 agent_conflict` означает потерю lease, отмену или уже завершённый run. Worker не должен повторять side effect после такого ответа.
 
 Один runtime-процесс может держать несколько claim-loop'ов (`COMA_RUNTIME_CONCURRENCY`, по умолчанию 4). Каждый loop имеет отдельный UUID worker'а; lease не может быть использован для другого run или агента. Получение MCP-конфигурации, provider proxy, tools и realtime frames требуют тот же `run_id + lease_token`.
 
@@ -52,6 +53,12 @@ Provider chunks необходимо коалесцировать: не чаще
 ## Sandbox
 
 Run с `input.sandbox=true` и `input.publish=false` выполняет обычный контекст/tool loop, но не создаёт сообщение. Предпросмотр возвращается в `result_summary.preview`. Это позволяет проверить поведение до включения triggers.
+
+## Подтверждения write-tools
+
+Runtime передаёт UUID provider tool call как `tool_call_id` и не передаёт флаг `confirmed`. Для write-tool core валидирует run, lease, scope, JSON Schema и сохраняет неизменяемый pending-запрос; HTTP `202` означает, что side effect ещё не выполнялся. Повтор `(organization, run_id, tool_call_id)` с теми же аргументами возвращает тот же запрос, а попытка изменить tool или аргументы отклоняется.
+
+Менеджер агента видит очередь в разделе «Агенты → Подтверждения» и вызывает approve/deny API. При approve core повторно проверяет текущий allowlist агента и membership через доменный handler, выполняет сохранённые аргументы ровно в рамках этого confirmation и пишет решение/результат в аудит. Повторное решение и истёкший запрос возвращают conflict. Tool validation/authorization errors возвращаются модели как безопасный `tool_result`, чтобы один неверный вызов не обрывал весь run.
 
 ## Provider gateway
 

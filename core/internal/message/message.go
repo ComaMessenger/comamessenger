@@ -110,7 +110,7 @@ func NewService(pool *pgxpool.Pool, maxBodyBytes, maxPageSize int, afterCommit f
 }
 
 func (s *Service) Create(ctx context.Context, user identity.User, chatID string, input CreateInput) (Message, bool, error) {
-	return s.create(ctx, user, chatID, input, nil)
+	return s.create(ctx, user, chatID, input, nil, false)
 }
 
 // CreateForAgentRun persists the message and its run provenance in one transaction,
@@ -119,10 +119,19 @@ func (s *Service) CreateForAgentRun(ctx context.Context, user identity.User, cha
 	if _, err := uuid.Parse(provenance.RunID); err != nil {
 		return Message{}, false, fmt.Errorf("%w: run_id must be a UUID", ErrInvalid)
 	}
-	return s.create(ctx, user, chatID, input, &provenance)
+	return s.create(ctx, user, chatID, input, &provenance, false)
 }
 
-func (s *Service) create(ctx context.Context, user identity.User, chatID string, input CreateInput, provenance *AgentProvenance) (Message, bool, error) {
+// CreateFinalForAgentRun publishes the sole durable final response of a run.
+// Repeating the same client_msg_id is idempotent; a different second message is rejected.
+func (s *Service) CreateFinalForAgentRun(ctx context.Context, user identity.User, chatID string, input CreateInput, provenance AgentProvenance) (Message, bool, error) {
+	if _, err := uuid.Parse(provenance.RunID); err != nil {
+		return Message{}, false, fmt.Errorf("%w: run_id must be a UUID", ErrInvalid)
+	}
+	return s.create(ctx, user, chatID, input, &provenance, true)
+}
+
+func (s *Service) create(ctx context.Context, user identity.User, chatID string, input CreateInput, provenance *AgentProvenance, final bool) (Message, bool, error) {
 	if err := s.validateCreate(chatID, &input); err != nil {
 		return Message{}, false, err
 	}
@@ -158,6 +167,11 @@ func (s *Service) create(ctx context.Context, user identity.User, chatID string,
 			if provenance != nil {
 				if err := insertAgentProvenance(ctx, tx, user, existing.ID, *provenance); err != nil {
 					return Message{}, false, err
+				}
+				if final {
+					if err := markFinalAgentMessage(ctx, tx, user, existing.ID, provenance.RunID); err != nil {
+						return Message{}, false, err
+					}
 				}
 				if err := tx.Commit(ctx); err != nil {
 					return Message{}, false, fmt.Errorf("commit agent message provenance: %w", err)
@@ -208,6 +222,11 @@ func (s *Service) create(ctx context.Context, user identity.User, chatID string,
 		if err := insertAgentProvenance(ctx, tx, user, result.ID, *provenance); err != nil {
 			return Message{}, false, err
 		}
+		if final {
+			if err := markFinalAgentMessage(ctx, tx, user, result.ID, provenance.RunID); err != nil {
+				return Message{}, false, err
+			}
+		}
 	}
 	if err := insertEvent(ctx, tx, user, chatID, result.ID, seq, "message.created"); err != nil {
 		return Message{}, false, err
@@ -227,6 +246,17 @@ func (s *Service) create(ctx context.Context, user identity.User, chatID string,
 	}
 	s.notifyAfterCommit(user.OrgID, highWatermark)
 	return result, true, nil
+}
+
+func markFinalAgentMessage(ctx context.Context, tx pgx.Tx, user identity.User, messageID, runID string) error {
+	result, err := tx.Exec(ctx, `UPDATE agent_runs SET published_message_id=$4 WHERE org_id=$1 AND agent_id=$2 AND id=$3 AND (published_message_id IS NULL OR published_message_id=$4)`, user.OrgID, user.ActorID, runID, messageID)
+	if err != nil {
+		return fmt.Errorf("mark final agent message: %w", err)
+	}
+	if result.RowsAffected() != 1 {
+		return ErrIdempotencyConflict
+	}
+	return nil
 }
 
 func insertAgentProvenance(ctx context.Context, tx pgx.Tx, user identity.User, messageID string, provenance AgentProvenance) error {

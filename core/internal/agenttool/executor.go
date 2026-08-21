@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
+	"strings"
+	"time"
 
 	"github.com/comamessenger/comamessenger/core/internal/access"
 	"github.com/comamessenger/comamessenger/core/internal/agent"
@@ -25,8 +28,9 @@ import (
 var (
 	ErrInvalid              = errors.New("invalid agent tool call")
 	ErrForbidden            = errors.New("agent tool call forbidden")
-	ErrConfirmationRequired = errors.New("agent tool call confirmation required")
 	ErrOutputTooLarge       = errors.New("agent tool output too large")
+	ErrConfirmationNotFound = errors.New("agent tool confirmation not found")
+	ErrConfirmationConflict = errors.New("agent tool confirmation conflict")
 )
 
 type Definition struct {
@@ -53,7 +57,31 @@ type Invocation struct {
 	RunID         string
 	LeaseToken    string
 	CorrelationID string
-	Confirmed     bool
+	ToolCallID    string
+}
+
+type Confirmation struct {
+	ID            string          `json:"id"`
+	AgentID       string          `json:"agent_id"`
+	RunID         string          `json:"run_id"`
+	ToolCallID    string          `json:"tool_call_id"`
+	CorrelationID string          `json:"correlation_id"`
+	ToolName      string          `json:"tool_name"`
+	RequiredScope agent.Scope     `json:"required_scope"`
+	Arguments     json.RawMessage `json:"arguments"`
+	Status        string          `json:"status"`
+	Result        json.RawMessage `json:"result,omitempty"`
+	ErrorCode     string          `json:"error_code,omitempty"`
+	RequestedAt   time.Time       `json:"requested_at"`
+	ExpiresAt     time.Time       `json:"expires_at"`
+	DecidedAt     *time.Time      `json:"decided_at,omitempty"`
+	DecidedBy     *string         `json:"decided_by,omitempty"`
+	CompletedAt   *time.Time      `json:"completed_at,omitempty"`
+}
+
+type InvokeResult struct {
+	Output       json.RawMessage
+	Confirmation *Confirmation
 }
 
 type Services struct {
@@ -124,36 +152,47 @@ func (executor *Executor) resolveInvocation(ctx context.Context, invocation Invo
 	return invocation, nil
 }
 
-func (executor *Executor) Invoke(ctx context.Context, invocation Invocation) (json.RawMessage, error) {
+func (executor *Executor) Invoke(ctx context.Context, invocation Invocation) (InvokeResult, error) {
 	resolved, err := executor.resolveInvocation(ctx, invocation)
 	if err != nil {
-		return nil, err
+		return InvokeResult{}, err
 	}
 	invocation = resolved
 	tool, exists := executor.tools[invocation.Name]
 	if !exists || !executor.authorizer.CanInvokeTool(invocation.User, invocation.Identity, string(tool.Definition.RequiredScope)) {
-		return nil, ErrForbidden
+		return InvokeResult{}, ErrForbidden
 	}
 	definition := tool.Definition
 	if _, err := uuid.Parse(invocation.CorrelationID); err != nil {
-		return nil, fmt.Errorf("%w: correlation_id must be a UUID", ErrInvalid)
+		return InvokeResult{}, fmt.Errorf("%w: correlation_id must be a UUID", ErrInvalid)
 	}
-	if _, err := uuid.Parse(invocation.RunID); err != nil {
-		return nil, fmt.Errorf("%w: run_id must be a UUID", ErrInvalid)
+	if _, err := uuid.Parse(invocation.ToolCallID); err != nil {
+		return InvokeResult{}, fmt.Errorf("%w: tool_call_id must be a UUID", ErrInvalid)
 	}
-	if _, err := uuid.Parse(invocation.LeaseToken); err != nil {
-		return nil, fmt.Errorf("%w: lease_token must be a UUID", ErrInvalid)
+	if err := validateArguments(definition, invocation.Arguments); err != nil {
+		return InvokeResult{}, err
 	}
-	if executor.requireWriteConfirmation && definition.Mode == "write" && !invocation.Confirmed {
-		return nil, ErrConfirmationRequired
+	if executor.requireWriteConfirmation && definition.Mode == "write" {
+		confirmation, err := executor.requestConfirmation(ctx, invocation, definition)
+		return InvokeResult{Confirmation: &confirmation}, err
 	}
+	output, err := executor.execute(ctx, invocation, tool)
+	return InvokeResult{Output: output}, err
+}
+
+func validateArguments(definition Definition, arguments json.RawMessage) error {
 	var document any
-	if err := json.Unmarshal(invocation.Arguments, &document); err != nil {
-		return nil, fmt.Errorf("%w: arguments must be JSON", ErrInvalid)
+	if err := json.Unmarshal(arguments, &document); err != nil {
+		return fmt.Errorf("%w: arguments must be JSON", ErrInvalid)
 	}
 	if err := definition.compiled.Validate(document); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalid, err)
+		return fmt.Errorf("%w: %v", ErrInvalid, err)
 	}
+	return nil
+}
+
+func (executor *Executor) execute(ctx context.Context, invocation Invocation, tool Tool) (json.RawMessage, error) {
+	definition := tool.Definition
 	callID, err := id.New()
 	if err != nil {
 		return nil, err
@@ -277,6 +316,184 @@ func (executor *Executor) recall(ctx context.Context, invocation Invocation) (an
 	}
 	_ = json.Unmarshal(invocation.Arguments, &input)
 	return executor.services.Memory.Recall(ctx, invocation.User, agentmemory.RecallInput{Namespace: input.Namespace, Keys: input.Keys, Prefix: input.Prefix, Limit: input.Limit, EmbeddingModel: input.EmbeddingModel, QueryEmbedding: input.QueryEmbedding})
+}
+
+func (executor *Executor) requestConfirmation(ctx context.Context, invocation Invocation, definition Definition) (Confirmation, error) {
+	confirmationID, err := id.New()
+	if err != nil {
+		return Confirmation{}, err
+	}
+	tx, err := executor.pool.Begin(ctx)
+	if err != nil {
+		return Confirmation{}, err
+	}
+	defer tx.Rollback(ctx)
+	inserted, err := tx.Exec(ctx, `INSERT INTO agent_tool_confirmations(id,org_id,agent_id,run_id,tool_call_id,correlation_id,tool_name,required_scope,arguments)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(org_id,run_id,tool_call_id) DO NOTHING`, confirmationID, invocation.User.OrgID, invocation.User.ActorID, invocation.RunID, invocation.ToolCallID, invocation.CorrelationID, definition.Name, definition.RequiredScope, invocation.Arguments)
+	if err != nil {
+		return Confirmation{}, fmt.Errorf("create agent tool confirmation: %w", err)
+	}
+	var confirmation Confirmation
+	err = scanConfirmation(tx.QueryRow(ctx, confirmationSelect+` WHERE confirmation.org_id=$1 AND confirmation.run_id=$2 AND confirmation.tool_call_id=$3`, invocation.User.OrgID, invocation.RunID, invocation.ToolCallID), &confirmation)
+	if err != nil {
+		return Confirmation{}, err
+	}
+	if confirmation.ToolName != definition.Name || confirmation.CorrelationID != invocation.CorrelationID || !jsonEqual(confirmation.Arguments, invocation.Arguments) {
+		return Confirmation{}, ErrConfirmationConflict
+	}
+	if confirmation.Status != "pending" || !confirmation.ExpiresAt.After(time.Now().UTC()) {
+		return Confirmation{}, ErrConfirmationConflict
+	}
+	if inserted.RowsAffected() == 1 {
+		auditID, err := id.New()
+		if err != nil {
+			return Confirmation{}, err
+		}
+		metadata, _ := json.Marshal(map[string]any{"confirmation_id": confirmation.ID, "run_id": confirmation.RunID, "tool_call_id": confirmation.ToolCallID, "tool": confirmation.ToolName, "required_scope": confirmation.RequiredScope})
+		if _, err := tx.Exec(ctx, `INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,'agent.tool.confirmation.request','agent',$3,$4)`, auditID, invocation.User.OrgID, invocation.User.ActorID, metadata); err != nil {
+			return Confirmation{}, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Confirmation{}, err
+	}
+	return confirmation, nil
+}
+
+func (executor *Executor) ListConfirmations(ctx context.Context, current identity.User, status string) ([]Confirmation, error) {
+	if !executor.authorizer.CanManage(current) {
+		return nil, ErrForbidden
+	}
+	status = strings.ToLower(strings.TrimSpace(status))
+	if status == "" {
+		status = "pending"
+	}
+	if status != "pending" && status != "approved" && status != "denied" && status != "completed" && status != "failed" && status != "expired" && status != "all" {
+		return nil, ErrInvalid
+	}
+	if _, err := executor.pool.Exec(ctx, `UPDATE agent_tool_confirmations SET status='expired',completed_at=now() WHERE org_id=$1 AND status='pending' AND expires_at<=now()`, current.OrgID); err != nil {
+		return nil, err
+	}
+	query := confirmationSelect + ` WHERE confirmation.org_id=$1`
+	args := []any{current.OrgID}
+	if status != "all" {
+		query += ` AND confirmation.status=$2`
+		args = append(args, status)
+	}
+	query += ` ORDER BY confirmation.requested_at DESC LIMIT 200`
+	rows, err := executor.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make([]Confirmation, 0)
+	for rows.Next() {
+		var confirmation Confirmation
+		if err := scanConfirmation(rows, &confirmation); err != nil {
+			return nil, err
+		}
+		result = append(result, confirmation)
+	}
+	return result, rows.Err()
+}
+
+func (executor *Executor) DecideConfirmation(ctx context.Context, current identity.User, confirmationID string, approve bool) (Confirmation, error) {
+	if !executor.authorizer.CanManage(current) {
+		return Confirmation{}, ErrForbidden
+	}
+	if uuid.Validate(confirmationID) != nil {
+		return Confirmation{}, ErrConfirmationNotFound
+	}
+	tx, err := executor.pool.Begin(ctx)
+	if err != nil {
+		return Confirmation{}, err
+	}
+	defer tx.Rollback(ctx)
+	var confirmation Confirmation
+	var scopes []string
+	err = scanConfirmationWithScopes(tx.QueryRow(ctx, `SELECT `+confirmationFields+`,agent.allowed_scopes FROM agent_tool_confirmations confirmation JOIN agents agent ON agent.org_id=confirmation.org_id AND agent.actor_id=confirmation.agent_id WHERE confirmation.org_id=$1 AND confirmation.id=$2 FOR UPDATE OF confirmation`, current.OrgID, confirmationID), &confirmation, &scopes)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Confirmation{}, ErrConfirmationNotFound
+	}
+	if err != nil {
+		return Confirmation{}, err
+	}
+	if confirmation.Status != "pending" || !confirmation.ExpiresAt.After(time.Now().UTC()) {
+		if confirmation.Status == "pending" {
+			_, _ = tx.Exec(ctx, `UPDATE agent_tool_confirmations SET status='expired',completed_at=now() WHERE id=$1`, confirmation.ID)
+			_ = tx.Commit(ctx)
+		}
+		return Confirmation{}, ErrConfirmationConflict
+	}
+	status, action := "denied", "agent.tool.confirmation.deny"
+	if approve {
+		status, action = "approved", "agent.tool.confirmation.approve"
+	}
+	var decidedAt time.Time
+	if err := tx.QueryRow(ctx, `UPDATE agent_tool_confirmations SET status=$2,decided_at=now(),decided_by=$3 WHERE id=$1 RETURNING decided_at`, confirmation.ID, status, current.ActorID).Scan(&decidedAt); err != nil {
+		return Confirmation{}, err
+	}
+	confirmation.Status, confirmation.DecidedAt, confirmation.DecidedBy = status, &decidedAt, &current.ActorID
+	auditID, err := id.New()
+	if err != nil {
+		return Confirmation{}, err
+	}
+	metadata, _ := json.Marshal(map[string]any{"confirmation_id": confirmation.ID, "run_id": confirmation.RunID, "tool_call_id": confirmation.ToolCallID, "tool": confirmation.ToolName, "decision": status})
+	if _, err := tx.Exec(ctx, `INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,'agent',$5,$6)`, auditID, current.OrgID, current.ActorID, action, confirmation.AgentID, metadata); err != nil {
+		return Confirmation{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Confirmation{}, err
+	}
+	if !approve {
+		return confirmation, nil
+	}
+	tool, exists := executor.tools[confirmation.ToolName]
+	if !exists || tool.Definition.Mode != "write" || !agentauthz.HasScope(scopes, string(tool.Definition.RequiredScope)) || tool.Definition.RequiredScope != confirmation.RequiredScope {
+		return executor.finishConfirmation(ctx, confirmation, nil, ErrForbidden)
+	}
+	invocation := Invocation{User: identity.User{ActorID: confirmation.AgentID, OrgID: current.OrgID, OrgRole: "member"}, Identity: access.Identity{AuthenticationKind: "api_key", ActorID: confirmation.AgentID, OrgID: current.OrgID, Scopes: scopes}, Name: confirmation.ToolName, Arguments: confirmation.Arguments, RunID: confirmation.RunID, CorrelationID: confirmation.CorrelationID, ToolCallID: confirmation.ToolCallID}
+	if err := validateArguments(tool.Definition, invocation.Arguments); err != nil {
+		return executor.finishConfirmation(ctx, confirmation, nil, err)
+	}
+	output, callErr := executor.execute(ctx, invocation, tool)
+	return executor.finishConfirmation(ctx, confirmation, output, callErr)
+}
+
+func (executor *Executor) finishConfirmation(ctx context.Context, confirmation Confirmation, output json.RawMessage, callErr error) (Confirmation, error) {
+	status, errorCode := "completed", ""
+	if callErr != nil {
+		status, errorCode = "failed", classifyError(callErr)
+	}
+	var result any
+	if len(output) > 0 {
+		result = output
+	}
+	var completedAt time.Time
+	err := executor.pool.QueryRow(ctx, `UPDATE agent_tool_confirmations SET status=$2,result=$3,error_code=$4,completed_at=now() WHERE id=$1 AND status='approved' RETURNING completed_at`, confirmation.ID, status, result, errorCode).Scan(&completedAt)
+	if err != nil {
+		return Confirmation{}, err
+	}
+	confirmation.Status, confirmation.Result, confirmation.ErrorCode, confirmation.CompletedAt = status, output, errorCode, &completedAt
+	return confirmation, nil
+}
+
+func jsonEqual(left, right json.RawMessage) bool {
+	var leftValue, rightValue any
+	return json.Unmarshal(left, &leftValue) == nil && json.Unmarshal(right, &rightValue) == nil && reflect.DeepEqual(leftValue, rightValue)
+}
+
+const confirmationFields = `confirmation.id,confirmation.agent_id,confirmation.run_id,confirmation.tool_call_id,confirmation.correlation_id,confirmation.tool_name,confirmation.required_scope,confirmation.arguments,confirmation.status,confirmation.result,confirmation.error_code,confirmation.requested_at,confirmation.expires_at,confirmation.decided_at,confirmation.decided_by,confirmation.completed_at`
+const confirmationSelect = `SELECT ` + confirmationFields + ` FROM agent_tool_confirmations confirmation`
+
+type rowScanner interface{ Scan(...any) error }
+
+func scanConfirmation(row rowScanner, result *Confirmation) error {
+	return row.Scan(&result.ID, &result.AgentID, &result.RunID, &result.ToolCallID, &result.CorrelationID, &result.ToolName, &result.RequiredScope, &result.Arguments, &result.Status, &result.Result, &result.ErrorCode, &result.RequestedAt, &result.ExpiresAt, &result.DecidedAt, &result.DecidedBy, &result.CompletedAt)
+}
+
+func scanConfirmationWithScopes(row rowScanner, result *Confirmation, scopes *[]string) error {
+	return row.Scan(&result.ID, &result.AgentID, &result.RunID, &result.ToolCallID, &result.CorrelationID, &result.ToolName, &result.RequiredScope, &result.Arguments, &result.Status, &result.Result, &result.ErrorCode, &result.RequestedAt, &result.ExpiresAt, &result.DecidedAt, &result.DecidedBy, &result.CompletedAt, scopes)
 }
 
 func (executor *Executor) startCall(ctx context.Context, callID string, invocation Invocation, definition Definition) error {

@@ -117,10 +117,14 @@ POST   /api/v1/agents/:id/mcp-servers
 PATCH  /api/v1/agents/:id/mcp-servers/:server_id
 DELETE /api/v1/agents/:id/mcp-servers/:server_id
 POST   /api/v1/agent-runtime/runs/claim
+POST   /api/v1/agent-runtime/runs/:run_id/publish
 POST   /api/v1/agent-runtime/mcp-servers
 POST   /api/v1/agent-runtime/mcp-tool-calls
 POST   /api/v1/agent-runtime/mcp-tool-calls/:call_id/finish
 POST   /api/v1/agent-runtime/provider/chat
+GET    /api/v1/agents/tool-confirmations
+POST   /api/v1/agents/tool-confirmations/:confirmation_id/approve
+POST   /api/v1/agents/tool-confirmations/:confirmation_id/deny
 
 agent.invoked
 agent.run.started

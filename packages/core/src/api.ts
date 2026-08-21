@@ -70,6 +70,7 @@ import type {
   UpdateAgentPlatformSettingsRequest,
   AgentToolDefinition,
   InvokeAgentToolRequest,
+  AgentToolConfirmation,
   AgentRun,
   AgentRunPage,
   InvokeAgentRequest,
@@ -79,6 +80,7 @@ import type {
   ClaimedAgentRun,
   ClaimAgentRunRequest,
   AgentRunLeaseRequest,
+  PublishAgentRunRequest,
   CompleteAgentRunRequest,
   FailAgentRunRequest,
   AgentRuntimeCheckpoint,
@@ -304,6 +306,25 @@ export class MessengerAPI {
       body: JSON.stringify(input),
     });
   }
+  agentToolConfirmations(
+    status: "pending" | "approved" | "denied" | "completed" | "failed" | "expired" | "all" = "pending",
+  ): Promise<AgentToolConfirmation[]> {
+    return this.request(
+      `/api/v1/agents/tool-confirmations?status=${encodeURIComponent(status)}`,
+    );
+  }
+  approveAgentToolConfirmation(id: string): Promise<AgentToolConfirmation> {
+    return this.request(
+      `/api/v1/agents/tool-confirmations/${encodeURIComponent(id)}/approve`,
+      { method: "POST" },
+    );
+  }
+  denyAgentToolConfirmation(id: string): Promise<AgentToolConfirmation> {
+    return this.request(
+      `/api/v1/agents/tool-confirmations/${encodeURIComponent(id)}/deny`,
+      { method: "POST" },
+    );
+  }
   invokeAgent(id: string, input: InvokeAgentRequest): Promise<AgentRun> {
     return this.request(`/api/v1/agents/${encodeURIComponent(id)}/invoke`, {
       method: "POST",
@@ -341,6 +362,12 @@ export class MessengerAPI {
   ): Promise<AgentRun> {
     return this.request(
       `/api/v1/agent-runtime/runs/${encodeURIComponent(runID)}/heartbeat`,
+      { method: "POST", body: JSON.stringify(input) },
+    );
+  }
+  publishAgentRun(id: string, input: PublishAgentRunRequest): Promise<Message> {
+    return this.request(
+      `/api/v1/agent-runtime/runs/${encodeURIComponent(id)}/publish`,
       { method: "POST", body: JSON.stringify(input) },
     );
   }

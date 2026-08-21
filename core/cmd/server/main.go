@@ -202,7 +202,7 @@ func main() {
 	)
 	chatService := chat.NewService(pool, afterCommit)
 	searchService := search.NewService(pool)
-	agentToolExecutor, err := agenttool.NewExecutor(pool, agenttool.Services{Chats: chatService, Messages: messageService, Search: searchService, Files: fileService, Memory: agentmemory.NewService(pool)}, false)
+	agentToolExecutor, err := agenttool.NewExecutor(pool, agenttool.Services{Chats: chatService, Messages: messageService, Search: searchService, Files: fileService, Memory: agentmemory.NewService(pool)}, true)
 	if err != nil {
 		logger.Error("agent tool initialization failed", "error", err)
 		os.Exit(1)

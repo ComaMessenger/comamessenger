@@ -82,6 +82,8 @@ export type UpdateAgentPlatformSettingsRequest =
 export type AgentToolDefinition = components["schemas"]["AgentToolDefinition"];
 export type InvokeAgentToolRequest =
   components["schemas"]["InvokeAgentToolRequest"];
+export type AgentToolConfirmation =
+  components["schemas"]["AgentToolConfirmation"];
 export type AgentRun = components["schemas"]["AgentRun"];
 export type AgentRunPage = components["schemas"]["AgentRunPage"];
 export type InvokeAgentRequest = components["schemas"]["InvokeAgentRequest"];
@@ -95,6 +97,8 @@ export type ClaimAgentRunRequest =
   components["schemas"]["ClaimAgentRunRequest"];
 export type AgentRunLeaseRequest =
   components["schemas"]["AgentRunLeaseRequest"];
+export type PublishAgentRunRequest =
+  components["schemas"]["PublishAgentRunRequest"];
 export type CompleteAgentRunRequest =
   components["schemas"]["CompleteAgentRunRequest"];
 export type FailAgentRunRequest = components["schemas"]["FailAgentRunRequest"];
