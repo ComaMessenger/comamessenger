@@ -16,6 +16,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/agent"
 	"github.com/comamessenger/comamessenger/core/internal/agentconfig"
 	"github.com/comamessenger/comamessenger/core/internal/agentmemory"
+	"github.com/comamessenger/comamessenger/core/internal/agentprovider"
 	"github.com/comamessenger/comamessenger/core/internal/agentrun"
 	"github.com/comamessenger/comamessenger/core/internal/agenttool"
 	"github.com/comamessenger/comamessenger/core/internal/agenttrigger"
@@ -207,6 +208,7 @@ func main() {
 		os.Exit(1)
 	}
 	agentRunService := agentrun.NewService(pool)
+	agentProviderService := agentprovider.NewService(pool, agentConfigService, agentRunService)
 	agentTriggerService := agenttrigger.NewService(pool, logger)
 	go agentTriggerService.Run(realtimeCtx, time.Second)
 	userStateService := userstate.NewService(pool, int(cfg.Messaging.MaxBodyBytes), afterCommit)
@@ -218,7 +220,7 @@ func main() {
 	server := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: serverhttp.NewHandler(logger, cfg.PublicAppURL, pool.Ping, serverhttp.Dependencies{
-			Identity: identityService, Agents: agentService, AgentConfig: agentConfigService, AgentTools: agentToolExecutor, AgentRuns: agentRunService, AgentTriggers: agentTriggerService, Chats: chatService,
+			Identity: identityService, Agents: agentService, AgentConfig: agentConfigService, AgentProvider: agentProviderService, AgentTools: agentToolExecutor, AgentRuns: agentRunService, AgentTriggers: agentTriggerService, Chats: chatService,
 			Messages: messageService, UserState: userStateService, Push: pushService, Workspace: workspaceService, Files: fileService, Search: searchService, Realtime: realtimeServer,
 			CookieSecure: cfg.Auth.CookieSecure, RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
 			BootstrapToken: cfg.BootstrapToken, RequireBootstrapToken: cfg.AppEnv != "development",

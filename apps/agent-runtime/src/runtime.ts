@@ -18,7 +18,7 @@ import {
 } from "./providers.js";
 import { MCPError, resolveMCPTools, type ResolvedMCPTool } from "./mcp.js";
 
-export type ProviderResolver = (name: string, apiKey?: string) => Provider;
+export type ProviderResolver = (name: string) => Provider;
 
 export type RuntimeOptions = {
   api: MessengerAPI;
@@ -26,7 +26,6 @@ export type RuntimeOptions = {
   workerID?: string;
   pollIntervalMS?: number;
   leaseSeconds?: number;
-  reservedCallCost?: string;
   events?: {
     agentStatus(input: {
       runID: string;
@@ -57,13 +56,11 @@ export class AgentRuntime {
   private readonly workerID: string;
   private readonly pollIntervalMS: number;
   private readonly leaseSeconds: number;
-  private readonly reservedCallCost: string;
 
   constructor(private readonly options: RuntimeOptions) {
     this.workerID = options.workerID ?? crypto.randomUUID();
     this.pollIntervalMS = Math.max(500, options.pollIntervalMS ?? 5_000);
     this.leaseSeconds = Math.min(300, Math.max(30, options.leaseSeconds ?? 90));
-    this.reservedCallCost = options.reservedCallCost ?? "0.01000000";
   }
 
   async run(signal: AbortSignal): Promise<void> {
@@ -122,14 +119,6 @@ export class AgentRuntime {
         await this.options.api.agentRuntimeMcpServers(),
         controller.signal,
       );
-      let providerAPIKey: string | undefined;
-      try {
-        providerAPIKey = (
-          await this.options.api.agentRuntimeProviderCredential()
-        ).api_key;
-      } catch (cause) {
-        if (!(cause instanceof APIError && cause.status === 404)) throw cause;
-      }
       const messages = await this.assembleContext(run, agent);
       const result = await this.runProviderLoop(
         run,
@@ -137,7 +126,6 @@ export class AgentRuntime {
         tools,
         mcpTools,
         messages,
-        providerAPIKey,
         controller.signal,
         streamID,
         () => ++streamIndex,
@@ -245,7 +233,6 @@ export class AgentRuntime {
     definitions: AgentToolDefinition[],
     mcpTools: Map<string, ResolvedMCPTool>,
     messages: ChatMessage[],
-    providerAPIKey: string | undefined,
     signal: AbortSignal,
     streamID: string,
     nextStreamIndex: () => number,
@@ -254,7 +241,7 @@ export class AgentRuntime {
     usage: ProviderUsage;
     toolCalls: number;
   }> {
-    const provider = this.options.provider(run.provider, providerAPIKey);
+    const provider = this.options.provider(run.provider);
     const tools: ProviderTool[] = [
       ...definitions.map((definition) => ({
         name: definition.name,
@@ -279,13 +266,6 @@ export class AgentRuntime {
       this.emitStreaming(run, streamID, nextStreamIndex(), "", true, false);
       let finished: Extract<ProviderEvent, { type: "finish" }> | null = null;
       const callID = crypto.randomUUID();
-      await this.options.api.startAgentProviderCall({
-        call_id: callID,
-        run_id: run.id,
-        lease_token: run.lease_token,
-        reserved_cost: this.reservedCallCost,
-        currency: "USD",
-      });
       const stream = new StreamingCoalescer((delta) => {
         for (const part of splitStreamingDelta(delta)) {
           this.emitStreaming(
@@ -301,6 +281,9 @@ export class AgentRuntime {
       try {
         this.emitStatus(run, "streaming");
         for await (const event of provider.stream({
+          callID,
+          runID: run.id,
+          leaseToken: run.lease_token,
           model: run.model,
           messages,
           tools,
@@ -314,36 +297,8 @@ export class AgentRuntime {
         }
         stream.close();
         if (!finished) throw new RuntimeError("provider_incomplete_stream");
-        finished = {
-          ...finished,
-          usage: billableUsage(finished.usage, this.reservedCallCost),
-        };
-        await this.options.api.finishAgentProviderCall(callID, {
-          run_id: run.id,
-          lease_token: run.lease_token,
-          status: "completed",
-          actual_cost: finished.usage.cost,
-          currency: finished.usage.currency,
-          input_tokens: finished.usage.inputTokens,
-          output_tokens: finished.usage.outputTokens,
-          price_source: finished.usage.priceSource,
-        });
       } catch (cause) {
         stream.close();
-        try {
-          await this.options.api.finishAgentProviderCall(callID, {
-            run_id: run.id,
-            lease_token: run.lease_token,
-            status: "failed",
-            actual_cost: "0",
-            currency: "USD",
-            input_tokens: 0,
-            output_tokens: 0,
-            price_source: "unknown",
-          });
-        } catch {
-          // The original provider/core error determines retry behavior.
-        }
         throw cause;
       }
       if (
@@ -587,14 +542,6 @@ function escapeTrustedConfiguration(value: string): string {
 function addDecimal(left: string, right: string): string {
   const total = Number(left) + Number(right);
   return Number.isFinite(total) ? total.toFixed(8) : "0";
-}
-
-function billableUsage(
-  usage: ProviderUsage,
-  reservedCost: string,
-): ProviderUsage {
-  if (Number(usage.cost) > 0) return usage;
-  return { ...usage, cost: reservedCost, priceSource: "estimated" };
 }
 
 function delay(ms: number, signal: AbortSignal): Promise<void> {

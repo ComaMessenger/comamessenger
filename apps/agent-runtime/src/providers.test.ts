@@ -7,6 +7,12 @@ import {
   type ProviderEvent,
 } from "./providers.js";
 
+const runContext = {
+  callID: "00000000-0000-7000-8000-000000000001",
+  runID: "00000000-0000-7000-8000-000000000002",
+  leaseToken: "00000000-0000-7000-8000-000000000003",
+};
+
 describe("provider normalization", () => {
   it("normalizes OpenAI content, tool calls, and usage", async () => {
     const provider = new OpenAIProvider(
@@ -34,6 +40,7 @@ describe("provider normalization", () => {
     );
     const events: ProviderEvent[] = [];
     for await (const event of provider.stream({
+      ...runContext,
       model: "model",
       messages: [{ role: "user", content: "hello" }],
       tools: [],
@@ -78,6 +85,7 @@ describe("provider normalization", () => {
     );
     const events: ProviderEvent[] = [];
     for await (const event of provider.stream({
+      ...runContext,
       model: "claude",
       messages: [{ role: "user", content: "hello" }],
       tools: [],
@@ -112,6 +120,7 @@ describe("provider normalization", () => {
     );
     const events: ProviderEvent[] = [];
     for await (const event of provider.stream({
+      ...runContext,
       model: "gpt-5-mini",
       messages: [],
       tools: [],
@@ -134,6 +143,7 @@ describe("provider normalization", () => {
     let caught: unknown;
     try {
       for await (const _event of provider.stream({
+        ...runContext,
         model: "model",
         messages: [],
         tools: [],
@@ -169,6 +179,7 @@ describe("provider normalization", () => {
     let caught: unknown;
     try {
       for await (const _event of provider.stream({
+        ...runContext,
         model: "model",
         messages: [],
         tools: [],

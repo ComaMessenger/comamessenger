@@ -1635,23 +1635,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/agent-runtime/provider-credential": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description Returns the authenticated agent's credential only to its API-key runtime over a no-store response. */
-        get: operations["getAgentRuntimeProviderCredential"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/agent-runtime/mcp-servers": {
         parameters: {
             query?: never;
@@ -1680,6 +1663,23 @@ export interface paths {
         put?: never;
         /** @description Atomically reserves cost against daily and monthly budgets before a provider request. */
         post: operations["startAgentProviderCall"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent-runtime/provider/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Streams a model response through core; provider credentials and authoritative usage accounting never leave core. */
+        post: operations["proxyAgentProviderChat"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2351,9 +2351,6 @@ export interface components {
             api_key: string;
             clear: boolean;
         };
-        AgentRuntimeProviderCredential: {
-            api_key: string;
-        };
         AgentMcpServer: {
             /** Format: uuid */
             id: string;
@@ -2456,6 +2453,18 @@ export interface components {
             lease_token: string;
             reserved_cost: string;
             currency: string;
+        };
+        AgentProviderProxyRequest: {
+            /** Format: uuid */
+            call_id: string;
+            /** Format: uuid */
+            run_id: string;
+            /** Format: uuid */
+            lease_token: string;
+            /** @description Vendor request body without credentials; core overwrites model and streaming controls from the active run. */
+            request: {
+                [key: string]: unknown;
+            };
         };
         FinishAgentProviderCallRequest: {
             /** Format: uuid */
@@ -6777,28 +6786,6 @@ export interface operations {
             422: components["responses"]["Error"];
         };
     };
-    getAgentRuntimeProviderCredential: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Runtime-only provider credential. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentRuntimeProviderCredential"];
-                };
-            };
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-        };
-    };
     listAgentRuntimeMcpServers: {
         parameters: {
             query?: never;
@@ -6846,6 +6833,36 @@ export interface operations {
             403: components["responses"]["Error"];
             409: components["responses"]["Error"];
             422: components["responses"]["Error"];
+        };
+    };
+    proxyAgentProviderChat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentProviderProxyRequest"];
+            };
+        };
+        responses: {
+            /** @description Provider SSE stream with credentials removed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            402: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            502: components["responses"]["Error"];
         };
     };
     finishAgentProviderCall: {

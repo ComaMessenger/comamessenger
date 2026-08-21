@@ -329,7 +329,7 @@ func (service *Service) Usage(ctx context.Context, current identity.User, agentI
 		COALESCE(sum(cost) FILTER (WHERE created_at >= date_trunc('month',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'),0)::text,
 		COALESCE(sum(input_tokens) FILTER (WHERE created_at >= date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'),0),
 		COALESCE(sum(output_tokens) FILTER (WHERE created_at >= date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'),0),
-		count(*) FILTER (WHERE created_at >= date_trunc('month',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')
+		count(DISTINCT run_id) FILTER (WHERE created_at >= date_trunc('month',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')
 		FROM agent_usage WHERE org_id=$1 AND agent_id=$2`, current.OrgID, agentID).Scan(&result.DailyCost, &result.MonthlyCost, &result.DailyInputTokens, &result.DailyOutputTokens, &result.MonthlyRuns)
 	if err != nil {
 		return UsageReport{}, err

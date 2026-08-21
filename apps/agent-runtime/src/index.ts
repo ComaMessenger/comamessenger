@@ -5,6 +5,7 @@ import {
   AnthropicProvider,
   OpenAIProvider,
   type Provider,
+  type ProviderRequest,
 } from "./providers.js";
 import { AgentRuntime } from "./runtime.js";
 
@@ -40,8 +41,7 @@ async function main(): Promise<void> {
   );
   const runtime = new AgentRuntime({
     api,
-    provider: providerResolver(),
-    reservedCallCost: process.env.AGENT_RESERVED_CALL_COST ?? "0.01000000",
+    provider: providerResolver(api),
     events: connection,
   });
   const shutdown = new AbortController();
@@ -56,17 +56,26 @@ async function main(): Promise<void> {
   }
 }
 
-function providerResolver(): (name: string, apiKey?: string) => Provider {
-  return (rawName, configuredAPIKey) => {
+function providerResolver(api: MessengerAPI): (name: string) => Provider {
+  return (rawName) => {
     const name = rawName.trim().toLowerCase();
     let provider: Provider;
     if (name === "openai") {
-      provider = new OpenAIProvider(
-        configuredAPIKey ?? requiredEnvironment("OPENAI_API_KEY"),
+      provider = proxiedProvider(api, name, (fetcher) =>
+        new OpenAIProvider(
+          "core-managed",
+          "https://core.invalid",
+          "openai",
+          fetcher,
+        ),
       );
     } else if (name === "anthropic") {
-      provider = new AnthropicProvider(
-        configuredAPIKey ?? requiredEnvironment("ANTHROPIC_API_KEY"),
+      provider = proxiedProvider(api, name, (fetcher) =>
+        new AnthropicProvider(
+          "core-managed",
+          "https://core.invalid",
+          fetcher,
+        ),
       );
     } else if (
       name === "openai-compatible" ||
@@ -74,17 +83,43 @@ function providerResolver(): (name: string, apiKey?: string) => Provider {
       name === "ollama" ||
       name === "vllm"
     ) {
-      provider = new OpenAIProvider(
-        configuredAPIKey ??
-          process.env.OPENAI_COMPATIBLE_API_KEY ??
-          "local-runtime",
-        requiredEnvironment("OPENAI_COMPATIBLE_BASE_URL"),
-        "openai-compatible",
+      provider = proxiedProvider(api, name, (fetcher) =>
+        new OpenAIProvider(
+          "core-managed",
+          "https://core.invalid",
+          "openai-compatible",
+          fetcher,
+        ),
       );
     } else {
       throw new Error("unsupported_provider");
     }
     return provider;
+  };
+}
+
+function proxiedProvider(
+  api: MessengerAPI,
+  name: string,
+  create: (fetcher: typeof fetch) => Provider,
+): Provider {
+  return {
+    name,
+    stream(request: ProviderRequest) {
+      const fetcher: typeof fetch = async (_input, init) => {
+        const raw = typeof init?.body === "string" ? init.body : "{}";
+        return api.agentRuntimeProviderChat(
+          {
+            call_id: request.callID,
+            run_id: request.runID,
+            lease_token: request.leaseToken,
+            request: JSON.parse(raw) as Record<string, unknown>,
+          },
+          request.signal,
+        );
+      };
+      return create(fetcher).stream(request);
+    },
   };
 }
 

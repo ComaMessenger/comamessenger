@@ -50,6 +50,12 @@ Provider chunks необходимо коалесцировать: не чаще
 
 Run с `input.sandbox=true` и `input.publish=false` выполняет обычный контекст/tool loop, но не создаёт сообщение. Предпросмотр возвращается в `result_summary.preview`. Это позволяет проверить поведение до включения triggers.
 
+## Provider gateway
+
+Runtime отправляет vendor request без секрета в `POST /api/v1/agent-runtime/provider/chat`. Core проверяет активный run и lease, разрешение на внешнюю передачу данных, provider rate limit и бюджет, подставляет выбранные на сервере model/max output и только затем открывает upstream SSE. Provider credential никогда не возвращается runtime API.
+
+Core наблюдает usage в SSE и записывает каждую фактически начатую provider-операцию независимо от финального состояния run. Для моделей из встроенной pricing-таблицы стоимость вычисляется по токенам; неизвестные OpenAI-compatible модели получают явно помеченную оценочную стоимость до появления настроенного тарифа.
+
 ## Compatibility
 
 - Новые optional поля добавляются без смены версии.

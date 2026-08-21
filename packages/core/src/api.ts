@@ -85,7 +85,6 @@ import type {
   UpdateAgentRuntimeCheckpointRequest,
   AgentProviderCredentialView,
   UpdateAgentProviderCredentialRequest,
-  AgentRuntimeProviderCredential,
   AgentMcpServer,
   CreateAgentMcpServerRequest,
   UpdateAgentMcpServerRequest,
@@ -94,6 +93,7 @@ import type {
   StartAgentMcpToolCallRequest,
   FinishAgentMcpToolCallRequest,
   AgentProviderCall,
+  AgentProviderProxyRequest,
   StartAgentProviderCallRequest,
   FinishAgentProviderCallRequest,
 } from "./types";
@@ -386,9 +386,6 @@ export class MessengerAPI {
       { method: "PUT", body: JSON.stringify(input) },
     );
   }
-  agentRuntimeProviderCredential(): Promise<AgentRuntimeProviderCredential> {
-    return this.request("/api/v1/agent-runtime/provider-credential");
-  }
   agentMcpServers(id: string): Promise<AgentMcpServer[]> {
     return this.request(`/api/v1/agents/${encodeURIComponent(id)}/mcp-servers`);
   }
@@ -453,6 +450,38 @@ export class MessengerAPI {
       `/api/v1/agent-runtime/provider-calls/${encodeURIComponent(callID)}/finish`,
       { method: "POST", body: JSON.stringify(input) },
     );
+  }
+  async agentRuntimeProviderChat(
+    input: AgentProviderProxyRequest,
+    signal: AbortSignal,
+  ): Promise<Response> {
+    const headers = new Headers({ "Content-Type": "application/json" });
+    if (this.accessToken)
+      headers.set("Authorization", `Bearer ${this.accessToken}`);
+    const response = await fetch(
+      `${this.apiURL}/api/v1/agent-runtime/provider/chat`,
+      {
+        method: "POST",
+        headers,
+        credentials: "include",
+        body: JSON.stringify(input),
+        signal,
+      },
+    );
+    if (!response.ok) {
+      let payload: Partial<APIErrorPayload> = {};
+      try {
+        payload = (await response.json()) as APIErrorPayload;
+      } catch {
+        /* core returned a non-JSON gateway failure */
+      }
+      throw new APIError(
+        response.status,
+        payload.code ?? "request_failed",
+        payload.message ?? "Provider request failed.",
+      );
+    }
+    return response;
   }
   agentTriggers(id: string): Promise<AgentTrigger[]> {
     return this.request(`/api/v1/agents/${encodeURIComponent(id)}/triggers`);

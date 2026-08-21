@@ -2774,6 +2774,16 @@ type AgentProviderCredentialView struct {
 	UpdatedAt  *time.Time `json:"updated_at,omitempty"`
 }
 
+// AgentProviderProxyRequest defines model for AgentProviderProxyRequest.
+type AgentProviderProxyRequest struct {
+	CallId     openapi_types.UUID `json:"call_id"`
+	LeaseToken openapi_types.UUID `json:"lease_token"`
+
+	// Request Vendor request body without credentials; core overwrites model and streaming controls from the active run.
+	Request map[string]interface{} `json:"request"`
+	RunId   openapi_types.UUID     `json:"run_id"`
+}
+
 // AgentReadiness defines model for AgentReadiness.
 type AgentReadiness struct {
 	Blockers []AgentReadinessBlockers `json:"blockers"`
@@ -2851,11 +2861,6 @@ type AgentRuntimeMcpServer struct {
 	Name                     string             `json:"name"`
 	RequireWriteConfirmation bool               `json:"require_write_confirmation"`
 	TimeoutMs                int                `json:"timeout_ms"`
-}
-
-// AgentRuntimeProviderCredential defines model for AgentRuntimeProviderCredential.
-type AgentRuntimeProviderCredential struct {
-	ApiKey string `json:"api_key"`
 }
 
 // AgentScope defines model for AgentScope.
@@ -4514,6 +4519,9 @@ type StartAgentProviderCallJSONRequestBody = StartAgentProviderCallRequest
 
 // FinishAgentProviderCallJSONRequestBody defines body for FinishAgentProviderCall for application/json ContentType.
 type FinishAgentProviderCallJSONRequestBody = FinishAgentProviderCallRequest
+
+// ProxyAgentProviderChatJSONRequestBody defines body for ProxyAgentProviderChat for application/json ContentType.
+type ProxyAgentProviderChatJSONRequestBody = AgentProviderProxyRequest
 
 // ClaimAgentRuntimeRunJSONRequestBody defines body for ClaimAgentRuntimeRun for application/json ContentType.
 type ClaimAgentRuntimeRunJSONRequestBody = ClaimAgentRunRequest

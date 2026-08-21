@@ -28,6 +28,9 @@ export type ProviderUsage = {
 };
 
 export type ProviderRequest = {
+  callID: string;
+  runID: string;
+  leaseToken: string;
   model: string;
   messages: ChatMessage[];
   tools: ProviderTool[];

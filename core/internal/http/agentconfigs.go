@@ -31,17 +31,6 @@ func (h *identityHandlers) updateAgentProviderCredential(w standardhttp.Response
 	writeJSON(h.logger, w, standardhttp.StatusOK, result)
 }
 
-func (h *identityHandlers) agentRuntimeProviderCredential(w standardhttp.ResponseWriter, r *standardhttp.Request) {
-	auth := authFromContext(r.Context())
-	result, err := h.agentConfig.RuntimeCredential(r.Context(), auth.User, auth.Identity)
-	if err != nil {
-		h.writeAgentConfigError(w, r, err)
-		return
-	}
-	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(h.logger, w, standardhttp.StatusOK, result)
-}
-
 func (h *identityHandlers) listAgentMCPServers(w standardhttp.ResponseWriter, r *standardhttp.Request) {
 	result, err := h.agentConfig.ListMCPServers(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "agentID"))
 	if err != nil {

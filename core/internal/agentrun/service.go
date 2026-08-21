@@ -536,6 +536,17 @@ func (service *Service) UpdateRuntimeCheckpoint(ctx context.Context, current ide
 }
 
 func (service *Service) StartProviderCall(ctx context.Context, current identity.User, authentication access.Identity, input StartProviderCallInput) (ProviderCall, error) {
+	return service.startProviderCall(ctx, current, authentication, input, serverReservedProviderCost)
+}
+
+// StartProviderCallServer is reserved for the core-side provider gateway. The
+// reservation is derived by core from the selected model and request bounds,
+// never accepted from the runtime process.
+func (service *Service) StartProviderCallServer(ctx context.Context, current identity.User, authentication access.Identity, input StartProviderCallInput, reservedCost string) (ProviderCall, error) {
+	return service.startProviderCall(ctx, current, authentication, input, reservedCost)
+}
+
+func (service *Service) startProviderCall(ctx context.Context, current identity.User, authentication access.Identity, input StartProviderCallInput, reservedCost string) (ProviderCall, error) {
 	if !isAgentWorker(current, authentication) {
 		return ProviderCall{}, ErrForbidden
 	}
@@ -544,12 +555,10 @@ func (service *Service) StartProviderCall(ctx context.Context, current identity.
 		input.Currency = "USD"
 	}
 	if uuid.Validate(input.CallID) != nil || uuid.Validate(input.RunID) != nil || uuid.Validate(input.LeaseToken) != nil ||
-		!costPattern.MatchString(input.ReservedCost) || input.Currency != "USD" {
+		!costPattern.MatchString(reservedCost) || input.Currency != "USD" {
 		return ProviderCall{}, ErrInvalid
 	}
-	// The runtime cannot choose its own budget reservation. Until model pricing is
-	// known server-side, every provider request reserves a conservative fixed unit.
-	input.ReservedCost = serverReservedProviderCost
+	input.ReservedCost = reservedCost
 	tx, err := service.pool.Begin(ctx)
 	if err != nil {
 		return ProviderCall{}, err
@@ -560,7 +569,9 @@ func (service *Service) StartProviderCall(ctx context.Context, current identity.
 	}
 	var correlationID, provider, model string
 	err = tx.QueryRow(ctx, `SELECT run.correlation_id,run.provider,run.model FROM agent_runs run
-		WHERE run.org_id=$1 AND run.agent_id=$2 AND run.id=$3 AND run.lease_token=$4 AND run.status='running' FOR UPDATE`,
+		JOIN agents agent ON agent.org_id=run.org_id AND agent.actor_id=run.agent_id
+		WHERE run.org_id=$1 AND run.agent_id=$2 AND run.id=$3 AND run.lease_token=$4 AND run.status='running'
+		AND agent.external_data_sharing_approved FOR UPDATE OF run`,
 		current.OrgID, current.ActorID, input.RunID, input.LeaseToken).Scan(&correlationID, &provider, &model)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ProviderCall{}, ErrConflict
@@ -571,9 +582,9 @@ func (service *Service) StartProviderCall(ctx context.Context, current identity.
 	var dailyAllowed, monthlyAllowed, providerRateAllowed bool
 	err = tx.QueryRow(ctx, `SELECT
 		(agent.daily_cost_limit IS NULL OR COALESCE((SELECT sum(usage.cost) FROM agent_usage usage WHERE usage.agent_id=agent.actor_id AND usage.created_at>=date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'),0)
-			 + COALESCE((SELECT sum(COALESCE(call.actual_cost,call.reserved_cost)) FROM agent_provider_calls call JOIN agent_runs pending ON pending.id=call.run_id WHERE call.agent_id=agent.actor_id AND call.created_at>=date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AND pending.status IN('queued','running')),0) + $2::numeric <= agent.daily_cost_limit),
+			 + COALESCE((SELECT sum(call.reserved_cost) FROM agent_provider_calls call WHERE call.agent_id=agent.actor_id AND call.created_at>=date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AND call.status='started'),0) + $2::numeric <= agent.daily_cost_limit),
 		(agent.monthly_cost_limit IS NULL OR COALESCE((SELECT sum(usage.cost) FROM agent_usage usage WHERE usage.agent_id=agent.actor_id AND usage.created_at>=date_trunc('month',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'),0)
-			 + COALESCE((SELECT sum(COALESCE(call.actual_cost,call.reserved_cost)) FROM agent_provider_calls call JOIN agent_runs pending ON pending.id=call.run_id WHERE call.agent_id=agent.actor_id AND call.created_at>=date_trunc('month',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AND pending.status IN('queued','running')),0) + $2::numeric <= agent.monthly_cost_limit)
+			 + COALESCE((SELECT sum(call.reserved_cost) FROM agent_provider_calls call WHERE call.agent_id=agent.actor_id AND call.created_at>=date_trunc('month',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AND call.status='started'),0) + $2::numeric <= agent.monthly_cost_limit)
 		,((SELECT count(*) FROM agent_provider_calls recent WHERE recent.agent_id=agent.actor_id AND recent.created_at>=now()-interval '1 minute') < agent.provider_rate_limit_per_minute)
 		FROM agents agent WHERE agent.actor_id=$1`, current.ActorID, input.ReservedCost).Scan(&dailyAllowed, &monthlyAllowed, &providerRateAllowed)
 	if err != nil {
@@ -598,6 +609,16 @@ func (service *Service) StartProviderCall(ctx context.Context, current identity.
 }
 
 func (service *Service) FinishProviderCall(ctx context.Context, current identity.User, authentication access.Identity, callID string, input FinishProviderCallInput) (ProviderCall, error) {
+	return service.finishProviderCall(ctx, current, authentication, callID, input, false)
+}
+
+// FinishProviderCallServer records usage observed by the core-side provider
+// gateway. Runtime-supplied token and cost values never reach this path.
+func (service *Service) FinishProviderCallServer(ctx context.Context, current identity.User, authentication access.Identity, callID string, input FinishProviderCallInput) (ProviderCall, error) {
+	return service.finishProviderCall(ctx, current, authentication, callID, input, true)
+}
+
+func (service *Service) finishProviderCall(ctx context.Context, current identity.User, authentication access.Identity, callID string, input FinishProviderCallInput, trustedUsage bool) (ProviderCall, error) {
 	if !isAgentWorker(current, authentication) {
 		return ProviderCall{}, ErrForbidden
 	}
@@ -613,17 +634,44 @@ func (service *Service) FinishProviderCall(ctx context.Context, current identity
 		input.InputTokens < 0 || input.OutputTokens < 0 || !validPriceSource(input.PriceSource) {
 		return ProviderCall{}, ErrInvalid
 	}
-	result, err := service.pool.Exec(ctx, `UPDATE agent_provider_calls call SET status=$6,
-		actual_cost=CASE WHEN $6='completed' THEN call.reserved_cost ELSE 0 END,currency='USD',
-		input_tokens=$7,output_tokens=$8,price_source=CASE WHEN $6='completed' THEN 'estimated' ELSE 'unknown' END,finished_at=now()
-		FROM agent_runs run WHERE call.org_id=$1 AND call.agent_id=$2 AND call.id=$3 AND call.run_id=$4 AND call.status='started'
-		AND run.id=call.run_id AND run.lease_token=$5 AND run.status='running' AND run.agent_id=$2 AND run.org_id=$1`,
-		current.OrgID, current.ActorID, callID, input.RunID, input.LeaseToken, input.Status, input.InputTokens, input.OutputTokens)
+	actualCost := input.ActualCost
+	priceSource := input.PriceSource
+	if !trustedUsage {
+		actualCost = "0"
+		priceSource = "unknown"
+	}
+	tx, err := service.pool.Begin(ctx)
 	if err != nil {
 		return ProviderCall{}, err
 	}
-	if result.RowsAffected() != 1 {
+	defer tx.Rollback(ctx)
+	var correlationID, provider, model string
+	err = tx.QueryRow(ctx, `UPDATE agent_provider_calls call SET status=$6,
+		actual_cost=CASE WHEN $11 THEN $9::numeric WHEN $6='completed' THEN call.reserved_cost ELSE 0 END,currency='USD',
+		input_tokens=$7,output_tokens=$8,price_source=CASE WHEN $11 THEN $10 WHEN $6='completed' THEN 'estimated' ELSE 'unknown' END,finished_at=now()
+		FROM agent_runs run WHERE call.org_id=$1 AND call.agent_id=$2 AND call.id=$3 AND call.run_id=$4 AND call.status='started'
+		AND run.id=call.run_id AND run.lease_token=$5 AND run.status='running' AND run.agent_id=$2 AND run.org_id=$1
+		RETURNING call.correlation_id,call.provider,call.model`,
+		current.OrgID, current.ActorID, callID, input.RunID, input.LeaseToken, input.Status, input.InputTokens, input.OutputTokens, actualCost, priceSource, trustedUsage).Scan(&correlationID, &provider, &model)
+	if errors.Is(err, pgx.ErrNoRows) {
 		return ProviderCall{}, ErrConflict
+	}
+	if err != nil {
+		return ProviderCall{}, err
+	}
+	if trustedUsage && (input.InputTokens > 0 || input.OutputTokens > 0 || actualCost != "0" && actualCost != "0.00000000") {
+		usageID, err := id.New()
+		if err != nil {
+			return ProviderCall{}, err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO agent_usage(id,org_id,agent_id,run_id,provider_call_id,correlation_id,provider,model,input_tokens,output_tokens,cost,currency,price_source)
+			VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'USD',$12) ON CONFLICT(provider_call_id) DO NOTHING`,
+			usageID, current.OrgID, current.ActorID, input.RunID, callID, correlationID, provider, model, input.InputTokens, input.OutputTokens, actualCost, priceSource); err != nil {
+			return ProviderCall{}, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return ProviderCall{}, err
 	}
 	return service.providerCall(ctx, current.OrgID, current.ActorID, callID)
 }
@@ -795,7 +843,9 @@ func (service *Service) Complete(ctx context.Context, runID, leaseToken string, 
 	}
 	if !canceled && provider != "" && model != "" {
 		if _, err := tx.Exec(ctx, `INSERT INTO agent_usage(id,org_id,agent_id,run_id,correlation_id,provider,model,
-			input_tokens,output_tokens,cost,currency,price_source) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+			input_tokens,output_tokens,cost,currency,price_source)
+			SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12
+			WHERE NOT EXISTS(SELECT 1 FROM agent_usage WHERE org_id=$2 AND run_id=$4)`,
 			usageID, orgID, agentID, runID, correlationID, provider, model, result.InputTokens, result.OutputTokens,
 			result.Cost, result.Currency, result.PriceSource); err != nil {
 			return Run{}, err

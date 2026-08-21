@@ -106,8 +106,6 @@ export type AgentProviderCredentialView =
   components["schemas"]["AgentProviderCredentialView"];
 export type UpdateAgentProviderCredentialRequest =
   components["schemas"]["UpdateAgentProviderCredentialRequest"];
-export type AgentRuntimeProviderCredential =
-  components["schemas"]["AgentRuntimeProviderCredential"];
 export type AgentMcpServer = components["schemas"]["AgentMcpServer"];
 export type CreateAgentMcpServerRequest =
   components["schemas"]["CreateAgentMcpServerRequest"];
@@ -121,6 +119,8 @@ export type StartAgentMcpToolCallRequest =
 export type FinishAgentMcpToolCallRequest =
   components["schemas"]["FinishAgentMcpToolCallRequest"];
 export type AgentProviderCall = components["schemas"]["AgentProviderCall"];
+export type AgentProviderProxyRequest =
+  components["schemas"]["AgentProviderProxyRequest"];
 export type StartAgentProviderCallRequest =
   components["schemas"]["StartAgentProviderCallRequest"];
 export type FinishAgentProviderCallRequest =

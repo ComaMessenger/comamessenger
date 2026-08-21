@@ -18,6 +18,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/agent"
 	"github.com/comamessenger/comamessenger/core/internal/agentauthz"
 	"github.com/comamessenger/comamessenger/core/internal/agentconfig"
+	"github.com/comamessenger/comamessenger/core/internal/agentprovider"
 	"github.com/comamessenger/comamessenger/core/internal/agentrun"
 	"github.com/comamessenger/comamessenger/core/internal/agenttool"
 	"github.com/comamessenger/comamessenger/core/internal/agenttrigger"
@@ -40,6 +41,7 @@ type Dependencies struct {
 	Identity              *identity.Service
 	Agents                *agent.Service
 	AgentConfig           *agentconfig.Service
+	AgentProvider         *agentprovider.Service
 	AgentTools            *agenttool.Executor
 	AgentRuns             *agentrun.Service
 	AgentTriggers         *agenttrigger.Service
@@ -64,6 +66,7 @@ type identityHandlers struct {
 	service               *identity.Service
 	agents                *agent.Service
 	agentConfig           *agentconfig.Service
+	agentProvider         *agentprovider.Service
 	agentTools            *agenttool.Executor
 	agentRuns             *agentrun.Service
 	agentTriggers         *agenttrigger.Service
@@ -100,7 +103,7 @@ type authenticated struct {
 
 func newIdentityHandlers(logger *slog.Logger, allowedOrigin string, dependencies Dependencies) *identityHandlers {
 	return &identityHandlers{
-		logger: logger, service: dependencies.Identity, agents: dependencies.Agents, agentConfig: dependencies.AgentConfig, agentTools: dependencies.AgentTools, agentRuns: dependencies.AgentRuns, agentTriggers: dependencies.AgentTriggers, chats: dependencies.Chats, messages: dependencies.Messages, userState: dependencies.UserState, push: dependencies.Push, workspace: dependencies.Workspace, files: dependencies.Files, search: dependencies.Search, realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
+		logger: logger, service: dependencies.Identity, agents: dependencies.Agents, agentConfig: dependencies.AgentConfig, agentProvider: dependencies.AgentProvider, agentTools: dependencies.AgentTools, agentRuns: dependencies.AgentRuns, agentTriggers: dependencies.AgentTriggers, chats: dependencies.Chats, messages: dependencies.Messages, userState: dependencies.UserState, push: dependencies.Push, workspace: dependencies.Workspace, files: dependencies.Files, search: dependencies.Search, realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
 		cookieSecure: dependencies.CookieSecure, refreshTTL: dependencies.RefreshTokenTTL,
 		bootstrapRate: newIPRateLimiter(5, 5), loginRate: newIPRateLimiter(10, 10),
 		refreshRate: newIPRateLimiter(30, 20), invitationRate: newIPRateLimiter(10, 10), websocketRate: newIPRateLimiter(60, 20), actorRate: newIPRateLimiter(1200, 200),
@@ -165,7 +168,6 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Post("/agents/{agentID}/mcp-servers", h.createAgentMCPServer)
 			protected.Patch("/agents/{agentID}/mcp-servers/{serverID}", h.updateAgentMCPServer)
 			protected.Delete("/agents/{agentID}/mcp-servers/{serverID}", h.deleteAgentMCPServer)
-			protected.Get("/agent-runtime/provider-credential", h.agentRuntimeProviderCredential)
 			protected.Get("/agent-runtime/mcp-servers", h.agentRuntimeMCPServers)
 		}
 		if h.agentTools != nil {
@@ -187,6 +189,9 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Post("/agent-runtime/provider-calls/{callID}/finish", h.finishAgentProviderCall)
 			protected.Post("/agent-runtime/mcp-tool-calls", h.startAgentMCPToolCall)
 			protected.Post("/agent-runtime/mcp-tool-calls/{callID}/finish", h.finishAgentMCPToolCall)
+		}
+		if h.agentProvider != nil {
+			protected.Post("/agent-runtime/provider/chat", h.proxyAgentProviderChat)
 		}
 		if h.agentTriggers != nil {
 			protected.Get("/agents/{agentID}/triggers", h.listAgentTriggers)
@@ -983,7 +988,7 @@ func requiredAgentScope(method, path string) (string, bool) {
 func runtimeAgentRoute(method string, parts []string) bool {
 	if method == standardhttp.MethodGet {
 		return (len(parts) == 2 && parts[0] == "checkpoints") ||
-			(len(parts) == 1 && (parts[0] == "provider-credential" || parts[0] == "mcp-servers"))
+			(len(parts) == 1 && parts[0] == "mcp-servers")
 	}
 	if method == standardhttp.MethodPut {
 		return len(parts) == 2 && parts[0] == "checkpoints"
@@ -993,6 +998,7 @@ func runtimeAgentRoute(method string, parts []string) bool {
 	}
 	return (len(parts) == 2 && parts[0] == "runs" && parts[1] == "claim") ||
 		(len(parts) == 3 && parts[0] == "runs" && (parts[2] == "heartbeat" || parts[2] == "complete" || parts[2] == "fail")) ||
+		(len(parts) == 2 && parts[0] == "provider" && parts[1] == "chat") ||
 		(len(parts) == 1 && (parts[0] == "provider-calls" || parts[0] == "mcp-tool-calls")) ||
 		(len(parts) == 3 && (parts[0] == "provider-calls" || parts[0] == "mcp-tool-calls") && parts[2] == "finish")
 }
