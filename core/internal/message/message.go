@@ -684,7 +684,7 @@ func insertEventData(ctx context.Context, tx pgx.Tx, user identity.User, chatID,
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)`, user.OrgID, seq, eventType, user.ActorID, chatID, subjectID, audienceActorID, string(payload)); err != nil {
 		return fmt.Errorf("insert durable event: %w", err)
 	}
-	if eventType == "message.created" {
+	if eventType == "message.created" || eventType == "reaction.added" {
 		if _, err := tx.Exec(ctx, `INSERT INTO notification_jobs (org_id, event_seq) VALUES ($1, $2) ON CONFLICT DO NOTHING`, user.OrgID, seq); err != nil {
 			return fmt.Errorf("enqueue notification job: %w", err)
 		}

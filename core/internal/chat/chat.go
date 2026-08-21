@@ -859,6 +859,11 @@ func appendDurableEvent(ctx context.Context, tx pgx.Tx, user identity.User, chat
 	if err != nil {
 		return 0, fmt.Errorf("append chat event: %w", err)
 	}
+	if chat != nil && (eventType == "member.joined" || eventType == "member.updated" || eventType == "member.removed") {
+		if _, err := tx.Exec(ctx, `INSERT INTO notification_jobs(org_id,event_seq) VALUES($1,$2) ON CONFLICT DO NOTHING`, user.OrgID, seq); err != nil {
+			return 0, fmt.Errorf("enqueue notification job: %w", err)
+		}
+	}
 	return seq, nil
 }
 func (s *Service) notify(orgID string, seq int64) {

@@ -653,40 +653,59 @@ func (w *Worker) materialize(ctx context.Context) error {
 	rows.Close()
 	for _, j := range jobs {
 		_, err = tx.Exec(ctx, `
+			WITH event AS (
+			  SELECT * FROM events WHERE org_id=$1 AND seq=$2
+			), recipients AS (
+			  SELECT cm.actor_id AS recipient_id,cm.notify_level,cm.muted_until,c.kind,m.mentioned_actor_ids,m.thread_root_id,'message'::text AS category
+			  FROM event e JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id
+			  JOIN chats c ON c.org_id=m.org_id AND c.id=m.chat_id
+			  JOIN chat_members cm ON cm.org_id=e.org_id AND cm.chat_id=e.chat_id
+			  WHERE e.type='message.created' AND cm.actor_id<>e.actor_id
+			  UNION ALL
+			  SELECT m.actor_id,'default',NULL,c.kind,'{}'::uuid[],NULL::uuid,'reaction'
+			  FROM event e JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id
+			  JOIN chats c ON c.org_id=m.org_id AND c.id=m.chat_id
+			  WHERE e.type='reaction.added' AND m.actor_id<>e.actor_id
+			  UNION ALL
+			  SELECT (e.data->>'actor_id')::uuid,'default',NULL,c.kind,'{}'::uuid[],NULL::uuid,
+			    CASE WHEN e.type='member.joined' THEN 'invite' ELSE 'system' END
+			  FROM event e JOIN chats c ON c.org_id=e.org_id AND c.id=e.chat_id
+			  WHERE e.type IN ('member.joined','member.updated','member.removed')
+			    AND e.data ? 'actor_id' AND (e.data->>'actor_id')::uuid<>e.actor_id
+			)
 			INSERT INTO notification_deliveries(org_id,event_seq,subscription_id)
 			SELECT e.org_id,e.seq,s.id
-			FROM events e
-			JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id
-			JOIN chats c ON c.org_id=m.org_id AND c.id=m.chat_id
-			JOIN chat_members cm ON cm.org_id=e.org_id AND cm.chat_id=e.chat_id
-			JOIN web_push_subscriptions s ON s.org_id=cm.org_id AND s.actor_id=cm.actor_id
-			JOIN users u ON u.org_id=cm.org_id AND u.actor_id=cm.actor_id
-			JOIN actors recipient ON recipient.org_id=cm.org_id AND recipient.id=cm.actor_id
-			WHERE e.org_id=$1 AND e.seq=$2 AND e.type='message.created'
-			  AND cm.actor_id<>e.actor_id
-			  AND (cm.muted_until IS NULL OR cm.muted_until<=e.occurred_at)
+			FROM event e JOIN recipients r ON true
+			JOIN web_push_subscriptions s ON s.org_id=e.org_id AND s.actor_id=r.recipient_id
+			JOIN users u ON u.org_id=e.org_id AND u.actor_id=r.recipient_id
+			JOIN actors recipient ON recipient.org_id=e.org_id AND recipient.id=r.recipient_id
+			WHERE (r.muted_until IS NULL OR r.muted_until<=e.occurred_at)
 			  AND COALESCE((u.preferences->>'push_enabled')::boolean,true)
 			  AND NOT EXISTS (
 			    SELECT 1 FROM notification_snoozes ns
-			    WHERE ns.org_id=cm.org_id AND ns.actor_id=cm.actor_id
+			    WHERE ns.org_id=e.org_id AND ns.actor_id=r.recipient_id
 			      AND e.occurred_at>=ns.starts_at AND e.occurred_at<ns.ends_at
 			  )
-			  AND CASE cm.notify_level
+			  AND CASE r.category
+			    WHEN 'reaction' THEN COALESCE((u.preferences->>'notify_reactions')::boolean,true)
+			    WHEN 'invite' THEN COALESCE((u.preferences->>'notify_invites')::boolean,true)
+			    WHEN 'system' THEN COALESCE((u.preferences->>'notify_system')::boolean,true)
+			    ELSE CASE r.notify_level
+			      WHEN 'all' THEN true
+			      WHEN 'mentions' THEN r.recipient_id=ANY(r.mentioned_actor_ids)
+			      WHEN 'none' THEN false
+			      ELSE CASE COALESCE(u.preferences->>'notify_messages','all')
 			        WHEN 'all' THEN true
-			        WHEN 'mentions' THEN cm.actor_id=ANY(m.mentioned_actor_ids)
-			        WHEN 'none' THEN false
-			        ELSE
-			          CASE COALESCE(u.preferences->>'notify_messages','all')
-			            WHEN 'all' THEN true
-			            WHEN 'direct_and_mentions' THEN c.kind='direct' OR cm.actor_id=ANY(m.mentioned_actor_ids)
-			            ELSE false
-			          END
-			          AND (m.thread_root_id IS NULL OR CASE COALESCE(u.preferences->>'notify_threads','all')
-			            WHEN 'all' THEN true
-			            WHEN 'mentions' THEN cm.actor_id=ANY(m.mentioned_actor_ids)
-			            ELSE false
-			          END)
+			        WHEN 'direct_and_mentions' THEN r.kind='direct' OR r.recipient_id=ANY(r.mentioned_actor_ids)
+			        ELSE false
 			      END
+			      AND (r.thread_root_id IS NULL OR CASE COALESCE(u.preferences->>'notify_threads','all')
+			        WHEN 'all' THEN true
+			        WHEN 'mentions' THEN r.recipient_id=ANY(r.mentioned_actor_ids)
+			        ELSE false
+			      END)
+			    END
+			  END
 			  AND (
 			    u.preferences->'schedule' IS NULL OR jsonb_typeof(u.preferences->'schedule')='null' OR (
 			      CASE
@@ -731,20 +750,21 @@ func (w *Worker) deliver(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	rows, err := w.pool.Query(ctx, `SELECT d.org_id,d.event_seq,d.subscription_id,s.actor_id,s.endpoint,s.p256dh,s.auth,e.chat_id,m.thread_root_id,m.body,c.name,a.display_name,COALESCE((u.preferences->>'push_preview')::boolean,false),COALESCE(u.preferences->>'locale','ru') FROM notification_deliveries d JOIN web_push_subscriptions s ON s.id=d.subscription_id JOIN events e ON e.org_id=d.org_id AND e.seq=d.event_seq JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id JOIN chats c ON c.org_id=m.org_id AND c.id=m.chat_id JOIN actors a ON a.org_id=m.org_id AND a.id=m.actor_id JOIN users u ON u.org_id=s.org_id AND u.actor_id=s.actor_id WHERE d.lease_token=$1 ORDER BY d.event_seq`, leaseToken)
+	rows, err := w.pool.Query(ctx, `SELECT d.org_id,d.event_seq,d.subscription_id,s.actor_id,s.endpoint,s.p256dh,s.auth,e.type,e.data,e.chat_id,m.thread_root_id,m.body,c.name,a.display_name,COALESCE((u.preferences->>'push_preview')::boolean,false),COALESCE(u.preferences->>'locale','ru') FROM notification_deliveries d JOIN web_push_subscriptions s ON s.id=d.subscription_id JOIN events e ON e.org_id=d.org_id AND e.seq=d.event_seq LEFT JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id LEFT JOIN chats c ON c.org_id=e.org_id AND c.id=e.chat_id JOIN actors a ON a.org_id=e.org_id AND a.id=e.actor_id JOIN users u ON u.org_id=s.org_id AND u.actor_id=s.actor_id WHERE d.lease_token=$1 ORDER BY d.event_seq`, leaseToken)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var org, subID, actor, endpoint, p256dh, auth, chatID, body, author, locale string
+		var org, subID, actor, endpoint, p256dh, auth, eventType, author, locale string
 		var seq int64
-		var threadID, name *string
+		var chatID, threadID, body, name *string
+		var eventData []byte
 		var preview bool
-		if err := rows.Scan(&org, &seq, &subID, &actor, &endpoint, &p256dh, &auth, &chatID, &threadID, &body, &name, &author, &preview, &locale); err != nil {
+		if err := rows.Scan(&org, &seq, &subID, &actor, &endpoint, &p256dh, &auth, &eventType, &eventData, &chatID, &threadID, &body, &name, &author, &preview, &locale); err != nil {
 			return err
 		}
-		if w.active != nil && w.active(org, actor, chatID) {
+		if chatID != nil && w.active != nil && w.active(org, actor, *chatID) {
 			_, _ = w.pool.Exec(ctx, `UPDATE notification_deliveries SET sent_at=now(),last_error='suppressed_active',lease_token=NULL,lease_until=NULL WHERE org_id=$1 AND event_seq=$2 AND subscription_id=$3 AND lease_token=$4`, org, seq, subID, leaseToken)
 			continue
 		}
@@ -756,12 +776,18 @@ func (w *Worker) deliver(ctx context.Context) error {
 		if locale == "en" {
 			genericBody = "New message"
 		}
-		payload := map[string]any{"title": title, "body": genericBody, "chat_id": chatID, "url": "/chat/" + chatID}
-		if preview {
-			payload["body"] = truncate(body, 180)
+		payload := map[string]any{"title": title, "body": genericBody}
+		if chatID != nil {
+			payload["chat_id"] = *chatID
+			payload["url"] = "/chat/" + *chatID
 		}
-		if threadID != nil {
-			payload["url"] = "/chat/" + chatID + "/thread/" + *threadID
+		if eventType == "message.created" && preview && body != nil {
+			payload["body"] = truncate(*body, 180)
+		} else if eventType != "message.created" {
+			payload["body"] = categoryBody(eventType, eventData, author, locale)
+		}
+		if threadID != nil && chatID != nil {
+			payload["url"] = "/chat/" + *chatID + "/thread/" + *threadID
 		}
 		encoded, _ := json.Marshal(payload)
 		response, sendErr := webpush.SendNotificationWithContext(ctx, encoded, &webpush.Subscription{Endpoint: endpoint, Keys: webpush.Keys{P256dh: p256dh, Auth: auth}}, &webpush.Options{Subscriber: w.config.VAPIDSubject, VAPIDPublicKey: w.config.VAPIDPublicKey, VAPIDPrivateKey: w.config.VAPIDPrivateKey, TTL: 120})
@@ -784,6 +810,32 @@ func (w *Worker) deliver(ctx context.Context) error {
 		_, _ = w.pool.Exec(ctx, `UPDATE notification_deliveries SET attempts=attempts+1,last_error=$4,available_at=now()+LEAST(interval '1 hour',interval '5 seconds'*power(2,LEAST(attempts,8))),lease_token=NULL,lease_until=NULL WHERE org_id=$1 AND event_seq=$2 AND subscription_id=$3 AND lease_token=$5`, org, seq, subID, message, leaseToken)
 	}
 	return rows.Err()
+}
+func categoryBody(eventType string, raw []byte, author, locale string) string {
+	data := map[string]any{}
+	_ = json.Unmarshal(raw, &data)
+	if locale == "en" {
+		switch eventType {
+		case "reaction.added":
+			return fmt.Sprintf("%s reacted %v to your message", author, data["emoji"])
+		case "member.joined":
+			return fmt.Sprintf("%s added you to the chat", author)
+		case "member.updated":
+			return fmt.Sprintf("%s changed your chat role to %v", author, data["role"])
+		default:
+			return fmt.Sprintf("%s removed you from the chat", author)
+		}
+	}
+	switch eventType {
+	case "reaction.added":
+		return fmt.Sprintf("%s отреагировал(а) %v на ваше сообщение", author, data["emoji"])
+	case "member.joined":
+		return fmt.Sprintf("%s добавил(а) вас в чат", author)
+	case "member.updated":
+		return fmt.Sprintf("%s изменил(а) вашу роль в чате на %v", author, data["role"])
+	default:
+		return fmt.Sprintf("%s удалил(а) вас из чата", author)
+	}
 }
 func truncate(value string, max int) string {
 	runes := []rune(value)

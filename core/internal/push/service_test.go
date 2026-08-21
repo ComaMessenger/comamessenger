@@ -25,6 +25,16 @@ func TestTruncateUsesRunes(t *testing.T) {
 	}
 }
 
+func TestCategoryBodyIsLocalized(t *testing.T) {
+	data := []byte(`{"emoji":"🔥","role":"admin"}`)
+	if got := categoryBody("reaction.added", data, "Ada", "en"); got != "Ada reacted 🔥 to your message" {
+		t.Fatalf("reaction body = %q", got)
+	}
+	if got := categoryBody("member.updated", data, "Ада", "ru"); got != "Ада изменил(а) вашу роль в чате на admin" {
+		t.Fatalf("member body = %q", got)
+	}
+}
+
 func TestPushTestRequiresVAPIDConfiguration(t *testing.T) {
 	_, err := NewService(nil, config.PushConfig{}).Test(context.Background(), identity.User{})
 	if !errors.Is(err, ErrUnavailable) {
@@ -232,4 +242,55 @@ func TestMaterializeAppliesGlobalRulesSnoozeAndSchedule(t *testing.T) {
 			t.Fatalf("out-of-schedule deliveries = %d", got)
 		}
 	})
+	materializeCategory := func(t *testing.T, eventType string, enabled bool) int {
+		t.Helper()
+		preference := "notify_system"
+		if eventType == "reaction.added" {
+			preference = "notify_reactions"
+		} else if eventType == "member.joined" {
+			preference = "notify_invites"
+		}
+		encoded, _ := json.Marshal(map[string]any{"push_enabled": true, preference: enabled})
+		if _, err := pool.Exec(ctx, `UPDATE users SET preferences=$2 WHERE actor_id=$1`, recipientID, encoded); err != nil {
+			t.Fatal(err)
+		}
+		var seq int64
+		if err := pool.QueryRow(ctx, `UPDATE organizations SET event_seq=event_seq+1 WHERE id=$1 RETURNING event_seq`, orgID).Scan(&seq); err != nil {
+			t.Fatal(err)
+		}
+		subjectID := chatID
+		data := map[string]any{"actor_id": recipientID, "role": "admin"}
+		if eventType == "reaction.added" {
+			subjectID = uuid.NewString()
+			if _, err := pool.Exec(ctx, `INSERT INTO messages(id,org_id,chat_id,actor_id,client_msg_id,create_fingerprint,body,body_format,created_seq,created_at) VALUES($1,$2,$3,$4,$5,decode(repeat('03',32),'hex'),'mine','plain',$6,$7)`, subjectID, orgID, chatID, recipientID, uuid.NewString(), seq, occurredAt); err != nil {
+				t.Fatal(err)
+			}
+			data = map[string]any{"emoji": "🔥"}
+		}
+		encodedData, _ := json.Marshal(data)
+		if _, err := pool.Exec(ctx, `INSERT INTO events(org_id,seq,type,actor_id,chat_id,subject_id,data,occurred_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, orgID, seq, eventType, senderID, chatID, subjectID, encodedData, occurredAt); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO notification_jobs(org_id,event_seq) VALUES($1,$2)`, orgID, seq); err != nil {
+			t.Fatal(err)
+		}
+		if err := worker.materialize(ctx); err != nil {
+			t.Fatal(err)
+		}
+		var count int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM notification_deliveries WHERE org_id=$1 AND event_seq=$2`, orgID, seq).Scan(&count); err != nil {
+			t.Fatal(err)
+		}
+		return count
+	}
+	for _, eventType := range []string{"reaction.added", "member.joined", "member.updated", "member.removed"} {
+		t.Run(eventType, func(t *testing.T) {
+			if got := materializeCategory(t, eventType, false); got != 0 {
+				t.Fatalf("disabled deliveries = %d", got)
+			}
+			if got := materializeCategory(t, eventType, true); got != 1 {
+				t.Fatalf("enabled deliveries = %d", got)
+			}
+		})
+	}
 }
