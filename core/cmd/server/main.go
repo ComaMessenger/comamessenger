@@ -154,7 +154,7 @@ func main() {
 	)
 	userStateService := userstate.NewService(pool, int(cfg.Messaging.MaxBodyBytes), afterCommit)
 	pushService := push.NewService(pool, cfg.Push)
-	pushWorker := push.NewWorker(logger, pool, cfg.Push, realtimeHub.ActorActiveIn)
+	pushWorker := push.NewWorker(logger, pool, cfg.Push, realtimeHub.ActorActiveIn, workspaceService)
 	go pushWorker.Run(realtimeCtx)
 	server := &http.Server{
 		Addr: cfg.HTTPAddr,

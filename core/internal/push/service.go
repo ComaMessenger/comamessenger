@@ -593,20 +593,31 @@ func (s *Service) ListChatOverrides(ctx context.Context, user identity.User) ([]
 }
 
 type ActiveCheck func(orgID, actorID, chatID string) bool
+type EmailSender interface {
+	EmailConfigured(context.Context, string) (bool, error)
+	SendEmail(context.Context, string, string, string, string) error
+}
 type Worker struct {
-	logger *slog.Logger
-	pool   *pgxpool.Pool
-	config config.PushConfig
-	active ActiveCheck
-	client *http.Client
+	logger      *slog.Logger
+	pool        *pgxpool.Pool
+	config      config.PushConfig
+	active      ActiveCheck
+	emailSender EmailSender
+	client      *http.Client
 }
 
-func NewWorker(logger *slog.Logger, pool *pgxpool.Pool, cfg config.PushConfig, active ActiveCheck) *Worker {
-	return &Worker{logger: logger, pool: pool, config: cfg, active: active, client: &http.Client{Timeout: 10 * time.Second}}
+func NewWorker(logger *slog.Logger, pool *pgxpool.Pool, cfg config.PushConfig, active ActiveCheck, emailSenders ...EmailSender) *Worker {
+	var emailSender EmailSender
+	if len(emailSenders) > 0 {
+		emailSender = emailSenders[0]
+	}
+	return &Worker{logger: logger, pool: pool, config: cfg, active: active, emailSender: emailSender, client: &http.Client{Timeout: 10 * time.Second}}
 }
 func (w *Worker) Run(ctx context.Context) {
 	if w.config.VAPIDPrivateKey == "" {
 		w.logger.Info("web push disabled; VAPID keys are not configured")
+	}
+	if w.config.VAPIDPrivateKey == "" && w.emailSender == nil {
 		return
 	}
 	ticker := time.NewTicker(w.config.PollInterval)
@@ -626,7 +637,15 @@ func (w *Worker) tick(ctx context.Context) error {
 	if err := w.materialize(ctx); err != nil {
 		return err
 	}
-	return w.deliver(ctx)
+	if w.config.VAPIDPrivateKey != "" {
+		if err := w.deliver(ctx); err != nil {
+			return err
+		}
+	}
+	if w.emailSender != nil {
+		return w.deliverDigests(ctx)
+	}
+	return nil
 }
 func (w *Worker) materialize(ctx context.Context) error {
 	tx, err := w.pool.Begin(ctx)
@@ -672,15 +691,12 @@ func (w *Worker) materialize(ctx context.Context) error {
 			  FROM event e JOIN chats c ON c.org_id=e.org_id AND c.id=e.chat_id
 			  WHERE e.type IN ('member.joined','member.updated','member.removed')
 			    AND e.data ? 'actor_id' AND (e.data->>'actor_id')::uuid<>e.actor_id
-			)
-			INSERT INTO notification_deliveries(org_id,event_seq,subscription_id)
-			SELECT e.org_id,e.seq,s.id
+			), eligible AS (
+			SELECT e.org_id,e.seq,e.occurred_at,r.*,u.preferences
 			FROM event e JOIN recipients r ON true
-			JOIN web_push_subscriptions s ON s.org_id=e.org_id AND s.actor_id=r.recipient_id
 			JOIN users u ON u.org_id=e.org_id AND u.actor_id=r.recipient_id
 			JOIN actors recipient ON recipient.org_id=e.org_id AND recipient.id=r.recipient_id
 			WHERE (r.muted_until IS NULL OR r.muted_until<=e.occurred_at)
-			  AND COALESCE((u.preferences->>'push_enabled')::boolean,true)
 			  AND NOT EXISTS (
 			    SELECT 1 FROM notification_snoozes ns
 			    WHERE ns.org_id=e.org_id AND ns.actor_id=r.recipient_id
@@ -726,6 +742,19 @@ func (w *Worker) materialize(ctx context.Context) error {
 			      )
 			    )
 			  )
+			), email_items AS (
+			  INSERT INTO email_digest_items(org_id,event_seq,actor_id,available_at)
+			  SELECT org_id,seq,recipient_id,occurred_at+interval '15 minutes'
+			  FROM eligible
+			  WHERE COALESCE((preferences->>'email_digest')::boolean,false)
+			  ON CONFLICT DO NOTHING
+			  RETURNING 1
+			)
+			INSERT INTO notification_deliveries(org_id,event_seq,subscription_id)
+			SELECT e.org_id,e.seq,s.id
+			FROM eligible e
+			JOIN web_push_subscriptions s ON s.org_id=e.org_id AND s.actor_id=e.recipient_id
+			WHERE COALESCE((e.preferences->>'push_enabled')::boolean,true)
 			ON CONFLICT DO NOTHING`, j.org, j.seq)
 		if err != nil {
 			return err
@@ -811,6 +840,124 @@ func (w *Worker) deliver(ctx context.Context) error {
 	}
 	return rows.Err()
 }
+
+type digestItem struct {
+	orgID, actorID, email, locale, eventType, author string
+	seq                                              int64
+	eventData                                        []byte
+	chatID, body, chatName                           *string
+	preview                                          bool
+}
+
+func (w *Worker) deliverDigests(ctx context.Context) error {
+	leaseToken, err := id.New()
+	if err != nil {
+		return err
+	}
+	_, err = w.pool.Exec(ctx, `WITH candidates AS (
+		SELECT org_id,event_seq,actor_id FROM email_digest_items
+		WHERE sent_at IS NULL AND available_at<=now() AND (lease_until IS NULL OR lease_until<now())
+		ORDER BY available_at,event_seq LIMIT 200 FOR UPDATE SKIP LOCKED
+	) UPDATE email_digest_items i SET lease_token=$1,lease_until=now()+interval '30 seconds'
+	FROM candidates c WHERE i.org_id=c.org_id AND i.event_seq=c.event_seq AND i.actor_id=c.actor_id`, leaseToken)
+	if err != nil {
+		return err
+	}
+	rows, err := w.pool.Query(ctx, `
+		SELECT i.org_id,i.event_seq,i.actor_id,u.email,COALESCE(u.preferences->>'locale','ru'),
+		       e.type,e.data,e.chat_id,m.body,c.name,a.display_name,
+		       COALESCE((u.preferences->>'push_preview')::boolean,false)
+		FROM email_digest_items i
+		JOIN users u ON u.org_id=i.org_id AND u.actor_id=i.actor_id
+		JOIN events e ON e.org_id=i.org_id AND e.seq=i.event_seq
+		JOIN actors a ON a.org_id=e.org_id AND a.id=e.actor_id
+		LEFT JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id
+		LEFT JOIN chats c ON c.org_id=e.org_id AND c.id=e.chat_id
+		WHERE i.lease_token=$1 ORDER BY i.org_id,i.actor_id,i.event_seq`, leaseToken)
+	if err != nil {
+		return err
+	}
+	items := []digestItem{}
+	for rows.Next() {
+		var item digestItem
+		if err := rows.Scan(&item.orgID, &item.seq, &item.actorID, &item.email, &item.locale, &item.eventType, &item.eventData, &item.chatID, &item.body, &item.chatName, &item.author, &item.preview); err != nil {
+			rows.Close()
+			return err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+
+	groups := map[string][]digestItem{}
+	for _, item := range items {
+		if item.chatID != nil && w.active != nil && w.active(item.orgID, item.actorID, *item.chatID) {
+			_, _ = w.pool.Exec(ctx, `UPDATE email_digest_items SET sent_at=now(),last_error='suppressed_active',lease_token=NULL,lease_until=NULL WHERE org_id=$1 AND event_seq=$2 AND actor_id=$3 AND lease_token=$4`, item.orgID, item.seq, item.actorID, leaseToken)
+			continue
+		}
+		groups[item.orgID+":"+item.actorID] = append(groups[item.orgID+":"+item.actorID], item)
+	}
+	for _, group := range groups {
+		configured, checkErr := w.emailSender.EmailConfigured(ctx, group[0].orgID)
+		if checkErr != nil {
+			w.retryDigest(ctx, leaseToken, group, checkErr)
+			continue
+		}
+		if !configured {
+			_, _ = w.pool.Exec(ctx, `UPDATE email_digest_items SET sent_at=now(),last_error='smtp_unavailable',lease_token=NULL,lease_until=NULL WHERE org_id=$1 AND actor_id=$2 AND lease_token=$3`, group[0].orgID, group[0].actorID, leaseToken)
+			continue
+		}
+		subject, body := digestMessage(group)
+		if sendErr := w.emailSender.SendEmail(ctx, group[0].orgID, group[0].email, subject, body); sendErr != nil {
+			w.retryDigest(ctx, leaseToken, group, sendErr)
+			continue
+		}
+		_, _ = w.pool.Exec(ctx, `UPDATE email_digest_items SET sent_at=now(),attempts=attempts+1,last_error=NULL,lease_token=NULL,lease_until=NULL WHERE org_id=$1 AND actor_id=$2 AND lease_token=$3`, group[0].orgID, group[0].actorID, leaseToken)
+	}
+	return nil
+}
+
+func (w *Worker) retryDigest(ctx context.Context, leaseToken string, group []digestItem, sendErr error) {
+	_, _ = w.pool.Exec(ctx, `UPDATE email_digest_items SET attempts=attempts+1,last_error=$4,available_at=now()+LEAST(interval '6 hours',interval '1 minute'*power(2,LEAST(attempts,8))),lease_token=NULL,lease_until=NULL WHERE org_id=$1 AND actor_id=$2 AND lease_token=$3`, group[0].orgID, group[0].actorID, leaseToken, sendErr.Error())
+}
+
+func digestMessage(items []digestItem) (string, string) {
+	english := items[0].locale == "en"
+	subject := fmt.Sprintf("ComaMessenger — %d notifications", len(items))
+	heading := "Notifications you missed:"
+	if !english {
+		subject = fmt.Sprintf("ComaMessenger — %d уведомлений", len(items))
+		heading = "Пропущенные уведомления:"
+	}
+	var body strings.Builder
+	body.WriteString(heading)
+	body.WriteString("\n\n")
+	for _, item := range items {
+		chatName := "Chat"
+		if !english {
+			chatName = "Чат"
+		}
+		if item.chatName != nil && *item.chatName != "" {
+			chatName = *item.chatName
+		}
+		description := categoryBody(item.eventType, item.eventData, item.author, item.locale)
+		if item.eventType == "message.created" {
+			description = "New message"
+			if !english {
+				description = "Новое сообщение"
+			}
+			if item.preview && item.body != nil {
+				description = truncate(*item.body, 180)
+			}
+		}
+		fmt.Fprintf(&body, "• %s · %s: %s\n", item.author, chatName, description)
+	}
+	return subject, strings.TrimSpace(body.String())
+}
+
 func categoryBody(eventType string, raw []byte, author, locale string) string {
 	data := map[string]any{}
 	_ = json.Unmarshal(raw, &data)

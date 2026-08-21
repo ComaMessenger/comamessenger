@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +16,22 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/testdb"
 	"github.com/google/uuid"
 )
+
+type recordingEmailSender struct {
+	recipient string
+	subject   string
+	body      string
+	err       error
+}
+
+func (s *recordingEmailSender) EmailConfigured(context.Context, string) (bool, error) {
+	return true, nil
+}
+
+func (s *recordingEmailSender) SendEmail(_ context.Context, _, recipient, subject, body string) error {
+	s.recipient, s.subject, s.body = recipient, subject, body
+	return s.err
+}
 
 func TestTruncateUsesRunes(t *testing.T) {
 	if got := truncate("Привет", 4); got != "Прив…" {
@@ -170,6 +187,7 @@ func TestMaterializeAppliesGlobalRulesSnoozeAndSchedule(t *testing.T) {
 	}
 	worker := NewWorker(slog.New(slog.NewTextHandler(io.Discard, nil)), pool, config.PushConfig{}, nil)
 	occurredAt := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC) // Monday.
+	var lastSeq int64
 	materialize := func(t *testing.T, preferences map[string]any, mentioned bool) int {
 		t.Helper()
 		encoded, err := json.Marshal(preferences)
@@ -191,6 +209,7 @@ func TestMaterializeAppliesGlobalRulesSnoozeAndSchedule(t *testing.T) {
 		if err = pool.QueryRow(ctx, `UPDATE organizations SET event_seq=event_seq+1 WHERE id=$1 RETURNING event_seq`, orgID).Scan(&seq); err != nil {
 			t.Fatal(err)
 		}
+		lastSeq = seq
 		messageID, clientID := uuid.NewString(), uuid.NewString()
 		mentions := []string{}
 		if mentioned {
@@ -293,4 +312,31 @@ func TestMaterializeAppliesGlobalRulesSnoozeAndSchedule(t *testing.T) {
 			}
 		})
 	}
+	t.Run("email digest is durable and batched without VAPID", func(t *testing.T) {
+		if got := materialize(t, map[string]any{"push_enabled": false, "email_digest": true, "push_preview": true}, true); got != 0 {
+			t.Fatalf("push deliveries = %d", got)
+		}
+		var availableAt time.Time
+		if err := pool.QueryRow(ctx, `SELECT available_at FROM email_digest_items WHERE org_id=$1 AND event_seq=$2 AND actor_id=$3`, orgID, lastSeq, recipientID).Scan(&availableAt); err != nil {
+			t.Fatal(err)
+		}
+		if !availableAt.Equal(occurredAt.Add(15 * time.Minute)) {
+			t.Fatalf("available_at = %s", availableAt)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE email_digest_items SET available_at=now() WHERE org_id=$1 AND event_seq=$2`, orgID, lastSeq); err != nil {
+			t.Fatal(err)
+		}
+		sender := &recordingEmailSender{}
+		worker.emailSender = sender
+		if err := worker.deliverDigests(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if sender.recipient != "recipient@example.test" || !strings.Contains(sender.subject, "1 уведомлений") || !strings.Contains(sender.body, "hello") {
+			t.Fatalf("email = recipient %q, subject %q, body %q", sender.recipient, sender.subject, sender.body)
+		}
+		var sentAt *time.Time
+		if err := pool.QueryRow(ctx, `SELECT sent_at FROM email_digest_items WHERE org_id=$1 AND event_seq=$2 AND actor_id=$3`, orgID, lastSeq, recipientID).Scan(&sentAt); err != nil || sentAt == nil {
+			t.Fatalf("sent_at = %v, error = %v", sentAt, err)
+		}
+	})
 }
