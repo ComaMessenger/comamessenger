@@ -25,6 +25,8 @@ func TestAgentModelKeyHashScopesVisibilityAndAudit(t *testing.T) {
 	pool := testdb.New(t)
 	seedAgentModel(t, pool)
 	service := NewService(pool)
+	var revokedRealtime []string
+	service.SetRevokeSession(func(keyID string) { revokedRealtime = append(revokedRealtime, keyID) })
 	owner := identity.User{ActorID: agentTestOwnerID, OrgID: agentTestOrgID, OrgRole: "owner"}
 	member := identity.User{ActorID: agentTestMemberID, OrgID: agentTestOrgID, OrgRole: "member"}
 
@@ -63,6 +65,25 @@ func TestAgentModelKeyHashScopesVisibilityAndAudit(t *testing.T) {
 	}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("over-scoped key error = %v", err)
 	}
+	keys, err := service.ListKeys(t.Context(), owner, created.ID)
+	if err != nil || len(keys) != 1 || keys[0].ID != key.ID {
+		t.Fatalf("listed keys = %+v, err=%v", keys, err)
+	}
+	authenticatedUser, authenticatedIdentity, err := service.AuthenticateKey(t.Context(), key.Secret)
+	if err != nil || authenticatedUser.ActorID != created.ID || authenticatedIdentity.AuthenticationKind != "api_key" || authenticatedIdentity.KeyID != key.ID {
+		t.Fatalf("authenticated agent = %+v identity=%+v err=%v", authenticatedUser, authenticatedIdentity, err)
+	}
+	narrowed := []Scope{ScopeSearchRead}
+	updated, err := service.Update(t.Context(), owner, created.ID, UpdateInput{AllowedScopes: &narrowed})
+	if err != nil || len(updated.AllowedScopes) != 1 || updated.AllowedScopes[0] != ScopeSearchRead {
+		t.Fatalf("updated agent = %+v, err=%v", updated, err)
+	}
+	if _, _, err := service.AuthenticateKey(t.Context(), key.Secret); !errors.Is(err, identity.ErrUnauthorized) {
+		t.Fatalf("over-scoped key remained usable: %v", err)
+	}
+	if len(revokedRealtime) != 1 || revokedRealtime[0] != key.ID {
+		t.Fatalf("realtime revocations = %v", revokedRealtime)
+	}
 	var storedHash []byte
 	if err := pool.QueryRow(t.Context(), `SELECT key_hash FROM agent_api_keys WHERE id=$1`, key.ID).Scan(&storedHash); err != nil {
 		t.Fatal(err)
@@ -78,8 +99,8 @@ func TestAgentModelKeyHashScopesVisibilityAndAudit(t *testing.T) {
 	if bytes.Contains(publicJSON, []byte(key.Secret)) || bytes.Contains(publicJSON, storedHash) {
 		t.Fatalf("key listing model leaked secret material: %s", publicJSON)
 	}
-	if err := service.RevokeKey(t.Context(), owner, created.ID, key.ID); err != nil {
-		t.Fatal(err)
+	if err := service.RevokeKey(t.Context(), owner, created.ID, key.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("automatically revoked key revoke error = %v", err)
 	}
 	var revoked bool
 	if err := pool.QueryRow(t.Context(), `SELECT revoked_at IS NOT NULL FROM agent_api_keys WHERE id=$1`, key.ID).Scan(&revoked); err != nil || !revoked {
@@ -98,7 +119,7 @@ func TestAgentModelKeyHashScopesVisibilityAndAudit(t *testing.T) {
 		auditActions = append(auditActions, action)
 	}
 	rows.Close()
-	if len(auditActions) != 3 || auditActions[0] != "agent.create" || auditActions[1] != "agent.key.create" || auditActions[2] != "agent.key.revoke" {
+	if len(auditActions) != 3 || auditActions[0] != "agent.create" || auditActions[1] != "agent.key.create" || auditActions[2] != "agent.update" {
 		t.Fatalf("agent audit actions = %v", auditActions)
 	}
 }

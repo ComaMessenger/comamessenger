@@ -19,11 +19,14 @@ const (
 var ErrInvalidToken = errors.New("invalid access token")
 
 type Identity struct {
-	ActorID   string
-	OrgID     string
-	SessionID string
-	Role      string
-	ExpiresAt time.Time
+	ActorID            string
+	OrgID              string
+	SessionID          string
+	Role               string
+	ExpiresAt          time.Time
+	AuthenticationKind string
+	KeyID              string
+	Scopes             []string
 }
 
 type Claims struct {
@@ -88,7 +91,7 @@ func (m *Manager) Parse(value string) (Identity, error) {
 	if err != nil || !token.Valid || claims.Subject == "" || claims.OrgID == "" || claims.SessionID == "" {
 		return Identity{}, ErrInvalidToken
 	}
-	return Identity{ActorID: claims.Subject, OrgID: claims.OrgID, SessionID: claims.SessionID, Role: claims.Role, ExpiresAt: claims.ExpiresAt.Time.UTC()}, nil
+	return Identity{ActorID: claims.Subject, OrgID: claims.OrgID, SessionID: claims.SessionID, Role: claims.Role, ExpiresAt: claims.ExpiresAt.Time.UTC(), AuthenticationKind: "session"}, nil
 }
 
 func NewRefreshToken() (plain string, hash [sha256.Size]byte, err error) {

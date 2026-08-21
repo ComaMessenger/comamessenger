@@ -131,6 +131,10 @@ func (s *Server) ServeHTTP(w standardhttp.ResponseWriter, r *standardhttp.Reques
 		_ = connection.Close(statusAuthenticationFailed, "authentication failed")
 		return
 	}
+	if accessIdentity.AuthenticationKind == "api_key" && !hasRealtimeScope(accessIdentity.Scopes) {
+		_ = connection.Close(statusAuthenticationFailed, "messages:read scope required")
+		return
+	}
 	if user.MustChangePassword {
 		s.writeInitialError(r.Context(), connection, "password_change_required", "Change your password before connecting to realtime.")
 		_ = connection.Close(statusAuthenticationFailed, "password change required")
@@ -207,6 +211,15 @@ func (s *Server) ServeHTTP(w standardhttp.ResponseWriter, r *standardhttp.Reques
 		"close_code", closeCode, "close_reason", closeReason, "error", closeCause,
 	)
 	_ = connection.Close(closeCode, closeReason)
+}
+
+func hasRealtimeScope(scopes []string) bool {
+	for _, scope := range scopes {
+		if scope == "messages:read" {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) validOrigin(origin string) bool {

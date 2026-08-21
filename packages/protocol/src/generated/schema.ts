@@ -1255,6 +1255,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAgents"];
+        put?: never;
+        post: operations["createAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{agent_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getAgent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateAgent"];
+        trace?: never;
+    };
+    "/api/v1/agents/{agent_id}/keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listAgentKeys"];
+        put?: never;
+        /** @description The plaintext secret is returned once and is never stored. */
+        post: operations["createAgentKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{agent_id}/keys/{key_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["revokeAgentKey"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1555,6 +1624,93 @@ export interface components {
             avatar_version: number;
             /** Format: date-time */
             created_at: string;
+        };
+        /** @enum {string} */
+        AgentScope: "chats:read" | "messages:read" | "messages:write" | "reactions:write" | "files:read" | "search:read" | "members:read" | "memory:read" | "memory:write";
+        Agent: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            org_id: string;
+            /** Format: uuid */
+            owner_actor_id: string;
+            display_name: string;
+            handle: string;
+            /** @enum {string} */
+            kind: "builtin" | "external";
+            description: string;
+            enabled: boolean;
+            allowed_scopes: components["schemas"]["AgentScope"][];
+            provider: string;
+            model: string;
+            endpoint_url?: string;
+            external_data_sharing_approved: boolean;
+            max_output_tokens: number;
+            max_tool_iterations: number;
+            max_chain_depth: number;
+            per_chat_concurrency: number;
+            rate_limit_per_minute: number;
+            chat_ids: string[];
+            /** Format: int64 */
+            avatar_version: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CreateAgentRequest: {
+            display_name: string;
+            handle: string;
+            /** @enum {string} */
+            kind: "builtin" | "external";
+            description?: string;
+            enabled: boolean;
+            allowed_scopes: components["schemas"]["AgentScope"][];
+            provider?: string;
+            model?: string;
+            endpoint_url?: string;
+            external_data_sharing_approved: boolean;
+            chat_ids: string[];
+        };
+        UpdateAgentRequest: {
+            display_name?: string;
+            handle?: string;
+            description?: string;
+            enabled?: boolean;
+            allowed_scopes?: components["schemas"]["AgentScope"][];
+            provider?: string;
+            model?: string;
+            endpoint_url?: string;
+            external_data_sharing_approved?: boolean;
+            chat_ids?: string[];
+        };
+        AgentApiKey: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            agent_id: string;
+            name: string;
+            prefix: string;
+            scopes: components["schemas"]["AgentScope"][];
+            rate_limit_per_minute: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            last_used_at?: string | null;
+            /** Format: date-time */
+            expires_at?: string | null;
+            /** Format: date-time */
+            revoked_at?: string | null;
+        };
+        CreatedAgentApiKey: components["schemas"]["AgentApiKey"] & {
+            secret: string;
+        };
+        CreateAgentKeyRequest: {
+            name: string;
+            scopes: components["schemas"]["AgentScope"][];
+            rate_limit_per_minute: number;
+            /** Format: date-time */
+            expires_at?: string | null;
         };
         AvatarUpdate: {
             /** Format: uuid */
@@ -2277,6 +2433,8 @@ export interface components {
         MessageId: string;
         UploadId: string;
         FileId: string;
+        AgentId: string;
+        AgentKeyId: string;
     };
     requestBodies: never;
     headers: never;
@@ -4838,6 +4996,183 @@ export interface operations {
                 };
             };
             422: components["responses"]["Error"];
+        };
+    };
+    listAgents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Agents visible to the current actor. Management-only fields are omitted for ordinary members. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"][];
+                };
+            };
+            401: components["responses"]["Error"];
+        };
+    };
+    createAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAgentRequest"];
+            };
+        };
+        responses: {
+            /** @description Agent created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"];
+                };
+            };
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    getAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Agent profile. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    updateAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAgentRequest"];
+            };
+        };
+        responses: {
+            /** @description Agent updated; keys outside the new scope allowlist are revoked atomically. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    listAgentKeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Agent keys without secret or hash material. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentApiKey"][];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    createAgentKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAgentKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description Agent key created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedAgentApiKey"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    revokeAgentKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+                key_id: components["parameters"]["AgentKeyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Agent key revoked immediately. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
 }

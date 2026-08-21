@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/comamessenger/comamessenger/core/internal/access"
+	"github.com/comamessenger/comamessenger/core/internal/agent"
 	"github.com/comamessenger/comamessenger/core/internal/api"
 	"github.com/comamessenger/comamessenger/core/internal/chat"
 	"github.com/comamessenger/comamessenger/core/internal/files"
@@ -32,6 +33,7 @@ const refreshCookieName = "comamessenger_refresh"
 
 type Dependencies struct {
 	Identity              *identity.Service
+	Agents                *agent.Service
 	Chats                 *chat.Service
 	Messages              *message.Service
 	UserState             *userstate.Service
@@ -51,6 +53,7 @@ type Dependencies struct {
 type identityHandlers struct {
 	logger                *slog.Logger
 	service               *identity.Service
+	agents                *agent.Service
 	chats                 *chat.Service
 	messages              *message.Service
 	userState             *userstate.Service
@@ -84,7 +87,7 @@ type authenticated struct {
 
 func newIdentityHandlers(logger *slog.Logger, allowedOrigin string, dependencies Dependencies) *identityHandlers {
 	return &identityHandlers{
-		logger: logger, service: dependencies.Identity, chats: dependencies.Chats, messages: dependencies.Messages, userState: dependencies.UserState, push: dependencies.Push, workspace: dependencies.Workspace, files: dependencies.Files, search: dependencies.Search, realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
+		logger: logger, service: dependencies.Identity, agents: dependencies.Agents, chats: dependencies.Chats, messages: dependencies.Messages, userState: dependencies.UserState, push: dependencies.Push, workspace: dependencies.Workspace, files: dependencies.Files, search: dependencies.Search, realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
 		cookieSecure: dependencies.CookieSecure, refreshTTL: dependencies.RefreshTokenTTL,
 		bootstrapRate: newIPRateLimiter(5, 5), loginRate: newIPRateLimiter(10, 10),
 		refreshRate: newIPRateLimiter(30, 20), invitationRate: newIPRateLimiter(10, 10), websocketRate: newIPRateLimiter(60, 20), actorRate: newIPRateLimiter(1200, 200),
@@ -129,6 +132,15 @@ func (h *identityHandlers) routes(router chi.Router) {
 		protected.Get("/invitations", h.listInvitations)
 		protected.Delete("/invitations/{invitationID}", h.revokeInvitation)
 		protected.Post("/invitations/{invitationID}/rotate", h.rotateInvitation)
+		if h.agents != nil {
+			protected.Get("/agents", h.listAgents)
+			protected.Post("/agents", h.createAgent)
+			protected.Get("/agents/{agentID}", h.getAgent)
+			protected.Patch("/agents/{agentID}", h.updateAgent)
+			protected.Get("/agents/{agentID}/keys", h.listAgentKeys)
+			protected.Post("/agents/{agentID}/keys", h.createAgentKey)
+			protected.Delete("/agents/{agentID}/keys/{keyID}", h.revokeAgentKey)
+		}
 		protected.With(h.actorRateLimit("ownership-transfer", h.ownershipRate)).Post("/organization/transfer-ownership", h.transferOwnership)
 		if h.workspace != nil {
 			protected.Get("/organization", h.workspaceSettings)
@@ -841,9 +853,73 @@ func (h *identityHandlers) authenticate(next standardhttp.Handler) standardhttp.
 			h.writeError(w, r, standardhttp.StatusUnauthorized, "unauthorized", "Authentication is required.")
 			return
 		}
+		if accessIdentity.AuthenticationKind == "api_key" {
+			required, allowed := requiredAgentScope(r.Method, r.URL.Path)
+			if !allowed || !containsString(accessIdentity.Scopes, required) {
+				h.writeError(w, r, standardhttp.StatusForbidden, "agent_scope_required", "The agent key does not allow this API operation.")
+				return
+			}
+		}
 		ctx := context.WithValue(r.Context(), authContextKey{}, authenticated{User: user, Identity: accessIdentity})
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func requiredAgentScope(method, path string) (string, bool) {
+	path = strings.TrimPrefix(path, "/api/v1")
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) == 0 {
+		return "", false
+	}
+	if method == standardhttp.MethodGet && parts[0] == "actors" {
+		return string(agent.ScopeMembersRead), true
+	}
+	if method == standardhttp.MethodGet && parts[0] == "search" {
+		return string(agent.ScopeSearchRead), true
+	}
+	if method == standardhttp.MethodGet && parts[0] == "files" && len(parts) >= 2 && parts[1] != "uploads" {
+		return string(agent.ScopeFilesRead), true
+	}
+	if parts[0] == "chats" {
+		if method == standardhttp.MethodPost && len(parts) == 3 && parts[2] == "messages" {
+			return string(agent.ScopeMessagesWrite), true
+		}
+		if method == standardhttp.MethodGet && len(parts) >= 3 && parts[2] == "messages" {
+			return string(agent.ScopeMessagesRead), true
+		}
+		if method == standardhttp.MethodGet && len(parts) >= 3 && parts[2] == "members" {
+			return string(agent.ScopeMembersRead), true
+		}
+		if method == standardhttp.MethodGet && len(parts) <= 2 {
+			return string(agent.ScopeChatsRead), true
+		}
+	}
+	if parts[0] == "threads" && method == standardhttp.MethodGet {
+		return string(agent.ScopeMessagesRead), true
+	}
+	if parts[0] == "messages" && len(parts) >= 2 {
+		if len(parts) >= 3 && parts[2] == "reactions" {
+			if method == standardhttp.MethodGet {
+				return string(agent.ScopeMessagesRead), true
+			}
+			if method == standardhttp.MethodPut || method == standardhttp.MethodDelete {
+				return string(agent.ScopeReactionsWrite), true
+			}
+		}
+		if method == standardhttp.MethodGet {
+			return string(agent.ScopeMessagesRead), true
+		}
+	}
+	return "", false
+}
+
+func containsString(values []string, wanted string) bool {
+	for _, value := range values {
+		if value == wanted {
+			return true
+		}
+	}
+	return false
 }
 
 func authFromContext(ctx context.Context) authenticated {

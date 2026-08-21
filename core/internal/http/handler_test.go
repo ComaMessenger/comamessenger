@@ -67,3 +67,29 @@ func TestCORSAllowsCredentialedWebRequests(t *testing.T) {
 		t.Fatal("credentialed CORS requests are not enabled")
 	}
 }
+
+func TestRequiredAgentScopeUsesClosedAllowlist(t *testing.T) {
+	tests := []struct {
+		method, path, scope string
+		allowed             bool
+	}{
+		{standardhttp.MethodGet, "/api/v1/chats", "chats:read", true},
+		{standardhttp.MethodGet, "/api/v1/chats/00000000-0000-7000-8000-000000000001/messages", "messages:read", true},
+		{standardhttp.MethodPost, "/api/v1/chats/00000000-0000-7000-8000-000000000001/messages", "messages:write", true},
+		{standardhttp.MethodPut, "/api/v1/messages/00000000-0000-7000-8000-000000000001/reactions/%F0%9F%91%8D", "reactions:write", true},
+		{standardhttp.MethodGet, "/api/v1/files/00000000-0000-7000-8000-000000000001/download", "files:read", true},
+		{standardhttp.MethodGet, "/api/v1/search", "search:read", true},
+		{standardhttp.MethodGet, "/api/v1/actors", "members:read", true},
+		{standardhttp.MethodGet, "/api/v1/me", "", false},
+		{standardhttp.MethodPost, "/api/v1/files/uploads", "", false},
+		{standardhttp.MethodGet, "/api/v1/agents", "", false},
+	}
+	for _, test := range tests {
+		t.Run(test.method+" "+test.path, func(t *testing.T) {
+			scope, allowed := requiredAgentScope(test.method, test.path)
+			if scope != test.scope || allowed != test.allowed {
+				t.Fatalf("scope=%q allowed=%v, want %q/%v", scope, allowed, test.scope, test.allowed)
+			}
+		})
+	}
+}

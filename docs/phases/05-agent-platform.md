@@ -42,10 +42,10 @@
 
 - [x] Создать `agents`, `api_keys`, `agent_usage`, `agent_memory`, `agent_runs`, `agent_triggers` либо согласованную нормализованную модель.
 - [x] Хранить API keys только как hash; показывать plaintext один раз при создании.
-- [ ] Пересекать actor permissions, API-key scopes и chat membership при каждом действии.
+- [x] Пересекать actor permissions, API-key scopes и chat membership при каждом действии.
 - [ ] Записывать tool calls, administrative changes и чувствительные агентские действия в audit log без сохранения provider secrets.
 - [ ] Зашифровать provider credentials envelope encryption/AES-GCM с master key из environment или внешнего secret store.
-- [ ] Реализовать rotation/revocation ключей без рестарта core.
+- [x] Реализовать rotation/revocation ключей без рестарта core.
 - [ ] Добавить rate limits по agent, key, provider и organization.
 
 ### Runtime и triggers

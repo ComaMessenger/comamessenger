@@ -50,6 +50,63 @@ func (e AddChatMemberRequestRole) Valid() bool {
 	}
 }
 
+// Defines values for AgentKind.
+const (
+	AgentKindBuiltin  AgentKind = "builtin"
+	AgentKindExternal AgentKind = "external"
+)
+
+// Valid indicates whether the value is a known member of the AgentKind enum.
+func (e AgentKind) Valid() bool {
+	switch e {
+	case AgentKindBuiltin:
+		return true
+	case AgentKindExternal:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentScope.
+const (
+	ChatsRead      AgentScope = "chats:read"
+	FilesRead      AgentScope = "files:read"
+	MembersRead    AgentScope = "members:read"
+	MemoryRead     AgentScope = "memory:read"
+	MemoryWrite    AgentScope = "memory:write"
+	MessagesRead   AgentScope = "messages:read"
+	MessagesWrite  AgentScope = "messages:write"
+	ReactionsWrite AgentScope = "reactions:write"
+	SearchRead     AgentScope = "search:read"
+)
+
+// Valid indicates whether the value is a known member of the AgentScope enum.
+func (e AgentScope) Valid() bool {
+	switch e {
+	case ChatsRead:
+		return true
+	case FilesRead:
+		return true
+	case MembersRead:
+		return true
+	case MemoryRead:
+		return true
+	case MemoryWrite:
+		return true
+	case MessagesRead:
+		return true
+	case MessagesWrite:
+		return true
+	case ReactionsWrite:
+		return true
+	case SearchRead:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AuditEntryActorRole.
 const (
 	AuditEntryActorRoleAdmin       AuditEntryActorRole = "admin"
@@ -491,6 +548,24 @@ func (e ConnectionTestRequestKind) Valid() bool {
 	case S3:
 		return true
 	case Smtp:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CreateAgentRequestKind.
+const (
+	CreateAgentRequestKindBuiltin  CreateAgentRequestKind = "builtin"
+	CreateAgentRequestKindExternal CreateAgentRequestKind = "external"
+)
+
+// Valid indicates whether the value is a known member of the CreateAgentRequestKind enum.
+func (e CreateAgentRequestKind) Valid() bool {
+	switch e {
+	case CreateAgentRequestKindBuiltin:
+		return true
+	case CreateAgentRequestKindExternal:
 		return true
 	default:
 		return false
@@ -1902,6 +1977,52 @@ type AddChatMemberRequest struct {
 // AddChatMemberRequestRole defines model for AddChatMemberRequest.Role.
 type AddChatMemberRequestRole string
 
+// Agent defines model for Agent.
+type Agent struct {
+	AllowedScopes               []AgentScope         `json:"allowed_scopes"`
+	AvatarVersion               int64                `json:"avatar_version"`
+	ChatIds                     []openapi_types.UUID `json:"chat_ids"`
+	CreatedAt                   time.Time            `json:"created_at"`
+	Description                 string               `json:"description"`
+	DisplayName                 string               `json:"display_name"`
+	Enabled                     bool                 `json:"enabled"`
+	EndpointUrl                 *string              `json:"endpoint_url,omitempty"`
+	ExternalDataSharingApproved bool                 `json:"external_data_sharing_approved"`
+	Handle                      string               `json:"handle"`
+	Id                          openapi_types.UUID   `json:"id"`
+	Kind                        AgentKind            `json:"kind"`
+	MaxChainDepth               int                  `json:"max_chain_depth"`
+	MaxOutputTokens             int                  `json:"max_output_tokens"`
+	MaxToolIterations           int                  `json:"max_tool_iterations"`
+	Model                       string               `json:"model"`
+	OrgId                       openapi_types.UUID   `json:"org_id"`
+	OwnerActorId                openapi_types.UUID   `json:"owner_actor_id"`
+	PerChatConcurrency          int                  `json:"per_chat_concurrency"`
+	Provider                    string               `json:"provider"`
+	RateLimitPerMinute          int                  `json:"rate_limit_per_minute"`
+	UpdatedAt                   time.Time            `json:"updated_at"`
+}
+
+// AgentKind defines model for Agent.Kind.
+type AgentKind string
+
+// AgentApiKey defines model for AgentApiKey.
+type AgentApiKey struct {
+	AgentId            openapi_types.UUID `json:"agent_id"`
+	CreatedAt          time.Time          `json:"created_at"`
+	ExpiresAt          *time.Time         `json:"expires_at,omitempty"`
+	Id                 openapi_types.UUID `json:"id"`
+	LastUsedAt         *time.Time         `json:"last_used_at,omitempty"`
+	Name               string             `json:"name"`
+	Prefix             string             `json:"prefix"`
+	RateLimitPerMinute int                `json:"rate_limit_per_minute"`
+	RevokedAt          *time.Time         `json:"revoked_at,omitempty"`
+	Scopes             []AgentScope       `json:"scopes"`
+}
+
+// AgentScope defines model for AgentScope.
+type AgentScope string
+
 // AuditEntry defines model for AuditEntry.
 type AuditEntry struct {
 	Action     string                 `json:"action"`
@@ -2096,6 +2217,32 @@ type ConnectionTestResult struct {
 	Ok        bool      `json:"ok"`
 }
 
+// CreateAgentKeyRequest defines model for CreateAgentKeyRequest.
+type CreateAgentKeyRequest struct {
+	ExpiresAt          *time.Time   `json:"expires_at,omitempty"`
+	Name               string       `json:"name"`
+	RateLimitPerMinute int          `json:"rate_limit_per_minute"`
+	Scopes             []AgentScope `json:"scopes"`
+}
+
+// CreateAgentRequest defines model for CreateAgentRequest.
+type CreateAgentRequest struct {
+	AllowedScopes               []AgentScope           `json:"allowed_scopes"`
+	ChatIds                     []openapi_types.UUID   `json:"chat_ids"`
+	Description                 *string                `json:"description,omitempty"`
+	DisplayName                 string                 `json:"display_name"`
+	Enabled                     bool                   `json:"enabled"`
+	EndpointUrl                 *string                `json:"endpoint_url,omitempty"`
+	ExternalDataSharingApproved bool                   `json:"external_data_sharing_approved"`
+	Handle                      string                 `json:"handle"`
+	Kind                        CreateAgentRequestKind `json:"kind"`
+	Model                       *string                `json:"model,omitempty"`
+	Provider                    *string                `json:"provider,omitempty"`
+}
+
+// CreateAgentRequestKind defines model for CreateAgentRequest.Kind.
+type CreateAgentRequestKind string
+
 // CreateChatRequest defines model for CreateChatRequest.
 type CreateChatRequest struct {
 	Kind       CreateChatRequestKind        `json:"kind"`
@@ -2141,6 +2288,21 @@ type CreateMessageRequest struct {
 
 // CreateMessageRequestBodyFormat defines model for CreateMessageRequest.BodyFormat.
 type CreateMessageRequestBodyFormat string
+
+// CreatedAgentApiKey defines model for CreatedAgentApiKey.
+type CreatedAgentApiKey struct {
+	AgentId            openapi_types.UUID `json:"agent_id"`
+	CreatedAt          time.Time          `json:"created_at"`
+	ExpiresAt          *time.Time         `json:"expires_at,omitempty"`
+	Id                 openapi_types.UUID `json:"id"`
+	LastUsedAt         *time.Time         `json:"last_used_at,omitempty"`
+	Name               string             `json:"name"`
+	Prefix             string             `json:"prefix"`
+	RateLimitPerMinute int                `json:"rate_limit_per_minute"`
+	RevokedAt          *time.Time         `json:"revoked_at,omitempty"`
+	Scopes             []AgentScope       `json:"scopes"`
+	Secret             string             `json:"secret"`
+}
 
 // CustomStatus defines model for CustomStatus.
 type CustomStatus struct {
@@ -2836,6 +2998,20 @@ type UnreadSnapshot struct {
 	Threads []ThreadUnread `json:"threads"`
 }
 
+// UpdateAgentRequest defines model for UpdateAgentRequest.
+type UpdateAgentRequest struct {
+	AllowedScopes               *[]AgentScope         `json:"allowed_scopes,omitempty"`
+	ChatIds                     *[]openapi_types.UUID `json:"chat_ids,omitempty"`
+	Description                 *string               `json:"description,omitempty"`
+	DisplayName                 *string               `json:"display_name,omitempty"`
+	Enabled                     *bool                 `json:"enabled,omitempty"`
+	EndpointUrl                 *string               `json:"endpoint_url,omitempty"`
+	ExternalDataSharingApproved *bool                 `json:"external_data_sharing_approved,omitempty"`
+	Handle                      *string               `json:"handle,omitempty"`
+	Model                       *string               `json:"model,omitempty"`
+	Provider                    *string               `json:"provider,omitempty"`
+}
+
 // UpdateChatMemberRequest defines model for UpdateChatMemberRequest.
 type UpdateChatMemberRequest struct {
 	Role UpdateChatMemberRequestRole `json:"role"`
@@ -3009,6 +3185,12 @@ type UserPreferencesTheme string
 // ActorId defines model for ActorId.
 type ActorId = openapi_types.UUID
 
+// AgentId defines model for AgentId.
+type AgentId = openapi_types.UUID
+
+// AgentKeyId defines model for AgentKeyId.
+type AgentKeyId = openapi_types.UUID
+
 // ChatId defines model for ChatId.
 type ChatId = openapi_types.UUID
 
@@ -3103,6 +3285,15 @@ type ListFollowedThreadsParams struct {
 	BeforeSeq *int64 `form:"before_seq,omitempty" json:"before_seq,omitempty"`
 	Limit     *int   `form:"limit,omitempty" json:"limit,omitempty"`
 }
+
+// CreateAgentJSONRequestBody defines body for CreateAgent for application/json ContentType.
+type CreateAgentJSONRequestBody = CreateAgentRequest
+
+// UpdateAgentJSONRequestBody defines body for UpdateAgent for application/json ContentType.
+type UpdateAgentJSONRequestBody = UpdateAgentRequest
+
+// CreateAgentKeyJSONRequestBody defines body for CreateAgentKey for application/json ContentType.
+type CreateAgentKeyJSONRequestBody = CreateAgentKeyRequest
 
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest

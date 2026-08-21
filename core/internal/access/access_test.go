@@ -2,6 +2,7 @@ package access
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -23,7 +24,8 @@ func TestIssueAndParse(t *testing.T) {
 	}
 	want.ExpiresAt = expiresAt
 	got, err := manager.Parse(token)
-	if err != nil || got != want {
+	want.AuthenticationKind = "session"
+	if err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("Parse() = %#v, %v; want %#v", got, err, want)
 	}
 }

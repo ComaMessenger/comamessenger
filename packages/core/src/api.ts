@@ -59,6 +59,12 @@ import type {
   UserPreferences,
   UpdatePreferencesRequest,
   AuditPage,
+  Agent,
+  AgentApiKey,
+  CreatedAgentApiKey,
+  CreateAgentRequest,
+  UpdateAgentRequest,
+  CreateAgentKeyRequest,
 } from "./types";
 
 type APIErrorPayload = components["schemas"]["Error"];
@@ -238,6 +244,42 @@ export class MessengerAPI {
     return this.request(
       `/api/v1/invitations/${encodeURIComponent(id)}/rotate`,
       { method: "POST" },
+    );
+  }
+  agents(): Promise<Agent[]> {
+    return this.request("/api/v1/agents");
+  }
+  createAgent(input: CreateAgentRequest): Promise<Agent> {
+    return this.request("/api/v1/agents", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+  agent(id: string): Promise<Agent> {
+    return this.request(`/api/v1/agents/${encodeURIComponent(id)}`);
+  }
+  updateAgent(id: string, input: UpdateAgentRequest): Promise<Agent> {
+    return this.request(`/api/v1/agents/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+  }
+  agentKeys(id: string): Promise<AgentApiKey[]> {
+    return this.request(`/api/v1/agents/${encodeURIComponent(id)}/keys`);
+  }
+  createAgentKey(
+    id: string,
+    input: CreateAgentKeyRequest,
+  ): Promise<CreatedAgentApiKey> {
+    return this.request(`/api/v1/agents/${encodeURIComponent(id)}/keys`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+  revokeAgentKey(id: string, keyID: string): Promise<void> {
+    return this.request(
+      `/api/v1/agents/${encodeURIComponent(id)}/keys/${encodeURIComponent(keyID)}`,
+      { method: "DELETE" },
     );
   }
   branding(): Promise<PublicBranding> {

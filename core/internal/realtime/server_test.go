@@ -60,6 +60,15 @@ func TestRealtimeLiveDeliveryAndResume(t *testing.T) {
 	}
 }
 
+func TestRealtimeAgentScope(t *testing.T) {
+	if !hasRealtimeScope([]string{"chats:read", "messages:read"}) {
+		t.Fatal("messages:read did not authorize realtime")
+	}
+	if hasRealtimeScope([]string{"messages:write"}) {
+		t.Fatal("write-only key authorized realtime")
+	}
+}
+
 func TestRealtimeEphemeralFramesDoNotEnterEventLog(t *testing.T) {
 	harness := newRealtimeHarness(t, realtimeTestConfig())
 	sender, _ := harness.connect(t, 0)

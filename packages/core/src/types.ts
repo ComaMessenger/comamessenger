@@ -65,6 +65,14 @@ export type ChangeEmailRequest = components["schemas"]["ChangeEmailRequest"];
 export type ConfirmEmailRequest = components["schemas"]["ConfirmEmailRequest"];
 export type EmailChangeResponse = components["schemas"]["EmailChangeResponse"];
 export type AuditPage = components["schemas"]["AuditPage"];
+export type Agent = components["schemas"]["Agent"];
+export type AgentScope = components["schemas"]["AgentScope"];
+export type AgentApiKey = components["schemas"]["AgentApiKey"];
+export type CreatedAgentApiKey = components["schemas"]["CreatedAgentApiKey"];
+export type CreateAgentRequest = components["schemas"]["CreateAgentRequest"];
+export type UpdateAgentRequest = components["schemas"]["UpdateAgentRequest"];
+export type CreateAgentKeyRequest =
+  components["schemas"]["CreateAgentKeyRequest"];
 export type Session = components["schemas"]["Session"];
 export type BootstrapRequest = components["schemas"]["BootstrapRequest"];
 export type LoginRequest = components["schemas"]["LoginRequest"];

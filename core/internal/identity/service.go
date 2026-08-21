@@ -24,21 +24,26 @@ var (
 )
 
 type Service struct {
-	repository    *Repository
-	hasher        *password.Hasher
-	tokens        *access.Manager
-	refreshTTL    time.Duration
-	invitationTTL time.Duration
-	publicAppURL  string
-	development   bool
-	dummyHash     string
-	now           func() time.Time
-	emailSender   EmailSender
-	afterCommit   func(string, int64)
+	repository          *Repository
+	hasher              *password.Hasher
+	tokens              *access.Manager
+	refreshTTL          time.Duration
+	invitationTTL       time.Duration
+	publicAppURL        string
+	development         bool
+	dummyHash           string
+	now                 func() time.Time
+	emailSender         EmailSender
+	afterCommit         func(string, int64)
+	bearerAuthenticator func(context.Context, string) (User, access.Identity, error)
 }
 
 func (s *Service) SetAfterCommit(callback func(string, int64)) {
 	s.afterCommit = callback
+}
+
+func (s *Service) SetBearerAuthenticator(authenticator func(context.Context, string) (User, access.Identity, error)) {
+	s.bearerAuthenticator = authenticator
 }
 
 type EmailSender interface {
@@ -154,6 +159,16 @@ func (s *Service) Refresh(ctx context.Context, oldRefresh string, device Device)
 }
 
 func (s *Service) Authenticate(ctx context.Context, bearer string) (User, access.Identity, error) {
+	if strings.HasPrefix(bearer, "coma_agent_") {
+		if s.bearerAuthenticator == nil {
+			return User{}, access.Identity{}, ErrUnauthorized
+		}
+		user, authenticated, err := s.bearerAuthenticator(ctx, bearer)
+		if err != nil {
+			return User{}, access.Identity{}, ErrUnauthorized
+		}
+		return user, authenticated, nil
+	}
 	identity, err := s.tokens.Parse(bearer)
 	if err != nil {
 		return User{}, access.Identity{}, ErrUnauthorized

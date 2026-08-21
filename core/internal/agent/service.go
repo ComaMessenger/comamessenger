@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/comamessenger/comamessenger/core/internal/access"
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/permission"
@@ -90,6 +91,19 @@ type CreateInput struct {
 	ChatIDs                     []string `json:"chat_ids"`
 }
 
+type UpdateInput struct {
+	DisplayName                 *string   `json:"display_name"`
+	Handle                      *string   `json:"handle"`
+	Description                 *string   `json:"description"`
+	Enabled                     *bool     `json:"enabled"`
+	AllowedScopes               *[]Scope  `json:"allowed_scopes"`
+	Provider                    *string   `json:"provider"`
+	Model                       *string   `json:"model"`
+	EndpointURL                 *string   `json:"endpoint_url"`
+	ExternalDataSharingApproved *bool     `json:"external_data_sharing_approved"`
+	ChatIDs                     *[]string `json:"chat_ids"`
+}
+
 type APIKey struct {
 	ID                 string     `json:"id"`
 	AgentID            string     `json:"agent_id"`
@@ -116,12 +130,17 @@ type CreateKeyInput struct {
 }
 
 type Service struct {
-	pool *pgxpool.Pool
-	now  func() time.Time
+	pool          *pgxpool.Pool
+	now           func() time.Time
+	revokeSession func(string)
 }
 
 func NewService(pool *pgxpool.Pool) *Service {
 	return &Service{pool: pool, now: time.Now}
+}
+
+func (service *Service) SetRevokeSession(callback func(string)) {
+	service.revokeSession = callback
 }
 
 func (service *Service) Create(ctx context.Context, current identity.User, input CreateInput) (Agent, error) {
@@ -226,9 +245,114 @@ func (service *Service) Get(ctx context.Context, current identity.User, agentID 
 	return result, nil
 }
 
+func (service *Service) Update(ctx context.Context, current identity.User, agentID string, input UpdateInput) (Agent, error) {
+	if !canManage(current) {
+		return Agent{}, ErrForbidden
+	}
+	if _, err := uuid.Parse(agentID); err != nil {
+		return Agent{}, ErrNotFound
+	}
+	if input.DisplayName == nil && input.Handle == nil && input.Description == nil && input.Enabled == nil && input.AllowedScopes == nil && input.Provider == nil && input.Model == nil && input.EndpointURL == nil && input.ExternalDataSharingApproved == nil && input.ChatIDs == nil {
+		return Agent{}, fmt.Errorf("%w: update must contain at least one field", ErrInvalid)
+	}
+	auditID, err := id.New()
+	if err != nil {
+		return Agent{}, err
+	}
+	tx, err := service.pool.Begin(ctx)
+	if err != nil {
+		return Agent{}, fmt.Errorf("begin agent update: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	lockedAgent, err := scanAgent(tx.QueryRow(ctx, agentSelect+` WHERE agent.org_id=$1 AND agent.actor_id=$2 FOR UPDATE OF agent,actor`, current.OrgID, agentID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Agent{}, ErrNotFound
+	} else if err != nil {
+		return Agent{}, fmt.Errorf("lock agent: %w", err)
+	}
+	prospective, err := mergeUpdate(lockedAgent, input)
+	if err != nil {
+		return Agent{}, err
+	}
+	if input.ChatIDs != nil && len(prospective.ChatIDs) > 0 {
+		var count int
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM chats WHERE org_id=$1 AND id=ANY($2::uuid[]) AND archived_at IS NULL`, current.OrgID, prospective.ChatIDs).Scan(&count); err != nil {
+			return Agent{}, fmt.Errorf("validate agent chats: %w", err)
+		}
+		if count != len(prospective.ChatIDs) {
+			return Agent{}, fmt.Errorf("%w: every chat must be active and belong to the organization", ErrInvalid)
+		}
+	}
+	if _, err := tx.Exec(ctx, `UPDATE actors SET display_name=$3,handle=$4 WHERE org_id=$1 AND id=$2`, current.OrgID, agentID, prospective.DisplayName, prospective.Handle); err != nil {
+		return Agent{}, mapWriteError("update agent actor", err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE agents SET description=$3,enabled=$4,allowed_scopes=$5,provider=$6,model=$7,endpoint_url=$8,external_data_sharing_approved=$9,updated_at=now() WHERE org_id=$1 AND actor_id=$2`, current.OrgID, agentID, prospective.Description, prospective.Enabled, scopeStrings(prospective.AllowedScopes), prospective.Provider, prospective.Model, prospective.EndpointURL, prospective.ExternalDataSharingApproved); err != nil {
+		return Agent{}, mapWriteError("update agent", err)
+	}
+	if input.ChatIDs != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM chat_members WHERE org_id=$1 AND actor_id=$2`, current.OrgID, agentID); err != nil {
+			return Agent{}, fmt.Errorf("replace agent memberships: %w", err)
+		}
+		if len(prospective.ChatIDs) > 0 {
+			if _, err := tx.Exec(ctx, `INSERT INTO chat_members(chat_id,actor_id,org_id,role) SELECT chat_id,$1,$2,'member' FROM unnest($3::uuid[]) selected(chat_id)`, agentID, current.OrgID, prospective.ChatIDs); err != nil {
+				return Agent{}, mapWriteError("replace agent memberships", err)
+			}
+		}
+	}
+	revokedKeyIDs := make([]string, 0)
+	revokedRows, err := tx.Query(ctx, `UPDATE agent_api_keys SET revoked_at=now() WHERE org_id=$1 AND agent_id=$2 AND revoked_at IS NULL AND NOT (scopes <@ $3::text[]) RETURNING id`, current.OrgID, agentID, scopeStrings(prospective.AllowedScopes))
+	if err != nil {
+		return Agent{}, fmt.Errorf("revoke over-scoped agent keys: %w", err)
+	}
+	for revokedRows.Next() {
+		var keyID string
+		if err := revokedRows.Scan(&keyID); err != nil {
+			revokedRows.Close()
+			return Agent{}, fmt.Errorf("scan revoked agent key: %w", err)
+		}
+		revokedKeyIDs = append(revokedKeyIDs, keyID)
+	}
+	if err := revokedRows.Err(); err != nil {
+		revokedRows.Close()
+		return Agent{}, fmt.Errorf("iterate revoked agent keys: %w", err)
+	}
+	revokedRows.Close()
+	if !prospective.Enabled {
+		rows, err := tx.Query(ctx, `SELECT id FROM agent_api_keys WHERE org_id=$1 AND agent_id=$2 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>now())`, current.OrgID, agentID)
+		if err != nil {
+			return Agent{}, fmt.Errorf("list disabled agent keys: %w", err)
+		}
+		for rows.Next() {
+			var keyID string
+			if err := rows.Scan(&keyID); err != nil {
+				rows.Close()
+				return Agent{}, fmt.Errorf("scan disabled agent key: %w", err)
+			}
+			revokedKeyIDs = append(revokedKeyIDs, keyID)
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return Agent{}, fmt.Errorf("iterate disabled agent keys: %w", err)
+		}
+		rows.Close()
+	}
+	metadata, _ := json.Marshal(map[string]any{"enabled": prospective.Enabled, "scopes": scopeStrings(prospective.AllowedScopes), "chat_ids": prospective.ChatIDs})
+	if _, err := tx.Exec(ctx, `INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,'agent.update','agent',$4,$5)`, auditID, current.OrgID, current.ActorID, agentID, metadata); err != nil {
+		return Agent{}, fmt.Errorf("audit agent update: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Agent{}, mapWriteError("commit agent update", err)
+	}
+	service.revokeRealtimeKeys(revokedKeyIDs)
+	return service.Get(ctx, current, agentID)
+}
+
 func (service *Service) CreateKey(ctx context.Context, current identity.User, agentID string, input CreateKeyInput) (CreatedAPIKey, error) {
 	if !canManage(current) {
 		return CreatedAPIKey{}, ErrForbidden
+	}
+	if _, err := uuid.Parse(agentID); err != nil {
+		return CreatedAPIKey{}, ErrNotFound
 	}
 	name := strings.TrimSpace(input.Name)
 	scopes, err := normalizeScopes(input.Scopes)
@@ -287,6 +411,12 @@ func (service *Service) RevokeKey(ctx context.Context, current identity.User, ag
 	if !canManage(current) {
 		return ErrForbidden
 	}
+	if _, err := uuid.Parse(agentID); err != nil {
+		return ErrNotFound
+	}
+	if _, err := uuid.Parse(keyID); err != nil {
+		return ErrNotFound
+	}
 	auditID, err := id.New()
 	if err != nil {
 		return err
@@ -307,7 +437,81 @@ func (service *Service) RevokeKey(ctx context.Context, current identity.User, ag
 	if _, err := tx.Exec(ctx, `INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,'agent.key.revoke','agent',$4,$5)`, auditID, current.OrgID, current.ActorID, agentID, metadata); err != nil {
 		return fmt.Errorf("audit agent key revocation: %w", err)
 	}
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit agent key revocation: %w", err)
+	}
+	service.revokeRealtimeKeys([]string{keyID})
+	return nil
+}
+
+func (service *Service) ListKeys(ctx context.Context, current identity.User, agentID string) ([]APIKey, error) {
+	if !canManage(current) {
+		return nil, ErrForbidden
+	}
+	if _, err := uuid.Parse(agentID); err != nil {
+		return nil, ErrNotFound
+	}
+	rows, err := service.pool.Query(ctx, `SELECT key.id,key.agent_id,key.name,key.key_prefix,key.scopes,key.rate_limit_per_minute,key.created_at,key.last_used_at,key.expires_at,key.revoked_at FROM agent_api_keys key JOIN agents agent ON agent.org_id=key.org_id AND agent.actor_id=key.agent_id WHERE key.org_id=$1 AND key.agent_id=$2 ORDER BY key.created_at DESC,key.id`, current.OrgID, agentID)
+	if err != nil {
+		return nil, fmt.Errorf("list agent keys: %w", err)
+	}
+	defer rows.Close()
+	result := make([]APIKey, 0)
+	for rows.Next() {
+		var key APIKey
+		var scopes []string
+		if err := rows.Scan(&key.ID, &key.AgentID, &key.Name, &key.Prefix, &scopes, &key.RateLimitPerMinute, &key.CreatedAt, &key.LastUsedAt, &key.ExpiresAt, &key.RevokedAt); err != nil {
+			return nil, fmt.Errorf("scan agent key: %w", err)
+		}
+		key.Scopes = make([]Scope, len(scopes))
+		for i, scope := range scopes {
+			key.Scopes[i] = Scope(scope)
+		}
+		result = append(result, key)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate agent keys: %w", err)
+	}
+	if len(result) == 0 {
+		var exists bool
+		if err := service.pool.QueryRow(ctx, `SELECT true FROM agents WHERE org_id=$1 AND actor_id=$2`, current.OrgID, agentID).Scan(&exists); errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		} else if err != nil {
+			return nil, fmt.Errorf("find agent: %w", err)
+		}
+	}
+	return result, nil
+}
+
+func (service *Service) AuthenticateKey(ctx context.Context, secret string) (identity.User, access.Identity, error) {
+	if !strings.HasPrefix(secret, "coma_agent_") || len(secret) > 256 {
+		return identity.User{}, access.Identity{}, identity.ErrUnauthorized
+	}
+	digest := sha256.Sum256([]byte(secret))
+	var user identity.User
+	var keyID string
+	var scopes []string
+	var expiresAt *time.Time
+	err := service.pool.QueryRow(ctx, `
+		SELECT actor.id,actor.org_id,organization.name,actor.display_name,actor.handle,actor.status,actor.created_at,actor.avatar_version,
+		       key.id,key.scopes,key.expires_at
+		FROM agent_api_keys key
+		JOIN agents agent ON agent.org_id=key.org_id AND agent.actor_id=key.agent_id
+		JOIN actors actor ON actor.org_id=agent.org_id AND actor.id=agent.actor_id
+		JOIN organizations organization ON organization.id=agent.org_id
+		WHERE key.key_hash=$1 AND key.revoked_at IS NULL AND (key.expires_at IS NULL OR key.expires_at>now())
+		  AND agent.enabled AND key.scopes <@ agent.allowed_scopes AND actor.status='active' AND actor.deleted_at IS NULL`, digest[:]).Scan(
+		&user.ActorID, &user.OrgID, &user.OrganizationName, &user.DisplayName, &user.Handle, &user.Status, &user.CreatedAt, &user.AvatarVersion, &keyID, &scopes, &expiresAt)
+	if err != nil {
+		return identity.User{}, access.Identity{}, identity.ErrUnauthorized
+	}
+	user.OrgRole = "member"
+	authExpiry := service.now().UTC().Add(24 * time.Hour)
+	if expiresAt != nil && expiresAt.Before(authExpiry) {
+		authExpiry = expiresAt.UTC()
+	}
+	_, _ = service.pool.Exec(ctx, `UPDATE agent_api_keys SET last_used_at=now() WHERE id=$1 AND (last_used_at IS NULL OR last_used_at<now()-interval '1 minute')`, keyID)
+	return user, access.Identity{ActorID: user.ActorID, OrgID: user.OrgID, SessionID: keyID, Role: "member", ExpiresAt: authExpiry, AuthenticationKind: "api_key", KeyID: keyID, Scopes: scopes}, nil
 }
 
 const agentSelect = `
@@ -373,6 +577,46 @@ func normalizeCreate(input CreateInput) (CreateInput, error) {
 	return input, nil
 }
 
+func mergeUpdate(existing Agent, input UpdateInput) (CreateInput, error) {
+	prospective := CreateInput{
+		DisplayName: existing.DisplayName, Handle: existing.Handle, Kind: existing.Kind,
+		Description: existing.Description, Enabled: existing.Enabled, AllowedScopes: existing.AllowedScopes,
+		Provider: existing.Provider, Model: existing.Model, EndpointURL: existing.EndpointURL,
+		ExternalDataSharingApproved: existing.ExternalDataSharingApproved, ChatIDs: existing.ChatIDs,
+	}
+	if input.DisplayName != nil {
+		prospective.DisplayName = *input.DisplayName
+	}
+	if input.Handle != nil {
+		prospective.Handle = *input.Handle
+	}
+	if input.Description != nil {
+		prospective.Description = *input.Description
+	}
+	if input.Enabled != nil {
+		prospective.Enabled = *input.Enabled
+	}
+	if input.AllowedScopes != nil {
+		prospective.AllowedScopes = *input.AllowedScopes
+	}
+	if input.Provider != nil {
+		prospective.Provider = *input.Provider
+	}
+	if input.Model != nil {
+		prospective.Model = *input.Model
+	}
+	if input.EndpointURL != nil {
+		prospective.EndpointURL = *input.EndpointURL
+	}
+	if input.ExternalDataSharingApproved != nil {
+		prospective.ExternalDataSharingApproved = *input.ExternalDataSharingApproved
+	}
+	if input.ChatIDs != nil {
+		prospective.ChatIDs = *input.ChatIDs
+	}
+	return normalizeCreate(prospective)
+}
+
 func normalizeScopes(input []Scope) ([]Scope, error) {
 	seen := make(map[Scope]struct{}, len(input))
 	result := make([]Scope, 0, len(input))
@@ -435,6 +679,20 @@ func scopeSubset(scopes []Scope, allowed []string) bool {
 
 func canManage(current identity.User) bool {
 	return permission.Allows(current.OrgRole, current.Permissions, permission.AgentsManage)
+}
+
+func (service *Service) revokeRealtimeKeys(keyIDs []string) {
+	if service.revokeSession == nil {
+		return
+	}
+	seen := make(map[string]struct{}, len(keyIDs))
+	for _, keyID := range keyIDs {
+		if _, exists := seen[keyID]; exists {
+			continue
+		}
+		seen[keyID] = struct{}{}
+		service.revokeSession(keyID)
+	}
 }
 
 func mapWriteError(operation string, err error) error {

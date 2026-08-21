@@ -19,6 +19,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/comamessenger/comamessenger/core/internal/access"
+	"github.com/comamessenger/comamessenger/core/internal/agent"
 	"github.com/comamessenger/comamessenger/core/internal/chat"
 	"github.com/comamessenger/comamessenger/core/internal/config"
 	"github.com/comamessenger/comamessenger/core/internal/eventlog"
@@ -59,6 +60,8 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	agentService := agent.NewService(pool)
+	identityService.SetBearerAuthenticator(agentService.AuthenticateKey)
 	eventStore := eventlog.NewStore(pool)
 	hub := realtime.NewHub(10)
 	realtimeConfig := e2eRealtimeConfig()
@@ -80,6 +83,7 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	afterCommit := func(_ string, _ int64) { dispatcher.WakeLocal() }
 	identityService.SetAfterCommit(afterCommit)
 	realtimeServer := realtime.NewServer(logger, baseURL, eventStore, hub, identityService.Authenticate, realtimeConfig, ephemeral)
+	agentService.SetRevokeSession(realtimeServer.RevokeSession)
 	workspaceService, err := workspace.NewService(workspace.NewRepository(pool), "e2e-encryption-secret", e2eConnectionTester{})
 	if err != nil {
 		t.Fatal(err)
@@ -94,7 +98,7 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	}
 	fileService.SetAfterCommit(afterCommit)
 	server.Config.Handler = NewHandler(logger, baseURL, pool.Ping, Dependencies{
-		Identity: identityService, Chats: chat.NewService(pool),
+		Identity: identityService, Agents: agentService, Chats: chat.NewService(pool),
 		Messages:  message.NewService(pool, 64*1024, 100, afterCommit),
 		UserState: userstate.NewService(pool, 64*1024, afterCommit), Realtime: realtimeServer,
 		Push:            push.NewService(pool, config.PushConfig{}),
@@ -709,6 +713,36 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/chats/"+group.ID+"/messages", owner.AccessToken, nil, standardhttp.StatusOK, &page)
 	if len(page.Messages) != 3 || page.Messages[0].ID != attachment.ID || page.Messages[1].ID != second.ID || page.Messages[2].ID != first.ID {
 		t.Fatalf("message history = %+v", page.Messages)
+	}
+
+	var createdAgent agent.Agent
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agents", owner.AccessToken, map[string]any{
+		"display_name": "E2E agent", "handle": "e2e-agent", "kind": "builtin", "enabled": true,
+		"allowed_scopes": []string{"chats:read", "messages:read"}, "chat_ids": []string{group.ID},
+	}, standardhttp.StatusCreated, &createdAgent)
+	var createdAgentKey agent.CreatedAPIKey
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agents/"+createdAgent.ID+"/keys", owner.AccessToken, map[string]any{
+		"name": "e2e runtime", "scopes": []string{"chats:read", "messages:read"}, "rate_limit_per_minute": 30,
+	}, standardhttp.StatusCreated, &createdAgentKey)
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/chats/"+group.ID+"/messages", createdAgentKey.Secret, nil, standardhttp.StatusOK, &page)
+	agentSocket := e2eSocket(t, baseURL, createdAgentKey.Secret, 0)
+	defer agentSocket.CloseNow()
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/chats/"+group.ID+"/messages", createdAgentKey.Secret, map[string]any{
+		"client_msg_id": e2eID(t), "body": "must be blocked", "body_format": "plain",
+	}, standardhttp.StatusForbidden, nil)
+	e2eRequest(t, server.Client(), standardhttp.MethodDelete, baseURL+"/api/v1/agents/"+createdAgent.ID+"/keys/"+createdAgentKey.ID, owner.AccessToken, nil, standardhttp.StatusNoContent, nil)
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/chats/"+group.ID+"/messages", createdAgentKey.Secret, nil, standardhttp.StatusUnauthorized, nil)
+	agentCloseCtx, agentCloseCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer agentCloseCancel()
+	for {
+		_, _, err := agentSocket.Read(agentCloseCtx)
+		if err == nil {
+			continue
+		}
+		if websocket.CloseStatus(err) != 4001 {
+			t.Fatalf("agent websocket after key revocation: close status=%d error=%v", websocket.CloseStatus(err), err)
+		}
+		break
 	}
 
 	var unread userstate.UnreadSnapshot
