@@ -16,6 +16,7 @@ import (
 
 	"github.com/comamessenger/comamessenger/core/internal/access"
 	"github.com/comamessenger/comamessenger/core/internal/agent"
+	"github.com/comamessenger/comamessenger/core/internal/agentrun"
 	"github.com/comamessenger/comamessenger/core/internal/agenttool"
 	"github.com/comamessenger/comamessenger/core/internal/api"
 	"github.com/comamessenger/comamessenger/core/internal/chat"
@@ -36,6 +37,7 @@ type Dependencies struct {
 	Identity              *identity.Service
 	Agents                *agent.Service
 	AgentTools            *agenttool.Executor
+	AgentRuns             *agentrun.Service
 	Chats                 *chat.Service
 	Messages              *message.Service
 	UserState             *userstate.Service
@@ -57,6 +59,7 @@ type identityHandlers struct {
 	service               *identity.Service
 	agents                *agent.Service
 	agentTools            *agenttool.Executor
+	agentRuns             *agentrun.Service
 	chats                 *chat.Service
 	messages              *message.Service
 	userState             *userstate.Service
@@ -90,7 +93,7 @@ type authenticated struct {
 
 func newIdentityHandlers(logger *slog.Logger, allowedOrigin string, dependencies Dependencies) *identityHandlers {
 	return &identityHandlers{
-		logger: logger, service: dependencies.Identity, agents: dependencies.Agents, agentTools: dependencies.AgentTools, chats: dependencies.Chats, messages: dependencies.Messages, userState: dependencies.UserState, push: dependencies.Push, workspace: dependencies.Workspace, files: dependencies.Files, search: dependencies.Search, realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
+		logger: logger, service: dependencies.Identity, agents: dependencies.Agents, agentTools: dependencies.AgentTools, agentRuns: dependencies.AgentRuns, chats: dependencies.Chats, messages: dependencies.Messages, userState: dependencies.UserState, push: dependencies.Push, workspace: dependencies.Workspace, files: dependencies.Files, search: dependencies.Search, realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
 		cookieSecure: dependencies.CookieSecure, refreshTTL: dependencies.RefreshTokenTTL,
 		bootstrapRate: newIPRateLimiter(5, 5), loginRate: newIPRateLimiter(10, 10),
 		refreshRate: newIPRateLimiter(30, 20), invitationRate: newIPRateLimiter(10, 10), websocketRate: newIPRateLimiter(60, 20), actorRate: newIPRateLimiter(1200, 200),
@@ -149,6 +152,12 @@ func (h *identityHandlers) routes(router chi.Router) {
 		if h.agentTools != nil {
 			protected.Get("/agent-tools", h.listAgentTools)
 			protected.Post("/agent-tools/{toolName}", h.invokeAgentTool)
+		}
+		if h.agentRuns != nil {
+			protected.Post("/agents/{agentID}/invoke", h.invokeAgent)
+			protected.Get("/agents/{agentID}/runs", h.listAgentRuns)
+			protected.Get("/agent-runs/{runID}", h.getAgentRun)
+			protected.Post("/agent-runs/{runID}/cancel", h.cancelAgentRun)
 		}
 		protected.With(h.actorRateLimit("ownership-transfer", h.ownershipRate)).Post("/organization/transfer-ownership", h.transferOwnership)
 		if h.workspace != nil {

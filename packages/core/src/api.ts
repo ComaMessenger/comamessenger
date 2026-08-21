@@ -69,6 +69,9 @@ import type {
   UpdateAgentPlatformSettingsRequest,
   AgentToolDefinition,
   InvokeAgentToolRequest,
+  AgentRun,
+  AgentRunPage,
+  InvokeAgentRequest,
 } from "./types";
 
 type APIErrorPayload = components["schemas"]["Error"];
@@ -272,6 +275,24 @@ export class MessengerAPI {
       method: "POST",
       body: JSON.stringify(input),
     });
+  }
+  invokeAgent(id: string, input: InvokeAgentRequest): Promise<AgentRun> {
+    return this.request(`/api/v1/agents/${encodeURIComponent(id)}/invoke`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+  agentRuns(id: string): Promise<AgentRunPage> {
+    return this.request(`/api/v1/agents/${encodeURIComponent(id)}/runs`);
+  }
+  agentRun(runID: string): Promise<AgentRun> {
+    return this.request(`/api/v1/agent-runs/${encodeURIComponent(runID)}`);
+  }
+  cancelAgentRun(runID: string): Promise<AgentRun> {
+    return this.request(
+      `/api/v1/agent-runs/${encodeURIComponent(runID)}/cancel`,
+      { method: "POST" },
+    );
   }
   createAgent(input: CreateAgentRequest): Promise<Agent> {
     return this.request("/api/v1/agents", {

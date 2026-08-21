@@ -68,6 +68,36 @@ func (e AgentKind) Valid() bool {
 	}
 }
 
+// Defines values for AgentRunStatus.
+const (
+	AgentRunStatusCanceled  AgentRunStatus = "canceled"
+	AgentRunStatusCompleted AgentRunStatus = "completed"
+	AgentRunStatusFailed    AgentRunStatus = "failed"
+	AgentRunStatusQueued    AgentRunStatus = "queued"
+	AgentRunStatusRunning   AgentRunStatus = "running"
+	AgentRunStatusTimedOut  AgentRunStatus = "timed_out"
+)
+
+// Valid indicates whether the value is a known member of the AgentRunStatus enum.
+func (e AgentRunStatus) Valid() bool {
+	switch e {
+	case AgentRunStatusCanceled:
+		return true
+	case AgentRunStatusCompleted:
+		return true
+	case AgentRunStatusFailed:
+		return true
+	case AgentRunStatusQueued:
+		return true
+	case AgentRunStatusRunning:
+		return true
+	case AgentRunStatusTimedOut:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentScope.
 const (
 	ChatsRead      AgentScope = "chats:read"
@@ -2050,6 +2080,46 @@ type AgentPlatformSettings struct {
 	OrganizationRateLimitPerMinute int `json:"organization_rate_limit_per_minute"`
 }
 
+// AgentRun defines model for AgentRun.
+type AgentRun struct {
+	AgentId           openapi_types.UUID     `json:"agent_id"`
+	Attempt           int                    `json:"attempt"`
+	CancelRequestedAt *time.Time             `json:"cancel_requested_at,omitempty"`
+	ChainDepth        int                    `json:"chain_depth"`
+	ChatId            *openapi_types.UUID    `json:"chat_id,omitempty"`
+	ClientRunId       *openapi_types.UUID    `json:"client_run_id,omitempty"`
+	CorrelationId     openapi_types.UUID     `json:"correlation_id"`
+	Cost              string                 `json:"cost"`
+	CreatedAt         time.Time              `json:"created_at"`
+	Currency          string                 `json:"currency"`
+	ErrorCode         string                 `json:"error_code"`
+	FinishedAt        *time.Time             `json:"finished_at,omitempty"`
+	Id                openapi_types.UUID     `json:"id"`
+	Input             map[string]interface{} `json:"input"`
+	InputTokens       int64                  `json:"input_tokens"`
+	MaxAttempts       int                    `json:"max_attempts"`
+	Model             string                 `json:"model"`
+	OrgId             openapi_types.UUID     `json:"org_id"`
+	OutputTokens      int64                  `json:"output_tokens"`
+	Provider          string                 `json:"provider"`
+	RequestedBy       *openapi_types.UUID    `json:"requested_by,omitempty"`
+	ResultSummary     map[string]interface{} `json:"result_summary"`
+	StartedAt         *time.Time             `json:"started_at,omitempty"`
+	Status            AgentRunStatus         `json:"status"`
+	ThreadRootId      *openapi_types.UUID    `json:"thread_root_id,omitempty"`
+	TimeoutAt         *time.Time             `json:"timeout_at,omitempty"`
+	TriggerEventSeq   *int64                 `json:"trigger_event_seq,omitempty"`
+	TriggerId         *openapi_types.UUID    `json:"trigger_id,omitempty"`
+}
+
+// AgentRunStatus defines model for AgentRun.Status.
+type AgentRunStatus string
+
+// AgentRunPage defines model for AgentRunPage.
+type AgentRunPage struct {
+	Runs []AgentRun `json:"runs"`
+}
+
 // AgentScope defines model for AgentScope.
 type AgentScope string
 
@@ -2506,6 +2576,18 @@ type InvitationSummaryRole string
 
 // InvitationSummaryStatus defines model for InvitationSummary.Status.
 type InvitationSummaryStatus string
+
+// InvokeAgentRequest defines model for InvokeAgentRequest.
+type InvokeAgentRequest struct {
+	ChainDepth     *int                   `json:"chain_depth,omitempty"`
+	ChatId         openapi_types.UUID     `json:"chat_id"`
+	ClientRunId    openapi_types.UUID     `json:"client_run_id"`
+	CorrelationId  *openapi_types.UUID    `json:"correlation_id,omitempty"`
+	Input          map[string]interface{} `json:"input"`
+	MaxAttempts    *int                   `json:"max_attempts,omitempty"`
+	ThreadRootId   *openapi_types.UUID    `json:"thread_root_id,omitempty"`
+	TimeoutSeconds *int                   `json:"timeout_seconds,omitempty"`
+}
 
 // InvokeAgentToolRequest defines model for InvokeAgentToolRequest.
 type InvokeAgentToolRequest struct {
@@ -3250,6 +3332,9 @@ type AgentId = openapi_types.UUID
 // AgentKeyId defines model for AgentKeyId.
 type AgentKeyId = openapi_types.UUID
 
+// AgentRunId defines model for AgentRunId.
+type AgentRunId = openapi_types.UUID
+
 // ChatId defines model for ChatId.
 type ChatId = openapi_types.UUID
 
@@ -3356,6 +3441,9 @@ type UpdateAgentPlatformSettingsJSONRequestBody = UpdateAgentPlatformSettingsReq
 
 // UpdateAgentJSONRequestBody defines body for UpdateAgent for application/json ContentType.
 type UpdateAgentJSONRequestBody = UpdateAgentRequest
+
+// InvokeAgentJSONRequestBody defines body for InvokeAgent for application/json ContentType.
+type InvokeAgentJSONRequestBody = InvokeAgentRequest
 
 // CreateAgentKeyJSONRequestBody defines body for CreateAgentKey for application/json ContentType.
 type CreateAgentKeyJSONRequestBody = CreateAgentKeyRequest

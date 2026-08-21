@@ -1374,6 +1374,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agents/{agent_id}/invoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["invokeAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{agent_id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAgentRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent-runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAgentRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent-runs/{run_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["cancelAgentRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1782,6 +1846,80 @@ export interface components {
             correlation_id: string;
             /** @default false */
             confirmed: boolean;
+        };
+        InvokeAgentRequest: {
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: uuid */
+            thread_root_id?: string;
+            /** Format: uuid */
+            client_run_id: string;
+            /** Format: uuid */
+            correlation_id?: string;
+            /** @default 0 */
+            chain_depth: number;
+            /** @default 120 */
+            timeout_seconds: number;
+            /** @default 3 */
+            max_attempts: number;
+            input: {
+                [key: string]: unknown;
+            };
+        };
+        AgentRunPage: {
+            runs: components["schemas"]["AgentRun"][];
+        };
+        AgentRun: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            org_id: string;
+            /** Format: uuid */
+            agent_id: string;
+            /** Format: uuid */
+            trigger_id?: string;
+            /** Format: int64 */
+            trigger_event_seq?: number;
+            /** Format: uuid */
+            chat_id?: string;
+            /** Format: uuid */
+            thread_root_id?: string;
+            /** Format: uuid */
+            requested_by?: string;
+            /** Format: uuid */
+            client_run_id?: string;
+            /** Format: uuid */
+            correlation_id: string;
+            chain_depth: number;
+            /** @enum {string} */
+            status: "queued" | "running" | "completed" | "failed" | "canceled" | "timed_out";
+            provider: string;
+            model: string;
+            input: {
+                [key: string]: unknown;
+            };
+            result_summary: {
+                [key: string]: unknown;
+            };
+            /** Format: int64 */
+            input_tokens: number;
+            /** Format: int64 */
+            output_tokens: number;
+            cost: string;
+            currency: string;
+            error_code: string;
+            attempt: number;
+            max_attempts: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            started_at?: string;
+            /** Format: date-time */
+            finished_at?: string;
+            /** Format: date-time */
+            cancel_requested_at?: string;
+            /** Format: date-time */
+            timeout_at?: string;
         };
         UpdateAgentPlatformSettingsRequest: {
             organization_rate_limit_per_minute: number;
@@ -2519,6 +2657,7 @@ export interface components {
         FileId: string;
         AgentId: string;
         AgentKeyId: string;
+        AgentRunId: string;
     };
     requestBodies: never;
     headers: never;
@@ -5354,6 +5493,105 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             422: components["responses"]["Error"];
+        };
+    };
+    invokeAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvokeAgentRequest"];
+            };
+        };
+        responses: {
+            /** @description Durable agent run queued, or the idempotent existing run. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRun"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    listAgentRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recent durable runs for an agent. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunPage"];
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    getAgentRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: components["parameters"]["AgentRunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Durable agent run state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRun"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    cancelAgentRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: components["parameters"]["AgentRunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Run canceled or marked for cooperative cancellation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRun"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
         };
     };
 }

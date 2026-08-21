@@ -15,6 +15,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/access"
 	"github.com/comamessenger/comamessenger/core/internal/agent"
 	"github.com/comamessenger/comamessenger/core/internal/agentmemory"
+	"github.com/comamessenger/comamessenger/core/internal/agentrun"
 	"github.com/comamessenger/comamessenger/core/internal/agenttool"
 	"github.com/comamessenger/comamessenger/core/internal/chat"
 	"github.com/comamessenger/comamessenger/core/internal/config"
@@ -198,6 +199,7 @@ func main() {
 		logger.Error("agent tool initialization failed", "error", err)
 		os.Exit(1)
 	}
+	agentRunService := agentrun.NewService(pool)
 	userStateService := userstate.NewService(pool, int(cfg.Messaging.MaxBodyBytes), afterCommit)
 	pushService := push.NewService(pool, cfg.Push)
 	pushWorker := push.NewWorker(logger, pool, cfg.Push, realtimeHub.ActorActiveIn, workspaceService)
@@ -207,7 +209,7 @@ func main() {
 	server := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: serverhttp.NewHandler(logger, cfg.PublicAppURL, pool.Ping, serverhttp.Dependencies{
-			Identity: identityService, Agents: agentService, AgentTools: agentToolExecutor, Chats: chatService,
+			Identity: identityService, Agents: agentService, AgentTools: agentToolExecutor, AgentRuns: agentRunService, Chats: chatService,
 			Messages: messageService, UserState: userStateService, Push: pushService, Workspace: workspaceService, Files: fileService, Search: searchService, Realtime: realtimeServer,
 			CookieSecure: cfg.Auth.CookieSecure, RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
 			BootstrapToken: cfg.BootstrapToken, RequireBootstrapToken: cfg.AppEnv != "development",

@@ -55,8 +55,8 @@
 - [ ] Игнорировать собственные ответы агента по умолчанию и ограничить chain depth для предотвращения agent loops.
 - [ ] Реализовать mention, command, keyword/regex, every-message и event triggers.
 - [ ] Реализовать schedule trigger через durable scheduler/job, учитывающий timezone и missed runs policy.
-- [ ] Вводить per-chat concurrency и очередь, чтобы сообщения не переставлялись непредсказуемо.
-- [ ] Поддержать cancel/timeout/retry с явным состоянием run.
+- [x] Вводить per-chat concurrency и очередь, чтобы сообщения не переставлялись непредсказуемо.
+- [x] Поддержать cancel/timeout/retry с явным состоянием run.
 
 ### LLM providers и context
 

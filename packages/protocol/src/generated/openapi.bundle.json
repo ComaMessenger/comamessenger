@@ -4127,6 +4127,145 @@
           }
         }
       }
+    },
+    "/api/v1/agents/{agent_id}/invoke": {
+      "post": {
+        "operationId": "invokeAgent",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AgentId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvokeAgentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Durable agent run queued, or the idempotent existing run.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRun"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/agents/{agent_id}/runs": {
+      "get": {
+        "operationId": "listAgentRuns",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AgentId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recent durable runs for an agent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRunPage"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/agent-runs/{run_id}": {
+      "get": {
+        "operationId": "getAgentRun",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AgentRunId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Durable agent run state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRun"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/agent-runs/{run_id}/cancel": {
+      "post": {
+        "operationId": "cancelAgentRun",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AgentRunId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Run canceled or marked for cooperative cancellation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRun"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4216,6 +4355,15 @@
       },
       "AgentKeyId": {
         "name": "key_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "AgentRunId": {
+        "name": "run_id",
         "in": "path",
         "required": true,
         "schema": {
@@ -5811,6 +5959,219 @@
           "confirmed": {
             "type": "boolean",
             "default": false
+          }
+        }
+      },
+      "InvokeAgentRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "chat_id",
+          "client_run_id",
+          "input"
+        ],
+        "properties": {
+          "chat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "thread_root_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "client_run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "correlation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "chain_depth": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 16,
+            "default": 0
+          },
+          "timeout_seconds": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 3600,
+            "default": 120
+          },
+          "max_attempts": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "default": 3
+          },
+          "input": {
+            "type": "object",
+            "additionalProperties": true,
+            "maxProperties": 1000
+          }
+        }
+      },
+      "AgentRunPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "runs"
+        ],
+        "properties": {
+          "runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentRun"
+            }
+          }
+        }
+      },
+      "AgentRun": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "org_id",
+          "agent_id",
+          "correlation_id",
+          "chain_depth",
+          "status",
+          "provider",
+          "model",
+          "input",
+          "result_summary",
+          "input_tokens",
+          "output_tokens",
+          "cost",
+          "currency",
+          "error_code",
+          "attempt",
+          "max_attempts",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "org_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "agent_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "trigger_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "trigger_event_seq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "chat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "thread_root_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "requested_by": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "client_run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "correlation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "chain_depth": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 16
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "completed",
+              "failed",
+              "canceled",
+              "timed_out"
+            ]
+          },
+          "provider": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "input": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "result_summary": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "input_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "output_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "cost": {
+            "type": "string",
+            "pattern": "^[0-9]+(?:\\.[0-9]{1,8})?$"
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "error_code": {
+            "type": "string"
+          },
+          "attempt": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "max_attempts": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "finished_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cancel_requested_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timeout_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
