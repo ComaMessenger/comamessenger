@@ -137,6 +137,7 @@ import {
   type ChatMember,
   type ClientMessage,
   type Draft,
+  type DurableEvent,
   type FileMetadata,
   type Message,
   type Reaction,
@@ -192,6 +193,7 @@ import { uploadAttachment } from "./uploads";
 import {
   playNotificationSound,
   shouldPlayNotificationSound,
+  shouldShowInAppNotification,
   unlockNotificationSound,
 } from "./notificationSound";
 
@@ -222,6 +224,15 @@ type ComposerAttachment = {
   file?: FileMetadata;
   error?: string;
   controller: AbortController;
+};
+
+type InAppNotification = {
+  id: string;
+  title: string;
+  body: string;
+  url: string;
+  avatarName: string;
+  avatarSeed: string;
 };
 
 const folderIconOptions: Array<{
@@ -1097,6 +1108,10 @@ function Messenger({
   const [statusPending, setStatusPending] = useState(false);
   const [snoozedUntil, setSnoozedUntil] = useState<string | null>(null);
   const notificationPreferences = useRef<UserPreferences | null>(null);
+  const [inAppNotifications, setInAppNotifications] = useState<
+    InAppNotification[]
+  >([]);
+  const inAppNotificationTimers = useRef(new Map<string, number>());
   const [snoozeCustom, setSnoozeCustom] = useState("");
   const [snoozePending, setSnoozePending] = useState(false);
   const reloadTimer = useRef<number | null>(null);
@@ -1156,6 +1171,59 @@ function Messenger({
       void reload();
     }, 120);
   }, [reload]);
+  const dismissInAppNotification = useCallback((id: string) => {
+    const timer = inAppNotificationTimers.current.get(id);
+    if (timer !== undefined) window.clearTimeout(timer);
+    inAppNotificationTimers.current.delete(id);
+    setInAppNotifications((current) =>
+      current.filter((notification) => notification.id !== id),
+    );
+  }, []);
+  const showInAppNotification = useCallback(
+    (event: DurableEvent, chat: Chat | undefined) => {
+      const id = `${event.seq}:${event.type}`;
+      const messageBody =
+        typeof event.data.body === "string"
+          ? messagePlainText(event.data.body).trim()
+          : "";
+      const contextName = chat?.display_name || user.organization_name;
+      const title =
+        event.type === "message.created"
+          ? i18n.t("inAppNewMessage", { chat: contextName })
+          : event.type === "reaction.added"
+            ? i18n.t("inAppNewReaction", { chat: contextName })
+            : i18n.t("inAppChatEvent", { chat: contextName });
+      const body = messageBody || i18n.t("inAppOpenChat");
+      const threadRoot =
+        typeof event.data.thread_root_id === "string"
+          ? event.data.thread_root_id
+          : null;
+      const notification: InAppNotification = {
+        id,
+        title,
+        body,
+        url:
+          event.chat_id && threadRoot
+            ? `/chat/${event.chat_id}/thread/${threadRoot}`
+            : event.chat_id
+              ? `/chat/${event.chat_id}`
+              : "/members",
+        avatarName: contextName,
+        avatarSeed: chat?.avatar_seed || chat?.id || user.org_id,
+      };
+      setInAppNotifications((current) => [
+        ...current.filter((item) => item.id !== id).slice(-2),
+        notification,
+      ]);
+      const previousTimer = inAppNotificationTimers.current.get(id);
+      if (previousTimer !== undefined) window.clearTimeout(previousTimer);
+      inAppNotificationTimers.current.set(
+        id,
+        window.setTimeout(() => dismissInAppNotification(id), 7000),
+      );
+    },
+    [dismissInAppNotification, user.org_id, user.organization_name],
+  );
   const coordinator = useMemo(
     () =>
       new RealtimeCoordinator(
@@ -1166,18 +1234,30 @@ function Messenger({
           state: store.getState().setRealtime,
           event: (event) => {
             const applied = store.getState().apply(event);
+            const chat = event.chat_id
+              ? store.getState().chats[String(event.chat_id)]
+              : undefined;
             if (
-              document.visibilityState === "hidden" &&
-              shouldPlayNotificationSound(
+              document.visibilityState === "visible" &&
+              event.chat_id !== store.getState().activeChatID &&
+              shouldShowInAppNotification(
                 event,
                 user,
                 notificationPreferences.current,
-                event.chat_id
-                  ? store.getState().chats[String(event.chat_id)]
-                  : undefined,
+                chat,
               )
-            )
-              playNotificationSound();
+            ) {
+              showInAppNotification(event, chat);
+              if (
+                shouldPlayNotificationSound(
+                  event,
+                  user,
+                  notificationPreferences.current,
+                  chat,
+                )
+              )
+                playNotificationSound();
+            }
             if (
               (event.type === "actor.status.updated" ||
                 event.type === "actor.avatar.updated") &&
@@ -1262,7 +1342,15 @@ function Messenger({
           sessionExpired: onLogout,
         },
       ),
-    [api, onLogout, onUserUpdated, scheduleReload, store, user.id],
+    [
+      api,
+      onLogout,
+      onUserUpdated,
+      scheduleReload,
+      showInAppNotification,
+      store,
+      user,
+    ],
   );
   const outbox = useMemo(
     () =>
@@ -1323,6 +1411,9 @@ function Messenger({
       coordinator.stop();
       if (reloadTimer.current !== null)
         window.clearTimeout(reloadTimer.current);
+      for (const timer of inAppNotificationTimers.current.values())
+        window.clearTimeout(timer);
+      inAppNotificationTimers.current.clear();
     };
   }, [api, coordinator, outbox, reload]);
   useEffect(() => {
@@ -1508,6 +1599,40 @@ function Messenger({
         threadID && "messenger--thread-open",
       )}
     >
+      <div
+        className="in-app-notification-stack"
+        role="region"
+        aria-live="polite"
+        aria-label={t("inAppNotifications")}
+      >
+        {inAppNotifications.map((notification) => (
+          <article className="in-app-notification" key={notification.id}>
+            <button
+              className="in-app-notification__content"
+              onClick={() => {
+                dismissInAppNotification(notification.id);
+                navigate(notification.url);
+              }}
+            >
+              <Avatar
+                name={notification.avatarName}
+                seed={notification.avatarSeed}
+                size="md"
+              />
+              <span>
+                <strong>{notification.title}</strong>
+                <small>{notification.body}</small>
+              </span>
+            </button>
+            <IconButton
+              label={t("close")}
+              onClick={() => dismissInAppNotification(notification.id)}
+            >
+              <X />
+            </IconButton>
+          </article>
+        ))}
+      </div>
       <aside className="global-sidebar" aria-label={t("primaryNavigation")}>
         <div className="workspace-menu-root" ref={workspaceMenuRoot}>
           <button
@@ -1667,90 +1792,101 @@ function Messenger({
                 <UserRound />
                 <span>{t("profileSettings")}</span>
               </button>
-              <button
-                role="menuitem"
-                aria-expanded={profileSnoozeOpen}
-                onClick={() => setProfileSnoozeOpen((open) => !open)}
-              >
-                <BellOff />
-                <span>
-                  {snoozedUntil
-                    ? t("resumeNotifications")
-                    : t("snoozeNotifications")}
-                </span>
-                <ChevronRight className={profileSnoozeOpen ? "is-open" : ""} />
-              </button>
-              {profileSnoozeOpen && (
-                <div className="profile-menu__snooze">
-                  <small>
+              <div className="profile-menu__submenu-root">
+                <button
+                  role="menuitem"
+                  aria-expanded={profileSnoozeOpen}
+                  onClick={() => setProfileSnoozeOpen((open) => !open)}
+                >
+                  <BellOff />
+                  <span>
                     {snoozedUntil
-                      ? t("snoozedUntil", {
-                          time: formatDateTime(snoozedUntil),
-                        })
-                      : t("snoozeHint")}
-                  </small>
-                  <div>
-                    <Button
-                      size="sm"
-                      disabled={snoozePending}
-                      onClick={() => snoozeFor(30)}
-                    >
-                      {t("snooze30Minutes")}
-                    </Button>
-                    <Button
-                      size="sm"
-                      disabled={snoozePending}
-                      onClick={() => snoozeFor(60)}
-                    >
-                      {t("snoozeOneHour")}
-                    </Button>
-                    <Button
-                      size="sm"
-                      disabled={snoozePending}
-                      onClick={() => snoozeFor(120)}
-                    >
-                      {t("snoozeTwoHours")}
-                    </Button>
-                    <Button
-                      size="sm"
-                      disabled={snoozePending}
-                      onClick={() =>
-                        void updateSnooze(tomorrowAtNine(user.timezone))
-                      }
-                    >
-                      {t("snoozeUntilTomorrow")}
-                    </Button>
+                      ? t("resumeNotifications")
+                      : t("snoozeNotifications")}
+                  </span>
+                  <ChevronRight
+                    className={profileSnoozeOpen ? "is-open" : ""}
+                  />
+                </button>
+                {profileSnoozeOpen && (
+                  <div
+                    className="profile-menu__snooze"
+                    role="dialog"
+                    aria-label={t("snoozeNotifications")}
+                  >
+                    <strong>{t("snoozeNotifications")}</strong>
+                    <small>
+                      {snoozedUntil
+                        ? t("snoozedUntil", {
+                            time: formatDateTime(snoozedUntil),
+                          })
+                        : t("snoozeHint")}
+                    </small>
+                    <div>
+                      <Button
+                        size="sm"
+                        disabled={snoozePending}
+                        onClick={() => snoozeFor(30)}
+                      >
+                        {t("snooze30Minutes")}
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={snoozePending}
+                        onClick={() => snoozeFor(60)}
+                      >
+                        {t("snoozeOneHour")}
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={snoozePending}
+                        onClick={() => snoozeFor(120)}
+                      >
+                        {t("snoozeTwoHours")}
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={snoozePending}
+                        onClick={() =>
+                          void updateSnooze(tomorrowAtNine(user.timezone))
+                        }
+                      >
+                        {t("snoozeUntilTomorrow")}
+                      </Button>
+                    </div>
+                    <div className="profile-menu__custom-snooze">
+                      <input
+                        type="datetime-local"
+                        aria-label={t("snoozeCustom")}
+                        value={snoozeCustom}
+                        onChange={(event) =>
+                          setSnoozeCustom(event.target.value)
+                        }
+                      />
+                      <Button
+                        size="sm"
+                        disabled={!snoozeCustom || snoozePending}
+                        onClick={() =>
+                          void updateSnooze(
+                            localDateTimeInZone(snoozeCustom, user.timezone),
+                          )
+                        }
+                      >
+                        {t("apply")}
+                      </Button>
+                    </div>
+                    {snoozedUntil && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => void updateSnooze(null)}
+                      >
+                        {t("resumeNotifications")}
+                      </Button>
+                    )}
                   </div>
-                  <div className="profile-menu__custom-snooze">
-                    <input
-                      type="datetime-local"
-                      aria-label={t("snoozeCustom")}
-                      value={snoozeCustom}
-                      onChange={(event) => setSnoozeCustom(event.target.value)}
-                    />
-                    <Button
-                      size="sm"
-                      disabled={!snoozeCustom || snoozePending}
-                      onClick={() =>
-                        void updateSnooze(
-                          localDateTimeInZone(snoozeCustom, user.timezone),
-                        )
-                      }
-                    >
-                      {t("apply")}
-                    </Button>
-                  </div>
-                  {snoozedUntil && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => void updateSnooze(null)}
-                    >
-                      {t("resumeNotifications")}
-                    </Button>
-                  )}
-                </div>
-              )}
+                )}
+              </div>
               <button
                 role="menuitem"
                 onClick={() => {
@@ -2126,17 +2262,51 @@ function StatusDialog({
   onClose(): void;
 }) {
   const { t } = useTranslation();
+  const [emojiOpen, setEmojiOpen] = useState(false);
   return (
     <Dialog title={t("setStatus")} className="status-dialog" onClose={onClose}>
       <form onSubmit={onSave}>
         <div className="status-dialog__fields">
-          <input
-            aria-label={t("statusEmoji")}
-            value={emoji}
-            maxLength={16}
-            placeholder="🙂"
-            onChange={(event) => onEmojiChange(event.target.value)}
-          />
+          <div className="status-dialog__emoji">
+            <button
+              type="button"
+              className="status-dialog__emoji-trigger"
+              aria-label={t("statusEmoji")}
+              aria-expanded={emojiOpen}
+              onClick={() => setEmojiOpen((open) => !open)}
+            >
+              {emoji || "🙂"}
+              <ChevronDown aria-hidden="true" />
+            </button>
+            {emojiOpen && (
+              <div
+                className="status-dialog__emoji-picker"
+                role="dialog"
+                aria-label={t("emoji")}
+              >
+                <Suspense fallback={<Skeleton />}>
+                  <EmojiPicker
+                    width="100%"
+                    height={340}
+                    theme={
+                      (document.documentElement.dataset.theme === "dark"
+                        ? "dark"
+                        : "light") as EmojiTheme
+                    }
+                    emojiStyle={"native" as EmojiStyle}
+                    lazyLoadEmojis
+                    searchPlaceholder={t("searchEmoji")}
+                    searchClearButtonLabel={t("clearSearch")}
+                    previewConfig={{ showPreview: false }}
+                    onEmojiClick={(selection) => {
+                      onEmojiChange(selection.emoji);
+                      setEmojiOpen(false);
+                    }}
+                  />
+                </Suspense>
+              </div>
+            )}
+          </div>
           <input
             aria-label={t("statusText")}
             value={text}
@@ -2146,31 +2316,42 @@ function StatusDialog({
             onChange={(event) => onTextChange(event.target.value)}
           />
         </div>
-        <label className="ui-field">
-          <span className="ui-field__label">{t("statusDuration")}</span>
-          <select
-            value={expiry}
-            onChange={(event) => onExpiryChange(event.target.value)}
-          >
-            <option value="hour">{t("statusOneHour")}</option>
-            <option value="day">{t("statusOneDay")}</option>
-            <option value="week">{t("statusOneWeek")}</option>
-            <option value="none">{t("statusNoExpiry")}</option>
-          </select>
-        </label>
+        <SelectField
+          label={t("statusDuration")}
+          name="status-expiry"
+          value={expiry}
+          onChange={(event) => onExpiryChange(event.target.value)}
+        >
+          <option value="hour">{t("statusOneHour")}</option>
+          <option value="day">{t("statusOneDay")}</option>
+          <option value="week">{t("statusOneWeek")}</option>
+          <option value="none">{t("statusNoExpiry")}</option>
+        </SelectField>
         <div className="status-dialog__actions">
-          {hasStatus && (
-            <Button disabled={pending} onClick={onClear}>
-              {t("clearStatus")}
+          <div>
+            {hasStatus && (
+              <Button variant="ghost" disabled={pending} onClick={onClear}>
+                {t("clearStatus")}
+              </Button>
+            )}
+          </div>
+          <div>
+            <Button
+              className="status-dialog__cancel"
+              disabled={pending}
+              onClick={onClose}
+            >
+              {t("cancel")}
             </Button>
-          )}
-          <span />
-          <Button disabled={pending} onClick={onClose}>
-            {t("cancel")}
-          </Button>
-          <Button type="submit" variant="primary" disabled={pending}>
-            {t("save")}
-          </Button>
+            <Button
+              className="status-dialog__save"
+              type="submit"
+              variant="primary"
+              disabled={pending}
+            >
+              {t("save")}
+            </Button>
+          </div>
         </div>
       </form>
     </Dialog>
@@ -2553,8 +2734,9 @@ function SearchPalette({
         </div>
         {tab === "messages" && (
           <div className="search-palette__filters">
-            <select
-              aria-label={t("searchType")}
+            <SelectField
+              label={t("searchType")}
+              name="search-type"
               value={searchType}
               onChange={(event) =>
                 setSearchType(event.target.value as typeof searchType)
@@ -2563,9 +2745,10 @@ function SearchPalette({
               <option value="all">{t("all")}</option>
               <option value="message">{t("messages")}</option>
               <option value="file">{t("files")}</option>
-            </select>
-            <select
-              aria-label={t("chat")}
+            </SelectField>
+            <SelectField
+              label={t("chat")}
+              name="search-chat"
               value={searchChat}
               onChange={(event) => setSearchChat(event.target.value)}
             >
@@ -2575,7 +2758,7 @@ function SearchPalette({
                   {titleOf(chat, members, ownID)}
                 </option>
               ))}
-            </select>
+            </SelectField>
           </div>
         )}
         <div className="search-palette__results">
@@ -5368,18 +5551,43 @@ function MobileMorePage({
   const [snoozePending, setSnoozePending] = useState(false);
   const [emoji, setEmoji] = useState(user.status_emoji);
   const [text, setText] = useState(user.status_text);
+  const [statusExpiry, setStatusExpiry] = useState("none");
+  const [statusPending, setStatusPending] = useState(false);
   async function saveMobileStatus(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await api.setStatus({ emoji, text, expires_at: null });
-    onUserUpdated(await api.me());
-    setStatusOpen(false);
+    setStatusPending(true);
+    const now = Date.now();
+    const duration =
+      statusExpiry === "hour"
+        ? 60 * 60 * 1000
+        : statusExpiry === "day"
+          ? 24 * 60 * 60 * 1000
+          : statusExpiry === "week"
+            ? 7 * 24 * 60 * 60 * 1000
+            : null;
+    try {
+      await api.setStatus({
+        emoji,
+        text,
+        expires_at: duration ? new Date(now + duration).toISOString() : null,
+      });
+      onUserUpdated(await api.me());
+      setStatusOpen(false);
+    } finally {
+      setStatusPending(false);
+    }
   }
   async function clearMobileStatus() {
-    await api.clearStatus();
-    setEmoji("");
-    setText("");
-    onUserUpdated(await api.me());
-    setStatusOpen(false);
+    setStatusPending(true);
+    try {
+      await api.clearStatus();
+      setEmoji("");
+      setText("");
+      onUserUpdated(await api.me());
+      setStatusOpen(false);
+    } finally {
+      setStatusPending(false);
+    }
   }
   async function updateMobileSnooze(until: string | null) {
     setSnoozePending(true);
@@ -5428,30 +5636,19 @@ function MobileMorePage({
           </span>
         </button>
         {statusOpen && (
-          <form className="mobile-status-form" onSubmit={saveMobileStatus}>
-            <Field
-              label={t("statusEmoji")}
-              name="mobile-status-emoji"
-              value={emoji}
-              maxLength={16}
-              onChange={(event) => setEmoji(event.target.value)}
-            />
-            <Field
-              label={t("statusText")}
-              name="mobile-status-text"
-              value={text}
-              maxLength={100}
-              onChange={(event) => setText(event.target.value)}
-            />
-            <Button type="submit" variant="primary">
-              {t("save")}
-            </Button>
-            {(user.status_text || user.status_emoji) && (
-              <Button onClick={() => void clearMobileStatus()}>
-                {t("clearStatus")}
-              </Button>
-            )}
-          </form>
+          <StatusDialog
+            emoji={emoji}
+            text={text}
+            expiry={statusExpiry}
+            pending={statusPending}
+            hasStatus={Boolean(user.status_text || user.status_emoji)}
+            onEmojiChange={setEmoji}
+            onTextChange={setText}
+            onExpiryChange={setStatusExpiry}
+            onSave={saveMobileStatus}
+            onClear={() => void clearMobileStatus()}
+            onClose={() => setStatusOpen(false)}
+          />
         )}
         <button onClick={() => setSnoozeOpen((open) => !open)}>
           <BellOff />

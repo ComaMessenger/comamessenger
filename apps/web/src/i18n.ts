@@ -156,6 +156,17 @@ const ru = {
   appearanceHint: "Тема и язык интерфейса применяются сразу на всех экранах.",
   accountActions: "Аккаунт",
   notificationSettings: "Настройки уведомлений",
+  inAppNotifications: "Уведомления внутри Coma",
+  inAppNotificationsHint:
+    "Показывайте компактные уведомления поверх интерфейса, пока Coma открыта.",
+  inAppNotificationsEnabled: "Показывать уведомления в приложении",
+  inAppNotificationsEnabledHint:
+    "Можно отключить отдельно, не выключая браузерные push-уведомления.",
+  inAppSoundHint: "Звук воспроизводится вместе с уведомлением внутри Coma.",
+  inAppNewMessage: "Новое сообщение · {chat}",
+  inAppNewReaction: "Новая реакция · {chat}",
+  inAppChatEvent: "Событие в чате · {chat}",
+  inAppOpenChat: "Открыть чат",
   browserNotifications: "Браузерные уведомления",
   browserNotificationsHint:
     "Получайте новые сообщения, когда вкладка Coma неактивна.",
@@ -646,6 +657,7 @@ const ru = {
   auditCategory_security: "Безопасность",
   auditCategory_chats: "Чаты",
   auditCategory_infrastructure: "Подключения",
+  auditCategory_agents: "Агенты",
   auditActor: "Кто выполнил",
   auditActorAll: "Все участники",
   auditFrom: "С даты",
@@ -831,6 +843,17 @@ const en: Record<keyof typeof ru, string> = {
   appearanceHint: "Theme and language apply immediately across the interface.",
   accountActions: "Account",
   notificationSettings: "Notification settings",
+  inAppNotifications: "In-app notifications",
+  inAppNotificationsHint:
+    "Show compact notifications over the interface while Coma is open.",
+  inAppNotificationsEnabled: "Show in-app notifications",
+  inAppNotificationsEnabledHint:
+    "You can disable these without turning off browser push notifications.",
+  inAppSoundHint: "Play a sound together with an in-app notification.",
+  inAppNewMessage: "New message · {chat}",
+  inAppNewReaction: "New reaction · {chat}",
+  inAppChatEvent: "Chat event · {chat}",
+  inAppOpenChat: "Open chat",
   browserNotifications: "Browser notifications",
   browserNotificationsHint:
     "Receive new messages while the Coma tab is inactive.",
@@ -1318,6 +1341,7 @@ const en: Record<keyof typeof ru, string> = {
   auditCategory_security: "Security",
   auditCategory_chats: "Chats",
   auditCategory_infrastructure: "Connections",
+  auditCategory_agents: "Agents",
   auditActor: "Performed by",
   auditActorAll: "All members",
   auditFrom: "From",

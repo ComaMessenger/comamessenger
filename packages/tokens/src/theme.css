@@ -1,3 +1,22 @@
+:root {
+  /* 8pt layout system with 4px half-steps for compact controls. */
+  --coma-space-0-5: 4px;
+  --coma-space-1: 8px;
+  --coma-space-1-5: 12px;
+  --coma-space-2: 16px;
+  --coma-space-2-5: 20px;
+  --coma-space-3: 24px;
+  --coma-space-4: 32px;
+  --coma-space-5: 40px;
+  --coma-space-6: 48px;
+  --coma-radius-sm: 8px;
+  --coma-radius-md: 12px;
+  --coma-radius-lg: 16px;
+  --coma-control-sm: 32px;
+  --coma-control-md: 40px;
+  --coma-control-lg: 48px;
+}
+
 :root,
 [data-theme="light"] {
   color-scheme: light;

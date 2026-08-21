@@ -367,6 +367,7 @@ export function AuditSettingsPage({
                   "security",
                   "chats",
                   "infrastructure",
+                  "agents",
                 ].map((value) => (
                   <option key={value} value={value}>
                     {t(`auditCategory_${value}`)}

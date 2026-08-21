@@ -3225,6 +3225,7 @@ export interface components {
             theme: "system" | "light" | "dark";
             /** @enum {string} */
             locale: "ru" | "en";
+            in_app_enabled: boolean;
             push_enabled: boolean;
             push_preview: boolean;
             /** @enum {string} */
@@ -3247,6 +3248,7 @@ export interface components {
             theme?: "system" | "light" | "dark";
             /** @enum {string} */
             locale?: "ru" | "en";
+            in_app_enabled?: boolean;
             push_enabled?: boolean;
             push_preview?: boolean;
             /** @enum {string} */

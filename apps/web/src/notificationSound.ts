@@ -37,7 +37,19 @@ export function shouldPlayNotificationSound(
   preferences: UserPreferences | null,
   chat?: Chat,
 ): boolean {
-  if (!preferences?.sound_enabled || event.actor_id === user.id) return false;
+  return Boolean(
+    preferences?.sound_enabled &&
+      shouldShowInAppNotification(event, user, preferences, chat),
+  );
+}
+
+export function shouldShowInAppNotification(
+  event: DurableEvent,
+  user: User,
+  preferences: UserPreferences | null,
+  chat?: Chat,
+): boolean {
+  if (!preferences?.in_app_enabled || event.actor_id === user.id) return false;
   const occurredAt = new Date(event.occurred_at);
   if (
     preferences.snoozed_until &&

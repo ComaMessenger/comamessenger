@@ -1,6 +1,6 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { Avatar, Button, Dialog, RadioOption } from "./ui";
+import { Avatar, Button, Dialog, RadioOption, SelectField } from "./ui";
 describe("web primitives", () => {
   it("keeps explicit button semantics", () => {
     render(<Button variant="primary">Save</Button>);
@@ -8,7 +8,7 @@ describe("web primitives", () => {
   });
   it("closes a dialog with Escape", () => {
     const close = vi.fn();
-    render(
+    const view = render(
       <Dialog title="Settings" onClose={close}>
         <button>Action</button>
       </Dialog>,
@@ -27,6 +27,26 @@ describe("web primitives", () => {
       />,
     );
     fireEvent.click(screen.getByRole("radio", { name: /Enter sends/ }));
+    expect(change).toHaveBeenCalledOnce();
+  });
+  it("renders a custom dropdown while preserving native form semantics", () => {
+    const change = vi.fn();
+    const view = render(
+      <SelectField label="Category" name="category" onChange={change}>
+        <option value="all">All</option>
+        <option value="agents">Agents</option>
+      </SelectField>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /All/ }));
+    fireEvent.click(
+      within(screen.getByRole("listbox", { name: "Category" })).getByRole(
+        "option",
+        { name: "Agents" },
+      ),
+    );
+    expect(view.container.querySelector("select[name='category']")).toHaveValue(
+      "agents",
+    );
     expect(change).toHaveBeenCalledOnce();
   });
   it("keeps an avatar color stable when its label changes", () => {

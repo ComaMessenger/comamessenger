@@ -36,11 +36,13 @@ export function SettingsToggle({
   label,
   hint,
   checked,
+  disabled = false,
   onChange,
 }: {
   label: string;
   hint?: string;
   checked: boolean;
+  disabled?: boolean;
   onChange(value: boolean): void;
 }) {
   return (
@@ -48,6 +50,7 @@ export function SettingsToggle({
       <input
         type="checkbox"
         checked={checked}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.checked)}
       />
     </SettingsRow>

@@ -4487,6 +4487,7 @@ components:
         [
           theme,
           locale,
+          in_app_enabled,
           push_enabled,
           push_preview,
           notify_messages,
@@ -4503,6 +4504,7 @@ components:
       properties:
         theme: { type: string, enum: [system, light, dark] }
         locale: { type: string, enum: [ru, en] }
+        in_app_enabled: { type: boolean }
         push_enabled: { type: boolean }
         push_preview: { type: boolean }
         notify_messages:
@@ -4526,6 +4528,7 @@ components:
       properties:
         theme: { type: string, enum: [system, light, dark] }
         locale: { type: string, enum: [ru, en] }
+        in_app_enabled: { type: boolean }
         push_enabled: { type: boolean }
         push_preview: { type: boolean }
         notify_messages:

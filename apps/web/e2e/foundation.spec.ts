@@ -129,6 +129,7 @@ async function mockMessenger(
     threads?: Array<Record<string, unknown>>;
     userPatch?: Partial<typeof user>;
     organizationPatch?: Record<string, unknown>;
+    preferencesPatch?: Record<string, unknown>;
     unread?: {
       last_read_seq: number;
       unread_count: number;
@@ -150,6 +151,7 @@ async function mockMessenger(
     threads = [],
     userPatch = {},
     organizationPatch = {},
+    preferencesPatch = {},
     unread = { last_read_seq: 0, unread_count: 3, mention_count: 1 },
   } = options;
   let runtimeUser = {
@@ -160,6 +162,7 @@ async function mockMessenger(
   const runtimeChat = { ...chat, ...chatPatch };
   let runtimeReactions = [...suppliedReactions];
   const reactionMutations: string[] = [];
+  const statusMutations: Array<Record<string, unknown>> = [];
   let chatRequests = 0;
   let remainingSendFailures = sendFailures;
   let paginationRequests = 0;
@@ -167,6 +170,7 @@ async function mockMessenger(
   let preferences = {
     theme,
     locale: "ru",
+    in_app_enabled: true,
     push_enabled: false,
     push_preview: false,
     notify_messages: "all" as const,
@@ -183,6 +187,7 @@ async function mockMessenger(
     },
     snoozed_until: null as string | null,
     email_digest: false,
+    ...preferencesPatch,
   };
   let chatFolders: Array<Record<string, unknown>> = [];
   let pinnedChatIDs: string[] = [];
@@ -370,6 +375,7 @@ async function mockMessenger(
           status_text: input.text,
           status_expires_at: input.expires_at,
         };
+        statusMutations.push(input);
       }
       body = {
         emoji: runtimeUser.status_emoji,
@@ -791,6 +797,7 @@ async function mockMessenger(
     refreshRequests: () => refreshRequests,
     chatRequests: () => chatRequests,
     reactionMutations,
+    statusMutations,
     emitEvent: async (
       frame: Record<string, unknown>,
       chatState?: Record<string, unknown>,
@@ -966,6 +973,49 @@ test("message events coalesce and refresh the chat card preview", async ({
   await expect(preview).not.toContainText("Удалить");
 });
 
+test("visible inactive chats produce an in-app notification", async ({
+  page,
+}) => {
+  const runtime = await mockMessenger(page);
+  await page.goto("/threads");
+  await expect(page.getByRole("heading", { name: "Треды" })).toBeVisible();
+  await runtime.emitEvent({
+    op: "event",
+    seq: 4,
+    type: "message.created",
+    occurred_at: "2026-08-19T06:40:00Z",
+    actor_id: lev.actor_id,
+    chat_id: chat.id,
+    subject_id: "00000000-0000-4000-8000-000000000050",
+    data: { ...message, body: "Проверьте новый макет", created_seq: 4 },
+  });
+  const notification = page.locator(".in-app-notification");
+  await expect(notification).toContainText("Новое сообщение · Объявления");
+  await expect(notification).toContainText("Проверьте новый макет");
+  await notification.locator(".in-app-notification__content").click();
+  await expect(page).toHaveURL(new RegExp(`/chat/${chat.id}$`));
+});
+
+test("in-app notifications can be disabled without disabling push", async ({
+  page,
+}) => {
+  await mockMessenger(page, {
+    preferencesPatch: { in_app_enabled: true, push_enabled: true },
+  });
+  await page.goto("/settings/notifications");
+  const inApp = page.getByRole("checkbox", {
+    name: "Показывать уведомления в приложении",
+  });
+  const push = page.getByRole("checkbox", {
+    name: "Уведомления Push",
+  });
+  await expect(inApp).toBeChecked();
+  await expect(push).toBeChecked();
+  await inApp.uncheck();
+  await expect(page.getByText("Сохранено")).toBeVisible();
+  await expect(push).toBeChecked();
+});
+
 test("global navigation stays stable while utility pages replace content", async ({
   page,
 }) => {
@@ -996,6 +1046,7 @@ test("global navigation stays stable while utility pages replace content", async
     const workspaceMenuBox = await workspaceMenu.boundingBox();
     expect(workspaceButtonBox).not.toBeNull();
     expect(workspaceMenuBox).not.toBeNull();
+    expect(workspaceMenuBox!.width).toBe(320);
     expect(
       workspaceMenuBox!.y -
         (workspaceButtonBox!.y + workspaceButtonBox!.height),
@@ -1096,6 +1147,10 @@ test("phone tabbar keeps navigation and settings in the main field", async ({
 test("phase 3.1 settings cover workspace branding infrastructure sessions and audit", async ({
   page,
 }) => {
+  test.skip(
+    test.info().project.name === "phone",
+    "workspace settings use the mobile More routes",
+  );
   await mockMessenger(page);
   await page.goto("/settings/workspace");
   await expect(
@@ -1211,7 +1266,9 @@ test("phase 3.1 settings cover workspace branding infrastructure sessions and au
   await expect(
     page.getByText(/Анна изменил\(а\) настройки пространства/),
   ).toBeVisible();
-  await page.getByLabel("Категория").selectOption("organization");
+  await page
+    .locator('select[name="audit-category"]')
+    .selectOption("organization");
   await page.getByLabel("С даты").fill("2026-08-01");
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
@@ -1219,11 +1276,18 @@ test("phase 3.1 settings cover workspace branding infrastructure sessions and au
 test("profile menu, status dialog and attachment picker expose the new flows", async ({
   page,
 }) => {
+  test.skip(
+    test.info().project.name === "phone",
+    "the desktop profile menu is replaced by the mobile More page",
+  );
   await mockMessenger(page, { chatPatch: { kind: "group", role: "owner" } });
   await page.goto("/chats");
 
   await page.getByRole("button", { name: /Анна/ }).click();
   const profileMenu = page.getByRole("menu");
+  const profileMenuBox = await profileMenu.boundingBox();
+  expect(profileMenuBox).not.toBeNull();
+  expect(profileMenuBox!.width).toBe(320);
   await expect(profileMenu.getByText("Анна")).toBeVisible();
   await expect(
     profileMenu.getByRole("menuitem", { name: "Настройки профиля" }),
@@ -1234,6 +1298,15 @@ test("profile menu, status dialog and attachment picker expose the new flows", a
     name: "Установить статус",
   });
   await expect(statusDialog).toBeVisible();
+  const cancelBox = await statusDialog
+    .getByRole("button", { name: "Отмена" })
+    .boundingBox();
+  const saveBox = await statusDialog
+    .getByRole("button", { name: "Сохранить" })
+    .boundingBox();
+  expect(cancelBox).not.toBeNull();
+  expect(saveBox).not.toBeNull();
+  expect(cancelBox!.width).toBeGreaterThan(saveBox!.width);
   await statusDialog.getByLabel("Текст статуса").fill("Проверяю интерфейс");
   await statusDialog.getByRole("button", { name: "Отмена" }).click();
   await expect(statusDialog).toBeHidden();
@@ -1968,22 +2041,27 @@ test("password recovery explains the local operator path without SMTP", async ({
 });
 
 test("custom status is edited from the profile menu", async ({ page }) => {
-  await mockMessenger(page);
+  const runtime = await mockMessenger(page);
   const phone = test.info().project.name === "phone";
   await page.goto(phone ? "/more" : "/chats");
   await page.getByRole("button", { name: phone ? /Статус/ : /Анна/ }).click();
   if (!phone) await page.getByRole("menuitem", { name: /Чем заняты/ }).click();
-  await page.getByLabel("Эмодзи статуса").fill("🏖️");
+  await page.getByLabel("Эмодзи статуса").click();
+  await page
+    .locator(".status-dialog__emoji-picker")
+    .getByRole("button", { name: "grinning face", exact: true })
+    .click();
   await page.getByLabel("Текст статуса").fill("В отпуске");
   if (!phone)
-    await page.getByLabel("Срок действия статуса").selectOption("week");
+    await page.locator('select[name="status-expiry"]').selectOption("week");
   await page.getByRole("button", { name: "Сохранить" }).click();
+  await expect.poll(() => runtime.statusMutations.length).toBe(1);
   if (phone) {
     await expect(
-      page.getByRole("button", { name: "Статус 🏖️ В отпуске" }),
+      page.getByRole("button", { name: "Статус 😀 В отпуске" }),
     ).toBeVisible();
   } else {
-    await expect(page.getByText("🏖️ В отпуске").first()).toBeVisible();
+    await expect(page.getByText("😀 В отпуске").first()).toBeVisible();
   }
 
   await page.getByRole("button", { name: phone ? /Статус/ : /Анна/ }).click();
@@ -1994,7 +2072,7 @@ test("custom status is edited from the profile menu", async ({ page }) => {
       page.getByRole("button", { name: "Статус Чем заняты?" }),
     ).toBeVisible();
   } else {
-    await expect(page.getByText("🏖️ В отпуске")).toHaveCount(0);
+    await expect(page.getByText("😀 В отпуске")).toHaveCount(0);
   }
 });
 
@@ -2007,6 +2085,13 @@ test("notification snooze is shared by the profile menu", async ({ page }) => {
   } else {
     await page.getByRole("button", { name: /Анна/ }).click();
     await page.getByRole("menuitem", { name: "Отключить уведомления" }).click();
+    const menuBox = await page.locator(".profile-menu").boundingBox();
+    const snoozeBox = await page.locator(".profile-menu__snooze").boundingBox();
+    expect(menuBox).not.toBeNull();
+    expect(snoozeBox).not.toBeNull();
+    expect(snoozeBox!.x - (menuBox!.x + menuBox!.width)).toBeGreaterThanOrEqual(
+      7,
+    );
   }
   await page.getByRole("button", { name: "На 30 минут" }).click();
   if (phone) {

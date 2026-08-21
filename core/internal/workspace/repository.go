@@ -393,11 +393,12 @@ func (r *Repository) Audit(ctx context.Context, orgID string, filter AuditFilter
 		  WHERE l.org_id=$1
 		)
 		SELECT l.id,l.actor_id,a.display_name,a.org_role,l.action,l.category,l.target_type,l.target_id,
-		       COALESCE(target_actor.display_name,target_chat.name,target_invitation.email::text,target_org.name),
+		       COALESCE(target_actor.display_name,target_agent.display_name,target_chat.name,target_invitation.email::text,target_org.name),
 		       l.metadata,l.created_at
 		FROM entries l
 		LEFT JOIN actors a ON a.org_id=l.org_id AND a.id=l.actor_id
 		LEFT JOIN actors target_actor ON l.target_type='actor' AND target_actor.org_id=l.org_id AND target_actor.id=l.target_id
+		LEFT JOIN actors target_agent ON l.target_type='agent' AND target_agent.org_id=l.org_id AND target_agent.id=l.target_id
 		LEFT JOIN chats target_chat ON l.target_type='chat' AND target_chat.org_id=l.org_id AND target_chat.id=l.target_id
 		LEFT JOIN invitations target_invitation ON l.target_type='invitation' AND target_invitation.org_id=l.org_id AND target_invitation.id=l.target_id
 		LEFT JOIN organizations target_org ON l.target_type='organization' AND target_org.id=l.target_id

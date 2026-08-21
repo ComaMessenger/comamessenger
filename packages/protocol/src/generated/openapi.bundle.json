@@ -10753,6 +10753,7 @@
         "required": [
           "theme",
           "locale",
+          "in_app_enabled",
           "push_enabled",
           "push_preview",
           "notify_messages",
@@ -10781,6 +10782,9 @@
               "ru",
               "en"
             ]
+          },
+          "in_app_enabled": {
+            "type": "boolean"
           },
           "push_enabled": {
             "type": "boolean"
@@ -10863,6 +10867,9 @@
               "ru",
               "en"
             ]
+          },
+          "in_app_enabled": {
+            "type": "boolean"
           },
           "push_enabled": {
             "type": "boolean"

@@ -29,6 +29,21 @@ export const auditActions = [
   "chat.member.update",
   "chat.member.remove",
   "message.moderate.delete",
+  "agent.create",
+  "agent.update",
+  "agent.key.create",
+  "agent.key.revoke",
+  "agent.settings.update",
+  "agent.provider_credential.update",
+  "agent.mcp_server.create",
+  "agent.mcp_server.update",
+  "agent.mcp_server.delete",
+  "agent.trigger.create",
+  "agent.trigger.update",
+  "agent.trigger.delete",
+  "agent.run.invoke",
+  "agent.run.cancel",
+  "agent.tool.call",
 ] as const;
 
 const ru: Record<(typeof auditActions)[number], string> = {
@@ -60,6 +75,22 @@ const ru: Record<(typeof auditActions)[number], string> = {
   "chat.member.update": "изменил(а) роль {{target}} в чате",
   "chat.member.remove": "удалил(а) {{target}} из чата",
   "message.moderate.delete": "удалил(а) чужое сообщение",
+  "agent.create": "создал(а) агента {{target}}",
+  "agent.update": "изменил(а) агента {{target}}",
+  "agent.key.create": "создал(а) ключ агента {{target}}",
+  "agent.key.revoke": "отозвал(а) ключ агента {{target}}",
+  "agent.settings.update": "изменил(а) общие настройки агентов",
+  "agent.provider_credential.update":
+    "обновил(а) данные провайдера агента {{target}}",
+  "agent.mcp_server.create": "добавил(а) MCP-сервер агента",
+  "agent.mcp_server.update": "изменил(а) MCP-сервер агента",
+  "agent.mcp_server.delete": "удалил(а) MCP-сервер агента",
+  "agent.trigger.create": "создал(а) триггер агента {{target}}",
+  "agent.trigger.update": "изменил(а) триггер агента {{target}}",
+  "agent.trigger.delete": "удалил(а) триггер агента {{target}}",
+  "agent.run.invoke": "запустил(а) агента {{target}}",
+  "agent.run.cancel": "остановил(а) агента {{target}}",
+  "agent.tool.call": "вызвал(а) инструмент агента {{target}}",
 };
 
 const en: Record<(typeof auditActions)[number], string> = {
@@ -91,6 +122,22 @@ const en: Record<(typeof auditActions)[number], string> = {
   "chat.member.update": "changed {{target}}'s chat role",
   "chat.member.remove": "removed {{target}} from a chat",
   "message.moderate.delete": "deleted another member's message",
+  "agent.create": "created agent {{target}}",
+  "agent.update": "updated agent {{target}}",
+  "agent.key.create": "created a key for agent {{target}}",
+  "agent.key.revoke": "revoked a key for agent {{target}}",
+  "agent.settings.update": "changed global agent settings",
+  "agent.provider_credential.update":
+    "updated provider credentials for agent {{target}}",
+  "agent.mcp_server.create": "added an agent MCP server",
+  "agent.mcp_server.update": "updated an agent MCP server",
+  "agent.mcp_server.delete": "removed an agent MCP server",
+  "agent.trigger.create": "created a trigger for agent {{target}}",
+  "agent.trigger.update": "updated a trigger for agent {{target}}",
+  "agent.trigger.delete": "removed a trigger from agent {{target}}",
+  "agent.run.invoke": "started agent {{target}}",
+  "agent.run.cancel": "stopped agent {{target}}",
+  "agent.tool.call": "called a tool for agent {{target}}",
 };
 
 const fieldLabels: Record<string, { ru: string; en: string }> = {

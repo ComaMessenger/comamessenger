@@ -1,19 +1,23 @@
 import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
+  ReactElement,
   ReactNode,
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
 } from "react";
 import {
+  Children,
   createContext,
+  isValidElement,
   useContext,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
 } from "react";
-import { X } from "lucide-react";
+import { Check, ChevronDown, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { stableAvatarIndex } from "@comamessenger/tokens";
 import type { MessengerAPI } from "@comamessenger/core";
@@ -134,19 +138,123 @@ export function SelectField({
   label,
   name,
   children,
+  value,
+  defaultValue,
+  disabled,
+  onChange,
   ...props
 }: SelectHTMLAttributes<HTMLSelectElement> & {
   label: string;
   name: string;
   children: ReactNode;
 }) {
+  const labelID = useId();
+  const selectedLabelID = useId();
+  const root = useRef<HTMLDivElement>(null);
+  const nativeSelect = useRef<HTMLSelectElement>(null);
+  const [open, setOpen] = useState(false);
+  const options = Children.toArray(children)
+    .filter(
+      (
+        child,
+      ): child is ReactElement<{
+        value?: string | number;
+        disabled?: boolean;
+        children?: ReactNode;
+      }> => isValidElement(child) && child.type === "option",
+    )
+    .map((option) => ({
+      value: String(option.props.value ?? ""),
+      label: option.props.children,
+      disabled: option.props.disabled,
+    }));
+  const fallbackValue = String(defaultValue ?? options[0]?.value ?? "");
+  const [uncontrolledValue, setUncontrolledValue] = useState(fallbackValue);
+  const selectedValue = String(value ?? uncontrolledValue);
+  const selected =
+    options.find((option) => option.value === selectedValue) ?? options[0];
+
+  useEffect(() => {
+    function dismiss(event: PointerEvent) {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    }
+    function keyboard(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("pointerdown", dismiss);
+    document.addEventListener("keydown", keyboard);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss);
+      document.removeEventListener("keydown", keyboard);
+    };
+  }, []);
+
+  function choose(nextValue: string) {
+    setUncontrolledValue(nextValue);
+    setOpen(false);
+    const select = nativeSelect.current;
+    if (!select) return;
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLSelectElement.prototype,
+      "value",
+    )?.set;
+    setter?.call(select, nextValue);
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
   return (
-    <label className="ui-field">
-      <span className="ui-field__label">{label}</span>
-      <select name={name} {...props}>
-        {children}
-      </select>
-    </label>
+    <div className="ui-field ui-select-field">
+      <span className="ui-field__label" id={labelID}>
+        {label}
+      </span>
+      <div className="ui-select" ref={root}>
+        <select
+          ref={nativeSelect}
+          className="ui-select__native"
+          name={name}
+          aria-hidden="true"
+          value={selectedValue}
+          disabled={disabled}
+          onChange={(event) => {
+            setUncontrolledValue(event.target.value);
+            onChange?.(event);
+          }}
+          tabIndex={-1}
+          {...props}
+        >
+          {children}
+        </select>
+        <button
+          type="button"
+          className="ui-select__trigger"
+          aria-labelledby={`${labelID} ${selectedLabelID}`}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          disabled={disabled}
+          onClick={() => setOpen((current) => !current)}
+        >
+          <span id={selectedLabelID}>{selected?.label}</span>
+          <ChevronDown aria-hidden="true" />
+        </button>
+        {open && (
+          <div className="ui-select__menu" role="listbox" aria-label={label}>
+            {options.map((option) => (
+              <button
+                type="button"
+                role="option"
+                aria-selected={option.value === selectedValue}
+                disabled={option.disabled}
+                key={option.value}
+                onClick={() => choose(option.value)}
+              >
+                <span>{option.label}</span>
+                {option.value === selectedValue && <Check aria-hidden="true" />}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

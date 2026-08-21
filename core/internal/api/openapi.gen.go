@@ -4155,6 +4155,7 @@ type UpdateOrganizationSettingsRequestInvitationDefaultRole string
 // UpdatePreferencesRequest defines model for UpdatePreferencesRequest.
 type UpdatePreferencesRequest struct {
 	EmailDigest     *bool                                   `json:"email_digest,omitempty"`
+	InAppEnabled    *bool                                   `json:"in_app_enabled,omitempty"`
 	Locale          *UpdatePreferencesRequestLocale         `json:"locale,omitempty"`
 	NotifyInvites   *bool                                   `json:"notify_invites,omitempty"`
 	NotifyMessages  *UpdatePreferencesRequestNotifyMessages `json:"notify_messages,omitempty"`
@@ -4226,6 +4227,7 @@ type UserStatus string
 // UserPreferences defines model for UserPreferences.
 type UserPreferences struct {
 	EmailDigest     bool                          `json:"email_digest"`
+	InAppEnabled    bool                          `json:"in_app_enabled"`
 	Locale          UserPreferencesLocale         `json:"locale"`
 	NotifyInvites   bool                          `json:"notify_invites"`
 	NotifyMessages  UserPreferencesNotifyMessages `json:"notify_messages"`

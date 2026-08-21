@@ -48,6 +48,7 @@ type TestResult struct {
 type Preferences struct {
 	Theme           string                `json:"theme"`
 	Locale          string                `json:"locale"`
+	InAppEnabled    bool                  `json:"in_app_enabled"`
 	PushEnabled     bool                  `json:"push_enabled"`
 	PushPreview     bool                  `json:"push_preview"`
 	NotifyMessages  string                `json:"notify_messages"`
@@ -83,6 +84,7 @@ func (value *OptionalTime) UnmarshalJSON(data []byte) error {
 type UpdatePreferences struct {
 	Theme           *string          `json:"theme"`
 	Locale          *string          `json:"locale"`
+	InAppEnabled    *bool            `json:"in_app_enabled"`
 	PushEnabled     *bool            `json:"push_enabled"`
 	PushPreview     *bool            `json:"push_preview"`
 	NotifyMessages  *string          `json:"notify_messages"`
@@ -245,7 +247,7 @@ func (s *Service) Test(ctx context.Context, user identity.User) (TestResult, err
 }
 func (s *Service) GetPreferences(ctx context.Context, user identity.User) (Preferences, error) {
 	result := Preferences{
-		Theme: "light", Locale: "ru", PushEnabled: true,
+		Theme: "light", Locale: "ru", InAppEnabled: true, PushEnabled: true,
 		NotifyMessages: "all", NotifyThreads: "all",
 		NotifyReactions: true, NotifyInvites: true, NotifySystem: true,
 		SoundEnabled: true, SoundID: "default",
@@ -273,6 +275,9 @@ func (s *Service) GetPreferences(ctx context.Context, user identity.User) (Prefe
 	// Boolean defaults for rows created before notification preferences existed.
 	var stored map[string]json.RawMessage
 	if json.Unmarshal(raw, &stored) == nil {
+		if _, ok := stored["in_app_enabled"]; !ok {
+			result.InAppEnabled = true
+		}
 		if _, ok := stored["notify_reactions"]; !ok {
 			result.NotifyReactions = true
 		}
@@ -316,12 +321,15 @@ func (s *Service) UpdatePreferences(ctx context.Context, user identity.User, inp
 			return Preferences{}, ErrInvalid
 		}
 	}
-	payload := make(map[string]any, 14)
+	payload := make(map[string]any, 15)
 	if input.Theme != nil {
 		payload["theme"] = *input.Theme
 	}
 	if input.Locale != nil {
 		payload["locale"] = *input.Locale
+	}
+	if input.InAppEnabled != nil {
+		payload["in_app_enabled"] = *input.InAppEnabled
 	}
 	if input.PushEnabled != nil {
 		payload["push_enabled"] = *input.PushEnabled
@@ -395,7 +403,7 @@ func (s *Service) UpdatePreferences(ctx context.Context, user identity.User, inp
 }
 
 func (input UpdatePreferences) empty() bool {
-	return input.Theme == nil && input.Locale == nil && input.PushEnabled == nil && input.PushPreview == nil &&
+	return input.Theme == nil && input.Locale == nil && input.InAppEnabled == nil && input.PushEnabled == nil && input.PushPreview == nil &&
 		input.NotifyMessages == nil && input.NotifyThreads == nil && input.NotifyReactions == nil && input.NotifyInvites == nil &&
 		input.NotifySystem == nil && input.SoundEnabled == nil && input.SoundID == nil && !input.Schedule.Set &&
 		!input.SnoozedUntil.Set && input.EmailDigest == nil

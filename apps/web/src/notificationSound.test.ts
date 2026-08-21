@@ -5,7 +5,10 @@ import type {
   User,
   UserPreferences,
 } from "@comamessenger/core";
-import { shouldPlayNotificationSound } from "./notificationSound";
+import {
+  shouldPlayNotificationSound,
+  shouldShowInAppNotification,
+} from "./notificationSound";
 
 const user = { id: "recipient", timezone: "UTC" } as User;
 const chat = {
@@ -15,6 +18,7 @@ const chat = {
   muted_until: null,
 } as Chat;
 const preferences = {
+  in_app_enabled: true,
   sound_enabled: true,
   snoozed_until: null,
   schedule: null,
@@ -84,6 +88,29 @@ describe("notification sound policy", () => {
         ...preferences,
         notify_reactions: false,
       }),
+    ).toBe(false);
+  });
+
+  it("keeps in-app notifications independent from browser push", () => {
+    const visibleChat = { ...chat, notify_level: "all" } as Chat;
+    expect(
+      shouldShowInAppNotification(event, user, preferences, visibleChat),
+    ).toBe(true);
+    expect(
+      shouldShowInAppNotification(
+        event,
+        user,
+        { ...preferences, in_app_enabled: false, push_enabled: true },
+        visibleChat,
+      ),
+    ).toBe(false);
+    expect(
+      shouldPlayNotificationSound(
+        event,
+        user,
+        { ...preferences, sound_enabled: false },
+        visibleChat,
+      ),
     ).toBe(false);
   });
 });

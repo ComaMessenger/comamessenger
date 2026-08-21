@@ -9,7 +9,6 @@ import {
   MonitorSmartphone,
   RotateCcw,
   Send,
-  Volume2,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
@@ -360,6 +359,7 @@ export function NotificationSettingsPage({
     value: draft,
     save: (snapshot) =>
       api.updatePreferences({
+        in_app_enabled: snapshot.in_app_enabled,
         push_enabled: snapshot.push_enabled,
         push_preview: snapshot.push_preview,
         notify_messages: snapshot.notify_messages,
@@ -431,6 +431,27 @@ export function NotificationSettingsPage({
       <div className="settings-page__body">
         <AutosaveStatus {...autosave} onRetry={autosave.retry} />
         <SettingsSection
+          title={t("inAppNotifications")}
+          description={t("inAppNotificationsHint")}
+          icon={<MessageCircle />}
+        >
+          <SettingsToggle
+            label={t("inAppNotificationsEnabled")}
+            hint={t("inAppNotificationsEnabledHint")}
+            checked={draft.in_app_enabled}
+            onChange={(in_app_enabled) =>
+              setDraft({ ...draft, in_app_enabled })
+            }
+          />
+          <SettingsToggle
+            label={t("soundEnabled")}
+            hint={t("inAppSoundHint")}
+            checked={draft.sound_enabled}
+            disabled={!draft.in_app_enabled}
+            onChange={(sound_enabled) => setDraft({ ...draft, sound_enabled })}
+          />
+        </SettingsSection>
+        <SettingsSection
           title={t("browserNotifications")}
           description={t("browserNotificationsHint")}
           icon={<Bell />}
@@ -464,6 +485,12 @@ export function NotificationSettingsPage({
               </Button>
             )}
           </div>
+          <SettingsToggle
+            label={t("notificationPreview")}
+            hint={t("notificationPreviewHint")}
+            checked={draft.push_preview}
+            onChange={(push_preview) => setDraft({ ...draft, push_preview })}
+          />
         </SettingsSection>
         <SettingsSection
           title={t("messageNotifications")}
@@ -631,23 +658,6 @@ export function NotificationSettingsPage({
               </small>
             </div>
           )}
-        </SettingsSection>
-        <SettingsSection
-          title={t("notificationSound")}
-          description={t("notificationSoundHint")}
-          icon={<Volume2 />}
-        >
-          <SettingsToggle
-            label={t("soundEnabled")}
-            checked={draft.sound_enabled}
-            onChange={(sound_enabled) => setDraft({ ...draft, sound_enabled })}
-          />
-          <SettingsToggle
-            label={t("notificationPreview")}
-            hint={t("notificationPreviewHint")}
-            checked={draft.push_preview}
-            onChange={(push_preview) => setDraft({ ...draft, push_preview })}
-          />
         </SettingsSection>
         <SettingsSection
           title={t("snoozeNotifications")}
