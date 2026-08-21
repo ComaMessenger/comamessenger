@@ -1079,6 +1079,118 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/files/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createFileUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/uploads/{upload_id}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["putFileUploadContent"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/uploads/{upload_id}/parts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["signFileUploadParts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/uploads/{upload_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["completeFileUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/uploads/{upload_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["abortFileUpload"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{file_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{file_id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["downloadFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1095,7 +1207,64 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "already_bootstrapped" | "chat_conflict" | "chat_not_found" | "forbidden" | "idempotency_conflict" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "workspace_not_found";
+        ErrorCode: "already_bootstrapped" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "workspace_not_found";
+        File: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            mime: string;
+            /** Format: int64 */
+            size: number;
+            sha256?: string;
+            /** @enum {string} */
+            status: "pending" | "ready" | "failed" | "deleted";
+            /** @enum {string} */
+            processing_status: "pending" | "processing" | "ready" | "failed" | "skipped";
+            /** Format: uuid */
+            preview_file_id?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            ready_at?: string;
+            /** Format: uuid */
+            uploader_id: string;
+        };
+        CreateFileUploadRequest: {
+            name: string;
+            mime: string;
+            /** Format: int64 */
+            size: number;
+            sha256?: string;
+        };
+        FileUpload: {
+            /** Format: uuid */
+            id: string;
+            file: components["schemas"]["File"];
+            /** @enum {string} */
+            mode: "streaming" | "presigned" | "multipart";
+            /** Format: uri-reference */
+            upload_url?: string;
+            /** Format: date-time */
+            expires_at: string;
+            parts?: components["schemas"]["FilePartLink"][];
+        };
+        FilePartLink: {
+            number: number;
+            /** Format: uri */
+            url: string;
+        };
+        SignFilePartsRequest: {
+            part_numbers: number[];
+        };
+        CompletedFilePart: {
+            number: number;
+            etag: string;
+            /** Format: int64 */
+            size?: number;
+        };
+        CompleteFileUploadRequest: {
+            parts?: components["schemas"]["CompletedFilePart"][];
+        };
         /** @enum {string} */
         DurableEventTypeV1: "message.created" | "message.updated" | "message.deleted" | "message.pinned" | "message.unpinned" | "reaction.added" | "reaction.removed" | "thread.followed" | "thread.unfollowed" | "read.marked" | "draft.updated" | "draft.deleted" | "chat.created" | "chat.updated" | "chat.archived" | "member.joined" | "member.updated" | "member.removed" | "actor.status.updated";
         /**
@@ -1690,6 +1859,7 @@ export interface components {
              * @description Number of non-deleted replies when this message is a thread root.
              */
             thread_reply_count: number;
+            files: components["schemas"]["File"][];
         };
         MessagePage: {
             messages: components["schemas"]["Message"][];
@@ -1717,6 +1887,7 @@ export interface components {
             /** Format: uuid */
             thread_root_id?: string;
             mentioned_actor_ids?: string[];
+            file_ids?: string[];
         };
         UpdateMessageRequest: {
             body: string;
@@ -1997,6 +2168,8 @@ export interface components {
         ChatId: string;
         ActorId: string;
         MessageId: string;
+        UploadId: string;
+        FileId: string;
     };
     requestBodies: never;
     headers: never;
@@ -4205,6 +4378,197 @@ export interface operations {
                     "application/json": components["schemas"]["ChatNotificationOverride"][];
                 };
             };
+        };
+    };
+    createFileUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateFileUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description Reserved upload session with a selected transport flow. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileUpload"];
+                };
+            };
+            413: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            507: components["responses"]["Error"];
+        };
+    };
+    putFileUploadContent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                upload_id: components["parameters"]["UploadId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description Completed streaming upload. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["File"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+            415: components["responses"]["Error"];
+            507: components["responses"]["Error"];
+        };
+    };
+    signFileUploadParts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                upload_id: components["parameters"]["UploadId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignFilePartsRequest"];
+            };
+        };
+        responses: {
+            /** @description Short-lived multipart part URLs. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        parts: components["schemas"]["FilePartLink"][];
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    completeFileUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                upload_id: components["parameters"]["UploadId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CompleteFileUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description Completed presigned or multipart upload. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["File"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    abortFileUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                upload_id: components["parameters"]["UploadId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Upload aborted and quota reservation released. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    getFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_id: components["parameters"]["FileId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Membership-authorized file metadata. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["File"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    downloadFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_id: components["parameters"]["FileId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized local blob stream. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description Short-lived authorized object-store URL. */
+            307: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
         };
     };
 }

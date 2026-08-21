@@ -120,7 +120,7 @@ func (s *S3BlobStore) Open(ctx context.Context, key string) (io.ReadCloser, Blob
 	if err != nil {
 		return nil, Blob{}, fmt.Errorf("open S3 blob: %w", err)
 	}
-	return result.Body, Blob{Key: key, Size: aws.ToInt64(result.ContentLength), ContentType: aws.ToString(result.ContentType)}, nil
+	return result.Body, Blob{Key: key, Size: aws.ToInt64(result.ContentLength), ContentType: aws.ToString(result.ContentType), ModifiedAt: aws.ToTime(result.LastModified)}, nil
 }
 
 func (s *S3BlobStore) Stat(ctx context.Context, key string) (Blob, error) {
@@ -135,7 +135,30 @@ func (s *S3BlobStore) Stat(ctx context.Context, key string) (Blob, error) {
 	if err != nil {
 		return Blob{}, fmt.Errorf("stat S3 blob: %w", err)
 	}
-	return Blob{Key: key, Size: aws.ToInt64(result.ContentLength), ContentType: aws.ToString(result.ContentType)}, nil
+	return Blob{Key: key, Size: aws.ToInt64(result.ContentLength), ContentType: aws.ToString(result.ContentType), ModifiedAt: aws.ToTime(result.LastModified)}, nil
+}
+
+func (s *S3BlobStore) List(ctx context.Context) ([]Blob, error) {
+	prefix := s.prefix
+	if prefix != "" {
+		prefix += "/"
+	}
+	paginator := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{Bucket: aws.String(s.bucket), Prefix: aws.String(prefix)})
+	result := make([]Blob, 0)
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("list S3 blobs: %w", err)
+		}
+		for _, object := range page.Contents {
+			key := strings.TrimPrefix(aws.ToString(object.Key), prefix)
+			if key == "" || !validKey(key) {
+				continue
+			}
+			result = append(result, Blob{Key: key, Size: aws.ToInt64(object.Size), ModifiedAt: aws.ToTime(object.LastModified)})
+		}
+	}
+	return result, nil
 }
 
 func (s *S3BlobStore) Delete(ctx context.Context, key string) error {

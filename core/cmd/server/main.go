@@ -18,12 +18,14 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/coordination"
 	"github.com/comamessenger/comamessenger/core/internal/database"
 	"github.com/comamessenger/comamessenger/core/internal/eventlog"
+	"github.com/comamessenger/comamessenger/core/internal/files"
 	serverhttp "github.com/comamessenger/comamessenger/core/internal/http"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/message"
 	"github.com/comamessenger/comamessenger/core/internal/password"
 	"github.com/comamessenger/comamessenger/core/internal/push"
 	"github.com/comamessenger/comamessenger/core/internal/realtime"
+	"github.com/comamessenger/comamessenger/core/internal/storage"
 	"github.com/comamessenger/comamessenger/core/internal/userstate"
 	"github.com/comamessenger/comamessenger/core/internal/workspace"
 )
@@ -88,6 +90,25 @@ func main() {
 	workspaceService, err := workspace.NewService(workspace.NewRepository(pool), cfg.IntegrationEncryptionKey, nil)
 	if err != nil {
 		logger.Error("workspace service initialization failed", "error", err)
+		os.Exit(1)
+	}
+	var blobStore storage.BlobStore
+	if cfg.Storage.Driver == "local" {
+		blobStore, err = storage.NewLocalBlobStore(cfg.Storage.LocalPath, cfg.Storage.MinimumFreeBytes)
+	} else {
+		blobStore, err = storage.NewS3BlobStore(startupCtx, storage.S3Options{
+			Endpoint: cfg.S3.Endpoint, PublicEndpoint: cfg.S3.PublicEndpoint, Region: cfg.S3.Region,
+			Bucket: cfg.S3.Bucket, AccessKey: cfg.S3.AccessKey, SecretKey: cfg.S3.SecretKey,
+			Prefix: cfg.S3.Prefix, ForcePathStyle: cfg.S3.ForcePathStyle,
+		})
+	}
+	if err != nil {
+		logger.Error("blob storage initialization failed", "error", err)
+		os.Exit(1)
+	}
+	fileService, err := files.NewService(pool, blobStore, cfg.S3.Bucket, cfg.Storage.QuotaBytes, cfg.Storage.MaxFileBytes, cfg.Storage.MultipartThreshold, cfg.Storage.UploadTTL, cfg.Storage.PresignTTL)
+	if err != nil {
+		logger.Error("file service initialization failed", "error", err)
 		os.Exit(1)
 	}
 	identityService, err := identity.NewService(
@@ -156,11 +177,13 @@ func main() {
 	pushService := push.NewService(pool, cfg.Push)
 	pushWorker := push.NewWorker(logger, pool, cfg.Push, realtimeHub.ActorActiveIn, workspaceService)
 	go pushWorker.Run(realtimeCtx)
+	fileWorker := files.NewWorker(logger, fileService, 10*time.Minute)
+	go fileWorker.Run(realtimeCtx)
 	server := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: serverhttp.NewHandler(logger, cfg.PublicAppURL, pool.Ping, serverhttp.Dependencies{
 			Identity: identityService, Chats: chat.NewService(pool, afterCommit),
-			Messages: messageService, UserState: userStateService, Push: pushService, Workspace: workspaceService, Realtime: realtimeServer,
+			Messages: messageService, UserState: userStateService, Push: pushService, Workspace: workspaceService, Files: fileService, Realtime: realtimeServer,
 			CookieSecure: cfg.Auth.CookieSecure, RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
 			BootstrapToken: cfg.BootstrapToken, RequireBootstrapToken: cfg.AppEnv != "development",
 			TrustedProxyCIDRs: cfg.TrustedProxyCIDRs, RevokeRealtimeSession: realtimeServer.RevokeSession,

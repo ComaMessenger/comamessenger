@@ -3,6 +3,7 @@ package message
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/comamessenger/comamessenger/core/internal/authz"
+	filemodel "github.com/comamessenger/comamessenger/core/internal/files"
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/permission"
@@ -47,6 +49,7 @@ type Message struct {
 	ForwardedFrom     *ForwardAttribution `json:"forwarded_from,omitempty"`
 	MentionedActorIDs []string            `json:"mentioned_actor_ids"`
 	ThreadReplyCount  int64               `json:"thread_reply_count"`
+	Files             []filemodel.File    `json:"files"`
 }
 
 type ForwardAttribution struct {
@@ -62,6 +65,7 @@ type CreateInput struct {
 	ReplyToID         *string  `json:"reply_to_id"`
 	ThreadRootID      *string  `json:"thread_root_id"`
 	MentionedActorIDs []string `json:"mentioned_actor_ids"`
+	FileIDs           []string `json:"file_ids"`
 }
 
 type UpdateInput struct {
@@ -146,6 +150,9 @@ func (s *Service) Create(ctx context.Context, user identity.User, chatID string,
 	if err := validateMentions(ctx, tx, user.OrgID, chatID, input.MentionedActorIDs); err != nil {
 		return Message{}, false, err
 	}
+	if err := validateFiles(ctx, tx, user, input.FileIDs); err != nil {
+		return Message{}, false, err
+	}
 
 	seq, err := nextSequence(ctx, tx, user.OrgID)
 	if err != nil {
@@ -163,6 +170,14 @@ func (s *Service) Create(ctx context.Context, user identity.User, chatID string,
 	if err != nil {
 		return Message{}, false, fmt.Errorf("insert message: %w", err)
 	}
+	if err := attachFiles(ctx, tx, user.OrgID, result.ID, input.FileIDs); err != nil {
+		return Message{}, false, err
+	}
+	created := []Message{result}
+	if err := hydrateFiles(ctx, tx, user.OrgID, created); err != nil {
+		return Message{}, false, err
+	}
+	result = created[0]
 	if err := insertEvent(ctx, tx, user, chatID, result.ID, seq, "message.created"); err != nil {
 		return Message{}, false, err
 	}
@@ -244,6 +259,9 @@ func (s *Service) List(ctx context.Context, user identity.User, chatID string, o
 	if err := hydrateThreadReplyCounts(ctx, tx, user.OrgID, messages); err != nil {
 		return Page{}, err
 	}
+	if err := hydrateFiles(ctx, tx, user.OrgID, messages); err != nil {
+		return Page{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return Page{}, fmt.Errorf("commit list messages: %w", err)
 	}
@@ -298,6 +316,9 @@ func (s *Service) Context(ctx context.Context, user identity.User, messageID str
 	if err := hydrateThreadReplyCounts(ctx, tx, user.OrgID, result.Messages); err != nil {
 		return Window{}, err
 	}
+	if err := hydrateFiles(ctx, tx, user.OrgID, result.Messages); err != nil {
+		return Window{}, err
+	}
 	if len(result.Messages) > 0 {
 		firstSeq := result.Messages[0].CreatedSeq
 		lastSeq := result.Messages[len(result.Messages)-1].CreatedSeq
@@ -318,7 +339,7 @@ func (s *Service) Update(ctx context.Context, user identity.User, messageID stri
 	if _, err := uuid.Parse(messageID); err != nil {
 		return Message{}, fmt.Errorf("%w: message_id must be a UUID", ErrInvalid)
 	}
-	if err := s.validateBody(&input.Body, &input.BodyFormat); err != nil {
+	if err := s.validateBody(&input.Body, &input.BodyFormat, false); err != nil {
 		return Message{}, err
 	}
 	if input.ExpectedVersion < 1 {
@@ -386,6 +407,11 @@ func (s *Service) Update(ctx context.Context, user identity.User, messageID stri
 	if err := insertEvent(ctx, tx, user, result.ChatID, result.ID, seq, "message.updated"); err != nil {
 		return Message{}, err
 	}
+	updated := []Message{result}
+	if err := hydrateFiles(ctx, tx, user.OrgID, updated); err != nil {
+		return Message{}, err
+	}
+	result = updated[0]
 	if err := tx.Commit(ctx); err != nil {
 		return Message{}, fmt.Errorf("commit update message: %w", err)
 	}
@@ -437,6 +463,11 @@ func (s *Service) Delete(ctx context.Context, user identity.User, messageID stri
 	if err := insertEvent(ctx, tx, user, result.ChatID, result.ID, seq, "message.deleted"); err != nil {
 		return Message{}, err
 	}
+	deleted := []Message{result}
+	if err := hydrateFiles(ctx, tx, user.OrgID, deleted); err != nil {
+		return Message{}, err
+	}
+	result = deleted[0]
 	if current.ActorID != user.ActorID {
 		auditID, err := id.New()
 		if err != nil {
@@ -491,7 +522,11 @@ func (s *Service) validateCreate(chatID string, input *CreateInput) error {
 		return err
 	}
 	input.MentionedActorIDs = normalized
-	return s.validateBody(&input.Body, &input.BodyFormat)
+	input.FileIDs, err = normalizeFileIDs(input.FileIDs)
+	if err != nil {
+		return err
+	}
+	return s.validateBody(&input.Body, &input.BodyFormat, len(input.FileIDs) > 0)
 }
 
 func normalizeActorIDs(actorIDs []string) ([]string, error) {
@@ -510,8 +545,27 @@ func normalizeActorIDs(actorIDs []string) ([]string, error) {
 	return normalized, nil
 }
 
-func (s *Service) validateBody(body, format *string) error {
-	if strings.TrimSpace(*body) == "" {
+func normalizeFileIDs(fileIDs []string) ([]string, error) {
+	if len(fileIDs) > 10 {
+		return nil, fmt.Errorf("%w: a message may contain at most 10 files", ErrInvalid)
+	}
+	seen := make(map[string]struct{}, len(fileIDs))
+	normalized := make([]string, 0, len(fileIDs))
+	for _, fileID := range fileIDs {
+		if _, err := uuid.Parse(fileID); err != nil {
+			return nil, fmt.Errorf("%w: file_ids must contain UUIDs", ErrInvalid)
+		}
+		if _, exists := seen[fileID]; exists {
+			return nil, fmt.Errorf("%w: file_ids must be unique", ErrInvalid)
+		}
+		seen[fileID] = struct{}{}
+		normalized = append(normalized, fileID)
+	}
+	return normalized, nil
+}
+
+func (s *Service) validateBody(body, format *string, allowBlank bool) error {
+	if strings.TrimSpace(*body) == "" && !allowBlank {
 		return fmt.Errorf("%w: body must not be blank", ErrInvalid)
 	}
 	if len([]byte(*body)) > s.maxBodyBytes {
@@ -708,7 +762,7 @@ func commandFingerprint(chatID string, input CreateInput) [32]byte {
 	if input.ThreadRootID != nil {
 		threadRoot = "+" + *input.ThreadRootID
 	}
-	return sha256.Sum256([]byte(chatID + "\x00" + input.Body + "\x00" + input.BodyFormat + "\x00" + replyTo + "\x00" + threadRoot + "\x00" + strings.Join(input.MentionedActorIDs, ",")))
+	return sha256.Sum256([]byte(chatID + "\x00" + input.Body + "\x00" + input.BodyFormat + "\x00" + replyTo + "\x00" + threadRoot + "\x00" + strings.Join(input.MentionedActorIDs, ",") + "\x00" + strings.Join(input.FileIDs, ",")))
 }
 
 type rowScanner interface {
@@ -754,6 +808,75 @@ func hydrateThreadReplyCounts(ctx context.Context, tx pgx.Tx, orgID string, mess
 	}
 	for i := range messages {
 		messages[i].ThreadReplyCount = counts[messages[i].ID]
+	}
+	return nil
+}
+
+func validateFiles(ctx context.Context, tx pgx.Tx, user identity.User, fileIDs []string) error {
+	if len(fileIDs) == 0 {
+		return nil
+	}
+	var count int
+	if err := tx.QueryRow(ctx, `
+		SELECT count(*) FROM files
+		WHERE org_id = $1 AND uploader_id = $2 AND id = ANY($3::uuid[]) AND status = 'ready'`, user.OrgID, user.ActorID, fileIDs).Scan(&count); err != nil {
+		return fmt.Errorf("validate message files: %w", err)
+	}
+	if count != len(fileIDs) {
+		return fmt.Errorf("%w: every file must be ready and owned by the sender", ErrInvalid)
+	}
+	return nil
+}
+
+func attachFiles(ctx context.Context, tx pgx.Tx, orgID, messageID string, fileIDs []string) error {
+	if len(fileIDs) == 0 {
+		return nil
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO message_files (message_id, file_id, org_id, ordinal)
+		SELECT $1, value, $2, ordinal - 1
+		FROM unnest($3::uuid[]) WITH ORDINALITY AS selected(value, ordinal)`, messageID, orgID, fileIDs); err != nil {
+		return fmt.Errorf("attach message files: %w", err)
+	}
+	return nil
+}
+
+func hydrateFiles(ctx context.Context, tx pgx.Tx, orgID string, messages []Message) error {
+	if len(messages) == 0 {
+		return nil
+	}
+	messageIDs := make([]string, len(messages))
+	indexByID := make(map[string]int, len(messages))
+	for index := range messages {
+		messageIDs[index] = messages[index].ID
+		indexByID[messages[index].ID] = index
+		messages[index].Files = []filemodel.File{}
+	}
+	rows, err := tx.Query(ctx, `
+		SELECT mf.message_id, f.id, f.name, f.mime, f.size, f.sha256, f.status, f.processing_status,
+		       f.preview_file_id, f.created_at, f.ready_at, f.uploader_id
+		FROM message_files mf JOIN files f ON f.org_id = mf.org_id AND f.id = mf.file_id
+		WHERE mf.org_id = $1 AND mf.message_id = ANY($2::uuid[]) AND f.status <> 'deleted'
+		ORDER BY mf.message_id, mf.ordinal`, orgID, messageIDs)
+	if err != nil {
+		return fmt.Errorf("load message files: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var messageID string
+		var item filemodel.File
+		var checksum []byte
+		if err := rows.Scan(&messageID, &item.ID, &item.Name, &item.MIME, &item.Size, &checksum, &item.Status, &item.ProcessingStatus, &item.PreviewFileID, &item.CreatedAt, &item.ReadyAt, &item.UploaderID); err != nil {
+			return fmt.Errorf("scan message file: %w", err)
+		}
+		if len(checksum) == sha256.Size {
+			value := hex.EncodeToString(checksum)
+			item.SHA256 = &value
+		}
+		messages[indexByID[messageID]].Files = append(messages[indexByID[messageID]].Files, item)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate message files: %w", err)
 	}
 	return nil
 }

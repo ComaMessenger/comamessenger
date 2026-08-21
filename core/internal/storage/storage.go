@@ -29,6 +29,11 @@ type Blob struct {
 	Size        int64
 	SHA256      [32]byte
 	ContentType string
+	ModifiedAt  time.Time
+}
+
+type BlobLister interface {
+	List(context.Context) ([]Blob, error)
 }
 
 type PutRequest struct {

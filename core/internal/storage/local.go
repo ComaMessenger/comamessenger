@@ -127,7 +127,7 @@ func (s *LocalBlobStore) Open(_ context.Context, key string) (io.ReadCloser, Blo
 		_ = file.Close()
 		return nil, Blob{}, fmt.Errorf("stat blob: %w", err)
 	}
-	return file, Blob{Key: key, Size: info.Size()}, nil
+	return file, Blob{Key: key, Size: info.Size(), ModifiedAt: info.ModTime()}, nil
 }
 
 func (s *LocalBlobStore) Stat(_ context.Context, key string) (Blob, error) {
@@ -145,7 +145,36 @@ func (s *LocalBlobStore) Stat(_ context.Context, key string) (Blob, error) {
 	if !info.Mode().IsRegular() {
 		return Blob{}, ErrNotFound
 	}
-	return Blob{Key: key, Size: info.Size()}, nil
+	return Blob{Key: key, Size: info.Size(), ModifiedAt: info.ModTime()}, nil
+}
+
+func (s *LocalBlobStore) List(_ context.Context) ([]Blob, error) {
+	result := make([]Blob, 0)
+	err := filepath.WalkDir(s.root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() || strings.HasPrefix(entry.Name(), ".upload-") {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if !info.Mode().IsRegular() {
+			return nil
+		}
+		relative, err := filepath.Rel(s.root, path)
+		if err != nil {
+			return err
+		}
+		result = append(result, Blob{Key: filepath.ToSlash(relative), Size: info.Size(), ModifiedAt: info.ModTime()})
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list local blobs: %w", err)
+	}
+	return result, nil
 }
 
 func (s *LocalBlobStore) Delete(_ context.Context, key string) error {

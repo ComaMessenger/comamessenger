@@ -17,11 +17,11 @@ func TestValidation(t *testing.T) {
 	service := NewService(nil, 8, 100, nil)
 	body := "123456789"
 	format := "plain"
-	if err := service.validateBody(&body, &format); !errors.Is(err, ErrTooLarge) {
+	if err := service.validateBody(&body, &format, false); !errors.Is(err, ErrTooLarge) {
 		t.Fatalf("validateBody() error = %v, want ErrTooLarge", err)
 	}
 	body = "   "
-	if err := service.validateBody(&body, &format); !errors.Is(err, ErrInvalid) {
+	if err := service.validateBody(&body, &format, false); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("validateBody() error = %v, want ErrInvalid", err)
 	}
 }
@@ -154,6 +154,40 @@ func TestMessageCoreIntegration(t *testing.T) {
 			ClientMsgID: mustID(t), Body: "announcement", BodyFormat: "plain",
 		}); err != nil || !created {
 			t.Fatalf("owner channel Create() created=%v error=%v", created, err)
+		}
+	})
+
+	t.Run("ready files are attached atomically and only by their uploader", func(t *testing.T) {
+		fileID := mustID(t)
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO files (id, org_id, uploader_id, storage_driver, storage_key, name, mime, size, status, processing_status, ready_at)
+			VALUES ($1, $2, $3, 'local', $4, 'notes.txt', 'text/plain', 5, 'ready', 'pending', now())`, fileID, fixture.member.OrgID, fixture.member.ActorID, "objects/test/"+fileID); err != nil {
+			t.Fatal(err)
+		}
+		attached, _, err := service.Create(ctx, fixture.member, fixture.groupID, CreateInput{
+			ClientMsgID: mustID(t), Body: "", BodyFormat: "plain", FileIDs: []string{fileID},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(attached.Files) != 1 || attached.Files[0].ID != fileID {
+			t.Fatalf("attached files = %#v", attached.Files)
+		}
+		page, err := service.List(ctx, fixture.owner, fixture.groupID, ListOptions{Limit: 100})
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := false
+		for _, item := range page.Messages {
+			if item.ID == attached.ID && len(item.Files) == 1 && item.Files[0].ID == fileID {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatal("attachment was not hydrated for another chat member")
+		}
+		if _, _, err := service.Create(ctx, fixture.owner, fixture.groupID, CreateInput{ClientMsgID: mustID(t), Body: "steal", BodyFormat: "plain", FileIDs: []string{fileID}}); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("foreign file attach error = %v, want ErrInvalid", err)
 		}
 	})
 

@@ -17,6 +17,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/access"
 	"github.com/comamessenger/comamessenger/core/internal/api"
 	"github.com/comamessenger/comamessenger/core/internal/chat"
+	"github.com/comamessenger/comamessenger/core/internal/files"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/message"
 	"github.com/comamessenger/comamessenger/core/internal/push"
@@ -35,6 +36,7 @@ type Dependencies struct {
 	UserState             *userstate.Service
 	Push                  *push.Service
 	Workspace             *workspace.Service
+	Files                 *files.Service
 	Realtime              standardhttp.Handler
 	CookieSecure          bool
 	RefreshTokenTTL       time.Duration
@@ -52,6 +54,7 @@ type identityHandlers struct {
 	userState             *userstate.Service
 	push                  *push.Service
 	workspace             *workspace.Service
+	files                 *files.Service
 	realtime              standardhttp.Handler
 	allowedOrigin         string
 	cookieSecure          bool
@@ -78,7 +81,7 @@ type authenticated struct {
 
 func newIdentityHandlers(logger *slog.Logger, allowedOrigin string, dependencies Dependencies) *identityHandlers {
 	return &identityHandlers{
-		logger: logger, service: dependencies.Identity, chats: dependencies.Chats, messages: dependencies.Messages, userState: dependencies.UserState, push: dependencies.Push, workspace: dependencies.Workspace, realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
+		logger: logger, service: dependencies.Identity, chats: dependencies.Chats, messages: dependencies.Messages, userState: dependencies.UserState, push: dependencies.Push, workspace: dependencies.Workspace, files: dependencies.Files, realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
 		cookieSecure: dependencies.CookieSecure, refreshTTL: dependencies.RefreshTokenTTL,
 		bootstrapRate: newIPRateLimiter(5, 5), loginRate: newIPRateLimiter(10, 10),
 		refreshRate: newIPRateLimiter(30, 20), invitationRate: newIPRateLimiter(10, 10), websocketRate: newIPRateLimiter(60, 20), actorRate: newIPRateLimiter(1200, 200),
@@ -170,6 +173,15 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Get("/messages/{messageID}/thread", h.listThread)
 			protected.Put("/messages/{messageID}/thread/follow", h.followThread)
 			protected.Delete("/messages/{messageID}/thread/follow", h.unfollowThread)
+		}
+		if h.files != nil {
+			protected.Post("/files/uploads", h.createFileUpload)
+			protected.Put("/files/uploads/{uploadID}/content", h.putFileUploadContent)
+			protected.Post("/files/uploads/{uploadID}/parts", h.signFileUploadParts)
+			protected.Post("/files/uploads/{uploadID}/complete", h.completeFileUpload)
+			protected.Delete("/files/uploads/{uploadID}", h.abortFileUpload)
+			protected.Get("/files/{fileID}", h.getFile)
+			protected.Get("/files/{fileID}/download", h.downloadFile)
 		}
 		if h.userState != nil {
 			protected.Get("/unread", h.unreadSnapshot)

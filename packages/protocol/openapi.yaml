@@ -1560,6 +1560,120 @@ paths:
                 type: array
                 items:
                   { $ref: "#/components/schemas/ChatNotificationOverride" }
+  /api/v1/files/uploads:
+    post:
+      operationId: createFileUpload
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateFileUploadRequest" }
+      responses:
+        "201":
+          description: Reserved upload session with a selected transport flow.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FileUpload" }
+        "413": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "507": { $ref: "#/components/responses/Error" }
+  /api/v1/files/uploads/{upload_id}/content:
+    put:
+      operationId: putFileUploadContent
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: "#/components/parameters/UploadId" }]
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "200":
+          description: Completed streaming upload.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/File" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+        "415": { $ref: "#/components/responses/Error" }
+        "507": { $ref: "#/components/responses/Error" }
+  /api/v1/files/uploads/{upload_id}/parts:
+    post:
+      operationId: signFileUploadParts
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: "#/components/parameters/UploadId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SignFilePartsRequest" }
+      responses:
+        "200":
+          description: Short-lived multipart part URLs.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [parts]
+                properties:
+                  parts:
+                    type: array
+                    items: { $ref: "#/components/schemas/FilePartLink" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /api/v1/files/uploads/{upload_id}/complete:
+    post:
+      operationId: completeFileUpload
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: "#/components/parameters/UploadId" }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CompleteFileUploadRequest" }
+      responses:
+        "200":
+          description: Completed presigned or multipart upload.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/File" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /api/v1/files/uploads/{upload_id}:
+    delete:
+      operationId: abortFileUpload
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: "#/components/parameters/UploadId" }]
+      responses:
+        "204": { description: Upload aborted and quota reservation released. }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v1/files/{file_id}:
+    get:
+      operationId: getFile
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: "#/components/parameters/FileId" }]
+      responses:
+        "200":
+          description: Membership-authorized file metadata.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/File" }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v1/files/{file_id}/download:
+    get:
+      operationId: downloadFile
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: "#/components/parameters/FileId" }]
+      responses:
+        "200":
+          description: Authorized local blob stream.
+          content:
+            application/octet-stream: { schema: { type: string, format: binary } }
+        "307": { description: Short-lived authorized object-store URL. }
+        "404": { $ref: "#/components/responses/Error" }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -1588,6 +1702,16 @@ components:
       schema: { type: string, format: uuid }
     MessageId:
       name: message_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    UploadId:
+      name: upload_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    FileId:
+      name: file_id
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -1620,6 +1744,8 @@ components:
         - chat_conflict
         - chat_not_found
         - forbidden
+        - file_conflict
+        - file_not_found
         - idempotency_conflict
         - internal_error
         - invalid_credentials
@@ -1635,6 +1761,7 @@ components:
         - service_not_ready
         - session_not_found
         - smtp_not_configured
+        - storage_full
         - email_taken
         - reauthentication_failed
         - token_invalid
@@ -1643,6 +1770,78 @@ components:
         - validation_failed
         - version_conflict
         - workspace_not_found
+    File:
+      type: object
+      additionalProperties: false
+      required: [id, name, mime, size, status, processing_status, created_at, uploader_id]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 255 }
+        mime: { type: string, minLength: 1, maxLength: 255 }
+        size: { type: integer, format: int64, minimum: 0 }
+        sha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        status: { type: string, enum: [pending, ready, failed, deleted] }
+        processing_status: { type: string, enum: [pending, processing, ready, failed, skipped] }
+        preview_file_id: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        ready_at: { type: string, format: date-time }
+        uploader_id: { type: string, format: uuid }
+    CreateFileUploadRequest:
+      type: object
+      additionalProperties: false
+      required: [name, mime, size]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 255 }
+        mime: { type: string, minLength: 1, maxLength: 255 }
+        size: { type: integer, format: int64, minimum: 1 }
+        sha256: { type: string, pattern: "^[a-fA-F0-9]{64}$" }
+    FileUpload:
+      type: object
+      additionalProperties: false
+      required: [id, file, mode, expires_at]
+      properties:
+        id: { type: string, format: uuid }
+        file: { $ref: "#/components/schemas/File" }
+        mode: { type: string, enum: [streaming, presigned, multipart] }
+        upload_url: { type: string, format: uri-reference }
+        expires_at: { type: string, format: date-time }
+        parts:
+          type: array
+          items: { $ref: "#/components/schemas/FilePartLink" }
+    FilePartLink:
+      type: object
+      additionalProperties: false
+      required: [number, url]
+      properties:
+        number: { type: integer, minimum: 1, maximum: 10000 }
+        url: { type: string, format: uri }
+    SignFilePartsRequest:
+      type: object
+      additionalProperties: false
+      required: [part_numbers]
+      properties:
+        part_numbers:
+          type: array
+          minItems: 1
+          maxItems: 100
+          uniqueItems: true
+          items: { type: integer, minimum: 1, maximum: 10000 }
+    CompletedFilePart:
+      type: object
+      additionalProperties: false
+      required: [number, etag]
+      properties:
+        number: { type: integer, minimum: 1, maximum: 10000 }
+        etag: { type: string, minLength: 1, maxLength: 512 }
+        size: { type: integer, format: int64, minimum: 1 }
+    CompleteFileUploadRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        parts:
+          type: array
+          maxItems: 10000
+          items: { $ref: "#/components/schemas/CompletedFilePart" }
     DurableEventTypeV1:
       $ref: "./schemas/realtime/v1.schema.json#/$defs/KnownDurableEventType"
     RealtimeCloseCodeV1:
@@ -2318,6 +2517,7 @@ components:
           body_format,
           mentioned_actor_ids,
           thread_reply_count,
+          files,
           version,
           created_seq,
           created_at,
@@ -2350,6 +2550,10 @@ components:
           format: int64
           minimum: 0
           description: Number of non-deleted replies when this message is a thread root.
+        files:
+          type: array
+          maxItems: 10
+          items: { $ref: "#/components/schemas/File" }
     MessagePage:
       type: object
       additionalProperties: false
@@ -2374,7 +2578,7 @@ components:
       required: [client_msg_id, body]
       properties:
         client_msg_id: { type: string, format: uuid }
-        body: { type: string, minLength: 1 }
+        body: { type: string }
         body_format: { type: string, enum: [plain, markdown], default: plain }
         reply_to_id: { type: string, format: uuid }
         thread_root_id: { type: string, format: uuid }
@@ -2382,6 +2586,11 @@ components:
           type: array
           items: { type: string, format: uuid }
           uniqueItems: true
+        file_ids:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          items: { type: string, format: uuid }
     UpdateMessageRequest:
       type: object
       additionalProperties: false

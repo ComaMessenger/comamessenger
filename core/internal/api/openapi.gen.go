@@ -683,6 +683,8 @@ const (
 	ErrorCodeChatConflict           ErrorCode = "chat_conflict"
 	ErrorCodeChatNotFound           ErrorCode = "chat_not_found"
 	ErrorCodeEmailTaken             ErrorCode = "email_taken"
+	ErrorCodeFileConflict           ErrorCode = "file_conflict"
+	ErrorCodeFileNotFound           ErrorCode = "file_not_found"
 	ErrorCodeForbidden              ErrorCode = "forbidden"
 	ErrorCodeIdempotencyConflict    ErrorCode = "idempotency_conflict"
 	ErrorCodeInternalError          ErrorCode = "internal_error"
@@ -700,6 +702,7 @@ const (
 	ErrorCodeServiceNotReady        ErrorCode = "service_not_ready"
 	ErrorCodeSessionNotFound        ErrorCode = "session_not_found"
 	ErrorCodeSmtpNotConfigured      ErrorCode = "smtp_not_configured"
+	ErrorCodeStorageFull            ErrorCode = "storage_full"
 	ErrorCodeTokenInvalid           ErrorCode = "token_invalid"
 	ErrorCodeUnauthorized           ErrorCode = "unauthorized"
 	ErrorCodeUnsupportedFormat      ErrorCode = "unsupported_format"
@@ -718,6 +721,10 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeChatNotFound:
 		return true
 	case ErrorCodeEmailTaken:
+		return true
+	case ErrorCodeFileConflict:
+		return true
+	case ErrorCodeFileNotFound:
 		return true
 	case ErrorCodeForbidden:
 		return true
@@ -753,6 +760,8 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeSmtpNotConfigured:
 		return true
+	case ErrorCodeStorageFull:
+		return true
 	case ErrorCodeTokenInvalid:
 		return true
 	case ErrorCodeUnauthorized:
@@ -764,6 +773,78 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeVersionConflict:
 		return true
 	case ErrorCodeWorkspaceNotFound:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for FileProcessingStatus.
+const (
+	FileProcessingStatusFailed     FileProcessingStatus = "failed"
+	FileProcessingStatusPending    FileProcessingStatus = "pending"
+	FileProcessingStatusProcessing FileProcessingStatus = "processing"
+	FileProcessingStatusReady      FileProcessingStatus = "ready"
+	FileProcessingStatusSkipped    FileProcessingStatus = "skipped"
+)
+
+// Valid indicates whether the value is a known member of the FileProcessingStatus enum.
+func (e FileProcessingStatus) Valid() bool {
+	switch e {
+	case FileProcessingStatusFailed:
+		return true
+	case FileProcessingStatusPending:
+		return true
+	case FileProcessingStatusProcessing:
+		return true
+	case FileProcessingStatusReady:
+		return true
+	case FileProcessingStatusSkipped:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for FileStatus.
+const (
+	FileStatusDeleted FileStatus = "deleted"
+	FileStatusFailed  FileStatus = "failed"
+	FileStatusPending FileStatus = "pending"
+	FileStatusReady   FileStatus = "ready"
+)
+
+// Valid indicates whether the value is a known member of the FileStatus enum.
+func (e FileStatus) Valid() bool {
+	switch e {
+	case FileStatusDeleted:
+		return true
+	case FileStatusFailed:
+		return true
+	case FileStatusPending:
+		return true
+	case FileStatusReady:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for FileUploadMode.
+const (
+	Multipart FileUploadMode = "multipart"
+	Presigned FileUploadMode = "presigned"
+	Streaming FileUploadMode = "streaming"
+)
+
+// Valid indicates whether the value is a known member of the FileUploadMode enum.
+func (e FileUploadMode) Valid() bool {
+	switch e {
+	case Multipart:
+		return true
+	case Presigned:
+		return true
+	case Streaming:
 		return true
 	default:
 		return false
@@ -1929,6 +2010,18 @@ type ChatUnread struct {
 	UnreadCount  int64              `json:"unread_count"`
 }
 
+// CompleteFileUploadRequest defines model for CompleteFileUploadRequest.
+type CompleteFileUploadRequest struct {
+	Parts *[]CompletedFilePart `json:"parts,omitempty"`
+}
+
+// CompletedFilePart defines model for CompletedFilePart.
+type CompletedFilePart struct {
+	Etag   string `json:"etag"`
+	Number int    `json:"number"`
+	Size   *int64 `json:"size,omitempty"`
+}
+
 // ConfirmEmailRequest defines model for ConfirmEmailRequest.
 type ConfirmEmailRequest struct {
 	Token string `json:"token"`
@@ -1964,6 +2057,14 @@ type CreateChatRequestKind string
 // CreateChatRequestVisibility defines model for CreateChatRequest.Visibility.
 type CreateChatRequestVisibility string
 
+// CreateFileUploadRequest defines model for CreateFileUploadRequest.
+type CreateFileUploadRequest struct {
+	Mime   string  `json:"mime"`
+	Name   string  `json:"name"`
+	Sha256 *string `json:"sha256,omitempty"`
+	Size   int64   `json:"size"`
+}
+
 // CreateInvitationRequest defines model for CreateInvitationRequest.
 type CreateInvitationRequest struct {
 	Email openapi_types.Email          `json:"email"`
@@ -1978,6 +2079,7 @@ type CreateMessageRequest struct {
 	Body              string                          `json:"body"`
 	BodyFormat        *CreateMessageRequestBodyFormat `json:"body_format,omitempty"`
 	ClientMsgId       openapi_types.UUID              `json:"client_msg_id"`
+	FileIds           *[]openapi_types.UUID           `json:"file_ids,omitempty"`
 	MentionedActorIds *[]openapi_types.UUID           `json:"mentioned_actor_ids,omitempty"`
 	ReplyToId         *openapi_types.UUID             `json:"reply_to_id,omitempty"`
 	ThreadRootId      *openapi_types.UUID             `json:"thread_root_id,omitempty"`
@@ -2042,6 +2144,46 @@ type Error struct {
 
 // ErrorCode defines model for ErrorCode.
 type ErrorCode string
+
+// File defines model for File.
+type File struct {
+	CreatedAt        time.Time            `json:"created_at"`
+	Id               openapi_types.UUID   `json:"id"`
+	Mime             string               `json:"mime"`
+	Name             string               `json:"name"`
+	PreviewFileId    *openapi_types.UUID  `json:"preview_file_id,omitempty"`
+	ProcessingStatus FileProcessingStatus `json:"processing_status"`
+	ReadyAt          *time.Time           `json:"ready_at,omitempty"`
+	Sha256           *string              `json:"sha256,omitempty"`
+	Size             int64                `json:"size"`
+	Status           FileStatus           `json:"status"`
+	UploaderId       openapi_types.UUID   `json:"uploader_id"`
+}
+
+// FileProcessingStatus defines model for File.ProcessingStatus.
+type FileProcessingStatus string
+
+// FileStatus defines model for File.Status.
+type FileStatus string
+
+// FilePartLink defines model for FilePartLink.
+type FilePartLink struct {
+	Number int    `json:"number"`
+	Url    string `json:"url"`
+}
+
+// FileUpload defines model for FileUpload.
+type FileUpload struct {
+	ExpiresAt time.Time          `json:"expires_at"`
+	File      File               `json:"file"`
+	Id        openapi_types.UUID `json:"id"`
+	Mode      FileUploadMode     `json:"mode"`
+	Parts     *[]FilePartLink    `json:"parts,omitempty"`
+	UploadUrl *string            `json:"upload_url,omitempty"`
+}
+
+// FileUploadMode defines model for FileUpload.Mode.
+type FileUploadMode string
 
 // ForgotPasswordRequest defines model for ForgotPasswordRequest.
 type ForgotPasswordRequest struct {
@@ -2127,6 +2269,7 @@ type Message struct {
 	CreatedSeq        int64                `json:"created_seq"`
 	DeletedAt         *time.Time           `json:"deleted_at,omitempty"`
 	EditedAt          *time.Time           `json:"edited_at,omitempty"`
+	Files             []File               `json:"files"`
 	ForwardedFrom     *ForwardAttribution  `json:"forwarded_from,omitempty"`
 	Id                openapi_types.UUID   `json:"id"`
 	MentionedActorIds []openapi_types.UUID `json:"mentioned_actor_ids"`
@@ -2559,6 +2702,11 @@ type SetStatusRequest struct {
 	Text      string     `json:"text"`
 }
 
+// SignFilePartsRequest defines model for SignFilePartsRequest.
+type SignFilePartsRequest struct {
+	PartNumbers []int `json:"part_numbers"`
+}
+
 // ThreadFollow defines model for ThreadFollow.
 type ThreadFollow struct {
 	FollowedAt   time.Time          `json:"followed_at"`
@@ -2783,8 +2931,14 @@ type ActorId = openapi_types.UUID
 // ChatId defines model for ChatId.
 type ChatId = openapi_types.UUID
 
+// FileId defines model for FileId.
+type FileId = openapi_types.UUID
+
 // MessageId defines model for MessageId.
 type MessageId = openapi_types.UUID
+
+// UploadId defines model for UploadId.
+type UploadId = openapi_types.UUID
 
 // Tokens defines model for Tokens.
 type Tokens = TokenResponse
@@ -2888,6 +3042,15 @@ type MarkChatReadJSONRequestBody = MarkReadRequest
 
 // PutDraftJSONRequestBody defines body for PutDraft for application/json ContentType.
 type PutDraftJSONRequestBody = PutDraftRequest
+
+// CreateFileUploadJSONRequestBody defines body for CreateFileUpload for application/json ContentType.
+type CreateFileUploadJSONRequestBody = CreateFileUploadRequest
+
+// CompleteFileUploadJSONRequestBody defines body for CompleteFileUpload for application/json ContentType.
+type CompleteFileUploadJSONRequestBody = CompleteFileUploadRequest
+
+// SignFileUploadPartsJSONRequestBody defines body for SignFileUploadParts for application/json ContentType.
+type SignFileUploadPartsJSONRequestBody = SignFilePartsRequest
 
 // CreateInvitationJSONRequestBody defines body for CreateInvitation for application/json ContentType.
 type CreateInvitationJSONRequestBody = CreateInvitationRequest
