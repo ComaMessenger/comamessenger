@@ -635,6 +635,60 @@ func (e ChatNotificationPreferencesNotifyLevel) Valid() bool {
 	}
 }
 
+// Defines values for ClaimedAgentRunStatus.
+const (
+	ClaimedAgentRunStatusCanceled  ClaimedAgentRunStatus = "canceled"
+	ClaimedAgentRunStatusCompleted ClaimedAgentRunStatus = "completed"
+	ClaimedAgentRunStatusFailed    ClaimedAgentRunStatus = "failed"
+	ClaimedAgentRunStatusQueued    ClaimedAgentRunStatus = "queued"
+	ClaimedAgentRunStatusRunning   ClaimedAgentRunStatus = "running"
+	ClaimedAgentRunStatusTimedOut  ClaimedAgentRunStatus = "timed_out"
+)
+
+// Valid indicates whether the value is a known member of the ClaimedAgentRunStatus enum.
+func (e ClaimedAgentRunStatus) Valid() bool {
+	switch e {
+	case ClaimedAgentRunStatusCanceled:
+		return true
+	case ClaimedAgentRunStatusCompleted:
+		return true
+	case ClaimedAgentRunStatusFailed:
+		return true
+	case ClaimedAgentRunStatusQueued:
+		return true
+	case ClaimedAgentRunStatusRunning:
+		return true
+	case ClaimedAgentRunStatusTimedOut:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CompleteAgentRunRequestPriceSource.
+const (
+	Configured CompleteAgentRunRequestPriceSource = "configured"
+	Estimated  CompleteAgentRunRequestPriceSource = "estimated"
+	Provider   CompleteAgentRunRequestPriceSource = "provider"
+	Unknown    CompleteAgentRunRequestPriceSource = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the CompleteAgentRunRequestPriceSource enum.
+func (e CompleteAgentRunRequestPriceSource) Valid() bool {
+	switch e {
+	case Configured:
+		return true
+	case Estimated:
+		return true
+	case Provider:
+		return true
+	case Unknown:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ConnectionTestRequestKind.
 const (
 	S3   ConnectionTestRequestKind = "s3"
@@ -2230,9 +2284,22 @@ type AgentRun struct {
 // AgentRunStatus defines model for AgentRun.Status.
 type AgentRunStatus string
 
+// AgentRunLeaseRequest defines model for AgentRunLeaseRequest.
+type AgentRunLeaseRequest struct {
+	LeaseSeconds *int               `json:"lease_seconds,omitempty"`
+	LeaseToken   openapi_types.UUID `json:"lease_token"`
+}
+
 // AgentRunPage defines model for AgentRunPage.
 type AgentRunPage struct {
 	Runs []AgentRun `json:"runs"`
+}
+
+// AgentRuntimeCheckpoint defines model for AgentRuntimeCheckpoint.
+type AgentRuntimeCheckpoint struct {
+	Consumer     string    `json:"consumer"`
+	LastEventSeq int64     `json:"last_event_seq"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 // AgentScope defines model for AgentScope.
@@ -2433,6 +2500,63 @@ type ChatUnread struct {
 	UnreadCount  int64              `json:"unread_count"`
 }
 
+// ClaimAgentRunRequest defines model for ClaimAgentRunRequest.
+type ClaimAgentRunRequest struct {
+	LeaseSeconds *int               `json:"lease_seconds,omitempty"`
+	WorkerId     openapi_types.UUID `json:"worker_id"`
+}
+
+// ClaimedAgentRun defines model for ClaimedAgentRun.
+type ClaimedAgentRun struct {
+	AgentId           openapi_types.UUID     `json:"agent_id"`
+	Attempt           int                    `json:"attempt"`
+	CancelRequestedAt *time.Time             `json:"cancel_requested_at,omitempty"`
+	ChainDepth        int                    `json:"chain_depth"`
+	ChatId            *openapi_types.UUID    `json:"chat_id,omitempty"`
+	ClientRunId       *openapi_types.UUID    `json:"client_run_id,omitempty"`
+	CorrelationId     openapi_types.UUID     `json:"correlation_id"`
+	Cost              string                 `json:"cost"`
+	CreatedAt         time.Time              `json:"created_at"`
+	Currency          string                 `json:"currency"`
+	ErrorCode         string                 `json:"error_code"`
+	FinishedAt        *time.Time             `json:"finished_at,omitempty"`
+	Id                openapi_types.UUID     `json:"id"`
+	Input             map[string]interface{} `json:"input"`
+	InputTokens       int64                  `json:"input_tokens"`
+	LeaseToken        openapi_types.UUID     `json:"lease_token"`
+	MaxAttempts       int                    `json:"max_attempts"`
+	Model             string                 `json:"model"`
+	OrgId             openapi_types.UUID     `json:"org_id"`
+	OutputTokens      int64                  `json:"output_tokens"`
+	Provider          string                 `json:"provider"`
+	RequestedBy       *openapi_types.UUID    `json:"requested_by,omitempty"`
+	ResultSummary     map[string]interface{} `json:"result_summary"`
+	ScheduledFor      *time.Time             `json:"scheduled_for,omitempty"`
+	StartedAt         *time.Time             `json:"started_at,omitempty"`
+	Status            ClaimedAgentRunStatus  `json:"status"`
+	ThreadRootId      *openapi_types.UUID    `json:"thread_root_id,omitempty"`
+	TimeoutAt         *time.Time             `json:"timeout_at,omitempty"`
+	TriggerEventSeq   *int64                 `json:"trigger_event_seq,omitempty"`
+	TriggerId         *openapi_types.UUID    `json:"trigger_id,omitempty"`
+}
+
+// ClaimedAgentRunStatus defines model for ClaimedAgentRun.Status.
+type ClaimedAgentRunStatus string
+
+// CompleteAgentRunRequest defines model for CompleteAgentRunRequest.
+type CompleteAgentRunRequest struct {
+	Cost          string                             `json:"cost"`
+	Currency      string                             `json:"currency"`
+	InputTokens   int64                              `json:"input_tokens"`
+	LeaseToken    openapi_types.UUID                 `json:"lease_token"`
+	OutputTokens  int64                              `json:"output_tokens"`
+	PriceSource   CompleteAgentRunRequestPriceSource `json:"price_source"`
+	ResultSummary map[string]interface{}             `json:"result_summary"`
+}
+
+// CompleteAgentRunRequestPriceSource defines model for CompleteAgentRunRequest.PriceSource.
+type CompleteAgentRunRequestPriceSource string
+
 // CompleteFileUploadRequest defines model for CompleteFileUploadRequest.
 type CompleteFileUploadRequest struct {
 	Parts *[]CompletedFilePart `json:"parts,omitempty"`
@@ -2484,7 +2608,11 @@ type CreateAgentRequest struct {
 	ExternalDataSharingApproved bool                   `json:"external_data_sharing_approved"`
 	Handle                      string                 `json:"handle"`
 	Kind                        CreateAgentRequestKind `json:"kind"`
+	MaxChainDepth               *int                   `json:"max_chain_depth,omitempty"`
+	MaxOutputTokens             *int                   `json:"max_output_tokens,omitempty"`
+	MaxToolIterations           *int                   `json:"max_tool_iterations,omitempty"`
 	Model                       *string                `json:"model,omitempty"`
+	PerChatConcurrency          *int                   `json:"per_chat_concurrency,omitempty"`
 	Provider                    *string                `json:"provider,omitempty"`
 	ProviderRateLimitPerMinute  *int                   `json:"provider_rate_limit_per_minute,omitempty"`
 	RateLimitPerMinute          *int                   `json:"rate_limit_per_minute,omitempty"`
@@ -2625,6 +2753,12 @@ type Error struct {
 
 // ErrorCode defines model for ErrorCode.
 type ErrorCode string
+
+// FailAgentRunRequest defines model for FailAgentRunRequest.
+type FailAgentRunRequest struct {
+	ErrorCode  string             `json:"error_code"`
+	LeaseToken openapi_types.UUID `json:"lease_token"`
+}
 
 // File defines model for File.
 type File struct {
@@ -3298,10 +3432,19 @@ type UpdateAgentRequest struct {
 	EndpointUrl                 *string               `json:"endpoint_url,omitempty"`
 	ExternalDataSharingApproved *bool                 `json:"external_data_sharing_approved,omitempty"`
 	Handle                      *string               `json:"handle,omitempty"`
+	MaxChainDepth               *int                  `json:"max_chain_depth,omitempty"`
+	MaxOutputTokens             *int                  `json:"max_output_tokens,omitempty"`
+	MaxToolIterations           *int                  `json:"max_tool_iterations,omitempty"`
 	Model                       *string               `json:"model,omitempty"`
+	PerChatConcurrency          *int                  `json:"per_chat_concurrency,omitempty"`
 	Provider                    *string               `json:"provider,omitempty"`
 	ProviderRateLimitPerMinute  *int                  `json:"provider_rate_limit_per_minute,omitempty"`
 	RateLimitPerMinute          *int                  `json:"rate_limit_per_minute,omitempty"`
+}
+
+// UpdateAgentRuntimeCheckpointRequest defines model for UpdateAgentRuntimeCheckpointRequest.
+type UpdateAgentRuntimeCheckpointRequest struct {
+	LastEventSeq int64 `json:"last_event_seq"`
 }
 
 // UpdateAgentTriggerRequest defines model for UpdateAgentTriggerRequest.
@@ -3594,6 +3737,21 @@ type ListFollowedThreadsParams struct {
 	BeforeSeq *int64 `form:"before_seq,omitempty" json:"before_seq,omitempty"`
 	Limit     *int   `form:"limit,omitempty" json:"limit,omitempty"`
 }
+
+// UpdateAgentRuntimeCheckpointJSONRequestBody defines body for UpdateAgentRuntimeCheckpoint for application/json ContentType.
+type UpdateAgentRuntimeCheckpointJSONRequestBody = UpdateAgentRuntimeCheckpointRequest
+
+// ClaimAgentRuntimeRunJSONRequestBody defines body for ClaimAgentRuntimeRun for application/json ContentType.
+type ClaimAgentRuntimeRunJSONRequestBody = ClaimAgentRunRequest
+
+// CompleteAgentRuntimeRunJSONRequestBody defines body for CompleteAgentRuntimeRun for application/json ContentType.
+type CompleteAgentRuntimeRunJSONRequestBody = CompleteAgentRunRequest
+
+// FailAgentRuntimeRunJSONRequestBody defines body for FailAgentRuntimeRun for application/json ContentType.
+type FailAgentRuntimeRunJSONRequestBody = FailAgentRunRequest
+
+// HeartbeatAgentRuntimeRunJSONRequestBody defines body for HeartbeatAgentRuntimeRun for application/json ContentType.
+type HeartbeatAgentRuntimeRunJSONRequestBody = AgentRunLeaseRequest
 
 // InvokeAgentToolJSONRequestBody defines body for InvokeAgentTool for application/json ContentType.
 type InvokeAgentToolJSONRequestBody = InvokeAgentToolRequest

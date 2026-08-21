@@ -245,14 +245,24 @@ func validateAgentAndScheduleChat(ctx context.Context, tx pgx.Tx, orgID, agentID
 	} else if err != nil {
 		return err
 	}
-	if input.Type != "schedule" {
+	chatID := ""
+	if input.Type == "schedule" {
+		var config scheduleConfig
+		if err := json.Unmarshal(input.Config, &config); err != nil {
+			return ErrInvalid
+		}
+		chatID = config.ChatID
+	} else if input.Type == "event" {
+		var config eventConfig
+		if err := json.Unmarshal(input.Config, &config); err != nil {
+			return ErrInvalid
+		}
+		chatID = config.ChatID
+	}
+	if chatID == "" {
 		return nil
 	}
-	var config scheduleConfig
-	if err := json.Unmarshal(input.Config, &config); err != nil {
-		return ErrInvalid
-	}
-	if err := tx.QueryRow(ctx, `SELECT true FROM chat_members WHERE org_id=$1 AND actor_id=$2 AND chat_id=$3`, orgID, agentID, config.ChatID).Scan(&exists); errors.Is(err, pgx.ErrNoRows) {
+	if err := tx.QueryRow(ctx, `SELECT true FROM chat_members WHERE org_id=$1 AND actor_id=$2 AND chat_id=$3`, orgID, agentID, chatID).Scan(&exists); errors.Is(err, pgx.ErrNoRows) {
 		return ErrForbidden
 	} else {
 		return err
@@ -357,13 +367,24 @@ func (service *Service) dispatchAgent(ctx context.Context, orgID, agentID string
 			if err != nil {
 				return err
 			}
-			payload, _ := json.Marshal(map[string]any{"event_seq": item.seq, "event_type": item.kind, "subject_id": item.subjectID, "chat_id": item.chatID})
+			runChatID := item.chatID
+			if trigger.Type == "event" {
+				var config eventConfig
+				_ = json.Unmarshal(trigger.Config, &config)
+				if config.ChatID != "" {
+					runChatID = &config.ChatID
+				}
+			}
+			payload, _ := json.Marshal(map[string]any{
+				"event_seq": item.seq, "event_type": item.kind, "subject_id": item.subjectID,
+				"source_chat_id": item.chatID, "chat_id": runChatID,
+			})
 			if _, err := tx.Exec(ctx, `INSERT INTO agent_runs(id,org_id,agent_id,trigger_id,trigger_event_seq,chat_id,requested_by,
 					correlation_id,chain_depth,provider,model,input,timeout_at)
 				SELECT $1,agent.org_id,agent.actor_id,$2,$3,$4,$5,$6,$7,agent.provider,agent.model,$8,now()+interval '2 minutes'
 				FROM agents agent WHERE agent.org_id=$9 AND agent.actor_id=$10
 				ON CONFLICT(agent_id,trigger_id,trigger_event_seq) WHERE trigger_id IS NOT NULL AND trigger_event_seq IS NOT NULL DO NOTHING`,
-				runID, trigger.ID, item.seq, item.chatID, item.actorID, correlationID, depth, payload, orgID, agentID); err != nil {
+				runID, trigger.ID, item.seq, runChatID, item.actorID, correlationID, depth, payload, orgID, agentID); err != nil {
 				return err
 			}
 		}
@@ -484,6 +505,7 @@ type keywordConfig struct {
 type eventConfig struct {
 	EventTypes           []string `json:"event_types"`
 	IncludeAgentMessages bool     `json:"include_agent_messages"`
+	ChatID               string   `json:"chat_id,omitempty"`
 }
 
 func (service *Service) normalize(input CreateInput) (CreateInput, *time.Time, error) {
@@ -540,6 +562,9 @@ func (service *Service) normalize(input CreateInput) (CreateInput, *time.Time, e
 			return input, nil, ErrInvalid
 		}
 		seen := make(map[string]struct{}, len(config.EventTypes))
+		if config.ChatID != "" && uuid.Validate(config.ChatID) != nil {
+			return input, nil, ErrInvalid
+		}
 		for _, kind := range config.EventTypes {
 			kind = strings.TrimSpace(kind)
 			if kind == "" || len(kind) > 120 {

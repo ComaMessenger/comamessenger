@@ -13,4 +13,9 @@ COPY apps/agent-runtime ./apps/agent-runtime
 COPY packages/core ./packages/core
 COPY packages/protocol ./packages/protocol
 
-CMD ["pnpm", "--filter", "@comamessenger/agent-runtime", "dev"]
+RUN pnpm --filter @comamessenger/protocol build \
+    && pnpm --filter @comamessenger/core build \
+    && pnpm --filter @comamessenger/agent-runtime build
+
+USER node
+CMD ["pnpm", "--filter", "@comamessenger/agent-runtime", "exec", "tsx", "src/index.ts"]

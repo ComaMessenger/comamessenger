@@ -44,6 +44,95 @@ func (h *identityHandlers) cancelAgentRun(w standardhttp.ResponseWriter, r *stan
 	}
 	writeJSON(h.logger, w, standardhttp.StatusOK, result)
 }
+
+func (h *identityHandlers) claimAgentRun(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input agentrun.ClaimInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	auth := authFromContext(r.Context())
+	result, err := h.agentRuns.ClaimForAgent(r.Context(), auth.User, auth.Identity, input)
+	if errors.Is(err, agentrun.ErrNotFound) {
+		w.WriteHeader(standardhttp.StatusNoContent)
+		return
+	}
+	if err != nil {
+		h.writeAgentRunError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) heartbeatAgentRun(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input agentrun.LeaseInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	auth := authFromContext(r.Context())
+	result, err := h.agentRuns.HeartbeatForAgent(r.Context(), auth.User, auth.Identity, chi.URLParam(r, "runID"), input)
+	if err != nil {
+		h.writeAgentRunError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) completeAgentRun(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input agentrun.RuntimeCompletion
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	auth := authFromContext(r.Context())
+	result, err := h.agentRuns.CompleteForAgent(r.Context(), auth.User, auth.Identity, chi.URLParam(r, "runID"), input)
+	if err != nil {
+		h.writeAgentRunError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) failAgentRun(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input agentrun.RuntimeFailure
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	auth := authFromContext(r.Context())
+	result, err := h.agentRuns.FailForAgent(r.Context(), auth.User, auth.Identity, chi.URLParam(r, "runID"), input)
+	if err != nil {
+		h.writeAgentRunError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) getAgentRuntimeCheckpoint(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	auth := authFromContext(r.Context())
+	result, err := h.agentRuns.GetRuntimeCheckpoint(r.Context(), auth.User, auth.Identity, chi.URLParam(r, "consumer"))
+	if err != nil {
+		h.writeAgentRunError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) updateAgentRuntimeCheckpoint(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input agentrun.UpdateRuntimeCheckpoint
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	auth := authFromContext(r.Context())
+	result, err := h.agentRuns.UpdateRuntimeCheckpoint(r.Context(), auth.User, auth.Identity, chi.URLParam(r, "consumer"), input)
+	if err != nil {
+		h.writeAgentRunError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
 func (h *identityHandlers) writeAgentRunError(w standardhttp.ResponseWriter, r *standardhttp.Request, err error) {
 	switch {
 	case errors.Is(err, agentrun.ErrInvalid):

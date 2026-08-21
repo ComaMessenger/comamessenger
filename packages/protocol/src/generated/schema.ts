@@ -1476,6 +1476,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agent-runtime/runs/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Claims the next queued run belonging to the agent authenticated by API key. */
+        post: operations["claimAgentRuntimeRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent-runtime/runs/{run_id}/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["heartbeatAgentRuntimeRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent-runtime/runs/{run_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["completeAgentRuntimeRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent-runtime/runs/{run_id}/fail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["failAgentRuntimeRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent-runtime/checkpoints/{consumer}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                consumer: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getAgentRuntimeCheckpoint"];
+        /** @description Advances a consumer checkpoint monotonically; rewinds are ignored. */
+        put: operations["updateAgentRuntimeCheckpoint"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1823,6 +1907,14 @@ export interface components {
             model?: string;
             endpoint_url?: string;
             external_data_sharing_approved: boolean;
+            /** @default 2048 */
+            max_output_tokens: number;
+            /** @default 8 */
+            max_tool_iterations: number;
+            /** @default 3 */
+            max_chain_depth: number;
+            /** @default 1 */
+            per_chat_concurrency: number;
             /** @default 60 */
             rate_limit_per_minute: number;
             /** @default 300 */
@@ -1839,6 +1931,10 @@ export interface components {
             model?: string;
             endpoint_url?: string;
             external_data_sharing_approved?: boolean;
+            max_output_tokens?: number;
+            max_tool_iterations?: number;
+            max_chain_depth?: number;
+            per_chat_concurrency?: number;
             rate_limit_per_minute?: number;
             provider_rate_limit_per_minute?: number;
             chat_ids?: string[];
@@ -1903,6 +1999,49 @@ export interface components {
             input: {
                 [key: string]: unknown;
             };
+        };
+        ClaimAgentRunRequest: {
+            /** Format: uuid */
+            worker_id: string;
+            /** @default 60 */
+            lease_seconds: number;
+        };
+        AgentRunLeaseRequest: {
+            /** Format: uuid */
+            lease_token: string;
+            /** @default 60 */
+            lease_seconds: number;
+        };
+        CompleteAgentRunRequest: {
+            /** Format: uuid */
+            lease_token: string;
+            /** Format: int64 */
+            input_tokens: number;
+            /** Format: int64 */
+            output_tokens: number;
+            cost: string;
+            currency: string;
+            result_summary: {
+                [key: string]: unknown;
+            };
+            /** @enum {string} */
+            price_source: "provider" | "configured" | "estimated" | "unknown";
+        };
+        FailAgentRunRequest: {
+            /** Format: uuid */
+            lease_token: string;
+            error_code: string;
+        };
+        AgentRuntimeCheckpoint: {
+            consumer: string;
+            /** Format: int64 */
+            last_event_seq: number;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        UpdateAgentRuntimeCheckpointRequest: {
+            /** Format: int64 */
+            last_event_seq: number;
         };
         AgentRunPage: {
             runs: components["schemas"]["AgentRun"][];
@@ -2007,6 +2146,10 @@ export interface components {
             cancel_requested_at?: string;
             /** Format: date-time */
             timeout_at?: string;
+        };
+        ClaimedAgentRun: components["schemas"]["AgentRun"] & {
+            /** Format: uuid */
+            lease_token: string;
         };
         UpdateAgentPlatformSettingsRequest: {
             organization_rate_limit_per_minute: number;
@@ -5787,6 +5930,180 @@ export interface operations {
             };
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+        };
+    };
+    claimAgentRuntimeRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClaimAgentRunRequest"];
+            };
+        };
+        responses: {
+            /** @description Claimed run and short-lived lease capability. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClaimedAgentRun"];
+                };
+            };
+            /** @description No runnable work for this agent. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    heartbeatAgentRuntimeRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: components["parameters"]["AgentRunId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentRunLeaseRequest"];
+            };
+        };
+        responses: {
+            /** @description Lease extended. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRun"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    completeAgentRuntimeRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: components["parameters"]["AgentRunId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompleteAgentRunRequest"];
+            };
+        };
+        responses: {
+            /** @description Run completed and usage recorded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRun"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    failAgentRuntimeRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: components["parameters"]["AgentRunId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FailAgentRunRequest"];
+            };
+        };
+        responses: {
+            /** @description Run failed, requeued, canceled, or timed out according to durable retry policy. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRun"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    getAgentRuntimeCheckpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                consumer: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Durable resume checkpoint initialized at the current organization watermark when first read. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRuntimeCheckpoint"];
+                };
+            };
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    updateAgentRuntimeCheckpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                consumer: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAgentRuntimeCheckpointRequest"];
+            };
+        };
+        responses: {
+            /** @description Durable checkpoint advanced. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRuntimeCheckpoint"];
+                };
+            };
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
         };
     };
 }

@@ -161,6 +161,12 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Get("/agents/{agentID}/runs", h.listAgentRuns)
 			protected.Get("/agent-runs/{runID}", h.getAgentRun)
 			protected.Post("/agent-runs/{runID}/cancel", h.cancelAgentRun)
+			protected.Post("/agent-runtime/runs/claim", h.claimAgentRun)
+			protected.Post("/agent-runtime/runs/{runID}/heartbeat", h.heartbeatAgentRun)
+			protected.Post("/agent-runtime/runs/{runID}/complete", h.completeAgentRun)
+			protected.Post("/agent-runtime/runs/{runID}/fail", h.failAgentRun)
+			protected.Get("/agent-runtime/checkpoints/{consumer}", h.getAgentRuntimeCheckpoint)
+			protected.Put("/agent-runtime/checkpoints/{consumer}", h.updateAgentRuntimeCheckpoint)
 		}
 		if h.agentTriggers != nil {
 			protected.Get("/agents/{agentID}/triggers", h.listAgentTriggers)

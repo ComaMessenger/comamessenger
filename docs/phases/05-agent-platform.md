@@ -50,7 +50,7 @@
 
 ### Runtime и triggers
 
-- [ ] Создать runtime connection manager с WS resume и checkpoint durable seq.
+- [x] Создать runtime connection manager с WS resume и checkpoint durable seq.
 - [x] Сделать trigger dispatcher идемпотентным по `(agent_id, event_seq, trigger_id)`.
 - [x] Игнорировать собственные ответы агента по умолчанию и ограничить chain depth для предотвращения agent loops.
 - [x] Реализовать mention, command, keyword/regex, every-message и event triggers.
@@ -60,13 +60,13 @@
 
 ### LLM providers и context
 
-- [ ] Определить provider interface для chat/stream/tools/usage без протекания vendor-specific объектов.
-- [ ] Реализовать адаптеры OpenAI, Anthropic и OpenAI-compatible endpoint.
-- [ ] Собирать контекст только через доступные публичные read APIs/search.
-- [ ] Ограничивать размер контекста, количество search/tool iterations и max output tokens.
+- [x] Определить provider interface для chat/stream/tools/usage без протекания vendor-specific объектов.
+- [x] Реализовать адаптеры OpenAI, Anthropic и OpenAI-compatible endpoint.
+- [x] Собирать контекст только через доступные публичные read APIs/search.
+- [x] Ограничивать размер контекста, количество search/tool iterations и max output tokens.
 - [ ] Реализовать key-value memory и vector retrieval с namespace по organization/agent.
-- [ ] Помечать untrusted message/file content и защищать system/tool policy от prompt injection.
-- [ ] Не передавать содержимое внешнему provider без явной конфигурации организации.
+- [x] Помечать untrusted message/file content и защищать system/tool policy от prompt injection.
+- [x] Не передавать содержимое внешнему provider без явной конфигурации организации.
 
 ### Tools и MCP
 

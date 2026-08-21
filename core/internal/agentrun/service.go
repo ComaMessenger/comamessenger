@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/comamessenger/comamessenger/core/internal/access"
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/permission"
@@ -24,6 +25,7 @@ var (
 	ErrConflict  = errors.New("agent run state conflict")
 )
 var costPattern = regexp.MustCompile(`^[0-9]+(?:\.[0-9]{1,8})?$`)
+var consumerPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{0,63}$`)
 
 type Run struct {
 	ID                string          `json:"id"`
@@ -68,15 +70,49 @@ type InvokeInput struct {
 	MaxAttempts    int             `json:"max_attempts"`
 	Input          json.RawMessage `json:"input"`
 }
+type ClaimInput struct {
+	WorkerID     string `json:"worker_id"`
+	LeaseSeconds int    `json:"lease_seconds"`
+}
+type LeaseInput struct {
+	LeaseToken   string `json:"lease_token"`
+	LeaseSeconds int    `json:"lease_seconds"`
+}
 type Completion struct {
 	InputTokens   int64           `json:"input_tokens"`
 	OutputTokens  int64           `json:"output_tokens"`
 	Cost          string          `json:"cost"`
 	Currency      string          `json:"currency"`
 	ResultSummary json.RawMessage `json:"result_summary"`
+	PriceSource   string          `json:"price_source"`
+}
+type RuntimeCompletion struct {
+	LeaseToken    string          `json:"lease_token"`
+	InputTokens   int64           `json:"input_tokens"`
+	OutputTokens  int64           `json:"output_tokens"`
+	Cost          string          `json:"cost"`
+	Currency      string          `json:"currency"`
+	ResultSummary json.RawMessage `json:"result_summary"`
+	PriceSource   string          `json:"price_source"`
+}
+type RuntimeFailure struct {
+	LeaseToken string `json:"lease_token"`
+	ErrorCode  string `json:"error_code"`
+}
+type RuntimeCheckpoint struct {
+	Consumer     string    `json:"consumer"`
+	LastEventSeq int64     `json:"last_event_seq"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+type UpdateRuntimeCheckpoint struct {
+	LastEventSeq int64 `json:"last_event_seq"`
 }
 type Page struct {
 	Runs []Run `json:"runs"`
+}
+type ClaimedRun struct {
+	Run
+	LeaseToken string `json:"lease_token"`
 }
 type Service struct {
 	pool *pgxpool.Pool
@@ -224,6 +260,27 @@ func (service *Service) Get(ctx context.Context, current identity.User, runID st
 }
 
 func (service *Service) Claim(ctx context.Context, workerID string, lease time.Duration) (Run, error) {
+	return service.claim(ctx, "", workerID, lease)
+}
+
+func (service *Service) ClaimForAgent(ctx context.Context, current identity.User, authentication access.Identity, input ClaimInput) (ClaimedRun, error) {
+	if !isAgentWorker(current, authentication) {
+		return ClaimedRun{}, ErrForbidden
+	}
+	if input.LeaseSeconds == 0 {
+		input.LeaseSeconds = 60
+	}
+	run, err := service.claim(ctx, current.ActorID, input.WorkerID, time.Duration(input.LeaseSeconds)*time.Second)
+	if err != nil {
+		return ClaimedRun{}, err
+	}
+	if run.LeaseToken == nil {
+		return ClaimedRun{}, ErrConflict
+	}
+	return ClaimedRun{Run: run, LeaseToken: *run.LeaseToken}, nil
+}
+
+func (service *Service) claim(ctx context.Context, agentID, workerID string, lease time.Duration) (Run, error) {
 	if uuid.Validate(workerID) != nil || lease < 5*time.Second || lease > 5*time.Minute {
 		return Run{}, ErrInvalid
 	}
@@ -235,7 +292,15 @@ func (service *Service) Claim(ctx context.Context, workerID string, lease time.D
 		return Run{}, err
 	}
 	defer tx.Rollback(ctx)
-	rows, err := tx.Query(ctx, `SELECT run.id,run.agent_id,run.chat_id,agent.per_chat_concurrency FROM agent_runs run JOIN agents agent ON agent.org_id=run.org_id AND agent.actor_id=run.agent_id WHERE run.status='queued' AND run.next_attempt_at<=now() AND run.timeout_at>now() AND run.cancel_requested_at IS NULL AND agent.enabled ORDER BY run.next_attempt_at,run.created_at FOR UPDATE OF run SKIP LOCKED LIMIT 20`)
+	var agentFilter any
+	if agentID != "" {
+		agentFilter = agentID
+	}
+	rows, err := tx.Query(ctx, `SELECT run.id,run.agent_id,run.chat_id,agent.per_chat_concurrency
+		FROM agent_runs run JOIN agents agent ON agent.org_id=run.org_id AND agent.actor_id=run.agent_id
+		WHERE run.status='queued' AND run.next_attempt_at<=now() AND run.timeout_at>now()
+			AND run.cancel_requested_at IS NULL AND agent.enabled AND ($1::uuid IS NULL OR run.agent_id=$1)
+		ORDER BY run.next_attempt_at,run.created_at FOR UPDATE OF run SKIP LOCKED LIMIT 20`, agentFilter)
 	if err != nil {
 		return Run{}, err
 	}
@@ -293,6 +358,107 @@ func (service *Service) Claim(ctx context.Context, workerID string, lease time.D
 	return Run{}, ErrNotFound
 }
 
+func (service *Service) HeartbeatForAgent(ctx context.Context, current identity.User, authentication access.Identity, runID string, input LeaseInput) (Run, error) {
+	if !isAgentWorker(current, authentication) {
+		return Run{}, ErrForbidden
+	}
+	if input.LeaseSeconds == 0 {
+		input.LeaseSeconds = 60
+	}
+	lease := time.Duration(input.LeaseSeconds) * time.Second
+	if uuid.Validate(runID) != nil || uuid.Validate(input.LeaseToken) != nil || lease < 5*time.Second || lease > 5*time.Minute {
+		return Run{}, ErrInvalid
+	}
+	result, err := service.pool.Exec(ctx, `UPDATE agent_runs SET lease_expires_at=$5
+		WHERE org_id=$1 AND agent_id=$2 AND id=$3 AND lease_token=$4 AND status='running'`, current.OrgID, current.ActorID,
+		runID, input.LeaseToken, service.now().UTC().Add(lease))
+	if err != nil {
+		return Run{}, err
+	}
+	if result.RowsAffected() != 1 {
+		return Run{}, ErrConflict
+	}
+	return service.getByID(ctx, runID)
+}
+
+func (service *Service) CompleteForAgent(ctx context.Context, current identity.User, authentication access.Identity, runID string, input RuntimeCompletion) (Run, error) {
+	if !isAgentWorker(current, authentication) {
+		return Run{}, ErrForbidden
+	}
+	if err := service.authorizeAgentRun(ctx, current, runID); err != nil {
+		return Run{}, err
+	}
+	return service.Complete(ctx, runID, input.LeaseToken, Completion{
+		InputTokens: input.InputTokens, OutputTokens: input.OutputTokens, Cost: input.Cost,
+		Currency: input.Currency, ResultSummary: input.ResultSummary, PriceSource: input.PriceSource,
+	})
+}
+
+func (service *Service) FailForAgent(ctx context.Context, current identity.User, authentication access.Identity, runID string, input RuntimeFailure) (Run, error) {
+	if !isAgentWorker(current, authentication) {
+		return Run{}, ErrForbidden
+	}
+	if err := service.authorizeAgentRun(ctx, current, runID); err != nil {
+		return Run{}, err
+	}
+	return service.Fail(ctx, runID, input.LeaseToken, input.ErrorCode)
+}
+
+func (service *Service) GetRuntimeCheckpoint(ctx context.Context, current identity.User, authentication access.Identity, consumer string) (RuntimeCheckpoint, error) {
+	if !isAgentWorker(current, authentication) {
+		return RuntimeCheckpoint{}, ErrForbidden
+	}
+	consumer = strings.ToLower(strings.TrimSpace(consumer))
+	if !consumerPattern.MatchString(consumer) {
+		return RuntimeCheckpoint{}, ErrInvalid
+	}
+	if _, err := service.pool.Exec(ctx, `INSERT INTO agent_runtime_checkpoints(org_id,agent_id,consumer,last_event_seq)
+		SELECT $1,$2,$3,event_seq FROM organizations WHERE id=$1 ON CONFLICT(agent_id,consumer) DO NOTHING`, current.OrgID, current.ActorID, consumer); err != nil {
+		return RuntimeCheckpoint{}, err
+	}
+	var result RuntimeCheckpoint
+	result.Consumer = consumer
+	err := service.pool.QueryRow(ctx, `SELECT last_event_seq,updated_at FROM agent_runtime_checkpoints
+		WHERE org_id=$1 AND agent_id=$2 AND consumer=$3`, current.OrgID, current.ActorID, consumer).Scan(&result.LastEventSeq, &result.UpdatedAt)
+	return result, err
+}
+
+func (service *Service) UpdateRuntimeCheckpoint(ctx context.Context, current identity.User, authentication access.Identity, consumer string, input UpdateRuntimeCheckpoint) (RuntimeCheckpoint, error) {
+	if !isAgentWorker(current, authentication) {
+		return RuntimeCheckpoint{}, ErrForbidden
+	}
+	consumer = strings.ToLower(strings.TrimSpace(consumer))
+	if !consumerPattern.MatchString(consumer) || input.LastEventSeq < 0 {
+		return RuntimeCheckpoint{}, ErrInvalid
+	}
+	var highWatermark int64
+	if err := service.pool.QueryRow(ctx, `SELECT event_seq FROM organizations WHERE id=$1`, current.OrgID).Scan(&highWatermark); err != nil {
+		return RuntimeCheckpoint{}, err
+	}
+	if input.LastEventSeq > highWatermark {
+		return RuntimeCheckpoint{}, ErrInvalid
+	}
+	var result RuntimeCheckpoint
+	result.Consumer = consumer
+	err := service.pool.QueryRow(ctx, `INSERT INTO agent_runtime_checkpoints(org_id,agent_id,consumer,last_event_seq)
+		VALUES($1,$2,$3,$4) ON CONFLICT(agent_id,consumer) DO UPDATE
+		SET last_event_seq=GREATEST(agent_runtime_checkpoints.last_event_seq,EXCLUDED.last_event_seq),updated_at=now()
+		RETURNING last_event_seq,updated_at`, current.OrgID, current.ActorID, consumer, input.LastEventSeq).Scan(&result.LastEventSeq, &result.UpdatedAt)
+	return result, err
+}
+
+func (service *Service) authorizeAgentRun(ctx context.Context, current identity.User, runID string) error {
+	if uuid.Validate(runID) != nil {
+		return ErrNotFound
+	}
+	var exists bool
+	if err := service.pool.QueryRow(ctx, `SELECT true FROM agent_runs WHERE org_id=$1 AND agent_id=$2 AND id=$3`, current.OrgID, current.ActorID, runID).Scan(&exists); errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	} else {
+		return err
+	}
+}
+
 func (service *Service) Complete(ctx context.Context, runID, leaseToken string, result Completion) (Run, error) {
 	if len(result.ResultSummary) == 0 {
 		result.ResultSummary = json.RawMessage(`{}`)
@@ -304,18 +470,46 @@ func (service *Service) Complete(ctx context.Context, runID, leaseToken string, 
 	if result.Cost == "" {
 		result.Cost = "0"
 	}
-	if uuid.Validate(runID) != nil || uuid.Validate(leaseToken) != nil || result.InputTokens < 0 || result.OutputTokens < 0 || !costPattern.MatchString(result.Cost) || len(result.Currency) != 3 || len(result.ResultSummary) > 262144 || !validObject(result.ResultSummary) {
+	if result.PriceSource == "" {
+		result.PriceSource = "unknown"
+	}
+	if uuid.Validate(runID) != nil || uuid.Validate(leaseToken) != nil || result.InputTokens < 0 || result.OutputTokens < 0 || !costPattern.MatchString(result.Cost) || len(result.Currency) != 3 || len(result.ResultSummary) > 262144 || !validObject(result.ResultSummary) || !validPriceSource(result.PriceSource) {
 		return Run{}, ErrInvalid
 	}
+	usageID, err := id.New()
+	if err != nil {
+		return Run{}, err
+	}
+	tx, err := service.pool.Begin(ctx)
+	if err != nil {
+		return Run{}, err
+	}
+	defer tx.Rollback(ctx)
 	var canceled bool
-	err := service.pool.QueryRow(ctx, `UPDATE agent_runs SET status=CASE WHEN cancel_requested_at IS NULL THEN 'completed' ELSE 'canceled' END,input_tokens=$3,output_tokens=$4,cost=COALESCE(NULLIF($5,''),'0')::numeric,currency=COALESCE(NULLIF($6,''),'USD'),result_summary=$7,finished_at=now(),lease_token=NULL,lease_expires_at=NULL WHERE id=$1 AND lease_token=$2 AND status='running' RETURNING status='canceled'`, runID, leaseToken, result.InputTokens, result.OutputTokens, result.Cost, result.Currency, result.ResultSummary).Scan(&canceled)
+	var orgID, agentID, correlationID, provider, model string
+	err = tx.QueryRow(ctx, `UPDATE agent_runs SET status=CASE WHEN cancel_requested_at IS NULL THEN 'completed' ELSE 'canceled' END,
+		input_tokens=$3,output_tokens=$4,cost=COALESCE(NULLIF($5,''),'0')::numeric,currency=COALESCE(NULLIF($6,''),'USD'),
+		result_summary=$7,finished_at=now(),lease_token=NULL,lease_expires_at=NULL
+		WHERE id=$1 AND lease_token=$2 AND status='running'
+		RETURNING status='canceled',org_id,agent_id,correlation_id,provider,model`, runID, leaseToken, result.InputTokens,
+		result.OutputTokens, result.Cost, result.Currency, result.ResultSummary).Scan(&canceled, &orgID, &agentID, &correlationID, &provider, &model)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Run{}, ErrConflict
 	}
 	if err != nil {
 		return Run{}, err
 	}
-	_ = canceled
+	if !canceled && provider != "" && model != "" {
+		if _, err := tx.Exec(ctx, `INSERT INTO agent_usage(id,org_id,agent_id,run_id,correlation_id,provider,model,
+			input_tokens,output_tokens,cost,currency,price_source) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+			usageID, orgID, agentID, runID, correlationID, provider, model, result.InputTokens, result.OutputTokens,
+			result.Cost, result.Currency, result.PriceSource); err != nil {
+			return Run{}, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Run{}, err
+	}
 	return service.getByID(ctx, runID)
 }
 
@@ -348,8 +542,15 @@ func validObject(value json.RawMessage) bool {
 	var object map[string]any
 	return json.Unmarshal(value, &object) == nil && object != nil
 }
+func validPriceSource(value string) bool {
+	return value == "provider" || value == "configured" || value == "estimated" || value == "unknown"
+}
 func canManage(current identity.User) bool {
 	return permission.Allows(current.OrgRole, current.Permissions, permission.AgentsManage)
+}
+func isAgentWorker(current identity.User, authentication access.Identity) bool {
+	return authentication.AuthenticationKind == "api_key" && authentication.ActorID == current.ActorID &&
+		authentication.OrgID == current.OrgID && authentication.KeyID != ""
 }
 
 const runSelect = `SELECT run.id,run.org_id,run.agent_id,run.trigger_id,run.trigger_event_seq,run.scheduled_for,run.chat_id,run.thread_root_id,run.requested_by,run.client_run_id,run.correlation_id,run.chain_depth,run.status,run.provider,run.model,run.input,run.result_summary,run.input_tokens,run.output_tokens,run.cost::text,run.currency,run.error_code,run.attempt,run.max_attempts,run.created_at,run.started_at,run.finished_at,run.cancel_requested_at,run.timeout_at,run.lease_token FROM agent_runs run`

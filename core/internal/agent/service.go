@@ -90,6 +90,10 @@ type CreateInput struct {
 	Model                       string   `json:"model"`
 	EndpointURL                 string   `json:"endpoint_url"`
 	ExternalDataSharingApproved bool     `json:"external_data_sharing_approved"`
+	MaxOutputTokens             *int     `json:"max_output_tokens"`
+	MaxToolIterations           *int     `json:"max_tool_iterations"`
+	MaxChainDepth               *int     `json:"max_chain_depth"`
+	PerChatConcurrency          *int     `json:"per_chat_concurrency"`
 	RateLimitPerMinute          int      `json:"rate_limit_per_minute"`
 	ProviderRateLimitPerMinute  int      `json:"provider_rate_limit_per_minute"`
 	ChatIDs                     []string `json:"chat_ids"`
@@ -105,6 +109,10 @@ type UpdateInput struct {
 	Model                       *string   `json:"model"`
 	EndpointURL                 *string   `json:"endpoint_url"`
 	ExternalDataSharingApproved *bool     `json:"external_data_sharing_approved"`
+	MaxOutputTokens             *int      `json:"max_output_tokens"`
+	MaxToolIterations           *int      `json:"max_tool_iterations"`
+	MaxChainDepth               *int      `json:"max_chain_depth"`
+	PerChatConcurrency          *int      `json:"per_chat_concurrency"`
 	RateLimitPerMinute          *int      `json:"rate_limit_per_minute"`
 	ProviderRateLimitPerMinute  *int      `json:"provider_rate_limit_per_minute"`
 	ChatIDs                     *[]string `json:"chat_ids"`
@@ -194,10 +202,13 @@ func (service *Service) Create(ctx context.Context, current identity.User, input
 	}
 	scopes := scopeStrings(normalized.AllowedScopes)
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO agents(actor_id,org_id,owner_actor_id,kind,description,enabled,allowed_scopes,provider,model,endpoint_url,external_data_sharing_approved,rate_limit_per_minute,provider_rate_limit_per_minute)
-		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, agentID, current.OrgID, current.ActorID, normalized.Kind,
+		INSERT INTO agents(actor_id,org_id,owner_actor_id,kind,description,enabled,allowed_scopes,provider,model,endpoint_url,
+			external_data_sharing_approved,max_output_tokens,max_tool_iterations,max_chain_depth,per_chat_concurrency,
+			rate_limit_per_minute,provider_rate_limit_per_minute)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`, agentID, current.OrgID, current.ActorID, normalized.Kind,
 		normalized.Description, normalized.Enabled, scopes, normalized.Provider, normalized.Model, normalized.EndpointURL,
-		normalized.ExternalDataSharingApproved, normalized.RateLimitPerMinute, normalized.ProviderRateLimitPerMinute); err != nil {
+		normalized.ExternalDataSharingApproved, *normalized.MaxOutputTokens, *normalized.MaxToolIterations, *normalized.MaxChainDepth,
+		*normalized.PerChatConcurrency, normalized.RateLimitPerMinute, normalized.ProviderRateLimitPerMinute); err != nil {
 		return Agent{}, mapWriteError("insert agent", err)
 	}
 	if _, err := tx.Exec(ctx, `
@@ -305,7 +316,14 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 	if _, err := tx.Exec(ctx, `UPDATE actors SET display_name=$3,handle=$4 WHERE org_id=$1 AND id=$2`, current.OrgID, agentID, prospective.DisplayName, prospective.Handle); err != nil {
 		return Agent{}, mapWriteError("update agent actor", err)
 	}
-	if _, err := tx.Exec(ctx, `UPDATE agents SET description=$3,enabled=$4,allowed_scopes=$5,provider=$6,model=$7,endpoint_url=$8,external_data_sharing_approved=$9,rate_limit_per_minute=$10,provider_rate_limit_per_minute=$11,updated_at=now() WHERE org_id=$1 AND actor_id=$2`, current.OrgID, agentID, prospective.Description, prospective.Enabled, scopeStrings(prospective.AllowedScopes), prospective.Provider, prospective.Model, prospective.EndpointURL, prospective.ExternalDataSharingApproved, prospective.RateLimitPerMinute, prospective.ProviderRateLimitPerMinute); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE agents SET description=$3,enabled=$4,allowed_scopes=$5,provider=$6,model=$7,
+		endpoint_url=$8,external_data_sharing_approved=$9,max_output_tokens=$10,max_tool_iterations=$11,max_chain_depth=$12,
+		per_chat_concurrency=$13,rate_limit_per_minute=$14,provider_rate_limit_per_minute=$15,updated_at=now()
+		WHERE org_id=$1 AND actor_id=$2`, current.OrgID, agentID, prospective.Description, prospective.Enabled,
+		scopeStrings(prospective.AllowedScopes), prospective.Provider, prospective.Model, prospective.EndpointURL,
+		prospective.ExternalDataSharingApproved, *prospective.MaxOutputTokens, *prospective.MaxToolIterations,
+		*prospective.MaxChainDepth, *prospective.PerChatConcurrency, prospective.RateLimitPerMinute,
+		prospective.ProviderRateLimitPerMinute); err != nil {
 		return Agent{}, mapWriteError("update agent", err)
 	}
 	if input.ChatIDs != nil {
@@ -580,9 +598,23 @@ func normalizeCreate(input CreateInput) (CreateInput, error) {
 	if input.ProviderRateLimitPerMinute == 0 {
 		input.ProviderRateLimitPerMinute = 300
 	}
+	if input.MaxOutputTokens == nil {
+		input.MaxOutputTokens = intPointer(2048)
+	}
+	if input.MaxToolIterations == nil {
+		input.MaxToolIterations = intPointer(8)
+	}
+	if input.MaxChainDepth == nil {
+		input.MaxChainDepth = intPointer(3)
+	}
+	if input.PerChatConcurrency == nil {
+		input.PerChatConcurrency = intPointer(1)
+	}
 	if len([]rune(input.DisplayName)) < 1 || len([]rune(input.DisplayName)) > 120 || !handlePattern.MatchString(input.Handle) ||
 		(input.Kind != "builtin" && input.Kind != "external") || len([]rune(input.Description)) > 2000 || len(input.Provider) > 100 || len(input.Model) > 200 ||
-		input.RateLimitPerMinute < 1 || input.RateLimitPerMinute > 100000 || input.ProviderRateLimitPerMinute < 1 || input.ProviderRateLimitPerMinute > 100000 {
+		input.RateLimitPerMinute < 1 || input.RateLimitPerMinute > 100000 || input.ProviderRateLimitPerMinute < 1 || input.ProviderRateLimitPerMinute > 100000 ||
+		*input.MaxOutputTokens < 1 || *input.MaxOutputTokens > 1000000 || *input.MaxToolIterations < 0 || *input.MaxToolIterations > 64 ||
+		*input.MaxChainDepth < 0 || *input.MaxChainDepth > 16 || *input.PerChatConcurrency < 1 || *input.PerChatConcurrency > 32 {
 		return CreateInput{}, fmt.Errorf("%w: invalid agent profile", ErrInvalid)
 	}
 	if input.Kind == "builtin" && input.EndpointURL != "" {
@@ -614,6 +646,8 @@ func mergeUpdate(existing Agent, input UpdateInput) (CreateInput, error) {
 		Provider: existing.Provider, Model: existing.Model, EndpointURL: existing.EndpointURL,
 		ExternalDataSharingApproved: existing.ExternalDataSharingApproved, RateLimitPerMinute: existing.RateLimitPerMinute,
 		ProviderRateLimitPerMinute: existing.ProviderRateLimitPerMinute, ChatIDs: existing.ChatIDs,
+		MaxOutputTokens: intPointer(existing.MaxOutputTokens), MaxToolIterations: intPointer(existing.MaxToolIterations),
+		MaxChainDepth: intPointer(existing.MaxChainDepth), PerChatConcurrency: intPointer(existing.PerChatConcurrency),
 	}
 	if input.DisplayName != nil {
 		prospective.DisplayName = *input.DisplayName
@@ -642,6 +676,18 @@ func mergeUpdate(existing Agent, input UpdateInput) (CreateInput, error) {
 	if input.ExternalDataSharingApproved != nil {
 		prospective.ExternalDataSharingApproved = *input.ExternalDataSharingApproved
 	}
+	if input.MaxOutputTokens != nil {
+		prospective.MaxOutputTokens = input.MaxOutputTokens
+	}
+	if input.MaxToolIterations != nil {
+		prospective.MaxToolIterations = input.MaxToolIterations
+	}
+	if input.MaxChainDepth != nil {
+		prospective.MaxChainDepth = input.MaxChainDepth
+	}
+	if input.PerChatConcurrency != nil {
+		prospective.PerChatConcurrency = input.PerChatConcurrency
+	}
 	if input.RateLimitPerMinute != nil {
 		prospective.RateLimitPerMinute = *input.RateLimitPerMinute
 	}
@@ -653,6 +699,8 @@ func mergeUpdate(existing Agent, input UpdateInput) (CreateInput, error) {
 	}
 	return normalizeCreate(prospective)
 }
+
+func intPointer(value int) *int { return &value }
 
 func normalizeScopes(input []Scope) ([]Scope, error) {
 	seen := make(map[Scope]struct{}, len(input))

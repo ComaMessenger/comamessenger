@@ -75,6 +75,13 @@ import type {
   AgentTrigger,
   CreateAgentTriggerRequest,
   UpdateAgentTriggerRequest,
+  ClaimedAgentRun,
+  ClaimAgentRunRequest,
+  AgentRunLeaseRequest,
+  CompleteAgentRunRequest,
+  FailAgentRunRequest,
+  AgentRuntimeCheckpoint,
+  UpdateAgentRuntimeCheckpointRequest,
 } from "./types";
 
 type APIErrorPayload = components["schemas"]["Error"];
@@ -110,6 +117,9 @@ export class MessengerAPI {
   ) {}
   token(): string | null {
     return this.accessToken;
+  }
+  useAccessToken(token: string): void {
+    this.accessToken = token;
   }
   clearToken(expected?: string | null): boolean {
     if (expected !== undefined && this.accessToken !== expected) return false;
@@ -295,6 +305,46 @@ export class MessengerAPI {
     return this.request(
       `/api/v1/agent-runs/${encodeURIComponent(runID)}/cancel`,
       { method: "POST" },
+    );
+  }
+  async claimAgentRun(input: ClaimAgentRunRequest): Promise<ClaimedAgentRun | null> {
+    return (
+      (await this.request<ClaimedAgentRun | undefined>(
+        "/api/v1/agent-runtime/runs/claim",
+        { method: "POST", body: JSON.stringify(input) },
+      )) ?? null
+    );
+  }
+  heartbeatAgentRun(runID: string, input: AgentRunLeaseRequest): Promise<AgentRun> {
+    return this.request(
+      `/api/v1/agent-runtime/runs/${encodeURIComponent(runID)}/heartbeat`,
+      { method: "POST", body: JSON.stringify(input) },
+    );
+  }
+  completeAgentRun(runID: string, input: CompleteAgentRunRequest): Promise<AgentRun> {
+    return this.request(
+      `/api/v1/agent-runtime/runs/${encodeURIComponent(runID)}/complete`,
+      { method: "POST", body: JSON.stringify(input) },
+    );
+  }
+  failAgentRun(runID: string, input: FailAgentRunRequest): Promise<AgentRun> {
+    return this.request(
+      `/api/v1/agent-runtime/runs/${encodeURIComponent(runID)}/fail`,
+      { method: "POST", body: JSON.stringify(input) },
+    );
+  }
+  agentRuntimeCheckpoint(consumer: string): Promise<AgentRuntimeCheckpoint> {
+    return this.request(
+      `/api/v1/agent-runtime/checkpoints/${encodeURIComponent(consumer)}`,
+    );
+  }
+  updateAgentRuntimeCheckpoint(
+    consumer: string,
+    input: UpdateAgentRuntimeCheckpointRequest,
+  ): Promise<AgentRuntimeCheckpoint> {
+    return this.request(
+      `/api/v1/agent-runtime/checkpoints/${encodeURIComponent(consumer)}`,
+      { method: "PUT", body: JSON.stringify(input) },
     );
   }
   agentTriggers(id: string): Promise<AgentTrigger[]> {

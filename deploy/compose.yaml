@@ -193,7 +193,13 @@ services:
       context: ..
       dockerfile: apps/agent-runtime/Dockerfile
     environment:
-      CORE_API_URL: http://core:8080
+      COMA_CORE_URL: http://core:8080
+      COMA_AGENT_API_KEY: ${AGENT_RUNTIME_API_KEY:-}
+      COMA_RUNTIME_CONSUMER: ${AGENT_RUNTIME_CONSUMER:-builtin-runtime}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_COMPATIBLE_BASE_URL: ${OPENAI_COMPATIBLE_BASE_URL:-}
+      OPENAI_COMPATIBLE_API_KEY: ${OPENAI_COMPATIBLE_API_KEY:-}
     depends_on:
       core:
         condition: service_started
