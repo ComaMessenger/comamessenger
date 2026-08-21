@@ -36,6 +36,8 @@ export function organizationUpdate(
     expected_version: value.version,
     invitation_default_role: value.invitation_default_role,
     invitation_ttl_hours: value.invitation_ttl_hours,
+    default_timezone: value.default_timezone,
+    allow_member_invitations: value.allow_member_invitations,
     allow_public_chat_creation: value.allow_public_chat_creation,
     allow_channel_creation: value.allow_channel_creation,
     accent_color: value.accent_color,

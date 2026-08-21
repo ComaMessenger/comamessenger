@@ -28,6 +28,7 @@ const user = {
   timezone: "UTC",
   status: "active",
   must_change_password: false,
+  can_create_invitations: true,
   status_emoji: "",
   status_text: "",
   status_expires_at: null,
@@ -150,6 +151,8 @@ async function mockMessenger(
     version: 1,
     invitation_default_role: "member",
     invitation_ttl_hours: 168,
+    default_timezone: "UTC",
+    allow_member_invitations: false,
     allow_public_chat_creation: true,
     allow_channel_creation: false,
     accent_color: "#174586",
@@ -1785,9 +1788,7 @@ test("notification snooze is shared by the profile menu", async ({ page }) => {
   const phone = test.info().project.name === "phone";
   await page.goto(phone ? "/more" : "/chats");
   if (phone) {
-    await page
-      .getByRole("button", { name: /Отключить уведомления/ })
-      .click();
+    await page.getByRole("button", { name: /Отключить уведомления/ }).click();
   } else {
     await page.getByRole("button", { name: /Анна/ }).click();
   }
@@ -1798,9 +1799,7 @@ test("notification snooze is shared by the profile menu", async ({ page }) => {
         name: /Отключить уведомления Уведомления отключены до/,
       }),
     ).toBeVisible();
-    await page
-      .getByRole("button", { name: /Отключить уведомления/ })
-      .click();
+    await page.getByRole("button", { name: /Отключить уведомления/ }).click();
   } else {
     await expect(
       page.locator(".status-menu").getByText(/Уведомления отключены до/),
@@ -1815,7 +1814,9 @@ test("notification snooze is shared by the profile menu", async ({ page }) => {
     ).toBeVisible();
   } else {
     await expect(
-      page.locator(".status-menu").getByText("Пауза действует на всех ваших устройствах"),
+      page
+        .locator(".status-menu")
+        .getByText("Пауза действует на всех ваших устройствах"),
     ).toBeVisible();
   }
 });
@@ -1826,13 +1827,11 @@ test("notification rules and schedule autosave", async ({ page }) => {
   await page
     .locator('select[name="notify-messages"]')
     .selectOption("direct_and_mentions");
+  await page.locator('select[name="notify-threads"]').selectOption("mentions");
   await page
-    .locator('select[name="notify-threads"]')
-    .selectOption("mentions");
-  await page.getByRole("checkbox", { name: "Реакции на мои сообщения" }).uncheck();
-  await page
-    .getByRole("checkbox", { name: "Использовать расписание" })
-    .check();
+    .getByRole("checkbox", { name: "Реакции на мои сообщения" })
+    .uncheck();
+  await page.getByRole("checkbox", { name: "Использовать расписание" }).check();
   await page.getByRole("button", { name: "Выбрать дни" }).click();
   await page.getByRole("button", { name: "Вс" }).click();
   await page.locator('input[name="schedule-from"]').fill("10:00");
@@ -1856,9 +1855,7 @@ test("push diagnostics lists devices and resets chat overrides", async ({
   await expect(page.getByText("Тест отправлен на устройств: 1")).toBeVisible();
   await expect(page.getByText(chat.name)).toBeVisible();
   await page.getByRole("button", { name: "Сбросить" }).click();
-  await expect(
-    page.getByText(/Исключений пока нет/),
-  ).toBeVisible();
+  await expect(page.getByText(/Исключений пока нет/)).toBeVisible();
 });
 
 test("a 10k-message history stays virtualized", async ({ page }) => {

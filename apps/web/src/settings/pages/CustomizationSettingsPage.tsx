@@ -65,6 +65,8 @@ export function CustomizationSettingsPage({
         expected_version: snapshot.version,
         invitation_default_role: snapshot.invitation_default_role,
         invitation_ttl_hours: snapshot.invitation_ttl_hours,
+        default_timezone: snapshot.default_timezone,
+        allow_member_invitations: snapshot.allow_member_invitations,
         allow_public_chat_creation: snapshot.allow_public_chat_creation,
         allow_channel_creation: snapshot.allow_channel_creation,
         accent_color: snapshot.accent_color,

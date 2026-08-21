@@ -18,17 +18,19 @@ type Repository struct {
 	pool *pgxpool.Pool
 }
 
-func (r *Repository) InvitationPolicy(ctx context.Context, orgID string) (string, time.Duration, error) {
+func (r *Repository) InvitationPolicy(ctx context.Context, orgID string) (string, time.Duration, bool, error) {
 	var role string
 	var ttlHours int
+	var allowMembers bool
 	err := r.pool.QueryRow(ctx, `
 		SELECT COALESCE(settings->>'invitation_default_role', 'member'),
-		       COALESCE((settings->>'invitation_ttl_hours')::int, 168)
-		FROM organizations WHERE id = $1`, orgID).Scan(&role, &ttlHours)
+		       COALESCE((settings->>'invitation_ttl_hours')::int, 168),
+		       COALESCE((settings->>'allow_member_invitations')::bool,false)
+		FROM organizations WHERE id = $1`, orgID).Scan(&role, &ttlHours, &allowMembers)
 	if err != nil {
-		return "", 0, fmt.Errorf("query invitation policy: %w", err)
+		return "", 0, false, fmt.Errorf("query invitation policy: %w", err)
 	}
-	return role, time.Duration(ttlHours) * time.Hour, nil
+	return role, time.Duration(ttlHours) * time.Hour, allowMembers, nil
 }
 
 func NewRepository(pool *pgxpool.Pool) *Repository {
@@ -96,7 +98,7 @@ func (r *Repository) Bootstrap(ctx context.Context, record BootstrapRecord) (Use
 	return User{
 		ActorID: record.ActorID, OrgID: record.OrganizationID, OrganizationName: record.OrganizationName, OrgRole: "owner",
 		Email: record.Email, DisplayName: record.DisplayName, Handle: record.Handle,
-		Timezone: record.Timezone, Status: "active", Permissions: permission.All(), CreatedAt: time.Now().UTC(),
+		Timezone: record.Timezone, Status: "active", Permissions: permission.All(), CanCreateInvitations: true, CreatedAt: time.Now().UTC(),
 	}, nil
 }
 
@@ -942,19 +944,23 @@ func (r *Repository) AcceptInvitation(ctx context.Context, acceptance Invitation
 		return User{}, fmt.Errorf("begin invitation acceptance: %w", err)
 	}
 	defer tx.Rollback(ctx)
-	var invitationID, orgID, organizationName, email, role string
+	var invitationID, orgID, organizationName, email, role, defaultTimezone string
 	var expiresAt time.Time
 	var acceptedAt, revokedAt *time.Time
 	err = tx.QueryRow(ctx, `
-		SELECT i.id, i.org_id, o.name, i.email::text, i.org_role, i.expires_at, i.accepted_at, i.revoked_at
+		SELECT i.id, i.org_id, o.name, i.email::text, i.org_role, i.expires_at, i.accepted_at, i.revoked_at,
+		       COALESCE(o.settings->>'default_timezone','UTC')
 		FROM invitations i JOIN organizations o ON o.id = i.org_id
 		WHERE i.token_hash = $1 FOR UPDATE OF i`, acceptance.TokenHash).Scan(
-		&invitationID, &orgID, &organizationName, &email, &role, &expiresAt, &acceptedAt, &revokedAt)
+		&invitationID, &orgID, &organizationName, &email, &role, &expiresAt, &acceptedAt, &revokedAt, &defaultTimezone)
 	if errors.Is(err, pgx.ErrNoRows) || acceptedAt != nil || revokedAt != nil || !expiresAt.After(now) {
 		return User{}, ErrInvitationInvalid
 	}
 	if err != nil {
 		return User{}, fmt.Errorf("find invitation: %w", err)
+	}
+	if acceptance.Timezone == "" {
+		acceptance.Timezone = defaultTimezone
 	}
 	_, err = tx.Exec(ctx, `
 		INSERT INTO actors (id, org_id, type, org_role, display_name, handle, timezone)
@@ -1009,6 +1015,13 @@ type permissionQueryRower interface {
 func loadPermissions(ctx context.Context, db permissionQueryRower, user *User) error {
 	if user.OrgRole != "admin" {
 		user.Permissions = permission.Effective(user.OrgRole, nil)
+		if user.OrgRole == "owner" {
+			user.CanCreateInvitations = true
+			return nil
+		}
+		if err := db.QueryRow(ctx, `SELECT COALESCE((settings->>'allow_member_invitations')::bool,false) FROM organizations WHERE id=$1`, user.OrgID).Scan(&user.CanCreateInvitations); err != nil {
+			return fmt.Errorf("load invitation capability: %w", err)
+		}
 		return nil
 	}
 	var stored []string
@@ -1023,6 +1036,7 @@ func loadPermissions(ctx context.Context, db permissionQueryRower, user *User) e
 		granted[index] = permission.Code(code)
 	}
 	user.Permissions = permission.Effective(user.OrgRole, granted)
+	user.CanCreateInvitations = permission.Allows(user.OrgRole, user.Permissions, permission.InvitationsManage)
 	return nil
 }
 

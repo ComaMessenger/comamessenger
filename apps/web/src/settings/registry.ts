@@ -144,6 +144,11 @@ export function permissionsOf(user: User): ReadonlySet<Permission> {
 
 export function canAccessSettings(user: User, entry: SettingsEntry): boolean {
   if (user.role === "owner") return true;
+  if (
+    (entry.id === "workspace" || entry.id === "workspace-invitations") &&
+    user.can_create_invitations
+  )
+    return true;
   if (entry.access?.ownerOnly) return false;
   const granted = permissionsOf(user);
   if (entry.access?.permission) return granted.has(entry.access.permission);

@@ -37,7 +37,11 @@ export function WorkspaceGeneralPage({
   const { query, draft, setDraft } = useOrganizationDraft(api, allowed);
   const fingerprint = useCallback(
     (value: OrganizationSettings) =>
-      JSON.stringify({ name: value.name, slug: value.slug }),
+      JSON.stringify({
+        name: value.name,
+        slug: value.slug,
+        default_timezone: value.default_timezone,
+      }),
     [],
   );
   const reconcile = useDraftReconciler(setDraft, fingerprint);
@@ -80,6 +84,14 @@ export function WorkspaceGeneralPage({
                 value={draft.name}
                 onChange={(event) =>
                   setDraft({ ...draft, name: event.target.value })
+                }
+              />
+              <Field
+                label={t("defaultWorkspaceTimezone")}
+                name="workspace-timezone"
+                value={draft.default_timezone}
+                onChange={(event) =>
+                  setDraft({ ...draft, default_timezone: event.target.value })
                 }
               />
               <Field

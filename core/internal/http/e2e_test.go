@@ -316,15 +316,42 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/organization", member.AccessToken, map[string]any{
 		"name": "Forbidden", "slug": "forbidden", "expected_version": organization.Version,
 		"invitation_default_role": "member", "invitation_ttl_hours": 24,
+		"default_timezone": "UTC", "allow_member_invitations": false,
 		"allow_public_chat_creation": true, "allow_channel_creation": false, "accent_color": "#174586",
 	}, standardhttp.StatusForbidden, nil)
 	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/organization", owner.AccessToken, map[string]any{
 		"name": "E2E Team", "slug": "e2e-team", "expected_version": organization.Version,
 		"invitation_default_role": "member", "invitation_ttl_hours": 48,
+		"default_timezone": "Asia/Yekaterinburg", "allow_member_invitations": true,
 		"allow_public_chat_creation": false, "allow_channel_creation": false, "accent_color": "#6D5EF5",
 	}, standardhttp.StatusOK, &organization)
 	if organization.Name != "E2E Team" || organization.AccentColor != "#6D5EF5" || organization.Version < 2 {
 		t.Fatalf("organization settings = %+v", organization)
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/me", member.AccessToken, nil, standardhttp.StatusOK, &updatedMember)
+	if !updatedMember.CanCreateInvitations {
+		t.Fatalf("member invitation capability = %+v", updatedMember)
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/invitations", member.AccessToken, map[string]any{
+		"email": "forbidden-admin@example.test", "role": "admin",
+	}, standardhttp.StatusForbidden, nil)
+	var memberInvitation identity.Invitation
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/invitations", member.AccessToken, map[string]any{
+		"email": "member-invited@example.test",
+	}, standardhttp.StatusCreated, &memberInvitation)
+	if memberInvitation.Role != "member" {
+		t.Fatalf("member-created invitation = %+v", memberInvitation)
+	}
+	memberAcceptURL, err := url.Parse(memberInvitation.AcceptURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var invitedByMember identity.Tokens
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/invitations/"+path.Base(memberAcceptURL.Path)+"/accept", "", map[string]any{
+		"display_name": "Invited Member", "handle": "invited-member", "password": "member invitation password",
+	}, standardhttp.StatusCreated, &invitedByMember)
+	if invitedByMember.User.Timezone != "Asia/Yekaterinburg" {
+		t.Fatalf("invitation default timezone = %+v", invitedByMember.User)
 	}
 	var branding workspace.PublicBranding
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/branding", "", nil, standardhttp.StatusOK, &branding)
@@ -355,7 +382,7 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 		Members []workspace.Member `json:"members"`
 	}
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/organization/members", owner.AccessToken, nil, standardhttp.StatusOK, &organizationMembers)
-	if len(organizationMembers.Members) != 3 {
+	if len(organizationMembers.Members) != 4 {
 		t.Fatalf("organization members = %+v", organizationMembers.Members)
 	}
 	var audit workspace.AuditPage
@@ -382,6 +409,7 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/organization", admin.AccessToken, map[string]any{
 		"name": organization.Name, "slug": organization.Slug, "expected_version": organization.Version,
 		"invitation_default_role": organization.InvitationDefaultRole, "invitation_ttl_hours": organization.InvitationTTLHours,
+		"default_timezone": organization.DefaultTimezone, "allow_member_invitations": organization.AllowMemberInvitations,
 		"allow_public_chat_creation": organization.AllowPublicChatCreation, "allow_channel_creation": organization.AllowChannelCreation, "accent_color": "#2255AA",
 	}, standardhttp.StatusOK, &organization)
 	if organization.AccentColor != "#2255AA" {

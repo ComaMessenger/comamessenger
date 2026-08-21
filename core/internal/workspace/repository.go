@@ -24,6 +24,8 @@ func (r *Repository) Settings(ctx context.Context, orgID string) (Settings, erro
 		SELECT o.id,o.name,o.slug::text,o.version,
 		       COALESCE(o.settings->>'invitation_default_role','member'),
 		       COALESCE((o.settings->>'invitation_ttl_hours')::int,168),
+		       COALESCE(o.settings->>'default_timezone','UTC'),
+		       COALESCE((o.settings->>'allow_member_invitations')::bool,false),
 		       COALESCE((o.settings->>'allow_public_chat_creation')::bool,true),
 		       COALESCE((o.settings->>'allow_channel_creation')::bool,false),
 		       COALESCE(o.settings->>'accent_color','#174586'),
@@ -31,7 +33,7 @@ func (r *Repository) Settings(ctx context.Context, orgID string) (Settings, erro
 		       EXISTS(SELECT 1 FROM organization_branding_assets a WHERE a.org_id=o.id AND a.kind='favicon')
 		FROM organizations o WHERE o.id=$1`, orgID).Scan(
 		&value.ID, &value.Name, &value.Slug, &value.Version, &value.InvitationDefaultRole,
-		&value.InvitationTTLHours, &value.AllowPublicChatCreation, &value.AllowChannelCreation,
+		&value.InvitationTTLHours, &value.DefaultTimezone, &value.AllowMemberInvitations, &value.AllowPublicChatCreation, &value.AllowChannelCreation,
 		&value.AccentColor, &value.HasLogo, &value.HasFavicon,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -52,6 +54,8 @@ func (r *Repository) UpdateSettings(ctx context.Context, orgID, actorID string, 
 	settingsJSON, err := json.Marshal(map[string]any{
 		"invitation_default_role":    input.InvitationDefaultRole,
 		"invitation_ttl_hours":       input.InvitationTTLHours,
+		"default_timezone":           input.DefaultTimezone,
+		"allow_member_invitations":   input.AllowMemberInvitations,
 		"allow_public_chat_creation": input.AllowPublicChatCreation,
 		"allow_channel_creation":     input.AllowChannelCreation,
 		"accent_color":               input.AccentColor,

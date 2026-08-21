@@ -25,6 +25,7 @@ function user(role: User["role"], permissions: Permission[] = []): User {
     status: "active",
     permissions,
     must_change_password: false,
+    can_create_invitations: role === "owner",
     status_emoji: "",
     status_text: "",
     status_expires_at: null,
@@ -71,6 +72,16 @@ describe("settings registry", () => {
     expect(
       canAccessSettingsPage(user("admin", ["invitations.manage"]), "workspace"),
     ).toBe(true);
+  });
+
+  it("exposes only invitation creation when member self-service is enabled", () => {
+    const member = user("member");
+    member.can_create_invitations = true;
+    expect(canAccessSettingsPage(member, "workspace")).toBe(true);
+    expect(
+      visibleChildSettings(member, "workspace").map((entry) => entry.id),
+    ).toEqual(["workspace-invitations"]);
+    expect(canAccessSettingsPage(member, "workspace-members")).toBe(false);
   });
 
   it("exposes only permitted workspace subpages", () => {

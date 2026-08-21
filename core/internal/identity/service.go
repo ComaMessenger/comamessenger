@@ -501,20 +501,27 @@ func (s *Service) TransferOwnership(ctx context.Context, current User, input Tra
 }
 
 func (s *Service) CreateInvitation(ctx context.Context, current User, input CreateInvitationInput) (Invitation, error) {
-	if !permission.Allows(current.OrgRole, current.Permissions, permission.InvitationsManage) {
-		return Invitation{}, ErrForbidden
-	}
 	email := strings.ToLower(strings.TrimSpace(input.Email))
 	parsedEmail, err := mail.ParseAddress(email)
 	if err != nil || parsedEmail.Address != email || len(email) > 254 {
 		return Invitation{}, validationErrorf("email has invalid format")
 	}
 	role := strings.ToLower(strings.TrimSpace(input.Role))
-	policyRole, policyTTL, err := s.repository.InvitationPolicy(ctx, current.OrgID)
+	policyRole, policyTTL, allowMembers, err := s.repository.InvitationPolicy(ctx, current.OrgID)
 	if err != nil {
 		return Invitation{}, err
 	}
-	if role == "" {
+	manager := permission.Allows(current.OrgRole, current.Permissions, permission.InvitationsManage)
+	memberSelfService := current.OrgRole == "member" && allowMembers
+	if !manager && !memberSelfService {
+		return Invitation{}, ErrForbidden
+	}
+	if memberSelfService && !manager {
+		if role != "" && role != "member" {
+			return Invitation{}, ErrForbidden
+		}
+		role = "member"
+	} else if role == "" {
 		role = policyRole
 	}
 	if role != "member" && role != "admin" {
@@ -576,7 +583,7 @@ func (s *Service) RotateInvitation(ctx context.Context, current User, invitation
 	if err != nil {
 		return Invitation{}, err
 	}
-	_, policyTTL, err := s.repository.InvitationPolicy(ctx, current.OrgID)
+	_, policyTTL, _, err := s.repository.InvitationPolicy(ctx, current.OrgID)
 	if err != nil {
 		return Invitation{}, err
 	}
@@ -620,9 +627,6 @@ func (s *Service) AcceptInvitation(ctx context.Context, token string, input Acce
 	input.DisplayName = strings.TrimSpace(input.DisplayName)
 	input.Handle = strings.ToLower(strings.TrimSpace(input.Handle))
 	input.Timezone = strings.TrimSpace(input.Timezone)
-	if input.Timezone == "" {
-		input.Timezone = "UTC"
-	}
 	if len(token) < 32 || len(token) > 1024 {
 		return Tokens{}, ErrInvitationInvalid
 	}
@@ -635,7 +639,7 @@ func (s *Service) AcceptInvitation(ctx context.Context, token string, input Acce
 	if len(input.Password) < 10 || len(input.Password) > 1024 {
 		return Tokens{}, validationErrorf("password length must be between 10 and 1024 bytes")
 	}
-	if len(input.Timezone) < 1 || len(input.Timezone) > 64 {
+	if len(input.Timezone) > 64 {
 		return Tokens{}, validationErrorf("timezone has invalid length")
 	}
 	now := s.now().UTC()
@@ -667,6 +671,11 @@ func (s *Service) AcceptInvitation(ctx context.Context, token string, input Acce
 	if err != nil {
 		return Tokens{}, err
 	}
+	_, _, allowMembers, policyErr := s.repository.InvitationPolicy(ctx, user.OrgID)
+	if policyErr != nil {
+		return Tokens{}, policyErr
+	}
+	user.CanCreateInvitations = user.OrgRole == "owner" || (user.OrgRole == "member" && allowMembers) || permission.Allows(user.OrgRole, user.Permissions, permission.InvitationsManage)
 	return s.issue(user, ids[1], refreshToken)
 }
 

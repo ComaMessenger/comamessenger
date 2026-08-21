@@ -1286,6 +1286,7 @@ export interface components {
             status: "active" | "deactivated";
             permissions: components["schemas"]["Permission"][];
             must_change_password: boolean;
+            can_create_invitations: boolean;
             status_emoji: string;
             status_text: string;
             /** Format: date-time */
@@ -1348,6 +1349,8 @@ export interface components {
             /** @enum {string} */
             invitation_default_role: "admin" | "member";
             invitation_ttl_hours: number;
+            default_timezone: string;
+            allow_member_invitations: boolean;
             allow_public_chat_creation: boolean;
             allow_channel_creation: boolean;
             accent_color: string;
@@ -1362,6 +1365,8 @@ export interface components {
             /** @enum {string} */
             invitation_default_role: "admin" | "member";
             invitation_ttl_hours: number;
+            default_timezone: string;
+            allow_member_invitations: boolean;
             allow_public_chat_creation: boolean;
             allow_channel_creation: boolean;
             accent_color: string;
@@ -1483,11 +1488,8 @@ export interface components {
         CreateInvitationRequest: {
             /** Format: email */
             email: string;
-            /**
-             * @default member
-             * @enum {string}
-             */
-            role: "admin" | "member";
+            /** @enum {string} */
+            role?: "admin" | "member";
         };
         Invitation: {
             /** Format: uuid */

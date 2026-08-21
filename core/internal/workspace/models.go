@@ -21,6 +21,8 @@ type Settings struct {
 	Version                 int64  `json:"version"`
 	InvitationDefaultRole   string `json:"invitation_default_role"`
 	InvitationTTLHours      int    `json:"invitation_ttl_hours"`
+	DefaultTimezone         string `json:"default_timezone"`
+	AllowMemberInvitations  bool   `json:"allow_member_invitations"`
 	AllowPublicChatCreation bool   `json:"allow_public_chat_creation"`
 	AllowChannelCreation    bool   `json:"allow_channel_creation"`
 	AccentColor             string `json:"accent_color"`
@@ -34,6 +36,8 @@ type UpdateSettingsInput struct {
 	ExpectedVersion         int64  `json:"expected_version"`
 	InvitationDefaultRole   string `json:"invitation_default_role"`
 	InvitationTTLHours      int    `json:"invitation_ttl_hours"`
+	DefaultTimezone         string `json:"default_timezone"`
+	AllowMemberInvitations  bool   `json:"allow_member_invitations"`
 	AllowPublicChatCreation bool   `json:"allow_public_chat_creation"`
 	AllowChannelCreation    bool   `json:"allow_channel_creation"`
 	AccentColor             string `json:"accent_color"`

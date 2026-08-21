@@ -69,6 +69,7 @@ func (s *Service) UpdateSettings(ctx context.Context, current identity.User, inp
 	input.Name = strings.TrimSpace(input.Name)
 	input.Slug = strings.ToLower(strings.TrimSpace(input.Slug))
 	input.InvitationDefaultRole = strings.ToLower(strings.TrimSpace(input.InvitationDefaultRole))
+	input.DefaultTimezone = strings.TrimSpace(input.DefaultTimezone)
 	input.AccentColor = strings.ToUpper(strings.TrimSpace(input.AccentColor))
 	if len(input.Name) < 1 || len(input.Name) > 120 {
 		return Settings{}, fmt.Errorf("%w: name must contain 1 to 120 characters", ErrInvalid)
@@ -85,6 +86,12 @@ func (s *Service) UpdateSettings(ctx context.Context, current identity.User, inp
 	if input.InvitationTTLHours < 1 || input.InvitationTTLHours > 720 {
 		return Settings{}, fmt.Errorf("%w: invitation TTL must be between 1 and 720 hours", ErrInvalid)
 	}
+	if len(input.DefaultTimezone) < 1 || len(input.DefaultTimezone) > 64 {
+		return Settings{}, fmt.Errorf("%w: default timezone has invalid length", ErrInvalid)
+	}
+	if _, err := time.LoadLocation(input.DefaultTimezone); err != nil {
+		return Settings{}, fmt.Errorf("%w: default timezone is invalid", ErrInvalid)
+	}
 	if !colorPattern.MatchString(input.AccentColor) {
 		return Settings{}, fmt.Errorf("%w: accent color must be a six-digit hex color", ErrInvalid)
 	}
@@ -99,7 +106,7 @@ func (s *Service) UpdateSettings(ctx context.Context, current identity.User, inp
 		!allows(current, permission.WorkspaceSettings) {
 		return Settings{}, ErrForbidden
 	}
-	if (input.InvitationDefaultRole != existing.InvitationDefaultRole || input.InvitationTTLHours != existing.InvitationTTLHours) &&
+	if (input.InvitationDefaultRole != existing.InvitationDefaultRole || input.InvitationTTLHours != existing.InvitationTTLHours || input.DefaultTimezone != existing.DefaultTimezone || input.AllowMemberInvitations != existing.AllowMemberInvitations) &&
 		!allows(current, permission.InvitationsManage) {
 		return Settings{}, ErrForbidden
 	}

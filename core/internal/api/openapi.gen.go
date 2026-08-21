@@ -2143,7 +2143,9 @@ type OrganizationMemberStatus string
 type OrganizationSettings struct {
 	AccentColor             string                                    `json:"accent_color"`
 	AllowChannelCreation    bool                                      `json:"allow_channel_creation"`
+	AllowMemberInvitations  bool                                      `json:"allow_member_invitations"`
 	AllowPublicChatCreation bool                                      `json:"allow_public_chat_creation"`
+	DefaultTimezone         string                                    `json:"default_timezone"`
 	HasFavicon              bool                                      `json:"has_favicon"`
 	HasLogo                 bool                                      `json:"has_logo"`
 	Id                      openapi_types.UUID                        `json:"id"`
@@ -2564,7 +2566,9 @@ type UpdateOrganizationMemberRequestStatus string
 type UpdateOrganizationSettingsRequest struct {
 	AccentColor             string                                                 `json:"accent_color"`
 	AllowChannelCreation    bool                                                   `json:"allow_channel_creation"`
+	AllowMemberInvitations  bool                                                   `json:"allow_member_invitations"`
 	AllowPublicChatCreation bool                                                   `json:"allow_public_chat_creation"`
+	DefaultTimezone         string                                                 `json:"default_timezone"`
 	ExpectedVersion         int64                                                  `json:"expected_version"`
 	InvitationDefaultRole   UpdateOrganizationSettingsRequestInvitationDefaultRole `json:"invitation_default_role"`
 	InvitationTtlHours      int                                                    `json:"invitation_ttl_hours"`
@@ -2619,23 +2623,24 @@ type UpdateProfileRequest struct {
 
 // User defines model for User.
 type User struct {
-	About              string              `json:"about"`
-	CreatedAt          time.Time           `json:"created_at"`
-	DisplayName        string              `json:"display_name"`
-	Email              openapi_types.Email `json:"email"`
-	Handle             string              `json:"handle"`
-	Id                 openapi_types.UUID  `json:"id"`
-	MustChangePassword bool                `json:"must_change_password"`
-	OrgId              openapi_types.UUID  `json:"org_id"`
-	OrganizationName   string              `json:"organization_name"`
-	Permissions        []Permission        `json:"permissions"`
-	Role               UserRole            `json:"role"`
-	Status             UserStatus          `json:"status"`
-	StatusEmoji        string              `json:"status_emoji"`
-	StatusExpiresAt    *time.Time          `json:"status_expires_at"`
-	StatusText         string              `json:"status_text"`
-	Timezone           string              `json:"timezone"`
-	Title              string              `json:"title"`
+	About                string              `json:"about"`
+	CanCreateInvitations bool                `json:"can_create_invitations"`
+	CreatedAt            time.Time           `json:"created_at"`
+	DisplayName          string              `json:"display_name"`
+	Email                openapi_types.Email `json:"email"`
+	Handle               string              `json:"handle"`
+	Id                   openapi_types.UUID  `json:"id"`
+	MustChangePassword   bool                `json:"must_change_password"`
+	OrgId                openapi_types.UUID  `json:"org_id"`
+	OrganizationName     string              `json:"organization_name"`
+	Permissions          []Permission        `json:"permissions"`
+	Role                 UserRole            `json:"role"`
+	Status               UserStatus          `json:"status"`
+	StatusEmoji          string              `json:"status_emoji"`
+	StatusExpiresAt      *time.Time          `json:"status_expires_at"`
+	StatusText           string              `json:"status_text"`
+	Timezone             string              `json:"timezone"`
+	Title                string              `json:"title"`
 }
 
 // UserRole defines model for User.Role.

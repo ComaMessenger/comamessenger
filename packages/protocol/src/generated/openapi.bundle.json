@@ -3888,6 +3888,7 @@
           "status",
           "permissions",
           "must_change_password",
+          "can_create_invitations",
           "status_emoji",
           "status_text",
           "status_expires_at",
@@ -3947,6 +3948,9 @@
             }
           },
           "must_change_password": {
+            "type": "boolean"
+          },
+          "can_create_invitations": {
             "type": "boolean"
           },
           "status_emoji": {
@@ -4146,6 +4150,8 @@
           "version",
           "invitation_default_role",
           "invitation_ttl_hours",
+          "default_timezone",
+          "allow_member_invitations",
           "allow_public_chat_creation",
           "allow_channel_creation",
           "accent_color",
@@ -4179,6 +4185,14 @@
             "minimum": 1,
             "maximum": 720
           },
+          "default_timezone": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "allow_member_invitations": {
+            "type": "boolean"
+          },
           "allow_public_chat_creation": {
             "type": "boolean"
           },
@@ -4206,6 +4220,8 @@
           "expected_version",
           "invitation_default_role",
           "invitation_ttl_hours",
+          "default_timezone",
+          "allow_member_invitations",
           "allow_public_chat_creation",
           "allow_channel_creation",
           "accent_color"
@@ -4236,6 +4252,14 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 720
+          },
+          "default_timezone": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "allow_member_invitations": {
+            "type": "boolean"
           },
           "allow_public_chat_creation": {
             "type": "boolean"
@@ -4727,8 +4751,7 @@
             "enum": [
               "admin",
               "member"
-            ],
-            "default": "member"
+            ]
           }
         }
       },
