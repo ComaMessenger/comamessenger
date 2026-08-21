@@ -72,6 +72,7 @@ export type AcceptInvitationRequest =
 export type CreateInvitationRequest =
   components["schemas"]["CreateInvitationRequest"];
 export type Invitation = components["schemas"]["Invitation"];
+export type InvitationSummary = components["schemas"]["InvitationSummary"];
 export type TokenResponse = components["schemas"]["TokenResponse"];
 export type ServiceHealth = { status: "checking" | "ok" | "unavailable" };
 export type DeliveryState = "sending" | "sent" | "failed" | "retrying";

@@ -120,6 +120,9 @@ func (h *identityHandlers) routes(router chi.Router) {
 		protected.Delete("/sessions/{sessionID}", h.revokeSession)
 		protected.Post("/sessions/revoke-others", h.revokeOtherSessions)
 		protected.Post("/invitations", h.createInvitation)
+		protected.Get("/invitations", h.listInvitations)
+		protected.Delete("/invitations/{invitationID}", h.revokeInvitation)
+		protected.Post("/invitations/{invitationID}/rotate", h.rotateInvitation)
 		protected.With(h.actorRateLimit("ownership-transfer", h.ownershipRate)).Post("/organization/transfer-ownership", h.transferOwnership)
 		if h.workspace != nil {
 			protected.Get("/organization", h.workspaceSettings)
@@ -580,6 +583,51 @@ func (h *identityHandlers) createInvitation(w standardhttp.ResponseWriter, r *st
 			h.writeError(w, r, standardhttp.StatusForbidden, "forbidden", "You do not have permission to create invitations.")
 		case identity.IsValidationError(err):
 			h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "validation_failed", err.Error())
+		default:
+			h.internalError(w, r, err)
+		}
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusCreated, invitation)
+}
+
+func (h *identityHandlers) listInvitations(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	items, err := h.service.Invitations(r.Context(), authFromContext(r.Context()).User)
+	if err != nil {
+		if errors.Is(err, identity.ErrForbidden) {
+			h.writeError(w, r, standardhttp.StatusForbidden, "forbidden", "You do not have permission to list invitations.")
+			return
+		}
+		h.internalError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, items)
+}
+
+func (h *identityHandlers) revokeInvitation(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	err := h.service.RevokeInvitation(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "invitationID"))
+	if err != nil {
+		switch {
+		case errors.Is(err, identity.ErrForbidden):
+			h.writeError(w, r, standardhttp.StatusForbidden, "forbidden", "You do not have permission to revoke invitations.")
+		case errors.Is(err, identity.ErrNotFound):
+			h.writeError(w, r, standardhttp.StatusNotFound, "not_found", "Invitation was not found.")
+		default:
+			h.internalError(w, r, err)
+		}
+		return
+	}
+	w.WriteHeader(standardhttp.StatusNoContent)
+}
+
+func (h *identityHandlers) rotateInvitation(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	invitation, err := h.service.RotateInvitation(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "invitationID"))
+	if err != nil {
+		switch {
+		case errors.Is(err, identity.ErrForbidden):
+			h.writeError(w, r, standardhttp.StatusForbidden, "forbidden", "You do not have permission to rotate invitations.")
+		case errors.Is(err, identity.ErrNotFound):
+			h.writeError(w, r, standardhttp.StatusNotFound, "not_found", "Invitation was not found.")
 		default:
 			h.internalError(w, r, err)
 		}

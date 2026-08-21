@@ -117,6 +117,26 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	if member.User.Permissions == nil || len(member.User.Permissions) != 0 {
 		t.Fatalf("member permissions = %#v", member.User.Permissions)
 	}
+	var pendingInvitation identity.Invitation
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/invitations", owner.AccessToken, map[string]any{
+		"email": "pending@example.test", "role": "admin",
+	}, standardhttp.StatusCreated, &pendingInvitation)
+	var invitations []identity.InvitationSummary
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/invitations", owner.AccessToken, nil, standardhttp.StatusOK, &invitations)
+	if len(invitations) != 1 || invitations[0].ID != pendingInvitation.ID || invitations[0].CreatedByName != "Owner" || invitations[0].Status != "active" {
+		t.Fatalf("pending invitations = %+v", invitations)
+	}
+	var rotatedInvitation identity.Invitation
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/invitations/"+pendingInvitation.ID+"/rotate", owner.AccessToken, nil, standardhttp.StatusCreated, &rotatedInvitation)
+	if rotatedInvitation.ID == pendingInvitation.ID || rotatedInvitation.AcceptURL == "" {
+		t.Fatalf("rotated invitation = %+v", rotatedInvitation)
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodDelete, baseURL+"/api/v1/invitations/"+rotatedInvitation.ID, owner.AccessToken, nil, standardhttp.StatusNoContent, nil)
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/invitations", owner.AccessToken, nil, standardhttp.StatusOK, &invitations)
+	if len(invitations) != 0 {
+		t.Fatalf("invitations after revoke = %+v", invitations)
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/invitations", member.AccessToken, nil, standardhttp.StatusForbidden, nil)
 	var memberOtherSession identity.Tokens
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/auth/login", "", map[string]any{
 		"email": "member@example.test", "password": "another correct password",
@@ -264,6 +284,9 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/invitations", owner.AccessToken, map[string]any{
 		"email": "admin@example.test", "role": "admin",
 	}, standardhttp.StatusCreated, &invitation)
+	if !invitation.EmailSent || emailSender.messages[len(emailSender.messages)-1].recipient != "admin@example.test" {
+		t.Fatalf("invitation email delivery = invitation %+v messages=%+v", invitation, emailSender.messages)
+	}
 	acceptURL, err = url.Parse(invitation.AcceptURL)
 	if err != nil || path.Base(acceptURL.Path) == "" {
 		t.Fatalf("admin invitation accept URL = %q, error = %v", invitation.AcceptURL, err)

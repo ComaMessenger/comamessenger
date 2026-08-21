@@ -511,6 +511,17 @@ const ru = {
   invitationLink: "Ссылка приглашения",
   invitationLinkHint:
     "Показывается один раз — передайте её участнику безопасным способом.",
+  activeInvitations: "Активные приглашения",
+  activeInvitationsHint:
+    "Ссылку нельзя показать повторно. Отзовите приглашение или выпустите новую ссылку.",
+  noActiveInvitations: "Активных приглашений пока нет",
+  invitationCreatedBy: "создал(а) {{name}}",
+  invitationExpires: "до {{time}}",
+  rotateInvitation: "Новая ссылка",
+  revokeInvitation: "Отозвать",
+  invitationRevoked: "Приглашение отозвано",
+  invitationRotated: "Новая ссылка создана — скопируйте её сейчас",
+  invitationRotatedAndSent: "Новая ссылка создана и отправлена по email",
 };
 const en: Record<keyof typeof ru, string> = {
   loading: "Starting your workspace…",
@@ -1018,6 +1029,17 @@ const en: Record<keyof typeof ru, string> = {
   invitationLink: "Invitation link",
   invitationLinkHint:
     "Shown once — share it with the member through a secure channel.",
+  activeInvitations: "Active invitations",
+  activeInvitationsHint:
+    "The link cannot be shown again. Revoke the invitation or issue a new link.",
+  noActiveInvitations: "There are no active invitations yet",
+  invitationCreatedBy: "created by {{name}}",
+  invitationExpires: "expires {{time}}",
+  rotateInvitation: "New link",
+  revokeInvitation: "Revoke",
+  invitationRevoked: "Invitation revoked",
+  invitationRotated: "A new link was created — copy it now",
+  invitationRotatedAndSent: "A new link was created and sent by email",
 };
 const pseudo = Object.fromEntries(
   Object.entries(en).map(([key, value]) => [

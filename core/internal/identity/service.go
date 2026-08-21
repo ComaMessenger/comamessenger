@@ -540,7 +540,80 @@ func (s *Service) CreateInvitation(ctx context.Context, current User, input Crea
 		return Invitation{}, err
 	}
 	invitation.AcceptURL = s.publicAppURL + "/invite/" + token
+	s.deliverInvitation(ctx, current.OrgID, &invitation)
 	return invitation, nil
+}
+
+func (s *Service) Invitations(ctx context.Context, current User) ([]InvitationSummary, error) {
+	if !permission.Allows(current.OrgRole, current.Permissions, permission.InvitationsManage) {
+		return nil, ErrForbidden
+	}
+	return s.repository.Invitations(ctx, current.OrgID, s.now().UTC())
+}
+
+func (s *Service) RevokeInvitation(ctx context.Context, current User, invitationID string) error {
+	if !permission.Allows(current.OrgRole, current.Permissions, permission.InvitationsManage) {
+		return ErrForbidden
+	}
+	if uuid.Validate(invitationID) != nil {
+		return ErrNotFound
+	}
+	auditID, err := id.New()
+	if err != nil {
+		return err
+	}
+	return s.repository.RevokeInvitation(ctx, current.OrgID, current.ActorID, invitationID, auditID)
+}
+
+func (s *Service) RotateInvitation(ctx context.Context, current User, invitationID string) (Invitation, error) {
+	if !permission.Allows(current.OrgRole, current.Permissions, permission.InvitationsManage) {
+		return Invitation{}, ErrForbidden
+	}
+	if uuid.Validate(invitationID) != nil {
+		return Invitation{}, ErrNotFound
+	}
+	ids, err := newIDs(2)
+	if err != nil {
+		return Invitation{}, err
+	}
+	_, policyTTL, err := s.repository.InvitationPolicy(ctx, current.OrgID)
+	if err != nil {
+		return Invitation{}, err
+	}
+	if policyTTL <= 0 {
+		policyTTL = s.invitationTTL
+	}
+	token, tokenHash, err := access.NewRefreshToken()
+	if err != nil {
+		return Invitation{}, err
+	}
+	invitation, err := s.repository.RotateInvitation(ctx, invitationID, InvitationRecord{
+		ID: ids[0], OrgID: current.OrgID, TokenHash: tokenHash[:], CreatedBy: current.ActorID,
+		ExpiresAt: s.now().UTC().Add(policyTTL), AuditID: ids[1],
+	})
+	if err != nil {
+		return Invitation{}, err
+	}
+	invitation.AcceptURL = s.publicAppURL + "/invite/" + token
+	s.deliverInvitation(ctx, current.OrgID, &invitation)
+	return invitation, nil
+}
+
+func (s *Service) deliverInvitation(ctx context.Context, orgID string, invitation *Invitation) {
+	if s.emailSender == nil {
+		return
+	}
+	configured, err := s.emailSender.EmailConfigured(ctx, orgID)
+	if err != nil || !configured {
+		return
+	}
+	subject := "ComaMessenger invitation"
+	body := "You were invited to ComaMessenger as " + invitation.Role + ".\n\nOpen this one-time link:\n" + invitation.AcceptURL
+	if err := s.emailSender.SendEmail(ctx, orgID, invitation.Email, subject, body); err != nil {
+		return
+	}
+	invitation.EmailSent = true
+	_ = s.repository.MarkInvitationEmailSent(ctx, orgID, invitation.ID, s.now().UTC())
 }
 
 func (s *Service) AcceptInvitation(ctx context.Context, token string, input AcceptInvitationInput, device Device) (Tokens, error) {

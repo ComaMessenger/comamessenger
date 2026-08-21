@@ -1,11 +1,13 @@
 import { useCallback, useState } from "react";
 import type {
+  InvitationSummary,
   MessengerAPI,
   OrganizationSettings,
   User,
 } from "@comamessenger/core";
-import { Copy, UserPlus } from "lucide-react";
+import { Copy, RotateCcw, Trash2, UserPlus } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useQuery } from "@tanstack/react-query";
 import { Button, Field, SelectField, Skeleton } from "../../../ui";
 import { messageOf } from "../../../errors";
 import { AutosaveStatus } from "../../components/AutosaveStatus";
@@ -37,6 +39,11 @@ export function WorkspaceInvitationsPage({
   const { t } = useTranslation();
   const allowed = canAccessSettingsPage(user, "workspace-invitations");
   const { query, draft, setDraft } = useOrganizationDraft(api, allowed);
+  const invitations = useQuery({
+    queryKey: ["invitations"],
+    queryFn: () => api.invitations(),
+    enabled: allowed,
+  });
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"member" | "admin">("member");
   const [inviteURL, setInviteURL] = useState("");
@@ -66,6 +73,34 @@ export function WorkspaceInvitationsPage({
       setInviteURL(invitation.accept_url ?? "");
       setInviteEmail("");
       setMessage(t("invitationCreated"));
+      await invitations.refetch();
+    } catch (cause) {
+      setMessage(messageOf(cause));
+    }
+  }
+
+  async function revoke(invitation: InvitationSummary) {
+    setMessage("");
+    try {
+      await api.revokeInvitation(invitation.id);
+      setMessage(t("invitationRevoked"));
+      await invitations.refetch();
+    } catch (cause) {
+      setMessage(messageOf(cause));
+    }
+  }
+
+  async function rotate(invitation: InvitationSummary) {
+    setMessage("");
+    try {
+      const replacement = await api.rotateInvitation(invitation.id);
+      setInviteURL(replacement.accept_url ?? "");
+      setMessage(
+        replacement.email_sent
+          ? t("invitationRotatedAndSent")
+          : t("invitationRotated"),
+      );
+      await invitations.refetch();
     } catch (cause) {
       setMessage(messageOf(cause));
     }
@@ -175,6 +210,60 @@ export function WorkspaceInvitationsPage({
                   <Copy />
                   {t("copyLink")}
                 </Button>
+              </div>
+            )}
+          </SettingsSection>
+          <SettingsSection
+            title={t("activeInvitations")}
+            description={t("activeInvitationsHint")}
+          >
+            {invitations.isLoading ? (
+              <Skeleton />
+            ) : (invitations.data?.length ?? 0) === 0 ? (
+              <p className="settings-empty">{t("noActiveInvitations")}</p>
+            ) : (
+              <div className="settings-diagnostic-list">
+                {invitations.data?.map((invitation) => (
+                  <div key={invitation.id}>
+                    <span>
+                      <strong>{invitation.email}</strong>
+                      <small>
+                        {t(
+                          invitation.role === "admin"
+                            ? "roleAdmin"
+                            : "roleMember",
+                        )}
+                        {" · "}
+                        {t("invitationCreatedBy", {
+                          name: invitation.created_by_name,
+                        })}
+                        {" · "}
+                        {t("invitationExpires", {
+                          time: new Intl.DateTimeFormat(undefined, {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                          }).format(new Date(invitation.expires_at)),
+                        })}
+                      </small>
+                    </span>
+                    <Button
+                      size="sm"
+                      disabled={invitation.status === "expired"}
+                      onClick={() => void rotate(invitation)}
+                    >
+                      <RotateCcw />
+                      {t("rotateInvitation")}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={() => void revoke(invitation)}
+                    >
+                      <Trash2 />
+                      {t("revokeInvitation")}
+                    </Button>
+                  </div>
+                ))}
               </div>
             )}
           </SettingsSection>

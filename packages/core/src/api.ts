@@ -22,6 +22,7 @@ import type {
   MessageWindow,
   InfrastructureSettings,
   Invitation,
+  InvitationSummary,
   OrganizationMember,
   OrganizationSettings,
   PublicBranding,
@@ -219,6 +220,20 @@ export class MessengerAPI {
       method: "POST",
       body: JSON.stringify(input),
     });
+  }
+  invitations(): Promise<InvitationSummary[]> {
+    return this.request("/api/v1/invitations");
+  }
+  revokeInvitation(id: string): Promise<void> {
+    return this.request(`/api/v1/invitations/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+  }
+  rotateInvitation(id: string): Promise<Invitation> {
+    return this.request(
+      `/api/v1/invitations/${encodeURIComponent(id)}/rotate`,
+      { method: "POST" },
+    );
   }
   branding(): Promise<PublicBranding> {
     return this.request("/api/v1/branding");

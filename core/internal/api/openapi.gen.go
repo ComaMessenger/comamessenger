@@ -734,6 +734,42 @@ func (e InvitationRole) Valid() bool {
 	}
 }
 
+// Defines values for InvitationSummaryRole.
+const (
+	InvitationSummaryRoleAdmin  InvitationSummaryRole = "admin"
+	InvitationSummaryRoleMember InvitationSummaryRole = "member"
+)
+
+// Valid indicates whether the value is a known member of the InvitationSummaryRole enum.
+func (e InvitationSummaryRole) Valid() bool {
+	switch e {
+	case InvitationSummaryRoleAdmin:
+		return true
+	case InvitationSummaryRoleMember:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InvitationSummaryStatus.
+const (
+	InvitationSummaryStatusActive  InvitationSummaryStatus = "active"
+	InvitationSummaryStatusExpired InvitationSummaryStatus = "expired"
+)
+
+// Valid indicates whether the value is a known member of the InvitationSummaryStatus enum.
+func (e InvitationSummaryStatus) Valid() bool {
+	switch e {
+	case InvitationSummaryStatusActive:
+		return true
+	case InvitationSummaryStatusExpired:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MessageBodyFormat.
 const (
 	MessageBodyFormatMarkdown MessageBodyFormat = "markdown"
@@ -1946,6 +1982,7 @@ type InfrastructureSettings struct {
 type Invitation struct {
 	AcceptUrl *string             `json:"accept_url,omitempty"`
 	Email     openapi_types.Email `json:"email"`
+	EmailSent bool                `json:"email_sent"`
 	ExpiresAt time.Time           `json:"expires_at"`
 	Id        openapi_types.UUID  `json:"id"`
 	Role      InvitationRole      `json:"role"`
@@ -1953,6 +1990,25 @@ type Invitation struct {
 
 // InvitationRole defines model for Invitation.Role.
 type InvitationRole string
+
+// InvitationSummary defines model for InvitationSummary.
+type InvitationSummary struct {
+	CreatedAt     time.Time               `json:"created_at"`
+	CreatedById   openapi_types.UUID      `json:"created_by_id"`
+	CreatedByName string                  `json:"created_by_name"`
+	Email         openapi_types.Email     `json:"email"`
+	EmailSentAt   *time.Time              `json:"email_sent_at,omitempty"`
+	ExpiresAt     time.Time               `json:"expires_at"`
+	Id            openapi_types.UUID      `json:"id"`
+	Role          InvitationSummaryRole   `json:"role"`
+	Status        InvitationSummaryStatus `json:"status"`
+}
+
+// InvitationSummaryRole defines model for InvitationSummary.Role.
+type InvitationSummaryRole string
+
+// InvitationSummaryStatus defines model for InvitationSummary.Status.
+type InvitationSummaryStatus string
 
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {

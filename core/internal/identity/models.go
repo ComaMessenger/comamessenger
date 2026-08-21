@@ -206,6 +206,19 @@ type Invitation struct {
 	Role      string    `json:"role"`
 	ExpiresAt time.Time `json:"expires_at"`
 	AcceptURL string    `json:"accept_url,omitempty"`
+	EmailSent bool      `json:"email_sent"`
+}
+
+type InvitationSummary struct {
+	ID            string     `json:"id"`
+	Email         string     `json:"email"`
+	Role          string     `json:"role"`
+	CreatedByID   string     `json:"created_by_id"`
+	CreatedByName string     `json:"created_by_name"`
+	CreatedAt     time.Time  `json:"created_at"`
+	ExpiresAt     time.Time  `json:"expires_at"`
+	EmailSentAt   *time.Time `json:"email_sent_at"`
+	Status        string     `json:"status"`
 }
 
 type InvitationRecord struct {

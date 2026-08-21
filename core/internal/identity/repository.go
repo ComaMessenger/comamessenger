@@ -863,6 +863,79 @@ func (r *Repository) CreateInvitation(ctx context.Context, record InvitationReco
 	return Invitation{ID: record.ID, Email: record.Email, Role: record.Role, ExpiresAt: record.ExpiresAt}, nil
 }
 
+func (r *Repository) Invitations(ctx context.Context, orgID string, now time.Time) ([]InvitationSummary, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT i.id,i.email,i.org_role,i.created_by,a.display_name,i.created_at,i.expires_at,i.email_sent_at,
+		       CASE WHEN i.expires_at<=$2 THEN 'expired' ELSE 'active' END
+		FROM invitations i JOIN actors a ON a.org_id=i.org_id AND a.id=i.created_by
+		WHERE i.org_id=$1 AND i.accepted_at IS NULL AND i.revoked_at IS NULL
+		ORDER BY i.created_at DESC,i.id DESC`, orgID, now)
+	if err != nil {
+		return nil, fmt.Errorf("list invitations: %w", err)
+	}
+	defer rows.Close()
+	result := []InvitationSummary{}
+	for rows.Next() {
+		var item InvitationSummary
+		if err := rows.Scan(&item.ID, &item.Email, &item.Role, &item.CreatedByID, &item.CreatedByName, &item.CreatedAt, &item.ExpiresAt, &item.EmailSentAt, &item.Status); err != nil {
+			return nil, err
+		}
+		result = append(result, item)
+	}
+	return result, rows.Err()
+}
+
+func (r *Repository) RevokeInvitation(ctx context.Context, orgID, actorID, invitationID, auditID string) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	command, err := tx.Exec(ctx, `UPDATE invitations SET revoked_at=now() WHERE id=$1 AND org_id=$2 AND accepted_at IS NULL AND revoked_at IS NULL`, invitationID, orgID)
+	if err != nil {
+		return fmt.Errorf("revoke invitation: %w", err)
+	}
+	if command.RowsAffected() != 1 {
+		return ErrNotFound
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,'invitation.revoke','invitation',$4,'{}')`, auditID, orgID, actorID, invitationID); err != nil {
+		return fmt.Errorf("audit invitation revocation: %w", err)
+	}
+	return tx.Commit(ctx)
+}
+
+func (r *Repository) RotateInvitation(ctx context.Context, oldID string, record InvitationRecord) (Invitation, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return Invitation{}, err
+	}
+	defer tx.Rollback(ctx)
+	var email, role string
+	if err := tx.QueryRow(ctx, `SELECT email,org_role FROM invitations WHERE id=$1 AND org_id=$2 AND accepted_at IS NULL AND revoked_at IS NULL FOR UPDATE`, oldID, record.OrgID).Scan(&email, &role); errors.Is(err, pgx.ErrNoRows) {
+		return Invitation{}, ErrNotFound
+	} else if err != nil {
+		return Invitation{}, fmt.Errorf("lock invitation for rotation: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE invitations SET revoked_at=now() WHERE id=$1`, oldID); err != nil {
+		return Invitation{}, err
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO invitations(id,org_id,email,org_role,token_hash,created_by,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7)`, record.ID, record.OrgID, email, role, record.TokenHash, record.CreatedBy, record.ExpiresAt); err != nil {
+		return Invitation{}, fmt.Errorf("insert rotated invitation: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,'invitation.rotate','invitation',$4,jsonb_build_object('previous_id',$5::text,'role',$6::text))`, record.AuditID, record.OrgID, record.CreatedBy, record.ID, oldID, role); err != nil {
+		return Invitation{}, fmt.Errorf("audit invitation rotation: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Invitation{}, err
+	}
+	return Invitation{ID: record.ID, Email: email, Role: role, ExpiresAt: record.ExpiresAt}, nil
+}
+
+func (r *Repository) MarkInvitationEmailSent(ctx context.Context, orgID, invitationID string, sentAt time.Time) error {
+	_, err := r.pool.Exec(ctx, `UPDATE invitations SET email_sent_at=$3 WHERE org_id=$1 AND id=$2`, orgID, invitationID, sentAt)
+	return err
+}
+
 func (r *Repository) AcceptInvitation(ctx context.Context, acceptance InvitationAcceptance, now time.Time) (User, error) {
 	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
