@@ -19,9 +19,9 @@ import (
 	"time"
 
 	"github.com/comamessenger/comamessenger/core/internal/access"
+	"github.com/comamessenger/comamessenger/core/internal/agentauthz"
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
-	"github.com/comamessenger/comamessenger/core/internal/permission"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -575,7 +575,7 @@ func isUniqueViolation(err error) bool {
 
 func aad(orgID, agentID string) []byte { return []byte(orgID + "\x00" + agentID + "\x001") }
 func canManage(current identity.User) bool {
-	return permission.Allows(current.OrgRole, current.Permissions, permission.AgentsManage)
+	return agentauthz.New().CanManage(current)
 }
 func mask(value string) string {
 	if len(value) <= 8 {

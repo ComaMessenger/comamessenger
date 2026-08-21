@@ -6,14 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"slices"
 	"strings"
 	"time"
 
 	"github.com/comamessenger/comamessenger/core/internal/access"
+	"github.com/comamessenger/comamessenger/core/internal/agentauthz"
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
-	"github.com/comamessenger/comamessenger/core/internal/permission"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -841,11 +840,10 @@ func validPriceSource(value string) bool {
 	return value == "provider" || value == "configured" || value == "estimated" || value == "unknown"
 }
 func canManage(current identity.User) bool {
-	return permission.Allows(current.OrgRole, current.Permissions, permission.AgentsManage)
+	return agentauthz.New().CanManage(current)
 }
 func isAgentWorker(current identity.User, authentication access.Identity) bool {
-	return authentication.AuthenticationKind == "api_key" && authentication.ActorID == current.ActorID &&
-		authentication.OrgID == current.OrgID && authentication.KeyID != "" && slices.Contains(authentication.Scopes, "runtime:execute")
+	return agentauthz.New().IsRuntime(current, authentication)
 }
 
 const runSelect = `SELECT run.id,run.org_id,run.agent_id,run.trigger_id,run.trigger_event_seq,run.scheduled_for,run.chat_id,run.thread_root_id,run.requested_by,run.client_run_id,run.correlation_id,run.chain_depth,run.status,run.provider,run.model,run.input,run.result_summary,run.input_tokens,run.output_tokens,run.cost::text,run.currency,run.error_code,run.attempt,run.max_attempts,run.created_at,run.started_at,run.finished_at,run.cancel_requested_at,run.timeout_at,run.lease_token FROM agent_runs run`

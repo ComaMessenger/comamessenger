@@ -5,14 +5,14 @@ import (
 )
 
 func TestToolDefinitionsCompileAndRejectUnknownFields(t *testing.T) {
-	definitions, err := compileDefinitions()
+	tools, order, err := compileTools(&Executor{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(definitions) != 10 {
-		t.Fatalf("definitions=%d", len(definitions))
+	if len(tools) != 10 || len(order) != 10 {
+		t.Fatalf("tools=%d order=%d", len(tools), len(order))
 	}
-	definition := definitions["get_chat_messages"]
+	definition := tools["get_chat_messages"].Definition
 	valid := map[string]any{"chat_id": "00000000-0000-7000-8000-000000000001", "limit": 10}
 	if err := definition.compiled.Validate(valid); err != nil {
 		t.Fatalf("valid arguments rejected: %v", err)
@@ -21,7 +21,7 @@ func TestToolDefinitionsCompileAndRejectUnknownFields(t *testing.T) {
 	if err := definition.compiled.Validate(valid); err == nil {
 		t.Fatal("schema accepted unknown provider_secret")
 	}
-	if definitions["post_message"].Mode != "write" || definitions["post_message"].RequiredScope != "messages:write" {
-		t.Fatalf("post_message definition=%+v", definitions["post_message"])
+	if tools["post_message"].Definition.Mode != "write" || tools["post_message"].Definition.RequiredScope != "messages:write" {
+		t.Fatalf("post_message definition=%+v", tools["post_message"].Definition)
 	}
 }

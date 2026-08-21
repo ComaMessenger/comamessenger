@@ -15,9 +15,9 @@ import (
 	"time"
 
 	"github.com/comamessenger/comamessenger/core/internal/access"
+	"github.com/comamessenger/comamessenger/core/internal/agentauthz"
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
-	"github.com/comamessenger/comamessenger/core/internal/permission"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -1111,7 +1111,7 @@ func scopeSubset(scopes []Scope, allowed []string) bool {
 }
 
 func canManage(current identity.User) bool {
-	return permission.Allows(current.OrgRole, current.Permissions, permission.AgentsManage)
+	return agentauthz.New().CanManage(current)
 }
 
 func (service *Service) revokeRealtimeKeys(keyIDs []string) {

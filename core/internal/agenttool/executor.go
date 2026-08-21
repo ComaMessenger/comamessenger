@@ -8,6 +8,7 @@ import (
 
 	"github.com/comamessenger/comamessenger/core/internal/access"
 	"github.com/comamessenger/comamessenger/core/internal/agent"
+	"github.com/comamessenger/comamessenger/core/internal/agentauthz"
 	"github.com/comamessenger/comamessenger/core/internal/agentmemory"
 	"github.com/comamessenger/comamessenger/core/internal/chat"
 	"github.com/comamessenger/comamessenger/core/internal/files"
@@ -37,6 +38,13 @@ type Definition struct {
 	compiled      *jsonschema.Schema
 }
 
+type Handler func(context.Context, Invocation) (any, error)
+
+type Tool struct {
+	Definition Definition
+	Handler    Handler
+}
+
 type Invocation struct {
 	User          identity.User
 	Identity      access.Identity
@@ -58,27 +66,31 @@ type Services struct {
 type Executor struct {
 	pool                     *pgxpool.Pool
 	services                 Services
-	definitions              map[string]Definition
+	tools                    map[string]Tool
+	order                    []string
 	maxOutputBytes           int
 	requireWriteConfirmation bool
+	authorizer               agentauthz.Authorizer
 }
 
 func NewExecutor(pool *pgxpool.Pool, services Services, requireWriteConfirmation bool) (*Executor, error) {
 	if pool == nil || services.Chats == nil || services.Messages == nil || services.Search == nil || services.Files == nil || services.Memory == nil {
 		return nil, fmt.Errorf("agent tool services are incomplete")
 	}
-	definitions, err := compileDefinitions()
+	executor := &Executor{pool: pool, services: services, maxOutputBytes: 1 << 20, requireWriteConfirmation: requireWriteConfirmation, authorizer: agentauthz.New()}
+	tools, order, err := compileTools(executor)
 	if err != nil {
 		return nil, err
 	}
-	return &Executor{pool: pool, services: services, definitions: definitions, maxOutputBytes: 1 << 20, requireWriteConfirmation: requireWriteConfirmation}, nil
+	executor.tools = tools
+	executor.order = order
+	return executor, nil
 }
 
 func (executor *Executor) Definitions() []Definition {
-	order := []string{"get_chat_messages", "get_thread", "search_messages", "post_message", "reply_in_thread", "add_reaction", "get_file_text", "list_members", "remember", "recall"}
-	result := make([]Definition, 0, len(order))
-	for _, name := range order {
-		definition := executor.definitions[name]
+	result := make([]Definition, 0, len(executor.order))
+	for _, name := range executor.order {
+		definition := executor.tools[name].Definition
 		definition.compiled = nil
 		result = append(result, definition)
 	}
@@ -86,10 +98,11 @@ func (executor *Executor) Definitions() []Definition {
 }
 
 func (executor *Executor) Invoke(ctx context.Context, invocation Invocation) (json.RawMessage, error) {
-	definition, exists := executor.definitions[invocation.Name]
-	if !exists || invocation.Identity.AuthenticationKind != "api_key" || invocation.Identity.ActorID != invocation.User.ActorID || invocation.Identity.OrgID != invocation.User.OrgID {
+	tool, exists := executor.tools[invocation.Name]
+	if !exists || !executor.authorizer.CanInvokeTool(invocation.User, invocation.Identity, string(tool.Definition.RequiredScope)) {
 		return nil, ErrForbidden
 	}
+	definition := tool.Definition
 	if _, err := uuid.Parse(invocation.CorrelationID); err != nil {
 		return nil, fmt.Errorf("%w: correlation_id must be a UUID", ErrInvalid)
 	}
@@ -100,9 +113,6 @@ func (executor *Executor) Invoke(ctx context.Context, invocation Invocation) (js
 	}
 	if definition.Mode == "write" && invocation.RunID == "" {
 		return nil, fmt.Errorf("%w: run_id is required for write tools", ErrInvalid)
-	}
-	if !hasScope(invocation.Identity.Scopes, string(definition.RequiredScope)) {
-		return nil, ErrForbidden
 	}
 	if executor.requireWriteConfirmation && definition.Mode == "write" && !invocation.Confirmed {
 		return nil, ErrConfirmationRequired
@@ -121,7 +131,7 @@ func (executor *Executor) Invoke(ctx context.Context, invocation Invocation) (js
 	if err := executor.startCall(ctx, callID, invocation, definition); err != nil {
 		return nil, err
 	}
-	result, callErr := executor.execute(ctx, invocation)
+	result, callErr := tool.Handler(ctx, invocation)
 	encoded := json.RawMessage(nil)
 	if callErr == nil {
 		encoded, callErr = json.Marshal(result)
@@ -136,102 +146,107 @@ func (executor *Executor) Invoke(ctx context.Context, invocation Invocation) (js
 	return encoded, callErr
 }
 
-func (executor *Executor) execute(ctx context.Context, invocation Invocation) (any, error) {
-	switch invocation.Name {
-	case "get_chat_messages":
-		var input struct {
-			ChatID    string `json:"chat_id"`
-			BeforeSeq *int64 `json:"before_seq"`
-			Limit     int    `json:"limit"`
-		}
-		_ = json.Unmarshal(invocation.Arguments, &input)
-		return executor.services.Messages.List(ctx, invocation.User, input.ChatID, message.ListOptions{BeforeSeq: input.BeforeSeq, Limit: input.Limit})
-	case "get_thread":
-		var input struct {
-			MessageID string `json:"message_id"`
-			BeforeSeq *int64 `json:"before_seq"`
-			Limit     int    `json:"limit"`
-		}
-		_ = json.Unmarshal(invocation.Arguments, &input)
-		return executor.services.Messages.ListThread(ctx, invocation.User, input.MessageID, message.ListOptions{BeforeSeq: input.BeforeSeq, Limit: input.Limit})
-	case "search_messages":
-		var input struct {
-			Query  string `json:"query"`
-			ChatID string `json:"chat_id"`
-			Limit  int    `json:"limit"`
-		}
-		_ = json.Unmarshal(invocation.Arguments, &input)
-		return executor.services.Search.Search(ctx, invocation.User, search.Input{Query: input.Query, ChatID: input.ChatID, Type: "message", Limit: input.Limit})
-	case "post_message", "reply_in_thread":
-		var input struct {
-			ChatID            string   `json:"chat_id"`
-			ClientMsgID       string   `json:"client_msg_id"`
-			Body              string   `json:"body"`
-			BodyFormat        string   `json:"body_format"`
-			ThreadRootID      *string  `json:"thread_root_id"`
-			MentionedActorIDs []string `json:"mentioned_actor_ids"`
-			FileIDs           []string `json:"file_ids"`
-		}
-		if err := json.Unmarshal(invocation.Arguments, &input); err != nil {
-			return nil, err
-		}
-		if input.BodyFormat == "" {
-			input.BodyFormat = "plain"
-		}
-		if invocation.Name == "reply_in_thread" && input.ThreadRootID != nil {
-			root := *input.ThreadRootID
-			input.ThreadRootID = &root
-		}
-		createInput := message.CreateInput{ClientMsgID: input.ClientMsgID, Body: input.Body, BodyFormat: input.BodyFormat, ThreadRootID: input.ThreadRootID, ReplyToID: input.ThreadRootID, MentionedActorIDs: input.MentionedActorIDs, FileIDs: input.FileIDs}
-		var created message.Message
-		var err error
-		created, _, err = executor.services.Messages.CreateForAgentRun(ctx, invocation.User, input.ChatID, createInput, message.AgentProvenance{RunID: invocation.RunID})
-		return created, err
-	case "add_reaction":
-		var input struct {
-			MessageID string `json:"message_id"`
-			Emoji     string `json:"emoji"`
-		}
-		_ = json.Unmarshal(invocation.Arguments, &input)
-		result, _, err := executor.services.Messages.PutReaction(ctx, invocation.User, input.MessageID, input.Emoji)
-		return result, err
-	case "get_file_text":
-		var input struct {
-			FileID   string `json:"file_id"`
-			MaxChars int    `json:"max_chars"`
-		}
-		_ = json.Unmarshal(invocation.Arguments, &input)
-		return executor.services.Files.GetText(ctx, invocation.User, input.FileID, input.MaxChars)
-	case "list_members":
-		var input struct {
-			ChatID string `json:"chat_id"`
-		}
-		_ = json.Unmarshal(invocation.Arguments, &input)
-		return executor.services.Chats.ListMembers(ctx, invocation.User, input.ChatID)
-	case "remember":
-		var input struct {
-			Namespace      string          `json:"namespace"`
-			Key            string          `json:"key"`
-			Value          json.RawMessage `json:"value"`
-			EmbeddingModel string          `json:"embedding_model"`
-			Embedding      []float64       `json:"embedding"`
-		}
-		_ = json.Unmarshal(invocation.Arguments, &input)
-		return executor.services.Memory.Remember(ctx, invocation.User, agentmemory.RememberInput{Namespace: input.Namespace, Key: input.Key, Value: input.Value, EmbeddingModel: input.EmbeddingModel, Embedding: input.Embedding})
-	case "recall":
-		var input struct {
-			Namespace      string    `json:"namespace"`
-			Keys           []string  `json:"keys"`
-			Prefix         string    `json:"prefix"`
-			Limit          int       `json:"limit"`
-			EmbeddingModel string    `json:"embedding_model"`
-			QueryEmbedding []float64 `json:"query_embedding"`
-		}
-		_ = json.Unmarshal(invocation.Arguments, &input)
-		return executor.services.Memory.Recall(ctx, invocation.User, agentmemory.RecallInput{Namespace: input.Namespace, Keys: input.Keys, Prefix: input.Prefix, Limit: input.Limit, EmbeddingModel: input.EmbeddingModel, QueryEmbedding: input.QueryEmbedding})
-	default:
-		return nil, ErrInvalid
+func (executor *Executor) getChatMessages(ctx context.Context, invocation Invocation) (any, error) {
+	var input struct {
+		ChatID    string `json:"chat_id"`
+		BeforeSeq *int64 `json:"before_seq"`
+		Limit     int    `json:"limit"`
 	}
+	_ = json.Unmarshal(invocation.Arguments, &input)
+	return executor.services.Messages.List(ctx, invocation.User, input.ChatID, message.ListOptions{BeforeSeq: input.BeforeSeq, Limit: input.Limit})
+}
+
+func (executor *Executor) getThread(ctx context.Context, invocation Invocation) (any, error) {
+	var input struct {
+		MessageID string `json:"message_id"`
+		BeforeSeq *int64 `json:"before_seq"`
+		Limit     int    `json:"limit"`
+	}
+	_ = json.Unmarshal(invocation.Arguments, &input)
+	return executor.services.Messages.ListThread(ctx, invocation.User, input.MessageID, message.ListOptions{BeforeSeq: input.BeforeSeq, Limit: input.Limit})
+}
+
+func (executor *Executor) searchMessages(ctx context.Context, invocation Invocation) (any, error) {
+	var input struct {
+		Query  string `json:"query"`
+		ChatID string `json:"chat_id"`
+		Limit  int    `json:"limit"`
+	}
+	_ = json.Unmarshal(invocation.Arguments, &input)
+	return executor.services.Search.Search(ctx, invocation.User, search.Input{Query: input.Query, ChatID: input.ChatID, Type: "message", Limit: input.Limit})
+}
+
+func (executor *Executor) postMessage(ctx context.Context, invocation Invocation) (any, error) {
+	var input struct {
+		ChatID            string   `json:"chat_id"`
+		ClientMsgID       string   `json:"client_msg_id"`
+		Body              string   `json:"body"`
+		BodyFormat        string   `json:"body_format"`
+		ThreadRootID      *string  `json:"thread_root_id"`
+		MentionedActorIDs []string `json:"mentioned_actor_ids"`
+		FileIDs           []string `json:"file_ids"`
+	}
+	if err := json.Unmarshal(invocation.Arguments, &input); err != nil {
+		return nil, err
+	}
+	if input.BodyFormat == "" {
+		input.BodyFormat = "plain"
+	}
+	createInput := message.CreateInput{ClientMsgID: input.ClientMsgID, Body: input.Body, BodyFormat: input.BodyFormat, ThreadRootID: input.ThreadRootID, ReplyToID: input.ThreadRootID, MentionedActorIDs: input.MentionedActorIDs, FileIDs: input.FileIDs}
+	created, _, err := executor.services.Messages.CreateForAgentRun(ctx, invocation.User, input.ChatID, createInput, message.AgentProvenance{RunID: invocation.RunID})
+	return created, err
+}
+
+func (executor *Executor) addReaction(ctx context.Context, invocation Invocation) (any, error) {
+	var input struct {
+		MessageID string `json:"message_id"`
+		Emoji     string `json:"emoji"`
+	}
+	_ = json.Unmarshal(invocation.Arguments, &input)
+	result, _, err := executor.services.Messages.PutReaction(ctx, invocation.User, input.MessageID, input.Emoji)
+	return result, err
+}
+
+func (executor *Executor) getFileText(ctx context.Context, invocation Invocation) (any, error) {
+	var input struct {
+		FileID   string `json:"file_id"`
+		MaxChars int    `json:"max_chars"`
+	}
+	_ = json.Unmarshal(invocation.Arguments, &input)
+	return executor.services.Files.GetText(ctx, invocation.User, input.FileID, input.MaxChars)
+}
+
+func (executor *Executor) listMembers(ctx context.Context, invocation Invocation) (any, error) {
+	var input struct {
+		ChatID string `json:"chat_id"`
+	}
+	_ = json.Unmarshal(invocation.Arguments, &input)
+	return executor.services.Chats.ListMembers(ctx, invocation.User, input.ChatID)
+}
+
+func (executor *Executor) remember(ctx context.Context, invocation Invocation) (any, error) {
+	var input struct {
+		Namespace      string          `json:"namespace"`
+		Key            string          `json:"key"`
+		Value          json.RawMessage `json:"value"`
+		EmbeddingModel string          `json:"embedding_model"`
+		Embedding      []float64       `json:"embedding"`
+	}
+	_ = json.Unmarshal(invocation.Arguments, &input)
+	return executor.services.Memory.Remember(ctx, invocation.User, agentmemory.RememberInput{Namespace: input.Namespace, Key: input.Key, Value: input.Value, EmbeddingModel: input.EmbeddingModel, Embedding: input.Embedding})
+}
+
+func (executor *Executor) recall(ctx context.Context, invocation Invocation) (any, error) {
+	var input struct {
+		Namespace      string    `json:"namespace"`
+		Keys           []string  `json:"keys"`
+		Prefix         string    `json:"prefix"`
+		Limit          int       `json:"limit"`
+		EmbeddingModel string    `json:"embedding_model"`
+		QueryEmbedding []float64 `json:"query_embedding"`
+	}
+	_ = json.Unmarshal(invocation.Arguments, &input)
+	return executor.services.Memory.Recall(ctx, invocation.User, agentmemory.RecallInput{Namespace: input.Namespace, Keys: input.Keys, Prefix: input.Prefix, Limit: input.Limit, EmbeddingModel: input.EmbeddingModel, QueryEmbedding: input.QueryEmbedding})
 }
 
 func (executor *Executor) startCall(ctx context.Context, callID string, invocation Invocation, definition Definition) error {
@@ -276,14 +291,6 @@ func (executor *Executor) finishCall(ctx context.Context, callID string, invocat
 	return tx.Commit(ctx)
 }
 
-func hasScope(scopes []string, wanted string) bool {
-	for _, scope := range scopes {
-		if scope == wanted {
-			return true
-		}
-	}
-	return false
-}
 func classifyError(err error) string {
 	switch {
 	case errors.Is(err, ErrForbidden):
@@ -301,35 +308,45 @@ func classifyError(err error) string {
 	}
 }
 
-func compileDefinitions() (map[string]Definition, error) {
-	definitions := rawDefinitions()
-	result := make(map[string]Definition, len(definitions))
+func compileTools(executor *Executor) (map[string]Tool, []string, error) {
+	tools := rawTools(executor)
+	result := make(map[string]Tool, len(tools))
+	order := make([]string, 0, len(tools))
 	compiler := jsonschema.NewCompiler()
 	compiler.AssertFormat()
-	for _, definition := range definitions {
+	for _, tool := range tools {
+		definition := tool.Definition
+		if definition.Name == "" || tool.Handler == nil {
+			return nil, nil, fmt.Errorf("agent tool registration is incomplete")
+		}
+		if _, exists := result[definition.Name]; exists {
+			return nil, nil, fmt.Errorf("duplicate agent tool %q", definition.Name)
+		}
 		location := "https://comamessenger.local/schemas/agent-tools/" + definition.Name
 		encoded, err := json.Marshal(definition.InputSchema)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		var schemaDocument any
 		if err := json.Unmarshal(encoded, &schemaDocument); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if err := compiler.AddResource(location, schemaDocument); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		compiled, err := compiler.Compile(location)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		definition.compiled = compiled
-		result[definition.Name] = definition
+		tool.Definition = definition
+		result[definition.Name] = tool
+		order = append(order, definition.Name)
 	}
-	return result, nil
+	return result, order, nil
 }
 
-func rawDefinitions() []Definition {
+func rawTools(executor *Executor) []Tool {
 	uuidSchema := map[string]any{"type": "string", "format": "uuid"}
 	positive := map[string]any{"type": "integer", "minimum": 1}
 	limit := map[string]any{"type": "integer", "minimum": 1, "maximum": 100}
@@ -340,17 +357,17 @@ func rawDefinitions() []Definition {
 		}
 		return result
 	}
-	return []Definition{
-		{Name: "get_chat_messages", Description: "Read recent root messages from a chat.", Mode: "read", RequiredScope: agent.ScopeMessagesRead, InputSchema: object([]string{"chat_id"}, map[string]any{"chat_id": uuidSchema, "before_seq": positive, "limit": limit})},
-		{Name: "get_thread", Description: "Read replies in a message thread.", Mode: "read", RequiredScope: agent.ScopeMessagesRead, InputSchema: object([]string{"message_id"}, map[string]any{"message_id": uuidSchema, "before_seq": positive, "limit": limit})},
-		{Name: "search_messages", Description: "Search messages visible to the agent.", Mode: "read", RequiredScope: agent.ScopeSearchRead, InputSchema: object([]string{"query"}, map[string]any{"query": map[string]any{"type": "string", "minLength": 1, "maxLength": 200}, "chat_id": uuidSchema, "limit": limit})},
-		{Name: "post_message", Description: "Post a message to a chat.", Mode: "write", RequiredScope: agent.ScopeMessagesWrite, InputSchema: messageSchema(object, uuidSchema, false)},
-		{Name: "reply_in_thread", Description: "Reply to a thread.", Mode: "write", RequiredScope: agent.ScopeMessagesWrite, InputSchema: messageSchema(object, uuidSchema, true)},
-		{Name: "add_reaction", Description: "Add a reaction to a message.", Mode: "write", RequiredScope: agent.ScopeReactionsWrite, InputSchema: object([]string{"message_id", "emoji"}, map[string]any{"message_id": uuidSchema, "emoji": map[string]any{"type": "string", "minLength": 1, "maxLength": 16}})},
-		{Name: "get_file_text", Description: "Read bounded extracted text from an accessible file.", Mode: "read", RequiredScope: agent.ScopeFilesRead, InputSchema: object([]string{"file_id"}, map[string]any{"file_id": uuidSchema, "max_chars": map[string]any{"type": "integer", "minimum": 1, "maximum": 100000}})},
-		{Name: "list_members", Description: "List active members of a chat.", Mode: "read", RequiredScope: agent.ScopeMembersRead, InputSchema: object([]string{"chat_id"}, map[string]any{"chat_id": uuidSchema})},
-		{Name: "remember", Description: "Store a namespaced JSON memory value with an optional vector embedding.", Mode: "write", RequiredScope: agent.ScopeMemoryWrite, InputSchema: object([]string{"key", "value"}, map[string]any{"namespace": map[string]any{"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"}, "key": map[string]any{"type": "string", "minLength": 1, "maxLength": 255}, "value": map[string]any{}, "embedding_model": map[string]any{"type": "string", "minLength": 1, "maxLength": 200}, "embedding": embeddingSchema()})},
-		{Name: "recall", Description: "Recall namespaced memory by key/prefix or nearest vector using the same embedding model.", Mode: "read", RequiredScope: agent.ScopeMemoryRead, InputSchema: object(nil, map[string]any{"namespace": map[string]any{"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"}, "keys": map[string]any{"type": "array", "maxItems": 100, "uniqueItems": true, "items": map[string]any{"type": "string", "minLength": 1, "maxLength": 255}}, "prefix": map[string]any{"type": "string", "maxLength": 255}, "limit": limit, "embedding_model": map[string]any{"type": "string", "minLength": 1, "maxLength": 200}, "query_embedding": embeddingSchema()})},
+	return []Tool{
+		{Definition: Definition{Name: "get_chat_messages", Description: "Read recent root messages from a chat.", Mode: "read", RequiredScope: agent.ScopeMessagesRead, InputSchema: object([]string{"chat_id"}, map[string]any{"chat_id": uuidSchema, "before_seq": positive, "limit": limit})}, Handler: executor.getChatMessages},
+		{Definition: Definition{Name: "get_thread", Description: "Read replies in a message thread.", Mode: "read", RequiredScope: agent.ScopeMessagesRead, InputSchema: object([]string{"message_id"}, map[string]any{"message_id": uuidSchema, "before_seq": positive, "limit": limit})}, Handler: executor.getThread},
+		{Definition: Definition{Name: "search_messages", Description: "Search messages visible to the agent.", Mode: "read", RequiredScope: agent.ScopeSearchRead, InputSchema: object([]string{"query"}, map[string]any{"query": map[string]any{"type": "string", "minLength": 1, "maxLength": 200}, "chat_id": uuidSchema, "limit": limit})}, Handler: executor.searchMessages},
+		{Definition: Definition{Name: "post_message", Description: "Post a message to a chat.", Mode: "write", RequiredScope: agent.ScopeMessagesWrite, InputSchema: messageSchema(object, uuidSchema, false)}, Handler: executor.postMessage},
+		{Definition: Definition{Name: "reply_in_thread", Description: "Reply to a thread.", Mode: "write", RequiredScope: agent.ScopeMessagesWrite, InputSchema: messageSchema(object, uuidSchema, true)}, Handler: executor.postMessage},
+		{Definition: Definition{Name: "add_reaction", Description: "Add a reaction to a message.", Mode: "write", RequiredScope: agent.ScopeReactionsWrite, InputSchema: object([]string{"message_id", "emoji"}, map[string]any{"message_id": uuidSchema, "emoji": map[string]any{"type": "string", "minLength": 1, "maxLength": 16}})}, Handler: executor.addReaction},
+		{Definition: Definition{Name: "get_file_text", Description: "Read bounded extracted text from an accessible file.", Mode: "read", RequiredScope: agent.ScopeFilesRead, InputSchema: object([]string{"file_id"}, map[string]any{"file_id": uuidSchema, "max_chars": map[string]any{"type": "integer", "minimum": 1, "maximum": 100000}})}, Handler: executor.getFileText},
+		{Definition: Definition{Name: "list_members", Description: "List active members of a chat.", Mode: "read", RequiredScope: agent.ScopeMembersRead, InputSchema: object([]string{"chat_id"}, map[string]any{"chat_id": uuidSchema})}, Handler: executor.listMembers},
+		{Definition: Definition{Name: "remember", Description: "Store a namespaced JSON memory value with an optional vector embedding.", Mode: "write", RequiredScope: agent.ScopeMemoryWrite, InputSchema: object([]string{"key", "value"}, map[string]any{"namespace": map[string]any{"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"}, "key": map[string]any{"type": "string", "minLength": 1, "maxLength": 255}, "value": map[string]any{}, "embedding_model": map[string]any{"type": "string", "minLength": 1, "maxLength": 200}, "embedding": embeddingSchema()})}, Handler: executor.remember},
+		{Definition: Definition{Name: "recall", Description: "Recall namespaced memory by key/prefix or nearest vector using the same embedding model.", Mode: "read", RequiredScope: agent.ScopeMemoryRead, InputSchema: object(nil, map[string]any{"namespace": map[string]any{"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"}, "keys": map[string]any{"type": "array", "maxItems": 100, "uniqueItems": true, "items": map[string]any{"type": "string", "minLength": 1, "maxLength": 255}}, "prefix": map[string]any{"type": "string", "maxLength": 255}, "limit": limit, "embedding_model": map[string]any{"type": "string", "minLength": 1, "maxLength": 200}, "query_embedding": embeddingSchema()})}, Handler: executor.recall},
 	}
 }
 

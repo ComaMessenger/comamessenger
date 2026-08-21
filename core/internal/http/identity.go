@@ -16,6 +16,7 @@ import (
 
 	"github.com/comamessenger/comamessenger/core/internal/access"
 	"github.com/comamessenger/comamessenger/core/internal/agent"
+	"github.com/comamessenger/comamessenger/core/internal/agentauthz"
 	"github.com/comamessenger/comamessenger/core/internal/agentconfig"
 	"github.com/comamessenger/comamessenger/core/internal/agentrun"
 	"github.com/comamessenger/comamessenger/core/internal/agenttool"
@@ -912,7 +913,7 @@ func (h *identityHandlers) authenticate(next standardhttp.Handler) standardhttp.
 		}
 		if accessIdentity.AuthenticationKind == "api_key" {
 			required, allowed := requiredAgentScope(r.Method, r.URL.Path)
-			if !allowed || (required != "" && !containsString(accessIdentity.Scopes, required)) {
+			if !allowed || !agentauthz.HasScope(accessIdentity.Scopes, required) {
 				h.writeError(w, r, standardhttp.StatusForbidden, "agent_scope_required", "The agent key does not allow this API operation.")
 				return
 			}
@@ -994,15 +995,6 @@ func runtimeAgentRoute(method string, parts []string) bool {
 		(len(parts) == 3 && parts[0] == "runs" && (parts[2] == "heartbeat" || parts[2] == "complete" || parts[2] == "fail")) ||
 		(len(parts) == 1 && (parts[0] == "provider-calls" || parts[0] == "mcp-tool-calls")) ||
 		(len(parts) == 3 && (parts[0] == "provider-calls" || parts[0] == "mcp-tool-calls") && parts[2] == "finish")
-}
-
-func containsString(values []string, wanted string) bool {
-	for _, value := range values {
-		if value == wanted {
-			return true
-		}
-	}
-	return false
 }
 
 func authFromContext(ctx context.Context) authenticated {
