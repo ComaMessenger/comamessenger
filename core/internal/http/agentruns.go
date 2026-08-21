@@ -163,6 +163,35 @@ func (h *identityHandlers) finishAgentProviderCall(w standardhttp.ResponseWriter
 	}
 	writeJSON(h.logger, w, standardhttp.StatusOK, result)
 }
+
+func (h *identityHandlers) startAgentMCPToolCall(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input agentrun.StartMCPToolCallInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	auth := authFromContext(r.Context())
+	result, err := h.agentRuns.StartMCPToolCall(r.Context(), auth.User, auth.Identity, input)
+	if err != nil {
+		h.writeAgentRunError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusCreated, result)
+}
+
+func (h *identityHandlers) finishAgentMCPToolCall(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input agentrun.FinishMCPToolCallInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	auth := authFromContext(r.Context())
+	if err := h.agentRuns.FinishMCPToolCall(r.Context(), auth.User, auth.Identity, chi.URLParam(r, "callID"), input); err != nil {
+		h.writeAgentRunError(w, r, err)
+		return
+	}
+	w.WriteHeader(standardhttp.StatusNoContent)
+}
 func (h *identityHandlers) writeAgentRunError(w standardhttp.ResponseWriter, r *standardhttp.Request, err error) {
 	switch {
 	case errors.Is(err, agentrun.ErrInvalid):

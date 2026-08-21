@@ -28,6 +28,7 @@ var (
 )
 var costPattern = regexp.MustCompile(`^[0-9]+(?:\.[0-9]{1,8})?$`)
 var consumerPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{0,63}$`)
+var mcpToolPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
 
 type Run struct {
 	ID                string          `json:"id"`
@@ -141,6 +142,28 @@ type FinishProviderCallInput struct {
 	InputTokens  int64  `json:"input_tokens"`
 	OutputTokens int64  `json:"output_tokens"`
 	PriceSource  string `json:"price_source"`
+}
+type StartMCPToolCallInput struct {
+	CallID     string `json:"call_id"`
+	RunID      string `json:"run_id"`
+	LeaseToken string `json:"lease_token"`
+	ServerID   string `json:"server_id"`
+	ToolName   string `json:"tool_name"`
+	Mode       string `json:"mode"`
+	InputBytes int    `json:"input_bytes"`
+}
+type MCPToolCall struct {
+	ID            string `json:"id"`
+	CorrelationID string `json:"correlation_id"`
+	ToolName      string `json:"tool_name"`
+	Mode          string `json:"mode"`
+}
+type FinishMCPToolCallInput struct {
+	RunID       string `json:"run_id"`
+	LeaseToken  string `json:"lease_token"`
+	Status      string `json:"status"`
+	OutputBytes int    `json:"output_bytes"`
+	ErrorCode   string `json:"error_code"`
 }
 type Page struct {
 	Runs []Run `json:"runs"`
@@ -579,6 +602,67 @@ func (service *Service) providerCall(ctx context.Context, orgID, agentID, callID
 		return ProviderCall{}, ErrNotFound
 	}
 	return result, err
+}
+
+func (service *Service) StartMCPToolCall(ctx context.Context, current identity.User, authentication access.Identity, input StartMCPToolCallInput) (MCPToolCall, error) {
+	if !isAgentWorker(current, authentication) {
+		return MCPToolCall{}, ErrForbidden
+	}
+	if uuid.Validate(input.CallID) != nil || uuid.Validate(input.RunID) != nil || uuid.Validate(input.LeaseToken) != nil || uuid.Validate(input.ServerID) != nil ||
+		!mcpToolPattern.MatchString(input.ToolName) || (input.Mode != "read" && input.Mode != "write") || input.InputBytes < 0 || input.InputBytes > 262144 {
+		return MCPToolCall{}, ErrInvalid
+	}
+	summary, _ := json.Marshal(map[string]any{"input_bytes": input.InputBytes, "mcp_server_id": input.ServerID})
+	var result MCPToolCall
+	err := service.pool.QueryRow(ctx, `INSERT INTO agent_tool_calls(id,org_id,agent_id,run_id,correlation_id,tool_name,mode,required_scope,input_summary)
+		SELECT $3,run.org_id,run.agent_id,run.id,run.correlation_id,'mcp__' || server.name || '__' || $7,$8,'mcp:' || server.name,$9
+		FROM agent_runs run JOIN agent_mcp_servers server ON server.org_id=run.org_id AND server.agent_id=run.agent_id AND server.id=$6
+		WHERE run.org_id=$1 AND run.agent_id=$2 AND run.id=$4 AND run.lease_token=$5 AND run.status='running' AND run.lease_expires_at>now()
+		AND server.enabled AND $7=ANY(server.allowed_tools) AND ($8='read' OR NOT server.require_write_confirmation)
+		RETURNING id,correlation_id,tool_name,mode`, current.OrgID, current.ActorID, input.CallID, input.RunID, input.LeaseToken, input.ServerID, input.ToolName, input.Mode, summary).Scan(&result.ID, &result.CorrelationID, &result.ToolName, &result.Mode)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return MCPToolCall{}, ErrForbidden
+	}
+	if err != nil {
+		return MCPToolCall{}, err
+	}
+	return result, nil
+}
+
+func (service *Service) FinishMCPToolCall(ctx context.Context, current identity.User, authentication access.Identity, callID string, input FinishMCPToolCallInput) error {
+	if !isAgentWorker(current, authentication) {
+		return ErrForbidden
+	}
+	if uuid.Validate(callID) != nil || uuid.Validate(input.RunID) != nil || uuid.Validate(input.LeaseToken) != nil ||
+		(input.Status != "completed" && input.Status != "failed") || input.OutputBytes < 0 || input.OutputBytes > 4194304 || len(input.ErrorCode) > 120 || (input.Status == "completed" && input.ErrorCode != "") {
+		return ErrInvalid
+	}
+	auditID, err := id.New()
+	if err != nil {
+		return err
+	}
+	tx, err := service.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	var correlationID, toolName, mode string
+	err = tx.QueryRow(ctx, `UPDATE agent_tool_calls call SET status=$6,output_bytes=$7,error_code=$8,finished_at=now()
+		FROM agent_runs run WHERE call.org_id=$1 AND call.agent_id=$2 AND call.id=$3 AND call.run_id=$4 AND call.status='running'
+		AND run.org_id=call.org_id AND run.agent_id=call.agent_id AND run.id=call.run_id AND run.lease_token=$5 AND run.status='running'
+		RETURNING call.correlation_id,call.tool_name,call.mode`, current.OrgID, current.ActorID, callID, input.RunID, input.LeaseToken, input.Status, input.OutputBytes, input.ErrorCode).Scan(&correlationID, &toolName, &mode)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrConflict
+	}
+	if err != nil {
+		return err
+	}
+	metadata, _ := json.Marshal(map[string]any{"tool_call_id": callID, "run_id": input.RunID, "correlation_id": correlationID, "tool": toolName, "mode": mode, "status": input.Status, "error_code": input.ErrorCode, "output_bytes": input.OutputBytes})
+	if _, err := tx.Exec(ctx, `INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata)
+		VALUES($1,$2,$3,'agent.tool.call','agent',$3,$4)`, auditID, current.OrgID, current.ActorID, metadata); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (service *Service) authorizeAgentRun(ctx context.Context, current identity.User, runID string) error {

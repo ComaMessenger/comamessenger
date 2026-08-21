@@ -16,6 +16,7 @@ import {
   type ProviderTool,
   type ProviderUsage,
 } from "./providers.js";
+import { MCPError, resolveMCPTools, type ResolvedMCPTool } from "./mcp.js";
 
 export type ProviderResolver = (name: string, apiKey?: string) => Provider;
 
@@ -89,6 +90,10 @@ export class AgentRuntime {
         throw new RuntimeError("external_data_sharing_not_approved");
       }
       const tools = await this.options.api.agentTools();
+      const mcpTools = await resolveMCPTools(
+        await this.options.api.agentRuntimeMcpServers(),
+        controller.signal,
+      );
       let providerAPIKey: string | undefined;
       try {
         providerAPIKey = (
@@ -102,6 +107,7 @@ export class AgentRuntime {
         run,
         agent,
         tools,
+        mcpTools,
         messages,
         providerAPIKey,
         controller.signal,
@@ -196,6 +202,7 @@ export class AgentRuntime {
     run: ClaimedAgentRun,
     agent: Agent,
     definitions: AgentToolDefinition[],
+    mcpTools: Map<string, ResolvedMCPTool>,
     messages: ChatMessage[],
     providerAPIKey: string | undefined,
     signal: AbortSignal,
@@ -205,11 +212,14 @@ export class AgentRuntime {
     toolCalls: number;
   }> {
     const provider = this.options.provider(run.provider, providerAPIKey);
-    const tools: ProviderTool[] = definitions.map((definition) => ({
-      name: definition.name,
-      description: definition.description,
-      inputSchema: definition.input_schema as Record<string, unknown>,
-    }));
+    const tools: ProviderTool[] = [
+      ...definitions.map((definition) => ({
+        name: definition.name,
+        description: definition.description,
+        inputSchema: definition.input_schema as Record<string, unknown>,
+      })),
+      ...[...mcpTools.values()].map((tool) => tool.definition),
+    ];
     const usage: ProviderUsage = {
       inputTokens: 0,
       outputTokens: 0,
@@ -288,15 +298,15 @@ export class AgentRuntime {
       });
       for (const call of finished.toolCalls) {
         totalToolCalls++;
-        const output = await this.options.api.invokeAgentTool<unknown>(
-          call.name,
-          {
-            run_id: run.id,
-            correlation_id: run.correlation_id,
-            confirmed: true,
-            arguments: call.arguments,
-          },
-        );
+        const mcpTool = mcpTools.get(call.name);
+        const output = mcpTool
+          ? await this.invokeMCPTool(run, mcpTool, call.arguments, signal)
+          : await this.options.api.invokeAgentTool<unknown>(call.name, {
+              run_id: run.id,
+              correlation_id: run.correlation_id,
+              confirmed: true,
+              arguments: call.arguments,
+            });
         messages.push({
           role: "tool",
           toolCallID: call.id,
@@ -305,6 +315,49 @@ export class AgentRuntime {
       }
     }
     throw new RuntimeError("tool_iteration_limit");
+  }
+
+  private async invokeMCPTool(
+    run: ClaimedAgentRun,
+    tool: ResolvedMCPTool,
+    arguments_: Record<string, unknown>,
+    signal: AbortSignal,
+  ): Promise<unknown> {
+    const callID = crypto.randomUUID();
+    const inputBytes = encodedSize(arguments_);
+    await this.options.api.startAgentMcpToolCall({
+      call_id: callID,
+      run_id: run.id,
+      lease_token: run.lease_token,
+      server_id: tool.serverID,
+      tool_name: tool.toolName,
+      mode: tool.mode,
+      input_bytes: inputBytes,
+    });
+    try {
+      const output = await tool.call(arguments_, signal);
+      await this.options.api.finishAgentMcpToolCall(callID, {
+        run_id: run.id,
+        lease_token: run.lease_token,
+        status: "completed",
+        output_bytes: encodedSize(output),
+        error_code: "",
+      });
+      return output;
+    } catch (cause) {
+      try {
+        await this.options.api.finishAgentMcpToolCall(callID, {
+          run_id: run.id,
+          lease_token: run.lease_token,
+          status: "failed",
+          output_bytes: 0,
+          error_code: cause instanceof MCPError ? cause.code : "mcp_call_failed",
+        });
+      } catch {
+        // Preserve the original MCP error and its retry classification.
+      }
+      throw cause;
+    }
   }
 }
 
@@ -324,6 +377,7 @@ function stableErrorCode(cause: unknown, signal: AbortSignal): string {
   if (cause instanceof ProviderError) {
     return cause.retryable ? "provider_retryable" : cause.code;
   }
+  if (cause instanceof MCPError) return cause.code;
   if (cause instanceof APIError) {
     if (cause.code === "agent_budget_exceeded") return "budget_exceeded";
     return cause.status >= 500 || cause.status === 429
@@ -340,6 +394,14 @@ function untrustedMessage(message: Message): string {
 function safeJSON(value: unknown): string {
   const encoded = JSON.stringify(value);
   return encoded.length > 262_144 ? encoded.slice(0, 262_144) : encoded;
+}
+
+function encodedSize(value: unknown): number {
+  try {
+    return new TextEncoder().encode(JSON.stringify(value)).byteLength;
+  } catch {
+    return 0;
+  }
 }
 
 function addDecimal(left: string, right: string): string {

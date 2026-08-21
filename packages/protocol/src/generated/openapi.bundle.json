@@ -4205,6 +4205,156 @@
         }
       }
     },
+    "/api/v1/agents/{agent_id}/mcp-servers": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AgentId"
+        }
+      ],
+      "get": {
+        "operationId": "listAgentMcpServers",
+        "description": "Lists the agent's allowlisted MCP servers without returning secret headers.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "MCP server configurations.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AgentMcpServer"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createAgentMcpServer",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAgentMcpServerRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Allowlisted MCP server created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentMcpServer"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/agents/{agent_id}/mcp-servers/{server_id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AgentId"
+        },
+        {
+          "name": "server_id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "patch": {
+        "operationId": "updateAgentMcpServer",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAgentMcpServerRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "MCP server updated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentMcpServer"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteAgentMcpServer",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "MCP server removed."
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/v1/agents/settings": {
       "get": {
         "operationId": "getAgentPlatformSettings",
@@ -4777,6 +4927,35 @@
         }
       }
     },
+    "/api/v1/agent-runtime/mcp-servers": {
+      "get": {
+        "operationId": "listAgentRuntimeMcpServers",
+        "description": "Returns enabled MCP endpoints and decrypted headers only to the authenticated agent runtime over a no-store response.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Runtime-only MCP configurations.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AgentRuntimeMcpServer"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/v1/agent-runtime/provider-calls": {
       "post": {
         "operationId": "startAgentProviderCall",
@@ -4861,6 +5040,93 @@
                 }
               }
             }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/agent-runtime/mcp-tool-calls": {
+      "post": {
+        "operationId": "startAgentRuntimeMcpToolCall",
+        "description": "Authorizes and records an allowlisted MCP tool call against its run correlation ID.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartAgentMcpToolCallRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "MCP tool call authorized and started.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentMcpToolCall"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/agent-runtime/mcp-tool-calls/{call_id}/finish": {
+      "post": {
+        "operationId": "finishAgentRuntimeMcpToolCall",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinishAgentMcpToolCallRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "MCP tool call finalized and audited."
           },
           "403": {
             "$ref": "#/components/responses/Error"
@@ -6893,6 +7159,347 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 16384
+          }
+        }
+      },
+      "AgentMcpServer": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "agent_id",
+          "name",
+          "endpoint_url",
+          "enabled",
+          "allowed_tools",
+          "headers_configured",
+          "timeout_ms",
+          "max_output_bytes",
+          "require_write_confirmation",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "agent_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+          },
+          "endpoint_url": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 2048
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "allowed_tools": {
+            "type": "array",
+            "maxItems": 128,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+            }
+          },
+          "headers_configured": {
+            "type": "boolean"
+          },
+          "timeout_ms": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 120000
+          },
+          "max_output_bytes": {
+            "type": "integer",
+            "minimum": 1024,
+            "maximum": 4194304
+          },
+          "require_write_confirmation": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AgentMcpHeaders": {
+        "type": "object",
+        "maxProperties": 32,
+        "additionalProperties": {
+          "type": "string",
+          "maxLength": 16384
+        }
+      },
+      "CreateAgentMcpServerRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "endpoint_url",
+          "enabled",
+          "allowed_tools"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+          },
+          "endpoint_url": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 2048
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "allowed_tools": {
+            "type": "array",
+            "maxItems": 128,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+            }
+          },
+          "headers": {
+            "$ref": "#/components/schemas/AgentMcpHeaders"
+          },
+          "timeout_ms": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 120000,
+            "default": 10000
+          },
+          "max_output_bytes": {
+            "type": "integer",
+            "minimum": 1024,
+            "maximum": 4194304,
+            "default": 262144
+          },
+          "require_write_confirmation": {
+            "type": "boolean",
+            "default": true
+          }
+        }
+      },
+      "UpdateAgentMcpServerRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+          },
+          "endpoint_url": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 2048
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "allowed_tools": {
+            "type": "array",
+            "maxItems": 128,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+            }
+          },
+          "headers": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentMcpHeaders"
+              }
+            ],
+            "description": "Replaces encrypted headers; an empty object clears them. Omit to keep them unchanged."
+          },
+          "timeout_ms": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 120000
+          },
+          "max_output_bytes": {
+            "type": "integer",
+            "minimum": 1024,
+            "maximum": 4194304
+          },
+          "require_write_confirmation": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AgentRuntimeMcpServer": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "endpoint_url",
+          "allowed_tools",
+          "headers",
+          "timeout_ms",
+          "max_output_bytes",
+          "require_write_confirmation"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "endpoint_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "allowed_tools": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "headers": {
+            "$ref": "#/components/schemas/AgentMcpHeaders"
+          },
+          "timeout_ms": {
+            "type": "integer"
+          },
+          "max_output_bytes": {
+            "type": "integer"
+          },
+          "require_write_confirmation": {
+            "type": "boolean"
+          }
+        }
+      },
+      "StartAgentMcpToolCallRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "call_id",
+          "run_id",
+          "lease_token",
+          "server_id",
+          "tool_name",
+          "mode",
+          "input_bytes"
+        ],
+        "properties": {
+          "call_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "lease_token": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "server_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tool_name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "read",
+              "write"
+            ]
+          },
+          "input_bytes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 262144
+          }
+        }
+      },
+      "AgentMcpToolCall": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "correlation_id",
+          "tool_name",
+          "mode"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "correlation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tool_name": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "read",
+              "write"
+            ]
+          }
+        }
+      },
+      "FinishAgentMcpToolCallRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "run_id",
+          "lease_token",
+          "status",
+          "output_bytes",
+          "error_code"
+        ],
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "lease_token": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "failed"
+            ]
+          },
+          "output_bytes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4194304
+          },
+          "error_code": {
+            "type": "string",
+            "maxLength": 120
           }
         }
       },

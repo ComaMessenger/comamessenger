@@ -66,6 +66,26 @@ func TestAgentWorkerLeaseAndCheckpointContract(t *testing.T) {
 	if bytes.Contains(ciphertext, []byte("provider-secret-value")) {
 		t.Fatal("provider credential persisted as plaintext")
 	}
+	requireConfirmation := true
+	mcpServer, err := configService.CreateMCPServer(t.Context(), owner, created.ID, agentconfig.CreateMCPServerInput{
+		Name: "knowledge", EndpointURL: "https://mcp.example.test/rpc", Enabled: true,
+		AllowedTools: []string{"search"}, Headers: map[string]string{"Authorization": "Bearer mcp-secret"},
+		TimeoutMS: 5000, MaxOutputBytes: 32768, RequireWriteConfirmation: &requireConfirmation,
+	})
+	if err != nil || !mcpServer.HeadersConfigured {
+		t.Fatalf("MCP server = %+v, err=%v", mcpServer, err)
+	}
+	runtimeMCP, err := configService.RuntimeMCPServers(t.Context(), agentUser, authentication)
+	if err != nil || len(runtimeMCP) != 1 || runtimeMCP[0].Headers["Authorization"] != "Bearer mcp-secret" {
+		t.Fatalf("runtime MCP servers = %+v, err=%v", runtimeMCP, err)
+	}
+	var encryptedHeaders []byte
+	if err := pool.QueryRow(t.Context(), `SELECT encrypted_headers FROM agent_mcp_servers WHERE id=$1`, mcpServer.ID).Scan(&encryptedHeaders); err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(encryptedHeaders, []byte("mcp-secret")) {
+		t.Fatal("MCP headers persisted as plaintext")
+	}
 	service := agentrun.NewService(pool)
 	invoked, err := service.Invoke(t.Context(), owner, created.ID, agentrun.InvokeInput{
 		ChatID: runTestChatID, ClientRunID: mustRunID(t), Input: json.RawMessage(`{"prompt":"hello"}`),
@@ -92,6 +112,24 @@ func TestAgentWorkerLeaseAndCheckpointContract(t *testing.T) {
 		LeaseToken: claimed.LeaseToken, LeaseSeconds: 45,
 	}); err != nil {
 		t.Fatal(err)
+	}
+	mcpCall, err := service.StartMCPToolCall(t.Context(), agentUser, authentication, agentrun.StartMCPToolCallInput{
+		CallID: mustRunID(t), RunID: invoked.ID, LeaseToken: claimed.LeaseToken, ServerID: mcpServer.ID,
+		ToolName: "search", Mode: "read", InputBytes: 24,
+	})
+	if err != nil || mcpCall.CorrelationID != invoked.CorrelationID {
+		t.Fatalf("MCP tool call = %+v, err=%v", mcpCall, err)
+	}
+	if err := service.FinishMCPToolCall(t.Context(), agentUser, authentication, mcpCall.ID, agentrun.FinishMCPToolCallInput{
+		RunID: invoked.ID, LeaseToken: claimed.LeaseToken, Status: "completed", OutputBytes: 128,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.StartMCPToolCall(t.Context(), agentUser, authentication, agentrun.StartMCPToolCallInput{
+		CallID: mustRunID(t), RunID: invoked.ID, LeaseToken: claimed.LeaseToken, ServerID: mcpServer.ID,
+		ToolName: "search", Mode: "write", InputBytes: 24,
+	}); !errors.Is(err, agentrun.ErrForbidden) {
+		t.Fatalf("unconfirmed MCP write error = %v", err)
 	}
 	providerCall, err := service.StartProviderCall(t.Context(), agentUser, authentication, agentrun.StartProviderCallInput{
 		CallID: mustRunID(t), RunID: invoked.ID, LeaseToken: claimed.LeaseToken, ReservedCost: "0.01000000", Currency: "USD",

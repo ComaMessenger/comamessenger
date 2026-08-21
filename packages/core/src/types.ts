@@ -106,6 +106,18 @@ export type UpdateAgentProviderCredentialRequest =
   components["schemas"]["UpdateAgentProviderCredentialRequest"];
 export type AgentRuntimeProviderCredential =
   components["schemas"]["AgentRuntimeProviderCredential"];
+export type AgentMcpServer = components["schemas"]["AgentMcpServer"];
+export type CreateAgentMcpServerRequest =
+  components["schemas"]["CreateAgentMcpServerRequest"];
+export type UpdateAgentMcpServerRequest =
+  components["schemas"]["UpdateAgentMcpServerRequest"];
+export type AgentRuntimeMcpServer =
+  components["schemas"]["AgentRuntimeMcpServer"];
+export type AgentMcpToolCall = components["schemas"]["AgentMcpToolCall"];
+export type StartAgentMcpToolCallRequest =
+  components["schemas"]["StartAgentMcpToolCallRequest"];
+export type FinishAgentMcpToolCallRequest =
+  components["schemas"]["FinishAgentMcpToolCallRequest"];
 export type AgentProviderCall = components["schemas"]["AgentProviderCall"];
 export type StartAgentProviderCallRequest =
   components["schemas"]["StartAgentProviderCallRequest"];

@@ -68,6 +68,24 @@ func (e AgentKind) Valid() bool {
 	}
 }
 
+// Defines values for AgentMcpToolCallMode.
+const (
+	AgentMcpToolCallModeRead  AgentMcpToolCallMode = "read"
+	AgentMcpToolCallModeWrite AgentMcpToolCallMode = "write"
+)
+
+// Valid indicates whether the value is a known member of the AgentMcpToolCallMode enum.
+func (e AgentMcpToolCallMode) Valid() bool {
+	switch e {
+	case AgentMcpToolCallModeRead:
+		return true
+	case AgentMcpToolCallModeWrite:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentProviderCallPriceSource.
 const (
 	AgentProviderCallPriceSourceConfigured AgentProviderCallPriceSource = "configured"
@@ -187,16 +205,16 @@ func (e AgentScope) Valid() bool {
 
 // Defines values for AgentToolDefinitionMode.
 const (
-	Read  AgentToolDefinitionMode = "read"
-	Write AgentToolDefinitionMode = "write"
+	AgentToolDefinitionModeRead  AgentToolDefinitionMode = "read"
+	AgentToolDefinitionModeWrite AgentToolDefinitionMode = "write"
 )
 
 // Valid indicates whether the value is a known member of the AgentToolDefinitionMode enum.
 func (e AgentToolDefinitionMode) Valid() bool {
 	switch e {
-	case Read:
+	case AgentToolDefinitionModeRead:
 		return true
-	case Write:
+	case AgentToolDefinitionModeWrite:
 		return true
 	default:
 		return false
@@ -1196,6 +1214,24 @@ func (e FileUploadMode) Valid() bool {
 	}
 }
 
+// Defines values for FinishAgentMcpToolCallRequestStatus.
+const (
+	FinishAgentMcpToolCallRequestStatusCompleted FinishAgentMcpToolCallRequestStatus = "completed"
+	FinishAgentMcpToolCallRequestStatusFailed    FinishAgentMcpToolCallRequestStatus = "failed"
+)
+
+// Valid indicates whether the value is a known member of the FinishAgentMcpToolCallRequestStatus enum.
+func (e FinishAgentMcpToolCallRequestStatus) Valid() bool {
+	switch e {
+	case FinishAgentMcpToolCallRequestStatusCompleted:
+		return true
+	case FinishAgentMcpToolCallRequestStatusFailed:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for FinishAgentProviderCallRequestPriceSource.
 const (
 	FinishAgentProviderCallRequestPriceSourceConfigured FinishAgentProviderCallRequestPriceSource = "configured"
@@ -1793,6 +1829,24 @@ func (e SearchResultKind) Valid() bool {
 	}
 }
 
+// Defines values for StartAgentMcpToolCallRequestMode.
+const (
+	StartAgentMcpToolCallRequestModeRead  StartAgentMcpToolCallRequestMode = "read"
+	StartAgentMcpToolCallRequestModeWrite StartAgentMcpToolCallRequestMode = "write"
+)
+
+// Valid indicates whether the value is a known member of the StartAgentMcpToolCallRequestMode enum.
+func (e StartAgentMcpToolCallRequestMode) Valid() bool {
+	switch e {
+	case StartAgentMcpToolCallRequestModeRead:
+		return true
+	case StartAgentMcpToolCallRequestModeWrite:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UpdateAgentTriggerRequestMissedRunsPolicy.
 const (
 	UpdateAgentTriggerRequestMissedRunsPolicyLatest UpdateAgentTriggerRequestMissedRunsPolicy = "latest"
@@ -2353,6 +2407,36 @@ type AgentApiKey struct {
 	Scopes             []AgentScope       `json:"scopes"`
 }
 
+// AgentMcpHeaders defines model for AgentMcpHeaders.
+type AgentMcpHeaders map[string]string
+
+// AgentMcpServer defines model for AgentMcpServer.
+type AgentMcpServer struct {
+	AgentId                  openapi_types.UUID `json:"agent_id"`
+	AllowedTools             []string           `json:"allowed_tools"`
+	CreatedAt                time.Time          `json:"created_at"`
+	Enabled                  bool               `json:"enabled"`
+	EndpointUrl              string             `json:"endpoint_url"`
+	HeadersConfigured        bool               `json:"headers_configured"`
+	Id                       openapi_types.UUID `json:"id"`
+	MaxOutputBytes           int                `json:"max_output_bytes"`
+	Name                     string             `json:"name"`
+	RequireWriteConfirmation bool               `json:"require_write_confirmation"`
+	TimeoutMs                int                `json:"timeout_ms"`
+	UpdatedAt                time.Time          `json:"updated_at"`
+}
+
+// AgentMcpToolCall defines model for AgentMcpToolCall.
+type AgentMcpToolCall struct {
+	CorrelationId openapi_types.UUID   `json:"correlation_id"`
+	Id            openapi_types.UUID   `json:"id"`
+	Mode          AgentMcpToolCallMode `json:"mode"`
+	ToolName      string               `json:"tool_name"`
+}
+
+// AgentMcpToolCallMode defines model for AgentMcpToolCall.Mode.
+type AgentMcpToolCallMode string
+
 // AgentPlatformSettings defines model for AgentPlatformSettings.
 type AgentPlatformSettings struct {
 	OrganizationRateLimitPerMinute int `json:"organization_rate_limit_per_minute"`
@@ -2441,6 +2525,18 @@ type AgentRuntimeCheckpoint struct {
 	Consumer     string    `json:"consumer"`
 	LastEventSeq int64     `json:"last_event_seq"`
 	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// AgentRuntimeMcpServer defines model for AgentRuntimeMcpServer.
+type AgentRuntimeMcpServer struct {
+	AllowedTools             []string           `json:"allowed_tools"`
+	EndpointUrl              string             `json:"endpoint_url"`
+	Headers                  AgentMcpHeaders    `json:"headers"`
+	Id                       openapi_types.UUID `json:"id"`
+	MaxOutputBytes           int                `json:"max_output_bytes"`
+	Name                     string             `json:"name"`
+	RequireWriteConfirmation bool               `json:"require_write_confirmation"`
+	TimeoutMs                int                `json:"timeout_ms"`
 }
 
 // AgentRuntimeProviderCredential defines model for AgentRuntimeProviderCredential.
@@ -2743,6 +2839,18 @@ type CreateAgentKeyRequest struct {
 	Scopes             []AgentScope `json:"scopes"`
 }
 
+// CreateAgentMcpServerRequest defines model for CreateAgentMcpServerRequest.
+type CreateAgentMcpServerRequest struct {
+	AllowedTools             []string         `json:"allowed_tools"`
+	Enabled                  bool             `json:"enabled"`
+	EndpointUrl              string           `json:"endpoint_url"`
+	Headers                  *AgentMcpHeaders `json:"headers,omitempty"`
+	MaxOutputBytes           *int             `json:"max_output_bytes,omitempty"`
+	Name                     string           `json:"name"`
+	RequireWriteConfirmation *bool            `json:"require_write_confirmation,omitempty"`
+	TimeoutMs                *int             `json:"timeout_ms,omitempty"`
+}
+
 // CreateAgentRequest defines model for CreateAgentRequest.
 type CreateAgentRequest struct {
 	AllowedScopes               []AgentScope           `json:"allowed_scopes"`
@@ -2947,6 +3055,18 @@ type FileUpload struct {
 
 // FileUploadMode defines model for FileUpload.Mode.
 type FileUploadMode string
+
+// FinishAgentMcpToolCallRequest defines model for FinishAgentMcpToolCallRequest.
+type FinishAgentMcpToolCallRequest struct {
+	ErrorCode   string                              `json:"error_code"`
+	LeaseToken  openapi_types.UUID                  `json:"lease_token"`
+	OutputBytes int                                 `json:"output_bytes"`
+	RunId       openapi_types.UUID                  `json:"run_id"`
+	Status      FinishAgentMcpToolCallRequestStatus `json:"status"`
+}
+
+// FinishAgentMcpToolCallRequestStatus defines model for FinishAgentMcpToolCallRequest.Status.
+type FinishAgentMcpToolCallRequestStatus string
 
 // FinishAgentProviderCallRequest defines model for FinishAgentProviderCallRequest.
 type FinishAgentProviderCallRequest struct {
@@ -3534,6 +3654,20 @@ type SignFilePartsRequest struct {
 	PartNumbers []int `json:"part_numbers"`
 }
 
+// StartAgentMcpToolCallRequest defines model for StartAgentMcpToolCallRequest.
+type StartAgentMcpToolCallRequest struct {
+	CallId     openapi_types.UUID               `json:"call_id"`
+	InputBytes int                              `json:"input_bytes"`
+	LeaseToken openapi_types.UUID               `json:"lease_token"`
+	Mode       StartAgentMcpToolCallRequestMode `json:"mode"`
+	RunId      openapi_types.UUID               `json:"run_id"`
+	ServerId   openapi_types.UUID               `json:"server_id"`
+	ToolName   string                           `json:"tool_name"`
+}
+
+// StartAgentMcpToolCallRequestMode defines model for StartAgentMcpToolCallRequest.Mode.
+type StartAgentMcpToolCallRequestMode string
+
 // StartAgentProviderCallRequest defines model for StartAgentProviderCallRequest.
 type StartAgentProviderCallRequest struct {
 	CallId       openapi_types.UUID `json:"call_id"`
@@ -3590,6 +3724,20 @@ type TransferOwnershipRequest struct {
 type UnreadSnapshot struct {
 	Chats   []ChatUnread   `json:"chats"`
 	Threads []ThreadUnread `json:"threads"`
+}
+
+// UpdateAgentMcpServerRequest defines model for UpdateAgentMcpServerRequest.
+type UpdateAgentMcpServerRequest struct {
+	AllowedTools *[]string `json:"allowed_tools,omitempty"`
+	Enabled      *bool     `json:"enabled,omitempty"`
+	EndpointUrl  *string   `json:"endpoint_url,omitempty"`
+
+	// Headers Replaces encrypted headers; an empty object clears them. Omit to keep them unchanged.
+	Headers                  *AgentMcpHeaders `json:"headers,omitempty"`
+	MaxOutputBytes           *int             `json:"max_output_bytes,omitempty"`
+	Name                     *string          `json:"name,omitempty"`
+	RequireWriteConfirmation *bool            `json:"require_write_confirmation,omitempty"`
+	TimeoutMs                *int             `json:"timeout_ms,omitempty"`
 }
 
 // UpdateAgentPlatformSettingsRequest defines model for UpdateAgentPlatformSettingsRequest.
@@ -3924,6 +4072,12 @@ type ListFollowedThreadsParams struct {
 // UpdateAgentRuntimeCheckpointJSONRequestBody defines body for UpdateAgentRuntimeCheckpoint for application/json ContentType.
 type UpdateAgentRuntimeCheckpointJSONRequestBody = UpdateAgentRuntimeCheckpointRequest
 
+// StartAgentRuntimeMcpToolCallJSONRequestBody defines body for StartAgentRuntimeMcpToolCall for application/json ContentType.
+type StartAgentRuntimeMcpToolCallJSONRequestBody = StartAgentMcpToolCallRequest
+
+// FinishAgentRuntimeMcpToolCallJSONRequestBody defines body for FinishAgentRuntimeMcpToolCall for application/json ContentType.
+type FinishAgentRuntimeMcpToolCallJSONRequestBody = FinishAgentMcpToolCallRequest
+
 // StartAgentProviderCallJSONRequestBody defines body for StartAgentProviderCall for application/json ContentType.
 type StartAgentProviderCallJSONRequestBody = StartAgentProviderCallRequest
 
@@ -3959,6 +4113,12 @@ type InvokeAgentJSONRequestBody = InvokeAgentRequest
 
 // CreateAgentKeyJSONRequestBody defines body for CreateAgentKey for application/json ContentType.
 type CreateAgentKeyJSONRequestBody = CreateAgentKeyRequest
+
+// CreateAgentMcpServerJSONRequestBody defines body for CreateAgentMcpServer for application/json ContentType.
+type CreateAgentMcpServerJSONRequestBody = CreateAgentMcpServerRequest
+
+// UpdateAgentMcpServerJSONRequestBody defines body for UpdateAgentMcpServer for application/json ContentType.
+type UpdateAgentMcpServerJSONRequestBody = UpdateAgentMcpServerRequest
 
 // UpdateAgentProviderCredentialJSONRequestBody defines body for UpdateAgentProviderCredential for application/json ContentType.
 type UpdateAgentProviderCredentialJSONRequestBody = UpdateAgentProviderCredentialRequest

@@ -85,6 +85,13 @@ import type {
   AgentProviderCredentialView,
   UpdateAgentProviderCredentialRequest,
   AgentRuntimeProviderCredential,
+  AgentMcpServer,
+  CreateAgentMcpServerRequest,
+  UpdateAgentMcpServerRequest,
+  AgentRuntimeMcpServer,
+  AgentMcpToolCall,
+  StartAgentMcpToolCallRequest,
+  FinishAgentMcpToolCallRequest,
   AgentProviderCall,
   StartAgentProviderCallRequest,
   FinishAgentProviderCallRequest,
@@ -377,6 +384,56 @@ export class MessengerAPI {
   }
   agentRuntimeProviderCredential(): Promise<AgentRuntimeProviderCredential> {
     return this.request("/api/v1/agent-runtime/provider-credential");
+  }
+  agentMcpServers(id: string): Promise<AgentMcpServer[]> {
+    return this.request(
+      `/api/v1/agents/${encodeURIComponent(id)}/mcp-servers`,
+    );
+  }
+  createAgentMcpServer(
+    id: string,
+    input: CreateAgentMcpServerRequest,
+  ): Promise<AgentMcpServer> {
+    return this.request(
+      `/api/v1/agents/${encodeURIComponent(id)}/mcp-servers`,
+      { method: "POST", body: JSON.stringify(input) },
+    );
+  }
+  updateAgentMcpServer(
+    id: string,
+    serverID: string,
+    input: UpdateAgentMcpServerRequest,
+  ): Promise<AgentMcpServer> {
+    return this.request(
+      `/api/v1/agents/${encodeURIComponent(id)}/mcp-servers/${encodeURIComponent(serverID)}`,
+      { method: "PATCH", body: JSON.stringify(input) },
+    );
+  }
+  deleteAgentMcpServer(id: string, serverID: string): Promise<void> {
+    return this.request(
+      `/api/v1/agents/${encodeURIComponent(id)}/mcp-servers/${encodeURIComponent(serverID)}`,
+      { method: "DELETE" },
+    );
+  }
+  agentRuntimeMcpServers(): Promise<AgentRuntimeMcpServer[]> {
+    return this.request("/api/v1/agent-runtime/mcp-servers");
+  }
+  startAgentMcpToolCall(
+    input: StartAgentMcpToolCallRequest,
+  ): Promise<AgentMcpToolCall> {
+    return this.request("/api/v1/agent-runtime/mcp-tool-calls", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+  finishAgentMcpToolCall(
+    callID: string,
+    input: FinishAgentMcpToolCallRequest,
+  ): Promise<void> {
+    return this.request(
+      `/api/v1/agent-runtime/mcp-tool-calls/${encodeURIComponent(callID)}/finish`,
+      { method: "POST", body: JSON.stringify(input) },
+    );
   }
   startAgentProviderCall(
     input: StartAgentProviderCallRequest,

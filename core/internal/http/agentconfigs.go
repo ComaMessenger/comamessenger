@@ -42,6 +42,63 @@ func (h *identityHandlers) agentRuntimeProviderCredential(w standardhttp.Respons
 	writeJSON(h.logger, w, standardhttp.StatusOK, result)
 }
 
+func (h *identityHandlers) listAgentMCPServers(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.agentConfig.ListMCPServers(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "agentID"))
+	if err != nil {
+		h.writeAgentConfigError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) createAgentMCPServer(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input agentconfig.CreateMCPServerInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	result, err := h.agentConfig.CreateMCPServer(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "agentID"), input)
+	if err != nil {
+		h.writeAgentConfigError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusCreated, result)
+}
+
+func (h *identityHandlers) updateAgentMCPServer(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input agentconfig.UpdateMCPServerInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	result, err := h.agentConfig.UpdateMCPServer(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "agentID"), chi.URLParam(r, "serverID"), input)
+	if err != nil {
+		h.writeAgentConfigError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) deleteAgentMCPServer(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	err := h.agentConfig.DeleteMCPServer(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "agentID"), chi.URLParam(r, "serverID"))
+	if err != nil {
+		h.writeAgentConfigError(w, r, err)
+		return
+	}
+	w.WriteHeader(standardhttp.StatusNoContent)
+}
+
+func (h *identityHandlers) agentRuntimeMCPServers(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	auth := authFromContext(r.Context())
+	result, err := h.agentConfig.RuntimeMCPServers(r.Context(), auth.User, auth.Identity)
+	if err != nil {
+		h.writeAgentConfigError(w, r, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
 func (h *identityHandlers) writeAgentConfigError(w standardhttp.ResponseWriter, r *standardhttp.Request, err error) {
 	switch {
 	case errors.Is(err, agentconfig.ErrInvalid):

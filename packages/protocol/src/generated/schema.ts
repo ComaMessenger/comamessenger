@@ -1380,6 +1380,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agents/{agent_id}/mcp-servers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        /** @description Lists the agent's allowlisted MCP servers without returning secret headers. */
+        get: operations["listAgentMcpServers"];
+        put?: never;
+        post: operations["createAgentMcpServer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{agent_id}/mcp-servers/{server_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+                server_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteAgentMcpServer"];
+        options?: never;
+        head?: never;
+        patch: operations["updateAgentMcpServer"];
+        trace?: never;
+    };
     "/api/v1/agents/settings": {
         parameters: {
             query?: never;
@@ -1595,6 +1633,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agent-runtime/mcp-servers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns enabled MCP endpoints and decrypted headers only to the authenticated agent runtime over a no-store response. */
+        get: operations["listAgentRuntimeMcpServers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agent-runtime/provider-calls": {
         parameters: {
             query?: never;
@@ -1622,6 +1677,39 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["finishAgentProviderCall"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent-runtime/mcp-tool-calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Authorizes and records an allowlisted MCP tool call against its run correlation ID. */
+        post: operations["startAgentRuntimeMcpToolCall"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent-runtime/mcp-tool-calls/{call_id}/finish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["finishAgentRuntimeMcpToolCall"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2125,6 +2213,99 @@ export interface components {
         };
         AgentRuntimeProviderCredential: {
             api_key: string;
+        };
+        AgentMcpServer: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            agent_id: string;
+            name: string;
+            /** Format: uri */
+            endpoint_url: string;
+            enabled: boolean;
+            allowed_tools: string[];
+            headers_configured: boolean;
+            timeout_ms: number;
+            max_output_bytes: number;
+            require_write_confirmation: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        AgentMcpHeaders: {
+            [key: string]: string;
+        };
+        CreateAgentMcpServerRequest: {
+            name: string;
+            /** Format: uri */
+            endpoint_url: string;
+            enabled: boolean;
+            allowed_tools: string[];
+            headers?: components["schemas"]["AgentMcpHeaders"];
+            /** @default 10000 */
+            timeout_ms: number;
+            /** @default 262144 */
+            max_output_bytes: number;
+            /** @default true */
+            require_write_confirmation: boolean;
+        };
+        UpdateAgentMcpServerRequest: {
+            name?: string;
+            /** Format: uri */
+            endpoint_url?: string;
+            enabled?: boolean;
+            allowed_tools?: string[];
+            /** @description Replaces encrypted headers; an empty object clears them. Omit to keep them unchanged. */
+            headers?: components["schemas"]["AgentMcpHeaders"];
+            timeout_ms?: number;
+            max_output_bytes?: number;
+            require_write_confirmation?: boolean;
+        };
+        AgentRuntimeMcpServer: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** Format: uri */
+            endpoint_url: string;
+            allowed_tools: string[];
+            headers: components["schemas"]["AgentMcpHeaders"];
+            timeout_ms: number;
+            max_output_bytes: number;
+            require_write_confirmation: boolean;
+        };
+        StartAgentMcpToolCallRequest: {
+            /** Format: uuid */
+            call_id: string;
+            /** Format: uuid */
+            run_id: string;
+            /** Format: uuid */
+            lease_token: string;
+            /** Format: uuid */
+            server_id: string;
+            tool_name: string;
+            /** @enum {string} */
+            mode: "read" | "write";
+            input_bytes: number;
+        };
+        AgentMcpToolCall: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            correlation_id: string;
+            tool_name: string;
+            /** @enum {string} */
+            mode: "read" | "write";
+        };
+        FinishAgentMcpToolCallRequest: {
+            /** Format: uuid */
+            run_id: string;
+            /** Format: uuid */
+            lease_token: string;
+            /** @enum {string} */
+            status: "completed" | "failed";
+            output_bytes: number;
+            error_code: string;
         };
         StartAgentProviderCallRequest: {
             /** Format: uuid */
@@ -5927,6 +6108,112 @@ export interface operations {
             422: components["responses"]["Error"];
         };
     };
+    listAgentMcpServers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description MCP server configurations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentMcpServer"][];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    createAgentMcpServer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAgentMcpServerRequest"];
+            };
+        };
+        responses: {
+            /** @description Allowlisted MCP server created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentMcpServer"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    deleteAgentMcpServer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+                server_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description MCP server removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    updateAgentMcpServer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+                server_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAgentMcpServerRequest"];
+            };
+        };
+        responses: {
+            /** @description MCP server updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentMcpServer"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
     getAgentPlatformSettings: {
         parameters: {
             query?: never;
@@ -6319,6 +6606,27 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
+    listAgentRuntimeMcpServers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Runtime-only MCP configurations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRuntimeMcpServer"][];
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
     startAgentProviderCall: {
         parameters: {
             query?: never;
@@ -6370,6 +6678,60 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AgentProviderCall"];
                 };
+            };
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    startAgentRuntimeMcpToolCall: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartAgentMcpToolCallRequest"];
+            };
+        };
+        responses: {
+            /** @description MCP tool call authorized and started. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentMcpToolCall"];
+                };
+            };
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    finishAgentRuntimeMcpToolCall: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                call_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinishAgentMcpToolCallRequest"];
+            };
+        };
+        responses: {
+            /** @description MCP tool call finalized and audited. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             403: components["responses"]["Error"];
             409: components["responses"]["Error"];

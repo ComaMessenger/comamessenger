@@ -72,8 +72,8 @@
 
 - [x] Реализовать tools `get_chat_messages`, `get_thread`, `search_messages`, `post_message`, `reply_in_thread`, `add_reaction`, `get_file_text`, `list_members`, `remember`, `recall`.
 - [x] Валидировать аргументы tools по JSON Schema и применять те же authz/scopes, что и REST.
-- [ ] Добавить allowlist внешних MCP servers, timeout, output size limits и redaction секретов.
-- [ ] Разделить read и write tools; потенциально значимые действия могут требовать configurable user confirmation.
+- [x] Добавить allowlist внешних MCP servers, timeout, output size limits и redaction секретов.
+- [x] Разделить read и write tools; потенциально значимые действия могут требовать configurable user confirmation.
 - [x] Записывать correlation IDs run → provider call → tool call → message.
 
 ### Streaming и Web UI
@@ -112,7 +112,14 @@ PATCH  /api/v1/agents/:id/triggers/:trigger_id
 DELETE /api/v1/agents/:id/triggers/:trigger_id
 GET    /api/v1/agents/:id/provider-credentials
 PUT    /api/v1/agents/:id/provider-credentials
+GET    /api/v1/agents/:id/mcp-servers
+POST   /api/v1/agents/:id/mcp-servers
+PATCH  /api/v1/agents/:id/mcp-servers/:server_id
+DELETE /api/v1/agents/:id/mcp-servers/:server_id
 POST   /api/v1/agent-runtime/runs/claim
+GET    /api/v1/agent-runtime/mcp-servers
+POST   /api/v1/agent-runtime/mcp-tool-calls
+POST   /api/v1/agent-runtime/mcp-tool-calls/:call_id/finish
 POST   /api/v1/agent-runtime/provider-calls
 POST   /api/v1/agent-runtime/provider-calls/:call_id/finish
 
@@ -127,6 +134,8 @@ message.streaming
 - Durable final message создаётся core через публичный message endpoint.
 - Streaming delta не является источником истины и может быть отброшена при reconnect.
 - Provider key никогда не входит в event payload, run logs или browser/admin API; runtime-only `no-store` endpoint доступен только API key самого агента.
+- Секретные MCP headers шифруются отдельным AEAD domain и возвращаются только runtime-ключу самого агента через `no-store`; admin API показывает лишь факт их настройки. Runtime запрещает redirects, не включает неразрешённые tools, ограничивает каждый ответ по времени и размеру и наружу возвращает только стабильные redacted error codes.
+- MCP tools с `annotations.readOnlyHint=true` считаются read; остальные считаются write. При `require_write_confirmation=true` write tools не передаются автономной модели, а core дополнительно отклоняет попытку начать такой вызов без разрешённой политики. Каждый MCP-вызов записывается и аудируется с run correlation ID.
 - Usage сохраняет provider/model/tokens/cost/currency и источник расчёта стоимости.
 - Перед provider call runtime атомарно резервирует оценочную стоимость под advisory lock; дневной и месячный лимиты учитывают завершённый usage и незавершённые reservations, поэтому конкурентные runs не обходят budget gate.
 

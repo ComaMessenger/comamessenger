@@ -158,7 +158,12 @@ func (h *identityHandlers) routes(router chi.Router) {
 		if h.agentConfig != nil {
 			protected.Get("/agents/{agentID}/provider-credentials", h.agentProviderCredential)
 			protected.Put("/agents/{agentID}/provider-credentials", h.updateAgentProviderCredential)
+			protected.Get("/agents/{agentID}/mcp-servers", h.listAgentMCPServers)
+			protected.Post("/agents/{agentID}/mcp-servers", h.createAgentMCPServer)
+			protected.Patch("/agents/{agentID}/mcp-servers/{serverID}", h.updateAgentMCPServer)
+			protected.Delete("/agents/{agentID}/mcp-servers/{serverID}", h.deleteAgentMCPServer)
 			protected.Get("/agent-runtime/provider-credential", h.agentRuntimeProviderCredential)
+			protected.Get("/agent-runtime/mcp-servers", h.agentRuntimeMCPServers)
 		}
 		if h.agentTools != nil {
 			protected.Get("/agent-tools", h.listAgentTools)
@@ -177,6 +182,8 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Put("/agent-runtime/checkpoints/{consumer}", h.updateAgentRuntimeCheckpoint)
 			protected.Post("/agent-runtime/provider-calls", h.startAgentProviderCall)
 			protected.Post("/agent-runtime/provider-calls/{callID}/finish", h.finishAgentProviderCall)
+			protected.Post("/agent-runtime/mcp-tool-calls", h.startAgentMCPToolCall)
+			protected.Post("/agent-runtime/mcp-tool-calls/{callID}/finish", h.finishAgentMCPToolCall)
 		}
 		if h.agentTriggers != nil {
 			protected.Get("/agents/{agentID}/triggers", h.listAgentTriggers)
