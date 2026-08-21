@@ -11,10 +11,11 @@ import (
 )
 
 type ReconcileStats struct {
-	ExpiredUploads int
-	MissingBlobs   int
-	SizeMismatches int
-	OrphanBlobs    int
+	ExpiredUploads  int
+	MissingBlobs    int
+	SizeMismatches  int
+	OrphanBlobs     int
+	UnattachedFiles int
 }
 
 type staleUpload struct {
@@ -27,6 +28,11 @@ func (s *Service) Reconcile(ctx context.Context) (ReconcileStats, error) {
 	if err != nil {
 		return stats, err
 	}
+	unattached, err := s.cleanupUnattached(ctx, 100)
+	if err != nil {
+		return stats, err
+	}
+	stats.UnattachedFiles = unattached
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, org_id, storage_key, size
 		FROM files
@@ -102,7 +108,7 @@ func (s *Service) Reconcile(ctx context.Context) (ReconcileStats, error) {
 				continue
 			}
 			var exists bool
-			if err := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM files WHERE storage_driver = $1 AND storage_key = $2)`, s.store.Driver(), blob.Key).Scan(&exists); err != nil {
+			if err := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM files WHERE storage_driver = $1 AND storage_key = $2 AND status <> 'deleted')`, s.store.Driver(), blob.Key).Scan(&exists); err != nil {
 				return stats, fmt.Errorf("check orphan blob: %w", err)
 			}
 			if !exists {
@@ -114,6 +120,87 @@ func (s *Service) Reconcile(ctx context.Context) (ReconcileStats, error) {
 		}
 	}
 	return stats, nil
+}
+
+type unattachedFile struct {
+	ID, OrgID, Key string
+	Size           int64
+	PreviewID      *string
+	PreviewKey     *string
+	PreviewSize    *int64
+}
+
+func (s *Service) cleanupUnattached(ctx context.Context, limit int) (int, error) {
+	cutoff := time.Now().UTC().Add(-s.uploadTTL)
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("begin unattached file cleanup: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	rows, err := tx.Query(ctx, `
+		SELECT f.id, f.org_id, f.storage_key, f.size, preview.id, preview.storage_key, preview.size
+		FROM files f
+		LEFT JOIN files preview ON preview.id = f.preview_file_id AND preview.org_id = f.org_id AND preview.status = 'ready'
+		WHERE f.status = 'ready' AND f.ready_at <= $1
+		  AND NOT EXISTS (SELECT 1 FROM message_files mf WHERE mf.file_id = f.id)
+		  AND NOT EXISTS (SELECT 1 FROM actors a WHERE a.org_id = f.org_id AND a.avatar_file_id = f.id)
+		  AND NOT EXISTS (SELECT 1 FROM files parent WHERE parent.org_id = f.org_id AND parent.preview_file_id = f.id AND parent.status <> 'deleted')
+		ORDER BY f.ready_at, f.id
+		LIMIT $2
+		FOR UPDATE OF f SKIP LOCKED`, cutoff, limit)
+	if err != nil {
+		return 0, fmt.Errorf("select unattached files: %w", err)
+	}
+	items := make([]unattachedFile, 0, limit)
+	for rows.Next() {
+		var item unattachedFile
+		if err := rows.Scan(&item.ID, &item.OrgID, &item.Key, &item.Size, &item.PreviewID, &item.PreviewKey, &item.PreviewSize); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		items = append(items, item)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	claimed := make([]unattachedFile, 0, len(items))
+	for _, item := range items {
+		result, err := tx.Exec(ctx, `
+			UPDATE files f SET status = 'deleted', deleted_at = now()
+			WHERE f.id = $1 AND f.status = 'ready'
+			  AND NOT EXISTS (SELECT 1 FROM message_files mf WHERE mf.file_id = f.id)
+			  AND NOT EXISTS (SELECT 1 FROM actors a WHERE a.org_id = f.org_id AND a.avatar_file_id = f.id)`, item.ID)
+		if err != nil {
+			return 0, err
+		}
+		if result.RowsAffected() != 1 {
+			continue
+		}
+		bytes := item.Size
+		if item.PreviewID != nil {
+			if _, err := tx.Exec(ctx, `UPDATE files SET status = 'deleted', deleted_at = now() WHERE id = $1 AND status = 'ready'`, *item.PreviewID); err != nil {
+				return 0, err
+			}
+			if item.PreviewSize != nil {
+				bytes += *item.PreviewSize
+			}
+		}
+		if _, err := tx.Exec(ctx, `UPDATE organization_storage_usage SET used_bytes = GREATEST(0, used_bytes - $2), updated_at = now() WHERE org_id = $1`, item.OrgID, bytes); err != nil {
+			return 0, err
+		}
+		claimed = append(claimed, item)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("commit unattached file cleanup: %w", err)
+	}
+	for _, item := range claimed {
+		_ = s.store.Delete(ctx, item.Key)
+		if item.PreviewKey != nil {
+			_ = s.store.Delete(ctx, *item.PreviewKey)
+		}
+	}
+	return len(claimed), nil
 }
 
 func (s *Service) cleanupExpired(ctx context.Context, limit int) (ReconcileStats, error) {
@@ -194,7 +281,7 @@ func (w *Worker) Run(ctx context.Context) {
 			if err != nil && !errors.Is(err, context.Canceled) {
 				w.logger.Error("file reconciliation failed", "error", err)
 			} else if stats != (ReconcileStats{}) {
-				w.logger.Info("file reconciliation completed", "expired_uploads", stats.ExpiredUploads, "missing_blobs", stats.MissingBlobs, "size_mismatches", stats.SizeMismatches, "orphan_blobs", stats.OrphanBlobs)
+				w.logger.Info("file reconciliation completed", "expired_uploads", stats.ExpiredUploads, "unattached_files", stats.UnattachedFiles, "missing_blobs", stats.MissingBlobs, "size_mismatches", stats.SizeMismatches, "orphan_blobs", stats.OrphanBlobs)
 			}
 		}
 	}

@@ -3,6 +3,7 @@ package files
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"errors"
 	"image"
 	"image/color"
@@ -10,6 +11,8 @@ import (
 	"io"
 	"log/slog"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,6 +21,12 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/testdb"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+type processorHookFunc func(context.Context, ProcessorInput) error
+
+func (hook processorHookFunc) Process(ctx context.Context, input ProcessorInput) error {
+	return hook(ctx, input)
+}
 
 func TestProcessingExtractsTextCreatesPreviewAndEnqueuesDurably(t *testing.T) {
 	pool := testdb.New(t)
@@ -30,6 +39,14 @@ func TestProcessingExtractsTextCreatesPreviewAndEnqueuesDurably(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var hookCalls atomic.Int32
+	service.SetProcessorHooks(processorHookFunc(func(_ context.Context, input ProcessorInput) error {
+		if input.FileID == "" || input.OrgID == "" || len(input.Data) == 0 {
+			t.Fatalf("processor hook input = %#v", input)
+		}
+		hookCalls.Add(1)
+		return nil
+	}))
 	if _, err := NewProcessingClient(pool, service, slog.New(slog.NewTextHandler(io.Discard, nil))); err != nil {
 		t.Fatal(err)
 	}
@@ -61,6 +78,9 @@ func TestProcessingExtractsTextCreatesPreviewAndEnqueuesDurably(t *testing.T) {
 	if err := service.ProcessFile(t.Context(), textFile.ID); err != nil {
 		t.Fatalf("idempotent processing: %v", err)
 	}
+	if hookCalls.Load() != 1 {
+		t.Fatalf("processor hook calls after idempotent retry = %d", hookCalls.Load())
+	}
 
 	imageBuffer := new(bytes.Buffer)
 	source := image.NewRGBA(image.Rect(0, 0, 800, 400))
@@ -82,6 +102,9 @@ func TestProcessingExtractsTextCreatesPreviewAndEnqueuesDurably(t *testing.T) {
 	}
 	if err := service.ProcessFile(t.Context(), imageFile.ID); err != nil {
 		t.Fatal(err)
+	}
+	if hookCalls.Load() != 2 {
+		t.Fatalf("processor hook calls = %d", hookCalls.Load())
 	}
 	var previewID string
 	if err := pool.QueryRow(t.Context(), `SELECT preview_file_id FROM files WHERE id = $1 AND processing_status = 'ready'`, imageFile.ID).Scan(&previewID); err != nil {
@@ -125,6 +148,22 @@ func TestDOCXExtractionRejectsArchiveBombMetadata(t *testing.T) {
 	extracted, err := extractDOCXText(buffer.Bytes())
 	if err != nil || extracted != "Hello DOCX" {
 		t.Fatalf("DOCX extraction = %q, err = %v", extracted, err)
+	}
+
+	oversized := new(bytes.Buffer)
+	oversizedWriter := zip.NewWriter(oversized)
+	entry, err := oversizedWriter.Create("word/document.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := entry.Write(bytes.Repeat([]byte("x"), maxArchiveUnpacked+1)); err != nil {
+		t.Fatal(err)
+	}
+	if err := oversizedWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := extractDOCXText(oversized.Bytes()); err == nil {
+		t.Fatal("oversized DOCX archive was accepted")
 	}
 }
 
@@ -279,6 +318,105 @@ func TestUploadQuotaAbortAndMIMEValidationAreFailClosed(t *testing.T) {
 	if _, err := service.CreateUpload(t.Context(), owner, CreateUploadInput{Name: "malware.exe", MIME: "application/octet-stream", Size: 1}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("executable upload error = %v, want ErrInvalid", err)
 	}
+}
+
+func TestConcurrentQuotaReservationsAreAtomic(t *testing.T) {
+	pool := testdb.New(t)
+	seedFileActors(t, pool)
+	store, err := storage.NewLocalBlobStore(t.TempDir(), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := NewService(pool, store, "", 100, 10, 10, time.Hour, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := identity.User{ActorID: testOwnerID, OrgID: testOrgID, OrgRole: "owner"}
+
+	const attempts = 24
+	uploads := make(chan Upload, attempts)
+	errorsFound := make(chan error, attempts)
+	var wait sync.WaitGroup
+	for index := 0; index < attempts; index++ {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			upload, err := service.CreateUpload(t.Context(), owner, CreateUploadInput{Name: "parallel.txt", MIME: "text/plain", Size: 10})
+			if err != nil {
+				errorsFound <- err
+				return
+			}
+			uploads <- upload
+		}()
+	}
+	wait.Wait()
+	close(uploads)
+	close(errorsFound)
+	if len(uploads) != 10 || len(errorsFound) != attempts-10 {
+		t.Fatalf("concurrent reservations: success=%d errors=%d", len(uploads), len(errorsFound))
+	}
+	for err := range errorsFound {
+		if !errors.Is(err, ErrStorageFull) {
+			t.Fatalf("concurrent reservation error = %v", err)
+		}
+	}
+	assertUsage(t, pool, 0, 100)
+	for upload := range uploads {
+		if err := service.AbortUpload(t.Context(), owner, upload.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	assertUsage(t, pool, 0, 0)
+}
+
+func TestReconcileDeletesOnlyExpiredUnattachedReadyFiles(t *testing.T) {
+	pool := testdb.New(t)
+	seedFileActors(t, pool)
+	store, err := storage.NewLocalBlobStore(t.TempDir(), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := NewService(pool, store, "", 1024, 512, 128, time.Hour, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := identity.User{ActorID: testOwnerID, OrgID: testOrgID, OrgRole: "owner"}
+	uploadReady := func(name string) File {
+		body := []byte("ready file")
+		upload, err := service.CreateUpload(t.Context(), owner, CreateUploadInput{Name: name, MIME: "text/plain", Size: int64(len(body))})
+		if err != nil {
+			t.Fatal(err)
+		}
+		file, err := service.PutContent(t.Context(), owner, upload.ID, bytes.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return file
+	}
+	orphan := uploadReady("orphan.txt")
+	attached := uploadReady("attached.txt")
+	attachFileForMember(t, pool, attached.ID)
+	if _, err := pool.Exec(t.Context(), `UPDATE files SET ready_at = now() - interval '2 hours' WHERE id = ANY($1::uuid[])`, []string{orphan.ID, attached.ID}); err != nil {
+		t.Fatal(err)
+	}
+	stats, err := service.Reconcile(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.UnattachedFiles != 1 {
+		t.Fatalf("unattached cleanup stats = %+v", stats)
+	}
+	var orphanStatus, attachedStatus string
+	if err := pool.QueryRow(t.Context(), `SELECT status FROM files WHERE id=$1`, orphan.ID).Scan(&orphanStatus); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(t.Context(), `SELECT status FROM files WHERE id=$1`, attached.ID).Scan(&attachedStatus); err != nil {
+		t.Fatal(err)
+	}
+	if orphanStatus != "deleted" || attachedStatus != "ready" {
+		t.Fatalf("statuses after cleanup: orphan=%q attached=%q", orphanStatus, attachedStatus)
+	}
+	assertUsage(t, pool, attached.Size, 0)
 }
 
 func seedFileActors(t *testing.T, pool *pgxpool.Pool) {

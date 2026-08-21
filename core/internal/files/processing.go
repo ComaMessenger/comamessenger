@@ -45,6 +45,22 @@ const (
 
 var pdfLiteralPattern = regexp.MustCompile(`(?s)\((?:\\.|[^\\)])*\)\s*(?:Tj|'|")`)
 
+// ErrUnsafeContent lets a processor hook reject a file permanently. Other
+// hook errors are treated as transient and retried by River.
+var ErrUnsafeContent = errors.New("unsafe file content")
+
+type ProcessorInput struct {
+	FileID string
+	OrgID  string
+	Name   string
+	MIME   string
+	Data   []byte
+}
+
+type ProcessorHook interface {
+	Process(context.Context, ProcessorInput) error
+}
+
 type ProcessingArgs struct {
 	FileID string `json:"file_id" river:"unique"`
 }
@@ -127,6 +143,15 @@ func (s *Service) ProcessFile(ctx context.Context, fileID string) error {
 	if readErr != nil || closeErr != nil {
 		s.markProcessingFailed(ctx, fileID)
 		return errors.Join(readErr, closeErr)
+	}
+	for _, hook := range s.processorHooks {
+		if err := hook.Process(ctx, ProcessorInput{FileID: record.ID, OrgID: record.OrgID, Name: record.Name, MIME: record.MIME, Data: data}); err != nil {
+			s.markProcessingFailed(ctx, fileID)
+			if errors.Is(err, ErrUnsafeContent) {
+				return nil
+			}
+			return fmt.Errorf("file processor hook: %w", err)
+		}
 	}
 
 	var extracted string

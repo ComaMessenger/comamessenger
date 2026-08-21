@@ -43,67 +43,67 @@
 
 ### Object storage
 
-- [ ] Определить `storage.BlobStore` без AWS-специфичных типов; capability API различает streaming local upload и presigned/multipart S3 flow.
-- [ ] Реализовать `LocalBlobStore` в выделенном каталоге (по умолчанию `/var/lib/coma/files`) на persistent volume; handler не знает физический backend.
-- [ ] Для local backend писать во временный файл, проверять размер/checksum, делать `fsync` и атомарный `rename`; каталоги `0700`, blobs `0600`.
-- [ ] Генерировать непрозрачные object keys на сервере и раскладывать их по shard-каталогам; пользовательское имя никогда не становится путём.
-- [ ] Добавить `LOCAL_STORAGE_QUOTA_BYTES` (default 2 GiB), атомарное резервирование `used + reserved + incoming <= quota` и configurable minimum-free-space guard через `statfs`.
-- [ ] При исчерпании квоты/диска отвечать `507 storage_full`, не нарушая сообщения, чтение и остальные функции Core.
-- [ ] Реализовать S3-compatible adapter с `endpoint`, `region`, `bucket`, `prefix`, TLS и `force_path_style`.
-- [ ] Хранить credentials только в secrets/env и никогда не отдавать их клиенту.
-- [ ] Настроить ограниченные по TTL presigned URLs и точный Content-Type/size policy.
-- [ ] Реализовать multipart initiate/sign parts/complete/abort и сборку брошенных upload sessions.
-- [ ] Подготовить общий contract suite для LocalBlobStore, MinIO и выбранного внешнего S3 endpoint.
-- [ ] Зафиксировать deployment invariant: local backend поддерживает один Core instance; multi-Core требует S3 или явно поддерживаемое shared storage.
-- [ ] Сделать S3-compatible контейнер отдельным optional Compose profile, а не обязательной зависимостью default install.
+- [x] Определить `storage.BlobStore` без AWS-специфичных типов; capability API различает streaming local upload и presigned/multipart S3 flow.
+- [x] Реализовать `LocalBlobStore` в выделенном каталоге (по умолчанию `/var/lib/coma/files`) на persistent volume; handler не знает физический backend.
+- [x] Для local backend писать во временный файл, проверять размер/checksum, делать `fsync` и атомарный `rename`; каталоги `0700`, blobs `0600`.
+- [x] Генерировать непрозрачные object keys на сервере и раскладывать их по shard-каталогам; пользовательское имя никогда не становится путём.
+- [x] Добавить `LOCAL_STORAGE_QUOTA_BYTES` (default 2 GiB), атомарное резервирование `used + reserved + incoming <= quota` и configurable minimum-free-space guard через `statfs`.
+- [x] При исчерпании квоты/диска отвечать `507 storage_full`, не нарушая сообщения, чтение и остальные функции Core.
+- [x] Реализовать S3-compatible adapter с `endpoint`, `region`, `bucket`, `prefix`, TLS и `force_path_style`.
+- [x] Хранить credentials только в secrets/env и никогда не отдавать их клиенту.
+- [x] Настроить ограниченные по TTL presigned URLs и точный Content-Type/size policy.
+- [x] Реализовать multipart initiate/sign parts/complete/abort и сборку брошенных upload sessions.
+- [x] Подготовить общий contract suite для LocalBlobStore, MinIO и выбранного внешнего S3 endpoint.
+- [x] Зафиксировать deployment invariant: local backend поддерживает один Core instance; multi-Core требует S3 или явно поддерживаемое shared storage.
+- [x] Сделать S3-compatible контейнер отдельным optional Compose profile, а не обязательной зависимостью default install.
 
 ### Метаданные и безопасность файлов
 
-- [ ] Создать `files`, `file_uploads`, связи message-files и статусы `pending|ready|failed|deleted`.
-- [ ] Хранить `storage_driver`, object key, размер, SHA-256 и MIME в БД; байты local backend не хранить в PostgreSQL.
-- [ ] Атомарно учитывать `storage_used_bytes`/`storage_reserved_bytes`, освобождать reservation при abort/TTL и физическом удалении.
-- [ ] Валидировать лимиты размера, число файлов, MIME по содержимому и запрещённые расширения.
-- [ ] Рассчитывать/проверять SHA-256 там, где провайдер позволяет надёжную сверку.
-- [ ] Не разрешать прикрепить `file_id`, который загрузил другой actor или который недоступен в текущем chat.
-- [ ] Удалять незавершённые и неприкреплённые uploads после TTL.
-- [ ] Добавить безопасные `Content-Disposition`, CSP и запрет inline для опасных типов.
-- [ ] Оставить расширение для ClamAV как отключаемый processor hook.
-- [ ] Добавить reconciliation job: orphan blobs, metadata без blob, зависшие reservations и расхождение фактического размера.
+- [x] Создать `files`, `file_uploads`, связи message-files и статусы `pending|ready|failed|deleted`.
+- [x] Хранить `storage_driver`, object key, размер, SHA-256 и MIME в БД; байты local backend не хранить в PostgreSQL.
+- [x] Атомарно учитывать `storage_used_bytes`/`storage_reserved_bytes`, освобождать reservation при abort/TTL и физическом удалении.
+- [x] Валидировать лимиты размера, число файлов, MIME по содержимому и запрещённые расширения.
+- [x] Рассчитывать/проверять SHA-256 там, где провайдер позволяет надёжную сверку.
+- [x] Не разрешать прикрепить `file_id`, который загрузил другой actor или который недоступен в текущем chat.
+- [x] Удалять незавершённые и неприкреплённые uploads после TTL.
+- [x] Добавить безопасные `Content-Disposition`, CSP и запрет inline для опасных типов.
+- [x] Оставить расширение для ClamAV как отключаемый processor hook.
+- [x] Добавить reconciliation job: orphan blobs, metadata без blob, зависшие reservations и расхождение фактического размера.
 
 ### Аватары
 
-- [ ] `PUT/DELETE /me/avatar`; owner или admin с `members.manage` может заменить/удалить аватар участника.
-- [ ] Разрешить только PNG/JPEG/WebP, сверять MIME по сигнатуре, ограничить исходник 512 KiB и запретить SVG.
-- [ ] Хранить аватар как blob общего storage pipeline, а в actor — ссылку на file/blob metadata и `avatar_version`.
-- [ ] `GET /actors/:id/avatar` требует Bearer auth и same-organization visibility; чужой и отсутствующий actor дают одинаковый 404.
-- [ ] Web загружает blob через `MessengerAPI`, создаёт object URL в `apps/web`, инвалидирует его по `avatar_version` и отзывает при logout; `packages/core` не вызывает DOM API.
+- [x] `PUT/DELETE /me/avatar`; owner или admin с `members.manage` может заменить/удалить аватар участника.
+- [x] Разрешить только PNG/JPEG/WebP, сверять MIME по сигнатуре, ограничить исходник 512 KiB и запретить SVG.
+- [x] Хранить аватар как blob общего storage pipeline, а в actor — ссылку на file/blob metadata и `avatar_version`.
+- [x] `GET /actors/:id/avatar` требует Bearer auth и same-organization visibility; чужой и отсутствующий actor дают одинаковый 404.
+- [x] Web загружает blob через `MessengerAPI`, создаёт object URL в `apps/web`, инвалидирует его по `avatar_version` и отзывает при logout; `packages/core` не вызывает DOM API.
 
 ### Processing jobs
 
-- [ ] Подключить River и транзакционно ставить jobs после перехода файла в `ready`.
-- [ ] Реализовать idempotent processors для image preview и text extraction.
-- [ ] Ограничить CPU, память, время и размер распакованного содержимого внешних файлов.
-- [ ] Изолировать обработку потенциально опасных форматов и не выполнять макросы/embedded code.
-- [ ] Хранить extracted text отдельно либо в `files.extracted_text` с версией extractor.
-- [ ] Повторять transient failures с backoff, а permanent failure отображать без потери исходного файла.
+- [x] Подключить River и транзакционно ставить jobs после перехода файла в `ready`.
+- [x] Реализовать idempotent processors для image preview и text extraction.
+- [x] Ограничить CPU, память, время и размер распакованного содержимого внешних файлов.
+- [x] Изолировать обработку потенциально опасных форматов и не выполнять макросы/embedded code.
+- [x] Хранить extracted text отдельно либо в `files.extracted_text` с версией extractor.
+- [x] Повторять transient failures с backoff, а permanent failure отображать без потери исходного файла.
 
 ### Поиск
 
-- [ ] Создать search vectors для body сообщений и extracted text файлов.
-- [ ] Выбрать стратегию RU/EN: несколько конфигураций или комбинированный индекс с `simple` fallback.
-- [ ] Обновлять индекс при create/edit/delete сообщения и завершении extraction job.
-- [ ] Реализовать cursor pagination и стабильное ранжирование.
-- [ ] Применять membership/visibility в самом SQL query до limit, а не фильтровать результаты после выборки.
-- [ ] Добавить фильтры `chat`, `author`, `from`, `to`, `type`, `in_thread`.
-- [ ] Создать таблицу embeddings и интерфейс записи в неё для фазы 5 без обязательного внешнего API.
+- [x] Создать search vectors для body сообщений и extracted text файлов.
+- [x] Выбрать стратегию RU/EN: несколько конфигураций или комбинированный индекс с `simple` fallback.
+- [x] Обновлять индекс при create/edit/delete сообщения и завершении extraction job.
+- [x] Реализовать cursor pagination и стабильное ранжирование.
+- [x] Применять membership/visibility в самом SQL query до limit, а не фильтровать результаты после выборки.
+- [x] Добавить фильтры `chat`, `author`, `from`, `to`, `type`, `in_thread`.
+- [x] Создать таблицу embeddings и интерфейс записи в неё для фазы 5 без обязательного внешнего API.
 
 ### Web UI
 
-- [ ] Добавить drag-and-drop, file picker, progress, cancel/retry и preview before send.
-- [ ] Отображать файл только после безопасного завершения upload handshake.
-- [ ] Реализовать image preview, download и понятные состояния processing/failed.
-- [ ] Добавить экран поиска с query syntax, фильтрами, snippets и переходом к сообщению.
-- [ ] Корректно обрабатывать истёкший presigned URL повторным запросом, а не вечным broken link.
+- [x] Добавить drag-and-drop, file picker, progress, cancel/retry и preview before send.
+- [x] Отображать файл только после безопасного завершения upload handshake.
+- [x] Реализовать image preview, download и понятные состояния processing/failed.
+- [x] Добавить экран поиска с query syntax, фильтрами, snippets и переходом к сообщению.
+- [x] Корректно обрабатывать истёкший presigned URL повторным запросом, а не вечным broken link.
 
 ## Контракты и данные
 
@@ -153,12 +153,12 @@ DELETE /api/v1/me/avatar
 
 ## Риски и открытые вопросы
 
-- Local volume входит в backup вместе с PostgreSQL; runbook определяет согласованный snapshot, restore и reconciliation после восстановления.
-- Selectel/Yandex/AWS отличаются CORS, checksum и addressing; contract suite должна отражать поддерживаемое подмножество.
-- До реализации определить максимальный размер обычной и multipart загрузки.
-- Выбрать библиотеки безопасного извлечения PDF/DOCX и модель изоляции processor.
-- Решить retention удалённых файлов и момент физического удаления object.
-- Уточнить, нужен ли semantic search пользователю напрямую или только агентам.
+- Local volume входит в backup вместе с PostgreSQL; согласованный snapshot, restore и reconciliation описаны в [runbook](../runbooks/files-search.md).
+- Selectel/Yandex/AWS отличаются CORS, checksum и addressing; единый opt-in contract suite проверяет только используемое подмножество операций перед релизом.
+- Максимум файла — 100 MiB, multipart начинается с 16 MiB; оба значения конфигурируемы.
+- PDF/DOCX/TXT обрабатываются встроенным bounded parser без запуска макросов или embedded code; процесс ограничен по входу, распаковке, пикселям, времени и числу workers.
+- Неприкреплённый ready-файл удаляется после upload TTL, аватар — при замене/удалении; вложение удалённого сообщения пока сохраняется на срок жизни workspace.
+- Пользовательский semantic search отложен: фаза 4 оставляет embeddings schema/API для фазы 5, а основной UX использует PostgreSQL FTS.
 
 ## Definition of Done
 
@@ -169,3 +169,5 @@ DELETE /api/v1/me/avatar
 - Permissions проверяются до выдачи metadata, URL и search snippets.
 - Фоновые jobs наблюдаемы, повторяемы и не блокируют API-процесс.
 - Документация содержит таблицу проверенных S3-провайдеров и особенности настройки.
+
+Эксплуатационные настройки, provider matrix, backup/restore, диагностика jobs и воспроизводимые contract/load команды находятся в [files/search runbook](../runbooks/files-search.md).

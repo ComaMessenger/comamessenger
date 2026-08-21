@@ -816,10 +816,19 @@ func validateFiles(ctx context.Context, tx pgx.Tx, user identity.User, fileIDs [
 	if len(fileIDs) == 0 {
 		return nil
 	}
-	var count int
-	if err := tx.QueryRow(ctx, `
-		SELECT count(*) FROM files
-		WHERE org_id = $1 AND uploader_id = $2 AND id = ANY($3::uuid[]) AND status = 'ready'`, user.OrgID, user.ActorID, fileIDs).Scan(&count); err != nil {
+	rows, err := tx.Query(ctx, `
+		SELECT id FROM files
+		WHERE org_id = $1 AND uploader_id = $2 AND id = ANY($3::uuid[]) AND status = 'ready'
+		FOR UPDATE`, user.OrgID, user.ActorID, fileIDs)
+	if err != nil {
+		return fmt.Errorf("validate message files: %w", err)
+	}
+	defer rows.Close()
+	count := 0
+	for rows.Next() {
+		count++
+	}
+	if err := rows.Err(); err != nil {
 		return fmt.Errorf("validate message files: %w", err)
 	}
 	if count != len(fileIDs) {

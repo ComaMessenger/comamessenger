@@ -90,6 +90,7 @@ type Service struct {
 	uploadTTL          time.Duration
 	presignTTL         time.Duration
 	processingEnqueue  func(context.Context, pgx.Tx, string) error
+	processorHooks     []ProcessorHook
 	afterCommit        func(string, int64)
 }
 
@@ -107,6 +108,13 @@ func NewService(pool *pgxpool.Pool, store storage.BlobStore, bucket string, quot
 // before the upload transaction commits.
 func (s *Service) SetProcessingEnqueuer(enqueue func(context.Context, pgx.Tx, string) error) {
 	s.processingEnqueue = enqueue
+}
+
+// SetProcessorHooks installs optional scanners that run before built-in
+// preview and extraction. It is the integration point for deployments that
+// enable ClamAV or another content policy service.
+func (s *Service) SetProcessorHooks(hooks ...ProcessorHook) {
+	s.processorHooks = append([]ProcessorHook(nil), hooks...)
 }
 
 func (s *Service) CreateUpload(ctx context.Context, user identity.User, input CreateUploadInput) (Upload, error) {

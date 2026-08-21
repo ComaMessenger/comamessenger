@@ -17,6 +17,7 @@ func TestLocalBlobStoreContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	runBlobStoreContract(t, store)
 	body := []byte("durable local blob")
 	checksum := sha256.Sum256(body)
 	key := "ab/cd/0198-file"

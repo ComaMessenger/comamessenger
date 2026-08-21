@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"image"
+	"image/color"
+	"image/png"
 	"io"
 	"log/slog"
 	standardhttp "net/http"
@@ -19,6 +22,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/chat"
 	"github.com/comamessenger/comamessenger/core/internal/config"
 	"github.com/comamessenger/comamessenger/core/internal/eventlog"
+	"github.com/comamessenger/comamessenger/core/internal/files"
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/message"
@@ -26,6 +30,8 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/permission"
 	"github.com/comamessenger/comamessenger/core/internal/push"
 	"github.com/comamessenger/comamessenger/core/internal/realtime"
+	"github.com/comamessenger/comamessenger/core/internal/search"
+	"github.com/comamessenger/comamessenger/core/internal/storage"
 	"github.com/comamessenger/comamessenger/core/internal/testdb"
 	"github.com/comamessenger/comamessenger/core/internal/userstate"
 	"github.com/comamessenger/comamessenger/core/internal/workspace"
@@ -78,12 +84,23 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	blobStore, err := storage.NewLocalBlobStore(t.TempDir(), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fileService, err := files.NewService(pool, blobStore, "", 16<<20, 4<<20, 1<<20, time.Hour, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fileService.SetAfterCommit(afterCommit)
 	server.Config.Handler = NewHandler(logger, baseURL, pool.Ping, Dependencies{
 		Identity: identityService, Chats: chat.NewService(pool),
 		Messages:  message.NewService(pool, 64*1024, 100, afterCommit),
 		UserState: userstate.NewService(pool, 64*1024, afterCommit), Realtime: realtimeServer,
 		Push:            push.NewService(pool, config.PushConfig{}),
 		Workspace:       workspaceService,
+		Files:           fileService,
+		Search:          search.NewService(pool),
 		RefreshTokenTTL: 24 * time.Hour, RevokeRealtimeSession: realtimeServer.RevokeSession,
 	})
 	server.Start()
@@ -638,9 +655,59 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	e2eAck(t, ownerSocket, ownerSecond.Seq)
 	e2eAck(t, memberSocket, memberSecond.Seq)
 
+	avatarBuffer := new(bytes.Buffer)
+	avatarImage := image.NewRGBA(image.Rect(0, 0, 8, 8))
+	for y := 0; y < 8; y++ {
+		for x := 0; x < 8; x++ {
+			avatarImage.Set(x, y, color.RGBA{R: 30, G: uint8(80 + x), B: uint8(120 + y), A: 255})
+		}
+	}
+	if err := png.Encode(avatarBuffer, avatarImage); err != nil {
+		t.Fatal(err)
+	}
+	e2eBinaryRequest(t, server.Client(), standardhttp.MethodPut, baseURL+"/api/v1/me/avatar", owner.AccessToken, "image/png", avatarBuffer.Bytes(), standardhttp.StatusOK)
+	ownerAvatar := e2eEvent(t, ownerSocket)
+	memberAvatar := e2eEvent(t, memberSocket)
+	if ownerAvatar.Type != "actor.avatar.updated" || memberAvatar.Type != "actor.avatar.updated" {
+		t.Fatalf("avatar events owner=%+v member=%+v", ownerAvatar, memberAvatar)
+	}
+	e2eAck(t, ownerSocket, ownerAvatar.Seq)
+	e2eAck(t, memberSocket, memberAvatar.Seq)
+	e2eBinaryRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/actors/"+owner.User.ActorID+"/avatar", member.AccessToken, "", nil, standardhttp.StatusOK)
+
+	fileBody := []byte("phasefourtoken searchable attachment")
+	var upload files.Upload
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/files/uploads", owner.AccessToken, map[string]any{
+		"name": "phase-four.txt", "mime": "text/plain", "size": len(fileBody),
+	}, standardhttp.StatusCreated, &upload)
+	if upload.UploadURL == nil || upload.File.ID == "" {
+		t.Fatalf("file upload handshake = %+v", upload)
+	}
+	e2eBinaryRequest(t, server.Client(), standardhttp.MethodPut, baseURL+*upload.UploadURL, owner.AccessToken, "text/plain", fileBody, standardhttp.StatusOK)
+	if err := fileService.ProcessFile(t.Context(), upload.File.ID); err != nil {
+		t.Fatal(err)
+	}
+	var attachment message.Message
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/chats/"+group.ID+"/messages", owner.AccessToken, map[string]any{
+		"client_msg_id": e2eID(t), "body": "attached phasefourtoken document", "body_format": "plain", "file_ids": []string{upload.File.ID},
+	}, standardhttp.StatusCreated, &attachment)
+	ownerAttachment := e2eEvent(t, ownerSocket)
+	memberAttachment := e2eEvent(t, memberSocket)
+	if ownerAttachment.Type != "message.created" || memberAttachment.Type != "message.created" {
+		t.Fatalf("attachment events owner=%+v member=%+v", ownerAttachment, memberAttachment)
+	}
+	e2eAck(t, ownerSocket, ownerAttachment.Seq)
+	e2eAck(t, memberSocket, memberAttachment.Seq)
+	e2eBinaryRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/files/"+upload.File.ID+"/download", member.AccessToken, "", nil, standardhttp.StatusOK)
+	var searchPage search.Page
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/search?q=phasefourtoken&chat_id="+url.QueryEscape(group.ID), member.AccessToken, nil, standardhttp.StatusOK, &searchPage)
+	if len(searchPage.Results) < 2 {
+		t.Fatalf("file/message search results = %+v", searchPage.Results)
+	}
+
 	var page message.Page
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/chats/"+group.ID+"/messages", owner.AccessToken, nil, standardhttp.StatusOK, &page)
-	if len(page.Messages) != 2 || page.Messages[0].ID != second.ID || page.Messages[1].ID != first.ID {
+	if len(page.Messages) != 3 || page.Messages[0].ID != attachment.ID || page.Messages[1].ID != second.ID || page.Messages[2].ID != first.ID {
 		t.Fatalf("message history = %+v", page.Messages)
 	}
 
