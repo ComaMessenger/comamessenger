@@ -177,6 +177,8 @@ services:
     build:
       context: ..
       dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
     restart: unless-stopped
     environment:
       VITE_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}

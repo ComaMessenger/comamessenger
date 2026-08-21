@@ -16,6 +16,8 @@ COPY packages/core ./packages/core
 COPY packages/protocol ./packages/protocol
 COPY packages/tokens ./packages/tokens
 
+ARG VITE_API_URL
+ENV VITE_API_URL=${VITE_API_URL}
 RUN pnpm --filter @comamessenger/web build
 
 EXPOSE 5173
