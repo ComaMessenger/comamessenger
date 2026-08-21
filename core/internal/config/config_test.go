@@ -10,6 +10,14 @@ func setRequiredEnvironment(t *testing.T) {
 	t.Helper()
 	t.Setenv("DATABASE_URL", "postgres://test:test@localhost:5432/test")
 	t.Setenv("S3_BUCKET", "test")
+	t.Setenv("STORAGE_DRIVER", "")
+	t.Setenv("LOCAL_STORAGE_PATH", "")
+	t.Setenv("LOCAL_STORAGE_QUOTA_BYTES", "")
+	t.Setenv("LOCAL_STORAGE_MIN_FREE_BYTES", "")
+	t.Setenv("FILE_MAX_BYTES", "")
+	t.Setenv("FILE_MULTIPART_THRESHOLD_BYTES", "")
+	t.Setenv("FILE_UPLOAD_TTL", "")
+	t.Setenv("FILE_PRESIGN_TTL", "")
 	t.Setenv("AUTH_SIGNING_KEY", "0123456789abcdef0123456789abcdef")
 	t.Setenv("REDIS_MODE", "")
 	t.Setenv("REDIS_URL", "")
@@ -45,6 +53,12 @@ func TestFromEnvironmentDefaults(t *testing.T) {
 	}
 	if cfg.S3.ForcePathStyle {
 		t.Fatal("S3.ForcePathStyle = true, want false")
+	}
+	if cfg.Storage.Driver != "local" || cfg.Storage.LocalPath != "/var/lib/coma/files" || cfg.Storage.QuotaBytes != 2*1024*1024*1024 {
+		t.Fatalf("unexpected storage defaults: %#v", cfg.Storage)
+	}
+	if cfg.Storage.MaxFileBytes != 100*1024*1024 || cfg.Storage.MultipartThreshold != 16*1024*1024 || cfg.Storage.UploadTTL != 24*time.Hour || cfg.Storage.PresignTTL != 15*time.Minute {
+		t.Fatalf("unexpected upload defaults: %#v", cfg.Storage)
 	}
 	if cfg.Auth.CookieSecure {
 		t.Fatal("Auth.CookieSecure = true in development, want false")
@@ -147,6 +161,7 @@ func TestFromEnvironmentRequiresDatabaseURL(t *testing.T) {
 
 func TestFromEnvironmentSupportsCustomS3Endpoint(t *testing.T) {
 	setRequiredEnvironment(t)
+	t.Setenv("STORAGE_DRIVER", "s3")
 	t.Setenv("S3_ENDPOINT", "https://storage.example.test")
 	t.Setenv("S3_PUBLIC_ENDPOINT", "https://cdn.example.test")
 	t.Setenv("S3_REGION", "ru-1")
@@ -168,6 +183,42 @@ func TestFromEnvironmentSupportsCustomS3Endpoint(t *testing.T) {
 	}
 	if !cfg.S3.ForcePathStyle {
 		t.Fatal("S3.ForcePathStyle = false, want true")
+	}
+}
+
+func TestFromEnvironmentAllowsLocalStorageWithoutS3Bucket(t *testing.T) {
+	setRequiredEnvironment(t)
+	t.Setenv("S3_BUCKET", "")
+	t.Setenv("LOCAL_STORAGE_PATH", "/srv/coma/blobs")
+	t.Setenv("LOCAL_STORAGE_QUOTA_BYTES", "1073741824")
+	t.Setenv("FILE_MAX_BYTES", "104857600")
+
+	cfg, err := FromEnvironment()
+	if err != nil {
+		t.Fatalf("FromEnvironment() error = %v", err)
+	}
+	if cfg.Storage.Driver != "local" || cfg.Storage.LocalPath != "/srv/coma/blobs" || cfg.Storage.QuotaBytes != 1073741824 {
+		t.Fatalf("unexpected local storage configuration: %#v", cfg.Storage)
+	}
+}
+
+func TestFromEnvironmentRejectsInvalidStorageConfiguration(t *testing.T) {
+	tests := []struct{ key, value string }{
+		{key: "STORAGE_DRIVER", value: "elastic"},
+		{key: "LOCAL_STORAGE_QUOTA_BYTES", value: "0"},
+		{key: "FILE_MAX_BYTES", value: "0"},
+		{key: "FILE_MULTIPART_THRESHOLD_BYTES", value: "1024"},
+		{key: "FILE_UPLOAD_TTL", value: "30m"},
+		{key: "FILE_PRESIGN_TTL", value: "2h"},
+	}
+	for _, test := range tests {
+		t.Run(test.key, func(t *testing.T) {
+			setRequiredEnvironment(t)
+			t.Setenv(test.key, test.value)
+			if _, err := FromEnvironment(); err == nil {
+				t.Fatalf("FromEnvironment() error = nil for %s", test.key)
+			}
+		})
 	}
 }
 

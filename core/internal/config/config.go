@@ -20,6 +20,17 @@ type S3Config struct {
 	ForcePathStyle bool
 }
 
+type StorageConfig struct {
+	Driver             string
+	LocalPath          string
+	QuotaBytes         uint64
+	MinimumFreeBytes   uint64
+	MaxFileBytes       uint64
+	MultipartThreshold uint64
+	UploadTTL          time.Duration
+	PresignTTL         time.Duration
+}
+
 type AuthConfig struct {
 	SigningKey       string
 	AccessTokenTTL   time.Duration
@@ -90,6 +101,7 @@ type Config struct {
 	BootstrapToken           string
 	IntegrationEncryptionKey string
 	TrustedProxyCIDRs        []netip.Prefix
+	Storage                  StorageConfig
 	S3                       S3Config
 	Auth                     AuthConfig
 	Messaging                MessagingConfig
@@ -165,6 +177,10 @@ func FromEnvironment() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	storageConfig, err := storageConfigFromEnvironment()
+	if err != nil {
+		return Config{}, err
+	}
 
 	cfg := Config{
 		AppEnv:                   appEnv,
@@ -174,6 +190,7 @@ func FromEnvironment() (Config, error) {
 		BootstrapToken:           strings.TrimSpace(os.Getenv("BOOTSTRAP_TOKEN")),
 		IntegrationEncryptionKey: integrationEncryptionKey,
 		TrustedProxyCIDRs:        trustedProxyCIDRs,
+		Storage:                  storageConfig,
 		S3: S3Config{
 			Endpoint:       strings.TrimSpace(os.Getenv("S3_ENDPOINT")),
 			PublicEndpoint: strings.TrimSpace(os.Getenv("S3_PUBLIC_ENDPOINT")),
@@ -210,11 +227,11 @@ func FromEnvironment() (Config, error) {
 	if cfg.PublicAppURL == "" {
 		return Config{}, fmt.Errorf("PUBLIC_APP_URL must not be empty")
 	}
-	if cfg.S3.Bucket == "" {
-		return Config{}, fmt.Errorf("S3_BUCKET must not be empty")
-	}
 	if (cfg.S3.AccessKey == "") != (cfg.S3.SecretKey == "") {
 		return Config{}, fmt.Errorf("S3_ACCESS_KEY and S3_SECRET_KEY must be set together")
+	}
+	if cfg.Storage.Driver == "s3" && cfg.S3.Bucket == "" {
+		return Config{}, fmt.Errorf("S3_BUCKET must not be empty when STORAGE_DRIVER=s3")
 	}
 	if len(cfg.Auth.SigningKey) < 32 {
 		return Config{}, fmt.Errorf("AUTH_SIGNING_KEY must be at least 32 bytes")
@@ -264,6 +281,57 @@ func FromEnvironment() (Config, error) {
 		}
 	}
 	return cfg, nil
+}
+
+func storageConfigFromEnvironment() (StorageConfig, error) {
+	driver := strings.ToLower(valueOrDefault("STORAGE_DRIVER", "local"))
+	if driver != "local" && driver != "s3" {
+		return StorageConfig{}, fmt.Errorf("STORAGE_DRIVER must be local or s3")
+	}
+	quota, err := uintValueOrDefault("LOCAL_STORAGE_QUOTA_BYTES", 2*1024*1024*1024, 64)
+	if err != nil {
+		return StorageConfig{}, err
+	}
+	minimumFree, err := uintValueOrDefault("LOCAL_STORAGE_MIN_FREE_BYTES", 256*1024*1024, 64)
+	if err != nil {
+		return StorageConfig{}, err
+	}
+	maxFile, err := uintValueOrDefault("FILE_MAX_BYTES", 100*1024*1024, 64)
+	if err != nil {
+		return StorageConfig{}, err
+	}
+	multipartThreshold, err := uintValueOrDefault("FILE_MULTIPART_THRESHOLD_BYTES", 16*1024*1024, 64)
+	if err != nil {
+		return StorageConfig{}, err
+	}
+	uploadTTL, err := durationValueOrDefault("FILE_UPLOAD_TTL", 24*time.Hour)
+	if err != nil {
+		return StorageConfig{}, err
+	}
+	presignTTL, err := durationValueOrDefault("FILE_PRESIGN_TTL", 15*time.Minute)
+	if err != nil {
+		return StorageConfig{}, err
+	}
+	if quota == 0 {
+		return StorageConfig{}, fmt.Errorf("LOCAL_STORAGE_QUOTA_BYTES must be positive")
+	}
+	if maxFile == 0 || maxFile > quota {
+		return StorageConfig{}, fmt.Errorf("FILE_MAX_BYTES must be positive and not exceed LOCAL_STORAGE_QUOTA_BYTES")
+	}
+	if multipartThreshold < 5*1024*1024 || multipartThreshold > maxFile {
+		return StorageConfig{}, fmt.Errorf("FILE_MULTIPART_THRESHOLD_BYTES must be between 5 MiB and FILE_MAX_BYTES")
+	}
+	if uploadTTL < time.Hour || uploadTTL > 7*24*time.Hour {
+		return StorageConfig{}, fmt.Errorf("FILE_UPLOAD_TTL must be between 1h and 168h")
+	}
+	if presignTTL < time.Minute || presignTTL > time.Hour {
+		return StorageConfig{}, fmt.Errorf("FILE_PRESIGN_TTL must be between 1m and 1h")
+	}
+	return StorageConfig{
+		Driver: driver, LocalPath: valueOrDefault("LOCAL_STORAGE_PATH", "/var/lib/coma/files"),
+		QuotaBytes: quota, MinimumFreeBytes: minimumFree, MaxFileBytes: maxFile,
+		MultipartThreshold: multipartThreshold, UploadTTL: uploadTTL, PresignTTL: presignTTL,
+	}, nil
 }
 
 func prefixListValue(name, fallback string) ([]netip.Prefix, error) {

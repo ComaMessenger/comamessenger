@@ -44,6 +44,7 @@ services:
       retries: 20
 
   minio:
+    profiles: ["s3"]
     image: minio/minio:latest
     restart: unless-stopped
     command: server /data --console-address :9001
@@ -62,6 +63,7 @@ services:
       - minio-data:/data
 
   minio-init:
+    profiles: ["s3"]
     image: minio/mc:latest
     depends_on:
       minio:
@@ -77,6 +79,13 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-comamessenger}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-comamessenger-local-secret}
       S3_BUCKET: ${S3_BUCKET:-comamessenger}
+    restart: "no"
+
+  storage-init:
+    image: alpine:3.23
+    command: ["/bin/sh", "-ec", "mkdir -p /var/lib/coma/files && chown 65532:65532 /var/lib/coma/files && chmod 0700 /var/lib/coma/files"]
+    volumes:
+      - files-data:/var/lib/coma/files
     restart: "no"
 
   core:
@@ -131,12 +140,20 @@ services:
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@localhost}
       PUSH_POLL_INTERVAL: ${PUSH_POLL_INTERVAL:-1s}
-      S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
-      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:9000}
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+      LOCAL_STORAGE_PATH: /var/lib/coma/files
+      LOCAL_STORAGE_QUOTA_BYTES: ${LOCAL_STORAGE_QUOTA_BYTES:-2147483648}
+      LOCAL_STORAGE_MIN_FREE_BYTES: ${LOCAL_STORAGE_MIN_FREE_BYTES:-268435456}
+      FILE_MAX_BYTES: ${FILE_MAX_BYTES:-104857600}
+      FILE_MULTIPART_THRESHOLD_BYTES: ${FILE_MULTIPART_THRESHOLD_BYTES:-16777216}
+      FILE_UPLOAD_TTL: ${FILE_UPLOAD_TTL:-24h}
+      FILE_PRESIGN_TTL: ${FILE_PRESIGN_TTL:-15m}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-}
       S3_REGION: ${S3_REGION:-us-east-1}
-      S3_BUCKET: ${S3_BUCKET:-comamessenger}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-comamessenger}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:-comamessenger-local-secret}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-}
       S3_PREFIX: ${S3_PREFIX:-}
       S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
     depends_on:
@@ -144,8 +161,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio-init:
+      storage-init:
         condition: service_completed_successfully
+    volumes:
+      - files-data:/var/lib/coma/files
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:8080:8080"
     healthcheck:
@@ -182,3 +201,4 @@ services:
 volumes:
   postgres-data:
   minio-data:
+  files-data:
