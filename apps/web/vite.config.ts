@@ -13,6 +13,10 @@ const contentSecurityPolicy = [
   "base-uri 'self'",
   "form-action 'self'",
 ].join("; ");
+const developmentContentSecurityPolicy = contentSecurityPolicy.replace(
+  "script-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+);
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, ".", "");
@@ -28,7 +32,9 @@ export default defineConfig(({ mode }) => {
       host: "0.0.0.0",
       port,
       allowedHosts,
-      headers: { "Content-Security-Policy": contentSecurityPolicy },
+      headers: {
+        "Content-Security-Policy": developmentContentSecurityPolicy,
+      },
     },
     preview: {
       host: "0.0.0.0",

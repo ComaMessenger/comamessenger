@@ -2389,7 +2389,7 @@ a:focus-visible {
 .utility-list > button:hover {
   background: var(--coma-sidebar);
 }
-.utility-list > button > span {
+.utility-list > button > span:not(.ui-avatar) {
   display: grid;
   min-width: 0;
 }

@@ -126,6 +126,7 @@ async function mockMessenger(
     passwordRecoveryAvailable?: boolean;
     signedOut?: boolean;
     reactions?: Array<Record<string, unknown>>;
+    threads?: Array<Record<string, unknown>>;
     userPatch?: Partial<typeof user>;
     organizationPatch?: Record<string, unknown>;
     unread?: {
@@ -146,6 +147,7 @@ async function mockMessenger(
     passwordRecoveryAvailable = false,
     signedOut = false,
     reactions: suppliedReactions = [],
+    threads = [],
     userPatch = {},
     organizationPatch = {},
     unread = { last_read_seq: 0, unread_count: 3, mention_count: 1 },
@@ -612,7 +614,7 @@ async function mockMessenger(
         next_after_id: null,
       };
     else if (path.endsWith("/threads"))
-      body = { threads: [], next_before_seq: null };
+      body = { threads, next_before_seq: null };
     else if (path.endsWith(`/chats/${chat.id}/pins`)) body = { pins: [] };
     else if (path.endsWith("/unread"))
       body = {
@@ -806,6 +808,31 @@ async function mockMessenger(
     },
   };
 }
+
+test("thread directory keeps every avatar circular", async ({ page }) => {
+  await mockMessenger(page, {
+    threads: [
+      {
+        root: { ...message, id: "thread-root-1", body: "Всем привет!" },
+        reply_count: 1,
+      },
+      {
+        root: { ...message, id: "thread-root-2", body: "@лев" },
+        reply_count: 1,
+      },
+    ],
+  });
+  await page.goto("/threads");
+
+  const avatars = page.locator(".utility-list .ui-avatar");
+  await expect(avatars).toHaveCount(2);
+  for (const avatar of await avatars.all()) {
+    const box = await avatar.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.width).toBe(box!.height);
+    expect(box!.width).toBeGreaterThanOrEqual(30);
+  }
+});
 
 test("responsive chat list opens a channel with a read-only composer", async ({
   page,
