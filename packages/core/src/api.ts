@@ -20,6 +20,11 @@ import type {
   MessagePin,
   MessageReceipt,
   MessageWindow,
+  FileMetadata,
+  FileUpload,
+  CompletedFilePart,
+  SearchPage,
+  AvatarUpdate,
   InfrastructureSettings,
   Invitation,
   InvitationSummary,
@@ -318,6 +323,31 @@ export class MessengerAPI {
       { method: "POST" },
     );
   }
+  putMyAvatar(file: Blob): Promise<AvatarUpdate> {
+    return this.request("/api/v1/me/avatar", {
+      method: "PUT",
+      headers: { "Content-Type": file.type },
+      body: file,
+    });
+  }
+  deleteMyAvatar(): Promise<AvatarUpdate> {
+    return this.request("/api/v1/me/avatar", { method: "DELETE" });
+  }
+  putOrganizationMemberAvatar(
+    actorID: string,
+    file: Blob,
+  ): Promise<AvatarUpdate> {
+    return this.request(
+      `/api/v1/organization/members/${encodeURIComponent(actorID)}/avatar`,
+      { method: "PUT", headers: { "Content-Type": file.type }, body: file },
+    );
+  }
+  deleteOrganizationMemberAvatar(actorID: string): Promise<AvatarUpdate> {
+    return this.request(
+      `/api/v1/organization/members/${encodeURIComponent(actorID)}/avatar`,
+      { method: "DELETE" },
+    );
+  }
   transferOrganizationOwnership(
     input: TransferOwnershipRequest,
   ): Promise<User> {
@@ -418,6 +448,73 @@ export class MessengerAPI {
     if (query) values.set("q", query);
     if (afterID) values.set("after_id", afterID);
     return this.request(`/api/v1/actors${values.size ? `?${values}` : ""}`);
+  }
+  actorAvatar(actorID: string): Promise<Blob> {
+    return this.requestBlob(
+      `/api/v1/actors/${encodeURIComponent(actorID)}/avatar`,
+    );
+  }
+  createFileUpload(input: {
+    name: string;
+    mime: string;
+    size: number;
+    sha256?: string;
+  }): Promise<FileUpload> {
+    return this.request("/api/v1/files/uploads", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+  signFileUploadParts(
+    uploadID: string,
+    partNumbers: number[],
+  ): Promise<{
+    parts: Array<{ number: number; url: string }>;
+  }> {
+    return this.request(
+      `/api/v1/files/uploads/${encodeURIComponent(uploadID)}/parts`,
+      { method: "POST", body: JSON.stringify({ part_numbers: partNumbers }) },
+    );
+  }
+  completeFileUpload(
+    uploadID: string,
+    parts: CompletedFilePart[] = [],
+  ): Promise<FileMetadata> {
+    return this.request(
+      `/api/v1/files/uploads/${encodeURIComponent(uploadID)}/complete`,
+      { method: "POST", body: JSON.stringify({ parts }) },
+    );
+  }
+  abortFileUpload(uploadID: string): Promise<void> {
+    return this.request(
+      `/api/v1/files/uploads/${encodeURIComponent(uploadID)}`,
+      { method: "DELETE" },
+    );
+  }
+  file(fileID: string): Promise<FileMetadata> {
+    return this.request(`/api/v1/files/${encodeURIComponent(fileID)}`);
+  }
+  downloadFile(fileID: string): Promise<Blob> {
+    return this.requestBlob(
+      `/api/v1/files/${encodeURIComponent(fileID)}/download`,
+    );
+  }
+  search(filters: {
+    q: string;
+    chat_id?: string;
+    author_id?: string;
+    from?: string;
+    to?: string;
+    type?: "all" | "message" | "file";
+    in_thread?: boolean;
+    cursor?: string;
+    limit?: number;
+  }): Promise<SearchPage> {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters)) {
+      if (value !== undefined && value !== "") query.set(key, String(value));
+    }
+    return this.request(`/api/v1/search?${query}`);
   }
   messages(
     chatID: string,
@@ -666,5 +763,32 @@ export class MessengerAPI {
     const body = await response.text();
     if (!body) return undefined as T;
     return JSON.parse(body) as T;
+  }
+  private async requestBlob(path: string, retry = true): Promise<Blob> {
+    const headers = new Headers();
+    if (this.accessToken)
+      headers.set("Authorization", `Bearer ${this.accessToken}`);
+    const response = await fetch(`${this.apiURL}${path}`, {
+      headers,
+      credentials: "include",
+    });
+    if (response.status === 401 && retry) {
+      await this.refresh();
+      return this.requestBlob(path, false);
+    }
+    if (!response.ok) {
+      let payload: Partial<APIErrorPayload> = {};
+      try {
+        payload = (await response.json()) as APIErrorPayload;
+      } catch {
+        /* proxy returned non-JSON */
+      }
+      throw new APIError(
+        response.status,
+        payload.code ?? "request_failed",
+        payload.message ?? "Request failed.",
+      );
+    }
+    return response.blob();
   }
 }

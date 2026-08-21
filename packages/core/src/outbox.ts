@@ -49,6 +49,7 @@ export class Outbox {
       edited_at: null,
       deleted_at: null,
       forwarded_from: null,
+      files: [],
       delivery: "sending",
     });
     await this.flush();

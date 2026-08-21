@@ -100,6 +100,13 @@ func TestProcessingExtractsTextCreatesPreviewAndEnqueuesDurably(t *testing.T) {
 	if err != nil || previewConfig.Width != 512 || previewConfig.Height != 256 {
 		t.Fatalf("preview dimensions = %dx%d, err = %v", previewConfig.Width, previewConfig.Height, err)
 	}
+	attachFileForMember(t, pool, imageFile.ID)
+	member := identity.User{ActorID: testMemberID, OrgID: testOrgID, OrgRole: "member"}
+	memberPreview, err := service.Download(t.Context(), member, previewID)
+	if err != nil {
+		t.Fatalf("member preview ACL: %v", err)
+	}
+	memberPreview.Reader.Close()
 }
 
 func TestDOCXExtractionRejectsArchiveBombMetadata(t *testing.T) {

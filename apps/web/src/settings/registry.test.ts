@@ -29,6 +29,7 @@ function user(role: User["role"], permissions: Permission[] = []): User {
     status_emoji: "",
     status_text: "",
     status_expires_at: null,
+    avatar_version: 0,
     created_at: "2026-08-21T00:00:00Z",
   };
 }

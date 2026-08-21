@@ -111,6 +111,23 @@ export function WorkspaceMembersPage({
     }
   }
 
+  async function changeMemberAvatar(member: OrganizationMember, file: File) {
+    setMessage("");
+    if (
+      file.size > 512 * 1024 ||
+      !["image/png", "image/jpeg", "image/webp"].includes(file.type)
+    ) {
+      setMessage(t("avatarValidation"));
+      return;
+    }
+    try {
+      await api.putOrganizationMemberAvatar(member.actor_id, file);
+      await members.refetch();
+    } catch (cause) {
+      setMessage(messageOf(cause));
+    }
+  }
+
   return (
     <SettingsShell
       user={user}
@@ -134,6 +151,8 @@ export function WorkspaceMembersPage({
                   <Avatar
                     name={member.display_name}
                     seed={member.actor_id}
+                    actorID={member.actor_id}
+                    avatarVersion={member.avatar_version}
                     size="md"
                     online={member.status === "active"}
                   />
@@ -194,6 +213,34 @@ export function WorkspaceMembersPage({
                   >
                     {t("requirePasswordChange")}
                   </Button>
+                  {member.actor_id !== user.id && (
+                    <label className="ui-button ui-button--secondary ui-button--sm">
+                      {t("changeAvatar")}
+                      <input
+                        hidden
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (file) void changeMemberAvatar(member, file);
+                          event.target.value = "";
+                        }}
+                      />
+                    </label>
+                  )}
+                  {member.actor_id !== user.id && member.avatar_version > 0 && (
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        void api
+                          .deleteOrganizationMemberAvatar(member.actor_id)
+                          .then(() => members.refetch())
+                          .catch((cause) => setMessage(messageOf(cause)))
+                      }
+                    >
+                      {t("removeAvatar")}
+                    </Button>
+                  )}
                   {branding.data?.password_recovery_available && (
                     <Button
                       size="sm"

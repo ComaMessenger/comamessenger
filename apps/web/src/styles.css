@@ -691,6 +691,19 @@ a:focus-visible {
   padding: 10px;
   overflow-y: auto;
 }
+.search-palette__filters {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px 0;
+}
+.search-palette__filters select {
+  min-width: 0;
+  height: 34px;
+  padding-inline: 9px;
+  border: 1px solid var(--coma-border);
+  border-radius: 7px;
+  background: var(--coma-surface);
+}
 .search-palette__results > button {
   display: flex;
   align-items: center;
@@ -1042,6 +1055,12 @@ a:focus-visible {
 .message--failed {
   background: var(--coma-danger-soft);
 }
+.ui-avatar__face img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
 .message__avatar {
   min-height: 1px;
 }
@@ -1112,6 +1131,45 @@ a:focus-visible {
 }
 .message__body li + li {
   margin-block-start: 0.18em;
+}
+.message-files {
+  display: grid;
+  gap: 6px;
+  width: min(420px, 100%);
+  margin-block-start: 8px;
+}
+.message-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--coma-border);
+  border-radius: 9px;
+  background: var(--coma-surface);
+  text-align: start;
+}
+.message-file > img {
+  width: 64px;
+  height: 48px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+.message-file > svg {
+  width: 28px;
+  color: var(--coma-primary);
+}
+.message-file > span {
+  display: grid;
+  min-width: 0;
+}
+.message-file strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.message-file small {
+  color: var(--coma-muted);
 }
 .mention--context {
   padding: 1px 4px;
@@ -1401,6 +1459,47 @@ a:focus-visible {
   border: 1px solid var(--coma-border-strong);
   border-radius: 9px;
   background: var(--coma-surface-raised);
+}
+.composer-attachments {
+  display: grid;
+  gap: 6px;
+  margin-block-end: 7px;
+}
+.composer-attachment {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px;
+  border: 1px solid var(--coma-border);
+  border-radius: 8px;
+  background: var(--coma-surface-raised);
+}
+.composer-attachment > img {
+  width: 38px;
+  height: 38px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+.composer-attachment > span {
+  display: grid;
+  min-width: 0;
+}
+.composer-attachment strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.composer-attachment small {
+  color: var(--coma-muted);
+}
+.composer-attachment progress {
+  grid-column: 2 / 4;
+  width: 100%;
+  height: 4px;
+}
+.composer-attachment--failed {
+  border-color: var(--coma-danger);
 }
 .composer:focus-within {
   border-color: var(--coma-primary);

@@ -466,6 +466,12 @@ func (s *Service) getAccessible(ctx context.Context, user identity.User, fileID 
 		    JOIN messages m ON m.id = mf.message_id AND m.deleted_at IS NULL
 		    JOIN chat_members cm ON cm.chat_id = m.chat_id AND cm.actor_id = $3
 		    WHERE mf.file_id = f.id
+		  ) OR EXISTS (
+		    SELECT 1 FROM files original
+		    JOIN message_files mf ON mf.file_id = original.id
+		    JOIN messages m ON m.id = mf.message_id AND m.deleted_at IS NULL
+		    JOIN chat_members cm ON cm.chat_id = m.chat_id AND cm.actor_id = $3
+		    WHERE original.preview_file_id = f.id AND original.org_id = f.org_id
 		  ))`, fileID, user.OrgID, user.ActorID).Scan(&result.ID, &result.Name, &result.MIME, &result.Size, &sha, &result.Status, &result.ProcessingStatus, &result.PreviewFileID, &result.CreatedAt, &result.ReadyAt, &result.UploaderID, &result.storageKey, &result.storageDriver)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return File{}, ErrNotFound

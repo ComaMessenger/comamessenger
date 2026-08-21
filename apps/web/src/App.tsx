@@ -133,6 +133,7 @@ import {
   type ChatMember,
   type ClientMessage,
   type Draft,
+  type FileMetadata,
   type Message,
   type Reaction,
   type MessageReceipt,
@@ -143,6 +144,7 @@ import {
 } from "@comamessenger/core";
 import {
   Avatar,
+  AvatarProvider,
   Badge,
   Button,
   Dialog,
@@ -181,6 +183,7 @@ import {
 } from "./settings";
 import { messageOf } from "./errors";
 import { setTheme } from "./theme";
+import { uploadAttachment } from "./uploads";
 import {
   playNotificationSound,
   shouldPlayNotificationSound,
@@ -204,6 +207,16 @@ type OverlayPlacement = {
   bottom?: number;
   right: number;
   maxHeight: number;
+};
+
+type ComposerAttachment = {
+  id: string;
+  source: File;
+  status: "uploading" | "ready" | "failed";
+  progress: number;
+  file?: FileMetadata;
+  error?: string;
+  controller: AbortController;
 };
 
 const folderIconOptions: Array<{
@@ -714,14 +727,16 @@ export function App() {
       />
     );
   return (
-    <Messenger
-      api={api}
-      user={user}
-      path={path}
-      navigate={navigateTo}
-      onLogout={logout}
-      onUserUpdated={setUser}
-    />
+    <AvatarProvider api={api}>
+      <Messenger
+        api={api}
+        user={user}
+        path={path}
+        navigate={navigateTo}
+        onLogout={logout}
+        onUserUpdated={setUser}
+      />
+    </AvatarProvider>
   );
 }
 
@@ -1157,7 +1172,8 @@ function Messenger({
             )
               playNotificationSound();
             if (
-              event.type === "actor.status.updated" &&
+              (event.type === "actor.status.updated" ||
+                event.type === "actor.avatar.updated") &&
               event.actor_id === user.id
             )
               void api.me().then(onUserUpdated);
@@ -1168,8 +1184,16 @@ function Messenger({
                 event.type.startsWith("message."))
             )
               scheduleReload();
-            if (event.type === "actor.status.updated") scheduleReload();
-            return applied || event.type === "actor.status.updated";
+            if (
+              event.type === "actor.status.updated" ||
+              event.type === "actor.avatar.updated"
+            )
+              scheduleReload();
+            return (
+              applied ||
+              event.type === "actor.status.updated" ||
+              event.type === "actor.avatar.updated"
+            );
           },
           resync: async (watermark) => {
             const active = store.getState().activeChatID;
@@ -1541,7 +1565,14 @@ function Messenger({
           {sidebarCollapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
         </IconButton>
         <footer className="sidebar-profile" ref={profileMenuRoot}>
-          <Avatar name={user.display_name} seed={user.id} size="sm" online />
+          <Avatar
+            name={user.display_name}
+            seed={user.id}
+            actorID={user.id}
+            avatarVersion={user.avatar_version}
+            size="sm"
+            online
+          />
           <button
             aria-expanded={statusMenu}
             onClick={() => setStatusMenu((open) => !open)}
@@ -1963,13 +1994,16 @@ function Messenger({
       )}
       {searchOpen && (
         <SearchPalette
+          api={api}
           chats={chats}
           members={membersQuery.data ?? []}
           ownID={user.id}
           onClose={() => setSearchOpen(false)}
-          onOpen={(chatID) => {
+          onOpen={(chatID, messageID) => {
             setSearchOpen(false);
-            navigate(`/chat/${chatID}`);
+            navigate(
+              `/chat/${chatID}${messageID ? `?message=${messageID}` : ""}`,
+            );
           }}
         />
       )}
@@ -2085,6 +2119,8 @@ function ChatCard({
         <Avatar
           name={title}
           seed={chat.avatar_seed}
+          actorID={chat.direct_peer?.actor_id}
+          avatarVersion={chat.direct_peer?.avatar_version}
           size="lg"
           online={chat.kind === "direct"}
         />
@@ -2218,21 +2254,33 @@ function ChatCard({
 }
 
 function SearchPalette({
+  api,
   chats,
   members,
   ownID,
   onClose,
   onOpen,
 }: {
+  api: MessengerAPI;
   chats: Chat[];
   members: ChatMember[];
   ownID: string;
   onClose(): void;
-  onOpen(chatID: string): void;
+  onOpen(chatID: string, messageID?: string): void;
 }) {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<"people" | "messages">("people");
+  const [deferredQuery, setDeferredQuery] = useState("");
+  const [searchType, setSearchType] = useState<"all" | "message" | "file">(
+    "all",
+  );
+  const [searchChat, setSearchChat] = useState("");
+  const [messageResults, setMessageResults] = useState<Awaited<
+    ReturnType<MessengerAPI["search"]>
+  > | null>(null);
+  const [searchPending, setSearchPending] = useState(false);
+  const [searchError, setSearchError] = useState("");
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => {
     input.current?.focus();
@@ -2242,6 +2290,59 @@ function SearchPalette({
     document.addEventListener("keydown", keyboard);
     return () => document.removeEventListener("keydown", keyboard);
   }, [onClose]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDeferredQuery(query.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+  useEffect(() => {
+    if (tab !== "messages" || deferredQuery.length < 2) {
+      setMessageResults(null);
+      return;
+    }
+    let active = true;
+    setSearchPending(true);
+    setSearchError("");
+    void api
+      .search({
+        q: deferredQuery,
+        type: searchType,
+        chat_id: searchChat || undefined,
+        limit: 30,
+      })
+      .then((page) => {
+        if (active) setMessageResults(page);
+      })
+      .catch((cause) => {
+        if (active) setSearchError(messageOf(cause));
+      })
+      .finally(() => {
+        if (active) setSearchPending(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [api, deferredQuery, searchChat, searchType, tab]);
+  async function loadMoreSearch() {
+    if (!messageResults?.next_cursor) return;
+    setSearchPending(true);
+    try {
+      const next = await api.search({
+        q: deferredQuery,
+        type: searchType,
+        chat_id: searchChat || undefined,
+        cursor: messageResults.next_cursor,
+        limit: 30,
+      });
+      setMessageResults({
+        results: [...messageResults.results, ...next.results],
+        next_cursor: next.next_cursor,
+      });
+    } catch (cause) {
+      setSearchError(messageOf(cause));
+    } finally {
+      setSearchPending(false);
+    }
+  }
   const value = query.trim().toLowerCase();
   const chatResults = chats.filter((chat) =>
     titleOf(chat, members, ownID).toLowerCase().includes(value),
@@ -2291,6 +2392,33 @@ function SearchPalette({
             {t("messagesAndThreads")}
           </button>
         </div>
+        {tab === "messages" && (
+          <div className="search-palette__filters">
+            <select
+              aria-label={t("searchType")}
+              value={searchType}
+              onChange={(event) =>
+                setSearchType(event.target.value as typeof searchType)
+              }
+            >
+              <option value="all">{t("all")}</option>
+              <option value="message">{t("messages")}</option>
+              <option value="file">{t("files")}</option>
+            </select>
+            <select
+              aria-label={t("chat")}
+              value={searchChat}
+              onChange={(event) => setSearchChat(event.target.value)}
+            >
+              <option value="">{t("allChats")}</option>
+              {chats.map((chat) => (
+                <option key={chat.id} value={chat.id}>
+                  {titleOf(chat, members, ownID)}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="search-palette__results">
           {tab === "people" ? (
             <>
@@ -2299,6 +2427,8 @@ function SearchPalette({
                   <Avatar
                     name={titleOf(chat, members, ownID)}
                     seed={chat.avatar_seed}
+                    actorID={chat.direct_peer?.actor_id}
+                    avatarVersion={chat.direct_peer?.avatar_version}
                     size="sm"
                   />
                   <span>
@@ -2326,6 +2456,8 @@ function SearchPalette({
                     <Avatar
                       name={member.display_name}
                       seed={member.actor_id}
+                      actorID={member.actor_id}
+                      avatarVersion={member.avatar_version}
                       size="sm"
                       online
                     />
@@ -2340,8 +2472,37 @@ function SearchPalette({
                 <Empty label={t("nothingFound")} />
               )}
             </>
+          ) : deferredQuery.length < 2 ? (
+            <Empty label={t("searchTypeMore")} />
+          ) : searchPending && !messageResults ? (
+            <Skeleton />
+          ) : searchError ? (
+            <FormError message={searchError} />
+          ) : messageResults?.results.length ? (
+            <>
+              {messageResults.results.map((result) => (
+                <button
+                  key={`${result.kind}:${result.file_id ?? result.message_id}:${result.message_id}`}
+                  onClick={() => onOpen(result.chat_id, result.message_id)}
+                >
+                  {result.kind === "file" ? <Paperclip /> : <MessageCircle />}
+                  <span>
+                    <strong>{result.file_name ?? result.snippet}</strong>
+                    <small>{result.snippet}</small>
+                  </span>
+                </button>
+              ))}
+              {messageResults.next_cursor && (
+                <Button
+                  disabled={searchPending}
+                  onClick={() => void loadMoreSearch()}
+                >
+                  {t("loadMore")}
+                </Button>
+              )}
+            </>
           ) : (
-            <Empty label={t("searchMessagesUnavailable")} />
+            <Empty label={t("nothingFound")} />
           )}
         </div>
         <footer className="search-palette__footer" aria-hidden="true">
@@ -2393,6 +2554,7 @@ function Conversation({
   const presence = useStore(store, (state) => state.presence);
   const [reply, setReply] = useState<Message | null>(null);
   const [body, setBody] = useState("");
+  const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
   const [hasMore, setHasMore] = useState(true);
   const [loadingPrevious, setLoadingPrevious] = useState(false);
   const [newBelow, setNewBelow] = useState(0);
@@ -2429,6 +2591,10 @@ function Conversation({
     if (!chat) return;
     const saved = getLocalDraft(chat.id, null);
     setBody(saved);
+    setAttachments((current) => {
+      current.forEach((item) => item.controller.abort());
+      return [];
+    });
   }, [chat]);
   useEffect(() => {
     if (!chat) return;
@@ -2585,10 +2751,19 @@ function Conversation({
   const activeChat = chat;
   async function send() {
     const content = body.trim();
-    if (!content || readonly) return;
+    const uploaded = attachments.filter(
+      (item) => item.status === "ready" && item.file,
+    );
+    if (
+      (!content && uploaded.length === 0) ||
+      attachments.some((item) => item.status === "uploading") ||
+      readonly
+    )
+      return;
     const client_msg_id = crypto.randomUUID();
     setBody("");
     setReply(null);
+    setAttachments([]);
     setLocalDraft(activeChat.id, null, "");
     coordinator.typing(activeChat.id, false, null);
     await outbox.enqueue(activeChat.id, {
@@ -2597,7 +2772,55 @@ function Conversation({
       body_format: "markdown",
       reply_to_id: reply?.id,
       mentioned_actor_ids: resolvedMentionActorIDs(content, members, presence),
+      file_ids: uploaded.map((item) => item.file!.id),
     });
+  }
+  function startAttachment(
+    source: File,
+    existingID: string = crypto.randomUUID(),
+  ) {
+    const controller = new AbortController();
+    const initial: ComposerAttachment = {
+      id: existingID,
+      source,
+      status: "uploading",
+      progress: 0,
+      controller,
+    };
+    setAttachments((items) => {
+      const withoutExisting = items.filter((item) => item.id !== existingID);
+      return [...withoutExisting, initial];
+    });
+    void uploadAttachment(api, source, controller.signal, (progress) =>
+      setAttachments((items) =>
+        items.map((item) =>
+          item.id === existingID ? { ...item, progress } : item,
+        ),
+      ),
+    )
+      .then((file) =>
+        setAttachments((items) =>
+          items.map((item) =>
+            item.id === existingID
+              ? { ...item, file, status: "ready", progress: 1 }
+              : item,
+          ),
+        ),
+      )
+      .catch((cause) => {
+        if (controller.signal.aborted) return;
+        setAttachments((items) =>
+          items.map((item) =>
+            item.id === existingID
+              ? { ...item, status: "failed", error: messageOf(cause) }
+              : item,
+          ),
+        );
+      });
+  }
+  function addAttachments(files: File[]) {
+    const available = Math.max(0, 10 - attachments.length);
+    files.slice(0, available).forEach((file) => startAttachment(file));
   }
   async function loadPrevious() {
     if (loadingPreviousRef.current || !hasMore) return;
@@ -2639,7 +2862,12 @@ function Conversation({
         <IconButton className="mobile-back" label={t("back")} onClick={onBack}>
           <ChevronLeft />
         </IconButton>
-        <Avatar name={title} seed={activeChat.avatar_seed} />
+        <Avatar
+          name={title}
+          seed={activeChat.avatar_seed}
+          actorID={directPeer?.actor_id}
+          avatarVersion={directPeer?.avatar_version}
+        />
         <div className="conversation-head__title">
           <h1>{title}</h1>
           <span>
@@ -2805,6 +3033,17 @@ function Conversation({
         reply={reply}
         onCancelReply={() => setReply(null)}
         readonly={readonly}
+        attachments={attachments}
+        onFiles={addAttachments}
+        onCancelFile={(id) => {
+          const target = attachments.find((item) => item.id === id);
+          target?.controller.abort();
+          setAttachments((items) => items.filter((item) => item.id !== id));
+        }}
+        onRetryFile={(id) => {
+          const target = attachments.find((item) => item.id === id);
+          if (target) startAttachment(target.source, id);
+        }}
       />
       {threadID && (
         <ThreadPanel
@@ -3000,7 +3239,15 @@ function MessageRow({
       )}
     >
       <div className="message__avatar">
-        {!grouped && <Avatar name={name} seed={message.actor_id} size="sm" />}
+        {!grouped && (
+          <Avatar
+            name={name}
+            seed={message.actor_id}
+            actorID={author?.actor_id}
+            avatarVersion={author?.avatar_version}
+            size="sm"
+          />
+        )}
       </div>
       <div className="message__content">
         {!grouped && (
@@ -3030,6 +3277,13 @@ function MessageRow({
             <Markdown source={message.body} />
           )}
         </div>
+        {!message.deleted_at && message.files.length > 0 && (
+          <div className="message-files">
+            {message.files.map((file) => (
+              <MessageFile key={file.id} api={api} file={file} />
+            ))}
+          </div>
+        )}
         {message.forwarded_from && (
           <span className="forwarded">
             ↪ {message.forwarded_from.author_name}
@@ -3251,6 +3505,76 @@ function MessageRow({
       )}
     </article>
   );
+}
+
+function MessageFile({ api, file }: { api: MessengerAPI; file: FileMetadata }) {
+  const { t } = useTranslation();
+  const metadata = useQuery({
+    queryKey: ["file", file.id],
+    queryFn: () => api.file(file.id),
+    initialData: file,
+    refetchInterval: (query) => {
+      const status = query.state.data?.processing_status;
+      return status === "pending" || status === "processing" ? 1500 : false;
+    },
+  });
+  const current = metadata.data ?? file;
+  const previewID =
+    current.preview_file_id ??
+    (current.mime.startsWith("image/") ? current.id : undefined);
+  const preview = useDownloadedObjectURL(api, previewID);
+  async function download() {
+    const blob = await api.downloadFile(current.id);
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = current.name;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
+  return (
+    <button className="message-file" onClick={() => void download()}>
+      {preview ? <img src={preview} alt="" /> : <Paperclip />}
+      <span>
+        <strong>{current.name}</strong>
+        <small>
+          {formatBytes(current.size)} ·{" "}
+          {current.processing_status === "processing" ||
+          current.processing_status === "pending"
+            ? t("fileProcessing")
+            : current.processing_status === "failed"
+              ? t("fileProcessingFailed")
+              : t("download")}
+        </small>
+      </span>
+    </button>
+  );
+}
+
+function useDownloadedObjectURL(
+  api: MessengerAPI,
+  fileID?: string,
+): string | null {
+  const [url, setURL] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    let objectURL: string | null = null;
+    setURL(null);
+    if (!fileID) return;
+    void api
+      .downloadFile(fileID)
+      .then((blob) => {
+        if (!active) return;
+        objectURL = URL.createObjectURL(blob);
+        setURL(objectURL);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+      if (objectURL) URL.revokeObjectURL(objectURL);
+    };
+  }, [api, fileID]);
+  return url;
 }
 
 function ForwardMessageDialog({
@@ -3480,6 +3804,64 @@ function MessageDetailsDialog({
   );
 }
 
+function ComposerAttachmentItem({
+  attachment,
+  onCancel,
+  onRetry,
+}: {
+  attachment: ComposerAttachment;
+  onCancel(): void;
+  onRetry(): void;
+}) {
+  const { t } = useTranslation();
+  const preview = useMemo(
+    () =>
+      attachment.source.type.startsWith("image/")
+        ? URL.createObjectURL(attachment.source)
+        : null,
+    [attachment.source],
+  );
+  useEffect(
+    () => () => {
+      if (preview) URL.revokeObjectURL(preview);
+    },
+    [preview],
+  );
+  return (
+    <div
+      className={cx(
+        "composer-attachment",
+        `composer-attachment--${attachment.status}`,
+      )}
+    >
+      {preview ? <img src={preview} alt="" /> : <Paperclip />}
+      <span>
+        <strong>{attachment.source.name}</strong>
+        <small>
+          {attachment.status === "uploading"
+            ? t("uploadProgress", {
+                progress: Math.round(attachment.progress * 100),
+              })
+            : attachment.status === "failed"
+              ? attachment.error || t("uploadFailed")
+              : formatBytes(attachment.source.size)}
+        </small>
+      </span>
+      {attachment.status === "uploading" && (
+        <progress max={1} value={attachment.progress} />
+      )}
+      {attachment.status === "failed" && (
+        <Button size="sm" onClick={onRetry}>
+          {t("retry")}
+        </Button>
+      )}
+      <IconButton label={t("cancel")} onClick={onCancel}>
+        <X />
+      </IconButton>
+    </div>
+  );
+}
+
 function Composer({
   members,
   body,
@@ -3489,6 +3871,10 @@ function Composer({
   reply,
   onCancelReply,
   readonly,
+  attachments = [],
+  onFiles,
+  onCancelFile,
+  onRetryFile,
 }: {
   members: ChatMember[];
   body: string;
@@ -3498,10 +3884,15 @@ function Composer({
   reply: Message | null;
   onCancelReply(): void;
   readonly: boolean;
+  attachments?: ComposerAttachment[];
+  onFiles?(files: File[]): void;
+  onCancelFile?(id: string): void;
+  onRetryFile?(id: string): void;
 }) {
   const { t } = useTranslation();
   const input = useRef<HTMLTextAreaElement>(null);
   const composerRoot = useRef<HTMLDivElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [formatOpen, setFormatOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [sendSettings, setSendSettings] = useState(false);
@@ -3509,7 +3900,10 @@ function Composer({
   const [sendOnEnter, setSendOnEnter] = useState(
     () => localStorage.getItem("coma-send-on-enter") !== "false",
   );
-  const canSend = Boolean(body.trim());
+  const canSend =
+    (Boolean(body.trim()) ||
+      attachments.some((item) => item.status === "ready")) &&
+    !attachments.some((item) => item.status === "uploading");
   useEffect(() => {
     if (!canSend) setSendSettings(false);
   }, [canSend]);
@@ -3628,7 +4022,20 @@ function Composer({
       </div>
     );
   return (
-    <div className="composer-wrap" ref={composerRoot}>
+    <div
+      className="composer-wrap"
+      ref={composerRoot}
+      onDragOver={(event) => {
+        if (!onFiles) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+      }}
+      onDrop={(event) => {
+        if (!onFiles) return;
+        event.preventDefault();
+        onFiles([...event.dataTransfer.files]);
+      }}
+    >
       {reply && (
         <div className="reply-strip">
           <span>
@@ -3638,6 +4045,18 @@ function Composer({
           <IconButton label={t("cancel")} onClick={onCancelReply}>
             <X />
           </IconButton>
+        </div>
+      )}
+      {attachments.length > 0 && (
+        <div className="composer-attachments">
+          {attachments.map((attachment) => (
+            <ComposerAttachmentItem
+              key={attachment.id}
+              attachment={attachment}
+              onCancel={() => onCancelFile?.(attachment.id)}
+              onRetry={() => onRetryFile?.(attachment.id)}
+            />
+          ))}
         </div>
       )}
       {composerFocused && mention && (
@@ -3653,6 +4072,8 @@ function Composer({
               <Avatar
                 name={member.display_name}
                 seed={member.actor_id}
+                actorID={member.actor_id}
+                avatarVersion={member.avatar_version}
                 size="sm"
               />
               <span>
@@ -3752,9 +4173,23 @@ function Composer({
         />
         <div className="composer__toolbar">
           <div className="composer__tools">
-            <IconButton label={t("attach")} disabled>
+            <IconButton
+              label={t("attach")}
+              disabled={!onFiles || attachments.length >= 10}
+              onClick={() => fileInput.current?.click()}
+            >
               <Paperclip />
             </IconButton>
+            <input
+              ref={fileInput}
+              hidden
+              type="file"
+              multiple
+              onChange={(event) => {
+                onFiles?.([...(event.target.files ?? [])]);
+                event.target.value = "";
+              }}
+            />
             <IconButton
               label={t("emoji")}
               onClick={() => {
@@ -4230,6 +4665,8 @@ function MembersDirectory({
               <Avatar
                 name={actor.display_name}
                 seed={actor.actor_id}
+                actorID={actor.actor_id}
+                avatarVersion={actor.avatar_version}
                 size="lg"
                 online
               />
@@ -4509,6 +4946,8 @@ function CreateChatDialog({
                 <Avatar
                   name={actor.display_name}
                   seed={actor.actor_id}
+                  actorID={actor.actor_id}
+                  avatarVersion={actor.avatar_version}
                   size="sm"
                 />
                 <span>
@@ -4639,7 +5078,14 @@ function MobileMorePage({
   return (
     <section className="mobile-more-page utility-page">
       <header className="mobile-more-page__identity">
-        <Avatar name={user.display_name} seed={user.id} size="lg" online />
+        <Avatar
+          name={user.display_name}
+          seed={user.id}
+          actorID={user.id}
+          avatarVersion={user.avatar_version}
+          size="lg"
+          online
+        />
         <span>
           <strong>{user.display_name}</strong>
           <small>@{user.handle}</small>
@@ -4952,6 +5398,8 @@ function ChatInfoDialog({
               <Avatar
                 name={member.display_name}
                 seed={member.actor_id}
+                actorID={member.actor_id}
+                avatarVersion={member.avatar_version}
                 size="sm"
               />
               <span>
@@ -5274,6 +5722,11 @@ function activeLocale() {
 }
 function minuteGap(a: string, b: string) {
   return (new Date(b).getTime() - new Date(a).getTime()) / 60000;
+}
+function formatBytes(value: number) {
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KiB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MiB`;
 }
 function draftKey(chatID: string, threadID: string | null) {
   return `coma-draft:${chatID}:${threadID ?? "main"}`;

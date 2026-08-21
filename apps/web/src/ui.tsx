@@ -5,10 +5,19 @@ import type {
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
 } from "react";
-import { useEffect, useRef } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { stableAvatarIndex } from "@comamessenger/tokens";
+import type { MessengerAPI } from "@comamessenger/core";
+import { AvatarObjectURLs } from "./objectURLs";
 
 export function cx(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
@@ -222,12 +231,32 @@ export function Avatar({
   seed,
   size = "md",
   online = false,
+  actorID,
+  avatarVersion = 0,
 }: {
   name: string;
   seed?: string;
   size?: "sm" | "md" | "lg" | "xl";
   online?: boolean;
+  actorID?: string;
+  avatarVersion?: number;
 }) {
+  const objectURLs = useContext(avatarObjectURLContext);
+  const [source, setSource] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    setSource(null);
+    if (!objectURLs || !actorID || avatarVersion < 1) return;
+    void objectURLs
+      .get(actorID, avatarVersion)
+      .then((url) => {
+        if (active) setSource(url);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [actorID, avatarVersion, objectURLs]);
   const initials = name
     .split(/\s+/)
     .slice(0, 2)
@@ -239,9 +268,29 @@ export function Avatar({
       className={cx("ui-avatar", `ui-avatar--${size}`)}
       data-avatar-color={stableAvatarIndex(seed || name)}
     >
-      <span className="ui-avatar__face">{initials || "U"}</span>
+      <span className="ui-avatar__face">
+        {source ? <img src={source} alt="" /> : initials || "U"}
+      </span>
       {online && <i aria-hidden="true" />}
     </span>
+  );
+}
+
+const avatarObjectURLContext = createContext<AvatarObjectURLs | null>(null);
+
+export function AvatarProvider({
+  api,
+  children,
+}: {
+  api: MessengerAPI;
+  children: ReactNode;
+}) {
+  const objectURLs = useMemo(() => new AvatarObjectURLs(api), [api]);
+  useEffect(() => () => objectURLs.dispose(), [objectURLs]);
+  return (
+    <avatarObjectURLContext.Provider value={objectURLs}>
+      {children}
+    </avatarObjectURLContext.Provider>
   );
 }
 
