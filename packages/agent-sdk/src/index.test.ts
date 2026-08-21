@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { AgentClient, DeltaCoalescer, defineAgent } from "./index.js";
+import {
+  AgentClient,
+  DeltaCoalescer,
+  defineAgent,
+  scopesForRecipe,
+  simulationInput,
+} from "./index.js";
 
 describe("agent SDK", () => {
   it("uses long-poll claim without exposing transport details", async () => {
@@ -42,5 +48,34 @@ describe("agent SDK", () => {
         tools: [],
       }),
     ).toThrow("Invalid agent recipe");
+  });
+
+  it("derives least-privilege scopes from declared tools", () => {
+    expect(
+      scopesForRecipe({
+        name: "release-notes",
+        version: 1,
+        instructions: "Summarize releases",
+        triggers: ["command:/release-notes"],
+        tools: ["search_messages", "post_message"],
+      }),
+    ).toEqual(["messages:write", "runtime:execute", "search:read"]);
+  });
+
+  it("builds deterministic simulation trigger payloads", () => {
+    expect(
+      simulationInput({ kind: "command", command: "/digest weekly release" }),
+    ).toMatchObject({
+      simulated: true,
+      trigger: {
+        type: "command",
+        command: "digest",
+        arguments: "weekly release",
+      },
+    });
+    expect(simulationInput({ kind: "mention", text: "@agent hi" })).toEqual({
+      simulated: true,
+      trigger: { type: "mention", text: "@agent hi" },
+    });
   });
 });

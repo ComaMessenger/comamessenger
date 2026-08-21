@@ -25,6 +25,33 @@ export type AgentRecipe = {
   instructions: string;
   triggers: readonly string[];
   tools: readonly string[];
+  onRun?: AgentRunHandler;
+};
+
+export type AgentRunContext = {
+  run: AgentRun;
+  input: Readonly<Record<string, unknown>>;
+  tool<T>(name: string, arguments_: Record<string, unknown>): Promise<T>;
+  thread<T>(): Promise<T>;
+  command(): { name: string; arguments: string } | null;
+  sinceLastRun<T = unknown>(): T | null;
+  stream(chunks: AsyncIterable<string> | Iterable<string>): Promise<string>;
+};
+
+export type AgentRunHandler = (
+  context: AgentRunContext,
+) => Promise<Record<string, unknown> | void>;
+
+export type WorkerOptions = {
+  client: AgentClient;
+  recipe: AgentRecipe | (() => AgentRecipe | Promise<AgentRecipe>);
+  workerID?: string;
+  concurrency?: number;
+  leaseSeconds?: number;
+  waitSeconds?: number;
+  signal?: AbortSignal;
+  socket?: RuntimeSocket;
+  onError?: (error: unknown, run?: AgentRun) => void;
 };
 
 export type RuntimeEvent =
@@ -32,6 +59,15 @@ export type RuntimeEvent =
   | { op: "event"; seq: number; type: string; data: Record<string, unknown> }
   | { op: "resync_required"; current_seq: number }
   | { op: "error"; code: string; message: string; fatal: boolean };
+
+export {
+  AgentAdminClient,
+  scopesForRecipe,
+  simulationInput,
+  type ProvisionAgentInput,
+  type ProvisionedAgent,
+  type SimulationKind,
+} from "./admin.js";
 
 export class AgentSDKError extends Error {
   constructor(
@@ -203,19 +239,31 @@ export class RuntimeSocket {
     private readonly onEvent: (event: RuntimeEvent) => void,
   ) {}
 
-  connect(lastSeq = 0): void {
+  connect(lastSeq = 0): Promise<void> {
     const socket = new WebSocket(this.client.websocketURL());
     this.socket = socket;
-    socket.addEventListener("open", () =>
-      socket.send(
-        JSON.stringify({
-          op: "auth",
-          request_id: crypto.randomUUID(),
-          access_token: this.client.token(),
-          last_seq: lastSeq,
-        }),
-      ),
-    );
+    const ready = new Promise<void>((resolve, reject) => {
+      socket.addEventListener("open", () => {
+        socket.send(
+          JSON.stringify({
+            op: "auth",
+            request_id: crypto.randomUUID(),
+            access_token: this.client.token(),
+            last_seq: lastSeq,
+          }),
+        );
+        resolve();
+      });
+      socket.addEventListener("error", () =>
+        reject(
+          new AgentSDKError(
+            "websocket_connection_failed",
+            0,
+            "WebSocket connection failed",
+          ),
+        ),
+      );
+    });
     socket.addEventListener("message", (message) => {
       const event = JSON.parse(String(message.data)) as RuntimeEvent;
       this.onEvent(event);
@@ -225,6 +273,7 @@ export class RuntimeSocket {
       }
       if (event.op === "error" && event.fatal) socket.close();
     });
+    return ready;
   }
 
   status(run: AgentRun, state: string): void {
@@ -291,6 +340,165 @@ export class MockProvider {
   async *stream(): AsyncIterable<string> {
     for (const response of this.responses) yield response;
   }
+}
+
+export async function runWorker(options: WorkerOptions): Promise<void> {
+  const concurrency = Math.max(1, Math.min(32, options.concurrency ?? 1));
+  const workerID = options.workerID ?? crypto.randomUUID();
+  const leaseSeconds = options.leaseSeconds ?? 90;
+  if (options.socket) await options.socket.connect();
+  await Promise.all(
+    Array.from({ length: concurrency }, (_, index) =>
+      workerLoop(
+        options,
+        index === 0 ? workerID : crypto.randomUUID(),
+        leaseSeconds,
+      ),
+    ),
+  );
+}
+
+async function workerLoop(
+  options: WorkerOptions,
+  workerID: string,
+  leaseSeconds: number,
+): Promise<void> {
+  while (!options.signal?.aborted) {
+    let run: AgentRun | null = null;
+    try {
+      run = await options.client.claim({
+        workerID,
+        leaseSeconds,
+        waitSeconds: options.waitSeconds ?? 25,
+      });
+      if (!run) continue;
+      const recipe =
+        typeof options.recipe === "function"
+          ? await options.recipe()
+          : options.recipe;
+      if (!recipe.onRun) {
+        throw new AgentSDKError(
+          "agent_handler_missing",
+          0,
+          `Recipe ${recipe.name} does not define onRun`,
+        );
+      }
+      const heartbeat = setInterval(
+        () =>
+          void options.client
+            .heartbeat(run!, leaseSeconds)
+            .catch(options.onError),
+        Math.max(10_000, Math.floor((leaseSeconds * 1_000) / 3)),
+      );
+      try {
+        options.socket?.status(run, "working");
+        const summary = await recipe.onRun(
+          createRunContext(options.client, run, options.socket),
+        );
+        options.socket?.status(run, "completed");
+        await options.client.complete(run, summary ?? { handled: true });
+      } finally {
+        clearInterval(heartbeat);
+      }
+    } catch (error) {
+      options.onError?.(error, run ?? undefined);
+      if (run) {
+        options.socket?.status(run, "failed");
+        await options.client
+          .fail(run, errorCodeOf(error))
+          .catch(options.onError);
+      } else if (!options.signal?.aborted) {
+        await delay(1_000, options.signal);
+      }
+    }
+  }
+}
+
+function createRunContext(
+  client: AgentClient,
+  run: AgentRun,
+  socket?: RuntimeSocket,
+): AgentRunContext {
+  let streamIndex = 0;
+  return {
+    run,
+    input: Object.freeze({ ...run.input }),
+    tool: <T>(name: string, arguments_: Record<string, unknown>) =>
+      client.invokeTool<T>(run, name, arguments_),
+    thread: <T>() => {
+      if (!run.chat_id || !run.thread_root_id) {
+        return Promise.reject(
+          new AgentSDKError(
+            "thread_context_missing",
+            0,
+            "Run is not attached to a thread",
+          ),
+        );
+      }
+      return client.invokeTool<T>(run, "get_thread", {
+        chat_id: run.chat_id,
+        thread_root_id: run.thread_root_id,
+      });
+    },
+    command: () => commandFromInput(run.input),
+    sinceLastRun: <T>() =>
+      (run.input.since_last_run as T | null | undefined) ?? null,
+    stream: async (chunks) => {
+      const streamID = crypto.randomUUID();
+      let complete = "";
+      const coalescer = new DeltaCoalescer((delta) => {
+        complete += delta;
+        socket?.stream(run, {
+          streamID,
+          index: streamIndex++,
+          delta,
+        });
+      });
+      for await (const chunk of chunks) coalescer.push(chunk);
+      coalescer.close();
+      socket?.stream(run, {
+        streamID,
+        index: streamIndex++,
+        delta: "",
+        done: true,
+      });
+      return complete;
+    },
+  };
+}
+
+function commandFromInput(
+  input: Record<string, unknown>,
+): { name: string; arguments: string } | null {
+  const trigger = input.trigger;
+  if (!trigger || typeof trigger !== "object") return null;
+  const value = trigger as Record<string, unknown>;
+  if (value.type !== "command" || typeof value.command !== "string")
+    return null;
+  return {
+    name: value.command,
+    arguments: typeof value.arguments === "string" ? value.arguments : "",
+  };
+}
+
+function errorCodeOf(error: unknown): string {
+  if (error instanceof AgentSDKError) return error.code;
+  return "external_agent_failed";
+}
+
+function delay(milliseconds: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.resolve();
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, milliseconds);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
+  });
 }
 
 async function decode<T>(response: Response): Promise<T> {
