@@ -3098,6 +3098,7 @@ type ChatUnread struct {
 // ClaimAgentRunRequest defines model for ClaimAgentRunRequest.
 type ClaimAgentRunRequest struct {
 	LeaseSeconds *int               `json:"lease_seconds,omitempty"`
+	WaitSeconds  *int               `json:"wait_seconds,omitempty"`
 	WorkerId     openapi_types.UUID `json:"worker_id"`
 }
 

@@ -3227,6 +3227,7 @@ components:
       properties:
         worker_id: { type: string, format: uuid }
         lease_seconds: { type: integer, minimum: 5, maximum: 300, default: 60 }
+        wait_seconds: { type: integer, minimum: 0, maximum: 30, default: 0 }
     AgentRunLeaseRequest:
       type: object
       additionalProperties: false

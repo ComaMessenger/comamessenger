@@ -298,7 +298,7 @@ func (service *Service) DispatchEvents(ctx context.Context) error {
 	rows.Close()
 	for _, target := range targets {
 		if err := service.dispatchAgent(ctx, target.org, target.agent, target.maxDepth); err != nil {
-			return err
+			service.logger.Error("agent trigger dispatch failed", "org_id", target.org, "agent_id", target.agent, "error", err)
 		}
 	}
 	return nil
@@ -414,60 +414,77 @@ func (service *Service) dispatchAgent(ctx context.Context, orgID, agentID string
 }
 
 func (service *Service) DispatchSchedules(ctx context.Context) error {
-	tx, err := service.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
 	now := service.now().UTC()
-	rows, err := tx.Query(ctx, triggerSelect+` WHERE trigger.enabled AND trigger.type='schedule' AND trigger.next_run_at<=$1
-		ORDER BY trigger.next_run_at FOR UPDATE OF trigger SKIP LOCKED LIMIT 100`, now)
+	rows, err := service.pool.Query(ctx, `SELECT trigger.id FROM agent_triggers trigger
+		WHERE trigger.enabled AND trigger.type='schedule' AND trigger.next_run_at<=$1
+		ORDER BY trigger.next_run_at LIMIT 100`, now)
 	if err != nil {
 		return err
 	}
-	due := make([]Trigger, 0)
+	due := make([]string, 0)
 	for rows.Next() {
-		item, err := scanTrigger(rows)
-		if err != nil {
+		var triggerID string
+		if err := rows.Scan(&triggerID); err != nil {
 			rows.Close()
 			return err
 		}
-		due = append(due, item)
+		due = append(due, triggerID)
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
 		return err
 	}
 	rows.Close()
-	for _, trigger := range due {
-		scheduled := *trigger.NextRunAt
-		var config scheduleConfig
-		if err := json.Unmarshal(trigger.Config, &config); err != nil {
+	for _, triggerID := range due {
+		if err := service.dispatchSchedule(ctx, triggerID, now); err != nil {
+			service.logger.Error("agent schedule dispatch failed", "trigger_id", triggerID, "error", err)
+		}
+	}
+	return nil
+}
+
+func (service *Service) dispatchSchedule(ctx context.Context, triggerID string, now time.Time) error {
+	tx, err := service.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	trigger, err := scanTrigger(tx.QueryRow(ctx, triggerSelect+` WHERE trigger.id=$1 AND trigger.enabled AND trigger.type='schedule'
+		AND trigger.next_run_at<=$2 FOR UPDATE OF trigger SKIP LOCKED`, triggerID, now))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	scheduled := *trigger.NextRunAt
+	var config scheduleConfig
+	if err := json.Unmarshal(trigger.Config, &config); err != nil {
+		return err
+	}
+	shouldRun := trigger.MissedRunsPolicy == "latest" || now.Sub(scheduled) <= 2*time.Minute
+	if shouldRun {
+		runID, err := id.New()
+		if err != nil {
 			return err
 		}
-		shouldRun := trigger.MissedRunsPolicy == "latest" || now.Sub(scheduled) <= 2*time.Minute
-		if shouldRun {
-			runID, err := id.New()
-			if err != nil {
-				return err
-			}
-			correlationID, err := id.New()
-			if err != nil {
-				return err
-			}
-			var sinceLastRun *time.Time
-			if err := tx.QueryRow(ctx, `SELECT max(scheduled_for) FROM agent_runs WHERE trigger_id=$1 AND scheduled_for<$2`, trigger.ID, scheduled).Scan(&sinceLastRun); err != nil {
-				return err
-			}
-			payload, _ := json.Marshal(map[string]any{
-				"scheduled_for":  scheduled,
-				"since_last_run": sinceLastRun,
-				"chat_id":        config.ChatID,
-				"timezone":       trigger.Timezone,
-				"trigger_type":   trigger.Type,
-				"trigger_id":     trigger.ID,
-			})
-			if _, err := tx.Exec(ctx, `INSERT INTO agent_runs(id,org_id,agent_id,trigger_id,scheduled_for,chat_id,correlation_id,provider,model,input,timeout_at)
+		correlationID, err := id.New()
+		if err != nil {
+			return err
+		}
+		var sinceLastRun *time.Time
+		if err := tx.QueryRow(ctx, `SELECT max(scheduled_for) FROM agent_runs WHERE trigger_id=$1 AND scheduled_for<$2`, trigger.ID, scheduled).Scan(&sinceLastRun); err != nil {
+			return err
+		}
+		payload, _ := json.Marshal(map[string]any{
+			"scheduled_for":  scheduled,
+			"since_last_run": sinceLastRun,
+			"chat_id":        config.ChatID,
+			"timezone":       trigger.Timezone,
+			"trigger_type":   trigger.Type,
+			"trigger_id":     trigger.ID,
+		})
+		if _, err := tx.Exec(ctx, `INSERT INTO agent_runs(id,org_id,agent_id,trigger_id,scheduled_for,chat_id,correlation_id,provider,model,input,timeout_at)
 				SELECT $1,agent.org_id,agent.actor_id,$2,$3,$4,$5,agent.provider,agent.model,$6,
 					now()+make_interval(secs=>agent.execution_timeout_seconds)
 				FROM agents agent
@@ -475,17 +492,16 @@ func (service *Service) DispatchSchedules(ctx context.Context) error {
 				JOIN chat_members member ON member.org_id=agent.org_id AND member.actor_id=agent.actor_id AND member.chat_id=$4
 				WHERE agent.org_id=$7 AND agent.actor_id=$8 AND agent.enabled
 				ON CONFLICT(trigger_id,scheduled_for) WHERE trigger_id IS NOT NULL AND scheduled_for IS NOT NULL DO NOTHING`,
-				runID, trigger.ID, scheduled, config.ChatID, correlationID, payload, trigger.OrgID, trigger.AgentID); err != nil {
-				return err
-			}
-		}
-		next, err := nextSchedule(config, trigger.Timezone, now)
-		if err != nil {
+			runID, trigger.ID, scheduled, config.ChatID, correlationID, payload, trigger.OrgID, trigger.AgentID); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `UPDATE agent_triggers SET next_run_at=$2,updated_at=now() WHERE id=$1`, trigger.ID, next); err != nil {
-			return err
-		}
+	}
+	next, err := nextSchedule(config, trigger.Timezone, now)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE agent_triggers SET next_run_at=$2,updated_at=now() WHERE id=$1`, trigger.ID, next); err != nil {
+		return err
 	}
 	return tx.Commit(ctx)
 }

@@ -73,6 +73,7 @@ export class AgentRuntime {
         claimed = await this.options.api.claimAgentRun({
           worker_id: this.workerID,
           lease_seconds: this.leaseSeconds,
+          wait_seconds: 25,
         });
       } catch (cause) {
         if (signal.aborted) return;

@@ -2305,6 +2305,8 @@ export interface components {
             worker_id: string;
             /** @default 60 */
             lease_seconds: number;
+            /** @default 0 */
+            wait_seconds: number;
         };
         AgentRunLeaseRequest: {
             /** Format: uuid */

@@ -79,6 +79,7 @@ type InvokeInput struct {
 type ClaimInput struct {
 	WorkerID     string `json:"worker_id"`
 	LeaseSeconds int    `json:"lease_seconds"`
+	WaitSeconds  int    `json:"wait_seconds"`
 }
 type LeaseInput struct {
 	LeaseToken   string `json:"lease_token"`
@@ -331,14 +332,37 @@ func (service *Service) ClaimForAgent(ctx context.Context, current identity.User
 	if input.LeaseSeconds == 0 {
 		input.LeaseSeconds = 60
 	}
-	run, err := service.claim(ctx, current.ActorID, input.WorkerID, time.Duration(input.LeaseSeconds)*time.Second)
-	if err != nil {
-		return ClaimedRun{}, err
+	if input.WaitSeconds < 0 || input.WaitSeconds > 30 {
+		return ClaimedRun{}, ErrInvalid
 	}
-	if run.LeaseToken == nil {
-		return ClaimedRun{}, ErrConflict
+	deadline := service.now().Add(time.Duration(input.WaitSeconds) * time.Second)
+	for {
+		run, err := service.claim(ctx, current.ActorID, input.WorkerID, time.Duration(input.LeaseSeconds)*time.Second)
+		if err == nil {
+			if run.LeaseToken == nil {
+				return ClaimedRun{}, ErrConflict
+			}
+			return ClaimedRun{Run: run, LeaseToken: *run.LeaseToken}, nil
+		}
+		if !errors.Is(err, ErrNotFound) || input.WaitSeconds == 0 || !service.now().Before(deadline) {
+			return ClaimedRun{}, err
+		}
+		remaining := deadline.Sub(service.now())
+		if remaining <= 0 {
+			return ClaimedRun{}, ErrNotFound
+		}
+		pause := 500 * time.Millisecond
+		if remaining < pause {
+			pause = remaining
+		}
+		timer := time.NewTimer(pause)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ClaimedRun{}, ctx.Err()
+		case <-timer.C:
+		}
 	}
-	return ClaimedRun{Run: run, LeaseToken: *run.LeaseToken}, nil
 }
 
 func (service *Service) claim(ctx context.Context, agentID, workerID string, lease time.Duration) (Run, error) {
