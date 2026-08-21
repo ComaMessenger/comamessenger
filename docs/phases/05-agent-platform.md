@@ -51,10 +51,10 @@
 ### Runtime и triggers
 
 - [ ] Создать runtime connection manager с WS resume и checkpoint durable seq.
-- [ ] Сделать trigger dispatcher идемпотентным по `(agent_id, event_seq, trigger_id)`.
-- [ ] Игнорировать собственные ответы агента по умолчанию и ограничить chain depth для предотвращения agent loops.
-- [ ] Реализовать mention, command, keyword/regex, every-message и event triggers.
-- [ ] Реализовать schedule trigger через durable scheduler/job, учитывающий timezone и missed runs policy.
+- [x] Сделать trigger dispatcher идемпотентным по `(agent_id, event_seq, trigger_id)`.
+- [x] Игнорировать собственные ответы агента по умолчанию и ограничить chain depth для предотвращения agent loops.
+- [x] Реализовать mention, command, keyword/regex, every-message и event triggers.
+- [x] Реализовать schedule trigger через durable scheduler/job, учитывающий timezone и missed runs policy.
 - [x] Вводить per-chat concurrency и очередь, чтобы сообщения не переставлялись непредсказуемо.
 - [x] Поддержать cancel/timeout/retry с явным состоянием run.
 
@@ -106,6 +106,10 @@ DELETE /api/v1/agents/:id/keys/:key_id
 POST   /api/v1/agents/:id/invoke
 GET    /api/v1/agents/:id/runs
 GET    /api/v1/agents/:id/usage
+GET    /api/v1/agents/:id/triggers
+POST   /api/v1/agents/:id/triggers
+PATCH  /api/v1/agents/:id/triggers/:trigger_id
+DELETE /api/v1/agents/:id/triggers/:trigger_id
 
 agent.invoked
 agent.run.started

@@ -155,6 +155,54 @@ func (e AgentToolDefinitionMode) Valid() bool {
 	}
 }
 
+// Defines values for AgentTriggerMissedRunsPolicy.
+const (
+	AgentTriggerMissedRunsPolicyLatest AgentTriggerMissedRunsPolicy = "latest"
+	AgentTriggerMissedRunsPolicySkip   AgentTriggerMissedRunsPolicy = "skip"
+)
+
+// Valid indicates whether the value is a known member of the AgentTriggerMissedRunsPolicy enum.
+func (e AgentTriggerMissedRunsPolicy) Valid() bool {
+	switch e {
+	case AgentTriggerMissedRunsPolicyLatest:
+		return true
+	case AgentTriggerMissedRunsPolicySkip:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentTriggerType.
+const (
+	AgentTriggerTypeCommand      AgentTriggerType = "command"
+	AgentTriggerTypeEvent        AgentTriggerType = "event"
+	AgentTriggerTypeEveryMessage AgentTriggerType = "every_message"
+	AgentTriggerTypeKeyword      AgentTriggerType = "keyword"
+	AgentTriggerTypeMention      AgentTriggerType = "mention"
+	AgentTriggerTypeSchedule     AgentTriggerType = "schedule"
+)
+
+// Valid indicates whether the value is a known member of the AgentTriggerType enum.
+func (e AgentTriggerType) Valid() bool {
+	switch e {
+	case AgentTriggerTypeCommand:
+		return true
+	case AgentTriggerTypeEvent:
+		return true
+	case AgentTriggerTypeEveryMessage:
+		return true
+	case AgentTriggerTypeKeyword:
+		return true
+	case AgentTriggerTypeMention:
+		return true
+	case AgentTriggerTypeSchedule:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AuditEntryActorRole.
 const (
 	AuditEntryActorRoleAdmin       AuditEntryActorRole = "admin"
@@ -617,6 +665,54 @@ func (e CreateAgentRequestKind) Valid() bool {
 	case CreateAgentRequestKindBuiltin:
 		return true
 	case CreateAgentRequestKindExternal:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CreateAgentTriggerRequestMissedRunsPolicy.
+const (
+	CreateAgentTriggerRequestMissedRunsPolicyLatest CreateAgentTriggerRequestMissedRunsPolicy = "latest"
+	CreateAgentTriggerRequestMissedRunsPolicySkip   CreateAgentTriggerRequestMissedRunsPolicy = "skip"
+)
+
+// Valid indicates whether the value is a known member of the CreateAgentTriggerRequestMissedRunsPolicy enum.
+func (e CreateAgentTriggerRequestMissedRunsPolicy) Valid() bool {
+	switch e {
+	case CreateAgentTriggerRequestMissedRunsPolicyLatest:
+		return true
+	case CreateAgentTriggerRequestMissedRunsPolicySkip:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CreateAgentTriggerRequestType.
+const (
+	CreateAgentTriggerRequestTypeCommand      CreateAgentTriggerRequestType = "command"
+	CreateAgentTriggerRequestTypeEvent        CreateAgentTriggerRequestType = "event"
+	CreateAgentTriggerRequestTypeEveryMessage CreateAgentTriggerRequestType = "every_message"
+	CreateAgentTriggerRequestTypeKeyword      CreateAgentTriggerRequestType = "keyword"
+	CreateAgentTriggerRequestTypeMention      CreateAgentTriggerRequestType = "mention"
+	CreateAgentTriggerRequestTypeSchedule     CreateAgentTriggerRequestType = "schedule"
+)
+
+// Valid indicates whether the value is a known member of the CreateAgentTriggerRequestType enum.
+func (e CreateAgentTriggerRequestType) Valid() bool {
+	switch e {
+	case CreateAgentTriggerRequestTypeCommand:
+		return true
+	case CreateAgentTriggerRequestTypeEvent:
+		return true
+	case CreateAgentTriggerRequestTypeEveryMessage:
+		return true
+	case CreateAgentTriggerRequestTypeKeyword:
+		return true
+	case CreateAgentTriggerRequestTypeMention:
+		return true
+	case CreateAgentTriggerRequestTypeSchedule:
 		return true
 	default:
 		return false
@@ -1261,13 +1357,13 @@ func (e RealtimeCloseCodeV1) Valid() bool {
 
 // Defines values for RealtimeDurableEventFrameV1Op.
 const (
-	Event RealtimeDurableEventFrameV1Op = "event"
+	RealtimeDurableEventFrameV1OpEvent RealtimeDurableEventFrameV1Op = "event"
 )
 
 // Valid indicates whether the value is a known member of the RealtimeDurableEventFrameV1Op enum.
 func (e RealtimeDurableEventFrameV1Op) Valid() bool {
 	switch e {
-	case Event:
+	case RealtimeDurableEventFrameV1OpEvent:
 		return true
 	default:
 		return false
@@ -1529,6 +1625,24 @@ func (e SearchResultKind) Valid() bool {
 	case SearchResultKindFile:
 		return true
 	case SearchResultKindMessage:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UpdateAgentTriggerRequestMissedRunsPolicy.
+const (
+	UpdateAgentTriggerRequestMissedRunsPolicyLatest UpdateAgentTriggerRequestMissedRunsPolicy = "latest"
+	UpdateAgentTriggerRequestMissedRunsPolicySkip   UpdateAgentTriggerRequestMissedRunsPolicy = "skip"
+)
+
+// Valid indicates whether the value is a known member of the UpdateAgentTriggerRequestMissedRunsPolicy enum.
+func (e UpdateAgentTriggerRequestMissedRunsPolicy) Valid() bool {
+	switch e {
+	case UpdateAgentTriggerRequestMissedRunsPolicyLatest:
+		return true
+	case UpdateAgentTriggerRequestMissedRunsPolicySkip:
 		return true
 	default:
 		return false
@@ -2104,6 +2218,7 @@ type AgentRun struct {
 	Provider          string                 `json:"provider"`
 	RequestedBy       *openapi_types.UUID    `json:"requested_by,omitempty"`
 	ResultSummary     map[string]interface{} `json:"result_summary"`
+	ScheduledFor      *time.Time             `json:"scheduled_for,omitempty"`
 	StartedAt         *time.Time             `json:"started_at,omitempty"`
 	Status            AgentRunStatus         `json:"status"`
 	ThreadRootId      *openapi_types.UUID    `json:"thread_root_id,omitempty"`
@@ -2134,6 +2249,27 @@ type AgentToolDefinition struct {
 
 // AgentToolDefinitionMode defines model for AgentToolDefinition.Mode.
 type AgentToolDefinitionMode string
+
+// AgentTrigger defines model for AgentTrigger.
+type AgentTrigger struct {
+	AgentId          openapi_types.UUID           `json:"agent_id"`
+	Config           map[string]interface{}       `json:"config"`
+	CreatedAt        time.Time                    `json:"created_at"`
+	Enabled          bool                         `json:"enabled"`
+	Id               openapi_types.UUID           `json:"id"`
+	MissedRunsPolicy AgentTriggerMissedRunsPolicy `json:"missed_runs_policy"`
+	NextRunAt        *time.Time                   `json:"next_run_at,omitempty"`
+	OrgId            openapi_types.UUID           `json:"org_id"`
+	Timezone         string                       `json:"timezone"`
+	Type             AgentTriggerType             `json:"type"`
+	UpdatedAt        time.Time                    `json:"updated_at"`
+}
+
+// AgentTriggerMissedRunsPolicy defines model for AgentTrigger.MissedRunsPolicy.
+type AgentTriggerMissedRunsPolicy string
+
+// AgentTriggerType defines model for AgentTrigger.Type.
+type AgentTriggerType string
 
 // AuditEntry defines model for AuditEntry.
 type AuditEntry struct {
@@ -2356,6 +2492,21 @@ type CreateAgentRequest struct {
 
 // CreateAgentRequestKind defines model for CreateAgentRequest.Kind.
 type CreateAgentRequestKind string
+
+// CreateAgentTriggerRequest defines model for CreateAgentTriggerRequest.
+type CreateAgentTriggerRequest struct {
+	Config           map[string]interface{}                     `json:"config"`
+	Enabled          bool                                       `json:"enabled"`
+	MissedRunsPolicy *CreateAgentTriggerRequestMissedRunsPolicy `json:"missed_runs_policy,omitempty"`
+	Timezone         *string                                    `json:"timezone,omitempty"`
+	Type             CreateAgentTriggerRequestType              `json:"type"`
+}
+
+// CreateAgentTriggerRequestMissedRunsPolicy defines model for CreateAgentTriggerRequest.MissedRunsPolicy.
+type CreateAgentTriggerRequestMissedRunsPolicy string
+
+// CreateAgentTriggerRequestType defines model for CreateAgentTriggerRequest.Type.
+type CreateAgentTriggerRequestType string
 
 // CreateChatRequest defines model for CreateChatRequest.
 type CreateChatRequest struct {
@@ -3153,6 +3304,17 @@ type UpdateAgentRequest struct {
 	RateLimitPerMinute          *int                  `json:"rate_limit_per_minute,omitempty"`
 }
 
+// UpdateAgentTriggerRequest defines model for UpdateAgentTriggerRequest.
+type UpdateAgentTriggerRequest struct {
+	Config           *map[string]interface{}                    `json:"config,omitempty"`
+	Enabled          *bool                                      `json:"enabled,omitempty"`
+	MissedRunsPolicy *UpdateAgentTriggerRequestMissedRunsPolicy `json:"missed_runs_policy,omitempty"`
+	Timezone         *string                                    `json:"timezone,omitempty"`
+}
+
+// UpdateAgentTriggerRequestMissedRunsPolicy defines model for UpdateAgentTriggerRequest.MissedRunsPolicy.
+type UpdateAgentTriggerRequestMissedRunsPolicy string
+
 // UpdateChatMemberRequest defines model for UpdateChatMemberRequest.
 type UpdateChatMemberRequest struct {
 	Role UpdateChatMemberRequestRole `json:"role"`
@@ -3335,6 +3497,9 @@ type AgentKeyId = openapi_types.UUID
 // AgentRunId defines model for AgentRunId.
 type AgentRunId = openapi_types.UUID
 
+// AgentTriggerId defines model for AgentTriggerId.
+type AgentTriggerId = openapi_types.UUID
+
 // ChatId defines model for ChatId.
 type ChatId = openapi_types.UUID
 
@@ -3447,6 +3612,12 @@ type InvokeAgentJSONRequestBody = InvokeAgentRequest
 
 // CreateAgentKeyJSONRequestBody defines body for CreateAgentKey for application/json ContentType.
 type CreateAgentKeyJSONRequestBody = CreateAgentKeyRequest
+
+// CreateAgentTriggerJSONRequestBody defines body for CreateAgentTrigger for application/json ContentType.
+type CreateAgentTriggerJSONRequestBody = CreateAgentTriggerRequest
+
+// UpdateAgentTriggerJSONRequestBody defines body for UpdateAgentTrigger for application/json ContentType.
+type UpdateAgentTriggerJSONRequestBody = UpdateAgentTriggerRequest
 
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest

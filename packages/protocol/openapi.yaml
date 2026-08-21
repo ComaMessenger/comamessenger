@@ -1908,6 +1908,65 @@ paths:
         "204": { description: Agent key revoked immediately. }
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
+  /api/v1/agents/{agent_id}/triggers:
+    parameters: [{ $ref: "#/components/parameters/AgentId" }]
+    get:
+      operationId: listAgentTriggers
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Configured durable triggers for an agent.
+          content:
+            application/json:
+              schema:
+                { type: array, items: { $ref: "#/components/schemas/AgentTrigger" } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createAgentTrigger
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            { schema: { $ref: "#/components/schemas/CreateAgentTriggerRequest" } }
+      responses:
+        "201":
+          description: Durable trigger created.
+          content:
+            application/json: { schema: { $ref: "#/components/schemas/AgentTrigger" } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /api/v1/agents/{agent_id}/triggers/{trigger_id}:
+    parameters:
+      - { $ref: "#/components/parameters/AgentId" }
+      - { $ref: "#/components/parameters/AgentTriggerId" }
+    patch:
+      operationId: updateAgentTrigger
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            { schema: { $ref: "#/components/schemas/UpdateAgentTriggerRequest" } }
+      responses:
+        "200":
+          description: Durable trigger updated.
+          content:
+            application/json: { schema: { $ref: "#/components/schemas/AgentTrigger" } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteAgentTrigger
+      description: Triggers with run history must be disabled instead of deleted.
+      security: [{ bearerAuth: [] }]
+      responses:
+        "204": { description: Trigger without run history deleted. }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
   /api/v1/agents/settings:
     get:
       operationId: getAgentPlatformSettings
@@ -2090,6 +2149,11 @@ components:
       schema: { type: string, format: uuid }
     AgentRunId:
       name: run_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    AgentTriggerId:
+      name: trigger_id
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -2645,6 +2709,42 @@ components:
       required: [runs]
       properties:
         runs: { type: array, items: { $ref: "#/components/schemas/AgentRun" } }
+    AgentTrigger:
+      type: object
+      additionalProperties: false
+      required:
+        [id, org_id, agent_id, type, config, enabled, timezone, missed_runs_policy, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        org_id: { type: string, format: uuid }
+        agent_id: { type: string, format: uuid }
+        type: { type: string, enum: [mention, command, keyword, every_message, schedule, event] }
+        config: { type: object, additionalProperties: true }
+        enabled: { type: boolean }
+        timezone: { type: string, minLength: 1, maxLength: 64 }
+        missed_runs_policy: { type: string, enum: [skip, latest] }
+        next_run_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CreateAgentTriggerRequest:
+      type: object
+      additionalProperties: false
+      required: [type, config, enabled]
+      properties:
+        type: { type: string, enum: [mention, command, keyword, every_message, schedule, event] }
+        config: { type: object, additionalProperties: true }
+        enabled: { type: boolean }
+        timezone: { type: string, minLength: 1, maxLength: 64, default: UTC }
+        missed_runs_policy: { type: string, enum: [skip, latest], default: skip }
+    UpdateAgentTriggerRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        config: { type: object, additionalProperties: true }
+        enabled: { type: boolean }
+        timezone: { type: string, minLength: 1, maxLength: 64 }
+        missed_runs_policy: { type: string, enum: [skip, latest] }
     AgentRun:
       type: object
       additionalProperties: false
@@ -2675,6 +2775,7 @@ components:
         agent_id: { type: string, format: uuid }
         trigger_id: { type: string, format: uuid }
         trigger_event_seq: { type: integer, format: int64, minimum: 1 }
+        scheduled_for: { type: string, format: date-time }
         chat_id: { type: string, format: uuid }
         thread_root_id: { type: string, format: uuid }
         requested_by: { type: string, format: uuid }

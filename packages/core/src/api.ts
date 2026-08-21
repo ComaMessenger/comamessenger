@@ -72,6 +72,9 @@ import type {
   AgentRun,
   AgentRunPage,
   InvokeAgentRequest,
+  AgentTrigger,
+  CreateAgentTriggerRequest,
+  UpdateAgentTriggerRequest,
 } from "./types";
 
 type APIErrorPayload = components["schemas"]["Error"];
@@ -292,6 +295,34 @@ export class MessengerAPI {
     return this.request(
       `/api/v1/agent-runs/${encodeURIComponent(runID)}/cancel`,
       { method: "POST" },
+    );
+  }
+  agentTriggers(id: string): Promise<AgentTrigger[]> {
+    return this.request(`/api/v1/agents/${encodeURIComponent(id)}/triggers`);
+  }
+  createAgentTrigger(
+    id: string,
+    input: CreateAgentTriggerRequest,
+  ): Promise<AgentTrigger> {
+    return this.request(`/api/v1/agents/${encodeURIComponent(id)}/triggers`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+  updateAgentTrigger(
+    id: string,
+    triggerID: string,
+    input: UpdateAgentTriggerRequest,
+  ): Promise<AgentTrigger> {
+    return this.request(
+      `/api/v1/agents/${encodeURIComponent(id)}/triggers/${encodeURIComponent(triggerID)}`,
+      { method: "PATCH", body: JSON.stringify(input) },
+    );
+  }
+  deleteAgentTrigger(id: string, triggerID: string): Promise<void> {
+    return this.request(
+      `/api/v1/agents/${encodeURIComponent(id)}/triggers/${encodeURIComponent(triggerID)}`,
+      { method: "DELETE" },
     );
   }
   createAgent(input: CreateAgentRequest): Promise<Agent> {

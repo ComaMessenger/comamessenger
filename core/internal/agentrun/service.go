@@ -31,6 +31,7 @@ type Run struct {
 	AgentID           string          `json:"agent_id"`
 	TriggerID         *string         `json:"trigger_id,omitempty"`
 	TriggerEventSeq   *int64          `json:"trigger_event_seq,omitempty"`
+	ScheduledFor      *time.Time      `json:"scheduled_for,omitempty"`
 	ChatID            *string         `json:"chat_id,omitempty"`
 	ThreadRootID      *string         `json:"thread_root_id,omitempty"`
 	RequestedBy       *string         `json:"requested_by,omitempty"`
@@ -351,13 +352,13 @@ func canManage(current identity.User) bool {
 	return permission.Allows(current.OrgRole, current.Permissions, permission.AgentsManage)
 }
 
-const runSelect = `SELECT run.id,run.org_id,run.agent_id,run.trigger_id,run.trigger_event_seq,run.chat_id,run.thread_root_id,run.requested_by,run.client_run_id,run.correlation_id,run.chain_depth,run.status,run.provider,run.model,run.input,run.result_summary,run.input_tokens,run.output_tokens,run.cost::text,run.currency,run.error_code,run.attempt,run.max_attempts,run.created_at,run.started_at,run.finished_at,run.cancel_requested_at,run.timeout_at,run.lease_token FROM agent_runs run`
+const runSelect = `SELECT run.id,run.org_id,run.agent_id,run.trigger_id,run.trigger_event_seq,run.scheduled_for,run.chat_id,run.thread_root_id,run.requested_by,run.client_run_id,run.correlation_id,run.chain_depth,run.status,run.provider,run.model,run.input,run.result_summary,run.input_tokens,run.output_tokens,run.cost::text,run.currency,run.error_code,run.attempt,run.max_attempts,run.created_at,run.started_at,run.finished_at,run.cancel_requested_at,run.timeout_at,run.lease_token FROM agent_runs run`
 
 type scanner interface{ Scan(...any) error }
 
 func scanRun(row scanner) (Run, error) {
 	var result Run
-	err := row.Scan(&result.ID, &result.OrgID, &result.AgentID, &result.TriggerID, &result.TriggerEventSeq, &result.ChatID, &result.ThreadRootID, &result.RequestedBy, &result.ClientRunID, &result.CorrelationID, &result.ChainDepth, &result.Status, &result.Provider, &result.Model, &result.Input, &result.ResultSummary, &result.InputTokens, &result.OutputTokens, &result.Cost, &result.Currency, &result.ErrorCode, &result.Attempt, &result.MaxAttempts, &result.CreatedAt, &result.StartedAt, &result.FinishedAt, &result.CancelRequestedAt, &result.TimeoutAt, &result.LeaseToken)
+	err := row.Scan(&result.ID, &result.OrgID, &result.AgentID, &result.TriggerID, &result.TriggerEventSeq, &result.ScheduledFor, &result.ChatID, &result.ThreadRootID, &result.RequestedBy, &result.ClientRunID, &result.CorrelationID, &result.ChainDepth, &result.Status, &result.Provider, &result.Model, &result.Input, &result.ResultSummary, &result.InputTokens, &result.OutputTokens, &result.Cost, &result.Currency, &result.ErrorCode, &result.Attempt, &result.MaxAttempts, &result.CreatedAt, &result.StartedAt, &result.FinishedAt, &result.CancelRequestedAt, &result.TimeoutAt, &result.LeaseToken)
 	return result, err
 }
 func (service *Service) getByID(ctx context.Context, runID string) (Run, error) {

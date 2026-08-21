@@ -179,7 +179,14 @@ func (executor *Executor) execute(ctx context.Context, invocation Invocation) (a
 			root := *input.ThreadRootID
 			input.ThreadRootID = &root
 		}
-		created, _, err := executor.services.Messages.Create(ctx, invocation.User, input.ChatID, message.CreateInput{ClientMsgID: input.ClientMsgID, Body: input.Body, BodyFormat: input.BodyFormat, ThreadRootID: input.ThreadRootID, ReplyToID: input.ThreadRootID, MentionedActorIDs: input.MentionedActorIDs, FileIDs: input.FileIDs})
+		createInput := message.CreateInput{ClientMsgID: input.ClientMsgID, Body: input.Body, BodyFormat: input.BodyFormat, ThreadRootID: input.ThreadRootID, ReplyToID: input.ThreadRootID, MentionedActorIDs: input.MentionedActorIDs, FileIDs: input.FileIDs}
+		var created message.Message
+		var err error
+		if invocation.RunID == "" {
+			created, _, err = executor.services.Messages.Create(ctx, invocation.User, input.ChatID, createInput)
+		} else {
+			created, _, err = executor.services.Messages.CreateForAgentRun(ctx, invocation.User, input.ChatID, createInput, message.AgentProvenance{RunID: invocation.RunID})
+		}
 		return created, err
 	case "add_reaction":
 		var input struct {

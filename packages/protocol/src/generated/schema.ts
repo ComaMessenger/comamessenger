@@ -1324,6 +1324,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agents/{agent_id}/triggers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listAgentTriggers"];
+        put?: never;
+        post: operations["createAgentTrigger"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{agent_id}/triggers/{trigger_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+                trigger_id: components["parameters"]["AgentTriggerId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Triggers with run history must be disabled instead of deleted. */
+        delete: operations["deleteAgentTrigger"];
+        options?: never;
+        head?: never;
+        patch: operations["updateAgentTrigger"];
+        trace?: never;
+    };
     "/api/v1/agents/settings": {
         parameters: {
             query?: never;
@@ -1869,6 +1907,53 @@ export interface components {
         AgentRunPage: {
             runs: components["schemas"]["AgentRun"][];
         };
+        AgentTrigger: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            org_id: string;
+            /** Format: uuid */
+            agent_id: string;
+            /** @enum {string} */
+            type: "mention" | "command" | "keyword" | "every_message" | "schedule" | "event";
+            config: {
+                [key: string]: unknown;
+            };
+            enabled: boolean;
+            timezone: string;
+            /** @enum {string} */
+            missed_runs_policy: "skip" | "latest";
+            /** Format: date-time */
+            next_run_at?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CreateAgentTriggerRequest: {
+            /** @enum {string} */
+            type: "mention" | "command" | "keyword" | "every_message" | "schedule" | "event";
+            config: {
+                [key: string]: unknown;
+            };
+            enabled: boolean;
+            /** @default UTC */
+            timezone: string;
+            /**
+             * @default skip
+             * @enum {string}
+             */
+            missed_runs_policy: "skip" | "latest";
+        };
+        UpdateAgentTriggerRequest: {
+            config?: {
+                [key: string]: unknown;
+            };
+            enabled?: boolean;
+            timezone?: string;
+            /** @enum {string} */
+            missed_runs_policy?: "skip" | "latest";
+        };
         AgentRun: {
             /** Format: uuid */
             id: string;
@@ -1880,6 +1965,8 @@ export interface components {
             trigger_id?: string;
             /** Format: int64 */
             trigger_event_seq?: number;
+            /** Format: date-time */
+            scheduled_for?: string;
             /** Format: uuid */
             chat_id?: string;
             /** Format: uuid */
@@ -2658,6 +2745,7 @@ export interface components {
         AgentId: string;
         AgentKeyId: string;
         AgentRunId: string;
+        AgentTriggerId: string;
     };
     requestBodies: never;
     headers: never;
@@ -5396,6 +5484,113 @@ export interface operations {
             };
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
+        };
+    };
+    listAgentTriggers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Configured durable triggers for an agent. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTrigger"][];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    createAgentTrigger: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAgentTriggerRequest"];
+            };
+        };
+        responses: {
+            /** @description Durable trigger created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTrigger"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    deleteAgentTrigger: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+                trigger_id: components["parameters"]["AgentTriggerId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Trigger without run history deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    updateAgentTrigger: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+                trigger_id: components["parameters"]["AgentTriggerId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAgentTriggerRequest"];
+            };
+        };
+        responses: {
+            /** @description Durable trigger updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTrigger"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
         };
     };
     getAgentPlatformSettings: {

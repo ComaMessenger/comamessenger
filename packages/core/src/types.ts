@@ -83,6 +83,11 @@ export type InvokeAgentToolRequest =
 export type AgentRun = components["schemas"]["AgentRun"];
 export type AgentRunPage = components["schemas"]["AgentRunPage"];
 export type InvokeAgentRequest = components["schemas"]["InvokeAgentRequest"];
+export type AgentTrigger = components["schemas"]["AgentTrigger"];
+export type CreateAgentTriggerRequest =
+  components["schemas"]["CreateAgentTriggerRequest"];
+export type UpdateAgentTriggerRequest =
+  components["schemas"]["UpdateAgentTriggerRequest"];
 export type Session = components["schemas"]["Session"];
 export type BootstrapRequest = components["schemas"]["BootstrapRequest"];
 export type LoginRequest = components["schemas"]["LoginRequest"];

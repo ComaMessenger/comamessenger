@@ -68,6 +68,10 @@ type CreateInput struct {
 	FileIDs           []string `json:"file_ids"`
 }
 
+type AgentProvenance struct {
+	RunID string
+}
+
 type UpdateInput struct {
 	Body              string    `json:"body"`
 	BodyFormat        string    `json:"body_format"`
@@ -105,6 +109,19 @@ func NewService(pool *pgxpool.Pool, maxBodyBytes, maxPageSize int, afterCommit f
 }
 
 func (s *Service) Create(ctx context.Context, user identity.User, chatID string, input CreateInput) (Message, bool, error) {
+	return s.create(ctx, user, chatID, input, nil)
+}
+
+// CreateForAgentRun persists the message and its run provenance in one transaction,
+// so trigger dispatch can never observe an agent message without its chain depth.
+func (s *Service) CreateForAgentRun(ctx context.Context, user identity.User, chatID string, input CreateInput, provenance AgentProvenance) (Message, bool, error) {
+	if _, err := uuid.Parse(provenance.RunID); err != nil {
+		return Message{}, false, fmt.Errorf("%w: run_id must be a UUID", ErrInvalid)
+	}
+	return s.create(ctx, user, chatID, input, &provenance)
+}
+
+func (s *Service) create(ctx context.Context, user identity.User, chatID string, input CreateInput, provenance *AgentProvenance) (Message, bool, error) {
 	if err := s.validateCreate(chatID, &input); err != nil {
 		return Message{}, false, err
 	}
@@ -137,6 +154,14 @@ func (s *Service) Create(ctx context.Context, user identity.User, chatID string,
 	existing, existingFingerprint, err := findByClientID(ctx, tx, user.ActorID, input.ClientMsgID)
 	if err == nil {
 		if existingFingerprint == fingerprint {
+			if provenance != nil {
+				if err := insertAgentProvenance(ctx, tx, user, existing.ID, *provenance); err != nil {
+					return Message{}, false, err
+				}
+				if err := tx.Commit(ctx); err != nil {
+					return Message{}, false, fmt.Errorf("commit agent message provenance: %w", err)
+				}
+			}
 			return existing, false, nil
 		}
 		return Message{}, false, ErrIdempotencyConflict
@@ -178,6 +203,11 @@ func (s *Service) Create(ctx context.Context, user identity.User, chatID string,
 		return Message{}, false, err
 	}
 	result = created[0]
+	if provenance != nil {
+		if err := insertAgentProvenance(ctx, tx, user, result.ID, *provenance); err != nil {
+			return Message{}, false, err
+		}
+	}
 	if err := insertEvent(ctx, tx, user, chatID, result.ID, seq, "message.created"); err != nil {
 		return Message{}, false, err
 	}
@@ -196,6 +226,31 @@ func (s *Service) Create(ctx context.Context, user identity.User, chatID string,
 	}
 	s.notifyAfterCommit(user.OrgID, highWatermark)
 	return result, true, nil
+}
+
+func insertAgentProvenance(ctx context.Context, tx pgx.Tx, user identity.User, messageID string, provenance AgentProvenance) error {
+	result, err := tx.Exec(ctx, `
+		INSERT INTO message_agent_provenance(message_id,org_id,agent_id,run_id,correlation_id,chain_depth)
+		SELECT $1,run.org_id,run.agent_id,run.id,run.correlation_id,run.chain_depth
+		FROM agent_runs run WHERE run.org_id=$2 AND run.agent_id=$3 AND run.id=$4
+		ON CONFLICT(message_id) DO NOTHING`, messageID, user.OrgID, user.ActorID, provenance.RunID)
+	if err != nil {
+		return fmt.Errorf("record agent message provenance: %w", err)
+	}
+	if result.RowsAffected() == 1 {
+		return nil
+	}
+	var existingRunID string
+	if err := tx.QueryRow(ctx, `SELECT run_id FROM message_agent_provenance WHERE message_id=$1`, messageID).Scan(&existingRunID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrForbidden
+		}
+		return fmt.Errorf("read agent message provenance: %w", err)
+	}
+	if existingRunID != provenance.RunID {
+		return ErrIdempotencyConflict
+	}
+	return nil
 }
 
 func (s *Service) List(ctx context.Context, user identity.User, chatID string, options ListOptions) (Page, error) {

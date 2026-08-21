@@ -200,6 +200,11 @@ func (service *Service) Create(ctx context.Context, current identity.User, input
 		normalized.ExternalDataSharingApproved, normalized.RateLimitPerMinute, normalized.ProviderRateLimitPerMinute); err != nil {
 		return Agent{}, mapWriteError("insert agent", err)
 	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO agent_checkpoints(org_id,agent_id,last_event_seq)
+		SELECT $1,$2,event_seq FROM organizations WHERE id=$1`, current.OrgID, agentID); err != nil {
+		return Agent{}, mapWriteError("initialize agent checkpoint", err)
+	}
 	if len(normalized.ChatIDs) > 0 {
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO chat_members(chat_id,actor_id,org_id,role)
