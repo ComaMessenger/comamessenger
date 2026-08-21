@@ -60,6 +60,7 @@ import type {
   UpdatePreferencesRequest,
   AuditPage,
   Agent,
+  AgentUsageReport,
   AgentApiKey,
   CreatedAgentApiKey,
   CreateAgentRequest,
@@ -314,6 +315,9 @@ export class MessengerAPI {
   agentRun(runID: string): Promise<AgentRun> {
     return this.request(`/api/v1/agent-runs/${encodeURIComponent(runID)}`);
   }
+  agentUsage(id: string): Promise<AgentUsageReport> {
+    return this.request(`/api/v1/agents/${encodeURIComponent(id)}/usage`);
+  }
   cancelAgentRun(runID: string): Promise<AgentRun> {
     return this.request(
       `/api/v1/agent-runs/${encodeURIComponent(runID)}/cancel`,
@@ -386,9 +390,7 @@ export class MessengerAPI {
     return this.request("/api/v1/agent-runtime/provider-credential");
   }
   agentMcpServers(id: string): Promise<AgentMcpServer[]> {
-    return this.request(
-      `/api/v1/agents/${encodeURIComponent(id)}/mcp-servers`,
-    );
+    return this.request(`/api/v1/agents/${encodeURIComponent(id)}/mcp-servers`);
   }
   createAgentMcpServer(
     id: string,

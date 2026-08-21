@@ -150,6 +150,7 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Get("/agents/settings", h.agentPlatformSettings)
 			protected.Patch("/agents/settings", h.updateAgentPlatformSettings)
 			protected.Get("/agents/{agentID}", h.getAgent)
+			protected.Get("/agents/{agentID}/usage", h.agentUsage)
 			protected.Patch("/agents/{agentID}", h.updateAgent)
 			protected.Get("/agents/{agentID}/keys", h.listAgentKeys)
 			protected.Post("/agents/{agentID}/keys", h.createAgentKey)

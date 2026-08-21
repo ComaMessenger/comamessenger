@@ -64,6 +64,15 @@ func (h *identityHandlers) getAgent(w standardhttp.ResponseWriter, r *standardht
 	writeJSON(h.logger, w, standardhttp.StatusOK, result)
 }
 
+func (h *identityHandlers) agentUsage(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.agents.Usage(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "agentID"))
+	if err != nil {
+		h.writeAgentError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
 func (h *identityHandlers) updateAgent(w standardhttp.ResponseWriter, r *standardhttp.Request) {
 	var input agent.UpdateInput
 	if err := decodeJSON(w, r, &input); err != nil {

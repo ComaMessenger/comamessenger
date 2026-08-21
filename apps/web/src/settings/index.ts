@@ -42,3 +42,4 @@ export {
 } from "./pages/workspace";
 export { CustomizationSettingsPage } from "./pages/CustomizationSettingsPage";
 export { InfrastructureSettingsPage } from "./pages/InfrastructureSettingsPage";
+export { AgentSettingsPage } from "./pages/AgentSettingsPage";

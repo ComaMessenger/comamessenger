@@ -37,6 +37,7 @@ export type SettingsPageID =
   | "workspace-policies"
   | "customization"
   | "infrastructure"
+  | "agents"
   | "audit";
 
 export type SettingsEntry = {
@@ -130,6 +131,13 @@ export const settingsRegistry: readonly SettingsEntry[] = [
     group: "workspace",
     labelKey: "connections",
     access: { permission: "integrations.manage" },
+  },
+  {
+    id: "agents",
+    path: "/settings/agents",
+    group: "workspace",
+    labelKey: "agentsTitle",
+    access: { permission: "agents.manage" },
   },
   {
     id: "audit",

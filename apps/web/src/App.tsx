@@ -168,6 +168,7 @@ import comaLogo from "./assets/coma-logo.svg";
 import { BrowserSessionCoordinator } from "./session";
 import {
   AuditSettingsPage,
+  AgentSettingsPage,
   CustomizationSettingsPage,
   InfrastructureSettingsPage,
   NotificationSettingsPage,
@@ -1116,6 +1117,7 @@ function Messenger({
   const showWorkspacePolicies = activeSettings?.id === "workspace-policies";
   const showCustomizationSettings = activeSettings?.id === "customization";
   const showInfrastructureSettings = activeSettings?.id === "infrastructure";
+  const showAgentSettings = activeSettings?.id === "agents";
   const showSecuritySettings = activeSettings?.id === "security";
   const showAuditSettings = activeSettings?.id === "audit";
   const showAnySettings = activeSettings !== undefined;
@@ -1959,6 +1961,8 @@ function Messenger({
             user={user}
             navigate={navigate}
           />
+        ) : showAgentSettings ? (
+          <AgentSettingsPage api={api} user={user} navigate={navigate} />
         ) : showSecuritySettings ? (
           <SecuritySettingsPage
             api={api}
@@ -2913,14 +2917,16 @@ function Conversation({
           <h1>{title}</h1>
           <span>
             {visibleAgentStatuses.length
-              ? t("agentsWorking", { count: visibleAgentStatuses.length })
+              ? visibleAgentStatuses.length === 1
+                ? t(`agentState_${visibleAgentStatuses[0]!.state}`)
+                : t("agentsWorking", { count: visibleAgentStatuses.length })
               : typing.length
-              ? `${typing.length} ${t("typing")}`
-              : directPeer?.status_text
-                ? `${directPeer.status_emoji} ${directPeer.status_text}`.trim()
-                : directPeer?.title ||
-                  chat.topic ||
-                  t("memberCount", { count: members.length })}
+                ? `${typing.length} ${t("typing")}`
+                : directPeer?.status_text
+                  ? `${directPeer.status_emoji} ${directPeer.status_text}`.trim()
+                  : directPeer?.title ||
+                    chat.topic ||
+                    t("memberCount", { count: members.length })}
           </span>
         </div>
         <div className="conversation-head__actions">
@@ -3128,7 +3134,13 @@ function AgentStreamRow({
 }: {
   body: string;
   author?: ChatMember;
-  state: "thinking" | "tool" | "streaming" | "completed" | "failed" | "canceled";
+  state:
+    | "thinking"
+    | "tool"
+    | "streaming"
+    | "completed"
+    | "failed"
+    | "canceled";
 }) {
   const { t } = useTranslation();
   return (
@@ -3149,7 +3161,11 @@ function AgentStreamRow({
           <span>{t(`agentState_${state}`)}</span>
         </header>
         <div className="message__body message__body--streaming">
-          {body ? <Markdown source={body} /> : <span className="streaming-dots">•••</span>}
+          {body ? (
+            <Markdown source={body} />
+          ) : (
+            <span className="streaming-dots">•••</span>
+          )}
         </div>
       </div>
     </article>
@@ -4606,9 +4622,7 @@ function ThreadPanel({
               author={members.find(
                 (member) => member.actor_id === stream.actorID,
               )}
-              state={
-                threadAgentStatuses[stream.runID]?.state ?? "streaming"
-              }
+              state={threadAgentStatuses[stream.runID]?.state ?? "streaming"}
             />
           ))}
       </div>

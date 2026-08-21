@@ -1308,6 +1308,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agents/{agent_id}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        /** @description Returns UTC daily/monthly USD usage totals and recent correlated records. */
+        get: operations["getAgentUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents/{agent_id}/keys/{key_id}": {
         parameters: {
             query?: never;
@@ -2166,6 +2185,40 @@ export interface components {
             rate_limit_per_minute?: number;
             provider_rate_limit_per_minute?: number;
             chat_ids?: string[];
+        };
+        AgentUsageEntry: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            run_id: string | null;
+            /** Format: uuid */
+            correlation_id: string;
+            provider: string;
+            model: string;
+            /** Format: int64 */
+            input_tokens: number;
+            /** Format: int64 */
+            output_tokens: number;
+            cost: string;
+            /** @enum {string} */
+            currency: "USD";
+            /** @enum {string} */
+            price_source: "provider" | "configured" | "estimated" | "unknown";
+            /** Format: date-time */
+            created_at: string;
+        };
+        AgentUsageReport: {
+            daily_cost: string;
+            monthly_cost: string;
+            /** Format: int64 */
+            daily_input_tokens: number;
+            /** Format: int64 */
+            daily_output_tokens: number;
+            /** Format: int64 */
+            monthly_runs: number;
+            /** @enum {string} */
+            currency: "USD";
+            recent: components["schemas"]["AgentUsageEntry"][];
         };
         AgentApiKey: {
             /** Format: uuid */
@@ -5991,6 +6044,30 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             422: components["responses"]["Error"];
+        };
+    };
+    getAgentUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Agent usage report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentUsageReport"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     revokeAgentKey: {

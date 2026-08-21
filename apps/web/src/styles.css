@@ -1086,7 +1086,147 @@ a:focus-visible {
   letter-spacing: 0.15em;
 }
 @keyframes stream-caret {
-  50% { opacity: 0; }
+  50% {
+    opacity: 0;
+  }
+}
+.agent-settings {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: 20px;
+  padding: 20px;
+}
+.agent-catalog,
+.agent-editor,
+.agent-record-list {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+.agent-catalog > button:not(.ui-button),
+.agent-template-row button,
+.agent-record-list > button,
+.agent-record-list > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--coma-foreground);
+  text-align: start;
+}
+.agent-catalog > button.active {
+  border-color: color-mix(in srgb, var(--coma-primary) 35%, transparent);
+  background: color-mix(in srgb, var(--coma-primary) 9%, transparent);
+}
+.agent-catalog button span,
+.agent-record-list span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.agent-catalog small,
+.agent-record-list small,
+.agent-editor__toolbar p {
+  overflow: hidden;
+  margin: 0;
+  color: var(--coma-subtle);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-template-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+}
+.agent-template-row button {
+  display: grid;
+  justify-items: center;
+  padding: 8px 4px;
+  font-size: 11px;
+  text-align: center;
+}
+.agent-editor__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.agent-editor__toolbar h2 {
+  margin: 0;
+}
+.agent-check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+.agent-check-grid label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 7px;
+  background: var(--coma-canvas);
+}
+.agent-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.agent-stat-grid > span {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--coma-canvas);
+}
+.agent-stat-grid small {
+  color: var(--coma-subtle);
+}
+.agent-stat-grid strong {
+  font-size: 18px;
+}
+.agent-inline-form {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.agent-inline-form .ui-field {
+  flex: 1 1 180px;
+}
+.agent-record-list > button time {
+  margin-inline-start: auto;
+  color: var(--coma-subtle);
+  font-size: 11px;
+}
+.agent-record-list .ui-button {
+  margin-inline-start: auto;
+}
+.agent-run-detail,
+.agent-secret {
+  overflow: auto;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--coma-canvas);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.agent-secret {
+  display: grid;
+  gap: 8px;
+}
+@media (max-width: 800px) {
+  .agent-settings {
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+  .agent-stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 .ui-avatar__face img {
   width: 100%;

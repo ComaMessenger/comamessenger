@@ -269,6 +269,60 @@ func (e AgentTriggerType) Valid() bool {
 	}
 }
 
+// Defines values for AgentUsageEntryCurrency.
+const (
+	AgentUsageEntryCurrencyUSD AgentUsageEntryCurrency = "USD"
+)
+
+// Valid indicates whether the value is a known member of the AgentUsageEntryCurrency enum.
+func (e AgentUsageEntryCurrency) Valid() bool {
+	switch e {
+	case AgentUsageEntryCurrencyUSD:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentUsageEntryPriceSource.
+const (
+	AgentUsageEntryPriceSourceConfigured AgentUsageEntryPriceSource = "configured"
+	AgentUsageEntryPriceSourceEstimated  AgentUsageEntryPriceSource = "estimated"
+	AgentUsageEntryPriceSourceProvider   AgentUsageEntryPriceSource = "provider"
+	AgentUsageEntryPriceSourceUnknown    AgentUsageEntryPriceSource = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the AgentUsageEntryPriceSource enum.
+func (e AgentUsageEntryPriceSource) Valid() bool {
+	switch e {
+	case AgentUsageEntryPriceSourceConfigured:
+		return true
+	case AgentUsageEntryPriceSourceEstimated:
+		return true
+	case AgentUsageEntryPriceSourceProvider:
+		return true
+	case AgentUsageEntryPriceSourceUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentUsageReportCurrency.
+const (
+	AgentUsageReportCurrencyUSD AgentUsageReportCurrency = "USD"
+)
+
+// Valid indicates whether the value is a known member of the AgentUsageReportCurrency enum.
+func (e AgentUsageReportCurrency) Valid() bool {
+	switch e {
+	case AgentUsageReportCurrencyUSD:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AuditEntryActorRole.
 const (
 	AuditEntryActorRoleAdmin       AuditEntryActorRole = "admin"
@@ -2717,6 +2771,41 @@ type AgentTriggerMissedRunsPolicy string
 
 // AgentTriggerType defines model for AgentTrigger.Type.
 type AgentTriggerType string
+
+// AgentUsageEntry defines model for AgentUsageEntry.
+type AgentUsageEntry struct {
+	CorrelationId openapi_types.UUID         `json:"correlation_id"`
+	Cost          string                     `json:"cost"`
+	CreatedAt     time.Time                  `json:"created_at"`
+	Currency      AgentUsageEntryCurrency    `json:"currency"`
+	Id            openapi_types.UUID         `json:"id"`
+	InputTokens   int64                      `json:"input_tokens"`
+	Model         string                     `json:"model"`
+	OutputTokens  int64                      `json:"output_tokens"`
+	PriceSource   AgentUsageEntryPriceSource `json:"price_source"`
+	Provider      string                     `json:"provider"`
+	RunId         *openapi_types.UUID        `json:"run_id"`
+}
+
+// AgentUsageEntryCurrency defines model for AgentUsageEntry.Currency.
+type AgentUsageEntryCurrency string
+
+// AgentUsageEntryPriceSource defines model for AgentUsageEntry.PriceSource.
+type AgentUsageEntryPriceSource string
+
+// AgentUsageReport defines model for AgentUsageReport.
+type AgentUsageReport struct {
+	Currency          AgentUsageReportCurrency `json:"currency"`
+	DailyCost         string                   `json:"daily_cost"`
+	DailyInputTokens  int64                    `json:"daily_input_tokens"`
+	DailyOutputTokens int64                    `json:"daily_output_tokens"`
+	MonthlyCost       string                   `json:"monthly_cost"`
+	MonthlyRuns       int64                    `json:"monthly_runs"`
+	Recent            []AgentUsageEntry        `json:"recent"`
+}
+
+// AgentUsageReportCurrency defines model for AgentUsageReport.Currency.
+type AgentUsageReportCurrency string
 
 // AuditEntry defines model for AuditEntry.
 type AuditEntry struct {

@@ -3957,6 +3957,40 @@
         }
       }
     },
+    "/api/v1/agents/{agent_id}/usage": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AgentId"
+        }
+      ],
+      "get": {
+        "operationId": "getAgentUsage",
+        "description": "Returns UTC daily/monthly USD usage totals and recent correlated records.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent usage report.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentUsageReport"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/v1/agents/{agent_id}/keys/{key_id}": {
       "delete": {
         "operationId": "revokeAgentKey",
@@ -7006,6 +7040,126 @@
             "items": {
               "type": "string",
               "format": "uuid"
+            }
+          }
+        }
+      },
+      "AgentUsageEntry": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "run_id",
+          "correlation_id",
+          "provider",
+          "model",
+          "input_tokens",
+          "output_tokens",
+          "cost",
+          "currency",
+          "price_source",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "run_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "correlation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "input_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "output_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "cost": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD"
+            ]
+          },
+          "price_source": {
+            "type": "string",
+            "enum": [
+              "provider",
+              "configured",
+              "estimated",
+              "unknown"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AgentUsageReport": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "daily_cost",
+          "monthly_cost",
+          "daily_input_tokens",
+          "daily_output_tokens",
+          "monthly_runs",
+          "currency",
+          "recent"
+        ],
+        "properties": {
+          "daily_cost": {
+            "type": "string"
+          },
+          "monthly_cost": {
+            "type": "string"
+          },
+          "daily_input_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "daily_output_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "monthly_runs": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD"
+            ]
+          },
+          "recent": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentUsageEntry"
             }
           }
         }

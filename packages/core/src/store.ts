@@ -41,7 +41,13 @@ export type AgentStatusState = {
   actorID: string;
   chatID: string;
   threadRootID: string | null;
-  state: "thinking" | "tool" | "streaming" | "completed" | "failed" | "canceled";
+  state:
+    | "thinking"
+    | "tool"
+    | "streaming"
+    | "completed"
+    | "failed"
+    | "canceled";
   expiresAt: string;
 };
 export type MessageStreamState = {
@@ -180,8 +186,6 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
         const next = { ...state.agentStatuses };
         if (
           value.state === "completed" ||
-          value.state === "failed" ||
-          value.state === "canceled" ||
           Date.parse(value.expiresAt) <= Date.now()
         )
           delete next[value.runID];
@@ -193,7 +197,9 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
         setTimeout(
           () =>
             set((state) => {
-              if (state.agentStatuses[value.runID]?.expiresAt !== value.expiresAt)
+              if (
+                state.agentStatuses[value.runID]?.expiresAt !== value.expiresAt
+              )
                 return state;
               const next = { ...state.agentStatuses };
               delete next[value.runID];
@@ -215,7 +221,9 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
             actorID: value.actorID,
             chatID: value.chatID,
             threadRootID: value.threadRootID,
-            body: value.reset ? value.delta : (current?.body ?? "") + value.delta,
+            body: value.reset
+              ? value.delta
+              : (current?.body ?? "") + value.delta,
             index: value.index,
             expiresAt: value.expiresAt,
           };
@@ -227,7 +235,10 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
         setTimeout(
           () =>
             set((state) => {
-              if (state.messageStreams[value.streamID]?.expiresAt !== value.expiresAt)
+              if (
+                state.messageStreams[value.streamID]?.expiresAt !==
+                value.expiresAt
+              )
                 return state;
               const next = { ...state.messageStreams };
               delete next[value.streamID];
@@ -238,7 +249,14 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
     },
     clearAgentEphemeral: () => set({ agentStatuses: {}, messageStreams: {} }),
     resetDurable: (value) =>
-      set({ chats: {}, messages: {}, unread: emptyUnread, agentStatuses: {}, messageStreams: {}, checkpoint: value }),
+      set({
+        chats: {},
+        messages: {},
+        unread: emptyUnread,
+        agentStatuses: {},
+        messageStreams: {},
+        checkpoint: value,
+      }),
   }));
 }
 function expiryDelay(expiresAt: string): number {

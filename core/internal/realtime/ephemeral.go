@@ -281,8 +281,10 @@ func (e *Ephemeral) AgentStatus(ctx context.Context, user identity.User, authent
 		return err
 	}
 	expiresAt := time.Now().UTC().Add(15 * time.Second)
-	if input.State == "completed" || input.State == "failed" || input.State == "canceled" {
+	if input.State == "completed" {
 		expiresAt = time.Now().UTC()
+	} else if input.State == "failed" || input.State == "canceled" {
+		expiresAt = time.Now().UTC().Add(8 * time.Second)
 	}
 	frame := agentStatusEventFrame{Op: input.Op, ActorID: user.ActorID, RunID: input.RunID, ChatID: input.ChatID, ThreadRootID: input.ThreadRootID, State: input.State, ExpiresAt: expiresAt}
 	return e.broadcast(ctx, user, subscription.ConnectionID, input.ChatID, frame)

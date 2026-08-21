@@ -171,6 +171,10 @@ func TestAgentWorkerLeaseAndCheckpointContract(t *testing.T) {
 	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM agent_usage WHERE run_id=$1 AND price_source='provider'`, invoked.ID).Scan(&usageCount); err != nil || usageCount != 1 {
 		t.Fatalf("usage count = %d, err=%v", usageCount, err)
 	}
+	usageReport, err := agents.Usage(t.Context(), owner, created.ID)
+	if err != nil || usageReport.MonthlyRuns != 1 || usageReport.MonthlyCost != "0.01000000" || len(usageReport.Recent) != 1 || usageReport.Recent[0].CorrelationID != invoked.CorrelationID {
+		t.Fatalf("usage report = %+v, err=%v", usageReport, err)
+	}
 	if _, err := service.ClaimForAgent(t.Context(), owner, access.Identity{}, agentrun.ClaimInput{WorkerID: workerID}); !errors.Is(err, agentrun.ErrForbidden) {
 		t.Fatalf("human worker claim error = %v", err)
 	}

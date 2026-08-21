@@ -153,6 +153,30 @@ type CreatedAPIKey struct {
 	Secret string `json:"secret"`
 }
 
+type UsageEntry struct {
+	ID            string    `json:"id"`
+	RunID         *string   `json:"run_id"`
+	CorrelationID string    `json:"correlation_id"`
+	Provider      string    `json:"provider"`
+	Model         string    `json:"model"`
+	InputTokens   int64     `json:"input_tokens"`
+	OutputTokens  int64     `json:"output_tokens"`
+	Cost          string    `json:"cost"`
+	Currency      string    `json:"currency"`
+	PriceSource   string    `json:"price_source"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
+type UsageReport struct {
+	DailyCost         string       `json:"daily_cost"`
+	MonthlyCost       string       `json:"monthly_cost"`
+	DailyInputTokens  int64        `json:"daily_input_tokens"`
+	DailyOutputTokens int64        `json:"daily_output_tokens"`
+	MonthlyRuns       int64        `json:"monthly_runs"`
+	Currency          string       `json:"currency"`
+	Recent            []UsageEntry `json:"recent"`
+}
+
 type CreateKeyInput struct {
 	Name               string     `json:"name"`
 	Scopes             []Scope    `json:"scopes"`
@@ -265,6 +289,48 @@ func (service *Service) List(ctx context.Context, current identity.User) ([]Agen
 		return nil, fmt.Errorf("iterate agents: %w", err)
 	}
 	return result, nil
+}
+
+func (service *Service) Usage(ctx context.Context, current identity.User, agentID string) (UsageReport, error) {
+	if !canManage(current) {
+		return UsageReport{}, ErrForbidden
+	}
+	if uuid.Validate(agentID) != nil {
+		return UsageReport{}, ErrNotFound
+	}
+	var exists bool
+	if err := service.pool.QueryRow(ctx, `SELECT true FROM agents WHERE org_id=$1 AND actor_id=$2`, current.OrgID, agentID).Scan(&exists); errors.Is(err, pgx.ErrNoRows) {
+		return UsageReport{}, ErrNotFound
+	} else if err != nil {
+		return UsageReport{}, err
+	}
+	var result UsageReport
+	err := service.pool.QueryRow(ctx, `SELECT
+		COALESCE(sum(cost) FILTER (WHERE created_at >= date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'),0)::text,
+		COALESCE(sum(cost) FILTER (WHERE created_at >= date_trunc('month',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'),0)::text,
+		COALESCE(sum(input_tokens) FILTER (WHERE created_at >= date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'),0),
+		COALESCE(sum(output_tokens) FILTER (WHERE created_at >= date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'),0),
+		count(*) FILTER (WHERE created_at >= date_trunc('month',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')
+		FROM agent_usage WHERE org_id=$1 AND agent_id=$2`, current.OrgID, agentID).Scan(&result.DailyCost, &result.MonthlyCost, &result.DailyInputTokens, &result.DailyOutputTokens, &result.MonthlyRuns)
+	if err != nil {
+		return UsageReport{}, err
+	}
+	result.Currency = "USD"
+	rows, err := service.pool.Query(ctx, `SELECT id,run_id,correlation_id,provider,model,input_tokens,output_tokens,cost::text,currency,price_source,created_at
+		FROM agent_usage WHERE org_id=$1 AND agent_id=$2 ORDER BY created_at DESC LIMIT 100`, current.OrgID, agentID)
+	if err != nil {
+		return UsageReport{}, err
+	}
+	defer rows.Close()
+	result.Recent = make([]UsageEntry, 0)
+	for rows.Next() {
+		var entry UsageEntry
+		if err := rows.Scan(&entry.ID, &entry.RunID, &entry.CorrelationID, &entry.Provider, &entry.Model, &entry.InputTokens, &entry.OutputTokens, &entry.Cost, &entry.Currency, &entry.PriceSource, &entry.CreatedAt); err != nil {
+			return UsageReport{}, err
+		}
+		result.Recent = append(result.Recent, entry)
+	}
+	return result, rows.Err()
 }
 
 func (service *Service) Get(ctx context.Context, current identity.User, agentID string) (Agent, error) {

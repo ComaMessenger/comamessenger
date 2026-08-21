@@ -80,15 +80,15 @@
 
 - [x] Добавить ephemeral `agent.status` и `message.streaming` deltas с финальным durable `message.created`.
 - [x] Определить поведение reconnect: partial stream не считается финальным сообщением и может быть восстановлен/заменён.
-- [ ] Создать каталог агентов, страницу агента, форму создания, scopes, memberships, triggers и usage.
-- [ ] Показывать «агент думает», streaming, ошибку/cancel и ссылку на run details для admin.
+- [x] Создать каталог агентов, страницу агента, форму создания, scopes, memberships, triggers и usage.
+- [x] Показывать «агент думает», streaming, ошибку/cancel и ссылку на run details для admin.
 - [x] Отмечать все сообщения агента визуально и в доступном текстовом представлении.
 
 ### Встроенные агенты и SDK
 
-- [ ] Summarizer: ручная команда по chat/thread и scheduled digest.
-- [ ] Q&A: retrieval по доступным сообщениям/файлам с цитатами на источники внутри мессенджера.
-- [ ] Onboarding: greeting по member event и ответы по выбранному knowledge chat/channel.
+- [x] Summarizer: ручная команда по chat/thread и scheduled digest.
+- [x] Q&A: retrieval по доступным сообщениям/файлам с цитатами на источники внутри мессенджера.
+- [x] Onboarding: greeting по member event и ответы по выбранному knowledge chat/channel.
 - [ ] Создать минимальные TS/Python examples: connect, resume, react to mention, post reply.
 - [ ] Проверить, что examples используют только опубликованные OpenAPI/WS contracts.
 

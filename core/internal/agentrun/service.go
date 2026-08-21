@@ -514,7 +514,7 @@ func (service *Service) StartProviderCall(ctx context.Context, current identity.
 		input.Currency = "USD"
 	}
 	if uuid.Validate(input.CallID) != nil || uuid.Validate(input.RunID) != nil || uuid.Validate(input.LeaseToken) != nil ||
-		!costPattern.MatchString(input.ReservedCost) || len(input.Currency) != 3 {
+		!costPattern.MatchString(input.ReservedCost) || input.Currency != "USD" {
 		return ProviderCall{}, ErrInvalid
 	}
 	tx, err := service.pool.Begin(ctx)
@@ -537,10 +537,10 @@ func (service *Service) StartProviderCall(ctx context.Context, current identity.
 	}
 	var dailyAllowed, monthlyAllowed bool
 	err = tx.QueryRow(ctx, `SELECT
-		(agent.daily_cost_limit IS NULL OR COALESCE((SELECT sum(usage.cost) FROM agent_usage usage WHERE usage.agent_id=agent.actor_id AND usage.created_at>=date_trunc('day',now())),0)
-		 + COALESCE((SELECT sum(COALESCE(call.actual_cost,call.reserved_cost)) FROM agent_provider_calls call JOIN agent_runs pending ON pending.id=call.run_id WHERE call.agent_id=agent.actor_id AND call.created_at>=date_trunc('day',now()) AND pending.status IN('queued','running')),0) + $2::numeric <= agent.daily_cost_limit),
-		(agent.monthly_cost_limit IS NULL OR COALESCE((SELECT sum(usage.cost) FROM agent_usage usage WHERE usage.agent_id=agent.actor_id AND usage.created_at>=date_trunc('month',now())),0)
-		 + COALESCE((SELECT sum(COALESCE(call.actual_cost,call.reserved_cost)) FROM agent_provider_calls call JOIN agent_runs pending ON pending.id=call.run_id WHERE call.agent_id=agent.actor_id AND call.created_at>=date_trunc('month',now()) AND pending.status IN('queued','running')),0) + $2::numeric <= agent.monthly_cost_limit)
+		(agent.daily_cost_limit IS NULL OR COALESCE((SELECT sum(usage.cost) FROM agent_usage usage WHERE usage.agent_id=agent.actor_id AND usage.created_at>=date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'),0)
+			 + COALESCE((SELECT sum(COALESCE(call.actual_cost,call.reserved_cost)) FROM agent_provider_calls call JOIN agent_runs pending ON pending.id=call.run_id WHERE call.agent_id=agent.actor_id AND call.created_at>=date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AND pending.status IN('queued','running')),0) + $2::numeric <= agent.daily_cost_limit),
+		(agent.monthly_cost_limit IS NULL OR COALESCE((SELECT sum(usage.cost) FROM agent_usage usage WHERE usage.agent_id=agent.actor_id AND usage.created_at>=date_trunc('month',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'),0)
+			 + COALESCE((SELECT sum(COALESCE(call.actual_cost,call.reserved_cost)) FROM agent_provider_calls call JOIN agent_runs pending ON pending.id=call.run_id WHERE call.agent_id=agent.actor_id AND call.created_at>=date_trunc('month',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AND pending.status IN('queued','running')),0) + $2::numeric <= agent.monthly_cost_limit)
 		FROM agents agent WHERE agent.actor_id=$1`, current.ActorID, input.ReservedCost).Scan(&dailyAllowed, &monthlyAllowed)
 	if err != nil {
 		return ProviderCall{}, err
@@ -572,7 +572,7 @@ func (service *Service) FinishProviderCall(ctx context.Context, current identity
 		input.PriceSource = "unknown"
 	}
 	if uuid.Validate(callID) != nil || uuid.Validate(input.RunID) != nil || uuid.Validate(input.LeaseToken) != nil ||
-		(input.Status != "completed" && input.Status != "failed") || !costPattern.MatchString(input.ActualCost) || len(input.Currency) != 3 ||
+		(input.Status != "completed" && input.Status != "failed") || !costPattern.MatchString(input.ActualCost) || input.Currency != "USD" ||
 		input.InputTokens < 0 || input.OutputTokens < 0 || !validPriceSource(input.PriceSource) {
 		return ProviderCall{}, ErrInvalid
 	}
@@ -691,7 +691,7 @@ func (service *Service) Complete(ctx context.Context, runID, leaseToken string, 
 	if result.PriceSource == "" {
 		result.PriceSource = "unknown"
 	}
-	if uuid.Validate(runID) != nil || uuid.Validate(leaseToken) != nil || result.InputTokens < 0 || result.OutputTokens < 0 || !costPattern.MatchString(result.Cost) || len(result.Currency) != 3 || len(result.ResultSummary) > 262144 || !validObject(result.ResultSummary) || !validPriceSource(result.PriceSource) {
+	if uuid.Validate(runID) != nil || uuid.Validate(leaseToken) != nil || result.InputTokens < 0 || result.OutputTokens < 0 || !costPattern.MatchString(result.Cost) || result.Currency != "USD" || len(result.ResultSummary) > 262144 || !validObject(result.ResultSummary) || !validPriceSource(result.PriceSource) {
 		return Run{}, ErrInvalid
 	}
 	usageID, err := id.New()
