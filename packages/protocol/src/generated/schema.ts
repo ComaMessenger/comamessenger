@@ -240,7 +240,7 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["changeEmail"];
-        delete?: never;
+        delete: operations["deleteAgent"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2115,6 +2115,9 @@ export interface components {
             handle: string;
             /** @enum {string} */
             kind: "builtin" | "external";
+            /** @enum {string} */
+            recipe: "custom" | "summarizer" | "qa" | "onboarding";
+            recipe_version: number;
             description: string;
             enabled: boolean;
             allowed_scopes: components["schemas"]["AgentScope"][];
@@ -2130,19 +2133,32 @@ export interface components {
             per_chat_concurrency: number;
             rate_limit_per_minute: number;
             provider_rate_limit_per_minute: number;
+            execution_timeout_seconds: number;
             chat_ids: string[];
             /** Format: int64 */
             avatar_version: number;
+            readiness: components["schemas"]["AgentReadiness"];
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+        };
+        AgentReadiness: {
+            /** @enum {string} */
+            state: "needs_setup" | "ready" | "enabled" | "error";
+            ready: boolean;
+            blockers: ("chat_required" | "runtime_key_required" | "provider_model_required" | "provider_credential_required" | "external_data_approval_required" | "trigger_required")[];
         };
         CreateAgentRequest: {
             display_name: string;
             handle: string;
             /** @enum {string} */
             kind: "builtin" | "external";
+            /**
+             * @default custom
+             * @enum {string}
+             */
+            recipe: "custom" | "summarizer" | "qa" | "onboarding";
             description?: string;
             enabled: boolean;
             allowed_scopes: components["schemas"]["AgentScope"][];
@@ -2164,6 +2180,8 @@ export interface components {
             rate_limit_per_minute: number;
             /** @default 300 */
             provider_rate_limit_per_minute: number;
+            /** @default 600 */
+            execution_timeout_seconds: number;
             chat_ids: string[];
         };
         UpdateAgentRequest: {
@@ -2184,6 +2202,7 @@ export interface components {
             per_chat_concurrency?: number;
             rate_limit_per_minute?: number;
             provider_rate_limit_per_minute?: number;
+            execution_timeout_seconds?: number;
             chat_ids?: string[];
         };
         AgentUsageEntry: {
@@ -3740,6 +3759,26 @@ export interface operations {
             403: components["responses"]["Error"];
             409: components["responses"]["Error"];
             422: components["responses"]["Error"];
+        };
+    };
+    deleteAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Agent disabled and removed from the active catalog; audit history is retained. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     confirmEmail: {

@@ -497,6 +497,11 @@ export class MessengerAPI {
       body: JSON.stringify(input),
     });
   }
+  deleteAgent(id: string): Promise<void> {
+    return this.request(`/api/v1/agents/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+  }
   agentKeys(id: string): Promise<AgentApiKey[]> {
     return this.request(`/api/v1/agents/${encodeURIComponent(id)}/keys`);
   }

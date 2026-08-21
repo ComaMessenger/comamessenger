@@ -493,6 +493,25 @@
             "$ref": "#/components/responses/Error"
           }
         }
+      },
+      "delete": {
+        "operationId": "deleteAgent",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Agent disabled and removed from the active catalog; audit history is retained."
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
       }
     },
     "/api/v1/me/email/confirm": {
@@ -6700,6 +6719,8 @@
           "display_name",
           "handle",
           "kind",
+          "recipe",
+          "recipe_version",
           "description",
           "enabled",
           "allowed_scopes",
@@ -6714,7 +6735,9 @@
           "per_chat_concurrency",
           "rate_limit_per_minute",
           "provider_rate_limit_per_minute",
+          "execution_timeout_seconds",
           "chat_ids",
+          "readiness",
           "avatar_version",
           "created_at",
           "updated_at"
@@ -6747,6 +6770,19 @@
               "builtin",
               "external"
             ]
+          },
+          "recipe": {
+            "type": "string",
+            "enum": [
+              "custom",
+              "summarizer",
+              "qa",
+              "onboarding"
+            ]
+          },
+          "recipe_version": {
+            "type": "integer",
+            "minimum": 1
           },
           "description": {
             "type": "string",
@@ -6821,6 +6857,11 @@
             "minimum": 1,
             "maximum": 100000
           },
+          "execution_timeout_seconds": {
+            "type": "integer",
+            "minimum": 30,
+            "maximum": 3600
+          },
           "chat_ids": {
             "type": "array",
             "uniqueItems": true,
@@ -6835,6 +6876,9 @@
             "format": "int64",
             "minimum": 0
           },
+          "readiness": {
+            "$ref": "#/components/schemas/AgentReadiness"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -6842,6 +6886,44 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "AgentReadiness": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "state",
+          "ready",
+          "blockers"
+        ],
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "needs_setup",
+              "ready",
+              "enabled",
+              "error"
+            ]
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "blockers": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "chat_required",
+                "runtime_key_required",
+                "provider_model_required",
+                "provider_credential_required",
+                "external_data_approval_required",
+                "trigger_required"
+              ]
+            }
           }
         }
       },
@@ -6873,6 +6955,16 @@
               "builtin",
               "external"
             ]
+          },
+          "recipe": {
+            "type": "string",
+            "enum": [
+              "custom",
+              "summarizer",
+              "qa",
+              "onboarding"
+            ],
+            "default": "custom"
           },
           "description": {
             "type": "string",
@@ -6946,6 +7038,12 @@
             "minimum": 1,
             "maximum": 100000,
             "default": 300
+          },
+          "execution_timeout_seconds": {
+            "type": "integer",
+            "minimum": 30,
+            "maximum": 3600,
+            "default": 600
           },
           "chat_ids": {
             "type": "array",
@@ -7038,6 +7136,11 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 100000
+          },
+          "execution_timeout_seconds": {
+            "type": "integer",
+            "minimum": 30,
+            "maximum": 3600
           },
           "chat_ids": {
             "type": "array",

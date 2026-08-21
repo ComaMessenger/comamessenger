@@ -169,6 +169,68 @@ func TestAgentCreateValidationAndManagerPermission(t *testing.T) {
 	}
 }
 
+func TestAgentRecipeCreationAndDeletionLifecycle(t *testing.T) {
+	pool := testdb.New(t)
+	seedAgentModel(t, pool)
+	service := NewService(pool)
+	owner := identity.User{ActorID: agentTestOwnerID, OrgID: agentTestOrgID, OrgRole: "owner"}
+	var revoked []string
+	service.SetRevokeSession(func(keyID string) { revoked = append(revoked, keyID) })
+
+	created, err := service.Create(t.Context(), owner, CreateInput{
+		DisplayName: "Summarizer", Handle: "summarizer", Kind: "builtin", Recipe: "summarizer",
+		Provider: "openai", Model: "gpt-5-mini", ExternalDataSharingApproved: true,
+		AllowedScopes: []Scope{ScopeMessagesRead, ScopeMessagesWrite, ScopeRuntimeExecute}, ChatIDs: []string{agentTestChatID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Recipe != "summarizer" || created.RecipeVersion != 1 || created.ExecutionTimeoutSeconds != 600 {
+		t.Fatalf("recipe metadata = %+v", created)
+	}
+	var triggerCount int
+	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM agent_triggers WHERE agent_id=$1 AND enabled`, created.ID).Scan(&triggerCount); err != nil || triggerCount != 2 {
+		t.Fatalf("recipe triggers=%d err=%v", triggerCount, err)
+	}
+	key, err := service.CreateKey(t.Context(), owner, created.ID, CreateKeyInput{
+		Name: "runtime", Scopes: []Scope{ScopeMessagesRead, ScopeMessagesWrite, ScopeRuntimeExecute}, RateLimitPerMinute: 100,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Delete(t.Context(), owner, created.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Delete(t.Context(), owner, created.ID); err != nil {
+		t.Fatalf("idempotent delete: %v", err)
+	}
+	if _, err := service.Get(t.Context(), owner, created.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("deleted agent get error=%v", err)
+	}
+	if len(revoked) != 1 || revoked[0] != key.ID {
+		t.Fatalf("realtime revocations=%v", revoked)
+	}
+	var actorStatus string
+	var actorDeleted, agentDeleted, keyRevoked bool
+	if err := pool.QueryRow(t.Context(), `SELECT actor.status,actor.deleted_at IS NOT NULL,agent.deleted_at IS NOT NULL
+		FROM actors actor JOIN agents agent ON agent.actor_id=actor.id WHERE agent.actor_id=$1`, created.ID).Scan(&actorStatus, &actorDeleted, &agentDeleted); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(t.Context(), `SELECT revoked_at IS NOT NULL FROM agent_api_keys WHERE id=$1`, key.ID).Scan(&keyRevoked); err != nil {
+		t.Fatal(err)
+	}
+	if actorStatus != "deactivated" || !actorDeleted || !agentDeleted || !keyRevoked {
+		t.Fatalf("deleted state status=%s actor=%v agent=%v key=%v", actorStatus, actorDeleted, agentDeleted, keyRevoked)
+	}
+	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM chat_members WHERE actor_id=$1`, created.ID).Scan(&triggerCount); err != nil || triggerCount != 0 {
+		t.Fatalf("deleted memberships=%d err=%v", triggerCount, err)
+	}
+	var deleteAudit int
+	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM audit_log WHERE target_id=$1 AND action='agent.delete'`, created.ID).Scan(&deleteAudit); err != nil || deleteAudit != 1 {
+		t.Fatalf("delete audit=%d err=%v", deleteAudit, err)
+	}
+}
+
 func seedAgentModel(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
 	tx, err := pool.Begin(t.Context())

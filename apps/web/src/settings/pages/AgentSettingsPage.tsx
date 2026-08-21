@@ -15,6 +15,7 @@ import { messageOf } from "../../errors";
 import {
   Badge,
   Button,
+  Dialog,
   Field,
   FormError,
   SelectField,
@@ -31,10 +32,7 @@ import {
   type SettingsNavigate,
 } from "../components/SettingsShell";
 import { canAccessSettingsPage } from "../registry";
-import {
-  builtinTriggerRequests,
-  type AgentTemplate as Template,
-} from "../agentTemplates";
+import { type AgentTemplate as Template } from "../agentTemplates";
 
 const scopes: AgentScope[] = [
   "chats:read",
@@ -73,6 +71,7 @@ function emptyDraft(template: Template = "custom"): Draft {
             : "New agent",
     handle: `${template === "custom" ? "agent" : template}_${suffix}`,
     kind: "builtin",
+    recipe: template,
     description: templateDescriptions[template],
     enabled: false,
     allowed_scopes:
@@ -105,6 +104,7 @@ function emptyDraft(template: Template = "custom"): Draft {
     per_chat_concurrency: 1,
     rate_limit_per_minute: 60,
     provider_rate_limit_per_minute: 300,
+    execution_timeout_seconds: 600,
     chat_ids: [],
   };
 }
@@ -114,6 +114,7 @@ function draftOf(agent: Agent): Draft {
     display_name: agent.display_name,
     handle: agent.handle,
     kind: agent.kind,
+    recipe: agent.recipe,
     description: agent.description,
     enabled: agent.enabled,
     allowed_scopes: agent.allowed_scopes,
@@ -129,6 +130,7 @@ function draftOf(agent: Agent): Draft {
     per_chat_concurrency: agent.per_chat_concurrency,
     rate_limit_per_minute: agent.rate_limit_per_minute,
     provider_rate_limit_per_minute: agent.provider_rate_limit_per_minute,
+    execution_timeout_seconds: agent.execution_timeout_seconds,
     chat_ids: agent.chat_ids,
   };
 }
@@ -163,6 +165,7 @@ export function AgentSettingsPage({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [pending, setPending] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const selected = agents.data?.find((agent) => agent.id === selectedID);
   useEffect(() => {
     if (selected) setDraft(draftOf(selected));
@@ -212,11 +215,11 @@ export function AgentSettingsPage({
           per_chat_concurrency: draft.per_chat_concurrency,
           rate_limit_per_minute: draft.rate_limit_per_minute,
           provider_rate_limit_per_minute: draft.provider_rate_limit_per_minute,
+          execution_timeout_seconds: draft.execution_timeout_seconds,
           chat_ids: draft.chat_ids,
         });
       } else {
         saved = await api.createAgent(draft);
-        await createTemplateTriggers(api, saved, template, chats.data ?? []);
         setSelectedID(saved.id);
       }
       await agents.refetch();
@@ -283,6 +286,16 @@ export function AgentSettingsPage({
                 <Save />
                 {pending ? t("saving") : t("save")}
               </Button>
+              {selected && (
+                <Button
+                  variant="ghost"
+                  disabled={pending}
+                  onClick={() => setDeleteOpen(true)}
+                >
+                  <Trash2 />
+                  {t("deleteAgent")}
+                </Button>
+              )}
             </div>
             <FormError message={error} />
             {notice && <Badge tone="success">{notice}</Badge>}
@@ -297,6 +310,44 @@ export function AgentSettingsPage({
                 agent={selected}
                 onChanged={() => void agents.refetch()}
               />
+            )}
+            {selected && deleteOpen && (
+              <Dialog
+                title={t("deleteAgentTitle")}
+                description={t("deleteAgentDescription", {
+                  name: selected.display_name,
+                })}
+                onClose={() => setDeleteOpen(false)}
+              >
+                <div className="ui-dialog__actions">
+                  <Button
+                    variant="ghost"
+                    disabled={pending}
+                    onClick={() => setDeleteOpen(false)}
+                  >
+                    {t("cancel")}
+                  </Button>
+                  <Button
+                    variant="danger"
+                    disabled={pending}
+                    onClick={() => {
+                      setPending(true);
+                      void api
+                        .deleteAgent(selected.id)
+                        .then(async () => {
+                          setDeleteOpen(false);
+                          setSelectedID(null);
+                          await agents.refetch();
+                        })
+                        .catch((cause) => setError(messageOf(cause)))
+                        .finally(() => setPending(false));
+                    }}
+                  >
+                    <Trash2 />
+                    {t("deleteAgentConfirm")}
+                  </Button>
+                </div>
+              </Dialog>
             )}
           </div>
         </div>
@@ -322,7 +373,8 @@ function AgentConfiguration({
       | "max_chain_depth"
       | "per_chat_concurrency"
       | "rate_limit_per_minute"
-      | "provider_rate_limit_per_minute",
+      | "provider_rate_limit_per_minute"
+      | "execution_timeout_seconds",
     value: string,
   ) => onChange({ ...draft, [key]: Number(value) });
   return (
@@ -492,6 +544,15 @@ function AgentConfiguration({
             name="agent-rate"
             value={draft.rate_limit_per_minute ?? 60}
             onChange={(e) => number("rate_limit_per_minute", e.target.value)}
+          />
+          <Field
+            type="number"
+            label={t("executionTimeout")}
+            name="execution-timeout"
+            value={draft.execution_timeout_seconds ?? 600}
+            onChange={(e) =>
+              number("execution_timeout_seconds", e.target.value)
+            }
           />
         </div>
       </SettingsSection>
@@ -885,16 +946,4 @@ function triggerConfig(
     };
   }
   return { include_agent_messages: false };
-}
-
-async function createTemplateTriggers(
-  api: MessengerAPI,
-  agent: Agent,
-  template: Template,
-  chats: Chat[],
-): Promise<void> {
-  const chatID = agent.chat_ids[0] ?? chats[0]?.id;
-  for (const trigger of builtinTriggerRequests(template, chatID)) {
-    await api.createAgentTrigger(agent.id, trigger);
-  }
 }

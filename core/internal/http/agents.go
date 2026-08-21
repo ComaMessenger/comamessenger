@@ -87,6 +87,14 @@ func (h *identityHandlers) updateAgent(w standardhttp.ResponseWriter, r *standar
 	writeJSON(h.logger, w, standardhttp.StatusOK, result)
 }
 
+func (h *identityHandlers) deleteAgent(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	if err := h.agents.Delete(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "agentID")); err != nil {
+		h.writeAgentError(w, r, err)
+		return
+	}
+	w.WriteHeader(standardhttp.StatusNoContent)
+}
+
 func (h *identityHandlers) listAgentKeys(w standardhttp.ResponseWriter, r *standardhttp.Request) {
 	result, err := h.agents.ListKeys(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "agentID"))
 	if err != nil {

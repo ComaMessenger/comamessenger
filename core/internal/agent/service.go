@@ -63,6 +63,8 @@ type Agent struct {
 	DisplayName                 string    `json:"display_name"`
 	Handle                      string    `json:"handle"`
 	Kind                        string    `json:"kind"`
+	Recipe                      string    `json:"recipe"`
+	RecipeVersion               int       `json:"recipe_version"`
 	Description                 string    `json:"description"`
 	Enabled                     bool      `json:"enabled"`
 	AllowedScopes               []Scope   `json:"allowed_scopes"`
@@ -78,16 +80,25 @@ type Agent struct {
 	PerChatConcurrency          int       `json:"per_chat_concurrency"`
 	RateLimitPerMinute          int       `json:"rate_limit_per_minute"`
 	ProviderRateLimitPerMinute  int       `json:"provider_rate_limit_per_minute"`
+	ExecutionTimeoutSeconds     int       `json:"execution_timeout_seconds"`
 	ChatIDs                     []string  `json:"chat_ids"`
+	Readiness                   Readiness `json:"readiness"`
 	AvatarVersion               int64     `json:"avatar_version"`
 	CreatedAt                   time.Time `json:"created_at"`
 	UpdatedAt                   time.Time `json:"updated_at"`
+}
+
+type Readiness struct {
+	State    string   `json:"state"`
+	Ready    bool     `json:"ready"`
+	Blockers []string `json:"blockers"`
 }
 
 type CreateInput struct {
 	DisplayName                 string   `json:"display_name"`
 	Handle                      string   `json:"handle"`
 	Kind                        string   `json:"kind"`
+	Recipe                      string   `json:"recipe"`
 	Description                 string   `json:"description"`
 	Enabled                     bool     `json:"enabled"`
 	AllowedScopes               []Scope  `json:"allowed_scopes"`
@@ -103,6 +114,7 @@ type CreateInput struct {
 	PerChatConcurrency          *int     `json:"per_chat_concurrency"`
 	RateLimitPerMinute          int      `json:"rate_limit_per_minute"`
 	ProviderRateLimitPerMinute  int      `json:"provider_rate_limit_per_minute"`
+	ExecutionTimeoutSeconds     int      `json:"execution_timeout_seconds"`
 	ChatIDs                     []string `json:"chat_ids"`
 }
 
@@ -124,6 +136,7 @@ type UpdateInput struct {
 	PerChatConcurrency          *int      `json:"per_chat_concurrency"`
 	RateLimitPerMinute          *int      `json:"rate_limit_per_minute"`
 	ProviderRateLimitPerMinute  *int      `json:"provider_rate_limit_per_minute"`
+	ExecutionTimeoutSeconds     *int      `json:"execution_timeout_seconds"`
 	ChatIDs                     *[]string `json:"chat_ids"`
 }
 
@@ -235,14 +248,14 @@ func (service *Service) Create(ctx context.Context, current identity.User, input
 	}
 	scopes := scopeStrings(normalized.AllowedScopes)
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO agents(actor_id,org_id,owner_actor_id,kind,description,enabled,allowed_scopes,provider,model,endpoint_url,
+		INSERT INTO agents(actor_id,org_id,owner_actor_id,kind,recipe,recipe_version,description,enabled,allowed_scopes,provider,model,endpoint_url,
 			external_data_sharing_approved,daily_cost_limit,monthly_cost_limit,max_output_tokens,max_tool_iterations,max_chain_depth,per_chat_concurrency,
-			rate_limit_per_minute,provider_rate_limit_per_minute)
-		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NULLIF($12,'')::numeric,NULLIF($13,'')::numeric,$14,$15,$16,$17,$18,$19)`, agentID, current.OrgID, current.ActorID, normalized.Kind,
+			rate_limit_per_minute,provider_rate_limit_per_minute,execution_timeout_seconds)
+		VALUES($1,$2,$3,$4,$5,1,$6,$7,$8,$9,$10,$11,$12,NULLIF($13,'')::numeric,NULLIF($14,'')::numeric,$15,$16,$17,$18,$19,$20,$21)`, agentID, current.OrgID, current.ActorID, normalized.Kind, normalized.Recipe,
 		normalized.Description, normalized.Enabled, scopes, normalized.Provider, normalized.Model, normalized.EndpointURL,
 		normalized.ExternalDataSharingApproved, costLimitValue(normalized.DailyCostLimit), costLimitValue(normalized.MonthlyCostLimit),
 		*normalized.MaxOutputTokens, *normalized.MaxToolIterations, *normalized.MaxChainDepth,
-		*normalized.PerChatConcurrency, normalized.RateLimitPerMinute, normalized.ProviderRateLimitPerMinute); err != nil {
+		*normalized.PerChatConcurrency, normalized.RateLimitPerMinute, normalized.ProviderRateLimitPerMinute, normalized.ExecutionTimeoutSeconds); err != nil {
 		return Agent{}, mapWriteError("insert agent", err)
 	}
 	if _, err := tx.Exec(ctx, `
@@ -257,7 +270,10 @@ func (service *Service) Create(ctx context.Context, current identity.User, input
 			return Agent{}, mapWriteError("add agent memberships", err)
 		}
 	}
-	metadata, _ := json.Marshal(map[string]any{"kind": normalized.Kind, "enabled": normalized.Enabled, "scopes": scopes, "chat_ids": normalized.ChatIDs})
+	if err := insertRecipeTriggers(ctx, tx, current.OrgID, agentID, normalized.Recipe, normalized.ChatIDs, service.now().UTC()); err != nil {
+		return Agent{}, err
+	}
+	metadata, _ := json.Marshal(map[string]any{"kind": normalized.Kind, "recipe": normalized.Recipe, "recipe_version": 1, "enabled": normalized.Enabled, "scopes": scopes, "chat_ids": normalized.ChatIDs})
 	if _, err := tx.Exec(ctx, `INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,'agent.create','agent',$4,$5)`, auditID, current.OrgID, current.ActorID, agentID, metadata); err != nil {
 		return Agent{}, fmt.Errorf("audit agent creation: %w", err)
 	}
@@ -269,7 +285,7 @@ func (service *Service) Create(ctx context.Context, current identity.User, input
 
 func (service *Service) List(ctx context.Context, current identity.User) ([]Agent, error) {
 	manager := canManage(current)
-	rows, err := service.pool.Query(ctx, agentSelect+` WHERE agent.org_id=$1 AND (agent.enabled OR $2) ORDER BY actor.display_name, actor.id`, current.OrgID, manager)
+	rows, err := service.pool.Query(ctx, agentSelect+` WHERE agent.org_id=$1 AND agent.deleted_at IS NULL AND (agent.enabled OR $2) ORDER BY actor.display_name, actor.id`, current.OrgID, manager)
 	if err != nil {
 		return nil, fmt.Errorf("list agents: %w", err)
 	}
@@ -282,6 +298,8 @@ func (service *Service) List(ctx context.Context, current identity.User) ([]Agen
 		}
 		if !manager {
 			item.EndpointURL = ""
+			item.ChatIDs = []string{}
+			item.Readiness.Blockers = []string{}
 		}
 		result = append(result, item)
 	}
@@ -299,7 +317,7 @@ func (service *Service) Usage(ctx context.Context, current identity.User, agentI
 		return UsageReport{}, ErrNotFound
 	}
 	var exists bool
-	if err := service.pool.QueryRow(ctx, `SELECT true FROM agents WHERE org_id=$1 AND actor_id=$2`, current.OrgID, agentID).Scan(&exists); errors.Is(err, pgx.ErrNoRows) {
+	if err := service.pool.QueryRow(ctx, `SELECT true FROM agents WHERE org_id=$1 AND actor_id=$2 AND deleted_at IS NULL`, current.OrgID, agentID).Scan(&exists); errors.Is(err, pgx.ErrNoRows) {
 		return UsageReport{}, ErrNotFound
 	} else if err != nil {
 		return UsageReport{}, err
@@ -338,7 +356,7 @@ func (service *Service) Get(ctx context.Context, current identity.User, agentID 
 		return Agent{}, ErrNotFound
 	}
 	manager := canManage(current)
-	result, err := scanAgent(service.pool.QueryRow(ctx, agentSelect+` WHERE agent.org_id=$1 AND agent.actor_id=$2 AND (agent.enabled OR $3)`, current.OrgID, agentID, manager))
+	result, err := scanAgent(service.pool.QueryRow(ctx, agentSelect+` WHERE agent.org_id=$1 AND agent.actor_id=$2 AND agent.deleted_at IS NULL AND (agent.enabled OR $3)`, current.OrgID, agentID, manager))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Agent{}, ErrNotFound
 	}
@@ -347,6 +365,8 @@ func (service *Service) Get(ctx context.Context, current identity.User, agentID 
 	}
 	if !manager {
 		result.EndpointURL = ""
+		result.ChatIDs = []string{}
+		result.Readiness.Blockers = []string{}
 	}
 	return result, nil
 }
@@ -358,7 +378,7 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 	if _, err := uuid.Parse(agentID); err != nil {
 		return Agent{}, ErrNotFound
 	}
-	if input.DisplayName == nil && input.Handle == nil && input.Description == nil && input.Enabled == nil && input.AllowedScopes == nil && input.Provider == nil && input.Model == nil && input.EndpointURL == nil && input.ExternalDataSharingApproved == nil && input.RateLimitPerMinute == nil && input.ProviderRateLimitPerMinute == nil && input.ChatIDs == nil {
+	if input.DisplayName == nil && input.Handle == nil && input.Description == nil && input.Enabled == nil && input.AllowedScopes == nil && input.Provider == nil && input.Model == nil && input.EndpointURL == nil && input.ExternalDataSharingApproved == nil && input.DailyCostLimit == nil && input.MonthlyCostLimit == nil && input.MaxOutputTokens == nil && input.MaxToolIterations == nil && input.MaxChainDepth == nil && input.PerChatConcurrency == nil && input.RateLimitPerMinute == nil && input.ProviderRateLimitPerMinute == nil && input.ExecutionTimeoutSeconds == nil && input.ChatIDs == nil {
 		return Agent{}, fmt.Errorf("%w: update must contain at least one field", ErrInvalid)
 	}
 	auditID, err := id.New()
@@ -370,7 +390,7 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 		return Agent{}, fmt.Errorf("begin agent update: %w", err)
 	}
 	defer tx.Rollback(ctx)
-	lockedAgent, err := scanAgent(tx.QueryRow(ctx, agentSelect+` WHERE agent.org_id=$1 AND agent.actor_id=$2 FOR UPDATE OF agent,actor`, current.OrgID, agentID))
+	lockedAgent, err := scanAgent(tx.QueryRow(ctx, agentSelect+` WHERE agent.org_id=$1 AND agent.actor_id=$2 AND agent.deleted_at IS NULL FOR UPDATE OF agent,actor`, current.OrgID, agentID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Agent{}, ErrNotFound
 	} else if err != nil {
@@ -395,13 +415,13 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 	if _, err := tx.Exec(ctx, `UPDATE agents SET description=$3,enabled=$4,allowed_scopes=$5,provider=$6,model=$7,
 		endpoint_url=$8,external_data_sharing_approved=$9,daily_cost_limit=NULLIF($10,'')::numeric,monthly_cost_limit=NULLIF($11,'')::numeric,
 		max_output_tokens=$12,max_tool_iterations=$13,max_chain_depth=$14,per_chat_concurrency=$15,
-		rate_limit_per_minute=$16,provider_rate_limit_per_minute=$17,updated_at=now()
+		rate_limit_per_minute=$16,provider_rate_limit_per_minute=$17,execution_timeout_seconds=$18,updated_at=now()
 		WHERE org_id=$1 AND actor_id=$2`, current.OrgID, agentID, prospective.Description, prospective.Enabled,
 		scopeStrings(prospective.AllowedScopes), prospective.Provider, prospective.Model, prospective.EndpointURL,
 		prospective.ExternalDataSharingApproved, costLimitValue(prospective.DailyCostLimit), costLimitValue(prospective.MonthlyCostLimit),
 		*prospective.MaxOutputTokens, *prospective.MaxToolIterations,
 		*prospective.MaxChainDepth, *prospective.PerChatConcurrency, prospective.RateLimitPerMinute,
-		prospective.ProviderRateLimitPerMinute); err != nil {
+		prospective.ProviderRateLimitPerMinute, prospective.ExecutionTimeoutSeconds); err != nil {
 		return Agent{}, mapWriteError("update agent", err)
 	}
 	if input.ChatIDs != nil {
@@ -460,6 +480,88 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 	}
 	service.revokeRealtimeKeys(revokedKeyIDs)
 	return service.Get(ctx, current, agentID)
+}
+
+func (service *Service) Delete(ctx context.Context, current identity.User, agentID string) error {
+	if !canManage(current) {
+		return ErrForbidden
+	}
+	if _, err := uuid.Parse(agentID); err != nil {
+		return ErrNotFound
+	}
+	auditID, err := id.New()
+	if err != nil {
+		return err
+	}
+	tx, err := service.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin agent deletion: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	var deletedAt *time.Time
+	err = tx.QueryRow(ctx, `SELECT deleted_at FROM agents WHERE org_id=$1 AND actor_id=$2 FOR UPDATE`, current.OrgID, agentID).Scan(&deletedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("lock agent for deletion: %w", err)
+	}
+	if deletedAt != nil {
+		return nil
+	}
+	revokedKeyIDs := make([]string, 0)
+	rows, err := tx.Query(ctx, `UPDATE agent_api_keys SET revoked_at=now()
+		WHERE org_id=$1 AND agent_id=$2 AND revoked_at IS NULL RETURNING id`, current.OrgID, agentID)
+	if err != nil {
+		return fmt.Errorf("revoke deleted agent keys: %w", err)
+	}
+	for rows.Next() {
+		var keyID string
+		if err := rows.Scan(&keyID); err != nil {
+			rows.Close()
+			return err
+		}
+		revokedKeyIDs = append(revokedKeyIDs, keyID)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+	statements := []struct {
+		operation string
+		query     string
+	}{
+		{"disable deleted agent triggers", `UPDATE agent_triggers SET enabled=false,updated_at=now() WHERE org_id=$1 AND agent_id=$2 AND enabled`},
+		{"cancel queued deleted agent runs", `UPDATE agent_runs SET status='canceled',error_code='agent_deleted',cancel_requested_at=now(),finished_at=now() WHERE org_id=$1 AND agent_id=$2 AND status='queued'`},
+		{"request cancellation for running deleted agent runs", `UPDATE agent_runs SET cancel_requested_at=COALESCE(cancel_requested_at,now()),error_code='agent_deleted' WHERE org_id=$1 AND agent_id=$2 AND status='running'`},
+		{"remove deleted agent memberships", `DELETE FROM chat_members WHERE org_id=$1 AND actor_id=$2`},
+		{"remove deleted agent provider credential", `DELETE FROM agent_provider_credentials WHERE org_id=$1 AND agent_id=$2`},
+		{"remove deleted agent MCP servers", `DELETE FROM agent_mcp_servers WHERE org_id=$1 AND agent_id=$2`},
+		{"remove deleted agent memory", `DELETE FROM agent_memory WHERE org_id=$1 AND agent_id=$2`},
+		{"remove deleted agent runtime checkpoints", `DELETE FROM agent_runtime_checkpoints WHERE org_id=$1 AND agent_id=$2`},
+	}
+	for _, statement := range statements {
+		if _, err := tx.Exec(ctx, statement.query, current.OrgID, agentID); err != nil {
+			return fmt.Errorf("%s: %w", statement.operation, err)
+		}
+	}
+	if _, err := tx.Exec(ctx, `UPDATE agents SET enabled=false,deleted_at=now(),updated_at=now() WHERE org_id=$1 AND actor_id=$2`, current.OrgID, agentID); err != nil {
+		return mapWriteError("tombstone agent", err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE actors SET status='deactivated',deleted_at=now() WHERE org_id=$1 AND id=$2 AND type='agent'`, current.OrgID, agentID); err != nil {
+		return mapWriteError("deactivate agent actor", err)
+	}
+	metadata, _ := json.Marshal(map[string]any{"revoked_key_count": len(revokedKeyIDs), "historical_records_retained": true})
+	if _, err := tx.Exec(ctx, `INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata)
+		VALUES($1,$2,$3,'agent.delete','agent',$4,$5)`, auditID, current.OrgID, current.ActorID, agentID, metadata); err != nil {
+		return fmt.Errorf("audit agent deletion: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return mapWriteError("commit agent deletion", err)
+	}
+	service.revokeRealtimeKeys(revokedKeyIDs)
+	return nil
 }
 
 func (service *Service) CreateKey(ctx context.Context, current identity.User, agentID string, input CreateKeyInput) (CreatedAPIKey, error) {
@@ -616,7 +718,7 @@ func (service *Service) AuthenticateKey(ctx context.Context, secret string) (ide
 		JOIN actors actor ON actor.org_id=agent.org_id AND actor.id=agent.actor_id
 		JOIN organizations organization ON organization.id=agent.org_id
 		WHERE key.key_hash=$1 AND key.revoked_at IS NULL AND (key.expires_at IS NULL OR key.expires_at>now())
-		  AND agent.enabled AND key.scopes <@ agent.allowed_scopes AND actor.status='active' AND actor.deleted_at IS NULL`, digest[:]).Scan(
+		  AND agent.enabled AND agent.deleted_at IS NULL AND key.scopes <@ agent.allowed_scopes AND actor.status='active' AND actor.deleted_at IS NULL`, digest[:]).Scan(
 		&user.ActorID, &user.OrgID, &user.OrganizationName, &user.DisplayName, &user.Handle, &user.Status, &user.CreatedAt, &user.AvatarVersion, &keyID, &scopes, &expiresAt, &keyRateLimit, &agentRateLimit, &organizationRateLimit)
 	if err != nil {
 		return identity.User{}, access.Identity{}, identity.ErrUnauthorized
@@ -635,11 +737,14 @@ func (service *Service) AuthenticateKey(ctx context.Context, secret string) (ide
 
 const agentSelect = `
 	SELECT agent.actor_id,agent.org_id,agent.owner_actor_id,actor.display_name,actor.handle,
-	       agent.kind,agent.description,agent.enabled,agent.allowed_scopes,agent.provider,agent.model,
+	       agent.kind,agent.recipe,agent.recipe_version,agent.description,agent.enabled,agent.allowed_scopes,agent.provider,agent.model,
 	       agent.endpoint_url,agent.external_data_sharing_approved,agent.daily_cost_limit::text,agent.monthly_cost_limit::text,agent.max_output_tokens,
 	       agent.max_tool_iterations,agent.max_chain_depth,agent.per_chat_concurrency,
-	       agent.rate_limit_per_minute,agent.provider_rate_limit_per_minute,
+	       agent.rate_limit_per_minute,agent.provider_rate_limit_per_minute,agent.execution_timeout_seconds,
 	       COALESCE((SELECT array_agg(member.chat_id ORDER BY member.chat_id) FROM chat_members member WHERE member.org_id=agent.org_id AND member.actor_id=agent.actor_id),'{}'::uuid[]),
+	       EXISTS(SELECT 1 FROM agent_provider_credentials credential WHERE credential.org_id=agent.org_id AND credential.agent_id=agent.actor_id),
+	       EXISTS(SELECT 1 FROM agent_api_keys key WHERE key.org_id=agent.org_id AND key.agent_id=agent.actor_id AND key.revoked_at IS NULL AND (key.expires_at IS NULL OR key.expires_at>now())),
+	       EXISTS(SELECT 1 FROM agent_triggers trigger WHERE trigger.org_id=agent.org_id AND trigger.agent_id=agent.actor_id AND trigger.enabled),
 	       actor.avatar_version,agent.created_at,agent.updated_at
 	FROM agents agent JOIN actors actor ON actor.org_id=agent.org_id AND actor.id=agent.actor_id`
 
@@ -648,24 +753,66 @@ type scanner interface{ Scan(...any) error }
 func scanAgent(row scanner) (Agent, error) {
 	var result Agent
 	var scopes []string
+	var hasCredential, hasActiveKey, hasTrigger bool
 	if err := row.Scan(&result.ID, &result.OrgID, &result.OwnerActorID, &result.DisplayName, &result.Handle,
-		&result.Kind, &result.Description, &result.Enabled, &scopes, &result.Provider, &result.Model,
+		&result.Kind, &result.Recipe, &result.RecipeVersion, &result.Description, &result.Enabled, &scopes, &result.Provider, &result.Model,
 		&result.EndpointURL, &result.ExternalDataSharingApproved, &result.DailyCostLimit, &result.MonthlyCostLimit, &result.MaxOutputTokens,
 		&result.MaxToolIterations, &result.MaxChainDepth, &result.PerChatConcurrency,
-		&result.RateLimitPerMinute, &result.ProviderRateLimitPerMinute, &result.ChatIDs, &result.AvatarVersion, &result.CreatedAt, &result.UpdatedAt); err != nil {
+		&result.RateLimitPerMinute, &result.ProviderRateLimitPerMinute, &result.ExecutionTimeoutSeconds, &result.ChatIDs,
+		&hasCredential, &hasActiveKey, &hasTrigger, &result.AvatarVersion, &result.CreatedAt, &result.UpdatedAt); err != nil {
 		return Agent{}, err
 	}
 	result.AllowedScopes = make([]Scope, len(scopes))
 	for index, value := range scopes {
 		result.AllowedScopes[index] = Scope(value)
 	}
+	result.Readiness = readinessFor(result, hasCredential, hasActiveKey, hasTrigger)
 	return result, nil
+}
+
+func readinessFor(value Agent, hasCredential, hasActiveKey, hasTrigger bool) Readiness {
+	blockers := make([]string, 0, 6)
+	if len(value.ChatIDs) == 0 {
+		blockers = append(blockers, "chat_required")
+	}
+	if !hasActiveKey {
+		blockers = append(blockers, "runtime_key_required")
+	}
+	if value.Kind == "builtin" {
+		if value.Provider == "" || value.Model == "" {
+			blockers = append(blockers, "provider_model_required")
+		}
+		if !hasCredential {
+			blockers = append(blockers, "provider_credential_required")
+		}
+		if !value.ExternalDataSharingApproved {
+			blockers = append(blockers, "external_data_approval_required")
+		}
+	}
+	if value.Recipe != "custom" && !hasTrigger {
+		blockers = append(blockers, "trigger_required")
+	}
+	ready := len(blockers) == 0
+	state := "needs_setup"
+	if ready {
+		state = "ready"
+	}
+	if value.Enabled && ready {
+		state = "enabled"
+	} else if value.Enabled {
+		state = "error"
+	}
+	return Readiness{State: state, Ready: ready, Blockers: blockers}
 }
 
 func normalizeCreate(input CreateInput) (CreateInput, error) {
 	input.DisplayName = strings.TrimSpace(input.DisplayName)
 	input.Handle = strings.ToLower(strings.TrimSpace(input.Handle))
 	input.Kind = strings.TrimSpace(input.Kind)
+	input.Recipe = strings.ToLower(strings.TrimSpace(input.Recipe))
+	if input.Recipe == "" {
+		input.Recipe = "custom"
+	}
 	input.Description = strings.TrimSpace(input.Description)
 	input.Provider = strings.TrimSpace(input.Provider)
 	input.Model = strings.TrimSpace(input.Model)
@@ -675,6 +822,9 @@ func normalizeCreate(input CreateInput) (CreateInput, error) {
 	}
 	if input.ProviderRateLimitPerMinute == 0 {
 		input.ProviderRateLimitPerMinute = 300
+	}
+	if input.ExecutionTimeoutSeconds == 0 {
+		input.ExecutionTimeoutSeconds = 600
 	}
 	if input.MaxOutputTokens == nil {
 		input.MaxOutputTokens = intPointer(2048)
@@ -700,12 +850,19 @@ func normalizeCreate(input CreateInput) (CreateInput, error) {
 	if len([]rune(input.DisplayName)) < 1 || len([]rune(input.DisplayName)) > 120 || !handlePattern.MatchString(input.Handle) ||
 		(input.Kind != "builtin" && input.Kind != "external") || len([]rune(input.Description)) > 2000 || len(input.Provider) > 100 || len(input.Model) > 200 ||
 		input.RateLimitPerMinute < 1 || input.RateLimitPerMinute > 100000 || input.ProviderRateLimitPerMinute < 1 || input.ProviderRateLimitPerMinute > 100000 ||
+		input.ExecutionTimeoutSeconds < 30 || input.ExecutionTimeoutSeconds > 3600 ||
 		*input.MaxOutputTokens < 1 || *input.MaxOutputTokens > 1000000 || *input.MaxToolIterations < 0 || *input.MaxToolIterations > 64 ||
 		*input.MaxChainDepth < 0 || *input.MaxChainDepth > 16 || *input.PerChatConcurrency < 1 || *input.PerChatConcurrency > 32 {
 		return CreateInput{}, fmt.Errorf("%w: invalid agent profile", ErrInvalid)
 	}
 	if input.Kind == "builtin" && input.EndpointURL != "" {
 		return CreateInput{}, fmt.Errorf("%w: builtin agent cannot have an endpoint", ErrInvalid)
+	}
+	if input.Recipe != "custom" && input.Recipe != "summarizer" && input.Recipe != "qa" && input.Recipe != "onboarding" {
+		return CreateInput{}, fmt.Errorf("%w: unsupported agent recipe", ErrInvalid)
+	}
+	if input.Recipe != "custom" && input.Kind != "builtin" {
+		return CreateInput{}, fmt.Errorf("%w: recipes require a builtin agent", ErrInvalid)
 	}
 	if input.Kind == "external" {
 		parsed, err := url.Parse(input.EndpointURL)
@@ -723,17 +880,20 @@ func normalizeCreate(input CreateInput) (CreateInput, error) {
 		return CreateInput{}, err
 	}
 	input.ChatIDs = chatIDs
+	if input.Recipe != "custom" && len(input.ChatIDs) == 0 {
+		return CreateInput{}, fmt.Errorf("%w: recipe agents require at least one chat", ErrInvalid)
+	}
 	return input, nil
 }
 
 func mergeUpdate(existing Agent, input UpdateInput) (CreateInput, error) {
 	prospective := CreateInput{
-		DisplayName: existing.DisplayName, Handle: existing.Handle, Kind: existing.Kind,
+		DisplayName: existing.DisplayName, Handle: existing.Handle, Kind: existing.Kind, Recipe: existing.Recipe,
 		Description: existing.Description, Enabled: existing.Enabled, AllowedScopes: existing.AllowedScopes,
 		Provider: existing.Provider, Model: existing.Model, EndpointURL: existing.EndpointURL,
 		ExternalDataSharingApproved: existing.ExternalDataSharingApproved, RateLimitPerMinute: existing.RateLimitPerMinute,
 		DailyCostLimit: existing.DailyCostLimit, MonthlyCostLimit: existing.MonthlyCostLimit,
-		ProviderRateLimitPerMinute: existing.ProviderRateLimitPerMinute, ChatIDs: existing.ChatIDs,
+		ProviderRateLimitPerMinute: existing.ProviderRateLimitPerMinute, ExecutionTimeoutSeconds: existing.ExecutionTimeoutSeconds, ChatIDs: existing.ChatIDs,
 		MaxOutputTokens: intPointer(existing.MaxOutputTokens), MaxToolIterations: intPointer(existing.MaxToolIterations),
 		MaxChainDepth: intPointer(existing.MaxChainDepth), PerChatConcurrency: intPointer(existing.PerChatConcurrency),
 	}
@@ -788,10 +948,63 @@ func mergeUpdate(existing Agent, input UpdateInput) (CreateInput, error) {
 	if input.ProviderRateLimitPerMinute != nil {
 		prospective.ProviderRateLimitPerMinute = *input.ProviderRateLimitPerMinute
 	}
+	if input.ExecutionTimeoutSeconds != nil {
+		prospective.ExecutionTimeoutSeconds = *input.ExecutionTimeoutSeconds
+	}
 	if input.ChatIDs != nil {
 		prospective.ChatIDs = *input.ChatIDs
 	}
 	return normalizeCreate(prospective)
+}
+
+func insertRecipeTriggers(ctx context.Context, tx pgx.Tx, orgID, agentID, recipe string, chatIDs []string, now time.Time) error {
+	if recipe == "custom" {
+		return nil
+	}
+	if len(chatIDs) == 0 {
+		return fmt.Errorf("%w: recipe agents require at least one chat", ErrInvalid)
+	}
+	type recipeTrigger struct {
+		kind         string
+		config       map[string]any
+		timezone     string
+		missedPolicy string
+		nextRunAt    *time.Time
+	}
+	triggers := make([]recipeTrigger, 0, 2)
+	switch recipe {
+	case "summarizer":
+		triggers = append(triggers, recipeTrigger{kind: "command", config: map[string]any{"command": "summarize", "include_agent_messages": false}, timezone: "UTC", missedPolicy: "skip"})
+		next := time.Date(now.Year(), now.Month(), now.Day(), 9, 0, 0, 0, time.UTC)
+		if !next.After(now) {
+			next = next.Add(24 * time.Hour)
+		}
+		triggers = append(triggers, recipeTrigger{kind: "schedule", config: map[string]any{"chat_id": chatIDs[0], "hour": 9, "minute": 0, "days_of_week": []int{}}, timezone: "UTC", missedPolicy: "latest", nextRunAt: &next})
+	case "qa":
+		triggers = append(triggers, recipeTrigger{kind: "mention", config: map[string]any{"include_agent_messages": false}, timezone: "UTC", missedPolicy: "skip"})
+	case "onboarding":
+		triggers = append(triggers,
+			recipeTrigger{kind: "event", config: map[string]any{"event_types": []string{"member.joined"}, "include_agent_messages": false, "chat_id": chatIDs[0]}, timezone: "UTC", missedPolicy: "latest"},
+			recipeTrigger{kind: "mention", config: map[string]any{"include_agent_messages": false}, timezone: "UTC", missedPolicy: "skip"},
+		)
+	default:
+		return fmt.Errorf("%w: unsupported agent recipe", ErrInvalid)
+	}
+	for _, trigger := range triggers {
+		triggerID, err := id.New()
+		if err != nil {
+			return err
+		}
+		config, err := json.Marshal(trigger.config)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO agent_triggers(id,org_id,agent_id,type,config,enabled,timezone,missed_runs_policy,next_run_at)
+			VALUES($1,$2,$3,$4,$5,true,$6,$7,$8)`, triggerID, orgID, agentID, trigger.kind, config, trigger.timezone, trigger.missedPolicy, trigger.nextRunAt); err != nil {
+			return mapWriteError("create recipe trigger", err)
+		}
+	}
+	return nil
 }
 
 func intPointer(value int) *int { return &value }

@@ -68,6 +68,30 @@ func (e AgentKind) Valid() bool {
 	}
 }
 
+// Defines values for AgentRecipe.
+const (
+	AgentRecipeCustom     AgentRecipe = "custom"
+	AgentRecipeOnboarding AgentRecipe = "onboarding"
+	AgentRecipeQa         AgentRecipe = "qa"
+	AgentRecipeSummarizer AgentRecipe = "summarizer"
+)
+
+// Valid indicates whether the value is a known member of the AgentRecipe enum.
+func (e AgentRecipe) Valid() bool {
+	switch e {
+	case AgentRecipeCustom:
+		return true
+	case AgentRecipeOnboarding:
+		return true
+	case AgentRecipeQa:
+		return true
+	case AgentRecipeSummarizer:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentMcpToolCallMode.
 const (
 	AgentMcpToolCallModeRead  AgentMcpToolCallMode = "read"
@@ -125,6 +149,60 @@ func (e AgentProviderCallStatus) Valid() bool {
 	case AgentProviderCallStatusFailed:
 		return true
 	case AgentProviderCallStatusStarted:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentReadinessBlockers.
+const (
+	ChatRequired                 AgentReadinessBlockers = "chat_required"
+	ExternalDataApprovalRequired AgentReadinessBlockers = "external_data_approval_required"
+	ProviderCredentialRequired   AgentReadinessBlockers = "provider_credential_required"
+	ProviderModelRequired        AgentReadinessBlockers = "provider_model_required"
+	RuntimeKeyRequired           AgentReadinessBlockers = "runtime_key_required"
+	TriggerRequired              AgentReadinessBlockers = "trigger_required"
+)
+
+// Valid indicates whether the value is a known member of the AgentReadinessBlockers enum.
+func (e AgentReadinessBlockers) Valid() bool {
+	switch e {
+	case ChatRequired:
+		return true
+	case ExternalDataApprovalRequired:
+		return true
+	case ProviderCredentialRequired:
+		return true
+	case ProviderModelRequired:
+		return true
+	case RuntimeKeyRequired:
+		return true
+	case TriggerRequired:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentReadinessState.
+const (
+	AgentReadinessStateEnabled    AgentReadinessState = "enabled"
+	AgentReadinessStateError      AgentReadinessState = "error"
+	AgentReadinessStateNeedsSetup AgentReadinessState = "needs_setup"
+	AgentReadinessStateReady      AgentReadinessState = "ready"
+)
+
+// Valid indicates whether the value is a known member of the AgentReadinessState enum.
+func (e AgentReadinessState) Valid() bool {
+	switch e {
+	case AgentReadinessStateEnabled:
+		return true
+	case AgentReadinessStateError:
+		return true
+	case AgentReadinessStateNeedsSetup:
+		return true
+	case AgentReadinessStateReady:
 		return true
 	default:
 		return false
@@ -857,6 +935,30 @@ func (e CreateAgentRequestKind) Valid() bool {
 	case CreateAgentRequestKindBuiltin:
 		return true
 	case CreateAgentRequestKindExternal:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CreateAgentRequestRecipe.
+const (
+	CreateAgentRequestRecipeCustom     CreateAgentRequestRecipe = "custom"
+	CreateAgentRequestRecipeOnboarding CreateAgentRequestRecipe = "onboarding"
+	CreateAgentRequestRecipeQa         CreateAgentRequestRecipe = "qa"
+	CreateAgentRequestRecipeSummarizer CreateAgentRequestRecipe = "summarizer"
+)
+
+// Valid indicates whether the value is a known member of the CreateAgentRequestRecipe enum.
+func (e CreateAgentRequestRecipe) Valid() bool {
+	switch e {
+	case CreateAgentRequestRecipeCustom:
+		return true
+	case CreateAgentRequestRecipeOnboarding:
+		return true
+	case CreateAgentRequestRecipeQa:
+		return true
+	case CreateAgentRequestRecipeSummarizer:
 		return true
 	default:
 		return false
@@ -2564,6 +2666,7 @@ type Agent struct {
 	DisplayName                 string               `json:"display_name"`
 	Enabled                     bool                 `json:"enabled"`
 	EndpointUrl                 *string              `json:"endpoint_url,omitempty"`
+	ExecutionTimeoutSeconds     int                  `json:"execution_timeout_seconds"`
 	ExternalDataSharingApproved bool                 `json:"external_data_sharing_approved"`
 	Handle                      string               `json:"handle"`
 	Id                          openapi_types.UUID   `json:"id"`
@@ -2579,11 +2682,17 @@ type Agent struct {
 	Provider                    string               `json:"provider"`
 	ProviderRateLimitPerMinute  int                  `json:"provider_rate_limit_per_minute"`
 	RateLimitPerMinute          int                  `json:"rate_limit_per_minute"`
+	Readiness                   AgentReadiness       `json:"readiness"`
+	Recipe                      AgentRecipe          `json:"recipe"`
+	RecipeVersion               int                  `json:"recipe_version"`
 	UpdatedAt                   time.Time            `json:"updated_at"`
 }
 
 // AgentKind defines model for Agent.Kind.
 type AgentKind string
+
+// AgentRecipe defines model for Agent.Recipe.
+type AgentRecipe string
 
 // AgentApiKey defines model for AgentApiKey.
 type AgentApiKey struct {
@@ -2664,6 +2773,19 @@ type AgentProviderCredentialView struct {
 	KeyHint    string     `json:"key_hint"`
 	UpdatedAt  *time.Time `json:"updated_at,omitempty"`
 }
+
+// AgentReadiness defines model for AgentReadiness.
+type AgentReadiness struct {
+	Blockers []AgentReadinessBlockers `json:"blockers"`
+	Ready    bool                     `json:"ready"`
+	State    AgentReadinessState      `json:"state"`
+}
+
+// AgentReadinessBlockers defines model for AgentReadiness.Blockers.
+type AgentReadinessBlockers string
+
+// AgentReadinessState defines model for AgentReadiness.State.
+type AgentReadinessState string
 
 // AgentRun defines model for AgentRun.
 type AgentRun struct {
@@ -3084,29 +3206,34 @@ type CreateAgentMcpServerRequest struct {
 
 // CreateAgentRequest defines model for CreateAgentRequest.
 type CreateAgentRequest struct {
-	AllowedScopes               []AgentScope           `json:"allowed_scopes"`
-	ChatIds                     []openapi_types.UUID   `json:"chat_ids"`
-	DailyCostLimit              *string                `json:"daily_cost_limit,omitempty"`
-	Description                 *string                `json:"description,omitempty"`
-	DisplayName                 string                 `json:"display_name"`
-	Enabled                     bool                   `json:"enabled"`
-	EndpointUrl                 *string                `json:"endpoint_url,omitempty"`
-	ExternalDataSharingApproved bool                   `json:"external_data_sharing_approved"`
-	Handle                      string                 `json:"handle"`
-	Kind                        CreateAgentRequestKind `json:"kind"`
-	MaxChainDepth               *int                   `json:"max_chain_depth,omitempty"`
-	MaxOutputTokens             *int                   `json:"max_output_tokens,omitempty"`
-	MaxToolIterations           *int                   `json:"max_tool_iterations,omitempty"`
-	Model                       *string                `json:"model,omitempty"`
-	MonthlyCostLimit            *string                `json:"monthly_cost_limit,omitempty"`
-	PerChatConcurrency          *int                   `json:"per_chat_concurrency,omitempty"`
-	Provider                    *string                `json:"provider,omitempty"`
-	ProviderRateLimitPerMinute  *int                   `json:"provider_rate_limit_per_minute,omitempty"`
-	RateLimitPerMinute          *int                   `json:"rate_limit_per_minute,omitempty"`
+	AllowedScopes               []AgentScope              `json:"allowed_scopes"`
+	ChatIds                     []openapi_types.UUID      `json:"chat_ids"`
+	DailyCostLimit              *string                   `json:"daily_cost_limit,omitempty"`
+	Description                 *string                   `json:"description,omitempty"`
+	DisplayName                 string                    `json:"display_name"`
+	Enabled                     bool                      `json:"enabled"`
+	EndpointUrl                 *string                   `json:"endpoint_url,omitempty"`
+	ExecutionTimeoutSeconds     *int                      `json:"execution_timeout_seconds,omitempty"`
+	ExternalDataSharingApproved bool                      `json:"external_data_sharing_approved"`
+	Handle                      string                    `json:"handle"`
+	Kind                        CreateAgentRequestKind    `json:"kind"`
+	MaxChainDepth               *int                      `json:"max_chain_depth,omitempty"`
+	MaxOutputTokens             *int                      `json:"max_output_tokens,omitempty"`
+	MaxToolIterations           *int                      `json:"max_tool_iterations,omitempty"`
+	Model                       *string                   `json:"model,omitempty"`
+	MonthlyCostLimit            *string                   `json:"monthly_cost_limit,omitempty"`
+	PerChatConcurrency          *int                      `json:"per_chat_concurrency,omitempty"`
+	Provider                    *string                   `json:"provider,omitempty"`
+	ProviderRateLimitPerMinute  *int                      `json:"provider_rate_limit_per_minute,omitempty"`
+	RateLimitPerMinute          *int                      `json:"rate_limit_per_minute,omitempty"`
+	Recipe                      *CreateAgentRequestRecipe `json:"recipe,omitempty"`
 }
 
 // CreateAgentRequestKind defines model for CreateAgentRequest.Kind.
 type CreateAgentRequestKind string
+
+// CreateAgentRequestRecipe defines model for CreateAgentRequest.Recipe.
+type CreateAgentRequestRecipe string
 
 // CreateAgentTriggerRequest defines model for CreateAgentTriggerRequest.
 type CreateAgentTriggerRequest struct {
@@ -4057,6 +4184,7 @@ type UpdateAgentRequest struct {
 	DisplayName                 *string               `json:"display_name,omitempty"`
 	Enabled                     *bool                 `json:"enabled,omitempty"`
 	EndpointUrl                 *string               `json:"endpoint_url,omitempty"`
+	ExecutionTimeoutSeconds     *int                  `json:"execution_timeout_seconds,omitempty"`
 	ExternalDataSharingApproved *bool                 `json:"external_data_sharing_approved,omitempty"`
 	Handle                      *string               `json:"handle,omitempty"`
 	MaxChainDepth               *int                  `json:"max_chain_depth,omitempty"`
