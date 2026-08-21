@@ -506,29 +506,32 @@ func (e DraftBodyFormat) Valid() bool {
 
 // Defines values for DurableEventTypeV1.
 const (
-	ChatArchived     DurableEventTypeV1 = "chat.archived"
-	ChatCreated      DurableEventTypeV1 = "chat.created"
-	ChatUpdated      DurableEventTypeV1 = "chat.updated"
-	DraftDeleted     DurableEventTypeV1 = "draft.deleted"
-	DraftUpdated     DurableEventTypeV1 = "draft.updated"
-	MemberJoined     DurableEventTypeV1 = "member.joined"
-	MemberRemoved    DurableEventTypeV1 = "member.removed"
-	MemberUpdated    DurableEventTypeV1 = "member.updated"
-	MessageCreated   DurableEventTypeV1 = "message.created"
-	MessageDeleted   DurableEventTypeV1 = "message.deleted"
-	MessagePinned    DurableEventTypeV1 = "message.pinned"
-	MessageUnpinned  DurableEventTypeV1 = "message.unpinned"
-	MessageUpdated   DurableEventTypeV1 = "message.updated"
-	ReactionAdded    DurableEventTypeV1 = "reaction.added"
-	ReactionRemoved  DurableEventTypeV1 = "reaction.removed"
-	ReadMarked       DurableEventTypeV1 = "read.marked"
-	ThreadFollowed   DurableEventTypeV1 = "thread.followed"
-	ThreadUnfollowed DurableEventTypeV1 = "thread.unfollowed"
+	ActorStatusUpdated DurableEventTypeV1 = "actor.status.updated"
+	ChatArchived       DurableEventTypeV1 = "chat.archived"
+	ChatCreated        DurableEventTypeV1 = "chat.created"
+	ChatUpdated        DurableEventTypeV1 = "chat.updated"
+	DraftDeleted       DurableEventTypeV1 = "draft.deleted"
+	DraftUpdated       DurableEventTypeV1 = "draft.updated"
+	MemberJoined       DurableEventTypeV1 = "member.joined"
+	MemberRemoved      DurableEventTypeV1 = "member.removed"
+	MemberUpdated      DurableEventTypeV1 = "member.updated"
+	MessageCreated     DurableEventTypeV1 = "message.created"
+	MessageDeleted     DurableEventTypeV1 = "message.deleted"
+	MessagePinned      DurableEventTypeV1 = "message.pinned"
+	MessageUnpinned    DurableEventTypeV1 = "message.unpinned"
+	MessageUpdated     DurableEventTypeV1 = "message.updated"
+	ReactionAdded      DurableEventTypeV1 = "reaction.added"
+	ReactionRemoved    DurableEventTypeV1 = "reaction.removed"
+	ReadMarked         DurableEventTypeV1 = "read.marked"
+	ThreadFollowed     DurableEventTypeV1 = "thread.followed"
+	ThreadUnfollowed   DurableEventTypeV1 = "thread.unfollowed"
 )
 
 // Valid indicates whether the value is a known member of the DurableEventTypeV1 enum.
 func (e DurableEventTypeV1) Valid() bool {
 	switch e {
+	case ActorStatusUpdated:
+		return true
 	case ChatArchived:
 		return true
 	case ChatCreated:
@@ -1405,12 +1408,15 @@ type ActorPage struct {
 
 // ActorSummary defines model for ActorSummary.
 type ActorSummary struct {
-	About       string             `json:"about"`
-	ActorId     openapi_types.UUID `json:"actor_id"`
-	DisplayName string             `json:"display_name"`
-	Handle      string             `json:"handle"`
-	Title       string             `json:"title"`
-	Type        ActorSummaryType   `json:"type"`
+	About           string             `json:"about"`
+	ActorId         openapi_types.UUID `json:"actor_id"`
+	DisplayName     string             `json:"display_name"`
+	Handle          string             `json:"handle"`
+	StatusEmoji     string             `json:"status_emoji"`
+	StatusExpiresAt *time.Time         `json:"status_expires_at"`
+	StatusText      string             `json:"status_text"`
+	Title           string             `json:"title"`
+	Type            ActorSummaryType   `json:"type"`
 }
 
 // ActorSummaryType defines model for ActorSummary.Type.
@@ -1519,12 +1525,15 @@ type ChatFolderIcon string
 
 // ChatMember defines model for ChatMember.
 type ChatMember struct {
-	ActorId     openapi_types.UUID `json:"actor_id"`
-	DisplayName string             `json:"display_name"`
-	Handle      string             `json:"handle"`
-	JoinedAt    time.Time          `json:"joined_at"`
-	Role        ChatMemberRole     `json:"role"`
-	Title       string             `json:"title"`
+	ActorId         openapi_types.UUID `json:"actor_id"`
+	DisplayName     string             `json:"display_name"`
+	Handle          string             `json:"handle"`
+	JoinedAt        time.Time          `json:"joined_at"`
+	Role            ChatMemberRole     `json:"role"`
+	StatusEmoji     string             `json:"status_emoji"`
+	StatusExpiresAt *time.Time         `json:"status_expires_at"`
+	StatusText      string             `json:"status_text"`
+	Title           string             `json:"title"`
 }
 
 // ChatMemberRole defines model for ChatMember.Role.
@@ -1603,6 +1612,13 @@ type CreateMessageRequest struct {
 
 // CreateMessageRequestBodyFormat defines model for CreateMessageRequest.BodyFormat.
 type CreateMessageRequestBodyFormat string
+
+// CustomStatus defines model for CustomStatus.
+type CustomStatus struct {
+	Emoji     string     `json:"emoji"`
+	ExpiresAt *time.Time `json:"expires_at"`
+	Text      string     `json:"text"`
+}
 
 // DirectoryChat defines model for DirectoryChat.
 type DirectoryChat struct {
@@ -1786,16 +1802,19 @@ type MessageWindow struct {
 
 // OrganizationMember defines model for OrganizationMember.
 type OrganizationMember struct {
-	ActorId     openapi_types.UUID       `json:"actor_id"`
-	CreatedAt   time.Time                `json:"created_at"`
-	DisplayName string                   `json:"display_name"`
-	Email       openapi_types.Email      `json:"email"`
-	Handle      string                   `json:"handle"`
-	LastSeenAt  *time.Time               `json:"last_seen_at"`
-	Permissions []Permission             `json:"permissions"`
-	Role        OrganizationMemberRole   `json:"role"`
-	Status      OrganizationMemberStatus `json:"status"`
-	Title       string                   `json:"title"`
+	ActorId         openapi_types.UUID       `json:"actor_id"`
+	CreatedAt       time.Time                `json:"created_at"`
+	DisplayName     string                   `json:"display_name"`
+	Email           openapi_types.Email      `json:"email"`
+	Handle          string                   `json:"handle"`
+	LastSeenAt      *time.Time               `json:"last_seen_at"`
+	Permissions     []Permission             `json:"permissions"`
+	Role            OrganizationMemberRole   `json:"role"`
+	Status          OrganizationMemberStatus `json:"status"`
+	StatusEmoji     string                   `json:"status_emoji"`
+	StatusExpiresAt *time.Time               `json:"status_expires_at"`
+	StatusText      string                   `json:"status_text"`
+	Title           string                   `json:"title"`
 }
 
 // OrganizationMemberRole defines model for OrganizationMember.Role.
@@ -2101,6 +2120,13 @@ type Session struct {
 	UserAgent  string             `json:"user_agent"`
 }
 
+// SetStatusRequest defines model for SetStatusRequest.
+type SetStatusRequest struct {
+	Emoji     string     `json:"emoji"`
+	ExpiresAt *time.Time `json:"expires_at"`
+	Text      string     `json:"text"`
+}
+
 // ThreadFollow defines model for ThreadFollow.
 type ThreadFollow struct {
 	FollowedAt   time.Time          `json:"followed_at"`
@@ -2237,6 +2263,9 @@ type User struct {
 	Permissions        []Permission        `json:"permissions"`
 	Role               UserRole            `json:"role"`
 	Status             UserStatus          `json:"status"`
+	StatusEmoji        string              `json:"status_emoji"`
+	StatusExpiresAt    *time.Time          `json:"status_expires_at"`
+	StatusText         string              `json:"status_text"`
 	Timezone           string              `json:"timezone"`
 	Title              string              `json:"title"`
 }
@@ -2384,6 +2413,9 @@ type ConfirmEmailJSONRequestBody = ConfirmEmailRequest
 
 // ChangePasswordJSONRequestBody defines body for ChangePassword for application/json ContentType.
 type ChangePasswordJSONRequestBody = ChangePasswordRequest
+
+// SetStatusJSONRequestBody defines body for SetStatus for application/json ContentType.
+type SetStatusJSONRequestBody = SetStatusRequest
 
 // UpdateMessageJSONRequestBody defines body for UpdateMessage for application/json ContentType.
 type UpdateMessageJSONRequestBody = UpdateMessageRequest

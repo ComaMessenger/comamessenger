@@ -25,6 +25,9 @@ function user(role: User["role"], permissions: Permission[] = []): User {
     status: "active",
     permissions,
     must_change_password: false,
+    status_emoji: "",
+    status_text: "",
+    status_expires_at: null,
     created_at: "2026-08-21T00:00:00Z",
   };
 }

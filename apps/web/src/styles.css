@@ -753,6 +753,7 @@ a:focus-visible {
   white-space: nowrap;
 }
 .sidebar-profile {
+  position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -762,6 +763,49 @@ a:focus-visible {
   padding: 6px 5px;
   border-block-start: 1px solid var(--coma-border);
   background: transparent;
+}
+.status-menu {
+  position: absolute;
+  z-index: 110;
+  inset-block-end: calc(100% + 8px);
+  inset-inline-start: 4px;
+  display: grid;
+  width: min(340px, calc(100vw - 16px));
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--coma-border);
+  border-radius: 12px;
+  background: var(--coma-surface-raised);
+  box-shadow: var(--coma-shadow);
+}
+.status-menu__fields {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 8px;
+}
+.status-menu input,
+.status-menu select {
+  min-width: 0;
+  min-height: 36px;
+  padding: 7px 9px;
+  border: 1px solid var(--coma-border);
+  border-radius: 8px;
+  background: var(--coma-surface);
+  color: var(--coma-foreground);
+  font: inherit;
+}
+.status-menu__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.mobile-status-form {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--coma-border);
+  border-radius: 12px;
+  background: var(--coma-surface-raised);
 }
 .sidebar-profile > button:not(.ui-button) {
   display: grid;

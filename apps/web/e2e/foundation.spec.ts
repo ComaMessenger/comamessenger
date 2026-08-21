@@ -28,6 +28,9 @@ const user = {
   timezone: "UTC",
   status: "active",
   must_change_password: false,
+  status_emoji: "",
+  status_text: "",
+  status_expires_at: null,
   created_at: "2026-08-19T00:00:00Z",
 };
 const lev = {
@@ -284,6 +287,32 @@ async function mockMessenger(
       runtimeUser = { ...runtimeUser, must_change_password: false };
       status = 204;
       body = undefined;
+    } else if (path.endsWith("/me/status")) {
+      if (route.request().method() === "DELETE") {
+        runtimeUser = {
+          ...runtimeUser,
+          status_emoji: "",
+          status_text: "",
+          status_expires_at: null,
+        };
+      } else {
+        const input = route.request().postDataJSON() as {
+          emoji: string;
+          text: string;
+          expires_at: string | null;
+        };
+        runtimeUser = {
+          ...runtimeUser,
+          status_emoji: input.emoji,
+          status_text: input.text,
+          status_expires_at: input.expires_at,
+        };
+      }
+      body = {
+        emoji: runtimeUser.status_emoji,
+        text: runtimeUser.status_text,
+        expires_at: runtimeUser.status_expires_at,
+      };
     } else if (path.endsWith("/me") && route.request().method() === "GET") {
       body = runtimeUser;
     } else if (path.endsWith("/me") && route.request().method() === "PATCH")
@@ -1659,6 +1688,35 @@ test("password recovery explains the local operator path without SMTP", async ({
     ),
   ).toBeVisible();
   await expect(page.getByLabel("Почта")).toHaveCount(0);
+});
+
+test("custom status is edited from the profile menu", async ({ page }) => {
+  await mockMessenger(page);
+  const phone = test.info().project.name === "phone";
+  await page.goto(phone ? "/more" : "/chats");
+  await page.getByRole("button", { name: phone ? /Статус/ : /Анна/ }).click();
+  await page.getByLabel("Эмодзи статуса").fill("🏖️");
+  await page.getByLabel("Текст статуса").fill("В отпуске");
+  if (!phone)
+    await page.getByLabel("Срок действия статуса").selectOption("week");
+  await page.getByRole("button", { name: "Сохранить" }).click();
+  if (phone) {
+    await expect(
+      page.getByRole("button", { name: "Статус 🏖️ В отпуске" }),
+    ).toBeVisible();
+  } else {
+    await expect(page.getByText("🏖️ В отпуске").first()).toBeVisible();
+  }
+
+  await page.getByRole("button", { name: phone ? /Статус/ : /Анна/ }).click();
+  await page.getByRole("button", { name: "Очистить статус" }).click();
+  if (phone) {
+    await expect(
+      page.getByRole("button", { name: "Статус Чем заняты?" }),
+    ).toBeVisible();
+  } else {
+    await expect(page.getByText("🏖️ В отпуске")).toHaveCount(0);
+  }
 });
 
 test("a 10k-message history stays virtualized", async ({ page }) => {

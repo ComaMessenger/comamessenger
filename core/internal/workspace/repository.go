@@ -193,7 +193,10 @@ func (r *Repository) Members(ctx context.Context, orgID string) ([]Member, error
 	rows, err := r.pool.Query(ctx, `
 		SELECT a.id,u.email::text,a.display_name,a.handle::text,a.title,a.org_role,a.status,a.created_at,
 		       (SELECT max(s.last_seen_at) FROM sessions s WHERE s.actor_id=a.id),
-		       ARRAY(SELECT ap.permission FROM actor_permissions ap WHERE ap.org_id=a.org_id AND ap.actor_id=a.id ORDER BY ap.permission)
+		       ARRAY(SELECT ap.permission FROM actor_permissions ap WHERE ap.org_id=a.org_id AND ap.actor_id=a.id ORDER BY ap.permission),
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_emoji ELSE '' END,
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_text ELSE '' END,
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_expires_at END
 		FROM actors a
 		JOIN users u ON u.actor_id=a.id
 		WHERE a.org_id=$1 AND a.deleted_at IS NULL
@@ -206,7 +209,7 @@ func (r *Repository) Members(ctx context.Context, orgID string) ([]Member, error
 	for rows.Next() {
 		var item Member
 		var stored []string
-		if err := rows.Scan(&item.ActorID, &item.Email, &item.DisplayName, &item.Handle, &item.Title, &item.Role, &item.Status, &item.CreatedAt, &item.LastSeenAt, &stored); err != nil {
+		if err := rows.Scan(&item.ActorID, &item.Email, &item.DisplayName, &item.Handle, &item.Title, &item.Role, &item.Status, &item.CreatedAt, &item.LastSeenAt, &stored, &item.StatusEmoji, &item.StatusText, &item.StatusExpiresAt); err != nil {
 			return nil, err
 		}
 		item.Permissions = effectivePermissions(item.Role, stored)
@@ -295,10 +298,13 @@ func (r *Repository) UpdateMember(ctx context.Context, orgID, currentActorID, ta
 	err = r.pool.QueryRow(ctx, `
 		SELECT a.id,u.email::text,a.display_name,a.handle::text,a.title,a.org_role,a.status,a.created_at,
 		       (SELECT max(s.last_seen_at) FROM sessions s WHERE s.actor_id=a.id),
-		       ARRAY(SELECT ap.permission FROM actor_permissions ap WHERE ap.org_id=a.org_id AND ap.actor_id=a.id ORDER BY ap.permission)
+		       ARRAY(SELECT ap.permission FROM actor_permissions ap WHERE ap.org_id=a.org_id AND ap.actor_id=a.id ORDER BY ap.permission),
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_emoji ELSE '' END,
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_text ELSE '' END,
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_expires_at END
 		FROM actors a
 		JOIN users u ON u.actor_id=a.id
-		WHERE a.id=$1`, targetActorID).Scan(&result.ActorID, &result.Email, &result.DisplayName, &result.Handle, &result.Title, &result.Role, &result.Status, &result.CreatedAt, &result.LastSeenAt, &stored)
+		WHERE a.id=$1`, targetActorID).Scan(&result.ActorID, &result.Email, &result.DisplayName, &result.Handle, &result.Title, &result.Role, &result.Status, &result.CreatedAt, &result.LastSeenAt, &stored, &result.StatusEmoji, &result.StatusText, &result.StatusExpiresAt)
 	if err != nil {
 		return Member{}, err
 	}

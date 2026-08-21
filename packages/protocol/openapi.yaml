@@ -161,6 +161,31 @@ paths:
           { description: Password changed and other sessions revoked. }
         "403": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
+  /api/v1/me/status:
+    put:
+      operationId: setStatus
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetStatusRequest" }
+      responses:
+        "200":
+          description: Updated custom status.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomStatus" }
+        "422": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: clearStatus
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Cleared custom status.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomStatus" }
   /api/v1/me/email/change:
     post:
       operationId: changeEmail
@@ -1576,6 +1601,9 @@ components:
           status,
           permissions,
           must_change_password,
+          status_emoji,
+          status_text,
+          status_expires_at,
           created_at,
         ]
       properties:
@@ -1595,7 +1623,26 @@ components:
           uniqueItems: true
           items: { $ref: "#/components/schemas/Permission" }
         must_change_password: { type: boolean }
+        status_emoji: { type: string, maxLength: 16 }
+        status_text: { type: string, maxLength: 100 }
+        status_expires_at: { type: [string, "null"], format: date-time }
         created_at: { type: string, format: date-time }
+    SetStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [emoji, text, expires_at]
+      properties:
+        emoji: { type: string, maxLength: 16 }
+        text: { type: string, maxLength: 100 }
+        expires_at: { type: [string, "null"], format: date-time }
+    CustomStatus:
+      type: object
+      additionalProperties: false
+      required: [emoji, text, expires_at]
+      properties:
+        emoji: { type: string, maxLength: 16 }
+        text: { type: string, maxLength: 100 }
+        expires_at: { type: [string, "null"], format: date-time }
     Permission:
       type: string
       enum:
@@ -1812,6 +1859,9 @@ components:
           permissions,
           created_at,
           last_seen_at,
+          status_emoji,
+          status_text,
+          status_expires_at,
         ]
       properties:
         actor_id: { type: string, format: uuid }
@@ -1827,6 +1877,9 @@ components:
           items: { $ref: "#/components/schemas/Permission" }
         created_at: { type: string, format: date-time }
         last_seen_at: { type: [string, "null"], format: date-time }
+        status_emoji: { type: string, maxLength: 16 }
+        status_text: { type: string, maxLength: 100 }
+        status_expires_at: { type: [string, "null"], format: date-time }
     UpdateOrganizationMemberRequest:
       type: object
       additionalProperties: false
@@ -1955,7 +2008,8 @@ components:
     ActorSummary:
       type: object
       additionalProperties: false
-      required: [actor_id, display_name, handle, title, about, type]
+      required:
+        [actor_id, display_name, handle, title, about, type, status_emoji, status_text, status_expires_at]
       properties:
         actor_id: { type: string, format: uuid }
         display_name: { type: string }
@@ -1963,6 +2017,9 @@ components:
         title: { type: string }
         about: { type: string }
         type: { type: string, enum: [user, agent] }
+        status_emoji: { type: string, maxLength: 16 }
+        status_text: { type: string, maxLength: 100 }
+        status_expires_at: { type: [string, "null"], format: date-time }
     ActorPage:
       type: object
       additionalProperties: false
@@ -2011,7 +2068,8 @@ components:
         created_at: { type: string, format: date-time }
     ChatMember:
       type: object
-      required: [actor_id, display_name, handle, title, role, joined_at]
+      required:
+        [actor_id, display_name, handle, title, role, joined_at, status_emoji, status_text, status_expires_at]
       properties:
         actor_id: { type: string, format: uuid }
         display_name: { type: string }
@@ -2019,6 +2077,9 @@ components:
         title: { type: string }
         role: { type: string, enum: [owner, admin, member] }
         joined_at: { type: string, format: date-time }
+        status_emoji: { type: string, maxLength: 16 }
+        status_text: { type: string, maxLength: 100 }
+        status_expires_at: { type: [string, "null"], format: date-time }
     AddChatMemberRequest:
       type: object
       additionalProperties: false

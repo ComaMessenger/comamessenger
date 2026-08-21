@@ -1062,6 +1062,12 @@ function Messenger({
   const [searchOpen, setSearchOpen] = useState(false);
   const [workspaceMenu, setWorkspaceMenu] = useState(false);
   const workspaceMenuRoot = useRef<HTMLDivElement>(null);
+  const [statusMenu, setStatusMenu] = useState(false);
+  const profileMenuRoot = useRef<HTMLElement>(null);
+  const [statusEmoji, setStatusEmoji] = useState(user.status_emoji);
+  const [statusText, setStatusText] = useState(user.status_text);
+  const [statusExpiry, setStatusExpiry] = useState("none");
+  const [statusPending, setStatusPending] = useState(false);
   const reloadTimer = useRef<number | null>(null);
   const [chatLoading, setChatLoading] = useState(true);
   const [chatError, setChatError] = useState("");
@@ -1092,6 +1098,7 @@ function Messenger({
   useDismissable(workspaceMenuRoot, workspaceMenu, () =>
     setWorkspaceMenu(false),
   );
+  useDismissable(profileMenuRoot, statusMenu, () => setStatusMenu(false));
   const membersQuery = useQuery({
     queryKey: ["chat-members", selectedID],
     queryFn: () => api.members(selectedID!),
@@ -1128,13 +1135,19 @@ function Messenger({
           event: (event) => {
             const applied = store.getState().apply(event);
             if (
+              event.type === "actor.status.updated" &&
+              event.actor_id === user.id
+            )
+              void api.me().then(onUserUpdated);
+            if (
               applied &&
               (event.type.startsWith("chat.") ||
                 event.type.startsWith("member.") ||
                 event.type.startsWith("message."))
             )
               scheduleReload();
-            return applied;
+            if (event.type === "actor.status.updated") scheduleReload();
+            return applied || event.type === "actor.status.updated";
           },
           resync: async (watermark) => {
             const active = store.getState().activeChatID;
@@ -1163,7 +1176,7 @@ function Messenger({
           sessionExpired: onLogout,
         },
       ),
-    [api, onLogout, onUserUpdated, scheduleReload, store],
+    [api, onLogout, onUserUpdated, scheduleReload, store, user.id],
   );
   const outbox = useMemo(
     () =>
@@ -1327,6 +1340,43 @@ function Messenger({
       ),
     );
   }
+  async function saveStatus(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setStatusPending(true);
+    const now = new Date();
+    let expiresAt: string | null = null;
+    if (statusExpiry === "hour")
+      expiresAt = new Date(now.getTime() + 60 * 60 * 1000).toISOString();
+    if (statusExpiry === "day")
+      expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
+    if (statusExpiry === "week")
+      expiresAt = new Date(
+        now.getTime() + 7 * 24 * 60 * 60 * 1000,
+      ).toISOString();
+    try {
+      await api.setStatus({
+        emoji: statusEmoji,
+        text: statusText,
+        expires_at: expiresAt,
+      });
+      onUserUpdated(await api.me());
+      setStatusMenu(false);
+    } finally {
+      setStatusPending(false);
+    }
+  }
+  async function clearStatus() {
+    setStatusPending(true);
+    try {
+      await api.clearStatus();
+      setStatusEmoji("");
+      setStatusText("");
+      onUserUpdated(await api.me());
+      setStatusMenu(false);
+    } finally {
+      setStatusPending(false);
+    }
+  }
   return (
     <div
       className={cx(
@@ -1433,11 +1483,17 @@ function Messenger({
         >
           {sidebarCollapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
         </IconButton>
-        <footer className="sidebar-profile">
+        <footer className="sidebar-profile" ref={profileMenuRoot}>
           <Avatar name={user.display_name} seed={user.id} size="sm" online />
-          <button onClick={() => navigate("/settings/profile")}>
+          <button
+            aria-expanded={statusMenu}
+            onClick={() => setStatusMenu((open) => !open)}
+          >
             <strong>{user.display_name}</strong>
-            <span>@{user.handle}</span>
+            <span>
+              {user.status_emoji && `${user.status_emoji} `}
+              {user.status_text || `@${user.handle}`}
+            </span>
           </button>
           <IconButton
             label={t("notifications")}
@@ -1445,6 +1501,66 @@ function Messenger({
           >
             <Bell />
           </IconButton>
+          {statusMenu && (
+            <form
+              className="status-menu"
+              onSubmit={(event) => void saveStatus(event)}
+            >
+              <strong>{t("customStatus")}</strong>
+              <div className="status-menu__fields">
+                <input
+                  aria-label={t("statusEmoji")}
+                  value={statusEmoji}
+                  maxLength={16}
+                  placeholder="🙂"
+                  onChange={(event) => setStatusEmoji(event.target.value)}
+                />
+                <input
+                  aria-label={t("statusText")}
+                  value={statusText}
+                  maxLength={100}
+                  placeholder={t("statusPlaceholder")}
+                  onChange={(event) => setStatusText(event.target.value)}
+                />
+              </div>
+              <select
+                aria-label={t("statusDuration")}
+                value={statusExpiry}
+                onChange={(event) => setStatusExpiry(event.target.value)}
+              >
+                <option value="hour">{t("statusOneHour")}</option>
+                <option value="day">{t("statusOneDay")}</option>
+                <option value="week">{t("statusOneWeek")}</option>
+                <option value="none">{t("statusNoExpiry")}</option>
+              </select>
+              <div className="status-menu__actions">
+                <Button
+                  type="submit"
+                  size="sm"
+                  variant="primary"
+                  disabled={statusPending}
+                >
+                  {t("save")}
+                </Button>
+                {(user.status_text || user.status_emoji) && (
+                  <Button
+                    size="sm"
+                    disabled={statusPending}
+                    onClick={() => void clearStatus()}
+                  >
+                    {t("clearStatus")}
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => navigate("/settings/profile")}
+                >
+                  {t("profileSettings")}
+                </Button>
+              </div>
+            </form>
+          )}
         </footer>
       </aside>
       {showChatList && (
@@ -1589,9 +1705,11 @@ function Messenger({
           <MembersDirectory api={api} onBack={() => navigate("/chats")} />
         ) : showMore ? (
           <MobileMorePage
+            api={api}
             user={user}
             navigate={navigate}
             onLogout={() => void logout()}
+            onUserUpdated={onUserUpdated}
           />
         ) : showProfileSettings ? (
           <ProfileSettingsPage
@@ -2390,9 +2508,11 @@ function Conversation({
           <span>
             {typing.length
               ? `${typing.length} ${t("typing")}`
-              : directPeer?.title ||
-                chat.topic ||
-                t("memberCount", { count: members.length })}
+              : directPeer?.status_text
+                ? `${directPeer.status_emoji} ${directPeer.status_text}`.trim()
+                : directPeer?.title ||
+                  chat.topic ||
+                  t("memberCount", { count: members.length })}
           </span>
         </div>
         <div className="conversation-head__actions">
@@ -3983,6 +4103,11 @@ function MembersDirectory({
                   {actor.title ? ` · ${actor.title}` : ""}
                 </small>
                 {actor.about && <small>{actor.about}</small>}
+                {actor.status_text && (
+                  <small>
+                    {actor.status_emoji} {actor.status_text}
+                  </small>
+                )}
               </span>
               <Badge>{actor.type}</Badge>
             </article>
@@ -4329,15 +4454,35 @@ function MobileTabBar({
 }
 
 function MobileMorePage({
+  api,
   user,
   navigate,
   onLogout,
+  onUserUpdated,
 }: {
+  api: MessengerAPI;
   user: User;
   navigate(to: string): void;
   onLogout(): void;
+  onUserUpdated(user: User): void;
 }) {
   const { t } = useTranslation();
+  const [statusOpen, setStatusOpen] = useState(false);
+  const [emoji, setEmoji] = useState(user.status_emoji);
+  const [text, setText] = useState(user.status_text);
+  async function saveMobileStatus(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await api.setStatus({ emoji, text, expires_at: null });
+    onUserUpdated(await api.me());
+    setStatusOpen(false);
+  }
+  async function clearMobileStatus() {
+    await api.clearStatus();
+    setEmoji("");
+    setText("");
+    onUserUpdated(await api.me());
+    setStatusOpen(false);
+  }
   return (
     <section className="mobile-more-page utility-page">
       <header className="mobile-more-page__identity">
@@ -4357,6 +4502,45 @@ function MobileMorePage({
         </span>
       </div>
       <div className="mobile-more-list">
+        <button onClick={() => setStatusOpen((open) => !open)}>
+          <Smile />
+          <span>
+            <strong>{t("customStatus")}</strong>
+            <small>
+              {user.status_text
+                ? `${user.status_emoji} ${user.status_text}`.trim()
+                : t("statusPlaceholder")}
+            </small>
+          </span>
+        </button>
+        {statusOpen && (
+          <form className="mobile-status-form" onSubmit={saveMobileStatus}>
+            <Field
+              label={t("statusEmoji")}
+              name="mobile-status-emoji"
+              value={emoji}
+              maxLength={16}
+              onChange={(event) => setEmoji(event.target.value)}
+            />
+            <Field
+              label={t("statusText")}
+              name="mobile-status-text"
+              value={text}
+              maxLength={100}
+              onChange={(event) => setText(event.target.value)}
+            />
+            <Button type="submit" variant="primary">
+              {t("save")}
+            </Button>
+            {(user.status_text || user.status_emoji) && (
+              <Button
+                onClick={() => void clearMobileStatus()}
+              >
+                {t("clearStatus")}
+              </Button>
+            )}
+          </form>
+        )}
         <button onClick={() => navigate("/settings/profile")}>
           <UserRound />
           <span>

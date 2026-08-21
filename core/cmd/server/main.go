@@ -147,6 +147,8 @@ func main() {
 			redisCoordinator.Notify(orgID, highWatermark)
 		}
 	}
+	identityService.SetAfterCommit(afterCommit)
+	go identityService.RunStatusExpiry(realtimeCtx, time.Minute)
 	messageService := message.NewService(
 		pool, int(cfg.Messaging.MaxBodyBytes), int(cfg.Messaging.MaxPageSize), afterCommit,
 	)

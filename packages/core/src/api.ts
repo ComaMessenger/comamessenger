@@ -39,6 +39,8 @@ import type {
   ChangePasswordRequest,
   ForgotPasswordRequest,
   ResetPasswordRequest,
+  SetStatusRequest,
+  CustomStatus,
   ChangeEmailRequest,
   ConfirmEmailRequest,
   EmailChangeResponse,
@@ -185,6 +187,15 @@ export class MessengerAPI {
       method: "POST",
       body: JSON.stringify(input),
     });
+  }
+  setStatus(input: SetStatusRequest): Promise<CustomStatus> {
+    return this.request("/api/v1/me/status", {
+      method: "PUT",
+      body: JSON.stringify(input),
+    });
+  }
+  clearStatus(): Promise<CustomStatus> {
+    return this.request("/api/v1/me/status", { method: "DELETE" });
   }
   changeEmail(input: ChangeEmailRequest): Promise<EmailChangeResponse> {
     return this.request("/api/v1/me/email/change", {

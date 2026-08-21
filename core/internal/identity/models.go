@@ -55,6 +55,9 @@ type User struct {
 	CreatedAt          time.Time         `json:"created_at"`
 	PasswordHash       string            `json:"-"`
 	MustChangePassword bool              `json:"must_change_password"`
+	StatusEmoji        string            `json:"status_emoji"`
+	StatusText         string            `json:"status_text"`
+	StatusExpiresAt    *time.Time        `json:"status_expires_at"`
 }
 
 type Session struct {
@@ -125,6 +128,18 @@ type ForgotPasswordInput struct {
 type ResetPasswordInput struct {
 	Token       string `json:"token"`
 	NewPassword string `json:"new_password"`
+}
+
+type SetStatusInput struct {
+	Emoji     string     `json:"emoji"`
+	Text      string     `json:"text"`
+	ExpiresAt *time.Time `json:"expires_at"`
+}
+
+type CustomStatus struct {
+	Emoji     string     `json:"emoji"`
+	Text      string     `json:"text"`
+	ExpiresAt *time.Time `json:"expires_at"`
 }
 
 type PasswordResetTarget struct {

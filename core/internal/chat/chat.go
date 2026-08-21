@@ -44,12 +44,15 @@ type Chat struct {
 }
 
 type Actor struct {
-	ID          string `json:"actor_id"`
-	DisplayName string `json:"display_name"`
-	Handle      string `json:"handle"`
-	Title       string `json:"title"`
-	About       string `json:"about"`
-	Type        string `json:"type"`
+	ID              string     `json:"actor_id"`
+	DisplayName     string     `json:"display_name"`
+	Handle          string     `json:"handle"`
+	Title           string     `json:"title"`
+	About           string     `json:"about"`
+	Type            string     `json:"type"`
+	StatusEmoji     string     `json:"status_emoji"`
+	StatusText      string     `json:"status_text"`
+	StatusExpiresAt *time.Time `json:"status_expires_at"`
 }
 type ActorPage struct {
 	Actors      []Actor `json:"actors"`
@@ -89,12 +92,15 @@ type UpdateMemberInput struct {
 }
 
 type Member struct {
-	ActorID     string    `json:"actor_id"`
-	DisplayName string    `json:"display_name"`
-	Handle      string    `json:"handle"`
-	Title       string    `json:"title"`
-	Role        string    `json:"role"`
-	JoinedAt    time.Time `json:"joined_at"`
+	ActorID         string     `json:"actor_id"`
+	DisplayName     string     `json:"display_name"`
+	Handle          string     `json:"handle"`
+	Title           string     `json:"title"`
+	Role            string     `json:"role"`
+	JoinedAt        time.Time  `json:"joined_at"`
+	StatusEmoji     string     `json:"status_emoji"`
+	StatusText      string     `json:"status_text"`
+	StatusExpiresAt *time.Time `json:"status_expires_at"`
 }
 
 type DirectoryChat struct {
@@ -122,11 +128,15 @@ func (s *Service) List(ctx context.Context, user identity.User) ([]Chat, error) 
 	rows, err := s.pool.Query(ctx, `
 		SELECT c.id, c.kind, c.visibility, c.name, c.topic, cm.role, c.created_at, c.archived_at,
 			COALESCE(c.name, peer.display_name, 'Direct chat'), COALESCE(peer.id::text, c.id::text), cm.notify_level, cm.muted_until,
-			peer.id, peer.display_name, peer.handle::text, peer.title, peer.about, peer.type,
+			peer.id, peer.display_name, peer.handle::text, peer.title, peer.about, peer.type, peer.status_emoji, peer.status_text, peer.status_expires_at,
 			last.id, last.actor_id, last.actor_name, left(last.body, 280), last.created_seq, last.created_at, last.deleted,
 			COALESCE(last.created_seq, 0), c.last_message_at
 		FROM chats c JOIN chat_members cm ON cm.chat_id = c.id
-		LEFT JOIN LATERAL (SELECT a.id,a.display_name,a.handle,a.title,a.about,a.type FROM chat_members other JOIN actors a ON a.id=other.actor_id WHERE other.chat_id=c.id AND other.actor_id<>$1 LIMIT 1) peer ON c.kind='direct'
+		LEFT JOIN LATERAL (SELECT a.id,a.display_name,a.handle,a.title,a.about,a.type,
+			CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_emoji ELSE '' END status_emoji,
+			CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_text ELSE '' END status_text,
+			CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_expires_at END status_expires_at
+			FROM chat_members other JOIN actors a ON a.id=other.actor_id WHERE other.chat_id=c.id AND other.actor_id<>$1 LIMIT 1) peer ON c.kind='direct'
 		LEFT JOIN LATERAL (SELECT m.id,m.actor_id,a.display_name actor_name,m.body,m.created_seq,m.created_at,false deleted FROM messages m JOIN actors a ON a.id=m.actor_id WHERE m.chat_id=c.id AND m.deleted_at IS NULL ORDER BY m.created_seq DESC LIMIT 1) last ON true
 		WHERE cm.actor_id = $1 AND c.org_id = $2 AND c.archived_at IS NULL
 		ORDER BY COALESCE(c.last_message_at, c.created_at) DESC`, user.ActorID, user.OrgID)
@@ -149,11 +159,15 @@ func (s *Service) Get(ctx context.Context, user identity.User, chatID string) (C
 	row := s.pool.QueryRow(ctx, `
 		SELECT c.id, c.kind, c.visibility, c.name, c.topic, cm.role, c.created_at, c.archived_at,
 			COALESCE(c.name, peer.display_name, 'Direct chat'), COALESCE(peer.id::text, c.id::text), cm.notify_level, cm.muted_until,
-			peer.id, peer.display_name, peer.handle::text, peer.title, peer.about, peer.type,
+			peer.id, peer.display_name, peer.handle::text, peer.title, peer.about, peer.type, peer.status_emoji, peer.status_text, peer.status_expires_at,
 			last.id, last.actor_id, last.actor_name, left(last.body, 280), last.created_seq, last.created_at, last.deleted,
 			COALESCE(last.created_seq, 0), c.last_message_at
 		FROM chats c JOIN chat_members cm ON cm.chat_id = c.id
-		LEFT JOIN LATERAL (SELECT a.id,a.display_name,a.handle,a.title,a.about,a.type FROM chat_members other JOIN actors a ON a.id=other.actor_id WHERE other.chat_id=c.id AND other.actor_id<>$1 LIMIT 1) peer ON c.kind='direct'
+		LEFT JOIN LATERAL (SELECT a.id,a.display_name,a.handle,a.title,a.about,a.type,
+			CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_emoji ELSE '' END status_emoji,
+			CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_text ELSE '' END status_text,
+			CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_expires_at END status_expires_at
+			FROM chat_members other JOIN actors a ON a.id=other.actor_id WHERE other.chat_id=c.id AND other.actor_id<>$1 LIMIT 1) peer ON c.kind='direct'
 		LEFT JOIN LATERAL (SELECT m.id,m.actor_id,a.display_name actor_name,m.body,m.created_seq,m.created_at,false deleted FROM messages m JOIN actors a ON a.id=m.actor_id WHERE m.chat_id=c.id AND m.deleted_at IS NULL ORDER BY m.created_seq DESC LIMIT 1) last ON true
 		WHERE cm.actor_id = $1 AND c.org_id = $2 AND c.id = $3 AND c.archived_at IS NULL`, user.ActorID, user.OrgID, chatID)
 	result, err := scanChat(row)
@@ -170,17 +184,18 @@ type rowScanner interface{ Scan(...any) error }
 
 func scanChat(row rowScanner) (Chat, error) {
 	var chat Chat
-	var peerID, peerName, peerHandle, peerTitle, peerAbout, peerType, lastID, lastActorID, lastActorName, lastBody *string
+	var peerID, peerName, peerHandle, peerTitle, peerAbout, peerType, peerStatusEmoji, peerStatusText, lastID, lastActorID, lastActorName, lastBody *string
+	var peerStatusExpiresAt *time.Time
 	var lastSeq *int64
 	var lastAt *time.Time
 	var deleted *bool
 	if err := row.Scan(&chat.ID, &chat.Kind, &chat.Visibility, &chat.Name, &chat.Topic,
 		&chat.Role, &chat.CreatedAt, &chat.ArchivedAt, &chat.DisplayName, &chat.AvatarSeed, &chat.NotifyLevel, &chat.MutedUntil,
-		&peerID, &peerName, &peerHandle, &peerTitle, &peerAbout, &peerType, &lastID, &lastActorID, &lastActorName, &lastBody, &lastSeq, &lastAt, &deleted, &chat.LastActivitySeq, &chat.LastMessageAt); err != nil {
+		&peerID, &peerName, &peerHandle, &peerTitle, &peerAbout, &peerType, &peerStatusEmoji, &peerStatusText, &peerStatusExpiresAt, &lastID, &lastActorID, &lastActorName, &lastBody, &lastSeq, &lastAt, &deleted, &chat.LastActivitySeq, &chat.LastMessageAt); err != nil {
 		return Chat{}, err
 	}
 	if peerID != nil {
-		chat.DirectPeer = &Actor{ID: *peerID, DisplayName: *peerName, Handle: *peerHandle, Title: *peerTitle, About: *peerAbout, Type: *peerType}
+		chat.DirectPeer = &Actor{ID: *peerID, DisplayName: *peerName, Handle: *peerHandle, Title: *peerTitle, About: *peerAbout, Type: *peerType, StatusEmoji: *peerStatusEmoji, StatusText: *peerStatusText, StatusExpiresAt: peerStatusExpiresAt}
 	}
 	if lastID != nil {
 		chat.LastMessage = &Preview{ID: *lastID, ActorID: *lastActorID, ActorDisplayName: *lastActorName, Body: *lastBody, CreatedSeq: *lastSeq, CreatedAt: *lastAt, Deleted: *deleted}
@@ -196,7 +211,11 @@ func (s *Service) ListActors(ctx context.Context, user identity.User, query, aft
 	if limit < 1 || limit > 100 {
 		return ActorPage{}, fmt.Errorf("%w: limit must be between 1 and 100", ErrInvalid)
 	}
-	rows, err := s.pool.Query(ctx, `SELECT id,display_name,handle::text,title,about,type FROM actors WHERE org_id=$1 AND status='active' AND deleted_at IS NULL AND ($2='' OR display_name ILIKE '%'||$2||'%' OR handle::text ILIKE '%'||$2||'%' OR title ILIKE '%'||$2||'%') AND (NULLIF($3,'') IS NULL OR id>NULLIF($3,'')::uuid) ORDER BY id LIMIT $4`, user.OrgID, query, afterID, limit+1)
+	rows, err := s.pool.Query(ctx, `SELECT id,display_name,handle::text,title,about,type,
+		CASE WHEN status_expires_at IS NULL OR status_expires_at>now() THEN status_emoji ELSE '' END,
+		CASE WHEN status_expires_at IS NULL OR status_expires_at>now() THEN status_text ELSE '' END,
+		CASE WHEN status_expires_at IS NULL OR status_expires_at>now() THEN status_expires_at END
+		FROM actors WHERE org_id=$1 AND status='active' AND deleted_at IS NULL AND ($2='' OR display_name ILIKE '%'||$2||'%' OR handle::text ILIKE '%'||$2||'%' OR title ILIKE '%'||$2||'%') AND (NULLIF($3,'') IS NULL OR id>NULLIF($3,'')::uuid) ORDER BY id LIMIT $4`, user.OrgID, query, afterID, limit+1)
 	if err != nil {
 		return ActorPage{}, fmt.Errorf("list actors: %w", err)
 	}
@@ -204,7 +223,7 @@ func (s *Service) ListActors(ctx context.Context, user identity.User, query, aft
 	result := ActorPage{Actors: make([]Actor, 0, limit)}
 	for rows.Next() {
 		var actor Actor
-		if err := rows.Scan(&actor.ID, &actor.DisplayName, &actor.Handle, &actor.Title, &actor.About, &actor.Type); err != nil {
+		if err := rows.Scan(&actor.ID, &actor.DisplayName, &actor.Handle, &actor.Title, &actor.About, &actor.Type, &actor.StatusEmoji, &actor.StatusText, &actor.StatusExpiresAt); err != nil {
 			return ActorPage{}, err
 		}
 		result.Actors = append(result.Actors, actor)
@@ -508,7 +527,10 @@ func (s *Service) ListMembers(ctx context.Context, user identity.User, chatID st
 		return nil, ErrNotFound
 	}
 	rows, err := s.pool.Query(ctx, `
-		SELECT a.id, a.display_name, a.handle::text, a.title, cm.role, cm.joined_at
+		SELECT a.id, a.display_name, a.handle::text, a.title, cm.role, cm.joined_at,
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_emoji ELSE '' END,
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_text ELSE '' END,
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_expires_at END
 		FROM chat_members cm JOIN actors a ON a.id = cm.actor_id
 		WHERE cm.chat_id = $1 AND cm.org_id = $2 AND a.status = 'active' AND a.deleted_at IS NULL
 		ORDER BY CASE cm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, a.display_name`, chatID, user.OrgID)
@@ -519,7 +541,7 @@ func (s *Service) ListMembers(ctx context.Context, user identity.User, chatID st
 	result := make([]Member, 0)
 	for rows.Next() {
 		var member Member
-		if err := rows.Scan(&member.ActorID, &member.DisplayName, &member.Handle, &member.Title, &member.Role, &member.JoinedAt); err != nil {
+		if err := rows.Scan(&member.ActorID, &member.DisplayName, &member.Handle, &member.Title, &member.Role, &member.JoinedAt, &member.StatusEmoji, &member.StatusText, &member.StatusExpiresAt); err != nil {
 			return nil, fmt.Errorf("scan chat member: %w", err)
 		}
 		result = append(result, member)
@@ -857,10 +879,14 @@ func twoIDs() (string, string, error) {
 func (s *Service) member(ctx context.Context, chatID, actorID string) (Member, error) {
 	var member Member
 	err := s.pool.QueryRow(ctx, `
-		SELECT a.id, a.display_name, a.handle::text, a.title, cm.role, cm.joined_at
+		SELECT a.id, a.display_name, a.handle::text, a.title, cm.role, cm.joined_at,
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_emoji ELSE '' END,
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_text ELSE '' END,
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_expires_at END
 		FROM chat_members cm JOIN actors a ON a.id = cm.actor_id
 		WHERE cm.chat_id = $1 AND cm.actor_id = $2`, chatID, actorID).Scan(
-		&member.ActorID, &member.DisplayName, &member.Handle, &member.Title, &member.Role, &member.JoinedAt)
+		&member.ActorID, &member.DisplayName, &member.Handle, &member.Title, &member.Role, &member.JoinedAt,
+		&member.StatusEmoji, &member.StatusText, &member.StatusExpiresAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Member{}, ErrNotFound
 	}

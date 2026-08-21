@@ -41,7 +41,8 @@
         "chat.archived",
         "member.joined",
         "member.updated",
-        "member.removed"
+        "member.removed",
+        "actor.status.updated"
       ]
     },
     "CloseCode": {

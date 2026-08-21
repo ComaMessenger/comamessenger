@@ -34,6 +34,11 @@ type Service struct {
 	dummyHash     string
 	now           func() time.Time
 	emailSender   EmailSender
+	afterCommit   func(string, int64)
+}
+
+func (s *Service) SetAfterCommit(callback func(string, int64)) {
+	s.afterCommit = callback
 }
 
 type EmailSender interface {
@@ -213,6 +218,37 @@ func (s *Service) UpdateProfile(ctx context.Context, current User, input UpdateP
 		}
 	}
 	return s.repository.UpdateProfile(ctx, current.ActorID, displayName, handle, title, about, timezone)
+}
+
+func (s *Service) SetStatus(ctx context.Context, current User, input SetStatusInput) (CustomStatus, error) {
+	status := CustomStatus{Emoji: strings.TrimSpace(input.Emoji), Text: strings.TrimSpace(input.Text), ExpiresAt: input.ExpiresAt}
+	if len([]rune(status.Emoji)) > 16 {
+		return CustomStatus{}, validationErrorf("emoji must contain at most 16 characters")
+	}
+	if len([]rune(status.Text)) > 100 {
+		return CustomStatus{}, validationErrorf("text must contain at most 100 characters")
+	}
+	now := s.now().UTC()
+	if status.ExpiresAt != nil {
+		expires := status.ExpiresAt.UTC()
+		if !expires.After(now) || expires.After(now.Add(366*24*time.Hour)) {
+			return CustomStatus{}, validationErrorf("expires_at must be in the future and within one year")
+		}
+		status.ExpiresAt = &expires
+	}
+	result, seq, err := s.repository.UpdateStatus(ctx, current, status)
+	if err == nil && s.afterCommit != nil {
+		s.afterCommit(current.OrgID, seq)
+	}
+	return result, err
+}
+
+func (s *Service) ClearStatus(ctx context.Context, current User) (CustomStatus, error) {
+	result, seq, err := s.repository.UpdateStatus(ctx, current, CustomStatus{})
+	if err == nil && s.afterCommit != nil {
+		s.afterCommit(current.OrgID, seq)
+	}
+	return result, err
 }
 
 func (s *Service) ChangePassword(ctx context.Context, current User, currentSessionID string, input ChangePasswordInput) ([]string, error) {

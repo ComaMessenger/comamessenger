@@ -144,16 +144,19 @@ type ConnectionTestResult struct {
 }
 
 type Member struct {
-	ActorID     string            `json:"actor_id"`
-	Email       string            `json:"email"`
-	DisplayName string            `json:"display_name"`
-	Handle      string            `json:"handle"`
-	Title       string            `json:"title"`
-	Role        string            `json:"role"`
-	Status      string            `json:"status"`
-	Permissions []permission.Code `json:"permissions"`
-	CreatedAt   time.Time         `json:"created_at"`
-	LastSeenAt  *time.Time        `json:"last_seen_at"`
+	ActorID         string            `json:"actor_id"`
+	Email           string            `json:"email"`
+	DisplayName     string            `json:"display_name"`
+	Handle          string            `json:"handle"`
+	Title           string            `json:"title"`
+	Role            string            `json:"role"`
+	Status          string            `json:"status"`
+	Permissions     []permission.Code `json:"permissions"`
+	CreatedAt       time.Time         `json:"created_at"`
+	LastSeenAt      *time.Time        `json:"last_seen_at"`
+	StatusEmoji     string            `json:"status_emoji"`
+	StatusText      string            `json:"status_text"`
+	StatusExpiresAt *time.Time        `json:"status_expires_at"`
 }
 
 type UpdateMemberInput struct {

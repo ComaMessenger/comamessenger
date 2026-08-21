@@ -46,6 +46,8 @@ export type ForgotPasswordRequest =
   components["schemas"]["ForgotPasswordRequest"];
 export type ResetPasswordRequest =
   components["schemas"]["ResetPasswordRequest"];
+export type SetStatusRequest = components["schemas"]["SetStatusRequest"];
+export type CustomStatus = components["schemas"]["CustomStatus"];
 export type ChangeEmailRequest = components["schemas"]["ChangeEmailRequest"];
 export type ConfirmEmailRequest = components["schemas"]["ConfirmEmailRequest"];
 export type EmailChangeResponse = components["schemas"]["EmailChangeResponse"];

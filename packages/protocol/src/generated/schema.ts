@@ -198,6 +198,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["setStatus"];
+        post?: never;
+        delete: operations["clearStatus"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/email/change": {
         parameters: {
             query?: never;
@@ -985,7 +1001,7 @@ export interface components {
         /** @enum {string} */
         ErrorCode: "already_bootstrapped" | "chat_conflict" | "chat_not_found" | "forbidden" | "idempotency_conflict" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "rate_limited" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "workspace_not_found";
         /** @enum {string} */
-        DurableEventTypeV1: "message.created" | "message.updated" | "message.deleted" | "message.pinned" | "message.unpinned" | "reaction.added" | "reaction.removed" | "thread.followed" | "thread.unfollowed" | "read.marked" | "draft.updated" | "draft.deleted" | "chat.created" | "chat.updated" | "chat.archived" | "member.joined" | "member.updated" | "member.removed";
+        DurableEventTypeV1: "message.created" | "message.updated" | "message.deleted" | "message.pinned" | "message.unpinned" | "reaction.added" | "reaction.removed" | "thread.followed" | "thread.unfollowed" | "read.marked" | "draft.updated" | "draft.deleted" | "chat.created" | "chat.updated" | "chat.archived" | "member.joined" | "member.updated" | "member.removed" | "actor.status.updated";
         /**
          * Format: int32
          * @enum {integer}
@@ -1174,8 +1190,24 @@ export interface components {
             status: "active" | "deactivated";
             permissions: components["schemas"]["Permission"][];
             must_change_password: boolean;
+            status_emoji: string;
+            status_text: string;
+            /** Format: date-time */
+            status_expires_at: string | null;
             /** Format: date-time */
             created_at: string;
+        };
+        SetStatusRequest: {
+            emoji: string;
+            text: string;
+            /** Format: date-time */
+            expires_at: string | null;
+        };
+        CustomStatus: {
+            emoji: string;
+            text: string;
+            /** Format: date-time */
+            expires_at: string | null;
         };
         /** @enum {string} */
         Permission: "members.manage" | "invitations.manage" | "workspace.settings" | "workspace.policies" | "branding.manage" | "integrations.manage" | "audit.read" | "chats.moderate";
@@ -1316,6 +1348,10 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             last_seen_at: string | null;
+            status_emoji: string;
+            status_text: string;
+            /** Format: date-time */
+            status_expires_at: string | null;
         };
         UpdateOrganizationMemberRequest: {
             /** @enum {string|null} */
@@ -1424,6 +1460,10 @@ export interface components {
             about: string;
             /** @enum {string} */
             type: "user" | "agent";
+            status_emoji: string;
+            status_text: string;
+            /** Format: date-time */
+            status_expires_at: string | null;
         };
         ActorPage: {
             actors: components["schemas"]["ActorSummary"][];
@@ -1469,6 +1509,10 @@ export interface components {
             role: "owner" | "admin" | "member";
             /** Format: date-time */
             joined_at: string;
+            status_emoji: string;
+            status_text: string;
+            /** Format: date-time */
+            status_expires_at: string | null;
         };
         AddChatMemberRequest: {
             /** Format: uuid */
@@ -2046,6 +2090,51 @@ export interface operations {
             };
             403: components["responses"]["Error"];
             422: components["responses"]["Error"];
+        };
+    };
+    setStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetStatusRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated custom status. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomStatus"];
+                };
+            };
+            422: components["responses"]["Error"];
+        };
+    };
+    clearStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cleared custom status. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomStatus"];
+                };
+            };
         };
     };
     changeEmail: {

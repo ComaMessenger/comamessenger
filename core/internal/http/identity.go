@@ -111,6 +111,8 @@ func (h *identityHandlers) routes(router chi.Router) {
 		protected.Post("/auth/logout", h.logout)
 		protected.Get("/me", h.me)
 		protected.Patch("/me", h.updateMe)
+		protected.Put("/me/status", h.setStatus)
+		protected.Delete("/me/status", h.clearStatus)
 		protected.Post("/me/password", h.changePassword)
 		protected.Post("/me/email/change", h.changeEmail)
 		protected.Post("/me/email/confirm", h.confirmEmail)
@@ -259,6 +261,33 @@ func (h *identityHandlers) listActors(w standardhttp.ResponseWriter, r *standard
 		return
 	}
 	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) setStatus(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input identity.SetStatusInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	status, err := h.service.SetStatus(r.Context(), authFromContext(r.Context()).User, input)
+	if err != nil {
+		if identity.IsValidationError(err) {
+			h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "validation_failed", err.Error())
+		} else {
+			h.internalError(w, r, err)
+		}
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, status)
+}
+
+func (h *identityHandlers) clearStatus(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	status, err := h.service.ClearStatus(r.Context(), authFromContext(r.Context()).User)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, status)
 }
 
 func (h *identityHandlers) bootstrapStatus(w standardhttp.ResponseWriter, r *standardhttp.Request) {

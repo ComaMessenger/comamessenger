@@ -2,6 +2,7 @@ package identity
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -104,13 +105,17 @@ func (r *Repository) FindUserByEmail(ctx context.Context, email string) (User, e
 	err := r.pool.QueryRow(ctx, `
 		SELECT a.id, a.org_id, o.name, a.org_role, u.email::text, a.display_name, a.handle::text,
 		       a.title, a.about, a.timezone, a.status, a.created_at, u.password_hash,
-		       u.must_change_password_at IS NOT NULL
+		       u.must_change_password_at IS NOT NULL,
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_emoji ELSE '' END,
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_text ELSE '' END,
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_expires_at END
 		FROM users u
 		JOIN actors a ON a.id = u.actor_id
 		JOIN organizations o ON o.id = a.org_id
 		WHERE u.email = $1`, email).Scan(
 		&user.ActorID, &user.OrgID, &user.OrganizationName, &user.OrgRole, &user.Email, &user.DisplayName,
 		&user.Handle, &user.Title, &user.About, &user.Timezone, &user.Status, &user.CreatedAt, &user.PasswordHash, &user.MustChangePassword,
+		&user.StatusEmoji, &user.StatusText, &user.StatusExpiresAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return User{}, ErrInvalidCredentials
@@ -536,13 +541,17 @@ func (r *Repository) TransferOwnership(ctx context.Context, transfer OwnershipTr
 	err = tx.QueryRow(ctx, `
 		SELECT a.id, a.org_id, o.name, a.org_role, u.email::text, a.display_name, a.handle::text,
 		       a.title, a.about, a.timezone, a.status, a.created_at,
-		       u.must_change_password_at IS NOT NULL
+		       u.must_change_password_at IS NOT NULL,
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_emoji ELSE '' END,
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_text ELSE '' END,
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_expires_at END
 		FROM actors a
 		JOIN users u ON u.actor_id = a.id
 		JOIN organizations o ON o.id = a.org_id
 		WHERE a.org_id = $1 AND a.id = $2`, transfer.OrgID, transfer.CurrentActorID).Scan(
 		&user.ActorID, &user.OrgID, &user.OrganizationName, &user.OrgRole, &user.Email, &user.DisplayName,
 		&user.Handle, &user.Title, &user.About, &user.Timezone, &user.Status, &user.CreatedAt, &user.MustChangePassword,
+		&user.StatusEmoji, &user.StatusText, &user.StatusExpiresAt,
 	)
 	if err != nil {
 		return User{}, fmt.Errorf("load previous owner after transfer: %w", err)
@@ -604,7 +613,10 @@ func (r *Repository) RotateSession(ctx context.Context, refreshHash []byte, repl
 		SELECT s.id, s.family_id, s.expires_at, s.revoked_at, s.replaced_by,
 		       a.id, a.org_id, o.name, a.org_role, u.email::text, a.display_name, a.handle::text,
 		       a.title, a.about, a.timezone, a.status, a.created_at,
-		       u.must_change_password_at IS NOT NULL
+		       u.must_change_password_at IS NOT NULL,
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_emoji ELSE '' END,
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_text ELSE '' END,
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_expires_at END
 		FROM sessions s
 		JOIN actors a ON a.id = s.actor_id
 		JOIN users u ON u.actor_id = a.id
@@ -614,6 +626,7 @@ func (r *Repository) RotateSession(ctx context.Context, refreshHash []byte, repl
 		&sessionID, &familyID, &expiresAt, &revokedAt, &replacedBy,
 		&user.ActorID, &user.OrgID, &user.OrganizationName, &user.OrgRole, &user.Email, &user.DisplayName,
 		&user.Handle, &user.Title, &user.About, &user.Timezone, &user.Status, &user.CreatedAt, &user.MustChangePassword,
+		&user.StatusEmoji, &user.StatusText, &user.StatusExpiresAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return User{}, ErrInvalidRefreshToken
@@ -668,7 +681,10 @@ func (r *Repository) ResolveSession(ctx context.Context, sessionID, actorID stri
 	err := r.pool.QueryRow(ctx, `
 		SELECT a.id, a.org_id, o.name, a.org_role, u.email::text, a.display_name, a.handle::text,
 		       a.title, a.about, a.timezone, a.status, a.created_at,
-		       u.must_change_password_at IS NOT NULL
+		       u.must_change_password_at IS NOT NULL,
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>$3 THEN a.status_emoji ELSE '' END,
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>$3 THEN a.status_text ELSE '' END,
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>$3 THEN a.status_expires_at END
 		FROM sessions s
 		JOIN actors a ON a.id = s.actor_id
 		JOIN users u ON u.actor_id = a.id
@@ -678,6 +694,7 @@ func (r *Repository) ResolveSession(ctx context.Context, sessionID, actorID stri
 		sessionID, actorID, now).Scan(
 		&user.ActorID, &user.OrgID, &user.OrganizationName, &user.OrgRole, &user.Email, &user.DisplayName,
 		&user.Handle, &user.Title, &user.About, &user.Timezone, &user.Status, &user.CreatedAt, &user.MustChangePassword,
+		&user.StatusEmoji, &user.StatusText, &user.StatusExpiresAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return User{}, ErrUnauthorized
@@ -698,16 +715,21 @@ func (r *Repository) UpdateProfile(ctx context.Context, actorID, displayName, ha
 			UPDATE actors
 			SET display_name = $2, handle = $3, title = $4, about = $5, timezone = $6
 			WHERE id = $1 AND status = 'active' AND deleted_at IS NULL
-			RETURNING id, org_id, org_role, display_name, handle, title, about, timezone, status, created_at
+			RETURNING id, org_id, org_role, display_name, handle, title, about, timezone, status, created_at,
+			          status_emoji,status_text,status_expires_at
 		)
 		SELECT updated.id, updated.org_id, o.name, updated.org_role, u.email::text, updated.display_name,
 		       updated.handle::text, updated.title, updated.about, updated.timezone, updated.status, updated.created_at,
-		       u.must_change_password_at IS NOT NULL
+		       u.must_change_password_at IS NOT NULL,
+		       CASE WHEN updated.status_expires_at IS NULL OR updated.status_expires_at>now() THEN updated.status_emoji ELSE '' END,
+		       CASE WHEN updated.status_expires_at IS NULL OR updated.status_expires_at>now() THEN updated.status_text ELSE '' END,
+		       CASE WHEN updated.status_expires_at IS NULL OR updated.status_expires_at>now() THEN updated.status_expires_at END
 		FROM updated JOIN users u ON u.actor_id = updated.id
 		JOIN organizations o ON o.id = updated.org_id`,
 		actorID, displayName, handle, title, about, timezone).Scan(
 		&user.ActorID, &user.OrgID, &user.OrganizationName, &user.OrgRole, &user.Email, &user.DisplayName,
 		&user.Handle, &user.Title, &user.About, &user.Timezone, &user.Status, &user.CreatedAt, &user.MustChangePassword,
+		&user.StatusEmoji, &user.StatusText, &user.StatusExpiresAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return User{}, ErrNotFound
@@ -722,6 +744,91 @@ func (r *Repository) UpdateProfile(ctx context.Context, actorID, displayName, ha
 		return User{}, err
 	}
 	return user, nil
+}
+
+func (r *Repository) UpdateStatus(ctx context.Context, user User, status CustomStatus) (CustomStatus, int64, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return CustomStatus{}, 0, fmt.Errorf("begin status update: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	command, err := tx.Exec(ctx, `
+		UPDATE actors SET status_emoji=$3,status_text=$4,status_expires_at=$5
+		WHERE org_id=$1 AND id=$2 AND status='active' AND deleted_at IS NULL`,
+		user.OrgID, user.ActorID, status.Emoji, status.Text, status.ExpiresAt)
+	if err != nil {
+		return CustomStatus{}, 0, fmt.Errorf("update actor status: %w", err)
+	}
+	if command.RowsAffected() != 1 {
+		return CustomStatus{}, 0, ErrNotFound
+	}
+	var seq int64
+	if err := tx.QueryRow(ctx, `UPDATE organizations SET event_seq=event_seq+1 WHERE id=$1 RETURNING event_seq`, user.OrgID).Scan(&seq); err != nil {
+		return CustomStatus{}, 0, fmt.Errorf("allocate status event sequence: %w", err)
+	}
+	payload, err := json.Marshal(status)
+	if err != nil {
+		return CustomStatus{}, 0, fmt.Errorf("marshal actor status: %w", err)
+	}
+	_, err = tx.Exec(ctx, `
+		INSERT INTO events(org_id,seq,type,actor_id,subject_id,data)
+		VALUES($1,$2,'actor.status.updated',$3,$3,$4::jsonb)`, user.OrgID, seq, user.ActorID, string(payload))
+	if err != nil {
+		return CustomStatus{}, 0, fmt.Errorf("insert actor status event: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return CustomStatus{}, 0, fmt.Errorf("commit status update: %w", err)
+	}
+	return status, seq, nil
+}
+
+func (r *Repository) ExpireStatuses(ctx context.Context, now time.Time, limit int) (map[string]int64, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin status expiry: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	rows, err := tx.Query(ctx, `
+		SELECT org_id,id FROM actors
+		WHERE status_expires_at IS NOT NULL AND status_expires_at<=$1
+		ORDER BY status_expires_at,id FOR UPDATE SKIP LOCKED LIMIT $2`, now, limit)
+	if err != nil {
+		return nil, fmt.Errorf("select expired statuses: %w", err)
+	}
+	type expiredActor struct{ orgID, actorID string }
+	targets := make([]expiredActor, 0)
+	for rows.Next() {
+		var target expiredActor
+		if err := rows.Scan(&target.orgID, &target.actorID); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		targets = append(targets, target)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+	high := make(map[string]int64)
+	emptyPayload := `{"emoji":"","text":"","expires_at":null}`
+	for _, target := range targets {
+		if _, err := tx.Exec(ctx, `UPDATE actors SET status_emoji='',status_text='',status_expires_at=NULL WHERE org_id=$1 AND id=$2`, target.orgID, target.actorID); err != nil {
+			return nil, fmt.Errorf("clear expired status: %w", err)
+		}
+		var seq int64
+		if err := tx.QueryRow(ctx, `UPDATE organizations SET event_seq=event_seq+1 WHERE id=$1 RETURNING event_seq`, target.orgID).Scan(&seq); err != nil {
+			return nil, fmt.Errorf("allocate expired status event: %w", err)
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO events(org_id,seq,type,actor_id,subject_id,data) VALUES($1,$2,'actor.status.updated',$3,$3,$4::jsonb)`, target.orgID, seq, target.actorID, emptyPayload); err != nil {
+			return nil, fmt.Errorf("insert expired status event: %w", err)
+		}
+		high[target.orgID] = seq
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit status expiry: %w", err)
+	}
+	return high, nil
 }
 
 func (r *Repository) CreateInvitation(ctx context.Context, record InvitationRecord) (Invitation, error) {

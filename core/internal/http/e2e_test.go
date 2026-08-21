@@ -72,6 +72,7 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	go dispatcher.Run(ctx)
 	go ephemeral.Run(ctx)
 	afterCommit := func(_ string, _ int64) { dispatcher.WakeLocal() }
+	identityService.SetAfterCommit(afterCommit)
 	realtimeServer := realtime.NewServer(logger, baseURL, eventStore, hub, identityService.Authenticate, realtimeConfig, ephemeral)
 	workspaceService, err := workspace.NewService(workspace.NewRepository(pool), "e2e-encryption-secret", e2eConnectionTester{})
 	if err != nil {
@@ -458,6 +459,45 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	}
 	e2eAck(t, ownerSocket, ownerChatCreated.Seq)
 	e2eAck(t, memberSocket, memberChatCreated.Seq)
+
+	statusExpiresAt := time.Now().UTC().Add(time.Hour).Truncate(time.Second)
+	var customStatus identity.CustomStatus
+	e2eRequest(t, server.Client(), standardhttp.MethodPut, baseURL+"/api/v1/me/status", owner.AccessToken, map[string]any{
+		"emoji": "🏖️", "text": "On vacation", "expires_at": statusExpiresAt,
+	}, standardhttp.StatusOK, &customStatus)
+	ownerStatus := e2eEvent(t, ownerSocket)
+	memberStatus := e2eEvent(t, memberSocket)
+	if ownerStatus.Type != "actor.status.updated" || memberStatus.Type != "actor.status.updated" || ownerStatus.SubjectID != owner.User.ActorID {
+		t.Fatalf("status websocket events owner=%+v member=%+v", ownerStatus, memberStatus)
+	}
+	var ownerWithStatus identity.User
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/me", owner.AccessToken, nil, standardhttp.StatusOK, &ownerWithStatus)
+	if ownerWithStatus.StatusEmoji != "🏖️" || ownerWithStatus.StatusText != "On vacation" || ownerWithStatus.StatusExpiresAt == nil {
+		t.Fatalf("owner custom status = %+v", ownerWithStatus)
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodDelete, baseURL+"/api/v1/me/status", owner.AccessToken, nil, standardhttp.StatusOK, &customStatus)
+	ownerStatusCleared := e2eEvent(t, ownerSocket)
+	memberStatusCleared := e2eEvent(t, memberSocket)
+	if ownerStatusCleared.Type != "actor.status.updated" || memberStatusCleared.Type != "actor.status.updated" {
+		t.Fatalf("cleared status websocket events owner=%+v member=%+v", ownerStatusCleared, memberStatusCleared)
+	}
+	e2eAck(t, ownerSocket, ownerStatusCleared.Seq)
+	e2eAck(t, memberSocket, memberStatusCleared.Seq)
+	if _, err := pool.Exec(context.Background(), `UPDATE actors SET status_emoji='⌛',status_text='Expired',status_expires_at=now()-interval '1 second' WHERE id=$1`, owner.User.ActorID); err != nil {
+		t.Fatal(err)
+	}
+	high, err := identity.NewRepository(pool).ExpireStatuses(context.Background(), time.Now().UTC(), 100)
+	if err != nil || high[owner.User.OrgID] == 0 {
+		t.Fatalf("expire custom status high=%v error=%v", high, err)
+	}
+	afterCommit(owner.User.OrgID, high[owner.User.OrgID])
+	ownerStatusExpired := e2eEvent(t, ownerSocket)
+	memberStatusExpired := e2eEvent(t, memberSocket)
+	if ownerStatusExpired.Type != "actor.status.updated" || memberStatusExpired.Type != "actor.status.updated" {
+		t.Fatalf("expired status websocket events owner=%+v member=%+v", ownerStatusExpired, memberStatusExpired)
+	}
+	e2eAck(t, ownerSocket, ownerStatusExpired.Seq)
+	e2eAck(t, memberSocket, memberStatusExpired.Seq)
 
 	var first message.Message
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/chats/"+group.ID+"/messages", member.AccessToken, map[string]any{
