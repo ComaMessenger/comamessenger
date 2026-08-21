@@ -118,6 +118,12 @@ type CreateInput struct {
 	ProviderRateLimitPerMinute  int      `json:"provider_rate_limit_per_minute"`
 	ExecutionTimeoutSeconds     int      `json:"execution_timeout_seconds"`
 	ChatIDs                     []string `json:"chat_ids"`
+	DuplicateFrom               string   `json:"-"`
+}
+
+type DuplicateInput struct {
+	DisplayName string `json:"display_name"`
+	Handle      string `json:"handle"`
 }
 
 type UpdateInput struct {
@@ -272,16 +278,113 @@ func (service *Service) Create(ctx context.Context, current identity.User, input
 			return Agent{}, mapWriteError("add agent memberships", err)
 		}
 	}
-	if err := insertRecipeTriggers(ctx, tx, current.OrgID, agentID, normalized.Recipe, normalized.ChatIDs, service.now().UTC()); err != nil {
-		return Agent{}, err
+	if normalized.DuplicateFrom != "" {
+		if err := copyAgentTriggers(ctx, tx, current.OrgID, normalized.DuplicateFrom, agentID); err != nil {
+			return Agent{}, err
+		}
+	} else {
+		if err := insertRecipeTriggers(ctx, tx, current.OrgID, agentID, normalized.Recipe, normalized.ChatIDs, service.now().UTC()); err != nil {
+			return Agent{}, err
+		}
 	}
-	metadata, _ := json.Marshal(map[string]any{"kind": normalized.Kind, "recipe": normalized.Recipe, "recipe_version": 1, "enabled": normalized.Enabled, "scopes": scopes, "chat_ids": normalized.ChatIDs})
-	if _, err := tx.Exec(ctx, `INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,'agent.create','agent',$4,$5)`, auditID, current.OrgID, current.ActorID, agentID, metadata); err != nil {
+	action := "agent.create"
+	if normalized.DuplicateFrom != "" {
+		action = "agent.duplicate"
+	}
+	metadata, _ := json.Marshal(map[string]any{"kind": normalized.Kind, "recipe": normalized.Recipe, "recipe_version": 1, "enabled": normalized.Enabled, "scopes": scopes, "chat_ids": normalized.ChatIDs, "duplicated_from": normalized.DuplicateFrom})
+	if _, err := tx.Exec(ctx, `INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,$4,'agent',$5,$6)`, auditID, current.OrgID, current.ActorID, action, agentID, metadata); err != nil {
 		return Agent{}, fmt.Errorf("audit agent creation: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return Agent{}, mapWriteError("commit agent creation", err)
 	}
+	return service.Get(ctx, current, agentID)
+}
+
+func (service *Service) Duplicate(ctx context.Context, current identity.User, agentID string, input DuplicateInput) (Agent, error) {
+	if !canManage(current) {
+		return Agent{}, ErrForbidden
+	}
+	source, err := service.Get(ctx, current, agentID)
+	if err != nil {
+		return Agent{}, err
+	}
+	return service.Create(ctx, current, CreateInput{
+		DisplayName: input.DisplayName, Handle: input.Handle, Kind: source.Kind, Recipe: source.Recipe,
+		Description: source.Description, Enabled: false, AllowedScopes: source.AllowedScopes,
+		Provider: source.Provider, Model: source.Model, EndpointURL: source.EndpointURL,
+		ExternalDataSharingApproved: source.ExternalDataSharingApproved, DailyCostLimit: source.DailyCostLimit, MonthlyCostLimit: source.MonthlyCostLimit,
+		MaxOutputTokens: intPointer(source.MaxOutputTokens), MaxToolIterations: intPointer(source.MaxToolIterations), MaxChainDepth: intPointer(source.MaxChainDepth), PerChatConcurrency: intPointer(source.PerChatConcurrency),
+		RateLimitPerMinute: source.RateLimitPerMinute, ProviderRateLimitPerMinute: source.ProviderRateLimitPerMinute, ExecutionTimeoutSeconds: source.ExecutionTimeoutSeconds,
+		ChatIDs: source.ChatIDs, DuplicateFrom: source.ID,
+	})
+}
+
+func (service *Service) ResetRecipe(ctx context.Context, current identity.User, agentID string) (Agent, error) {
+	if !canManage(current) {
+		return Agent{}, ErrForbidden
+	}
+	if uuid.Validate(agentID) != nil {
+		return Agent{}, ErrNotFound
+	}
+	tx, err := service.pool.Begin(ctx)
+	if err != nil {
+		return Agent{}, err
+	}
+	defer tx.Rollback(ctx)
+	locked, err := scanAgent(tx.QueryRow(ctx, agentSelect+` WHERE agent.org_id=$1 AND agent.actor_id=$2 AND agent.deleted_at IS NULL FOR UPDATE OF agent,actor`, current.OrgID, agentID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Agent{}, ErrNotFound
+	}
+	if err != nil {
+		return Agent{}, err
+	}
+	description, scopes, ok := recipeDefaults(locked.Recipe)
+	if !ok {
+		return Agent{}, fmt.Errorf("%w: custom agents do not have template defaults", ErrInvalid)
+	}
+	if len(locked.ChatIDs) == 0 {
+		return Agent{}, fmt.Errorf("%w: recipe agents require at least one chat", ErrInvalid)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE agent_triggers SET enabled=false,superseded_at=now(),updated_at=now() WHERE org_id=$1 AND agent_id=$2 AND superseded_at IS NULL`, current.OrgID, agentID); err != nil {
+		return Agent{}, err
+	}
+	if err := insertRecipeTriggers(ctx, tx, current.OrgID, agentID, locked.Recipe, locked.ChatIDs, service.now().UTC()); err != nil {
+		return Agent{}, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE agents SET description=$3,enabled=false,allowed_scopes=$4,max_output_tokens=2048,max_tool_iterations=8,max_chain_depth=3,per_chat_concurrency=1,rate_limit_per_minute=60,provider_rate_limit_per_minute=300,execution_timeout_seconds=600,recipe_version=recipe_version+1,updated_at=now() WHERE org_id=$1 AND actor_id=$2`, current.OrgID, agentID, description, scopeStrings(scopes)); err != nil {
+		return Agent{}, err
+	}
+	revokedKeyIDs := make([]string, 0)
+	rows, err := tx.Query(ctx, `UPDATE agent_api_keys SET revoked_at=now() WHERE org_id=$1 AND agent_id=$2 AND revoked_at IS NULL AND NOT (scopes <@ $3::text[]) RETURNING id`, current.OrgID, agentID, scopeStrings(scopes))
+	if err != nil {
+		return Agent{}, err
+	}
+	for rows.Next() {
+		var keyID string
+		if err := rows.Scan(&keyID); err != nil {
+			rows.Close()
+			return Agent{}, err
+		}
+		revokedKeyIDs = append(revokedKeyIDs, keyID)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return Agent{}, err
+	}
+	rows.Close()
+	auditID, err := id.New()
+	if err != nil {
+		return Agent{}, err
+	}
+	metadata, _ := json.Marshal(map[string]any{"recipe": locked.Recipe, "from_version": locked.RecipeVersion, "to_version": locked.RecipeVersion + 1, "revoked_key_count": len(revokedKeyIDs)})
+	if _, err := tx.Exec(ctx, `INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,'agent.recipe.reset','agent',$4,$5)`, auditID, current.OrgID, current.ActorID, agentID, metadata); err != nil {
+		return Agent{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Agent{}, err
+	}
+	service.revokeRealtimeKeys(revokedKeyIDs)
 	return service.Get(ctx, current, agentID)
 }
 
@@ -571,6 +674,7 @@ func (service *Service) Delete(ctx context.Context, current identity.User, agent
 		{"disable deleted agent triggers", `UPDATE agent_triggers SET enabled=false,updated_at=now() WHERE org_id=$1 AND agent_id=$2 AND enabled`},
 		{"cancel queued deleted agent runs", `UPDATE agent_runs SET status='canceled',error_code='agent_deleted',cancel_requested_at=now(),finished_at=now() WHERE org_id=$1 AND agent_id=$2 AND status='queued'`},
 		{"request cancellation for running deleted agent runs", `UPDATE agent_runs SET cancel_requested_at=COALESCE(cancel_requested_at,now()),error_code='agent_deleted' WHERE org_id=$1 AND agent_id=$2 AND status='running'`},
+		{"deny pending deleted agent confirmations", `UPDATE agent_tool_confirmations SET status='denied',error_code='agent_deleted',completed_at=now() WHERE org_id=$1 AND agent_id=$2 AND status='pending'`},
 		{"remove deleted agent memberships", `DELETE FROM chat_members WHERE org_id=$1 AND actor_id=$2`},
 		{"remove deleted agent provider credential", `DELETE FROM agent_provider_credentials WHERE org_id=$1 AND agent_id=$2`},
 		{"remove deleted agent MCP servers", `DELETE FROM agent_mcp_servers WHERE org_id=$1 AND agent_id=$2`},
@@ -891,8 +995,20 @@ func normalizeCreate(input CreateInput) (CreateInput, error) {
 		*input.MaxChainDepth < 0 || *input.MaxChainDepth > 16 || *input.PerChatConcurrency < 1 || *input.PerChatConcurrency > 32 {
 		return CreateInput{}, fmt.Errorf("%w: invalid agent profile", ErrInvalid)
 	}
-	if input.Kind == "builtin" && input.EndpointURL != "" {
-		return CreateInput{}, fmt.Errorf("%w: builtin agent cannot have an endpoint", ErrInvalid)
+	if input.Kind == "builtin" {
+		switch input.Provider {
+		case "openai", "anthropic":
+			if input.EndpointURL != "" {
+				return CreateInput{}, fmt.Errorf("%w: the selected provider uses its canonical endpoint", ErrInvalid)
+			}
+		case "openai-compatible":
+			parsed, err := url.Parse(input.EndpointURL)
+			if err != nil || parsed.Host == "" || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.User != nil {
+				return CreateInput{}, fmt.Errorf("%w: OpenAI-compatible provider requires an HTTP(S) endpoint without credentials", ErrInvalid)
+			}
+		default:
+			return CreateInput{}, fmt.Errorf("%w: unsupported builtin provider", ErrInvalid)
+		}
 	}
 	if input.Recipe != "custom" && input.Recipe != "summarizer" && input.Recipe != "qa" && input.Recipe != "onboarding" {
 		return CreateInput{}, fmt.Errorf("%w: unsupported agent recipe", ErrInvalid)
@@ -1041,6 +1157,66 @@ func insertRecipeTriggers(ctx context.Context, tx pgx.Tx, orgID, agentID, recipe
 		}
 	}
 	return nil
+}
+
+func copyAgentTriggers(ctx context.Context, tx pgx.Tx, orgID, sourceAgentID, targetAgentID string) error {
+	if uuid.Validate(sourceAgentID) != nil || sourceAgentID == targetAgentID {
+		return ErrInvalid
+	}
+	var sourceExists bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM agents WHERE org_id=$1 AND actor_id=$2 AND deleted_at IS NULL)`, orgID, sourceAgentID).Scan(&sourceExists); err != nil {
+		return err
+	}
+	if !sourceExists {
+		return ErrNotFound
+	}
+	rows, err := tx.Query(ctx, `SELECT type,config,enabled,timezone,missed_runs_policy,next_run_at FROM agent_triggers WHERE org_id=$1 AND agent_id=$2 AND superseded_at IS NULL ORDER BY created_at,id`, orgID, sourceAgentID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	type trigger struct {
+		kind, timezone, missedPolicy string
+		config                       json.RawMessage
+		enabled                      bool
+		nextRunAt                    *time.Time
+	}
+	items := make([]trigger, 0)
+	for rows.Next() {
+		var item trigger
+		if err := rows.Scan(&item.kind, &item.config, &item.enabled, &item.timezone, &item.missedPolicy, &item.nextRunAt); err != nil {
+			return err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	rows.Close()
+	for _, item := range items {
+		triggerID, err := id.New()
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO agent_triggers(id,org_id,agent_id,type,config,enabled,timezone,missed_runs_policy,next_run_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`, triggerID, orgID, targetAgentID, item.kind, item.config, item.enabled, item.timezone, item.missedPolicy, item.nextRunAt); err != nil {
+			return mapWriteError("duplicate agent trigger", err)
+		}
+	}
+	return nil
+}
+
+func recipeDefaults(recipe string) (string, []Scope, bool) {
+	baseScopes := []Scope{ScopeMessagesRead, ScopeMessagesWrite, ScopeSearchRead, ScopeFilesRead, ScopeMemoryRead, ScopeMemoryWrite, ScopeRuntimeExecute}
+	switch recipe {
+	case "summarizer":
+		return "Summarize the selected chat or thread with decisions, open questions, and next actions. Cite message identifiers and never invent facts.", baseScopes, true
+	case "qa":
+		return "Answer from accessible workspace history and extracted files. Search first, cite exact sources, distinguish evidence from inference, and say when the answer is unavailable.", baseScopes, true
+	case "onboarding":
+		return "Help new members understand the workspace using only accessible history and files. Cite sources, answer follow-up questions, and never reveal private chats.", []Scope{ScopeMessagesRead, ScopeMessagesWrite, ScopeSearchRead, ScopeFilesRead, ScopeRuntimeExecute}, true
+	default:
+		return "", nil, false
+	}
 }
 
 func intPointer(value int) *int { return &value }

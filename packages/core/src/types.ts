@@ -72,6 +72,8 @@ export type AgentScope = components["schemas"]["AgentScope"];
 export type AgentApiKey = components["schemas"]["AgentApiKey"];
 export type CreatedAgentApiKey = components["schemas"]["CreatedAgentApiKey"];
 export type CreateAgentRequest = components["schemas"]["CreateAgentRequest"];
+export type DuplicateAgentRequest =
+  components["schemas"]["DuplicateAgentRequest"];
 export type UpdateAgentRequest = components["schemas"]["UpdateAgentRequest"];
 export type CreateAgentKeyRequest =
   components["schemas"]["CreateAgentKeyRequest"];

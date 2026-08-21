@@ -1746,6 +1746,166 @@ a:focus-visible {
   color: var(--coma-muted);
 }
 
+.agent-wizard,
+.agent-wizard__step,
+.agent-wizard__step > div:first-child,
+.agent-advanced__content {
+  display: grid;
+  gap: 16px;
+}
+
+.agent-wizard__step h3,
+.agent-wizard__step p,
+.agent-wizard__summary,
+.agent-wizard__summary dd,
+.agent-advanced summary strong,
+.agent-advanced summary small {
+  margin: 0;
+}
+
+.agent-wizard__step p,
+.agent-wizard__templates small,
+.agent-advanced summary small {
+  color: var(--coma-muted);
+}
+
+.agent-wizard__progress {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.agent-wizard__progress span {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--coma-border);
+}
+
+.agent-wizard__progress span.active {
+  background: var(--coma-primary);
+}
+
+.agent-wizard__templates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.agent-wizard__templates button {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--coma-border);
+  border-radius: var(--coma-radius-md);
+  background: var(--coma-surface);
+  color: var(--coma-foreground);
+  text-align: start;
+  cursor: pointer;
+}
+
+.agent-wizard__templates button svg {
+  grid-row: 1 / 3;
+  width: 20px;
+}
+
+.agent-wizard__templates button.active {
+  border-color: var(--coma-primary);
+  background: var(--coma-primary-soft);
+}
+
+.agent-wizard__chats {
+  display: grid;
+  gap: 8px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.agent-wizard__chats label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--coma-border);
+  border-radius: var(--coma-radius-sm);
+}
+
+.agent-wizard__summary {
+  display: grid;
+  gap: 8px;
+}
+
+.agent-wizard__summary > div {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--coma-border);
+}
+
+.agent-wizard__summary dt {
+  color: var(--coma-muted);
+}
+
+.agent-wizard__notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--coma-radius-sm);
+  background: var(--coma-primary-soft);
+}
+
+.agent-advanced {
+  border: 1px solid var(--coma-border);
+  border-radius: var(--coma-radius-lg);
+  background: var(--coma-surface);
+}
+
+.agent-advanced > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.agent-advanced > summary::-webkit-details-marker {
+  display: none;
+}
+
+.agent-advanced > summary span {
+  display: grid;
+  gap: 4px;
+}
+
+.agent-advanced > summary svg {
+  flex: 0 0 auto;
+  transition: transform 160ms ease;
+}
+
+.agent-advanced[open] > summary svg {
+  transform: rotate(180deg);
+}
+
+.agent-advanced__content {
+  padding: 0 16px 16px;
+}
+
+@media (max-width: 700px) {
+  .agent-wizard__templates {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-wizard__summary > div {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+
 .agent-approvals {
   display: grid;
   gap: 16px;

@@ -182,6 +182,38 @@ export interface paths {
         patch: operations["updateMe"];
         trace?: never;
     };
+    "/api/v1/agents/{agent_id}/duplicate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["duplicateAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{agent_id}/reset-recipe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resetAgentRecipe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/avatar": {
         parameters: {
             query?: never;
@@ -240,7 +272,7 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["changeEmail"];
-        delete: operations["deleteAgent"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1283,7 +1315,7 @@ export interface paths {
         get: operations["getAgent"];
         put?: never;
         post?: never;
-        delete?: never;
+        delete: operations["deleteAgent"];
         options?: never;
         head?: never;
         patch: operations["updateAgent"];
@@ -2217,6 +2249,10 @@ export interface components {
             state: "needs_setup" | "ready" | "enabled" | "error";
             ready: boolean;
             blockers: ("chat_required" | "runtime_key_required" | "provider_model_required" | "provider_credential_required" | "external_data_approval_required" | "trigger_required")[];
+        };
+        DuplicateAgentRequest: {
+            display_name: string;
+            handle: string;
         };
         CreateAgentRequest: {
             display_name: string;
@@ -3754,6 +3790,61 @@ export interface operations {
             422: components["responses"]["Error"];
         };
     };
+    duplicateAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DuplicateAgentRequest"];
+            };
+        };
+        responses: {
+            /** @description Disabled agent duplicate with atomically copied triggers and no copied secrets. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    resetAgentRecipe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Agent disabled and reset to a new version of its built-in recipe. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
     putMyAvatar: {
         parameters: {
             query?: never;
@@ -3897,26 +3988,6 @@ export interface operations {
             403: components["responses"]["Error"];
             409: components["responses"]["Error"];
             422: components["responses"]["Error"];
-        };
-    };
-    deleteAgent: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Agent disabled and removed from the active catalog; audit history is retained. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
         };
     };
     confirmEmail: {
@@ -6139,6 +6210,28 @@ export interface operations {
                     "application/json": components["schemas"]["Agent"];
                 };
             };
+            404: components["responses"]["Error"];
+        };
+    };
+    deleteAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Agent tombstoned; keys, memberships, and active work revoked atomically. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
             404: components["responses"]["Error"];
         };
     };

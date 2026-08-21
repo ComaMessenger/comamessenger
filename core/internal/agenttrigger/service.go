@@ -131,7 +131,7 @@ func (service *Service) List(ctx context.Context, current identity.User, agentID
 	if !canManage(current) {
 		return nil, ErrForbidden
 	}
-	rows, err := service.pool.Query(ctx, triggerSelect+` WHERE trigger.org_id=$1 AND trigger.agent_id=$2 ORDER BY trigger.created_at`, current.OrgID, agentID)
+	rows, err := service.pool.Query(ctx, triggerSelect+` WHERE trigger.org_id=$1 AND trigger.agent_id=$2 AND trigger.superseded_at IS NULL ORDER BY trigger.created_at`, current.OrgID, agentID)
 	if err != nil {
 		return nil, err
 	}
@@ -416,7 +416,7 @@ func (service *Service) dispatchAgent(ctx context.Context, orgID, agentID string
 func (service *Service) DispatchSchedules(ctx context.Context) error {
 	now := service.now().UTC()
 	rows, err := service.pool.Query(ctx, `SELECT trigger.id FROM agent_triggers trigger
-		WHERE trigger.enabled AND trigger.type='schedule' AND trigger.next_run_at<=$1
+		WHERE trigger.enabled AND trigger.superseded_at IS NULL AND trigger.type='schedule' AND trigger.next_run_at<=$1
 		ORDER BY trigger.next_run_at LIMIT 100`, now)
 	if err != nil {
 		return err
@@ -748,7 +748,7 @@ func nextSchedule(config scheduleConfig, timezone string, after time.Time) (time
 }
 
 func loadTriggers(ctx context.Context, tx pgx.Tx, orgID, agentID string) ([]Trigger, error) {
-	rows, err := tx.Query(ctx, triggerSelect+` WHERE trigger.org_id=$1 AND trigger.agent_id=$2 AND trigger.enabled AND trigger.type<>'schedule'`, orgID, agentID)
+	rows, err := tx.Query(ctx, triggerSelect+` WHERE trigger.org_id=$1 AND trigger.agent_id=$2 AND trigger.enabled AND trigger.superseded_at IS NULL AND trigger.type<>'schedule'`, orgID, agentID)
 	if err != nil {
 		return nil, err
 	}
@@ -765,7 +765,7 @@ func loadTriggers(ctx context.Context, tx pgx.Tx, orgID, agentID string) ([]Trig
 }
 
 func (service *Service) get(ctx context.Context, orgID, triggerID string) (Trigger, error) {
-	result, err := scanTrigger(service.pool.QueryRow(ctx, triggerSelect+` WHERE trigger.org_id=$1 AND trigger.id=$2`, orgID, triggerID))
+	result, err := scanTrigger(service.pool.QueryRow(ctx, triggerSelect+` WHERE trigger.org_id=$1 AND trigger.id=$2 AND trigger.superseded_at IS NULL`, orgID, triggerID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Trigger{}, ErrNotFound
 	}

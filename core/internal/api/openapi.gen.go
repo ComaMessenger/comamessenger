@@ -3470,6 +3470,12 @@ type DraftList struct {
 	Drafts []Draft `json:"drafts"`
 }
 
+// DuplicateAgentRequest defines model for DuplicateAgentRequest.
+type DuplicateAgentRequest struct {
+	DisplayName string `json:"display_name"`
+	Handle      string `json:"handle"`
+}
+
 // DurableEventTypeV1 defines model for DurableEventTypeV1.
 type DurableEventTypeV1 string
 
@@ -4692,6 +4698,9 @@ type UpdateAgentPlatformSettingsJSONRequestBody = UpdateAgentPlatformSettingsReq
 
 // UpdateAgentJSONRequestBody defines body for UpdateAgent for application/json ContentType.
 type UpdateAgentJSONRequestBody = UpdateAgentRequest
+
+// DuplicateAgentJSONRequestBody defines body for DuplicateAgent for application/json ContentType.
+type DuplicateAgentJSONRequestBody = DuplicateAgentRequest
 
 // InvokeAgentJSONRequestBody defines body for InvokeAgent for application/json ContentType.
 type InvokeAgentJSONRequestBody = InvokeAgentRequest

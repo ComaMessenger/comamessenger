@@ -64,6 +64,7 @@ import type {
   AgentApiKey,
   CreatedAgentApiKey,
   CreateAgentRequest,
+  DuplicateAgentRequest,
   UpdateAgentRequest,
   CreateAgentKeyRequest,
   AgentPlatformSettings,
@@ -307,7 +308,14 @@ export class MessengerAPI {
     });
   }
   agentToolConfirmations(
-    status: "pending" | "approved" | "denied" | "completed" | "failed" | "expired" | "all" = "pending",
+    status:
+      | "pending"
+      | "approved"
+      | "denied"
+      | "completed"
+      | "failed"
+      | "expired"
+      | "all" = "pending",
   ): Promise<AgentToolConfirmation[]> {
     return this.request(
       `/api/v1/agents/tool-confirmations?status=${encodeURIComponent(status)}`,
@@ -563,6 +571,18 @@ export class MessengerAPI {
     return this.request(`/api/v1/agents/${encodeURIComponent(id)}`, {
       method: "DELETE",
     });
+  }
+  duplicateAgent(id: string, input: DuplicateAgentRequest): Promise<Agent> {
+    return this.request(`/api/v1/agents/${encodeURIComponent(id)}/duplicate`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+  resetAgentRecipe(id: string): Promise<Agent> {
+    return this.request(
+      `/api/v1/agents/${encodeURIComponent(id)}/reset-recipe`,
+      { method: "POST" },
+    );
   }
   agentKeys(id: string): Promise<AgentApiKey[]> {
     return this.request(`/api/v1/agents/${encodeURIComponent(id)}/keys`);

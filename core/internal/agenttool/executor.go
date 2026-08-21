@@ -411,7 +411,7 @@ func (executor *Executor) DecideConfirmation(ctx context.Context, current identi
 	defer tx.Rollback(ctx)
 	var confirmation Confirmation
 	var scopes []string
-	err = scanConfirmationWithScopes(tx.QueryRow(ctx, `SELECT `+confirmationFields+`,agent.allowed_scopes FROM agent_tool_confirmations confirmation JOIN agents agent ON agent.org_id=confirmation.org_id AND agent.actor_id=confirmation.agent_id WHERE confirmation.org_id=$1 AND confirmation.id=$2 FOR UPDATE OF confirmation`, current.OrgID, confirmationID), &confirmation, &scopes)
+	err = scanConfirmationWithScopes(tx.QueryRow(ctx, `SELECT `+confirmationFields+`,agent.allowed_scopes FROM agent_tool_confirmations confirmation JOIN agents agent ON agent.org_id=confirmation.org_id AND agent.actor_id=confirmation.agent_id AND agent.deleted_at IS NULL WHERE confirmation.org_id=$1 AND confirmation.id=$2 FOR UPDATE OF confirmation`, current.OrgID, confirmationID), &confirmation, &scopes)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Confirmation{}, ErrConfirmationNotFound
 	}

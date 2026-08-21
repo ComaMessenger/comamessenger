@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -159,6 +160,13 @@ func TestAgentCreateValidationAndManagerPermission(t *testing.T) {
 	if _, err := service.Create(t.Context(), manager, CreateInput{DisplayName: "Bad scope", Handle: "bad-scope", Kind: "builtin", AllowedScopes: []Scope{"organization:admin"}}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("unknown scope error = %v", err)
 	}
+	if _, err := service.Create(t.Context(), manager, CreateInput{DisplayName: "Canonical", Handle: "canonical", Kind: "builtin", Provider: "openai", EndpointURL: "https://override.example.test/v1"}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("canonical endpoint override error = %v", err)
+	}
+	compatible, err := service.Create(t.Context(), manager, CreateInput{DisplayName: "Compatible", Handle: "compatible", Kind: "builtin", Provider: "openai-compatible", Model: "local-model", EndpointURL: "http://llm.internal.test/v1"})
+	if err != nil || compatible.EndpointURL != "http://llm.internal.test/v1" {
+		t.Fatalf("OpenAI-compatible agent=%+v err=%v", compatible, err)
+	}
 	created, err := service.Create(t.Context(), manager, CreateInput{DisplayName: "Disabled", Handle: "disabled-agent", Kind: "builtin", Enabled: false})
 	if err != nil {
 		t.Fatal(err)
@@ -191,6 +199,25 @@ func TestAgentRecipeCreationAndDeletionLifecycle(t *testing.T) {
 	var triggerCount int
 	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM agent_triggers WHERE agent_id=$1 AND enabled`, created.ID).Scan(&triggerCount); err != nil || triggerCount != 2 {
 		t.Fatalf("recipe triggers=%d err=%v", triggerCount, err)
+	}
+	duplicated, err := service.Duplicate(t.Context(), owner, created.ID, DuplicateInput{DisplayName: "Summarizer copy", Handle: "summarizer-copy"})
+	if err != nil || duplicated.Enabled || duplicated.Recipe != created.Recipe || duplicated.Description != created.Description {
+		t.Fatalf("duplicated agent=%+v err=%v", duplicated, err)
+	}
+	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM agent_triggers WHERE agent_id=$1 AND enabled`, duplicated.ID).Scan(&triggerCount); err != nil || triggerCount != 2 {
+		t.Fatalf("duplicated triggers=%d err=%v", triggerCount, err)
+	}
+	changedDescription := "broken custom instructions"
+	changedScopes := []Scope{ScopeMembersRead, ScopeRuntimeExecute}
+	if _, err := service.Update(t.Context(), owner, created.ID, UpdateInput{Description: &changedDescription, AllowedScopes: &changedScopes}); err != nil {
+		t.Fatal(err)
+	}
+	reset, err := service.ResetRecipe(t.Context(), owner, created.ID)
+	if err != nil || reset.Enabled || reset.RecipeVersion != 2 || reset.Description == changedDescription || !slices.Contains(reset.AllowedScopes, ScopeMessagesRead) {
+		t.Fatalf("reset agent=%+v err=%v", reset, err)
+	}
+	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM agent_triggers WHERE agent_id=$1 AND enabled`, created.ID).Scan(&triggerCount); err != nil || triggerCount != 2 {
+		t.Fatalf("reset enabled triggers=%d err=%v", triggerCount, err)
 	}
 	key, err := service.CreateKey(t.Context(), owner, created.ID, CreateKeyInput{
 		Name: "runtime", Scopes: []Scope{ScopeMessagesRead, ScopeMessagesWrite, ScopeRuntimeExecute}, RateLimitPerMinute: 100,

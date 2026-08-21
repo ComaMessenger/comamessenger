@@ -91,6 +91,29 @@ func (h *identityHandlers) updateAgent(w standardhttp.ResponseWriter, r *standar
 	writeJSON(h.logger, w, standardhttp.StatusOK, result)
 }
 
+func (h *identityHandlers) duplicateAgent(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input agent.DuplicateInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	result, err := h.agents.Duplicate(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "agentID"), input)
+	if err != nil {
+		h.writeAgentError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusCreated, result)
+}
+
+func (h *identityHandlers) resetAgentRecipe(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.agents.ResetRecipe(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "agentID"))
+	if err != nil {
+		h.writeAgentError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
 func (h *identityHandlers) deleteAgent(w standardhttp.ResponseWriter, r *standardhttp.Request) {
 	if err := h.agents.Delete(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "agentID")); err != nil {
 		h.writeAgentError(w, r, err)

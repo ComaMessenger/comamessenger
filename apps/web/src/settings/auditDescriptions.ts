@@ -32,6 +32,8 @@ export const auditActions = [
   "agent.create",
   "agent.update",
   "agent.delete",
+  "agent.duplicate",
+  "agent.recipe.reset",
   "agent.key.create",
   "agent.key.revoke",
   "agent.settings.update",
@@ -82,6 +84,8 @@ const ru: Record<(typeof auditActions)[number], string> = {
   "agent.create": "создал(а) агента {{target}}",
   "agent.update": "изменил(а) агента {{target}}",
   "agent.delete": "удалил(а) агента {{target}}",
+  "agent.duplicate": "создал(а) копию агента {{target}}",
+  "agent.recipe.reset": "сбросил(а) агента {{target}} к шаблону",
   "agent.key.create": "создал(а) ключ агента {{target}}",
   "agent.key.revoke": "отозвал(а) ключ агента {{target}}",
   "agent.settings.update": "изменил(а) общие настройки агентов",
@@ -98,10 +102,8 @@ const ru: Record<(typeof auditActions)[number], string> = {
   "agent.tool.call": "вызвал(а) инструмент агента {{target}}",
   "agent.tool.confirmation.request":
     "запросил(а) подтверждение действия агента {{target}}",
-  "agent.tool.confirmation.approve":
-    "одобрил(а) действие агента {{target}}",
-  "agent.tool.confirmation.deny":
-    "отклонил(а) действие агента {{target}}",
+  "agent.tool.confirmation.approve": "одобрил(а) действие агента {{target}}",
+  "agent.tool.confirmation.deny": "отклонил(а) действие агента {{target}}",
 };
 
 const en: Record<(typeof auditActions)[number], string> = {
@@ -136,6 +138,8 @@ const en: Record<(typeof auditActions)[number], string> = {
   "agent.create": "created agent {{target}}",
   "agent.update": "updated agent {{target}}",
   "agent.delete": "deleted agent {{target}}",
+  "agent.duplicate": "duplicated agent {{target}}",
+  "agent.recipe.reset": "reset agent {{target}} to its recipe",
   "agent.key.create": "created a key for agent {{target}}",
   "agent.key.revoke": "revoked a key for agent {{target}}",
   "agent.settings.update": "changed global agent settings",

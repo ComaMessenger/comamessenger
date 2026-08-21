@@ -157,6 +157,8 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Get("/agents/{agentID}/usage", h.agentUsage)
 			protected.Patch("/agents/{agentID}", h.updateAgent)
 			protected.Delete("/agents/{agentID}", h.deleteAgent)
+			protected.Post("/agents/{agentID}/duplicate", h.duplicateAgent)
+			protected.Post("/agents/{agentID}/reset-recipe", h.resetAgentRecipe)
 			protected.Get("/agents/{agentID}/keys", h.listAgentKeys)
 			protected.Post("/agents/{agentID}/keys", h.createAgentKey)
 			protected.Delete("/agents/{agentID}/keys/{keyID}", h.revokeAgentKey)

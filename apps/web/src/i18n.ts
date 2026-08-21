@@ -320,6 +320,45 @@ const ru = {
   model: "Модель",
   type: "Тип",
   createAgent: "Создать агента",
+  agentsEmptyTitle: "Создайте первого агента",
+  agentsEmptyHint: "Мастер поможет настроить задачу, доступ и запуск.",
+  duplicateAgent: "Дублировать",
+  agentDuplicated: "Копия создана выключенной и открыта для проверки.",
+  copySuffix: "копия",
+  resetTemplate: "Сбросить к шаблону",
+  resetTemplateTitle: "Сбросить настройки агента?",
+  resetTemplateDescription:
+    "Агент {{name}} будет выключен. Инструкция, права, лимиты и правила запуска вернутся к текущей версии шаблона. Секреты и история запусков сохранятся.",
+  resetTemplateConfirm: "Сбросить настройки",
+  templateResetDone:
+    "Настройки и правила запуска восстановлены из новой версии шаблона. Агент выключен до проверки.",
+  agentWizardTitle: "Новый агент",
+  agentWizardStep: "Шаг {{current}} из {{total}}",
+  agentWizardPurpose: "Что должен делать агент?",
+  agentWizardPurposeHint:
+    "Выберите готовый сценарий или начните со своей инструкции.",
+  agentWizardAccess: "Где агент сможет работать?",
+  agentWizardAccessHint:
+    "Он увидит только выбранные чаты и никогда не получит доступ к остальным.",
+  agentWizardLaunch: "Проверьте настройку запуска",
+  agentWizardLaunchHint:
+    "Агент создастся выключенным: сначала добавьте подключение и проверьте его в песочнице.",
+  agentWizardIdentityRequired: "Укажите имя и адрес агента.",
+  agentWizardTask: "Задача",
+  agentWizardWhere: "Доступ",
+  agentWizardWhen: "Запуск",
+  agentWizardSafeStart:
+    "Автоматические действия начнутся только после завершения настройки и включения агента.",
+  agentTemplateShort_summarizer: "Сводки решений и следующих шагов",
+  agentTemplateShort_qa: "Ответы со ссылками на историю и файлы",
+  agentTemplateShort_onboarding: "Помощь новым участникам пространства",
+  agentTemplateShort_custom: "Своя инструкция и ручной запуск",
+  agentRecipeLaunch_summarizer: "По команде /summarize и ежедневно в 09:00",
+  agentRecipeLaunch_qa: "Когда агента упоминают в выбранном чате",
+  agentRecipeLaunch_onboarding:
+    "При вступлении участника и при упоминании агента",
+  agentRecipeLaunch_custom:
+    "Вручную из песочницы; правила можно добавить позже",
   agentTemplate_custom: "Новый агент",
   agentTemplate_summarizer: "Сводки",
   agentTemplate_qa: "Ответы по истории",
@@ -333,6 +372,14 @@ const ru = {
   newAgentHint: "Настройте безопасные границы до включения",
   agentIdentity: "Профиль и модель",
   agentIdentityHint: "Публичный профиль агента и его основная инструкция.",
+  agentAdvanced: "Расширенные настройки",
+  agentAdvancedHint:
+    "Провайдер, технические разрешения, бюджет и ограничения выполнения.",
+  agentProviderSettings: "Модель и передача данных",
+  agentProviderSettingsHint:
+    "Эти параметры нужны для собственного или нестандартного LLM-подключения.",
+  providerEndpoint: "Адрес API провайдера",
+  continue: "Продолжить",
   agentInstructions: "Инструкция агента",
   agentEnabled: "Агент включён",
   agentEnabledHint:
@@ -391,6 +438,29 @@ const ru = {
   correlationID: "Идентификатор запроса",
   createdAt: "Создан",
   errorCode: "Код ошибки",
+  agentRunError_provider_credential_missing:
+    "Не добавлен ключ LLM-провайдера. Откройте «Подключения» и добавьте его.",
+  agentRunError_external_data_sharing_required:
+    "Передача данных провайдеру не разрешена. Включите её в расширенных настройках.",
+  agentRunError_budget_exceeded:
+    "Исчерпан бюджет агента. Увеличьте лимит или дождитесь нового периода.",
+  agentRunError_agent_provider_rate_limited:
+    "Слишком много обращений к модели. Запуск можно повторить позже.",
+  agentRunError_provider_retryable:
+    "Провайдер временно недоступен. Система попробует ещё раз.",
+  agentRunError_provider_output_truncated:
+    "Ответ модели не поместился в лимит. Увеличьте максимум токенов.",
+  agentRunError_tool_iteration_limit:
+    "Агент сделал слишком много шагов с инструментами. Проверьте инструкцию или лимит.",
+  agentRunError_empty_provider_output:
+    "Модель вернула пустой ответ. Проверьте модель и инструкцию.",
+  agentRunError_run_timeout:
+    "Агент не успел завершить работу. Увеличьте максимальное время запуска.",
+  agentRunError_lease_expired:
+    "Среда выполнения потеряла запуск. Проверьте её подключение.",
+  agentRunError_run_canceled: "Запуск был отменён.",
+  agentRunError_unknown:
+    "Запуск завершился с ошибкой. Откройте аудит или повторите после проверки подключения.",
   agentCredentials: "Ключи и учётные данные",
   agentCredentialsHint:
     "Ключ провайдера хранится зашифрованным; ключ среды выполнения показывается только один раз.",
@@ -1068,6 +1138,44 @@ const en: Record<keyof typeof ru, string> = {
   model: "Model",
   type: "Type",
   createAgent: "Create agent",
+  agentsEmptyTitle: "Create your first agent",
+  agentsEmptyHint:
+    "The wizard will guide you through task, access, and launch.",
+  duplicateAgent: "Duplicate",
+  agentDuplicated: "A disabled copy was created and opened for review.",
+  copySuffix: "copy",
+  resetTemplate: "Reset to template",
+  resetTemplateTitle: "Reset agent settings?",
+  resetTemplateDescription:
+    "Agent {{name}} will be disabled. Instructions, permissions, limits, and triggers will return to the current template version. Secrets and run history will be preserved.",
+  resetTemplateConfirm: "Reset settings",
+  templateResetDone:
+    "Settings and triggers were restored from a new template version. The agent is disabled until reviewed.",
+  agentWizardTitle: "New agent",
+  agentWizardStep: "Step {{current}} of {{total}}",
+  agentWizardPurpose: "What should the agent do?",
+  agentWizardPurposeHint:
+    "Choose a ready-made workflow or start with your own instructions.",
+  agentWizardAccess: "Where can the agent work?",
+  agentWizardAccessHint:
+    "It can see only the selected chats and never gains access to the rest.",
+  agentWizardLaunch: "Review the launch setup",
+  agentWizardLaunchHint:
+    "The agent starts disabled: connect a provider and test it in the sandbox first.",
+  agentWizardIdentityRequired: "Enter the agent name and handle.",
+  agentWizardTask: "Task",
+  agentWizardWhere: "Access",
+  agentWizardWhen: "Launch",
+  agentWizardSafeStart:
+    "Automatic actions start only after setup is complete and you enable the agent.",
+  agentTemplateShort_summarizer: "Summaries of decisions and next actions",
+  agentTemplateShort_qa: "Answers grounded in history and files",
+  agentTemplateShort_onboarding: "Guidance for new workspace members",
+  agentTemplateShort_custom: "Custom instructions and manual runs",
+  agentRecipeLaunch_summarizer: "On /summarize and every day at 09:00",
+  agentRecipeLaunch_qa: "When the agent is mentioned in a selected chat",
+  agentRecipeLaunch_onboarding: "On member join and when mentioned",
+  agentRecipeLaunch_custom: "Manually from the sandbox; add triggers later",
   agentTemplate_custom: "New agent",
   agentTemplate_summarizer: "Summarizer",
   agentTemplate_qa: "History Q&A",
@@ -1082,6 +1190,14 @@ const en: Record<keyof typeof ru, string> = {
   agentIdentity: "Profile and model",
   agentIdentityHint:
     "The agent's public identity and trusted runtime instruction.",
+  agentAdvanced: "Advanced settings",
+  agentAdvancedHint:
+    "Provider, technical permissions, budgets, and execution limits.",
+  agentProviderSettings: "Model and data sharing",
+  agentProviderSettingsHint:
+    "Use these options for self-hosted or non-standard LLM connections.",
+  providerEndpoint: "Provider API endpoint",
+  continue: "Continue",
   agentInstructions: "Agent instruction",
   agentEnabled: "Agent enabled",
   agentEnabledHint:
@@ -1139,6 +1255,29 @@ const en: Record<keyof typeof ru, string> = {
   correlationID: "Correlation ID",
   createdAt: "Created",
   errorCode: "Error code",
+  agentRunError_provider_credential_missing:
+    "No LLM provider key is configured. Add one under Connections.",
+  agentRunError_external_data_sharing_required:
+    "Provider data sharing is disabled. Enable it under Advanced settings.",
+  agentRunError_budget_exceeded:
+    "The agent budget is exhausted. Increase the limit or wait for the next period.",
+  agentRunError_agent_provider_rate_limited:
+    "The model is receiving too many requests. Try the run again later.",
+  agentRunError_provider_retryable:
+    "The provider is temporarily unavailable. The system will retry.",
+  agentRunError_provider_output_truncated:
+    "The response exceeded the output limit. Increase maximum output tokens.",
+  agentRunError_tool_iteration_limit:
+    "The agent used too many tool steps. Review its instructions or limit.",
+  agentRunError_empty_provider_output:
+    "The model returned an empty response. Check the model and instructions.",
+  agentRunError_run_timeout:
+    "The agent did not finish in time. Increase the maximum run time.",
+  agentRunError_lease_expired:
+    "The runtime lost this run. Check its connection.",
+  agentRunError_run_canceled: "The run was canceled.",
+  agentRunError_unknown:
+    "The run failed. Check the audit log or retry after checking the connection.",
   agentCredentials: "Keys and credential",
   agentCredentialsHint:
     "Provider key is encrypted; runtime API keys are shown once.",

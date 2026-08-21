@@ -14,6 +14,8 @@ import {
   Activity,
   Bot,
   Check,
+  ChevronDown,
+  Copy,
   FlaskConical,
   KeyRound,
   LayoutGrid,
@@ -23,6 +25,7 @@ import {
   Save,
   ShieldCheck,
   Trash2,
+  RotateCcw,
   X,
   Zap,
 } from "lucide-react";
@@ -165,11 +168,11 @@ export function AgentSettingsPage({
     ? "sandbox"
     : path.endsWith("/approvals")
       ? "approvals"
-    : path.endsWith("/runs")
-      ? "runs"
-      : path.endsWith("/connections")
-        ? "connections"
-        : "overview";
+      : path.endsWith("/runs")
+        ? "runs"
+        : path.endsWith("/connections")
+          ? "connections"
+          : "overview";
   const agents = useQuery({
     queryKey: ["agents"],
     queryFn: () => api.agents(),
@@ -181,7 +184,6 @@ export function AgentSettingsPage({
     enabled: allowed,
   });
   const [selectedID, setSelectedID] = useState<string | null>(null);
-  const [template, setTemplate] = useState<Template>("custom");
   const [draft, setDraft] = useState<Draft>(() => ({
     ...emptyDraft(),
     display_name: t("agentTemplate_custom"),
@@ -190,6 +192,8 @@ export function AgentSettingsPage({
   const [notice, setNotice] = useState("");
   const [pending, setPending] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [wizardTemplate, setWizardTemplate] = useState<Template | null>(null);
   const selected = agents.data?.find((agent) => agent.id === selectedID);
   useEffect(() => {
     if (selected) setDraft(draftOf(selected));
@@ -199,53 +203,37 @@ export function AgentSettingsPage({
   }, [agents.data, selectedID]);
 
   function chooseTemplate(value: Template) {
-    setTemplate(value);
-    setSelectedID(null);
-    setDraft({
-      ...emptyDraft(value),
-      display_name: t(`agentTemplate_${value}`),
-      description:
-        value === "custom" ? "" : t(`agentTemplateDescription_${value}`),
-    });
+    setWizardTemplate(value);
     setError("");
   }
 
   async function save() {
-    if (!selected && template !== "custom" && draft.chat_ids.length === 0) {
-      setError(t("agentTemplateChatRequired"));
-      return;
-    }
+    if (!selected) return;
     setPending(true);
     setError("");
     setNotice("");
     try {
-      let saved: Agent;
-      if (selected) {
-        saved = await api.updateAgent(selected.id, {
-          display_name: draft.display_name,
-          handle: draft.handle,
-          description: draft.description,
-          enabled: draft.enabled,
-          allowed_scopes: draft.allowed_scopes,
-          provider: draft.provider,
-          model: draft.model,
-          endpoint_url: draft.endpoint_url,
-          external_data_sharing_approved: draft.external_data_sharing_approved,
-          daily_cost_limit: draft.daily_cost_limit,
-          monthly_cost_limit: draft.monthly_cost_limit,
-          max_output_tokens: draft.max_output_tokens,
-          max_tool_iterations: draft.max_tool_iterations,
-          max_chain_depth: draft.max_chain_depth,
-          per_chat_concurrency: draft.per_chat_concurrency,
-          rate_limit_per_minute: draft.rate_limit_per_minute,
-          provider_rate_limit_per_minute: draft.provider_rate_limit_per_minute,
-          execution_timeout_seconds: draft.execution_timeout_seconds,
-          chat_ids: draft.chat_ids,
-        });
-      } else {
-        saved = await api.createAgent(draft);
-        setSelectedID(saved.id);
-      }
+      const saved = await api.updateAgent(selected.id, {
+        display_name: draft.display_name,
+        handle: draft.handle,
+        description: draft.description,
+        enabled: draft.enabled,
+        allowed_scopes: draft.allowed_scopes,
+        provider: draft.provider,
+        model: draft.model,
+        endpoint_url: draft.endpoint_url,
+        external_data_sharing_approved: draft.external_data_sharing_approved,
+        daily_cost_limit: draft.daily_cost_limit,
+        monthly_cost_limit: draft.monthly_cost_limit,
+        max_output_tokens: draft.max_output_tokens,
+        max_tool_iterations: draft.max_tool_iterations,
+        max_chain_depth: draft.max_chain_depth,
+        per_chat_concurrency: draft.per_chat_concurrency,
+        rate_limit_per_minute: draft.rate_limit_per_minute,
+        provider_rate_limit_per_minute: draft.provider_rate_limit_per_minute,
+        execution_timeout_seconds: draft.execution_timeout_seconds,
+        chat_ids: draft.chat_ids,
+      });
       await agents.refetch();
       setNotice(t("agentSaved"));
     } catch (cause) {
@@ -331,17 +319,55 @@ export function AgentSettingsPage({
             <div className="agent-editor">
               <div className="agent-editor__toolbar">
                 <div>
-                  <h2>
-                    {selected?.display_name ?? t(`agentTemplate_${template}`)}
-                  </h2>
-                  <p>{selected ? `@${selected.handle}` : t("newAgentHint")}</p>
+                  <h2>{selected?.display_name ?? t("agentsEmptyTitle")}</h2>
+                  <p>
+                    {selected ? `@${selected.handle}` : t("agentsEmptyHint")}
+                  </p>
                 </div>
-                {tab === "overview" && (
+                {selected && tab === "overview" && (
                   <Button disabled={pending} onClick={() => void save()}>
                     <Save />
                     {pending ? t("saving") : t("save")}
                   </Button>
                 )}
+                {selected && tab === "overview" && (
+                  <Button
+                    variant="ghost"
+                    disabled={pending}
+                    onClick={() => {
+                      setPending(true);
+                      setError("");
+                      setNotice("");
+                      void api
+                        .duplicateAgent(selected.id, {
+                          display_name: `${selected.display_name} — ${t("copySuffix")}`,
+                          handle: `${selected.handle}_copy_${Math.random().toString(36).slice(2, 6)}`,
+                        })
+                        .then(async (created) => {
+                          await agents.refetch();
+                          setSelectedID(created.id);
+                          setNotice(t("agentDuplicated"));
+                        })
+                        .catch((cause) => setError(messageOf(cause)))
+                        .finally(() => setPending(false));
+                    }}
+                  >
+                    <Copy />
+                    {t("duplicateAgent")}
+                  </Button>
+                )}
+                {selected &&
+                  selected.recipe !== "custom" &&
+                  tab === "overview" && (
+                    <Button
+                      variant="ghost"
+                      disabled={pending}
+                      onClick={() => setResetOpen(true)}
+                    >
+                      <RotateCcw />
+                      {t("resetTemplate")}
+                    </Button>
+                  )}
                 {selected && tab === "overview" && (
                   <Button
                     variant="ghost"
@@ -356,7 +382,7 @@ export function AgentSettingsPage({
               <FormError message={error} />
               {notice && <Badge tone="success">{notice}</Badge>}
               {selected && <AgentReadiness agent={selected} />}
-              {tab === "overview" && (
+              {selected && tab === "overview" && (
                 <AgentConfiguration
                   draft={draft}
                   chats={chats.data ?? []}
@@ -409,12 +435,266 @@ export function AgentSettingsPage({
                   </div>
                 </Dialog>
               )}
+              {selected && tab === "overview" && resetOpen && (
+                <Dialog
+                  title={t("resetTemplateTitle")}
+                  description={t("resetTemplateDescription", {
+                    name: selected.display_name,
+                  })}
+                  onClose={() => setResetOpen(false)}
+                >
+                  <div className="ui-dialog__actions">
+                    <Button
+                      variant="ghost"
+                      disabled={pending}
+                      onClick={() => setResetOpen(false)}
+                    >
+                      {t("cancel")}
+                    </Button>
+                    <Button
+                      disabled={pending}
+                      onClick={() => {
+                        setPending(true);
+                        setError("");
+                        setNotice("");
+                        void api
+                          .resetAgentRecipe(selected.id)
+                          .then(async (reset) => {
+                            setDraft(draftOf(reset));
+                            await agents.refetch();
+                            setResetOpen(false);
+                            setNotice(t("templateResetDone"));
+                          })
+                          .catch((cause) => setError(messageOf(cause)))
+                          .finally(() => setPending(false));
+                      }}
+                    >
+                      <RotateCcw />
+                      {pending ? t("saving") : t("resetTemplateConfirm")}
+                    </Button>
+                  </div>
+                </Dialog>
+              )}
             </div>
           </div>
         )}
       </div>
+      {wizardTemplate && (
+        <AgentCreationWizard
+          api={api}
+          template={wizardTemplate}
+          chats={chats.data ?? []}
+          onClose={() => setWizardTemplate(null)}
+          onCreated={async (created) => {
+            setWizardTemplate(null);
+            await agents.refetch();
+            setSelectedID(created.id);
+          }}
+        />
+      )}
     </section>
   );
+}
+
+function AgentCreationWizard({
+  api,
+  template,
+  chats,
+  onClose,
+  onCreated,
+}: {
+  api: MessengerAPI;
+  template: Template;
+  chats: Chat[];
+  onClose(): void;
+  onCreated(agent: Agent): Promise<void>;
+}) {
+  const { t } = useTranslation();
+  const [step, setStep] = useState(1);
+  const [draft, setDraft] = useState<Draft>(() => ({
+    ...emptyDraft(template),
+    display_name: t(`agentTemplate_${template}`),
+    description:
+      template === "custom" ? "" : t(`agentTemplateDescription_${template}`),
+  }));
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
+  function selectTemplate(value: Template) {
+    const next = emptyDraft(value);
+    setDraft({
+      ...next,
+      display_name: t(`agentTemplate_${value}`),
+      description:
+        value === "custom" ? "" : t(`agentTemplateDescription_${value}`),
+    });
+  }
+  function next() {
+    setError("");
+    if (step === 1 && (!draft.display_name.trim() || !draft.handle.trim())) {
+      setError(t("agentWizardIdentityRequired"));
+      return;
+    }
+    if (step === 2 && draft.chat_ids.length === 0) {
+      setError(t("agentTemplateChatRequired"));
+      return;
+    }
+    setStep((current) => Math.min(3, current + 1));
+  }
+  async function create() {
+    setPending(true);
+    setError("");
+    try {
+      await onCreated(await api.createAgent({ ...draft, enabled: false }));
+    } catch (cause) {
+      setError(messageOf(cause));
+    } finally {
+      setPending(false);
+    }
+  }
+  return (
+    <Dialog
+      title={t("agentWizardTitle")}
+      description={t("agentWizardStep", { current: step, total: 3 })}
+      onClose={onClose}
+    >
+      <div className="agent-wizard">
+        <div className="agent-wizard__progress" aria-hidden="true">
+          {[1, 2, 3].map((item) => (
+            <span key={item} className={item <= step ? "active" : ""} />
+          ))}
+        </div>
+        {step === 1 && (
+          <div className="agent-wizard__step">
+            <div>
+              <h3>{t("agentWizardPurpose")}</h3>
+              <p>{t("agentWizardPurposeHint")}</p>
+            </div>
+            <div className="agent-wizard__templates">
+              {(["summarizer", "qa", "onboarding", "custom"] as const).map(
+                (item) => (
+                  <button
+                    key={item}
+                    className={draft.recipe === item ? "active" : ""}
+                    onClick={() => selectTemplate(item)}
+                  >
+                    <Zap />
+                    <strong>{t(`agentTemplate_${item}`)}</strong>
+                    <small>{t(`agentTemplateShort_${item}`)}</small>
+                  </button>
+                ),
+              )}
+            </div>
+            <div className="settings-form-grid">
+              <Field
+                label={t("displayName")}
+                name="wizard-agent-name"
+                value={draft.display_name}
+                onChange={(event) =>
+                  setDraft({ ...draft, display_name: event.target.value })
+                }
+              />
+              <Field
+                label={t("handle")}
+                name="wizard-agent-handle"
+                value={draft.handle}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    handle: event.target.value.toLowerCase(),
+                  })
+                }
+              />
+            </div>
+          </div>
+        )}
+        {step === 2 && (
+          <div className="agent-wizard__step">
+            <div>
+              <h3>{t("agentWizardAccess")}</h3>
+              <p>{t("agentWizardAccessHint")}</p>
+            </div>
+            <div className="agent-wizard__chats">
+              {chats.map((chat) => (
+                <label key={chat.id}>
+                  <input
+                    type="checkbox"
+                    checked={draft.chat_ids.includes(chat.id)}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        chat_ids: event.target.checked
+                          ? [...draft.chat_ids, chat.id]
+                          : draft.chat_ids.filter((id) => id !== chat.id),
+                      })
+                    }
+                  />
+                  <span>{chatName(chat)}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+        {step === 3 && (
+          <div className="agent-wizard__step">
+            <div>
+              <h3>{t("agentWizardLaunch")}</h3>
+              <p>{t("agentWizardLaunchHint")}</p>
+            </div>
+            <dl className="agent-wizard__summary">
+              <div>
+                <dt>{t("agentWizardTask")}</dt>
+                <dd>{t(`agentTemplate_${draft.recipe}`)}</dd>
+              </div>
+              <div>
+                <dt>{t("agentWizardWhere")}</dt>
+                <dd>
+                  {chats
+                    .filter((chat) => draft.chat_ids.includes(chat.id))
+                    .map(chatName)
+                    .join(", ")}
+                </dd>
+              </div>
+              <div>
+                <dt>{t("agentWizardWhen")}</dt>
+                <dd>{t(`agentRecipeLaunch_${draft.recipe}`)}</dd>
+              </div>
+            </dl>
+            <div className="agent-wizard__notice">
+              <ShieldCheck />
+              <span>{t("agentWizardSafeStart")}</span>
+            </div>
+          </div>
+        )}
+        <FormError message={error} />
+        <div className="ui-dialog__actions">
+          {step > 1 && (
+            <Button
+              variant="ghost"
+              disabled={pending}
+              onClick={() => setStep(step - 1)}
+            >
+              {t("back")}
+            </Button>
+          )}
+          <Button variant="ghost" disabled={pending} onClick={onClose}>
+            {t("cancel")}
+          </Button>
+          {step < 3 ? (
+            <Button onClick={next}>{t("continue")}</Button>
+          ) : (
+            <Button disabled={pending} onClick={() => void create()}>
+              <Plus />
+              {pending ? t("saving") : t("createAgent")}
+            </Button>
+          )}
+        </div>
+      </div>
+    </Dialog>
+  );
+}
+
+function chatName(chat: Chat): string {
+  return chat.name || chat.direct_peer?.display_name || chat.id;
 }
 
 function AgentReadiness({ agent }: { agent: Agent }) {
@@ -602,22 +882,6 @@ function AgentConfiguration({
               onChange({ ...draft, handle: e.target.value.toLowerCase() })
             }
           />
-          <SelectField
-            label={t("provider")}
-            name="agent-provider"
-            value={draft.provider}
-            onChange={(e) => onChange({ ...draft, provider: e.target.value })}
-          >
-            <option value="openai">OpenAI</option>
-            <option value="anthropic">Anthropic</option>
-            <option value="openai-compatible">{t("openAICompatible")}</option>
-          </SelectField>
-          <Field
-            label={t("model")}
-            name="agent-model"
-            value={draft.model ?? ""}
-            onChange={(e) => onChange({ ...draft, model: e.target.value })}
-          />
         </div>
         <TextareaField
           label={t("agentInstructions")}
@@ -632,39 +896,6 @@ function AgentConfiguration({
           checked={draft.enabled}
           onChange={(enabled) => onChange({ ...draft, enabled })}
         />
-        <SettingsToggle
-          label={t("externalDataSharing")}
-          hint={t("externalDataSharingHint")}
-          checked={draft.external_data_sharing_approved}
-          onChange={(external_data_sharing_approved) =>
-            onChange({ ...draft, external_data_sharing_approved })
-          }
-        />
-      </SettingsSection>
-      <SettingsSection
-        title={t("agentPermissions")}
-        description={t("agentPermissionsHint")}
-        wide
-      >
-        <div className="agent-check-grid">
-          {scopes.map((scope) => (
-            <label key={scope}>
-              <input
-                type="checkbox"
-                checked={draft.allowed_scopes.includes(scope)}
-                onChange={(e) =>
-                  onChange({
-                    ...draft,
-                    allowed_scopes: e.target.checked
-                      ? [...draft.allowed_scopes, scope]
-                      : draft.allowed_scopes.filter((item) => item !== scope),
-                  })
-                }
-              />
-              <span>{t(`agentScope_${scope.replace(":", "_")}`)}</span>
-            </label>
-          ))}
-        </div>
       </SettingsSection>
       <SettingsSection
         title={t("agentChats")}
@@ -686,76 +917,161 @@ function AgentConfiguration({
                   })
                 }
               />
-              <span>
-                {chat.name || chat.direct_peer?.display_name || chat.id}
-              </span>
+              <span>{chatName(chat)}</span>
             </label>
           ))}
         </div>
       </SettingsSection>
-      <SettingsSection
-        title={t("agentLimits")}
-        description={t("agentLimitsHint")}
-        wide
-      >
-        <div className="settings-form-grid">
-          <Field
-            required={false}
-            label={t("dailyBudget")}
-            name="daily-budget"
-            value={draft.daily_cost_limit ?? ""}
-            onChange={(e) =>
-              onChange({ ...draft, daily_cost_limit: e.target.value })
-            }
-          />
-          <Field
-            required={false}
-            label={t("monthlyBudget")}
-            name="monthly-budget"
-            value={draft.monthly_cost_limit ?? ""}
-            onChange={(e) =>
-              onChange({ ...draft, monthly_cost_limit: e.target.value })
-            }
-          />
-          <Field
-            type="number"
-            label={t("maxOutputTokens")}
-            name="max-output"
-            value={draft.max_output_tokens ?? 2048}
-            onChange={(e) => number("max_output_tokens", e.target.value)}
-          />
-          <Field
-            type="number"
-            label={t("maxToolIterations")}
-            name="max-tools"
-            value={draft.max_tool_iterations ?? 8}
-            onChange={(e) => number("max_tool_iterations", e.target.value)}
-          />
-          <Field
-            type="number"
-            label={t("perChatConcurrency")}
-            name="concurrency"
-            value={draft.per_chat_concurrency ?? 1}
-            onChange={(e) => number("per_chat_concurrency", e.target.value)}
-          />
-          <Field
-            type="number"
-            label={t("rateLimit")}
-            name="agent-rate"
-            value={draft.rate_limit_per_minute ?? 60}
-            onChange={(e) => number("rate_limit_per_minute", e.target.value)}
-          />
-          <Field
-            type="number"
-            label={t("executionTimeout")}
-            name="execution-timeout"
-            value={draft.execution_timeout_seconds ?? 600}
-            onChange={(e) =>
-              number("execution_timeout_seconds", e.target.value)
-            }
-          />
+      <details className="agent-advanced">
+        <summary>
+          <span>
+            <strong>{t("agentAdvanced")}</strong>
+            <small>{t("agentAdvancedHint")}</small>
+          </span>
+          <ChevronDown />
+        </summary>
+        <div className="agent-advanced__content">
+          <SettingsSection
+            title={t("agentProviderSettings")}
+            description={t("agentProviderSettingsHint")}
+            wide
+          >
+            <div className="settings-form-grid">
+              <SelectField
+                label={t("provider")}
+                name="agent-provider"
+                value={draft.provider}
+                onChange={(e) =>
+                  onChange({ ...draft, provider: e.target.value })
+                }
+              >
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Anthropic</option>
+                <option value="openai-compatible">
+                  {t("openAICompatible")}
+                </option>
+              </SelectField>
+              <Field
+                label={t("model")}
+                name="agent-model"
+                value={draft.model ?? ""}
+                onChange={(e) => onChange({ ...draft, model: e.target.value })}
+              />
+              {draft.provider === "openai-compatible" && (
+                <Field
+                  label={t("providerEndpoint")}
+                  name="agent-provider-endpoint"
+                  value={draft.endpoint_url ?? ""}
+                  placeholder="https://llm.example.com/v1"
+                  onChange={(e) =>
+                    onChange({ ...draft, endpoint_url: e.target.value })
+                  }
+                />
+              )}
+            </div>
+            <SettingsToggle
+              label={t("externalDataSharing")}
+              hint={t("externalDataSharingHint")}
+              checked={draft.external_data_sharing_approved}
+              onChange={(external_data_sharing_approved) =>
+                onChange({ ...draft, external_data_sharing_approved })
+              }
+            />
+          </SettingsSection>
+          <SettingsSection
+            title={t("agentPermissions")}
+            description={t("agentPermissionsHint")}
+            wide
+          >
+            <div className="agent-check-grid">
+              {scopes.map((scope) => (
+                <label key={scope}>
+                  <input
+                    type="checkbox"
+                    checked={draft.allowed_scopes.includes(scope)}
+                    onChange={(e) =>
+                      onChange({
+                        ...draft,
+                        allowed_scopes: e.target.checked
+                          ? [...draft.allowed_scopes, scope]
+                          : draft.allowed_scopes.filter(
+                              (item) => item !== scope,
+                            ),
+                      })
+                    }
+                  />
+                  <span>{t(`agentScope_${scope.replace(":", "_")}`)}</span>
+                </label>
+              ))}
+            </div>
+          </SettingsSection>
+          <SettingsSection
+            title={t("agentLimits")}
+            description={t("agentLimitsHint")}
+            wide
+          >
+            <div className="settings-form-grid">
+              <Field
+                required={false}
+                label={t("dailyBudget")}
+                name="daily-budget"
+                value={draft.daily_cost_limit ?? ""}
+                onChange={(e) =>
+                  onChange({ ...draft, daily_cost_limit: e.target.value })
+                }
+              />
+              <Field
+                required={false}
+                label={t("monthlyBudget")}
+                name="monthly-budget"
+                value={draft.monthly_cost_limit ?? ""}
+                onChange={(e) =>
+                  onChange({ ...draft, monthly_cost_limit: e.target.value })
+                }
+              />
+              <Field
+                type="number"
+                label={t("maxOutputTokens")}
+                name="max-output"
+                value={draft.max_output_tokens ?? 2048}
+                onChange={(e) => number("max_output_tokens", e.target.value)}
+              />
+              <Field
+                type="number"
+                label={t("maxToolIterations")}
+                name="max-tools"
+                value={draft.max_tool_iterations ?? 8}
+                onChange={(e) => number("max_tool_iterations", e.target.value)}
+              />
+              <Field
+                type="number"
+                label={t("perChatConcurrency")}
+                name="concurrency"
+                value={draft.per_chat_concurrency ?? 1}
+                onChange={(e) => number("per_chat_concurrency", e.target.value)}
+              />
+              <Field
+                type="number"
+                label={t("rateLimit")}
+                name="agent-rate"
+                value={draft.rate_limit_per_minute ?? 60}
+                onChange={(e) =>
+                  number("rate_limit_per_minute", e.target.value)
+                }
+              />
+              <Field
+                type="number"
+                label={t("executionTimeout")}
+                name="execution-timeout"
+                value={draft.execution_timeout_seconds ?? 600}
+                onChange={(e) =>
+                  number("execution_timeout_seconds", e.target.value)
+                }
+              />
+            </div>
+          </SettingsSection>
         </div>
-      </SettingsSection>
+      </details>
     </>
   );
 }
@@ -774,10 +1090,7 @@ function AgentApprovals({
     refetchInterval: 5_000,
   });
   const [error, setError] = useState("");
-  async function decide(
-    confirmation: AgentToolConfirmation,
-    approve: boolean,
-  ) {
+  async function decide(confirmation: AgentToolConfirmation, approve: boolean) {
     setError("");
     try {
       if (approve) await api.approveAgentToolConfirmation(confirmation.id);
@@ -1064,7 +1377,9 @@ function AgentOperations({
                   </strong>
                   <small>
                     {run.correlation_id}
-                    {run.error_code ? ` · ${run.error_code}` : ""}
+                    {run.error_code
+                      ? ` · ${agentRunErrorText(t, run.error_code)}`
+                      : ""}
                   </small>
                 </span>
                 <time>{new Date(run.created_at).toLocaleString()}</time>
@@ -1093,7 +1408,7 @@ function AgentOperations({
                 {selectedRun.error_code && (
                   <div>
                     <dt>{t("errorCode")}</dt>
-                    <dd>{selectedRun.error_code}</dd>
+                    <dd>{agentRunErrorText(t, selectedRun.error_code)}</dd>
                   </div>
                 )}
               </dl>
@@ -1263,4 +1578,26 @@ function triggerConfig(
     };
   }
   return { include_agent_messages: false };
+}
+
+function agentRunErrorText(
+  t: ReturnType<typeof useTranslation>["t"],
+  code: string,
+): string {
+  const known = new Set([
+    "provider_credential_missing",
+    "external_data_sharing_required",
+    "budget_exceeded",
+    "agent_provider_rate_limited",
+    "provider_retryable",
+    "provider_output_truncated",
+    "tool_iteration_limit",
+    "empty_provider_output",
+    "run_timeout",
+    "lease_expired",
+    "run_canceled",
+  ]);
+  return known.has(code)
+    ? t(`agentRunError_${code}`)
+    : t("agentRunError_unknown");
 }
