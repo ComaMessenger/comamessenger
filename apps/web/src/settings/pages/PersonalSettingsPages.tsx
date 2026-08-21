@@ -69,7 +69,7 @@ export function ProfileSettingsPage({
   async function changeAvatar(file: File) {
     setAvatarError("");
     if (
-      file.size > 512 * 1024 ||
+      file.size > 10_000_000 ||
       !["image/png", "image/jpeg", "image/webp"].includes(file.type)
     ) {
       setAvatarError(t("avatarValidation"));
@@ -131,55 +131,60 @@ export function ProfileSettingsPage({
       <div className="settings-page__body">
         <AutosaveStatus {...autosave} onRetry={autosave.retry} />
         <article className="profile-settings-card">
-          <Avatar
-            name={draft.displayName}
-            seed={user.id}
-            actorID={user.id}
-            avatarVersion={user.avatar_version}
-            size="lg"
-            online
-          />
-          <span>
-            <strong>{draft.displayName}</strong>
-            <small>@{draft.handle}</small>
-            {draft.title && <small>{draft.title}</small>}
-            <small>{user.email}</small>
-          </span>
-          <label className="ui-button ui-button--secondary ui-button--sm">
-            {t("changeAvatar")}
-            <input
-              hidden
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              disabled={avatarPending}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void changeAvatar(file);
-                event.target.value = "";
-              }}
+          <div className="profile-settings-card__identity">
+            <Avatar
+              name={draft.displayName}
+              seed={user.id}
+              actorID={user.id}
+              avatarVersion={user.avatar_version}
+              size="xl"
+              online
             />
-          </label>
-          {user.avatar_version > 0 && (
-            <Button
-              size="sm"
-              disabled={avatarPending}
-              onClick={() =>
-                void api
-                  .deleteMyAvatar()
-                  .then((updated) =>
-                    onUserUpdated({
-                      ...user,
-                      avatar_version: updated.avatar_version,
-                    }),
-                  )
-              }
-            >
-              {t("removeAvatar")}
-            </Button>
-          )}
-          {avatarError && (
-            <small className="settings-error">{avatarError}</small>
-          )}
+            <span>
+              <strong>{draft.displayName}</strong>
+              <small>@{draft.handle}</small>
+              {draft.title && <small>{draft.title}</small>}
+              <small>{user.email}</small>
+            </span>
+          </div>
+          <div className="profile-settings-card__actions">
+            <div>
+              <label className="ui-button ui-button--secondary ui-button--sm">
+                {t("changeAvatar")}
+                <input
+                  hidden
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  disabled={avatarPending}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) void changeAvatar(file);
+                    event.target.value = "";
+                  }}
+                />
+              </label>
+              {user.avatar_version > 0 && (
+                <Button
+                  size="sm"
+                  disabled={avatarPending}
+                  onClick={() =>
+                    void api.deleteMyAvatar().then((updated) =>
+                      onUserUpdated({
+                        ...user,
+                        avatar_version: updated.avatar_version,
+                      }),
+                    )
+                  }
+                >
+                  {t("removeAvatar")}
+                </Button>
+              )}
+            </div>
+            <small>{t("avatarValidation")}</small>
+            {avatarError && (
+              <small className="settings-error">{avatarError}</small>
+            )}
+          </div>
         </article>
         <SettingsSection
           title={t("personalPreferences")}

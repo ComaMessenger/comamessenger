@@ -73,7 +73,7 @@ func (h *identityHandlers) putBrandingAsset(w standardhttp.ResponseWriter, r *st
 	r.Body = standardhttp.MaxBytesReader(w, r.Body, 512*1024)
 	content, err := io.ReadAll(r.Body)
 	if err != nil {
-		h.writeError(w, r, standardhttp.StatusRequestEntityTooLarge, "payload_too_large", "Branding image must not exceed 512 KiB.")
+		h.writeError(w, r, standardhttp.StatusRequestEntityTooLarge, "payload_too_large", "Branding image must not exceed 512 KB.")
 		return
 	}
 	if err := h.workspace.PutAsset(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "kind"), contentType, content); err != nil {

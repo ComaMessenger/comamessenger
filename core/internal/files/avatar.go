@@ -20,7 +20,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const maxAvatarBytes = 512 << 10
+const maxAvatarBytes = 10_000_000
 
 type AvatarUpdate struct {
 	ActorID       string `json:"actor_id"`
@@ -38,7 +38,7 @@ func (s *Service) PutAvatar(ctx context.Context, current identity.User, targetAc
 	}
 	data, err := readBounded(body, maxAvatarBytes)
 	if err != nil || len(data) == 0 {
-		return AvatarUpdate{}, fmt.Errorf("%w: avatar must be between 1 and 512 KiB", ErrInvalid)
+		return AvatarUpdate{}, fmt.Errorf("%w: avatar must be between 1 byte and 10 MB", ErrInvalid)
 	}
 	detected := http.DetectContentType(data)
 	declared, _, parseErr := mime.ParseMediaType(strings.TrimSpace(declaredContentType))

@@ -154,9 +154,12 @@ paths:
       requestBody:
         required: true
         content:
-          image/png: { schema: { type: string, format: binary } }
-          image/jpeg: { schema: { type: string, format: binary } }
-          image/webp: { schema: { type: string, format: binary } }
+          image/png:
+            { schema: { type: string, format: binary, maxLength: 10000000 } }
+          image/jpeg:
+            { schema: { type: string, format: binary, maxLength: 10000000 } }
+          image/webp:
+            { schema: { type: string, format: binary, maxLength: 10000000 } }
       responses:
         "200":
           description: Avatar replaced.
@@ -471,9 +474,12 @@ paths:
       requestBody:
         required: true
         content:
-          image/png: { schema: { type: string, format: binary } }
-          image/jpeg: { schema: { type: string, format: binary } }
-          image/webp: { schema: { type: string, format: binary } }
+          image/png:
+            { schema: { type: string, format: binary, maxLength: 10000000 } }
+          image/jpeg:
+            { schema: { type: string, format: binary, maxLength: 10000000 } }
+          image/webp:
+            { schema: { type: string, format: binary, maxLength: 10000000 } }
       responses:
         "200":
           description: Member avatar replaced.

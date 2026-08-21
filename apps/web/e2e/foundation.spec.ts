@@ -78,6 +78,7 @@ const message = {
   created_seq: 3,
   created_at: "2026-08-19T06:30:00Z",
   mentioned_actor_ids: [],
+  files: [],
   thread_reply_count: 0,
 };
 
@@ -302,7 +303,8 @@ async function mockMessenger(
     } else if (path.endsWith("/auth/password/reset")) {
       status = 204;
       body = undefined;
-    } else if (path.endsWith("/chats")) {
+    } else if (path.endsWith("/agents")) body = [];
+    else if (path.endsWith("/chats")) {
       chatRequests += 1;
       body = { chats: [runtimeChat] };
     } else if (path.endsWith("/me/email/change")) {
@@ -1101,7 +1103,12 @@ test("phase 3.1 settings cover workspace branding infrastructure sessions and au
   await page.getByLabel("Secret key").fill("secret");
   await page.getByLabel("Хост").fill("smtp.example.com");
   await page.getByLabel("Адрес отправителя").fill("coma@example.com");
-  await expect(page.getByText("Сохранено")).toBeVisible();
+  const saveConnections = page.getByRole("button", {
+    name: "Сохранить подключения",
+  });
+  await expect(saveConnections).toBeEnabled();
+  await saveConnections.click();
+  await expect(page.getByText("Изменения сохранены")).toBeVisible();
   await page
     .getByRole("button", { name: "Проверить подключение" })
     .first()
@@ -1149,6 +1156,66 @@ test("phase 3.1 settings cover workspace branding infrastructure sessions and au
   await page.getByLabel("Категория").selectOption("organization");
   await page.getByLabel("С даты").fill("2026-08-01");
   await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+test("profile menu, status dialog and attachment picker expose the new flows", async ({
+  page,
+}) => {
+  await mockMessenger(page, { chatPatch: { kind: "group", role: "owner" } });
+  await page.goto("/chats");
+
+  await page.getByRole("button", { name: /Анна/ }).click();
+  const profileMenu = page.getByRole("menu");
+  await expect(profileMenu.getByText("Анна")).toBeVisible();
+  await expect(
+    profileMenu.getByRole("menuitem", { name: "Настройки профиля" }),
+  ).toBeVisible();
+  await profileMenu.getByRole("menuitem", { name: "Чем заняты?" }).click();
+
+  const statusDialog = page.getByRole("dialog", {
+    name: "Установить статус",
+  });
+  await expect(statusDialog).toBeVisible();
+  await statusDialog.getByLabel("Текст статуса").fill("Проверяю интерфейс");
+  await statusDialog.getByRole("button", { name: "Отмена" }).click();
+  await expect(statusDialog).toBeHidden();
+
+  await page.getByRole("button", { name: /Объявления/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/chat/${chat.id}$`));
+  await page.getByRole("button", { name: "Прикрепить" }).click();
+  const attachmentMenu = page.getByRole("menu", { name: "Прикрепить" });
+  await expect(attachmentMenu.getByText("Фото или видео")).toBeVisible();
+  await expect(attachmentMenu.getByText("Файл", { exact: true })).toBeVisible();
+  await expect(attachmentMenu.getByText("Markdown")).toBeVisible();
+});
+
+test("member controls use a dialog and the agent editor scrolls in Russian", async ({
+  page,
+}) => {
+  await mockMessenger(page);
+  await page.goto("/settings/workspace/members");
+  await page.getByRole("button", { name: "Управление участником" }).click();
+  const memberDialog = page.getByRole("dialog", {
+    name: "Управление участником",
+  });
+  await expect(memberDialog.getByText("Роль участника")).toBeVisible();
+  await expect(memberDialog.getByText(/не более 10 МБ/)).toBeVisible();
+  await memberDialog.getByRole("button", { name: "Закрыть" }).click();
+
+  await page.goto("/settings/agents");
+  await expect(page.getByRole("heading", { name: "Агенты" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Разрешения" })).toBeVisible();
+  await expect(page.getByText("messages:read", { exact: true })).toHaveCount(0);
+  const editor = page.locator(".agent-settings");
+  await expect
+    .poll(() =>
+      editor.evaluate((element) => element.scrollHeight > element.clientHeight),
+    )
+    .toBe(true);
+  await editor.evaluate((element) => element.scrollTo(0, element.scrollHeight));
+  await expect
+    .poll(() => editor.evaluate((element) => element.scrollTop))
+    .toBeGreaterThan(0);
 });
 
 test("member invitation self-service never exposes administrative controls", async ({
@@ -1847,6 +1914,7 @@ test("custom status is edited from the profile menu", async ({ page }) => {
   const phone = test.info().project.name === "phone";
   await page.goto(phone ? "/more" : "/chats");
   await page.getByRole("button", { name: phone ? /Статус/ : /Анна/ }).click();
+  if (!phone) await page.getByRole("menuitem", { name: /Чем заняты/ }).click();
   await page.getByLabel("Эмодзи статуса").fill("🏖️");
   await page.getByLabel("Текст статуса").fill("В отпуске");
   if (!phone)
@@ -1861,6 +1929,7 @@ test("custom status is edited from the profile menu", async ({ page }) => {
   }
 
   await page.getByRole("button", { name: phone ? /Статус/ : /Анна/ }).click();
+  if (!phone) await page.getByRole("menuitem", { name: /В отпуске/ }).click();
   await page.getByRole("button", { name: "Очистить статус" }).click();
   if (phone) {
     await expect(
@@ -1879,6 +1948,7 @@ test("notification snooze is shared by the profile menu", async ({ page }) => {
     await page.getByRole("button", { name: /Отключить уведомления/ }).click();
   } else {
     await page.getByRole("button", { name: /Анна/ }).click();
+    await page.getByRole("menuitem", { name: "Отключить уведомления" }).click();
   }
   await page.getByRole("button", { name: "На 30 минут" }).click();
   if (phone) {
@@ -1890,7 +1960,7 @@ test("notification snooze is shared by the profile menu", async ({ page }) => {
     await page.getByRole("button", { name: /Отключить уведомления/ }).click();
   } else {
     await expect(
-      page.locator(".status-menu").getByText(/Уведомления отключены до/),
+      page.locator(".profile-menu").getByText(/Уведомления отключены до/),
     ).toBeVisible();
   }
   await page.getByRole("button", { name: "Включить сейчас" }).click();
@@ -1903,7 +1973,7 @@ test("notification snooze is shared by the profile menu", async ({ page }) => {
   } else {
     await expect(
       page
-        .locator(".status-menu")
+        .locator(".profile-menu")
         .getByText("Пауза действует на всех ваших устройствах"),
     ).toBeVisible();
   }

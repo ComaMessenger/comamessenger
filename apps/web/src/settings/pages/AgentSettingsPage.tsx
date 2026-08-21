@@ -156,7 +156,10 @@ export function AgentSettingsPage({
   });
   const [selectedID, setSelectedID] = useState<string | null>(null);
   const [template, setTemplate] = useState<Template>("custom");
-  const [draft, setDraft] = useState<Draft>(() => emptyDraft());
+  const [draft, setDraft] = useState<Draft>(() => ({
+    ...emptyDraft(),
+    display_name: t("agentTemplate_custom"),
+  }));
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [pending, setPending] = useState(false);
@@ -171,7 +174,12 @@ export function AgentSettingsPage({
   function chooseTemplate(value: Template) {
     setTemplate(value);
     setSelectedID(null);
-    setDraft(emptyDraft(value));
+    setDraft({
+      ...emptyDraft(value),
+      display_name: t(`agentTemplate_${value}`),
+      description:
+        value === "custom" ? "" : t(`agentTemplateDescription_${value}`),
+    });
     setError("");
   }
 
@@ -350,7 +358,7 @@ function AgentConfiguration({
           >
             <option value="openai">OpenAI</option>
             <option value="anthropic">Anthropic</option>
-            <option value="openai-compatible">OpenAI-compatible</option>
+            <option value="openai-compatible">{t("openAICompatible")}</option>
           </SelectField>
           <Field
             label={t("model")}
@@ -401,7 +409,7 @@ function AgentConfiguration({
                   })
                 }
               />
-              <span>{scope}</span>
+              <span>{t(`agentScope_${scope.replace(":", "_")}`)}</span>
             </label>
           ))}
         </div>
@@ -564,6 +572,22 @@ function AgentOperations({
     );
     setTriggerValue("");
   }
+  function triggerDetails(type: string, rawConfig: unknown) {
+    const config = rawConfig as Record<string, unknown>;
+    if (type === "command") return `/${String(config.command ?? "")}`;
+    if (type === "keyword") return String(config.pattern ?? "");
+    if (type === "schedule")
+      return `${String(config.hour ?? 0).padStart(2, "0")}:${String(
+        config.minute ?? 0,
+      ).padStart(2, "0")}`;
+    if (type === "event")
+      return Array.isArray(config.event_types)
+        ? config.event_types.join(", ")
+        : t("agentTriggerEventHint");
+    return type === "mention"
+      ? t("agentTriggerMentionHint")
+      : t("agentTriggerEveryMessageHint");
+  }
   return (
     <>
       <FormError message={error} />
@@ -615,7 +639,7 @@ function AgentOperations({
               "event",
             ].map((type) => (
               <option key={type} value={type}>
-                {type}
+                {t(`agentTrigger_${type}`)}
               </option>
             ))}
           </SelectField>
@@ -644,8 +668,8 @@ function AgentOperations({
           {(triggers.data ?? []).map((trigger) => (
             <div key={trigger.id}>
               <span>
-                <strong>{trigger.type}</strong>
-                <small>{JSON.stringify(trigger.config)}</small>
+                <strong>{t(`agentTrigger_${trigger.type}`)}</strong>
+                <small>{triggerDetails(trigger.type, trigger.config)}</small>
               </span>
               <Badge tone={trigger.enabled ? "success" : "neutral"}>
                 {trigger.enabled ? t("enabled") : t("disabled")}
@@ -690,7 +714,7 @@ function AgentOperations({
               <Play />
               <span>
                 <strong>
-                  {run.status} · {run.model}
+                  {t(`agentRunStatus_${run.status}`)} · {run.model}
                 </strong>
                 <small>
                   {run.correlation_id}
@@ -703,7 +727,30 @@ function AgentOperations({
         </div>
         {selectedRun && (
           <div className="agent-run-detail">
-            <pre>{JSON.stringify(selectedRun, null, 2)}</pre>
+            <dl>
+              <div>
+                <dt>{t("runStatus")}</dt>
+                <dd>{t(`agentRunStatus_${selectedRun.status}`)}</dd>
+              </div>
+              <div>
+                <dt>{t("model")}</dt>
+                <dd>{selectedRun.model}</dd>
+              </div>
+              <div>
+                <dt>{t("correlationID")}</dt>
+                <dd>{selectedRun.correlation_id}</dd>
+              </div>
+              <div>
+                <dt>{t("createdAt")}</dt>
+                <dd>{new Date(selectedRun.created_at).toLocaleString()}</dd>
+              </div>
+              {selectedRun.error_code && (
+                <div>
+                  <dt>{t("errorCode")}</dt>
+                  <dd>{selectedRun.error_code}</dd>
+                </div>
+              )}
+            </dl>
             {["queued", "running"].includes(selectedRun.status) && (
               <Button
                 onClick={() =>
@@ -758,7 +805,10 @@ function AgentOperations({
               <span>
                 <strong>{key.name}</strong>
                 <small>
-                  {key.prefix} · {key.scopes.join(", ")}
+                  {key.prefix} ·{" "}
+                  {key.scopes
+                    .map((scope) => t(`agentScope_${scope.replace(":", "_")}`))
+                    .join(", ")}
                 </small>
               </span>
               <Button

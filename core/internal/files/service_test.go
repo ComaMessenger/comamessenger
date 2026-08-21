@@ -190,6 +190,9 @@ func TestAvatarUsesSharedStorageEnforcesAuthorizationAndVersions(t *testing.T) {
 	if _, err := service.PutAvatar(t.Context(), member, testMemberID, "image/svg+xml", strings.NewReader(`<svg xmlns="http://www.w3.org/2000/svg"/>`)); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("SVG avatar error = %v", err)
 	}
+	if _, err := service.PutAvatar(t.Context(), member, testMemberID, "image/png", bytes.NewReader(make([]byte, maxAvatarBytes+1))); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("oversized avatar error = %v", err)
+	}
 
 	buffer := new(bytes.Buffer)
 	source := image.NewRGBA(image.Rect(0, 0, 32, 32))

@@ -73,7 +73,7 @@
 ### Аватары
 
 - [x] `PUT/DELETE /me/avatar`; owner или admin с `members.manage` может заменить/удалить аватар участника.
-- [x] Разрешить только PNG/JPEG/WebP, сверять MIME по сигнатуре, ограничить исходник 512 KiB и запретить SVG.
+- [x] Разрешить только PNG/JPEG/WebP, сверять MIME по сигнатуре, ограничить исходник 10 MB и запретить SVG.
 - [x] Хранить аватар как blob общего storage pipeline, а в actor — ссылку на file/blob metadata и `avatar_version`.
 - [x] `GET /actors/:id/avatar` требует Bearer auth и same-organization visibility; чужой и отсутствующий actor дают одинаковый 404.
 - [x] Web загружает blob через `MessengerAPI`, создаёт object URL в `apps/web`, инвалидирует его по `avatar_version` и отзывает при logout; `packages/core` не вызывает DOM API.

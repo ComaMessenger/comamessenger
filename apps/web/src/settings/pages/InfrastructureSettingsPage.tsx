@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type {
   InfrastructureSettings,
@@ -8,8 +8,7 @@ import type {
 import { HardDrive, Mail, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { messageOf } from "../../errors";
-import { Button, Field, SelectField, Skeleton } from "../../ui";
-import { AutosaveStatus } from "../components/AutosaveStatus";
+import { Button, Field, FormError, SelectField, Skeleton } from "../../ui";
 import {
   SettingsAccessDenied,
   SettingsSection,
@@ -19,15 +18,38 @@ import {
   SettingsShell,
   type SettingsNavigate,
 } from "../components/SettingsShell";
-import { useAutosave } from "../hooks/useAutosave";
 import { canAccessSettingsPage } from "../registry";
 
-type InfrastructureDraft = {
-  settings: InfrastructureSettings;
-  s3AccessKey: string;
-  s3SecretKey: string;
-  smtpPassword: string;
-};
+function normalizeInfrastructure(value: InfrastructureSettings) {
+  return {
+    ...value,
+    smtp: {
+      ...value.smtp,
+      security: value.smtp.security || ("starttls" as const),
+      port: value.smtp.port || 587,
+    },
+  };
+}
+
+function infrastructureFingerprint(value: InfrastructureSettings) {
+  return JSON.stringify({
+    s3: {
+      endpoint: value.s3.endpoint,
+      region: value.s3.region,
+      bucket: value.s3.bucket,
+      prefix: value.s3.prefix,
+      force_path_style: value.s3.force_path_style,
+    },
+    smtp: {
+      host: value.smtp.host,
+      port: value.smtp.port,
+      username: value.smtp.username,
+      from_address: value.smtp.from_address,
+      from_name: value.smtp.from_name,
+      security: value.smtp.security,
+    },
+  });
+}
 
 export function InfrastructureSettingsPage({
   api,
@@ -46,126 +68,78 @@ export function InfrastructureSettingsPage({
     enabled: allowed,
   });
   const [value, setValue] = useState<InfrastructureSettings | null>(null);
+  const [baseline, setBaseline] = useState<InfrastructureSettings | null>(null);
   const [s3AccessKey, setS3AccessKey] = useState("");
   const [s3SecretKey, setS3SecretKey] = useState("");
   const [smtpPassword, setSMTPPassword] = useState("");
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
   useEffect(() => {
-    if (query.data)
-      setValue({
-        ...query.data,
-        smtp: {
-          ...query.data.smtp,
-          security: query.data.smtp.security || "starttls",
-          port: query.data.smtp.port || 587,
-        },
-      });
+    if (!query.data) return;
+    const normalized = normalizeInfrastructure(query.data);
+    setValue(normalized);
+    setBaseline(normalized);
   }, [query.data]);
-  const draft: InfrastructureDraft | null = value
-    ? {
-        settings: value,
-        s3AccessKey,
-        s3SecretKey,
-        smtpPassword,
-      }
-    : null;
-  const infrastructureFingerprint = useCallback(
-    (item: InfrastructureDraft) =>
-      JSON.stringify({
-        s3: {
-          endpoint: item.settings.s3.endpoint,
-          region: item.settings.s3.region,
-          bucket: item.settings.s3.bucket,
-          prefix: item.settings.s3.prefix,
-          force_path_style: item.settings.s3.force_path_style,
-          access_key: item.s3AccessKey,
-          secret_key: item.s3SecretKey,
-        },
-        smtp: {
-          host: item.settings.smtp.host,
-          port: item.settings.smtp.port,
-          username: item.settings.smtp.username,
-          password: item.smtpPassword,
-          from_address: item.settings.smtp.from_address,
-          from_name: item.settings.smtp.from_name,
-          security: item.settings.smtp.security,
-        },
-      }),
-    [],
+  const dirty = Boolean(
+    value &&
+      baseline &&
+      (infrastructureFingerprint(value) !==
+        infrastructureFingerprint(baseline) ||
+        s3AccessKey ||
+        s3SecretKey ||
+        smtpPassword),
   );
-  const autosave = useAutosave({
-    value: draft,
-    fingerprint: infrastructureFingerprint,
-    save: async (snapshot) => {
+  async function save() {
+    if (!value || !dirty) return;
+    setPending(true);
+    setError("");
+    setMessage("");
+    try {
       const updated = await api.updateInfrastructure({
-        expected_version: snapshot.settings.version,
+        expected_version: value.version,
         s3: {
-          endpoint: snapshot.settings.s3.endpoint,
-          region: snapshot.settings.s3.region,
-          bucket: snapshot.settings.s3.bucket,
-          prefix: snapshot.settings.s3.prefix,
-          force_path_style: snapshot.settings.s3.force_path_style,
-          access_key: snapshot.s3AccessKey || null,
-          secret_key: snapshot.s3SecretKey || null,
+          endpoint: value.s3.endpoint,
+          region: value.s3.region,
+          bucket: value.s3.bucket,
+          prefix: value.s3.prefix,
+          force_path_style: value.s3.force_path_style,
+          access_key: s3AccessKey || null,
+          secret_key: s3SecretKey || null,
           clear_credentials: false,
         },
         smtp: {
-          host: snapshot.settings.smtp.host,
-          port: snapshot.settings.smtp.port,
-          username: snapshot.settings.smtp.username,
-          password: snapshot.smtpPassword || null,
-          from_address: snapshot.settings.smtp.from_address,
-          from_name: snapshot.settings.smtp.from_name,
-          security: snapshot.settings.smtp.security,
+          host: value.smtp.host,
+          port: value.smtp.port,
+          username: value.smtp.username,
+          password: smtpPassword || null,
+          from_address: value.smtp.from_address,
+          from_name: value.smtp.from_name,
+          security: value.smtp.security,
           clear_credentials: false,
         },
       });
-      return {
-        settings: updated,
-        s3AccessKey: "",
-        s3SecretKey: "",
-        smtpPassword: "",
-      };
-    },
-    onSaved: (result, snapshot) => {
-      const unchanged =
-        draft &&
-        infrastructureFingerprint(draft) ===
-          infrastructureFingerprint(snapshot);
-      if (unchanged) {
-        setValue(result.settings);
-      } else {
-        setValue((current) =>
-          current
-            ? {
-                ...current,
-                version: result.settings.version,
-                s3: {
-                  ...current.s3,
-                  credentials_configured:
-                    result.settings.s3.credentials_configured,
-                  access_key_hint: result.settings.s3.access_key_hint,
-                },
-                smtp: {
-                  ...current.smtp,
-                  credentials_configured:
-                    result.settings.smtp.credentials_configured,
-                },
-              }
-            : result.settings,
-        );
-      }
-      if (s3AccessKey === snapshot.s3AccessKey) setS3AccessKey("");
-      if (s3SecretKey === snapshot.s3SecretKey) setS3SecretKey("");
-      if (smtpPassword === snapshot.smtpPassword) setSMTPPassword("");
-    },
-  });
+      const normalized = normalizeInfrastructure(updated);
+      setValue(normalized);
+      setBaseline(normalized);
+      setS3AccessKey("");
+      setS3SecretKey("");
+      setSMTPPassword("");
+      setMessage(t("changesSaved"));
+    } catch (cause) {
+      setError(messageOf(cause));
+    } finally {
+      setPending(false);
+    }
+  }
   async function test(kind: "s3" | "smtp") {
+    setError("");
+    setMessage("");
     try {
       const result = await api.testInfrastructure(kind);
       setMessage(result.ok ? t("connectionSuccessful") : result.message);
     } catch (cause) {
-      setMessage(messageOf(cause));
+      setError(messageOf(cause));
     }
   }
   return (
@@ -181,11 +155,15 @@ export function InfrastructureSettingsPage({
         <Skeleton />
       ) : (
         <div className="settings-page__body settings-page__body--columns">
-          <AutosaveStatus
-            phase={autosave.phase}
-            error={autosave.error}
-            onRetry={autosave.retry}
-          />
+          <div className="settings-actions settings-section--wide settings-actions--save">
+            <Button
+              variant="primary"
+              disabled={!dirty || pending}
+              onClick={() => void save()}
+            >
+              {pending ? t("autosaveSaving") : t("saveInfrastructure")}
+            </Button>
+          </div>
           <SettingsSection
             title={t("s3Storage")}
             description={t("s3StorageHint")}
@@ -270,7 +248,7 @@ export function InfrastructureSettingsPage({
                 })
               }
             />
-            <Button onClick={() => void test("s3")}>
+            <Button disabled={dirty || pending} onClick={() => void test("s3")}>
               <RefreshCw />
               {t("testConnection")}
             </Button>
@@ -373,7 +351,10 @@ export function InfrastructureSettingsPage({
                 <option value="none">{t("noEncryption")}</option>
               </SelectField>
             </div>
-            <Button onClick={() => void test("smtp")}>
+            <Button
+              disabled={dirty || pending}
+              onClick={() => void test("smtp")}
+            >
               <RefreshCw />
               {t("testConnection")}
             </Button>
@@ -383,6 +364,7 @@ export function InfrastructureSettingsPage({
               {message}
             </span>
           )}
+          {error && <FormError message={error} />}
         </div>
       )}
     </SettingsShell>

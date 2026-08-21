@@ -27,6 +27,7 @@ import {
   Bookmark,
   Bot,
   BriefcaseBusiness,
+  Bug,
   Building2,
   CalendarDays,
   Camera,
@@ -38,6 +39,7 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronDown,
+  ChevronRight,
   Circle,
   Clock3,
   Cloud,
@@ -48,6 +50,7 @@ import {
   Forward,
   Folder,
   FolderPlus,
+  FileText,
   Flower2,
   Flame,
   Gamepad2,
@@ -56,6 +59,7 @@ import {
   GraduationCap,
   Hash,
   Heart,
+  History,
   Home,
   Image,
   Inbox,
@@ -1085,6 +1089,7 @@ function Messenger({
   const [workspaceMenu, setWorkspaceMenu] = useState(false);
   const workspaceMenuRoot = useRef<HTMLDivElement>(null);
   const [statusMenu, setStatusMenu] = useState(false);
+  const [profileSnoozeOpen, setProfileSnoozeOpen] = useState(false);
   const profileMenuRoot = useRef<HTMLElement>(null);
   const [statusEmoji, setStatusEmoji] = useState(user.status_emoji);
   const [statusText, setStatusText] = useState(user.status_text);
@@ -1098,7 +1103,7 @@ function Messenger({
   const [chatLoading, setChatLoading] = useState(true);
   const [chatError, setChatError] = useState("");
   const [modal, setModal] = useState<
-    "new" | "folder" | "notify" | "pinned" | null
+    "new" | "folder" | "notify" | "pinned" | "status" | null
   >(null);
   const selectedID = /^\/chat\/([^/]+)/.exec(path)?.[1] ?? null;
   const threadID = /\/thread\/([^/]+)/.exec(path)?.[1] ?? null;
@@ -1458,7 +1463,7 @@ function Messenger({
         expires_at: expiresAt,
       });
       onUserUpdated(await api.me());
-      setStatusMenu(false);
+      setModal(null);
     } finally {
       setStatusPending(false);
     }
@@ -1470,7 +1475,7 @@ function Messenger({
       setStatusEmoji("");
       setStatusText("");
       onUserUpdated(await api.me());
-      setStatusMenu(false);
+      setModal(null);
     } finally {
       setStatusPending(false);
     }
@@ -1625,142 +1630,167 @@ function Messenger({
             <Bell />
           </IconButton>
           {statusMenu && (
-            <form
-              className="status-menu"
-              onSubmit={(event) => void saveStatus(event)}
-            >
-              <strong>{t("customStatus")}</strong>
-              <div className="status-menu__fields">
-                <input
-                  aria-label={t("statusEmoji")}
-                  value={statusEmoji}
-                  maxLength={16}
-                  placeholder="🙂"
-                  onChange={(event) => setStatusEmoji(event.target.value)}
+            <div className="profile-menu" role="menu">
+              <div className="profile-menu__identity">
+                <Avatar
+                  name={user.display_name}
+                  seed={user.id}
+                  actorID={user.id}
+                  avatarVersion={user.avatar_version}
+                  size="lg"
+                  online
                 />
-                <input
-                  aria-label={t("statusText")}
-                  value={statusText}
-                  maxLength={100}
-                  placeholder={t("statusPlaceholder")}
-                  onChange={(event) => setStatusText(event.target.value)}
-                />
+                <span>
+                  <strong>{user.display_name}</strong>
+                  <small>{t("online")}</small>
+                </span>
               </div>
-              <select
-                aria-label={t("statusDuration")}
-                value={statusExpiry}
-                onChange={(event) => setStatusExpiry(event.target.value)}
+              <button
+                className="profile-menu__status"
+                role="menuitem"
+                onClick={() => {
+                  setStatusMenu(false);
+                  setModal("status");
+                }}
               >
-                <option value="hour">{t("statusOneHour")}</option>
-                <option value="day">{t("statusOneDay")}</option>
-                <option value="week">{t("statusOneWeek")}</option>
-                <option value="none">{t("statusNoExpiry")}</option>
-              </select>
-              <div className="status-menu__actions">
-                <Button
-                  type="submit"
-                  size="sm"
-                  variant="primary"
-                  disabled={statusPending}
-                >
-                  {t("save")}
-                </Button>
-                {(user.status_text || user.status_emoji) && (
-                  <Button
-                    size="sm"
-                    disabled={statusPending}
-                    onClick={() => void clearStatus()}
-                  >
-                    {t("clearStatus")}
-                  </Button>
-                )}
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => navigate("/settings/profile")}
-                >
-                  {t("profileSettings")}
-                </Button>
-              </div>
-              <div className="status-menu__snooze">
-                <strong>{t("snoozeNotifications")}</strong>
-                <small>
+                <span>{user.status_emoji || "🙂"}</span>
+                <strong>{user.status_text || t("statusPlaceholder")}</strong>
+                <ChevronRight />
+              </button>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setStatusMenu(false);
+                  navigate("/settings/profile");
+                }}
+              >
+                <UserRound />
+                <span>{t("profileSettings")}</span>
+              </button>
+              <button
+                role="menuitem"
+                aria-expanded={profileSnoozeOpen}
+                onClick={() => setProfileSnoozeOpen((open) => !open)}
+              >
+                <BellOff />
+                <span>
                   {snoozedUntil
-                    ? t("snoozedUntil", {
-                        time: formatDateTime(snoozedUntil),
-                      })
-                    : t("snoozeHint")}
-                </small>
-                <div className="status-menu__actions">
-                  <Button
-                    size="sm"
-                    disabled={snoozePending}
-                    onClick={() => snoozeFor(30)}
-                  >
-                    {t("snooze30Minutes")}
-                  </Button>
-                  <Button
-                    size="sm"
-                    disabled={snoozePending}
-                    onClick={() => snoozeFor(60)}
-                  >
-                    {t("snoozeOneHour")}
-                  </Button>
-                  <Button
-                    size="sm"
-                    disabled={snoozePending}
-                    onClick={() => snoozeFor(120)}
-                  >
-                    {t("snoozeTwoHours")}
-                  </Button>
-                  <Button
-                    size="sm"
-                    disabled={snoozePending}
-                    onClick={() =>
-                      void updateSnooze(tomorrowAtNine(user.timezone))
-                    }
-                  >
-                    {t("snoozeUntilTomorrow")}
-                  </Button>
+                    ? t("resumeNotifications")
+                    : t("snoozeNotifications")}
+                </span>
+                <ChevronRight className={profileSnoozeOpen ? "is-open" : ""} />
+              </button>
+              {profileSnoozeOpen && (
+                <div className="profile-menu__snooze">
+                  <small>
+                    {snoozedUntil
+                      ? t("snoozedUntil", {
+                          time: formatDateTime(snoozedUntil),
+                        })
+                      : t("snoozeHint")}
+                  </small>
+                  <div>
+                    <Button
+                      size="sm"
+                      disabled={snoozePending}
+                      onClick={() => snoozeFor(30)}
+                    >
+                      {t("snooze30Minutes")}
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={snoozePending}
+                      onClick={() => snoozeFor(60)}
+                    >
+                      {t("snoozeOneHour")}
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={snoozePending}
+                      onClick={() => snoozeFor(120)}
+                    >
+                      {t("snoozeTwoHours")}
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={snoozePending}
+                      onClick={() =>
+                        void updateSnooze(tomorrowAtNine(user.timezone))
+                      }
+                    >
+                      {t("snoozeUntilTomorrow")}
+                    </Button>
+                  </div>
+                  <div className="profile-menu__custom-snooze">
+                    <input
+                      type="datetime-local"
+                      aria-label={t("snoozeCustom")}
+                      value={snoozeCustom}
+                      onChange={(event) => setSnoozeCustom(event.target.value)}
+                    />
+                    <Button
+                      size="sm"
+                      disabled={!snoozeCustom || snoozePending}
+                      onClick={() =>
+                        void updateSnooze(
+                          localDateTimeInZone(snoozeCustom, user.timezone),
+                        )
+                      }
+                    >
+                      {t("apply")}
+                    </Button>
+                  </div>
+                  {snoozedUntil && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => void updateSnooze(null)}
+                    >
+                      {t("resumeNotifications")}
+                    </Button>
+                  )}
                 </div>
-                <div className="status-menu__custom-snooze">
-                  <input
-                    type="datetime-local"
-                    aria-label={t("snoozeCustom")}
-                    value={snoozeCustom}
-                    onChange={(event) => setSnoozeCustom(event.target.value)}
-                  />
-                  <Button
-                    size="sm"
-                    disabled={!snoozeCustom || snoozePending}
-                    onClick={() =>
-                      void updateSnooze(
-                        localDateTimeInZone(snoozeCustom, user.timezone),
-                      )
-                    }
-                  >
-                    {t("apply")}
-                  </Button>
-                </div>
-                {snoozedUntil && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={snoozePending}
-                    onClick={() => void updateSnooze(null)}
-                  >
-                    {t("resumeNotifications")}
-                  </Button>
-                )}
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => navigate("/settings/notifications")}
+              )}
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setStatusMenu(false);
+                  navigate("/settings/notifications");
+                }}
+              >
+                <Settings />
+                <span>{t("notificationSettings")}</span>
+              </button>
+              <div className="profile-menu__section">
+                <a
+                  role="menuitem"
+                  href="https://github.com/ComaMessenger/comamessenger#readme"
+                  target="_blank"
+                  rel="noreferrer"
                 >
-                  {t("notificationSettings")}
-                </Button>
+                  <BookOpen />
+                  <span>{t("knowledgeBase")}</span>
+                </a>
+                <a
+                  role="menuitem"
+                  href="https://github.com/ComaMessenger/comamessenger/issues/new/choose"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <Bug />
+                  <span>{t("reportProblem")}</span>
+                </a>
+                <a
+                  role="menuitem"
+                  href="https://github.com/ComaMessenger/comamessenger/commits/main/"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <History />
+                  <span>{t("latestUpdates")}</span>
+                </a>
               </div>
-            </form>
+            </div>
           )}
         </footer>
       </aside>
@@ -2018,6 +2048,21 @@ function Messenger({
       {modal === "notify" && (
         <NotificationDialog api={api} onClose={() => setModal(null)} />
       )}
+      {modal === "status" && (
+        <StatusDialog
+          emoji={statusEmoji}
+          text={statusText}
+          expiry={statusExpiry}
+          pending={statusPending}
+          hasStatus={Boolean(user.status_text || user.status_emoji)}
+          onEmojiChange={setStatusEmoji}
+          onTextChange={setStatusText}
+          onExpiryChange={setStatusExpiry}
+          onSave={saveStatus}
+          onClear={() => void clearStatus()}
+          onClose={() => setModal(null)}
+        />
+      )}
       {modal === "pinned" && selectedID && (
         <PinnedDialog
           api={api}
@@ -2052,6 +2097,83 @@ function Messenger({
         {realtime === "live" ? t("connectionLive") : t("connectionOffline")}
       </div>
     </div>
+  );
+}
+
+function StatusDialog({
+  emoji,
+  text,
+  expiry,
+  pending,
+  hasStatus,
+  onEmojiChange,
+  onTextChange,
+  onExpiryChange,
+  onSave,
+  onClear,
+  onClose,
+}: {
+  emoji: string;
+  text: string;
+  expiry: string;
+  pending: boolean;
+  hasStatus: boolean;
+  onEmojiChange(value: string): void;
+  onTextChange(value: string): void;
+  onExpiryChange(value: string): void;
+  onSave(event: FormEvent<HTMLFormElement>): void;
+  onClear(): void;
+  onClose(): void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Dialog title={t("setStatus")} className="status-dialog" onClose={onClose}>
+      <form onSubmit={onSave}>
+        <div className="status-dialog__fields">
+          <input
+            aria-label={t("statusEmoji")}
+            value={emoji}
+            maxLength={16}
+            placeholder="🙂"
+            onChange={(event) => onEmojiChange(event.target.value)}
+          />
+          <input
+            aria-label={t("statusText")}
+            value={text}
+            maxLength={100}
+            placeholder={t("statusPlaceholder")}
+            autoFocus
+            onChange={(event) => onTextChange(event.target.value)}
+          />
+        </div>
+        <label className="ui-field">
+          <span className="ui-field__label">{t("statusDuration")}</span>
+          <select
+            value={expiry}
+            onChange={(event) => onExpiryChange(event.target.value)}
+          >
+            <option value="hour">{t("statusOneHour")}</option>
+            <option value="day">{t("statusOneDay")}</option>
+            <option value="week">{t("statusOneWeek")}</option>
+            <option value="none">{t("statusNoExpiry")}</option>
+          </select>
+        </label>
+        <div className="status-dialog__actions">
+          {hasStatus && (
+            <Button disabled={pending} onClick={onClear}>
+              {t("clearStatus")}
+            </Button>
+          )}
+          <span />
+          <Button disabled={pending} onClick={onClose}>
+            {t("cancel")}
+          </Button>
+          <Button type="submit" variant="primary" disabled={pending}>
+            {t("save")}
+          </Button>
+        </div>
+      </form>
+    </Dialog>
   );
 }
 
@@ -3997,7 +4119,10 @@ function Composer({
   const { t } = useTranslation();
   const input = useRef<HTMLTextAreaElement>(null);
   const composerRoot = useRef<HTMLDivElement>(null);
+  const mediaInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const markdownInput = useRef<HTMLInputElement>(null);
+  const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [formatOpen, setFormatOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [sendSettings, setSendSettings] = useState(false);
@@ -4012,11 +4137,16 @@ function Composer({
   useEffect(() => {
     if (!canSend) setSendSettings(false);
   }, [canSend]);
-  useDismissable(composerRoot, formatOpen || emojiOpen || sendSettings, () => {
-    setFormatOpen(false);
-    setEmojiOpen(false);
-    setSendSettings(false);
-  });
+  useDismissable(
+    composerRoot,
+    formatOpen || emojiOpen || sendSettings || attachmentOpen,
+    () => {
+      setFormatOpen(false);
+      setEmojiOpen(false);
+      setSendSettings(false);
+      setAttachmentOpen(false);
+    },
+  );
   const draft = useMemo(() => decodeMentions(body), [body]);
   useEffect(() => {
     const element = input.current;
@@ -4213,6 +4343,38 @@ function Composer({
         </div>
       )}
       <div className="composer">
+        {attachmentOpen && (
+          <div
+            className="composer-attachment-menu"
+            role="menu"
+            aria-label={t("attach")}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => mediaInput.current?.click()}
+            >
+              <Image />
+              <span>{t("attachMedia")}</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => fileInput.current?.click()}
+            >
+              <FileText />
+              <span>{t("attachFile")}</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => markdownInput.current?.click()}
+            >
+              <Code2 />
+              <span>{t("attachMarkdown")}</span>
+            </button>
+          </div>
+        )}
         {formatOpen && (
           <div className="composer__formatbar" aria-label={t("formatting")}>
             <button aria-label={t("bold")} onClick={() => wrap("**")}>
@@ -4281,10 +4443,28 @@ function Composer({
             <IconButton
               label={t("attach")}
               disabled={!onFiles || attachments.length >= 10}
-              onClick={() => fileInput.current?.click()}
+              aria-expanded={attachmentOpen}
+              onClick={() => {
+                setAttachmentOpen((open) => !open);
+                setEmojiOpen(false);
+                setFormatOpen(false);
+                setSendSettings(false);
+              }}
             >
               <Paperclip />
             </IconButton>
+            <input
+              ref={mediaInput}
+              hidden
+              type="file"
+              accept="image/*,video/*"
+              multiple
+              onChange={(event) => {
+                onFiles?.([...(event.target.files ?? [])]);
+                event.target.value = "";
+                setAttachmentOpen(false);
+              }}
+            />
             <input
               ref={fileInput}
               hidden
@@ -4293,6 +4473,19 @@ function Composer({
               onChange={(event) => {
                 onFiles?.([...(event.target.files ?? [])]);
                 event.target.value = "";
+                setAttachmentOpen(false);
+              }}
+            />
+            <input
+              ref={markdownInput}
+              hidden
+              type="file"
+              accept=".md,text/markdown,text/plain"
+              multiple
+              onChange={(event) => {
+                onFiles?.([...(event.target.files ?? [])]);
+                event.target.value = "";
+                setAttachmentOpen(false);
               }}
             />
             <IconButton
@@ -5846,9 +6039,10 @@ function minuteGap(a: string, b: string) {
   return (new Date(b).getTime() - new Date(a).getTime()) / 60000;
 }
 function formatBytes(value: number) {
-  if (value < 1024) return `${value} B`;
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KiB`;
-  return `${(value / (1024 * 1024)).toFixed(1)} MiB`;
+  if (value < 1000) return `${value} B`;
+  if (value < 1_000_000) return `${(value / 1000).toFixed(1)} KB`;
+  if (value < 1_000_000_000) return `${(value / 1_000_000).toFixed(1)} MB`;
+  return `${(value / 1_000_000_000).toFixed(1)} GB`;
 }
 function draftKey(chatID: string, threadID: string | null) {
   return `coma-draft:${chatID}:${threadID ?? "main"}`;

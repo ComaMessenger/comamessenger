@@ -7,14 +7,15 @@ export default defineConfig(({ mode }) => {
     .split(",")
     .map((host) => host.trim())
     .filter(Boolean);
+  const port = Number(env.PORT || 5173);
 
   return {
     plugins: [react()],
     server: {
       host: "0.0.0.0",
-      port: 5173,
+      port,
       allowedHosts,
     },
-    preview: { host: "0.0.0.0", port: 5173, allowedHosts },
+    preview: { host: "0.0.0.0", port, allowedHosts },
   };
 });

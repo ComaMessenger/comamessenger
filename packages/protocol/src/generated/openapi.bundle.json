@@ -305,19 +305,22 @@
             "image/png": {
               "schema": {
                 "type": "string",
-                "format": "binary"
+                "format": "binary",
+                "maxLength": 10000000
               }
             },
             "image/jpeg": {
               "schema": {
                 "type": "string",
-                "format": "binary"
+                "format": "binary",
+                "maxLength": 10000000
               }
             },
             "image/webp": {
               "schema": {
                 "type": "string",
-                "format": "binary"
+                "format": "binary",
+                "maxLength": 10000000
               }
             }
           }
@@ -1045,19 +1048,22 @@
             "image/png": {
               "schema": {
                 "type": "string",
-                "format": "binary"
+                "format": "binary",
+                "maxLength": 10000000
               }
             },
             "image/jpeg": {
               "schema": {
                 "type": "string",
-                "format": "binary"
+                "format": "binary",
+                "maxLength": 10000000
               }
             },
             "image/webp": {
               "schema": {
                 "type": "string",
-                "format": "binary"
+                "format": "binary",
+                "maxLength": 10000000
               }
             }
           }

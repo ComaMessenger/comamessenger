@@ -165,7 +165,7 @@ func (s *Service) PutAsset(ctx context.Context, current identity.User, kind, con
 		return fmt.Errorf("%w: unsupported branding image type", ErrInvalid)
 	}
 	if len(content) < 1 || len(content) > maxBrandingAssetBytes {
-		return fmt.Errorf("%w: branding image must not exceed 512 KiB", ErrInvalid)
+		return fmt.Errorf("%w: branding image must not exceed 512 KB", ErrInvalid)
 	}
 	detected := strings.ToLower(standardhttp.DetectContentType(content))
 	validMagic := detected == strings.ToLower(contentType)

@@ -116,7 +116,7 @@ export function CustomizationSettingsPage({
       ) : !settings ? (
         <Skeleton />
       ) : (
-        <div className="settings-page__body settings-page__body--columns">
+        <div className="settings-page__body settings-page__body--appearance">
           <AutosaveStatus
             phase={autosave.phase}
             error={autosave.error}
@@ -125,6 +125,7 @@ export function CustomizationSettingsPage({
           <SettingsSection
             title={t("brandIdentity")}
             description={t("brandIdentityHint")}
+            wide
           >
             <div className="branding-assets">
               <BrandingAssetCard
@@ -162,6 +163,7 @@ export function CustomizationSettingsPage({
           <SettingsSection
             title={t("accentColor")}
             description={t("accentColorHint")}
+            wide
           >
             <div className="accent-editor">
               <input

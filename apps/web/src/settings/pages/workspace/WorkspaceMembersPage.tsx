@@ -6,9 +6,18 @@ import type {
   Permission,
   User,
 } from "@comamessenger/core";
+import { MoreHorizontal } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { messageOf } from "../../../errors";
-import { Avatar, Button, Field, SelectField, Skeleton } from "../../../ui";
+import {
+  Avatar,
+  Button,
+  Dialog,
+  Field,
+  IconButton,
+  SelectField,
+  Skeleton,
+} from "../../../ui";
 import {
   SettingsAccessDenied,
   SettingsSection,
@@ -51,6 +60,8 @@ export function WorkspaceMembersPage({
   const [ownershipTarget, setOwnershipTarget] = useState("");
   const [ownershipPassword, setOwnershipPassword] = useState("");
   const [ownershipPending, setOwnershipPending] = useState(false);
+  const [selectedMember, setSelectedMember] =
+    useState<OrganizationMember | null>(null);
 
   async function updateMember(
     member: OrganizationMember,
@@ -62,7 +73,13 @@ export function WorkspaceMembersPage({
   ) {
     setMessage("");
     try {
-      await api.updateOrganizationMember(member.actor_id, patch);
+      const updated = await api.updateOrganizationMember(
+        member.actor_id,
+        patch,
+      );
+      setSelectedMember((current) =>
+        current?.actor_id === updated.actor_id ? updated : current,
+      );
       await members.refetch();
       setMessage(t("changesSaved"));
     } catch (cause) {
@@ -114,15 +131,24 @@ export function WorkspaceMembersPage({
   async function changeMemberAvatar(member: OrganizationMember, file: File) {
     setMessage("");
     if (
-      file.size > 512 * 1024 ||
+      file.size > 10_000_000 ||
       !["image/png", "image/jpeg", "image/webp"].includes(file.type)
     ) {
       setMessage(t("avatarValidation"));
       return;
     }
     try {
-      await api.putOrganizationMemberAvatar(member.actor_id, file);
-      await members.refetch();
+      const updated = await api.putOrganizationMemberAvatar(
+        member.actor_id,
+        file,
+      );
+      const refreshed = await members.refetch();
+      const next = refreshed.data?.find(
+        (item) => item.actor_id === member.actor_id,
+      );
+      if (next) setSelectedMember(next);
+      if (member.actor_id === user.id)
+        onUserUpdated({ ...user, avatar_version: updated.avatar_version });
     } catch (cause) {
       setMessage(messageOf(cause));
     }
@@ -169,116 +195,180 @@ export function WorkspaceMembersPage({
                       </small>
                     )}
                   </span>
-                  <select
-                    aria-label={t("defaultRole")}
-                    value={member.role}
-                    disabled={
-                      member.actor_id === user.id ||
-                      (user.role !== "owner" && member.role !== "member")
-                    }
-                    onChange={(event) =>
-                      void updateMember(member, {
-                        role: event.target.value as "admin" | "member",
-                      })
-                    }
+                  <span className="organization-member__summary">
+                    <small>
+                      {member.role === "owner"
+                        ? t("roleOwner")
+                        : member.role === "admin"
+                          ? t("roleAdmin")
+                          : t("roleMember")}
+                    </small>
+                    <small>
+                      {member.status === "active"
+                        ? t("statusActive")
+                        : t("statusDeactivated")}
+                    </small>
+                  </span>
+                  <IconButton
+                    label={t("manageMember")}
+                    onClick={() => setSelectedMember(member)}
                   >
-                    {member.role === "owner" && (
-                      <option value="owner">{t("roleOwner")}</option>
-                    )}
-                    <option value="admin">{t("roleAdmin")}</option>
-                    <option value="member">{t("roleMember")}</option>
-                  </select>
+                    <MoreHorizontal />
+                  </IconButton>
+                </article>
+              ))}
+            </div>
+          </SettingsSection>
+          {selectedMember && (
+            <Dialog
+              title={t("manageMember")}
+              className="member-management-dialog"
+              onClose={() => setSelectedMember(null)}
+            >
+              <div className="member-management">
+                <div className="member-management__identity">
+                  <Avatar
+                    name={selectedMember.display_name}
+                    seed={selectedMember.actor_id}
+                    actorID={selectedMember.actor_id}
+                    avatarVersion={selectedMember.avatar_version}
+                    size="lg"
+                    online={selectedMember.status === "active"}
+                  />
+                  <span>
+                    <strong>{selectedMember.display_name}</strong>
+                    <small>
+                      @{selectedMember.handle} · {selectedMember.email}
+                    </small>
+                  </span>
+                </div>
+                <SelectField
+                  label={t("memberRole")}
+                  name="member-role"
+                  value={selectedMember.role}
+                  disabled={
+                    selectedMember.actor_id === user.id ||
+                    (user.role !== "owner" && selectedMember.role !== "member")
+                  }
+                  onChange={(event) =>
+                    void updateMember(selectedMember, {
+                      role: event.target.value as "admin" | "member",
+                    })
+                  }
+                >
+                  {selectedMember.role === "owner" && (
+                    <option value="owner">{t("roleOwner")}</option>
+                  )}
+                  <option value="admin">{t("roleAdmin")}</option>
+                  <option value="member">{t("roleMember")}</option>
+                </SelectField>
+                <div className="member-management__actions">
                   <Button
-                    size="sm"
-                    disabled={member.actor_id === user.id}
+                    disabled={selectedMember.actor_id === user.id}
                     onClick={() =>
-                      void updateMember(member, {
+                      void updateMember(selectedMember, {
                         status:
-                          member.status === "active" ? "deactivated" : "active",
+                          selectedMember.status === "active"
+                            ? "deactivated"
+                            : "active",
                       })
                     }
                   >
-                    {member.status === "active"
+                    {selectedMember.status === "active"
                       ? t("deactivate")
                       : t("activate")}
                   </Button>
-                  <Button
-                    size="sm"
-                    disabled={
-                      member.actor_id === user.id ||
-                      member.role === "owner" ||
-                      (user.role !== "owner" && member.role !== "member")
-                    }
-                    onClick={() => void requirePasswordChange(member)}
-                  >
-                    {t("requirePasswordChange")}
-                  </Button>
-                  {member.actor_id !== user.id && (
-                    <label className="ui-button ui-button--secondary ui-button--sm">
-                      {t("changeAvatar")}
-                      <input
-                        hidden
-                        type="file"
-                        accept="image/png,image/jpeg,image/webp"
-                        onChange={(event) => {
-                          const file = event.target.files?.[0];
-                          if (file) void changeMemberAvatar(member, file);
-                          event.target.value = "";
-                        }}
-                      />
-                    </label>
-                  )}
-                  {member.actor_id !== user.id && member.avatar_version > 0 && (
+                  <label className="ui-button ui-button--secondary ui-button--md">
+                    {t("changeAvatar")}
+                    <input
+                      hidden
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) void changeMemberAvatar(selectedMember, file);
+                        event.target.value = "";
+                      }}
+                    />
+                  </label>
+                  {selectedMember.avatar_version > 0 && (
                     <Button
-                      size="sm"
                       onClick={() =>
                         void api
-                          .deleteOrganizationMemberAvatar(member.actor_id)
-                          .then(() => members.refetch())
+                          .deleteOrganizationMemberAvatar(
+                            selectedMember.actor_id,
+                          )
+                          .then(async (updated) => {
+                            const refreshed = await members.refetch();
+                            const next = refreshed.data?.find(
+                              (item) =>
+                                item.actor_id === selectedMember.actor_id,
+                            );
+                            if (next) setSelectedMember(next);
+                            if (selectedMember.actor_id === user.id)
+                              onUserUpdated({
+                                ...user,
+                                avatar_version: updated.avatar_version,
+                              });
+                          })
                           .catch((cause) => setMessage(messageOf(cause)))
                       }
                     >
                       {t("removeAvatar")}
                     </Button>
                   )}
+                  <Button
+                    disabled={
+                      selectedMember.actor_id === user.id ||
+                      selectedMember.role === "owner" ||
+                      (user.role !== "owner" &&
+                        selectedMember.role !== "member")
+                    }
+                    onClick={() => void requirePasswordChange(selectedMember)}
+                  >
+                    {t("requirePasswordChange")}
+                  </Button>
                   {branding.data?.password_recovery_available && (
                     <Button
-                      size="sm"
                       disabled={
-                        member.actor_id === user.id ||
-                        member.role === "owner" ||
-                        (user.role !== "owner" && member.role !== "member")
+                        selectedMember.actor_id === user.id ||
+                        selectedMember.role === "owner" ||
+                        (user.role !== "owner" &&
+                          selectedMember.role !== "member")
                       }
-                      onClick={() => void issuePasswordReset(member)}
+                      onClick={() => void issuePasswordReset(selectedMember)}
                     >
                       {t("sendPasswordReset")}
                     </Button>
                   )}
-                  {member.role === "admin" && user.role === "owner" && (
-                    <fieldset className="organization-member__permissions">
-                      <legend>{t("administratorPermissions")}</legend>
-                      {permissions.map((code) => (
-                        <SettingsToggle
-                          key={code}
-                          label={t(permissionLabelKeys[code])}
-                          checked={member.permissions.includes(code)}
-                          onChange={(checked) =>
-                            void updateMember(member, {
-                              permissions: checked
-                                ? [...member.permissions, code]
-                                : member.permissions.filter(
-                                    (permission) => permission !== code,
-                                  ),
-                            })
-                          }
-                        />
-                      ))}
-                    </fieldset>
-                  )}
-                </article>
-              ))}
-            </div>
-          </SettingsSection>
+                </div>
+                {selectedMember.role === "admin" && user.role === "owner" && (
+                  <fieldset className="member-management__permissions">
+                    <legend>{t("administratorPermissions")}</legend>
+                    {permissions.map((code) => (
+                      <SettingsToggle
+                        key={code}
+                        label={t(permissionLabelKeys[code])}
+                        checked={selectedMember.permissions.includes(code)}
+                        onChange={(checked) =>
+                          void updateMember(selectedMember, {
+                            permissions: checked
+                              ? [...selectedMember.permissions, code]
+                              : selectedMember.permissions.filter(
+                                  (permission) => permission !== code,
+                                ),
+                          })
+                        }
+                      />
+                    ))}
+                  </fieldset>
+                )}
+                <small className="member-management__avatar-hint">
+                  {t("avatarValidation")}
+                </small>
+              </div>
+            </Dialog>
+          )}
           {user.role === "owner" && (
             <SettingsSection
               title={t("transferOwnership")}
