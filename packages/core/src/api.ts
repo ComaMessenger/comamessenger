@@ -65,6 +65,8 @@ import type {
   CreateAgentRequest,
   UpdateAgentRequest,
   CreateAgentKeyRequest,
+  AgentPlatformSettings,
+  UpdateAgentPlatformSettingsRequest,
 } from "./types";
 
 type APIErrorPayload = components["schemas"]["Error"];
@@ -248,6 +250,17 @@ export class MessengerAPI {
   }
   agents(): Promise<Agent[]> {
     return this.request("/api/v1/agents");
+  }
+  agentPlatformSettings(): Promise<AgentPlatformSettings> {
+    return this.request("/api/v1/agents/settings");
+  }
+  updateAgentPlatformSettings(
+    input: UpdateAgentPlatformSettingsRequest,
+  ): Promise<AgentPlatformSettings> {
+    return this.request("/api/v1/agents/settings", {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
   }
   createAgent(input: CreateAgentRequest): Promise<Agent> {
     return this.request("/api/v1/agents", {

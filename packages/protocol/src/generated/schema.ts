@@ -1324,6 +1324,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agents/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAgentPlatformSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateAgentPlatformSettings"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1650,6 +1666,7 @@ export interface components {
             max_chain_depth: number;
             per_chat_concurrency: number;
             rate_limit_per_minute: number;
+            provider_rate_limit_per_minute: number;
             chat_ids: string[];
             /** Format: int64 */
             avatar_version: number;
@@ -1670,6 +1687,10 @@ export interface components {
             model?: string;
             endpoint_url?: string;
             external_data_sharing_approved: boolean;
+            /** @default 60 */
+            rate_limit_per_minute: number;
+            /** @default 300 */
+            provider_rate_limit_per_minute: number;
             chat_ids: string[];
         };
         UpdateAgentRequest: {
@@ -1682,6 +1703,8 @@ export interface components {
             model?: string;
             endpoint_url?: string;
             external_data_sharing_approved?: boolean;
+            rate_limit_per_minute?: number;
+            provider_rate_limit_per_minute?: number;
             chat_ids?: string[];
         };
         AgentApiKey: {
@@ -1701,6 +1724,12 @@ export interface components {
             expires_at?: string | null;
             /** Format: date-time */
             revoked_at?: string | null;
+        };
+        AgentPlatformSettings: {
+            organization_rate_limit_per_minute: number;
+        };
+        UpdateAgentPlatformSettingsRequest: {
+            organization_rate_limit_per_minute: number;
         };
         CreatedAgentApiKey: components["schemas"]["AgentApiKey"] & {
             secret: string;
@@ -5173,6 +5202,53 @@ export interface operations {
             };
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
+        };
+    };
+    getAgentPlatformSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Organization-wide agent platform settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentPlatformSettings"];
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    updateAgentPlatformSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAgentPlatformSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated organization-wide agent platform settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentPlatformSettings"];
+                };
+            };
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
         };
     };
 }

@@ -46,7 +46,7 @@
 - [ ] Записывать tool calls, administrative changes и чувствительные агентские действия в audit log без сохранения provider secrets.
 - [ ] Зашифровать provider credentials envelope encryption/AES-GCM с master key из environment или внешнего secret store.
 - [x] Реализовать rotation/revocation ключей без рестарта core.
-- [ ] Добавить rate limits по agent, key, provider и organization.
+- [x] Добавить rate limits по agent, key, provider и organization.
 
 ### Runtime и triggers
 

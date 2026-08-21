@@ -73,6 +73,10 @@ export type CreateAgentRequest = components["schemas"]["CreateAgentRequest"];
 export type UpdateAgentRequest = components["schemas"]["UpdateAgentRequest"];
 export type CreateAgentKeyRequest =
   components["schemas"]["CreateAgentKeyRequest"];
+export type AgentPlatformSettings =
+  components["schemas"]["AgentPlatformSettings"];
+export type UpdateAgentPlatformSettingsRequest =
+  components["schemas"]["UpdateAgentPlatformSettingsRequest"];
 export type Session = components["schemas"]["Session"];
 export type BootstrapRequest = components["schemas"]["BootstrapRequest"];
 export type LoginRequest = components["schemas"]["LoginRequest"];

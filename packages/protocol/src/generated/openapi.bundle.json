@@ -3984,6 +3984,67 @@
           }
         }
       }
+    },
+    "/api/v1/agents/settings": {
+      "get": {
+        "operationId": "getAgentPlatformSettings",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Organization-wide agent platform settings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentPlatformSettings"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateAgentPlatformSettings",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAgentPlatformSettingsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated organization-wide agent platform settings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentPlatformSettings"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5265,6 +5326,7 @@
           "max_chain_depth",
           "per_chat_concurrency",
           "rate_limit_per_minute",
+          "provider_rate_limit_per_minute",
           "chat_ids",
           "avatar_version",
           "created_at",
@@ -5353,6 +5415,11 @@
             "minimum": 1,
             "maximum": 100000
           },
+          "provider_rate_limit_per_minute": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000
+          },
           "chat_ids": {
             "type": "array",
             "uniqueItems": true,
@@ -5435,6 +5502,18 @@
           "external_data_sharing_approved": {
             "type": "boolean"
           },
+          "rate_limit_per_minute": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000,
+            "default": 60
+          },
+          "provider_rate_limit_per_minute": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000,
+            "default": 300
+          },
           "chat_ids": {
             "type": "array",
             "uniqueItems": true,
@@ -5488,6 +5567,16 @@
           },
           "external_data_sharing_approved": {
             "type": "boolean"
+          },
+          "rate_limit_per_minute": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000
+          },
+          "provider_rate_limit_per_minute": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000
           },
           "chat_ids": {
             "type": "array",
@@ -5565,6 +5654,34 @@
               "null"
             ],
             "format": "date-time"
+          }
+        }
+      },
+      "AgentPlatformSettings": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "organization_rate_limit_per_minute"
+        ],
+        "properties": {
+          "organization_rate_limit_per_minute": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000
+          }
+        }
+      },
+      "UpdateAgentPlatformSettingsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "organization_rate_limit_per_minute"
+        ],
+        "properties": {
+          "organization_rate_limit_per_minute": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000
           }
         }
       },

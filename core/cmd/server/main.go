@@ -151,6 +151,7 @@ func main() {
 	realtimeServer := realtime.NewServer(logger, cfg.PublicAppURL, eventStore, realtimeHub, identityService.Authenticate, cfg.Realtime, ephemeralService)
 	agentService.SetRevokeSession(realtimeServer.RevokeSession)
 	realtimeCtx, stopRealtime := context.WithCancel(context.Background())
+	go agentService.RunRateLimitCleanup(realtimeCtx)
 	if err := processingClient.Start(realtimeCtx); err != nil {
 		logger.Error("file processing startup failed", "error", err)
 		os.Exit(1)

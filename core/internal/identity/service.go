@@ -165,7 +165,7 @@ func (s *Service) Authenticate(ctx context.Context, bearer string) (User, access
 		}
 		user, authenticated, err := s.bearerAuthenticator(ctx, bearer)
 		if err != nil {
-			return User{}, access.Identity{}, ErrUnauthorized
+			return User{}, access.Identity{}, err
 		}
 		return user, authenticated, nil
 	}

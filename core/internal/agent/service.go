@@ -25,10 +25,11 @@ import (
 )
 
 var (
-	ErrInvalid   = errors.New("invalid agent input")
-	ErrForbidden = errors.New("agent management forbidden")
-	ErrNotFound  = errors.New("agent not found")
-	ErrConflict  = errors.New("agent conflicts with existing data")
+	ErrInvalid     = errors.New("invalid agent input")
+	ErrForbidden   = errors.New("agent management forbidden")
+	ErrNotFound    = errors.New("agent not found")
+	ErrConflict    = errors.New("agent conflicts with existing data")
+	ErrRateLimited = errors.New("agent rate limit exceeded")
 )
 
 type Scope string
@@ -71,6 +72,7 @@ type Agent struct {
 	MaxChainDepth               int       `json:"max_chain_depth"`
 	PerChatConcurrency          int       `json:"per_chat_concurrency"`
 	RateLimitPerMinute          int       `json:"rate_limit_per_minute"`
+	ProviderRateLimitPerMinute  int       `json:"provider_rate_limit_per_minute"`
 	ChatIDs                     []string  `json:"chat_ids"`
 	AvatarVersion               int64     `json:"avatar_version"`
 	CreatedAt                   time.Time `json:"created_at"`
@@ -88,6 +90,8 @@ type CreateInput struct {
 	Model                       string   `json:"model"`
 	EndpointURL                 string   `json:"endpoint_url"`
 	ExternalDataSharingApproved bool     `json:"external_data_sharing_approved"`
+	RateLimitPerMinute          int      `json:"rate_limit_per_minute"`
+	ProviderRateLimitPerMinute  int      `json:"provider_rate_limit_per_minute"`
 	ChatIDs                     []string `json:"chat_ids"`
 }
 
@@ -101,7 +105,17 @@ type UpdateInput struct {
 	Model                       *string   `json:"model"`
 	EndpointURL                 *string   `json:"endpoint_url"`
 	ExternalDataSharingApproved *bool     `json:"external_data_sharing_approved"`
+	RateLimitPerMinute          *int      `json:"rate_limit_per_minute"`
+	ProviderRateLimitPerMinute  *int      `json:"provider_rate_limit_per_minute"`
 	ChatIDs                     *[]string `json:"chat_ids"`
+}
+
+type PlatformSettings struct {
+	OrganizationRateLimitPerMinute int `json:"organization_rate_limit_per_minute"`
+}
+
+type UpdatePlatformSettingsInput struct {
+	OrganizationRateLimitPerMinute int `json:"organization_rate_limit_per_minute"`
 }
 
 type APIKey struct {
@@ -180,10 +194,10 @@ func (service *Service) Create(ctx context.Context, current identity.User, input
 	}
 	scopes := scopeStrings(normalized.AllowedScopes)
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO agents(actor_id,org_id,owner_actor_id,kind,description,enabled,allowed_scopes,provider,model,endpoint_url,external_data_sharing_approved)
-		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, agentID, current.OrgID, current.ActorID, normalized.Kind,
+		INSERT INTO agents(actor_id,org_id,owner_actor_id,kind,description,enabled,allowed_scopes,provider,model,endpoint_url,external_data_sharing_approved,rate_limit_per_minute,provider_rate_limit_per_minute)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, agentID, current.OrgID, current.ActorID, normalized.Kind,
 		normalized.Description, normalized.Enabled, scopes, normalized.Provider, normalized.Model, normalized.EndpointURL,
-		normalized.ExternalDataSharingApproved); err != nil {
+		normalized.ExternalDataSharingApproved, normalized.RateLimitPerMinute, normalized.ProviderRateLimitPerMinute); err != nil {
 		return Agent{}, mapWriteError("insert agent", err)
 	}
 	if len(normalized.ChatIDs) > 0 {
@@ -252,7 +266,7 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 	if _, err := uuid.Parse(agentID); err != nil {
 		return Agent{}, ErrNotFound
 	}
-	if input.DisplayName == nil && input.Handle == nil && input.Description == nil && input.Enabled == nil && input.AllowedScopes == nil && input.Provider == nil && input.Model == nil && input.EndpointURL == nil && input.ExternalDataSharingApproved == nil && input.ChatIDs == nil {
+	if input.DisplayName == nil && input.Handle == nil && input.Description == nil && input.Enabled == nil && input.AllowedScopes == nil && input.Provider == nil && input.Model == nil && input.EndpointURL == nil && input.ExternalDataSharingApproved == nil && input.RateLimitPerMinute == nil && input.ProviderRateLimitPerMinute == nil && input.ChatIDs == nil {
 		return Agent{}, fmt.Errorf("%w: update must contain at least one field", ErrInvalid)
 	}
 	auditID, err := id.New()
@@ -286,7 +300,7 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 	if _, err := tx.Exec(ctx, `UPDATE actors SET display_name=$3,handle=$4 WHERE org_id=$1 AND id=$2`, current.OrgID, agentID, prospective.DisplayName, prospective.Handle); err != nil {
 		return Agent{}, mapWriteError("update agent actor", err)
 	}
-	if _, err := tx.Exec(ctx, `UPDATE agents SET description=$3,enabled=$4,allowed_scopes=$5,provider=$6,model=$7,endpoint_url=$8,external_data_sharing_approved=$9,updated_at=now() WHERE org_id=$1 AND actor_id=$2`, current.OrgID, agentID, prospective.Description, prospective.Enabled, scopeStrings(prospective.AllowedScopes), prospective.Provider, prospective.Model, prospective.EndpointURL, prospective.ExternalDataSharingApproved); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE agents SET description=$3,enabled=$4,allowed_scopes=$5,provider=$6,model=$7,endpoint_url=$8,external_data_sharing_approved=$9,rate_limit_per_minute=$10,provider_rate_limit_per_minute=$11,updated_at=now() WHERE org_id=$1 AND actor_id=$2`, current.OrgID, agentID, prospective.Description, prospective.Enabled, scopeStrings(prospective.AllowedScopes), prospective.Provider, prospective.Model, prospective.EndpointURL, prospective.ExternalDataSharingApproved, prospective.RateLimitPerMinute, prospective.ProviderRateLimitPerMinute); err != nil {
 		return Agent{}, mapWriteError("update agent", err)
 	}
 	if input.ChatIDs != nil {
@@ -492,18 +506,22 @@ func (service *Service) AuthenticateKey(ctx context.Context, secret string) (ide
 	var keyID string
 	var scopes []string
 	var expiresAt *time.Time
+	var keyRateLimit, agentRateLimit, organizationRateLimit int
 	err := service.pool.QueryRow(ctx, `
 		SELECT actor.id,actor.org_id,organization.name,actor.display_name,actor.handle,actor.status,actor.created_at,actor.avatar_version,
-		       key.id,key.scopes,key.expires_at
+		       key.id,key.scopes,key.expires_at,key.rate_limit_per_minute,agent.rate_limit_per_minute,organization.agent_rate_limit_per_minute
 		FROM agent_api_keys key
 		JOIN agents agent ON agent.org_id=key.org_id AND agent.actor_id=key.agent_id
 		JOIN actors actor ON actor.org_id=agent.org_id AND actor.id=agent.actor_id
 		JOIN organizations organization ON organization.id=agent.org_id
 		WHERE key.key_hash=$1 AND key.revoked_at IS NULL AND (key.expires_at IS NULL OR key.expires_at>now())
 		  AND agent.enabled AND key.scopes <@ agent.allowed_scopes AND actor.status='active' AND actor.deleted_at IS NULL`, digest[:]).Scan(
-		&user.ActorID, &user.OrgID, &user.OrganizationName, &user.DisplayName, &user.Handle, &user.Status, &user.CreatedAt, &user.AvatarVersion, &keyID, &scopes, &expiresAt)
+		&user.ActorID, &user.OrgID, &user.OrganizationName, &user.DisplayName, &user.Handle, &user.Status, &user.CreatedAt, &user.AvatarVersion, &keyID, &scopes, &expiresAt, &keyRateLimit, &agentRateLimit, &organizationRateLimit)
 	if err != nil {
 		return identity.User{}, access.Identity{}, identity.ErrUnauthorized
+	}
+	if err := service.acquireBaseRateLimits(ctx, user.OrgID, user.ActorID, keyID, organizationRateLimit, agentRateLimit, keyRateLimit); err != nil {
+		return identity.User{}, access.Identity{}, err
 	}
 	user.OrgRole = "member"
 	authExpiry := service.now().UTC().Add(24 * time.Hour)
@@ -519,7 +537,7 @@ const agentSelect = `
 	       agent.kind,agent.description,agent.enabled,agent.allowed_scopes,agent.provider,agent.model,
 	       agent.endpoint_url,agent.external_data_sharing_approved,agent.max_output_tokens,
 	       agent.max_tool_iterations,agent.max_chain_depth,agent.per_chat_concurrency,
-	       agent.rate_limit_per_minute,
+	       agent.rate_limit_per_minute,agent.provider_rate_limit_per_minute,
 	       COALESCE((SELECT array_agg(member.chat_id ORDER BY member.chat_id) FROM chat_members member WHERE member.org_id=agent.org_id AND member.actor_id=agent.actor_id),'{}'::uuid[]),
 	       actor.avatar_version,agent.created_at,agent.updated_at
 	FROM agents agent JOIN actors actor ON actor.org_id=agent.org_id AND actor.id=agent.actor_id`
@@ -533,7 +551,7 @@ func scanAgent(row scanner) (Agent, error) {
 		&result.Kind, &result.Description, &result.Enabled, &scopes, &result.Provider, &result.Model,
 		&result.EndpointURL, &result.ExternalDataSharingApproved, &result.MaxOutputTokens,
 		&result.MaxToolIterations, &result.MaxChainDepth, &result.PerChatConcurrency,
-		&result.RateLimitPerMinute, &result.ChatIDs, &result.AvatarVersion, &result.CreatedAt, &result.UpdatedAt); err != nil {
+		&result.RateLimitPerMinute, &result.ProviderRateLimitPerMinute, &result.ChatIDs, &result.AvatarVersion, &result.CreatedAt, &result.UpdatedAt); err != nil {
 		return Agent{}, err
 	}
 	result.AllowedScopes = make([]Scope, len(scopes))
@@ -551,8 +569,15 @@ func normalizeCreate(input CreateInput) (CreateInput, error) {
 	input.Provider = strings.TrimSpace(input.Provider)
 	input.Model = strings.TrimSpace(input.Model)
 	input.EndpointURL = strings.TrimSpace(input.EndpointURL)
+	if input.RateLimitPerMinute == 0 {
+		input.RateLimitPerMinute = 60
+	}
+	if input.ProviderRateLimitPerMinute == 0 {
+		input.ProviderRateLimitPerMinute = 300
+	}
 	if len([]rune(input.DisplayName)) < 1 || len([]rune(input.DisplayName)) > 120 || !handlePattern.MatchString(input.Handle) ||
-		(input.Kind != "builtin" && input.Kind != "external") || len([]rune(input.Description)) > 2000 || len(input.Provider) > 100 || len(input.Model) > 200 {
+		(input.Kind != "builtin" && input.Kind != "external") || len([]rune(input.Description)) > 2000 || len(input.Provider) > 100 || len(input.Model) > 200 ||
+		input.RateLimitPerMinute < 1 || input.RateLimitPerMinute > 100000 || input.ProviderRateLimitPerMinute < 1 || input.ProviderRateLimitPerMinute > 100000 {
 		return CreateInput{}, fmt.Errorf("%w: invalid agent profile", ErrInvalid)
 	}
 	if input.Kind == "builtin" && input.EndpointURL != "" {
@@ -582,7 +607,8 @@ func mergeUpdate(existing Agent, input UpdateInput) (CreateInput, error) {
 		DisplayName: existing.DisplayName, Handle: existing.Handle, Kind: existing.Kind,
 		Description: existing.Description, Enabled: existing.Enabled, AllowedScopes: existing.AllowedScopes,
 		Provider: existing.Provider, Model: existing.Model, EndpointURL: existing.EndpointURL,
-		ExternalDataSharingApproved: existing.ExternalDataSharingApproved, ChatIDs: existing.ChatIDs,
+		ExternalDataSharingApproved: existing.ExternalDataSharingApproved, RateLimitPerMinute: existing.RateLimitPerMinute,
+		ProviderRateLimitPerMinute: existing.ProviderRateLimitPerMinute, ChatIDs: existing.ChatIDs,
 	}
 	if input.DisplayName != nil {
 		prospective.DisplayName = *input.DisplayName
@@ -610,6 +636,12 @@ func mergeUpdate(existing Agent, input UpdateInput) (CreateInput, error) {
 	}
 	if input.ExternalDataSharingApproved != nil {
 		prospective.ExternalDataSharingApproved = *input.ExternalDataSharingApproved
+	}
+	if input.RateLimitPerMinute != nil {
+		prospective.RateLimitPerMinute = *input.RateLimitPerMinute
+	}
+	if input.ProviderRateLimitPerMinute != nil {
+		prospective.ProviderRateLimitPerMinute = *input.ProviderRateLimitPerMinute
 	}
 	if input.ChatIDs != nil {
 		prospective.ChatIDs = *input.ChatIDs

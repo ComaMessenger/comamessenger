@@ -1999,6 +1999,7 @@ type Agent struct {
 	OwnerActorId                openapi_types.UUID   `json:"owner_actor_id"`
 	PerChatConcurrency          int                  `json:"per_chat_concurrency"`
 	Provider                    string               `json:"provider"`
+	ProviderRateLimitPerMinute  int                  `json:"provider_rate_limit_per_minute"`
 	RateLimitPerMinute          int                  `json:"rate_limit_per_minute"`
 	UpdatedAt                   time.Time            `json:"updated_at"`
 }
@@ -2018,6 +2019,11 @@ type AgentApiKey struct {
 	RateLimitPerMinute int                `json:"rate_limit_per_minute"`
 	RevokedAt          *time.Time         `json:"revoked_at,omitempty"`
 	Scopes             []AgentScope       `json:"scopes"`
+}
+
+// AgentPlatformSettings defines model for AgentPlatformSettings.
+type AgentPlatformSettings struct {
+	OrganizationRateLimitPerMinute int `json:"organization_rate_limit_per_minute"`
 }
 
 // AgentScope defines model for AgentScope.
@@ -2238,6 +2244,8 @@ type CreateAgentRequest struct {
 	Kind                        CreateAgentRequestKind `json:"kind"`
 	Model                       *string                `json:"model,omitempty"`
 	Provider                    *string                `json:"provider,omitempty"`
+	ProviderRateLimitPerMinute  *int                   `json:"provider_rate_limit_per_minute,omitempty"`
+	RateLimitPerMinute          *int                   `json:"rate_limit_per_minute,omitempty"`
 }
 
 // CreateAgentRequestKind defines model for CreateAgentRequest.Kind.
@@ -2998,6 +3006,11 @@ type UnreadSnapshot struct {
 	Threads []ThreadUnread `json:"threads"`
 }
 
+// UpdateAgentPlatformSettingsRequest defines model for UpdateAgentPlatformSettingsRequest.
+type UpdateAgentPlatformSettingsRequest struct {
+	OrganizationRateLimitPerMinute int `json:"organization_rate_limit_per_minute"`
+}
+
 // UpdateAgentRequest defines model for UpdateAgentRequest.
 type UpdateAgentRequest struct {
 	AllowedScopes               *[]AgentScope         `json:"allowed_scopes,omitempty"`
@@ -3010,6 +3023,8 @@ type UpdateAgentRequest struct {
 	Handle                      *string               `json:"handle,omitempty"`
 	Model                       *string               `json:"model,omitempty"`
 	Provider                    *string               `json:"provider,omitempty"`
+	ProviderRateLimitPerMinute  *int                  `json:"provider_rate_limit_per_minute,omitempty"`
+	RateLimitPerMinute          *int                  `json:"rate_limit_per_minute,omitempty"`
 }
 
 // UpdateChatMemberRequest defines model for UpdateChatMemberRequest.
@@ -3288,6 +3303,9 @@ type ListFollowedThreadsParams struct {
 
 // CreateAgentJSONRequestBody defines body for CreateAgent for application/json ContentType.
 type CreateAgentJSONRequestBody = CreateAgentRequest
+
+// UpdateAgentPlatformSettingsJSONRequestBody defines body for UpdateAgentPlatformSettings for application/json ContentType.
+type UpdateAgentPlatformSettingsJSONRequestBody = UpdateAgentPlatformSettingsRequest
 
 // UpdateAgentJSONRequestBody defines body for UpdateAgent for application/json ContentType.
 type UpdateAgentJSONRequestBody = UpdateAgentRequest

@@ -37,7 +37,7 @@ func TestAgentModelKeyHashScopesVisibilityAndAudit(t *testing.T) {
 		DisplayName: "History helper", Handle: "history-helper", Kind: "external",
 		Description: "Answers from workspace history", Enabled: true,
 		AllowedScopes: []Scope{ScopeSearchRead, ScopeMessagesWrite, ScopeMessagesRead, ScopeSearchRead},
-		EndpointURL:   "https://agents.example.test/runtime", ChatIDs: []string{agentTestChatID, agentTestChatID},
+		EndpointURL:   "https://agents.example.test/runtime", ProviderRateLimitPerMinute: 1, ChatIDs: []string{agentTestChatID, agentTestChatID},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -52,7 +52,7 @@ func TestAgentModelKeyHashScopesVisibilityAndAudit(t *testing.T) {
 
 	expiresAt := time.Now().UTC().Add(time.Hour)
 	key, err := service.CreateKey(t.Context(), owner, created.ID, CreateKeyInput{
-		Name: "runtime", Scopes: []Scope{ScopeMessagesRead, ScopeMessagesWrite}, RateLimitPerMinute: 30, ExpiresAt: &expiresAt,
+		Name: "runtime", Scopes: []Scope{ScopeMessagesRead, ScopeMessagesWrite}, RateLimitPerMinute: 1, ExpiresAt: &expiresAt,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -72,6 +72,19 @@ func TestAgentModelKeyHashScopesVisibilityAndAudit(t *testing.T) {
 	authenticatedUser, authenticatedIdentity, err := service.AuthenticateKey(t.Context(), key.Secret)
 	if err != nil || authenticatedUser.ActorID != created.ID || authenticatedIdentity.AuthenticationKind != "api_key" || authenticatedIdentity.KeyID != key.ID {
 		t.Fatalf("authenticated agent = %+v identity=%+v err=%v", authenticatedUser, authenticatedIdentity, err)
+	}
+	if _, _, err := service.AuthenticateKey(t.Context(), key.Secret); !errors.Is(err, ErrRateLimited) {
+		t.Fatalf("key rate limit error = %v", err)
+	}
+	if err := service.AcquireProviderRateLimit(t.Context(), authenticatedIdentity, "openai"); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.AcquireProviderRateLimit(t.Context(), authenticatedIdentity, "openai"); !errors.Is(err, ErrRateLimited) {
+		t.Fatalf("provider rate limit error = %v", err)
+	}
+	settings, err := service.UpdatePlatformSettings(t.Context(), owner, UpdatePlatformSettingsInput{OrganizationRateLimitPerMinute: 5000})
+	if err != nil || settings.OrganizationRateLimitPerMinute != 5000 {
+		t.Fatalf("platform settings = %+v, err=%v", settings, err)
 	}
 	narrowed := []Scope{ScopeSearchRead}
 	updated, err := service.Update(t.Context(), owner, created.ID, UpdateInput{AllowedScopes: &narrowed})

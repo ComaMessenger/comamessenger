@@ -716,13 +716,20 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	}
 
 	var createdAgent agent.Agent
+	var agentSettings agent.PlatformSettings
+	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/agents/settings", owner.AccessToken, map[string]any{
+		"organization_rate_limit_per_minute": 5000,
+	}, standardhttp.StatusOK, &agentSettings)
+	if agentSettings.OrganizationRateLimitPerMinute != 5000 {
+		t.Fatalf("agent platform settings = %+v", agentSettings)
+	}
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agents", owner.AccessToken, map[string]any{
 		"display_name": "E2E agent", "handle": "e2e-agent", "kind": "builtin", "enabled": true,
 		"allowed_scopes": []string{"chats:read", "messages:read"}, "chat_ids": []string{group.ID},
 	}, standardhttp.StatusCreated, &createdAgent)
 	var createdAgentKey agent.CreatedAPIKey
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agents/"+createdAgent.ID+"/keys", owner.AccessToken, map[string]any{
-		"name": "e2e runtime", "scopes": []string{"chats:read", "messages:read"}, "rate_limit_per_minute": 30,
+		"name": "e2e runtime", "scopes": []string{"chats:read", "messages:read"}, "rate_limit_per_minute": 3,
 	}, standardhttp.StatusCreated, &createdAgentKey)
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/chats/"+group.ID+"/messages", createdAgentKey.Secret, nil, standardhttp.StatusOK, &page)
 	agentSocket := e2eSocket(t, baseURL, createdAgentKey.Secret, 0)
@@ -730,6 +737,7 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/chats/"+group.ID+"/messages", createdAgentKey.Secret, map[string]any{
 		"client_msg_id": e2eID(t), "body": "must be blocked", "body_format": "plain",
 	}, standardhttp.StatusForbidden, nil)
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/chats/"+group.ID+"/messages", createdAgentKey.Secret, nil, standardhttp.StatusTooManyRequests, nil)
 	e2eRequest(t, server.Client(), standardhttp.MethodDelete, baseURL+"/api/v1/agents/"+createdAgent.ID+"/keys/"+createdAgentKey.ID, owner.AccessToken, nil, standardhttp.StatusNoContent, nil)
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/chats/"+group.ID+"/messages", createdAgentKey.Secret, nil, standardhttp.StatusUnauthorized, nil)
 	agentCloseCtx, agentCloseCancel := context.WithTimeout(context.Background(), 2*time.Second)

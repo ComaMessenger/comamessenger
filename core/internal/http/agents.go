@@ -32,6 +32,29 @@ func (h *identityHandlers) createAgent(w standardhttp.ResponseWriter, r *standar
 	writeJSON(h.logger, w, standardhttp.StatusCreated, result)
 }
 
+func (h *identityHandlers) agentPlatformSettings(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.agents.PlatformSettings(r.Context(), authFromContext(r.Context()).User)
+	if err != nil {
+		h.writeAgentError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) updateAgentPlatformSettings(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input agent.UpdatePlatformSettingsInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	result, err := h.agents.UpdatePlatformSettings(r.Context(), authFromContext(r.Context()).User, input)
+	if err != nil {
+		h.writeAgentError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
 func (h *identityHandlers) getAgent(w standardhttp.ResponseWriter, r *standardhttp.Request) {
 	result, err := h.agents.Get(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "agentID"))
 	if err != nil {
@@ -97,6 +120,9 @@ func (h *identityHandlers) writeAgentError(w standardhttp.ResponseWriter, r *sta
 		h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "validation_failed", err.Error())
 	case errors.Is(err, agent.ErrConflict):
 		h.writeError(w, r, standardhttp.StatusConflict, "agent_conflict", "The agent configuration conflicts with existing data.")
+	case errors.Is(err, agent.ErrRateLimited):
+		w.Header().Set("Retry-After", "60")
+		h.writeError(w, r, standardhttp.StatusTooManyRequests, "rate_limited", "The agent rate limit was exceeded.")
 	default:
 		h.internalError(w, r, err)
 	}

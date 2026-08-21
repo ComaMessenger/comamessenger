@@ -135,6 +135,8 @@ func (h *identityHandlers) routes(router chi.Router) {
 		if h.agents != nil {
 			protected.Get("/agents", h.listAgents)
 			protected.Post("/agents", h.createAgent)
+			protected.Get("/agents/settings", h.agentPlatformSettings)
+			protected.Patch("/agents/settings", h.updateAgentPlatformSettings)
 			protected.Get("/agents/{agentID}", h.getAgent)
 			protected.Patch("/agents/{agentID}", h.updateAgent)
 			protected.Get("/agents/{agentID}/keys", h.listAgentKeys)
@@ -850,6 +852,11 @@ func (h *identityHandlers) authenticate(next standardhttp.Handler) standardhttp.
 		}
 		user, accessIdentity, err := h.service.Authenticate(r.Context(), strings.TrimSpace(parts[1]))
 		if err != nil {
+			if errors.Is(err, agent.ErrRateLimited) {
+				w.Header().Set("Retry-After", "60")
+				h.writeError(w, r, standardhttp.StatusTooManyRequests, "rate_limited", "The agent API rate limit was exceeded.")
+				return
+			}
 			h.writeError(w, r, standardhttp.StatusUnauthorized, "unauthorized", "Authentication is required.")
 			return
 		}
