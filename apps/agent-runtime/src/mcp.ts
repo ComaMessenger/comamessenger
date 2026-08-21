@@ -23,7 +23,10 @@ export type ResolvedMCPTool = {
   serverID: string;
   toolName: string;
   mode: "read" | "write";
-  call(arguments_: Record<string, unknown>, signal: AbortSignal): Promise<unknown>;
+  call(
+    arguments_: Record<string, unknown>,
+    signal: AbortSignal,
+  ): Promise<unknown>;
 };
 
 export class MCPError extends Error {
@@ -48,7 +51,8 @@ export async function resolveMCPTools(
       const readOnly = tool.annotations?.readOnlyHint === true;
       if (configuration.require_write_confirmation && !readOnly) continue;
       const exposedName = namespacedToolName(configuration.name, tool.name);
-      if (resolved.has(exposedName)) throw new MCPError("mcp_tool_name_collision");
+      if (resolved.has(exposedName))
+        throw new MCPError("mcp_tool_name_collision");
       resolved.set(exposedName, {
         definition: {
           name: exposedName,
@@ -118,8 +122,12 @@ export class MCPClient {
     signal: AbortSignal,
   ): Promise<unknown> {
     const id = ++this.requestID;
-    const response = await this.send({ jsonrpc: "2.0", id, method, params }, signal);
-    if (!response || response.id !== id) throw new MCPError("mcp_invalid_response");
+    const response = await this.send(
+      { jsonrpc: "2.0", id, method, params },
+      signal,
+    );
+    if (!response || response.id !== id)
+      throw new MCPError("mcp_invalid_response");
     if (response.error) throw new MCPError("mcp_rpc_error");
     return response.result;
   }
@@ -133,6 +141,7 @@ export class MCPClient {
     signal: AbortSignal,
     notification = false,
   ): Promise<JSONRPCResponse | null> {
+    assertSafeMCPEndpoint(this.configuration.endpoint_url);
     const controller = new AbortController();
     let timedOut = false;
     const timeout = setTimeout(() => {
@@ -157,11 +166,16 @@ export class MCPClient {
       });
       const sessionID = response.headers.get("Mcp-Session-Id");
       if (sessionID) this.sessionID = sessionID;
-      if (notification && (response.status === 202 || response.status === 204)) {
+      if (
+        notification &&
+        (response.status === 202 || response.status === 204)
+      ) {
         return null;
       }
       if (!response.ok) throw new MCPError("mcp_http_error");
-      const declaredLength = Number(response.headers.get("Content-Length") ?? "0");
+      const declaredLength = Number(
+        response.headers.get("Content-Length") ?? "0",
+      );
       if (declaredLength > this.configuration.max_output_bytes) {
         throw new MCPError("mcp_output_too_large");
       }
@@ -171,7 +185,9 @@ export class MCPClient {
       }
       if (!bytes.byteLength && notification) return null;
       const body = new TextDecoder().decode(bytes);
-      const decoded = response.headers.get("Content-Type")?.includes("text/event-stream")
+      const decoded = response.headers
+        .get("Content-Type")
+        ?.includes("text/event-stream")
         ? parseEventStream(body)
         : parseJSON(body);
       return responseValue(decoded);
@@ -185,6 +201,50 @@ export class MCPClient {
       signal.removeEventListener("abort", abort);
     }
   }
+}
+
+function assertSafeMCPEndpoint(endpoint: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(endpoint);
+  } catch {
+    throw new MCPError("mcp_endpoint_forbidden");
+  }
+  const host = parsed.hostname.toLowerCase().replace(/\.$/, "");
+  if (
+    parsed.protocol !== "https:" ||
+    parsed.username ||
+    parsed.password ||
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host.endsWith(".local") ||
+    host.endsWith(".internal") ||
+    isPrivateLiteralAddress(host)
+  ) {
+    throw new MCPError("mcp_endpoint_forbidden");
+  }
+}
+
+function isPrivateLiteralAddress(hostname: string): boolean {
+  const host = hostname.replace(/^\[|\]$/g, "");
+  if (host === "::" || host === "::1" || /^f[cd][0-9a-f]:/i.test(host))
+    return true;
+  const octets = host.split(".").map(Number);
+  if (
+    octets.length !== 4 ||
+    octets.some((value) => !Number.isInteger(value) || value < 0 || value > 255)
+  ) {
+    return false;
+  }
+  return (
+    octets[0] === 0 ||
+    octets[0] === 10 ||
+    octets[0] === 127 ||
+    (octets[0] === 169 && octets[1] === 254) ||
+    (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
+    (octets[0] === 192 && octets[1] === 168) ||
+    octets[0] >= 224
+  );
 }
 
 function responseValue(value: unknown): JSONRPCResponse {

@@ -297,7 +297,11 @@ func (e *Ephemeral) MessageStreaming(ctx context.Context, user identity.User, au
 	if err := e.authorizeAgentRun(ctx, user, authentication, input.RunID, input.ChatID, input.ThreadRootID); err != nil {
 		return err
 	}
-	if err := e.allow(ctx, user, "message.streaming"); err != nil {
+	// Provider output is coalesced by the runtime, but a healthy stream can still
+	// exceed the human-presence limit. Keep this bucket isolated and high enough
+	// for one frame per 100-150ms while retaining the global configured floor.
+	streamingLimit := max(e.config.EphemeralRateLimit, uint64(100))
+	if err := e.allowWithLimit(ctx, user, "message.streaming", streamingLimit); err != nil {
 		return err
 	}
 	expiresAt := time.Now().UTC().Add(15 * time.Second)
@@ -422,6 +426,10 @@ func (e *Ephemeral) signEnvelope(envelope ephemeralEnvelope) string {
 }
 
 func (e *Ephemeral) allow(ctx context.Context, user identity.User, operation string) error {
+	return e.allowWithLimit(ctx, user, operation, e.config.EphemeralRateLimit)
+}
+
+func (e *Ephemeral) allowWithLimit(ctx context.Context, user identity.User, operation string, limit uint64) error {
 	key := e.namespace + ":rate:" + user.OrgID + ":" + user.ActorID + ":" + operation
 	if e.redis == nil {
 		now := time.Now()
@@ -433,7 +441,7 @@ func (e *Ephemeral) allow(ctx context.Context, user identity.User, operation str
 		}
 		entry.count++
 		e.localRate[key] = entry
-		if uint64(entry.count) > e.config.EphemeralRateLimit {
+		if uint64(entry.count) > limit {
 			return ErrEphemeralRateLimited
 		}
 		return nil
@@ -445,7 +453,7 @@ func (e *Ephemeral) allow(ctx context.Context, user identity.User, operation str
 	if err != nil {
 		return ErrEphemeralUnavailable
 	}
-	if uint64(value) > e.config.EphemeralRateLimit {
+	if uint64(value) > limit {
 		return ErrEphemeralRateLimited
 	}
 	return nil

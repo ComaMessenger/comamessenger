@@ -61,7 +61,7 @@ export class AgentRuntime {
 
   constructor(private readonly options: RuntimeOptions) {
     this.workerID = options.workerID ?? crypto.randomUUID();
-    this.pollIntervalMS = Math.max(100, options.pollIntervalMS ?? 500);
+    this.pollIntervalMS = Math.max(500, options.pollIntervalMS ?? 5_000);
     this.leaseSeconds = Math.min(300, Math.max(30, options.leaseSeconds ?? 90));
     this.reservedCallCost = options.reservedCallCost ?? "0.01000000";
   }
@@ -210,12 +210,14 @@ export class AgentRuntime {
     ];
     if (run.chat_id) {
       const page = await this.options.api.invokeAgentTool<MessagePage>(
-        "get_chat_messages",
+        run.thread_root_id ? "get_thread" : "get_chat_messages",
         {
           run_id: run.id,
           correlation_id: run.correlation_id,
           confirmed: true,
-          arguments: { chat_id: run.chat_id, limit: 50 },
+          arguments: run.thread_root_id
+            ? { message_id: run.thread_root_id, limit: 50 }
+            : { chat_id: run.chat_id, limit: 50 },
         },
       );
       for (const item of page.messages.slice(-50)) {
@@ -279,7 +281,20 @@ export class AgentRuntime {
         reserved_cost: this.reservedCallCost,
         currency: "USD",
       });
+      const stream = new StreamingCoalescer((delta) => {
+        for (const part of splitStreamingDelta(delta)) {
+          this.emitStreaming(
+            run,
+            streamID,
+            nextStreamIndex(),
+            part,
+            false,
+            false,
+          );
+        }
+      });
       try {
+        this.emitStatus(run, "streaming");
         for await (const event of provider.stream({
           model: run.model,
           messages,
@@ -288,20 +303,11 @@ export class AgentRuntime {
           signal,
         })) {
           if (event.type === "delta") {
-            this.emitStatus(run, "streaming");
-            for (const delta of splitStreamingDelta(event.text)) {
-              this.emitStreaming(
-                run,
-                streamID,
-                nextStreamIndex(),
-                delta,
-                false,
-                false,
-              );
-            }
+            stream.push(event.text);
           }
           if (event.type === "finish") finished = event;
         }
+        stream.close();
         if (!finished) throw new RuntimeError("provider_incomplete_stream");
         finished = {
           ...finished,
@@ -318,6 +324,7 @@ export class AgentRuntime {
           price_source: finished.usage.priceSource,
         });
       } catch (cause) {
+        stream.close();
         try {
           await this.options.api.finishAgentProviderCall(callID, {
             run_id: run.id,
@@ -333,6 +340,12 @@ export class AgentRuntime {
           // The original provider/core error determines retry behavior.
         }
         throw cause;
+      }
+      if (
+        finished.stopReason === "length" ||
+        finished.stopReason === "max_tokens"
+      ) {
+        throw new RuntimeError("provider_output_truncated");
       }
       usage.inputTokens += finished.usage.inputTokens;
       usage.outputTokens += finished.usage.outputTokens;
@@ -485,12 +498,51 @@ function stableErrorCode(cause: unknown, signal: AbortSignal): string {
 }
 
 function untrustedMessage(message: Message): string {
-  return `<message id="${message.id}" actor_id="${message.actor_id}" untrusted="true">${message.body}</message>`;
+  return `<message id="${message.id}" actor_id="${message.actor_id}" untrusted="true">${escapeUntrustedContent(message.body)}</message>`;
 }
 
 function safeJSON(value: unknown): string {
   const encoded = JSON.stringify(value);
-  return encoded.length > 262_144 ? encoded.slice(0, 262_144) : encoded;
+  const bounded =
+    encoded.length > 262_144 ? encoded.slice(0, 262_144) : encoded;
+  return escapeUntrustedContent(bounded);
+}
+
+export function escapeUntrustedContent(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+class StreamingCoalescer {
+  private pending = "";
+  private timer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor(private readonly emit: (delta: string) => void) {}
+
+  push(delta: string): void {
+    if (!delta) return;
+    this.pending += delta;
+    if (new TextEncoder().encode(this.pending).byteLength >= 8192) {
+      this.flush();
+      return;
+    }
+    this.timer ??= setTimeout(() => this.flush(), 125);
+  }
+
+  close(): void {
+    this.flush();
+  }
+
+  private flush(): void {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+    if (!this.pending) return;
+    const value = this.pending;
+    this.pending = "";
+    this.emit(value);
+  }
 }
 
 function encodedSize(value: unknown): number {

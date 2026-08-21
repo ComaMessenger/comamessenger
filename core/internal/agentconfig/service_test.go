@@ -66,6 +66,10 @@ func TestMCPConfigurationValidation(t *testing.T) {
 	}{
 		{name: "bad name", endpoint: "https://mcp.example.com", tools: []string{"search"}},
 		{name: "valid", endpoint: "file:///etc/passwd", tools: []string{"search"}},
+		{name: "valid", endpoint: "http://mcp.example.com/rpc", tools: []string{"search"}},
+		{name: "valid", endpoint: "https://127.0.0.1/rpc", tools: []string{"search"}},
+		{name: "valid", endpoint: "https://10.0.0.4/rpc", tools: []string{"search"}},
+		{name: "valid", endpoint: "https://mcp.local/rpc", tools: []string{"search"}},
 		{name: "valid", endpoint: "https://user:pass@mcp.example.com", tools: []string{"search"}},
 		{name: "valid", endpoint: "https://mcp.example.com", tools: []string{"bad.tool"}},
 		{name: "valid", endpoint: "https://mcp.example.com", tools: []string{"search", "search"}},

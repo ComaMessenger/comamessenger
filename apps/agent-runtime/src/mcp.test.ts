@@ -44,6 +44,20 @@ function protocolFetcher(tools: unknown[]): typeof fetch {
 }
 
 describe("MCP security boundaries", () => {
+  it.each([
+    "http://mcp.example.test/rpc",
+    "https://127.0.0.1/rpc",
+    "https://10.0.0.5/rpc",
+    "https://metadata.internal/rpc",
+  ])("rejects unsafe endpoint %s before transport", async (endpoint_url) => {
+    const fetcher = vi.fn() as unknown as typeof fetch;
+    const client = new MCPClient({ ...configuration, endpoint_url }, fetcher);
+    await expect(
+      client.listTools(new AbortController().signal),
+    ).rejects.toMatchObject({ code: "mcp_endpoint_forbidden" });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it("enforces allowlist and suppresses unconfirmed write tools", async () => {
     const fetcher = protocolFetcher([
       {
@@ -72,20 +86,27 @@ describe("MCP security boundaries", () => {
     expect([...tools.keys()]).toEqual(["mcp__knowledge__read"]);
     const firstRequest = vi.mocked(fetcher).mock.calls[0];
     expect(firstRequest?.[1]?.redirect).toBe("error");
-    expect((firstRequest?.[1]?.headers as Record<string, string>).Authorization).toBe(
-      "Bearer top-secret",
-    );
+    expect(
+      (firstRequest?.[1]?.headers as Record<string, string>).Authorization,
+    ).toBe("Bearer top-secret");
   });
 
   it("rejects oversized output before parsing", async () => {
     const fetcher = vi.fn(async () =>
       jsonResponse(
         { jsonrpc: "2.0", id: 1, result: {} },
-        { headers: { "Content-Type": "application/json", "Content-Length": "5000" } },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "Content-Length": "5000",
+          },
+        },
       ),
     ) as typeof fetch;
     const client = new MCPClient(configuration, fetcher);
-    await expect(client.listTools(new AbortController().signal)).rejects.toMatchObject({
+    await expect(
+      client.listTools(new AbortController().signal),
+    ).rejects.toMatchObject({
       code: "mcp_output_too_large",
     });
   });
@@ -94,7 +115,9 @@ describe("MCP security boundaries", () => {
     const fetcher = vi.fn(
       async (_input: RequestInfo | URL, init?: RequestInit) =>
         await new Promise<Response>((_resolve, reject) => {
-          init?.signal?.addEventListener("abort", () => reject(new Error("Bearer top-secret")));
+          init?.signal?.addEventListener("abort", () =>
+            reject(new Error("Bearer top-secret")),
+          );
         }),
     ) as typeof fetch;
     const client = new MCPClient({ ...configuration, timeout_ms: 5 }, fetcher);

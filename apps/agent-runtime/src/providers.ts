@@ -42,6 +42,7 @@ export type ProviderEvent =
       content: string;
       toolCalls: ToolCall[];
       usage: ProviderUsage;
+      stopReason: string;
     };
 
 export interface Provider {
@@ -95,7 +96,11 @@ export class OpenAIProvider implements Provider {
             },
           })),
           tool_choice: request.tools.length ? "auto" : undefined,
-          max_tokens: request.maxOutputTokens,
+          ...openAITokenLimit(
+            this.name,
+            request.model,
+            request.maxOutputTokens,
+          ),
           stream: true,
           stream_options: { include_usage: true },
         }),
@@ -104,12 +109,17 @@ export class OpenAIProvider implements Provider {
     await ensureProviderOK(response);
     let content = "";
     let usage: Record<string, unknown> = {};
-    const calls = new Map<number, { id: string; name: string; arguments: string }>();
+    let stopReason = "";
+    const calls = new Map<
+      number,
+      { id: string; name: string; arguments: string }
+    >();
     for await (const payload of readProviderSSE(response)) {
       usage = Object.keys(objectValue(payload.usage)).length
         ? objectValue(payload.usage)
         : usage;
       const choice = objectArray(payload.choices)[0] ?? {};
+      stopReason = stringValue(choice.finish_reason) || stopReason;
       const delta = objectValue(choice.delta);
       const text = stringValue(delta.content);
       if (text) {
@@ -144,6 +154,7 @@ export class OpenAIProvider implements Provider {
         currency: "USD",
         priceSource: "unknown",
       },
+      stopReason,
     };
   }
 }
@@ -191,11 +202,17 @@ export class AnthropicProvider implements Provider {
     let content = "";
     let inputTokens = 0;
     let outputTokens = 0;
-    const calls = new Map<number, { id: string; name: string; arguments: string }>();
+    let stopReason = "";
+    const calls = new Map<
+      number,
+      { id: string; name: string; arguments: string }
+    >();
     for await (const payload of readProviderSSE(response)) {
       const type = stringValue(payload.type);
       if (type === "message_start") {
-        inputTokens = numberValue(objectValue(objectValue(payload.message).usage).input_tokens);
+        inputTokens = numberValue(
+          objectValue(objectValue(payload.message).usage).input_tokens,
+        );
       }
       if (type === "content_block_start") {
         const index = numberValue(payload.index);
@@ -222,6 +239,8 @@ export class AnthropicProvider implements Provider {
         }
       }
       if (type === "message_delta") {
+        stopReason =
+          stringValue(objectValue(payload.delta).stop_reason) || stopReason;
         outputTokens = numberValue(objectValue(payload.usage).output_tokens);
       }
     }
@@ -243,6 +262,7 @@ export class AnthropicProvider implements Provider {
         currency: "USD",
         priceSource: "unknown",
       },
+      stopReason,
     };
   }
 }
@@ -299,10 +319,11 @@ function anthropicMessages(messages: ChatMessage[]): Record<string, unknown>[] {
 
 async function ensureProviderOK(response: Response): Promise<void> {
   if (!response.ok) {
+    const detail = await safeProviderErrorCode(response);
     throw new ProviderError(
       response.status === 429 ? "provider_rate_limited" : "provider_error",
       response.status === 429 || response.status >= 500,
-      `Provider returned HTTP ${response.status}`,
+      `Provider returned HTTP ${response.status}${detail ? ` (${detail})` : ""}`,
     );
   }
   if (!response.body) {
@@ -311,6 +332,31 @@ async function ensureProviderOK(response: Response): Promise<void> {
       false,
       "Provider returned an empty stream",
     );
+  }
+}
+
+function openAITokenLimit(
+  provider: string,
+  model: string,
+  value: number,
+): Record<string, number> {
+  if (provider !== "openai") return { max_tokens: value };
+  const normalized = model.trim().toLowerCase();
+  return /^(?:gpt-5|o[1-9](?:-|$))/.test(normalized)
+    ? { max_completion_tokens: value }
+    : { max_tokens: value };
+}
+
+async function safeProviderErrorCode(response: Response): Promise<string> {
+  try {
+    const raw = await response.text();
+    if (!raw || raw.length > 65_536) return "";
+    const payload = JSON.parse(raw) as unknown;
+    const error = objectValue(objectValue(payload).error);
+    const candidate = stringValue(error.code) || stringValue(error.type);
+    return /^[a-zA-Z0-9_.-]{1,120}$/.test(candidate) ? candidate : "";
+  } catch {
+    return "";
   }
 }
 

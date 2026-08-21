@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/comamessenger/comamessenger/core/internal/agent"
 	"github.com/comamessenger/comamessenger/core/internal/agenttrigger"
@@ -59,6 +60,17 @@ func TestDurableEventAndScheduleDispatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertTriggerRuns(t, pool, everyMessage.ID, 1)
+	var eventInput map[string]any
+	var eventTimeout time.Time
+	if err := pool.QueryRow(t.Context(), `SELECT input,timeout_at FROM agent_runs WHERE trigger_id=$1`, everyMessage.ID).Scan(&eventInput, &eventTimeout); err != nil {
+		t.Fatal(err)
+	}
+	if eventInput["message_body"] != "hello trigger" || eventInput["trigger_type"] != "every_message" {
+		t.Fatalf("event run input = %#v", eventInput)
+	}
+	if remaining := time.Until(eventTimeout); remaining < 9*time.Minute || remaining > 11*time.Minute {
+		t.Fatalf("event timeout remaining = %v, want configured 10 minutes", remaining)
+	}
 
 	agentUser := identity.User{ActorID: createdAgent.ID, OrgID: triggerTestOrgID, OrgRole: "member"}
 	runID := mustTriggerID(t)
@@ -102,6 +114,13 @@ func TestDurableEventAndScheduleDispatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertTriggerRuns(t, pool, schedule.ID, 1)
+	var scheduleInput map[string]any
+	if err := pool.QueryRow(t.Context(), `SELECT input FROM agent_runs WHERE trigger_id=$1`, schedule.ID).Scan(&scheduleInput); err != nil {
+		t.Fatal(err)
+	}
+	if scheduleInput["chat_id"] != triggerTestChatID || scheduleInput["timezone"] != "Asia/Yekaterinburg" {
+		t.Fatalf("schedule run input = %#v", scheduleInput)
+	}
 
 	disabled := false
 	updated, err := service.Update(t.Context(), owner, createdAgent.ID, everyMessage.ID, agenttrigger.UpdateInput{Enabled: &disabled})

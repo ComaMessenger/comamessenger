@@ -31,6 +31,11 @@ export class AgentConnectionManager {
     private readonly onEvent: (
       event: Record<string, unknown>,
     ) => Promise<void> = async () => {},
+    private readonly onProtocolError: (error: {
+      code: string;
+      message: string;
+      fatal: boolean;
+    }) => void = () => {},
   ) {}
 
   start(): void {
@@ -107,7 +112,18 @@ export class AgentConnectionManager {
   }
 
   private async receive(raw: unknown): Promise<void> {
-    const frame = JSON.parse(String(raw)) as Record<string, unknown>;
+    let frame: Record<string, unknown>;
+    try {
+      frame = JSON.parse(String(raw)) as Record<string, unknown>;
+    } catch {
+      this.onProtocolError({
+        code: "invalid_server_frame",
+        message: "Core sent an invalid WebSocket frame",
+        fatal: true,
+      });
+      this.socket?.close();
+      return;
+    }
     if (frame.op === "hello") {
       this.reconnectAttempt = 0;
       return;
@@ -128,6 +144,22 @@ export class AgentConnectionManager {
         last_event_seq: seq,
       });
       this.socket?.close();
+      return;
+    }
+    if (frame.op === "error") {
+      const fatal = frame.fatal === true;
+      this.onProtocolError({
+        code:
+          typeof frame.code === "string"
+            ? frame.code
+            : "websocket_protocol_error",
+        message:
+          typeof frame.message === "string"
+            ? frame.message
+            : "Core rejected a WebSocket operation",
+        fatal,
+      });
+      if (fatal) this.socket?.close();
     }
   }
 

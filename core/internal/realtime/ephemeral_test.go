@@ -98,7 +98,9 @@ func TestAgentStatusAndStreamingRequireRuntimeRun(t *testing.T) {
 	defer sender.Close()
 	receiver, _ := hub.Register(member.OrgID, member.ActorID, "member-session", uuid.NewString(), 0)
 	defer receiver.Close()
-	service, err := NewEphemeral(slog.New(slog.NewTextHandler(io.Discard, nil)), pool, hub, realtimeTestConfig(), config.RedisConfig{Mode: "disabled", Namespace: "coma:test", OperationTimeout: time.Second})
+	cfg := realtimeTestConfig()
+	cfg.EphemeralRateLimit = 1
+	service, err := NewEphemeral(slog.New(slog.NewTextHandler(io.Discard, nil)), pool, hub, cfg, config.RedisConfig{Mode: "disabled", Namespace: "coma:test", OperationTimeout: time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,6 +126,9 @@ func TestAgentStatusAndStreamingRequireRuntimeRun(t *testing.T) {
 	readEphemeral(t, receiver, &stream)
 	if stream.StreamID != streamID || stream.Delta != "Hello" || stream.Done {
 		t.Fatalf("message stream = %+v", stream)
+	}
+	if err := service.MessageStreaming(t.Context(), agentUser, authentication, sender, messageStreamingFrame{Op: "message.streaming", RunID: runID, ChatID: chatID, StreamID: streamID, Index: 2, Delta: " world"}); err != nil {
+		t.Fatalf("streaming should use its dedicated higher rate limit: %v", err)
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"regexp"
 	"slices"
@@ -481,7 +482,7 @@ func validMCPConfig(name, endpoint string, tools []string, headers map[string]st
 		return false
 	}
 	parsed, err := url.ParseRequestURI(strings.TrimSpace(endpoint))
-	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" {
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" || unsafeMCPHostname(parsed.Hostname()) {
 		return false
 	}
 	seen := make(map[string]struct{}, len(tools))
@@ -503,6 +504,19 @@ func validMCPConfig(name, endpoint string, tools []string, headers map[string]st
 		total += len(name) + len(value)
 	}
 	return total <= 16384
+}
+
+func unsafeMCPHostname(hostname string) bool {
+	host := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(hostname), "."))
+	if host == "" || host == "localhost" || strings.HasSuffix(host, ".localhost") || strings.HasSuffix(host, ".local") || strings.HasSuffix(host, ".internal") {
+		return true
+	}
+	address, err := netip.ParseAddr(host)
+	if err != nil {
+		return false
+	}
+	address = address.Unmap()
+	return address.IsPrivate() || address.IsLoopback() || address.IsLinkLocalUnicast() || address.IsLinkLocalMulticast() || address.IsMulticast() || address.IsUnspecified()
 }
 
 func hasMCPUpdate(input UpdateMCPServerInput) bool {

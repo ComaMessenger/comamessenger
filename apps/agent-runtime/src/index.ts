@@ -27,6 +27,16 @@ async function main(): Promise<void> {
     api,
     process.env.COMA_RUNTIME_CONSUMER ?? "builtin-runtime",
     (url) => new WebSocket(url) as unknown as SocketLike,
+    async () => {},
+    (error) =>
+      console.error(
+        JSON.stringify({
+          level: "error",
+          component: "agent-runtime-websocket",
+          code: error.code,
+          fatal: error.fatal,
+        }),
+      ),
   );
   const runtime = new AgentRuntime({
     api,
@@ -47,11 +57,8 @@ async function main(): Promise<void> {
 }
 
 function providerResolver(): (name: string, apiKey?: string) => Provider {
-  const cache = new Map<string, Provider>();
   return (rawName, configuredAPIKey) => {
     const name = rawName.trim().toLowerCase();
-    const existing = cache.get(name);
-    if (existing) return existing;
     let provider: Provider;
     if (name === "openai") {
       provider = new OpenAIProvider(
@@ -77,7 +84,6 @@ function providerResolver(): (name: string, apiKey?: string) => Provider {
     } else {
       throw new Error("unsupported_provider");
     }
-    cache.set(name, provider);
     return provider;
   };
 }

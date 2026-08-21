@@ -59,15 +59,16 @@ type UpdateInput struct {
 }
 
 type event struct {
-	seq         int64
-	kind        string
-	actorID     *string
-	actorType   string
-	subjectID   string
-	chatID      *string
-	body        string
-	mentioned   []string
-	sourceDepth *int
+	seq          int64
+	kind         string
+	actorID      *string
+	actorType    string
+	subjectID    string
+	chatID       *string
+	threadRootID *string
+	body         string
+	mentioned    []string
+	sourceDepth  *int
 }
 
 type Service struct {
@@ -322,7 +323,7 @@ func (service *Service) dispatchAgent(ctx context.Context, orgID, agentID string
 		return err
 	}
 	rows, err := tx.Query(ctx, `SELECT event.seq,event.type,event.actor_id,COALESCE(actor.type,'system'),event.chat_id,event.subject_id,
-			COALESCE(message.body,''),COALESCE(message.mentioned_actor_ids,'{}'::uuid[]),provenance.chain_depth
+			message.thread_root_id,COALESCE(message.body,''),COALESCE(message.mentioned_actor_ids,'{}'::uuid[]),provenance.chain_depth
 		FROM events event LEFT JOIN actors actor ON actor.org_id=event.org_id AND actor.id=event.actor_id
 		LEFT JOIN messages message ON message.org_id=event.org_id AND message.id=event.subject_id
 		LEFT JOIN message_agent_provenance provenance ON provenance.message_id=message.id
@@ -335,7 +336,7 @@ func (service *Service) dispatchAgent(ctx context.Context, orgID, agentID string
 	events := make([]event, 0)
 	for rows.Next() {
 		var item event
-		if err := rows.Scan(&item.seq, &item.kind, &item.actorID, &item.actorType, &item.chatID, &item.subjectID, &item.body, &item.mentioned, &item.sourceDepth); err != nil {
+		if err := rows.Scan(&item.seq, &item.kind, &item.actorID, &item.actorType, &item.chatID, &item.subjectID, &item.threadRootID, &item.body, &item.mentioned, &item.sourceDepth); err != nil {
 			rows.Close()
 			return err
 		}
@@ -368,23 +369,37 @@ func (service *Service) dispatchAgent(ctx context.Context, orgID, agentID string
 				return err
 			}
 			runChatID := item.chatID
+			runThreadRootID := item.threadRootID
 			if trigger.Type == "event" {
 				var config eventConfig
 				_ = json.Unmarshal(trigger.Config, &config)
 				if config.ChatID != "" {
 					runChatID = &config.ChatID
+					if item.chatID == nil || *item.chatID != config.ChatID {
+						runThreadRootID = nil
+					}
 				}
 			}
-			payload, _ := json.Marshal(map[string]any{
+			payloadData := map[string]any{
 				"event_seq": item.seq, "event_type": item.kind, "subject_id": item.subjectID,
 				"source_chat_id": item.chatID, "chat_id": runChatID,
-			})
-			if _, err := tx.Exec(ctx, `INSERT INTO agent_runs(id,org_id,agent_id,trigger_id,trigger_event_seq,chat_id,requested_by,
+				"thread_root_id": item.threadRootID, "message_body": item.body,
+				"trigger_type": trigger.Type, "trigger_id": trigger.ID,
+			}
+			if trigger.Type == "command" {
+				var config commandConfig
+				_ = json.Unmarshal(trigger.Config, &config)
+				payloadData["command"] = config.Command
+				payloadData["command_arguments"] = commandArguments(item.body)
+			}
+			payload, _ := json.Marshal(payloadData)
+			if _, err := tx.Exec(ctx, `INSERT INTO agent_runs(id,org_id,agent_id,trigger_id,trigger_event_seq,chat_id,thread_root_id,requested_by,
 					correlation_id,chain_depth,provider,model,input,timeout_at)
-				SELECT $1,agent.org_id,agent.actor_id,$2,$3,$4,$5,$6,$7,agent.provider,agent.model,$8,now()+interval '2 minutes'
-				FROM agents agent WHERE agent.org_id=$9 AND agent.actor_id=$10
+				SELECT $1,agent.org_id,agent.actor_id,$2,$3,$4,$5,$6,$7,$8,agent.provider,agent.model,$9,
+					now()+make_interval(secs=>agent.execution_timeout_seconds)
+				FROM agents agent WHERE agent.org_id=$10 AND agent.actor_id=$11
 				ON CONFLICT(agent_id,trigger_id,trigger_event_seq) WHERE trigger_id IS NOT NULL AND trigger_event_seq IS NOT NULL DO NOTHING`,
-				runID, trigger.ID, item.seq, runChatID, item.actorID, correlationID, depth, payload, orgID, agentID); err != nil {
+				runID, trigger.ID, item.seq, runChatID, runThreadRootID, item.actorID, correlationID, depth, payload, orgID, agentID); err != nil {
 				return err
 			}
 		}
@@ -440,9 +455,21 @@ func (service *Service) DispatchSchedules(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			payload, _ := json.Marshal(map[string]any{"scheduled_for": scheduled})
+			var sinceLastRun *time.Time
+			if err := tx.QueryRow(ctx, `SELECT max(scheduled_for) FROM agent_runs WHERE trigger_id=$1 AND scheduled_for<$2`, trigger.ID, scheduled).Scan(&sinceLastRun); err != nil {
+				return err
+			}
+			payload, _ := json.Marshal(map[string]any{
+				"scheduled_for":  scheduled,
+				"since_last_run": sinceLastRun,
+				"chat_id":        config.ChatID,
+				"timezone":       trigger.Timezone,
+				"trigger_type":   trigger.Type,
+				"trigger_id":     trigger.ID,
+			})
 			if _, err := tx.Exec(ctx, `INSERT INTO agent_runs(id,org_id,agent_id,trigger_id,scheduled_for,chat_id,correlation_id,provider,model,input,timeout_at)
-				SELECT $1,agent.org_id,agent.actor_id,$2,$3,$4,$5,agent.provider,agent.model,$6,now()+interval '2 minutes'
+				SELECT $1,agent.org_id,agent.actor_id,$2,$3,$4,$5,agent.provider,agent.model,$6,
+					now()+make_interval(secs=>agent.execution_timeout_seconds)
 				FROM agents agent
 				JOIN actors actor ON actor.org_id=agent.org_id AND actor.id=agent.actor_id AND actor.status='active' AND actor.deleted_at IS NULL
 				JOIN chat_members member ON member.org_id=agent.org_id AND member.actor_id=agent.actor_id AND member.chat_id=$4
@@ -671,6 +698,14 @@ func matches(trigger Trigger, item event, agentID string) (bool, bool) {
 	default:
 		return false, false
 	}
+}
+
+func commandArguments(body string) string {
+	trimmed := strings.TrimSpace(body)
+	if end := strings.IndexAny(trimmed, " \t\r\n"); end >= 0 {
+		return strings.TrimSpace(trimmed[end:])
+	}
+	return ""
 }
 
 func nextSchedule(config scheduleConfig, timezone string, after time.Time) (time.Time, error) {
