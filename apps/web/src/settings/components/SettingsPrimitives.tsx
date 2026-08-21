@@ -44,16 +44,34 @@ export function SettingsToggle({
   onChange(value: boolean): void;
 }) {
   return (
-    <label className="settings-toggle">
-      <span>
-        <strong>{label}</strong>
-        {hint && <small>{hint}</small>}
-      </span>
+    <SettingsRow label={label} hint={hint} className="settings-toggle">
       <input
         type="checkbox"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
       />
+    </SettingsRow>
+  );
+}
+
+export function SettingsRow({
+  label,
+  hint,
+  className,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <label className={cx("settings-row", className)}>
+      <span>
+        <strong>{label}</strong>
+        {hint && <small>{hint}</small>}
+      </span>
+      {children}
     </label>
   );
 }

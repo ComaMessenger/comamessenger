@@ -304,12 +304,16 @@ export function NotificationSettingsPage({
         schedule: snapshot.schedule,
         email_digest: snapshot.email_digest,
       }),
-    onSaved: (result, snapshot) =>
+    onSaved: (result, snapshot) => {
+      window.dispatchEvent(
+        new CustomEvent("coma-preferences-updated", { detail: result }),
+      );
       setDraft((current) =>
         current && JSON.stringify(current) !== JSON.stringify(snapshot)
           ? current
           : result,
-      ),
+      );
+    },
   });
   if (!draft) return <Skeleton />;
   const permission =
@@ -318,7 +322,11 @@ export function NotificationSettingsPage({
   async function setSnooze(until: string | null) {
     setSnoozePending(true);
     try {
-      setDraft(await api.updatePreferences({ snoozed_until: until }));
+      const updated = await api.updatePreferences({ snoozed_until: until });
+      setDraft(updated);
+      window.dispatchEvent(
+        new CustomEvent("coma-preferences-updated", { detail: updated }),
+      );
     } finally {
       setSnoozePending(false);
     }
@@ -402,7 +410,8 @@ export function NotificationSettingsPage({
               onChange={(event) =>
                 setDraft({
                   ...draft,
-                  notify_messages: event.target.value as UserPreferences["notify_messages"],
+                  notify_messages: event.target
+                    .value as UserPreferences["notify_messages"],
                 })
               }
             >
@@ -419,7 +428,8 @@ export function NotificationSettingsPage({
               onChange={(event) =>
                 setDraft({
                   ...draft,
-                  notify_threads: event.target.value as UserPreferences["notify_threads"],
+                  notify_threads: event.target
+                    .value as UserPreferences["notify_threads"],
                 })
               }
             >
@@ -445,9 +455,7 @@ export function NotificationSettingsPage({
           <SettingsToggle
             label={t("notifySystem")}
             checked={draft.notify_system}
-            onChange={(notify_system) =>
-              setDraft({ ...draft, notify_system })
-            }
+            onChange={(notify_system) => setDraft({ ...draft, notify_system })}
           />
         </SettingsSection>
         <SettingsSection
@@ -492,7 +500,9 @@ export function NotificationSettingsPage({
                 </Button>
                 <Button
                   size="sm"
-                  variant={Array.isArray(schedule.days) ? "primary" : "secondary"}
+                  variant={
+                    Array.isArray(schedule.days) ? "primary" : "secondary"
+                  }
                   onClick={() => setScheduleDays([1, 2, 3, 4, 5])}
                 >
                   {t("customDays")}
@@ -548,7 +558,9 @@ export function NotificationSettingsPage({
                   }
                 />
               </div>
-              <small>{t("scheduleTimezone", { timezone: user.timezone })}</small>
+              <small>
+                {t("scheduleTimezone", { timezone: user.timezone })}
+              </small>
             </div>
           )}
         </SettingsSection>
@@ -560,9 +572,7 @@ export function NotificationSettingsPage({
           <SettingsToggle
             label={t("soundEnabled")}
             checked={draft.sound_enabled}
-            onChange={(sound_enabled) =>
-              setDraft({ ...draft, sound_enabled })
-            }
+            onChange={(sound_enabled) => setDraft({ ...draft, sound_enabled })}
           />
           <SettingsToggle
             label={t("notificationPreview")}
@@ -625,9 +635,7 @@ export function NotificationSettingsPage({
             <SettingsToggle
               label={t("emailDigest")}
               checked={draft.email_digest}
-              onChange={(email_digest) =>
-                setDraft({ ...draft, email_digest })
-              }
+              onChange={(email_digest) => setDraft({ ...draft, email_digest })}
             />
           </SettingsSection>
         )}
@@ -671,7 +679,10 @@ export function NotificationSettingsPage({
                   <MonitorSmartphone />
                   <span>
                     <strong>
-                      {sessionLabel(subscription.user_agent, t("unknownDevice"))}
+                      {sessionLabel(
+                        subscription.user_agent,
+                        t("unknownDevice"),
+                      )}
                     </strong>
                     <small>
                       {subscription.current ? `${t("currentSession")} · ` : ""}
@@ -710,7 +721,9 @@ export function NotificationSettingsPage({
                   <Bell />
                   <span>
                     <strong>{override.name}</strong>
-                    <small>{t(`notificationOverride_${override.notify_level}`)}</small>
+                    <small>
+                      {t(`notificationOverride_${override.notify_level}`)}
+                    </small>
                   </span>
                   <Button
                     size="sm"

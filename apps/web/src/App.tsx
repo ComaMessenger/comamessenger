@@ -139,6 +139,7 @@ import {
   type PublicBranding,
   type TokenResponse,
   type User,
+  type UserPreferences,
 } from "@comamessenger/core";
 import {
   Avatar,
@@ -180,6 +181,11 @@ import {
 } from "./settings";
 import { messageOf } from "./errors";
 import { setTheme } from "./theme";
+import {
+  playNotificationSound,
+  shouldPlayNotificationSound,
+  unlockNotificationSound,
+} from "./notificationSound";
 
 const EmojiPicker = lazy(() => import("emoji-picker-react"));
 
@@ -1069,6 +1075,7 @@ function Messenger({
   const [statusExpiry, setStatusExpiry] = useState("none");
   const [statusPending, setStatusPending] = useState(false);
   const [snoozedUntil, setSnoozedUntil] = useState<string | null>(null);
+  const notificationPreferences = useRef<UserPreferences | null>(null);
   const [snoozeCustom, setSnoozeCustom] = useState("");
   const [snoozePending, setSnoozePending] = useState(false);
   const reloadTimer = useRef<number | null>(null);
@@ -1138,6 +1145,18 @@ function Messenger({
           event: (event) => {
             const applied = store.getState().apply(event);
             if (
+              document.visibilityState === "hidden" &&
+              shouldPlayNotificationSound(
+                event,
+                user,
+                notificationPreferences.current,
+                event.chat_id
+                  ? store.getState().chats[String(event.chat_id)]
+                  : undefined,
+              )
+            )
+              playNotificationSound();
+            if (
               event.type === "actor.status.updated" &&
               event.actor_id === user.id
             )
@@ -1196,14 +1215,37 @@ function Messenger({
   );
 
   useEffect(() => {
+    const unlock = () => unlockNotificationSound();
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    const updatePreferences = (event: Event) => {
+      notificationPreferences.current = (
+        event as CustomEvent<UserPreferences>
+      ).detail;
+    };
+    const refreshPreferences = () =>
+      void api
+        .preferences()
+        .then((preferences) => (notificationPreferences.current = preferences));
+    window.addEventListener("coma-preferences-updated", updatePreferences);
+    window.addEventListener("coma-notifications-changed", refreshPreferences);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+      window.removeEventListener("coma-preferences-updated", updatePreferences);
+      window.removeEventListener(
+        "coma-notifications-changed",
+        refreshPreferences,
+      );
+    };
+  }, [api]);
+
+  useEffect(() => {
     void reload();
     void api.drafts().then((drafts) => hydrateDrafts(drafts));
-    void Promise.all([
-      api.preferences(),
-      api.chatFolders(),
-      api.pinnedChats(),
-    ])
+    void Promise.all([api.preferences(), api.chatFolders(), api.pinnedChats()])
       .then(([preferences, chatFolders, pinnedChats]) => {
+        notificationPreferences.current = preferences;
         setTheme(preferences.theme);
         setFolders(chatFolders);
         setPinnedChatIDs(pinnedChats);
@@ -1380,15 +1422,17 @@ function Messenger({
       const preferences = await api.updatePreferences({
         snoozed_until: until,
       });
+      notificationPreferences.current = preferences;
       setSnoozedUntil(preferences.snoozed_until);
+      window.dispatchEvent(
+        new CustomEvent("coma-preferences-updated", { detail: preferences }),
+      );
     } finally {
       setSnoozePending(false);
     }
   }
   function snoozeFor(minutes: number) {
-    void updateSnooze(
-      new Date(Date.now() + minutes * 60 * 1000).toISOString(),
-    );
+    void updateSnooze(new Date(Date.now() + minutes * 60 * 1000).toISOString());
   }
   return (
     <div
@@ -4642,9 +4686,7 @@ function MobileMorePage({
               {t("save")}
             </Button>
             {(user.status_text || user.status_emoji) && (
-              <Button
-                onClick={() => void clearMobileStatus()}
-              >
+              <Button onClick={() => void clearMobileStatus()}>
                 {t("clearStatus")}
               </Button>
             )}
@@ -4671,9 +4713,7 @@ function MobileMorePage({
                   disabled={snoozePending}
                   onClick={() =>
                     void updateMobileSnooze(
-                      new Date(
-                        Date.now() + minutes * 60 * 1000,
-                      ).toISOString(),
+                      new Date(Date.now() + minutes * 60 * 1000).toISOString(),
                     )
                   }
                 >
@@ -5185,8 +5225,7 @@ function localPartsInZone(
   return new Date(instant).toISOString();
 }
 function localDateTimeInZone(value: string, timeZone: string) {
-  const match =
-    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
   if (!match) return value;
   return localPartsInZone(
     {
