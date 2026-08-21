@@ -66,6 +66,18 @@ Runtime отправляет vendor request без секрета в `POST /api/
 
 Core наблюдает usage в SSE и записывает каждую фактически начатую provider-операцию независимо от финального состояния run. Для моделей из встроенной pricing-таблицы стоимость вычисляется по токенам; неизвестные OpenAI-compatible модели получают явно помеченную оценочную стоимость до появления настроенного тарифа.
 
+## SDK и локальная разработка
+
+Пакет `@comamessenger/agent-sdk` предоставляет `AgentClient`, `RuntimeSocket`, `runWorker`, `defineAgent`, `MockProvider` и контекст `onRun(ctx)` с helpers `tool`, `thread`, `command`, `sinceLastRun`, `stream`. CLI `coma-agent dev` может через публичный admin API создать external agent, вывести runtime key один раз, включить агента только после успешной выдачи ключа и горячо перечитывать ESM recipe. `coma-agent simulate mention|command|schedule` ставит обычный run в очередь; отдельного привилегированного test endpoint нет.
+
+Минимальные scopes выводятся из объявленных recipe tools. Неизвестный tool не расширяет allowlist автоматически. Для повторного запуска используется сохранённый `COMA_AGENT_API_KEY`; admin access token нельзя передавать worker-процессу.
+
+## Масштабирование dispatcher
+
+Несколько core-реплик делят event и schedule triggers по стабильному PostgreSQL hash `agent_id`. У каждой реплики задаются `AGENT_TRIGGER_SHARD_INDEX` от `0` до `COUNT-1` и одинаковый `AGENT_TRIGGER_SHARD_COUNT` (1–1024). Значение по умолчанию `0/1`. Перекрывающиеся или пропущенные индексы являются ошибкой deployment-конфигурации, а уникальные ограничения run'ов остаются последним барьером идемпотентности.
+
+MCP runtime разрешает только HTTPS, запрещает redirects и локальные/private literal hostnames. DNS lookup выполняется транспортом при установлении соединения и возвращает только public IP; выбранный адрес закрепляется за сокетом, поэтому повторное DNS-разрешение между проверкой и connect отсутствует.
+
 ## Compatibility
 
 - Новые optional поля добавляются без смены версии.

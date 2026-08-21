@@ -1,6 +1,24 @@
 # Инспекция фазы 5. Агентская платформа
 
-Дата: 21 августа 2026. Цель — честная оценка того, что реализовано по [05-agent-platform.md](05-agent-platform.md), и вход для фазы 5.1. Все ссылки на код проверены по текущему `main`.
+Дата исходной инспекции: 21 августа 2026. Цель — честная оценка того, что было реализовано по [05-agent-platform.md](05-agent-platform.md), и вход для фазы 5.1. Разделы ниже сохранены как исторический baseline; номера строк относятся к состоянию до 5.1.
+
+## Статус после фазы 5.1 — 22 августа 2026
+
+Фаза 5.1 закрыла найденные runtime/security/lifecycle-дефекты и превратила агентов в самостоятельную рабочую поверхность. Проверка выполнена полными Go/TypeScript-прогонами; весь Go core, включая HTTP/WebSocket E2E, проверен на настоящей PostgreSQL внутри compose-сети, а схема доведена до миграции 36.
+
+| Область            | Результат 5.1                                                                                                                                                                                                                     |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Lifecycle          | Атомарное создание recipe + triggers; readiness; disable/duplicate/versioned reset/delete; tombstone сохраняет audit/usage, но отзывает keys/sessions, memberships и активную работу.                                             |
+| Продуктовый путь   | «Агенты» вынесены из Settings; есть каталог, трёхшаговый мастер, карточка, песочница, approvals, runs и connections; raw scopes/provider/limits спрятаны в расширенный раздел; ошибки run переведены в действия пользователя.     |
+| Runtime            | Long-poll claim, heartbeat вне обычного rate-limit, organization worker с пулом, per-chat concurrency, lease-bound runtime calls, явные execution/queue timeouts, error isolation и настраиваемое shard-распределение dispatcher. |
+| Provider           | Provider secret остаётся в core; proxy применяет budget/rate/external-sharing policy, model-aware token parameter и authoritative usage. Поддержан per-agent OpenAI-compatible endpoint.                                          |
+| Trust и provenance | User content структурно экранируется; trigger input несёт body/command/thread/since-last-run; сообщение agent actor требует активный run; chain depth нельзя обойти обычным REST write.                                           |
+| Tools              | Единые Authorizer и registry; write tools создают серверное pending confirmation, approve/deny исполняется от имени исходного run; tool error возвращается модели как результат.                                                  |
+| MCP                | Только HTTPS, запрет локальных/private literal hostnames, redirects запрещены, DNS lookup пинует только public IP, headers зашифрованы, allowlist/timeout/output limits сохранены.                                                |
+| SDK                | Публичный `@comamessenger/agent-sdk`, `defineAgent`, `onRun(ctx)`, `thread/command/sinceLastRun/stream`, `MockProvider`, organization/per-agent worker helpers и CLI `coma-agent dev/simulate`.                                   |
+| Контракты          | OpenAPI, generated Go/TS, [agents-v1.md](../protocols/agents-v1.md), RU/EN recipe-модули и audit descriptions синхронизированы.                                                                                                   |
+
+Единственный сознательно вынесенный продуктовый вопрос — общий каталог LLM-подключений уровня пространства. Сейчас credential остаётся per-agent в подвкладке «Подключения». Общая сущность подключения затрагивает роли создателя, наследование budget/policy, ротацию и multi-provider UX, поэтому её нельзя безопасно добавить как механический перенос формы; она входит в следующий отдельный продуктовый анализ агента, который был запланирован после починки 5.1.
 
 ## Итог в трёх предложениях
 

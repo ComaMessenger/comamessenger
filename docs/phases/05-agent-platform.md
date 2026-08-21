@@ -101,6 +101,9 @@ GET    /api/v1/agents
 POST   /api/v1/agents
 GET    /api/v1/agents/:id
 PATCH  /api/v1/agents/:id
+DELETE /api/v1/agents/:id
+POST   /api/v1/agents/:id/duplicate
+POST   /api/v1/agents/:id/reset-recipe
 POST   /api/v1/agents/:id/keys
 DELETE /api/v1/agents/:id/keys/:key_id
 POST   /api/v1/agents/:id/invoke
@@ -180,3 +183,16 @@ message.streaming
 - Permissions, budget, loop prevention и secret handling покрыты автоматическими тестами.
 - Три демонстрационных агента работают через web UI на RU/EN сценариях.
 - API/SDK документация позволяет создать минимального внешнего агента без чтения исходников core.
+
+## Фаза 5.1 — corrective redesign
+
+- [x] Устранить дефекты исходной инспекции runtime, streaming, timeout, accounting, trust boundary, provenance, write confirmations и MCP SSRF.
+- [x] Перевести provider-вызовы в core-side proxy; не выдавать provider secret runtime-процессу.
+- [x] Добавить organization worker, long-poll claim, параллельную обработку и shard dispatcher с изоляцией ошибок.
+- [x] Ввести единый Authorizer и декларативный tool registry.
+- [x] Сделать lifecycle полным: duplicate, versioned recipe reset и атомарный delete/tombstone.
+- [x] Вынести «Агенты» в основную навигацию; добавить мастер, readiness, песочницу, approvals, runs и connections.
+- [x] Опубликовать Agent SDK и CLI `coma-agent dev/simulate` с hot reload и `MockProvider`.
+- [x] Зафиксировать runtime wire contract, error codes, limits и примеры recipes.
+
+Следующий продуктовый анализ отдельно определяет модель общего LLM-подключения уровня пространства, роли создателя агента и предметные формы Summarizer/Q&A/Onboarding. До этого credential остаётся изолированным per-agent и не наследуется неявно.
