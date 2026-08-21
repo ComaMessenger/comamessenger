@@ -113,6 +113,8 @@ export type UpdateAgentMcpServerRequest =
   components["schemas"]["UpdateAgentMcpServerRequest"];
 export type AgentRuntimeMcpServer =
   components["schemas"]["AgentRuntimeMcpServer"];
+export type AgentRuntimeRunLeaseRequest =
+  components["schemas"]["AgentRuntimeRunLeaseRequest"];
 export type AgentMcpToolCall = components["schemas"]["AgentMcpToolCall"];
 export type StartAgentMcpToolCallRequest =
   components["schemas"]["StartAgentMcpToolCallRequest"];

@@ -14,7 +14,6 @@ import (
 	"net/netip"
 	"net/url"
 	"regexp"
-	"slices"
 	"strings"
 	"time"
 
@@ -210,18 +209,25 @@ func auditCredential(ctx context.Context, tx pgx.Tx, current identity.User, agen
 }
 
 func (service *Service) RuntimeCredential(ctx context.Context, current identity.User, authentication access.Identity) (RuntimeCredential, error) {
-	if authentication.AuthenticationKind != "api_key" || authentication.ActorID != current.ActorID || authentication.OrgID != current.OrgID || !slices.Contains(authentication.Scopes, "runtime:execute") {
+	if !agentauthz.New().IsRuntime(current, authentication) {
+		return RuntimeCredential{}, ErrForbidden
+	}
+	return service.RuntimeCredentialForAgent(ctx, current, authentication, current.ActorID)
+}
+
+func (service *Service) RuntimeCredentialForAgent(ctx context.Context, current identity.User, authentication access.Identity, agentID string) (RuntimeCredential, error) {
+	if !agentauthz.New().CanWork(current, authentication) || uuid.Validate(agentID) != nil {
 		return RuntimeCredential{}, ErrForbidden
 	}
 	var nonce, ciphertext []byte
-	err := service.pool.QueryRow(ctx, `SELECT nonce,ciphertext FROM agent_provider_credentials WHERE org_id=$1 AND agent_id=$2`, current.OrgID, current.ActorID).Scan(&nonce, &ciphertext)
+	err := service.pool.QueryRow(ctx, `SELECT nonce,ciphertext FROM agent_provider_credentials WHERE org_id=$1 AND agent_id=$2`, current.OrgID, agentID).Scan(&nonce, &ciphertext)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return RuntimeCredential{}, ErrNotFound
 	}
 	if err != nil {
 		return RuntimeCredential{}, err
 	}
-	plain, err := service.open(current.OrgID, current.ActorID, nonce, ciphertext)
+	plain, err := service.open(current.OrgID, agentID, nonce, ciphertext)
 	if err != nil {
 		return RuntimeCredential{}, err
 	}
@@ -424,11 +430,18 @@ func (service *Service) DeleteMCPServer(ctx context.Context, current identity.Us
 }
 
 func (service *Service) RuntimeMCPServers(ctx context.Context, current identity.User, authentication access.Identity) ([]RuntimeMCPServer, error) {
-	if authentication.AuthenticationKind != "api_key" || authentication.ActorID != current.ActorID || authentication.OrgID != current.OrgID || !slices.Contains(authentication.Scopes, "runtime:execute") {
+	if !agentauthz.New().IsRuntime(current, authentication) {
+		return nil, ErrForbidden
+	}
+	return service.RuntimeMCPServersForAgent(ctx, current, authentication, current.ActorID)
+}
+
+func (service *Service) RuntimeMCPServersForAgent(ctx context.Context, current identity.User, authentication access.Identity, agentID string) ([]RuntimeMCPServer, error) {
+	if !agentauthz.New().CanWork(current, authentication) || uuid.Validate(agentID) != nil {
 		return nil, ErrForbidden
 	}
 	rows, err := service.pool.Query(ctx, `SELECT id,name,endpoint_url,allowed_tools,encrypted_headers,timeout_ms,max_output_bytes,require_write_confirmation
-		FROM agent_mcp_servers WHERE org_id=$1 AND agent_id=$2 AND enabled ORDER BY name`, current.OrgID, current.ActorID)
+		FROM agent_mcp_servers WHERE org_id=$1 AND agent_id=$2 AND enabled ORDER BY name`, current.OrgID, agentID)
 	if err != nil {
 		return nil, err
 	}
@@ -440,7 +453,7 @@ func (service *Service) RuntimeMCPServers(ctx context.Context, current identity.
 		if err := rows.Scan(&server.ID, &server.Name, &server.EndpointURL, &server.AllowedTools, &encrypted, &server.TimeoutMS, &server.MaxOutputBytes, &server.RequireWriteConfirmation); err != nil {
 			return nil, err
 		}
-		headers, err := service.openMCPHeaders(current.OrgID, current.ActorID, server.ID, encrypted)
+		headers, err := service.openMCPHeaders(current.OrgID, agentID, server.ID, encrypted)
 		if err != nil {
 			return nil, err
 		}

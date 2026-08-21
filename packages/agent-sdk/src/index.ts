@@ -123,6 +123,7 @@ export class AgentClient {
       method: "POST",
       body: JSON.stringify({
         run_id: run.id,
+        lease_token: run.lease_token,
         correlation_id: run.correlation_id,
         confirmed: false,
         arguments: arguments_,

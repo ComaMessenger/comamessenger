@@ -42,6 +42,7 @@ async function main(): Promise<void> {
   const runtime = new AgentRuntime({
     api,
     provider: providerResolver(api),
+    concurrency: numberEnvironment("COMA_RUNTIME_CONCURRENCY", 4),
     events: connection,
   });
   const shutdown = new AbortController();
@@ -127,6 +128,11 @@ function requiredEnvironment(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`Missing required environment variable ${name}`);
   return value;
+}
+
+function numberEnvironment(name: string, fallback: number): number {
+  const value = Number(process.env[name]);
+  return Number.isInteger(value) && value > 0 ? value : fallback;
 }
 
 void main().catch((cause: unknown) => {

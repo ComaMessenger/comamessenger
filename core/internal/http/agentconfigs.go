@@ -78,8 +78,21 @@ func (h *identityHandlers) deleteAgentMCPServer(w standardhttp.ResponseWriter, r
 }
 
 func (h *identityHandlers) agentRuntimeMCPServers(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input struct {
+		RunID      string `json:"run_id"`
+		LeaseToken string `json:"lease_token"`
+	}
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
 	auth := authFromContext(r.Context())
-	result, err := h.agentConfig.RuntimeMCPServers(r.Context(), auth.User, auth.Identity)
+	agentID, err := h.agentRuns.RuntimeAgentID(r.Context(), auth.User, auth.Identity, input.RunID, input.LeaseToken)
+	if err != nil {
+		h.writeAgentRunError(w, r, err)
+		return
+	}
+	result, err := h.agentConfig.RuntimeMCPServersForAgent(r.Context(), auth.User, auth.Identity, agentID)
 	if err != nil {
 		h.writeAgentConfigError(w, r, err)
 		return

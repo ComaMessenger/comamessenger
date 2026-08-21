@@ -1642,10 +1642,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Returns enabled MCP endpoints and decrypted headers only to the authenticated agent runtime over a no-store response. */
-        get: operations["listAgentRuntimeMcpServers"];
+        get?: never;
         put?: never;
-        post?: never;
+        /** @description Returns enabled MCP endpoints for the agent bound to an active run lease over a no-store response. */
+        post: operations["listAgentRuntimeMcpServers"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1887,6 +1887,8 @@ export interface components {
             /** Format: uuid */
             run_id: string;
             /** Format: uuid */
+            lease_token: string;
+            /** Format: uuid */
             chat_id: string;
             /** Format: uuid */
             thread_root_id: string | null;
@@ -1898,6 +1900,8 @@ export interface components {
             op: "message.streaming";
             /** Format: uuid */
             run_id: string;
+            /** Format: uuid */
+            lease_token: string;
             /** Format: uuid */
             chat_id: string;
             /** Format: uuid */
@@ -2103,7 +2107,7 @@ export interface components {
             created_at: string;
         };
         /** @enum {string} */
-        AgentScope: "chats:read" | "messages:read" | "messages:write" | "reactions:write" | "files:read" | "search:read" | "members:read" | "memory:read" | "memory:write" | "runtime:execute";
+        AgentScope: "chats:read" | "messages:read" | "messages:write" | "reactions:write" | "files:read" | "search:read" | "members:read" | "memory:read" | "memory:write" | "runtime:execute" | "runtime:worker";
         Agent: {
             /** Format: uuid */
             id: string;
@@ -2275,7 +2279,9 @@ export interface components {
                 [key: string]: unknown;
             };
             /** Format: uuid */
-            run_id?: string;
+            run_id: string;
+            /** Format: uuid */
+            lease_token: string;
             /** Format: uuid */
             correlation_id: string;
             /** @default false */
@@ -2313,6 +2319,12 @@ export interface components {
             lease_token: string;
             /** @default 60 */
             lease_seconds: number;
+        };
+        AgentRuntimeRunLeaseRequest: {
+            /** Format: uuid */
+            run_id: string;
+            /** Format: uuid */
+            lease_token: string;
         };
         CompleteAgentRunRequest: {
             /** Format: uuid */
@@ -6793,7 +6805,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentRuntimeRunLeaseRequest"];
+            };
+        };
         responses: {
             /** @description Runtime-only MCP configurations. */
             200: {

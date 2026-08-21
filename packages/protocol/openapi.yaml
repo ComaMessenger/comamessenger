@@ -2361,10 +2361,15 @@ paths:
         "403": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
   /api/v1/agent-runtime/mcp-servers:
-    get:
+    post:
       operationId: listAgentRuntimeMcpServers
-      description: Returns enabled MCP endpoints and decrypted headers only to the authenticated agent runtime over a no-store response.
+      description: Returns enabled MCP endpoints for the agent bound to an active run lease over a no-store response.
       security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AgentRuntimeRunLeaseRequest" }
       responses:
         "200":
           description: Runtime-only MCP configurations.
@@ -2906,6 +2911,7 @@ components:
           memory:read,
           memory:write,
           runtime:execute,
+          runtime:worker,
         ]
     Agent:
       type: object
@@ -3199,12 +3205,13 @@ components:
     InvokeAgentToolRequest:
       type: object
       additionalProperties: false
-      required: [arguments, correlation_id]
+      required: [arguments, run_id, lease_token, correlation_id]
       properties:
         arguments:
           type: object
           additionalProperties: true
         run_id: { type: string, format: uuid }
+        lease_token: { type: string, format: uuid }
         correlation_id: { type: string, format: uuid }
         confirmed: { type: boolean, default: false }
     InvokeAgentRequest:
@@ -3239,6 +3246,13 @@ components:
       properties:
         lease_token: { type: string, format: uuid }
         lease_seconds: { type: integer, minimum: 5, maximum: 300, default: 60 }
+    AgentRuntimeRunLeaseRequest:
+      type: object
+      additionalProperties: false
+      required: [run_id, lease_token]
+      properties:
+        run_id: { type: string, format: uuid }
+        lease_token: { type: string, format: uuid }
     CompleteAgentRunRequest:
       type: object
       additionalProperties: false

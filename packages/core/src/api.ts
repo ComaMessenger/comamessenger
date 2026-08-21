@@ -89,6 +89,7 @@ import type {
   CreateAgentMcpServerRequest,
   UpdateAgentMcpServerRequest,
   AgentRuntimeMcpServer,
+  AgentRuntimeRunLeaseRequest,
   AgentMcpToolCall,
   StartAgentMcpToolCallRequest,
   FinishAgentMcpToolCallRequest,
@@ -414,8 +415,13 @@ export class MessengerAPI {
       { method: "DELETE" },
     );
   }
-  agentRuntimeMcpServers(): Promise<AgentRuntimeMcpServer[]> {
-    return this.request("/api/v1/agent-runtime/mcp-servers");
+  agentRuntimeMcpServers(
+    input: AgentRuntimeRunLeaseRequest,
+  ): Promise<AgentRuntimeMcpServer[]> {
+    return this.request("/api/v1/agent-runtime/mcp-servers", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
   }
   startAgentMcpToolCall(
     input: StartAgentMcpToolCallRequest,

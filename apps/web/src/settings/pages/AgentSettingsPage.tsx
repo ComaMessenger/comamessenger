@@ -53,6 +53,7 @@ const scopes: AgentScope[] = [
   "memory:read",
   "memory:write",
   "runtime:execute",
+  "runtime:worker",
 ];
 
 type Draft = CreateAgentRequest;
@@ -1103,6 +1104,33 @@ function AgentOperations({
             <Plus />
             {t("createRuntimeKey")}
           </Button>
+          <div className="agent-worker-key">
+            <p>{t("workspaceWorkerKeyHint")}</p>
+            <Button
+              variant="secondary"
+              onClick={() =>
+                void action(async () => {
+                  if (!agent.allowed_scopes.includes("runtime:worker")) {
+                    await api.updateAgent(agent.id, {
+                      allowed_scopes: [
+                        ...agent.allowed_scopes,
+                        "runtime:worker",
+                      ],
+                    });
+                  }
+                  const created = await api.createAgentKey(agent.id, {
+                    name: "workspace-runtime",
+                    scopes: ["runtime:worker"],
+                    rate_limit_per_minute: agent.rate_limit_per_minute,
+                  });
+                  setSecret(created.secret);
+                })
+              }
+            >
+              <Plus />
+              {t("createWorkspaceWorkerKey")}
+            </Button>
+          </div>
           {secret && (
             <div className="agent-secret" role="status">
               <strong>{t("copySecretNow")}</strong>

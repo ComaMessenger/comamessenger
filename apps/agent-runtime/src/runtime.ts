@@ -24,11 +24,13 @@ export type RuntimeOptions = {
   api: MessengerAPI;
   provider: ProviderResolver;
   workerID?: string;
+  concurrency?: number;
   pollIntervalMS?: number;
   leaseSeconds?: number;
   events?: {
     agentStatus(input: {
       runID: string;
+      leaseToken: string;
       chatID: string;
       threadRootID: string | null;
       state:
@@ -41,6 +43,7 @@ export type RuntimeOptions = {
     }): void;
     messageStreaming(input: {
       runID: string;
+      leaseToken: string;
       chatID: string;
       threadRootID: string | null;
       streamID: string;
@@ -54,21 +57,31 @@ export type RuntimeOptions = {
 
 export class AgentRuntime {
   private readonly workerID: string;
+  private readonly concurrency: number;
   private readonly pollIntervalMS: number;
   private readonly leaseSeconds: number;
 
   constructor(private readonly options: RuntimeOptions) {
     this.workerID = options.workerID ?? crypto.randomUUID();
+    this.concurrency = Math.min(32, Math.max(1, options.concurrency ?? 4));
     this.pollIntervalMS = Math.max(500, options.pollIntervalMS ?? 5_000);
     this.leaseSeconds = Math.min(300, Math.max(30, options.leaseSeconds ?? 90));
   }
 
   async run(signal: AbortSignal): Promise<void> {
+    await Promise.all(
+      Array.from({ length: this.concurrency }, (_, index) =>
+        this.runWorker(index === 0 ? this.workerID : crypto.randomUUID(), signal),
+      ),
+    );
+  }
+
+  private async runWorker(workerID: string, signal: AbortSignal): Promise<void> {
     while (!signal.aborted) {
       let claimed: ClaimedAgentRun | null = null;
       try {
         claimed = await this.options.api.claimAgentRun({
-          worker_id: this.workerID,
+          worker_id: workerID,
           lease_seconds: this.leaseSeconds,
           wait_seconds: 25,
         });
@@ -116,7 +129,10 @@ export class AgentRuntime {
       }
       const tools = await this.options.api.agentTools();
       const mcpTools = await resolveMCPTools(
-        await this.options.api.agentRuntimeMcpServers(),
+        await this.options.api.agentRuntimeMcpServers({
+          run_id: run.id,
+          lease_token: run.lease_token,
+        }),
         controller.signal,
       );
       const messages = await this.assembleContext(run, agent);
@@ -139,6 +155,7 @@ export class AgentRuntime {
             run.thread_root_id ? "reply_in_thread" : "post_message",
             {
               run_id: run.id,
+              lease_token: run.lease_token,
               correlation_id: run.correlation_id,
               confirmed: true,
               arguments: {
@@ -206,6 +223,7 @@ export class AgentRuntime {
         run.thread_root_id ? "get_thread" : "get_chat_messages",
         {
           run_id: run.id,
+          lease_token: run.lease_token,
           correlation_id: run.correlation_id,
           confirmed: true,
           arguments: run.thread_root_id
@@ -332,6 +350,7 @@ export class AgentRuntime {
           ? await this.invokeMCPTool(run, mcpTool, call.arguments, signal)
           : await this.options.api.invokeAgentTool<unknown>(call.name, {
               run_id: run.id,
+              lease_token: run.lease_token,
               correlation_id: run.correlation_id,
               confirmed: true,
               arguments: call.arguments,
@@ -403,6 +422,7 @@ export class AgentRuntime {
     if (!run.chat_id) return;
     this.options.events?.agentStatus({
       runID: run.id,
+      leaseToken: run.lease_token,
       chatID: run.chat_id,
       threadRootID: run.thread_root_id ?? null,
       state,
@@ -420,6 +440,7 @@ export class AgentRuntime {
     if (!run.chat_id) return;
     this.options.events?.messageStreaming({
       runID: run.id,
+      leaseToken: run.lease_token,
       chatID: run.chat_id,
       threadRootID: run.thread_root_id ?? null,
       streamID,

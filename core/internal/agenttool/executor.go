@@ -51,6 +51,7 @@ type Invocation struct {
 	Name          string
 	Arguments     json.RawMessage
 	RunID         string
+	LeaseToken    string
 	CorrelationID string
 	Confirmed     bool
 }
@@ -97,7 +98,38 @@ func (executor *Executor) Definitions() []Definition {
 	return result
 }
 
+func (executor *Executor) resolveInvocation(ctx context.Context, invocation Invocation) (Invocation, error) {
+	if uuid.Validate(invocation.RunID) != nil || uuid.Validate(invocation.LeaseToken) != nil {
+		return Invocation{}, fmt.Errorf("%w: active run_id and lease_token are required", ErrInvalid)
+	}
+	organizationWorker := executor.authorizer.IsOrganizationWorker(invocation.User, invocation.Identity)
+	if !organizationWorker && !executor.authorizer.IsRuntime(invocation.User, invocation.Identity) {
+		return Invocation{}, ErrForbidden
+	}
+	var agentID string
+	var scopes []string
+	err := executor.pool.QueryRow(ctx, `SELECT run.agent_id,agent.allowed_scopes FROM agent_runs run
+		JOIN agents agent ON agent.org_id=run.org_id AND agent.actor_id=run.agent_id
+		WHERE run.org_id=$1 AND run.id=$2 AND run.lease_token=$3 AND run.status='running' AND run.lease_expires_at>now()
+		AND ($4::boolean OR run.agent_id=$5)`, invocation.User.OrgID, invocation.RunID, invocation.LeaseToken, organizationWorker, invocation.User.ActorID).Scan(&agentID, &scopes)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Invocation{}, ErrForbidden
+	}
+	if err != nil {
+		return Invocation{}, err
+	}
+	invocation.User = identity.User{ActorID: agentID, OrgID: invocation.User.OrgID, OrgRole: "member"}
+	invocation.Identity.ActorID = agentID
+	invocation.Identity.Scopes = scopes
+	return invocation, nil
+}
+
 func (executor *Executor) Invoke(ctx context.Context, invocation Invocation) (json.RawMessage, error) {
+	resolved, err := executor.resolveInvocation(ctx, invocation)
+	if err != nil {
+		return nil, err
+	}
+	invocation = resolved
 	tool, exists := executor.tools[invocation.Name]
 	if !exists || !executor.authorizer.CanInvokeTool(invocation.User, invocation.Identity, string(tool.Definition.RequiredScope)) {
 		return nil, ErrForbidden
@@ -106,13 +138,11 @@ func (executor *Executor) Invoke(ctx context.Context, invocation Invocation) (js
 	if _, err := uuid.Parse(invocation.CorrelationID); err != nil {
 		return nil, fmt.Errorf("%w: correlation_id must be a UUID", ErrInvalid)
 	}
-	if invocation.RunID != "" {
-		if _, err := uuid.Parse(invocation.RunID); err != nil {
-			return nil, fmt.Errorf("%w: run_id must be a UUID", ErrInvalid)
-		}
+	if _, err := uuid.Parse(invocation.RunID); err != nil {
+		return nil, fmt.Errorf("%w: run_id must be a UUID", ErrInvalid)
 	}
-	if definition.Mode == "write" && invocation.RunID == "" {
-		return nil, fmt.Errorf("%w: run_id is required for write tools", ErrInvalid)
+	if _, err := uuid.Parse(invocation.LeaseToken); err != nil {
+		return nil, fmt.Errorf("%w: lease_token must be a UUID", ErrInvalid)
 	}
 	if executor.requireWriteConfirmation && definition.Mode == "write" && !invocation.Confirmed {
 		return nil, ErrConfirmationRequired

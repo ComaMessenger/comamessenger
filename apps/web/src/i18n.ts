@@ -386,6 +386,9 @@ const ru = {
   providerKey: "API-ключ провайдера",
   openAICompatible: "OpenAI-совместимый",
   createRuntimeKey: "Создать ключ среды выполнения",
+  createWorkspaceWorkerKey: "Создать ключ worker пространства",
+  workspaceWorkerKeyHint:
+    "Один такой ключ позволяет среде выполнения обслуживать всех агентов пространства. Действия всё равно ограничены настройками и активным запуском каждого агента.",
   copySecretNow: "Скопируйте секрет сейчас — повторно он не показывается.",
   agentScope_chats_read: "Чтение списка чатов",
   agentScope_messages_read: "Чтение сообщений",
@@ -397,6 +400,7 @@ const ru = {
   agentScope_memory_read: "Чтение памяти агента",
   agentScope_memory_write: "Запись в память агента",
   agentScope_runtime_execute: "Запуск агента",
+  agentScope_runtime_worker: "Запуск агентов пространства",
   agentTemplateChatRequired:
     "Для встроенного агента выберите хотя бы один чат.",
   draft: "Черновик",
@@ -1119,6 +1123,9 @@ const en: Record<keyof typeof ru, string> = {
   providerKey: "Provider API key",
   openAICompatible: "OpenAI-compatible",
   createRuntimeKey: "Create runtime key",
+  createWorkspaceWorkerKey: "Create workspace worker key",
+  workspaceWorkerKeyHint:
+    "One key lets the runtime serve every agent in this workspace. Each action remains limited by the target agent settings and its active run.",
   copySecretNow: "Copy the secret now — it cannot be shown again.",
   agentScope_chats_read: "Read chat list",
   agentScope_messages_read: "Read messages",
@@ -1130,6 +1137,7 @@ const en: Record<keyof typeof ru, string> = {
   agentScope_memory_read: "Read agent memory",
   agentScope_memory_write: "Write agent memory",
   agentScope_runtime_execute: "Run agent",
+  agentScope_runtime_worker: "Run workspace agents",
   agentTemplateChatRequired: "Select at least one chat for a built-in agent.",
   draft: "Draft",
   theme: "Theme",

@@ -75,9 +75,13 @@ func (service *Service) Start(ctx context.Context, current identity.User, authen
 	if err := json.Unmarshal(input.Request, &payload); err != nil || payload == nil {
 		return nil, nil, ErrInvalid
 	}
+	agentID, err := service.runs.RuntimeAgentID(ctx, current, authentication, input.RunID, input.LeaseToken)
+	if err != nil {
+		return nil, nil, err
+	}
 	var endpoint string
 	var approved bool
-	err := service.pool.QueryRow(ctx, `SELECT endpoint_url,external_data_sharing_approved FROM agents WHERE org_id=$1 AND actor_id=$2 AND deleted_at IS NULL`, current.OrgID, current.ActorID).Scan(&endpoint, &approved)
+	err = service.pool.QueryRow(ctx, `SELECT endpoint_url,external_data_sharing_approved FROM agents WHERE org_id=$1 AND actor_id=$2 AND deleted_at IS NULL`, current.OrgID, agentID).Scan(&endpoint, &approved)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil, agentrun.ErrNotFound
 	}
@@ -87,11 +91,11 @@ func (service *Service) Start(ctx context.Context, current identity.User, authen
 	if !approved {
 		return nil, nil, agentrun.ErrForbidden
 	}
-	credential, err := service.config.RuntimeCredential(ctx, current, authentication)
+	credential, err := service.config.RuntimeCredentialForAgent(ctx, current, authentication, agentID)
 	if err != nil {
 		return nil, nil, err
 	}
-	provider, model, maxOutputTokens, err := service.runProvider(ctx, current, input.RunID, input.LeaseToken)
+	provider, model, maxOutputTokens, err := service.runProvider(ctx, current.OrgID, agentID, input.RunID, input.LeaseToken)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -154,10 +158,10 @@ func (session *Session) Finish(ctx context.Context, status string) error {
 	return err
 }
 
-func (service *Service) runProvider(ctx context.Context, current identity.User, runID, leaseToken string) (string, string, int, error) {
+func (service *Service) runProvider(ctx context.Context, orgID, agentID, runID, leaseToken string) (string, string, int, error) {
 	var provider, model string
 	var maxOutputTokens int
-	err := service.pool.QueryRow(ctx, `SELECT run.provider,run.model,agent.max_output_tokens FROM agent_runs run JOIN agents agent ON agent.org_id=run.org_id AND agent.actor_id=run.agent_id WHERE run.org_id=$1 AND run.agent_id=$2 AND run.id=$3 AND run.lease_token=$4 AND run.status='running'`, current.OrgID, current.ActorID, runID, leaseToken).Scan(&provider, &model, &maxOutputTokens)
+	err := service.pool.QueryRow(ctx, `SELECT run.provider,run.model,agent.max_output_tokens FROM agent_runs run JOIN agents agent ON agent.org_id=run.org_id AND agent.actor_id=run.agent_id WHERE run.org_id=$1 AND run.agent_id=$2 AND run.id=$3 AND run.lease_token=$4 AND run.status='running'`, orgID, agentID, runID, leaseToken).Scan(&provider, &model, &maxOutputTokens)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", "", 0, agentrun.ErrConflict
 	}

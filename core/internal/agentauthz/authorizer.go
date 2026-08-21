@@ -26,6 +26,18 @@ func (Authorizer) IsRuntime(current identity.User, authentication access.Identit
 		HasScope(authentication.Scopes, "runtime:execute")
 }
 
+func (Authorizer) IsOrganizationWorker(current identity.User, authentication access.Identity) bool {
+	return authentication.AuthenticationKind == "api_key" &&
+		authentication.ActorID == current.ActorID &&
+		authentication.OrgID == current.OrgID &&
+		authentication.KeyID != "" &&
+		HasScope(authentication.Scopes, "runtime:worker")
+}
+
+func (authorizer Authorizer) CanWork(current identity.User, authentication access.Identity) bool {
+	return authorizer.IsRuntime(current, authentication) || authorizer.IsOrganizationWorker(current, authentication)
+}
+
 func (Authorizer) CanInvokeTool(current identity.User, authentication access.Identity, requiredScope string) bool {
 	return authentication.AuthenticationKind == "api_key" &&
 		authentication.ActorID == current.ActorID &&

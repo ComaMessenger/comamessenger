@@ -117,11 +117,10 @@ POST   /api/v1/agents/:id/mcp-servers
 PATCH  /api/v1/agents/:id/mcp-servers/:server_id
 DELETE /api/v1/agents/:id/mcp-servers/:server_id
 POST   /api/v1/agent-runtime/runs/claim
-GET    /api/v1/agent-runtime/mcp-servers
+POST   /api/v1/agent-runtime/mcp-servers
 POST   /api/v1/agent-runtime/mcp-tool-calls
 POST   /api/v1/agent-runtime/mcp-tool-calls/:call_id/finish
-POST   /api/v1/agent-runtime/provider-calls
-POST   /api/v1/agent-runtime/provider-calls/:call_id/finish
+POST   /api/v1/agent-runtime/provider/chat
 
 agent.invoked
 agent.run.started
@@ -133,9 +132,9 @@ message.streaming
 
 - Durable final message создаётся core через публичный message endpoint.
 - Streaming delta не является источником истины и может быть отброшена при reconnect.
-- `agent.status` и `message.streaming` принимаются только от API key с `runtime:execute`, привязываются к активному run и повторно проверяют membership/chat/thread. Deltas имеют монотонный index, bounded payload и TTL; web игнорирует переставленные/повторные deltas и очищает partial state по TTL, terminal frame или при reconnect. Финальный `message.created` остаётся единственным durable результатом.
-- Provider key никогда не входит в event payload, run logs или browser/admin API; runtime-only `no-store` endpoint доступен только API key самого агента.
-- Секретные MCP headers шифруются отдельным AEAD domain и возвращаются только runtime-ключу самого агента через `no-store`; admin API показывает лишь факт их настройки. Runtime запрещает redirects, не включает неразрешённые tools, ограничивает каждый ответ по времени и размеру и наружу возвращает только стабильные redacted error codes.
+- `agent.status` и `message.streaming` принимаются от API key с `runtime:execute` или `runtime:worker`, требуют `run_id + lease_token`, вычисляют целевого агента из активного run и повторно проверяют membership/chat/thread. Deltas имеют монотонный index, bounded payload и TTL; web игнорирует переставленные/повторные deltas и очищает partial state по TTL, terminal frame или при reconnect. Финальный `message.created` остаётся единственным durable результатом.
+- Provider key никогда не входит в event payload, run logs, runtime или browser/admin API. Core-side provider proxy сам применяет credential, модель, бюджет, rate limit и считает usage.
+- Секретные MCP headers шифруются отдельным AEAD domain и возвращаются runtime только для конкретного активного `run_id + lease_token`; admin API показывает лишь факт их настройки. Runtime запрещает redirects, не включает неразрешённые tools, ограничивает каждый ответ по времени и размеру и наружу возвращает только стабильные redacted error codes.
 - MCP tools с `annotations.readOnlyHint=true` считаются read; остальные считаются write. При `require_write_confirmation=true` write tools не передаются автономной модели, а core дополнительно отклоняет попытку начать такой вызов без разрешённой политики. Каждый MCP-вызов записывается и аудируется с run correlation ID.
 - Usage сохраняет provider/model/tokens/cost/currency и источник расчёта стоимости.
 - Memory key/value и pgvector embedding используют составную границу `(organization, agent, namespace, key)`; vector recall требует совпадающий embedding model и размерность, а raw embedding не возвращается в tool output.

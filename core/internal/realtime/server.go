@@ -297,6 +297,7 @@ type presenceEventFrame struct {
 type agentStatusFrame struct {
 	Op           string  `json:"op"`
 	RunID        string  `json:"run_id"`
+	LeaseToken   string  `json:"lease_token"`
 	ChatID       string  `json:"chat_id"`
 	ThreadRootID *string `json:"thread_root_id"`
 	State        string  `json:"state"`
@@ -313,6 +314,7 @@ type agentStatusEventFrame struct {
 type messageStreamingFrame struct {
 	Op           string  `json:"op"`
 	RunID        string  `json:"run_id"`
+	LeaseToken   string  `json:"lease_token"`
 	ChatID       string  `json:"chat_id"`
 	ThreadRootID *string `json:"thread_root_id"`
 	StreamID     string  `json:"stream_id"`

@@ -1732,6 +1732,19 @@ a:focus-visible {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+.agent-worker-key {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--coma-border);
+  border-radius: var(--coma-radius-md);
+}
+
+.agent-worker-key p {
+  max-width: 72ch;
+  color: var(--coma-muted);
+}
 .agent-run-detail dl {
   display: grid;
   gap: 8px;

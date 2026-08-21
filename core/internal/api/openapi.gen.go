@@ -250,6 +250,7 @@ const (
 	MessagesWrite  AgentScope = "messages:write"
 	ReactionsWrite AgentScope = "reactions:write"
 	RuntimeExecute AgentScope = "runtime:execute"
+	RuntimeWorker  AgentScope = "runtime:worker"
 	SearchRead     AgentScope = "search:read"
 )
 
@@ -273,6 +274,8 @@ func (e AgentScope) Valid() bool {
 	case ReactionsWrite:
 		return true
 	case RuntimeExecute:
+		return true
+	case RuntimeWorker:
 		return true
 	case SearchRead:
 		return true
@@ -2863,6 +2866,12 @@ type AgentRuntimeMcpServer struct {
 	TimeoutMs                int                `json:"timeout_ms"`
 }
 
+// AgentRuntimeRunLeaseRequest defines model for AgentRuntimeRunLeaseRequest.
+type AgentRuntimeRunLeaseRequest struct {
+	LeaseToken openapi_types.UUID `json:"lease_token"`
+	RunId      openapi_types.UUID `json:"run_id"`
+}
+
 // AgentScope defines model for AgentScope.
 type AgentScope string
 
@@ -3532,7 +3541,8 @@ type InvokeAgentToolRequest struct {
 	Arguments     map[string]interface{} `json:"arguments"`
 	Confirmed     *bool                  `json:"confirmed,omitempty"`
 	CorrelationId openapi_types.UUID     `json:"correlation_id"`
-	RunId         *openapi_types.UUID    `json:"run_id,omitempty"`
+	LeaseToken    openapi_types.UUID     `json:"lease_token"`
+	RunId         openapi_types.UUID     `json:"run_id"`
 }
 
 // LoginRequest defines model for LoginRequest.
@@ -3801,6 +3811,7 @@ type RealtimeAgentStatusEventFrameV1State string
 // RealtimeAgentStatusFrameV1 defines model for RealtimeAgentStatusFrameV1.
 type RealtimeAgentStatusFrameV1 struct {
 	ChatId       openapi_types.UUID              `json:"chat_id"`
+	LeaseToken   openapi_types.UUID              `json:"lease_token"`
 	Op           RealtimeAgentStatusFrameV1Op    `json:"op"`
 	RunId        openapi_types.UUID              `json:"run_id"`
 	State        RealtimeAgentStatusFrameV1State `json:"state"`
@@ -3882,6 +3893,7 @@ type RealtimeMessageStreamingFrameV1 struct {
 	Delta        string                            `json:"delta"`
 	Done         bool                              `json:"done"`
 	Index        int64                             `json:"index"`
+	LeaseToken   openapi_types.UUID                `json:"lease_token"`
 	Op           RealtimeMessageStreamingFrameV1Op `json:"op"`
 	Reset        bool                              `json:"reset"`
 	RunId        openapi_types.UUID                `json:"run_id"`
@@ -4507,6 +4519,9 @@ type ListFollowedThreadsParams struct {
 
 // UpdateAgentRuntimeCheckpointJSONRequestBody defines body for UpdateAgentRuntimeCheckpoint for application/json ContentType.
 type UpdateAgentRuntimeCheckpointJSONRequestBody = UpdateAgentRuntimeCheckpointRequest
+
+// ListAgentRuntimeMcpServersJSONRequestBody defines body for ListAgentRuntimeMcpServers for application/json ContentType.
+type ListAgentRuntimeMcpServersJSONRequestBody = AgentRuntimeRunLeaseRequest
 
 // StartAgentRuntimeMcpToolCallJSONRequestBody defines body for StartAgentRuntimeMcpToolCall for application/json ContentType.
 type StartAgentRuntimeMcpToolCallJSONRequestBody = StartAgentMcpToolCallRequest

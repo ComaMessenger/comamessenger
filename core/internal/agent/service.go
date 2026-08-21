@@ -46,12 +46,13 @@ const (
 	ScopeMemoryRead     Scope = "memory:read"
 	ScopeMemoryWrite    Scope = "memory:write"
 	ScopeRuntimeExecute Scope = "runtime:execute"
+	ScopeRuntimeWorker  Scope = "runtime:worker"
 )
 
 var validScopes = map[Scope]struct{}{
 	ScopeChatsRead: {}, ScopeMessagesRead: {}, ScopeMessagesWrite: {}, ScopeReactionsWrite: {},
 	ScopeFilesRead: {}, ScopeSearchRead: {}, ScopeMembersRead: {}, ScopeMemoryRead: {}, ScopeMemoryWrite: {},
-	ScopeRuntimeExecute: {},
+	ScopeRuntimeExecute: {}, ScopeRuntimeWorker: {},
 }
 
 var handlePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{1,31}$`)

@@ -52,6 +52,7 @@ export class AgentConnectionManager {
 
   agentStatus(input: {
     runID: string;
+    leaseToken: string;
     chatID: string;
     threadRootID: string | null;
     state: AgentStatus;
@@ -59,6 +60,7 @@ export class AgentConnectionManager {
     this.send({
       op: "agent.status",
       run_id: input.runID,
+      lease_token: input.leaseToken,
       chat_id: input.chatID,
       thread_root_id: input.threadRootID,
       state: input.state,
@@ -67,6 +69,7 @@ export class AgentConnectionManager {
 
   messageStreaming(input: {
     runID: string;
+    leaseToken: string;
     chatID: string;
     threadRootID: string | null;
     streamID: string;
@@ -78,6 +81,7 @@ export class AgentConnectionManager {
     this.send({
       op: "message.streaming",
       run_id: input.runID,
+      lease_token: input.leaseToken,
       chat_id: input.chatID,
       thread_root_id: input.threadRootID,
       stream_id: input.streamID,

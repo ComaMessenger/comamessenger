@@ -9,12 +9,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"slices"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/comamessenger/comamessenger/core/internal/access"
+	"github.com/comamessenger/comamessenger/core/internal/agentauthz"
 	"github.com/comamessenger/comamessenger/core/internal/config"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/google/uuid"
@@ -271,13 +271,15 @@ func (e *Ephemeral) Presence(ctx context.Context, user identity.User, subscripti
 }
 
 func (e *Ephemeral) AgentStatus(ctx context.Context, user identity.User, authentication access.Identity, subscription *Subscription, input agentStatusFrame) error {
-	if input.Op != "agent.status" || !validAgentState(input.State) || uuid.Validate(input.RunID) != nil || uuid.Validate(input.ChatID) != nil || (input.ThreadRootID != nil && uuid.Validate(*input.ThreadRootID) != nil) {
+	if input.Op != "agent.status" || !validAgentState(input.State) || uuid.Validate(input.RunID) != nil || uuid.Validate(input.LeaseToken) != nil || uuid.Validate(input.ChatID) != nil || (input.ThreadRootID != nil && uuid.Validate(*input.ThreadRootID) != nil) {
 		return ErrEphemeralInvalid
 	}
-	if err := e.authorizeAgentRun(ctx, user, authentication, input.RunID, input.ChatID, input.ThreadRootID); err != nil {
+	agentID, err := e.authorizeAgentRun(ctx, user, authentication, input.RunID, input.LeaseToken, input.ChatID, input.ThreadRootID)
+	if err != nil {
 		return err
 	}
-	if err := e.allow(ctx, user, "agent.status"); err != nil {
+	agentUser := identity.User{ActorID: agentID, OrgID: user.OrgID}
+	if err := e.allow(ctx, agentUser, "agent.status"); err != nil {
 		return err
 	}
 	expiresAt := time.Now().UTC().Add(15 * time.Second)
@@ -286,47 +288,49 @@ func (e *Ephemeral) AgentStatus(ctx context.Context, user identity.User, authent
 	} else if input.State == "failed" || input.State == "canceled" {
 		expiresAt = time.Now().UTC().Add(8 * time.Second)
 	}
-	frame := agentStatusEventFrame{Op: input.Op, ActorID: user.ActorID, RunID: input.RunID, ChatID: input.ChatID, ThreadRootID: input.ThreadRootID, State: input.State, ExpiresAt: expiresAt}
-	return e.broadcast(ctx, user, subscription.ConnectionID, input.ChatID, frame)
+	frame := agentStatusEventFrame{Op: input.Op, ActorID: agentID, RunID: input.RunID, ChatID: input.ChatID, ThreadRootID: input.ThreadRootID, State: input.State, ExpiresAt: expiresAt}
+	return e.broadcast(ctx, agentUser, subscription.ConnectionID, input.ChatID, frame)
 }
 
 func (e *Ephemeral) MessageStreaming(ctx context.Context, user identity.User, authentication access.Identity, subscription *Subscription, input messageStreamingFrame) error {
-	if input.Op != "message.streaming" || uuid.Validate(input.RunID) != nil || uuid.Validate(input.ChatID) != nil || uuid.Validate(input.StreamID) != nil || input.Index < 0 || len(input.Delta) > 8192 || (input.ThreadRootID != nil && uuid.Validate(*input.ThreadRootID) != nil) {
+	if input.Op != "message.streaming" || uuid.Validate(input.RunID) != nil || uuid.Validate(input.LeaseToken) != nil || uuid.Validate(input.ChatID) != nil || uuid.Validate(input.StreamID) != nil || input.Index < 0 || len(input.Delta) > 8192 || (input.ThreadRootID != nil && uuid.Validate(*input.ThreadRootID) != nil) {
 		return ErrEphemeralInvalid
 	}
-	if err := e.authorizeAgentRun(ctx, user, authentication, input.RunID, input.ChatID, input.ThreadRootID); err != nil {
+	agentID, err := e.authorizeAgentRun(ctx, user, authentication, input.RunID, input.LeaseToken, input.ChatID, input.ThreadRootID)
+	if err != nil {
 		return err
 	}
+	agentUser := identity.User{ActorID: agentID, OrgID: user.OrgID}
 	// Provider output is coalesced by the runtime, but a healthy stream can still
 	// exceed the human-presence limit. Keep this bucket isolated and high enough
 	// for one frame per 100-150ms while retaining the global configured floor.
 	streamingLimit := max(e.config.EphemeralRateLimit, uint64(100))
-	if err := e.allowWithLimit(ctx, user, "message.streaming", streamingLimit); err != nil {
+	if err := e.allowWithLimit(ctx, agentUser, "message.streaming", streamingLimit); err != nil {
 		return err
 	}
 	expiresAt := time.Now().UTC().Add(15 * time.Second)
 	if input.Done {
 		expiresAt = time.Now().UTC()
 	}
-	frame := messageStreamingEventFrame{Op: input.Op, ActorID: user.ActorID, RunID: input.RunID, ChatID: input.ChatID, ThreadRootID: input.ThreadRootID, StreamID: input.StreamID, Index: input.Index, Delta: input.Delta, Reset: input.Reset, Done: input.Done, ExpiresAt: expiresAt}
-	return e.broadcast(ctx, user, subscription.ConnectionID, input.ChatID, frame)
+	frame := messageStreamingEventFrame{Op: input.Op, ActorID: agentID, RunID: input.RunID, ChatID: input.ChatID, ThreadRootID: input.ThreadRootID, StreamID: input.StreamID, Index: input.Index, Delta: input.Delta, Reset: input.Reset, Done: input.Done, ExpiresAt: expiresAt}
+	return e.broadcast(ctx, agentUser, subscription.ConnectionID, input.ChatID, frame)
 }
 
-func (e *Ephemeral) authorizeAgentRun(ctx context.Context, user identity.User, authentication access.Identity, runID, chatID string, threadRootID *string) error {
-	if authentication.AuthenticationKind != "api_key" || authentication.ActorID != user.ActorID || authentication.OrgID != user.OrgID || !slices.Contains(authentication.Scopes, "runtime:execute") {
-		return ErrEphemeralForbidden
+func (e *Ephemeral) authorizeAgentRun(ctx context.Context, user identity.User, authentication access.Identity, runID, leaseToken, chatID string, threadRootID *string) (string, error) {
+	authorizer := agentauthz.New()
+	if !authorizer.CanWork(user, authentication) {
+		return "", ErrEphemeralForbidden
 	}
-	if err := e.authorizeScope(ctx, user, chatID, threadRootID); err != nil {
-		return err
+	var agentID string
+	err := e.pool.QueryRow(ctx, `SELECT run.agent_id FROM agent_runs run
+		JOIN chat_members member ON member.org_id=run.org_id AND member.chat_id=run.chat_id AND member.actor_id=run.agent_id AND member.removed_at IS NULL
+		WHERE run.org_id=$1 AND run.id=$2 AND run.lease_token=$3 AND run.chat_id=$4
+		AND run.thread_root_id IS NOT DISTINCT FROM $5::uuid AND run.status='running' AND run.lease_expires_at>now()
+		AND ($6::boolean OR run.agent_id=$7)`, user.OrgID, runID, leaseToken, chatID, threadRootID, authorizer.IsOrganizationWorker(user, authentication), user.ActorID).Scan(&agentID)
+	if err != nil {
+		return "", ErrEphemeralForbidden
 	}
-	var allowed bool
-	if err := e.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM agent_runs WHERE org_id=$1 AND agent_id=$2 AND id=$3 AND chat_id=$4 AND thread_root_id IS NOT DISTINCT FROM $5::uuid AND status='running')`, user.OrgID, user.ActorID, runID, chatID, threadRootID).Scan(&allowed); err != nil {
-		return err
-	}
-	if !allowed {
-		return ErrEphemeralForbidden
-	}
-	return nil
+	return agentID, nil
 }
 
 func validAgentState(state string) bool {

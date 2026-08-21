@@ -15,6 +15,7 @@ import (
 type invokeAgentToolRequest struct {
 	Arguments     json.RawMessage `json:"arguments"`
 	RunID         string          `json:"run_id"`
+	LeaseToken    string          `json:"lease_token"`
 	CorrelationID string          `json:"correlation_id"`
 	Confirmed     bool            `json:"confirmed"`
 }
@@ -30,7 +31,7 @@ func (h *identityHandlers) invokeAgentTool(w standardhttp.ResponseWriter, r *sta
 		return
 	}
 	auth := authFromContext(r.Context())
-	result, err := h.agentTools.Invoke(r.Context(), agenttool.Invocation{User: auth.User, Identity: auth.Identity, Name: chi.URLParam(r, "toolName"), Arguments: input.Arguments, RunID: input.RunID, CorrelationID: input.CorrelationID, Confirmed: input.Confirmed})
+	result, err := h.agentTools.Invoke(r.Context(), agenttool.Invocation{User: auth.User, Identity: auth.Identity, Name: chi.URLParam(r, "toolName"), Arguments: input.Arguments, RunID: input.RunID, LeaseToken: input.LeaseToken, CorrelationID: input.CorrelationID, Confirmed: input.Confirmed})
 	if err != nil {
 		h.writeAgentToolError(w, r, err)
 		return

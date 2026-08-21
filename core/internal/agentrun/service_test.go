@@ -31,9 +31,15 @@ func TestAgentWorkerLeaseAndCheckpointContract(t *testing.T) {
 	dailyLimit := "0.01500000"
 	created, err := agents.Create(t.Context(), owner, agent.CreateInput{
 		DisplayName: "Runtime", Handle: "runtime", Kind: "builtin", Enabled: true,
-		AllowedScopes: []agent.Scope{agent.ScopeMessagesRead, agent.ScopeMessagesWrite, agent.ScopeRuntimeExecute}, ChatIDs: []string{runTestChatID},
+		AllowedScopes: []agent.Scope{agent.ScopeMessagesRead, agent.ScopeMessagesWrite, agent.ScopeRuntimeExecute, agent.ScopeRuntimeWorker}, ChatIDs: []string{runTestChatID},
 		Provider: "openai", Model: "test", ExternalDataSharingApproved: true,
 		DailyCostLimit: &dailyLimit,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	organizationKey, err := agents.CreateKey(t.Context(), owner, created.ID, agent.CreateKeyInput{
+		Name: "organization-worker", Scopes: []agent.Scope{agent.ScopeRuntimeWorker}, RateLimitPerMinute: 100,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -187,6 +193,37 @@ func TestAgentWorkerLeaseAndCheckpointContract(t *testing.T) {
 	}
 	if _, err := service.ClaimForAgent(t.Context(), owner, access.Identity{}, agentrun.ClaimInput{WorkerID: workerID}); !errors.Is(err, agentrun.ErrForbidden) {
 		t.Fatalf("human worker claim error = %v", err)
+	}
+	second, err := agents.Create(t.Context(), owner, agent.CreateInput{
+		DisplayName: "Second Runtime", Handle: "second_runtime", Kind: "builtin", Enabled: true,
+		AllowedScopes: []agent.Scope{agent.ScopeMessagesRead, agent.ScopeMessagesWrite, agent.ScopeRuntimeExecute}, ChatIDs: []string{runTestChatID},
+		Provider: "openai", Model: "test", ExternalDataSharingApproved: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondRun, err := service.Invoke(t.Context(), owner, second.ID, agentrun.InvokeInput{
+		ChatID: runTestChatID, ClientRunID: mustRunID(t), Input: json.RawMessage(`{"prompt":"organization worker"}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	organizationUser, organizationAuthentication, err := agents.AuthenticateKey(t.Context(), organizationKey.Secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	organizationClaim, err := service.ClaimForAgent(t.Context(), organizationUser, organizationAuthentication, agentrun.ClaimInput{WorkerID: mustRunID(t), LeaseSeconds: 30})
+	if err != nil || organizationClaim.ID != secondRun.ID || organizationClaim.AgentID != second.ID {
+		t.Fatalf("organization worker claim = %+v, err=%v", organizationClaim, err)
+	}
+	if _, err := service.HeartbeatForAgent(t.Context(), agentUser, authentication, secondRun.ID, agentrun.LeaseInput{LeaseToken: organizationClaim.LeaseToken, LeaseSeconds: 30}); !errors.Is(err, agentrun.ErrConflict) {
+		t.Fatalf("agent-specific worker used another agent lease: %v", err)
+	}
+	if targetAgentID, err := service.RuntimeAgentID(t.Context(), organizationUser, organizationAuthentication, secondRun.ID, organizationClaim.LeaseToken); err != nil || targetAgentID != second.ID {
+		t.Fatalf("organization worker target = %q, err=%v", targetAgentID, err)
+	}
+	if _, err := service.FailForAgent(t.Context(), organizationUser, organizationAuthentication, secondRun.ID, agentrun.RuntimeFailure{LeaseToken: organizationClaim.LeaseToken, ErrorCode: "test_finished"}); err != nil {
+		t.Fatal(err)
 	}
 
 	checkpoint, err := service.GetRuntimeCheckpoint(t.Context(), agentUser, authentication, "builtin-runtime")

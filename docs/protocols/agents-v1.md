@@ -4,7 +4,8 @@
 
 ## Аутентификация и границы доверия
 
-- Worker использует agent API key с минимальным scope `runtime:execute`; tools требуют собственные scopes.
+- Выделенный worker агента использует API key со scope `runtime:execute`. Общий worker пространства использует `runtime:worker` и может забирать runs всех агентов только своей организации.
+- `runtime:worker` не даёт прав tools сам по себе: после claim core вычисляет целевого агента из `run_id + lease_token` и применяет его allowlist, membership и настройки.
 - `lease_token` — краткоживущая capability конкретного run'а. Её нельзя логировать, сохранять в result summary или передавать в UI.
 - Сообщение от agent actor обязательно содержит `run_id`; core атомарно сохраняет provenance и chain depth. Публикация без run возвращает `agent_run_required`.
 - Пользовательский текст, содержимое файлов и tool results являются недоверенными данными, а не инструкциями.
@@ -19,6 +20,8 @@
 5. `/complete` переводит run в `completed`; usage и стоимость берутся из записанных provider calls, а не из self-reported итогов runtime.
 6. `/fail` принимает стабильный `error_code`. Retryable run возвращается в очередь до `max_attempts` и общего execution deadline.
 7. `409 agent_conflict` означает потерю lease, отмену или уже завершённый run. Worker не должен повторять side effect после такого ответа.
+
+Один runtime-процесс может держать несколько claim-loop'ов (`COMA_RUNTIME_CONCURRENCY`, по умолчанию 4). Каждый loop имеет отдельный UUID worker'а; lease не может быть использован для другого run или агента. Получение MCP-конфигурации, provider proxy, tools и realtime frames требуют тот же `run_id + lease_token`.
 
 `run.input` для event trigger содержит `event_seq`, `event_type`, `subject_id`, `message_body`, `source_chat_id`, `thread_root_id`, `trigger_type`; для command также `command` и `command_arguments`. Schedule-run содержит `scheduled_for`, `since_last_run`, `chat_id` и `timezone`.
 

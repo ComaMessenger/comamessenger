@@ -4958,14 +4958,24 @@
       }
     },
     "/api/v1/agent-runtime/mcp-servers": {
-      "get": {
+      "post": {
         "operationId": "listAgentRuntimeMcpServers",
-        "description": "Returns enabled MCP endpoints and decrypted headers only to the authenticated agent runtime over a no-store response.",
+        "description": "Returns enabled MCP endpoints for the agent bound to an active run lease over a no-store response.",
         "security": [
           {
             "bearerAuth": []
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentRuntimeRunLeaseRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Runtime-only MCP configurations.",
@@ -5919,6 +5929,7 @@
         "required": [
           "op",
           "run_id",
+          "lease_token",
           "chat_id",
           "thread_root_id",
           "state"
@@ -5931,6 +5942,10 @@
             ]
           },
           "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "lease_token": {
             "type": "string",
             "format": "uuid"
           },
@@ -5964,6 +5979,7 @@
         "required": [
           "op",
           "run_id",
+          "lease_token",
           "chat_id",
           "thread_root_id",
           "stream_id",
@@ -5980,6 +5996,10 @@
             ]
           },
           "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "lease_token": {
             "type": "string",
             "format": "uuid"
           },
@@ -6728,7 +6748,8 @@
           "members:read",
           "memory:read",
           "memory:write",
-          "runtime:execute"
+          "runtime:execute",
+          "runtime:worker"
         ]
       },
       "Agent": {
@@ -7417,6 +7438,8 @@
         "additionalProperties": false,
         "required": [
           "arguments",
+          "run_id",
+          "lease_token",
           "correlation_id"
         ],
         "properties": {
@@ -7425,6 +7448,10 @@
             "additionalProperties": true
           },
           "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "lease_token": {
             "type": "string",
             "format": "uuid"
           },
@@ -7529,6 +7556,24 @@
             "minimum": 5,
             "maximum": 300,
             "default": 60
+          }
+        }
+      },
+      "AgentRuntimeRunLeaseRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "run_id",
+          "lease_token"
+        ],
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "lease_token": {
+            "type": "string",
+            "format": "uuid"
           }
         }
       },

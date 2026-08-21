@@ -321,11 +321,12 @@ func (service *Service) Get(ctx context.Context, current identity.User, runID st
 }
 
 func (service *Service) Claim(ctx context.Context, workerID string, lease time.Duration) (Run, error) {
-	return service.claim(ctx, "", workerID, lease)
+	return service.claim(ctx, "", "", workerID, lease)
 }
 
 func (service *Service) ClaimForAgent(ctx context.Context, current identity.User, authentication access.Identity, input ClaimInput) (ClaimedRun, error) {
-	if !isAgentWorker(current, authentication) {
+	authorizer := agentauthz.New()
+	if !authorizer.CanWork(current, authentication) {
 		return ClaimedRun{}, ErrForbidden
 	}
 	if input.LeaseSeconds == 0 {
@@ -334,9 +335,13 @@ func (service *Service) ClaimForAgent(ctx context.Context, current identity.User
 	if input.WaitSeconds < 0 || input.WaitSeconds > 30 {
 		return ClaimedRun{}, ErrInvalid
 	}
+	agentID := current.ActorID
+	if authorizer.IsOrganizationWorker(current, authentication) {
+		agentID = ""
+	}
 	deadline := service.now().Add(time.Duration(input.WaitSeconds) * time.Second)
 	for {
-		run, err := service.claim(ctx, current.ActorID, input.WorkerID, time.Duration(input.LeaseSeconds)*time.Second)
+		run, err := service.claim(ctx, current.OrgID, agentID, input.WorkerID, time.Duration(input.LeaseSeconds)*time.Second)
 		if err == nil {
 			if run.LeaseToken == nil {
 				return ClaimedRun{}, ErrConflict
@@ -364,7 +369,7 @@ func (service *Service) ClaimForAgent(ctx context.Context, current identity.User
 	}
 }
 
-func (service *Service) claim(ctx context.Context, agentID, workerID string, lease time.Duration) (Run, error) {
+func (service *Service) claim(ctx context.Context, orgID, agentID, workerID string, lease time.Duration) (Run, error) {
 	if uuid.Validate(workerID) != nil || lease < 5*time.Second || lease > 5*time.Minute {
 		return Run{}, ErrInvalid
 	}
@@ -380,11 +385,16 @@ func (service *Service) claim(ctx context.Context, agentID, workerID string, lea
 	if agentID != "" {
 		agentFilter = agentID
 	}
+	var orgFilter any
+	if orgID != "" {
+		orgFilter = orgID
+	}
 	rows, err := tx.Query(ctx, `SELECT run.id,run.agent_id,run.chat_id,agent.per_chat_concurrency
 		FROM agent_runs run JOIN agents agent ON agent.org_id=run.org_id AND agent.actor_id=run.agent_id
 		WHERE run.status='queued' AND run.next_attempt_at<=now() AND run.timeout_at>now()
-			AND run.cancel_requested_at IS NULL AND agent.enabled AND ($1::uuid IS NULL OR run.agent_id=$1)
-		ORDER BY run.next_attempt_at,run.created_at FOR UPDATE OF run SKIP LOCKED LIMIT 20`, agentFilter)
+			AND run.cancel_requested_at IS NULL AND agent.enabled AND ($1::uuid IS NULL OR run.org_id=$1)
+			AND ($2::uuid IS NULL OR run.agent_id=$2)
+		ORDER BY run.next_attempt_at,run.created_at FOR UPDATE OF run SKIP LOCKED LIMIT 20`, orgFilter, agentFilter)
 	if err != nil {
 		return Run{}, err
 	}
@@ -443,9 +453,6 @@ func (service *Service) claim(ctx context.Context, agentID, workerID string, lea
 }
 
 func (service *Service) HeartbeatForAgent(ctx context.Context, current identity.User, authentication access.Identity, runID string, input LeaseInput) (Run, error) {
-	if !isAgentWorker(current, authentication) {
-		return Run{}, ErrForbidden
-	}
 	if input.LeaseSeconds == 0 {
 		input.LeaseSeconds = 60
 	}
@@ -453,8 +460,12 @@ func (service *Service) HeartbeatForAgent(ctx context.Context, current identity.
 	if uuid.Validate(runID) != nil || uuid.Validate(input.LeaseToken) != nil || lease < 5*time.Second || lease > 5*time.Minute {
 		return Run{}, ErrInvalid
 	}
+	agentID, err := service.runtimeAgentID(ctx, current, authentication, runID, input.LeaseToken)
+	if err != nil {
+		return Run{}, err
+	}
 	result, err := service.pool.Exec(ctx, `UPDATE agent_runs SET lease_expires_at=$5
-		WHERE org_id=$1 AND agent_id=$2 AND id=$3 AND lease_token=$4 AND status='running'`, current.OrgID, current.ActorID,
+		WHERE org_id=$1 AND agent_id=$2 AND id=$3 AND lease_token=$4 AND status='running'`, current.OrgID, agentID,
 		runID, input.LeaseToken, service.now().UTC().Add(lease))
 	if err != nil {
 		return Run{}, err
@@ -466,13 +477,11 @@ func (service *Service) HeartbeatForAgent(ctx context.Context, current identity.
 }
 
 func (service *Service) CompleteForAgent(ctx context.Context, current identity.User, authentication access.Identity, runID string, input RuntimeCompletion) (Run, error) {
-	if !isAgentWorker(current, authentication) {
-		return Run{}, ErrForbidden
-	}
-	if err := service.authorizeAgentRun(ctx, current, runID); err != nil {
+	agentID, err := service.runtimeAgentID(ctx, current, authentication, runID, input.LeaseToken)
+	if err != nil {
 		return Run{}, err
 	}
-	usage, err := service.providerUsage(ctx, current.OrgID, current.ActorID, runID, input.LeaseToken)
+	usage, err := service.providerUsage(ctx, current.OrgID, agentID, runID, input.LeaseToken)
 	if err != nil {
 		return Run{}, err
 	}
@@ -483,17 +492,14 @@ func (service *Service) CompleteForAgent(ctx context.Context, current identity.U
 }
 
 func (service *Service) FailForAgent(ctx context.Context, current identity.User, authentication access.Identity, runID string, input RuntimeFailure) (Run, error) {
-	if !isAgentWorker(current, authentication) {
-		return Run{}, ErrForbidden
-	}
-	if err := service.authorizeAgentRun(ctx, current, runID); err != nil {
+	if _, err := service.runtimeAgentID(ctx, current, authentication, runID, input.LeaseToken); err != nil {
 		return Run{}, err
 	}
 	return service.Fail(ctx, runID, input.LeaseToken, input.ErrorCode)
 }
 
 func (service *Service) GetRuntimeCheckpoint(ctx context.Context, current identity.User, authentication access.Identity, consumer string) (RuntimeCheckpoint, error) {
-	if !isAgentWorker(current, authentication) {
+	if !agentauthz.New().CanWork(current, authentication) {
 		return RuntimeCheckpoint{}, ErrForbidden
 	}
 	consumer = strings.ToLower(strings.TrimSpace(consumer))
@@ -512,7 +518,7 @@ func (service *Service) GetRuntimeCheckpoint(ctx context.Context, current identi
 }
 
 func (service *Service) UpdateRuntimeCheckpoint(ctx context.Context, current identity.User, authentication access.Identity, consumer string, input UpdateRuntimeCheckpoint) (RuntimeCheckpoint, error) {
-	if !isAgentWorker(current, authentication) {
+	if !agentauthz.New().CanWork(current, authentication) {
 		return RuntimeCheckpoint{}, ErrForbidden
 	}
 	consumer = strings.ToLower(strings.TrimSpace(consumer))
@@ -547,9 +553,6 @@ func (service *Service) StartProviderCallServer(ctx context.Context, current ide
 }
 
 func (service *Service) startProviderCall(ctx context.Context, current identity.User, authentication access.Identity, input StartProviderCallInput, reservedCost string) (ProviderCall, error) {
-	if !isAgentWorker(current, authentication) {
-		return ProviderCall{}, ErrForbidden
-	}
 	input.Currency = strings.ToUpper(strings.TrimSpace(input.Currency))
 	if input.Currency == "" {
 		input.Currency = "USD"
@@ -558,13 +561,17 @@ func (service *Service) startProviderCall(ctx context.Context, current identity.
 		!costPattern.MatchString(reservedCost) || input.Currency != "USD" {
 		return ProviderCall{}, ErrInvalid
 	}
+	agentID, err := service.runtimeAgentID(ctx, current, authentication, input.RunID, input.LeaseToken)
+	if err != nil {
+		return ProviderCall{}, err
+	}
 	input.ReservedCost = reservedCost
 	tx, err := service.pool.Begin(ctx)
 	if err != nil {
 		return ProviderCall{}, err
 	}
 	defer tx.Rollback(ctx)
-	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "agent-budget/"+current.ActorID); err != nil {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "agent-budget/"+agentID); err != nil {
 		return ProviderCall{}, err
 	}
 	var correlationID, provider, model string
@@ -572,7 +579,7 @@ func (service *Service) startProviderCall(ctx context.Context, current identity.
 		JOIN agents agent ON agent.org_id=run.org_id AND agent.actor_id=run.agent_id
 		WHERE run.org_id=$1 AND run.agent_id=$2 AND run.id=$3 AND run.lease_token=$4 AND run.status='running'
 		AND agent.external_data_sharing_approved FOR UPDATE OF run`,
-		current.OrgID, current.ActorID, input.RunID, input.LeaseToken).Scan(&correlationID, &provider, &model)
+		current.OrgID, agentID, input.RunID, input.LeaseToken).Scan(&correlationID, &provider, &model)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ProviderCall{}, ErrConflict
 	}
@@ -586,7 +593,7 @@ func (service *Service) startProviderCall(ctx context.Context, current identity.
 		(agent.monthly_cost_limit IS NULL OR COALESCE((SELECT sum(usage.cost) FROM agent_usage usage WHERE usage.agent_id=agent.actor_id AND usage.created_at>=date_trunc('month',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'),0)
 			 + COALESCE((SELECT sum(call.reserved_cost) FROM agent_provider_calls call WHERE call.agent_id=agent.actor_id AND call.created_at>=date_trunc('month',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AND call.status='started'),0) + $2::numeric <= agent.monthly_cost_limit)
 		,((SELECT count(*) FROM agent_provider_calls recent WHERE recent.agent_id=agent.actor_id AND recent.created_at>=now()-interval '1 minute') < agent.provider_rate_limit_per_minute)
-		FROM agents agent WHERE agent.actor_id=$1`, current.ActorID, input.ReservedCost).Scan(&dailyAllowed, &monthlyAllowed, &providerRateAllowed)
+		FROM agents agent WHERE agent.actor_id=$1`, agentID, input.ReservedCost).Scan(&dailyAllowed, &monthlyAllowed, &providerRateAllowed)
 	if err != nil {
 		return ProviderCall{}, err
 	}
@@ -597,7 +604,7 @@ func (service *Service) startProviderCall(ctx context.Context, current identity.
 		return ProviderCall{}, ErrRateLimited
 	}
 	_, err = tx.Exec(ctx, `INSERT INTO agent_provider_calls(id,org_id,agent_id,run_id,correlation_id,provider,model,reserved_cost,currency)
-		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(id) DO NOTHING`, input.CallID, current.OrgID, current.ActorID,
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(id) DO NOTHING`, input.CallID, current.OrgID, agentID,
 		input.RunID, correlationID, provider, model, input.ReservedCost, input.Currency)
 	if err != nil {
 		return ProviderCall{}, err
@@ -605,7 +612,7 @@ func (service *Service) startProviderCall(ctx context.Context, current identity.
 	if err := tx.Commit(ctx); err != nil {
 		return ProviderCall{}, err
 	}
-	return service.providerCall(ctx, current.OrgID, current.ActorID, input.CallID)
+	return service.providerCall(ctx, current.OrgID, agentID, input.CallID)
 }
 
 func (service *Service) FinishProviderCall(ctx context.Context, current identity.User, authentication access.Identity, callID string, input FinishProviderCallInput) (ProviderCall, error) {
@@ -619,9 +626,6 @@ func (service *Service) FinishProviderCallServer(ctx context.Context, current id
 }
 
 func (service *Service) finishProviderCall(ctx context.Context, current identity.User, authentication access.Identity, callID string, input FinishProviderCallInput, trustedUsage bool) (ProviderCall, error) {
-	if !isAgentWorker(current, authentication) {
-		return ProviderCall{}, ErrForbidden
-	}
 	input.Currency = strings.ToUpper(strings.TrimSpace(input.Currency))
 	if input.Currency == "" {
 		input.Currency = "USD"
@@ -633,6 +637,10 @@ func (service *Service) finishProviderCall(ctx context.Context, current identity
 		(input.Status != "completed" && input.Status != "failed") || !costPattern.MatchString(input.ActualCost) || input.Currency != "USD" ||
 		input.InputTokens < 0 || input.OutputTokens < 0 || !validPriceSource(input.PriceSource) {
 		return ProviderCall{}, ErrInvalid
+	}
+	agentID, err := service.runtimeAgentID(ctx, current, authentication, input.RunID, input.LeaseToken)
+	if err != nil {
+		return ProviderCall{}, err
 	}
 	actualCost := input.ActualCost
 	priceSource := input.PriceSource
@@ -652,7 +660,7 @@ func (service *Service) finishProviderCall(ctx context.Context, current identity
 		FROM agent_runs run WHERE call.org_id=$1 AND call.agent_id=$2 AND call.id=$3 AND call.run_id=$4 AND call.status='started'
 		AND run.id=call.run_id AND run.lease_token=$5 AND run.status='running' AND run.agent_id=$2 AND run.org_id=$1
 		RETURNING call.correlation_id,call.provider,call.model`,
-		current.OrgID, current.ActorID, callID, input.RunID, input.LeaseToken, input.Status, input.InputTokens, input.OutputTokens, actualCost, priceSource, trustedUsage).Scan(&correlationID, &provider, &model)
+		current.OrgID, agentID, callID, input.RunID, input.LeaseToken, input.Status, input.InputTokens, input.OutputTokens, actualCost, priceSource, trustedUsage).Scan(&correlationID, &provider, &model)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ProviderCall{}, ErrConflict
 	}
@@ -666,14 +674,14 @@ func (service *Service) finishProviderCall(ctx context.Context, current identity
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO agent_usage(id,org_id,agent_id,run_id,provider_call_id,correlation_id,provider,model,input_tokens,output_tokens,cost,currency,price_source)
 			VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'USD',$12) ON CONFLICT(provider_call_id) DO NOTHING`,
-			usageID, current.OrgID, current.ActorID, input.RunID, callID, correlationID, provider, model, input.InputTokens, input.OutputTokens, actualCost, priceSource); err != nil {
+			usageID, current.OrgID, agentID, input.RunID, callID, correlationID, provider, model, input.InputTokens, input.OutputTokens, actualCost, priceSource); err != nil {
 			return ProviderCall{}, err
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return ProviderCall{}, err
 	}
-	return service.providerCall(ctx, current.OrgID, current.ActorID, callID)
+	return service.providerCall(ctx, current.OrgID, agentID, callID)
 }
 
 func (service *Service) providerCall(ctx context.Context, orgID, agentID, callID string) (ProviderCall, error) {
@@ -729,21 +737,22 @@ func (service *Service) providerUsage(ctx context.Context, orgID, agentID, runID
 }
 
 func (service *Service) StartMCPToolCall(ctx context.Context, current identity.User, authentication access.Identity, input StartMCPToolCallInput) (MCPToolCall, error) {
-	if !isAgentWorker(current, authentication) {
-		return MCPToolCall{}, ErrForbidden
-	}
 	if uuid.Validate(input.CallID) != nil || uuid.Validate(input.RunID) != nil || uuid.Validate(input.LeaseToken) != nil || uuid.Validate(input.ServerID) != nil ||
 		!mcpToolPattern.MatchString(input.ToolName) || (input.Mode != "read" && input.Mode != "write") || input.InputBytes < 0 || input.InputBytes > 262144 {
 		return MCPToolCall{}, ErrInvalid
 	}
+	agentID, err := service.runtimeAgentID(ctx, current, authentication, input.RunID, input.LeaseToken)
+	if err != nil {
+		return MCPToolCall{}, err
+	}
 	summary, _ := json.Marshal(map[string]any{"input_bytes": input.InputBytes, "mcp_server_id": input.ServerID})
 	var result MCPToolCall
-	err := service.pool.QueryRow(ctx, `INSERT INTO agent_tool_calls(id,org_id,agent_id,run_id,correlation_id,tool_name,mode,required_scope,input_summary)
+	err = service.pool.QueryRow(ctx, `INSERT INTO agent_tool_calls(id,org_id,agent_id,run_id,correlation_id,tool_name,mode,required_scope,input_summary)
 		SELECT $3,run.org_id,run.agent_id,run.id,run.correlation_id,'mcp__' || server.name || '__' || $7,$8,'mcp:' || server.name,$9
 		FROM agent_runs run JOIN agent_mcp_servers server ON server.org_id=run.org_id AND server.agent_id=run.agent_id AND server.id=$6
 		WHERE run.org_id=$1 AND run.agent_id=$2 AND run.id=$4 AND run.lease_token=$5 AND run.status='running' AND run.lease_expires_at>now()
 		AND server.enabled AND $7=ANY(server.allowed_tools) AND ($8='read' OR NOT server.require_write_confirmation)
-		RETURNING id,correlation_id,tool_name,mode`, current.OrgID, current.ActorID, input.CallID, input.RunID, input.LeaseToken, input.ServerID, input.ToolName, input.Mode, summary).Scan(&result.ID, &result.CorrelationID, &result.ToolName, &result.Mode)
+		RETURNING id,correlation_id,tool_name,mode`, current.OrgID, agentID, input.CallID, input.RunID, input.LeaseToken, input.ServerID, input.ToolName, input.Mode, summary).Scan(&result.ID, &result.CorrelationID, &result.ToolName, &result.Mode)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return MCPToolCall{}, ErrForbidden
 	}
@@ -754,12 +763,13 @@ func (service *Service) StartMCPToolCall(ctx context.Context, current identity.U
 }
 
 func (service *Service) FinishMCPToolCall(ctx context.Context, current identity.User, authentication access.Identity, callID string, input FinishMCPToolCallInput) error {
-	if !isAgentWorker(current, authentication) {
-		return ErrForbidden
-	}
 	if uuid.Validate(callID) != nil || uuid.Validate(input.RunID) != nil || uuid.Validate(input.LeaseToken) != nil ||
 		(input.Status != "completed" && input.Status != "failed") || input.OutputBytes < 0 || input.OutputBytes > 4194304 || len(input.ErrorCode) > 120 || (input.Status == "completed" && input.ErrorCode != "") {
 		return ErrInvalid
+	}
+	agentID, err := service.runtimeAgentID(ctx, current, authentication, input.RunID, input.LeaseToken)
+	if err != nil {
+		return err
 	}
 	auditID, err := id.New()
 	if err != nil {
@@ -774,7 +784,7 @@ func (service *Service) FinishMCPToolCall(ctx context.Context, current identity.
 	err = tx.QueryRow(ctx, `UPDATE agent_tool_calls call SET status=$6,output_bytes=$7,error_code=$8,finished_at=now()
 		FROM agent_runs run WHERE call.org_id=$1 AND call.agent_id=$2 AND call.id=$3 AND call.run_id=$4 AND call.status='running'
 		AND run.org_id=call.org_id AND run.agent_id=call.agent_id AND run.id=call.run_id AND run.lease_token=$5 AND run.status='running'
-		RETURNING call.correlation_id,call.tool_name,call.mode`, current.OrgID, current.ActorID, callID, input.RunID, input.LeaseToken, input.Status, input.OutputBytes, input.ErrorCode).Scan(&correlationID, &toolName, &mode)
+		RETURNING call.correlation_id,call.tool_name,call.mode`, current.OrgID, agentID, callID, input.RunID, input.LeaseToken, input.Status, input.OutputBytes, input.ErrorCode).Scan(&correlationID, &toolName, &mode)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrConflict
 	}
@@ -783,7 +793,7 @@ func (service *Service) FinishMCPToolCall(ctx context.Context, current identity.
 	}
 	metadata, _ := json.Marshal(map[string]any{"tool_call_id": callID, "run_id": input.RunID, "correlation_id": correlationID, "tool": toolName, "mode": mode, "status": input.Status, "error_code": input.ErrorCode, "output_bytes": input.OutputBytes})
 	if _, err := tx.Exec(ctx, `INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata)
-		VALUES($1,$2,$3,'agent.tool.call','agent',$3,$4)`, auditID, current.OrgID, current.ActorID, metadata); err != nil {
+		VALUES($1,$2,$3,'agent.tool.call','agent',$3,$4)`, auditID, current.OrgID, agentID, metadata); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -892,8 +902,22 @@ func validPriceSource(value string) bool {
 func canManage(current identity.User) bool {
 	return agentauthz.New().CanManage(current)
 }
-func isAgentWorker(current identity.User, authentication access.Identity) bool {
-	return agentauthz.New().IsRuntime(current, authentication)
+func (service *Service) runtimeAgentID(ctx context.Context, current identity.User, authentication access.Identity, runID, leaseToken string) (string, error) {
+	authorizer := agentauthz.New()
+	if !authorizer.CanWork(current, authentication) {
+		return "", ErrForbidden
+	}
+	var agentID string
+	err := service.pool.QueryRow(ctx, `SELECT agent_id FROM agent_runs WHERE org_id=$1 AND id=$2 AND lease_token=$3 AND status='running' AND lease_expires_at>now()
+		AND ($4::boolean OR agent_id=$5)`, current.OrgID, runID, leaseToken, authorizer.IsOrganizationWorker(current, authentication), current.ActorID).Scan(&agentID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrConflict
+	}
+	return agentID, err
+}
+
+func (service *Service) RuntimeAgentID(ctx context.Context, current identity.User, authentication access.Identity, runID, leaseToken string) (string, error) {
+	return service.runtimeAgentID(ctx, current, authentication, runID, leaseToken)
 }
 
 const runSelect = `SELECT run.id,run.org_id,run.agent_id,run.trigger_id,run.trigger_event_seq,run.scheduled_for,run.chat_id,run.thread_root_id,run.requested_by,run.client_run_id,run.correlation_id,run.chain_depth,run.status,run.provider,run.model,run.input,run.result_summary,run.input_tokens,run.output_tokens,run.cost::text,run.currency,run.error_code,run.attempt,run.max_attempts,run.created_at,run.started_at,run.finished_at,run.cancel_requested_at,run.timeout_at,run.lease_token FROM agent_runs run`

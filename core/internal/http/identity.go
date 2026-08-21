@@ -168,7 +168,7 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Post("/agents/{agentID}/mcp-servers", h.createAgentMCPServer)
 			protected.Patch("/agents/{agentID}/mcp-servers/{serverID}", h.updateAgentMCPServer)
 			protected.Delete("/agents/{agentID}/mcp-servers/{serverID}", h.deleteAgentMCPServer)
-			protected.Get("/agent-runtime/mcp-servers", h.agentRuntimeMCPServers)
+			protected.Post("/agent-runtime/mcp-servers", h.agentRuntimeMCPServers)
 		}
 		if h.agentTools != nil {
 			protected.Get("/agent-tools", h.listAgentTools)
@@ -918,7 +918,9 @@ func (h *identityHandlers) authenticate(next standardhttp.Handler) standardhttp.
 		}
 		if accessIdentity.AuthenticationKind == "api_key" {
 			required, allowed := requiredAgentScope(r.Method, r.URL.Path)
-			if !allowed || !agentauthz.HasScope(accessIdentity.Scopes, required) {
+			hasRequiredScope := agentauthz.HasScope(accessIdentity.Scopes, required) ||
+				(required == string(agent.ScopeRuntimeExecute) && agentauthz.HasScope(accessIdentity.Scopes, string(agent.ScopeRuntimeWorker)))
+			if !allowed || !hasRequiredScope {
 				h.writeError(w, r, standardhttp.StatusForbidden, "agent_scope_required", "The agent key does not allow this API operation.")
 				return
 			}
@@ -987,8 +989,7 @@ func requiredAgentScope(method, path string) (string, bool) {
 
 func runtimeAgentRoute(method string, parts []string) bool {
 	if method == standardhttp.MethodGet {
-		return (len(parts) == 2 && parts[0] == "checkpoints") ||
-			(len(parts) == 1 && parts[0] == "mcp-servers")
+		return len(parts) == 2 && parts[0] == "checkpoints"
 	}
 	if method == standardhttp.MethodPut {
 		return len(parts) == 2 && parts[0] == "checkpoints"
@@ -999,6 +1000,7 @@ func runtimeAgentRoute(method string, parts []string) bool {
 	return (len(parts) == 2 && parts[0] == "runs" && parts[1] == "claim") ||
 		(len(parts) == 3 && parts[0] == "runs" && (parts[2] == "heartbeat" || parts[2] == "complete" || parts[2] == "fail")) ||
 		(len(parts) == 2 && parts[0] == "provider" && parts[1] == "chat") ||
+		(len(parts) == 1 && parts[0] == "mcp-servers") ||
 		(len(parts) == 1 && (parts[0] == "provider-calls" || parts[0] == "mcp-tool-calls")) ||
 		(len(parts) == 3 && (parts[0] == "provider-calls" || parts[0] == "mcp-tool-calls") && parts[2] == "finish")
 }

@@ -106,7 +106,7 @@ func TestAgentStatusAndStreamingRequireRuntimeRun(t *testing.T) {
 	}
 	agentUser := identity.User{ActorID: agentID, OrgID: member.OrgID, Status: "active"}
 	authentication := access.Identity{AuthenticationKind: "api_key", ActorID: agentID, OrgID: member.OrgID, KeyID: uuid.NewString(), Scopes: []string{"messages:read", "runtime:execute"}}
-	status := agentStatusFrame{Op: "agent.status", RunID: runID, ChatID: chatID, State: "thinking"}
+	status := agentStatusFrame{Op: "agent.status", RunID: runID, LeaseToken: leaseToken, ChatID: chatID, State: "thinking"}
 	if err := service.AgentStatus(t.Context(), agentUser, access.Identity{}, sender, status); !errors.Is(err, ErrEphemeralForbidden) {
 		t.Fatalf("human status error = %v", err)
 	}
@@ -119,7 +119,7 @@ func TestAgentStatusAndStreamingRequireRuntimeRun(t *testing.T) {
 		t.Fatalf("agent status = %+v", receivedStatus)
 	}
 	streamID := uuid.NewString()
-	if err := service.MessageStreaming(t.Context(), agentUser, authentication, sender, messageStreamingFrame{Op: "message.streaming", RunID: runID, ChatID: chatID, StreamID: streamID, Index: 1, Delta: "Hello"}); err != nil {
+	if err := service.MessageStreaming(t.Context(), agentUser, authentication, sender, messageStreamingFrame{Op: "message.streaming", RunID: runID, LeaseToken: leaseToken, ChatID: chatID, StreamID: streamID, Index: 1, Delta: "Hello"}); err != nil {
 		t.Fatal(err)
 	}
 	var stream messageStreamingEventFrame
@@ -127,7 +127,7 @@ func TestAgentStatusAndStreamingRequireRuntimeRun(t *testing.T) {
 	if stream.StreamID != streamID || stream.Delta != "Hello" || stream.Done {
 		t.Fatalf("message stream = %+v", stream)
 	}
-	if err := service.MessageStreaming(t.Context(), agentUser, authentication, sender, messageStreamingFrame{Op: "message.streaming", RunID: runID, ChatID: chatID, StreamID: streamID, Index: 2, Delta: " world"}); err != nil {
+	if err := service.MessageStreaming(t.Context(), agentUser, authentication, sender, messageStreamingFrame{Op: "message.streaming", RunID: runID, LeaseToken: leaseToken, ChatID: chatID, StreamID: streamID, Index: 2, Delta: " world"}); err != nil {
 		t.Fatalf("streaming should use its dedicated higher rate limit: %v", err)
 	}
 }

@@ -25,4 +25,8 @@ func TestAuthorizer(t *testing.T) {
 	if authorizer.IsRuntime(agent, runtime) || authorizer.CanInvokeTool(agent, runtime, "messages:read") {
 		t.Fatal("runtime policy accepted another actor's key")
 	}
+	worker := access.Identity{AuthenticationKind: "api_key", ActorID: "agent", OrgID: "org", KeyID: "key", Scopes: []string{"runtime:worker"}}
+	if !authorizer.IsOrganizationWorker(agent, worker) || !authorizer.CanWork(agent, worker) {
+		t.Fatal("organization worker policy rejected a matching worker key")
+	}
 }

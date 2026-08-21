@@ -196,6 +196,7 @@ services:
       COMA_CORE_URL: http://core:8080
       COMA_AGENT_API_KEY: ${AGENT_RUNTIME_API_KEY:-}
       COMA_RUNTIME_CONSUMER: ${AGENT_RUNTIME_CONSUMER:-builtin-runtime}
+      COMA_RUNTIME_CONCURRENCY: ${AGENT_RUNTIME_CONCURRENCY:-4}
     depends_on:
       core:
         condition: service_started

@@ -116,10 +116,11 @@
     "AgentStatusFrame": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["op", "run_id", "chat_id", "thread_root_id", "state"],
+      "required": ["op", "run_id", "lease_token", "chat_id", "thread_root_id", "state"],
       "properties": {
         "op": { "type": "string", "enum": ["agent.status"] },
         "run_id": { "$ref": "#/$defs/UUID" },
+        "lease_token": { "$ref": "#/$defs/UUID" },
         "chat_id": { "$ref": "#/$defs/UUID" },
         "thread_root_id": { "$ref": "#/$defs/NullableUUID" },
         "state": { "type": "string", "enum": ["thinking", "tool", "streaming", "completed", "failed", "canceled"] }
@@ -128,10 +129,11 @@
     "MessageStreamingFrame": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["op", "run_id", "chat_id", "thread_root_id", "stream_id", "index", "delta", "reset", "done"],
+      "required": ["op", "run_id", "lease_token", "chat_id", "thread_root_id", "stream_id", "index", "delta", "reset", "done"],
       "properties": {
         "op": { "type": "string", "enum": ["message.streaming"] },
         "run_id": { "$ref": "#/$defs/UUID" },
+        "lease_token": { "$ref": "#/$defs/UUID" },
         "chat_id": { "$ref": "#/$defs/UUID" },
         "thread_root_id": { "$ref": "#/$defs/NullableUUID" },
         "stream_id": { "$ref": "#/$defs/UUID" },
