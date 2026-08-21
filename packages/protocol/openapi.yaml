@@ -1919,7 +1919,10 @@ paths:
           content:
             application/json:
               schema:
-                { type: array, items: { $ref: "#/components/schemas/AgentTrigger" } }
+                {
+                  type: array,
+                  items: { $ref: "#/components/schemas/AgentTrigger" },
+                }
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
     post:
@@ -1929,12 +1932,16 @@ paths:
         required: true
         content:
           application/json:
-            { schema: { $ref: "#/components/schemas/CreateAgentTriggerRequest" } }
+            {
+              schema:
+                { $ref: "#/components/schemas/CreateAgentTriggerRequest" },
+            }
       responses:
         "201":
           description: Durable trigger created.
           content:
-            application/json: { schema: { $ref: "#/components/schemas/AgentTrigger" } }
+            application/json:
+              { schema: { $ref: "#/components/schemas/AgentTrigger" } }
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
@@ -1949,12 +1956,16 @@ paths:
         required: true
         content:
           application/json:
-            { schema: { $ref: "#/components/schemas/UpdateAgentTriggerRequest" } }
+            {
+              schema:
+                { $ref: "#/components/schemas/UpdateAgentTriggerRequest" },
+            }
       responses:
         "200":
           description: Durable trigger updated.
           content:
-            application/json: { schema: { $ref: "#/components/schemas/AgentTrigger" } }
+            application/json:
+              { schema: { $ref: "#/components/schemas/AgentTrigger" } }
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
@@ -1967,6 +1978,47 @@ paths:
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+  /api/v1/agents/{agent_id}/provider-credentials:
+    parameters: [{ $ref: "#/components/parameters/AgentId" }]
+    get:
+      operationId: getAgentProviderCredential
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Masked provider credential state; plaintext is never returned to administrators.
+          content:
+            application/json:
+              {
+                schema:
+                  { $ref: "#/components/schemas/AgentProviderCredentialView" },
+              }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    put:
+      operationId: updateAgentProviderCredential
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            {
+              schema:
+                {
+                  $ref: "#/components/schemas/UpdateAgentProviderCredentialRequest",
+                },
+            }
+      responses:
+        "200":
+          description: Provider credential replaced or cleared using envelope-style authenticated encryption.
+          content:
+            application/json:
+              {
+                schema:
+                  { $ref: "#/components/schemas/AgentProviderCredentialView" },
+              }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
   /api/v1/agents/settings:
     get:
       operationId: getAgentPlatformSettings
@@ -2128,7 +2180,8 @@ paths:
         "200":
           description: Lease extended.
           content:
-            application/json: { schema: { $ref: "#/components/schemas/AgentRun" } }
+            application/json:
+              { schema: { $ref: "#/components/schemas/AgentRun" } }
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
@@ -2146,7 +2199,8 @@ paths:
         "200":
           description: Run completed and usage recorded.
           content:
-            application/json: { schema: { $ref: "#/components/schemas/AgentRun" } }
+            application/json:
+              { schema: { $ref: "#/components/schemas/AgentRun" } }
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
@@ -2165,7 +2219,8 @@ paths:
         "200":
           description: Run failed, requeued, canceled, or timed out according to durable retry policy.
           content:
-            application/json: { schema: { $ref: "#/components/schemas/AgentRun" } }
+            application/json:
+              { schema: { $ref: "#/components/schemas/AgentRun" } }
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
@@ -2184,7 +2239,9 @@ paths:
           description: Durable resume checkpoint initialized at the current organization watermark when first read.
           content:
             application/json:
-              { schema: { $ref: "#/components/schemas/AgentRuntimeCheckpoint" } }
+              {
+                schema: { $ref: "#/components/schemas/AgentRuntimeCheckpoint" },
+              }
         "403": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
     put:
@@ -2195,14 +2252,88 @@ paths:
         required: true
         content:
           application/json:
-            { schema: { $ref: "#/components/schemas/UpdateAgentRuntimeCheckpointRequest" } }
+            {
+              schema:
+                {
+                  $ref: "#/components/schemas/UpdateAgentRuntimeCheckpointRequest",
+                },
+            }
       responses:
         "200":
           description: Durable checkpoint advanced.
           content:
             application/json:
-              { schema: { $ref: "#/components/schemas/AgentRuntimeCheckpoint" } }
+              {
+                schema: { $ref: "#/components/schemas/AgentRuntimeCheckpoint" },
+              }
         "403": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /api/v1/agent-runtime/provider-credential:
+    get:
+      operationId: getAgentRuntimeProviderCredential
+      description: Returns the authenticated agent's credential only to its API-key runtime over a no-store response.
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Runtime-only provider credential.
+          content:
+            application/json:
+              {
+                schema:
+                  {
+                    $ref: "#/components/schemas/AgentRuntimeProviderCredential",
+                  },
+              }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v1/agent-runtime/provider-calls:
+    post:
+      operationId: startAgentProviderCall
+      description: Atomically reserves cost against daily and monthly budgets before a provider request.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            {
+              schema:
+                { $ref: "#/components/schemas/StartAgentProviderCallRequest" },
+            }
+      responses:
+        "201":
+          description: Provider call reservation recorded with the run correlation ID.
+          content:
+            application/json:
+              { schema: { $ref: "#/components/schemas/AgentProviderCall" } }
+        "402": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /api/v1/agent-runtime/provider-calls/{call_id}/finish:
+    post:
+      operationId: finishAgentProviderCall
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: call_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            {
+              schema:
+                { $ref: "#/components/schemas/FinishAgentProviderCallRequest" },
+            }
+      responses:
+        "200":
+          description: Provider call usage finalized.
+          content:
+            application/json:
+              { schema: { $ref: "#/components/schemas/AgentProviderCall" } }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
 components:
   securitySchemes:
@@ -2292,6 +2423,12 @@ components:
       type: string
       enum:
         - already_bootstrapped
+        - agent_budget_exceeded
+        - agent_conflict
+        - agent_configuration_not_found
+        - agent_not_found
+        - agent_trigger_conflict
+        - agent_trigger_not_found
         - chat_conflict
         - chat_not_found
         - forbidden
@@ -2610,6 +2747,7 @@ components:
           members:read,
           memory:read,
           memory:write,
+          runtime:execute,
         ]
     Agent:
       type: object
@@ -2628,6 +2766,8 @@ components:
           provider,
           model,
           external_data_sharing_approved,
+          daily_cost_limit,
+          monthly_cost_limit,
           max_output_tokens,
           max_tool_iterations,
           max_chain_depth,
@@ -2658,6 +2798,10 @@ components:
         model: { type: string, maxLength: 200 }
         endpoint_url: { type: string, maxLength: 2048 }
         external_data_sharing_approved: { type: boolean }
+        daily_cost_limit:
+          { type: [string, "null"], pattern: '^[0-9]+(?:\.[0-9]{1,8})?$' }
+        monthly_cost_limit:
+          { type: [string, "null"], pattern: '^[0-9]+(?:\.[0-9]{1,8})?$' }
         max_output_tokens: { type: integer, minimum: 1, maximum: 1000000 }
         max_tool_iterations: { type: integer, minimum: 0, maximum: 64 }
         max_chain_depth: { type: integer, minimum: 0, maximum: 16 }
@@ -2704,10 +2848,17 @@ components:
         model: { type: string, maxLength: 200 }
         endpoint_url: { type: string, maxLength: 2048 }
         external_data_sharing_approved: { type: boolean }
-        max_output_tokens: { type: integer, minimum: 1, maximum: 1000000, default: 2048 }
-        max_tool_iterations: { type: integer, minimum: 0, maximum: 64, default: 8 }
+        daily_cost_limit:
+          { type: string, pattern: '^(?:|[0-9]+(?:\.[0-9]{1,8})?)$' }
+        monthly_cost_limit:
+          { type: string, pattern: '^(?:|[0-9]+(?:\.[0-9]{1,8})?)$' }
+        max_output_tokens:
+          { type: integer, minimum: 1, maximum: 1000000, default: 2048 }
+        max_tool_iterations:
+          { type: integer, minimum: 0, maximum: 64, default: 8 }
         max_chain_depth: { type: integer, minimum: 0, maximum: 16, default: 3 }
-        per_chat_concurrency: { type: integer, minimum: 1, maximum: 32, default: 1 }
+        per_chat_concurrency:
+          { type: integer, minimum: 1, maximum: 32, default: 1 }
         rate_limit_per_minute:
           { type: integer, minimum: 1, maximum: 100000, default: 60 }
         provider_rate_limit_per_minute:
@@ -2738,6 +2889,10 @@ components:
         model: { type: string, maxLength: 200 }
         endpoint_url: { type: string, maxLength: 2048 }
         external_data_sharing_approved: { type: boolean }
+        daily_cost_limit:
+          { type: string, pattern: '^(?:|[0-9]+(?:\.[0-9]{1,8})?)$' }
+        monthly_cost_limit:
+          { type: string, pattern: '^(?:|[0-9]+(?:\.[0-9]{1,8})?)$' }
         max_output_tokens: { type: integer, minimum: 1, maximum: 1000000 }
         max_tool_iterations: { type: integer, minimum: 0, maximum: 64 }
         max_chain_depth: { type: integer, minimum: 0, maximum: 16 }
@@ -2837,7 +2992,16 @@ components:
     CompleteAgentRunRequest:
       type: object
       additionalProperties: false
-      required: [lease_token, input_tokens, output_tokens, cost, currency, result_summary, price_source]
+      required:
+        [
+          lease_token,
+          input_tokens,
+          output_tokens,
+          cost,
+          currency,
+          result_summary,
+          price_source,
+        ]
       properties:
         lease_token: { type: string, format: uuid }
         input_tokens: { type: integer, format: int64, minimum: 0 }
@@ -2845,7 +3009,8 @@ components:
         cost: { type: string, pattern: '^[0-9]+(?:\.[0-9]{1,8})?$' }
         currency: { type: string, pattern: "^[A-Z]{3}$" }
         result_summary: { type: object, additionalProperties: true }
-        price_source: { type: string, enum: [provider, configured, estimated, unknown] }
+        price_source:
+          { type: string, enum: [provider, configured, estimated, unknown] }
     FailAgentRunRequest:
       type: object
       additionalProperties: false
@@ -2861,6 +3026,95 @@ components:
         consumer: { type: string, pattern: "^[a-z0-9][a-z0-9_.-]{0,63}$" }
         last_event_seq: { type: integer, format: int64, minimum: 0 }
         updated_at: { type: string, format: date-time }
+    AgentProviderCredentialView:
+      type: object
+      additionalProperties: false
+      required: [configured, key_hint]
+      properties:
+        configured: { type: boolean }
+        key_hint: { type: string }
+        updated_at: { type: [string, "null"], format: date-time }
+    UpdateAgentProviderCredentialRequest:
+      type: object
+      additionalProperties: false
+      required: [api_key, clear]
+      properties:
+        api_key: { type: string, maxLength: 16384 }
+        clear: { type: boolean }
+    AgentRuntimeProviderCredential:
+      type: object
+      additionalProperties: false
+      required: [api_key]
+      properties:
+        api_key: { type: string, minLength: 1, maxLength: 16384 }
+    StartAgentProviderCallRequest:
+      type: object
+      additionalProperties: false
+      required: [call_id, run_id, lease_token, reserved_cost, currency]
+      properties:
+        call_id: { type: string, format: uuid }
+        run_id: { type: string, format: uuid }
+        lease_token: { type: string, format: uuid }
+        reserved_cost: { type: string, pattern: '^[0-9]+(?:\.[0-9]{1,8})?$' }
+        currency: { type: string, pattern: "^[A-Z]{3}$" }
+    FinishAgentProviderCallRequest:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          run_id,
+          lease_token,
+          status,
+          actual_cost,
+          currency,
+          input_tokens,
+          output_tokens,
+          price_source,
+        ]
+      properties:
+        run_id: { type: string, format: uuid }
+        lease_token: { type: string, format: uuid }
+        status: { type: string, enum: [completed, failed] }
+        actual_cost: { type: string, pattern: '^[0-9]+(?:\.[0-9]{1,8})?$' }
+        currency: { type: string, pattern: "^[A-Z]{3}$" }
+        input_tokens: { type: integer, format: int64, minimum: 0 }
+        output_tokens: { type: integer, format: int64, minimum: 0 }
+        price_source:
+          { type: string, enum: [provider, configured, estimated, unknown] }
+    AgentProviderCall:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          run_id,
+          correlation_id,
+          provider,
+          model,
+          status,
+          reserved_cost,
+          currency,
+          input_tokens,
+          output_tokens,
+          price_source,
+          created_at,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        run_id: { type: string, format: uuid }
+        correlation_id: { type: string, format: uuid }
+        provider: { type: string }
+        model: { type: string }
+        status: { type: string, enum: [started, completed, failed] }
+        reserved_cost: { type: string }
+        actual_cost: { type: [string, "null"] }
+        currency: { type: string }
+        input_tokens: { type: integer, format: int64, minimum: 0 }
+        output_tokens: { type: integer, format: int64, minimum: 0 }
+        price_source:
+          { type: string, enum: [provider, configured, estimated, unknown] }
+        created_at: { type: string, format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
     UpdateAgentRuntimeCheckpointRequest:
       type: object
       additionalProperties: false
@@ -2877,12 +3131,27 @@ components:
       type: object
       additionalProperties: false
       required:
-        [id, org_id, agent_id, type, config, enabled, timezone, missed_runs_policy, created_at, updated_at]
+        [
+          id,
+          org_id,
+          agent_id,
+          type,
+          config,
+          enabled,
+          timezone,
+          missed_runs_policy,
+          created_at,
+          updated_at,
+        ]
       properties:
         id: { type: string, format: uuid }
         org_id: { type: string, format: uuid }
         agent_id: { type: string, format: uuid }
-        type: { type: string, enum: [mention, command, keyword, every_message, schedule, event] }
+        type:
+          {
+            type: string,
+            enum: [mention, command, keyword, every_message, schedule, event],
+          }
         config: { type: object, additionalProperties: true }
         enabled: { type: boolean }
         timezone: { type: string, minLength: 1, maxLength: 64 }
@@ -2895,11 +3164,16 @@ components:
       additionalProperties: false
       required: [type, config, enabled]
       properties:
-        type: { type: string, enum: [mention, command, keyword, every_message, schedule, event] }
+        type:
+          {
+            type: string,
+            enum: [mention, command, keyword, every_message, schedule, event],
+          }
         config: { type: object, additionalProperties: true }
         enabled: { type: boolean }
         timezone: { type: string, minLength: 1, maxLength: 64, default: UTC }
-        missed_runs_policy: { type: string, enum: [skip, latest], default: skip }
+        missed_runs_policy:
+          { type: string, enum: [skip, latest], default: skip }
     UpdateAgentTriggerRequest:
       type: object
       additionalProperties: false

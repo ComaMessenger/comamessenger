@@ -1,9 +1,6 @@
 import { MessengerAPI } from "@comamessenger/core";
 
-import {
-  AgentConnectionManager,
-  type SocketLike,
-} from "./connection.js";
+import { AgentConnectionManager, type SocketLike } from "./connection.js";
 import {
   AnthropicProvider,
   OpenAIProvider,
@@ -26,7 +23,11 @@ async function main(): Promise<void> {
   const agentAPIKey = requiredEnvironment("COMA_AGENT_API_KEY");
   const api = new MessengerAPI(coreURL);
   api.useAccessToken(agentAPIKey);
-  const runtime = new AgentRuntime({ api, provider: providerResolver() });
+  const runtime = new AgentRuntime({
+    api,
+    provider: providerResolver(),
+    reservedCallCost: process.env.AGENT_RESERVED_CALL_COST ?? "0.01000000",
+  });
   const connection = new AgentConnectionManager(
     api,
     process.env.COMA_RUNTIME_CONSUMER ?? "builtin-runtime",
@@ -44,18 +45,20 @@ async function main(): Promise<void> {
   }
 }
 
-function providerResolver(): (name: string) => Provider {
+function providerResolver(): (name: string, apiKey?: string) => Provider {
   const cache = new Map<string, Provider>();
-  return (rawName) => {
+  return (rawName, configuredAPIKey) => {
     const name = rawName.trim().toLowerCase();
     const existing = cache.get(name);
     if (existing) return existing;
     let provider: Provider;
     if (name === "openai") {
-      provider = new OpenAIProvider(requiredEnvironment("OPENAI_API_KEY"));
+      provider = new OpenAIProvider(
+        configuredAPIKey ?? requiredEnvironment("OPENAI_API_KEY"),
+      );
     } else if (name === "anthropic") {
       provider = new AnthropicProvider(
-        requiredEnvironment("ANTHROPIC_API_KEY"),
+        configuredAPIKey ?? requiredEnvironment("ANTHROPIC_API_KEY"),
       );
     } else if (
       name === "openai-compatible" ||
@@ -64,7 +67,9 @@ function providerResolver(): (name: string) => Provider {
       name === "vllm"
     ) {
       provider = new OpenAIProvider(
-        process.env.OPENAI_COMPATIBLE_API_KEY ?? "local-runtime",
+        configuredAPIKey ??
+          process.env.OPENAI_COMPATIBLE_API_KEY ??
+          "local-runtime",
         requiredEnvironment("OPENAI_COMPATIBLE_BASE_URL"),
         "openai-compatible",
       );

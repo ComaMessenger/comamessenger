@@ -17,7 +17,7 @@ import {
   type ProviderUsage,
 } from "./providers.js";
 
-export type ProviderResolver = (name: string) => Provider;
+export type ProviderResolver = (name: string, apiKey?: string) => Provider;
 
 export type RuntimeOptions = {
   api: MessengerAPI;
@@ -25,17 +25,20 @@ export type RuntimeOptions = {
   workerID?: string;
   pollIntervalMS?: number;
   leaseSeconds?: number;
+  reservedCallCost?: string;
 };
 
 export class AgentRuntime {
   private readonly workerID: string;
   private readonly pollIntervalMS: number;
   private readonly leaseSeconds: number;
+  private readonly reservedCallCost: string;
 
   constructor(private readonly options: RuntimeOptions) {
     this.workerID = options.workerID ?? crypto.randomUUID();
     this.pollIntervalMS = Math.max(100, options.pollIntervalMS ?? 500);
     this.leaseSeconds = Math.min(300, Math.max(30, options.leaseSeconds ?? 90));
+    this.reservedCallCost = options.reservedCallCost ?? "0.01000000";
   }
 
   async run(signal: AbortSignal): Promise<void> {
@@ -66,32 +69,45 @@ export class AgentRuntime {
     const controller = new AbortController();
     const shutdown = () => controller.abort("runtime_shutdown");
     shutdownSignal.addEventListener("abort", shutdown, { once: true });
-    const heartbeat = setInterval(() => {
-      void this.options.api
-        .heartbeatAgentRun(run.id, {
-          lease_token: run.lease_token,
-          lease_seconds: this.leaseSeconds,
-        })
-        .then((current) => {
-          if (current.cancel_requested_at) controller.abort("run_canceled");
-        })
-        .catch(() => controller.abort("lease_lost"));
-    }, Math.max(5_000, (this.leaseSeconds * 1_000) / 3));
+    const heartbeat = setInterval(
+      () => {
+        void this.options.api
+          .heartbeatAgentRun(run.id, {
+            lease_token: run.lease_token,
+            lease_seconds: this.leaseSeconds,
+          })
+          .then((current) => {
+            if (current.cancel_requested_at) controller.abort("run_canceled");
+          })
+          .catch(() => controller.abort("lease_lost"));
+      },
+      Math.max(5_000, (this.leaseSeconds * 1_000) / 3),
+    );
     try {
       const agent = await this.options.api.agent(run.agent_id);
       if (!agent.external_data_sharing_approved) {
         throw new RuntimeError("external_data_sharing_not_approved");
       }
       const tools = await this.options.api.agentTools();
+      let providerAPIKey: string | undefined;
+      try {
+        providerAPIKey = (
+          await this.options.api.agentRuntimeProviderCredential()
+        ).api_key;
+      } catch (cause) {
+        if (!(cause instanceof APIError && cause.status === 404)) throw cause;
+      }
       const messages = await this.assembleContext(run, agent);
       const result = await this.runProviderLoop(
         run,
         agent,
         tools,
         messages,
+        providerAPIKey,
         controller.signal,
       );
-      if (!result.content.trim()) throw new RuntimeError("empty_provider_output");
+      if (!result.content.trim())
+        throw new RuntimeError("empty_provider_output");
       const posted = await this.options.api.invokeAgentTool<Message>(
         run.thread_root_id ? "reply_in_thread" : "post_message",
         {
@@ -130,7 +146,8 @@ export class AgentRuntime {
           error_code: code,
         });
       } catch (failure) {
-        if (!(failure instanceof APIError && failure.status === 409)) throw failure;
+        if (!(failure instanceof APIError && failure.status === 409))
+          throw failure;
       }
     } finally {
       clearInterval(heartbeat);
@@ -180,13 +197,14 @@ export class AgentRuntime {
     agent: Agent,
     definitions: AgentToolDefinition[],
     messages: ChatMessage[],
+    providerAPIKey: string | undefined,
     signal: AbortSignal,
   ): Promise<{
     content: string;
     usage: ProviderUsage;
     toolCalls: number;
   }> {
-    const provider = this.options.provider(run.provider);
+    const provider = this.options.provider(run.provider, providerAPIKey);
     const tools: ProviderTool[] = definitions.map((definition) => ({
       name: definition.name,
       description: definition.description,
@@ -200,18 +218,58 @@ export class AgentRuntime {
       priceSource: "unknown",
     };
     let totalToolCalls = 0;
-    for (let iteration = 0; iteration <= agent.max_tool_iterations; iteration++) {
+    for (
+      let iteration = 0;
+      iteration <= agent.max_tool_iterations;
+      iteration++
+    ) {
       let finished: Extract<ProviderEvent, { type: "finish" }> | null = null;
-      for await (const event of provider.stream({
-        model: run.model,
-        messages,
-        tools,
-        maxOutputTokens: agent.max_output_tokens,
-        signal,
-      })) {
-        if (event.type === "finish") finished = event;
+      const callID = crypto.randomUUID();
+      await this.options.api.startAgentProviderCall({
+        call_id: callID,
+        run_id: run.id,
+        lease_token: run.lease_token,
+        reserved_cost: this.reservedCallCost,
+        currency: "USD",
+      });
+      try {
+        for await (const event of provider.stream({
+          model: run.model,
+          messages,
+          tools,
+          maxOutputTokens: agent.max_output_tokens,
+          signal,
+        })) {
+          if (event.type === "finish") finished = event;
+        }
+        if (!finished) throw new RuntimeError("provider_incomplete_stream");
+        await this.options.api.finishAgentProviderCall(callID, {
+          run_id: run.id,
+          lease_token: run.lease_token,
+          status: "completed",
+          actual_cost: finished.usage.cost,
+          currency: finished.usage.currency,
+          input_tokens: finished.usage.inputTokens,
+          output_tokens: finished.usage.outputTokens,
+          price_source: finished.usage.priceSource,
+        });
+      } catch (cause) {
+        try {
+          await this.options.api.finishAgentProviderCall(callID, {
+            run_id: run.id,
+            lease_token: run.lease_token,
+            status: "failed",
+            actual_cost: "0",
+            currency: "USD",
+            input_tokens: 0,
+            output_tokens: 0,
+            price_source: "unknown",
+          });
+        } catch {
+          // The original provider/core error determines retry behavior.
+        }
+        throw cause;
       }
-      if (!finished) throw new RuntimeError("provider_incomplete_stream");
       usage.inputTokens += finished.usage.inputTokens;
       usage.outputTokens += finished.usage.outputTokens;
       usage.cost = addDecimal(usage.cost, finished.usage.cost);
@@ -258,13 +316,16 @@ class RuntimeError extends Error {
 
 function stableErrorCode(cause: unknown, signal: AbortSignal): string {
   if (signal.aborted) {
-    return signal.reason === "run_canceled" ? "run_canceled" : "runtime_aborted";
+    return signal.reason === "run_canceled"
+      ? "run_canceled"
+      : "runtime_aborted";
   }
   if (cause instanceof RuntimeError) return cause.code;
   if (cause instanceof ProviderError) {
     return cause.retryable ? "provider_retryable" : cause.code;
   }
   if (cause instanceof APIError) {
+    if (cause.code === "agent_budget_exceeded") return "budget_exceeded";
     return cause.status >= 500 || cause.status === 429
       ? "core_api_retryable"
       : "core_api_rejected";

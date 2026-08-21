@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -23,6 +24,7 @@ var (
 	ErrForbidden = errors.New("agent run forbidden")
 	ErrNotFound  = errors.New("agent run not found")
 	ErrConflict  = errors.New("agent run state conflict")
+	ErrBudget    = errors.New("agent budget exceeded")
 )
 var costPattern = regexp.MustCompile(`^[0-9]+(?:\.[0-9]{1,8})?$`)
 var consumerPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{0,63}$`)
@@ -106,6 +108,39 @@ type RuntimeCheckpoint struct {
 }
 type UpdateRuntimeCheckpoint struct {
 	LastEventSeq int64 `json:"last_event_seq"`
+}
+type StartProviderCallInput struct {
+	CallID       string `json:"call_id"`
+	RunID        string `json:"run_id"`
+	LeaseToken   string `json:"lease_token"`
+	ReservedCost string `json:"reserved_cost"`
+	Currency     string `json:"currency"`
+}
+type ProviderCall struct {
+	ID            string     `json:"id"`
+	RunID         string     `json:"run_id"`
+	CorrelationID string     `json:"correlation_id"`
+	Provider      string     `json:"provider"`
+	Model         string     `json:"model"`
+	Status        string     `json:"status"`
+	ReservedCost  string     `json:"reserved_cost"`
+	ActualCost    *string    `json:"actual_cost"`
+	Currency      string     `json:"currency"`
+	InputTokens   int64      `json:"input_tokens"`
+	OutputTokens  int64      `json:"output_tokens"`
+	PriceSource   string     `json:"price_source"`
+	CreatedAt     time.Time  `json:"created_at"`
+	FinishedAt    *time.Time `json:"finished_at"`
+}
+type FinishProviderCallInput struct {
+	RunID        string `json:"run_id"`
+	LeaseToken   string `json:"lease_token"`
+	Status       string `json:"status"`
+	ActualCost   string `json:"actual_cost"`
+	Currency     string `json:"currency"`
+	InputTokens  int64  `json:"input_tokens"`
+	OutputTokens int64  `json:"output_tokens"`
+	PriceSource  string `json:"price_source"`
 }
 type Page struct {
 	Runs []Run `json:"runs"`
@@ -447,6 +482,105 @@ func (service *Service) UpdateRuntimeCheckpoint(ctx context.Context, current ide
 	return result, err
 }
 
+func (service *Service) StartProviderCall(ctx context.Context, current identity.User, authentication access.Identity, input StartProviderCallInput) (ProviderCall, error) {
+	if !isAgentWorker(current, authentication) {
+		return ProviderCall{}, ErrForbidden
+	}
+	input.Currency = strings.ToUpper(strings.TrimSpace(input.Currency))
+	if input.Currency == "" {
+		input.Currency = "USD"
+	}
+	if uuid.Validate(input.CallID) != nil || uuid.Validate(input.RunID) != nil || uuid.Validate(input.LeaseToken) != nil ||
+		!costPattern.MatchString(input.ReservedCost) || len(input.Currency) != 3 {
+		return ProviderCall{}, ErrInvalid
+	}
+	tx, err := service.pool.Begin(ctx)
+	if err != nil {
+		return ProviderCall{}, err
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "agent-budget/"+current.ActorID); err != nil {
+		return ProviderCall{}, err
+	}
+	var correlationID, provider, model string
+	err = tx.QueryRow(ctx, `SELECT run.correlation_id,run.provider,run.model FROM agent_runs run
+		WHERE run.org_id=$1 AND run.agent_id=$2 AND run.id=$3 AND run.lease_token=$4 AND run.status='running' FOR UPDATE`,
+		current.OrgID, current.ActorID, input.RunID, input.LeaseToken).Scan(&correlationID, &provider, &model)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ProviderCall{}, ErrConflict
+	}
+	if err != nil {
+		return ProviderCall{}, err
+	}
+	var dailyAllowed, monthlyAllowed bool
+	err = tx.QueryRow(ctx, `SELECT
+		(agent.daily_cost_limit IS NULL OR COALESCE((SELECT sum(usage.cost) FROM agent_usage usage WHERE usage.agent_id=agent.actor_id AND usage.created_at>=date_trunc('day',now())),0)
+		 + COALESCE((SELECT sum(COALESCE(call.actual_cost,call.reserved_cost)) FROM agent_provider_calls call JOIN agent_runs pending ON pending.id=call.run_id WHERE call.agent_id=agent.actor_id AND call.created_at>=date_trunc('day',now()) AND pending.status IN('queued','running')),0) + $2::numeric <= agent.daily_cost_limit),
+		(agent.monthly_cost_limit IS NULL OR COALESCE((SELECT sum(usage.cost) FROM agent_usage usage WHERE usage.agent_id=agent.actor_id AND usage.created_at>=date_trunc('month',now())),0)
+		 + COALESCE((SELECT sum(COALESCE(call.actual_cost,call.reserved_cost)) FROM agent_provider_calls call JOIN agent_runs pending ON pending.id=call.run_id WHERE call.agent_id=agent.actor_id AND call.created_at>=date_trunc('month',now()) AND pending.status IN('queued','running')),0) + $2::numeric <= agent.monthly_cost_limit)
+		FROM agents agent WHERE agent.actor_id=$1`, current.ActorID, input.ReservedCost).Scan(&dailyAllowed, &monthlyAllowed)
+	if err != nil {
+		return ProviderCall{}, err
+	}
+	if !dailyAllowed || !monthlyAllowed {
+		return ProviderCall{}, ErrBudget
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO agent_provider_calls(id,org_id,agent_id,run_id,correlation_id,provider,model,reserved_cost,currency)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(id) DO NOTHING`, input.CallID, current.OrgID, current.ActorID,
+		input.RunID, correlationID, provider, model, input.ReservedCost, input.Currency)
+	if err != nil {
+		return ProviderCall{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return ProviderCall{}, err
+	}
+	return service.providerCall(ctx, current.OrgID, current.ActorID, input.CallID)
+}
+
+func (service *Service) FinishProviderCall(ctx context.Context, current identity.User, authentication access.Identity, callID string, input FinishProviderCallInput) (ProviderCall, error) {
+	if !isAgentWorker(current, authentication) {
+		return ProviderCall{}, ErrForbidden
+	}
+	input.Currency = strings.ToUpper(strings.TrimSpace(input.Currency))
+	if input.Currency == "" {
+		input.Currency = "USD"
+	}
+	if input.PriceSource == "" {
+		input.PriceSource = "unknown"
+	}
+	if uuid.Validate(callID) != nil || uuid.Validate(input.RunID) != nil || uuid.Validate(input.LeaseToken) != nil ||
+		(input.Status != "completed" && input.Status != "failed") || !costPattern.MatchString(input.ActualCost) || len(input.Currency) != 3 ||
+		input.InputTokens < 0 || input.OutputTokens < 0 || !validPriceSource(input.PriceSource) {
+		return ProviderCall{}, ErrInvalid
+	}
+	result, err := service.pool.Exec(ctx, `UPDATE agent_provider_calls call SET status=$6,actual_cost=$7::numeric,currency=$8,
+		input_tokens=$9,output_tokens=$10,price_source=$11,finished_at=now()
+		FROM agent_runs run WHERE call.org_id=$1 AND call.agent_id=$2 AND call.id=$3 AND call.run_id=$4 AND call.status='started'
+		AND run.id=call.run_id AND run.lease_token=$5 AND run.status='running' AND run.agent_id=$2 AND run.org_id=$1`,
+		current.OrgID, current.ActorID, callID, input.RunID, input.LeaseToken, input.Status, input.ActualCost,
+		input.Currency, input.InputTokens, input.OutputTokens, input.PriceSource)
+	if err != nil {
+		return ProviderCall{}, err
+	}
+	if result.RowsAffected() != 1 {
+		return ProviderCall{}, ErrConflict
+	}
+	return service.providerCall(ctx, current.OrgID, current.ActorID, callID)
+}
+
+func (service *Service) providerCall(ctx context.Context, orgID, agentID, callID string) (ProviderCall, error) {
+	var result ProviderCall
+	err := service.pool.QueryRow(ctx, `SELECT id,run_id,correlation_id,provider,model,status,reserved_cost::text,actual_cost::text,
+		currency,input_tokens,output_tokens,price_source,created_at,finished_at FROM agent_provider_calls
+		WHERE org_id=$1 AND agent_id=$2 AND id=$3`, orgID, agentID, callID).Scan(&result.ID, &result.RunID,
+		&result.CorrelationID, &result.Provider, &result.Model, &result.Status, &result.ReservedCost, &result.ActualCost,
+		&result.Currency, &result.InputTokens, &result.OutputTokens, &result.PriceSource, &result.CreatedAt, &result.FinishedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ProviderCall{}, ErrNotFound
+	}
+	return result, err
+}
+
 func (service *Service) authorizeAgentRun(ctx context.Context, current identity.User, runID string) error {
 	if uuid.Validate(runID) != nil {
 		return ErrNotFound
@@ -517,7 +651,7 @@ func (service *Service) Fail(ctx context.Context, runID, leaseToken, errorCode s
 	if uuid.Validate(runID) != nil || uuid.Validate(leaseToken) != nil || len(errorCode) < 1 || len(errorCode) > 120 {
 		return Run{}, ErrInvalid
 	}
-	result, err := service.pool.Exec(ctx, `UPDATE agent_runs SET status=CASE WHEN cancel_requested_at IS NOT NULL THEN 'canceled' WHEN timeout_at<=now() THEN 'timed_out' WHEN attempt<max_attempts THEN 'queued' ELSE 'failed' END,error_code=$3,attempt=CASE WHEN cancel_requested_at IS NULL AND timeout_at>now() AND attempt<max_attempts THEN attempt+1 ELSE attempt END,next_attempt_at=CASE WHEN cancel_requested_at IS NULL AND timeout_at>now() AND attempt<max_attempts THEN now()+make_interval(secs=>LEAST(60,attempt*attempt)) ELSE next_attempt_at END,finished_at=CASE WHEN cancel_requested_at IS NOT NULL OR timeout_at<=now() OR attempt>=max_attempts THEN now() ELSE NULL END,lease_token=NULL,lease_expires_at=NULL WHERE id=$1 AND lease_token=$2 AND status='running'`, runID, leaseToken, errorCode)
+	result, err := service.pool.Exec(ctx, `UPDATE agent_runs SET status=CASE WHEN cancel_requested_at IS NOT NULL THEN 'canceled' WHEN timeout_at<=now() THEN 'timed_out' WHEN $3='budget_exceeded' THEN 'failed' WHEN attempt<max_attempts THEN 'queued' ELSE 'failed' END,error_code=$3,attempt=CASE WHEN cancel_requested_at IS NULL AND timeout_at>now() AND $3<>'budget_exceeded' AND attempt<max_attempts THEN attempt+1 ELSE attempt END,next_attempt_at=CASE WHEN cancel_requested_at IS NULL AND timeout_at>now() AND $3<>'budget_exceeded' AND attempt<max_attempts THEN now()+make_interval(secs=>LEAST(60,attempt*attempt)) ELSE next_attempt_at END,finished_at=CASE WHEN cancel_requested_at IS NOT NULL OR timeout_at<=now() OR $3='budget_exceeded' OR attempt>=max_attempts THEN now() ELSE NULL END,lease_token=NULL,lease_expires_at=NULL WHERE id=$1 AND lease_token=$2 AND status='running'`, runID, leaseToken, errorCode)
 	if err != nil {
 		return Run{}, err
 	}
@@ -550,7 +684,7 @@ func canManage(current identity.User) bool {
 }
 func isAgentWorker(current identity.User, authentication access.Identity) bool {
 	return authentication.AuthenticationKind == "api_key" && authentication.ActorID == current.ActorID &&
-		authentication.OrgID == current.OrgID && authentication.KeyID != ""
+		authentication.OrgID == current.OrgID && authentication.KeyID != "" && slices.Contains(authentication.Scopes, "runtime:execute")
 }
 
 const runSelect = `SELECT run.id,run.org_id,run.agent_id,run.trigger_id,run.trigger_event_seq,run.scheduled_for,run.chat_id,run.thread_root_id,run.requested_by,run.client_run_id,run.correlation_id,run.chain_depth,run.status,run.provider,run.model,run.input,run.result_summary,run.input_tokens,run.output_tokens,run.cost::text,run.currency,run.error_code,run.attempt,run.max_attempts,run.created_at,run.started_at,run.finished_at,run.cancel_requested_at,run.timeout_at,run.lease_token FROM agent_runs run`

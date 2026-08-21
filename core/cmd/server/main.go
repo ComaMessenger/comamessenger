@@ -14,6 +14,7 @@ import (
 
 	"github.com/comamessenger/comamessenger/core/internal/access"
 	"github.com/comamessenger/comamessenger/core/internal/agent"
+	"github.com/comamessenger/comamessenger/core/internal/agentconfig"
 	"github.com/comamessenger/comamessenger/core/internal/agentmemory"
 	"github.com/comamessenger/comamessenger/core/internal/agentrun"
 	"github.com/comamessenger/comamessenger/core/internal/agenttool"
@@ -131,6 +132,11 @@ func main() {
 		os.Exit(1)
 	}
 	agentService := agent.NewService(pool)
+	agentConfigService, err := agentconfig.NewService(pool, cfg.IntegrationEncryptionKey)
+	if err != nil {
+		logger.Error("agent configuration initialization failed", "error", err)
+		os.Exit(1)
+	}
 	identityService.SetBearerAuthenticator(agentService.AuthenticateKey)
 	if len(os.Args) > 1 && os.Args[1] == "admin" {
 		if err := runAdminCommand(startupCtx, identityService, os.Args[2:]); err != nil {
@@ -212,7 +218,7 @@ func main() {
 	server := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: serverhttp.NewHandler(logger, cfg.PublicAppURL, pool.Ping, serverhttp.Dependencies{
-			Identity: identityService, Agents: agentService, AgentTools: agentToolExecutor, AgentRuns: agentRunService, AgentTriggers: agentTriggerService, Chats: chatService,
+			Identity: identityService, Agents: agentService, AgentConfig: agentConfigService, AgentTools: agentToolExecutor, AgentRuns: agentRunService, AgentTriggers: agentTriggerService, Chats: chatService,
 			Messages: messageService, UserState: userStateService, Push: pushService, Workspace: workspaceService, Files: fileService, Search: searchService, Realtime: realtimeServer,
 			CookieSecure: cfg.Auth.CookieSecure, RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
 			BootstrapToken: cfg.BootstrapToken, RequireBootstrapToken: cfg.AppEnv != "development",

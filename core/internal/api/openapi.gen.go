@@ -68,6 +68,51 @@ func (e AgentKind) Valid() bool {
 	}
 }
 
+// Defines values for AgentProviderCallPriceSource.
+const (
+	AgentProviderCallPriceSourceConfigured AgentProviderCallPriceSource = "configured"
+	AgentProviderCallPriceSourceEstimated  AgentProviderCallPriceSource = "estimated"
+	AgentProviderCallPriceSourceProvider   AgentProviderCallPriceSource = "provider"
+	AgentProviderCallPriceSourceUnknown    AgentProviderCallPriceSource = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the AgentProviderCallPriceSource enum.
+func (e AgentProviderCallPriceSource) Valid() bool {
+	switch e {
+	case AgentProviderCallPriceSourceConfigured:
+		return true
+	case AgentProviderCallPriceSourceEstimated:
+		return true
+	case AgentProviderCallPriceSourceProvider:
+		return true
+	case AgentProviderCallPriceSourceUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentProviderCallStatus.
+const (
+	AgentProviderCallStatusCompleted AgentProviderCallStatus = "completed"
+	AgentProviderCallStatusFailed    AgentProviderCallStatus = "failed"
+	AgentProviderCallStatusStarted   AgentProviderCallStatus = "started"
+)
+
+// Valid indicates whether the value is a known member of the AgentProviderCallStatus enum.
+func (e AgentProviderCallStatus) Valid() bool {
+	switch e {
+	case AgentProviderCallStatusCompleted:
+		return true
+	case AgentProviderCallStatusFailed:
+		return true
+	case AgentProviderCallStatusStarted:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentRunStatus.
 const (
 	AgentRunStatusCanceled  AgentRunStatus = "canceled"
@@ -108,6 +153,7 @@ const (
 	MessagesRead   AgentScope = "messages:read"
 	MessagesWrite  AgentScope = "messages:write"
 	ReactionsWrite AgentScope = "reactions:write"
+	RuntimeExecute AgentScope = "runtime:execute"
 	SearchRead     AgentScope = "search:read"
 )
 
@@ -129,6 +175,8 @@ func (e AgentScope) Valid() bool {
 	case MessagesWrite:
 		return true
 	case ReactionsWrite:
+		return true
+	case RuntimeExecute:
 		return true
 	case SearchRead:
 		return true
@@ -667,22 +715,22 @@ func (e ClaimedAgentRunStatus) Valid() bool {
 
 // Defines values for CompleteAgentRunRequestPriceSource.
 const (
-	Configured CompleteAgentRunRequestPriceSource = "configured"
-	Estimated  CompleteAgentRunRequestPriceSource = "estimated"
-	Provider   CompleteAgentRunRequestPriceSource = "provider"
-	Unknown    CompleteAgentRunRequestPriceSource = "unknown"
+	CompleteAgentRunRequestPriceSourceConfigured CompleteAgentRunRequestPriceSource = "configured"
+	CompleteAgentRunRequestPriceSourceEstimated  CompleteAgentRunRequestPriceSource = "estimated"
+	CompleteAgentRunRequestPriceSourceProvider   CompleteAgentRunRequestPriceSource = "provider"
+	CompleteAgentRunRequestPriceSourceUnknown    CompleteAgentRunRequestPriceSource = "unknown"
 )
 
 // Valid indicates whether the value is a known member of the CompleteAgentRunRequestPriceSource enum.
 func (e CompleteAgentRunRequestPriceSource) Valid() bool {
 	switch e {
-	case Configured:
+	case CompleteAgentRunRequestPriceSourceConfigured:
 		return true
-	case Estimated:
+	case CompleteAgentRunRequestPriceSourceEstimated:
 		return true
-	case Provider:
+	case CompleteAgentRunRequestPriceSourceProvider:
 		return true
-	case Unknown:
+	case CompleteAgentRunRequestPriceSourceUnknown:
 		return true
 	default:
 		return false
@@ -958,41 +1006,59 @@ func (e DurableEventTypeV1) Valid() bool {
 
 // Defines values for ErrorCode.
 const (
-	ErrorCodeAlreadyBootstrapped    ErrorCode = "already_bootstrapped"
-	ErrorCodeChatConflict           ErrorCode = "chat_conflict"
-	ErrorCodeChatNotFound           ErrorCode = "chat_not_found"
-	ErrorCodeEmailTaken             ErrorCode = "email_taken"
-	ErrorCodeFileConflict           ErrorCode = "file_conflict"
-	ErrorCodeFileNotFound           ErrorCode = "file_not_found"
-	ErrorCodeForbidden              ErrorCode = "forbidden"
-	ErrorCodeIdempotencyConflict    ErrorCode = "idempotency_conflict"
-	ErrorCodeInternalError          ErrorCode = "internal_error"
-	ErrorCodeInvalidCredentials     ErrorCode = "invalid_credentials"
-	ErrorCodeInvalidRefreshToken    ErrorCode = "invalid_refresh_token"
-	ErrorCodeInvalidRequest         ErrorCode = "invalid_request"
-	ErrorCodeInvitationInvalid      ErrorCode = "invitation_invalid"
-	ErrorCodeMessageNotFound        ErrorCode = "message_not_found"
-	ErrorCodeOriginNotAllowed       ErrorCode = "origin_not_allowed"
-	ErrorCodePasswordChangeRequired ErrorCode = "password_change_required"
-	ErrorCodePayloadTooLarge        ErrorCode = "payload_too_large"
-	ErrorCodePushUnavailable        ErrorCode = "push_unavailable"
-	ErrorCodeRateLimited            ErrorCode = "rate_limited"
-	ErrorCodeReauthenticationFailed ErrorCode = "reauthentication_failed"
-	ErrorCodeServiceNotReady        ErrorCode = "service_not_ready"
-	ErrorCodeSessionNotFound        ErrorCode = "session_not_found"
-	ErrorCodeSmtpNotConfigured      ErrorCode = "smtp_not_configured"
-	ErrorCodeStorageFull            ErrorCode = "storage_full"
-	ErrorCodeTokenInvalid           ErrorCode = "token_invalid"
-	ErrorCodeUnauthorized           ErrorCode = "unauthorized"
-	ErrorCodeUnsupportedFormat      ErrorCode = "unsupported_format"
-	ErrorCodeValidationFailed       ErrorCode = "validation_failed"
-	ErrorCodeVersionConflict        ErrorCode = "version_conflict"
-	ErrorCodeWorkspaceNotFound      ErrorCode = "workspace_not_found"
+	ErrorCodeAgentBudgetExceeded        ErrorCode = "agent_budget_exceeded"
+	ErrorCodeAgentConfigurationNotFound ErrorCode = "agent_configuration_not_found"
+	ErrorCodeAgentConflict              ErrorCode = "agent_conflict"
+	ErrorCodeAgentNotFound              ErrorCode = "agent_not_found"
+	ErrorCodeAgentTriggerConflict       ErrorCode = "agent_trigger_conflict"
+	ErrorCodeAgentTriggerNotFound       ErrorCode = "agent_trigger_not_found"
+	ErrorCodeAlreadyBootstrapped        ErrorCode = "already_bootstrapped"
+	ErrorCodeChatConflict               ErrorCode = "chat_conflict"
+	ErrorCodeChatNotFound               ErrorCode = "chat_not_found"
+	ErrorCodeEmailTaken                 ErrorCode = "email_taken"
+	ErrorCodeFileConflict               ErrorCode = "file_conflict"
+	ErrorCodeFileNotFound               ErrorCode = "file_not_found"
+	ErrorCodeForbidden                  ErrorCode = "forbidden"
+	ErrorCodeIdempotencyConflict        ErrorCode = "idempotency_conflict"
+	ErrorCodeInternalError              ErrorCode = "internal_error"
+	ErrorCodeInvalidCredentials         ErrorCode = "invalid_credentials"
+	ErrorCodeInvalidRefreshToken        ErrorCode = "invalid_refresh_token"
+	ErrorCodeInvalidRequest             ErrorCode = "invalid_request"
+	ErrorCodeInvitationInvalid          ErrorCode = "invitation_invalid"
+	ErrorCodeMessageNotFound            ErrorCode = "message_not_found"
+	ErrorCodeOriginNotAllowed           ErrorCode = "origin_not_allowed"
+	ErrorCodePasswordChangeRequired     ErrorCode = "password_change_required"
+	ErrorCodePayloadTooLarge            ErrorCode = "payload_too_large"
+	ErrorCodePushUnavailable            ErrorCode = "push_unavailable"
+	ErrorCodeRateLimited                ErrorCode = "rate_limited"
+	ErrorCodeReauthenticationFailed     ErrorCode = "reauthentication_failed"
+	ErrorCodeServiceNotReady            ErrorCode = "service_not_ready"
+	ErrorCodeSessionNotFound            ErrorCode = "session_not_found"
+	ErrorCodeSmtpNotConfigured          ErrorCode = "smtp_not_configured"
+	ErrorCodeStorageFull                ErrorCode = "storage_full"
+	ErrorCodeTokenInvalid               ErrorCode = "token_invalid"
+	ErrorCodeUnauthorized               ErrorCode = "unauthorized"
+	ErrorCodeUnsupportedFormat          ErrorCode = "unsupported_format"
+	ErrorCodeValidationFailed           ErrorCode = "validation_failed"
+	ErrorCodeVersionConflict            ErrorCode = "version_conflict"
+	ErrorCodeWorkspaceNotFound          ErrorCode = "workspace_not_found"
 )
 
 // Valid indicates whether the value is a known member of the ErrorCode enum.
 func (e ErrorCode) Valid() bool {
 	switch e {
+	case ErrorCodeAgentBudgetExceeded:
+		return true
+	case ErrorCodeAgentConfigurationNotFound:
+		return true
+	case ErrorCodeAgentConflict:
+		return true
+	case ErrorCodeAgentNotFound:
+		return true
+	case ErrorCodeAgentTriggerConflict:
+		return true
+	case ErrorCodeAgentTriggerNotFound:
+		return true
 	case ErrorCodeAlreadyBootstrapped:
 		return true
 	case ErrorCodeChatConflict:
@@ -1124,6 +1190,48 @@ func (e FileUploadMode) Valid() bool {
 	case Presigned:
 		return true
 	case Streaming:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for FinishAgentProviderCallRequestPriceSource.
+const (
+	FinishAgentProviderCallRequestPriceSourceConfigured FinishAgentProviderCallRequestPriceSource = "configured"
+	FinishAgentProviderCallRequestPriceSourceEstimated  FinishAgentProviderCallRequestPriceSource = "estimated"
+	FinishAgentProviderCallRequestPriceSourceProvider   FinishAgentProviderCallRequestPriceSource = "provider"
+	FinishAgentProviderCallRequestPriceSourceUnknown    FinishAgentProviderCallRequestPriceSource = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the FinishAgentProviderCallRequestPriceSource enum.
+func (e FinishAgentProviderCallRequestPriceSource) Valid() bool {
+	switch e {
+	case FinishAgentProviderCallRequestPriceSourceConfigured:
+		return true
+	case FinishAgentProviderCallRequestPriceSourceEstimated:
+		return true
+	case FinishAgentProviderCallRequestPriceSourceProvider:
+		return true
+	case FinishAgentProviderCallRequestPriceSourceUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for FinishAgentProviderCallRequestStatus.
+const (
+	FinishAgentProviderCallRequestStatusCompleted FinishAgentProviderCallRequestStatus = "completed"
+	FinishAgentProviderCallRequestStatusFailed    FinishAgentProviderCallRequestStatus = "failed"
+)
+
+// Valid indicates whether the value is a known member of the FinishAgentProviderCallRequestStatus enum.
+func (e FinishAgentProviderCallRequestStatus) Valid() bool {
+	switch e {
+	case FinishAgentProviderCallRequestStatusCompleted:
+		return true
+	case FinishAgentProviderCallRequestStatusFailed:
 		return true
 	default:
 		return false
@@ -2205,6 +2313,7 @@ type Agent struct {
 	AvatarVersion               int64                `json:"avatar_version"`
 	ChatIds                     []openapi_types.UUID `json:"chat_ids"`
 	CreatedAt                   time.Time            `json:"created_at"`
+	DailyCostLimit              *string              `json:"daily_cost_limit"`
 	Description                 string               `json:"description"`
 	DisplayName                 string               `json:"display_name"`
 	Enabled                     bool                 `json:"enabled"`
@@ -2217,6 +2326,7 @@ type Agent struct {
 	MaxOutputTokens             int                  `json:"max_output_tokens"`
 	MaxToolIterations           int                  `json:"max_tool_iterations"`
 	Model                       string               `json:"model"`
+	MonthlyCostLimit            *string              `json:"monthly_cost_limit"`
 	OrgId                       openapi_types.UUID   `json:"org_id"`
 	OwnerActorId                openapi_types.UUID   `json:"owner_actor_id"`
 	PerChatConcurrency          int                  `json:"per_chat_concurrency"`
@@ -2246,6 +2356,37 @@ type AgentApiKey struct {
 // AgentPlatformSettings defines model for AgentPlatformSettings.
 type AgentPlatformSettings struct {
 	OrganizationRateLimitPerMinute int `json:"organization_rate_limit_per_minute"`
+}
+
+// AgentProviderCall defines model for AgentProviderCall.
+type AgentProviderCall struct {
+	ActualCost    *string                      `json:"actual_cost,omitempty"`
+	CorrelationId openapi_types.UUID           `json:"correlation_id"`
+	CreatedAt     time.Time                    `json:"created_at"`
+	Currency      string                       `json:"currency"`
+	FinishedAt    *time.Time                   `json:"finished_at,omitempty"`
+	Id            openapi_types.UUID           `json:"id"`
+	InputTokens   int64                        `json:"input_tokens"`
+	Model         string                       `json:"model"`
+	OutputTokens  int64                        `json:"output_tokens"`
+	PriceSource   AgentProviderCallPriceSource `json:"price_source"`
+	Provider      string                       `json:"provider"`
+	ReservedCost  string                       `json:"reserved_cost"`
+	RunId         openapi_types.UUID           `json:"run_id"`
+	Status        AgentProviderCallStatus      `json:"status"`
+}
+
+// AgentProviderCallPriceSource defines model for AgentProviderCall.PriceSource.
+type AgentProviderCallPriceSource string
+
+// AgentProviderCallStatus defines model for AgentProviderCall.Status.
+type AgentProviderCallStatus string
+
+// AgentProviderCredentialView defines model for AgentProviderCredentialView.
+type AgentProviderCredentialView struct {
+	Configured bool       `json:"configured"`
+	KeyHint    string     `json:"key_hint"`
+	UpdatedAt  *time.Time `json:"updated_at,omitempty"`
 }
 
 // AgentRun defines model for AgentRun.
@@ -2300,6 +2441,11 @@ type AgentRuntimeCheckpoint struct {
 	Consumer     string    `json:"consumer"`
 	LastEventSeq int64     `json:"last_event_seq"`
 	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// AgentRuntimeProviderCredential defines model for AgentRuntimeProviderCredential.
+type AgentRuntimeProviderCredential struct {
+	ApiKey string `json:"api_key"`
 }
 
 // AgentScope defines model for AgentScope.
@@ -2601,6 +2747,7 @@ type CreateAgentKeyRequest struct {
 type CreateAgentRequest struct {
 	AllowedScopes               []AgentScope           `json:"allowed_scopes"`
 	ChatIds                     []openapi_types.UUID   `json:"chat_ids"`
+	DailyCostLimit              *string                `json:"daily_cost_limit,omitempty"`
 	Description                 *string                `json:"description,omitempty"`
 	DisplayName                 string                 `json:"display_name"`
 	Enabled                     bool                   `json:"enabled"`
@@ -2612,6 +2759,7 @@ type CreateAgentRequest struct {
 	MaxOutputTokens             *int                   `json:"max_output_tokens,omitempty"`
 	MaxToolIterations           *int                   `json:"max_tool_iterations,omitempty"`
 	Model                       *string                `json:"model,omitempty"`
+	MonthlyCostLimit            *string                `json:"monthly_cost_limit,omitempty"`
 	PerChatConcurrency          *int                   `json:"per_chat_concurrency,omitempty"`
 	Provider                    *string                `json:"provider,omitempty"`
 	ProviderRateLimitPerMinute  *int                   `json:"provider_rate_limit_per_minute,omitempty"`
@@ -2799,6 +2947,24 @@ type FileUpload struct {
 
 // FileUploadMode defines model for FileUpload.Mode.
 type FileUploadMode string
+
+// FinishAgentProviderCallRequest defines model for FinishAgentProviderCallRequest.
+type FinishAgentProviderCallRequest struct {
+	ActualCost   string                                    `json:"actual_cost"`
+	Currency     string                                    `json:"currency"`
+	InputTokens  int64                                     `json:"input_tokens"`
+	LeaseToken   openapi_types.UUID                        `json:"lease_token"`
+	OutputTokens int64                                     `json:"output_tokens"`
+	PriceSource  FinishAgentProviderCallRequestPriceSource `json:"price_source"`
+	RunId        openapi_types.UUID                        `json:"run_id"`
+	Status       FinishAgentProviderCallRequestStatus      `json:"status"`
+}
+
+// FinishAgentProviderCallRequestPriceSource defines model for FinishAgentProviderCallRequest.PriceSource.
+type FinishAgentProviderCallRequestPriceSource string
+
+// FinishAgentProviderCallRequestStatus defines model for FinishAgentProviderCallRequest.Status.
+type FinishAgentProviderCallRequestStatus string
 
 // ForgotPasswordRequest defines model for ForgotPasswordRequest.
 type ForgotPasswordRequest struct {
@@ -3368,6 +3534,15 @@ type SignFilePartsRequest struct {
 	PartNumbers []int `json:"part_numbers"`
 }
 
+// StartAgentProviderCallRequest defines model for StartAgentProviderCallRequest.
+type StartAgentProviderCallRequest struct {
+	CallId       openapi_types.UUID `json:"call_id"`
+	Currency     string             `json:"currency"`
+	LeaseToken   openapi_types.UUID `json:"lease_token"`
+	ReservedCost string             `json:"reserved_cost"`
+	RunId        openapi_types.UUID `json:"run_id"`
+}
+
 // ThreadFollow defines model for ThreadFollow.
 type ThreadFollow struct {
 	FollowedAt   time.Time          `json:"followed_at"`
@@ -3422,10 +3597,17 @@ type UpdateAgentPlatformSettingsRequest struct {
 	OrganizationRateLimitPerMinute int `json:"organization_rate_limit_per_minute"`
 }
 
+// UpdateAgentProviderCredentialRequest defines model for UpdateAgentProviderCredentialRequest.
+type UpdateAgentProviderCredentialRequest struct {
+	ApiKey string `json:"api_key"`
+	Clear  bool   `json:"clear"`
+}
+
 // UpdateAgentRequest defines model for UpdateAgentRequest.
 type UpdateAgentRequest struct {
 	AllowedScopes               *[]AgentScope         `json:"allowed_scopes,omitempty"`
 	ChatIds                     *[]openapi_types.UUID `json:"chat_ids,omitempty"`
+	DailyCostLimit              *string               `json:"daily_cost_limit,omitempty"`
 	Description                 *string               `json:"description,omitempty"`
 	DisplayName                 *string               `json:"display_name,omitempty"`
 	Enabled                     *bool                 `json:"enabled,omitempty"`
@@ -3436,6 +3618,7 @@ type UpdateAgentRequest struct {
 	MaxOutputTokens             *int                  `json:"max_output_tokens,omitempty"`
 	MaxToolIterations           *int                  `json:"max_tool_iterations,omitempty"`
 	Model                       *string               `json:"model,omitempty"`
+	MonthlyCostLimit            *string               `json:"monthly_cost_limit,omitempty"`
 	PerChatConcurrency          *int                  `json:"per_chat_concurrency,omitempty"`
 	Provider                    *string               `json:"provider,omitempty"`
 	ProviderRateLimitPerMinute  *int                  `json:"provider_rate_limit_per_minute,omitempty"`
@@ -3741,6 +3924,12 @@ type ListFollowedThreadsParams struct {
 // UpdateAgentRuntimeCheckpointJSONRequestBody defines body for UpdateAgentRuntimeCheckpoint for application/json ContentType.
 type UpdateAgentRuntimeCheckpointJSONRequestBody = UpdateAgentRuntimeCheckpointRequest
 
+// StartAgentProviderCallJSONRequestBody defines body for StartAgentProviderCall for application/json ContentType.
+type StartAgentProviderCallJSONRequestBody = StartAgentProviderCallRequest
+
+// FinishAgentProviderCallJSONRequestBody defines body for FinishAgentProviderCall for application/json ContentType.
+type FinishAgentProviderCallJSONRequestBody = FinishAgentProviderCallRequest
+
 // ClaimAgentRuntimeRunJSONRequestBody defines body for ClaimAgentRuntimeRun for application/json ContentType.
 type ClaimAgentRuntimeRunJSONRequestBody = ClaimAgentRunRequest
 
@@ -3770,6 +3959,9 @@ type InvokeAgentJSONRequestBody = InvokeAgentRequest
 
 // CreateAgentKeyJSONRequestBody defines body for CreateAgentKey for application/json ContentType.
 type CreateAgentKeyJSONRequestBody = CreateAgentKeyRequest
+
+// UpdateAgentProviderCredentialJSONRequestBody defines body for UpdateAgentProviderCredential for application/json ContentType.
+type UpdateAgentProviderCredentialJSONRequestBody = UpdateAgentProviderCredentialRequest
 
 // CreateAgentTriggerJSONRequestBody defines body for CreateAgentTrigger for application/json ContentType.
 type CreateAgentTriggerJSONRequestBody = CreateAgentTriggerRequest

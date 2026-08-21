@@ -1362,6 +1362,24 @@ export interface paths {
         patch: operations["updateAgentTrigger"];
         trace?: never;
     };
+    "/api/v1/agents/{agent_id}/provider-credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getAgentProviderCredential"];
+        put: operations["updateAgentProviderCredential"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents/settings": {
         parameters: {
             query?: never;
@@ -1560,6 +1578,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agent-runtime/provider-credential": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns the authenticated agent's credential only to its API-key runtime over a no-store response. */
+        get: operations["getAgentRuntimeProviderCredential"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent-runtime/provider-calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Atomically reserves cost against daily and monthly budgets before a provider request. */
+        post: operations["startAgentProviderCall"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent-runtime/provider-calls/{call_id}/finish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["finishAgentProviderCall"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1576,7 +1644,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "already_bootstrapped" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "workspace_not_found";
+        ErrorCode: "already_bootstrapped" | "agent_budget_exceeded" | "agent_conflict" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "workspace_not_found";
         File: {
             /** Format: uuid */
             id: string;
@@ -1862,7 +1930,7 @@ export interface components {
             created_at: string;
         };
         /** @enum {string} */
-        AgentScope: "chats:read" | "messages:read" | "messages:write" | "reactions:write" | "files:read" | "search:read" | "members:read" | "memory:read" | "memory:write";
+        AgentScope: "chats:read" | "messages:read" | "messages:write" | "reactions:write" | "files:read" | "search:read" | "members:read" | "memory:read" | "memory:write" | "runtime:execute";
         Agent: {
             /** Format: uuid */
             id: string;
@@ -1881,6 +1949,8 @@ export interface components {
             model: string;
             endpoint_url?: string;
             external_data_sharing_approved: boolean;
+            daily_cost_limit: string | null;
+            monthly_cost_limit: string | null;
             max_output_tokens: number;
             max_tool_iterations: number;
             max_chain_depth: number;
@@ -1907,6 +1977,8 @@ export interface components {
             model?: string;
             endpoint_url?: string;
             external_data_sharing_approved: boolean;
+            daily_cost_limit?: string;
+            monthly_cost_limit?: string;
             /** @default 2048 */
             max_output_tokens: number;
             /** @default 8 */
@@ -1931,6 +2003,8 @@ export interface components {
             model?: string;
             endpoint_url?: string;
             external_data_sharing_approved?: boolean;
+            daily_cost_limit?: string;
+            monthly_cost_limit?: string;
             max_output_tokens?: number;
             max_tool_iterations?: number;
             max_chain_depth?: number;
@@ -2038,6 +2112,70 @@ export interface components {
             last_event_seq: number;
             /** Format: date-time */
             updated_at: string;
+        };
+        AgentProviderCredentialView: {
+            configured: boolean;
+            key_hint: string;
+            /** Format: date-time */
+            updated_at?: string | null;
+        };
+        UpdateAgentProviderCredentialRequest: {
+            api_key: string;
+            clear: boolean;
+        };
+        AgentRuntimeProviderCredential: {
+            api_key: string;
+        };
+        StartAgentProviderCallRequest: {
+            /** Format: uuid */
+            call_id: string;
+            /** Format: uuid */
+            run_id: string;
+            /** Format: uuid */
+            lease_token: string;
+            reserved_cost: string;
+            currency: string;
+        };
+        FinishAgentProviderCallRequest: {
+            /** Format: uuid */
+            run_id: string;
+            /** Format: uuid */
+            lease_token: string;
+            /** @enum {string} */
+            status: "completed" | "failed";
+            actual_cost: string;
+            currency: string;
+            /** Format: int64 */
+            input_tokens: number;
+            /** Format: int64 */
+            output_tokens: number;
+            /** @enum {string} */
+            price_source: "provider" | "configured" | "estimated" | "unknown";
+        };
+        AgentProviderCall: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            run_id: string;
+            /** Format: uuid */
+            correlation_id: string;
+            provider: string;
+            model: string;
+            /** @enum {string} */
+            status: "started" | "completed" | "failed";
+            reserved_cost: string;
+            actual_cost?: string | null;
+            currency: string;
+            /** Format: int64 */
+            input_tokens: number;
+            /** Format: int64 */
+            output_tokens: number;
+            /** @enum {string} */
+            price_source: "provider" | "configured" | "estimated" | "unknown";
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            finished_at?: string | null;
         };
         UpdateAgentRuntimeCheckpointRequest: {
             /** Format: int64 */
@@ -5736,6 +5874,59 @@ export interface operations {
             422: components["responses"]["Error"];
         };
     };
+    getAgentProviderCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Masked provider credential state; plaintext is never returned to administrators. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentProviderCredentialView"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    updateAgentProviderCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAgentProviderCredentialRequest"];
+            };
+        };
+        responses: {
+            /** @description Provider credential replaced or cleared using envelope-style authenticated encryption. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentProviderCredentialView"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
     getAgentPlatformSettings: {
         parameters: {
             query?: never;
@@ -6103,6 +6294,85 @@ export interface operations {
                 };
             };
             403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    getAgentRuntimeProviderCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Runtime-only provider credential. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRuntimeProviderCredential"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    startAgentProviderCall: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartAgentProviderCallRequest"];
+            };
+        };
+        responses: {
+            /** @description Provider call reservation recorded with the run correlation ID. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentProviderCall"];
+                };
+            };
+            402: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    finishAgentProviderCall: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                call_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinishAgentProviderCallRequest"];
+            };
+        };
+        responses: {
+            /** @description Provider call usage finalized. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentProviderCall"];
+                };
+            };
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             422: components["responses"]["Error"];
         };
     };

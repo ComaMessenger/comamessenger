@@ -8,6 +8,7 @@ import (
 
 	"github.com/comamessenger/comamessenger/core/internal/access"
 	"github.com/comamessenger/comamessenger/core/internal/agent"
+	"github.com/comamessenger/comamessenger/core/internal/agentconfig"
 	"github.com/comamessenger/comamessenger/core/internal/agentrun"
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
@@ -26,16 +27,18 @@ func TestAgentWorkerLeaseAndCheckpointContract(t *testing.T) {
 	seedRunWorkerModel(t, pool)
 	owner := identity.User{ActorID: runTestOwnerID, OrgID: runTestOrgID, OrgRole: "owner"}
 	agents := agent.NewService(pool)
+	dailyLimit := "0.01500000"
 	created, err := agents.Create(t.Context(), owner, agent.CreateInput{
 		DisplayName: "Runtime", Handle: "runtime", Kind: "builtin", Enabled: true,
-		AllowedScopes: []agent.Scope{agent.ScopeMessagesRead, agent.ScopeMessagesWrite}, ChatIDs: []string{runTestChatID},
+		AllowedScopes: []agent.Scope{agent.ScopeMessagesRead, agent.ScopeMessagesWrite, agent.ScopeRuntimeExecute}, ChatIDs: []string{runTestChatID},
 		Provider: "openai", Model: "test", ExternalDataSharingApproved: true,
+		DailyCostLimit: &dailyLimit,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	key, err := agents.CreateKey(t.Context(), owner, created.ID, agent.CreateKeyInput{
-		Name: "worker", Scopes: []agent.Scope{agent.ScopeMessagesRead, agent.ScopeMessagesWrite}, RateLimitPerMinute: 100,
+		Name: "worker", Scopes: []agent.Scope{agent.ScopeMessagesRead, agent.ScopeMessagesWrite, agent.ScopeRuntimeExecute}, RateLimitPerMinute: 100,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -43,6 +46,25 @@ func TestAgentWorkerLeaseAndCheckpointContract(t *testing.T) {
 	agentUser, authentication, err := agents.AuthenticateKey(t.Context(), key.Secret)
 	if err != nil {
 		t.Fatal(err)
+	}
+	configService, err := agentconfig.NewService(pool, "0123456789abcdef0123456789abcdef")
+	if err != nil {
+		t.Fatal(err)
+	}
+	credential, err := configService.UpdateCredential(t.Context(), owner, created.ID, agentconfig.UpdateCredentialInput{APIKey: "provider-secret-value"})
+	if err != nil || !credential.Configured || credential.KeyHint == "provider-secret-value" {
+		t.Fatalf("credential view = %+v, err=%v", credential, err)
+	}
+	runtimeCredential, err := configService.RuntimeCredential(t.Context(), agentUser, authentication)
+	if err != nil || runtimeCredential.APIKey != "provider-secret-value" {
+		t.Fatalf("runtime credential = %+v, err=%v", runtimeCredential, err)
+	}
+	var ciphertext []byte
+	if err := pool.QueryRow(t.Context(), `SELECT ciphertext FROM agent_provider_credentials WHERE agent_id=$1`, created.ID).Scan(&ciphertext); err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(ciphertext, []byte("provider-secret-value")) {
+		t.Fatal("provider credential persisted as plaintext")
 	}
 	service := agentrun.NewService(pool)
 	invoked, err := service.Invoke(t.Context(), owner, created.ID, agentrun.InvokeInput{
@@ -70,6 +92,23 @@ func TestAgentWorkerLeaseAndCheckpointContract(t *testing.T) {
 		LeaseToken: claimed.LeaseToken, LeaseSeconds: 45,
 	}); err != nil {
 		t.Fatal(err)
+	}
+	providerCall, err := service.StartProviderCall(t.Context(), agentUser, authentication, agentrun.StartProviderCallInput{
+		CallID: mustRunID(t), RunID: invoked.ID, LeaseToken: claimed.LeaseToken, ReservedCost: "0.01000000", Currency: "USD",
+	})
+	if err != nil || providerCall.CorrelationID != invoked.CorrelationID {
+		t.Fatalf("provider call = %+v, err=%v", providerCall, err)
+	}
+	if _, err := service.FinishProviderCall(t.Context(), agentUser, authentication, providerCall.ID, agentrun.FinishProviderCallInput{
+		RunID: invoked.ID, LeaseToken: claimed.LeaseToken, Status: "completed", ActualCost: "0.01000000", Currency: "USD",
+		InputTokens: 10, OutputTokens: 5, PriceSource: "provider",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.StartProviderCall(t.Context(), agentUser, authentication, agentrun.StartProviderCallInput{
+		CallID: mustRunID(t), RunID: invoked.ID, LeaseToken: claimed.LeaseToken, ReservedCost: "0.01000000", Currency: "USD",
+	}); !errors.Is(err, agentrun.ErrBudget) {
+		t.Fatalf("over-budget provider call error = %v", err)
 	}
 	completed, err := service.CompleteForAgent(t.Context(), agentUser, authentication, invoked.ID, agentrun.RuntimeCompletion{
 		LeaseToken: claimed.LeaseToken, InputTokens: 10, OutputTokens: 5, Cost: "0.01000000", Currency: "USD",

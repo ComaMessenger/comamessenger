@@ -4133,6 +4133,78 @@
         }
       }
     },
+    "/api/v1/agents/{agent_id}/provider-credentials": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/AgentId"
+        }
+      ],
+      "get": {
+        "operationId": "getAgentProviderCredential",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Masked provider credential state; plaintext is never returned to administrators.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentProviderCredentialView"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "put": {
+        "operationId": "updateAgentProviderCredential",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAgentProviderCredentialRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Provider credential replaced or cleared using envelope-style authenticated encryption.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentProviderCredentialView"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/v1/agents/settings": {
       "get": {
         "operationId": "getAgentPlatformSettings",
@@ -4675,6 +4747,132 @@
           }
         }
       }
+    },
+    "/api/v1/agent-runtime/provider-credential": {
+      "get": {
+        "operationId": "getAgentRuntimeProviderCredential",
+        "description": "Returns the authenticated agent's credential only to its API-key runtime over a no-store response.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Runtime-only provider credential.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRuntimeProviderCredential"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/agent-runtime/provider-calls": {
+      "post": {
+        "operationId": "startAgentProviderCall",
+        "description": "Atomically reserves cost against daily and monthly budgets before a provider request.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartAgentProviderCallRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Provider call reservation recorded with the run correlation ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentProviderCall"
+                }
+              }
+            }
+          },
+          "402": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/agent-runtime/provider-calls/{call_id}/finish": {
+      "post": {
+        "operationId": "finishAgentProviderCall",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinishAgentProviderCallRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Provider call usage finalized.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentProviderCall"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4831,6 +5029,12 @@
         "type": "string",
         "enum": [
           "already_bootstrapped",
+          "agent_budget_exceeded",
+          "agent_conflict",
+          "agent_configuration_not_found",
+          "agent_not_found",
+          "agent_trigger_conflict",
+          "agent_trigger_not_found",
           "chat_conflict",
           "chat_not_found",
           "forbidden",
@@ -5950,7 +6154,8 @@
           "search:read",
           "members:read",
           "memory:read",
-          "memory:write"
+          "memory:write",
+          "runtime:execute"
         ]
       },
       "Agent": {
@@ -5969,6 +6174,8 @@
           "provider",
           "model",
           "external_data_sharing_approved",
+          "daily_cost_limit",
+          "monthly_cost_limit",
           "max_output_tokens",
           "max_tool_iterations",
           "max_chain_depth",
@@ -6037,6 +6244,20 @@
           },
           "external_data_sharing_approved": {
             "type": "boolean"
+          },
+          "daily_cost_limit": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9]+(?:\\.[0-9]{1,8})?$"
+          },
+          "monthly_cost_limit": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9]+(?:\\.[0-9]{1,8})?$"
           },
           "max_output_tokens": {
             "type": "integer",
@@ -6150,6 +6371,14 @@
           "external_data_sharing_approved": {
             "type": "boolean"
           },
+          "daily_cost_limit": {
+            "type": "string",
+            "pattern": "^(?:|[0-9]+(?:\\.[0-9]{1,8})?)$"
+          },
+          "monthly_cost_limit": {
+            "type": "string",
+            "pattern": "^(?:|[0-9]+(?:\\.[0-9]{1,8})?)$"
+          },
           "max_output_tokens": {
             "type": "integer",
             "minimum": 1,
@@ -6239,6 +6468,14 @@
           },
           "external_data_sharing_approved": {
             "type": "boolean"
+          },
+          "daily_cost_limit": {
+            "type": "string",
+            "pattern": "^(?:|[0-9]+(?:\\.[0-9]{1,8})?)$"
+          },
+          "monthly_cost_limit": {
+            "type": "string",
+            "pattern": "^(?:|[0-9]+(?:\\.[0-9]{1,8})?)$"
           },
           "max_output_tokens": {
             "type": "integer",
@@ -6601,6 +6838,239 @@
           },
           "updated_at": {
             "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AgentProviderCredentialView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "configured",
+          "key_hint"
+        ],
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "key_hint": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "UpdateAgentProviderCredentialRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "api_key",
+          "clear"
+        ],
+        "properties": {
+          "api_key": {
+            "type": "string",
+            "maxLength": 16384
+          },
+          "clear": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AgentRuntimeProviderCredential": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "api_key"
+        ],
+        "properties": {
+          "api_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16384
+          }
+        }
+      },
+      "StartAgentProviderCallRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "call_id",
+          "run_id",
+          "lease_token",
+          "reserved_cost",
+          "currency"
+        ],
+        "properties": {
+          "call_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "lease_token": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reserved_cost": {
+            "type": "string",
+            "pattern": "^[0-9]+(?:\\.[0-9]{1,8})?$"
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          }
+        }
+      },
+      "FinishAgentProviderCallRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "run_id",
+          "lease_token",
+          "status",
+          "actual_cost",
+          "currency",
+          "input_tokens",
+          "output_tokens",
+          "price_source"
+        ],
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "lease_token": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "failed"
+            ]
+          },
+          "actual_cost": {
+            "type": "string",
+            "pattern": "^[0-9]+(?:\\.[0-9]{1,8})?$"
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "input_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "output_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "price_source": {
+            "type": "string",
+            "enum": [
+              "provider",
+              "configured",
+              "estimated",
+              "unknown"
+            ]
+          }
+        }
+      },
+      "AgentProviderCall": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "run_id",
+          "correlation_id",
+          "provider",
+          "model",
+          "status",
+          "reserved_cost",
+          "currency",
+          "input_tokens",
+          "output_tokens",
+          "price_source",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "correlation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "started",
+              "completed",
+              "failed"
+            ]
+          },
+          "reserved_cost": {
+            "type": "string"
+          },
+          "actual_cost": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "currency": {
+            "type": "string"
+          },
+          "input_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "output_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "price_source": {
+            "type": "string",
+            "enum": [
+              "provider",
+              "configured",
+              "estimated",
+              "unknown"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "finished_at": {
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           }
         }

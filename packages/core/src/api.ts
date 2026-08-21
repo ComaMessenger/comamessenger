@@ -82,6 +82,12 @@ import type {
   FailAgentRunRequest,
   AgentRuntimeCheckpoint,
   UpdateAgentRuntimeCheckpointRequest,
+  AgentProviderCredentialView,
+  UpdateAgentProviderCredentialRequest,
+  AgentRuntimeProviderCredential,
+  AgentProviderCall,
+  StartAgentProviderCallRequest,
+  FinishAgentProviderCallRequest,
 } from "./types";
 
 type APIErrorPayload = components["schemas"]["Error"];
@@ -307,7 +313,9 @@ export class MessengerAPI {
       { method: "POST" },
     );
   }
-  async claimAgentRun(input: ClaimAgentRunRequest): Promise<ClaimedAgentRun | null> {
+  async claimAgentRun(
+    input: ClaimAgentRunRequest,
+  ): Promise<ClaimedAgentRun | null> {
     return (
       (await this.request<ClaimedAgentRun | undefined>(
         "/api/v1/agent-runtime/runs/claim",
@@ -315,13 +323,19 @@ export class MessengerAPI {
       )) ?? null
     );
   }
-  heartbeatAgentRun(runID: string, input: AgentRunLeaseRequest): Promise<AgentRun> {
+  heartbeatAgentRun(
+    runID: string,
+    input: AgentRunLeaseRequest,
+  ): Promise<AgentRun> {
     return this.request(
       `/api/v1/agent-runtime/runs/${encodeURIComponent(runID)}/heartbeat`,
       { method: "POST", body: JSON.stringify(input) },
     );
   }
-  completeAgentRun(runID: string, input: CompleteAgentRunRequest): Promise<AgentRun> {
+  completeAgentRun(
+    runID: string,
+    input: CompleteAgentRunRequest,
+  ): Promise<AgentRun> {
     return this.request(
       `/api/v1/agent-runtime/runs/${encodeURIComponent(runID)}/complete`,
       { method: "POST", body: JSON.stringify(input) },
@@ -345,6 +359,40 @@ export class MessengerAPI {
     return this.request(
       `/api/v1/agent-runtime/checkpoints/${encodeURIComponent(consumer)}`,
       { method: "PUT", body: JSON.stringify(input) },
+    );
+  }
+  agentProviderCredential(id: string): Promise<AgentProviderCredentialView> {
+    return this.request(
+      `/api/v1/agents/${encodeURIComponent(id)}/provider-credentials`,
+    );
+  }
+  updateAgentProviderCredential(
+    id: string,
+    input: UpdateAgentProviderCredentialRequest,
+  ): Promise<AgentProviderCredentialView> {
+    return this.request(
+      `/api/v1/agents/${encodeURIComponent(id)}/provider-credentials`,
+      { method: "PUT", body: JSON.stringify(input) },
+    );
+  }
+  agentRuntimeProviderCredential(): Promise<AgentRuntimeProviderCredential> {
+    return this.request("/api/v1/agent-runtime/provider-credential");
+  }
+  startAgentProviderCall(
+    input: StartAgentProviderCallRequest,
+  ): Promise<AgentProviderCall> {
+    return this.request("/api/v1/agent-runtime/provider-calls", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+  finishAgentProviderCall(
+    callID: string,
+    input: FinishAgentProviderCallRequest,
+  ): Promise<AgentProviderCall> {
+    return this.request(
+      `/api/v1/agent-runtime/provider-calls/${encodeURIComponent(callID)}/finish`,
+      { method: "POST", body: JSON.stringify(input) },
     );
   }
   agentTriggers(id: string): Promise<AgentTrigger[]> {

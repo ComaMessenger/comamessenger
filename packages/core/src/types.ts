@@ -95,12 +95,22 @@ export type AgentRunLeaseRequest =
   components["schemas"]["AgentRunLeaseRequest"];
 export type CompleteAgentRunRequest =
   components["schemas"]["CompleteAgentRunRequest"];
-export type FailAgentRunRequest =
-  components["schemas"]["FailAgentRunRequest"];
+export type FailAgentRunRequest = components["schemas"]["FailAgentRunRequest"];
 export type AgentRuntimeCheckpoint =
   components["schemas"]["AgentRuntimeCheckpoint"];
 export type UpdateAgentRuntimeCheckpointRequest =
   components["schemas"]["UpdateAgentRuntimeCheckpointRequest"];
+export type AgentProviderCredentialView =
+  components["schemas"]["AgentProviderCredentialView"];
+export type UpdateAgentProviderCredentialRequest =
+  components["schemas"]["UpdateAgentProviderCredentialRequest"];
+export type AgentRuntimeProviderCredential =
+  components["schemas"]["AgentRuntimeProviderCredential"];
+export type AgentProviderCall = components["schemas"]["AgentProviderCall"];
+export type StartAgentProviderCallRequest =
+  components["schemas"]["StartAgentProviderCallRequest"];
+export type FinishAgentProviderCallRequest =
+  components["schemas"]["FinishAgentProviderCallRequest"];
 export type Session = components["schemas"]["Session"];
 export type BootstrapRequest = components["schemas"]["BootstrapRequest"];
 export type LoginRequest = components["schemas"]["LoginRequest"];

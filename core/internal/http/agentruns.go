@@ -133,6 +133,36 @@ func (h *identityHandlers) updateAgentRuntimeCheckpoint(w standardhttp.ResponseW
 	}
 	writeJSON(h.logger, w, standardhttp.StatusOK, result)
 }
+
+func (h *identityHandlers) startAgentProviderCall(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input agentrun.StartProviderCallInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	auth := authFromContext(r.Context())
+	result, err := h.agentRuns.StartProviderCall(r.Context(), auth.User, auth.Identity, input)
+	if err != nil {
+		h.writeAgentRunError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusCreated, result)
+}
+
+func (h *identityHandlers) finishAgentProviderCall(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input agentrun.FinishProviderCallInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	auth := authFromContext(r.Context())
+	result, err := h.agentRuns.FinishProviderCall(r.Context(), auth.User, auth.Identity, chi.URLParam(r, "callID"), input)
+	if err != nil {
+		h.writeAgentRunError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
 func (h *identityHandlers) writeAgentRunError(w standardhttp.ResponseWriter, r *standardhttp.Request, err error) {
 	switch {
 	case errors.Is(err, agentrun.ErrInvalid):
@@ -143,6 +173,8 @@ func (h *identityHandlers) writeAgentRunError(w standardhttp.ResponseWriter, r *
 		h.writeError(w, r, standardhttp.StatusNotFound, "agent_not_found", "The agent run was not found.")
 	case errors.Is(err, agentrun.ErrConflict):
 		h.writeError(w, r, standardhttp.StatusConflict, "agent_conflict", "The agent run state has already changed.")
+	case errors.Is(err, agentrun.ErrBudget):
+		h.writeError(w, r, standardhttp.StatusPaymentRequired, "agent_budget_exceeded", "The agent cost budget has been reached.")
 	default:
 		h.internalError(w, r, err)
 	}

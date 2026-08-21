@@ -44,7 +44,7 @@
 - [x] Хранить API keys только как hash; показывать plaintext один раз при создании.
 - [x] Пересекать actor permissions, API-key scopes и chat membership при каждом действии.
 - [x] Записывать tool calls, administrative changes и чувствительные агентские действия в audit log без сохранения provider secrets.
-- [ ] Зашифровать provider credentials envelope encryption/AES-GCM с master key из environment или внешнего secret store.
+- [x] Зашифровать provider credentials envelope encryption/AES-GCM с master key из environment или внешнего secret store.
 - [x] Реализовать rotation/revocation ключей без рестарта core.
 - [x] Добавить rate limits по agent, key, provider и organization.
 
@@ -74,7 +74,7 @@
 - [x] Валидировать аргументы tools по JSON Schema и применять те же authz/scopes, что и REST.
 - [ ] Добавить allowlist внешних MCP servers, timeout, output size limits и redaction секретов.
 - [ ] Разделить read и write tools; потенциально значимые действия могут требовать configurable user confirmation.
-- [ ] Записывать correlation IDs run → provider call → tool call → message.
+- [x] Записывать correlation IDs run → provider call → tool call → message.
 
 ### Streaming и Web UI
 
@@ -110,6 +110,11 @@ GET    /api/v1/agents/:id/triggers
 POST   /api/v1/agents/:id/triggers
 PATCH  /api/v1/agents/:id/triggers/:trigger_id
 DELETE /api/v1/agents/:id/triggers/:trigger_id
+GET    /api/v1/agents/:id/provider-credentials
+PUT    /api/v1/agents/:id/provider-credentials
+POST   /api/v1/agent-runtime/runs/claim
+POST   /api/v1/agent-runtime/provider-calls
+POST   /api/v1/agent-runtime/provider-calls/:call_id/finish
 
 agent.invoked
 agent.run.started
@@ -121,8 +126,9 @@ message.streaming
 
 - Durable final message создаётся core через публичный message endpoint.
 - Streaming delta не является источником истины и может быть отброшена при reconnect.
-- Provider key никогда не входит в event payload, run logs или client API.
+- Provider key никогда не входит в event payload, run logs или browser/admin API; runtime-only `no-store` endpoint доступен только API key самого агента.
 - Usage сохраняет provider/model/tokens/cost/currency и источник расчёта стоимости.
+- Перед provider call runtime атомарно резервирует оценочную стоимость под advisory lock; дневной и месячный лимиты учитывают завершённый usage и незавершённые reservations, поэтому конкурентные runs не обходят budget gate.
 
 ## Критерии приёмки
 

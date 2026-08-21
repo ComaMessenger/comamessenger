@@ -16,6 +16,7 @@ import (
 
 	"github.com/comamessenger/comamessenger/core/internal/access"
 	"github.com/comamessenger/comamessenger/core/internal/agent"
+	"github.com/comamessenger/comamessenger/core/internal/agentconfig"
 	"github.com/comamessenger/comamessenger/core/internal/agentrun"
 	"github.com/comamessenger/comamessenger/core/internal/agenttool"
 	"github.com/comamessenger/comamessenger/core/internal/agenttrigger"
@@ -37,6 +38,7 @@ const refreshCookieName = "comamessenger_refresh"
 type Dependencies struct {
 	Identity              *identity.Service
 	Agents                *agent.Service
+	AgentConfig           *agentconfig.Service
 	AgentTools            *agenttool.Executor
 	AgentRuns             *agentrun.Service
 	AgentTriggers         *agenttrigger.Service
@@ -60,6 +62,7 @@ type identityHandlers struct {
 	logger                *slog.Logger
 	service               *identity.Service
 	agents                *agent.Service
+	agentConfig           *agentconfig.Service
 	agentTools            *agenttool.Executor
 	agentRuns             *agentrun.Service
 	agentTriggers         *agenttrigger.Service
@@ -96,7 +99,7 @@ type authenticated struct {
 
 func newIdentityHandlers(logger *slog.Logger, allowedOrigin string, dependencies Dependencies) *identityHandlers {
 	return &identityHandlers{
-		logger: logger, service: dependencies.Identity, agents: dependencies.Agents, agentTools: dependencies.AgentTools, agentRuns: dependencies.AgentRuns, agentTriggers: dependencies.AgentTriggers, chats: dependencies.Chats, messages: dependencies.Messages, userState: dependencies.UserState, push: dependencies.Push, workspace: dependencies.Workspace, files: dependencies.Files, search: dependencies.Search, realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
+		logger: logger, service: dependencies.Identity, agents: dependencies.Agents, agentConfig: dependencies.AgentConfig, agentTools: dependencies.AgentTools, agentRuns: dependencies.AgentRuns, agentTriggers: dependencies.AgentTriggers, chats: dependencies.Chats, messages: dependencies.Messages, userState: dependencies.UserState, push: dependencies.Push, workspace: dependencies.Workspace, files: dependencies.Files, search: dependencies.Search, realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
 		cookieSecure: dependencies.CookieSecure, refreshTTL: dependencies.RefreshTokenTTL,
 		bootstrapRate: newIPRateLimiter(5, 5), loginRate: newIPRateLimiter(10, 10),
 		refreshRate: newIPRateLimiter(30, 20), invitationRate: newIPRateLimiter(10, 10), websocketRate: newIPRateLimiter(60, 20), actorRate: newIPRateLimiter(1200, 200),
@@ -152,6 +155,11 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Post("/agents/{agentID}/keys", h.createAgentKey)
 			protected.Delete("/agents/{agentID}/keys/{keyID}", h.revokeAgentKey)
 		}
+		if h.agentConfig != nil {
+			protected.Get("/agents/{agentID}/provider-credentials", h.agentProviderCredential)
+			protected.Put("/agents/{agentID}/provider-credentials", h.updateAgentProviderCredential)
+			protected.Get("/agent-runtime/provider-credential", h.agentRuntimeProviderCredential)
+		}
 		if h.agentTools != nil {
 			protected.Get("/agent-tools", h.listAgentTools)
 			protected.Post("/agent-tools/{toolName}", h.invokeAgentTool)
@@ -167,6 +175,8 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Post("/agent-runtime/runs/{runID}/fail", h.failAgentRun)
 			protected.Get("/agent-runtime/checkpoints/{consumer}", h.getAgentRuntimeCheckpoint)
 			protected.Put("/agent-runtime/checkpoints/{consumer}", h.updateAgentRuntimeCheckpoint)
+			protected.Post("/agent-runtime/provider-calls", h.startAgentProviderCall)
+			protected.Post("/agent-runtime/provider-calls/{callID}/finish", h.finishAgentProviderCall)
 		}
 		if h.agentTriggers != nil {
 			protected.Get("/agents/{agentID}/triggers", h.listAgentTriggers)
