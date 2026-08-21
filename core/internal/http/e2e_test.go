@@ -163,6 +163,7 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/auth/login", "", map[string]any{
 		"email": "member-new@example.test", "password": "new member password",
 	}, standardhttp.StatusOK, &memberEmailLogin)
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/organization/members/"+member.User.ActorID+"/password-reset", owner.AccessToken, nil, standardhttp.StatusServiceUnavailable, nil)
 	emailSender.configured = true
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/me/email/change", member.AccessToken, map[string]any{
 		"new_email": "member-final@example.test", "current_password": "new member password",
@@ -188,10 +189,61 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 		"token": emailToken,
 	}, standardhttp.StatusUnprocessableEntity, nil)
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/me", memberEmailLogin.AccessToken, nil, standardhttp.StatusUnauthorized, nil)
+	operatorResetURL, err := identityService.IssueOperatorPasswordReset(context.Background(), "member-final@example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsedOperatorResetURL, err := url.Parse(operatorResetURL)
+	if err != nil || parsedOperatorResetURL.Query().Get("token") == "" {
+		t.Fatalf("operator reset URL = %q error=%v", operatorResetURL, err)
+	}
+	resetMessageCount := len(emailSender.messages)
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/auth/password/forgot", "", map[string]any{
+		"email": "missing@example.test",
+	}, standardhttp.StatusAccepted, nil)
+	if len(emailSender.messages) != resetMessageCount {
+		t.Fatalf("unknown account leaked through email delivery: messages=%d", len(emailSender.messages))
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/auth/password/forgot", "", map[string]any{
+		"email": "member-final@example.test",
+	}, standardhttp.StatusAccepted, nil)
+	if len(emailSender.messages) != resetMessageCount+1 {
+		t.Fatalf("self-service reset messages=%d want=%d", len(emailSender.messages), resetMessageCount+1)
+	}
+	selfResetURL, err := url.Parse(strings.TrimSpace(strings.Split(emailSender.messages[resetMessageCount].body, "\n")[1]))
+	if err != nil || selfResetURL.Query().Get("token") == "" {
+		t.Fatalf("self reset URL = %q error=%v", selfResetURL, err)
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/auth/password/reset", "", map[string]any{
+		"token": parsedOperatorResetURL.Query().Get("token"), "new_password": "must not be accepted",
+	}, standardhttp.StatusUnprocessableEntity, nil)
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/organization/members/"+member.User.ActorID+"/password-reset", owner.AccessToken, nil, standardhttp.StatusAccepted, nil)
+	if len(emailSender.messages) != resetMessageCount+2 {
+		t.Fatalf("admin reset messages=%d want=%d", len(emailSender.messages), resetMessageCount+2)
+	}
+	adminResetURL, err := url.Parse(strings.TrimSpace(strings.Split(emailSender.messages[resetMessageCount+1].body, "\n")[1]))
+	if err != nil || adminResetURL.Query().Get("token") == "" {
+		t.Fatalf("admin reset URL = %q error=%v", adminResetURL, err)
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/auth/password/reset", "", map[string]any{
+		"token": selfResetURL.Query().Get("token"), "new_password": "must not be accepted",
+	}, standardhttp.StatusUnprocessableEntity, nil)
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/auth/password/reset", "", map[string]any{
+		"token": adminResetURL.Query().Get("token"), "new_password": "recovered member password",
+	}, standardhttp.StatusNoContent, nil)
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/auth/password/reset", "", map[string]any{
+		"token": adminResetURL.Query().Get("token"), "new_password": "replayed member password",
+	}, standardhttp.StatusUnprocessableEntity, nil)
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/me", member.AccessToken, nil, standardhttp.StatusUnauthorized, nil)
+	var recoveredLogin identity.Tokens
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/auth/login", "", map[string]any{
+		"email": "member-final@example.test", "password": "recovered member password",
+	}, standardhttp.StatusOK, &recoveredLogin)
+	member = recoveredLogin
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/organization/members/"+member.User.ActorID+"/require-password-change", owner.AccessToken, nil, standardhttp.StatusNoContent, nil)
 	var forcedLogin identity.Tokens
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/auth/login", "", map[string]any{
-		"email": "member-final@example.test", "password": "new member password",
+		"email": "member-final@example.test", "password": "recovered member password",
 	}, standardhttp.StatusOK, &forcedLogin)
 	if !forcedLogin.User.MustChangePassword {
 		t.Fatalf("mandatory password flag = %+v", forcedLogin.User)
@@ -200,7 +252,7 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/me", forcedLogin.AccessToken, nil, standardhttp.StatusOK, &updatedMember)
 	e2ePasswordChangeRequiredSocket(t, baseURL, forcedLogin.AccessToken)
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/me/password", forcedLogin.AccessToken, map[string]any{
-		"current_password": "new member password", "new_password": "final member password",
+		"current_password": "recovered member password", "new_password": "final member password",
 	}, standardhttp.StatusNoContent, nil)
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/me", forcedLogin.AccessToken, nil, standardhttp.StatusOK, &updatedMember)
 	if updatedMember.MustChangePassword {

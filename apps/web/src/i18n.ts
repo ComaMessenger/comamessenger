@@ -16,6 +16,17 @@ const ru = {
   password: "Пароль",
   login: "Войти",
   loggingIn: "Входим…",
+  forgotPassword: "Забыли пароль?",
+  sendRecoveryLink: "Отправить ссылку",
+  sending: "Отправляем…",
+  passwordRecoverySent:
+    "Если аккаунт существует, ссылка для восстановления отправлена на его email",
+  passwordRecoveryContactAdmin:
+    "Почтовая отправка не настроена. Обратитесь к администратору пространства или оператору сервера.",
+  backToLogin: "Вернуться ко входу",
+  resetPassword: "Задать новый пароль",
+  passwordResetComplete: "Пароль изменён. Все прежние сессии завершены.",
+  passwordResetInvalid: "Ссылка восстановления отсутствует или недействительна",
   bootstrapTitle: "Создайте пространство",
   bootstrapLead: "Первый аккаунт получит права владельца",
   bootstrapToken: "Код первичной настройки",
@@ -342,6 +353,8 @@ const ru = {
   emailConfirmationSent:
     "Ссылка подтверждения отправлена на новый адрес и действует один час",
   requirePasswordChange: "Потребовать смену пароля",
+  sendPasswordReset: "Отправить сброс пароля",
+  passwordResetSent: "Ссылка восстановления отправлена участнику",
   passwordChangeRequired: "При следующем входе участник должен сменить пароль",
   passwordChangeRequiredHint:
     "Администратор потребовал сменить пароль. Задайте новый пароль, чтобы продолжить работу.",
@@ -438,6 +451,18 @@ const en: Record<keyof typeof ru, string> = {
   password: "Password",
   login: "Sign in",
   loggingIn: "Signing in…",
+  forgotPassword: "Forgot password?",
+  sendRecoveryLink: "Send recovery link",
+  sending: "Sending…",
+  passwordRecoverySent:
+    "If the account exists, a recovery link was sent to its email address",
+  passwordRecoveryContactAdmin:
+    "Email delivery is not configured. Contact your workspace administrator or server operator.",
+  backToLogin: "Back to sign in",
+  resetPassword: "Set a new password",
+  passwordResetComplete:
+    "Password changed. Every previous session has been signed out.",
+  passwordResetInvalid: "The recovery link is missing or invalid",
   bootstrapTitle: "Create a workspace",
   bootstrapLead: "The first account becomes the owner",
   bootstrapToken: "Bootstrap token",
@@ -760,6 +785,8 @@ const en: Record<keyof typeof ru, string> = {
   emailConfirmationSent:
     "A confirmation link was sent to the new address and is valid for one hour",
   requirePasswordChange: "Require password change",
+  sendPasswordReset: "Send password reset",
+  passwordResetSent: "A recovery link was sent to the member",
   passwordChangeRequired:
     "The member must change their password at the next sign-in",
   passwordChangeRequiredHint:

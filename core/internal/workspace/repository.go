@@ -121,7 +121,7 @@ func (r *Repository) DeleteAsset(ctx context.Context, orgID, actorID, kind strin
 func (r *Repository) PublicBranding(ctx context.Context) (PublicBranding, error) {
 	var value PublicBranding
 	var hasLogo, hasFavicon bool
-	err := r.pool.QueryRow(ctx, `SELECT name,COALESCE(settings->>'accent_color','#174586'),version,EXISTS(SELECT 1 FROM organization_branding_assets a WHERE a.org_id=o.id AND kind='logo'),EXISTS(SELECT 1 FROM organization_branding_assets a WHERE a.org_id=o.id AND kind='favicon') FROM organizations o LIMIT 1`).Scan(&value.WorkspaceName, &value.AccentColor, &value.Version, &hasLogo, &hasFavicon)
+	err := r.pool.QueryRow(ctx, `SELECT id,name,COALESCE(settings->>'accent_color','#174586'),version,EXISTS(SELECT 1 FROM organization_branding_assets a WHERE a.org_id=o.id AND kind='logo'),EXISTS(SELECT 1 FROM organization_branding_assets a WHERE a.org_id=o.id AND kind='favicon') FROM organizations o LIMIT 1`).Scan(&value.OrgID, &value.WorkspaceName, &value.AccentColor, &value.Version, &hasLogo, &hasFavicon)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return PublicBranding{WorkspaceName: "Coma", AccentColor: "#174586", Version: 0}, nil
 	}

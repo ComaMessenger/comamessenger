@@ -93,6 +93,8 @@ func (h *identityHandlers) routes(router chi.Router) {
 	router.With(h.rateLimit("bootstrap", h.bootstrapRate)).Post("/bootstrap", h.bootstrap)
 	router.With(h.rateLimit("login", h.loginRate)).Post("/auth/login", h.login)
 	router.With(h.rateLimit("refresh", h.refreshRate)).Post("/auth/refresh", h.refresh)
+	router.With(h.rateLimit("password-forgot", h.loginRate)).Post("/auth/password/forgot", h.forgotPassword)
+	router.With(h.rateLimit("password-reset", h.loginRate)).Post("/auth/password/reset", h.resetPassword)
 	router.With(h.rateLimit("invitation-accept", h.invitationRate)).Post("/invitations/{token}/accept", h.acceptInvitation)
 	if h.workspace != nil {
 		router.Get("/branding", h.publicBranding)
@@ -127,6 +129,7 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Post("/organization/infrastructure/test", h.testInfrastructureConnection)
 			protected.Get("/organization/members", h.organizationMembers)
 			protected.Patch("/organization/members/{actorID}", h.updateOrganizationMember)
+			protected.Post("/organization/members/{actorID}/password-reset", h.issueMemberPasswordReset)
 			protected.Post("/organization/members/{actorID}/require-password-change", h.requireMemberPasswordChange)
 			protected.Get("/organization/audit", h.organizationAudit)
 		}
@@ -195,6 +198,45 @@ func (h *identityHandlers) requireCompletedPasswordChange(next standardhttp.Hand
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (h *identityHandlers) forgotPassword(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input identity.ForgotPasswordInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	if err := h.service.ForgotPassword(r.Context(), input); err != nil {
+		h.logger.Warn("password recovery request failed", "error", err)
+	}
+	w.WriteHeader(standardhttp.StatusAccepted)
+}
+
+func (h *identityHandlers) resetPassword(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input identity.ResetPasswordInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	revoked, err := h.service.ResetPassword(r.Context(), input)
+	if err != nil {
+		switch {
+		case errors.Is(err, identity.ErrTokenInvalid):
+			h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "token_invalid", "Password reset token is invalid or expired.")
+		case identity.IsValidationError(err):
+			h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "validation_failed", err.Error())
+		default:
+			h.internalError(w, r, err)
+		}
+		return
+	}
+	if h.revokeRealtimeSession != nil {
+		for _, sessionID := range revoked {
+			h.revokeRealtimeSession(sessionID)
+		}
+	}
+	h.clearRefreshCookie(w)
+	w.WriteHeader(standardhttp.StatusNoContent)
 }
 
 func (h *identityHandlers) listActors(w standardhttp.ResponseWriter, r *standardhttp.Request) {

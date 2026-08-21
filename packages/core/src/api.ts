@@ -37,6 +37,8 @@ import type {
   UpdateOrganizationMemberRequest,
   TransferOwnershipRequest,
   ChangePasswordRequest,
+  ForgotPasswordRequest,
+  ResetPasswordRequest,
   ChangeEmailRequest,
   ConfirmEmailRequest,
   EmailChangeResponse,
@@ -116,6 +118,18 @@ export class MessengerAPI {
         body: JSON.stringify(input),
       }),
     );
+  }
+  forgotPassword(input: ForgotPasswordRequest): Promise<void> {
+    return this.request("/api/v1/auth/password/forgot", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+  resetPassword(input: ResetPasswordRequest): Promise<void> {
+    return this.request("/api/v1/auth/password/reset", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
   }
   refresh(): Promise<TokenResponse> {
     if (!this.refreshRequest) {
@@ -264,6 +278,12 @@ export class MessengerAPI {
   requireMemberPasswordChange(actorID: string): Promise<void> {
     return this.request(
       `/api/v1/organization/members/${encodeURIComponent(actorID)}/require-password-change`,
+      { method: "POST" },
+    );
+  }
+  issueMemberPasswordReset(actorID: string): Promise<void> {
+    return this.request(
+      `/api/v1/organization/members/${encodeURIComponent(actorID)}/password-reset`,
       { method: "POST" },
     );
   }
@@ -560,6 +580,8 @@ export class MessengerAPI {
       );
     }
     if (response.status === 204) return undefined as T;
-    return response.json() as Promise<T>;
+    const body = await response.text();
+    if (!body) return undefined as T;
+    return JSON.parse(body) as T;
   }
 }

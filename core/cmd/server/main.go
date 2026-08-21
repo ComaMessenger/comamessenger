@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -95,6 +97,13 @@ func main() {
 	if err != nil {
 		logger.Error("identity service initialization failed", "error", err)
 		os.Exit(1)
+	}
+	if len(os.Args) > 1 && os.Args[1] == "admin" {
+		if err := runAdminCommand(startupCtx, identityService, os.Args[2:]); err != nil {
+			logger.Error("admin command failed", "error", err)
+			os.Exit(1)
+		}
+		return
 	}
 	eventStore := eventlog.NewStore(pool)
 	retentionWorker := eventlog.NewRetentionWorker(
@@ -191,4 +200,24 @@ func main() {
 		logger.Info("Redis coordinator stopped", "stats", redisCoordinator.Stats())
 	}
 	logger.Info("http server stopped")
+}
+
+func runAdminCommand(ctx context.Context, service *identity.Service, args []string) error {
+	if len(args) < 1 || args[0] != "issue-password-reset" {
+		return fmt.Errorf("usage: comamessenger admin issue-password-reset --email user@example.com")
+	}
+	flags := flag.NewFlagSet("issue-password-reset", flag.ContinueOnError)
+	email := flags.String("email", "", "account email")
+	if err := flags.Parse(args[1:]); err != nil {
+		return err
+	}
+	if *email == "" || flags.NArg() != 0 {
+		return fmt.Errorf("usage: comamessenger admin issue-password-reset --email user@example.com")
+	}
+	resetURL, err := service.IssueOperatorPasswordReset(ctx, *email)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(os.Stdout, resetURL)
+	return err
 }

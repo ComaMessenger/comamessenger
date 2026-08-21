@@ -114,7 +114,12 @@ func (s *Service) UpdateSettings(ctx context.Context, current identity.User, inp
 }
 
 func (s *Service) PublicBranding(ctx context.Context) (PublicBranding, error) {
-	return s.repository.PublicBranding(ctx)
+	value, err := s.repository.PublicBranding(ctx)
+	if err != nil || value.OrgID == "" {
+		return value, err
+	}
+	value.PasswordRecoveryAvailable, err = s.EmailConfigured(ctx, value.OrgID)
+	return value, err
 }
 
 func (s *Service) Asset(ctx context.Context, kind string) (Asset, error) {

@@ -74,6 +74,11 @@ const routes = [
   }),
   createRoute({
     getParentRoute: () => root,
+    path: "/reset-password",
+    component: marker,
+  }),
+  createRoute({
+    getParentRoute: () => root,
     path: "/dev/components",
     component: marker,
   }),

@@ -148,6 +148,56 @@
         }
       }
     },
+    "/api/v1/auth/password/forgot": {
+      "post": {
+        "operationId": "forgotPassword",
+        "description": "Always returns 202 so account existence cannot be enumerated.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Recovery request accepted."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/password/reset": {
+      "post": {
+        "operationId": "resetPassword",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Password reset and all sessions revoked."
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/v1/auth/logout": {
       "post": {
         "operationId": "logout",
@@ -871,6 +921,39 @@
             "$ref": "#/components/responses/Error"
           },
           "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/organization/members/{actor_id}/password-reset": {
+      "post": {
+        "operationId": "issueMemberPasswordReset",
+        "description": "Sends a one-use reset link to the member. The caller never receives the token.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActorId"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Password reset email accepted for delivery."
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
             "$ref": "#/components/responses/Error"
           }
         }
@@ -2757,6 +2840,7 @@
           "rate_limited",
           "service_not_ready",
           "session_not_found",
+          "smtp_not_configured",
           "email_taken",
           "reauthentication_failed",
           "token_invalid",
@@ -3331,6 +3415,39 @@
           }
         }
       },
+      "ForgotPasswordRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "email"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          }
+        }
+      },
+      "ResetPasswordRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "token",
+          "new_password"
+        ],
+        "properties": {
+          "token": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "new_password": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 1024
+          }
+        }
+      },
       "ChangeEmailRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -3551,7 +3668,8 @@
         "required": [
           "workspace_name",
           "accent_color",
-          "version"
+          "version",
+          "password_recovery_available"
         ],
         "properties": {
           "workspace_name": {
@@ -3564,6 +3682,9 @@
           "version": {
             "type": "integer",
             "format": "int64"
+          },
+          "password_recovery_available": {
+            "type": "boolean"
           },
           "logo_url": {
             "type": "string"

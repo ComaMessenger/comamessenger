@@ -7,6 +7,7 @@ import (
 	standardhttp "net/http"
 	"strconv"
 
+	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/workspace"
 	"github.com/go-chi/chi/v5"
 )
@@ -160,6 +161,26 @@ func (h *identityHandlers) requireMemberPasswordChange(w standardhttp.ResponseWr
 		}
 	}
 	w.WriteHeader(standardhttp.StatusNoContent)
+}
+
+func (h *identityHandlers) issueMemberPasswordReset(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	err := h.service.IssueMemberPasswordReset(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "actorID"))
+	if err != nil {
+		switch {
+		case errors.Is(err, identity.ErrEmailNotConfigured):
+			h.writeError(w, r, standardhttp.StatusServiceUnavailable, "smtp_not_configured", "Email delivery is not configured for this workspace.")
+		case errors.Is(err, identity.ErrForbidden):
+			h.writeError(w, r, standardhttp.StatusForbidden, "forbidden", "Password recovery is not allowed for this member.")
+		case errors.Is(err, identity.ErrNotFound):
+			h.writeError(w, r, standardhttp.StatusNotFound, "member_not_found", "Member was not found.")
+		case identity.IsValidationError(err):
+			h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "validation_failed", err.Error())
+		default:
+			h.internalError(w, r, err)
+		}
+		return
+	}
+	w.WriteHeader(standardhttp.StatusAccepted)
 }
 
 func (h *identityHandlers) organizationAudit(w standardhttp.ResponseWriter, r *standardhttp.Request) {

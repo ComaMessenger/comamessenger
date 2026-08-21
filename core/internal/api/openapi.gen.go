@@ -591,6 +591,7 @@ const (
 	ErrorCodeReauthenticationFailed ErrorCode = "reauthentication_failed"
 	ErrorCodeServiceNotReady        ErrorCode = "service_not_ready"
 	ErrorCodeSessionNotFound        ErrorCode = "session_not_found"
+	ErrorCodeSmtpNotConfigured      ErrorCode = "smtp_not_configured"
 	ErrorCodeTokenInvalid           ErrorCode = "token_invalid"
 	ErrorCodeUnauthorized           ErrorCode = "unauthorized"
 	ErrorCodeUnsupportedFormat      ErrorCode = "unsupported_format"
@@ -639,6 +640,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeServiceNotReady:
 		return true
 	case ErrorCodeSessionNotFound:
+		return true
+	case ErrorCodeSmtpNotConfigured:
 		return true
 	case ErrorCodeTokenInvalid:
 		return true
@@ -1651,6 +1654,11 @@ type Error struct {
 // ErrorCode defines model for ErrorCode.
 type ErrorCode string
 
+// ForgotPasswordRequest defines model for ForgotPasswordRequest.
+type ForgotPasswordRequest struct {
+	Email openapi_types.Email `json:"email"`
+}
+
 // ForwardAttribution defines model for ForwardAttribution.
 type ForwardAttribution struct {
 	AuthorHandle string    `json:"author_handle"`
@@ -1819,11 +1827,12 @@ type Permission string
 
 // PublicBranding defines model for PublicBranding.
 type PublicBranding struct {
-	AccentColor   string  `json:"accent_color"`
-	FaviconUrl    *string `json:"favicon_url,omitempty"`
-	LogoUrl       *string `json:"logo_url,omitempty"`
-	Version       int64   `json:"version"`
-	WorkspaceName string  `json:"workspace_name"`
+	AccentColor               string  `json:"accent_color"`
+	FaviconUrl                *string `json:"favicon_url,omitempty"`
+	LogoUrl                   *string `json:"logo_url,omitempty"`
+	PasswordRecoveryAvailable bool    `json:"password_recovery_available"`
+	Version                   int64   `json:"version"`
+	WorkspaceName             string  `json:"workspace_name"`
 }
 
 // PushConfig defines model for PushConfig.
@@ -2021,6 +2030,12 @@ type RealtimeTypingFrameV1 struct {
 
 // RealtimeTypingFrameV1Op defines model for RealtimeTypingFrameV1.Op.
 type RealtimeTypingFrameV1Op string
+
+// ResetPasswordRequest defines model for ResetPasswordRequest.
+type ResetPasswordRequest struct {
+	NewPassword string `json:"new_password"`
+	Token       string `json:"token"`
+}
 
 // S3Configuration defines model for S3Configuration.
 type S3Configuration struct {
@@ -2318,6 +2333,12 @@ type ListFollowedThreadsParams struct {
 
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
+
+// ForgotPasswordJSONRequestBody defines body for ForgotPassword for application/json ContentType.
+type ForgotPasswordJSONRequestBody = ForgotPasswordRequest
+
+// ResetPasswordJSONRequestBody defines body for ResetPassword for application/json ContentType.
+type ResetPasswordJSONRequestBody = ResetPasswordRequest
 
 // BootstrapJSONRequestBody defines body for Bootstrap for application/json ContentType.
 type BootstrapJSONRequestBody = BootstrapRequest

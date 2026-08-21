@@ -21,6 +21,7 @@ var (
 	ErrConflict            = errors.New("conflict")
 	ErrEmailTaken          = errors.New("email is already in use")
 	ErrTokenInvalid        = errors.New("token is invalid")
+	ErrEmailNotConfigured  = errors.New("email is not configured")
 )
 
 type ValidationError struct {
@@ -115,6 +116,34 @@ type ChangeEmailInput struct {
 
 type ConfirmEmailInput struct {
 	Token string `json:"token"`
+}
+
+type ForgotPasswordInput struct {
+	Email string `json:"email"`
+}
+
+type ResetPasswordInput struct {
+	Token       string `json:"token"`
+	NewPassword string `json:"new_password"`
+}
+
+type PasswordResetTarget struct {
+	OrgID   string
+	ActorID string
+	Email   string
+	Role    string
+	Status  string
+}
+
+type PasswordResetRecord struct {
+	ID        string
+	OrgID     string
+	ActorID   string
+	TokenHash []byte
+	Delivery  string
+	IssuedBy  *string
+	ExpiresAt time.Time
+	AuditID   string
 }
 
 type EmailChangeResult struct {

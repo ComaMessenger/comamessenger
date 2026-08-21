@@ -183,7 +183,13 @@ import { setTheme } from "./theme";
 
 const EmojiPicker = lazy(() => import("emoji-picker-react"));
 
-type Screen = "loading" | "bootstrap" | "login" | "messenger" | "invite";
+type Screen =
+  | "loading"
+  | "bootstrap"
+  | "login"
+  | "messenger"
+  | "invite"
+  | "reset-password";
 type SystemChatFilter = "all" | "direct" | "grouped" | "channel";
 type ChatFilter = SystemChatFilter | `folder:${string}`;
 type OverlayPlacement = {
@@ -554,6 +560,8 @@ export function App() {
   const [screen, setScreen] = useState<Screen>("loading");
   const [user, setUser] = useState<User | null>(null);
   const [error, setError] = useState("");
+  const [passwordRecoveryAvailable, setPasswordRecoveryAvailable] =
+    useState(false);
   useTheme();
 
   useEffect(() => {
@@ -562,7 +570,10 @@ export function App() {
       void api
         .branding()
         .then((branding) => {
-          if (active) applyPublicBranding(branding, api.apiURL);
+          if (active) {
+            applyPublicBranding(branding, api.apiURL);
+            setPasswordRecoveryAvailable(branding.password_recovery_available);
+          }
         })
         .catch(() => undefined);
     };
@@ -604,6 +615,10 @@ export function App() {
     initialized.current = true;
     if (initialPath.startsWith("/invite/")) {
       setScreen("invite");
+      return;
+    }
+    if (initialPath === "/reset-password") {
+      setScreen("reset-password");
       return;
     }
     void api
@@ -670,6 +685,18 @@ export function App() {
         token={path.split("/").pop() ?? ""}
       />
     );
+  if (screen === "reset-password")
+    return (
+      <ResetPasswordScreen
+        api={api}
+        token={new URLSearchParams(window.location.search).get("token") ?? ""}
+        onComplete={() => {
+          setError("");
+          setScreen("login");
+          void navigate({ to: "/" });
+        }}
+      />
+    );
   if (screen === "login" || !user)
     return (
       <LoginScreen
@@ -677,6 +704,7 @@ export function App() {
         error={error}
         onError={setError}
         onAuthenticated={authenticated}
+        passwordRecoveryAvailable={passwordRecoveryAvailable}
       />
     );
   return (
@@ -697,9 +725,17 @@ type AuthProps = {
   onError(value: string): void;
   onAuthenticated(session: TokenResponse): void;
 };
-function LoginScreen({ api, error, onError, onAuthenticated }: AuthProps) {
+function LoginScreen({
+  api,
+  error,
+  onError,
+  onAuthenticated,
+  passwordRecoveryAvailable,
+}: AuthProps & { passwordRecoveryAvailable: boolean }) {
   const { t } = useTranslation();
   const [pending, setPending] = useState(false);
+  const [recovery, setRecovery] = useState(false);
+  const [recoveryMessage, setRecoveryMessage] = useState("");
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
@@ -718,6 +754,52 @@ function LoginScreen({ api, error, onError, onAuthenticated }: AuthProps) {
       setPending(false);
     }
   }
+  async function recover(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPending(true);
+    setRecoveryMessage("");
+    const data = new FormData(event.currentTarget);
+    try {
+      await api.forgotPassword({ email: value(data, "email") });
+      setRecoveryMessage(t("passwordRecoverySent"));
+    } catch (cause) {
+      onError(messageOf(cause));
+    } finally {
+      setPending(false);
+    }
+  }
+  if (recovery)
+    return (
+      <AuthLayout title={t("forgotPassword")} lead={t("loginLead")}>
+        {passwordRecoveryAvailable ? (
+          <form className="auth-form" onSubmit={recover}>
+            <Field
+              label={t("email")}
+              name="email"
+              type="email"
+              autoComplete="email"
+            />
+            <FormError message={error} />
+            {recoveryMessage && (
+              <span className="settings-success">{recoveryMessage}</span>
+            )}
+            <Button type="submit" variant="primary" disabled={pending}>
+              {pending ? t("sending") : t("sendRecoveryLink")}
+            </Button>
+            <Button variant="ghost" onClick={() => setRecovery(false)}>
+              {t("backToLogin")}
+            </Button>
+          </form>
+        ) : (
+          <div className="auth-form">
+            <p>{t("passwordRecoveryContactAdmin")}</p>
+            <Button variant="primary" onClick={() => setRecovery(false)}>
+              {t("backToLogin")}
+            </Button>
+          </div>
+        )}
+      </AuthLayout>
+    );
   return (
     <AuthLayout title={t("loginTitle")} lead={t("loginLead")}>
       <form className="auth-form" onSubmit={submit}>
@@ -737,7 +819,79 @@ function LoginScreen({ api, error, onError, onAuthenticated }: AuthProps) {
         <Button type="submit" variant="primary" disabled={pending}>
           {pending ? t("loggingIn") : t("login")}
         </Button>
+        <Button variant="ghost" onClick={() => setRecovery(true)}>
+          {t("forgotPassword")}
+        </Button>
       </form>
+    </AuthLayout>
+  );
+}
+
+function ResetPasswordScreen({
+  api,
+  token,
+  onComplete,
+}: {
+  api: MessengerAPI;
+  token: string;
+  onComplete(): void;
+}) {
+  const { t } = useTranslation();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  const [complete, setComplete] = useState(false);
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    const data = new FormData(event.currentTarget);
+    const password = value(data, "new_password");
+    if (password !== value(data, "confirm_password")) {
+      setError(t("passwordsDoNotMatch"));
+      return;
+    }
+    setPending(true);
+    try {
+      await api.resetPassword({ token, new_password: password });
+      setComplete(true);
+    } catch (cause) {
+      setError(messageOf(cause));
+    } finally {
+      setPending(false);
+    }
+  }
+  return (
+    <AuthLayout title={t("resetPassword")} lead={t("loginLead")}>
+      {complete ? (
+        <div className="auth-form">
+          <span className="settings-success">{t("passwordResetComplete")}</span>
+          <Button variant="primary" onClick={onComplete}>
+            {t("backToLogin")}
+          </Button>
+        </div>
+      ) : (
+        <form className="auth-form" onSubmit={submit}>
+          <Field
+            label={t("newPassword")}
+            name="new_password"
+            type="password"
+            minLength={10}
+            autoComplete="new-password"
+          />
+          <Field
+            label={t("confirmNewPassword")}
+            name="confirm_password"
+            type="password"
+            minLength={10}
+            autoComplete="new-password"
+          />
+          <FormError
+            message={error || (!token ? t("passwordResetInvalid") : "")}
+          />
+          <Button type="submit" variant="primary" disabled={pending || !token}>
+            {pending ? t("saving") : t("resetPassword")}
+          </Button>
+        </form>
+      )}
     </AuthLayout>
   );
 }

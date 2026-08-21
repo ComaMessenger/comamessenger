@@ -42,6 +42,10 @@ export type TransferOwnershipRequest =
   components["schemas"]["TransferOwnershipRequest"];
 export type ChangePasswordRequest =
   components["schemas"]["ChangePasswordRequest"];
+export type ForgotPasswordRequest =
+  components["schemas"]["ForgotPasswordRequest"];
+export type ResetPasswordRequest =
+  components["schemas"]["ResetPasswordRequest"];
 export type ChangeEmailRequest = components["schemas"]["ChangeEmailRequest"];
 export type ConfirmEmailRequest = components["schemas"]["ConfirmEmailRequest"];
 export type EmailChangeResponse = components["schemas"]["EmailChangeResponse"];

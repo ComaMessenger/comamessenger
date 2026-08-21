@@ -42,6 +42,11 @@ export function WorkspaceMembersPage({
     queryFn: () => api.organizationMembers(),
     enabled: allowed,
   });
+  const branding = useQuery({
+    queryKey: ["public-branding"],
+    queryFn: () => api.branding(),
+    enabled: allowed,
+  });
   const [message, setMessage] = useState("");
   const [ownershipTarget, setOwnershipTarget] = useState("");
   const [ownershipPassword, setOwnershipPassword] = useState("");
@@ -91,6 +96,16 @@ export function WorkspaceMembersPage({
     try {
       await api.requireMemberPasswordChange(member.actor_id);
       setMessage(t("passwordChangeRequired"));
+    } catch (cause) {
+      setMessage(messageOf(cause));
+    }
+  }
+
+  async function issuePasswordReset(member: OrganizationMember) {
+    setMessage("");
+    try {
+      await api.issueMemberPasswordReset(member.actor_id);
+      setMessage(t("passwordResetSent"));
     } catch (cause) {
       setMessage(messageOf(cause));
     }
@@ -179,6 +194,19 @@ export function WorkspaceMembersPage({
                   >
                     {t("requirePasswordChange")}
                   </Button>
+                  {branding.data?.password_recovery_available && (
+                    <Button
+                      size="sm"
+                      disabled={
+                        member.actor_id === user.id ||
+                        member.role === "owner" ||
+                        (user.role !== "owner" && member.role !== "member")
+                      }
+                      onClick={() => void issuePasswordReset(member)}
+                    >
+                      {t("sendPasswordReset")}
+                    </Button>
+                  )}
                   {member.role === "admin" && user.role === "owner" && (
                     <fieldset className="organization-member__permissions">
                       <legend>{t("administratorPermissions")}</legend>

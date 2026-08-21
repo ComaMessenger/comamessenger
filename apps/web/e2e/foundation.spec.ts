@@ -87,6 +87,8 @@ async function mockMessenger(
     paginate?: boolean;
     theme?: "light" | "dark";
     mustChangePassword?: boolean;
+    passwordRecoveryAvailable?: boolean;
+    signedOut?: boolean;
     reactions?: Array<Record<string, unknown>>;
     unread?: {
       last_read_seq: number;
@@ -103,6 +105,8 @@ async function mockMessenger(
     paginate = false,
     theme = "light",
     mustChangePassword = false,
+    passwordRecoveryAvailable = false,
+    signedOut = false,
     reactions: suppliedReactions = [],
     unread = { last_read_seq: 0, unread_count: 3, mention_count: 1 },
   } = options;
@@ -248,14 +252,25 @@ async function mockMessenger(
         workspace_name: organizationSettings.name,
         accent_color: organizationSettings.accent_color,
         version: organizationSettings.version,
+        password_recovery_available: passwordRecoveryAvailable,
       };
     else if (path.endsWith("/auth/refresh")) {
       refreshRequests += 1;
-      body = {
-        access_token: "test",
-        access_expires_at: "2026-08-20T00:00:00Z",
-        user: runtimeUser,
-      };
+      if (signedOut) {
+        status = 401;
+        body = { code: "unauthorized", message: "signed out" };
+      } else
+        body = {
+          access_token: "test",
+          access_expires_at: "2026-08-20T00:00:00Z",
+          user: runtimeUser,
+        };
+    } else if (path.endsWith("/auth/password/forgot")) {
+      status = 202;
+      body = undefined;
+    } else if (path.endsWith("/auth/password/reset")) {
+      status = 204;
+      body = undefined;
     } else if (path.endsWith("/chats")) {
       chatRequests += 1;
       body = { chats: [runtimeChat] };
@@ -1597,6 +1612,53 @@ test("mandatory password change blocks the messenger until completion", async ({
     ),
   ).toHaveCount(0);
   await expect(page.getByText("Выберите чат")).toBeVisible();
+});
+
+test("password recovery uses email without exposing the token", async ({
+  page,
+}) => {
+  await mockMessenger(page, {
+    signedOut: true,
+    passwordRecoveryAvailable: true,
+  });
+  await Promise.all([
+    page.waitForResponse((response) =>
+      response.url().endsWith("/api/v1/branding"),
+    ),
+    page.goto("/"),
+  ]);
+  await page.getByRole("button", { name: "Забыли пароль?" }).click();
+  await page.getByLabel("Почта").fill("owner@example.com");
+  await page.getByRole("button", { name: "Отправить ссылку" }).click();
+  await expect(
+    page.getByText(
+      "Если аккаунт существует, ссылка для восстановления отправлена на его email",
+    ),
+  ).toBeVisible();
+
+  await page.goto("/reset-password?token=one-use-token");
+  await page
+    .getByLabel("Новый пароль", { exact: true })
+    .fill("new password 123");
+  await page.getByLabel("Повторите новый пароль").fill("new password 123");
+  await page.getByRole("button", { name: "Задать новый пароль" }).click();
+  await expect(
+    page.getByText("Пароль изменён. Все прежние сессии завершены."),
+  ).toBeVisible();
+});
+
+test("password recovery explains the local operator path without SMTP", async ({
+  page,
+}) => {
+  await mockMessenger(page, { signedOut: true });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Забыли пароль?" }).click();
+  await expect(
+    page.getByText(
+      "Почтовая отправка не настроена. Обратитесь к администратору пространства или оператору сервера.",
+    ),
+  ).toBeVisible();
+  await expect(page.getByLabel("Почта")).toHaveCount(0);
 });
 
 test("a 10k-message history stays virtualized", async ({ page }) => {

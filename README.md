@@ -39,6 +39,14 @@ The web application is available at `http://localhost:5173`, the API at `http://
 
 Web Push is optional. Generate VAPID keys with `docker compose --env-file .env -f deploy/compose.yaml run --rm --no-deps core vapid`, copy the two emitted variables into `.env`, set `VAPID_SUBJECT`, and restart Core.
 
+If SMTP is not configured and a user has completely forgotten their password, the local server operator can issue a one-use recovery link:
+
+```sh
+docker compose --env-file .env -f deploy/compose.yaml run --rm --no-deps core admin issue-password-reset --email user@example.com
+```
+
+The link is printed only to the terminal, expires after one hour, invalidates any previously issued link for that account, and is recorded in the audit log. Treat it as a secret and deliver it to the user through a trusted channel.
+
 ## Local checks
 
 ```sh

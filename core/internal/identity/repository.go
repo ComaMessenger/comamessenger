@@ -308,6 +308,133 @@ func (r *Repository) ConfirmEmailChange(ctx context.Context, orgID, actorID, cur
 	return user, revoked, err
 }
 
+func (r *Repository) PasswordResetTargetByEmail(ctx context.Context, email string) (PasswordResetTarget, error) {
+	var target PasswordResetTarget
+	err := r.pool.QueryRow(ctx, `
+		SELECT a.org_id,a.id,u.email::text,a.org_role,a.status
+		FROM users u JOIN actors a ON a.id=u.actor_id AND a.org_id=u.org_id
+		WHERE u.email=$1 AND a.deleted_at IS NULL`, email).Scan(
+		&target.OrgID, &target.ActorID, &target.Email, &target.Role, &target.Status,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return PasswordResetTarget{}, ErrNotFound
+	}
+	if err != nil {
+		return PasswordResetTarget{}, fmt.Errorf("find password reset target: %w", err)
+	}
+	return target, nil
+}
+
+func (r *Repository) PasswordResetTargetByActor(ctx context.Context, orgID, actorID string) (PasswordResetTarget, error) {
+	var target PasswordResetTarget
+	err := r.pool.QueryRow(ctx, `
+		SELECT a.org_id,a.id,u.email::text,a.org_role,a.status
+		FROM actors a JOIN users u ON u.actor_id=a.id AND u.org_id=a.org_id
+		WHERE a.org_id=$1 AND a.id=$2 AND a.deleted_at IS NULL`, orgID, actorID).Scan(
+		&target.OrgID, &target.ActorID, &target.Email, &target.Role, &target.Status,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return PasswordResetTarget{}, ErrNotFound
+	}
+	if err != nil {
+		return PasswordResetTarget{}, fmt.Errorf("find password reset target: %w", err)
+	}
+	return target, nil
+}
+
+func (r *Repository) CreatePasswordReset(ctx context.Context, record PasswordResetRecord, now time.Time) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin password reset issue: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1::text,0))`, record.ActorID); err != nil {
+		return fmt.Errorf("lock password reset issuance: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE password_reset_tokens SET used_at=$3 WHERE org_id=$1 AND actor_id=$2 AND used_at IS NULL`, record.OrgID, record.ActorID, now); err != nil {
+		return fmt.Errorf("expire previous password resets: %w", err)
+	}
+	_, err = tx.Exec(ctx, `
+		INSERT INTO password_reset_tokens(id,org_id,actor_id,token_hash,delivery,issued_by,expires_at)
+		VALUES($1,$2,$3,$4,$5,$6,$7)`, record.ID, record.OrgID, record.ActorID, record.TokenHash, record.Delivery, record.IssuedBy, record.ExpiresAt)
+	if err != nil {
+		return fmt.Errorf("store password reset token: %w", err)
+	}
+	_, err = tx.Exec(ctx, `
+		INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata)
+		VALUES($1,$2,$3,'member.password_reset.issue','actor',$4,
+		       jsonb_build_object('delivery',$5::text))`, record.AuditID, record.OrgID, record.IssuedBy, record.ActorID, record.Delivery)
+	if err != nil {
+		return fmt.Errorf("audit password reset issue: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit password reset issue: %w", err)
+	}
+	return nil
+}
+
+func (r *Repository) CancelPasswordReset(ctx context.Context, tokenID, actorID string, now time.Time) error {
+	_, err := r.pool.Exec(ctx, `UPDATE password_reset_tokens SET used_at=$3 WHERE id=$1 AND actor_id=$2 AND used_at IS NULL`, tokenID, actorID, now)
+	return err
+}
+
+func (r *Repository) ResetPassword(ctx context.Context, tokenHash []byte, passwordHash, auditID string, now time.Time) ([]string, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin password reset: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	var tokenID, orgID, actorID, delivery string
+	err = tx.QueryRow(ctx, `
+		SELECT p.id,p.org_id,p.actor_id,p.delivery
+		FROM password_reset_tokens p
+		JOIN actors a ON a.id=p.actor_id AND a.org_id=p.org_id
+		WHERE p.token_hash=$1 AND p.used_at IS NULL AND p.expires_at>$2
+		  AND a.status='active' AND a.deleted_at IS NULL
+		FOR UPDATE OF p`, tokenHash, now).Scan(&tokenID, &orgID, &actorID, &delivery)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrTokenInvalid
+	}
+	if err != nil {
+		return nil, fmt.Errorf("load password reset token: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE users SET password_hash=$3,must_change_password_at=NULL WHERE org_id=$1 AND actor_id=$2`, orgID, actorID, passwordHash); err != nil {
+		return nil, fmt.Errorf("reset password: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE password_reset_tokens SET used_at=$2 WHERE id=$1`, tokenID, now); err != nil {
+		return nil, fmt.Errorf("consume password reset token: %w", err)
+	}
+	rows, err := tx.Query(ctx, `UPDATE sessions SET revoked_at=COALESCE(revoked_at,$3) WHERE org_id=$1 AND actor_id=$2 AND revoked_at IS NULL RETURNING id`, orgID, actorID, now)
+	if err != nil {
+		return nil, fmt.Errorf("revoke sessions after password reset: %w", err)
+	}
+	var revoked []string
+	for rows.Next() {
+		var sessionID string
+		if err := rows.Scan(&sessionID); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scan revoked reset session: %w", err)
+		}
+		revoked = append(revoked, sessionID)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, fmt.Errorf("iterate revoked reset sessions: %w", err)
+	}
+	rows.Close()
+	_, err = tx.Exec(ctx, `
+		INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata)
+		VALUES($1,$2,$3,'member.password_reset.complete','actor',$3,
+		       jsonb_build_object('delivery',$4::text,'revoked_sessions',$5::int))`, auditID, orgID, actorID, delivery, len(revoked))
+	if err != nil {
+		return nil, fmt.Errorf("audit password reset: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit password reset: %w", err)
+	}
+	return revoked, nil
+}
+
 func revokeOtherSessionsTx(ctx context.Context, tx pgx.Tx, orgID, actorID, currentSessionID string, now time.Time) ([]string, error) {
 	rows, err := tx.Query(ctx, `
 		UPDATE sessions SET revoked_at=COALESCE(revoked_at,$4)

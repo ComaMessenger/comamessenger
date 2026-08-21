@@ -40,11 +40,13 @@ type UpdateSettingsInput struct {
 }
 
 type PublicBranding struct {
-	WorkspaceName string `json:"workspace_name"`
-	AccentColor   string `json:"accent_color"`
-	Version       int64  `json:"version"`
-	LogoURL       string `json:"logo_url,omitempty"`
-	FaviconURL    string `json:"favicon_url,omitempty"`
+	OrgID                     string `json:"-"`
+	WorkspaceName             string `json:"workspace_name"`
+	AccentColor               string `json:"accent_color"`
+	Version                   int64  `json:"version"`
+	LogoURL                   string `json:"logo_url,omitempty"`
+	FaviconURL                string `json:"favicon_url,omitempty"`
+	PasswordRecoveryAvailable bool   `json:"password_recovery_available"`
 }
 
 type Asset struct {

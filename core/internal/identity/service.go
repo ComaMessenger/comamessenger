@@ -3,6 +3,7 @@ package identity
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"net/mail"
 	"net/url"
@@ -314,6 +315,121 @@ func (s *Service) ConfirmEmail(ctx context.Context, current User, currentSession
 		return User{}, nil, err
 	}
 	return s.repository.ConfirmEmailChange(ctx, current.OrgID, current.ActorID, currentSessionID, hash[:], auditID, s.now().UTC())
+}
+
+func (s *Service) ForgotPassword(ctx context.Context, input ForgotPasswordInput) error {
+	email := strings.ToLower(strings.TrimSpace(input.Email))
+	parsed, err := mail.ParseAddress(email)
+	if err != nil || parsed.Address != email || len(email) > 254 {
+		return nil
+	}
+	target, err := s.repository.PasswordResetTargetByEmail(ctx, email)
+	if errors.Is(err, ErrNotFound) || (err == nil && target.Status != "active") {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if s.emailSender == nil {
+		return nil
+	}
+	configured, err := s.emailSender.EmailConfigured(ctx, target.OrgID)
+	if err != nil || !configured {
+		return err
+	}
+	_, err = s.issuePasswordReset(ctx, target, "email", nil, true)
+	return err
+}
+
+func (s *Service) IssueMemberPasswordReset(ctx context.Context, current User, actorID string) error {
+	if !permission.Allows(current.OrgRole, current.Permissions, permission.MembersManage) {
+		return ErrForbidden
+	}
+	if actorID == current.ActorID {
+		return validationErrorf("use the personal recovery flow for your own account")
+	}
+	target, err := s.repository.PasswordResetTargetByActor(ctx, current.OrgID, actorID)
+	if err != nil {
+		return err
+	}
+	if target.Status != "active" || target.Role == "owner" || (current.OrgRole != "owner" && target.Role != "member") {
+		return ErrForbidden
+	}
+	if s.emailSender == nil {
+		return ErrEmailNotConfigured
+	}
+	configured, err := s.emailSender.EmailConfigured(ctx, target.OrgID)
+	if err != nil {
+		return err
+	}
+	if !configured {
+		return ErrEmailNotConfigured
+	}
+	_, err = s.issuePasswordReset(ctx, target, "email", &current.ActorID, true)
+	return err
+}
+
+func (s *Service) IssueOperatorPasswordReset(ctx context.Context, email string) (string, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	parsed, err := mail.ParseAddress(email)
+	if err != nil || parsed.Address != email || len(email) > 254 {
+		return "", validationErrorf("email has invalid format")
+	}
+	target, err := s.repository.PasswordResetTargetByEmail(ctx, email)
+	if err != nil {
+		return "", err
+	}
+	if target.Status != "active" {
+		return "", ErrNotFound
+	}
+	return s.issuePasswordReset(ctx, target, "operator", nil, false)
+}
+
+func (s *Service) issuePasswordReset(ctx context.Context, target PasswordResetTarget, delivery string, issuedBy *string, send bool) (string, error) {
+	token, tokenHash, err := access.NewRefreshToken()
+	if err != nil {
+		return "", err
+	}
+	ids, err := newIDs(2)
+	if err != nil {
+		return "", err
+	}
+	now := s.now().UTC()
+	record := PasswordResetRecord{
+		ID: ids[0], OrgID: target.OrgID, ActorID: target.ActorID, TokenHash: tokenHash[:],
+		Delivery: delivery, IssuedBy: issuedBy, ExpiresAt: now.Add(time.Hour), AuditID: ids[1],
+	}
+	if err := s.repository.CreatePasswordReset(ctx, record, now); err != nil {
+		return "", err
+	}
+	resetURL := s.publicAppURL + "/reset-password?token=" + url.QueryEscape(token)
+	if send {
+		body := "Reset your Coma password within one hour:\n" + resetURL
+		if err := s.emailSender.SendEmail(ctx, target.OrgID, target.Email, "Reset your Coma password", body); err != nil {
+			_ = s.repository.CancelPasswordReset(ctx, record.ID, target.ActorID, now)
+			return "", fmt.Errorf("send password reset: %w", err)
+		}
+	}
+	return resetURL, nil
+}
+
+func (s *Service) ResetPassword(ctx context.Context, input ResetPasswordInput) ([]string, error) {
+	if input.Token == "" || len(input.Token) > 1024 {
+		return nil, ErrTokenInvalid
+	}
+	if len(input.NewPassword) < 10 || len(input.NewPassword) > 1024 {
+		return nil, validationErrorf("new_password length must be between 10 and 1024 bytes")
+	}
+	passwordHash, err := s.hasher.Hash(input.NewPassword)
+	if err != nil {
+		return nil, err
+	}
+	auditID, err := id.New()
+	if err != nil {
+		return nil, err
+	}
+	tokenHash := sha256.Sum256([]byte(input.Token))
+	return s.repository.ResetPassword(ctx, tokenHash[:], passwordHash, auditID, s.now().UTC())
 }
 
 func (s *Service) TransferOwnership(ctx context.Context, current User, input TransferOwnershipInput) (User, error) {
