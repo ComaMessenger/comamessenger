@@ -1239,6 +1239,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["searchMessagesAndFiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1276,6 +1292,33 @@ export interface components {
             ready_at?: string;
             /** Format: uuid */
             uploader_id: string;
+        };
+        SearchResult: {
+            /** @enum {string} */
+            kind: "message" | "file";
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: uuid */
+            message_id: string;
+            /** Format: uuid */
+            thread_root_id?: string | null;
+            /** Format: uuid */
+            actor_id: string;
+            /** Format: uuid */
+            file_id?: string;
+            file_name?: string;
+            file_mime?: string;
+            snippet: string;
+            /** Format: float */
+            rank: number;
+            /** Format: int64 */
+            created_seq: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        SearchPage: {
+            results: components["schemas"]["SearchResult"][];
+            next_cursor: string | null;
         };
         CreateFileUploadRequest: {
             name: string;
@@ -4764,6 +4807,37 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["Error"];
+        };
+    };
+    searchMessagesAndFiles: {
+        parameters: {
+            query: {
+                q: string;
+                chat_id?: string;
+                author_id?: string;
+                from?: string;
+                to?: string;
+                type?: "all" | "message" | "file";
+                in_thread?: boolean;
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ranked results visible to the current actor. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchPage"];
+                };
+            };
+            422: components["responses"]["Error"];
         };
     };
 }

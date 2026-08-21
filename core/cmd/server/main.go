@@ -25,6 +25,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/password"
 	"github.com/comamessenger/comamessenger/core/internal/push"
 	"github.com/comamessenger/comamessenger/core/internal/realtime"
+	"github.com/comamessenger/comamessenger/core/internal/search"
 	"github.com/comamessenger/comamessenger/core/internal/storage"
 	"github.com/comamessenger/comamessenger/core/internal/userstate"
 	"github.com/comamessenger/comamessenger/core/internal/workspace"
@@ -193,7 +194,7 @@ func main() {
 		Addr: cfg.HTTPAddr,
 		Handler: serverhttp.NewHandler(logger, cfg.PublicAppURL, pool.Ping, serverhttp.Dependencies{
 			Identity: identityService, Chats: chat.NewService(pool, afterCommit),
-			Messages: messageService, UserState: userStateService, Push: pushService, Workspace: workspaceService, Files: fileService, Realtime: realtimeServer,
+			Messages: messageService, UserState: userStateService, Push: pushService, Workspace: workspaceService, Files: fileService, Search: search.NewService(pool), Realtime: realtimeServer,
 			CookieSecure: cfg.Auth.CookieSecure, RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
 			BootstrapToken: cfg.BootstrapToken, RequireBootstrapToken: cfg.AppEnv != "development",
 			TrustedProxyCIDRs: cfg.TrustedProxyCIDRs, RevokeRealtimeSession: realtimeServer.RevokeSession,

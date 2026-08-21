@@ -1388,6 +1388,24 @@ func (e SMTPConfigurationUpdateSecurity) Valid() bool {
 	}
 }
 
+// Defines values for SearchResultKind.
+const (
+	SearchResultKindFile    SearchResultKind = "file"
+	SearchResultKindMessage SearchResultKind = "message"
+)
+
+// Valid indicates whether the value is a known member of the SearchResultKind enum.
+func (e SearchResultKind) Valid() bool {
+	switch e {
+	case SearchResultKindFile:
+		return true
+	case SearchResultKindMessage:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UpdateChatMemberRequestRole.
 const (
 	UpdateChatMemberRequestRoleAdmin  UpdateChatMemberRequestRole = "admin"
@@ -1814,6 +1832,27 @@ func (e PutBrandingAssetParamsKind) Valid() bool {
 	case PutBrandingAssetParamsKindFavicon:
 		return true
 	case PutBrandingAssetParamsKindLogo:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SearchMessagesAndFilesParamsType.
+const (
+	SearchMessagesAndFilesParamsTypeAll     SearchMessagesAndFilesParamsType = "all"
+	SearchMessagesAndFilesParamsTypeFile    SearchMessagesAndFilesParamsType = "file"
+	SearchMessagesAndFilesParamsTypeMessage SearchMessagesAndFilesParamsType = "message"
+)
+
+// Valid indicates whether the value is a known member of the SearchMessagesAndFilesParamsType enum.
+func (e SearchMessagesAndFilesParamsType) Valid() bool {
+	switch e {
+	case SearchMessagesAndFilesParamsTypeAll:
+		return true
+	case SearchMessagesAndFilesParamsTypeFile:
+		return true
+	case SearchMessagesAndFilesParamsTypeMessage:
 		return true
 	default:
 		return false
@@ -2696,6 +2735,31 @@ type SMTPConfigurationUpdate struct {
 // SMTPConfigurationUpdateSecurity defines model for SMTPConfigurationUpdate.Security.
 type SMTPConfigurationUpdateSecurity string
 
+// SearchPage defines model for SearchPage.
+type SearchPage struct {
+	NextCursor *string        `json:"next_cursor"`
+	Results    []SearchResult `json:"results"`
+}
+
+// SearchResult defines model for SearchResult.
+type SearchResult struct {
+	ActorId      openapi_types.UUID  `json:"actor_id"`
+	ChatId       openapi_types.UUID  `json:"chat_id"`
+	CreatedAt    time.Time           `json:"created_at"`
+	CreatedSeq   int64               `json:"created_seq"`
+	FileId       *openapi_types.UUID `json:"file_id,omitempty"`
+	FileMime     *string             `json:"file_mime,omitempty"`
+	FileName     *string             `json:"file_name,omitempty"`
+	Kind         SearchResultKind    `json:"kind"`
+	MessageId    openapi_types.UUID  `json:"message_id"`
+	Rank         float32             `json:"rank"`
+	Snippet      string              `json:"snippet"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+}
+
+// SearchResultKind defines model for SearchResult.Kind.
+type SearchResultKind string
+
 // Session defines model for Session.
 type Session struct {
 	CreatedAt  time.Time          `json:"created_at"`
@@ -3014,6 +3078,22 @@ type DeleteBrandingAssetParamsKind string
 
 // PutBrandingAssetParamsKind defines parameters for PutBrandingAsset.
 type PutBrandingAssetParamsKind string
+
+// SearchMessagesAndFilesParams defines parameters for SearchMessagesAndFiles.
+type SearchMessagesAndFilesParams struct {
+	Q        string                            `form:"q" json:"q"`
+	ChatId   *openapi_types.UUID               `form:"chat_id,omitempty" json:"chat_id,omitempty"`
+	AuthorId *openapi_types.UUID               `form:"author_id,omitempty" json:"author_id,omitempty"`
+	From     *time.Time                        `form:"from,omitempty" json:"from,omitempty"`
+	To       *time.Time                        `form:"to,omitempty" json:"to,omitempty"`
+	Type     *SearchMessagesAndFilesParamsType `form:"type,omitempty" json:"type,omitempty"`
+	InThread *bool                             `form:"in_thread,omitempty" json:"in_thread,omitempty"`
+	Cursor   *string                           `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit    *int                              `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// SearchMessagesAndFilesParamsType defines parameters for SearchMessagesAndFiles.
+type SearchMessagesAndFilesParamsType string
 
 // ListFollowedThreadsParams defines parameters for ListFollowedThreads.
 type ListFollowedThreadsParams struct {
