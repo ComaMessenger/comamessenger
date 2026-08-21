@@ -47,6 +47,7 @@ type PublicBranding struct {
 	LogoURL                   string `json:"logo_url,omitempty"`
 	FaviconURL                string `json:"favicon_url,omitempty"`
 	PasswordRecoveryAvailable bool   `json:"password_recovery_available"`
+	EmailDeliveryAvailable    bool   `json:"email_delivery_available"`
 }
 
 type Asset struct {

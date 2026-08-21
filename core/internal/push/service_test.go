@@ -1,10 +1,17 @@
 package push
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log/slog"
 	"testing"
 	"time"
+
+	"github.com/comamessenger/comamessenger/core/internal/config"
+	"github.com/comamessenger/comamessenger/core/internal/testdb"
+	"github.com/google/uuid"
 )
 
 func TestTruncateUsesRunes(t *testing.T) {
@@ -75,4 +82,145 @@ func TestOptionalTimeDistinguishesMissingNullAndValue(t *testing.T) {
 	if !scheduled.SnoozedUntil.Set || scheduled.SnoozedUntil.Value == nil || !scheduled.SnoozedUntil.Value.Equal(want) {
 		t.Fatalf("timestamp snoozed_until = %+v", scheduled.SnoozedUntil)
 	}
+}
+
+func TestNotificationScheduleValidation(t *testing.T) {
+	valid := []string{
+		`{"days":"all","from":"00:00","to":"00:00"}`,
+		`{"days":"weekdays","from":"09:00","to":"18:30"}`,
+		`{"days":[1,3,5],"from":"22:00","to":"07:00"}`,
+	}
+	for _, raw := range valid {
+		var schedule NotificationSchedule
+		if err := json.Unmarshal([]byte(raw), &schedule); err != nil || !validSchedule(schedule) {
+			t.Fatalf("valid schedule %s rejected: %+v %v", raw, schedule, err)
+		}
+	}
+	invalid := []string{
+		`{"days":"holiday","from":"09:00","to":"18:00"}`,
+		`{"days":[],"from":"09:00","to":"18:00"}`,
+		`{"days":[1,1],"from":"09:00","to":"18:00"}`,
+		`{"days":[7],"from":"09:00","to":"18:00"}`,
+		`{"days":"all","from":"24:00","to":"18:00"}`,
+	}
+	for _, raw := range invalid {
+		var schedule NotificationSchedule
+		if err := json.Unmarshal([]byte(raw), &schedule); err == nil && validSchedule(schedule) {
+			t.Fatalf("invalid schedule %s accepted: %+v", raw, schedule)
+		}
+	}
+
+	var cleared UpdatePreferences
+	if err := json.Unmarshal([]byte(`{"schedule":null}`), &cleared); err != nil {
+		t.Fatal(err)
+	}
+	if !cleared.Schedule.Set || cleared.Schedule.Value != nil {
+		t.Fatalf("null schedule = %+v", cleared.Schedule)
+	}
+}
+
+func TestMaterializeAppliesGlobalRulesSnoozeAndSchedule(t *testing.T) {
+	pool := testdb.New(t)
+	ctx := context.Background()
+	orgID, senderID, recipientID := uuid.NewString(), uuid.NewString(), uuid.NewString()
+	chatID, sessionID, subscriptionID := uuid.NewString(), uuid.NewString(), uuid.NewString()
+	setup := []struct {
+		query string
+		args  []any
+	}{
+		{`INSERT INTO organizations(id,name,slug) VALUES($1,'Push test','push-test')`, []any{orgID}},
+		{`INSERT INTO actors(id,org_id,type,org_role,display_name,handle,timezone) VALUES ($2,$1,'user','owner','Sender','sender','UTC'),($3,$1,'user','member','Recipient','recipient','UTC')`, []any{orgID, senderID, recipientID}},
+		{`INSERT INTO users(actor_id,org_id,email,password_hash,preferences) VALUES ($2,$1,'sender@example.test','hash','{}'),($3,$1,'recipient@example.test','hash','{}')`, []any{orgID, senderID, recipientID}},
+		{`INSERT INTO sessions(id,org_id,actor_id,family_id,refresh_hash,expires_at) VALUES($3,$1,$2,$3,decode(repeat('01',32),'hex'),now()+interval '1 day')`, []any{orgID, recipientID, sessionID}},
+		{`INSERT INTO chats(id,org_id,kind,visibility,name,created_by) VALUES($3,$1,'group','private','Rules',$2)`, []any{orgID, senderID, chatID}},
+		{`INSERT INTO chat_members(chat_id,actor_id,org_id,role) VALUES ($3,$2,$1,'owner'),($3,$4,$1,'member')`, []any{orgID, senderID, chatID, recipientID}},
+		{`INSERT INTO web_push_subscriptions(id,org_id,actor_id,session_id,endpoint,p256dh,auth) VALUES($4,$1,$2,$3,'https://push.example.test/recipient','0123456789abcdef','0123456789abcdef')`, []any{orgID, recipientID, sessionID, subscriptionID}},
+	}
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, statement := range setup {
+		if _, err := tx.Exec(ctx, statement.query, statement.args...); err != nil {
+			_ = tx.Rollback(ctx)
+			t.Fatal(err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	worker := NewWorker(slog.New(slog.NewTextHandler(io.Discard, nil)), pool, config.PushConfig{}, nil)
+	occurredAt := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC) // Monday.
+	materialize := func(t *testing.T, preferences map[string]any, mentioned bool) int {
+		t.Helper()
+		encoded, err := json.Marshal(preferences)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = pool.Exec(ctx, `UPDATE users SET preferences=$2 WHERE actor_id=$1`, recipientID, encoded); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = pool.Exec(ctx, `DELETE FROM notification_snoozes WHERE org_id=$1 AND actor_id=$2`, orgID, recipientID); err != nil {
+			t.Fatal(err)
+		}
+		if until, ok := preferences["snoozed_until"].(time.Time); ok {
+			if _, err = pool.Exec(ctx, `INSERT INTO notification_snoozes(org_id,actor_id,starts_at,ends_at) VALUES($1,$2,$3,$4)`, orgID, recipientID, occurredAt.Add(-time.Minute), until); err != nil {
+				t.Fatal(err)
+			}
+		}
+		var seq int64
+		if err = pool.QueryRow(ctx, `UPDATE organizations SET event_seq=event_seq+1 WHERE id=$1 RETURNING event_seq`, orgID).Scan(&seq); err != nil {
+			t.Fatal(err)
+		}
+		messageID, clientID := uuid.NewString(), uuid.NewString()
+		mentions := []string{}
+		if mentioned {
+			mentions = []string{recipientID}
+		}
+		if _, err = pool.Exec(ctx, `INSERT INTO messages(id,org_id,chat_id,actor_id,client_msg_id,create_fingerprint,body,body_format,created_seq,created_at,mentioned_actor_ids)
+			VALUES($1,$2,$3,$4,$5,decode(repeat('02',32),'hex'),'hello','plain',$6,$7,$8)`,
+			messageID, orgID, chatID, senderID, clientID, seq, occurredAt, mentions); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = pool.Exec(ctx, `INSERT INTO events(org_id,seq,type,actor_id,chat_id,subject_id,occurred_at) VALUES($1,$2,'message.created',$3,$4,$5,$6)`, orgID, seq, senderID, chatID, messageID, occurredAt); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = pool.Exec(ctx, `INSERT INTO notification_jobs(org_id,event_seq) VALUES($1,$2)`, orgID, seq); err != nil {
+			t.Fatal(err)
+		}
+		if err = worker.materialize(ctx); err != nil {
+			t.Fatal(err)
+		}
+		var count int
+		if err = pool.QueryRow(ctx, `SELECT count(*) FROM notification_deliveries WHERE org_id=$1 AND event_seq=$2`, orgID, seq).Scan(&count); err != nil {
+			t.Fatal(err)
+		}
+		return count
+	}
+	t.Run("global none", func(t *testing.T) {
+		if got := materialize(t, map[string]any{"push_enabled": true, "notify_messages": "none"}, true); got != 0 {
+			t.Fatalf("deliveries = %d", got)
+		}
+	})
+	t.Run("mentions policy", func(t *testing.T) {
+		if got := materialize(t, map[string]any{"push_enabled": true, "notify_messages": "direct_and_mentions"}, false); got != 0 {
+			t.Fatalf("unmentioned deliveries = %d", got)
+		}
+		if got := materialize(t, map[string]any{"push_enabled": true, "notify_messages": "direct_and_mentions"}, true); got != 1 {
+			t.Fatalf("mentioned deliveries = %d", got)
+		}
+	})
+	t.Run("snooze is permanent for the event", func(t *testing.T) {
+		if got := materialize(t, map[string]any{"push_enabled": true, "snoozed_until": occurredAt.Add(time.Hour)}, true); got != 0 {
+			t.Fatalf("deliveries = %d", got)
+		}
+	})
+	t.Run("schedule", func(t *testing.T) {
+		if got := materialize(t, map[string]any{"push_enabled": true, "schedule": map[string]any{"days": "weekdays", "from": "09:00", "to": "18:00"}}, true); got != 1 {
+			t.Fatalf("in-schedule deliveries = %d", got)
+		}
+		if got := materialize(t, map[string]any{"push_enabled": true, "schedule": map[string]any{"days": []int{0}, "from": "09:00", "to": "18:00"}}, true); got != 0 {
+			t.Fatalf("out-of-schedule deliveries = %d", got)
+		}
+	})
 }

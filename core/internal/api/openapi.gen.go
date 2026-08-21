@@ -4,8 +4,10 @@
 package api
 
 import (
+	"encoding/json"
 	"time"
 
+	"github.com/oapi-codegen/runtime"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
@@ -714,6 +716,24 @@ func (e MessageType) Valid() bool {
 	}
 }
 
+// Defines values for NotificationScheduleDays0.
+const (
+	NotificationScheduleDays0All      NotificationScheduleDays0 = "all"
+	NotificationScheduleDays0Weekdays NotificationScheduleDays0 = "weekdays"
+)
+
+// Valid indicates whether the value is a known member of the NotificationScheduleDays0 enum.
+func (e NotificationScheduleDays0) Valid() bool {
+	switch e {
+	case NotificationScheduleDays0All:
+		return true
+	case NotificationScheduleDays0Weekdays:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OrganizationMemberRole.
 const (
 	OrganizationMemberRoleAdmin  OrganizationMemberRole = "admin"
@@ -1278,6 +1298,63 @@ func (e UpdatePreferencesRequestLocale) Valid() bool {
 	}
 }
 
+// Defines values for UpdatePreferencesRequestNotifyMessages.
+const (
+	UpdatePreferencesRequestNotifyMessagesAll               UpdatePreferencesRequestNotifyMessages = "all"
+	UpdatePreferencesRequestNotifyMessagesDirectAndMentions UpdatePreferencesRequestNotifyMessages = "direct_and_mentions"
+	UpdatePreferencesRequestNotifyMessagesNone              UpdatePreferencesRequestNotifyMessages = "none"
+)
+
+// Valid indicates whether the value is a known member of the UpdatePreferencesRequestNotifyMessages enum.
+func (e UpdatePreferencesRequestNotifyMessages) Valid() bool {
+	switch e {
+	case UpdatePreferencesRequestNotifyMessagesAll:
+		return true
+	case UpdatePreferencesRequestNotifyMessagesDirectAndMentions:
+		return true
+	case UpdatePreferencesRequestNotifyMessagesNone:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UpdatePreferencesRequestNotifyThreads.
+const (
+	UpdatePreferencesRequestNotifyThreadsAll      UpdatePreferencesRequestNotifyThreads = "all"
+	UpdatePreferencesRequestNotifyThreadsMentions UpdatePreferencesRequestNotifyThreads = "mentions"
+	UpdatePreferencesRequestNotifyThreadsNone     UpdatePreferencesRequestNotifyThreads = "none"
+)
+
+// Valid indicates whether the value is a known member of the UpdatePreferencesRequestNotifyThreads enum.
+func (e UpdatePreferencesRequestNotifyThreads) Valid() bool {
+	switch e {
+	case UpdatePreferencesRequestNotifyThreadsAll:
+		return true
+	case UpdatePreferencesRequestNotifyThreadsMentions:
+		return true
+	case UpdatePreferencesRequestNotifyThreadsNone:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UpdatePreferencesRequestSoundId.
+const (
+	UpdatePreferencesRequestSoundIdDefault UpdatePreferencesRequestSoundId = "default"
+)
+
+// Valid indicates whether the value is a known member of the UpdatePreferencesRequestSoundId enum.
+func (e UpdatePreferencesRequestSoundId) Valid() bool {
+	switch e {
+	case UpdatePreferencesRequestSoundIdDefault:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UpdatePreferencesRequestTheme.
 const (
 	UpdatePreferencesRequestThemeDark   UpdatePreferencesRequestTheme = "dark"
@@ -1350,6 +1427,63 @@ func (e UserPreferencesLocale) Valid() bool {
 	case UserPreferencesLocaleEn:
 		return true
 	case UserPreferencesLocaleRu:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UserPreferencesNotifyMessages.
+const (
+	UserPreferencesNotifyMessagesAll               UserPreferencesNotifyMessages = "all"
+	UserPreferencesNotifyMessagesDirectAndMentions UserPreferencesNotifyMessages = "direct_and_mentions"
+	UserPreferencesNotifyMessagesNone              UserPreferencesNotifyMessages = "none"
+)
+
+// Valid indicates whether the value is a known member of the UserPreferencesNotifyMessages enum.
+func (e UserPreferencesNotifyMessages) Valid() bool {
+	switch e {
+	case UserPreferencesNotifyMessagesAll:
+		return true
+	case UserPreferencesNotifyMessagesDirectAndMentions:
+		return true
+	case UserPreferencesNotifyMessagesNone:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UserPreferencesNotifyThreads.
+const (
+	UserPreferencesNotifyThreadsAll      UserPreferencesNotifyThreads = "all"
+	UserPreferencesNotifyThreadsMentions UserPreferencesNotifyThreads = "mentions"
+	UserPreferencesNotifyThreadsNone     UserPreferencesNotifyThreads = "none"
+)
+
+// Valid indicates whether the value is a known member of the UserPreferencesNotifyThreads enum.
+func (e UserPreferencesNotifyThreads) Valid() bool {
+	switch e {
+	case UserPreferencesNotifyThreadsAll:
+		return true
+	case UserPreferencesNotifyThreadsMentions:
+		return true
+	case UserPreferencesNotifyThreadsNone:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UserPreferencesSoundId.
+const (
+	UserPreferencesSoundIdDefault UserPreferencesSoundId = "default"
+)
+
+// Valid indicates whether the value is a known member of the UserPreferencesSoundId enum.
+func (e UserPreferencesSoundId) Valid() bool {
+	switch e {
+	case UserPreferencesSoundIdDefault:
 		return true
 	default:
 		return false
@@ -1842,6 +1976,24 @@ type MessageWindow struct {
 	TargetId   openapi_types.UUID `json:"target_id"`
 }
 
+// NotificationSchedule defines model for NotificationSchedule.
+type NotificationSchedule struct {
+	Days NotificationSchedule_Days `json:"days"`
+	From string                    `json:"from"`
+	To   string                    `json:"to"`
+}
+
+// NotificationScheduleDays0 defines model for NotificationSchedule.Days.0.
+type NotificationScheduleDays0 string
+
+// NotificationScheduleDays1 defines model for NotificationSchedule.Days.1.
+type NotificationScheduleDays1 = []int
+
+// NotificationSchedule_Days defines model for NotificationSchedule.Days.
+type NotificationSchedule_Days struct {
+	union json.RawMessage
+}
+
 // OrganizationMember defines model for OrganizationMember.
 type OrganizationMember struct {
 	ActorId         openapi_types.UUID       `json:"actor_id"`
@@ -1892,6 +2044,7 @@ type PinnedChatIds = []openapi_types.UUID
 // PublicBranding defines model for PublicBranding.
 type PublicBranding struct {
 	AccentColor               string  `json:"accent_color"`
+	EmailDeliveryAvailable    bool    `json:"email_delivery_available"`
 	FaviconUrl                *string `json:"favicon_url,omitempty"`
 	LogoUrl                   *string `json:"logo_url,omitempty"`
 	PasswordRecoveryAvailable bool    `json:"password_recovery_available"`
@@ -2287,15 +2440,33 @@ type UpdateOrganizationSettingsRequestInvitationDefaultRole string
 
 // UpdatePreferencesRequest defines model for UpdatePreferencesRequest.
 type UpdatePreferencesRequest struct {
-	Locale       *UpdatePreferencesRequestLocale `json:"locale,omitempty"`
-	PushEnabled  *bool                           `json:"push_enabled,omitempty"`
-	PushPreview  *bool                           `json:"push_preview,omitempty"`
-	SnoozedUntil *time.Time                      `json:"snoozed_until,omitempty"`
-	Theme        *UpdatePreferencesRequestTheme  `json:"theme,omitempty"`
+	EmailDigest     *bool                                   `json:"email_digest,omitempty"`
+	Locale          *UpdatePreferencesRequestLocale         `json:"locale,omitempty"`
+	NotifyInvites   *bool                                   `json:"notify_invites,omitempty"`
+	NotifyMessages  *UpdatePreferencesRequestNotifyMessages `json:"notify_messages,omitempty"`
+	NotifyReactions *bool                                   `json:"notify_reactions,omitempty"`
+	NotifySystem    *bool                                   `json:"notify_system,omitempty"`
+	NotifyThreads   *UpdatePreferencesRequestNotifyThreads  `json:"notify_threads,omitempty"`
+	PushEnabled     *bool                                   `json:"push_enabled,omitempty"`
+	PushPreview     *bool                                   `json:"push_preview,omitempty"`
+	Schedule        *NotificationSchedule                   `json:"schedule,omitempty"`
+	SnoozedUntil    *time.Time                              `json:"snoozed_until,omitempty"`
+	SoundEnabled    *bool                                   `json:"sound_enabled,omitempty"`
+	SoundId         *UpdatePreferencesRequestSoundId        `json:"sound_id,omitempty"`
+	Theme           *UpdatePreferencesRequestTheme          `json:"theme,omitempty"`
 }
 
 // UpdatePreferencesRequestLocale defines model for UpdatePreferencesRequest.Locale.
 type UpdatePreferencesRequestLocale string
+
+// UpdatePreferencesRequestNotifyMessages defines model for UpdatePreferencesRequest.NotifyMessages.
+type UpdatePreferencesRequestNotifyMessages string
+
+// UpdatePreferencesRequestNotifyThreads defines model for UpdatePreferencesRequest.NotifyThreads.
+type UpdatePreferencesRequestNotifyThreads string
+
+// UpdatePreferencesRequestSoundId defines model for UpdatePreferencesRequest.SoundId.
+type UpdatePreferencesRequestSoundId string
 
 // UpdatePreferencesRequestTheme defines model for UpdatePreferencesRequest.Theme.
 type UpdatePreferencesRequestTheme string
@@ -2338,15 +2509,33 @@ type UserStatus string
 
 // UserPreferences defines model for UserPreferences.
 type UserPreferences struct {
-	Locale       UserPreferencesLocale `json:"locale"`
-	PushEnabled  bool                  `json:"push_enabled"`
-	PushPreview  bool                  `json:"push_preview"`
-	SnoozedUntil *time.Time            `json:"snoozed_until"`
-	Theme        UserPreferencesTheme  `json:"theme"`
+	EmailDigest     bool                          `json:"email_digest"`
+	Locale          UserPreferencesLocale         `json:"locale"`
+	NotifyInvites   bool                          `json:"notify_invites"`
+	NotifyMessages  UserPreferencesNotifyMessages `json:"notify_messages"`
+	NotifyReactions bool                          `json:"notify_reactions"`
+	NotifySystem    bool                          `json:"notify_system"`
+	NotifyThreads   UserPreferencesNotifyThreads  `json:"notify_threads"`
+	PushEnabled     bool                          `json:"push_enabled"`
+	PushPreview     bool                          `json:"push_preview"`
+	Schedule        *NotificationSchedule         `json:"schedule"`
+	SnoozedUntil    *time.Time                    `json:"snoozed_until"`
+	SoundEnabled    bool                          `json:"sound_enabled"`
+	SoundId         UserPreferencesSoundId        `json:"sound_id"`
+	Theme           UserPreferencesTheme          `json:"theme"`
 }
 
 // UserPreferencesLocale defines model for UserPreferences.Locale.
 type UserPreferencesLocale string
+
+// UserPreferencesNotifyMessages defines model for UserPreferences.NotifyMessages.
+type UserPreferencesNotifyMessages string
+
+// UserPreferencesNotifyThreads defines model for UserPreferences.NotifyThreads.
+type UserPreferencesNotifyThreads string
+
+// UserPreferencesSoundId defines model for UserPreferences.SoundId.
+type UserPreferencesSoundId string
 
 // UserPreferencesTheme defines model for UserPreferences.Theme.
 type UserPreferencesTheme string
@@ -2511,3 +2700,65 @@ type PutPinnedChatsJSONRequestBody = PinnedChatIds
 
 // PutPushSubscriptionJSONRequestBody defines body for PutPushSubscription for application/json ContentType.
 type PutPushSubscriptionJSONRequestBody = PushSubscriptionRequest
+
+// AsNotificationScheduleDays0 returns the union data inside the NotificationSchedule_Days as a NotificationScheduleDays0
+func (t NotificationSchedule_Days) AsNotificationScheduleDays0() (NotificationScheduleDays0, error) {
+	var body NotificationScheduleDays0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromNotificationScheduleDays0 overwrites any union data inside the NotificationSchedule_Days as the provided NotificationScheduleDays0
+func (t *NotificationSchedule_Days) FromNotificationScheduleDays0(v NotificationScheduleDays0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeNotificationScheduleDays0 performs a merge with any union data inside the NotificationSchedule_Days, using the provided NotificationScheduleDays0
+func (t *NotificationSchedule_Days) MergeNotificationScheduleDays0(v NotificationScheduleDays0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsNotificationScheduleDays1 returns the union data inside the NotificationSchedule_Days as a NotificationScheduleDays1
+func (t NotificationSchedule_Days) AsNotificationScheduleDays1() (NotificationScheduleDays1, error) {
+	var body NotificationScheduleDays1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromNotificationScheduleDays1 overwrites any union data inside the NotificationSchedule_Days as the provided NotificationScheduleDays1
+func (t *NotificationSchedule_Days) FromNotificationScheduleDays1(v NotificationScheduleDays1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeNotificationScheduleDays1 performs a merge with any union data inside the NotificationSchedule_Days, using the provided NotificationScheduleDays1
+func (t *NotificationSchedule_Days) MergeNotificationScheduleDays1(v NotificationScheduleDays1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t NotificationSchedule_Days) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *NotificationSchedule_Days) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}

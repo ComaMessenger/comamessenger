@@ -126,7 +126,20 @@ async function mockMessenger(
     locale: "ru",
     push_enabled: false,
     push_preview: false,
+    notify_messages: "all" as const,
+    notify_threads: "all" as const,
+    notify_reactions: true,
+    notify_invites: true,
+    notify_system: true,
+    sound_enabled: true,
+    sound_id: "default" as const,
+    schedule: null as null | {
+      days: "all" | "weekdays" | number[];
+      from: string;
+      to: string;
+    },
     snoozed_until: null as string | null,
+    email_digest: false,
   };
   let chatFolders: Array<Record<string, unknown>> = [];
   let pinnedChatIDs: string[] = [];
@@ -257,6 +270,7 @@ async function mockMessenger(
         accent_color: organizationSettings.accent_color,
         version: organizationSettings.version,
         password_recovery_available: passwordRecoveryAvailable,
+        email_delivery_available: passwordRecoveryAvailable,
       };
     else if (path.endsWith("/auth/refresh")) {
       refreshRequests += 1;
@@ -1769,6 +1783,31 @@ test("notification snooze is shared by the profile menu", async ({ page }) => {
       page.locator(".status-menu").getByText("Пауза действует на всех ваших устройствах"),
     ).toBeVisible();
   }
+});
+
+test("notification rules and schedule autosave", async ({ page }) => {
+  await mockMessenger(page);
+  await page.goto("/settings/notifications");
+  await page
+    .locator('select[name="notify-messages"]')
+    .selectOption("direct_and_mentions");
+  await page
+    .locator('select[name="notify-threads"]')
+    .selectOption("mentions");
+  await page.getByRole("checkbox", { name: "Реакции на мои сообщения" }).uncheck();
+  await page
+    .getByRole("checkbox", { name: "Использовать расписание" })
+    .check();
+  await page.getByRole("button", { name: "Выбрать дни" }).click();
+  await page.getByRole("button", { name: "Вс" }).click();
+  await page.locator('input[name="schedule-from"]').fill("10:00");
+  await page.locator('input[name="schedule-to"]').fill("19:30");
+  await expect(page.getByText("Сохранено")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Вс" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.getByText("Email-дайджест")).toHaveCount(0);
 });
 
 test("a 10k-message history stays virtualized", async ({ page }) => {

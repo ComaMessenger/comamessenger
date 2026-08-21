@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { MessengerAPI, User, UserPreferences } from "@comamessenger/core";
-import { Bell, LogOut, MessageCircle } from "lucide-react";
+import { Bell, Clock3, LogOut, MessageCircle, Volume2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   Avatar,
@@ -245,7 +245,12 @@ export function NotificationSettingsPage({
     queryKey: ["preferences"],
     queryFn: () => api.preferences(),
   });
+  const brandingQuery = useQuery({
+    queryKey: ["public-branding"],
+    queryFn: () => api.branding(),
+  });
   const [draft, setDraft] = useState<UserPreferences | null>(null);
+  const [snoozePending, setSnoozePending] = useState(false);
   useEffect(() => {
     if (query.data) setDraft((current) => current ?? query.data);
   }, [query.data]);
@@ -264,6 +269,15 @@ export function NotificationSettingsPage({
       api.updatePreferences({
         push_enabled: snapshot.push_enabled,
         push_preview: snapshot.push_preview,
+        notify_messages: snapshot.notify_messages,
+        notify_threads: snapshot.notify_threads,
+        notify_reactions: snapshot.notify_reactions,
+        notify_invites: snapshot.notify_invites,
+        notify_system: snapshot.notify_system,
+        sound_enabled: snapshot.sound_enabled,
+        sound_id: snapshot.sound_id,
+        schedule: snapshot.schedule,
+        email_digest: snapshot.email_digest,
       }),
     onSaved: (result, snapshot) =>
       setDraft((current) =>
@@ -275,6 +289,21 @@ export function NotificationSettingsPage({
   if (!draft) return <Skeleton />;
   const permission =
     "Notification" in window ? Notification.permission : "denied";
+  const schedule = draft.schedule;
+  async function setSnooze(until: string | null) {
+    setSnoozePending(true);
+    try {
+      setDraft(await api.updatePreferences({ snoozed_until: until }));
+    } finally {
+      setSnoozePending(false);
+    }
+  }
+  function setScheduleDays(days: "all" | "weekdays" | number[]) {
+    if (!schedule) return;
+    setDraft((current) =>
+      current ? { ...current, schedule: { ...schedule, days } } : current,
+    );
+  }
   return (
     <SettingsShell
       user={user}
@@ -282,7 +311,7 @@ export function NotificationSettingsPage({
       title={t("notificationSettings")}
       navigate={navigate}
     >
-      <div className="settings-page__body settings-page__body--columns">
+      <div className="settings-page__body">
         <AutosaveStatus {...autosave} onRetry={autosave.retry} />
         <SettingsSection
           title={t("browserNotifications")}
@@ -320,10 +349,180 @@ export function NotificationSettingsPage({
           </div>
         </SettingsSection>
         <SettingsSection
-          title={t("notificationPreview")}
-          description={t("notificationPreviewHint")}
+          title={t("messageNotifications")}
+          description={t("messageNotificationsHint")}
           icon={<MessageCircle />}
         >
+          <div className="settings-form-grid">
+            <SelectField
+              label={t("messageNotificationMode")}
+              name="notify-messages"
+              value={draft.notify_messages}
+              onChange={(event) =>
+                setDraft({
+                  ...draft,
+                  notify_messages: event.target.value as UserPreferences["notify_messages"],
+                })
+              }
+            >
+              <option value="all">{t("allMessages")}</option>
+              <option value="direct_and_mentions">
+                {t("directAndMentions")}
+              </option>
+              <option value="none">{t("notificationsOff")}</option>
+            </SelectField>
+            <SelectField
+              label={t("threadNotificationMode")}
+              name="notify-threads"
+              value={draft.notify_threads}
+              onChange={(event) =>
+                setDraft({
+                  ...draft,
+                  notify_threads: event.target.value as UserPreferences["notify_threads"],
+                })
+              }
+            >
+              <option value="all">{t("allThreadReplies")}</option>
+              <option value="mentions">{t("mentionsOnly")}</option>
+              <option value="none">{t("notificationsOff")}</option>
+            </SelectField>
+          </div>
+          <SettingsToggle
+            label={t("notifyReactions")}
+            checked={draft.notify_reactions}
+            onChange={(notify_reactions) =>
+              setDraft({ ...draft, notify_reactions })
+            }
+          />
+          <SettingsToggle
+            label={t("notifyInvites")}
+            checked={draft.notify_invites}
+            onChange={(notify_invites) =>
+              setDraft({ ...draft, notify_invites })
+            }
+          />
+          <SettingsToggle
+            label={t("notifySystem")}
+            checked={draft.notify_system}
+            onChange={(notify_system) =>
+              setDraft({ ...draft, notify_system })
+            }
+          />
+        </SettingsSection>
+        <SettingsSection
+          title={t("notificationSchedule")}
+          description={t("notificationScheduleHint")}
+          icon={<Clock3 />}
+        >
+          <SettingsToggle
+            label={t("useNotificationSchedule")}
+            checked={schedule !== null}
+            onChange={(enabled) =>
+              setDraft({
+                ...draft,
+                schedule: enabled
+                  ? { days: "weekdays", from: "09:00", to: "18:00" }
+                  : null,
+              })
+            }
+          />
+          {schedule && (
+            <div className="notification-schedule-editor">
+              <div
+                className="notification-schedule-modes"
+                role="group"
+                aria-label={t("scheduleDays")}
+              >
+                <Button
+                  size="sm"
+                  variant={schedule.days === "all" ? "primary" : "secondary"}
+                  onClick={() => setScheduleDays("all")}
+                >
+                  {t("everyDay")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant={
+                    schedule.days === "weekdays" ? "primary" : "secondary"
+                  }
+                  onClick={() => setScheduleDays("weekdays")}
+                >
+                  {t("weekdays")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant={Array.isArray(schedule.days) ? "primary" : "secondary"}
+                  onClick={() => setScheduleDays([1, 2, 3, 4, 5])}
+                >
+                  {t("customDays")}
+                </Button>
+              </div>
+              {Array.isArray(schedule.days) && (
+                <div className="notification-schedule-days">
+                  {[0, 1, 2, 3, 4, 5, 6].map((day) => {
+                    const selected = (schedule.days as number[]).includes(day);
+                    return (
+                      <button
+                        type="button"
+                        key={day}
+                        aria-pressed={selected}
+                        onClick={() => {
+                          const next = selected
+                            ? (schedule.days as number[]).filter(
+                                (item) => item !== day,
+                              )
+                            : [...(schedule.days as number[]), day].sort();
+                          if (next.length) setScheduleDays(next);
+                        }}
+                      >
+                        {t(`weekday${day}`)}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="settings-form-grid">
+                <Field
+                  label={t("scheduleFrom")}
+                  name="schedule-from"
+                  type="time"
+                  value={schedule.from}
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      schedule: { ...schedule, from: event.target.value },
+                    })
+                  }
+                />
+                <Field
+                  label={t("scheduleTo")}
+                  name="schedule-to"
+                  type="time"
+                  value={schedule.to}
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      schedule: { ...schedule, to: event.target.value },
+                    })
+                  }
+                />
+              </div>
+              <small>{t("scheduleTimezone", { timezone: user.timezone })}</small>
+            </div>
+          )}
+        </SettingsSection>
+        <SettingsSection
+          title={t("notificationSound")}
+          description={t("notificationSoundHint")}
+          icon={<Volume2 />}
+        >
+          <SettingsToggle
+            label={t("soundEnabled")}
+            checked={draft.sound_enabled}
+            onChange={(sound_enabled) =>
+              setDraft({ ...draft, sound_enabled })
+            }
+          />
           <SettingsToggle
             label={t("notificationPreview")}
             hint={t("notificationPreviewHint")}
@@ -331,6 +530,66 @@ export function NotificationSettingsPage({
             onChange={(push_preview) => setDraft({ ...draft, push_preview })}
           />
         </SettingsSection>
+        <SettingsSection
+          title={t("snoozeNotifications")}
+          description={t("snoozeHint")}
+          icon={<Clock3 />}
+        >
+          {draft.snoozed_until && (
+            <p>
+              {t("snoozedUntil", {
+                time: new Intl.DateTimeFormat(undefined, {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                }).format(new Date(draft.snoozed_until)),
+              })}
+            </p>
+          )}
+          <div className="status-menu__actions">
+            {[30, 60, 120].map((minutes) => (
+              <Button
+                key={minutes}
+                size="sm"
+                disabled={snoozePending}
+                onClick={() =>
+                  void setSnooze(
+                    new Date(Date.now() + minutes * 60_000).toISOString(),
+                  )
+                }
+              >
+                {minutes === 30
+                  ? t("snooze30Minutes")
+                  : minutes === 60
+                    ? t("snoozeOneHour")
+                    : t("snoozeTwoHours")}
+              </Button>
+            ))}
+            {draft.snoozed_until && (
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={snoozePending}
+                onClick={() => void setSnooze(null)}
+              >
+                {t("resumeNotifications")}
+              </Button>
+            )}
+          </div>
+        </SettingsSection>
+        {brandingQuery.data?.email_delivery_available && (
+          <SettingsSection
+            title={t("emailDigest")}
+            description={t("emailDigestHint")}
+          >
+            <SettingsToggle
+              label={t("emailDigest")}
+              checked={draft.email_digest}
+              onChange={(email_digest) =>
+                setDraft({ ...draft, email_digest })
+              }
+            />
+          </SettingsSection>
+        )}
       </div>
     </SettingsShell>
   );

@@ -426,8 +426,14 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	var preferences push.Preferences
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/preferences", owner.AccessToken, nil, standardhttp.StatusOK, &preferences)
 	snoozedUntil := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
-	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/preferences", owner.AccessToken, map[string]any{"locale": "en", "push_enabled": true, "push_preview": true, "snoozed_until": snoozedUntil}, standardhttp.StatusOK, &preferences)
-	if preferences.Locale != "en" || !preferences.PushEnabled || !preferences.PushPreview || preferences.SnoozedUntil == nil || !preferences.SnoozedUntil.Equal(snoozedUntil) {
+	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/preferences", owner.AccessToken, map[string]any{
+		"locale": "en", "push_enabled": true, "push_preview": true, "snoozed_until": snoozedUntil,
+		"notify_messages": "direct_and_mentions", "notify_threads": "mentions",
+		"notify_reactions": false, "notify_invites": false, "notify_system": false,
+		"sound_enabled": false, "sound_id": "default", "email_digest": false,
+		"schedule": map[string]any{"days": []int{1, 3, 5}, "from": "09:00", "to": "18:00"},
+	}, standardhttp.StatusOK, &preferences)
+	if preferences.Locale != "en" || !preferences.PushEnabled || !preferences.PushPreview || preferences.NotifyMessages != "direct_and_mentions" || preferences.NotifyThreads != "mentions" || preferences.NotifyReactions || preferences.NotifyInvites || preferences.NotifySystem || preferences.SoundEnabled || preferences.Schedule == nil || preferences.SnoozedUntil == nil || !preferences.SnoozedUntil.Equal(snoozedUntil) {
 		t.Fatalf("partial preferences = %+v", preferences)
 	}
 	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/preferences", owner.AccessToken, map[string]any{"snoozed_until": nil}, standardhttp.StatusOK, &preferences)

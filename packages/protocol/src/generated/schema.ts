@@ -1270,6 +1270,7 @@ export interface components {
             /** Format: int64 */
             version: number;
             password_recovery_available: boolean;
+            email_delivery_available: boolean;
             logo_url?: string;
             favicon_url?: string;
         };
@@ -1790,8 +1791,20 @@ export interface components {
             locale: "ru" | "en";
             push_enabled: boolean;
             push_preview: boolean;
+            /** @enum {string} */
+            notify_messages: "all" | "direct_and_mentions" | "none";
+            /** @enum {string} */
+            notify_threads: "all" | "mentions" | "none";
+            notify_reactions: boolean;
+            notify_invites: boolean;
+            notify_system: boolean;
+            sound_enabled: boolean;
+            /** @enum {string} */
+            sound_id: "default";
+            schedule: components["schemas"]["NotificationSchedule"] | null;
             /** Format: date-time */
             snoozed_until: string | null;
+            email_digest: boolean;
         };
         UpdatePreferencesRequest: {
             /** @enum {string} */
@@ -1800,8 +1813,25 @@ export interface components {
             locale?: "ru" | "en";
             push_enabled?: boolean;
             push_preview?: boolean;
+            /** @enum {string} */
+            notify_messages?: "all" | "direct_and_mentions" | "none";
+            /** @enum {string} */
+            notify_threads?: "all" | "mentions" | "none";
+            notify_reactions?: boolean;
+            notify_invites?: boolean;
+            notify_system?: boolean;
+            sound_enabled?: boolean;
+            /** @enum {string} */
+            sound_id?: "default";
+            schedule?: components["schemas"]["NotificationSchedule"] | null;
             /** Format: date-time */
             snoozed_until?: string | null;
+            email_digest?: boolean;
+        };
+        NotificationSchedule: {
+            days: ("all" | "weekdays") | number[];
+            from: string;
+            to: string;
         };
         ChatFolders: components["schemas"]["ChatFolder"][];
         PinnedChatIds: string[];

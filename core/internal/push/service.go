@@ -34,11 +34,20 @@ type Subscription struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 type Preferences struct {
-	Theme        string     `json:"theme"`
-	Locale       string     `json:"locale"`
-	PushEnabled  bool       `json:"push_enabled"`
-	PushPreview  bool       `json:"push_preview"`
-	SnoozedUntil *time.Time `json:"snoozed_until"`
+	Theme           string                `json:"theme"`
+	Locale          string                `json:"locale"`
+	PushEnabled     bool                  `json:"push_enabled"`
+	PushPreview     bool                  `json:"push_preview"`
+	NotifyMessages  string                `json:"notify_messages"`
+	NotifyThreads   string                `json:"notify_threads"`
+	NotifyReactions bool                  `json:"notify_reactions"`
+	NotifyInvites   bool                  `json:"notify_invites"`
+	NotifySystem    bool                  `json:"notify_system"`
+	SoundEnabled    bool                  `json:"sound_enabled"`
+	SoundID         string                `json:"sound_id"`
+	Schedule        *NotificationSchedule `json:"schedule"`
+	SnoozedUntil    *time.Time            `json:"snoozed_until"`
+	EmailDigest     bool                  `json:"email_digest"`
 }
 type OptionalTime struct {
 	Set   bool
@@ -60,12 +69,45 @@ func (value *OptionalTime) UnmarshalJSON(data []byte) error {
 }
 
 type UpdatePreferences struct {
-	Theme        *string      `json:"theme"`
-	Locale       *string      `json:"locale"`
-	PushEnabled  *bool        `json:"push_enabled"`
-	PushPreview  *bool        `json:"push_preview"`
-	SnoozedUntil OptionalTime `json:"snoozed_until"`
+	Theme           *string          `json:"theme"`
+	Locale          *string          `json:"locale"`
+	PushEnabled     *bool            `json:"push_enabled"`
+	PushPreview     *bool            `json:"push_preview"`
+	NotifyMessages  *string          `json:"notify_messages"`
+	NotifyThreads   *string          `json:"notify_threads"`
+	NotifyReactions *bool            `json:"notify_reactions"`
+	NotifyInvites   *bool            `json:"notify_invites"`
+	NotifySystem    *bool            `json:"notify_system"`
+	SoundEnabled    *bool            `json:"sound_enabled"`
+	SoundID         *string          `json:"sound_id"`
+	Schedule        OptionalSchedule `json:"schedule"`
+	SnoozedUntil    OptionalTime     `json:"snoozed_until"`
+	EmailDigest     *bool            `json:"email_digest"`
 }
+type NotificationSchedule struct {
+	Days any    `json:"days"`
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+type OptionalSchedule struct {
+	Set   bool
+	Value *NotificationSchedule
+}
+
+func (value *OptionalSchedule) UnmarshalJSON(data []byte) error {
+	value.Set = true
+	if string(data) == "null" {
+		value.Value = nil
+		return nil
+	}
+	var parsed NotificationSchedule
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return err
+	}
+	value.Value = &parsed
+	return nil
+}
+
 type ChatFolder struct {
 	ID      string   `json:"id"`
 	Name    string   `json:"name"`
@@ -115,7 +157,12 @@ func (s *Service) Unsubscribe(ctx context.Context, user identity.User, subscript
 	return nil
 }
 func (s *Service) GetPreferences(ctx context.Context, user identity.User) (Preferences, error) {
-	result := Preferences{Theme: "light", Locale: "ru", PushEnabled: true}
+	result := Preferences{
+		Theme: "light", Locale: "ru", PushEnabled: true,
+		NotifyMessages: "all", NotifyThreads: "all",
+		NotifyReactions: true, NotifyInvites: true, NotifySystem: true,
+		SoundEnabled: true, SoundID: "default",
+	}
 	var raw []byte
 	if err := s.pool.QueryRow(ctx, `SELECT preferences FROM users WHERE org_id=$1 AND actor_id=$2`, user.OrgID, user.ActorID).Scan(&raw); err != nil {
 		return result, err
@@ -127,10 +174,35 @@ func (s *Service) GetPreferences(ctx context.Context, user identity.User) (Prefe
 	if result.Locale == "" {
 		result.Locale = "ru"
 	}
+	if result.NotifyMessages == "" {
+		result.NotifyMessages = "all"
+	}
+	if result.NotifyThreads == "" {
+		result.NotifyThreads = "all"
+	}
+	if result.SoundID == "" {
+		result.SoundID = "default"
+	}
+	// Boolean defaults for rows created before notification preferences existed.
+	var stored map[string]json.RawMessage
+	if json.Unmarshal(raw, &stored) == nil {
+		if _, ok := stored["notify_reactions"]; !ok {
+			result.NotifyReactions = true
+		}
+		if _, ok := stored["notify_invites"]; !ok {
+			result.NotifyInvites = true
+		}
+		if _, ok := stored["notify_system"]; !ok {
+			result.NotifySystem = true
+		}
+		if _, ok := stored["sound_enabled"]; !ok {
+			result.SoundEnabled = true
+		}
+	}
 	return result, nil
 }
 func (s *Service) UpdatePreferences(ctx context.Context, user identity.User, input UpdatePreferences) (Preferences, error) {
-	if input.Theme == nil && input.Locale == nil && input.PushEnabled == nil && input.PushPreview == nil && !input.SnoozedUntil.Set {
+	if input.empty() {
 		return Preferences{}, ErrInvalid
 	}
 	if input.Theme != nil && *input.Theme != "system" && *input.Theme != "light" && *input.Theme != "dark" {
@@ -139,13 +211,25 @@ func (s *Service) UpdatePreferences(ctx context.Context, user identity.User, inp
 	if input.Locale != nil && *input.Locale != "ru" && *input.Locale != "en" {
 		return Preferences{}, ErrInvalid
 	}
+	if input.NotifyMessages != nil && *input.NotifyMessages != "all" && *input.NotifyMessages != "direct_and_mentions" && *input.NotifyMessages != "none" {
+		return Preferences{}, ErrInvalid
+	}
+	if input.NotifyThreads != nil && *input.NotifyThreads != "all" && *input.NotifyThreads != "mentions" && *input.NotifyThreads != "none" {
+		return Preferences{}, ErrInvalid
+	}
+	if input.SoundID != nil && *input.SoundID != "default" {
+		return Preferences{}, ErrInvalid
+	}
+	if input.Schedule.Value != nil && !validSchedule(*input.Schedule.Value) {
+		return Preferences{}, ErrInvalid
+	}
 	if input.SnoozedUntil.Value != nil {
 		now := time.Now()
 		if !input.SnoozedUntil.Value.After(now) || input.SnoozedUntil.Value.After(now.AddDate(1, 0, 0)) {
 			return Preferences{}, ErrInvalid
 		}
 	}
-	payload := make(map[string]any, 5)
+	payload := make(map[string]any, 14)
 	if input.Theme != nil {
 		payload["theme"] = *input.Theme
 	}
@@ -158,17 +242,111 @@ func (s *Service) UpdatePreferences(ctx context.Context, user identity.User, inp
 	if input.PushPreview != nil {
 		payload["push_preview"] = *input.PushPreview
 	}
+	if input.NotifyMessages != nil {
+		payload["notify_messages"] = *input.NotifyMessages
+	}
+	if input.NotifyThreads != nil {
+		payload["notify_threads"] = *input.NotifyThreads
+	}
+	if input.NotifyReactions != nil {
+		payload["notify_reactions"] = *input.NotifyReactions
+	}
+	if input.NotifyInvites != nil {
+		payload["notify_invites"] = *input.NotifyInvites
+	}
+	if input.NotifySystem != nil {
+		payload["notify_system"] = *input.NotifySystem
+	}
+	if input.SoundEnabled != nil {
+		payload["sound_enabled"] = *input.SoundEnabled
+	}
+	if input.SoundID != nil {
+		payload["sound_id"] = *input.SoundID
+	}
+	if input.Schedule.Set {
+		payload["schedule"] = input.Schedule.Value
+	}
 	if input.SnoozedUntil.Set {
 		payload["snoozed_until"] = input.SnoozedUntil.Value
+	}
+	if input.EmailDigest != nil {
+		payload["email_digest"] = *input.EmailDigest
 	}
 	encoded, err := json.Marshal(payload)
 	if err != nil {
 		return Preferences{}, err
 	}
-	if _, err = s.pool.Exec(ctx, `UPDATE users SET preferences=preferences||$3::jsonb WHERE org_id=$1 AND actor_id=$2`, user.OrgID, user.ActorID, string(encoded)); err != nil {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return Preferences{}, err
+	}
+	defer tx.Rollback(ctx)
+	if _, err = tx.Exec(ctx, `UPDATE users SET preferences=preferences||$3::jsonb WHERE org_id=$1 AND actor_id=$2`, user.OrgID, user.ActorID, string(encoded)); err != nil {
+		return Preferences{}, err
+	}
+	if input.SnoozedUntil.Set {
+		if input.SnoozedUntil.Value == nil {
+			if _, err = tx.Exec(ctx, `UPDATE notification_snoozes SET ends_at=GREATEST(now(),starts_at+interval '1 microsecond') WHERE org_id=$1 AND actor_id=$2 AND starts_at<=now() AND ends_at>now()`, user.OrgID, user.ActorID); err != nil {
+				return Preferences{}, err
+			}
+		} else {
+			command, updateErr := tx.Exec(ctx, `UPDATE notification_snoozes SET ends_at=$3 WHERE org_id=$1 AND actor_id=$2 AND starts_at<=now() AND ends_at>now()`, user.OrgID, user.ActorID, *input.SnoozedUntil.Value)
+			if updateErr != nil {
+				return Preferences{}, updateErr
+			}
+			if command.RowsAffected() == 0 {
+				if _, err = tx.Exec(ctx, `INSERT INTO notification_snoozes(org_id,actor_id,starts_at,ends_at) VALUES($1,$2,now(),$3)`, user.OrgID, user.ActorID, *input.SnoozedUntil.Value); err != nil {
+					return Preferences{}, err
+				}
+			}
+		}
+	}
+	if err = tx.Commit(ctx); err != nil {
 		return Preferences{}, err
 	}
 	return s.GetPreferences(ctx, user)
+}
+
+func (input UpdatePreferences) empty() bool {
+	return input.Theme == nil && input.Locale == nil && input.PushEnabled == nil && input.PushPreview == nil &&
+		input.NotifyMessages == nil && input.NotifyThreads == nil && input.NotifyReactions == nil && input.NotifyInvites == nil &&
+		input.NotifySystem == nil && input.SoundEnabled == nil && input.SoundID == nil && !input.Schedule.Set &&
+		!input.SnoozedUntil.Set && input.EmailDigest == nil
+}
+
+func validSchedule(schedule NotificationSchedule) bool {
+	if !validClock(schedule.From) || !validClock(schedule.To) {
+		return false
+	}
+	switch days := schedule.Days.(type) {
+	case string:
+		return days == "all" || days == "weekdays"
+	case []any:
+		if len(days) == 0 || len(days) > 7 {
+			return false
+		}
+		seen := map[int]bool{}
+		for _, raw := range days {
+			value, ok := raw.(float64)
+			day := int(value)
+			if !ok || value != float64(day) || day < 0 || day > 6 || seen[day] {
+				return false
+			}
+			seen[day] = true
+		}
+		return true
+	default:
+		return false
+	}
+}
+
+func validClock(value string) bool {
+	if len(value) != 5 || value[2] != ':' {
+		return false
+	}
+	hour := int(value[0]-'0')*10 + int(value[1]-'0')
+	minute := int(value[3]-'0')*10 + int(value[4]-'0')
+	return value[0] >= '0' && value[0] <= '9' && value[1] >= '0' && value[1] <= '9' && value[3] >= '0' && value[3] <= '9' && value[4] >= '0' && value[4] <= '9' && hour < 24 && minute < 60
 }
 
 func (s *Service) GetChatFolders(ctx context.Context, user identity.User) ([]ChatFolder, error) {
@@ -351,7 +529,57 @@ func (w *Worker) materialize(ctx context.Context) error {
 	}
 	rows.Close()
 	for _, j := range jobs {
-		_, err = tx.Exec(ctx, `INSERT INTO notification_deliveries(org_id,event_seq,subscription_id) SELECT e.org_id,e.seq,s.id FROM events e JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id JOIN chat_members cm ON cm.org_id=e.org_id AND cm.chat_id=e.chat_id JOIN web_push_subscriptions s ON s.org_id=cm.org_id AND s.actor_id=cm.actor_id JOIN users u ON u.org_id=cm.org_id AND u.actor_id=cm.actor_id WHERE e.org_id=$1 AND e.seq=$2 AND e.type='message.created' AND cm.actor_id<>e.actor_id AND (cm.muted_until IS NULL OR cm.muted_until<=now()) AND COALESCE((u.preferences->>'push_enabled')::boolean,true) AND (NULLIF(u.preferences->>'snoozed_until','') IS NULL OR (u.preferences->>'snoozed_until')::timestamptz<=now()) AND (cm.notify_level='all' OR (cm.notify_level='mentions' AND cm.actor_id=ANY(m.mentioned_actor_ids))) ON CONFLICT DO NOTHING`, j.org, j.seq)
+		_, err = tx.Exec(ctx, `
+			INSERT INTO notification_deliveries(org_id,event_seq,subscription_id)
+			SELECT e.org_id,e.seq,s.id
+			FROM events e
+			JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id
+			JOIN chats c ON c.org_id=m.org_id AND c.id=m.chat_id
+			JOIN chat_members cm ON cm.org_id=e.org_id AND cm.chat_id=e.chat_id
+			JOIN web_push_subscriptions s ON s.org_id=cm.org_id AND s.actor_id=cm.actor_id
+			JOIN users u ON u.org_id=cm.org_id AND u.actor_id=cm.actor_id
+			JOIN actors recipient ON recipient.org_id=cm.org_id AND recipient.id=cm.actor_id
+			WHERE e.org_id=$1 AND e.seq=$2 AND e.type='message.created'
+			  AND cm.actor_id<>e.actor_id
+			  AND (cm.muted_until IS NULL OR cm.muted_until<=e.occurred_at)
+			  AND COALESCE((u.preferences->>'push_enabled')::boolean,true)
+			  AND NOT EXISTS (
+			    SELECT 1 FROM notification_snoozes ns
+			    WHERE ns.org_id=cm.org_id AND ns.actor_id=cm.actor_id
+			      AND e.occurred_at>=ns.starts_at AND e.occurred_at<ns.ends_at
+			  )
+			  AND CASE COALESCE(u.preferences->>'notify_messages','all')
+			        WHEN 'all' THEN true
+			        WHEN 'direct_and_mentions' THEN c.kind='direct' OR cm.actor_id=ANY(m.mentioned_actor_ids)
+			        ELSE false
+			      END
+			  AND (m.thread_root_id IS NULL OR CASE COALESCE(u.preferences->>'notify_threads','all')
+			        WHEN 'all' THEN true
+			        WHEN 'mentions' THEN cm.actor_id=ANY(m.mentioned_actor_ids)
+			        ELSE false
+			      END)
+			  AND (cm.notify_level='all' OR (cm.notify_level='mentions' AND cm.actor_id=ANY(m.mentioned_actor_ids)))
+			  AND (
+			    u.preferences->'schedule' IS NULL OR jsonb_typeof(u.preferences->'schedule')='null' OR (
+			      CASE
+			        WHEN u.preferences#>>'{schedule,from}' = u.preferences#>>'{schedule,to}' THEN true
+			        WHEN u.preferences#>>'{schedule,from}' < u.preferences#>>'{schedule,to}'
+			          THEN to_char(timezone(COALESCE(NULLIF(recipient.timezone,''),'UTC'),e.occurred_at),'HH24:MI') >= u.preferences#>>'{schedule,from}'
+			           AND to_char(timezone(COALESCE(NULLIF(recipient.timezone,''),'UTC'),e.occurred_at),'HH24:MI') < u.preferences#>>'{schedule,to}'
+			        ELSE to_char(timezone(COALESCE(NULLIF(recipient.timezone,''),'UTC'),e.occurred_at),'HH24:MI') >= u.preferences#>>'{schedule,from}'
+			          OR to_char(timezone(COALESCE(NULLIF(recipient.timezone,''),'UTC'),e.occurred_at),'HH24:MI') < u.preferences#>>'{schedule,to}'
+			      END
+			      AND (
+			        u.preferences#>>'{schedule,days}'='all'
+			        OR (u.preferences#>>'{schedule,days}'='weekdays' AND extract(isodow FROM timezone(COALESCE(NULLIF(recipient.timezone,''),'UTC'),e.occurred_at)) BETWEEN 1 AND 5)
+			        OR (jsonb_typeof(u.preferences#>'{schedule,days}')='array' AND EXISTS (
+			          SELECT 1 FROM jsonb_array_elements_text(u.preferences#>'{schedule,days}') configured(day)
+			          WHERE configured.day::int=extract(dow FROM timezone(COALESCE(NULLIF(recipient.timezone,''),'UTC'),e.occurred_at))::int
+			        ))
+			      )
+			    )
+			  )
+			ON CONFLICT DO NOTHING`, j.org, j.seq)
 		if err != nil {
 			return err
 		}

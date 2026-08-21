@@ -816,6 +816,37 @@ a:focus-visible {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 6px;
 }
+.notification-schedule-editor {
+  display: grid;
+  gap: 12px;
+  padding-block-start: 12px;
+  border-block-start: 1px solid var(--coma-border);
+}
+.notification-schedule-editor > small {
+  color: var(--coma-muted);
+}
+.notification-schedule-modes,
+.notification-schedule-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.notification-schedule-days button {
+  min-width: 38px;
+  min-height: 34px;
+  border: 1px solid var(--coma-border);
+  border-radius: 9px;
+  background: var(--coma-surface);
+  color: var(--coma-foreground);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+.notification-schedule-days button[aria-pressed="true"] {
+  border-color: var(--coma-accent);
+  background: color-mix(in srgb, var(--coma-accent) 14%, transparent);
+  color: var(--coma-accent);
+}
 .mobile-status-form {
   display: grid;
   gap: 10px;

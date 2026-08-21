@@ -119,6 +119,7 @@ func (s *Service) PublicBranding(ctx context.Context) (PublicBranding, error) {
 		return value, err
 	}
 	value.PasswordRecoveryAvailable, err = s.EmailConfigured(ctx, value.OrgID)
+	value.EmailDeliveryAvailable = value.PasswordRecoveryAvailable
 	return value, err
 }
 

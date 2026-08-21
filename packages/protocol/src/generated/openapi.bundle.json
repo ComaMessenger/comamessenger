@@ -3905,7 +3905,8 @@
           "workspace_name",
           "accent_color",
           "version",
-          "password_recovery_available"
+          "password_recovery_available",
+          "email_delivery_available"
         ],
         "properties": {
           "workspace_name": {
@@ -3920,6 +3921,9 @@
             "format": "int64"
           },
           "password_recovery_available": {
+            "type": "boolean"
+          },
+          "email_delivery_available": {
             "type": "boolean"
           },
           "logo_url": {
@@ -5792,7 +5796,16 @@
           "locale",
           "push_enabled",
           "push_preview",
-          "snoozed_until"
+          "notify_messages",
+          "notify_threads",
+          "notify_reactions",
+          "notify_invites",
+          "notify_system",
+          "sound_enabled",
+          "sound_id",
+          "schedule",
+          "snoozed_until",
+          "email_digest"
         ],
         "properties": {
           "theme": {
@@ -5816,12 +5829,59 @@
           "push_preview": {
             "type": "boolean"
           },
+          "notify_messages": {
+            "type": "string",
+            "enum": [
+              "all",
+              "direct_and_mentions",
+              "none"
+            ]
+          },
+          "notify_threads": {
+            "type": "string",
+            "enum": [
+              "all",
+              "mentions",
+              "none"
+            ]
+          },
+          "notify_reactions": {
+            "type": "boolean"
+          },
+          "notify_invites": {
+            "type": "boolean"
+          },
+          "notify_system": {
+            "type": "boolean"
+          },
+          "sound_enabled": {
+            "type": "boolean"
+          },
+          "sound_id": {
+            "type": "string",
+            "enum": [
+              "default"
+            ]
+          },
+          "schedule": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NotificationSchedule"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "snoozed_until": {
             "type": [
               "string",
               "null"
             ],
             "format": "date-time"
+          },
+          "email_digest": {
+            "type": "boolean"
           }
         }
       },
@@ -5851,12 +5911,100 @@
           "push_preview": {
             "type": "boolean"
           },
+          "notify_messages": {
+            "type": "string",
+            "enum": [
+              "all",
+              "direct_and_mentions",
+              "none"
+            ]
+          },
+          "notify_threads": {
+            "type": "string",
+            "enum": [
+              "all",
+              "mentions",
+              "none"
+            ]
+          },
+          "notify_reactions": {
+            "type": "boolean"
+          },
+          "notify_invites": {
+            "type": "boolean"
+          },
+          "notify_system": {
+            "type": "boolean"
+          },
+          "sound_enabled": {
+            "type": "boolean"
+          },
+          "sound_id": {
+            "type": "string",
+            "enum": [
+              "default"
+            ]
+          },
+          "schedule": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NotificationSchedule"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "snoozed_until": {
             "type": [
               "string",
               "null"
             ],
             "format": "date-time"
+          },
+          "email_digest": {
+            "type": "boolean"
+          }
+        }
+      },
+      "NotificationSchedule": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "days",
+          "from",
+          "to"
+        ],
+        "properties": {
+          "days": {
+            "oneOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "all",
+                  "weekdays"
+                ]
+              },
+              {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 7,
+                "uniqueItems": true,
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 6
+                }
+              }
+            ]
+          },
+          "from": {
+            "type": "string",
+            "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"
+          },
+          "to": {
+            "type": "string",
+            "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"
           }
         }
       },
