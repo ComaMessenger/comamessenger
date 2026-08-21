@@ -45,7 +45,7 @@ func (r *Repository) Settings(ctx context.Context, orgID string) (Settings, erro
 	return value, nil
 }
 
-func (r *Repository) UpdateSettings(ctx context.Context, orgID, actorID string, input UpdateSettingsInput) (Settings, error) {
+func (r *Repository) UpdateSettings(ctx context.Context, orgID, actorID string, input UpdateSettingsInput, changes map[string]any) (Settings, error) {
 	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
 		return Settings{}, err
@@ -73,7 +73,7 @@ func (r *Repository) UpdateSettings(ctx context.Context, orgID, actorID string, 
 	if command.RowsAffected() != 1 {
 		return Settings{}, ErrVersionConflict
 	}
-	if err := insertAudit(ctx, tx, orgID, actorID, "organization.settings.update", "organization", &orgID, map[string]any{"version": input.ExpectedVersion + 1}); err != nil {
+	if err := insertAudit(ctx, tx, orgID, actorID, "organization.settings.update", "organization", &orgID, map[string]any{"version": input.ExpectedVersion + 1, "changes": changes}); err != nil {
 		return Settings{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -372,8 +372,38 @@ func effectivePermissions(role string, stored []string) []permission.Code {
 	return permission.Effective(role, granted)
 }
 
-func (r *Repository) Audit(ctx context.Context, orgID string, limit int) (AuditPage, error) {
-	rows, err := r.pool.Query(ctx, `SELECT l.id,l.actor_id,a.display_name,l.action,l.target_type,l.target_id,l.metadata,l.created_at FROM audit_log l LEFT JOIN actors a ON a.id=l.actor_id WHERE l.org_id=$1 ORDER BY l.created_at DESC,l.id DESC LIMIT $2`, orgID, limit)
+func (r *Repository) Audit(ctx context.Context, orgID string, filter AuditFilter) (AuditPage, error) {
+	rows, err := r.pool.Query(ctx, `
+		WITH cursor AS (
+		  SELECT created_at,id FROM audit_log WHERE org_id=$1 AND id=$7::uuid
+		), entries AS (
+		  SELECT l.*,
+		    CASE
+		      WHEN l.action LIKE 'invitation.%' THEN 'invitations'
+		      WHEN l.action LIKE 'chat.%' OR l.action LIKE 'message.moderate.%' THEN 'chats'
+		      WHEN l.action LIKE 'member.password%' OR l.action LIKE 'member.email.%' THEN 'security'
+		      WHEN l.action LIKE 'member.%' OR l.action LIKE 'organization.member.%' THEN 'members'
+		      WHEN l.action LIKE 'organization.infrastructure.%' THEN 'infrastructure'
+		      ELSE 'organization'
+		    END AS category
+		  FROM audit_log l
+		  WHERE l.org_id=$1
+		)
+		SELECT l.id,l.actor_id,a.display_name,a.org_role,l.action,l.category,l.target_type,l.target_id,
+		       COALESCE(target_actor.display_name,target_chat.name,target_invitation.email::text,target_org.name),
+		       l.metadata,l.created_at
+		FROM entries l
+		LEFT JOIN actors a ON a.org_id=l.org_id AND a.id=l.actor_id
+		LEFT JOIN actors target_actor ON l.target_type='actor' AND target_actor.org_id=l.org_id AND target_actor.id=l.target_id
+		LEFT JOIN chats target_chat ON l.target_type='chat' AND target_chat.org_id=l.org_id AND target_chat.id=l.target_id
+		LEFT JOIN invitations target_invitation ON l.target_type='invitation' AND target_invitation.org_id=l.org_id AND target_invitation.id=l.target_id
+		LEFT JOIN organizations target_org ON l.target_type='organization' AND target_org.id=l.target_id
+		WHERE ($2='' OR l.category=$2)
+		  AND ($3::uuid IS NULL OR l.actor_id=$3::uuid)
+		  AND ($4::timestamptz IS NULL OR l.created_at >= $4)
+		  AND ($5::timestamptz IS NULL OR l.created_at < $5)
+		  AND ($7::uuid IS NULL OR EXISTS (SELECT 1 FROM cursor c WHERE (l.created_at,l.id)<(c.created_at,c.id)))
+		ORDER BY l.created_at DESC,l.id DESC LIMIT $6`, orgID, filter.Category, nullableUUID(filter.ActorID), filter.From, filter.To, filter.Limit+1, nullableUUID(filter.AfterID))
 	if err != nil {
 		return AuditPage{}, err
 	}
@@ -382,15 +412,32 @@ func (r *Repository) Audit(ctx context.Context, orgID string, limit int) (AuditP
 	for rows.Next() {
 		var item AuditEntry
 		var raw []byte
-		if err := rows.Scan(&item.ID, &item.ActorID, &item.ActorName, &item.Action, &item.TargetType, &item.TargetID, &raw, &item.CreatedAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.ActorID, &item.ActorName, &item.ActorRole, &item.Action, &item.Category, &item.TargetType, &item.TargetID, &item.TargetName, &raw, &item.CreatedAt); err != nil {
 			return AuditPage{}, err
 		}
 		if err := json.Unmarshal(raw, &item.Metadata); err != nil {
 			return AuditPage{}, err
 		}
+		if changes, ok := item.Metadata["changes"].(map[string]any); ok {
+			item.Changes = changes
+		} else {
+			item.Changes = map[string]any{}
+		}
 		page.Events = append(page.Events, item)
 	}
+	if len(page.Events) > filter.Limit {
+		next := page.Events[filter.Limit-1].ID
+		page.NextAfterID = &next
+		page.Events = page.Events[:filter.Limit]
+	}
 	return page, rows.Err()
+}
+
+func nullableUUID(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
 }
 
 type auditExecer interface {

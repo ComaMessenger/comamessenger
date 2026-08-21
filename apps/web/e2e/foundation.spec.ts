@@ -452,13 +452,18 @@ async function mockMessenger(
             id: "audit-1",
             actor_id: user.id,
             actor_name: user.display_name,
+            actor_role: "owner",
             action: "organization.settings.update",
+            category: "organization",
             target_type: "organization",
             target_id: user.org_id,
+            target_name: organizationSettings.name,
             metadata: {},
+            changes: {},
             created_at: "2026-08-20T00:00:00Z",
           },
         ],
+        next_after_id: null,
       };
     else if (path.endsWith("/sessions/revoke-others")) {
       runtimeSessions = runtimeSessions.map((session) =>

@@ -174,13 +174,27 @@ type AuditEntry struct {
 	ID         string         `json:"id"`
 	ActorID    *string        `json:"actor_id"`
 	ActorName  *string        `json:"actor_name"`
+	ActorRole  *string        `json:"actor_role"`
 	Action     string         `json:"action"`
+	Category   string         `json:"category"`
 	TargetType string         `json:"target_type"`
 	TargetID   *string        `json:"target_id"`
+	TargetName *string        `json:"target_name"`
 	Metadata   map[string]any `json:"metadata"`
+	Changes    map[string]any `json:"changes"`
 	CreatedAt  time.Time      `json:"created_at"`
 }
 
 type AuditPage struct {
-	Events []AuditEntry `json:"events"`
+	Events      []AuditEntry `json:"events"`
+	NextAfterID *string      `json:"next_after_id"`
+}
+
+type AuditFilter struct {
+	Limit    int
+	Category string
+	ActorID  string
+	From     *time.Time
+	To       *time.Time
+	AfterID  string
 }

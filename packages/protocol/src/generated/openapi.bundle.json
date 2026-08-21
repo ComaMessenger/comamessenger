@@ -1076,6 +1076,53 @@
               "maximum": 100,
               "default": 50
             }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "organization",
+                "members",
+                "invitations",
+                "security",
+                "chats",
+                "infrastructure"
+              ]
+            }
+          },
+          {
+            "name": "actor_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "after_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -4674,10 +4721,14 @@
           "id",
           "actor_id",
           "actor_name",
+          "actor_role",
           "action",
+          "category",
           "target_type",
           "target_id",
+          "target_name",
           "metadata",
+          "changes",
           "created_at"
         ],
         "properties": {
@@ -4698,8 +4749,31 @@
               "null"
             ]
           },
+          "actor_role": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "owner",
+              "admin",
+              "member",
+              null
+            ]
+          },
           "action": {
             "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "organization",
+              "members",
+              "invitations",
+              "security",
+              "chats",
+              "infrastructure"
+            ]
           },
           "target_type": {
             "type": "string"
@@ -4710,7 +4784,17 @@
               "null"
             ]
           },
+          "target_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "changes": {
             "type": "object",
             "additionalProperties": true
           },
@@ -4724,7 +4808,8 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "events"
+          "events",
+          "next_after_id"
         ],
         "properties": {
           "events": {
@@ -4732,6 +4817,13 @@
             "items": {
               "$ref": "#/components/schemas/AuditEntry"
             }
+          },
+          "next_after_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
           }
         }
       },

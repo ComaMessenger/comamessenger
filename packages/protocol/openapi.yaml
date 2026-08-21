@@ -486,6 +486,21 @@ paths:
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: category
+          in: query
+          schema: { type: string, enum: [organization, members, invitations, security, chats, infrastructure] }
+        - name: actor_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - name: after_id
+          in: query
+          schema: { type: string, format: uuid }
       responses:
         "200":
           description: Most recent administrative audit events.
@@ -2076,29 +2091,38 @@ components:
           id,
           actor_id,
           actor_name,
+          actor_role,
           action,
+          category,
           target_type,
           target_id,
+          target_name,
           metadata,
+          changes,
           created_at,
         ]
       properties:
         id: { type: string, format: uuid }
         actor_id: { type: [string, "null"], format: uuid }
         actor_name: { type: [string, "null"] }
+        actor_role: { type: [string, "null"], enum: [owner, admin, member, null] }
         action: { type: string }
+        category: { type: string, enum: [organization, members, invitations, security, chats, infrastructure] }
         target_type: { type: string }
         target_id: { type: [string, "null"] }
+        target_name: { type: [string, "null"] }
         metadata: { type: object, additionalProperties: true }
+        changes: { type: object, additionalProperties: true }
         created_at: { type: string, format: date-time }
     AuditPage:
       type: object
       additionalProperties: false
-      required: [events]
+      required: [events, next_after_id]
       properties:
         events:
           type: array
           items: { $ref: "#/components/schemas/AuditEntry" }
+        next_after_id: { type: [string, "null"], format: uuid }
     CreateInvitationRequest:
       type: object
       additionalProperties: false

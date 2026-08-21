@@ -1473,10 +1473,18 @@ export interface components {
             /** Format: uuid */
             actor_id: string | null;
             actor_name: string | null;
+            /** @enum {string|null} */
+            actor_role: "owner" | "admin" | "member" | null;
             action: string;
+            /** @enum {string} */
+            category: "organization" | "members" | "invitations" | "security" | "chats" | "infrastructure";
             target_type: string;
             target_id: string | null;
+            target_name: string | null;
             metadata: {
+                [key: string]: unknown;
+            };
+            changes: {
                 [key: string]: unknown;
             };
             /** Format: date-time */
@@ -1484,6 +1492,8 @@ export interface components {
         };
         AuditPage: {
             events: components["schemas"]["AuditEntry"][];
+            /** Format: uuid */
+            next_after_id: string | null;
         };
         CreateInvitationRequest: {
             /** Format: email */
@@ -2786,6 +2796,11 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
+                category?: "organization" | "members" | "invitations" | "security" | "chats" | "infrastructure";
+                actor_id?: string;
+                from?: string;
+                to?: string;
+                after_id?: string;
             };
             header?: never;
             path?: never;

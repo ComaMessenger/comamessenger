@@ -400,6 +400,26 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	if !permissionAuditFound {
 		t.Fatalf("permission update audit event is missing: %+v", audit.Events)
 	}
+	var firstAuditPage, secondAuditPage workspace.AuditPage
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/organization/audit?limit=1", owner.AccessToken, nil, standardhttp.StatusOK, &firstAuditPage)
+	if len(firstAuditPage.Events) != 1 || firstAuditPage.NextAfterID == nil {
+		t.Fatalf("first audit page = %+v", firstAuditPage)
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/organization/audit?limit=1&after_id="+url.QueryEscape(*firstAuditPage.NextAfterID), owner.AccessToken, nil, standardhttp.StatusOK, &secondAuditPage)
+	if len(secondAuditPage.Events) != 1 || secondAuditPage.Events[0].ID == firstAuditPage.Events[0].ID {
+		t.Fatalf("second audit page = %+v", secondAuditPage)
+	}
+	var organizationAudit workspace.AuditPage
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/organization/audit?category=organization", owner.AccessToken, nil, standardhttp.StatusOK, &organizationAudit)
+	settingsChangesFound := false
+	for _, event := range organizationAudit.Events {
+		if event.Action == "organization.settings.update" && len(event.Changes) > 0 && event.TargetName != nil && *event.TargetName == "E2E Team" {
+			settingsChangesFound = true
+		}
+	}
+	if !settingsChangesFound {
+		t.Fatalf("human-readable settings audit data is missing: %+v", organizationAudit.Events)
+	}
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/organization/audit", admin.AccessToken, nil, standardhttp.StatusOK, &audit)
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/organization/members", admin.AccessToken, nil, standardhttp.StatusForbidden, nil)
 	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/organization/members/"+admin.User.ActorID, owner.AccessToken, map[string]any{

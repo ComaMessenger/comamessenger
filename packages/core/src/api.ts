@@ -326,8 +326,28 @@ export class MessengerAPI {
       body: JSON.stringify(input),
     });
   }
-  organizationAudit(limit = 50): Promise<AuditPage> {
-    return this.request(`/api/v1/organization/audit?limit=${limit}`);
+  organizationAudit(
+    filters: {
+      limit?: number;
+      category?: string;
+      actor_id?: string;
+      from?: string;
+      to?: string;
+      after_id?: string;
+    } = {},
+  ): Promise<AuditPage> {
+    const query = new URLSearchParams();
+    query.set("limit", String(filters.limit ?? 50));
+    for (const key of [
+      "category",
+      "actor_id",
+      "from",
+      "to",
+      "after_id",
+    ] as const) {
+      if (filters[key]) query.set(key, filters[key]);
+    }
+    return this.request(`/api/v1/organization/audit?${query}`);
   }
   async chats(): Promise<Chat[]> {
     return (await this.request<{ chats: Chat[] }>("/api/v1/chats")).chats;
@@ -594,9 +614,7 @@ export class MessengerAPI {
       body: JSON.stringify(input),
     });
   }
-  resetChatNotifications(
-    chatID: string,
-  ): Promise<ChatNotificationPreferences> {
+  resetChatNotifications(chatID: string): Promise<ChatNotificationPreferences> {
     return this.request(`/api/v1/chats/${chatID}/notification-preferences`, {
       method: "DELETE",
     });

@@ -4,7 +4,7 @@ import type { MessengerAPI, Session, User } from "@comamessenger/core";
 import { History, KeyRound, MonitorSmartphone } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { messageOf } from "../../errors";
-import { Badge, Button, Field } from "../../ui";
+import { Badge, Button, Field, SelectField } from "../../ui";
 import {
   SettingsAccessDenied,
   SettingsSection,
@@ -15,6 +15,7 @@ import {
 } from "../components/SettingsShell";
 import { canAccessSettingsPage } from "../registry";
 import { sessionLabel } from "../sessionLabel";
+import { describeAudit } from "../auditDescriptions";
 
 export function SecuritySettingsPage({
   api,
@@ -297,13 +298,42 @@ export function AuditSettingsPage({
   user: User;
   navigate: SettingsNavigate;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const allowed = canAccessSettingsPage(user, "audit");
+  const [category, setCategory] = useState("");
+  const [actorID, setActorID] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [afterID, setAfterID] = useState("");
+  const [history, setHistory] = useState<string[]>([]);
   const query = useQuery({
-    queryKey: ["organization-audit"],
-    queryFn: () => api.organizationAudit(),
+    queryKey: ["organization-audit", category, actorID, from, to, afterID],
+    queryFn: () =>
+      api.organizationAudit({
+        category: category || undefined,
+        actor_id: actorID || undefined,
+        from: from ? new Date(`${from}T00:00:00`).toISOString() : undefined,
+        to: to ? new Date(`${to}T23:59:59.999`).toISOString() : undefined,
+        after_id: afterID || undefined,
+      }),
     enabled: allowed,
+    placeholderData: (previous) => previous,
   });
+  const changeFilter = (change: () => void) => {
+    change();
+    setAfterID("");
+    setHistory([]);
+  };
+  const actors = Array.from(
+    new Map(
+      (query.data?.events ?? [])
+        .filter((entry) => entry.actor_id)
+        .map((entry) => [
+          entry.actor_id!,
+          entry.actor_name || t("systemActor"),
+        ]),
+    ),
+  );
   return (
     <SettingsShell
       user={user}
@@ -320,19 +350,110 @@ export function AuditSettingsPage({
             description={t("auditLogHint")}
             icon={<History />}
           >
+            <div className="audit-filters">
+              <SelectField
+                label={t("auditCategory")}
+                name="audit-category"
+                value={category}
+                onChange={(event) =>
+                  changeFilter(() => setCategory(event.target.value))
+                }
+              >
+                <option value="">{t("auditCategoryAll")}</option>
+                {[
+                  "organization",
+                  "members",
+                  "invitations",
+                  "security",
+                  "chats",
+                  "infrastructure",
+                ].map((value) => (
+                  <option key={value} value={value}>
+                    {t(`auditCategory_${value}`)}
+                  </option>
+                ))}
+              </SelectField>
+              <SelectField
+                label={t("auditActor")}
+                name="audit-actor"
+                value={actorID}
+                onChange={(event) =>
+                  changeFilter(() => setActorID(event.target.value))
+                }
+              >
+                <option value="">{t("auditActorAll")}</option>
+                {actors.map(([id, name]) => (
+                  <option key={id} value={id}>
+                    {name}
+                  </option>
+                ))}
+              </SelectField>
+              <Field
+                label={t("auditFrom")}
+                name="audit-from"
+                type="date"
+                value={from}
+                onChange={(event) =>
+                  changeFilter(() => setFrom(event.target.value))
+                }
+              />
+              <Field
+                label={t("auditTo")}
+                name="audit-to"
+                type="date"
+                value={to}
+                onChange={(event) =>
+                  changeFilter(() => setTo(event.target.value))
+                }
+              />
+            </div>
             <div className="audit-list">
               {(query.data?.events ?? []).map((entry) => (
                 <article key={entry.id}>
                   <span>
-                    <strong>{entry.action}</strong>
+                    <strong>{describeAudit(entry, i18n.language)}</strong>
                     <small>
-                      {entry.actor_name || t("systemActor")} ·{" "}
-                      {entry.target_type}
+                      {t(`auditCategory_${entry.category}`)} ·{" "}
+                      {entry.actor_role
+                        ? t(
+                            entry.actor_role === "owner"
+                              ? "roleOwner"
+                              : entry.actor_role === "admin"
+                                ? "roleAdmin"
+                                : "roleMember",
+                          )
+                        : t("systemActor")}
                     </small>
                   </span>
                   <time>{new Date(entry.created_at).toLocaleString()}</time>
                 </article>
               ))}
+            </div>
+            {(query.data?.events.length ?? 0) === 0 && (
+              <p className="settings-empty">{t("auditEmpty")}</p>
+            )}
+            <div className="audit-pagination">
+              <Button
+                size="sm"
+                disabled={history.length === 0}
+                onClick={() => {
+                  const previous = [...history];
+                  setAfterID(previous.pop() ?? "");
+                  setHistory(previous);
+                }}
+              >
+                {t("previousPage")}
+              </Button>
+              <Button
+                size="sm"
+                disabled={!query.data?.next_after_id}
+                onClick={() => {
+                  setHistory((value) => [...value, afterID]);
+                  setAfterID(query.data?.next_after_id ?? "");
+                }}
+              >
+                {t("nextPage")}
+              </Button>
             </div>
           </SettingsSection>
         </div>

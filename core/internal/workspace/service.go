@@ -18,6 +18,7 @@ import (
 
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/permission"
+	"github.com/google/uuid"
 )
 
 const maxBrandingAssetBytes = 512 * 1024
@@ -117,7 +118,22 @@ func (s *Service) UpdateSettings(ctx context.Context, current identity.User, inp
 	if input.AccentColor != existing.AccentColor && !allows(current, permission.BrandingManage) {
 		return Settings{}, ErrForbidden
 	}
-	return s.repository.UpdateSettings(ctx, current.OrgID, current.ActorID, input)
+	changes := map[string]any{}
+	addChange := func(name string, from, to any) {
+		if fmt.Sprint(from) != fmt.Sprint(to) {
+			changes[name] = map[string]any{"from": from, "to": to}
+		}
+	}
+	addChange("name", existing.Name, input.Name)
+	addChange("slug", existing.Slug, input.Slug)
+	addChange("invitation_default_role", existing.InvitationDefaultRole, input.InvitationDefaultRole)
+	addChange("invitation_ttl_hours", existing.InvitationTTLHours, input.InvitationTTLHours)
+	addChange("default_timezone", existing.DefaultTimezone, input.DefaultTimezone)
+	addChange("allow_member_invitations", existing.AllowMemberInvitations, input.AllowMemberInvitations)
+	addChange("allow_public_chat_creation", existing.AllowPublicChatCreation, input.AllowPublicChatCreation)
+	addChange("allow_channel_creation", existing.AllowChannelCreation, input.AllowChannelCreation)
+	addChange("accent_color", existing.AccentColor, input.AccentColor)
+	return s.repository.UpdateSettings(ctx, current.OrgID, current.ActorID, input, changes)
 }
 
 func (s *Service) PublicBranding(ctx context.Context) (PublicBranding, error) {
@@ -356,17 +372,21 @@ func (s *Service) RequirePasswordChange(ctx context.Context, current identity.Us
 	return s.repository.RequirePasswordChange(ctx, current.OrgID, current.ActorID, actorID, current.OrgRole, s.now().UTC())
 }
 
-func (s *Service) Audit(ctx context.Context, current identity.User, limit int) (AuditPage, error) {
+func (s *Service) Audit(ctx context.Context, current identity.User, filter AuditFilter) (AuditPage, error) {
 	if !allows(current, permission.AuditRead) {
 		return AuditPage{}, ErrForbidden
 	}
-	if limit == 0 {
-		limit = 50
+	if filter.Limit == 0 {
+		filter.Limit = 50
 	}
-	if limit < 1 || limit > 100 {
+	if filter.Limit < 1 || filter.Limit > 100 {
 		return AuditPage{}, fmt.Errorf("%w: audit limit must be between 1 and 100", ErrInvalid)
 	}
-	return s.repository.Audit(ctx, current.OrgID, limit)
+	validCategory := filter.Category == "" || filter.Category == "organization" || filter.Category == "members" || filter.Category == "invitations" || filter.Category == "security" || filter.Category == "chats" || filter.Category == "infrastructure"
+	if !validCategory || filter.ActorID != "" && uuid.Validate(filter.ActorID) != nil || filter.AfterID != "" && uuid.Validate(filter.AfterID) != nil || filter.From != nil && filter.To != nil && !filter.From.Before(*filter.To) {
+		return AuditPage{}, fmt.Errorf("%w: audit filters are invalid", ErrInvalid)
+	}
+	return s.repository.Audit(ctx, current.OrgID, filter)
 }
 
 func (s *Service) encrypt(orgID string, value integrationSecrets) ([]byte, error) {

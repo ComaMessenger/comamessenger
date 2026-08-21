@@ -2,10 +2,12 @@ package http
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"mime"
 	standardhttp "net/http"
 	"strconv"
+	"time"
 
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/workspace"
@@ -185,7 +187,24 @@ func (h *identityHandlers) issueMemberPasswordReset(w standardhttp.ResponseWrite
 
 func (h *identityHandlers) organizationAudit(w standardhttp.ResponseWriter, r *standardhttp.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	value, err := h.workspace.Audit(r.Context(), authFromContext(r.Context()).User, limit)
+	parseTime := func(name string) (*time.Time, error) {
+		raw := r.URL.Query().Get(name)
+		if raw == "" {
+			return nil, nil
+		}
+		value, err := time.Parse(time.RFC3339, raw)
+		return &value, err
+	}
+	from, fromErr := parseTime("from")
+	to, toErr := parseTime("to")
+	if fromErr != nil || toErr != nil {
+		h.workspaceError(w, r, fmt.Errorf("%w: audit dates must use RFC3339", workspace.ErrInvalid))
+		return
+	}
+	value, err := h.workspace.Audit(r.Context(), authFromContext(r.Context()).User, workspace.AuditFilter{
+		Limit: limit, Category: r.URL.Query().Get("category"), ActorID: r.URL.Query().Get("actor_id"),
+		From: from, To: to, AfterID: r.URL.Query().Get("after_id"),
+	})
 	if err != nil {
 		h.workspaceError(w, r, err)
 		return

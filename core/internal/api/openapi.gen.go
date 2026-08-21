@@ -50,6 +50,60 @@ func (e AddChatMemberRequestRole) Valid() bool {
 	}
 }
 
+// Defines values for AuditEntryActorRole.
+const (
+	AuditEntryActorRoleAdmin       AuditEntryActorRole = "admin"
+	AuditEntryActorRoleLessThannil AuditEntryActorRole = "<nil>"
+	AuditEntryActorRoleMember      AuditEntryActorRole = "member"
+	AuditEntryActorRoleOwner       AuditEntryActorRole = "owner"
+)
+
+// Valid indicates whether the value is a known member of the AuditEntryActorRole enum.
+func (e AuditEntryActorRole) Valid() bool {
+	switch e {
+	case AuditEntryActorRoleAdmin:
+		return true
+	case AuditEntryActorRoleLessThannil:
+		return true
+	case AuditEntryActorRoleMember:
+		return true
+	case AuditEntryActorRoleOwner:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AuditEntryCategory.
+const (
+	AuditEntryCategoryChats          AuditEntryCategory = "chats"
+	AuditEntryCategoryInfrastructure AuditEntryCategory = "infrastructure"
+	AuditEntryCategoryInvitations    AuditEntryCategory = "invitations"
+	AuditEntryCategoryMembers        AuditEntryCategory = "members"
+	AuditEntryCategoryOrganization   AuditEntryCategory = "organization"
+	AuditEntryCategorySecurity       AuditEntryCategory = "security"
+)
+
+// Valid indicates whether the value is a known member of the AuditEntryCategory enum.
+func (e AuditEntryCategory) Valid() bool {
+	switch e {
+	case AuditEntryCategoryChats:
+		return true
+	case AuditEntryCategoryInfrastructure:
+		return true
+	case AuditEntryCategoryInvitations:
+		return true
+	case AuditEntryCategoryMembers:
+		return true
+	case AuditEntryCategoryOrganization:
+		return true
+	case AuditEntryCategorySecurity:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ChatKind.
 const (
 	ChatKindChannel ChatKind = "channel"
@@ -1616,6 +1670,36 @@ func (e GetBrandingAssetParamsKind) Valid() bool {
 	}
 }
 
+// Defines values for ListOrganizationAuditParamsCategory.
+const (
+	ListOrganizationAuditParamsCategoryChats          ListOrganizationAuditParamsCategory = "chats"
+	ListOrganizationAuditParamsCategoryInfrastructure ListOrganizationAuditParamsCategory = "infrastructure"
+	ListOrganizationAuditParamsCategoryInvitations    ListOrganizationAuditParamsCategory = "invitations"
+	ListOrganizationAuditParamsCategoryMembers        ListOrganizationAuditParamsCategory = "members"
+	ListOrganizationAuditParamsCategoryOrganization   ListOrganizationAuditParamsCategory = "organization"
+	ListOrganizationAuditParamsCategorySecurity       ListOrganizationAuditParamsCategory = "security"
+)
+
+// Valid indicates whether the value is a known member of the ListOrganizationAuditParamsCategory enum.
+func (e ListOrganizationAuditParamsCategory) Valid() bool {
+	switch e {
+	case ListOrganizationAuditParamsCategoryChats:
+		return true
+	case ListOrganizationAuditParamsCategoryInfrastructure:
+		return true
+	case ListOrganizationAuditParamsCategoryInvitations:
+		return true
+	case ListOrganizationAuditParamsCategoryMembers:
+		return true
+	case ListOrganizationAuditParamsCategoryOrganization:
+		return true
+	case ListOrganizationAuditParamsCategorySecurity:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DeleteBrandingAssetParamsKind.
 const (
 	DeleteBrandingAssetParamsKindFavicon DeleteBrandingAssetParamsKind = "favicon"
@@ -1696,16 +1780,27 @@ type AuditEntry struct {
 	Action     string                 `json:"action"`
 	ActorId    *openapi_types.UUID    `json:"actor_id"`
 	ActorName  *string                `json:"actor_name"`
+	ActorRole  *AuditEntryActorRole   `json:"actor_role"`
+	Category   AuditEntryCategory     `json:"category"`
+	Changes    map[string]interface{} `json:"changes"`
 	CreatedAt  time.Time              `json:"created_at"`
 	Id         openapi_types.UUID     `json:"id"`
 	Metadata   map[string]interface{} `json:"metadata"`
 	TargetId   *string                `json:"target_id"`
+	TargetName *string                `json:"target_name"`
 	TargetType string                 `json:"target_type"`
 }
 
+// AuditEntryActorRole defines model for AuditEntry.ActorRole.
+type AuditEntryActorRole string
+
+// AuditEntryCategory defines model for AuditEntry.Category.
+type AuditEntryCategory string
+
 // AuditPage defines model for AuditPage.
 type AuditPage struct {
-	Events []AuditEntry `json:"events"`
+	Events      []AuditEntry        `json:"events"`
+	NextAfterId *openapi_types.UUID `json:"next_after_id"`
 }
 
 // BootstrapRequest defines model for BootstrapRequest.
@@ -2735,8 +2830,16 @@ type ListThreadMessagesParams struct {
 
 // ListOrganizationAuditParams defines parameters for ListOrganizationAudit.
 type ListOrganizationAuditParams struct {
-	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+	Limit    *int                                 `form:"limit,omitempty" json:"limit,omitempty"`
+	Category *ListOrganizationAuditParamsCategory `form:"category,omitempty" json:"category,omitempty"`
+	ActorId  *openapi_types.UUID                  `form:"actor_id,omitempty" json:"actor_id,omitempty"`
+	From     *time.Time                           `form:"from,omitempty" json:"from,omitempty"`
+	To       *time.Time                           `form:"to,omitempty" json:"to,omitempty"`
+	AfterId  *openapi_types.UUID                  `form:"after_id,omitempty" json:"after_id,omitempty"`
 }
+
+// ListOrganizationAuditParamsCategory defines parameters for ListOrganizationAudit.
+type ListOrganizationAuditParamsCategory string
 
 // DeleteBrandingAssetParamsKind defines parameters for DeleteBrandingAsset.
 type DeleteBrandingAssetParamsKind string
