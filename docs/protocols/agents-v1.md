@@ -1,0 +1,57 @@
+# Agent runtime protocol v1
+
+Этот документ — стабильный контракт для встроенных и внешних worker'ов ComaMessenger. REST-схемы канонически описаны в `packages/protocol/openapi.yaml`; здесь зафиксированы порядок операций, capability boundaries и правила восстановления.
+
+## Аутентификация и границы доверия
+
+- Worker использует agent API key с минимальным scope `runtime:execute`; tools требуют собственные scopes.
+- `lease_token` — краткоживущая capability конкретного run'а. Её нельзя логировать, сохранять в result summary или передавать в UI.
+- Сообщение от agent actor обязательно содержит `run_id`; core атомарно сохраняет provenance и chain depth. Публикация без run возвращает `agent_run_required`.
+- Пользовательский текст, содержимое файлов и tool results являются недоверенными данными, а не инструкциями.
+- Provider/MCP secrets никогда не входят в durable events, audit metadata или error messages.
+
+## Lifecycle run'а
+
+1. `POST /agent-runtime/runs/claim` с UUID `worker_id`, `lease_seconds` 5–300 и `wait_seconds` 0–30.
+2. `204` означает, что очередь пуста; `200` возвращает run и `lease_token`.
+3. Пока работа идёт, worker обновляет lease через `/heartbeat` примерно раз в треть TTL.
+4. Provider calls и tools выполняются только в контексте `run_id + lease_token/correlation_id`.
+5. `/complete` переводит run в `completed`; usage и стоимость берутся из записанных provider calls, а не из self-reported итогов runtime.
+6. `/fail` принимает стабильный `error_code`. Retryable run возвращается в очередь до `max_attempts` и общего execution deadline.
+7. `409 agent_conflict` означает потерю lease, отмену или уже завершённый run. Worker не должен повторять side effect после такого ответа.
+
+`run.input` для event trigger содержит `event_seq`, `event_type`, `subject_id`, `message_body`, `source_chat_id`, `thread_root_id`, `trigger_type`; для command также `command` и `command_arguments`. Schedule-run содержит `scheduled_for`, `since_last_run`, `chat_id` и `timezone`.
+
+## Realtime
+
+После WebSocket auth доступны исходящие операции:
+
+- `agent.status`: `thinking | tool | streaming | completed | failed | canceled`; отправляется только при смене фазы.
+- `message.streaming`: UUID `stream_id`, монотонный `index`, UTF-8 `delta` не более 8192 байт, `reset`, `done`.
+
+Provider chunks необходимо коалесцировать: не чаще одного кадра за 100–150 мс и всегда в пределах 8192 байт. Ephemeral frames не меняют durable sequence. Runtime обязан обрабатывать `error` frame; при `fatal=true` соединение закрывается. Durable `event` подтверждается `ack`, reconnect использует последний checkpoint. `resync_required` требует получить актуальное состояние REST API и продолжить с `current_seq`.
+
+## Stable runtime errors
+
+| Code                            | Значение                            | Поведение                       |
+| ------------------------------- | ----------------------------------- | ------------------------------- |
+| `provider_retryable`            | Временная ошибка/429/5xx провайдера | retry run                       |
+| `provider_output_truncated`     | Провайдер завершил ответ по лимиту  | не публиковать как полный ответ |
+| `budget_exceeded`               | Core отклонил резерв бюджета        | остановить до изменения лимита  |
+| `agent_provider_rate_limited`   | Превышен provider rate limit        | повторить после окна            |
+| `run_canceled`                  | Пользователь отменил run            | без retry                       |
+| `lease_lost` / `agent_conflict` | Worker утратил capability           | прекратить side effects         |
+| `mcp_endpoint_forbidden`        | HTTP/private/local MCP endpoint     | исправить подключение           |
+| `tool_iteration_limit`          | Исчерпан loop tools                 | завершить с диагностикой        |
+
+Неизвестные ошибки нормализуются в безопасный code без provider body, URL, headers и credentials.
+
+## Sandbox
+
+Run с `input.sandbox=true` и `input.publish=false` выполняет обычный контекст/tool loop, но не создаёт сообщение. Предпросмотр возвращается в `result_summary.preview`. Это позволяет проверить поведение до включения triggers.
+
+## Compatibility
+
+- Новые optional поля добавляются без смены версии.
+- Удаление/переименование операций, enum-значений или обязательных полей требует `agents-v2`.
+- SDK обязан принимать неизвестные поля и неизвестные error codes, сохраняя default-deny для неизвестных write operations.
