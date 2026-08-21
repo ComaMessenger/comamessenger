@@ -927,6 +927,12 @@ func requiredAgentScope(method, path string) (string, bool) {
 	if len(parts) == 0 {
 		return "", false
 	}
+	if method == standardhttp.MethodGet && len(parts) == 1 && parts[0] == "me" {
+		return "", true
+	}
+	if parts[0] == "agent-runtime" && runtimeAgentRoute(method, parts[1:]) {
+		return string(agent.ScopeRuntimeExecute), true
+	}
 	if method == standardhttp.MethodGet && parts[0] == "actors" {
 		return string(agent.ScopeMembersRead), true
 	}
@@ -970,6 +976,23 @@ func requiredAgentScope(method, path string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func runtimeAgentRoute(method string, parts []string) bool {
+	if method == standardhttp.MethodGet {
+		return (len(parts) == 2 && parts[0] == "checkpoints") ||
+			(len(parts) == 1 && (parts[0] == "provider-credential" || parts[0] == "mcp-servers"))
+	}
+	if method == standardhttp.MethodPut {
+		return len(parts) == 2 && parts[0] == "checkpoints"
+	}
+	if method != standardhttp.MethodPost {
+		return false
+	}
+	return (len(parts) == 2 && parts[0] == "runs" && parts[1] == "claim") ||
+		(len(parts) == 3 && parts[0] == "runs" && (parts[2] == "heartbeat" || parts[2] == "complete" || parts[2] == "fail")) ||
+		(len(parts) == 1 && (parts[0] == "provider-calls" || parts[0] == "mcp-tool-calls")) ||
+		(len(parts) == 3 && (parts[0] == "provider-calls" || parts[0] == "mcp-tool-calls") && parts[2] == "finish")
 }
 
 func containsString(values []string, wanted string) bool {

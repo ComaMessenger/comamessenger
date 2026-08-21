@@ -737,7 +737,7 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	}
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agents", owner.AccessToken, map[string]any{
 		"display_name": "E2E agent", "handle": "e2e-agent", "kind": "builtin", "enabled": true,
-		"allowed_scopes": []string{"chats:read", "messages:read", "memory:read", "memory:write"}, "chat_ids": []string{group.ID},
+		"allowed_scopes": []string{"chats:read", "messages:read", "memory:read", "memory:write", "runtime:execute"}, "chat_ids": []string{group.ID},
 	}, standardhttp.StatusCreated, &createdAgent)
 	var queuedRun agentrun.Run
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agents/"+createdAgent.ID+"/invoke", owner.AccessToken, map[string]any{"chat_id": group.ID, "client_run_id": e2eID(t), "chain_depth": 0, "timeout_seconds": 60, "max_attempts": 2, "input": map[string]any{"prompt": "manual e2e"}}, standardhttp.StatusAccepted, &queuedRun)
@@ -775,8 +775,18 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	}
 	var createdAgentKey agent.CreatedAPIKey
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agents/"+createdAgent.ID+"/keys", owner.AccessToken, map[string]any{
-		"name": "e2e runtime", "scopes": []string{"chats:read", "messages:read", "memory:read", "memory:write"}, "rate_limit_per_minute": 5,
+		"name": "e2e runtime", "scopes": []string{"chats:read", "messages:read", "memory:read", "memory:write", "runtime:execute"}, "rate_limit_per_minute": 7,
 	}, standardhttp.StatusCreated, &createdAgentKey)
+	var agentMe identity.User
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/me", createdAgentKey.Secret, nil, standardhttp.StatusOK, &agentMe)
+	if agentMe.ActorID != createdAgent.ID {
+		t.Fatalf("agent /me = %+v", agentMe)
+	}
+	var runtimeCheckpoint agentrun.RuntimeCheckpoint
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/agent-runtime/checkpoints/e2e-example", createdAgentKey.Secret, nil, standardhttp.StatusOK, &runtimeCheckpoint)
+	if runtimeCheckpoint.Consumer != "e2e-example" {
+		t.Fatalf("agent runtime checkpoint = %+v", runtimeCheckpoint)
+	}
 	var remembered agentmemory.Entry
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agent-tools/remember", createdAgentKey.Secret, map[string]any{"correlation_id": e2eID(t), "arguments": map[string]any{"namespace": "e2e", "key": "preference", "value": map[string]any{"theme": "dark"}}}, standardhttp.StatusOK, &remembered)
 	if remembered.Key != "preference" {

@@ -80,7 +80,12 @@ func TestRequiredAgentScopeUsesClosedAllowlist(t *testing.T) {
 		{standardhttp.MethodGet, "/api/v1/files/00000000-0000-7000-8000-000000000001/download", "files:read", true},
 		{standardhttp.MethodGet, "/api/v1/search", "search:read", true},
 		{standardhttp.MethodGet, "/api/v1/actors", "members:read", true},
-		{standardhttp.MethodGet, "/api/v1/me", "", false},
+		{standardhttp.MethodGet, "/api/v1/me", "", true},
+		{standardhttp.MethodGet, "/api/v1/agent-runtime/checkpoints/example", "runtime:execute", true},
+		{standardhttp.MethodPut, "/api/v1/agent-runtime/checkpoints/example", "runtime:execute", true},
+		{standardhttp.MethodPost, "/api/v1/agent-runtime/runs/00000000-0000-7000-8000-000000000001/complete", "runtime:execute", true},
+		{standardhttp.MethodDelete, "/api/v1/agent-runtime/checkpoints/example", "", false},
+		{standardhttp.MethodGet, "/api/v1/agent-runtime/private-future-route", "", false},
 		{standardhttp.MethodPost, "/api/v1/files/uploads", "", false},
 		{standardhttp.MethodGet, "/api/v1/agents", "", false},
 	}

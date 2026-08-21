@@ -3558,7 +3558,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Current user. */
+            /** @description Current actor profile; an agent API key receives its own agent actor identity. */
             200: {
                 headers: {
                     [name: string]: unknown;

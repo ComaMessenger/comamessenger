@@ -89,8 +89,8 @@
 - [x] Summarizer: ручная команда по chat/thread и scheduled digest.
 - [x] Q&A: retrieval по доступным сообщениям/файлам с цитатами на источники внутри мессенджера.
 - [x] Onboarding: greeting по member event и ответы по выбранному knowledge chat/channel.
-- [ ] Создать минимальные TS/Python examples: connect, resume, react to mention, post reply.
-- [ ] Проверить, что examples используют только опубликованные OpenAPI/WS contracts.
+- [x] Создать минимальные TS/Python examples: connect, resume, react to mention, post reply.
+- [x] Проверить, что examples используют только опубликованные OpenAPI/WS contracts.
 
 ## Контракты и данные
 

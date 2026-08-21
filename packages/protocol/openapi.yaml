@@ -121,7 +121,7 @@ paths:
       security: [{ bearerAuth: [] }]
       responses:
         "200":
-          description: Current user.
+          description: Current actor profile; an agent API key receives its own agent actor identity.
           content:
             {
               application/json:
