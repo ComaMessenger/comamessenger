@@ -1068,6 +1068,9 @@ function Messenger({
   const [statusText, setStatusText] = useState(user.status_text);
   const [statusExpiry, setStatusExpiry] = useState("none");
   const [statusPending, setStatusPending] = useState(false);
+  const [snoozedUntil, setSnoozedUntil] = useState<string | null>(null);
+  const [snoozeCustom, setSnoozeCustom] = useState("");
+  const [snoozePending, setSnoozePending] = useState(false);
   const reloadTimer = useRef<number | null>(null);
   const [chatLoading, setChatLoading] = useState(true);
   const [chatError, setChatError] = useState("");
@@ -1195,12 +1198,16 @@ function Messenger({
   useEffect(() => {
     void reload();
     void api.drafts().then((drafts) => hydrateDrafts(drafts));
-    void api
-      .preferences()
-      .then((preferences) => {
+    void Promise.all([
+      api.preferences(),
+      api.chatFolders(),
+      api.pinnedChats(),
+    ])
+      .then(([preferences, chatFolders, pinnedChats]) => {
         setTheme(preferences.theme);
-        setFolders(preferences.chat_folders);
-        setPinnedChatIDs(preferences.pinned_chat_ids);
+        setFolders(chatFolders);
+        setPinnedChatIDs(pinnedChats);
+        setSnoozedUntil(preferences.snoozed_until);
         void setLocale(preferences.locale);
       })
       .catch(() => undefined);
@@ -1294,20 +1301,10 @@ function Messenger({
     window.history.replaceState(window.history.state, "", url);
   }
   async function saveFolders(next: ChatFolder[]) {
-    const preferences = await api.preferences();
-    const updated = await api.updatePreferences({
-      ...preferences,
-      chat_folders: next,
-    });
-    setFolders(updated.chat_folders);
+    setFolders(await api.putChatFolders(next));
   }
   async function savePinnedChats(next: string[]) {
-    const preferences = await api.preferences();
-    const updated = await api.updatePreferences({
-      ...preferences,
-      pinned_chat_ids: next,
-    });
-    setPinnedChatIDs(updated.pinned_chat_ids);
+    setPinnedChatIDs(await api.putPinnedChats(next));
   }
   async function togglePinnedChat(chatID: string) {
     if (pinnedChatIDs.includes(chatID)) {
@@ -1376,6 +1373,22 @@ function Messenger({
     } finally {
       setStatusPending(false);
     }
+  }
+  async function updateSnooze(until: string | null) {
+    setSnoozePending(true);
+    try {
+      const preferences = await api.updatePreferences({
+        snoozed_until: until,
+      });
+      setSnoozedUntil(preferences.snoozed_until);
+    } finally {
+      setSnoozePending(false);
+    }
+  }
+  function snoozeFor(minutes: number) {
+    void updateSnooze(
+      new Date(Date.now() + minutes * 60 * 1000).toISOString(),
+    );
   }
   return (
     <div
@@ -1559,6 +1572,84 @@ function Messenger({
                   {t("profileSettings")}
                 </Button>
               </div>
+              <div className="status-menu__snooze">
+                <strong>{t("snoozeNotifications")}</strong>
+                <small>
+                  {snoozedUntil
+                    ? t("snoozedUntil", {
+                        time: formatDateTime(snoozedUntil),
+                      })
+                    : t("snoozeHint")}
+                </small>
+                <div className="status-menu__actions">
+                  <Button
+                    size="sm"
+                    disabled={snoozePending}
+                    onClick={() => snoozeFor(30)}
+                  >
+                    {t("snooze30Minutes")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={snoozePending}
+                    onClick={() => snoozeFor(60)}
+                  >
+                    {t("snoozeOneHour")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={snoozePending}
+                    onClick={() => snoozeFor(120)}
+                  >
+                    {t("snoozeTwoHours")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={snoozePending}
+                    onClick={() =>
+                      void updateSnooze(tomorrowAtNine(user.timezone))
+                    }
+                  >
+                    {t("snoozeUntilTomorrow")}
+                  </Button>
+                </div>
+                <div className="status-menu__custom-snooze">
+                  <input
+                    type="datetime-local"
+                    aria-label={t("snoozeCustom")}
+                    value={snoozeCustom}
+                    onChange={(event) => setSnoozeCustom(event.target.value)}
+                  />
+                  <Button
+                    size="sm"
+                    disabled={!snoozeCustom || snoozePending}
+                    onClick={() =>
+                      void updateSnooze(
+                        localDateTimeInZone(snoozeCustom, user.timezone),
+                      )
+                    }
+                  >
+                    {t("apply")}
+                  </Button>
+                </div>
+                {snoozedUntil && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={snoozePending}
+                    onClick={() => void updateSnooze(null)}
+                  >
+                    {t("resumeNotifications")}
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => navigate("/settings/notifications")}
+                >
+                  {t("notificationSettings")}
+                </Button>
+              </div>
             </form>
           )}
         </footer>
@@ -1710,6 +1801,8 @@ function Messenger({
             navigate={navigate}
             onLogout={() => void logout()}
             onUserUpdated={onUserUpdated}
+            snoozedUntil={snoozedUntil}
+            onSnooze={updateSnooze}
           />
         ) : showProfileSettings ? (
           <ProfileSettingsPage
@@ -4459,15 +4552,22 @@ function MobileMorePage({
   navigate,
   onLogout,
   onUserUpdated,
+  snoozedUntil,
+  onSnooze,
 }: {
   api: MessengerAPI;
   user: User;
   navigate(to: string): void;
   onLogout(): void;
   onUserUpdated(user: User): void;
+  snoozedUntil: string | null;
+  onSnooze(until: string | null): Promise<void>;
 }) {
   const { t } = useTranslation();
   const [statusOpen, setStatusOpen] = useState(false);
+  const [snoozeOpen, setSnoozeOpen] = useState(false);
+  const [snoozeCustom, setSnoozeCustom] = useState("");
+  const [snoozePending, setSnoozePending] = useState(false);
   const [emoji, setEmoji] = useState(user.status_emoji);
   const [text, setText] = useState(user.status_text);
   async function saveMobileStatus(event: FormEvent<HTMLFormElement>) {
@@ -4482,6 +4582,15 @@ function MobileMorePage({
     setText("");
     onUserUpdated(await api.me());
     setStatusOpen(false);
+  }
+  async function updateMobileSnooze(until: string | null) {
+    setSnoozePending(true);
+    try {
+      await onSnooze(until);
+      setSnoozeOpen(false);
+    } finally {
+      setSnoozePending(false);
+    }
   }
   return (
     <section className="mobile-more-page utility-page">
@@ -4540,6 +4649,80 @@ function MobileMorePage({
               </Button>
             )}
           </form>
+        )}
+        <button onClick={() => setSnoozeOpen((open) => !open)}>
+          <BellOff />
+          <span>
+            <strong>{t("snoozeNotifications")}</strong>
+            <small>
+              {snoozedUntil
+                ? t("snoozedUntil", { time: formatDateTime(snoozedUntil) })
+                : t("snoozeHint")}
+            </small>
+          </span>
+        </button>
+        {snoozeOpen && (
+          <div className="mobile-status-form">
+            <div className="status-menu__actions">
+              {[30, 60, 120].map((minutes) => (
+                <Button
+                  key={minutes}
+                  size="sm"
+                  disabled={snoozePending}
+                  onClick={() =>
+                    void updateMobileSnooze(
+                      new Date(
+                        Date.now() + minutes * 60 * 1000,
+                      ).toISOString(),
+                    )
+                  }
+                >
+                  {minutes === 30
+                    ? t("snooze30Minutes")
+                    : minutes === 60
+                      ? t("snoozeOneHour")
+                      : t("snoozeTwoHours")}
+                </Button>
+              ))}
+              <Button
+                size="sm"
+                disabled={snoozePending}
+                onClick={() =>
+                  void updateMobileSnooze(tomorrowAtNine(user.timezone))
+                }
+              >
+                {t("snoozeUntilTomorrow")}
+              </Button>
+            </div>
+            <Field
+              label={t("snoozeCustom")}
+              name="mobile-snooze-until"
+              type="datetime-local"
+              value={snoozeCustom}
+              onChange={(event) => setSnoozeCustom(event.target.value)}
+            />
+            <Button
+              size="sm"
+              disabled={!snoozeCustom || snoozePending}
+              onClick={() =>
+                void updateMobileSnooze(
+                  localDateTimeInZone(snoozeCustom, user.timezone),
+                )
+              }
+            >
+              {t("apply")}
+            </Button>
+            {snoozedUntil && (
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={snoozePending}
+                onClick={() => void updateMobileSnooze(null)}
+              >
+                {t("resumeNotifications")}
+              </Button>
+            )}
+          </div>
         )}
         <button onClick={() => navigate("/settings/profile")}>
           <UserRound />
@@ -4618,8 +4801,7 @@ function NotificationDialog({
         endpoint: subscription.endpoint,
         keys: { p256dh: json.keys?.p256dh ?? "", auth: json.keys?.auth ?? "" },
       });
-      const preferences = await api.preferences();
-      await api.updatePreferences({ ...preferences, push_enabled: true });
+      await api.updatePreferences({ push_enabled: true });
       window.dispatchEvent(new Event("coma-notifications-changed"));
       onClose();
     } catch (cause) {
@@ -4942,6 +5124,92 @@ function formatDay(value: string) {
 function formatLongDate(value: string) {
   return new Intl.DateTimeFormat(activeLocale(), { dateStyle: "long" }).format(
     new Date(value),
+  );
+}
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat(activeLocale(), {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+function zonedParts(value: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(value);
+  return Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, Number(part.value)]),
+  ) as Record<string, number>;
+}
+function localPartsInZone(
+  parts: {
+    year: number;
+    month: number;
+    day: number;
+    hour: number;
+    minute: number;
+  },
+  timeZone: string,
+) {
+  const target = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+  );
+  let instant = target;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const rendered = zonedParts(new Date(instant), timeZone);
+    const renderedUTC = Date.UTC(
+      rendered.year,
+      rendered.month - 1,
+      rendered.day,
+      rendered.hour,
+      rendered.minute,
+      rendered.second,
+    );
+    instant += target - renderedUTC;
+  }
+  return new Date(instant).toISOString();
+}
+function localDateTimeInZone(value: string, timeZone: string) {
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return value;
+  return localPartsInZone(
+    {
+      year: Number(match[1]),
+      month: Number(match[2]),
+      day: Number(match[3]),
+      hour: Number(match[4]),
+      minute: Number(match[5]),
+    },
+    timeZone,
+  );
+}
+function tomorrowAtNine(timeZone: string) {
+  const current = zonedParts(new Date(), timeZone);
+  const tomorrow = new Date(
+    Date.UTC(current.year, current.month - 1, current.day + 1),
+  );
+  return localPartsInZone(
+    {
+      year: tomorrow.getUTCFullYear(),
+      month: tomorrow.getUTCMonth() + 1,
+      day: tomorrow.getUTCDate(),
+      hour: 9,
+      minute: 0,
+    },
+    timeZone,
   );
 }
 function resolvedMentionActorIDs(

@@ -1260,6 +1260,45 @@ func (e UpdateOrganizationSettingsRequestInvitationDefaultRole) Valid() bool {
 	}
 }
 
+// Defines values for UpdatePreferencesRequestLocale.
+const (
+	UpdatePreferencesRequestLocaleEn UpdatePreferencesRequestLocale = "en"
+	UpdatePreferencesRequestLocaleRu UpdatePreferencesRequestLocale = "ru"
+)
+
+// Valid indicates whether the value is a known member of the UpdatePreferencesRequestLocale enum.
+func (e UpdatePreferencesRequestLocale) Valid() bool {
+	switch e {
+	case UpdatePreferencesRequestLocaleEn:
+		return true
+	case UpdatePreferencesRequestLocaleRu:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UpdatePreferencesRequestTheme.
+const (
+	UpdatePreferencesRequestThemeDark   UpdatePreferencesRequestTheme = "dark"
+	UpdatePreferencesRequestThemeLight  UpdatePreferencesRequestTheme = "light"
+	UpdatePreferencesRequestThemeSystem UpdatePreferencesRequestTheme = "system"
+)
+
+// Valid indicates whether the value is a known member of the UpdatePreferencesRequestTheme enum.
+func (e UpdatePreferencesRequestTheme) Valid() bool {
+	switch e {
+	case UpdatePreferencesRequestThemeDark:
+		return true
+	case UpdatePreferencesRequestThemeLight:
+		return true
+	case UpdatePreferencesRequestThemeSystem:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UserRole.
 const (
 	UserRoleAdmin  UserRole = "admin"
@@ -1301,16 +1340,16 @@ func (e UserStatus) Valid() bool {
 
 // Defines values for UserPreferencesLocale.
 const (
-	En UserPreferencesLocale = "en"
-	Ru UserPreferencesLocale = "ru"
+	UserPreferencesLocaleEn UserPreferencesLocale = "en"
+	UserPreferencesLocaleRu UserPreferencesLocale = "ru"
 )
 
 // Valid indicates whether the value is a known member of the UserPreferencesLocale enum.
 func (e UserPreferencesLocale) Valid() bool {
 	switch e {
-	case En:
+	case UserPreferencesLocaleEn:
 		return true
-	case Ru:
+	case UserPreferencesLocaleRu:
 		return true
 	default:
 		return false
@@ -1319,19 +1358,19 @@ func (e UserPreferencesLocale) Valid() bool {
 
 // Defines values for UserPreferencesTheme.
 const (
-	Dark   UserPreferencesTheme = "dark"
-	Light  UserPreferencesTheme = "light"
-	System UserPreferencesTheme = "system"
+	UserPreferencesThemeDark   UserPreferencesTheme = "dark"
+	UserPreferencesThemeLight  UserPreferencesTheme = "light"
+	UserPreferencesThemeSystem UserPreferencesTheme = "system"
 )
 
 // Valid indicates whether the value is a known member of the UserPreferencesTheme enum.
 func (e UserPreferencesTheme) Valid() bool {
 	switch e {
-	case Dark:
+	case UserPreferencesThemeDark:
 		return true
-	case Light:
+	case UserPreferencesThemeLight:
 		return true
-	case System:
+	case UserPreferencesThemeSystem:
 		return true
 	default:
 		return false
@@ -1522,6 +1561,9 @@ type ChatFolderColor string
 
 // ChatFolderIcon defines model for ChatFolder.Icon.
 type ChatFolderIcon string
+
+// ChatFolders defines model for ChatFolders.
+type ChatFolders = []ChatFolder
 
 // ChatMember defines model for ChatMember.
 type ChatMember struct {
@@ -1843,6 +1885,9 @@ type OrganizationSettingsInvitationDefaultRole string
 
 // Permission defines model for Permission.
 type Permission string
+
+// PinnedChatIds defines model for PinnedChatIds.
+type PinnedChatIds = []openapi_types.UUID
 
 // PublicBranding defines model for PublicBranding.
 type PublicBranding struct {
@@ -2240,6 +2285,21 @@ type UpdateOrganizationSettingsRequest struct {
 // UpdateOrganizationSettingsRequestInvitationDefaultRole defines model for UpdateOrganizationSettingsRequest.InvitationDefaultRole.
 type UpdateOrganizationSettingsRequestInvitationDefaultRole string
 
+// UpdatePreferencesRequest defines model for UpdatePreferencesRequest.
+type UpdatePreferencesRequest struct {
+	Locale       *UpdatePreferencesRequestLocale `json:"locale,omitempty"`
+	PushEnabled  *bool                           `json:"push_enabled,omitempty"`
+	PushPreview  *bool                           `json:"push_preview,omitempty"`
+	SnoozedUntil *time.Time                      `json:"snoozed_until,omitempty"`
+	Theme        *UpdatePreferencesRequestTheme  `json:"theme,omitempty"`
+}
+
+// UpdatePreferencesRequestLocale defines model for UpdatePreferencesRequest.Locale.
+type UpdatePreferencesRequestLocale string
+
+// UpdatePreferencesRequestTheme defines model for UpdatePreferencesRequest.Theme.
+type UpdatePreferencesRequestTheme string
+
 // UpdateProfileRequest defines model for UpdateProfileRequest.
 type UpdateProfileRequest struct {
 	About       *string `json:"about,omitempty"`
@@ -2278,12 +2338,11 @@ type UserStatus string
 
 // UserPreferences defines model for UserPreferences.
 type UserPreferences struct {
-	ChatFolders   []ChatFolder          `json:"chat_folders"`
-	Locale        UserPreferencesLocale `json:"locale"`
-	PinnedChatIds []openapi_types.UUID  `json:"pinned_chat_ids"`
-	PushEnabled   bool                  `json:"push_enabled"`
-	PushPreview   bool                  `json:"push_preview"`
-	Theme         UserPreferencesTheme  `json:"theme"`
+	Locale       UserPreferencesLocale `json:"locale"`
+	PushEnabled  bool                  `json:"push_enabled"`
+	PushPreview  bool                  `json:"push_preview"`
+	SnoozedUntil *time.Time            `json:"snoozed_until"`
+	Theme        UserPreferencesTheme  `json:"theme"`
 }
 
 // UserPreferencesLocale defines model for UserPreferences.Locale.
@@ -2442,7 +2501,13 @@ type UpdateOrganizationMemberJSONRequestBody = UpdateOrganizationMemberRequest
 type TransferOrganizationOwnershipJSONRequestBody = TransferOwnershipRequest
 
 // UpdatePreferencesJSONRequestBody defines body for UpdatePreferences for application/json ContentType.
-type UpdatePreferencesJSONRequestBody = UserPreferences
+type UpdatePreferencesJSONRequestBody = UpdatePreferencesRequest
+
+// PutChatFoldersJSONRequestBody defines body for PutChatFolders for application/json ContentType.
+type PutChatFoldersJSONRequestBody = ChatFolders
+
+// PutPinnedChatsJSONRequestBody defines body for PutPinnedChats for application/json ContentType.
+type PutPinnedChatsJSONRequestBody = PinnedChatIds
 
 // PutPushSubscriptionJSONRequestBody defines body for PutPushSubscription for application/json ContentType.
 type PutPushSubscriptionJSONRequestBody = PushSubscriptionRequest

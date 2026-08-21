@@ -4,6 +4,7 @@ import type {
   ActorPage,
   BootstrapRequest,
   Chat,
+  ChatFolder,
   ChatMember,
   ChatNotificationPreferences,
   ConnectionTestResult,
@@ -47,6 +48,7 @@ import type {
   UpdateOrganizationSettingsRequest,
   User,
   UserPreferences,
+  UpdatePreferencesRequest,
   AuditPage,
 } from "./types";
 
@@ -532,9 +534,27 @@ export class MessengerAPI {
   preferences(): Promise<UserPreferences> {
     return this.request("/api/v1/preferences");
   }
-  updatePreferences(input: UserPreferences): Promise<UserPreferences> {
+  updatePreferences(input: UpdatePreferencesRequest): Promise<UserPreferences> {
     return this.request("/api/v1/preferences", {
       method: "PATCH",
+      body: JSON.stringify(input),
+    });
+  }
+  chatFolders(): Promise<ChatFolder[]> {
+    return this.request("/api/v1/preferences/chat-folders");
+  }
+  putChatFolders(input: ChatFolder[]): Promise<ChatFolder[]> {
+    return this.request("/api/v1/preferences/chat-folders", {
+      method: "PUT",
+      body: JSON.stringify(input),
+    });
+  }
+  pinnedChats(): Promise<string[]> {
+    return this.request("/api/v1/preferences/pinned-chats");
+  }
+  putPinnedChats(input: string[]): Promise<string[]> {
+    return this.request("/api/v1/preferences/pinned-chats", {
+      method: "PUT",
       body: JSON.stringify(input),
     });
   }

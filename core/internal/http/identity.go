@@ -182,6 +182,10 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Delete("/push/subscriptions/{subscriptionID}", h.deletePushSubscription)
 			protected.Get("/preferences", h.getPreferences)
 			protected.Patch("/preferences", h.patchPreferences)
+			protected.Get("/preferences/chat-folders", h.getChatFolders)
+			protected.Put("/preferences/chat-folders", h.putChatFolders)
+			protected.Get("/preferences/pinned-chats", h.getPinnedChats)
+			protected.Put("/preferences/pinned-chats", h.putPinnedChats)
 			protected.Get("/chats/{chatID}/notification-preferences", h.getChatPreferences)
 			protected.Patch("/chats/{chatID}/notification-preferences", h.patchChatPreferences)
 		}

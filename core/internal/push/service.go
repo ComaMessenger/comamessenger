@@ -34,12 +34,37 @@ type Subscription struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 type Preferences struct {
-	Theme         string       `json:"theme"`
-	Locale        string       `json:"locale"`
-	PushEnabled   bool         `json:"push_enabled"`
-	PushPreview   bool         `json:"push_preview"`
-	ChatFolders   []ChatFolder `json:"chat_folders"`
-	PinnedChatIDs []string     `json:"pinned_chat_ids"`
+	Theme        string     `json:"theme"`
+	Locale       string     `json:"locale"`
+	PushEnabled  bool       `json:"push_enabled"`
+	PushPreview  bool       `json:"push_preview"`
+	SnoozedUntil *time.Time `json:"snoozed_until"`
+}
+type OptionalTime struct {
+	Set   bool
+	Value *time.Time
+}
+
+func (value *OptionalTime) UnmarshalJSON(data []byte) error {
+	value.Set = true
+	if string(data) == "null" {
+		value.Value = nil
+		return nil
+	}
+	var parsed time.Time
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return err
+	}
+	value.Value = &parsed
+	return nil
+}
+
+type UpdatePreferences struct {
+	Theme        *string      `json:"theme"`
+	Locale       *string      `json:"locale"`
+	PushEnabled  *bool        `json:"push_enabled"`
+	PushPreview  *bool        `json:"push_preview"`
+	SnoozedUntil OptionalTime `json:"snoozed_until"`
 }
 type ChatFolder struct {
 	ID      string   `json:"id"`
@@ -90,7 +115,7 @@ func (s *Service) Unsubscribe(ctx context.Context, user identity.User, subscript
 	return nil
 }
 func (s *Service) GetPreferences(ctx context.Context, user identity.User) (Preferences, error) {
-	result := Preferences{Theme: "light", Locale: "ru", PushEnabled: true, ChatFolders: []ChatFolder{}, PinnedChatIDs: []string{}}
+	result := Preferences{Theme: "light", Locale: "ru", PushEnabled: true}
 	var raw []byte
 	if err := s.pool.QueryRow(ctx, `SELECT preferences FROM users WHERE org_id=$1 AND actor_id=$2`, user.OrgID, user.ActorID).Scan(&raw); err != nil {
 		return result, err
@@ -102,34 +127,100 @@ func (s *Service) GetPreferences(ctx context.Context, user identity.User) (Prefe
 	if result.Locale == "" {
 		result.Locale = "ru"
 	}
-	if result.ChatFolders == nil {
-		result.ChatFolders = []ChatFolder{}
+	return result, nil
+}
+func (s *Service) UpdatePreferences(ctx context.Context, user identity.User, input UpdatePreferences) (Preferences, error) {
+	if input.Theme == nil && input.Locale == nil && input.PushEnabled == nil && input.PushPreview == nil && !input.SnoozedUntil.Set {
+		return Preferences{}, ErrInvalid
 	}
-	for index := range result.ChatFolders {
-		if result.ChatFolders[index].Color == "" {
-			result.ChatFolders[index].Color = "blue"
+	if input.Theme != nil && *input.Theme != "system" && *input.Theme != "light" && *input.Theme != "dark" {
+		return Preferences{}, ErrInvalid
+	}
+	if input.Locale != nil && *input.Locale != "ru" && *input.Locale != "en" {
+		return Preferences{}, ErrInvalid
+	}
+	if input.SnoozedUntil.Value != nil {
+		now := time.Now()
+		if !input.SnoozedUntil.Value.After(now) || input.SnoozedUntil.Value.After(now.AddDate(1, 0, 0)) {
+			return Preferences{}, ErrInvalid
 		}
 	}
-	if result.PinnedChatIDs == nil {
-		result.PinnedChatIDs = []string{}
+	payload := make(map[string]any, 5)
+	if input.Theme != nil {
+		payload["theme"] = *input.Theme
+	}
+	if input.Locale != nil {
+		payload["locale"] = *input.Locale
+	}
+	if input.PushEnabled != nil {
+		payload["push_enabled"] = *input.PushEnabled
+	}
+	if input.PushPreview != nil {
+		payload["push_preview"] = *input.PushPreview
+	}
+	if input.SnoozedUntil.Set {
+		payload["snoozed_until"] = input.SnoozedUntil.Value
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return Preferences{}, err
+	}
+	if _, err = s.pool.Exec(ctx, `UPDATE users SET preferences=preferences||$3::jsonb WHERE org_id=$1 AND actor_id=$2`, user.OrgID, user.ActorID, string(encoded)); err != nil {
+		return Preferences{}, err
+	}
+	return s.GetPreferences(ctx, user)
+}
+
+func (s *Service) GetChatFolders(ctx context.Context, user identity.User) ([]ChatFolder, error) {
+	result := []ChatFolder{}
+	var raw []byte
+	if err := s.pool.QueryRow(ctx, `SELECT COALESCE(preferences->'chat_folders','[]'::jsonb) FROM users WHERE org_id=$1 AND actor_id=$2`, user.OrgID, user.ActorID).Scan(&raw); err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, err
+	}
+	for index := range result {
+		if result[index].Color == "" {
+			result[index].Color = "blue"
+		}
 	}
 	return result, nil
 }
-func (s *Service) UpdatePreferences(ctx context.Context, user identity.User, input Preferences) (Preferences, error) {
-	if input.Theme != "system" && input.Theme != "light" && input.Theme != "dark" {
-		return Preferences{}, ErrInvalid
+
+func (s *Service) PutChatFolders(ctx context.Context, user identity.User, input []ChatFolder) ([]ChatFolder, error) {
+	if !validChatFolders(input) {
+		return nil, ErrInvalid
 	}
-	if input.Locale != "ru" && input.Locale != "en" {
-		return Preferences{}, ErrInvalid
+	payload, err := json.Marshal(input)
+	if err != nil {
+		return nil, err
 	}
-	if !validChatFolders(input.ChatFolders) {
-		return Preferences{}, ErrInvalid
+	_, err = s.pool.Exec(ctx, `UPDATE users SET preferences=jsonb_set(preferences,'{chat_folders}',$3::jsonb,true) WHERE org_id=$1 AND actor_id=$2`, user.OrgID, user.ActorID, string(payload))
+	return input, err
+}
+
+func (s *Service) GetPinnedChats(ctx context.Context, user identity.User) ([]string, error) {
+	result := []string{}
+	var raw []byte
+	if err := s.pool.QueryRow(ctx, `SELECT COALESCE(preferences->'pinned_chat_ids','[]'::jsonb) FROM users WHERE org_id=$1 AND actor_id=$2`, user.OrgID, user.ActorID).Scan(&raw); err != nil {
+		return nil, err
 	}
-	if !validPinnedChats(input.PinnedChatIDs) {
-		return Preferences{}, ErrInvalid
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, err
 	}
-	payload, _ := json.Marshal(input)
-	_, err := s.pool.Exec(ctx, `UPDATE users SET preferences=preferences||$3::jsonb WHERE org_id=$1 AND actor_id=$2`, user.OrgID, user.ActorID, string(payload))
+	return result, nil
+}
+
+func (s *Service) PutPinnedChats(ctx context.Context, user identity.User, input []string) ([]string, error) {
+	if !validPinnedChats(input) {
+		return nil, ErrInvalid
+	}
+	payload, err := json.Marshal(input)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.pool.Exec(ctx, `UPDATE users SET preferences=jsonb_set(preferences,'{pinned_chat_ids}',$3::jsonb,true) WHERE org_id=$1 AND actor_id=$2`, user.OrgID, user.ActorID, string(payload))
 	return input, err
 }
 
@@ -260,7 +351,7 @@ func (w *Worker) materialize(ctx context.Context) error {
 	}
 	rows.Close()
 	for _, j := range jobs {
-		_, err = tx.Exec(ctx, `INSERT INTO notification_deliveries(org_id,event_seq,subscription_id) SELECT e.org_id,e.seq,s.id FROM events e JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id JOIN chat_members cm ON cm.org_id=e.org_id AND cm.chat_id=e.chat_id JOIN web_push_subscriptions s ON s.org_id=cm.org_id AND s.actor_id=cm.actor_id JOIN users u ON u.org_id=cm.org_id AND u.actor_id=cm.actor_id WHERE e.org_id=$1 AND e.seq=$2 AND e.type='message.created' AND cm.actor_id<>e.actor_id AND (cm.muted_until IS NULL OR cm.muted_until<=now()) AND COALESCE((u.preferences->>'push_enabled')::boolean,true) AND (cm.notify_level='all' OR (cm.notify_level='mentions' AND cm.actor_id=ANY(m.mentioned_actor_ids))) ON CONFLICT DO NOTHING`, j.org, j.seq)
+		_, err = tx.Exec(ctx, `INSERT INTO notification_deliveries(org_id,event_seq,subscription_id) SELECT e.org_id,e.seq,s.id FROM events e JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id JOIN chat_members cm ON cm.org_id=e.org_id AND cm.chat_id=e.chat_id JOIN web_push_subscriptions s ON s.org_id=cm.org_id AND s.actor_id=cm.actor_id JOIN users u ON u.org_id=cm.org_id AND u.actor_id=cm.actor_id WHERE e.org_id=$1 AND e.seq=$2 AND e.type='message.created' AND cm.actor_id<>e.actor_id AND (cm.muted_until IS NULL OR cm.muted_until<=now()) AND COALESCE((u.preferences->>'push_enabled')::boolean,true) AND (NULLIF(u.preferences->>'snoozed_until','') IS NULL OR (u.preferences->>'snoozed_until')::timestamptz<=now()) AND (cm.notify_level='all' OR (cm.notify_level='mentions' AND cm.actor_id=ANY(m.mentioned_actor_ids))) ON CONFLICT DO NOTHING`, j.org, j.seq)
 		if err != nil {
 			return err
 		}

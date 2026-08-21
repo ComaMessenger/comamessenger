@@ -425,12 +425,26 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	}, standardhttp.StatusCreated, &group)
 	var preferences push.Preferences
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/preferences", owner.AccessToken, nil, standardhttp.StatusOK, &preferences)
-	preferences.Theme, preferences.Locale, preferences.PushEnabled, preferences.PushPreview = "light", "en", true, true
-	preferences.ChatFolders = []push.ChatFolder{{ID: "00000000-0000-4000-8000-000000000080", Name: "Work", Icon: "briefcase", Color: "violet", ChatIDs: []string{group.ID}}}
-	preferences.PinnedChatIDs = []string{group.ID}
-	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/preferences", owner.AccessToken, preferences, standardhttp.StatusOK, &preferences)
-	if len(preferences.ChatFolders) != 1 || preferences.ChatFolders[0].ChatIDs[0] != group.ID || preferences.PinnedChatIDs[0] != group.ID {
-		t.Fatalf("chat folders = %+v", preferences.ChatFolders)
+	snoozedUntil := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
+	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/preferences", owner.AccessToken, map[string]any{"locale": "en", "push_enabled": true, "push_preview": true, "snoozed_until": snoozedUntil}, standardhttp.StatusOK, &preferences)
+	if preferences.Locale != "en" || !preferences.PushEnabled || !preferences.PushPreview || preferences.SnoozedUntil == nil || !preferences.SnoozedUntil.Equal(snoozedUntil) {
+		t.Fatalf("partial preferences = %+v", preferences)
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/preferences", owner.AccessToken, map[string]any{"snoozed_until": nil}, standardhttp.StatusOK, &preferences)
+	if preferences.SnoozedUntil != nil {
+		t.Fatalf("snooze was not cleared: %+v", preferences)
+	}
+	folders := []push.ChatFolder{{ID: "00000000-0000-4000-8000-000000000080", Name: "Work", Icon: "briefcase", Color: "violet", ChatIDs: []string{group.ID}}}
+	e2eRequest(t, server.Client(), standardhttp.MethodPut, baseURL+"/api/v1/preferences/chat-folders", owner.AccessToken, folders, standardhttp.StatusOK, &folders)
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/preferences/chat-folders", owner.AccessToken, nil, standardhttp.StatusOK, &folders)
+	if len(folders) != 1 || folders[0].ChatIDs[0] != group.ID {
+		t.Fatalf("chat folders = %+v", folders)
+	}
+	pinnedChatIDs := []string{group.ID}
+	e2eRequest(t, server.Client(), standardhttp.MethodPut, baseURL+"/api/v1/preferences/pinned-chats", owner.AccessToken, pinnedChatIDs, standardhttp.StatusOK, &pinnedChatIDs)
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/preferences/pinned-chats", owner.AccessToken, nil, standardhttp.StatusOK, &pinnedChatIDs)
+	if len(pinnedChatIDs) != 1 || pinnedChatIDs[0] != group.ID {
+		t.Fatalf("pinned chats = %+v", pinnedChatIDs)
 	}
 	var chatPreferences push.ChatPreferences
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/chats/"+group.ID+"/notification-preferences", owner.AccessToken, nil, standardhttp.StatusOK, &chatPreferences)

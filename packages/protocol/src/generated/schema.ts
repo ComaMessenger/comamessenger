@@ -967,6 +967,38 @@ export interface paths {
         patch: operations["updatePreferences"];
         trace?: never;
     };
+    "/api/v1/preferences/chat-folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getChatFolders"];
+        put: operations["putChatFolders"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/preferences/pinned-chats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getPinnedChats"];
+        put: operations["putPinnedChats"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chats/{chat_id}/notification-preferences": {
         parameters: {
             query?: never;
@@ -1758,9 +1790,21 @@ export interface components {
             locale: "ru" | "en";
             push_enabled: boolean;
             push_preview: boolean;
-            chat_folders: components["schemas"]["ChatFolder"][];
-            pinned_chat_ids: string[];
+            /** Format: date-time */
+            snoozed_until: string | null;
         };
+        UpdatePreferencesRequest: {
+            /** @enum {string} */
+            theme?: "system" | "light" | "dark";
+            /** @enum {string} */
+            locale?: "ru" | "en";
+            push_enabled?: boolean;
+            push_preview?: boolean;
+            /** Format: date-time */
+            snoozed_until?: string | null;
+        };
+        ChatFolders: components["schemas"]["ChatFolder"][];
+        PinnedChatIds: string[];
         ChatFolder: {
             /** Format: uuid */
             id: string;
@@ -3699,7 +3743,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["UserPreferences"];
+                "application/json": components["schemas"]["UpdatePreferencesRequest"];
             };
         };
         responses: {
@@ -3710,6 +3754,96 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserPreferences"];
+                };
+            };
+            422: components["responses"]["Error"];
+        };
+    };
+    getChatFolders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current chat folders. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatFolders"];
+                };
+            };
+        };
+    };
+    putChatFolders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatFolders"];
+            };
+        };
+        responses: {
+            /** @description Updated chat folders. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatFolders"];
+                };
+            };
+            422: components["responses"]["Error"];
+        };
+    };
+    getPinnedChats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current pinned chat identifiers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PinnedChatIds"];
+                };
+            };
+        };
+    };
+    putPinnedChats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PinnedChatIds"];
+            };
+        };
+        responses: {
+            /** @description Updated pinned chat identifiers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PinnedChatIds"];
                 };
             };
             422: components["responses"]["Error"];

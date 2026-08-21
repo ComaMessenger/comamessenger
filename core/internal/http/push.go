@@ -42,12 +42,54 @@ func (h *identityHandlers) getPreferences(w standardhttp.ResponseWriter, r *stan
 	writeJSON(h.logger, w, standardhttp.StatusOK, result)
 }
 func (h *identityHandlers) patchPreferences(w standardhttp.ResponseWriter, r *standardhttp.Request) {
-	var input push.Preferences
+	var input push.UpdatePreferences
 	if err := decodeJSON(w, r, &input); err != nil {
 		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
 	result, err := h.push.UpdatePreferences(r.Context(), authFromContext(r.Context()).User, input)
+	if err != nil {
+		h.pushError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+func (h *identityHandlers) getChatFolders(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.push.GetChatFolders(r.Context(), authFromContext(r.Context()).User)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+func (h *identityHandlers) putChatFolders(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input []push.ChatFolder
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	result, err := h.push.PutChatFolders(r.Context(), authFromContext(r.Context()).User, input)
+	if err != nil {
+		h.pushError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+func (h *identityHandlers) getPinnedChats(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.push.GetPinnedChats(r.Context(), authFromContext(r.Context()).User)
+	if err != nil {
+		h.internalError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+func (h *identityHandlers) putPinnedChats(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input []string
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	result, err := h.push.PutPinnedChats(r.Context(), authFromContext(r.Context()).User, input)
 	if err != nil {
 		h.pushError(w, r, err)
 		return

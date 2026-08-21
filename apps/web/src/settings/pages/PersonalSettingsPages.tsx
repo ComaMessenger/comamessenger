@@ -80,12 +80,6 @@ export function ProfileSettingsPage({
           timezone: snapshot.timezone,
         }),
         api.updatePreferences({
-          ...(query.data ?? {
-            push_enabled: false,
-            push_preview: false,
-            chat_folders: [],
-            pinned_chat_ids: [],
-          }),
           theme: snapshot.theme,
           locale: snapshot.locale,
         }),
@@ -266,7 +260,11 @@ export function NotificationSettingsPage({
   }, [query]);
   const autosave = useAutosave({
     value: draft,
-    save: (snapshot) => api.updatePreferences(snapshot),
+    save: (snapshot) =>
+      api.updatePreferences({
+        push_enabled: snapshot.push_enabled,
+        push_preview: snapshot.push_preview,
+      }),
     onSaved: (result, snapshot) =>
       setDraft((current) =>
         current && JSON.stringify(current) !== JSON.stringify(snapshot)

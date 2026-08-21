@@ -126,9 +126,10 @@ async function mockMessenger(
     locale: "ru",
     push_enabled: false,
     push_preview: false,
-    chat_folders: [] as Array<Record<string, unknown>>,
-    pinned_chat_ids: [] as string[],
+    snoozed_until: null as string | null,
   };
+  let chatFolders: Array<Record<string, unknown>> = [];
+  let pinnedChatIDs: string[] = [];
   let organizationSettings = {
     id: user.org_id,
     name: user.organization_name,
@@ -320,9 +321,20 @@ async function mockMessenger(
         ...runtimeUser,
         ...route.request().postDataJSON(),
       };
-    else if (path.endsWith("/preferences")) {
+    else if (path.endsWith("/preferences/chat-folders")) {
+      if (route.request().method() === "PUT")
+        chatFolders = route.request().postDataJSON() as typeof chatFolders;
+      body = chatFolders;
+    } else if (path.endsWith("/preferences/pinned-chats")) {
+      if (route.request().method() === "PUT")
+        pinnedChatIDs = route.request().postDataJSON() as typeof pinnedChatIDs;
+      body = pinnedChatIDs;
+    } else if (path.endsWith("/preferences")) {
       if (route.request().method() === "PATCH")
-        preferences = route.request().postDataJSON() as typeof preferences;
+        preferences = {
+          ...preferences,
+          ...(route.request().postDataJSON() as Partial<typeof preferences>),
+        };
       body = preferences;
     } else if (
       path.endsWith("/organization") &&
@@ -1716,6 +1728,46 @@ test("custom status is edited from the profile menu", async ({ page }) => {
     ).toBeVisible();
   } else {
     await expect(page.getByText("🏖️ В отпуске")).toHaveCount(0);
+  }
+});
+
+test("notification snooze is shared by the profile menu", async ({ page }) => {
+  await mockMessenger(page);
+  const phone = test.info().project.name === "phone";
+  await page.goto(phone ? "/more" : "/chats");
+  if (phone) {
+    await page
+      .getByRole("button", { name: /Отключить уведомления/ })
+      .click();
+  } else {
+    await page.getByRole("button", { name: /Анна/ }).click();
+  }
+  await page.getByRole("button", { name: "На 30 минут" }).click();
+  if (phone) {
+    await expect(
+      page.getByRole("button", {
+        name: /Отключить уведомления Уведомления отключены до/,
+      }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: /Отключить уведомления/ })
+      .click();
+  } else {
+    await expect(
+      page.locator(".status-menu").getByText(/Уведомления отключены до/),
+    ).toBeVisible();
+  }
+  await page.getByRole("button", { name: "Включить сейчас" }).click();
+  if (phone) {
+    await expect(
+      page.getByRole("button", {
+        name: /Отключить уведомления Пауза действует/,
+      }),
+    ).toBeVisible();
+  } else {
+    await expect(
+      page.locator(".status-menu").getByText("Пауза действует на всех ваших устройствах"),
+    ).toBeVisible();
   }
 });
 

@@ -2688,7 +2688,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UserPreferences"
+                "$ref": "#/components/schemas/UpdatePreferencesRequest"
               }
             }
           }
@@ -2700,6 +2700,116 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UserPreferences"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/preferences/chat-folders": {
+      "get": {
+        "operationId": "getChatFolders",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current chat folders.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatFolders"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "putChatFolders",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatFolders"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated chat folders.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatFolders"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/preferences/pinned-chats": {
+      "get": {
+        "operationId": "getPinnedChats",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current pinned chat identifiers.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PinnedChatIds"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "putPinnedChats",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PinnedChatIds"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated pinned chat identifiers.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PinnedChatIds"
                 }
               }
             }
@@ -5682,8 +5792,7 @@
           "locale",
           "push_enabled",
           "push_preview",
-          "chat_folders",
-          "pinned_chat_ids"
+          "snoozed_until"
         ],
         "properties": {
           "theme": {
@@ -5707,22 +5816,64 @@
           "push_preview": {
             "type": "boolean"
           },
-          "chat_folders": {
-            "type": "array",
-            "maxItems": 12,
-            "items": {
-              "$ref": "#/components/schemas/ChatFolder"
-            }
-          },
-          "pinned_chat_ids": {
-            "type": "array",
-            "maxItems": 10,
-            "uniqueItems": true,
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            }
+          "snoozed_until": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
           }
+        }
+      },
+      "UpdatePreferencesRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "theme": {
+            "type": "string",
+            "enum": [
+              "system",
+              "light",
+              "dark"
+            ]
+          },
+          "locale": {
+            "type": "string",
+            "enum": [
+              "ru",
+              "en"
+            ]
+          },
+          "push_enabled": {
+            "type": "boolean"
+          },
+          "push_preview": {
+            "type": "boolean"
+          },
+          "snoozed_until": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "ChatFolders": {
+        "type": "array",
+        "maxItems": 12,
+        "items": {
+          "$ref": "#/components/schemas/ChatFolder"
+        }
+      },
+      "PinnedChatIds": {
+        "type": "array",
+        "maxItems": 10,
+        "uniqueItems": true,
+        "items": {
+          "type": "string",
+          "format": "uuid"
         }
       },
       "ChatFolder": {
