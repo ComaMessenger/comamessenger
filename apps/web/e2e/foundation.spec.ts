@@ -94,6 +94,8 @@ async function mockMessenger(
     passwordRecoveryAvailable?: boolean;
     signedOut?: boolean;
     reactions?: Array<Record<string, unknown>>;
+    userPatch?: Partial<typeof user>;
+    organizationPatch?: Record<string, unknown>;
     unread?: {
       last_read_seq: number;
       unread_count: number;
@@ -112,9 +114,15 @@ async function mockMessenger(
     passwordRecoveryAvailable = false,
     signedOut = false,
     reactions: suppliedReactions = [],
+    userPatch = {},
+    organizationPatch = {},
     unread = { last_read_seq: 0, unread_count: 3, mention_count: 1 },
   } = options;
-  let runtimeUser = { ...user, must_change_password: mustChangePassword };
+  let runtimeUser = {
+    ...user,
+    ...userPatch,
+    must_change_password: mustChangePassword,
+  };
   const runtimeChat = { ...chat, ...chatPatch };
   let runtimeReactions = [...suppliedReactions];
   const reactionMutations: string[] = [];
@@ -158,7 +166,9 @@ async function mockMessenger(
     accent_color: "#174586",
     has_logo: false,
     has_favicon: false,
+    ...organizationPatch,
   };
+  let runtimeInvitations: Array<Record<string, unknown>> = [];
   let infrastructure = {
     version: 0,
     s3: {
@@ -489,18 +499,58 @@ async function mockMessenger(
       body = {
         sessions: runtimeSessions,
       };
-    else if (
-      path.endsWith("/invitations") &&
-      route.request().method() === "POST"
-    )
-      body = {
-        id: "invitation-1",
-        email: "new@example.com",
-        role: "member",
-        expires_at: "2026-08-23T00:00:00Z",
-        accept_url: "https://coma.example/invite/test-token",
+    else if (path.endsWith("/invitations")) {
+      if (route.request().method() === "GET") body = runtimeInvitations;
+      else {
+        const input = route.request().postDataJSON() as {
+          email: string;
+          role?: "admin" | "member";
+        };
+        const invitation = {
+          id: "00000000-0000-4000-8000-000000000081",
+          email: input.email,
+          role: input.role ?? "member",
+          expires_at: "2026-08-23T00:00:00Z",
+          accept_url: "https://coma.example/invite/test-token",
+          email_sent: false,
+        };
+        runtimeInvitations = [
+          {
+            ...invitation,
+            created_by_id: user.id,
+            created_by_name: user.display_name,
+            created_at: "2026-08-21T00:00:00Z",
+            email_sent_at: null,
+            status: "active",
+          },
+        ];
+        body = invitation;
+        status = 201;
+      }
+    } else if (/\/invitations\/[^/]+\/rotate$/.test(path)) {
+      const previous = runtimeInvitations[0];
+      const replacement = {
+        ...previous,
+        id: "00000000-0000-4000-8000-000000000082",
       };
-    else if (/\/organization\/branding\/(logo|favicon)$/.test(path)) {
+      runtimeInvitations = [replacement];
+      body = {
+        id: replacement.id,
+        email: replacement.email,
+        role: replacement.role,
+        expires_at: replacement.expires_at,
+        accept_url: "https://coma.example/invite/rotated-token",
+        email_sent: false,
+      };
+      status = 201;
+    } else if (
+      /\/invitations\/[^/]+$/.test(path) &&
+      route.request().method() === "DELETE"
+    ) {
+      runtimeInvitations = [];
+      status = 204;
+      body = undefined;
+    } else if (/\/organization\/branding\/(logo|favicon)$/.test(path)) {
       const kind = path.endsWith("/logo") ? "logo" : "favicon";
       if (route.request().method() === "PUT") {
         organizationSettings = {
@@ -1004,6 +1054,13 @@ test("phase 3.1 settings cover workspace branding infrastructure sessions and au
   await expect(page.getByLabel("Ссылка приглашения")).toHaveValue(
     /\/invite\/test-token$/,
   );
+  await expect(page.getByText("new@example.com")).toBeVisible();
+  await page.getByRole("button", { name: "Новая ссылка" }).click();
+  await expect(page.getByLabel("Ссылка приглашения")).toHaveValue(
+    /\/invite\/rotated-token$/,
+  );
+  await page.getByRole("button", { name: "Отозвать" }).click();
+  await expect(page.getByText("Активных приглашений пока нет")).toBeVisible();
 
   await page
     .getByRole("navigation", { name: "Разделы настроек" })
@@ -1086,8 +1143,34 @@ test("phase 3.1 settings cover workspace branding infrastructure sessions and au
   await expect(page.getByText("Safari", { exact: true })).toHaveCount(0);
 
   await page.getByRole("button", { name: "Аудит", exact: true }).click();
-  await expect(page.getByText("organization.settings.update")).toBeVisible();
+  await expect(
+    page.getByText(/Анна изменил\(а\) настройки пространства/),
+  ).toBeVisible();
+  await page.getByLabel("Категория").selectOption("organization");
+  await page.getByLabel("С даты").fill("2026-08-01");
   await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+test("member invitation self-service never exposes administrative controls", async ({
+  page,
+}) => {
+  await mockMessenger(page, {
+    userPatch: {
+      role: "member",
+      permissions: [],
+      can_create_invitations: true,
+    },
+    organizationPatch: { allow_member_invitations: true },
+  });
+  await page.goto("/settings/workspace/invitations");
+  await expect(page.getByLabel("Почта участника")).toBeVisible();
+  await expect(page.getByLabel("Роль по умолчанию")).toHaveCount(0);
+  await expect(page.getByText("Активные приглашения")).toHaveCount(0);
+  await page.getByLabel("Почта участника").fill("friend@example.com");
+  await page.getByRole("button", { name: "Создать приглашение" }).click();
+  await expect(page.getByLabel("Ссылка приглашения")).toHaveValue(
+    /\/invite\/test-token$/,
+  );
 });
 
 test("dark messenger shell uses flat charcoal elevation without glow", async ({

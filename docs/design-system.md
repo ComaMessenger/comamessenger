@@ -126,6 +126,17 @@ At phone width the global sidebar becomes a fixed five-item bottom tabbar: Chats
 
 More is a full-height scrollable route, not a floating menu. Profile and workspace settings also render in the inset working area on desktop and as full screens above the tabbar on phone. Dialogs are reserved for bounded confirmations and browser permission flows, not application settings.
 
+### Settings layout
+
+- Settings use one centered content column capped at `680px`; sections follow reading order and never form a multi-column card dashboard.
+- `SettingsShell` owns the page header and permission-aware primary/subsection navigation. A registered settings route must remain directly addressable on desktop and phone.
+- `SettingsRow` is the default preference primitive: title and explanation form one text block, while the control occupies a stable action area. Narrow screens stack the control below the text.
+- Boolean preferences use the shared accessible switch appearance with a visible focus state; a browser-native checkbox is not exposed as the finished product control.
+- Forms keep labels above fields. Related fields may share a compact row only while there is enough width; phone layout stacks them and gives actions the full available width.
+- Lists with multiple actions, including invitations and push diagnostics, collapse to one column on phone so controls never overlap and each touch target remains at least `44px`.
+- Autosave state is shown in the page, and server mutation failures remain visible next to the affected settings rather than existing only as transient notifications.
+- Notification diagnostics distinguish server readiness, browser permission and registered devices. Per-chat overrides are visibly separate from global defaults and can be reset as a group.
+
 ### Chat header
 
 Contains chat identity, topic and kind plus a grouped action cluster on the right. Search is icon-only instead of occupying the center of the header. A pinned-message strip can be inserted immediately below the header without changing the message viewport.

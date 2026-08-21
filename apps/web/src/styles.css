@@ -3503,6 +3503,12 @@ a:focus-visible {
   .settings-state-row .settings-toggle {
     min-width: 0;
   }
+  .settings-diagnostic-list > div {
+    grid-template-columns: 1fr;
+  }
+  .settings-diagnostic-list > div > .ui-button {
+    width: 100%;
+  }
   .settings-form-grid,
   .branding-assets,
   .accent-editor,
