@@ -86,6 +86,10 @@ a:focus-visible {
 .ui-select-field {
   min-width: 0;
 }
+.ui-popover-layer {
+  position: fixed;
+  z-index: 300;
+}
 .ui-select {
   position: relative;
   min-width: 0;
@@ -135,12 +139,6 @@ a:focus-visible {
   outline-offset: 2px;
 }
 .ui-select__menu {
-  position: absolute;
-  z-index: 160;
-  inset-inline: 0;
-  top: calc(100% + var(--coma-space-1));
-  display: grid;
-  max-height: 256px;
   padding: var(--coma-space-1);
   overflow-y: auto;
   border: 1px solid var(--coma-border);
@@ -148,7 +146,10 @@ a:focus-visible {
   background: var(--coma-surface-raised);
   box-shadow: var(--coma-shadow);
 }
-.ui-select__menu > button {
+.ui-select__menu > div {
+  display: grid;
+}
+.ui-select__menu [role="option"] {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 20px;
   align-items: center;
@@ -161,16 +162,16 @@ a:focus-visible {
   color: var(--coma-foreground);
   text-align: start;
 }
-.ui-select__menu > button:hover,
-.ui-select__menu > button[aria-selected="true"] {
+.ui-select__menu [role="option"]:hover,
+.ui-select__menu [role="option"][aria-selected="true"] {
   background: var(--coma-primary-soft);
 }
-.ui-select__menu > button > span {
+.ui-select__menu [role="option"] > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ui-select__menu > button > svg {
+.ui-select__menu [role="option"] > svg {
   width: 17px;
   color: var(--coma-primary);
 }
@@ -956,6 +957,7 @@ a:focus-visible {
   border-radius: var(--coma-radius-md);
   background: var(--coma-surface-raised);
   box-shadow: var(--coma-shadow);
+  font-size: 14px;
 }
 .profile-menu__identity {
   display: grid;
@@ -978,6 +980,8 @@ a:focus-visible {
 .profile-menu__identity small,
 .profile-menu__snooze > small {
   color: var(--coma-muted);
+  font-size: 12px;
+  line-height: 1.4;
 }
 .profile-menu > button,
 .profile-menu__submenu-root > button,
@@ -1059,18 +1063,35 @@ a:focus-visible {
   inset-inline-start: calc(100% + var(--coma-space-2));
   top: 0;
   display: grid;
-  width: 296px;
-  gap: var(--coma-space-1-5);
+  width: min(304px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  gap: var(--coma-space-2);
   margin: 0;
   padding: var(--coma-space-2);
+  overflow-y: auto;
   border: 1px solid var(--coma-border);
   border-radius: var(--coma-radius-md);
   background: var(--coma-surface-raised);
   box-shadow: var(--coma-shadow);
 }
-.profile-menu__snooze > div {
+.profile-menu__snooze > strong {
+  font-size: 15px;
+  line-height: 1.3;
+}
+.profile-menu__snooze-presets {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--coma-space-1);
+}
+.profile-menu__snooze-presets .ui-button {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  white-space: nowrap;
+}
+.profile-menu__custom-snooze {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--coma-space-1);
 }
 .profile-menu__custom-snooze input {
@@ -1083,14 +1104,24 @@ a:focus-visible {
   color: var(--coma-foreground);
   font: inherit;
 }
+.profile-menu__custom-snooze .ui-button {
+  min-width: 72px;
+}
+.status-dialog {
+  width: min(100%, 448px);
+  padding: var(--coma-space-3);
+}
+.status-dialog .ui-dialog__head {
+  margin-block-end: var(--coma-space-3);
+}
 .status-dialog form {
   display: grid;
-  gap: var(--coma-space-3);
+  gap: var(--coma-space-2);
 }
 .status-dialog__fields {
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
-  gap: var(--coma-space-1);
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: var(--coma-space-1-5);
 }
 .status-dialog input {
   min-width: 0;
@@ -1101,6 +1132,7 @@ a:focus-visible {
   background: var(--coma-surface);
   color: var(--coma-foreground);
   font: inherit;
+  font-size: 15px;
 }
 .status-dialog__emoji {
   position: relative;
@@ -1111,23 +1143,18 @@ a:focus-visible {
   align-items: center;
   width: 100%;
   min-height: var(--coma-control-lg);
-  padding: 0 var(--coma-space-1);
+  padding: 0 var(--coma-space-1-5);
   border: 1px solid var(--coma-border);
   border-radius: var(--coma-radius-md);
   background: var(--coma-surface);
-  font-size: 22px;
+  font-size: 21px;
 }
 .status-dialog__emoji-trigger svg {
   width: 14px;
   color: var(--coma-muted);
 }
 .status-dialog__emoji-picker {
-  position: absolute;
-  z-index: 180;
-  top: calc(100% + var(--coma-space-1));
-  inset-inline-start: 0;
-  width: min(352px, calc(100vw - 64px));
-  overflow: hidden;
+  overflow: auto;
   border: 1px solid var(--coma-border);
   border-radius: var(--coma-radius-md);
   background: var(--coma-surface-raised);
@@ -1136,11 +1163,16 @@ a:focus-visible {
 .status-dialog__emoji-picker .EmojiPickerReact {
   border: 0;
 }
+.status-dialog__emoji-picker .epr-emoji-category-label {
+  text-transform: none;
+}
 .status-dialog__actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--coma-space-2);
+  min-height: var(--coma-control-md);
+  margin-block-start: var(--coma-space-1);
 }
 .status-dialog__actions > div {
   display: flex;
@@ -1254,7 +1286,7 @@ a:focus-visible {
   color: var(--coma-muted);
   font-size: 11px;
 }
-.sidebar-profile .ui-button {
+.sidebar-profile > .ui-button {
   width: 30px;
   min-width: 30px;
   height: 30px;

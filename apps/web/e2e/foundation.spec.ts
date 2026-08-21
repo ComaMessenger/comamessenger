@@ -1280,7 +1280,10 @@ test("profile menu, status dialog and attachment picker expose the new flows", a
     test.info().project.name === "phone",
     "the desktop profile menu is replaced by the mobile More page",
   );
-  await mockMessenger(page, { chatPatch: { kind: "group", role: "owner" } });
+  await mockMessenger(page, {
+    chatPatch: { kind: "group", role: "owner" },
+    theme: "dark",
+  });
   await page.goto("/chats");
 
   await page.getByRole("button", { name: /Анна/ }).click();
@@ -1307,6 +1310,39 @@ test("profile menu, status dialog and attachment picker expose the new flows", a
   expect(cancelBox).not.toBeNull();
   expect(saveBox).not.toBeNull();
   expect(cancelBox!.width).toBeGreaterThan(saveBox!.width);
+  await statusDialog.getByLabel("Эмодзи статуса").click();
+  const emojiPicker = page.locator(".status-dialog__emoji-picker");
+  await expect(emojiPicker).toBeVisible();
+  await expect(page.getByPlaceholder("Поиск эмодзи…")).toBeVisible();
+  const emojiPickerBox = await emojiPicker.boundingBox();
+  const viewport = page.viewportSize();
+  expect(emojiPickerBox).not.toBeNull();
+  expect(viewport).not.toBeNull();
+  expect(emojiPickerBox!.x).toBeGreaterThanOrEqual(0);
+  expect(emojiPickerBox!.y).toBeGreaterThanOrEqual(0);
+  expect(emojiPickerBox!.x + emojiPickerBox!.width).toBeLessThanOrEqual(
+    viewport!.width,
+  );
+  expect(emojiPickerBox!.y + emojiPickerBox!.height).toBeLessThanOrEqual(
+    viewport!.height,
+  );
+  await expect(page).toHaveScreenshot("status-dialog-emoji-picker.png", {
+    animations: "disabled",
+  });
+  await statusDialog.getByLabel("Эмодзи статуса").click();
+  await statusDialog
+    .getByRole("button", { name: "Не сбрасывать" })
+    .click();
+  const durationListbox = page.getByRole("listbox", {
+    name: "Срок действия статуса",
+  });
+  await expect(durationListbox).toBeVisible();
+  const durationBox = await durationListbox.boundingBox();
+  expect(durationBox).not.toBeNull();
+  expect(durationBox!.y + durationBox!.height).toBeLessThanOrEqual(
+    viewport!.height,
+  );
+  await page.keyboard.press("Escape");
   await statusDialog.getByLabel("Текст статуса").fill("Проверяю интерфейс");
   await statusDialog.getByRole("button", { name: "Отмена" }).click();
   await expect(statusDialog).toBeHidden();
@@ -2077,7 +2113,7 @@ test("custom status is edited from the profile menu", async ({ page }) => {
 });
 
 test("notification snooze is shared by the profile menu", async ({ page }) => {
-  await mockMessenger(page);
+  await mockMessenger(page, { theme: "dark" });
   const phone = test.info().project.name === "phone";
   await page.goto(phone ? "/more" : "/chats");
   if (phone) {
@@ -2092,6 +2128,18 @@ test("notification snooze is shared by the profile menu", async ({ page }) => {
     expect(snoozeBox!.x - (menuBox!.x + menuBox!.width)).toBeGreaterThanOrEqual(
       7,
     );
+    const presetButtons = page.locator(
+      ".profile-menu__snooze-presets .ui-button",
+    );
+    await expect(presetButtons).toHaveCount(4);
+    for (const button of await presetButtons.all()) {
+      const box = await button.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.width).toBeGreaterThan(100);
+    }
+    await expect(page).toHaveScreenshot("notification-snooze-popover.png", {
+      animations: "disabled",
+    });
   }
   await page.getByRole("button", { name: "На 30 минут" }).click();
   if (phone) {

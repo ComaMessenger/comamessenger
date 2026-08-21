@@ -1,8 +1,10 @@
 import type {
   ButtonHTMLAttributes,
+  CSSProperties,
   InputHTMLAttributes,
   ReactElement,
   ReactNode,
+  RefObject,
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
 } from "react";
@@ -13,10 +15,12 @@ import {
   useContext,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { Check, ChevronDown, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { stableAvatarIndex } from "@comamessenger/tokens";
@@ -134,6 +138,137 @@ export function TextareaField({
   );
 }
 
+export function FloatingPopover({
+  anchorRef,
+  children,
+  className,
+  matchAnchorWidth = false,
+  placement = "bottom-start",
+  width,
+  gap = 8,
+  onDismiss,
+}: {
+  anchorRef: RefObject<HTMLElement | null>;
+  children: ReactNode;
+  className?: string;
+  matchAnchorWidth?: boolean;
+  placement?: "bottom-start" | "side-start";
+  width?: number;
+  gap?: number;
+  onDismiss(): void;
+}) {
+  const layer = useRef<HTMLDivElement>(null);
+  const [style, setStyle] = useState<CSSProperties>({
+    left: -10_000,
+    top: -10_000,
+    visibility: "hidden",
+  });
+
+  useLayoutEffect(() => {
+    function position() {
+      const anchor = anchorRef.current;
+      const popover = layer.current;
+      if (!anchor || !popover) return;
+      const viewportGap = 16;
+      const anchorBox = anchor.getBoundingClientRect();
+      const targetWidth = matchAnchorWidth
+        ? anchorBox.width
+        : (width ?? popover.offsetWidth);
+      const measuredHeight = popover.offsetHeight;
+      if (placement === "side-start") {
+        const availableLeft = anchorBox.left - gap - viewportGap;
+        const availableRight =
+          window.innerWidth - anchorBox.right - gap - viewportGap;
+        if (availableLeft >= targetWidth || availableRight >= targetWidth) {
+          const openLeft = availableLeft >= targetWidth;
+          const left = openLeft
+            ? anchorBox.left - gap - targetWidth
+            : anchorBox.right + gap;
+          const maxHeight = window.innerHeight - viewportGap * 2;
+          const top = Math.min(
+            Math.max(anchorBox.top, viewportGap),
+            Math.max(
+              viewportGap,
+              window.innerHeight - measuredHeight - viewportGap,
+            ),
+          );
+          setStyle({
+            left,
+            top,
+            width: targetWidth,
+            maxHeight,
+            visibility: "visible",
+          });
+          return;
+        }
+      }
+      const below = window.innerHeight - anchorBox.bottom - gap - viewportGap;
+      const above = anchorBox.top - gap - viewportGap;
+      const openAbove = measuredHeight > below && above > below;
+      const availableHeight = Math.max(openAbove ? above : below, 120);
+      const left = Math.min(
+        Math.max(anchorBox.left, viewportGap),
+        Math.max(viewportGap, window.innerWidth - targetWidth - viewportGap),
+      );
+      const top = openAbove
+        ? Math.max(viewportGap, anchorBox.top - gap - measuredHeight)
+        : anchorBox.bottom + gap;
+      setStyle({
+        left,
+        top,
+        width: targetWidth,
+        maxHeight: availableHeight,
+        visibility: "visible",
+      });
+    }
+
+    position();
+    const frame = window.requestAnimationFrame(position);
+    window.addEventListener("resize", position);
+    window.addEventListener("scroll", position, true);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", position);
+      window.removeEventListener("scroll", position, true);
+    };
+  }, [anchorRef, gap, matchAnchorWidth, placement, width]);
+
+  useEffect(() => {
+    function dismiss(event: PointerEvent) {
+      const target = event.target as Node;
+      if (
+        anchorRef.current?.contains(target) ||
+        layer.current?.contains(target)
+      )
+        return;
+      onDismiss();
+    }
+    function keyboard(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      onDismiss();
+    }
+    document.addEventListener("pointerdown", dismiss);
+    document.addEventListener("keydown", keyboard, true);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss);
+      document.removeEventListener("keydown", keyboard, true);
+    };
+  }, [anchorRef, onDismiss]);
+
+  return createPortal(
+    <div
+      ref={layer}
+      className={cx("ui-popover-layer", className)}
+      style={style}
+    >
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
 export function SelectField({
   label,
   name,
@@ -150,7 +285,7 @@ export function SelectField({
 }) {
   const labelID = useId();
   const selectedLabelID = useId();
-  const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
   const nativeSelect = useRef<HTMLSelectElement>(null);
   const [open, setOpen] = useState(false);
   const options = Children.toArray(children)
@@ -174,21 +309,6 @@ export function SelectField({
   const selected =
     options.find((option) => option.value === selectedValue) ?? options[0];
 
-  useEffect(() => {
-    function dismiss(event: PointerEvent) {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
-    }
-    function keyboard(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("pointerdown", dismiss);
-    document.addEventListener("keydown", keyboard);
-    return () => {
-      document.removeEventListener("pointerdown", dismiss);
-      document.removeEventListener("keydown", keyboard);
-    };
-  }, []);
-
   function choose(nextValue: string) {
     setUncontrolledValue(nextValue);
     setOpen(false);
@@ -207,7 +327,7 @@ export function SelectField({
       <span className="ui-field__label" id={labelID}>
         {label}
       </span>
-      <div className="ui-select" ref={root}>
+      <div className="ui-select">
         <select
           ref={nativeSelect}
           className="ui-select__native"
@@ -225,6 +345,7 @@ export function SelectField({
           {children}
         </select>
         <button
+          ref={trigger}
           type="button"
           className="ui-select__trigger"
           aria-labelledby={`${labelID} ${selectedLabelID}`}
@@ -237,21 +358,30 @@ export function SelectField({
           <ChevronDown aria-hidden="true" />
         </button>
         {open && (
-          <div className="ui-select__menu" role="listbox" aria-label={label}>
-            {options.map((option) => (
-              <button
-                type="button"
-                role="option"
-                aria-selected={option.value === selectedValue}
-                disabled={option.disabled}
-                key={option.value}
-                onClick={() => choose(option.value)}
-              >
-                <span>{option.label}</span>
-                {option.value === selectedValue && <Check aria-hidden="true" />}
-              </button>
-            ))}
-          </div>
+          <FloatingPopover
+            anchorRef={trigger}
+            className="ui-select__menu"
+            matchAnchorWidth
+            onDismiss={() => setOpen(false)}
+          >
+            <div role="listbox" aria-label={label}>
+              {options.map((option) => (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={option.value === selectedValue}
+                  disabled={option.disabled}
+                  key={option.value}
+                  onClick={() => choose(option.value)}
+                >
+                  <span>{option.label}</span>
+                  {option.value === selectedValue && (
+                    <Check aria-hidden="true" />
+                  )}
+                </button>
+              ))}
+            </div>
+          </FloatingPopover>
         )}
       </div>
     </div>

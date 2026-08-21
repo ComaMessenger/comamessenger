@@ -12,7 +12,11 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import type { EmojiStyle, Theme as EmojiTheme } from "emoji-picker-react";
+import type {
+  Categories as EmojiCategory,
+  EmojiStyle,
+  Theme as EmojiTheme,
+} from "emoji-picker-react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -154,6 +158,7 @@ import {
   Button,
   Dialog,
   Field,
+  FloatingPopover,
   FormError,
   IconButton,
   Menu as UIMenu,
@@ -1822,7 +1827,7 @@ function Messenger({
                           })
                         : t("snoozeHint")}
                     </small>
-                    <div>
+                    <div className="profile-menu__snooze-presets">
                       <Button
                         size="sm"
                         disabled={snoozePending}
@@ -2263,12 +2268,14 @@ function StatusDialog({
 }) {
   const { t } = useTranslation();
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const emojiTrigger = useRef<HTMLButtonElement>(null);
   return (
     <Dialog title={t("setStatus")} className="status-dialog" onClose={onClose}>
       <form onSubmit={onSave}>
         <div className="status-dialog__fields">
           <div className="status-dialog__emoji">
             <button
+              ref={emojiTrigger}
               type="button"
               className="status-dialog__emoji-trigger"
               aria-label={t("statusEmoji")}
@@ -2279,32 +2286,75 @@ function StatusDialog({
               <ChevronDown aria-hidden="true" />
             </button>
             {emojiOpen && (
-              <div
+              <FloatingPopover
+                anchorRef={emojiTrigger}
                 className="status-dialog__emoji-picker"
-                role="dialog"
-                aria-label={t("emoji")}
+                gap={24}
+                placement="side-start"
+                width={352}
+                onDismiss={() => setEmojiOpen(false)}
               >
-                <Suspense fallback={<Skeleton />}>
-                  <EmojiPicker
-                    width="100%"
-                    height={340}
-                    theme={
-                      (document.documentElement.dataset.theme === "dark"
-                        ? "dark"
-                        : "light") as EmojiTheme
-                    }
-                    emojiStyle={"native" as EmojiStyle}
-                    lazyLoadEmojis
-                    searchPlaceholder={t("searchEmoji")}
-                    searchClearButtonLabel={t("clearSearch")}
-                    previewConfig={{ showPreview: false }}
-                    onEmojiClick={(selection) => {
-                      onEmojiChange(selection.emoji);
-                      setEmojiOpen(false);
-                    }}
-                  />
-                </Suspense>
-              </div>
+                <div role="dialog" aria-label={t("emoji")}>
+                  <Suspense fallback={<Skeleton />}>
+                    <EmojiPicker
+                      width="100%"
+                      height={320}
+                      categories={[
+                        {
+                          category: "suggested" as EmojiCategory,
+                          name: t("emojiSuggested"),
+                        },
+                        {
+                          category: "smileys_people" as EmojiCategory,
+                          name: t("emojiSmileys"),
+                        },
+                        {
+                          category: "animals_nature" as EmojiCategory,
+                          name: t("emojiAnimals"),
+                        },
+                        {
+                          category: "food_drink" as EmojiCategory,
+                          name: t("emojiFood"),
+                        },
+                        {
+                          category: "travel_places" as EmojiCategory,
+                          name: t("emojiTravel"),
+                        },
+                        {
+                          category: "activities" as EmojiCategory,
+                          name: t("emojiActivities"),
+                        },
+                        {
+                          category: "objects" as EmojiCategory,
+                          name: t("emojiObjects"),
+                        },
+                        {
+                          category: "symbols" as EmojiCategory,
+                          name: t("emojiSymbols"),
+                        },
+                        {
+                          category: "flags" as EmojiCategory,
+                          name: t("emojiFlags"),
+                        },
+                      ]}
+                      theme={
+                        (document.documentElement.dataset.theme === "dark"
+                          ? "dark"
+                          : "light") as EmojiTheme
+                      }
+                      emojiStyle={"native" as EmojiStyle}
+                      lazyLoadEmojis
+                      searchPlaceholder={t("searchEmoji")}
+                      searchClearButtonLabel={t("clearSearch")}
+                      previewConfig={{ showPreview: false }}
+                      onEmojiClick={(selection) => {
+                        onEmojiChange(selection.emoji);
+                        setEmojiOpen(false);
+                      }}
+                    />
+                  </Suspense>
+                </div>
+              </FloatingPopover>
             )}
           </div>
           <input
