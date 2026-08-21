@@ -37,6 +37,9 @@ export class RealtimeCoordinator {
       resync(highWatermark: number): Promise<void>;
       typing?(value: Record<string, unknown>): void;
       presence?(value: Record<string, unknown>): void;
+      agentStatus?(value: Record<string, unknown>): void;
+      messageStreaming?(value: Record<string, unknown>): void;
+      ephemeralReset?(): void;
       passwordChangeRequired?(): void;
       sessionExpired?(): void;
     },
@@ -49,6 +52,7 @@ export class RealtimeCoordinator {
     this.stopped = true;
     this.socket?.close();
     if (this.ackTimer) clearTimeout(this.ackTimer);
+    this.callbacks.ephemeralReset?.();
     this.callbacks.state("idle");
   }
   subscribe(chatID: string | null, threadRootID: string | null = null): void {
@@ -97,6 +101,7 @@ export class RealtimeCoordinator {
       };
       socket.onmessage = (raw) => void this.receive(raw.data);
       socket.onclose = (event) => {
+        this.callbacks.ephemeralReset?.();
         if (this.stopped) return;
         if (event.code === 4001) {
           if (this.passwordChangeRequired) return;
@@ -167,6 +172,9 @@ export class RealtimeCoordinator {
     }
     if (frame.op === "typing") this.callbacks.typing?.(frame);
     if (frame.op === "presence") this.callbacks.presence?.(frame);
+    if (frame.op === "agent.status") this.callbacks.agentStatus?.(frame);
+    if (frame.op === "message.streaming")
+      this.callbacks.messageStreaming?.(frame);
   }
   private scheduleAck(seq: number): void {
     if (seq - this.lastAck >= this.ackBatch) {

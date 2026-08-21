@@ -96,24 +96,43 @@ export class OpenAIProvider implements Provider {
           })),
           tool_choice: request.tools.length ? "auto" : undefined,
           max_tokens: request.maxOutputTokens,
-          stream: false,
+          stream: true,
+          stream_options: { include_usage: true },
         }),
       },
     );
-    const payload = await readProviderJSON(response);
-    const choice = objectArray(payload.choices)[0] ?? {};
-    const message = objectValue(choice.message);
-    const content = stringValue(message.content);
-    if (content) yield { type: "delta", text: content };
-    const toolCalls = objectArray(message.tool_calls).map((raw) => {
-      const fn = objectValue(raw.function);
-      return {
-        id: stringValue(raw.id),
-        name: stringValue(fn.name),
-        arguments: parseArguments(stringValue(fn.arguments)),
-      };
-    });
-    const usage = objectValue(payload.usage);
+    await ensureProviderOK(response);
+    let content = "";
+    let usage: Record<string, unknown> = {};
+    const calls = new Map<number, { id: string; name: string; arguments: string }>();
+    for await (const payload of readProviderSSE(response)) {
+      usage = Object.keys(objectValue(payload.usage)).length
+        ? objectValue(payload.usage)
+        : usage;
+      const choice = objectArray(payload.choices)[0] ?? {};
+      const delta = objectValue(choice.delta);
+      const text = stringValue(delta.content);
+      if (text) {
+        content += text;
+        yield { type: "delta", text };
+      }
+      for (const raw of objectArray(delta.tool_calls)) {
+        const index = numberValue(raw.index);
+        const current = calls.get(index) ?? { id: "", name: "", arguments: "" };
+        const fn = objectValue(raw.function);
+        current.id += stringValue(raw.id);
+        current.name += stringValue(fn.name);
+        current.arguments += stringValue(fn.arguments);
+        calls.set(index, current);
+      }
+    }
+    const toolCalls = [...calls.entries()]
+      .sort(([left], [right]) => left - right)
+      .map(([, call]) => ({
+        id: call.id,
+        name: call.name,
+        arguments: parseArguments(call.arguments),
+      }));
     yield {
       type: "finish",
       content,
@@ -164,32 +183,62 @@ export class AnthropicProvider implements Provider {
             input_schema: tool.inputSchema,
           })),
           max_tokens: request.maxOutputTokens,
-          stream: false,
+          stream: true,
         }),
       },
     );
-    const payload = await readProviderJSON(response);
+    await ensureProviderOK(response);
     let content = "";
-    const toolCalls: ToolCall[] = [];
-    for (const block of objectArray(payload.content)) {
-      if (block.type === "text") content += stringValue(block.text);
-      if (block.type === "tool_use") {
-        toolCalls.push({
-          id: stringValue(block.id),
-          name: stringValue(block.name),
-          arguments: objectValue(block.input),
-        });
+    let inputTokens = 0;
+    let outputTokens = 0;
+    const calls = new Map<number, { id: string; name: string; arguments: string }>();
+    for await (const payload of readProviderSSE(response)) {
+      const type = stringValue(payload.type);
+      if (type === "message_start") {
+        inputTokens = numberValue(objectValue(objectValue(payload.message).usage).input_tokens);
+      }
+      if (type === "content_block_start") {
+        const index = numberValue(payload.index);
+        const block = objectValue(payload.content_block);
+        if (block.type === "tool_use") {
+          calls.set(index, {
+            id: stringValue(block.id),
+            name: stringValue(block.name),
+            arguments: "",
+          });
+        }
+      }
+      if (type === "content_block_delta") {
+        const index = numberValue(payload.index);
+        const delta = objectValue(payload.delta);
+        if (delta.type === "text_delta") {
+          const text = stringValue(delta.text);
+          content += text;
+          if (text) yield { type: "delta", text };
+        }
+        if (delta.type === "input_json_delta") {
+          const call = calls.get(index);
+          if (call) call.arguments += stringValue(delta.partial_json);
+        }
+      }
+      if (type === "message_delta") {
+        outputTokens = numberValue(objectValue(payload.usage).output_tokens);
       }
     }
-    if (content) yield { type: "delta", text: content };
-    const usage = objectValue(payload.usage);
+    const toolCalls: ToolCall[] = [...calls.entries()]
+      .sort(([left], [right]) => left - right)
+      .map(([, call]) => ({
+        id: call.id,
+        name: call.name,
+        arguments: parseArguments(call.arguments || "{}"),
+      }));
     yield {
       type: "finish",
       content,
       toolCalls,
       usage: {
-        inputTokens: numberValue(usage.input_tokens),
-        outputTokens: numberValue(usage.output_tokens),
+        inputTokens,
+        outputTokens,
         cost: "0",
         currency: "USD",
         priceSource: "unknown",
@@ -248,19 +297,7 @@ function anthropicMessages(messages: ChatMessage[]): Record<string, unknown>[] {
   return result;
 }
 
-async function readProviderJSON(
-  response: Response,
-): Promise<Record<string, unknown>> {
-  let payload: unknown;
-  try {
-    payload = await response.json();
-  } catch {
-    throw new ProviderError(
-      "provider_invalid_response",
-      response.status >= 500,
-      `Provider returned HTTP ${response.status}`,
-    );
-  }
+async function ensureProviderOK(response: Response): Promise<void> {
   if (!response.ok) {
     throw new ProviderError(
       response.status === 429 ? "provider_rate_limited" : "provider_error",
@@ -268,7 +305,64 @@ async function readProviderJSON(
       `Provider returned HTTP ${response.status}`,
     );
   }
-  return objectValue(payload);
+  if (!response.body) {
+    throw new ProviderError(
+      "provider_invalid_response",
+      false,
+      "Provider returned an empty stream",
+    );
+  }
+}
+
+async function* readProviderSSE(
+  response: Response,
+): AsyncIterable<Record<string, unknown>> {
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let bytes = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    bytes += value.byteLength;
+    if (bytes > 16 * 1024 * 1024) {
+      await reader.cancel();
+      throw new ProviderError(
+        "provider_output_too_large",
+        false,
+        "Provider stream exceeded its transport limit",
+      );
+    }
+    buffer += decoder.decode(value, { stream: true });
+    const events = buffer.split(/\r?\n\r?\n/);
+    buffer = events.pop() ?? "";
+    for (const event of events) {
+      const data = event
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trimStart())
+        .join("\n");
+      if (!data || data === "[DONE]") continue;
+      let payload: Record<string, unknown>;
+      try {
+        payload = objectValue(JSON.parse(data));
+      } catch {
+        throw new ProviderError(
+          "provider_invalid_response",
+          false,
+          "Provider returned invalid stream JSON",
+        );
+      }
+      if (payload.type === "error" || payload.error) {
+        throw new ProviderError(
+          "provider_error",
+          true,
+          "Provider stream returned an error event",
+        );
+      }
+      yield payload;
+    }
+  }
 }
 
 function parseArguments(value: string): Record<string, unknown> {

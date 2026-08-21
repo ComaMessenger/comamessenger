@@ -95,6 +95,7 @@ type UpdateMemberInput struct {
 
 type Member struct {
 	ActorID         string     `json:"actor_id"`
+	Type            string     `json:"type"`
 	DisplayName     string     `json:"display_name"`
 	Handle          string     `json:"handle"`
 	Title           string     `json:"title"`
@@ -532,7 +533,7 @@ func (s *Service) ListMembers(ctx context.Context, user identity.User, chatID st
 		return nil, ErrNotFound
 	}
 	rows, err := s.pool.Query(ctx, `
-		SELECT a.id, a.display_name, a.handle::text, a.title, cm.role, cm.joined_at,
+		SELECT a.id, a.type, a.display_name, a.handle::text, a.title, cm.role, cm.joined_at,
 		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_emoji ELSE '' END,
 		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_text ELSE '' END,
 		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_expires_at END,
@@ -547,7 +548,7 @@ func (s *Service) ListMembers(ctx context.Context, user identity.User, chatID st
 	result := make([]Member, 0)
 	for rows.Next() {
 		var member Member
-		if err := rows.Scan(&member.ActorID, &member.DisplayName, &member.Handle, &member.Title, &member.Role, &member.JoinedAt, &member.StatusEmoji, &member.StatusText, &member.StatusExpiresAt, &member.AvatarVersion); err != nil {
+		if err := rows.Scan(&member.ActorID, &member.Type, &member.DisplayName, &member.Handle, &member.Title, &member.Role, &member.JoinedAt, &member.StatusEmoji, &member.StatusText, &member.StatusExpiresAt, &member.AvatarVersion); err != nil {
 			return nil, fmt.Errorf("scan chat member: %w", err)
 		}
 		result = append(result, member)
@@ -890,14 +891,14 @@ func twoIDs() (string, string, error) {
 func (s *Service) member(ctx context.Context, chatID, actorID string) (Member, error) {
 	var member Member
 	err := s.pool.QueryRow(ctx, `
-		SELECT a.id, a.display_name, a.handle::text, a.title, cm.role, cm.joined_at,
+		SELECT a.id, a.type, a.display_name, a.handle::text, a.title, cm.role, cm.joined_at,
 		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_emoji ELSE '' END,
 		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_text ELSE '' END,
 		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_expires_at END,
 		       a.avatar_version
 		FROM chat_members cm JOIN actors a ON a.id = cm.actor_id
 		WHERE cm.chat_id = $1 AND cm.actor_id = $2`, chatID, actorID).Scan(
-		&member.ActorID, &member.DisplayName, &member.Handle, &member.Title, &member.Role, &member.JoinedAt,
+		&member.ActorID, &member.Type, &member.DisplayName, &member.Handle, &member.Title, &member.Role, &member.JoinedAt,
 		&member.StatusEmoji, &member.StatusText, &member.StatusExpiresAt, &member.AvatarVersion)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Member{}, ErrNotFound

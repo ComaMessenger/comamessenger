@@ -78,11 +78,11 @@
 
 ### Streaming и Web UI
 
-- [ ] Добавить ephemeral `agent.status` и `message.streaming` deltas с финальным durable `message.created`.
-- [ ] Определить поведение reconnect: partial stream не считается финальным сообщением и может быть восстановлен/заменён.
+- [x] Добавить ephemeral `agent.status` и `message.streaming` deltas с финальным durable `message.created`.
+- [x] Определить поведение reconnect: partial stream не считается финальным сообщением и может быть восстановлен/заменён.
 - [ ] Создать каталог агентов, страницу агента, форму создания, scopes, memberships, triggers и usage.
 - [ ] Показывать «агент думает», streaming, ошибку/cancel и ссылку на run details для admin.
-- [ ] Отмечать все сообщения агента визуально и в доступном текстовом представлении.
+- [x] Отмечать все сообщения агента визуально и в доступном текстовом представлении.
 
 ### Встроенные агенты и SDK
 
@@ -133,6 +133,7 @@ message.streaming
 
 - Durable final message создаётся core через публичный message endpoint.
 - Streaming delta не является источником истины и может быть отброшена при reconnect.
+- `agent.status` и `message.streaming` принимаются только от API key с `runtime:execute`, привязываются к активному run и повторно проверяют membership/chat/thread. Deltas имеют монотонный index, bounded payload и TTL; web игнорирует переставленные/повторные deltas и очищает partial state по TTL, terminal frame или при reconnect. Финальный `message.created` остаётся единственным durable результатом.
 - Provider key никогда не входит в event payload, run logs или browser/admin API; runtime-only `no-store` endpoint доступен только API key самого агента.
 - Секретные MCP headers шифруются отдельным AEAD domain и возвращаются только runtime-ключу самого агента через `no-store`; admin API показывает лишь факт их настройки. Runtime запрещает redirects, не включает неразрешённые tools, ограничивает каждый ответ по времени и размеру и наружу возвращает только стабильные redacted error codes.
 - MCP tools с `annotations.readOnlyHint=true` считаются read; остальные считаются write. При `require_write_confirmation=true` write tools не передаются автономной модели, а core дополнительно отклоняет попытку начать такой вызов без разрешённой политики. Каждый MCP-вызов записывается и аудируется с run correlation ID.

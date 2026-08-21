@@ -23,16 +23,17 @@ async function main(): Promise<void> {
   const agentAPIKey = requiredEnvironment("COMA_AGENT_API_KEY");
   const api = new MessengerAPI(coreURL);
   api.useAccessToken(agentAPIKey);
-  const runtime = new AgentRuntime({
-    api,
-    provider: providerResolver(),
-    reservedCallCost: process.env.AGENT_RESERVED_CALL_COST ?? "0.01000000",
-  });
   const connection = new AgentConnectionManager(
     api,
     process.env.COMA_RUNTIME_CONSUMER ?? "builtin-runtime",
     (url) => new WebSocket(url) as unknown as SocketLike,
   );
+  const runtime = new AgentRuntime({
+    api,
+    provider: providerResolver(),
+    reservedCallCost: process.env.AGENT_RESERVED_CALL_COST ?? "0.01000000",
+    events: connection,
+  });
   const shutdown = new AbortController();
   const stop = () => shutdown.abort();
   process.on("SIGINT", stop);

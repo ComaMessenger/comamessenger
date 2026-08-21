@@ -115,6 +115,33 @@ describe("domain store", () => {
     });
     expect(store.getState().messages.chat).toHaveLength(before ?? 0);
   });
+  it("orders, resets, and clears ephemeral agent streams", () => {
+    const store = createMessengerStore();
+    const base = {
+      streamID: "stream",
+      runID: "run",
+      actorID: "agent",
+      chatID: "chat",
+      threadRootID: null,
+      expiresAt: "2099-01-01T00:00:00Z",
+    };
+    store.getState().applyMessageStream({ ...base, index: 1, delta: "Hel", reset: true, done: false });
+    store.getState().applyMessageStream({ ...base, index: 2, delta: "lo", reset: false, done: false });
+    store.getState().applyMessageStream({ ...base, index: 1, delta: "stale", reset: false, done: false });
+    expect(store.getState().messageStreams.stream?.body).toBe("Hello");
+    store.getState().applyMessageStream({ ...base, index: 3, delta: "", reset: false, done: true });
+    expect(store.getState().messageStreams.stream).toBeUndefined();
+    store.getState().setAgentStatus({
+      runID: "run",
+      actorID: "agent",
+      chatID: "chat",
+      threadRootID: null,
+      state: "thinking",
+      expiresAt: base.expiresAt,
+    });
+    store.getState().clearAgentEphemeral();
+    expect(store.getState().agentStatuses.run).toBeUndefined();
+  });
 });
 describe("markdown AST", () => {
   it("recognizes only the agreed safe subset", () => {

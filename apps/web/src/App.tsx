@@ -1216,6 +1216,39 @@ function Messenger({
                 String(frame.actor_id),
                 frame.state as "online" | "away" | "offline",
               ),
+          agentStatus: (frame) =>
+            store.getState().setAgentStatus({
+              runID: String(frame.run_id),
+              actorID: String(frame.actor_id),
+              chatID: String(frame.chat_id),
+              threadRootID: frame.thread_root_id
+                ? String(frame.thread_root_id)
+                : null,
+              state: frame.state as
+                | "thinking"
+                | "tool"
+                | "streaming"
+                | "completed"
+                | "failed"
+                | "canceled",
+              expiresAt: String(frame.expires_at),
+            }),
+          messageStreaming: (frame) =>
+            store.getState().applyMessageStream({
+              streamID: String(frame.stream_id),
+              runID: String(frame.run_id),
+              actorID: String(frame.actor_id),
+              chatID: String(frame.chat_id),
+              threadRootID: frame.thread_root_id
+                ? String(frame.thread_root_id)
+                : null,
+              delta: String(frame.delta ?? ""),
+              index: Number(frame.index),
+              reset: Boolean(frame.reset),
+              done: Boolean(frame.done),
+              expiresAt: String(frame.expires_at),
+            }),
+          ephemeralReset: () => store.getState().clearAgentEphemeral(),
           passwordChangeRequired: () => {
             void api.me().then(onUserUpdated);
           },
@@ -2552,6 +2585,8 @@ function Conversation({
     (state) => state.typing[chat?.id ?? ""] ?? emptyActorIDs,
   );
   const presence = useStore(store, (state) => state.presence);
+  const messageStreams = useStore(store, (state) => state.messageStreams);
+  const agentStatuses = useStore(store, (state) => state.agentStatuses);
   const [reply, setReply] = useState<Message | null>(null);
   const [body, setBody] = useState("");
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
@@ -2581,6 +2616,12 @@ function Conversation({
       : undefined;
   const readonly = chat?.kind === "channel" && chat.role === "member";
   const visible = messages.filter((item) => !item.thread_root_id);
+  const visibleStreams = Object.values(messageStreams).filter(
+    (item) => item.chatID === chat?.id && item.threadRootID === null,
+  );
+  const visibleAgentStatuses = Object.values(agentStatuses).filter(
+    (item) => item.chatID === chat?.id && item.threadRootID === null,
+  );
   const virtual = useVirtualizer({
     count: visible.length,
     getScrollElement: () => scroller.current,
@@ -2871,7 +2912,9 @@ function Conversation({
         <div className="conversation-head__title">
           <h1>{title}</h1>
           <span>
-            {typing.length
+            {visibleAgentStatuses.length
+              ? t("agentsWorking", { count: visibleAgentStatuses.length })
+              : typing.length
               ? `${typing.length} ${t("typing")}`
               : directPeer?.status_text
                 ? `${directPeer.status_emoji} ${directPeer.status_text}`.trim()
@@ -3003,6 +3046,14 @@ function Conversation({
               );
             })}
           </div>
+          {visibleStreams.map((stream) => (
+            <AgentStreamRow
+              key={stream.streamID}
+              body={stream.body}
+              author={members.find((item) => item.actor_id === stream.actorID)}
+              state={agentStatuses[stream.runID]?.state ?? "streaming"}
+            />
+          ))}
         </div>
       </div>
       {showScrollDown && (
@@ -3067,6 +3118,41 @@ function Conversation({
         />
       )}
     </>
+  );
+}
+
+function AgentStreamRow({
+  body,
+  author,
+  state,
+}: {
+  body: string;
+  author?: ChatMember;
+  state: "thinking" | "tool" | "streaming" | "completed" | "failed" | "canceled";
+}) {
+  const { t } = useTranslation();
+  return (
+    <article className="message message--agent-stream" aria-live="polite">
+      <div className="message__avatar">
+        <Avatar
+          name={author?.display_name ?? t("agent")}
+          seed={author?.actor_id ?? "agent"}
+          actorID={author?.actor_id}
+          avatarVersion={author?.avatar_version}
+          size="sm"
+        />
+      </div>
+      <div className="message__content">
+        <header>
+          <strong>{author?.display_name ?? t("agent")}</strong>
+          <span className="agent-badge">{t("agentBadge")}</span>
+          <span>{t(`agentState_${state}`)}</span>
+        </header>
+        <div className="message__body message__body--streaming">
+          {body ? <Markdown source={body} /> : <span className="streaming-dots">•••</span>}
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -3253,6 +3339,9 @@ function MessageRow({
         {!grouped && (
           <header>
             <strong>{name}</strong>
+            {author?.type === "agent" && (
+              <span className="agent-badge">{t("agentBadge")}</span>
+            )}
             <time>{formatTime(message.created_at)}</time>
             {message.edited_at && <span>· {t("edit")}</span>}
           </header>
@@ -4368,6 +4457,8 @@ function ThreadPanel({
     (state) => state.messages[chat.id] ?? emptyMessages,
   );
   const presence = useStore(store, (state) => state.presence);
+  const threadStreams = useStore(store, (state) => state.messageStreams);
+  const threadAgentStatuses = useStore(store, (state) => state.agentStatuses);
   const query = useQuery({
     queryKey: ["thread", rootID],
     queryFn: () => api.thread(rootID),
@@ -4503,6 +4594,23 @@ function ThreadPanel({
             />
           );
         })}
+        {Object.values(threadStreams)
+          .filter(
+            (stream) =>
+              stream.chatID === chat.id && stream.threadRootID === rootID,
+          )
+          .map((stream) => (
+            <AgentStreamRow
+              key={stream.streamID}
+              body={stream.body}
+              author={members.find(
+                (member) => member.actor_id === stream.actorID,
+              )}
+              state={
+                threadAgentStatuses[stream.runID]?.state ?? "streaming"
+              }
+            />
+          ))}
       </div>
       <Composer
         members={members}

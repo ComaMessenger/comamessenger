@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/comamessenger/comamessenger/core/internal/access"
 	"github.com/comamessenger/comamessenger/core/internal/config"
 	"github.com/comamessenger/comamessenger/core/internal/eventlog"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
@@ -20,6 +21,7 @@ type session struct {
 	subscription    *Subscription
 	store           *eventlog.Store
 	user            identity.User
+	authentication  access.Identity
 	config          config.RealtimeConfig
 	connectionID    string
 	requestID       string
@@ -128,6 +130,26 @@ func (s *session) readLoop(ctx context.Context) error {
 				return s.protocolFailure(ctx, "invalid_frame", "Presence frame is invalid.")
 			}
 			if err := s.ephemeral.Presence(ctx, s.user, s.subscription, frame.State); err != nil {
+				if reportErr := s.reportEphemeralError(ctx, err); reportErr != nil {
+					return reportErr
+				}
+			}
+		case "agent.status":
+			var frame agentStatusFrame
+			if decodeStrict(payload, &frame) != nil || s.ephemeral == nil {
+				return s.protocolFailure(ctx, "invalid_frame", "Agent status frame is invalid.")
+			}
+			if err := s.ephemeral.AgentStatus(ctx, s.user, s.authentication, s.subscription, frame); err != nil {
+				if reportErr := s.reportEphemeralError(ctx, err); reportErr != nil {
+					return reportErr
+				}
+			}
+		case "message.streaming":
+			var frame messageStreamingFrame
+			if decodeStrict(payload, &frame) != nil || s.ephemeral == nil {
+				return s.protocolFailure(ctx, "invalid_frame", "Message streaming frame is invalid.")
+			}
+			if err := s.ephemeral.MessageStreaming(ctx, s.user, s.authentication, s.subscription, frame); err != nil {
 				if reportErr := s.reportEphemeralError(ctx, err); reportErr != nil {
 					return reportErr
 				}

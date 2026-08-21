@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  AnthropicProvider,
   OpenAIProvider,
   ProviderError,
   type ProviderEvent,
@@ -15,25 +16,17 @@ describe("provider normalization", () => {
       async (_url, init) => {
         const headers = new Headers(init?.headers);
         expect(headers.get("Authorization")).toBe("Bearer secret");
-        return Response.json({
-          choices: [
-            {
-              message: {
-                content: "Drafted",
-                tool_calls: [
-                  {
-                    id: "call-1",
-                    function: {
-                      name: "search_messages",
-                      arguments: '{"query":"release"}',
-                    },
-                  },
-                ],
-              },
-            },
-          ],
-          usage: { prompt_tokens: 12, completion_tokens: 4 },
-        });
+        expect(JSON.parse(String(init?.body)).stream).toBe(true);
+        return new Response(
+          [
+            'data: {"choices":[{"delta":{"content":"Draft"}}]}',
+            'data: {"choices":[{"delta":{"content":"ed","tool_calls":[{"index":0,"id":"call-1","function":{"name":"search_","arguments":"{\\"query\\":"}}]}}]}',
+            'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"name":"messages","arguments":"\\"release\\"}"}}]}}]}',
+            'data: {"choices":[],"usage":{"prompt_tokens":12,"completion_tokens":4}}',
+            "data: [DONE]",
+          ].join("\n\n") + "\n\n",
+          { headers: { "Content-Type": "text/event-stream" } },
+        );
       },
     );
     const events: ProviderEvent[] = [];
@@ -46,8 +39,11 @@ describe("provider normalization", () => {
     })) {
       events.push(event);
     }
-    expect(events[0]).toEqual({ type: "delta", text: "Drafted" });
-    expect(events[1]).toMatchObject({
+    expect(events.slice(0, 2)).toEqual([
+      { type: "delta", text: "Draft" },
+      { type: "delta", text: "ed" },
+    ]);
+    expect(events[2]).toMatchObject({
       type: "finish",
       toolCalls: [
         {
@@ -57,6 +53,40 @@ describe("provider normalization", () => {
         },
       ],
       usage: { inputTokens: 12, outputTokens: 4 },
+    });
+  });
+
+  it("normalizes Anthropic SSE text, tools, and usage", async () => {
+    const provider = new AnthropicProvider(
+      "secret",
+      "https://anthropic.test/v1",
+      async () =>
+        new Response(
+          [
+            'event: message_start\ndata: {"type":"message_start","message":{"usage":{"input_tokens":9}}}',
+            'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hi"}}',
+            'event: content_block_start\ndata: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"tool-1","name":"recall"}}',
+            'event: content_block_delta\ndata: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\\"key\\":\\"x\\"}"}}',
+            'event: message_delta\ndata: {"type":"message_delta","usage":{"output_tokens":3}}',
+          ].join("\n\n") + "\n\n",
+          { headers: { "Content-Type": "text/event-stream" } },
+        ),
+    );
+    const events: ProviderEvent[] = [];
+    for await (const event of provider.stream({
+      model: "claude",
+      messages: [{ role: "user", content: "hello" }],
+      tools: [],
+      maxOutputTokens: 100,
+      signal: new AbortController().signal,
+    })) {
+      events.push(event);
+    }
+    expect(events[0]).toEqual({ type: "delta", text: "Hi" });
+    expect(events[1]).toMatchObject({
+      type: "finish",
+      toolCalls: [{ id: "tool-1", name: "recall", arguments: { key: "x" } }],
+      usage: { inputTokens: 9, outputTokens: 3 },
     });
   });
 

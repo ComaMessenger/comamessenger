@@ -1862,6 +1862,35 @@ export interface components {
             /** @enum {string} */
             state: "active" | "away";
         };
+        RealtimeAgentStatusFrameV1: {
+            /** @enum {string} */
+            op: "agent.status";
+            /** Format: uuid */
+            run_id: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: uuid */
+            thread_root_id: string | null;
+            /** @enum {string} */
+            state: "thinking" | "tool" | "streaming" | "completed" | "failed" | "canceled";
+        };
+        RealtimeMessageStreamingFrameV1: {
+            /** @enum {string} */
+            op: "message.streaming";
+            /** Format: uuid */
+            run_id: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: uuid */
+            thread_root_id: string | null;
+            /** Format: uuid */
+            stream_id: string;
+            /** Format: int64 */
+            index: number;
+            delta: string;
+            reset: boolean;
+            done: boolean;
+        };
         RealtimeHelloFrameV1: {
             /** @enum {string} */
             op: "hello";
@@ -1926,6 +1955,43 @@ export interface components {
             actor_id: string;
             /** @enum {string} */
             state: "online" | "away" | "offline";
+            /** Format: date-time */
+            expires_at: string;
+        };
+        RealtimeAgentStatusEventFrameV1: {
+            /** @enum {string} */
+            op: "agent.status";
+            /** Format: uuid */
+            actor_id: string;
+            /** Format: uuid */
+            run_id: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: uuid */
+            thread_root_id: string | null;
+            /** @enum {string} */
+            state: "thinking" | "tool" | "streaming" | "completed" | "failed" | "canceled";
+            /** Format: date-time */
+            expires_at: string;
+        };
+        RealtimeMessageStreamingEventFrameV1: {
+            /** @enum {string} */
+            op: "message.streaming";
+            /** Format: uuid */
+            actor_id: string;
+            /** Format: uuid */
+            run_id: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: uuid */
+            thread_root_id: string | null;
+            /** Format: uuid */
+            stream_id: string;
+            /** Format: int64 */
+            index: number;
+            delta: string;
+            reset: boolean;
+            done: boolean;
             /** Format: date-time */
             expires_at: string;
         };
@@ -2832,6 +2898,8 @@ export interface components {
         ChatMember: {
             /** Format: uuid */
             actor_id: string;
+            /** @enum {string} */
+            type: "user" | "agent";
             display_name: string;
             handle: string;
             title: string;

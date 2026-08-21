@@ -13,6 +13,8 @@ export type MessengerState = {
   unread: UnreadSnapshot;
   typing: Record<string, string[]>;
   presence: Record<string, "online" | "away" | "offline">;
+  agentStatuses: Record<string, AgentStatusState>;
+  messageStreams: Record<string, MessageStreamState>;
   checkpoint: number;
   realtime: RealtimeState;
   activeChatID: string | null;
@@ -29,7 +31,33 @@ export type MessengerState = {
   setActive(chatID: string | null): void;
   setTyping(chatID: string, actorID: string, active: boolean): void;
   setPresence(actorID: string, state: "online" | "away" | "offline"): void;
+  setAgentStatus(value: AgentStatusState): void;
+  applyMessageStream(value: MessageStreamFrame): void;
+  clearAgentEphemeral(): void;
   resetDurable(checkpoint: number): void;
+};
+export type AgentStatusState = {
+  runID: string;
+  actorID: string;
+  chatID: string;
+  threadRootID: string | null;
+  state: "thinking" | "tool" | "streaming" | "completed" | "failed" | "canceled";
+  expiresAt: string;
+};
+export type MessageStreamState = {
+  streamID: string;
+  runID: string;
+  actorID: string;
+  chatID: string;
+  threadRootID: string | null;
+  body: string;
+  index: number;
+  expiresAt: string;
+};
+export type MessageStreamFrame = Omit<MessageStreamState, "body"> & {
+  delta: string;
+  reset: boolean;
+  done: boolean;
 };
 const emptyUnread: UnreadSnapshot = { chats: [], threads: [] };
 export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
@@ -39,6 +67,8 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
     unread: emptyUnread,
     typing: {},
     presence: {},
+    agentStatuses: {},
+    messageStreams: {},
     checkpoint,
     realtime: "idle",
     activeChatID: null,
@@ -145,9 +175,74 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
       }),
     setPresence: (actorID, value) =>
       set((state) => ({ presence: { ...state.presence, [actorID]: value } })),
+    setAgentStatus: (value) => {
+      set((state) => {
+        const next = { ...state.agentStatuses };
+        if (
+          value.state === "completed" ||
+          value.state === "failed" ||
+          value.state === "canceled" ||
+          Date.parse(value.expiresAt) <= Date.now()
+        )
+          delete next[value.runID];
+        else next[value.runID] = value;
+        return { agentStatuses: next };
+      });
+      const delay = expiryDelay(value.expiresAt);
+      if (delay > 0)
+        setTimeout(
+          () =>
+            set((state) => {
+              if (state.agentStatuses[value.runID]?.expiresAt !== value.expiresAt)
+                return state;
+              const next = { ...state.agentStatuses };
+              delete next[value.runID];
+              return { agentStatuses: next };
+            }),
+          delay,
+        );
+    },
+    applyMessageStream: (value) => {
+      set((state) => {
+        const next = { ...state.messageStreams };
+        const current = next[value.streamID];
+        if (value.done || Date.parse(value.expiresAt) <= Date.now()) {
+          delete next[value.streamID];
+        } else if (!current || value.index > current.index) {
+          next[value.streamID] = {
+            streamID: value.streamID,
+            runID: value.runID,
+            actorID: value.actorID,
+            chatID: value.chatID,
+            threadRootID: value.threadRootID,
+            body: value.reset ? value.delta : (current?.body ?? "") + value.delta,
+            index: value.index,
+            expiresAt: value.expiresAt,
+          };
+        }
+        return { messageStreams: next };
+      });
+      const delay = expiryDelay(value.expiresAt);
+      if (!value.done && delay > 0)
+        setTimeout(
+          () =>
+            set((state) => {
+              if (state.messageStreams[value.streamID]?.expiresAt !== value.expiresAt)
+                return state;
+              const next = { ...state.messageStreams };
+              delete next[value.streamID];
+              return { messageStreams: next };
+            }),
+          delay,
+        );
+    },
+    clearAgentEphemeral: () => set({ agentStatuses: {}, messageStreams: {} }),
     resetDurable: (value) =>
-      set({ chats: {}, messages: {}, unread: emptyUnread, checkpoint: value }),
+      set({ chats: {}, messages: {}, unread: emptyUnread, agentStatuses: {}, messageStreams: {}, checkpoint: value }),
   }));
+}
+function expiryDelay(expiresAt: string): number {
+  return Math.max(0, Math.min(60_000, Date.parse(expiresAt) - Date.now() + 25));
 }
 function uniqueSorted(items: ClientMessage[]): ClientMessage[] {
   const unique = new Map<string, ClientMessage>();

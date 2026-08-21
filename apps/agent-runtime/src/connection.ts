@@ -10,6 +10,13 @@ export type SocketLike = {
 };
 
 export type SocketFactory = (url: string) => SocketLike;
+export type AgentStatus =
+  | "thinking"
+  | "tool"
+  | "streaming"
+  | "completed"
+  | "failed"
+  | "canceled";
 
 export class AgentConnectionManager {
   private socket: SocketLike | null = null;
@@ -36,6 +43,44 @@ export class AgentConnectionManager {
     this.stopped = true;
     this.socket?.close();
     this.socket = null;
+  }
+
+  agentStatus(input: {
+    runID: string;
+    chatID: string;
+    threadRootID: string | null;
+    state: AgentStatus;
+  }): void {
+    this.send({
+      op: "agent.status",
+      run_id: input.runID,
+      chat_id: input.chatID,
+      thread_root_id: input.threadRootID,
+      state: input.state,
+    });
+  }
+
+  messageStreaming(input: {
+    runID: string;
+    chatID: string;
+    threadRootID: string | null;
+    streamID: string;
+    index: number;
+    delta: string;
+    reset: boolean;
+    done: boolean;
+  }): void {
+    this.send({
+      op: "message.streaming",
+      run_id: input.runID,
+      chat_id: input.chatID,
+      thread_root_id: input.threadRootID,
+      stream_id: input.streamID,
+      index: input.index,
+      delta: input.delta,
+      reset: input.reset,
+      done: input.done,
+    });
   }
 
   private async connect(): Promise<void> {
@@ -93,5 +138,9 @@ export class AgentConnectionManager {
       Math.min(30_000, 500 * 2 ** this.reconnectAttempt++) +
       Math.random() * 250;
     setTimeout(() => void this.connect(), delay);
+  }
+
+  private send(frame: Record<string, unknown>): void {
+    if (this.socket?.readyState === 1) this.socket.send(JSON.stringify(frame));
   }
 }

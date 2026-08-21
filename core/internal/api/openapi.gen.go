@@ -635,6 +635,24 @@ func (e ChatMemberRole) Valid() bool {
 	}
 }
 
+// Defines values for ChatMemberType.
+const (
+	ChatMemberTypeAgent ChatMemberType = "agent"
+	ChatMemberTypeUser  ChatMemberType = "user"
+)
+
+// Valid indicates whether the value is a known member of the ChatMemberType enum.
+func (e ChatMemberType) Valid() bool {
+	switch e {
+	case ChatMemberTypeAgent:
+		return true
+	case ChatMemberTypeUser:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ChatNotificationOverrideKind.
 const (
 	ChatNotificationOverrideKindChannel ChatNotificationOverrideKind = "channel"
@@ -1195,19 +1213,19 @@ func (e FileStatus) Valid() bool {
 
 // Defines values for FileUploadMode.
 const (
-	Multipart FileUploadMode = "multipart"
-	Presigned FileUploadMode = "presigned"
-	Streaming FileUploadMode = "streaming"
+	FileUploadModeMultipart FileUploadMode = "multipart"
+	FileUploadModePresigned FileUploadMode = "presigned"
+	FileUploadModeStreaming FileUploadMode = "streaming"
 )
 
 // Valid indicates whether the value is a known member of the FileUploadMode enum.
 func (e FileUploadMode) Valid() bool {
 	switch e {
-	case Multipart:
+	case FileUploadModeMultipart:
 		return true
-	case Presigned:
+	case FileUploadModePresigned:
 		return true
-	case Streaming:
+	case FileUploadModeStreaming:
 		return true
 	default:
 		return false
@@ -1508,6 +1526,96 @@ func (e RealtimeAckFrameV1Op) Valid() bool {
 	}
 }
 
+// Defines values for RealtimeAgentStatusEventFrameV1Op.
+const (
+	RealtimeAgentStatusEventFrameV1OpAgentStatus RealtimeAgentStatusEventFrameV1Op = "agent.status"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeAgentStatusEventFrameV1Op enum.
+func (e RealtimeAgentStatusEventFrameV1Op) Valid() bool {
+	switch e {
+	case RealtimeAgentStatusEventFrameV1OpAgentStatus:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimeAgentStatusEventFrameV1State.
+const (
+	RealtimeAgentStatusEventFrameV1StateCanceled  RealtimeAgentStatusEventFrameV1State = "canceled"
+	RealtimeAgentStatusEventFrameV1StateCompleted RealtimeAgentStatusEventFrameV1State = "completed"
+	RealtimeAgentStatusEventFrameV1StateFailed    RealtimeAgentStatusEventFrameV1State = "failed"
+	RealtimeAgentStatusEventFrameV1StateStreaming RealtimeAgentStatusEventFrameV1State = "streaming"
+	RealtimeAgentStatusEventFrameV1StateThinking  RealtimeAgentStatusEventFrameV1State = "thinking"
+	RealtimeAgentStatusEventFrameV1StateTool      RealtimeAgentStatusEventFrameV1State = "tool"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeAgentStatusEventFrameV1State enum.
+func (e RealtimeAgentStatusEventFrameV1State) Valid() bool {
+	switch e {
+	case RealtimeAgentStatusEventFrameV1StateCanceled:
+		return true
+	case RealtimeAgentStatusEventFrameV1StateCompleted:
+		return true
+	case RealtimeAgentStatusEventFrameV1StateFailed:
+		return true
+	case RealtimeAgentStatusEventFrameV1StateStreaming:
+		return true
+	case RealtimeAgentStatusEventFrameV1StateThinking:
+		return true
+	case RealtimeAgentStatusEventFrameV1StateTool:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimeAgentStatusFrameV1Op.
+const (
+	RealtimeAgentStatusFrameV1OpAgentStatus RealtimeAgentStatusFrameV1Op = "agent.status"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeAgentStatusFrameV1Op enum.
+func (e RealtimeAgentStatusFrameV1Op) Valid() bool {
+	switch e {
+	case RealtimeAgentStatusFrameV1OpAgentStatus:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimeAgentStatusFrameV1State.
+const (
+	RealtimeAgentStatusFrameV1StateCanceled  RealtimeAgentStatusFrameV1State = "canceled"
+	RealtimeAgentStatusFrameV1StateCompleted RealtimeAgentStatusFrameV1State = "completed"
+	RealtimeAgentStatusFrameV1StateFailed    RealtimeAgentStatusFrameV1State = "failed"
+	RealtimeAgentStatusFrameV1StateStreaming RealtimeAgentStatusFrameV1State = "streaming"
+	RealtimeAgentStatusFrameV1StateThinking  RealtimeAgentStatusFrameV1State = "thinking"
+	RealtimeAgentStatusFrameV1StateTool      RealtimeAgentStatusFrameV1State = "tool"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeAgentStatusFrameV1State enum.
+func (e RealtimeAgentStatusFrameV1State) Valid() bool {
+	switch e {
+	case RealtimeAgentStatusFrameV1StateCanceled:
+		return true
+	case RealtimeAgentStatusFrameV1StateCompleted:
+		return true
+	case RealtimeAgentStatusFrameV1StateFailed:
+		return true
+	case RealtimeAgentStatusFrameV1StateStreaming:
+		return true
+	case RealtimeAgentStatusFrameV1StateThinking:
+		return true
+	case RealtimeAgentStatusFrameV1StateTool:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RealtimeAuthFrameV1Op.
 const (
 	Auth RealtimeAuthFrameV1Op = "auth"
@@ -1577,6 +1685,36 @@ const (
 func (e RealtimeHelloFrameV1Op) Valid() bool {
 	switch e {
 	case Hello:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimeMessageStreamingEventFrameV1Op.
+const (
+	RealtimeMessageStreamingEventFrameV1OpMessageStreaming RealtimeMessageStreamingEventFrameV1Op = "message.streaming"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeMessageStreamingEventFrameV1Op enum.
+func (e RealtimeMessageStreamingEventFrameV1Op) Valid() bool {
+	switch e {
+	case RealtimeMessageStreamingEventFrameV1OpMessageStreaming:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimeMessageStreamingFrameV1Op.
+const (
+	RealtimeMessageStreamingFrameV1OpMessageStreaming RealtimeMessageStreamingFrameV1Op = "message.streaming"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeMessageStreamingFrameV1Op enum.
+func (e RealtimeMessageStreamingFrameV1Op) Valid() bool {
+	switch e {
+	case RealtimeMessageStreamingFrameV1OpMessageStreaming:
 		return true
 	default:
 		return false
@@ -2705,10 +2843,14 @@ type ChatMember struct {
 	StatusExpiresAt *time.Time         `json:"status_expires_at"`
 	StatusText      string             `json:"status_text"`
 	Title           string             `json:"title"`
+	Type            ChatMemberType     `json:"type"`
 }
 
 // ChatMemberRole defines model for ChatMember.Role.
 type ChatMemberRole string
+
+// ChatMemberType defines model for ChatMember.Type.
+type ChatMemberType string
 
 // ChatNotificationOverride defines model for ChatNotificationOverride.
 type ChatNotificationOverride struct {
@@ -3414,6 +3556,38 @@ type RealtimeAckFrameV1 struct {
 // RealtimeAckFrameV1Op defines model for RealtimeAckFrameV1.Op.
 type RealtimeAckFrameV1Op string
 
+// RealtimeAgentStatusEventFrameV1 defines model for RealtimeAgentStatusEventFrameV1.
+type RealtimeAgentStatusEventFrameV1 struct {
+	ActorId      openapi_types.UUID                   `json:"actor_id"`
+	ChatId       openapi_types.UUID                   `json:"chat_id"`
+	ExpiresAt    time.Time                            `json:"expires_at"`
+	Op           RealtimeAgentStatusEventFrameV1Op    `json:"op"`
+	RunId        openapi_types.UUID                   `json:"run_id"`
+	State        RealtimeAgentStatusEventFrameV1State `json:"state"`
+	ThreadRootId *openapi_types.UUID                  `json:"thread_root_id"`
+}
+
+// RealtimeAgentStatusEventFrameV1Op defines model for RealtimeAgentStatusEventFrameV1.Op.
+type RealtimeAgentStatusEventFrameV1Op string
+
+// RealtimeAgentStatusEventFrameV1State defines model for RealtimeAgentStatusEventFrameV1.State.
+type RealtimeAgentStatusEventFrameV1State string
+
+// RealtimeAgentStatusFrameV1 defines model for RealtimeAgentStatusFrameV1.
+type RealtimeAgentStatusFrameV1 struct {
+	ChatId       openapi_types.UUID              `json:"chat_id"`
+	Op           RealtimeAgentStatusFrameV1Op    `json:"op"`
+	RunId        openapi_types.UUID              `json:"run_id"`
+	State        RealtimeAgentStatusFrameV1State `json:"state"`
+	ThreadRootId *openapi_types.UUID             `json:"thread_root_id"`
+}
+
+// RealtimeAgentStatusFrameV1Op defines model for RealtimeAgentStatusFrameV1.Op.
+type RealtimeAgentStatusFrameV1Op string
+
+// RealtimeAgentStatusFrameV1State defines model for RealtimeAgentStatusFrameV1.State.
+type RealtimeAgentStatusFrameV1State string
+
 // RealtimeAuthFrameV1 defines model for RealtimeAuthFrameV1.
 type RealtimeAuthFrameV1 struct {
 	AccessToken string                `json:"access_token"`
@@ -3458,6 +3632,40 @@ type RealtimeHelloFrameV1 struct {
 
 // RealtimeHelloFrameV1Op defines model for RealtimeHelloFrameV1.Op.
 type RealtimeHelloFrameV1Op string
+
+// RealtimeMessageStreamingEventFrameV1 defines model for RealtimeMessageStreamingEventFrameV1.
+type RealtimeMessageStreamingEventFrameV1 struct {
+	ActorId      openapi_types.UUID                     `json:"actor_id"`
+	ChatId       openapi_types.UUID                     `json:"chat_id"`
+	Delta        string                                 `json:"delta"`
+	Done         bool                                   `json:"done"`
+	ExpiresAt    time.Time                              `json:"expires_at"`
+	Index        int64                                  `json:"index"`
+	Op           RealtimeMessageStreamingEventFrameV1Op `json:"op"`
+	Reset        bool                                   `json:"reset"`
+	RunId        openapi_types.UUID                     `json:"run_id"`
+	StreamId     openapi_types.UUID                     `json:"stream_id"`
+	ThreadRootId *openapi_types.UUID                    `json:"thread_root_id"`
+}
+
+// RealtimeMessageStreamingEventFrameV1Op defines model for RealtimeMessageStreamingEventFrameV1.Op.
+type RealtimeMessageStreamingEventFrameV1Op string
+
+// RealtimeMessageStreamingFrameV1 defines model for RealtimeMessageStreamingFrameV1.
+type RealtimeMessageStreamingFrameV1 struct {
+	ChatId       openapi_types.UUID                `json:"chat_id"`
+	Delta        string                            `json:"delta"`
+	Done         bool                              `json:"done"`
+	Index        int64                             `json:"index"`
+	Op           RealtimeMessageStreamingFrameV1Op `json:"op"`
+	Reset        bool                              `json:"reset"`
+	RunId        openapi_types.UUID                `json:"run_id"`
+	StreamId     openapi_types.UUID                `json:"stream_id"`
+	ThreadRootId *openapi_types.UUID               `json:"thread_root_id"`
+}
+
+// RealtimeMessageStreamingFrameV1Op defines model for RealtimeMessageStreamingFrameV1.Op.
+type RealtimeMessageStreamingFrameV1Op string
 
 // RealtimePresenceEventFrameV1 defines model for RealtimePresenceEventFrameV1.
 type RealtimePresenceEventFrameV1 struct {

@@ -1055,6 +1055,39 @@ a:focus-visible {
 .message--failed {
   background: var(--coma-danger-soft);
 }
+.message--agent-stream {
+  margin-block-start: 8px;
+  background: color-mix(in srgb, var(--coma-primary) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--coma-primary) 20%, transparent);
+}
+.agent-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--coma-primary) 14%, transparent);
+  color: var(--coma-primary) !important;
+  font-size: 10px !important;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.message__body--streaming::after {
+  content: "";
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-inline-start: 3px;
+  vertical-align: -0.12em;
+  background: var(--coma-primary);
+  animation: stream-caret 0.8s steps(2, jump-none) infinite;
+}
+.streaming-dots {
+  color: var(--coma-subtle);
+  letter-spacing: 0.15em;
+}
+@keyframes stream-caret {
+  50% { opacity: 0; }
+}
 .ui-avatar__face img {
   width: 100%;
   height: 100%;

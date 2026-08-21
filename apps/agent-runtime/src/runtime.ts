@@ -27,6 +27,24 @@ export type RuntimeOptions = {
   pollIntervalMS?: number;
   leaseSeconds?: number;
   reservedCallCost?: string;
+  events?: {
+    agentStatus(input: {
+      runID: string;
+      chatID: string;
+      threadRootID: string | null;
+      state: "thinking" | "tool" | "streaming" | "completed" | "failed" | "canceled";
+    }): void;
+    messageStreaming(input: {
+      runID: string;
+      chatID: string;
+      threadRootID: string | null;
+      streamID: string;
+      index: number;
+      delta: string;
+      reset: boolean;
+      done: boolean;
+    }): void;
+  };
 };
 
 export class AgentRuntime {
@@ -68,6 +86,8 @@ export class AgentRuntime {
     shutdownSignal: AbortSignal,
   ): Promise<void> {
     const controller = new AbortController();
+    const streamID = crypto.randomUUID();
+    let streamIndex = 0;
     const shutdown = () => controller.abort("runtime_shutdown");
     shutdownSignal.addEventListener("abort", shutdown, { once: true });
     const heartbeat = setInterval(
@@ -85,6 +105,7 @@ export class AgentRuntime {
       Math.max(5_000, (this.leaseSeconds * 1_000) / 3),
     );
     try {
+      this.emitStatus(run, "thinking");
       const agent = await this.options.api.agent(run.agent_id);
       if (!agent.external_data_sharing_approved) {
         throw new RuntimeError("external_data_sharing_not_approved");
@@ -111,6 +132,8 @@ export class AgentRuntime {
         messages,
         providerAPIKey,
         controller.signal,
+        streamID,
+        () => ++streamIndex,
       );
       if (!result.content.trim())
         throw new RuntimeError("empty_provider_output");
@@ -131,6 +154,8 @@ export class AgentRuntime {
           },
         },
       );
+      this.emitStreaming(run, streamID, ++streamIndex, "", false, true);
+      this.emitStatus(run, "completed");
       await this.options.api.completeAgentRun(run.id, {
         lease_token: run.lease_token,
         input_tokens: result.usage.inputTokens,
@@ -146,6 +171,8 @@ export class AgentRuntime {
       });
     } catch (cause) {
       const code = stableErrorCode(cause, controller.signal);
+      this.emitStreaming(run, streamID, ++streamIndex, "", false, true);
+      this.emitStatus(run, code === "run_canceled" ? "canceled" : "failed");
       try {
         await this.options.api.failAgentRun(run.id, {
           lease_token: run.lease_token,
@@ -206,6 +233,8 @@ export class AgentRuntime {
     messages: ChatMessage[],
     providerAPIKey: string | undefined,
     signal: AbortSignal,
+    streamID: string,
+    nextStreamIndex: () => number,
   ): Promise<{
     content: string;
     usage: ProviderUsage;
@@ -233,6 +262,7 @@ export class AgentRuntime {
       iteration <= agent.max_tool_iterations;
       iteration++
     ) {
+      this.emitStreaming(run, streamID, nextStreamIndex(), "", true, false);
       let finished: Extract<ProviderEvent, { type: "finish" }> | null = null;
       const callID = crypto.randomUUID();
       await this.options.api.startAgentProviderCall({
@@ -250,6 +280,19 @@ export class AgentRuntime {
           maxOutputTokens: agent.max_output_tokens,
           signal,
         })) {
+          if (event.type === "delta") {
+            this.emitStatus(run, "streaming");
+            for (const delta of splitStreamingDelta(event.text)) {
+              this.emitStreaming(
+                run,
+                streamID,
+                nextStreamIndex(),
+                delta,
+                false,
+                false,
+              );
+            }
+          }
           if (event.type === "finish") finished = event;
         }
         if (!finished) throw new RuntimeError("provider_incomplete_stream");
@@ -291,6 +334,8 @@ export class AgentRuntime {
       if (iteration >= agent.max_tool_iterations) {
         throw new RuntimeError("tool_iteration_limit");
       }
+      this.emitStreaming(run, streamID, nextStreamIndex(), "", true, false);
+      this.emitStatus(run, "tool");
       messages.push({
         role: "assistant",
         content: finished.content,
@@ -359,6 +404,40 @@ export class AgentRuntime {
       throw cause;
     }
   }
+
+  private emitStatus(
+    run: ClaimedAgentRun,
+    state: "thinking" | "tool" | "streaming" | "completed" | "failed" | "canceled",
+  ): void {
+    if (!run.chat_id) return;
+    this.options.events?.agentStatus({
+      runID: run.id,
+      chatID: run.chat_id,
+      threadRootID: run.thread_root_id ?? null,
+      state,
+    });
+  }
+
+  private emitStreaming(
+    run: ClaimedAgentRun,
+    streamID: string,
+    index: number,
+    delta: string,
+    reset: boolean,
+    done: boolean,
+  ): void {
+    if (!run.chat_id) return;
+    this.options.events?.messageStreaming({
+      runID: run.id,
+      chatID: run.chat_id,
+      threadRootID: run.thread_root_id ?? null,
+      streamID,
+      index,
+      delta,
+      reset,
+      done,
+    });
+  }
 }
 
 class RuntimeError extends Error {
@@ -402,6 +481,25 @@ function encodedSize(value: unknown): number {
   } catch {
     return 0;
   }
+}
+
+function splitStreamingDelta(value: string): string[] {
+  if (new TextEncoder().encode(value).byteLength <= 8192) return [value];
+  const result: string[] = [];
+  let current = "";
+  let bytes = 0;
+  for (const character of value) {
+    const size = new TextEncoder().encode(character).byteLength;
+    if (bytes + size > 8192) {
+      result.push(current);
+      current = "";
+      bytes = 0;
+    }
+    current += character;
+    bytes += size;
+  }
+  if (current) result.push(current);
+  return result;
 }
 
 function addDecimal(left: string, right: string): string {

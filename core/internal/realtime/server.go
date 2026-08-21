@@ -186,7 +186,8 @@ func (s *Server) ServeHTTP(w standardhttp.ResponseWriter, r *standardhttp.Reques
 
 	session := &session{
 		logger: s.logger, connection: connection, subscription: subscription, store: s.store, user: user,
-		config: s.config, connectionID: connectionID, requestID: auth.RequestID,
+		authentication: accessIdentity,
+		config:         s.config, connectionID: connectionID, requestID: auth.RequestID,
 		sessionID: accessIdentity.SessionID, authExpiresAt: accessIdentity.ExpiresAt,
 		lastSeq: auth.LastSeq, backlogHigh: bounds.CurrentSeq, minRetainedSeq: bounds.MinRetainedSeq,
 		acks: make(chan int64, 32), protocolErrors: make(chan protocolErrorFrame, 1), ephemeralErrors: make(chan protocolErrorFrame, 8),
@@ -292,6 +293,46 @@ type presenceEventFrame struct {
 	ActorID   string    `json:"actor_id"`
 	State     string    `json:"state"`
 	ExpiresAt time.Time `json:"expires_at"`
+}
+type agentStatusFrame struct {
+	Op           string  `json:"op"`
+	RunID        string  `json:"run_id"`
+	ChatID       string  `json:"chat_id"`
+	ThreadRootID *string `json:"thread_root_id"`
+	State        string  `json:"state"`
+}
+type agentStatusEventFrame struct {
+	Op           string    `json:"op"`
+	ActorID      string    `json:"actor_id"`
+	RunID        string    `json:"run_id"`
+	ChatID       string    `json:"chat_id"`
+	ThreadRootID *string   `json:"thread_root_id"`
+	State        string    `json:"state"`
+	ExpiresAt    time.Time `json:"expires_at"`
+}
+type messageStreamingFrame struct {
+	Op           string  `json:"op"`
+	RunID        string  `json:"run_id"`
+	ChatID       string  `json:"chat_id"`
+	ThreadRootID *string `json:"thread_root_id"`
+	StreamID     string  `json:"stream_id"`
+	Index        int64   `json:"index"`
+	Delta        string  `json:"delta"`
+	Reset        bool    `json:"reset"`
+	Done         bool    `json:"done"`
+}
+type messageStreamingEventFrame struct {
+	Op           string    `json:"op"`
+	ActorID      string    `json:"actor_id"`
+	RunID        string    `json:"run_id"`
+	ChatID       string    `json:"chat_id"`
+	ThreadRootID *string   `json:"thread_root_id"`
+	StreamID     string    `json:"stream_id"`
+	Index        int64     `json:"index"`
+	Delta        string    `json:"delta"`
+	Reset        bool      `json:"reset"`
+	Done         bool      `json:"done"`
+	ExpiresAt    time.Time `json:"expires_at"`
 }
 
 type resyncFrame struct {

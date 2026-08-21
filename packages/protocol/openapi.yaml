@@ -2707,6 +2707,10 @@ components:
       $ref: "./schemas/realtime/v1.schema.json#/$defs/TypingFrame"
     RealtimeSetPresenceFrameV1:
       $ref: "./schemas/realtime/v1.schema.json#/$defs/SetPresenceFrame"
+    RealtimeAgentStatusFrameV1:
+      $ref: "./schemas/realtime/v1.schema.json#/$defs/AgentStatusFrame"
+    RealtimeMessageStreamingFrameV1:
+      $ref: "./schemas/realtime/v1.schema.json#/$defs/MessageStreamingFrame"
     RealtimeHelloFrameV1:
       $ref: "./schemas/realtime/v1.schema.json#/$defs/HelloFrame"
     RealtimeDurableEventFrameV1:
@@ -2717,6 +2721,10 @@ components:
       $ref: "./schemas/realtime/v1.schema.json#/$defs/TypingEventFrame"
     RealtimePresenceEventFrameV1:
       $ref: "./schemas/realtime/v1.schema.json#/$defs/PresenceEventFrame"
+    RealtimeAgentStatusEventFrameV1:
+      $ref: "./schemas/realtime/v1.schema.json#/$defs/AgentStatusEventFrame"
+    RealtimeMessageStreamingEventFrameV1:
+      $ref: "./schemas/realtime/v1.schema.json#/$defs/MessageStreamingEventFrame"
     RealtimeProtocolErrorFrameV1:
       $ref: "./schemas/realtime/v1.schema.json#/$defs/ProtocolErrorFrame"
     BootstrapStatus:
@@ -4059,6 +4067,7 @@ components:
       required:
         [
           actor_id,
+          type,
           display_name,
           handle,
           title,
@@ -4071,6 +4080,7 @@ components:
         ]
       properties:
         actor_id: { type: string, format: uuid }
+        type: { type: string, enum: [user, agent] }
         display_name: { type: string }
         handle: { type: string }
         title: { type: string }

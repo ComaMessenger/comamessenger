@@ -5832,6 +5832,109 @@
           }
         }
       },
+      "RealtimeAgentStatusFrameV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "op",
+          "run_id",
+          "chat_id",
+          "thread_root_id",
+          "state"
+        ],
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "agent.status"
+            ]
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "chat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "thread_root_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "thinking",
+              "tool",
+              "streaming",
+              "completed",
+              "failed",
+              "canceled"
+            ]
+          }
+        }
+      },
+      "RealtimeMessageStreamingFrameV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "op",
+          "run_id",
+          "chat_id",
+          "thread_root_id",
+          "stream_id",
+          "index",
+          "delta",
+          "reset",
+          "done"
+        ],
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "message.streaming"
+            ]
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "chat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "thread_root_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "stream_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "index": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "delta": {
+            "type": "string",
+            "maxLength": 8192
+          },
+          "reset": {
+            "type": "boolean"
+          },
+          "done": {
+            "type": "boolean"
+          }
+        }
+      },
       "RealtimeHelloFrameV1": {
         "type": "object",
         "additionalProperties": false,
@@ -6050,6 +6153,129 @@
               "away",
               "offline"
             ]
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "RealtimeAgentStatusEventFrameV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "op",
+          "actor_id",
+          "run_id",
+          "chat_id",
+          "thread_root_id",
+          "state",
+          "expires_at"
+        ],
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "agent.status"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "chat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "thread_root_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "thinking",
+              "tool",
+              "streaming",
+              "completed",
+              "failed",
+              "canceled"
+            ]
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "RealtimeMessageStreamingEventFrameV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "op",
+          "actor_id",
+          "run_id",
+          "chat_id",
+          "thread_root_id",
+          "stream_id",
+          "index",
+          "delta",
+          "reset",
+          "done",
+          "expires_at"
+        ],
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "message.streaming"
+            ]
+          },
+          "actor_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "chat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "thread_root_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "stream_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "index": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "delta": {
+            "type": "string",
+            "maxLength": 8192
+          },
+          "reset": {
+            "type": "boolean"
+          },
+          "done": {
+            "type": "boolean"
           },
           "expires_at": {
             "type": "string",
@@ -9421,6 +9647,7 @@
         "type": "object",
         "required": [
           "actor_id",
+          "type",
           "display_name",
           "handle",
           "title",
@@ -9435,6 +9662,13 @@
           "actor_id": {
             "type": "string",
             "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "user",
+              "agent"
+            ]
           },
           "display_name": {
             "type": "string"

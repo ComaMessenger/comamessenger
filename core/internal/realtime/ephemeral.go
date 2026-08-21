@@ -9,10 +9,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/comamessenger/comamessenger/core/internal/access"
 	"github.com/comamessenger/comamessenger/core/internal/config"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/google/uuid"
@@ -204,6 +206,22 @@ func (e *Ephemeral) decodeEphemeralEnvelope(payload []byte) (ephemeralEnvelope, 
 		if _, err := uuid.Parse(frame.ActorID); err != nil {
 			return ephemeralEnvelope{}, ErrEphemeralInvalid
 		}
+	case "agent.status":
+		var frame agentStatusEventFrame
+		if decodeStrict(envelope.Data, &frame) != nil || frame.Op != "agent.status" || frame.ExpiresAt.IsZero() || !validAgentState(frame.State) {
+			return ephemeralEnvelope{}, ErrEphemeralInvalid
+		}
+		if uuid.Validate(frame.ActorID) != nil || uuid.Validate(frame.RunID) != nil || uuid.Validate(frame.ChatID) != nil || (frame.ThreadRootID != nil && uuid.Validate(*frame.ThreadRootID) != nil) {
+			return ephemeralEnvelope{}, ErrEphemeralInvalid
+		}
+	case "message.streaming":
+		var frame messageStreamingEventFrame
+		if decodeStrict(envelope.Data, &frame) != nil || frame.Op != "message.streaming" || frame.ExpiresAt.IsZero() || frame.Index < 0 || len(frame.Delta) > 8192 {
+			return ephemeralEnvelope{}, ErrEphemeralInvalid
+		}
+		if uuid.Validate(frame.ActorID) != nil || uuid.Validate(frame.RunID) != nil || uuid.Validate(frame.ChatID) != nil || uuid.Validate(frame.StreamID) != nil || (frame.ThreadRootID != nil && uuid.Validate(*frame.ThreadRootID) != nil) {
+			return ephemeralEnvelope{}, ErrEphemeralInvalid
+		}
 	default:
 		return ephemeralEnvelope{}, ErrEphemeralInvalid
 	}
@@ -250,6 +268,63 @@ func (e *Ephemeral) Presence(ctx context.Context, user identity.User, subscripti
 	}
 	frame := presenceEventFrame{Op: "presence", ActorID: user.ActorID, State: map[string]string{"active": "online", "away": "away"}[state], ExpiresAt: expiresAt}
 	return e.broadcast(ctx, user, subscription.ConnectionID, "", frame)
+}
+
+func (e *Ephemeral) AgentStatus(ctx context.Context, user identity.User, authentication access.Identity, subscription *Subscription, input agentStatusFrame) error {
+	if input.Op != "agent.status" || !validAgentState(input.State) || uuid.Validate(input.RunID) != nil || uuid.Validate(input.ChatID) != nil || (input.ThreadRootID != nil && uuid.Validate(*input.ThreadRootID) != nil) {
+		return ErrEphemeralInvalid
+	}
+	if err := e.authorizeAgentRun(ctx, user, authentication, input.RunID, input.ChatID, input.ThreadRootID); err != nil {
+		return err
+	}
+	if err := e.allow(ctx, user, "agent.status"); err != nil {
+		return err
+	}
+	expiresAt := time.Now().UTC().Add(15 * time.Second)
+	if input.State == "completed" || input.State == "failed" || input.State == "canceled" {
+		expiresAt = time.Now().UTC()
+	}
+	frame := agentStatusEventFrame{Op: input.Op, ActorID: user.ActorID, RunID: input.RunID, ChatID: input.ChatID, ThreadRootID: input.ThreadRootID, State: input.State, ExpiresAt: expiresAt}
+	return e.broadcast(ctx, user, subscription.ConnectionID, input.ChatID, frame)
+}
+
+func (e *Ephemeral) MessageStreaming(ctx context.Context, user identity.User, authentication access.Identity, subscription *Subscription, input messageStreamingFrame) error {
+	if input.Op != "message.streaming" || uuid.Validate(input.RunID) != nil || uuid.Validate(input.ChatID) != nil || uuid.Validate(input.StreamID) != nil || input.Index < 0 || len(input.Delta) > 8192 || (input.ThreadRootID != nil && uuid.Validate(*input.ThreadRootID) != nil) {
+		return ErrEphemeralInvalid
+	}
+	if err := e.authorizeAgentRun(ctx, user, authentication, input.RunID, input.ChatID, input.ThreadRootID); err != nil {
+		return err
+	}
+	if err := e.allow(ctx, user, "message.streaming"); err != nil {
+		return err
+	}
+	expiresAt := time.Now().UTC().Add(15 * time.Second)
+	if input.Done {
+		expiresAt = time.Now().UTC()
+	}
+	frame := messageStreamingEventFrame{Op: input.Op, ActorID: user.ActorID, RunID: input.RunID, ChatID: input.ChatID, ThreadRootID: input.ThreadRootID, StreamID: input.StreamID, Index: input.Index, Delta: input.Delta, Reset: input.Reset, Done: input.Done, ExpiresAt: expiresAt}
+	return e.broadcast(ctx, user, subscription.ConnectionID, input.ChatID, frame)
+}
+
+func (e *Ephemeral) authorizeAgentRun(ctx context.Context, user identity.User, authentication access.Identity, runID, chatID string, threadRootID *string) error {
+	if authentication.AuthenticationKind != "api_key" || authentication.ActorID != user.ActorID || authentication.OrgID != user.OrgID || !slices.Contains(authentication.Scopes, "runtime:execute") {
+		return ErrEphemeralForbidden
+	}
+	if err := e.authorizeScope(ctx, user, chatID, threadRootID); err != nil {
+		return err
+	}
+	var allowed bool
+	if err := e.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM agent_runs WHERE org_id=$1 AND agent_id=$2 AND id=$3 AND chat_id=$4 AND thread_root_id IS NOT DISTINCT FROM $5::uuid AND status='running')`, user.OrgID, user.ActorID, runID, chatID, threadRootID).Scan(&allowed); err != nil {
+		return err
+	}
+	if !allowed {
+		return ErrEphemeralForbidden
+	}
+	return nil
+}
+
+func validAgentState(state string) bool {
+	return state == "thinking" || state == "tool" || state == "streaming" || state == "completed" || state == "failed" || state == "canceled"
 }
 
 func (e *Ephemeral) authorizeScope(ctx context.Context, user identity.User, chatID string, threadRootID *string) error {
