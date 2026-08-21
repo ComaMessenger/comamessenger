@@ -12,6 +12,7 @@ This runbook describes the current single-host Docker deployment used for the pu
 - Nginx sends `/api/` to Core, including WebSocket upgrade headers for `/api/v1/ws`; the local bucket path goes to MinIO and all other requests go to Web.
 
 The checked-in Nginx template is `deploy/nginx/coma.conf.example`. Replace `__DOMAIN__` and `__CERT_NAME__` when installing it.
+Keep `blob:` in the `img-src` Content Security Policy: authenticated avatars and file previews are fetched as blobs and displayed through browser-local object URLs.
 
 ## Environment
 

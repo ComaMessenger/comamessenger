@@ -15,6 +15,37 @@ test("component catalog supports light, dark and phone", async ({ page }) => {
   });
 });
 
+test("content security policy permits blob image previews", async ({
+  page,
+}) => {
+  const response = await page.goto("/dev/components");
+  expect(response?.headers()["content-security-policy"]).toContain(
+    "img-src 'self' data: blob:",
+  );
+
+  const dimensions = await page.evaluate(async () => {
+    const png = Uint8Array.from(
+      atob(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+      ),
+      (character) => character.charCodeAt(0),
+    );
+    const objectURL = URL.createObjectURL(
+      new Blob([png], { type: "image/png" }),
+    );
+    try {
+      const image = new Image();
+      image.src = objectURL;
+      await image.decode();
+      return { width: image.naturalWidth, height: image.naturalHeight };
+    } finally {
+      URL.revokeObjectURL(objectURL);
+    }
+  });
+
+  expect(dimensions).toEqual({ width: 1, height: 1 });
+});
+
 const user = {
   id: "00000000-0000-4000-8000-000000000001",
   org_id: "00000000-0000-4000-8000-000000000010",
