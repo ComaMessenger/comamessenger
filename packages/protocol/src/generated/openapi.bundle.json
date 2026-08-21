@@ -10229,6 +10229,11 @@
             "type": "string",
             "format": "uuid"
           },
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Required when authenticating with an agent API key."
+          },
           "mentioned_actor_ids": {
             "type": "array",
             "items": {

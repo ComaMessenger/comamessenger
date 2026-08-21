@@ -4305,6 +4305,10 @@ components:
         body_format: { type: string, enum: [plain, markdown], default: plain }
         reply_to_id: { type: string, format: uuid }
         thread_root_id: { type: string, format: uuid }
+        run_id:
+          type: string
+          format: uuid
+          description: Required when authenticating with an agent API key.
         mentioned_actor_ids:
           type: array
           items: { type: string, format: uuid }

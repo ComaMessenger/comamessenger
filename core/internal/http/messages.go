@@ -45,7 +45,19 @@ func (h *identityHandlers) createMessage(w standardhttp.ResponseWriter, r *stand
 		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
-	result, created, err := h.messages.Create(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "chatID"), input)
+	auth := authFromContext(r.Context())
+	var result message.Message
+	var created bool
+	var err error
+	if auth.Identity.AuthenticationKind == "api_key" {
+		if input.RunID == nil {
+			h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "agent_run_required", "Agent-authored messages must reference an active run.")
+			return
+		}
+		result, created, err = h.messages.CreateForAgentRun(r.Context(), auth.User, chi.URLParam(r, "chatID"), input, message.AgentProvenance{RunID: *input.RunID})
+	} else {
+		result, created, err = h.messages.Create(r.Context(), auth.User, chi.URLParam(r, "chatID"), input)
+	}
 	if err != nil {
 		h.messageError(w, r, err)
 		return

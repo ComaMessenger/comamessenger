@@ -3291,7 +3291,10 @@ type CreateMessageRequest struct {
 	FileIds           *[]openapi_types.UUID           `json:"file_ids,omitempty"`
 	MentionedActorIds *[]openapi_types.UUID           `json:"mentioned_actor_ids,omitempty"`
 	ReplyToId         *openapi_types.UUID             `json:"reply_to_id,omitempty"`
-	ThreadRootId      *openapi_types.UUID             `json:"thread_root_id,omitempty"`
+
+	// RunId Required when authenticating with an agent API key.
+	RunId        *openapi_types.UUID `json:"run_id,omitempty"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
 }
 
 // CreateMessageRequestBodyFormat defines model for CreateMessageRequest.BodyFormat.

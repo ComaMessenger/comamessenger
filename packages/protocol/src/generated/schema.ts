@@ -3062,6 +3062,11 @@ export interface components {
             reply_to_id?: string;
             /** Format: uuid */
             thread_root_id?: string;
+            /**
+             * Format: uuid
+             * @description Required when authenticating with an agent API key.
+             */
+            run_id?: string;
             mentioned_actor_ids?: string[];
             file_ids?: string[];
         };

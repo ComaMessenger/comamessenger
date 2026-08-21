@@ -66,6 +66,7 @@ type CreateInput struct {
 	ThreadRootID      *string  `json:"thread_root_id"`
 	MentionedActorIDs []string `json:"mentioned_actor_ids"`
 	FileIDs           []string `json:"file_ids"`
+	RunID             *string  `json:"run_id,omitempty"`
 }
 
 type AgentProvenance struct {
