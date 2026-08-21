@@ -1130,6 +1130,7 @@ function Messenger({
   const showThreads = path === "/threads";
   const showImportant = path === "/important";
   const showMembers = path === "/members";
+  const showAgents = path === "/agents" || path.startsWith("/agents/");
   const showMore = path === "/more";
   const activeSettings = settingForPath(path);
   const showProfileSettings = activeSettings?.id === "profile";
@@ -1142,7 +1143,6 @@ function Messenger({
   const showWorkspacePolicies = activeSettings?.id === "workspace-policies";
   const showCustomizationSettings = activeSettings?.id === "customization";
   const showInfrastructureSettings = activeSettings?.id === "infrastructure";
-  const showAgentSettings = activeSettings?.id === "agents";
   const showSecuritySettings = activeSettings?.id === "security";
   const showAuditSettings = activeSettings?.id === "audit";
   const showAnySettings = activeSettings !== undefined;
@@ -1726,6 +1726,15 @@ function Messenger({
             <Users />
             <span>{t("members")}</span>
           </button>
+          {hasPermission(user, "agents.manage") && (
+            <button
+              className={showAgents ? "active" : ""}
+              onClick={() => navigate("/agents")}
+            >
+              <Bot />
+              <span>{t("agentsTitle")}</span>
+            </button>
+          )}
         </nav>
         <IconButton
           className="sidebar-collapse"
@@ -2085,6 +2094,13 @@ function Messenger({
             snoozedUntil={snoozedUntil}
             onSnooze={updateSnooze}
           />
+        ) : showAgents ? (
+          <AgentSettingsPage
+            api={api}
+            user={user}
+            path={path}
+            navigate={navigate}
+          />
         ) : showProfileSettings ? (
           <ProfileSettingsPage
             api={api}
@@ -2132,8 +2148,6 @@ function Messenger({
             user={user}
             navigate={navigate}
           />
-        ) : showAgentSettings ? (
-          <AgentSettingsPage api={api} user={user} navigate={navigate} />
         ) : showSecuritySettings ? (
           <SecuritySettingsPage
             api={api}
@@ -2155,7 +2169,7 @@ function Messenger({
               ? "important"
               : showMembers
                 ? "members"
-                : showMore || showAnySettings
+                : showMore || showAnySettings || showAgents
                   ? "more"
                   : "chats"
         }

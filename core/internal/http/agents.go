@@ -23,6 +23,10 @@ func (h *identityHandlers) createAgent(w standardhttp.ResponseWriter, r *standar
 		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
+	if input.Enabled {
+		h.writeAgentError(w, r, agent.ErrNotReady)
+		return
+	}
 	result, err := h.agents.Create(r.Context(), authFromContext(r.Context()).User, input)
 	if err != nil {
 		h.writeAgentError(w, r, err)
@@ -140,6 +144,8 @@ func (h *identityHandlers) writeAgentError(w standardhttp.ResponseWriter, r *sta
 	case errors.Is(err, agent.ErrRateLimited):
 		w.Header().Set("Retry-After", "60")
 		h.writeError(w, r, standardhttp.StatusTooManyRequests, "rate_limited", "The agent rate limit was exceeded.")
+	case errors.Is(err, agent.ErrNotReady):
+		h.writeError(w, r, standardhttp.StatusConflict, "agent_not_ready", "Complete the agent readiness checklist before enabling it.")
 	default:
 		h.internalError(w, r, err)
 	}

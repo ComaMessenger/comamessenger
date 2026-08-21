@@ -9,7 +9,19 @@ import type {
   MessengerAPI,
   User,
 } from "@comamessenger/core";
-import { Bot, KeyRound, Play, Plus, Save, Trash2, Zap } from "lucide-react";
+import {
+  Activity,
+  Bot,
+  FlaskConical,
+  KeyRound,
+  LayoutGrid,
+  Play,
+  Plug,
+  Plus,
+  Save,
+  Trash2,
+  Zap,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { messageOf } from "../../errors";
 import {
@@ -27,11 +39,7 @@ import {
   SettingsSection,
   SettingsToggle,
 } from "../components/SettingsPrimitives";
-import {
-  SettingsShell,
-  type SettingsNavigate,
-} from "../components/SettingsShell";
-import { canAccessSettingsPage } from "../registry";
+import { hasPermission } from "../registry";
 import { type AgentTemplate as Template } from "../agentTemplates";
 
 const scopes: AgentScope[] = [
@@ -138,14 +146,23 @@ function draftOf(agent: Agent): Draft {
 export function AgentSettingsPage({
   api,
   user,
+  path,
   navigate,
 }: {
   api: MessengerAPI;
   user: User;
-  navigate: SettingsNavigate;
+  path: string;
+  navigate(to: string): void;
 }) {
   const { t } = useTranslation();
-  const allowed = canAccessSettingsPage(user, "agents");
+  const allowed = hasPermission(user, "agents.manage");
+  const tab = path.endsWith("/sandbox")
+    ? "sandbox"
+    : path.endsWith("/runs")
+      ? "runs"
+      : path.endsWith("/connections")
+        ? "connections"
+        : "overview";
   const agents = useQuery({
     queryKey: ["agents"],
     queryFn: () => api.agents(),
@@ -232,127 +249,300 @@ export function AgentSettingsPage({
   }
 
   return (
-    <SettingsShell
-      user={user}
-      active="agents"
-      title={t("agentsTitle")}
-      navigate={navigate}
-    >
-      {!allowed ? (
-        <SettingsAccessDenied />
-      ) : agents.isLoading || chats.isLoading ? (
-        <Skeleton />
-      ) : (
-        <div className="agent-settings">
-          <aside className="agent-catalog">
-            <Button onClick={() => chooseTemplate("custom")}>
-              <Plus />
-              {t("createAgent")}
-            </Button>
-            <div className="agent-template-row">
-              {(["summarizer", "qa", "onboarding"] as const).map((item) => (
-                <button key={item} onClick={() => chooseTemplate(item)}>
-                  <Zap />
-                  <span>{t(`agentTemplate_${item}`)}</span>
+    <section className="agent-platform">
+      <header className="agent-platform__header">
+        <div>
+          <h1>{t("agentsTitle")}</h1>
+          <p>{t("agentPlatformHint")}</p>
+        </div>
+        <nav aria-label={t("agentPlatformNavigation")}>
+          {(
+            [
+              ["overview", "/agents", LayoutGrid],
+              ["sandbox", "/agents/sandbox", FlaskConical],
+              ["runs", "/agents/runs", Activity],
+              ["connections", "/agents/connections", Plug],
+            ] as const
+          ).map(([id, target, Icon]) => (
+            <button
+              key={id}
+              className={tab === id ? "active" : ""}
+              onClick={() => navigate(target)}
+            >
+              <Icon />
+              <span>{t(`agentTab_${id}`)}</span>
+            </button>
+          ))}
+        </nav>
+      </header>
+      <div className="agent-platform__content">
+        {!allowed ? (
+          <SettingsAccessDenied />
+        ) : agents.isLoading || chats.isLoading ? (
+          <Skeleton />
+        ) : tab === "sandbox" ? (
+          <AgentSandbox
+            api={api}
+            agents={agents.data ?? []}
+            chats={chats.data ?? []}
+          />
+        ) : (
+          <div className="agent-settings">
+            <aside className="agent-catalog">
+              <Button onClick={() => chooseTemplate("custom")}>
+                <Plus />
+                {t("createAgent")}
+              </Button>
+              <div className="agent-template-row">
+                {(["summarizer", "qa", "onboarding"] as const).map((item) => (
+                  <button key={item} onClick={() => chooseTemplate(item)}>
+                    <Zap />
+                    <span>{t(`agentTemplate_${item}`)}</span>
+                  </button>
+                ))}
+              </div>
+              {(agents.data ?? []).map((agent) => (
+                <button
+                  key={agent.id}
+                  className={selectedID === agent.id ? "active" : ""}
+                  onClick={() => setSelectedID(agent.id)}
+                >
+                  <Bot />
+                  <span>
+                    <strong>{agent.display_name}</strong>
+                    <small>
+                      @{agent.handle} ·{" "}
+                      {agent.enabled ? t("enabled") : t("disabled")}
+                    </small>
+                  </span>
                 </button>
               ))}
-            </div>
-            {(agents.data ?? []).map((agent) => (
-              <button
-                key={agent.id}
-                className={selectedID === agent.id ? "active" : ""}
-                onClick={() => setSelectedID(agent.id)}
-              >
-                <Bot />
-                <span>
-                  <strong>{agent.display_name}</strong>
-                  <small>
-                    @{agent.handle} ·{" "}
-                    {agent.enabled ? t("enabled") : t("disabled")}
-                  </small>
-                </span>
-              </button>
-            ))}
-          </aside>
-          <div className="agent-editor">
-            <div className="agent-editor__toolbar">
-              <div>
-                <h2>
-                  {selected?.display_name ?? t(`agentTemplate_${template}`)}
-                </h2>
-                <p>{selected ? `@${selected.handle}` : t("newAgentHint")}</p>
-              </div>
-              <Button disabled={pending} onClick={() => void save()}>
-                <Save />
-                {pending ? t("saving") : t("save")}
-              </Button>
-              {selected && (
-                <Button
-                  variant="ghost"
-                  disabled={pending}
-                  onClick={() => setDeleteOpen(true)}
-                >
-                  <Trash2 />
-                  {t("deleteAgent")}
-                </Button>
-              )}
-            </div>
-            <FormError message={error} />
-            {notice && <Badge tone="success">{notice}</Badge>}
-            <AgentConfiguration
-              draft={draft}
-              chats={chats.data ?? []}
-              onChange={setDraft}
-            />
-            {selected && (
-              <AgentOperations
-                api={api}
-                agent={selected}
-                onChanged={() => void agents.refetch()}
-              />
-            )}
-            {selected && deleteOpen && (
-              <Dialog
-                title={t("deleteAgentTitle")}
-                description={t("deleteAgentDescription", {
-                  name: selected.display_name,
-                })}
-                onClose={() => setDeleteOpen(false)}
-              >
-                <div className="ui-dialog__actions">
+            </aside>
+            <div className="agent-editor">
+              <div className="agent-editor__toolbar">
+                <div>
+                  <h2>
+                    {selected?.display_name ?? t(`agentTemplate_${template}`)}
+                  </h2>
+                  <p>{selected ? `@${selected.handle}` : t("newAgentHint")}</p>
+                </div>
+                {tab === "overview" && (
+                  <Button disabled={pending} onClick={() => void save()}>
+                    <Save />
+                    {pending ? t("saving") : t("save")}
+                  </Button>
+                )}
+                {selected && tab === "overview" && (
                   <Button
                     variant="ghost"
                     disabled={pending}
-                    onClick={() => setDeleteOpen(false)}
-                  >
-                    {t("cancel")}
-                  </Button>
-                  <Button
-                    variant="danger"
-                    disabled={pending}
-                    onClick={() => {
-                      setPending(true);
-                      void api
-                        .deleteAgent(selected.id)
-                        .then(async () => {
-                          setDeleteOpen(false);
-                          setSelectedID(null);
-                          await agents.refetch();
-                        })
-                        .catch((cause) => setError(messageOf(cause)))
-                        .finally(() => setPending(false));
-                    }}
+                    onClick={() => setDeleteOpen(true)}
                   >
                     <Trash2 />
-                    {t("deleteAgentConfirm")}
+                    {t("deleteAgent")}
                   </Button>
-                </div>
-              </Dialog>
-            )}
+                )}
+              </div>
+              <FormError message={error} />
+              {notice && <Badge tone="success">{notice}</Badge>}
+              {selected && <AgentReadiness agent={selected} />}
+              {tab === "overview" && (
+                <AgentConfiguration
+                  draft={draft}
+                  chats={chats.data ?? []}
+                  onChange={setDraft}
+                />
+              )}
+              {selected && (
+                <AgentOperations
+                  api={api}
+                  agent={selected}
+                  section={tab}
+                  onChanged={() => void agents.refetch()}
+                />
+              )}
+              {selected && tab === "overview" && deleteOpen && (
+                <Dialog
+                  title={t("deleteAgentTitle")}
+                  description={t("deleteAgentDescription", {
+                    name: selected.display_name,
+                  })}
+                  onClose={() => setDeleteOpen(false)}
+                >
+                  <div className="ui-dialog__actions">
+                    <Button
+                      variant="ghost"
+                      disabled={pending}
+                      onClick={() => setDeleteOpen(false)}
+                    >
+                      {t("cancel")}
+                    </Button>
+                    <Button
+                      variant="danger"
+                      disabled={pending}
+                      onClick={() => {
+                        setPending(true);
+                        void api
+                          .deleteAgent(selected.id)
+                          .then(async () => {
+                            setDeleteOpen(false);
+                            setSelectedID(null);
+                            await agents.refetch();
+                          })
+                          .catch((cause) => setError(messageOf(cause)))
+                          .finally(() => setPending(false));
+                      }}
+                    >
+                      <Trash2 />
+                      {t("deleteAgentConfirm")}
+                    </Button>
+                  </div>
+                </Dialog>
+              )}
+            </div>
           </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function AgentReadiness({ agent }: { agent: Agent }) {
+  const { t } = useTranslation();
+  return (
+    <div className="agent-readiness">
+      <span>
+        <strong>{t("agentReadiness")}</strong>
+        <small>{t(`agentReadinessState_${agent.readiness.state}`)}</small>
+      </span>
+      <Badge tone={agent.readiness.ready ? "success" : "neutral"}>
+        {agent.readiness.ready ? t("ready") : t("needsSetup")}
+      </Badge>
+      {agent.readiness.blockers.length > 0 && (
+        <ul>
+          {agent.readiness.blockers.map((blocker) => (
+            <li key={blocker}>{t(`agentReadiness_${blocker}`)}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function AgentSandbox({
+  api,
+  agents,
+  chats,
+}: {
+  api: MessengerAPI;
+  agents: Agent[];
+  chats: Chat[];
+}) {
+  const { t } = useTranslation();
+  const [agentID, setAgentID] = useState(agents[0]?.id ?? "");
+  const [chatID, setChatID] = useState(
+    agents[0]?.chat_ids[0] ?? chats[0]?.id ?? "",
+  );
+  const [prompt, setPrompt] = useState("");
+  const [run, setRun] = useState<AgentRun | null>(null);
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
+  async function invoke() {
+    setPending(true);
+    setError("");
+    try {
+      const created = await api.invokeAgent(agentID, {
+        chat_id: chatID,
+        client_run_id: crypto.randomUUID(),
+        chain_depth: 0,
+        timeout_seconds: 600,
+        max_attempts: 1,
+        input: { prompt, sandbox: true, publish: false },
+      });
+      setRun(created);
+      for (let attempt = 0; attempt < 60; attempt++) {
+        await new Promise((resolve) => window.setTimeout(resolve, 1_000));
+        const current = await api.agentRun(created.id);
+        setRun(current);
+        if (!["queued", "running"].includes(current.status)) break;
+      }
+    } catch (cause) {
+      setError(messageOf(cause));
+    } finally {
+      setPending(false);
+    }
+  }
+  return (
+    <div className="agent-sandbox">
+      <div className="agent-sandbox__intro">
+        <FlaskConical />
+        <div>
+          <h2>{t("agentSandboxTitle")}</h2>
+          <p>{t("agentSandboxHint")}</p>
+        </div>
+      </div>
+      <div className="agent-sandbox__controls">
+        <SelectField
+          label={t("agent")}
+          name="sandbox-agent"
+          value={agentID}
+          onChange={(event) => {
+            const id = event.target.value;
+            setAgentID(id);
+            const selected = agents.find((item) => item.id === id);
+            if (selected?.chat_ids[0]) setChatID(selected.chat_ids[0]);
+          }}
+        >
+          {agents.map((agent) => (
+            <option key={agent.id} value={agent.id}>
+              {agent.display_name}
+            </option>
+          ))}
+        </SelectField>
+        <SelectField
+          label={t("chat")}
+          name="sandbox-chat"
+          value={chatID}
+          onChange={(event) => setChatID(event.target.value)}
+        >
+          {chats.map((chat) => (
+            <option key={chat.id} value={chat.id}>
+              {chat.name || chat.direct_peer?.display_name || chat.id}
+            </option>
+          ))}
+        </SelectField>
+      </div>
+      <TextareaField
+        label={t("sandboxPrompt")}
+        name="sandbox-prompt"
+        rows={8}
+        value={prompt}
+        placeholder={t("sandboxPromptPlaceholder")}
+        onChange={(event) => setPrompt(event.target.value)}
+      />
+      <FormError message={error} />
+      <div className="agent-sandbox__actions">
+        <Button
+          disabled={pending || !agentID || !chatID || !prompt.trim()}
+          onClick={() => void invoke()}
+        >
+          <Play />
+          {pending ? t("agentSandboxStarting") : t("agentSandboxRun")}
+        </Button>
+        {run && (
+          <span>
+            <Badge tone="neutral">{t(`agentRunStatus_${run.status}`)}</Badge>
+            <small>{run.correlation_id}</small>
+          </span>
+        )}
+      </div>
+      {run && typeof run.result_summary.preview === "string" && (
+        <div className="agent-sandbox__preview">
+          <strong>{t("agentSandboxResult")}</strong>
+          <p>{run.result_summary.preview}</p>
         </div>
       )}
-    </SettingsShell>
+    </div>
   );
 }
 
@@ -563,10 +753,12 @@ function AgentConfiguration({
 function AgentOperations({
   api,
   agent,
+  section,
   onChanged,
 }: {
   api: MessengerAPI;
   agent: Agent;
+  section: "overview" | "runs" | "connections";
   onChanged(): void;
 }) {
   const { t } = useTranslation();
@@ -652,267 +844,279 @@ function AgentOperations({
   return (
     <>
       <FormError message={error} />
-      <SettingsSection
-        title={t("agentUsage")}
-        description={t("agentUsageHint")}
-        wide
-      >
-        <div className="agent-stat-grid">
-          <span>
-            <small>{t("today")}</small>
-            <strong>${usage.data?.daily_cost ?? "0"}</strong>
-          </span>
-          <span>
-            <small>{t("thisMonth")}</small>
-            <strong>${usage.data?.monthly_cost ?? "0"}</strong>
-          </span>
-          <span>
-            <small>{t("runs")}</small>
-            <strong>{usage.data?.monthly_runs ?? 0}</strong>
-          </span>
-          <span>
-            <small>{t("tokens")}</small>
-            <strong>
-              {(usage.data?.daily_input_tokens ?? 0) +
-                (usage.data?.daily_output_tokens ?? 0)}
-            </strong>
-          </span>
-        </div>
-      </SettingsSection>
-      <SettingsSection
-        title={t("agentTriggers")}
-        description={t("agentTriggersHint")}
-        wide
-      >
-        <div className="agent-inline-form">
-          <SelectField
-            label={t("type")}
-            name="trigger-type"
-            value={triggerType}
-            onChange={(e) => setTriggerType(e.target.value)}
+      {section === "overview" && (
+        <>
+          <SettingsSection
+            title={t("agentUsage")}
+            description={t("agentUsageHint")}
+            wide
           >
-            {[
-              "mention",
-              "command",
-              "keyword",
-              "every_message",
-              "schedule",
-              "event",
-            ].map((type) => (
-              <option key={type} value={type}>
-                {t(`agentTrigger_${type}`)}
-              </option>
-            ))}
-          </SelectField>
-          {!["mention", "every_message"].includes(triggerType) && (
-            <Field
-              required={false}
-              label={t("configuration")}
-              name="trigger-value"
-              value={triggerValue}
-              placeholder={
-                triggerType === "schedule"
-                  ? "09:00"
-                  : triggerType === "event"
-                    ? "member.joined"
-                    : ""
-              }
-              onChange={(e) => setTriggerValue(e.target.value)}
-            />
-          )}
-          <Button onClick={() => void createTrigger()}>
-            <Plus />
-            {t("add")}
-          </Button>
-        </div>
-        <div className="agent-record-list">
-          {(triggers.data ?? []).map((trigger) => (
-            <div key={trigger.id}>
+            <div className="agent-stat-grid">
               <span>
-                <strong>{t(`agentTrigger_${trigger.type}`)}</strong>
-                <small>{triggerDetails(trigger.type, trigger.config)}</small>
+                <small>{t("today")}</small>
+                <strong>${usage.data?.daily_cost ?? "0"}</strong>
               </span>
-              <Badge tone={trigger.enabled ? "success" : "neutral"}>
-                {trigger.enabled ? t("enabled") : t("disabled")}
-              </Badge>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() =>
-                  void action(() =>
-                    api.updateAgentTrigger(agent.id, trigger.id, {
-                      enabled: !trigger.enabled,
-                    }),
-                  )
-                }
+              <span>
+                <small>{t("thisMonth")}</small>
+                <strong>${usage.data?.monthly_cost ?? "0"}</strong>
+              </span>
+              <span>
+                <small>{t("runs")}</small>
+                <strong>{usage.data?.monthly_runs ?? 0}</strong>
+              </span>
+              <span>
+                <small>{t("tokens")}</small>
+                <strong>
+                  {(usage.data?.daily_input_tokens ?? 0) +
+                    (usage.data?.daily_output_tokens ?? 0)}
+                </strong>
+              </span>
+            </div>
+          </SettingsSection>
+          <SettingsSection
+            title={t("agentTriggers")}
+            description={t("agentTriggersHint")}
+            wide
+          >
+            <div className="agent-inline-form">
+              <SelectField
+                label={t("type")}
+                name="trigger-type"
+                value={triggerType}
+                onChange={(e) => setTriggerType(e.target.value)}
               >
-                {trigger.enabled ? t("disable") : t("enable")}
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                aria-label={t("delete")}
-                onClick={() =>
-                  void action(() =>
-                    api.deleteAgentTrigger(agent.id, trigger.id),
-                  )
-                }
-              >
-                <Trash2 />
+                {[
+                  "mention",
+                  "command",
+                  "keyword",
+                  "every_message",
+                  "schedule",
+                  "event",
+                ].map((type) => (
+                  <option key={type} value={type}>
+                    {t(`agentTrigger_${type}`)}
+                  </option>
+                ))}
+              </SelectField>
+              {!["mention", "every_message"].includes(triggerType) && (
+                <Field
+                  required={false}
+                  label={t("configuration")}
+                  name="trigger-value"
+                  value={triggerValue}
+                  placeholder={
+                    triggerType === "schedule"
+                      ? "09:00"
+                      : triggerType === "event"
+                        ? "member.joined"
+                        : ""
+                  }
+                  onChange={(e) => setTriggerValue(e.target.value)}
+                />
+              )}
+              <Button onClick={() => void createTrigger()}>
+                <Plus />
+                {t("add")}
               </Button>
             </div>
-          ))}
-        </div>
-      </SettingsSection>
-      <SettingsSection
-        title={t("agentRuns")}
-        description={t("agentRunsHint")}
-        wide
-      >
-        <div className="agent-record-list">
-          {(runs.data?.runs ?? []).map((run) => (
-            <button key={run.id} onClick={() => setSelectedRun(run)}>
-              <Play />
-              <span>
-                <strong>
-                  {t(`agentRunStatus_${run.status}`)} · {run.model}
-                </strong>
-                <small>
-                  {run.correlation_id}
-                  {run.error_code ? ` · ${run.error_code}` : ""}
-                </small>
-              </span>
-              <time>{new Date(run.created_at).toLocaleString()}</time>
-            </button>
-          ))}
-        </div>
-        {selectedRun && (
-          <div className="agent-run-detail">
-            <dl>
-              <div>
-                <dt>{t("runStatus")}</dt>
-                <dd>{t(`agentRunStatus_${selectedRun.status}`)}</dd>
-              </div>
-              <div>
-                <dt>{t("model")}</dt>
-                <dd>{selectedRun.model}</dd>
-              </div>
-              <div>
-                <dt>{t("correlationID")}</dt>
-                <dd>{selectedRun.correlation_id}</dd>
-              </div>
-              <div>
-                <dt>{t("createdAt")}</dt>
-                <dd>{new Date(selectedRun.created_at).toLocaleString()}</dd>
-              </div>
-              {selectedRun.error_code && (
-                <div>
-                  <dt>{t("errorCode")}</dt>
-                  <dd>{selectedRun.error_code}</dd>
+            <div className="agent-record-list">
+              {(triggers.data ?? []).map((trigger) => (
+                <div key={trigger.id}>
+                  <span>
+                    <strong>{t(`agentTrigger_${trigger.type}`)}</strong>
+                    <small>
+                      {triggerDetails(trigger.type, trigger.config)}
+                    </small>
+                  </span>
+                  <Badge tone={trigger.enabled ? "success" : "neutral"}>
+                    {trigger.enabled ? t("enabled") : t("disabled")}
+                  </Badge>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      void action(() =>
+                        api.updateAgentTrigger(agent.id, trigger.id, {
+                          enabled: !trigger.enabled,
+                        }),
+                      )
+                    }
+                  >
+                    {trigger.enabled ? t("disable") : t("enable")}
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    aria-label={t("delete")}
+                    onClick={() =>
+                      void action(() =>
+                        api.deleteAgentTrigger(agent.id, trigger.id),
+                      )
+                    }
+                  >
+                    <Trash2 />
+                  </Button>
                 </div>
-              )}
-            </dl>
-            {["queued", "running"].includes(selectedRun.status) && (
-              <Button
-                onClick={() =>
-                  void action(async () => {
-                    const canceled = await api.cancelAgentRun(selectedRun.id);
-                    setSelectedRun(canceled);
-                  })
-                }
-              >
-                {t("cancel")}
-              </Button>
-            )}
+              ))}
+            </div>
+          </SettingsSection>
+        </>
+      )}
+      {section === "runs" && (
+        <SettingsSection
+          title={t("agentRuns")}
+          description={t("agentRunsHint")}
+          wide
+        >
+          <div className="agent-record-list">
+            {(runs.data?.runs ?? []).map((run) => (
+              <button key={run.id} onClick={() => setSelectedRun(run)}>
+                <Play />
+                <span>
+                  <strong>
+                    {t(`agentRunStatus_${run.status}`)} · {run.model}
+                  </strong>
+                  <small>
+                    {run.correlation_id}
+                    {run.error_code ? ` · ${run.error_code}` : ""}
+                  </small>
+                </span>
+                <time>{new Date(run.created_at).toLocaleString()}</time>
+              </button>
+            ))}
           </div>
-        )}
-      </SettingsSection>
-      <SettingsSection
-        title={t("agentCredentials")}
-        description={t("agentCredentialsHint")}
-        icon={<KeyRound />}
-        wide
-      >
-        <div className="agent-inline-form">
-          <Field
-            required={false}
-            type="password"
-            label={t("providerKey")}
-            name="provider-key"
-            value={providerKey}
-            placeholder={credential.data?.key_hint || "••••"}
-            onChange={(e) => setProviderKey(e.target.value)}
-          />
+          {selectedRun && (
+            <div className="agent-run-detail">
+              <dl>
+                <div>
+                  <dt>{t("runStatus")}</dt>
+                  <dd>{t(`agentRunStatus_${selectedRun.status}`)}</dd>
+                </div>
+                <div>
+                  <dt>{t("model")}</dt>
+                  <dd>{selectedRun.model}</dd>
+                </div>
+                <div>
+                  <dt>{t("correlationID")}</dt>
+                  <dd>{selectedRun.correlation_id}</dd>
+                </div>
+                <div>
+                  <dt>{t("createdAt")}</dt>
+                  <dd>{new Date(selectedRun.created_at).toLocaleString()}</dd>
+                </div>
+                {selectedRun.error_code && (
+                  <div>
+                    <dt>{t("errorCode")}</dt>
+                    <dd>{selectedRun.error_code}</dd>
+                  </div>
+                )}
+              </dl>
+              {["queued", "running"].includes(selectedRun.status) && (
+                <Button
+                  onClick={() =>
+                    void action(async () => {
+                      const canceled = await api.cancelAgentRun(selectedRun.id);
+                      setSelectedRun(canceled);
+                    })
+                  }
+                >
+                  {t("cancel")}
+                </Button>
+              )}
+            </div>
+          )}
+        </SettingsSection>
+      )}
+      {section === "connections" && (
+        <SettingsSection
+          title={t("agentCredentials")}
+          description={t("agentCredentialsHint")}
+          icon={<KeyRound />}
+          wide
+        >
+          <div className="agent-inline-form">
+            <Field
+              required={false}
+              type="password"
+              label={t("providerKey")}
+              name="provider-key"
+              value={providerKey}
+              placeholder={credential.data?.key_hint || "••••"}
+              onChange={(e) => setProviderKey(e.target.value)}
+            />
+            <Button
+              disabled={!providerKey}
+              onClick={() =>
+                void action(async () => {
+                  await api.updateAgentProviderCredential(agent.id, {
+                    api_key: providerKey,
+                    clear: false,
+                  });
+                  setProviderKey("");
+                })
+              }
+            >
+              <Save />
+              {t("save")}
+            </Button>
+          </div>
+          <div className="agent-record-list">
+            {(keys.data ?? []).map((key) => (
+              <div key={key.id}>
+                <KeyRound />
+                <span>
+                  <strong>{key.name}</strong>
+                  <small>
+                    {key.prefix} ·{" "}
+                    {key.scopes
+                      .map((scope) =>
+                        t(`agentScope_${scope.replace(":", "_")}`),
+                      )
+                      .join(", ")}
+                  </small>
+                </span>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  aria-label={t("delete")}
+                  onClick={() =>
+                    void action(() => api.revokeAgentKey(agent.id, key.id))
+                  }
+                >
+                  <Trash2 />
+                </Button>
+              </div>
+            ))}
+          </div>
           <Button
-            disabled={!providerKey}
             onClick={() =>
               void action(async () => {
-                await api.updateAgentProviderCredential(agent.id, {
-                  api_key: providerKey,
-                  clear: false,
+                const created = await api.createAgentKey(agent.id, {
+                  name: "runtime",
+                  scopes: agent.allowed_scopes,
+                  rate_limit_per_minute: agent.rate_limit_per_minute,
                 });
-                setProviderKey("");
+                setSecret(created.secret);
               })
             }
           >
-            <Save />
-            {t("save")}
+            <Plus />
+            {t("createRuntimeKey")}
           </Button>
-        </div>
-        <div className="agent-record-list">
-          {(keys.data ?? []).map((key) => (
-            <div key={key.id}>
-              <KeyRound />
-              <span>
-                <strong>{key.name}</strong>
-                <small>
-                  {key.prefix} ·{" "}
-                  {key.scopes
-                    .map((scope) => t(`agentScope_${scope.replace(":", "_")}`))
-                    .join(", ")}
-                </small>
-              </span>
+          {secret && (
+            <div className="agent-secret" role="status">
+              <strong>{t("copySecretNow")}</strong>
+              <code>{secret}</code>
               <Button
-                size="icon"
-                variant="ghost"
-                aria-label={t("delete")}
-                onClick={() =>
-                  void action(() => api.revokeAgentKey(agent.id, key.id))
-                }
+                size="sm"
+                onClick={() => void navigator.clipboard.writeText(secret)}
               >
-                <Trash2 />
+                {t("copy")}
               </Button>
             </div>
-          ))}
-        </div>
-        <Button
-          onClick={() =>
-            void action(async () => {
-              const created = await api.createAgentKey(agent.id, {
-                name: "runtime",
-                scopes: agent.allowed_scopes,
-                rate_limit_per_minute: agent.rate_limit_per_minute,
-              });
-              setSecret(created.secret);
-            })
-          }
-        >
-          <Plus />
-          {t("createRuntimeKey")}
-        </Button>
-        {secret && (
-          <div className="agent-secret" role="status">
-            <strong>{t("copySecretNow")}</strong>
-            <code>{secret}</code>
-            <Button
-              size="sm"
-              onClick={() => void navigator.clipboard.writeText(secret)}
-            >
-              {t("copy")}
-            </Button>
-          </div>
-        )}
-      </SettingsSection>
+          )}
+        </SettingsSection>
+      )}
     </>
   );
 }

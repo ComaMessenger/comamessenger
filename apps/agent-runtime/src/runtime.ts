@@ -144,23 +144,26 @@ export class AgentRuntime {
       );
       if (!result.content.trim())
         throw new RuntimeError("empty_provider_output");
-      const posted = await this.options.api.invokeAgentTool<Message>(
-        run.thread_root_id ? "reply_in_thread" : "post_message",
-        {
-          run_id: run.id,
-          correlation_id: run.correlation_id,
-          confirmed: true,
-          arguments: {
-            chat_id: run.chat_id,
-            client_msg_id: crypto.randomUUID(),
-            body: result.content,
-            body_format: "markdown",
-            thread_root_id: run.thread_root_id,
-            mentioned_actor_ids: [],
-            file_ids: [],
-          },
-        },
-      );
+      const sandbox = run.input.sandbox === true && run.input.publish === false;
+      const posted = sandbox
+        ? null
+        : await this.options.api.invokeAgentTool<Message>(
+            run.thread_root_id ? "reply_in_thread" : "post_message",
+            {
+              run_id: run.id,
+              correlation_id: run.correlation_id,
+              confirmed: true,
+              arguments: {
+                chat_id: run.chat_id,
+                client_msg_id: crypto.randomUUID(),
+                body: result.content,
+                body_format: "markdown",
+                thread_root_id: run.thread_root_id,
+                mentioned_actor_ids: [],
+                file_ids: [],
+              },
+            },
+          );
       this.emitStreaming(run, streamID, ++streamIndex, "", false, true);
       this.emitStatus(run, "completed");
       await this.options.api.completeAgentRun(run.id, {
@@ -171,7 +174,8 @@ export class AgentRuntime {
         currency: result.usage.currency,
         price_source: result.usage.priceSource,
         result_summary: {
-          message_id: posted.id,
+          ...(posted ? { message_id: posted.id } : { preview: result.content }),
+          sandbox,
           price_source: result.usage.priceSource,
           tool_calls: result.toolCalls,
         },

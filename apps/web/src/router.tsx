@@ -58,6 +58,26 @@ const routes = [
   }),
   createRoute({
     getParentRoute: () => root,
+    path: "/agents",
+    component: marker,
+  }),
+  createRoute({
+    getParentRoute: () => root,
+    path: "/agents/sandbox",
+    component: marker,
+  }),
+  createRoute({
+    getParentRoute: () => root,
+    path: "/agents/runs",
+    component: marker,
+  }),
+  createRoute({
+    getParentRoute: () => root,
+    path: "/agents/connections",
+    component: marker,
+  }),
+  createRoute({
+    getParentRoute: () => root,
     path: "/more",
     component: marker,
   }),

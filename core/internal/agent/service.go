@@ -30,6 +30,7 @@ var (
 	ErrNotFound    = errors.New("agent not found")
 	ErrConflict    = errors.New("agent conflicts with existing data")
 	ErrRateLimited = errors.New("agent rate limit exceeded")
+	ErrNotReady    = errors.New("agent is not ready")
 )
 
 type Scope string
@@ -452,6 +453,40 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 		return Agent{}, fmt.Errorf("iterate revoked agent keys: %w", err)
 	}
 	revokedRows.Close()
+	if prospective.Enabled {
+		var hasCredential, hasActiveKey, hasTrigger bool
+		if err := tx.QueryRow(ctx, `SELECT
+			EXISTS(SELECT 1 FROM agent_provider_credentials WHERE org_id=$1 AND agent_id=$2),
+			EXISTS(SELECT 1 FROM agent_api_keys WHERE org_id=$1 AND agent_id=$2 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>now()) AND scopes<@$3::text[]),
+			EXISTS(SELECT 1 FROM agent_triggers WHERE org_id=$1 AND agent_id=$2 AND enabled)`,
+			current.OrgID, agentID, scopeStrings(prospective.AllowedScopes)).Scan(&hasCredential, &hasActiveKey, &hasTrigger); err != nil {
+			return Agent{}, fmt.Errorf("check agent readiness: %w", err)
+		}
+		blockers := make([]string, 0, 6)
+		if len(prospective.ChatIDs) == 0 {
+			blockers = append(blockers, "chat_required")
+		}
+		if !hasActiveKey {
+			blockers = append(blockers, "runtime_key_required")
+		}
+		if prospective.Kind == "builtin" {
+			if prospective.Provider == "" || prospective.Model == "" {
+				blockers = append(blockers, "provider_model_required")
+			}
+			if !hasCredential {
+				blockers = append(blockers, "provider_credential_required")
+			}
+			if !prospective.ExternalDataSharingApproved {
+				blockers = append(blockers, "external_data_approval_required")
+			}
+		}
+		if prospective.Recipe != "custom" && !hasTrigger {
+			blockers = append(blockers, "trigger_required")
+		}
+		if len(blockers) > 0 {
+			return Agent{}, fmt.Errorf("%w: %s", ErrNotReady, strings.Join(blockers, ","))
+		}
+	}
 	if !prospective.Enabled {
 		rows, err := tx.Query(ctx, `SELECT id FROM agent_api_keys WHERE org_id=$1 AND agent_id=$2 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>now())`, current.OrgID, agentID)
 		if err != nil {
