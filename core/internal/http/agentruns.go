@@ -103,6 +103,10 @@ func (h *identityHandlers) publishAgentRun(w standardhttp.ResponseWriter, r *sta
 		h.writeAgentRunError(w, r, err)
 		return
 	}
+	if target.DryRun {
+		h.writeError(w, r, standardhttp.StatusConflict, "dry_run_write_forbidden", "Dry runs cannot publish messages.")
+		return
+	}
 	created, _, err := h.messages.CreateFinalForAgentRun(r.Context(), identity.User{ActorID: target.AgentID, OrgID: auth.User.OrgID, OrgRole: "member"}, target.ChatID, message.CreateInput{
 		ClientMsgID: input.ClientMsgID, Body: input.Body, BodyFormat: input.BodyFormat,
 		ReplyToID: target.ThreadRootID, ThreadRootID: target.ThreadRootID,

@@ -37,6 +37,8 @@ type Run struct {
 	OrgID             string          `json:"org_id"`
 	AgentID           string          `json:"agent_id"`
 	AgentVersion      *int            `json:"agent_version"`
+	DryRun            bool            `json:"dry_run"`
+	AgentConfig       json.RawMessage `json:"agent_config"`
 	TriggerID         *string         `json:"trigger_id,omitempty"`
 	TriggerEventSeq   *int64          `json:"trigger_event_seq,omitempty"`
 	ScheduledFor      *time.Time      `json:"scheduled_for,omitempty"`
@@ -75,6 +77,7 @@ type InvokeInput struct {
 	TimeoutSeconds int             `json:"timeout_seconds"`
 	MaxAttempts    int             `json:"max_attempts"`
 	Input          json.RawMessage `json:"input"`
+	DryRun         bool            `json:"dry_run"`
 }
 type ClaimInput struct {
 	WorkerID     string `json:"worker_id"`
@@ -116,6 +119,7 @@ type RuntimeTarget struct {
 	AgentID      string
 	ChatID       string
 	ThreadRootID *string
+	DryRun       bool
 }
 type UpdateRuntimeCheckpoint struct {
 	LastEventSeq int64 `json:"last_event_seq"`
@@ -167,6 +171,7 @@ type MCPToolCall struct {
 	CorrelationID string `json:"correlation_id"`
 	ToolName      string `json:"tool_name"`
 	Mode          string `json:"mode"`
+	Preview       bool   `json:"preview"`
 }
 type FinishMCPToolCallInput struct {
 	RunID       string `json:"run_id"`
@@ -236,13 +241,42 @@ func (service *Service) Invoke(ctx context.Context, current identity.User, agent
 	var maxDepth int
 	var agentVersion *int
 	var provider, model string
-	err = tx.QueryRow(ctx, `SELECT agent.max_chain_depth,agent.published_version,COALESCE(connection.provider,agent.provider),COALESCE(NULLIF(agent.model,''),connection.default_model,'')
-		FROM agents agent
-		LEFT JOIN agent_llm_connections connection ON connection.org_id=agent.org_id AND connection.id=agent.llm_connection_id AND connection.enabled
-		JOIN chat_members member ON member.org_id=agent.org_id AND member.actor_id=agent.actor_id AND member.chat_id=$3
-		JOIN chats chat ON chat.org_id=agent.org_id AND chat.id=member.chat_id AND chat.archived_at IS NULL
-		WHERE agent.org_id=$1 AND agent.actor_id=$2 AND agent.enabled AND (agent.llm_connection_id IS NULL OR connection.id IS NOT NULL)
-		FOR UPDATE OF agent`, current.OrgID, agentID, input.ChatID).Scan(&maxDepth, &agentVersion, &provider, &model)
+	var agentConfig json.RawMessage
+	if input.DryRun {
+		err = tx.QueryRow(ctx, `SELECT
+			COALESCE(draft.max_chain_depth,agent.max_chain_depth),COALESCE(draft.version,agent.published_version),
+			COALESCE(connection.provider,CASE WHEN draft.agent_id IS NOT NULL THEN draft.provider ELSE agent.provider END),
+			COALESCE(NULLIF(CASE WHEN draft.agent_id IS NOT NULL THEN draft.model ELSE agent.model END,''),connection.default_model,''),
+			jsonb_build_object(
+				'id',agent.actor_id,'handle',actor.handle,
+				'description',COALESCE(draft.description,agent.description),
+				'allowed_scopes',to_jsonb(COALESCE(draft.allowed_scopes,agent.allowed_scopes)),
+				'llm_connection_id',CASE WHEN draft.agent_id IS NOT NULL THEN draft.llm_connection_id ELSE agent.llm_connection_id END,
+				'endpoint_url',COALESCE(connection.endpoint_url,CASE WHEN draft.agent_id IS NOT NULL THEN draft.endpoint_url ELSE agent.endpoint_url END),
+				'external_data_sharing_approved',COALESCE(draft.external_data_sharing_approved,agent.external_data_sharing_approved),
+				'max_output_tokens',COALESCE(draft.max_output_tokens,agent.max_output_tokens),
+				'max_tool_iterations',COALESCE(draft.max_tool_iterations,agent.max_tool_iterations)
+			)
+			FROM agents agent JOIN actors actor ON actor.org_id=agent.org_id AND actor.id=agent.actor_id
+			LEFT JOIN agent_drafts draft ON draft.org_id=agent.org_id AND draft.agent_id=agent.actor_id
+			LEFT JOIN agent_llm_connections connection ON connection.org_id=agent.org_id AND connection.id=CASE WHEN draft.agent_id IS NOT NULL THEN draft.llm_connection_id ELSE agent.llm_connection_id END AND connection.enabled
+			JOIN chats chat ON chat.org_id=agent.org_id AND chat.id=$3 AND chat.archived_at IS NULL
+			WHERE agent.org_id=$1 AND agent.actor_id=$2 AND agent.deleted_at IS NULL
+			AND ((draft.agent_id IS NOT NULL AND chat.id=ANY(draft.chat_ids)) OR (draft.agent_id IS NULL AND EXISTS(SELECT 1 FROM chat_members member WHERE member.org_id=agent.org_id AND member.actor_id=agent.actor_id AND member.chat_id=chat.id)))
+			AND ((CASE WHEN draft.agent_id IS NOT NULL THEN draft.llm_connection_id ELSE agent.llm_connection_id END) IS NULL OR connection.id IS NOT NULL)
+			FOR UPDATE OF agent`, current.OrgID, agentID, input.ChatID).Scan(&maxDepth, &agentVersion, &provider, &model, &agentConfig)
+	} else {
+		err = tx.QueryRow(ctx, `SELECT agent.max_chain_depth,agent.published_version,COALESCE(connection.provider,agent.provider),COALESCE(NULLIF(agent.model,''),connection.default_model,''),
+			jsonb_build_object('id',agent.actor_id,'handle',actor.handle,'description',agent.description,'allowed_scopes',to_jsonb(agent.allowed_scopes),
+			'llm_connection_id',agent.llm_connection_id,'endpoint_url',COALESCE(connection.endpoint_url,agent.endpoint_url),
+			'external_data_sharing_approved',agent.external_data_sharing_approved,'max_output_tokens',agent.max_output_tokens,'max_tool_iterations',agent.max_tool_iterations)
+			FROM agents agent JOIN actors actor ON actor.org_id=agent.org_id AND actor.id=agent.actor_id
+			LEFT JOIN agent_llm_connections connection ON connection.org_id=agent.org_id AND connection.id=agent.llm_connection_id AND connection.enabled
+			JOIN chat_members member ON member.org_id=agent.org_id AND member.actor_id=agent.actor_id AND member.chat_id=$3
+			JOIN chats chat ON chat.org_id=agent.org_id AND chat.id=member.chat_id AND chat.archived_at IS NULL
+			WHERE agent.org_id=$1 AND agent.actor_id=$2 AND agent.enabled AND (agent.llm_connection_id IS NULL OR connection.id IS NOT NULL)
+			FOR UPDATE OF agent`, current.OrgID, agentID, input.ChatID).Scan(&maxDepth, &agentVersion, &provider, &model, &agentConfig)
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Run{}, ErrNotFound
 	}
@@ -254,11 +288,11 @@ func (service *Service) Invoke(ctx context.Context, current identity.User, agent
 	}
 	requestedBy := current.ActorID
 	timeoutAt := service.now().UTC().Add(time.Duration(input.TimeoutSeconds) * time.Second)
-	_, err = tx.Exec(ctx, `INSERT INTO agent_runs(id,org_id,agent_id,agent_version,chat_id,thread_root_id,requested_by,client_run_id,correlation_id,chain_depth,provider,model,input,timeout_at,max_attempts) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) ON CONFLICT(agent_id,client_run_id) DO NOTHING`, runID, current.OrgID, agentID, agentVersion, input.ChatID, input.ThreadRootID, requestedBy, input.ClientRunID, input.CorrelationID, input.ChainDepth, provider, model, input.Input, timeoutAt, input.MaxAttempts)
+	_, err = tx.Exec(ctx, `INSERT INTO agent_runs(id,org_id,agent_id,agent_version,dry_run,agent_config,chat_id,thread_root_id,requested_by,client_run_id,correlation_id,chain_depth,provider,model,input,timeout_at,max_attempts) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) ON CONFLICT(agent_id,client_run_id) DO NOTHING`, runID, current.OrgID, agentID, agentVersion, input.DryRun, agentConfig, input.ChatID, input.ThreadRootID, requestedBy, input.ClientRunID, input.CorrelationID, input.ChainDepth, provider, model, input.Input, timeoutAt, input.MaxAttempts)
 	if err != nil {
 		return Run{}, fmt.Errorf("enqueue agent run: %w", err)
 	}
-	metadata, _ := json.Marshal(map[string]any{"run_id": runID, "chat_id": input.ChatID, "correlation_id": input.CorrelationID, "chain_depth": input.ChainDepth})
+	metadata, _ := json.Marshal(map[string]any{"run_id": runID, "chat_id": input.ChatID, "correlation_id": input.CorrelationID, "chain_depth": input.ChainDepth, "dry_run": input.DryRun, "agent_version": agentVersion})
 	_, err = tx.Exec(ctx, `INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,'agent.run.invoke','agent',$4,$5)`, auditID, current.OrgID, current.ActorID, agentID, metadata)
 	if err != nil {
 		return Run{}, err
@@ -406,7 +440,7 @@ func (service *Service) claim(ctx context.Context, orgID, agentID, workerID stri
 	rows, err := tx.Query(ctx, `SELECT run.id,run.agent_id,run.chat_id,agent.per_chat_concurrency
 		FROM agent_runs run JOIN agents agent ON agent.org_id=run.org_id AND agent.actor_id=run.agent_id
 		WHERE run.status='queued' AND run.next_attempt_at<=now() AND run.timeout_at>now()
-			AND run.cancel_requested_at IS NULL AND agent.enabled AND ($1::uuid IS NULL OR run.org_id=$1)
+			AND run.cancel_requested_at IS NULL AND (agent.enabled OR run.dry_run) AND ($1::uuid IS NULL OR run.org_id=$1)
 			AND ($2::uuid IS NULL OR run.agent_id=$2)
 		ORDER BY run.next_attempt_at,run.created_at FOR UPDATE OF run SKIP LOCKED LIMIT 20`, orgFilter, agentFilter)
 	if err != nil {
@@ -773,8 +807,9 @@ func (service *Service) StartMCPToolCall(ctx context.Context, current identity.U
 		SELECT $3,run.org_id,run.agent_id,run.id,run.correlation_id,'mcp__' || server.name || '__' || $7,$8,'mcp:' || server.name,$9
 		FROM agent_runs run JOIN agent_mcp_servers server ON server.org_id=run.org_id AND server.agent_id=run.agent_id AND server.id=$6
 		WHERE run.org_id=$1 AND run.agent_id=$2 AND run.id=$4 AND run.lease_token=$5 AND run.status='running' AND run.lease_expires_at>now()
-		AND server.enabled AND $7=ANY(server.allowed_tools) AND ($8='read' OR NOT server.require_write_confirmation)
-		RETURNING id,correlation_id,tool_name,mode`, current.OrgID, agentID, input.CallID, input.RunID, input.LeaseToken, input.ServerID, input.ToolName, input.Mode, summary).Scan(&result.ID, &result.CorrelationID, &result.ToolName, &result.Mode)
+		AND server.enabled AND $7=ANY(server.allowed_tools) AND ($8='read' OR run.dry_run OR NOT server.require_write_confirmation)
+		RETURNING id,correlation_id,tool_name,mode,
+			(SELECT dry_run FROM agent_runs WHERE org_id=$1 AND agent_id=$2 AND id=$4) AND $8='write'`, current.OrgID, agentID, input.CallID, input.RunID, input.LeaseToken, input.ServerID, input.ToolName, input.Mode, summary).Scan(&result.ID, &result.CorrelationID, &result.ToolName, &result.Mode, &result.Preview)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return MCPToolCall{}, ErrForbidden
 	}
@@ -935,8 +970,8 @@ func (service *Service) RuntimeTarget(ctx context.Context, current identity.User
 		return RuntimeTarget{}, ErrForbidden
 	}
 	var target RuntimeTarget
-	err := service.pool.QueryRow(ctx, `SELECT agent_id,chat_id,thread_root_id FROM agent_runs WHERE org_id=$1 AND id=$2 AND lease_token=$3 AND status='running' AND lease_expires_at>now() AND chat_id IS NOT NULL
-		AND ($4::boolean OR agent_id=$5)`, current.OrgID, runID, leaseToken, authorizer.IsOrganizationWorker(current, authentication), current.ActorID).Scan(&target.AgentID, &target.ChatID, &target.ThreadRootID)
+	err := service.pool.QueryRow(ctx, `SELECT agent_id,chat_id,thread_root_id,dry_run FROM agent_runs WHERE org_id=$1 AND id=$2 AND lease_token=$3 AND status='running' AND lease_expires_at>now() AND chat_id IS NOT NULL
+		AND ($4::boolean OR agent_id=$5)`, current.OrgID, runID, leaseToken, authorizer.IsOrganizationWorker(current, authentication), current.ActorID).Scan(&target.AgentID, &target.ChatID, &target.ThreadRootID, &target.DryRun)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return RuntimeTarget{}, ErrConflict
 	}
@@ -947,13 +982,13 @@ func (service *Service) RuntimeAgentID(ctx context.Context, current identity.Use
 	return service.runtimeAgentID(ctx, current, authentication, runID, leaseToken)
 }
 
-const runSelect = `SELECT run.id,run.org_id,run.agent_id,run.agent_version,run.trigger_id,run.trigger_event_seq,run.scheduled_for,run.chat_id,run.thread_root_id,run.requested_by,run.client_run_id,run.correlation_id,run.chain_depth,run.status,run.provider,run.model,run.input,run.result_summary,run.input_tokens,run.output_tokens,run.cost::text,run.currency,run.error_code,run.attempt,run.max_attempts,run.created_at,run.started_at,run.finished_at,run.cancel_requested_at,run.timeout_at,run.lease_token FROM agent_runs run`
+const runSelect = `SELECT run.id,run.org_id,run.agent_id,run.agent_version,run.dry_run,run.agent_config,run.trigger_id,run.trigger_event_seq,run.scheduled_for,run.chat_id,run.thread_root_id,run.requested_by,run.client_run_id,run.correlation_id,run.chain_depth,run.status,run.provider,run.model,run.input,run.result_summary,run.input_tokens,run.output_tokens,run.cost::text,run.currency,run.error_code,run.attempt,run.max_attempts,run.created_at,run.started_at,run.finished_at,run.cancel_requested_at,run.timeout_at,run.lease_token FROM agent_runs run`
 
 type scanner interface{ Scan(...any) error }
 
 func scanRun(row scanner) (Run, error) {
 	var result Run
-	err := row.Scan(&result.ID, &result.OrgID, &result.AgentID, &result.AgentVersion, &result.TriggerID, &result.TriggerEventSeq, &result.ScheduledFor, &result.ChatID, &result.ThreadRootID, &result.RequestedBy, &result.ClientRunID, &result.CorrelationID, &result.ChainDepth, &result.Status, &result.Provider, &result.Model, &result.Input, &result.ResultSummary, &result.InputTokens, &result.OutputTokens, &result.Cost, &result.Currency, &result.ErrorCode, &result.Attempt, &result.MaxAttempts, &result.CreatedAt, &result.StartedAt, &result.FinishedAt, &result.CancelRequestedAt, &result.TimeoutAt, &result.LeaseToken)
+	err := row.Scan(&result.ID, &result.OrgID, &result.AgentID, &result.AgentVersion, &result.DryRun, &result.AgentConfig, &result.TriggerID, &result.TriggerEventSeq, &result.ScheduledFor, &result.ChatID, &result.ThreadRootID, &result.RequestedBy, &result.ClientRunID, &result.CorrelationID, &result.ChainDepth, &result.Status, &result.Provider, &result.Model, &result.Input, &result.ResultSummary, &result.InputTokens, &result.OutputTokens, &result.Cost, &result.Currency, &result.ErrorCode, &result.Attempt, &result.MaxAttempts, &result.CreatedAt, &result.StartedAt, &result.FinishedAt, &result.CancelRequestedAt, &result.TimeoutAt, &result.LeaseToken)
 	return result, err
 }
 func (service *Service) getByID(ctx context.Context, runID string) (Run, error) {

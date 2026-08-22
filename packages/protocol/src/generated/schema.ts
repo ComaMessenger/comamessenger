@@ -2597,6 +2597,8 @@ export interface components {
             timeout_seconds: number;
             /** @default 3 */
             max_attempts: number;
+            /** @default false */
+            dry_run: boolean;
             input: {
                 [key: string]: unknown;
             };
@@ -2790,6 +2792,8 @@ export interface components {
             tool_name: string;
             /** @enum {string} */
             mode: "read" | "write";
+            /** @description Server-enforced instruction to return a simulated result without calling the external MCP tool. */
+            preview: boolean;
         };
         FinishAgentMcpToolCallRequest: {
             /** Format: uuid */
@@ -2918,6 +2922,19 @@ export interface components {
             /** @enum {string} */
             missed_runs_policy?: "skip" | "latest";
         };
+        AgentRunConfig: {
+            /** Format: uuid */
+            id: string;
+            handle: string;
+            description: string;
+            allowed_scopes: components["schemas"]["AgentScope"][];
+            /** Format: uuid */
+            llm_connection_id: string | null;
+            endpoint_url: string;
+            external_data_sharing_approved: boolean;
+            max_output_tokens: number;
+            max_tool_iterations: number;
+        };
         AgentRun: {
             /** Format: uuid */
             id: string;
@@ -2926,6 +2943,8 @@ export interface components {
             /** Format: uuid */
             agent_id: string;
             agent_version: number | null;
+            dry_run: boolean;
+            agent_config: components["schemas"]["AgentRunConfig"];
             /** Format: uuid */
             trigger_id?: string;
             /** Format: int64 */

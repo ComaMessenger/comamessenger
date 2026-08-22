@@ -20,6 +20,16 @@ import { MCPError, resolveMCPTools, type ResolvedMCPTool } from "./mcp.js";
 
 export type ProviderResolver = (name: string) => Provider;
 
+type RuntimeAgent = Pick<
+  Agent,
+  | "id"
+  | "handle"
+  | "description"
+  | "external_data_sharing_approved"
+  | "max_tool_iterations"
+  | "max_output_tokens"
+>;
+
 export type RuntimeOptions = {
   api: MessengerAPI;
   provider: ProviderResolver;
@@ -123,7 +133,9 @@ export class AgentRuntime {
     );
     try {
       this.emitStatus(run, "thinking");
-      const agent = await this.options.api.agent(run.agent_id);
+      const agent: RuntimeAgent = run.dry_run
+        ? run.agent_config
+        : await this.options.api.agent(run.agent_id);
       if (!agent.external_data_sharing_approved) {
         throw new RuntimeError("external_data_sharing_not_approved");
       }
@@ -196,7 +208,7 @@ export class AgentRuntime {
 
   private async assembleContext(
     run: ClaimedAgentRun,
-    agent: Agent,
+    agent: RuntimeAgent,
   ): Promise<ChatMessage[]> {
     const messages: ChatMessage[] = [
       {
@@ -237,7 +249,7 @@ export class AgentRuntime {
 
   private async runProviderLoop(
     run: ClaimedAgentRun,
-    agent: Agent,
+    agent: RuntimeAgent,
     definitions: AgentToolDefinition[],
     mcpTools: Map<string, ResolvedMCPTool>,
     messages: ChatMessage[],
@@ -368,7 +380,7 @@ export class AgentRuntime {
   ): Promise<unknown> {
     const callID = crypto.randomUUID();
     const inputBytes = encodedSize(arguments_);
-    await this.options.api.startAgentMcpToolCall({
+    const registered = await this.options.api.startAgentMcpToolCall({
       call_id: callID,
       run_id: run.id,
       lease_token: run.lease_token,
@@ -378,7 +390,16 @@ export class AgentRuntime {
       input_bytes: inputBytes,
     });
     try {
-      const output = await tool.call(arguments_, signal);
+      const output = registered.preview
+        ? {
+            dry_run: true,
+            executed: false,
+            mode: tool.mode,
+            server_id: tool.serverID,
+            tool_name: tool.toolName,
+            arguments: arguments_,
+          }
+        : await tool.call(arguments_, signal);
       await this.options.api.finishAgentMcpToolCall(callID, {
         run_id: run.id,
         lease_token: run.lease_token,

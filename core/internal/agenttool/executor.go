@@ -58,6 +58,7 @@ type Invocation struct {
 	LeaseToken    string
 	CorrelationID string
 	ToolCallID    string
+	DryRun        bool
 }
 
 type Confirmation struct {
@@ -136,10 +137,13 @@ func (executor *Executor) resolveInvocation(ctx context.Context, invocation Invo
 	}
 	var agentID string
 	var scopes []string
-	err := executor.pool.QueryRow(ctx, `SELECT run.agent_id,agent.allowed_scopes FROM agent_runs run
+	err := executor.pool.QueryRow(ctx, `SELECT run.agent_id,
+		CASE WHEN run.dry_run AND run.agent_config ? 'allowed_scopes'
+		THEN ARRAY(SELECT jsonb_array_elements_text(run.agent_config->'allowed_scopes')) ELSE agent.allowed_scopes END,
+		run.dry_run FROM agent_runs run
 		JOIN agents agent ON agent.org_id=run.org_id AND agent.actor_id=run.agent_id
 		WHERE run.org_id=$1 AND run.id=$2 AND run.lease_token=$3 AND run.status='running' AND run.lease_expires_at>now()
-		AND ($4::boolean OR run.agent_id=$5)`, invocation.User.OrgID, invocation.RunID, invocation.LeaseToken, organizationWorker, invocation.User.ActorID).Scan(&agentID, &scopes)
+		AND ($4::boolean OR run.agent_id=$5)`, invocation.User.OrgID, invocation.RunID, invocation.LeaseToken, organizationWorker, invocation.User.ActorID).Scan(&agentID, &scopes, &invocation.DryRun)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Invocation{}, ErrForbidden
 	}
@@ -171,6 +175,12 @@ func (executor *Executor) Invoke(ctx context.Context, invocation Invocation) (In
 	}
 	if err := validateArguments(definition, invocation.Arguments); err != nil {
 		return InvokeResult{}, err
+	}
+	if invocation.DryRun && definition.Mode == "write" {
+		preview, err := json.Marshal(map[string]any{
+			"dry_run": true, "would_execute": definition.Name, "arguments": json.RawMessage(invocation.Arguments),
+		})
+		return InvokeResult{Output: preview}, err
 	}
 	if executor.requireWriteConfirmation && definition.Mode == "write" {
 		confirmation, err := executor.requestConfirmation(ctx, invocation, definition)

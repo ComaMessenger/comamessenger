@@ -8381,6 +8381,10 @@
             "maximum": 20,
             "default": 3
           },
+          "dry_run": {
+            "type": "boolean",
+            "default": false
+          },
           "input": {
             "type": "object",
             "additionalProperties": true,
@@ -9073,7 +9077,8 @@
           "id",
           "correlation_id",
           "tool_name",
-          "mode"
+          "mode",
+          "preview"
         ],
         "properties": {
           "id": {
@@ -9093,6 +9098,10 @@
               "read",
               "write"
             ]
+          },
+          "preview": {
+            "type": "boolean",
+            "description": "Server-enforced instruction to return a simulated result without calling the external MCP tool."
           }
         }
       },
@@ -9511,6 +9520,60 @@
           }
         }
       },
+      "AgentRunConfig": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "handle",
+          "description",
+          "allowed_scopes",
+          "llm_connection_id",
+          "endpoint_url",
+          "external_data_sharing_approved",
+          "max_output_tokens",
+          "max_tool_iterations"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "handle": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "allowed_scopes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentScope"
+            }
+          },
+          "llm_connection_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "endpoint_url": {
+            "type": "string"
+          },
+          "external_data_sharing_approved": {
+            "type": "boolean"
+          },
+          "max_output_tokens": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "max_tool_iterations": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
       "AgentRun": {
         "type": "object",
         "additionalProperties": false,
@@ -9519,6 +9582,8 @@
           "org_id",
           "agent_id",
           "agent_version",
+          "dry_run",
+          "agent_config",
           "correlation_id",
           "chain_depth",
           "status",
@@ -9554,6 +9619,12 @@
               "null"
             ],
             "minimum": 1
+          },
+          "dry_run": {
+            "type": "boolean"
+          },
+          "agent_config": {
+            "$ref": "#/components/schemas/AgentRunConfig"
           },
           "trigger_id": {
             "type": "string",

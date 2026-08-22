@@ -405,11 +405,17 @@ func (service *Service) dispatchAgent(ctx context.Context, orgID, agentID string
 				payloadData["command_arguments"] = commandArguments(item.body)
 			}
 			payload, _ := json.Marshal(payloadData)
-			if _, err := tx.Exec(ctx, `INSERT INTO agent_runs(id,org_id,agent_id,agent_version,trigger_id,trigger_event_seq,chat_id,thread_root_id,requested_by,
+			if _, err := tx.Exec(ctx, `INSERT INTO agent_runs(id,org_id,agent_id,agent_version,agent_config,trigger_id,trigger_event_seq,chat_id,thread_root_id,requested_by,
 					correlation_id,chain_depth,provider,model,input,timeout_at)
-				SELECT $1,agent.org_id,agent.actor_id,agent.published_version,$2,$3,$4,$5,$6,$7,$8,agent.provider,agent.model,$9,
+				SELECT $1,agent.org_id,agent.actor_id,agent.published_version,
+					jsonb_build_object('id',agent.actor_id,'handle',actor.handle,'description',agent.description,'allowed_scopes',to_jsonb(agent.allowed_scopes),
+						'llm_connection_id',agent.llm_connection_id,'endpoint_url',COALESCE(connection.endpoint_url,agent.endpoint_url),
+						'external_data_sharing_approved',agent.external_data_sharing_approved,'max_output_tokens',agent.max_output_tokens,'max_tool_iterations',agent.max_tool_iterations),
+					$2,$3,$4,$5,$6,$7,$8,COALESCE(connection.provider,agent.provider),COALESCE(NULLIF(agent.model,''),connection.default_model,''),$9,
 					now()+make_interval(secs=>agent.execution_timeout_seconds)
-				FROM agents agent WHERE agent.org_id=$10 AND agent.actor_id=$11
+				FROM agents agent JOIN actors actor ON actor.org_id=agent.org_id AND actor.id=agent.actor_id
+				LEFT JOIN agent_llm_connections connection ON connection.org_id=agent.org_id AND connection.id=agent.llm_connection_id AND connection.enabled
+				WHERE agent.org_id=$10 AND agent.actor_id=$11 AND (agent.llm_connection_id IS NULL OR connection.id IS NOT NULL)
 				ON CONFLICT(agent_id,trigger_id,trigger_event_seq) WHERE trigger_id IS NOT NULL AND trigger_event_seq IS NOT NULL DO NOTHING`,
 				runID, trigger.ID, item.seq, runChatID, runThreadRootID, item.actorID, correlationID, depth, payload, orgID, agentID); err != nil {
 				return err
@@ -497,13 +503,18 @@ func (service *Service) dispatchSchedule(ctx context.Context, triggerID string, 
 			"trigger_type":   trigger.Type,
 			"trigger_id":     trigger.ID,
 		})
-		if _, err := tx.Exec(ctx, `INSERT INTO agent_runs(id,org_id,agent_id,agent_version,trigger_id,scheduled_for,chat_id,correlation_id,provider,model,input,timeout_at)
-				SELECT $1,agent.org_id,agent.actor_id,agent.published_version,$2,$3,$4,$5,agent.provider,agent.model,$6,
+		if _, err := tx.Exec(ctx, `INSERT INTO agent_runs(id,org_id,agent_id,agent_version,agent_config,trigger_id,scheduled_for,chat_id,correlation_id,provider,model,input,timeout_at)
+				SELECT $1,agent.org_id,agent.actor_id,agent.published_version,
+					jsonb_build_object('id',agent.actor_id,'handle',actor.handle,'description',agent.description,'allowed_scopes',to_jsonb(agent.allowed_scopes),
+						'llm_connection_id',agent.llm_connection_id,'endpoint_url',COALESCE(connection.endpoint_url,agent.endpoint_url),
+						'external_data_sharing_approved',agent.external_data_sharing_approved,'max_output_tokens',agent.max_output_tokens,'max_tool_iterations',agent.max_tool_iterations),
+					$2,$3,$4,$5,COALESCE(connection.provider,agent.provider),COALESCE(NULLIF(agent.model,''),connection.default_model,''),$6,
 					now()+make_interval(secs=>agent.execution_timeout_seconds)
 				FROM agents agent
 				JOIN actors actor ON actor.org_id=agent.org_id AND actor.id=agent.actor_id AND actor.status='active' AND actor.deleted_at IS NULL
+				LEFT JOIN agent_llm_connections connection ON connection.org_id=agent.org_id AND connection.id=agent.llm_connection_id AND connection.enabled
 				JOIN chat_members member ON member.org_id=agent.org_id AND member.actor_id=agent.actor_id AND member.chat_id=$4
-				WHERE agent.org_id=$7 AND agent.actor_id=$8 AND agent.enabled
+				WHERE agent.org_id=$7 AND agent.actor_id=$8 AND agent.enabled AND (agent.llm_connection_id IS NULL OR connection.id IS NOT NULL)
 				ON CONFLICT(trigger_id,scheduled_for) WHERE trigger_id IS NOT NULL AND scheduled_for IS NOT NULL DO NOTHING`,
 			runID, trigger.ID, scheduled, config.ChatID, correlationID, payload, trigger.OrgID, trigger.AgentID); err != nil {
 			return err

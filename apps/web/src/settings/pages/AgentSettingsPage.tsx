@@ -1065,6 +1065,7 @@ function AgentSandbox({
         chain_depth: 0,
         timeout_seconds: 600,
         max_attempts: 1,
+        dry_run: true,
         input: { prompt, sandbox: true, publish: false },
       });
       setRun(created);
@@ -1149,6 +1150,36 @@ function AgentSandbox({
           <strong>{t("agentSandboxResult")}</strong>
           <p>{run.result_summary.preview}</p>
         </div>
+      )}
+      {run && (
+        <dl className="agent-sandbox__trace">
+          <div>
+            <dt>{t("agentTestVersion")}</dt>
+            <dd>v{run.agent_version ?? "—"}</dd>
+          </div>
+          <div>
+            <dt>{t("agentTestModel")}</dt>
+            <dd>
+              {run.provider} · {run.model}
+            </dd>
+          </div>
+          <div>
+            <dt>{t("agentTestTokens")}</dt>
+            <dd>
+              {run.input_tokens} / {run.output_tokens}
+            </dd>
+          </div>
+          <div>
+            <dt>{t("agentTestCost")}</dt>
+            <dd>
+              {run.cost} {run.currency}
+            </dd>
+          </div>
+          <div>
+            <dt>{t("agentTestWrites")}</dt>
+            <dd>{t("agentTestWritesBlocked")}</dd>
+          </div>
+        </dl>
       )}
     </div>
   );

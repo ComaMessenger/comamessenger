@@ -81,10 +81,12 @@ func (service *Service) Start(ctx context.Context, current identity.User, authen
 	}
 	var endpoint string
 	var approved bool
-	err = service.pool.QueryRow(ctx, `SELECT COALESCE(connection.endpoint_url,agent.endpoint_url),agent.external_data_sharing_approved
-		FROM agents agent LEFT JOIN agent_llm_connections connection ON connection.org_id=agent.org_id AND connection.id=agent.llm_connection_id AND connection.enabled
-		WHERE agent.org_id=$1 AND agent.actor_id=$2 AND agent.deleted_at IS NULL
-		AND (agent.llm_connection_id IS NULL OR connection.id IS NOT NULL)`, current.OrgID, agentID).Scan(&endpoint, &approved)
+	err = service.pool.QueryRow(ctx, `SELECT
+		CASE WHEN run.dry_run THEN COALESCE(run.agent_config->>'endpoint_url','') ELSE COALESCE(connection.endpoint_url,agent.endpoint_url) END,
+		CASE WHEN run.dry_run THEN COALESCE((run.agent_config->>'external_data_sharing_approved')::boolean,false) ELSE agent.external_data_sharing_approved END
+		FROM agent_runs run JOIN agents agent ON agent.org_id=run.org_id AND agent.actor_id=run.agent_id
+		LEFT JOIN agent_llm_connections connection ON connection.org_id=agent.org_id AND connection.id=agent.llm_connection_id AND connection.enabled
+		WHERE run.org_id=$1 AND run.agent_id=$2 AND run.id=$3 AND agent.deleted_at IS NULL`, current.OrgID, agentID, input.RunID).Scan(&endpoint, &approved)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil, agentrun.ErrNotFound
 	}
@@ -94,7 +96,7 @@ func (service *Service) Start(ctx context.Context, current identity.User, authen
 	if !approved {
 		return nil, nil, agentrun.ErrForbidden
 	}
-	credential, err := service.config.RuntimeCredentialForAgent(ctx, current, authentication, agentID)
+	credential, err := service.config.RuntimeCredentialForRun(ctx, current, authentication, agentID, input.RunID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -164,7 +166,10 @@ func (session *Session) Finish(ctx context.Context, status string) error {
 func (service *Service) runProvider(ctx context.Context, orgID, agentID, runID, leaseToken string) (string, string, int, error) {
 	var provider, model string
 	var maxOutputTokens int
-	err := service.pool.QueryRow(ctx, `SELECT run.provider,run.model,agent.max_output_tokens FROM agent_runs run JOIN agents agent ON agent.org_id=run.org_id AND agent.actor_id=run.agent_id WHERE run.org_id=$1 AND run.agent_id=$2 AND run.id=$3 AND run.lease_token=$4 AND run.status='running'`, orgID, agentID, runID, leaseToken).Scan(&provider, &model, &maxOutputTokens)
+	err := service.pool.QueryRow(ctx, `SELECT run.provider,run.model,
+		CASE WHEN run.dry_run THEN COALESCE((run.agent_config->>'max_output_tokens')::integer,agent.max_output_tokens) ELSE agent.max_output_tokens END
+		FROM agent_runs run JOIN agents agent ON agent.org_id=run.org_id AND agent.actor_id=run.agent_id
+		WHERE run.org_id=$1 AND run.agent_id=$2 AND run.id=$3 AND run.lease_token=$4 AND run.status='running'`, orgID, agentID, runID, leaseToken).Scan(&provider, &model, &maxOutputTokens)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", "", 0, agentrun.ErrConflict
 	}

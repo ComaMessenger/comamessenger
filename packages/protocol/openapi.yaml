@@ -3580,6 +3580,7 @@ components:
         timeout_seconds:
           { type: integer, minimum: 5, maximum: 3600, default: 120 }
         max_attempts: { type: integer, minimum: 1, maximum: 20, default: 3 }
+        dry_run: { type: boolean, default: false }
         input:
           type: object
           additionalProperties: true
@@ -3854,12 +3855,15 @@ components:
     AgentMcpToolCall:
       type: object
       additionalProperties: false
-      required: [id, correlation_id, tool_name, mode]
+      required: [id, correlation_id, tool_name, mode, preview]
       properties:
         id: { type: string, format: uuid }
         correlation_id: { type: string, format: uuid }
         tool_name: { type: string }
         mode: { type: string, enum: [read, write] }
+        preview:
+          type: boolean
+          description: Server-enforced instruction to return a simulated result without calling the external MCP tool.
     FinishAgentMcpToolCallRequest:
       type: object
       additionalProperties: false
@@ -4018,6 +4022,33 @@ components:
         enabled: { type: boolean }
         timezone: { type: string, minLength: 1, maxLength: 64 }
         missed_runs_policy: { type: string, enum: [skip, latest] }
+    AgentRunConfig:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          handle,
+          description,
+          allowed_scopes,
+          llm_connection_id,
+          endpoint_url,
+          external_data_sharing_approved,
+          max_output_tokens,
+          max_tool_iterations,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        handle: { type: string }
+        description: { type: string }
+        allowed_scopes:
+          type: array
+          items: { $ref: "#/components/schemas/AgentScope" }
+        llm_connection_id: { type: [string, "null"], format: uuid }
+        endpoint_url: { type: string }
+        external_data_sharing_approved: { type: boolean }
+        max_output_tokens: { type: integer, minimum: 1 }
+        max_tool_iterations: { type: integer, minimum: 0 }
     AgentRun:
       type: object
       additionalProperties: false
@@ -4027,6 +4058,8 @@ components:
           org_id,
           agent_id,
           agent_version,
+          dry_run,
+          agent_config,
           correlation_id,
           chain_depth,
           status,
@@ -4048,6 +4081,8 @@ components:
         org_id: { type: string, format: uuid }
         agent_id: { type: string, format: uuid }
         agent_version: { type: [integer, "null"], minimum: 1 }
+        dry_run: { type: boolean }
+        agent_config: { $ref: "#/components/schemas/AgentRunConfig" }
         trigger_id: { type: string, format: uuid }
         trigger_event_seq: { type: integer, format: int64, minimum: 1 }
         scheduled_for: { type: string, format: date-time }

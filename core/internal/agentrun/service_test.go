@@ -24,6 +24,80 @@ const (
 	runTestChatID  = "00000000-0000-7000-8000-000000000283"
 )
 
+func TestDryRunSnapshotsDraftWithoutEnablingAgent(t *testing.T) {
+	pool := testdb.New(t)
+	seedRunWorkerModel(t, pool)
+	owner := identity.User{ActorID: runTestOwnerID, OrgID: runTestOrgID, OrgRole: "owner"}
+	agents := agent.NewService(pool)
+	created, err := agents.Create(t.Context(), owner, agent.CreateInput{
+		DisplayName: "Draft tester", Handle: "draft-tester", Kind: "builtin", Description: "draft instructions",
+		Provider: "openai", Model: "test", ExternalDataSharingApproved: true,
+		AllowedScopes: []agent.Scope{agent.ScopeMessagesRead, agent.ScopeRuntimeExecute}, ChatIDs: []string{runTestChatID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := agentrun.NewService(pool)
+	run, err := service.Invoke(t.Context(), owner, created.ID, agentrun.InvokeInput{
+		ChatID: runTestChatID, ClientRunID: mustRunID(t), DryRun: true, Input: json.RawMessage(`{"prompt":"check draft"}`),
+	})
+	if err != nil || !run.DryRun || run.AgentVersion == nil || *run.AgentVersion != 1 {
+		t.Fatalf("dry run=%+v err=%v", run, err)
+	}
+	var config struct {
+		Description string `json:"description"`
+	}
+	if err := json.Unmarshal(run.AgentConfig, &config); err != nil || config.Description != "draft instructions" {
+		t.Fatalf("dry-run config=%+v err=%v", config, err)
+	}
+	if _, err := service.Invoke(t.Context(), owner, created.ID, agentrun.InvokeInput{
+		ChatID: runTestChatID, ClientRunID: mustRunID(t), Input: json.RawMessage(`{"prompt":"must not run"}`),
+	}); !errors.Is(err, agentrun.ErrNotFound) {
+		t.Fatalf("normal invocation of draft error=%v", err)
+	}
+	worker, err := agents.Create(t.Context(), owner, agent.CreateInput{
+		DisplayName: "Organization worker", Handle: "dry-run-worker", Kind: "builtin", Enabled: true,
+		AllowedScopes: []agent.Scope{agent.ScopeRuntimeWorker}, Provider: "openai", Model: "test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := agents.CreateKey(t.Context(), owner, worker.ID, agent.CreateKeyInput{
+		Name: "dry-run-worker", Scopes: []agent.Scope{agent.ScopeRuntimeWorker}, RateLimitPerMinute: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	agentUser, authentication, err := agents.AuthenticateKey(t.Context(), key.Secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configService, err := agentconfig.NewService(pool, "0123456789abcdef0123456789abcdef")
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireConfirmation := true
+	mcpServer, err := configService.CreateMCPServer(t.Context(), owner, created.ID, agentconfig.CreateMCPServerInput{
+		Name: "dry-run-external", EndpointURL: "https://mcp.example.test/rpc", Enabled: true,
+		AllowedTools: []string{"write_record"}, TimeoutMS: 5000, MaxOutputBytes: 32768,
+		RequireWriteConfirmation: &requireConfirmation,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := service.ClaimForAgent(t.Context(), agentUser, authentication, agentrun.ClaimInput{WorkerID: mustRunID(t), LeaseSeconds: 30})
+	if err != nil || claimed.ID != run.ID || !claimed.DryRun {
+		t.Fatalf("claimed dry run=%+v err=%v", claimed, err)
+	}
+	preview, err := service.StartMCPToolCall(t.Context(), agentUser, authentication, agentrun.StartMCPToolCallInput{
+		CallID: mustRunID(t), RunID: run.ID, LeaseToken: claimed.LeaseToken, ServerID: mcpServer.ID,
+		ToolName: "write_record", Mode: "write", InputBytes: 24,
+	})
+	if err != nil || !preview.Preview {
+		t.Fatalf("dry-run MCP write=%+v err=%v", preview, err)
+	}
+}
+
 func TestAgentWorkerLeaseAndCheckpointContract(t *testing.T) {
 	pool := testdb.New(t)
 	seedRunWorkerModel(t, pool)

@@ -1542,6 +1542,32 @@ a:focus-visible {
   gap: var(--coma-space-3);
 }
 
+.agent-sandbox__trace {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--coma-space-2);
+  margin: 0;
+}
+
+.agent-sandbox__trace > div {
+  display: grid;
+  gap: var(--coma-space-1);
+  padding: var(--coma-space-2);
+  border: 1px solid var(--coma-border);
+  border-radius: var(--coma-radius-md);
+  background: var(--coma-surface);
+}
+
+.agent-sandbox__trace dt {
+  color: var(--coma-muted);
+  font-size: 13px;
+}
+
+.agent-sandbox__trace dd {
+  margin: 0;
+  font-weight: 650;
+}
+
 .agent-lifecycle__status,
 .agent-version-list > div {
   display: flex;

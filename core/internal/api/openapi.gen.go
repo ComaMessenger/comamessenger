@@ -2964,7 +2964,10 @@ type AgentMcpToolCall struct {
 	CorrelationId openapi_types.UUID   `json:"correlation_id"`
 	Id            openapi_types.UUID   `json:"id"`
 	Mode          AgentMcpToolCallMode `json:"mode"`
-	ToolName      string               `json:"tool_name"`
+
+	// Preview Server-enforced instruction to return a simulated result without calling the external MCP tool.
+	Preview  bool   `json:"preview"`
+	ToolName string `json:"tool_name"`
 }
 
 // AgentMcpToolCallMode defines model for AgentMcpToolCall.Mode.
@@ -3031,6 +3034,7 @@ type AgentReadinessState string
 
 // AgentRun defines model for AgentRun.
 type AgentRun struct {
+	AgentConfig       AgentRunConfig         `json:"agent_config"`
 	AgentId           openapi_types.UUID     `json:"agent_id"`
 	AgentVersion      *int                   `json:"agent_version"`
 	Attempt           int                    `json:"attempt"`
@@ -3042,6 +3046,7 @@ type AgentRun struct {
 	Cost              string                 `json:"cost"`
 	CreatedAt         time.Time              `json:"created_at"`
 	Currency          string                 `json:"currency"`
+	DryRun            bool                   `json:"dry_run"`
 	ErrorCode         string                 `json:"error_code"`
 	FinishedAt        *time.Time             `json:"finished_at,omitempty"`
 	Id                openapi_types.UUID     `json:"id"`
@@ -3065,6 +3070,19 @@ type AgentRun struct {
 
 // AgentRunStatus defines model for AgentRun.Status.
 type AgentRunStatus string
+
+// AgentRunConfig defines model for AgentRunConfig.
+type AgentRunConfig struct {
+	AllowedScopes               []AgentScope        `json:"allowed_scopes"`
+	Description                 string              `json:"description"`
+	EndpointUrl                 string              `json:"endpoint_url"`
+	ExternalDataSharingApproved bool                `json:"external_data_sharing_approved"`
+	Handle                      string              `json:"handle"`
+	Id                          openapi_types.UUID  `json:"id"`
+	LlmConnectionId             *openapi_types.UUID `json:"llm_connection_id"`
+	MaxOutputTokens             int                 `json:"max_output_tokens"`
+	MaxToolIterations           int                 `json:"max_tool_iterations"`
+}
 
 // AgentRunLeaseRequest defines model for AgentRunLeaseRequest.
 type AgentRunLeaseRequest struct {
@@ -3381,6 +3399,7 @@ type ClaimAgentRunRequest struct {
 
 // ClaimedAgentRun defines model for ClaimedAgentRun.
 type ClaimedAgentRun struct {
+	AgentConfig       AgentRunConfig         `json:"agent_config"`
 	AgentId           openapi_types.UUID     `json:"agent_id"`
 	AgentVersion      *int                   `json:"agent_version"`
 	Attempt           int                    `json:"attempt"`
@@ -3392,6 +3411,7 @@ type ClaimedAgentRun struct {
 	Cost              string                 `json:"cost"`
 	CreatedAt         time.Time              `json:"created_at"`
 	Currency          string                 `json:"currency"`
+	DryRun            bool                   `json:"dry_run"`
 	ErrorCode         string                 `json:"error_code"`
 	FinishedAt        *time.Time             `json:"finished_at,omitempty"`
 	Id                openapi_types.UUID     `json:"id"`
@@ -3814,6 +3834,7 @@ type InvokeAgentRequest struct {
 	ChatId         openapi_types.UUID     `json:"chat_id"`
 	ClientRunId    openapi_types.UUID     `json:"client_run_id"`
 	CorrelationId  *openapi_types.UUID    `json:"correlation_id,omitempty"`
+	DryRun         *bool                  `json:"dry_run,omitempty"`
 	Input          map[string]interface{} `json:"input"`
 	MaxAttempts    *int                   `json:"max_attempts,omitempty"`
 	ThreadRootId   *openapi_types.UUID    `json:"thread_root_id,omitempty"`
