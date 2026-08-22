@@ -9,7 +9,7 @@ COPY apps/agent-runtime/package.json ./apps/agent-runtime/package.json
 COPY packages/core/package.json ./packages/core/package.json
 COPY packages/protocol/package.json ./packages/protocol/package.json
 COPY packages/tokens/package.json ./packages/tokens/package.json
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --prod=false
 
 COPY apps/web ./apps/web
 COPY packages/core ./packages/core
