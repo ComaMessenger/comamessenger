@@ -95,7 +95,7 @@ func (service *Service) ConfigureShard(index, count uint64) error {
 }
 
 func (service *Service) Create(ctx context.Context, current identity.User, agentID string, input CreateInput) (Trigger, error) {
-	if !canManage(current) {
+	if !canBuild(current) {
 		return Trigger{}, ErrForbidden
 	}
 	if uuid.Validate(agentID) != nil {
@@ -138,7 +138,7 @@ func (service *Service) Create(ctx context.Context, current identity.User, agent
 }
 
 func (service *Service) List(ctx context.Context, current identity.User, agentID string) ([]Trigger, error) {
-	if !canManage(current) {
+	if !canView(current) {
 		return nil, ErrForbidden
 	}
 	rows, err := service.pool.Query(ctx, triggerSelect+` WHERE trigger.org_id=$1 AND trigger.agent_id=$2 AND trigger.superseded_at IS NULL ORDER BY trigger.created_at`, current.OrgID, agentID)
@@ -158,7 +158,7 @@ func (service *Service) List(ctx context.Context, current identity.User, agentID
 }
 
 func (service *Service) Update(ctx context.Context, current identity.User, agentID, triggerID string, input UpdateInput) (Trigger, error) {
-	if !canManage(current) {
+	if !canBuild(current) {
 		return Trigger{}, ErrForbidden
 	}
 	existing, err := service.get(ctx, current.OrgID, triggerID)
@@ -218,7 +218,7 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 }
 
 func (service *Service) Delete(ctx context.Context, current identity.User, agentID, triggerID string) error {
-	if !canManage(current) {
+	if !canBuild(current) {
 		return ErrForbidden
 	}
 	auditID, err := id.New()
@@ -815,6 +815,5 @@ func scanTrigger(row scanner) (Trigger, error) {
 	return result, err
 }
 
-func canManage(current identity.User) bool {
-	return agentauthz.New().CanManage(current)
-}
+func canBuild(current identity.User) bool { return agentauthz.New().CanBuild(current) }
+func canView(current identity.User) bool  { return agentauthz.New().CanView(current) }

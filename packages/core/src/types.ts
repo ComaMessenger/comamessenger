@@ -68,6 +68,7 @@ export type AuditPage = components["schemas"]["AuditPage"];
 export type Agent = components["schemas"]["Agent"];
 export type AgentVersion = components["schemas"]["AgentVersion"];
 export type AgentUsageReport = components["schemas"]["AgentUsageReport"];
+export type AgentProductMetrics = components["schemas"]["AgentProductMetrics"];
 export type AgentUsageEntry = components["schemas"]["AgentUsageEntry"];
 export type AgentScope = components["schemas"]["AgentScope"];
 export type AgentApiKey = components["schemas"]["AgentApiKey"];

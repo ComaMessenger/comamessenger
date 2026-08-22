@@ -13,6 +13,8 @@ func TestAllows(t *testing.T) {
 		{name: "owner has every known permission", role: "owner", required: AuditRead, want: true},
 		{name: "admin needs an explicit permission", role: "admin", required: AuditRead, want: false},
 		{name: "admin receives a granted permission", role: "admin", granted: []Code{AuditRead}, required: AuditRead, want: true},
+		{name: "legacy agent manager can build", role: "admin", granted: []Code{AgentsManage}, required: AgentsBuild, want: true},
+		{name: "builder cannot publish", role: "admin", granted: []Code{AgentsBuild}, required: AgentsPublish, want: false},
 		{name: "member never receives explicit permissions", role: "member", granted: []Code{AuditRead}, required: AuditRead, want: false},
 		{name: "unknown permission is denied", role: "owner", required: Code("unknown"), want: false},
 	}

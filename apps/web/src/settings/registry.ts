@@ -10,6 +10,10 @@ export const permissions = [
   "branding.manage",
   "integrations.manage",
   "agents.manage",
+  "agents.build",
+  "agents.publish",
+  "agents.approve",
+  "agents.observe",
   "audit.read",
   "chats.moderate",
 ] as const satisfies readonly Permission[];
@@ -22,6 +26,10 @@ export const permissionLabelKeys: Record<Permission, string> = {
   "branding.manage": "permissionBrandingManage",
   "integrations.manage": "permissionIntegrationsManage",
   "agents.manage": "permissionAgentsManage",
+  "agents.build": "permissionAgentsBuild",
+  "agents.publish": "permissionAgentsPublish",
+  "agents.approve": "permissionAgentsApprove",
+  "agents.observe": "permissionAgentsObserve",
   "audit.read": "permissionAuditRead",
   "chats.moderate": "permissionChatsModerate",
 };
@@ -160,7 +168,15 @@ export function canAccessSettings(user: User, entry: SettingsEntry): boolean {
 }
 
 export function hasPermission(user: User, required: Permission): boolean {
-  return user.role === "owner" || permissionsOf(user).has(required);
+  if (user.role === "owner") return true;
+  const granted = permissionsOf(user);
+  if (granted.has(required)) return true;
+  return (
+    granted.has("agents.manage") &&
+    ["agents.build", "agents.publish", "agents.approve", "agents.observe"].includes(
+      required,
+    )
+  );
 }
 
 export function canAccessSettingsPage(

@@ -648,7 +648,7 @@ func isUniqueViolation(err error) bool {
 
 func aad(orgID, agentID string) []byte { return []byte(orgID + "\x00" + agentID + "\x001") }
 func canManage(current identity.User) bool {
-	return agentauthz.New().CanManage(current)
+	return agentauthz.New().CanBuild(current)
 }
 func mask(value string) string {
 	if len(value) <= 8 {

@@ -66,6 +66,15 @@ describe("settings registry", () => {
     expect(hasPermission(admin, "members.manage")).toBe(false);
   });
 
+  it("expands legacy agent management without merging granular roles", () => {
+    const legacy = user("admin", ["agents.manage"]);
+    expect(hasPermission(legacy, "agents.build")).toBe(true);
+    expect(hasPermission(legacy, "agents.publish")).toBe(true);
+    const builder = user("admin", ["agents.build"]);
+    expect(hasPermission(builder, "agents.build")).toBe(true);
+    expect(hasPermission(builder, "agents.publish")).toBe(false);
+  });
+
   it("opens workspace navigation for any workspace permission", () => {
     expect(
       canAccessSettingsPage(user("admin", ["members.manage"]), "workspace"),

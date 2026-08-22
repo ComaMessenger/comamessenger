@@ -62,6 +62,7 @@ import type {
   Agent,
   AgentVersion,
   AgentUsageReport,
+  AgentProductMetrics,
   AgentApiKey,
   CreatedAgentApiKey,
   CreateAgentRequest,
@@ -351,6 +352,9 @@ export class MessengerAPI {
   }
   agentUsage(id: string): Promise<AgentUsageReport> {
     return this.request(`/api/v1/agents/${encodeURIComponent(id)}/usage`);
+  }
+  agentProductMetrics(): Promise<AgentProductMetrics> {
+    return this.request("/api/v1/agents/product-metrics");
   }
   cancelAgentRun(runID: string): Promise<AgentRun> {
     return this.request(

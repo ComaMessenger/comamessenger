@@ -169,6 +169,15 @@ type PlatformSettings struct {
 	OrganizationRateLimitPerMinute int `json:"organization_rate_limit_per_minute"`
 }
 
+type ProductMetrics struct {
+	AgentsTotal                  int64   `json:"agents_total"`
+	AgentsPublished              int64   `json:"agents_published"`
+	TestRunsTotal                int64   `json:"test_runs_total"`
+	TestRunsFailed               int64   `json:"test_runs_failed"`
+	AverageSecondsToFirstTest    float64 `json:"average_seconds_to_first_test"`
+	AverageSecondsToFirstPublish float64 `json:"average_seconds_to_first_publish"`
+}
+
 type UpdatePlatformSettingsInput struct {
 	OrganizationRateLimitPerMinute int `json:"organization_rate_limit_per_minute"`
 }
@@ -237,7 +246,7 @@ func (service *Service) SetRevokeSession(callback func(string)) {
 }
 
 func (service *Service) Create(ctx context.Context, current identity.User, input CreateInput) (Agent, error) {
-	if !canManage(current) {
+	if !canBuild(current) {
 		return Agent{}, ErrForbidden
 	}
 	normalized, err := normalizeCreate(input)
@@ -336,7 +345,7 @@ func (service *Service) Create(ctx context.Context, current identity.User, input
 }
 
 func (service *Service) Duplicate(ctx context.Context, current identity.User, agentID string, input DuplicateInput) (Agent, error) {
-	if !canManage(current) {
+	if !canBuild(current) {
 		return Agent{}, ErrForbidden
 	}
 	source, err := service.Get(ctx, current, agentID)
@@ -360,7 +369,7 @@ func (service *Service) Duplicate(ctx context.Context, current identity.User, ag
 }
 
 func (service *Service) ResetRecipe(ctx context.Context, current identity.User, agentID string) (Agent, error) {
-	if !canManage(current) {
+	if !canBuild(current) {
 		return Agent{}, ErrForbidden
 	}
 	if uuid.Validate(agentID) != nil {
@@ -432,7 +441,7 @@ func (service *Service) ResetRecipe(ctx context.Context, current identity.User, 
 }
 
 func (service *Service) List(ctx context.Context, current identity.User) ([]Agent, error) {
-	manager := canManage(current)
+	manager := canView(current)
 	selectQuery := agentPublishedSelect
 	if manager {
 		selectQuery = agentSelect
@@ -462,7 +471,7 @@ func (service *Service) List(ctx context.Context, current identity.User) ([]Agen
 }
 
 func (service *Service) Usage(ctx context.Context, current identity.User, agentID string) (UsageReport, error) {
-	if !canManage(current) {
+	if !canView(current) {
 		return UsageReport{}, ErrForbidden
 	}
 	if uuid.Validate(agentID) != nil {
@@ -503,11 +512,34 @@ func (service *Service) Usage(ctx context.Context, current identity.User, agentI
 	return result, rows.Err()
 }
 
+func (service *Service) Metrics(ctx context.Context, current identity.User) (ProductMetrics, error) {
+	if !agentauthz.New().CanObserve(current) {
+		return ProductMetrics{}, ErrForbidden
+	}
+	var result ProductMetrics
+	err := service.pool.QueryRow(ctx, `SELECT
+		(SELECT count(*) FROM agents WHERE org_id=$1 AND deleted_at IS NULL),
+		(SELECT count(*) FROM agents WHERE org_id=$1 AND deleted_at IS NULL AND published_version IS NOT NULL),
+		(SELECT count(*) FROM agent_runs WHERE org_id=$1 AND dry_run),
+		(SELECT count(*) FROM agent_runs WHERE org_id=$1 AND dry_run AND status='failed'),
+		COALESCE((SELECT avg(extract(epoch FROM first_test.created_at-actor.created_at))
+			FROM agents agent JOIN actors actor ON actor.org_id=agent.org_id AND actor.id=agent.actor_id
+			JOIN LATERAL (SELECT min(created_at) created_at FROM agent_runs WHERE org_id=agent.org_id AND agent_id=agent.actor_id AND dry_run) first_test ON first_test.created_at IS NOT NULL
+			WHERE agent.org_id=$1),0),
+		COALESCE((SELECT avg(extract(epoch FROM agent.published_at-actor.created_at))
+			FROM agents agent JOIN actors actor ON actor.org_id=agent.org_id AND actor.id=agent.actor_id
+			WHERE agent.org_id=$1 AND agent.published_at IS NOT NULL),0)`, current.OrgID).Scan(
+		&result.AgentsTotal, &result.AgentsPublished, &result.TestRunsTotal, &result.TestRunsFailed,
+		&result.AverageSecondsToFirstTest, &result.AverageSecondsToFirstPublish,
+	)
+	return result, err
+}
+
 func (service *Service) Get(ctx context.Context, current identity.User, agentID string) (Agent, error) {
 	if _, err := uuid.Parse(agentID); err != nil {
 		return Agent{}, ErrNotFound
 	}
-	manager := canManage(current)
+	manager := canView(current)
 	selectQuery := agentPublishedSelect
 	if manager {
 		selectQuery = agentSelect
@@ -528,7 +560,7 @@ func (service *Service) Get(ctx context.Context, current identity.User, agentID 
 }
 
 func (service *Service) Update(ctx context.Context, current identity.User, agentID string, input UpdateInput) (Agent, error) {
-	if !canManage(current) {
+	if !canBuild(current) {
 		return Agent{}, ErrForbidden
 	}
 	if _, err := uuid.Parse(agentID); err != nil {
@@ -615,7 +647,7 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 }
 
 func (service *Service) Publish(ctx context.Context, current identity.User, agentID string) (Agent, error) {
-	if !canManage(current) {
+	if !canPublish(current) {
 		return Agent{}, ErrForbidden
 	}
 	if uuid.Validate(agentID) != nil {
@@ -668,7 +700,7 @@ func (service *Service) Resume(ctx context.Context, current identity.User, agent
 }
 
 func (service *Service) setOperationalStatus(ctx context.Context, current identity.User, agentID string, enabled bool) (Agent, error) {
-	if !canManage(current) {
+	if !canPublish(current) {
 		return Agent{}, ErrForbidden
 	}
 	if uuid.Validate(agentID) != nil {
@@ -723,7 +755,7 @@ func (service *Service) setOperationalStatus(ctx context.Context, current identi
 }
 
 func (service *Service) Versions(ctx context.Context, current identity.User, agentID string) ([]Version, error) {
-	if !canManage(current) {
+	if !canView(current) {
 		return nil, ErrForbidden
 	}
 	if uuid.Validate(agentID) != nil {
@@ -748,7 +780,7 @@ func (service *Service) Versions(ctx context.Context, current identity.User, age
 }
 
 func (service *Service) Rollback(ctx context.Context, current identity.User, agentID, versionID string) (Agent, error) {
-	if !canManage(current) {
+	if !canPublish(current) {
 		return Agent{}, ErrForbidden
 	}
 	if uuid.Validate(agentID) != nil || uuid.Validate(versionID) != nil {
@@ -807,7 +839,7 @@ func (service *Service) Rollback(ctx context.Context, current identity.User, age
 }
 
 func (service *Service) Delete(ctx context.Context, current identity.User, agentID string) error {
-	if !canManage(current) {
+	if !canBuild(current) {
 		return ErrForbidden
 	}
 	if _, err := uuid.Parse(agentID); err != nil {
@@ -890,7 +922,7 @@ func (service *Service) Delete(ctx context.Context, current identity.User, agent
 }
 
 func (service *Service) CreateKey(ctx context.Context, current identity.User, agentID string, input CreateKeyInput) (CreatedAPIKey, error) {
-	if !canManage(current) {
+	if !canBuild(current) {
 		return CreatedAPIKey{}, ErrForbidden
 	}
 	if _, err := uuid.Parse(agentID); err != nil {
@@ -950,7 +982,7 @@ func (service *Service) CreateKey(ctx context.Context, current identity.User, ag
 }
 
 func (service *Service) RevokeKey(ctx context.Context, current identity.User, agentID, keyID string) error {
-	if !canManage(current) {
+	if !canBuild(current) {
 		return ErrForbidden
 	}
 	if _, err := uuid.Parse(agentID); err != nil {
@@ -987,7 +1019,7 @@ func (service *Service) RevokeKey(ctx context.Context, current identity.User, ag
 }
 
 func (service *Service) ListKeys(ctx context.Context, current identity.User, agentID string) ([]APIKey, error) {
-	if !canManage(current) {
+	if !canBuild(current) {
 		return nil, ErrForbidden
 	}
 	if _, err := uuid.Parse(agentID); err != nil {
@@ -1666,9 +1698,9 @@ func scopeSubset(scopes []Scope, allowed []string) bool {
 	return true
 }
 
-func canManage(current identity.User) bool {
-	return agentauthz.New().CanManage(current)
-}
+func canBuild(current identity.User) bool   { return agentauthz.New().CanBuild(current) }
+func canPublish(current identity.User) bool { return agentauthz.New().CanPublish(current) }
+func canView(current identity.User) bool    { return agentauthz.New().CanView(current) }
 
 func (service *Service) revokeRealtimeKeys(keyIDs []string) {
 	if service.revokeSession == nil {

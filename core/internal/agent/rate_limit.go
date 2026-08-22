@@ -20,7 +20,7 @@ type rateDimension struct {
 }
 
 func (service *Service) PlatformSettings(ctx context.Context, current identity.User) (PlatformSettings, error) {
-	if !canManage(current) {
+	if !canPublish(current) {
 		return PlatformSettings{}, ErrForbidden
 	}
 	var result PlatformSettings
@@ -33,7 +33,7 @@ func (service *Service) PlatformSettings(ctx context.Context, current identity.U
 }
 
 func (service *Service) UpdatePlatformSettings(ctx context.Context, current identity.User, input UpdatePlatformSettingsInput) (PlatformSettings, error) {
-	if !canManage(current) {
+	if !canPublish(current) {
 		return PlatformSettings{}, ErrForbidden
 	}
 	if input.OrganizationRateLimitPerMinute < 1 || input.OrganizationRateLimitPerMinute > 1000000 {

@@ -18,6 +18,26 @@ func (Authorizer) CanManage(current identity.User) bool {
 	return permission.Allows(current.OrgRole, current.Permissions, permission.AgentsManage)
 }
 
+func (Authorizer) CanBuild(current identity.User) bool {
+	return permission.Allows(current.OrgRole, current.Permissions, permission.AgentsBuild)
+}
+
+func (Authorizer) CanPublish(current identity.User) bool {
+	return permission.Allows(current.OrgRole, current.Permissions, permission.AgentsPublish)
+}
+
+func (Authorizer) CanApprove(current identity.User) bool {
+	return permission.Allows(current.OrgRole, current.Permissions, permission.AgentsApprove)
+}
+
+func (Authorizer) CanObserve(current identity.User) bool {
+	return permission.Allows(current.OrgRole, current.Permissions, permission.AgentsObserve)
+}
+
+func (authorizer Authorizer) CanView(current identity.User) bool {
+	return authorizer.CanObserve(current) || authorizer.CanBuild(current) || authorizer.CanPublish(current) || authorizer.CanApprove(current)
+}
+
 func (Authorizer) IsRuntime(current identity.User, authentication access.Identity) bool {
 	return authentication.AuthenticationKind == "api_key" &&
 		authentication.ActorID == current.ActorID &&

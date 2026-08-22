@@ -10,6 +10,10 @@ const (
 	BrandingManage     Code = "branding.manage"
 	IntegrationsManage Code = "integrations.manage"
 	AgentsManage       Code = "agents.manage"
+	AgentsBuild        Code = "agents.build"
+	AgentsPublish      Code = "agents.publish"
+	AgentsApprove      Code = "agents.approve"
+	AgentsObserve      Code = "agents.observe"
 	AuditRead          Code = "audit.read"
 	ChatsModerate      Code = "chats.moderate"
 )
@@ -22,6 +26,10 @@ var all = [...]Code{
 	BrandingManage,
 	IntegrationsManage,
 	AgentsManage,
+	AgentsBuild,
+	AgentsPublish,
+	AgentsApprove,
+	AgentsObserve,
 	AuditRead,
 	ChatsModerate,
 }
@@ -69,9 +77,13 @@ func Allows(role string, granted []Code, required Code) bool {
 		return false
 	}
 	for _, code := range granted {
-		if code == required {
+		if code == required || (code == AgentsManage && isGranularAgentPermission(required)) {
 			return true
 		}
 	}
 	return false
+}
+
+func isGranularAgentPermission(code Code) bool {
+	return code == AgentsBuild || code == AgentsPublish || code == AgentsApprove || code == AgentsObserve
 }

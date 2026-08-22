@@ -1383,6 +1383,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agents/product-metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Aggregated workspace-local product funnel metrics derived from agent and run records. */
+        get: operations["getAgentProductMetrics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents/{agent_id}": {
         parameters: {
             query?: never;
@@ -2505,6 +2522,20 @@ export interface components {
             currency: "USD";
             recent: components["schemas"]["AgentUsageEntry"][];
         };
+        AgentProductMetrics: {
+            /** Format: int64 */
+            agents_total: number;
+            /** Format: int64 */
+            agents_published: number;
+            /** Format: int64 */
+            test_runs_total: number;
+            /** Format: int64 */
+            test_runs_failed: number;
+            /** Format: double */
+            average_seconds_to_first_test: number;
+            /** Format: double */
+            average_seconds_to_first_publish: number;
+        };
         AgentApiKey: {
             /** Format: uuid */
             id: string;
@@ -3028,7 +3059,7 @@ export interface components {
             expires_at: string | null;
         };
         /** @enum {string} */
-        Permission: "members.manage" | "invitations.manage" | "workspace.settings" | "workspace.policies" | "branding.manage" | "integrations.manage" | "agents.manage" | "audit.read" | "chats.moderate";
+        Permission: "members.manage" | "invitations.manage" | "workspace.settings" | "workspace.policies" | "branding.manage" | "integrations.manage" | "agents.manage" | "agents.build" | "agents.publish" | "agents.approve" | "agents.observe" | "audit.read" | "chats.moderate";
         TokenResponse: {
             access_token: string;
             /** Format: date-time */
@@ -6533,6 +6564,27 @@ export interface operations {
             403: components["responses"]["Error"];
             409: components["responses"]["Error"];
             422: components["responses"]["Error"];
+        };
+    };
+    getAgentProductMetrics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Agent product metrics for observers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentProductMetrics"];
+                };
+            };
+            403: components["responses"]["Error"];
         };
     };
     getAgent: {

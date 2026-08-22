@@ -1747,7 +1747,11 @@ func (e OrganizationSettingsInvitationDefaultRole) Valid() bool {
 
 // Defines values for Permission.
 const (
+	AgentsApprove      Permission = "agents.approve"
+	AgentsBuild        Permission = "agents.build"
 	AgentsManage       Permission = "agents.manage"
+	AgentsObserve      Permission = "agents.observe"
+	AgentsPublish      Permission = "agents.publish"
 	AuditRead          Permission = "audit.read"
 	BrandingManage     Permission = "branding.manage"
 	ChatsModerate      Permission = "chats.moderate"
@@ -1761,7 +1765,15 @@ const (
 // Valid indicates whether the value is a known member of the Permission enum.
 func (e Permission) Valid() bool {
 	switch e {
+	case AgentsApprove:
+		return true
+	case AgentsBuild:
+		return true
 	case AgentsManage:
+		return true
+	case AgentsObserve:
+		return true
+	case AgentsPublish:
 		return true
 	case AuditRead:
 		return true
@@ -2982,6 +2994,16 @@ type AgentMcpToolCallMode string
 // AgentPlatformSettings defines model for AgentPlatformSettings.
 type AgentPlatformSettings struct {
 	OrganizationRateLimitPerMinute int `json:"organization_rate_limit_per_minute"`
+}
+
+// AgentProductMetrics defines model for AgentProductMetrics.
+type AgentProductMetrics struct {
+	AgentsPublished              int64   `json:"agents_published"`
+	AgentsTotal                  int64   `json:"agents_total"`
+	AverageSecondsToFirstPublish float64 `json:"average_seconds_to_first_publish"`
+	AverageSecondsToFirstTest    float64 `json:"average_seconds_to_first_test"`
+	TestRunsFailed               int64   `json:"test_runs_failed"`
+	TestRunsTotal                int64   `json:"test_runs_total"`
 }
 
 // AgentProviderCall defines model for AgentProviderCall.

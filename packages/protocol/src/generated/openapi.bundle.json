@@ -4089,6 +4089,32 @@
         }
       }
     },
+    "/api/v1/agents/product-metrics": {
+      "get": {
+        "operationId": "getAgentProductMetrics",
+        "description": "Aggregated workspace-local product funnel metrics derived from agent and run records.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent product metrics for observers.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentProductMetrics"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/v1/agents/{agent_id}": {
       "parameters": [
         {
@@ -8098,6 +8124,50 @@
           }
         }
       },
+      "AgentProductMetrics": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "agents_total",
+          "agents_published",
+          "test_runs_total",
+          "test_runs_failed",
+          "average_seconds_to_first_test",
+          "average_seconds_to_first_publish"
+        ],
+        "properties": {
+          "agents_total": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "agents_published": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "test_runs_total": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "test_runs_failed": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "average_seconds_to_first_test": {
+            "type": "number",
+            "format": "double",
+            "minimum": 0
+          },
+          "average_seconds_to_first_publish": {
+            "type": "number",
+            "format": "double",
+            "minimum": 0
+          }
+        }
+      },
       "AgentApiKey": {
         "type": "object",
         "additionalProperties": false,
@@ -9914,6 +9984,10 @@
           "branding.manage",
           "integrations.manage",
           "agents.manage",
+          "agents.build",
+          "agents.publish",
+          "agents.approve",
+          "agents.observe",
           "audit.read",
           "chats.moderate"
         ]

@@ -172,7 +172,13 @@ export function AgentSettingsPage({
   navigate(to: string): void;
 }) {
   const { t } = useTranslation();
-  const allowed = hasPermission(user, "agents.manage");
+  const canBuild = hasPermission(user, "agents.build");
+  const canPublish = hasPermission(user, "agents.publish");
+  const canApprove = hasPermission(user, "agents.approve");
+  const canObserve = hasPermission(user, "agents.observe");
+  const canIntegrate = hasPermission(user, "integrations.manage");
+  const allowed =
+    canBuild || canPublish || canApprove || canObserve || canIntegrate;
   const route = agentRoute(path);
   const globalTab = route.kind === "global" ? route.section : null;
   const detailSection: AgentDetailSection =
@@ -267,7 +273,17 @@ export function AgentSettingsPage({
               ["approvals", "/agents/approvals", ShieldCheck],
               ["activity", "/agents/activity", Activity],
             ] as const
-          ).map(([id, target, Icon]) => (
+          )
+            .filter(([id]) =>
+              id === "connections"
+                ? canIntegrate
+                : id === "approvals"
+                  ? canApprove
+                  : id === "activity"
+                    ? canObserve
+                    : canBuild || canPublish || canObserve,
+            )
+            .map(([id, target, Icon]) => (
             <button
               key={id}
               className={globalTab === id ? "active" : ""}
@@ -276,7 +292,7 @@ export function AgentSettingsPage({
               <Icon />
               <span>{t(`agentTab_${id}`)}</span>
             </button>
-          ))}
+            ))}
         </nav>
       </header>
       <div className="agent-platform__content">
@@ -293,24 +309,31 @@ export function AgentSettingsPage({
           <AgentApprovals api={api} agents={agents.data ?? []} />
         ) : globalTab === "activity" ? (
           <AgentActivityDirectory
+            api={api}
             agents={agents.data ?? []}
             navigate={navigate}
           />
         ) : (
           <div className="agent-settings">
             <aside className="agent-catalog">
-              <Button onClick={() => chooseTemplate("custom")}>
-                <Plus />
-                {t("createAgent")}
-              </Button>
-              <div className="agent-template-row">
-                {(["summarizer", "qa", "onboarding"] as const).map((item) => (
-                  <button key={item} onClick={() => chooseTemplate(item)}>
-                    <Zap />
-                    <span>{t(`agentTemplate_${item}`)}</span>
-                  </button>
-                ))}
-              </div>
+              {canBuild && (
+                <>
+                  <Button onClick={() => chooseTemplate("custom")}>
+                    <Plus />
+                    {t("createAgent")}
+                  </Button>
+                  <div className="agent-template-row">
+                    {(["summarizer", "qa", "onboarding"] as const).map(
+                      (item) => (
+                        <button key={item} onClick={() => chooseTemplate(item)}>
+                          <Zap />
+                          <span>{t(`agentTemplate_${item}`)}</span>
+                        </button>
+                      ),
+                    )}
+                  </div>
+                </>
+              )}
               {(agents.data ?? []).map((agent) => (
                 <button
                   key={agent.id}
@@ -336,13 +359,13 @@ export function AgentSettingsPage({
                     {selected ? `@${selected.handle}` : t("agentsEmptyHint")}
                   </p>
                 </div>
-                {selected && detailSection === "behavior" && (
+                {canBuild && selected && detailSection === "behavior" && (
                   <Button disabled={pending} onClick={() => void save()}>
                     <Save />
                     {pending ? t("saving") : t("save")}
                   </Button>
                 )}
-                {selected && detailSection === "settings" && (
+                {canBuild && selected && detailSection === "settings" && (
                   <Button
                     variant="ghost"
                     disabled={pending}
@@ -368,7 +391,7 @@ export function AgentSettingsPage({
                     {t("duplicateAgent")}
                   </Button>
                 )}
-                {selected &&
+                {canBuild && selected &&
                   selected.recipe !== "custom" &&
                   detailSection === "settings" && (
                     <Button
@@ -380,7 +403,7 @@ export function AgentSettingsPage({
                       {t("resetTemplate")}
                     </Button>
                   )}
-                {selected && detailSection === "settings" && (
+                {canBuild && selected && detailSection === "settings" && (
                   <Button
                     variant="ghost"
                     disabled={pending}
@@ -406,7 +429,15 @@ export function AgentSettingsPage({
                       ["activity", Activity],
                       ["settings", Plug],
                     ] as const
-                  ).map(([section, Icon]) => (
+                  )
+                    .filter(([section]) =>
+                      section === "activity"
+                        ? canObserve
+                        : section === "overview"
+                          ? canBuild || canPublish || canObserve
+                          : canBuild,
+                    )
+                    .map(([section, Icon]) => (
                     <button
                       key={section}
                       className={detailSection === section ? "active" : ""}
@@ -421,13 +452,13 @@ export function AgentSettingsPage({
                       <Icon />
                       <span>{t(`agentTab_${section}`)}</span>
                     </button>
-                  ))}
+                    ))}
                 </nav>
               )}
               <FormError message={error} />
               {notice && <Badge tone="success">{notice}</Badge>}
               {selected && <AgentReadiness agent={selected} />}
-              {selected && detailSection === "behavior" && (
+              {canBuild && selected && detailSection === "behavior" && (
                 <AgentConfiguration
                   draft={draft}
                   chats={chats.data ?? []}
@@ -435,20 +466,21 @@ export function AgentSettingsPage({
                   onChange={setDraft}
                 />
               )}
-              {selected && detailSection === "test" && (
+              {canBuild && selected && detailSection === "test" && (
                 <AgentSandbox
                   api={api}
                   agents={[selected]}
                   chats={chats.data ?? []}
                 />
               )}
-              {selected && detailSection === "knowledge" && (
+              {canBuild && selected && detailSection === "knowledge" && (
                 <AgentKnowledgePlaceholder />
               )}
               {selected && detailSection === "overview" && (
                 <AgentLifecycle
                   api={api}
                   agent={selected}
+                  canPublish={canPublish}
                   onChanged={async (updated) => {
                     setDraft(draftOf(updated));
                     await agents.refetch();
@@ -458,10 +490,14 @@ export function AgentSettingsPage({
               {selected &&
                 ["overview", "automations", "activity", "settings"].includes(
                   detailSection,
-                ) && (
+                ) &&
+                (detailSection !== "settings" || canBuild) &&
+                (detailSection !== "automations" || canBuild || canObserve) &&
+                (detailSection !== "activity" || canObserve) && (
                   <AgentOperations
                     api={api}
                     agent={selected}
+                    canBuild={canBuild}
                     section={
                       detailSection as
                         | "overview"
@@ -554,7 +590,7 @@ export function AgentSettingsPage({
           </div>
         )}
       </div>
-      {wizardTemplate && (
+      {canBuild && wizardTemplate && (
         <AgentCreationWizard
           api={api}
           template={wizardTemplate}
@@ -573,13 +609,19 @@ export function AgentSettingsPage({
 }
 
 function AgentActivityDirectory({
+  api,
   agents,
   navigate,
 }: {
+  api: MessengerAPI;
   agents: Agent[];
   navigate(to: string): void;
 }) {
   const { t } = useTranslation();
+  const metrics = useQuery({
+    queryKey: ["agent-product-metrics"],
+    queryFn: () => api.agentProductMetrics(),
+  });
   return (
     <div className="agent-global-page">
       <div className="agent-global-page__title">
@@ -588,6 +630,38 @@ function AgentActivityDirectory({
           <p>{t("agentActivityDescription")}</p>
         </div>
       </div>
+      {metrics.data && (
+        <div className="agent-stat-grid">
+          <span>
+            <small>{t("agentMetricPublished")}</small>
+            <strong>
+              {metrics.data.agents_published} / {metrics.data.agents_total}
+            </strong>
+          </span>
+          <span>
+            <small>{t("agentMetricTestRuns")}</small>
+            <strong>{metrics.data.test_runs_total}</strong>
+          </span>
+          <span>
+            <small>{t("agentMetricTestFailures")}</small>
+            <strong>{metrics.data.test_runs_failed}</strong>
+          </span>
+          <span>
+            <small>{t("agentMetricTimeToTest")}</small>
+            <strong>
+              {formatProductDuration(metrics.data.average_seconds_to_first_test)}
+            </strong>
+          </span>
+          <span>
+            <small>{t("agentMetricTimeToPublish")}</small>
+            <strong>
+              {formatProductDuration(
+                metrics.data.average_seconds_to_first_publish,
+              )}
+            </strong>
+          </span>
+        </div>
+      )}
       {agents.length ? (
         <div className="agent-directory-grid">
           {agents.map((agent) => (
@@ -615,6 +689,15 @@ function AgentActivityDirectory({
       )}
     </div>
   );
+}
+
+function formatProductDuration(seconds: number): string {
+  if (!seconds) return "—";
+  const russian = document.documentElement.lang === "ru";
+  if (seconds < 60) return `${Math.round(seconds)} ${russian ? "с" : "s"}`;
+  if (seconds < 3600)
+    return `${Math.round(seconds / 60)} ${russian ? "мин" : "min"}`;
+  return `${Math.round(seconds / 3600)} ${russian ? "ч" : "h"}`;
 }
 
 function AgentKnowledgePlaceholder() {
@@ -1124,10 +1207,12 @@ function AgentReadiness({ agent }: { agent: Agent }) {
 function AgentLifecycle({
   api,
   agent,
+  canPublish,
   onChanged,
 }: {
   api: MessengerAPI;
   agent: Agent;
+  canPublish: boolean;
   onChanged(agent: Agent): Promise<void>;
 }) {
   const { t } = useTranslation();
@@ -1192,7 +1277,7 @@ function AgentLifecycle({
                 : t("agentNeverPublished")}
             </small>
           </div>
-          <div className="agent-lifecycle__actions">
+          {canPublish && <div className="agent-lifecycle__actions">
             {agent.has_unpublished_changes && (
               <Button
                 disabled={Boolean(pending) || !agent.readiness.ready}
@@ -1226,7 +1311,7 @@ function AgentLifecycle({
                 {t("agentResume")}
               </Button>
             )}
-          </div>
+          </div>}
         </div>
         <FormError message={error} />
         {notice && <Badge tone="success">{notice}</Badge>}
@@ -1241,7 +1326,7 @@ function AgentLifecycle({
                     {new Date(version.published_at).toLocaleString()}
                   </small>
                 </span>
-                {version.version !== agent.published_version && (
+                {canPublish && version.version !== agent.published_version && (
                   <Button
                     variant="ghost"
                     disabled={Boolean(pending)}
@@ -1740,11 +1825,13 @@ function AgentApprovals({
 function AgentOperations({
   api,
   agent,
+  canBuild,
   section,
   onChanged,
 }: {
   api: MessengerAPI;
   agent: Agent;
+  canBuild: boolean;
   section: "overview" | "automations" | "activity" | "settings";
   onChanged(): void;
 }) {
@@ -1752,23 +1839,27 @@ function AgentOperations({
   const usage = useQuery({
     queryKey: ["agent-usage", agent.id],
     queryFn: () => api.agentUsage(agent.id),
+    enabled: section === "overview",
   });
   const runs = useQuery({
     queryKey: ["agent-runs", agent.id],
     queryFn: () => api.agentRuns(agent.id),
+    enabled: section === "activity",
   });
   const triggers = useQuery({
     queryKey: ["agent-triggers", agent.id],
     queryFn: () => api.agentTriggers(agent.id),
+    enabled: section === "automations",
   });
   const keys = useQuery({
     queryKey: ["agent-keys", agent.id],
     queryFn: () => api.agentKeys(agent.id),
+    enabled: canBuild && section === "settings",
   });
   const credential = useQuery({
     queryKey: ["agent-credential", agent.id],
     queryFn: () => api.agentProviderCredential(agent.id),
-    enabled: !agent.llm_connection_id,
+    enabled: canBuild && section === "settings" && !agent.llm_connection_id,
   });
   const [selectedRun, setSelectedRun] = useState<AgentRun | null>(null);
   const [providerKey, setProviderKey] = useState("");
@@ -1873,7 +1964,7 @@ function AgentOperations({
           description={t("agentTriggersHint")}
           wide
         >
-          <div className="agent-inline-form">
+          {canBuild && <div className="agent-inline-form">
             <SelectField
               label={t("type")}
               name="trigger-type"
@@ -1914,7 +2005,7 @@ function AgentOperations({
               <Plus />
               {t("add")}
             </Button>
-          </div>
+          </div>}
           <div className="agent-record-list">
             {(triggers.data ?? []).map((trigger) => (
               <div key={trigger.id}>
@@ -1925,7 +2016,7 @@ function AgentOperations({
                 <Badge tone={trigger.enabled ? "success" : "neutral"}>
                   {trigger.enabled ? t("enabled") : t("disabled")}
                 </Badge>
-                <Button
+                {canBuild && <Button
                   size="sm"
                   variant="ghost"
                   onClick={() =>
@@ -1937,8 +2028,8 @@ function AgentOperations({
                   }
                 >
                   {trigger.enabled ? t("disable") : t("enable")}
-                </Button>
-                <Button
+                </Button>}
+                {canBuild && <Button
                   size="icon"
                   variant="ghost"
                   aria-label={t("delete")}
@@ -1949,7 +2040,7 @@ function AgentOperations({
                   }
                 >
                   <Trash2 />
-                </Button>
+                </Button>}
               </div>
             ))}
           </div>

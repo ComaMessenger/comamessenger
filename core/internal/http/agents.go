@@ -17,6 +17,15 @@ func (h *identityHandlers) listAgents(w standardhttp.ResponseWriter, r *standard
 	writeJSON(h.logger, w, standardhttp.StatusOK, result)
 }
 
+func (h *identityHandlers) agentProductMetrics(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.agents.Metrics(r.Context(), authFromContext(r.Context()).User)
+	if err != nil {
+		h.writeAgentError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
 func (h *identityHandlers) createAgent(w standardhttp.ResponseWriter, r *standardhttp.Request) {
 	var input agent.CreateInput
 	if err := decodeJSON(w, r, &input); err != nil {

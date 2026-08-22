@@ -195,7 +195,7 @@ type Service struct {
 func NewService(pool *pgxpool.Pool) *Service { return &Service{pool: pool, now: time.Now} }
 
 func (service *Service) Invoke(ctx context.Context, current identity.User, agentID string, input InvokeInput) (Run, error) {
-	if !canManage(current) {
+	if !canBuild(current) {
 		return Run{}, ErrForbidden
 	}
 	if uuid.Validate(agentID) != nil || uuid.Validate(input.ChatID) != nil || uuid.Validate(input.ClientRunID) != nil {
@@ -304,7 +304,7 @@ func (service *Service) Invoke(ctx context.Context, current identity.User, agent
 }
 
 func (service *Service) List(ctx context.Context, current identity.User, agentID string) (Page, error) {
-	if !canManage(current) {
+	if !canView(current) {
 		return Page{}, ErrForbidden
 	}
 	rows, err := service.pool.Query(ctx, runSelect+` WHERE run.org_id=$1 AND run.agent_id=$2 ORDER BY run.created_at DESC LIMIT 100`, current.OrgID, agentID)
@@ -324,7 +324,7 @@ func (service *Service) List(ctx context.Context, current identity.User, agentID
 }
 
 func (service *Service) RequestCancel(ctx context.Context, current identity.User, runID string) (Run, error) {
-	if !canManage(current) {
+	if !canPublish(current) {
 		return Run{}, ErrForbidden
 	}
 	if uuid.Validate(runID) != nil {
@@ -358,7 +358,7 @@ func (service *Service) RequestCancel(ctx context.Context, current identity.User
 }
 
 func (service *Service) Get(ctx context.Context, current identity.User, runID string) (Run, error) {
-	if !canManage(current) {
+	if !canView(current) {
 		return Run{}, ErrForbidden
 	}
 	run, err := scanRun(service.pool.QueryRow(ctx, runSelect+` WHERE run.org_id=$1 AND run.id=$2`, current.OrgID, runID))
@@ -956,9 +956,9 @@ func validObject(value json.RawMessage) bool {
 func validPriceSource(value string) bool {
 	return value == "provider" || value == "configured" || value == "estimated" || value == "unknown"
 }
-func canManage(current identity.User) bool {
-	return agentauthz.New().CanManage(current)
-}
+func canBuild(current identity.User) bool   { return agentauthz.New().CanBuild(current) }
+func canPublish(current identity.User) bool { return agentauthz.New().CanPublish(current) }
+func canView(current identity.User) bool    { return agentauthz.New().CanView(current) }
 func (service *Service) runtimeAgentID(ctx context.Context, current identity.User, authentication access.Identity, runID, leaseToken string) (string, error) {
 	target, err := service.RuntimeTarget(ctx, current, authentication, runID, leaseToken)
 	return target.AgentID, err

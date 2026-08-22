@@ -371,7 +371,7 @@ func (executor *Executor) requestConfirmation(ctx context.Context, invocation In
 }
 
 func (executor *Executor) ListConfirmations(ctx context.Context, current identity.User, status string) ([]Confirmation, error) {
-	if !executor.authorizer.CanManage(current) {
+	if !executor.authorizer.CanApprove(current) {
 		return nil, ErrForbidden
 	}
 	status = strings.ToLower(strings.TrimSpace(status))
@@ -408,7 +408,7 @@ func (executor *Executor) ListConfirmations(ctx context.Context, current identit
 }
 
 func (executor *Executor) DecideConfirmation(ctx context.Context, current identity.User, confirmationID string, approve bool) (Confirmation, error) {
-	if !executor.authorizer.CanManage(current) {
+	if !executor.authorizer.CanApprove(current) {
 		return Confirmation{}, ErrForbidden
 	}
 	if uuid.Validate(confirmationID) != nil {

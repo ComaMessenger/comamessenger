@@ -203,6 +203,32 @@ func TestAgentCreateValidationAndManagerPermission(t *testing.T) {
 	if _, err := service.Get(t.Context(), ordinary, created.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("disabled agent disclosure error = %v", err)
 	}
+	builder := identity.User{ActorID: agentTestMemberID, OrgID: agentTestOrgID, OrgRole: "admin", Permissions: []permission.Code{permission.AgentsBuild}}
+	built, err := service.Create(t.Context(), builder, CreateInput{DisplayName: "Built", Handle: "built-agent", Kind: "builtin", Provider: "openai"})
+	if err != nil {
+		t.Fatalf("builder create error=%v", err)
+	}
+	if _, err := service.Publish(t.Context(), builder, built.ID); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("builder publish error=%v", err)
+	}
+	publisher := identity.User{ActorID: agentTestMemberID, OrgID: agentTestOrgID, OrgRole: "admin", Permissions: []permission.Code{permission.AgentsPublish}}
+	forbiddenDescription := "forbidden"
+	if _, err := service.Update(t.Context(), publisher, built.ID, UpdateInput{Description: &forbiddenDescription}); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("publisher update error=%v", err)
+	}
+	if _, err := service.Publish(t.Context(), publisher, built.ID); errors.Is(err, ErrForbidden) {
+		t.Fatalf("publisher was denied publish permission: %v", err)
+	}
+	observer := identity.User{ActorID: agentTestMemberID, OrgID: agentTestOrgID, OrgRole: "admin", Permissions: []permission.Code{permission.AgentsObserve}}
+	if listed, err := service.List(t.Context(), observer); err != nil || len(listed) == 0 {
+		t.Fatalf("observer list=%+v err=%v", listed, err)
+	}
+	if metrics, err := service.Metrics(t.Context(), observer); err != nil || metrics.AgentsTotal < 1 {
+		t.Fatalf("observer metrics=%+v err=%v", metrics, err)
+	}
+	if _, err := service.Metrics(t.Context(), builder); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("builder metrics error=%v", err)
+	}
 }
 
 func TestAgentDraftPublishPauseResumeAndRollback(t *testing.T) {
