@@ -431,6 +431,7 @@ const (
 	AgentTriggerTypeEvent        AgentTriggerType = "event"
 	AgentTriggerTypeEveryMessage AgentTriggerType = "every_message"
 	AgentTriggerTypeKeyword      AgentTriggerType = "keyword"
+	AgentTriggerTypeManual       AgentTriggerType = "manual"
 	AgentTriggerTypeMention      AgentTriggerType = "mention"
 	AgentTriggerTypeSchedule     AgentTriggerType = "schedule"
 )
@@ -445,6 +446,8 @@ func (e AgentTriggerType) Valid() bool {
 	case AgentTriggerTypeEveryMessage:
 		return true
 	case AgentTriggerTypeKeyword:
+		return true
+	case AgentTriggerTypeManual:
 		return true
 	case AgentTriggerTypeMention:
 		return true
@@ -1118,6 +1121,7 @@ const (
 	CreateAgentTriggerRequestTypeEvent        CreateAgentTriggerRequestType = "event"
 	CreateAgentTriggerRequestTypeEveryMessage CreateAgentTriggerRequestType = "every_message"
 	CreateAgentTriggerRequestTypeKeyword      CreateAgentTriggerRequestType = "keyword"
+	CreateAgentTriggerRequestTypeManual       CreateAgentTriggerRequestType = "manual"
 	CreateAgentTriggerRequestTypeMention      CreateAgentTriggerRequestType = "mention"
 	CreateAgentTriggerRequestTypeSchedule     CreateAgentTriggerRequestType = "schedule"
 )
@@ -1132,6 +1136,8 @@ func (e CreateAgentTriggerRequestType) Valid() bool {
 	case CreateAgentTriggerRequestTypeEveryMessage:
 		return true
 	case CreateAgentTriggerRequestTypeKeyword:
+		return true
+	case CreateAgentTriggerRequestTypeManual:
 		return true
 	case CreateAgentTriggerRequestTypeMention:
 		return true

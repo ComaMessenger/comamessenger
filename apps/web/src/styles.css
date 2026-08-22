@@ -2024,7 +2024,7 @@ a:focus-visible {
 
 .agent-wizard__progress {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 8px;
 }
 
@@ -2110,6 +2110,46 @@ a:focus-visible {
   background: var(--coma-primary-soft);
 }
 
+.agent-wizard-dialog {
+  width: min(100%, 720px);
+}
+
+.agent-wizard__identity {
+  grid-template-columns: 1fr;
+}
+
+.agent-wizard__identity > small {
+  color: var(--coma-muted);
+}
+
+.agent-wizard__launches {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--coma-space-2);
+}
+
+.agent-wizard__launches button {
+  display: grid;
+  gap: var(--coma-space-1);
+  min-width: 0;
+  padding: var(--coma-space-3);
+  border: 1px solid var(--coma-border);
+  border-radius: var(--coma-radius-md);
+  color: var(--coma-foreground);
+  background: var(--coma-surface);
+  text-align: start;
+  cursor: pointer;
+}
+
+.agent-wizard__launches button small {
+  color: var(--coma-muted);
+}
+
+.agent-wizard__launches button.active {
+  border-color: var(--coma-primary);
+  background: var(--coma-primary-soft);
+}
+
 .agent-advanced {
   border: 1px solid var(--coma-border);
   border-radius: var(--coma-radius-lg);
@@ -2150,6 +2190,10 @@ a:focus-visible {
 
 @media (max-width: 700px) {
   .agent-wizard__templates {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-wizard__launches {
     grid-template-columns: 1fr;
   }
 

@@ -46,6 +46,12 @@ func TestDurableEventAndScheduleDispatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	service := agenttrigger.NewService(pool, nil)
+	manual, err := service.Create(t.Context(), owner, createdAgent.ID, agenttrigger.CreateInput{
+		Type: "manual", Config: json.RawMessage(`{}`), Enabled: true,
+	})
+	if err != nil || manual.Type != "manual" || manual.NextRunAt != nil {
+		t.Fatalf("manual trigger=%+v err=%v", manual, err)
+	}
 	everyMessage, err := service.Create(t.Context(), owner, createdAgent.ID, agenttrigger.CreateInput{
 		Type: "every_message", Config: json.RawMessage(`{}`), Enabled: true,
 	})
@@ -86,6 +92,7 @@ func TestDurableEventAndScheduleDispatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertTriggerRuns(t, pool, everyMessage.ID, 1)
+	assertTriggerRuns(t, pool, manual.ID, 0)
 	var eventInput map[string]any
 	var eventTimeout time.Time
 	if err := pool.QueryRow(t.Context(), `SELECT input,timeout_at FROM agent_runs WHERE trigger_id=$1`, everyMessage.ID).Scan(&eventInput, &eventTimeout); err != nil {
@@ -160,8 +167,8 @@ func TestDurableEventAndScheduleDispatch(t *testing.T) {
 	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM audit_log WHERE target_id=$1 AND action LIKE 'agent.trigger.%'`, createdAgent.ID).Scan(&auditCount); err != nil {
 		t.Fatal(err)
 	}
-	if auditCount != 3 {
-		t.Fatalf("trigger audit count = %d, want 3", auditCount)
+	if auditCount != 4 {
+		t.Fatalf("trigger audit count = %d, want 4", auditCount)
 	}
 }
 

@@ -3989,7 +3989,7 @@ components:
         type:
           {
             type: string,
-            enum: [mention, command, keyword, every_message, schedule, event],
+            enum: [manual, mention, command, keyword, every_message, schedule, event],
           }
         config: { type: object, additionalProperties: true }
         enabled: { type: boolean }
@@ -4006,7 +4006,7 @@ components:
         type:
           {
             type: string,
-            enum: [mention, command, keyword, every_message, schedule, event],
+            enum: [manual, mention, command, keyword, every_message, schedule, event],
           }
         config: { type: object, additionalProperties: true }
         enabled: { type: boolean }

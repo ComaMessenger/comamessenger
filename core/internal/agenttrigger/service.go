@@ -598,6 +598,11 @@ func (service *Service) normalize(input CreateInput) (CreateInput, *time.Time, e
 	}
 	var next *time.Time
 	switch input.Type {
+	case "manual":
+		if err := decodeConfig(input.Config, &struct{}{}); err != nil {
+			return input, nil, ErrInvalid
+		}
+		input.Config = json.RawMessage(`{}`)
 	case "mention", "every_message":
 		var config messageOptions
 		if err := decodeConfig(input.Config, &config); err != nil {
@@ -690,6 +695,8 @@ func decodeConfig(data json.RawMessage, target any) error {
 
 func matches(trigger Trigger, item event, agentID string) (bool, bool) {
 	switch trigger.Type {
+	case "manual":
+		return false, false
 	case "mention":
 		var config messageOptions
 		_ = json.Unmarshal(trigger.Config, &config)

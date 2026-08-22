@@ -9410,6 +9410,7 @@
           "type": {
             "type": "string",
             "enum": [
+              "manual",
               "mention",
               "command",
               "keyword",
@@ -9463,6 +9464,7 @@
           "type": {
             "type": "string",
             "enum": [
+              "manual",
               "mention",
               "command",
               "keyword",

@@ -409,6 +409,61 @@ const ru = {
   agentWizardLaunchHint:
     "Агент создастся выключенным: сначала добавьте подключение и проверьте его в песочнице.",
   agentWizardIdentityRequired: "Укажите имя и адрес агента.",
+  agentWizardHandleGenerated:
+    "Технический адрес будет создан автоматически. Его можно изменить позже в настройках.",
+  agentWizardSources: "Источники",
+  agentWizardSourcesHint:
+    "Выберите, откуда агент получает контекст, и отдельно укажите место результата.",
+  agentWizardDestination: "Куда отправлять результат",
+  agentWizardChooseDestination: "Выберите чат",
+  agentWizardRecipeDetails: "Как должен работать агент?",
+  agentWizardRecipeHint_summarizer:
+    "Настройте формат сводки и понятный способ запуска.",
+  agentWizardRecipeHint_qa:
+    "Определите поведение при отсутствии подтверждённого ответа.",
+  agentWizardRecipeHint_onboarding:
+    "Выберите тон общения и момент знакомства с новым участником.",
+  agentWizardRecipeHint_custom:
+    "Опишите результат и ограничения обычным языком.",
+  agentWizardInstructions: "Инструкция агенту",
+  agentWizardInstructionsRequired: "Опишите, что должен делать агент.",
+  agentWizardFallback: "Если ответа нет в источниках",
+  agentWizardFallbackDefault:
+    "Скажи, что подтверждённого ответа нет, и предложи обратиться к человеку.",
+  agentWizardTone: "Тон общения",
+  agentWizardToneFriendly: "Дружелюбный",
+  agentWizardToneConcise: "Краткий",
+  agentWizardToneFormal: "Деловой",
+  agentWizardCitations: "Показывать источники",
+  agentWizardCitationsHint:
+    "Ответ должен ссылаться на сообщения и файлы, на которых он основан.",
+  agentWizardInstructionCitations:
+    "Всегда указывай идентификаторы сообщений и файлов, подтверждающих результат.",
+  agentWizardInstructionFallback: "Если подтверждения нет: {{fallback}}",
+  agentWizardInstructionTone: "Используй тон общения: {{tone}}.",
+  agentWizardLaunch_manual: "Только вручную",
+  agentWizardLaunch_mention: "По упоминанию",
+  agentWizardLaunch_command: "По команде",
+  agentWizardLaunch_schedule: "По расписанию",
+  agentWizardLaunch_member_join: "При вступлении участника",
+  agentWizardLaunchHint_manual: "Запуск из Test Studio или карточки агента",
+  agentWizardLaunchHint_mention: "Когда агента упомянули в доступном чате",
+  agentWizardLaunchHint_command: "Когда сообщение начинается с заданной команды",
+  agentWizardLaunchHint_schedule: "Регулярно в заданное местное время",
+  agentWizardLaunchHint_member_join: "После добавления нового участника в пространство",
+  agentWizardCommand: "Команда после символа /",
+  agentWizardScheduleTime: "Время запуска",
+  agentWizardConnection: "Подключение и политика данных",
+  agentWizardConnectionHint:
+    "Выберите модель пространства. Без подключения черновик сохранится, но его нельзя будет опубликовать.",
+  agentWizardExternalData: "Разрешить передачу данных модели",
+  agentWizardExternalDataHint:
+    "Выбранные сообщения и файлы могут быть отправлены внешнему LLM-провайдеру.",
+  agentWizardReview: "Проверьте границы агента",
+  agentWizardReviewHint:
+    "После создания откроется безопасный тест. Рабочая версия не запустится до публикации.",
+  yes: "Да",
+  no: "Нет",
   agentWizardTask: "Задача",
   agentWizardWhere: "Доступ",
   agentWizardWhen: "Запуск",
@@ -476,6 +531,7 @@ const ru = {
   agentTriggers: "Правила запуска",
   agentTriggersHint:
     "Запускайте агента по упоминаниям, командам, ключевым словам, событиям или расписанию.",
+  agentTrigger_manual: "Только вручную",
   agentTrigger_mention: "Упоминание агента",
   agentTrigger_command: "Команда",
   agentTrigger_keyword: "Ключевое слово",
@@ -1293,6 +1349,61 @@ const en: Record<keyof typeof ru, string> = {
   agentWizardLaunchHint:
     "The agent starts disabled: connect a provider and test it in the sandbox first.",
   agentWizardIdentityRequired: "Enter the agent name and handle.",
+  agentWizardHandleGenerated:
+    "The technical handle is generated automatically and can be changed later in settings.",
+  agentWizardSources: "Sources",
+  agentWizardSourcesHint:
+    "Choose where the agent gets context and select the result destination separately.",
+  agentWizardDestination: "Result destination",
+  agentWizardChooseDestination: "Choose a chat",
+  agentWizardRecipeDetails: "How should the agent work?",
+  agentWizardRecipeHint_summarizer:
+    "Configure the digest format and a clear launch method.",
+  agentWizardRecipeHint_qa:
+    "Define what happens when no grounded answer is available.",
+  agentWizardRecipeHint_onboarding:
+    "Choose the voice and when to greet a new member.",
+  agentWizardRecipeHint_custom:
+    "Describe the desired result and boundaries in plain language.",
+  agentWizardInstructions: "Agent instructions",
+  agentWizardInstructionsRequired: "Describe what the agent should do.",
+  agentWizardFallback: "When the sources do not contain an answer",
+  agentWizardFallbackDefault:
+    "Say that no grounded answer was found and suggest contacting a person.",
+  agentWizardTone: "Voice",
+  agentWizardToneFriendly: "Friendly",
+  agentWizardToneConcise: "Concise",
+  agentWizardToneFormal: "Professional",
+  agentWizardCitations: "Show sources",
+  agentWizardCitationsHint:
+    "The response must cite the messages and files it is based on.",
+  agentWizardInstructionCitations:
+    "Always include the message and file identifiers that support the result.",
+  agentWizardInstructionFallback: "When evidence is unavailable: {{fallback}}",
+  agentWizardInstructionTone: "Use this voice: {{tone}}.",
+  agentWizardLaunch_manual: "Manual only",
+  agentWizardLaunch_mention: "On mention",
+  agentWizardLaunch_command: "On command",
+  agentWizardLaunch_schedule: "On schedule",
+  agentWizardLaunch_member_join: "When a member joins",
+  agentWizardLaunchHint_manual: "Run from Test Studio or the agent card",
+  agentWizardLaunchHint_mention: "When the agent is mentioned in an accessible chat",
+  agentWizardLaunchHint_command: "When a message begins with the configured command",
+  agentWizardLaunchHint_schedule: "Run regularly at the selected local time",
+  agentWizardLaunchHint_member_join: "After a new member is added to the workspace",
+  agentWizardCommand: "Command after /",
+  agentWizardScheduleTime: "Run time",
+  agentWizardConnection: "Connection and data policy",
+  agentWizardConnectionHint:
+    "Choose a workspace model. A draft can be saved without one, but it cannot be published.",
+  agentWizardExternalData: "Allow data sharing with the model",
+  agentWizardExternalDataHint:
+    "Selected messages and files may be sent to the external LLM provider.",
+  agentWizardReview: "Review the agent boundaries",
+  agentWizardReviewHint:
+    "A safe test opens next. The working version cannot run until it is published.",
+  yes: "Yes",
+  no: "No",
   agentWizardTask: "Task",
   agentWizardWhere: "Access",
   agentWizardWhen: "Launch",
@@ -1358,6 +1469,7 @@ const en: Record<keyof typeof ru, string> = {
   agentTriggers: "Triggers",
   agentTriggersHint:
     "Events, commands, mentions and schedules run durably and idempotently.",
+  agentTrigger_manual: "Manual only",
   agentTrigger_mention: "Agent mention",
   agentTrigger_command: "Command",
   agentTrigger_keyword: "Keyword",

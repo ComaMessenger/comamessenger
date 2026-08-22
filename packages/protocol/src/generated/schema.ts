@@ -2883,7 +2883,7 @@ export interface components {
             /** Format: uuid */
             agent_id: string;
             /** @enum {string} */
-            type: "mention" | "command" | "keyword" | "every_message" | "schedule" | "event";
+            type: "manual" | "mention" | "command" | "keyword" | "every_message" | "schedule" | "event";
             config: {
                 [key: string]: unknown;
             };
@@ -2900,7 +2900,7 @@ export interface components {
         };
         CreateAgentTriggerRequest: {
             /** @enum {string} */
-            type: "mention" | "command" | "keyword" | "every_message" | "schedule" | "event";
+            type: "manual" | "mention" | "command" | "keyword" | "every_message" | "schedule" | "event";
             config: {
                 [key: string]: unknown;
             };

@@ -50,7 +50,11 @@ import {
   SettingsToggle,
 } from "../components/SettingsPrimitives";
 import { hasPermission } from "../registry";
-import { type AgentTemplate as Template } from "../agentTemplates";
+import {
+  type AgentLaunch,
+  type AgentTemplate as Template,
+  recipeTriggerRequests,
+} from "../agentTemplates";
 
 const scopes: AgentScope[] = [
   "chats:read",
@@ -654,6 +658,28 @@ function AgentCreationWizard({
     description:
       template === "custom" ? "" : t(`agentTemplateDescription_${template}`),
   }));
+  const [sourceChatIDs, setSourceChatIDs] = useState<string[]>([]);
+  const [destinationChatID, setDestinationChatID] = useState("");
+  const [launch, setLaunch] = useState<AgentLaunch>(
+    template === "summarizer"
+      ? "schedule"
+      : template === "qa"
+        ? "mention"
+        : template === "onboarding"
+          ? "member_join"
+          : "manual",
+  );
+  const [command, setCommand] = useState("summarize");
+  const [scheduleTime, setScheduleTime] = useState("09:00");
+  const [timezone, setTimezone] = useState(
+    Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+  );
+  const [citations, setCitations] = useState(template !== "custom");
+  const [fallback, setFallback] = useState(
+    t("agentWizardFallbackDefault"),
+  );
+  const [tone, setTone] = useState(t("agentWizardToneFriendly"));
+  const [customInstructions, setCustomInstructions] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   function selectTemplate(value: Template) {
@@ -664,6 +690,16 @@ function AgentCreationWizard({
       description:
         value === "custom" ? "" : t(`agentTemplateDescription_${value}`),
     });
+    setLaunch(
+      value === "summarizer"
+        ? "schedule"
+        : value === "qa"
+          ? "mention"
+          : value === "onboarding"
+            ? "member_join"
+            : "manual",
+    );
+    setCitations(value !== "custom");
   }
   function next() {
     setError("");
@@ -671,21 +707,81 @@ function AgentCreationWizard({
       setError(t("agentWizardIdentityRequired"));
       return;
     }
-    if (step === 2 && draft.chat_ids.length === 0) {
+    if (step === 2 && (sourceChatIDs.length === 0 || !destinationChatID)) {
       setError(t("agentTemplateChatRequired"));
       return;
     }
-    setStep((current) => Math.min(3, current + 1));
+    if (step === 3 && draft.recipe === "custom" && !customInstructions.trim()) {
+      setError(t("agentWizardInstructionsRequired"));
+      return;
+    }
+    setStep((current) => Math.min(5, current + 1));
+  }
+  function description(): string {
+    const base =
+      draft.recipe === "custom"
+        ? customInstructions.trim()
+        : t(`agentTemplateDescription_${draft.recipe}`);
+    const policy = [
+      citations ? t("agentWizardInstructionCitations") : "",
+      draft.recipe === "qa" && fallback.trim()
+        ? t("agentWizardInstructionFallback", { fallback: fallback.trim() })
+        : "",
+      draft.recipe === "onboarding"
+        ? t("agentWizardInstructionTone", { tone })
+        : "",
+    ].filter(Boolean);
+    return [base, ...policy].join("\n\n");
   }
   async function create() {
     setPending(true);
     setError("");
+    let created: Agent | null = null;
     try {
+      const chatIDs = [...new Set([...sourceChatIDs, destinationChatID])];
       const input = draft.llm_connection_id
-        ? { ...draft, enabled: false, provider: "", endpoint_url: "" }
-        : { ...draft, enabled: false, llm_connection_id: undefined };
-      await onCreated(await api.createAgent(input));
+        ? {
+            ...draft,
+            description: description(),
+            chat_ids: chatIDs,
+            enabled: false,
+            provider: "",
+            endpoint_url: "",
+          }
+        : {
+            ...draft,
+            description: description(),
+            chat_ids: chatIDs,
+            enabled: false,
+            llm_connection_id: undefined,
+          };
+      created = await api.createAgent(input);
+      const existing = await api.agentTriggers(created.id);
+      await Promise.all(
+        existing.map((trigger) =>
+          api.deleteAgentTrigger(created!.id, trigger.id),
+        ),
+      );
+      const [hour, minute] = scheduleTime.split(":").map(Number);
+      for (const trigger of recipeTriggerRequests(draft.recipe, {
+        launch,
+        destinationChatID,
+        command,
+        hour,
+        minute,
+        timezone,
+      })) {
+        await api.createAgentTrigger(created.id, trigger);
+      }
+      await onCreated(created);
     } catch (cause) {
+      if (created) {
+        try {
+          await api.deleteAgent(created.id);
+        } catch {
+          // The incomplete draft remains visible and recoverable if cleanup fails.
+        }
+      }
       setError(messageOf(cause));
     } finally {
       setPending(false);
@@ -694,12 +790,13 @@ function AgentCreationWizard({
   return (
     <Dialog
       title={t("agentWizardTitle")}
-      description={t("agentWizardStep", { current: step, total: 3 })}
+      description={t("agentWizardStep", { current: step, total: 5 })}
       onClose={onClose}
+      className="agent-wizard-dialog"
     >
       <div className="agent-wizard">
         <div className="agent-wizard__progress" aria-hidden="true">
-          {[1, 2, 3].map((item) => (
+          {[1, 2, 3, 4, 5].map((item) => (
             <span key={item} className={item <= step ? "active" : ""} />
           ))}
         </div>
@@ -724,7 +821,7 @@ function AgentCreationWizard({
                 ),
               )}
             </div>
-            <div className="settings-form-grid">
+            <div className="settings-form-grid agent-wizard__identity">
               <Field
                 label={t("displayName")}
                 name="wizard-agent-name"
@@ -733,17 +830,7 @@ function AgentCreationWizard({
                   setDraft({ ...draft, display_name: event.target.value })
                 }
               />
-              <Field
-                label={t("handle")}
-                name="wizard-agent-handle"
-                value={draft.handle}
-                onChange={(event) =>
-                  setDraft({
-                    ...draft,
-                    handle: event.target.value.toLowerCase(),
-                  })
-                }
-              />
+              <small>{t("agentWizardHandleGenerated")}</small>
             </div>
           </div>
         )}
@@ -751,54 +838,139 @@ function AgentCreationWizard({
           <div className="agent-wizard__step">
             <div>
               <h3>{t("agentWizardAccess")}</h3>
-              <p>{t("agentWizardAccessHint")}</p>
+              <p>{t("agentWizardSourcesHint")}</p>
             </div>
+            <strong>{t("agentWizardSources")}</strong>
             <div className="agent-wizard__chats">
               {chats.map((chat) => (
                 <label key={chat.id}>
                   <input
                     type="checkbox"
-                    checked={draft.chat_ids.includes(chat.id)}
+                    checked={sourceChatIDs.includes(chat.id)}
                     onChange={(event) =>
-                      setDraft({
-                        ...draft,
-                        chat_ids: event.target.checked
-                          ? [...draft.chat_ids, chat.id]
-                          : draft.chat_ids.filter((id) => id !== chat.id),
-                      })
+                      setSourceChatIDs(
+                        event.target.checked
+                          ? [...sourceChatIDs, chat.id]
+                          : sourceChatIDs.filter((id) => id !== chat.id),
+                      )
                     }
                   />
                   <span>{chatName(chat)}</span>
                 </label>
               ))}
             </div>
+            <SelectField
+              label={t("agentWizardDestination")}
+              name="wizard-agent-destination"
+              value={destinationChatID}
+              onChange={(event) => setDestinationChatID(event.target.value)}
+            >
+              <option value="">{t("agentWizardChooseDestination")}</option>
+              {chats.map((chat) => (
+                <option key={chat.id} value={chat.id}>
+                  {chatName(chat)}
+                </option>
+              ))}
+            </SelectField>
           </div>
         )}
         {step === 3 && (
           <div className="agent-wizard__step">
             <div>
-              <h3>{t("agentWizardLaunch")}</h3>
-              <p>{t("agentWizardLaunchHint")}</p>
+              <h3>{t("agentWizardRecipeDetails")}</h3>
+              <p>{t(`agentWizardRecipeHint_${draft.recipe}`)}</p>
             </div>
-            <dl className="agent-wizard__summary">
-              <div>
-                <dt>{t("agentWizardTask")}</dt>
-                <dd>{t(`agentTemplate_${draft.recipe}`)}</dd>
+            {draft.recipe === "custom" && (
+              <TextareaField
+                label={t("agentWizardInstructions")}
+                name="wizard-agent-instructions"
+                rows={5}
+                value={customInstructions}
+                onChange={(event) => setCustomInstructions(event.target.value)}
+              />
+            )}
+            {draft.recipe === "qa" && (
+              <Field
+                label={t("agentWizardFallback")}
+                name="wizard-agent-fallback"
+                value={fallback}
+                onChange={(event) => setFallback(event.target.value)}
+              />
+            )}
+            {draft.recipe === "onboarding" && (
+              <SelectField
+                label={t("agentWizardTone")}
+                name="wizard-agent-tone"
+                value={tone}
+                onChange={(event) => setTone(event.target.value)}
+              >
+                <option value={t("agentWizardToneFriendly")}>
+                  {t("agentWizardToneFriendly")}
+                </option>
+                <option value={t("agentWizardToneConcise")}>
+                  {t("agentWizardToneConcise")}
+                </option>
+                <option value={t("agentWizardToneFormal")}>
+                  {t("agentWizardToneFormal")}
+                </option>
+              </SelectField>
+            )}
+            {draft.recipe !== "custom" && (
+              <SettingsToggle
+                label={t("agentWizardCitations")}
+                hint={t("agentWizardCitationsHint")}
+                checked={citations}
+                onChange={setCitations}
+              />
+            )}
+            <div className="agent-wizard__launches">
+              {(draft.recipe === "onboarding"
+                ? (["member_join", "mention", "manual"] as const)
+                : (["manual", "mention", "command", "schedule"] as const)
+              ).map((item) => (
+                <button
+                  key={item}
+                  className={launch === item ? "active" : ""}
+                  onClick={() => setLaunch(item)}
+                >
+                  <strong>{t(`agentWizardLaunch_${item}`)}</strong>
+                  <small>{t(`agentWizardLaunchHint_${item}`)}</small>
+                </button>
+              ))}
+            </div>
+            {launch === "command" && (
+              <Field
+                label={t("agentWizardCommand")}
+                name="wizard-agent-command"
+                value={command}
+                onChange={(event) => setCommand(event.target.value)}
+              />
+            )}
+            {launch === "schedule" && (
+              <div className="settings-form-grid">
+                <Field
+                  label={t("agentWizardScheduleTime")}
+                  name="wizard-agent-schedule-time"
+                  type="time"
+                  value={scheduleTime}
+                  onChange={(event) => setScheduleTime(event.target.value)}
+                />
+                <Field
+                  label={t("timezone")}
+                  name="wizard-agent-timezone"
+                  value={timezone}
+                  onChange={(event) => setTimezone(event.target.value)}
+                />
               </div>
-              <div>
-                <dt>{t("agentWizardWhere")}</dt>
-                <dd>
-                  {chats
-                    .filter((chat) => draft.chat_ids.includes(chat.id))
-                    .map(chatName)
-                    .join(", ")}
-                </dd>
-              </div>
-              <div>
-                <dt>{t("agentWizardWhen")}</dt>
-                <dd>{t(`agentRecipeLaunch_${draft.recipe}`)}</dd>
-              </div>
-            </dl>
+            )}
+          </div>
+        )}
+        {step === 4 && (
+          <div className="agent-wizard__step">
+            <div>
+              <h3>{t("agentWizardConnection")}</h3>
+              <p>{t("agentWizardConnectionHint")}</p>
+            </div>
             <SelectField
               required={false}
               label={t("agentConnectionsTitle")}
@@ -826,6 +998,69 @@ function AgentCreationWizard({
                   </option>
                 ))}
             </SelectField>
+            <SettingsToggle
+              label={t("agentWizardExternalData")}
+              hint={t("agentWizardExternalDataHint")}
+              checked={draft.external_data_sharing_approved}
+              onChange={(value) =>
+                setDraft({ ...draft, external_data_sharing_approved: value })
+              }
+            />
+            <div className="agent-wizard__notice">
+              <ShieldCheck />
+              <span>{t("agentWizardSafeStart")}</span>
+            </div>
+          </div>
+        )}
+        {step === 5 && (
+          <div className="agent-wizard__step">
+            <div>
+              <h3>{t("agentWizardReview")}</h3>
+              <p>{t("agentWizardReviewHint")}</p>
+            </div>
+            <dl className="agent-wizard__summary">
+              <div>
+                <dt>{t("agentWizardTask")}</dt>
+                <dd>{t(`agentTemplate_${draft.recipe}`)}</dd>
+              </div>
+              <div>
+                <dt>{t("agentWizardSources")}</dt>
+                <dd>
+                  {chats
+                    .filter((chat) => sourceChatIDs.includes(chat.id))
+                    .map(chatName)
+                    .join(", ")}
+                </dd>
+              </div>
+              <div>
+                <dt>{t("agentWizardDestination")}</dt>
+                <dd>
+                  {chats.find((chat) => chat.id === destinationChatID)
+                    ? chatName(
+                        chats.find((chat) => chat.id === destinationChatID)!,
+                      )
+                    : "—"}
+                </dd>
+              </div>
+              <div>
+                <dt>{t("agentWizardWhen")}</dt>
+                <dd>{t(`agentWizardLaunch_${launch}`)}</dd>
+              </div>
+              <div>
+                <dt>{t("agentConnectionsTitle")}</dt>
+                <dd>
+                  {connections.find(
+                    (connection) => connection.id === draft.llm_connection_id,
+                  )?.name ?? t("agentConnectionChooseLater")}
+                </dd>
+              </div>
+              <div>
+                <dt>{t("agentWizardExternalData")}</dt>
+                <dd>
+                  {draft.external_data_sharing_approved ? t("yes") : t("no")}
+                </dd>
+              </div>
+            </dl>
             <div className="agent-wizard__notice">
               <ShieldCheck />
               <span>{t("agentWizardSafeStart")}</span>
@@ -846,7 +1081,7 @@ function AgentCreationWizard({
           <Button variant="ghost" disabled={pending} onClick={onClose}>
             {t("cancel")}
           </Button>
-          {step < 3 ? (
+          {step < 5 ? (
             <Button onClick={next}>{t("continue")}</Button>
           ) : (
             <Button disabled={pending} onClick={() => void create()}>
@@ -1566,6 +1801,7 @@ function AgentOperations({
     await action(() =>
       api.createAgentTrigger(agent.id, {
         type: triggerType as
+          | "manual"
           | "mention"
           | "command"
           | "keyword"
@@ -1582,6 +1818,7 @@ function AgentOperations({
   }
   function triggerDetails(type: string, rawConfig: unknown) {
     const config = rawConfig as Record<string, unknown>;
+    if (type === "manual") return t("agentWizardLaunchHint_manual");
     if (type === "command") return `/${String(config.command ?? "")}`;
     if (type === "keyword") return String(config.pattern ?? "");
     if (type === "schedule")
@@ -1644,6 +1881,7 @@ function AgentOperations({
               onChange={(e) => setTriggerType(e.target.value)}
             >
               {[
+                "manual",
                 "mention",
                 "command",
                 "keyword",
@@ -1656,7 +1894,7 @@ function AgentOperations({
                 </option>
               ))}
             </SelectField>
-            {!["mention", "every_message"].includes(triggerType) && (
+            {!["manual", "mention", "every_message"].includes(triggerType) && (
               <Field
                 required={false}
                 label={t("configuration")}
@@ -1916,6 +2154,7 @@ function triggerConfig(
   value: string,
   chatID?: string,
 ): Record<string, unknown> {
+  if (type === "manual") return {};
   if (type === "command")
     return { command: value.replace(/^\//, ""), include_agent_messages: false };
   if (type === "keyword")
