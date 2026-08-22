@@ -344,8 +344,8 @@ const ru = {
   agentLifecycleTitle: "Публикация и версии",
   agentLifecycleDescription:
     "Черновик можно проверять и менять без влияния на работающего агента.",
-  agentDraftVersion: "Черновик v{{version}}",
-  agentPublishedVersion: "Опубликована v{{version}}",
+  agentDraftVersion: "Черновик v{version}",
+  agentPublishedVersion: "Опубликована v{version}",
   agentNeverPublished: "Ещё не публиковался",
   agentPublish: "Опубликовать",
   agentPause: "Поставить на паузу",
@@ -386,7 +386,7 @@ const ru = {
   deleteAgent: "Удалить",
   deleteAgentTitle: "Удалить агента?",
   deleteAgentDescription:
-    "Агент {{name}} будет выключен и удалён из каталога и чатов. Ключи будут отозваны, а история аудита сохранится.",
+    "Агент {name} будет выключен и удалён из каталога и чатов. Ключи будут отозваны, а история аудита сохранится.",
   deleteAgentConfirm: "Удалить агента",
   saving: "Сохраняем…",
   displayName: "Отображаемое имя",
@@ -402,12 +402,12 @@ const ru = {
   resetTemplate: "Сбросить к шаблону",
   resetTemplateTitle: "Сбросить настройки агента?",
   resetTemplateDescription:
-    "Агент {{name}} будет выключен. Инструкция, права, лимиты и правила запуска вернутся к текущей версии шаблона. Секреты и история запусков сохранятся.",
+    "Агент {name} будет выключен. Инструкция, права, лимиты и правила запуска вернутся к текущей версии шаблона. Секреты и история запусков сохранятся.",
   resetTemplateConfirm: "Сбросить настройки",
   templateResetDone:
     "Настройки и правила запуска восстановлены из новой версии шаблона. Агент выключен до проверки.",
   agentWizardTitle: "Новый агент",
-  agentWizardStep: "Шаг {{current}} из {{total}}",
+  agentWizardStep: "Шаг {current} из {total}",
   agentWizardPurpose: "Что должен делать агент?",
   agentWizardPurposeHint:
     "Выберите готовый сценарий или начните со своей инструкции.",
@@ -448,8 +448,8 @@ const ru = {
     "Ответ должен ссылаться на сообщения и файлы, на которых он основан.",
   agentWizardInstructionCitations:
     "Всегда указывай идентификаторы сообщений и файлов, подтверждающих результат.",
-  agentWizardInstructionFallback: "Если подтверждения нет: {{fallback}}",
-  agentWizardInstructionTone: "Используй тон общения: {{tone}}.",
+  agentWizardInstructionFallback: "Если подтверждения нет: {fallback}",
+  agentWizardInstructionTone: "Используй тон общения: {tone}.",
   agentWizardLaunch_manual: "Только вручную",
   agentWizardLaunch_mention: "По упоминанию",
   agentWizardLaunch_command: "По команде",
@@ -457,9 +457,11 @@ const ru = {
   agentWizardLaunch_member_join: "При вступлении участника",
   agentWizardLaunchHint_manual: "Запуск из Test Studio или карточки агента",
   agentWizardLaunchHint_mention: "Когда агента упомянули в доступном чате",
-  agentWizardLaunchHint_command: "Когда сообщение начинается с заданной команды",
+  agentWizardLaunchHint_command:
+    "Когда сообщение начинается с заданной команды",
   agentWizardLaunchHint_schedule: "Регулярно в заданное местное время",
-  agentWizardLaunchHint_member_join: "После добавления нового участника в пространство",
+  agentWizardLaunchHint_member_join:
+    "После добавления нового участника в пространство",
   agentWizardCommand: "Команда после символа /",
   agentWizardScheduleTime: "Время запуска",
   agentWizardConnection: "Подключение и политика данных",
@@ -940,8 +942,8 @@ const ru = {
   activeInvitationsHint:
     "Ссылку нельзя показать повторно. Отзовите приглашение или выпустите новую ссылку.",
   noActiveInvitations: "Активных приглашений пока нет",
-  invitationCreatedBy: "создал(а) {{name}}",
-  invitationExpires: "до {{time}}",
+  invitationCreatedBy: "создал(а) {name}",
+  invitationExpires: "до {time}",
   invitationStatusActive: "действует",
   invitationStatusExpired: "истекло",
   rotateInvitation: "Новая ссылка",
@@ -1292,8 +1294,8 @@ const en: Record<keyof typeof ru, string> = {
   agentLifecycleTitle: "Publishing and versions",
   agentLifecycleDescription:
     "You can test and edit a draft without changing the running agent.",
-  agentDraftVersion: "Draft v{{version}}",
-  agentPublishedVersion: "Published v{{version}}",
+  agentDraftVersion: "Draft v{version}",
+  agentPublishedVersion: "Published v{version}",
   agentNeverPublished: "Not published yet",
   agentPublish: "Publish",
   agentPause: "Pause",
@@ -1334,7 +1336,7 @@ const en: Record<keyof typeof ru, string> = {
   deleteAgent: "Delete",
   deleteAgentTitle: "Delete agent?",
   deleteAgentDescription:
-    "Agent {{name}} will be disabled and removed from the catalog and chats. Keys will be revoked while audit history is retained.",
+    "Agent {name} will be disabled and removed from the catalog and chats. Keys will be revoked while audit history is retained.",
   deleteAgentConfirm: "Delete agent",
   saving: "Saving…",
   displayName: "Display name",
@@ -1351,12 +1353,12 @@ const en: Record<keyof typeof ru, string> = {
   resetTemplate: "Reset to template",
   resetTemplateTitle: "Reset agent settings?",
   resetTemplateDescription:
-    "Agent {{name}} will be disabled. Instructions, permissions, limits, and triggers will return to the current template version. Secrets and run history will be preserved.",
+    "Agent {name} will be disabled. Instructions, permissions, limits, and triggers will return to the current template version. Secrets and run history will be preserved.",
   resetTemplateConfirm: "Reset settings",
   templateResetDone:
     "Settings and triggers were restored from a new template version. The agent is disabled until reviewed.",
   agentWizardTitle: "New agent",
-  agentWizardStep: "Step {{current}} of {{total}}",
+  agentWizardStep: "Step {current} of {total}",
   agentWizardPurpose: "What should the agent do?",
   agentWizardPurposeHint:
     "Choose a ready-made workflow or start with your own instructions.",
@@ -1397,18 +1399,21 @@ const en: Record<keyof typeof ru, string> = {
     "The response must cite the messages and files it is based on.",
   agentWizardInstructionCitations:
     "Always include the message and file identifiers that support the result.",
-  agentWizardInstructionFallback: "When evidence is unavailable: {{fallback}}",
-  agentWizardInstructionTone: "Use this voice: {{tone}}.",
+  agentWizardInstructionFallback: "When evidence is unavailable: {fallback}",
+  agentWizardInstructionTone: "Use this voice: {tone}.",
   agentWizardLaunch_manual: "Manual only",
   agentWizardLaunch_mention: "On mention",
   agentWizardLaunch_command: "On command",
   agentWizardLaunch_schedule: "On schedule",
   agentWizardLaunch_member_join: "When a member joins",
   agentWizardLaunchHint_manual: "Run from Test Studio or the agent card",
-  agentWizardLaunchHint_mention: "When the agent is mentioned in an accessible chat",
-  agentWizardLaunchHint_command: "When a message begins with the configured command",
+  agentWizardLaunchHint_mention:
+    "When the agent is mentioned in an accessible chat",
+  agentWizardLaunchHint_command:
+    "When a message begins with the configured command",
   agentWizardLaunchHint_schedule: "Run regularly at the selected local time",
-  agentWizardLaunchHint_member_join: "After a new member is added to the workspace",
+  agentWizardLaunchHint_member_join:
+    "After a new member is added to the workspace",
   agentWizardCommand: "Command after /",
   agentWizardScheduleTime: "Run time",
   agentWizardConnection: "Connection and data policy",
@@ -1883,8 +1888,8 @@ const en: Record<keyof typeof ru, string> = {
   activeInvitationsHint:
     "The link cannot be shown again. Revoke the invitation or issue a new link.",
   noActiveInvitations: "There are no active invitations yet",
-  invitationCreatedBy: "created by {{name}}",
-  invitationExpires: "expires {{time}}",
+  invitationCreatedBy: "created by {name}",
+  invitationExpires: "expires {time}",
   invitationStatusActive: "active",
   invitationStatusExpired: "expired",
   rotateInvitation: "New link",
