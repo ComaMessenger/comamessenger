@@ -7203,6 +7203,7 @@
           "description",
           "enabled",
           "allowed_scopes",
+          "llm_connection_id",
           "provider",
           "model",
           "external_data_sharing_approved",
@@ -7276,6 +7277,13 @@
             "items": {
               "$ref": "#/components/schemas/AgentScope"
             }
+          },
+          "llm_connection_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
           },
           "provider": {
             "type": "string",
@@ -7399,6 +7407,8 @@
                 "runtime_key_required",
                 "provider_model_required",
                 "provider_credential_required",
+                "llm_connection_required",
+                "llm_connection_unavailable",
                 "external_data_approval_required",
                 "trigger_required"
               ]
@@ -7477,6 +7487,10 @@
             "items": {
               "$ref": "#/components/schemas/AgentScope"
             }
+          },
+          "llm_connection_id": {
+            "type": "string",
+            "format": "uuid"
           },
           "provider": {
             "type": "string",
@@ -7581,6 +7595,10 @@
             "items": {
               "$ref": "#/components/schemas/AgentScope"
             }
+          },
+          "llm_connection_id": {
+            "type": "string",
+            "format": "uuid"
           },
           "provider": {
             "type": "string",

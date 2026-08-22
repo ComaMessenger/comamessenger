@@ -81,7 +81,10 @@ func (service *Service) Start(ctx context.Context, current identity.User, authen
 	}
 	var endpoint string
 	var approved bool
-	err = service.pool.QueryRow(ctx, `SELECT endpoint_url,external_data_sharing_approved FROM agents WHERE org_id=$1 AND actor_id=$2 AND deleted_at IS NULL`, current.OrgID, agentID).Scan(&endpoint, &approved)
+	err = service.pool.QueryRow(ctx, `SELECT COALESCE(connection.endpoint_url,agent.endpoint_url),agent.external_data_sharing_approved
+		FROM agents agent LEFT JOIN agent_llm_connections connection ON connection.org_id=agent.org_id AND connection.id=agent.llm_connection_id AND connection.enabled
+		WHERE agent.org_id=$1 AND agent.actor_id=$2 AND agent.deleted_at IS NULL
+		AND (agent.llm_connection_id IS NULL OR connection.id IS NOT NULL)`, current.OrgID, agentID).Scan(&endpoint, &approved)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil, agentrun.ErrNotFound
 	}

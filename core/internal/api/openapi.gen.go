@@ -201,6 +201,8 @@ func (e AgentProviderCallStatus) Valid() bool {
 const (
 	ChatRequired                 AgentReadinessBlockers = "chat_required"
 	ExternalDataApprovalRequired AgentReadinessBlockers = "external_data_approval_required"
+	LlmConnectionRequired        AgentReadinessBlockers = "llm_connection_required"
+	LlmConnectionUnavailable     AgentReadinessBlockers = "llm_connection_unavailable"
 	ProviderCredentialRequired   AgentReadinessBlockers = "provider_credential_required"
 	ProviderModelRequired        AgentReadinessBlockers = "provider_model_required"
 	RuntimeKeyRequired           AgentReadinessBlockers = "runtime_key_required"
@@ -213,6 +215,10 @@ func (e AgentReadinessBlockers) Valid() bool {
 	case ChatRequired:
 		return true
 	case ExternalDataApprovalRequired:
+		return true
+	case LlmConnectionRequired:
+		return true
+	case LlmConnectionUnavailable:
 		return true
 	case ProviderCredentialRequired:
 		return true
@@ -2839,6 +2845,7 @@ type Agent struct {
 	Handle                      string               `json:"handle"`
 	Id                          openapi_types.UUID   `json:"id"`
 	Kind                        AgentKind            `json:"kind"`
+	LlmConnectionId             *openapi_types.UUID  `json:"llm_connection_id"`
 	MaxChainDepth               int                  `json:"max_chain_depth"`
 	MaxOutputTokens             int                  `json:"max_output_tokens"`
 	MaxToolIterations           int                  `json:"max_tool_iterations"`
@@ -3455,6 +3462,7 @@ type CreateAgentRequest struct {
 	ExternalDataSharingApproved bool                      `json:"external_data_sharing_approved"`
 	Handle                      string                    `json:"handle"`
 	Kind                        CreateAgentRequestKind    `json:"kind"`
+	LlmConnectionId             *openapi_types.UUID       `json:"llm_connection_id,omitempty"`
 	MaxChainDepth               *int                      `json:"max_chain_depth,omitempty"`
 	MaxOutputTokens             *int                      `json:"max_output_tokens,omitempty"`
 	MaxToolIterations           *int                      `json:"max_tool_iterations,omitempty"`
@@ -4463,6 +4471,7 @@ type UpdateAgentRequest struct {
 	ExecutionTimeoutSeconds     *int                  `json:"execution_timeout_seconds,omitempty"`
 	ExternalDataSharingApproved *bool                 `json:"external_data_sharing_approved,omitempty"`
 	Handle                      *string               `json:"handle,omitempty"`
+	LlmConnectionId             *openapi_types.UUID   `json:"llm_connection_id,omitempty"`
 	MaxChainDepth               *int                  `json:"max_chain_depth,omitempty"`
 	MaxOutputTokens             *int                  `json:"max_output_tokens,omitempty"`
 	MaxToolIterations           *int                  `json:"max_tool_iterations,omitempty"`

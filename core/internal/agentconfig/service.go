@@ -224,8 +224,29 @@ func (service *Service) RuntimeCredentialForAgent(ctx context.Context, current i
 	if !agentauthz.New().CanWork(current, authentication) || uuid.Validate(agentID) != nil {
 		return RuntimeCredential{}, ErrForbidden
 	}
+	var connectionID *string
 	var nonce, ciphertext []byte
-	err := service.pool.QueryRow(ctx, `SELECT nonce,ciphertext FROM agent_provider_credentials WHERE org_id=$1 AND agent_id=$2`, current.OrgID, agentID).Scan(&nonce, &ciphertext)
+	var connectionEnabled *bool
+	err := service.pool.QueryRow(ctx, `SELECT connection.id,connection.nonce,connection.ciphertext,connection.enabled
+		FROM agents agent LEFT JOIN agent_llm_connections connection ON connection.org_id=agent.org_id AND connection.id=agent.llm_connection_id
+		WHERE agent.org_id=$1 AND agent.actor_id=$2 AND agent.deleted_at IS NULL`, current.OrgID, agentID).Scan(&connectionID, &nonce, &ciphertext, &connectionEnabled)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return RuntimeCredential{}, ErrNotFound
+	}
+	if err != nil {
+		return RuntimeCredential{}, err
+	}
+	if connectionID != nil {
+		if connectionEnabled == nil || !*connectionEnabled {
+			return RuntimeCredential{}, ErrNotFound
+		}
+		plain, err := service.openLLMConnection(current.OrgID, *connectionID, nonce, ciphertext)
+		if err != nil {
+			return RuntimeCredential{}, err
+		}
+		return RuntimeCredential{APIKey: plain}, nil
+	}
+	err = service.pool.QueryRow(ctx, `SELECT nonce,ciphertext FROM agent_provider_credentials WHERE org_id=$1 AND agent_id=$2`, current.OrgID, agentID).Scan(&nonce, &ciphertext)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return RuntimeCredential{}, ErrNotFound
 	}

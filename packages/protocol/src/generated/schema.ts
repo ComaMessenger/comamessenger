@@ -2258,6 +2258,8 @@ export interface components {
             description: string;
             enabled: boolean;
             allowed_scopes: components["schemas"]["AgentScope"][];
+            /** Format: uuid */
+            llm_connection_id: string | null;
             provider: string;
             model: string;
             endpoint_url?: string;
@@ -2284,7 +2286,7 @@ export interface components {
             /** @enum {string} */
             state: "needs_setup" | "ready" | "enabled" | "error";
             ready: boolean;
-            blockers: ("chat_required" | "runtime_key_required" | "provider_model_required" | "provider_credential_required" | "external_data_approval_required" | "trigger_required")[];
+            blockers: ("chat_required" | "runtime_key_required" | "provider_model_required" | "provider_credential_required" | "llm_connection_required" | "llm_connection_unavailable" | "external_data_approval_required" | "trigger_required")[];
         };
         DuplicateAgentRequest: {
             display_name: string;
@@ -2303,6 +2305,8 @@ export interface components {
             description?: string;
             enabled: boolean;
             allowed_scopes: components["schemas"]["AgentScope"][];
+            /** Format: uuid */
+            llm_connection_id?: string;
             provider?: string;
             model?: string;
             endpoint_url?: string;
@@ -2331,6 +2335,8 @@ export interface components {
             description?: string;
             enabled?: boolean;
             allowed_scopes?: components["schemas"]["AgentScope"][];
+            /** Format: uuid */
+            llm_connection_id?: string;
             provider?: string;
             model?: string;
             endpoint_url?: string;

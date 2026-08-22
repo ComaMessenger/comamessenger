@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/comamessenger/comamessenger/core/internal/access"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/testdb"
 )
@@ -207,6 +208,12 @@ func TestWorkspaceLLMConnectionLifecycle(t *testing.T) {
 	}
 	if _, err := pool.Exec(t.Context(), `INSERT INTO agents(actor_id,org_id,owner_actor_id,kind,llm_connection_id) VALUES($1,$2,$3,'builtin',$4)`, agentID, orgID, ownerID, created.ID); err != nil {
 		t.Fatal(err)
+	}
+	runtimeUser := identity.User{ActorID: agentID, OrgID: orgID, OrgRole: "member"}
+	runtimeIdentity := access.Identity{ActorID: agentID, OrgID: orgID, AuthenticationKind: "api_key", KeyID: "runtime-key", Scopes: []string{"runtime:execute"}}
+	runtimeCredential, err := service.RuntimeCredentialForAgent(t.Context(), runtimeUser, runtimeIdentity, agentID)
+	if err != nil || runtimeCredential.APIKey != updatedKey {
+		t.Fatalf("runtime connection credential = %+v, err=%v", runtimeCredential, err)
 	}
 	if err := service.DeleteLLMConnection(t.Context(), owner, created.ID); !errors.Is(err, ErrConflict) {
 		t.Fatalf("delete in-use connection error = %v", err)

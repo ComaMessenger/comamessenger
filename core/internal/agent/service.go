@@ -70,6 +70,7 @@ type Agent struct {
 	Description                 string    `json:"description"`
 	Enabled                     bool      `json:"enabled"`
 	AllowedScopes               []Scope   `json:"allowed_scopes"`
+	LLMConnectionID             *string   `json:"llm_connection_id"`
 	Provider                    string    `json:"provider"`
 	Model                       string    `json:"model"`
 	EndpointURL                 string    `json:"endpoint_url,omitempty"`
@@ -104,6 +105,7 @@ type CreateInput struct {
 	Description                 string   `json:"description"`
 	Enabled                     bool     `json:"enabled"`
 	AllowedScopes               []Scope  `json:"allowed_scopes"`
+	LLMConnectionID             *string  `json:"llm_connection_id"`
 	Provider                    string   `json:"provider"`
 	Model                       string   `json:"model"`
 	EndpointURL                 string   `json:"endpoint_url"`
@@ -132,6 +134,7 @@ type UpdateInput struct {
 	Description                 *string   `json:"description"`
 	Enabled                     *bool     `json:"enabled"`
 	AllowedScopes               *[]Scope  `json:"allowed_scopes"`
+	LLMConnectionID             *string   `json:"llm_connection_id"`
 	Provider                    *string   `json:"provider"`
 	Model                       *string   `json:"model"`
 	EndpointURL                 *string   `json:"endpoint_url"`
@@ -240,6 +243,20 @@ func (service *Service) Create(ctx context.Context, current identity.User, input
 		return Agent{}, fmt.Errorf("begin agent creation: %w", err)
 	}
 	defer tx.Rollback(ctx)
+	if normalized.LLMConnectionID != nil {
+		provider, endpoint, defaultModel, err := resolveLLMConnection(ctx, tx, current.OrgID, *normalized.LLMConnectionID)
+		if err != nil {
+			return Agent{}, err
+		}
+		normalized.Provider = provider
+		normalized.EndpointURL = endpoint
+		if normalized.Model == "" {
+			normalized.Model = defaultModel
+		}
+		if normalized.Model == "" {
+			return Agent{}, fmt.Errorf("%w: the selected LLM connection has no default model", ErrInvalid)
+		}
+	}
 	if len(normalized.ChatIDs) > 0 {
 		var count int
 		if err := tx.QueryRow(ctx, `SELECT count(*) FROM chats WHERE org_id=$1 AND id=ANY($2::uuid[]) AND archived_at IS NULL`, current.OrgID, normalized.ChatIDs).Scan(&count); err != nil {
@@ -256,11 +273,11 @@ func (service *Service) Create(ctx context.Context, current identity.User, input
 	}
 	scopes := scopeStrings(normalized.AllowedScopes)
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO agents(actor_id,org_id,owner_actor_id,kind,recipe,recipe_version,description,enabled,allowed_scopes,provider,model,endpoint_url,
+		INSERT INTO agents(actor_id,org_id,owner_actor_id,kind,recipe,recipe_version,description,enabled,allowed_scopes,llm_connection_id,provider,model,endpoint_url,
 			external_data_sharing_approved,daily_cost_limit,monthly_cost_limit,max_output_tokens,max_tool_iterations,max_chain_depth,per_chat_concurrency,
 			rate_limit_per_minute,provider_rate_limit_per_minute,execution_timeout_seconds)
-		VALUES($1,$2,$3,$4,$5,1,$6,$7,$8,$9,$10,$11,$12,NULLIF($13,'')::numeric,NULLIF($14,'')::numeric,$15,$16,$17,$18,$19,$20,$21)`, agentID, current.OrgID, current.ActorID, normalized.Kind, normalized.Recipe,
-		normalized.Description, normalized.Enabled, scopes, normalized.Provider, normalized.Model, normalized.EndpointURL,
+		VALUES($1,$2,$3,$4,$5,1,$6,$7,$8,$9,$10,$11,$12,$13,NULLIF($14,'')::numeric,NULLIF($15,'')::numeric,$16,$17,$18,$19,$20,$21,$22)`, agentID, current.OrgID, current.ActorID, normalized.Kind, normalized.Recipe,
+		normalized.Description, normalized.Enabled, scopes, normalized.LLMConnectionID, normalized.Provider, normalized.Model, normalized.EndpointURL,
 		normalized.ExternalDataSharingApproved, costLimitValue(normalized.DailyCostLimit), costLimitValue(normalized.MonthlyCostLimit),
 		*normalized.MaxOutputTokens, *normalized.MaxToolIterations, *normalized.MaxChainDepth,
 		*normalized.PerChatConcurrency, normalized.RateLimitPerMinute, normalized.ProviderRateLimitPerMinute, normalized.ExecutionTimeoutSeconds); err != nil {
@@ -309,15 +326,20 @@ func (service *Service) Duplicate(ctx context.Context, current identity.User, ag
 	if err != nil {
 		return Agent{}, err
 	}
-	return service.Create(ctx, current, CreateInput{
+	createInput := CreateInput{
 		DisplayName: input.DisplayName, Handle: input.Handle, Kind: source.Kind, Recipe: source.Recipe,
 		Description: source.Description, Enabled: false, AllowedScopes: source.AllowedScopes,
-		Provider: source.Provider, Model: source.Model, EndpointURL: source.EndpointURL,
+		LLMConnectionID: source.LLMConnectionID, Model: source.Model,
 		ExternalDataSharingApproved: source.ExternalDataSharingApproved, DailyCostLimit: source.DailyCostLimit, MonthlyCostLimit: source.MonthlyCostLimit,
 		MaxOutputTokens: intPointer(source.MaxOutputTokens), MaxToolIterations: intPointer(source.MaxToolIterations), MaxChainDepth: intPointer(source.MaxChainDepth), PerChatConcurrency: intPointer(source.PerChatConcurrency),
 		RateLimitPerMinute: source.RateLimitPerMinute, ProviderRateLimitPerMinute: source.ProviderRateLimitPerMinute, ExecutionTimeoutSeconds: source.ExecutionTimeoutSeconds,
 		ChatIDs: source.ChatIDs, DuplicateFrom: source.ID,
-	})
+	}
+	if source.LLMConnectionID == nil {
+		createInput.Provider = source.Provider
+		createInput.EndpointURL = source.EndpointURL
+	}
+	return service.Create(ctx, current, createInput)
 }
 
 func (service *Service) ResetRecipe(ctx context.Context, current identity.User, agentID string) (Agent, error) {
@@ -483,7 +505,7 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 	if _, err := uuid.Parse(agentID); err != nil {
 		return Agent{}, ErrNotFound
 	}
-	if input.DisplayName == nil && input.Handle == nil && input.Description == nil && input.Enabled == nil && input.AllowedScopes == nil && input.Provider == nil && input.Model == nil && input.EndpointURL == nil && input.ExternalDataSharingApproved == nil && input.DailyCostLimit == nil && input.MonthlyCostLimit == nil && input.MaxOutputTokens == nil && input.MaxToolIterations == nil && input.MaxChainDepth == nil && input.PerChatConcurrency == nil && input.RateLimitPerMinute == nil && input.ProviderRateLimitPerMinute == nil && input.ExecutionTimeoutSeconds == nil && input.ChatIDs == nil {
+	if input.DisplayName == nil && input.Handle == nil && input.Description == nil && input.Enabled == nil && input.AllowedScopes == nil && input.LLMConnectionID == nil && input.Provider == nil && input.Model == nil && input.EndpointURL == nil && input.ExternalDataSharingApproved == nil && input.DailyCostLimit == nil && input.MonthlyCostLimit == nil && input.MaxOutputTokens == nil && input.MaxToolIterations == nil && input.MaxChainDepth == nil && input.PerChatConcurrency == nil && input.RateLimitPerMinute == nil && input.ProviderRateLimitPerMinute == nil && input.ExecutionTimeoutSeconds == nil && input.ChatIDs == nil {
 		return Agent{}, fmt.Errorf("%w: update must contain at least one field", ErrInvalid)
 	}
 	auditID, err := id.New()
@@ -505,6 +527,20 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 	if err != nil {
 		return Agent{}, err
 	}
+	if prospective.LLMConnectionID != nil {
+		provider, endpoint, defaultModel, err := resolveLLMConnection(ctx, tx, current.OrgID, *prospective.LLMConnectionID)
+		if err != nil {
+			return Agent{}, err
+		}
+		prospective.Provider = provider
+		prospective.EndpointURL = endpoint
+		if input.LLMConnectionID != nil && input.Model == nil {
+			prospective.Model = defaultModel
+		}
+		if prospective.Model == "" {
+			return Agent{}, fmt.Errorf("%w: the selected LLM connection has no default model", ErrInvalid)
+		}
+	}
 	if input.ChatIDs != nil && len(prospective.ChatIDs) > 0 {
 		var count int
 		if err := tx.QueryRow(ctx, `SELECT count(*) FROM chats WHERE org_id=$1 AND id=ANY($2::uuid[]) AND archived_at IS NULL`, current.OrgID, prospective.ChatIDs).Scan(&count); err != nil {
@@ -517,12 +553,12 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 	if _, err := tx.Exec(ctx, `UPDATE actors SET display_name=$3,handle=$4 WHERE org_id=$1 AND id=$2`, current.OrgID, agentID, prospective.DisplayName, prospective.Handle); err != nil {
 		return Agent{}, mapWriteError("update agent actor", err)
 	}
-	if _, err := tx.Exec(ctx, `UPDATE agents SET description=$3,enabled=$4,allowed_scopes=$5,provider=$6,model=$7,
-		endpoint_url=$8,external_data_sharing_approved=$9,daily_cost_limit=NULLIF($10,'')::numeric,monthly_cost_limit=NULLIF($11,'')::numeric,
-		max_output_tokens=$12,max_tool_iterations=$13,max_chain_depth=$14,per_chat_concurrency=$15,
-		rate_limit_per_minute=$16,provider_rate_limit_per_minute=$17,execution_timeout_seconds=$18,updated_at=now()
+	if _, err := tx.Exec(ctx, `UPDATE agents SET description=$3,enabled=$4,allowed_scopes=$5,llm_connection_id=$6,provider=$7,model=$8,
+		endpoint_url=$9,external_data_sharing_approved=$10,daily_cost_limit=NULLIF($11,'')::numeric,monthly_cost_limit=NULLIF($12,'')::numeric,
+		max_output_tokens=$13,max_tool_iterations=$14,max_chain_depth=$15,per_chat_concurrency=$16,
+		rate_limit_per_minute=$17,provider_rate_limit_per_minute=$18,execution_timeout_seconds=$19,updated_at=now()
 		WHERE org_id=$1 AND actor_id=$2`, current.OrgID, agentID, prospective.Description, prospective.Enabled,
-		scopeStrings(prospective.AllowedScopes), prospective.Provider, prospective.Model, prospective.EndpointURL,
+		scopeStrings(prospective.AllowedScopes), prospective.LLMConnectionID, prospective.Provider, prospective.Model, prospective.EndpointURL,
 		prospective.ExternalDataSharingApproved, costLimitValue(prospective.DailyCostLimit), costLimitValue(prospective.MonthlyCostLimit),
 		*prospective.MaxOutputTokens, *prospective.MaxToolIterations,
 		*prospective.MaxChainDepth, *prospective.PerChatConcurrency, prospective.RateLimitPerMinute,
@@ -558,12 +594,12 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 	}
 	revokedRows.Close()
 	if prospective.Enabled {
-		var hasCredential, hasActiveKey, hasTrigger bool
+		var hasLegacyCredential, hasActiveKey, hasTrigger bool
 		if err := tx.QueryRow(ctx, `SELECT
 			EXISTS(SELECT 1 FROM agent_provider_credentials WHERE org_id=$1 AND agent_id=$2),
 			EXISTS(SELECT 1 FROM agent_api_keys WHERE org_id=$1 AND agent_id=$2 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>now()) AND scopes<@$3::text[]),
 			EXISTS(SELECT 1 FROM agent_triggers WHERE org_id=$1 AND agent_id=$2 AND enabled)`,
-			current.OrgID, agentID, scopeStrings(prospective.AllowedScopes)).Scan(&hasCredential, &hasActiveKey, &hasTrigger); err != nil {
+			current.OrgID, agentID, scopeStrings(prospective.AllowedScopes)).Scan(&hasLegacyCredential, &hasActiveKey, &hasTrigger); err != nil {
 			return Agent{}, fmt.Errorf("check agent readiness: %w", err)
 		}
 		blockers := make([]string, 0, 6)
@@ -577,8 +613,8 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 			if prospective.Provider == "" || prospective.Model == "" {
 				blockers = append(blockers, "provider_model_required")
 			}
-			if !hasCredential {
-				blockers = append(blockers, "provider_credential_required")
+			if prospective.LLMConnectionID == nil && !hasLegacyCredential {
+				blockers = append(blockers, "llm_connection_required")
 			}
 			if !prospective.ExternalDataSharingApproved {
 				blockers = append(blockers, "external_data_approval_required")
@@ -877,40 +913,45 @@ func (service *Service) AuthenticateKey(ctx context.Context, secret string) (ide
 
 const agentSelect = `
 	SELECT agent.actor_id,agent.org_id,agent.owner_actor_id,actor.display_name,actor.handle,
-	       agent.kind,agent.recipe,agent.recipe_version,agent.description,agent.enabled,agent.allowed_scopes,agent.provider,agent.model,
-	       agent.endpoint_url,agent.external_data_sharing_approved,agent.daily_cost_limit::text,agent.monthly_cost_limit::text,agent.max_output_tokens,
+	       agent.kind,agent.recipe,agent.recipe_version,agent.description,agent.enabled,agent.allowed_scopes,agent.llm_connection_id,
+	       COALESCE(connection.provider,agent.provider),COALESCE(NULLIF(agent.model,''),connection.default_model,''),
+	       COALESCE(connection.endpoint_url,agent.endpoint_url),agent.external_data_sharing_approved,agent.daily_cost_limit::text,agent.monthly_cost_limit::text,agent.max_output_tokens,
 	       agent.max_tool_iterations,agent.max_chain_depth,agent.per_chat_concurrency,
 	       agent.rate_limit_per_minute,agent.provider_rate_limit_per_minute,agent.execution_timeout_seconds,
 	       COALESCE((SELECT array_agg(member.chat_id ORDER BY member.chat_id) FROM chat_members member WHERE member.org_id=agent.org_id AND member.actor_id=agent.actor_id),'{}'::uuid[]),
+	       agent.llm_connection_id IS NOT NULL,
+	       connection.id IS NOT NULL AND connection.enabled,
 	       EXISTS(SELECT 1 FROM agent_provider_credentials credential WHERE credential.org_id=agent.org_id AND credential.agent_id=agent.actor_id),
 	       EXISTS(SELECT 1 FROM agent_api_keys key WHERE key.org_id=agent.org_id AND key.agent_id=agent.actor_id AND key.revoked_at IS NULL AND (key.expires_at IS NULL OR key.expires_at>now())),
 	       EXISTS(SELECT 1 FROM agent_triggers trigger WHERE trigger.org_id=agent.org_id AND trigger.agent_id=agent.actor_id AND trigger.enabled),
 	       actor.avatar_version,agent.created_at,agent.updated_at
-	FROM agents agent JOIN actors actor ON actor.org_id=agent.org_id AND actor.id=agent.actor_id`
+	FROM agents agent
+	JOIN actors actor ON actor.org_id=agent.org_id AND actor.id=agent.actor_id
+	LEFT JOIN agent_llm_connections connection ON connection.org_id=agent.org_id AND connection.id=agent.llm_connection_id`
 
 type scanner interface{ Scan(...any) error }
 
 func scanAgent(row scanner) (Agent, error) {
 	var result Agent
 	var scopes []string
-	var hasCredential, hasActiveKey, hasTrigger bool
+	var hasConnection, connectionAvailable, hasLegacyCredential, hasActiveKey, hasTrigger bool
 	if err := row.Scan(&result.ID, &result.OrgID, &result.OwnerActorID, &result.DisplayName, &result.Handle,
-		&result.Kind, &result.Recipe, &result.RecipeVersion, &result.Description, &result.Enabled, &scopes, &result.Provider, &result.Model,
+		&result.Kind, &result.Recipe, &result.RecipeVersion, &result.Description, &result.Enabled, &scopes, &result.LLMConnectionID, &result.Provider, &result.Model,
 		&result.EndpointURL, &result.ExternalDataSharingApproved, &result.DailyCostLimit, &result.MonthlyCostLimit, &result.MaxOutputTokens,
 		&result.MaxToolIterations, &result.MaxChainDepth, &result.PerChatConcurrency,
 		&result.RateLimitPerMinute, &result.ProviderRateLimitPerMinute, &result.ExecutionTimeoutSeconds, &result.ChatIDs,
-		&hasCredential, &hasActiveKey, &hasTrigger, &result.AvatarVersion, &result.CreatedAt, &result.UpdatedAt); err != nil {
+		&hasConnection, &connectionAvailable, &hasLegacyCredential, &hasActiveKey, &hasTrigger, &result.AvatarVersion, &result.CreatedAt, &result.UpdatedAt); err != nil {
 		return Agent{}, err
 	}
 	result.AllowedScopes = make([]Scope, len(scopes))
 	for index, value := range scopes {
 		result.AllowedScopes[index] = Scope(value)
 	}
-	result.Readiness = readinessFor(result, hasCredential, hasActiveKey, hasTrigger)
+	result.Readiness = readinessFor(result, hasConnection, connectionAvailable, hasLegacyCredential, hasActiveKey, hasTrigger)
 	return result, nil
 }
 
-func readinessFor(value Agent, hasCredential, hasActiveKey, hasTrigger bool) Readiness {
+func readinessFor(value Agent, hasConnection, connectionAvailable, hasLegacyCredential, hasActiveKey, hasTrigger bool) Readiness {
 	blockers := make([]string, 0, 6)
 	if len(value.ChatIDs) == 0 {
 		blockers = append(blockers, "chat_required")
@@ -922,8 +963,10 @@ func readinessFor(value Agent, hasCredential, hasActiveKey, hasTrigger bool) Rea
 		if value.Provider == "" || value.Model == "" {
 			blockers = append(blockers, "provider_model_required")
 		}
-		if !hasCredential {
-			blockers = append(blockers, "provider_credential_required")
+		if hasConnection && !connectionAvailable {
+			blockers = append(blockers, "llm_connection_unavailable")
+		} else if !hasConnection && !hasLegacyCredential {
+			blockers = append(blockers, "llm_connection_required")
 		}
 		if !value.ExternalDataSharingApproved {
 			blockers = append(blockers, "external_data_approval_required")
@@ -957,6 +1000,13 @@ func normalizeCreate(input CreateInput) (CreateInput, error) {
 	input.Provider = strings.TrimSpace(input.Provider)
 	input.Model = strings.TrimSpace(input.Model)
 	input.EndpointURL = strings.TrimSpace(input.EndpointURL)
+	if input.LLMConnectionID != nil {
+		connectionID := strings.TrimSpace(*input.LLMConnectionID)
+		input.LLMConnectionID = &connectionID
+		if uuid.Validate(connectionID) != nil {
+			return CreateInput{}, fmt.Errorf("%w: invalid LLM connection", ErrInvalid)
+		}
+	}
 	if input.RateLimitPerMinute == 0 {
 		input.RateLimitPerMinute = 60
 	}
@@ -996,18 +1046,20 @@ func normalizeCreate(input CreateInput) (CreateInput, error) {
 		return CreateInput{}, fmt.Errorf("%w: invalid agent profile", ErrInvalid)
 	}
 	if input.Kind == "builtin" {
-		switch input.Provider {
-		case "openai", "anthropic":
-			if input.EndpointURL != "" {
-				return CreateInput{}, fmt.Errorf("%w: the selected provider uses its canonical endpoint", ErrInvalid)
+		if input.LLMConnectionID == nil {
+			switch input.Provider {
+			case "openai", "anthropic":
+				if input.EndpointURL != "" {
+					return CreateInput{}, fmt.Errorf("%w: the selected provider uses its canonical endpoint", ErrInvalid)
+				}
+			case "openai-compatible":
+				parsed, err := url.Parse(input.EndpointURL)
+				if err != nil || parsed.Host == "" || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.User != nil {
+					return CreateInput{}, fmt.Errorf("%w: OpenAI-compatible provider requires an HTTP(S) endpoint without credentials", ErrInvalid)
+				}
+			default:
+				return CreateInput{}, fmt.Errorf("%w: unsupported builtin provider", ErrInvalid)
 			}
-		case "openai-compatible":
-			parsed, err := url.Parse(input.EndpointURL)
-			if err != nil || parsed.Host == "" || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.User != nil {
-				return CreateInput{}, fmt.Errorf("%w: OpenAI-compatible provider requires an HTTP(S) endpoint without credentials", ErrInvalid)
-			}
-		default:
-			return CreateInput{}, fmt.Errorf("%w: unsupported builtin provider", ErrInvalid)
 		}
 	}
 	if input.Recipe != "custom" && input.Recipe != "summarizer" && input.Recipe != "qa" && input.Recipe != "onboarding" {
@@ -1017,6 +1069,9 @@ func normalizeCreate(input CreateInput) (CreateInput, error) {
 		return CreateInput{}, fmt.Errorf("%w: recipes require a builtin agent", ErrInvalid)
 	}
 	if input.Kind == "external" {
+		if input.LLMConnectionID != nil {
+			return CreateInput{}, fmt.Errorf("%w: external agents cannot use an LLM connection", ErrInvalid)
+		}
 		parsed, err := url.Parse(input.EndpointURL)
 		if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.Host == "" || parsed.User != nil {
 			return CreateInput{}, fmt.Errorf("%w: external endpoint must be an HTTP(S) URL without credentials", ErrInvalid)
@@ -1042,7 +1097,7 @@ func mergeUpdate(existing Agent, input UpdateInput) (CreateInput, error) {
 	prospective := CreateInput{
 		DisplayName: existing.DisplayName, Handle: existing.Handle, Kind: existing.Kind, Recipe: existing.Recipe,
 		Description: existing.Description, Enabled: existing.Enabled, AllowedScopes: existing.AllowedScopes,
-		Provider: existing.Provider, Model: existing.Model, EndpointURL: existing.EndpointURL,
+		LLMConnectionID: existing.LLMConnectionID, Provider: existing.Provider, Model: existing.Model, EndpointURL: existing.EndpointURL,
 		ExternalDataSharingApproved: existing.ExternalDataSharingApproved, RateLimitPerMinute: existing.RateLimitPerMinute,
 		DailyCostLimit: existing.DailyCostLimit, MonthlyCostLimit: existing.MonthlyCostLimit,
 		ProviderRateLimitPerMinute: existing.ProviderRateLimitPerMinute, ExecutionTimeoutSeconds: existing.ExecutionTimeoutSeconds, ChatIDs: existing.ChatIDs,
@@ -1063,6 +1118,9 @@ func mergeUpdate(existing Agent, input UpdateInput) (CreateInput, error) {
 	}
 	if input.AllowedScopes != nil {
 		prospective.AllowedScopes = *input.AllowedScopes
+	}
+	if input.LLMConnectionID != nil {
+		prospective.LLMConnectionID = input.LLMConnectionID
 	}
 	if input.Provider != nil {
 		prospective.Provider = *input.Provider
@@ -1107,6 +1165,18 @@ func mergeUpdate(existing Agent, input UpdateInput) (CreateInput, error) {
 		prospective.ChatIDs = *input.ChatIDs
 	}
 	return normalizeCreate(prospective)
+}
+
+func resolveLLMConnection(ctx context.Context, tx pgx.Tx, orgID, connectionID string) (string, string, string, error) {
+	var provider, endpoint, defaultModel string
+	err := tx.QueryRow(ctx, `SELECT provider,endpoint_url,default_model FROM agent_llm_connections WHERE org_id=$1 AND id=$2 AND enabled`, orgID, connectionID).Scan(&provider, &endpoint, &defaultModel)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", "", fmt.Errorf("%w: LLM connection is missing or disabled", ErrInvalid)
+	}
+	if err != nil {
+		return "", "", "", err
+	}
+	return provider, endpoint, defaultModel, nil
 }
 
 func insertRecipeTriggers(ctx context.Context, tx pgx.Tx, orgID, agentID, recipe string, chatIDs []string, now time.Time) error {

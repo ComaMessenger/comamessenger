@@ -234,7 +234,13 @@ func (service *Service) Invoke(ctx context.Context, current identity.User, agent
 	defer tx.Rollback(ctx)
 	var maxDepth int
 	var provider, model string
-	err = tx.QueryRow(ctx, `SELECT agent.max_chain_depth,agent.provider,agent.model FROM agents agent JOIN chat_members member ON member.org_id=agent.org_id AND member.actor_id=agent.actor_id AND member.chat_id=$3 JOIN chats chat ON chat.org_id=agent.org_id AND chat.id=member.chat_id AND chat.archived_at IS NULL WHERE agent.org_id=$1 AND agent.actor_id=$2 AND agent.enabled FOR UPDATE OF agent`, current.OrgID, agentID, input.ChatID).Scan(&maxDepth, &provider, &model)
+	err = tx.QueryRow(ctx, `SELECT agent.max_chain_depth,COALESCE(connection.provider,agent.provider),COALESCE(NULLIF(agent.model,''),connection.default_model,'')
+		FROM agents agent
+		LEFT JOIN agent_llm_connections connection ON connection.org_id=agent.org_id AND connection.id=agent.llm_connection_id AND connection.enabled
+		JOIN chat_members member ON member.org_id=agent.org_id AND member.actor_id=agent.actor_id AND member.chat_id=$3
+		JOIN chats chat ON chat.org_id=agent.org_id AND chat.id=member.chat_id AND chat.archived_at IS NULL
+		WHERE agent.org_id=$1 AND agent.actor_id=$2 AND agent.enabled AND (agent.llm_connection_id IS NULL OR connection.id IS NOT NULL)
+		FOR UPDATE OF agent`, current.OrgID, agentID, input.ChatID).Scan(&maxDepth, &provider, &model)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Run{}, ErrNotFound
 	}

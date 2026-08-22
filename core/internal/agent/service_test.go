@@ -168,6 +168,15 @@ func TestAgentCreateValidationAndManagerPermission(t *testing.T) {
 	if err != nil || compatible.EndpointURL != "http://llm.internal.test/v1" {
 		t.Fatalf("OpenAI-compatible agent=%+v err=%v", compatible, err)
 	}
+	connectionID := "00000000-0000-7000-8000-000000000205"
+	if _, err := pool.Exec(t.Context(), `INSERT INTO agent_llm_connections(id,org_id,name,provider,endpoint_url,default_model,nonce,ciphertext,key_hint,created_by,updated_by)
+		VALUES($1,$2,'Local models','openai-compatible','http://models.internal.test/v1','qwen3',decode(repeat('00',12),'hex'),decode(repeat('00',16),'hex'),'test••••key',$3,$3)`, connectionID, agentTestOrgID, agentTestOwnerID); err != nil {
+		t.Fatal(err)
+	}
+	connected, err := service.Create(t.Context(), manager, CreateInput{DisplayName: "Connected", Handle: "connected", Kind: "builtin", LLMConnectionID: &connectionID})
+	if err != nil || connected.LLMConnectionID == nil || *connected.LLMConnectionID != connectionID || connected.Provider != "openai-compatible" || connected.Model != "qwen3" || connected.EndpointURL != "http://models.internal.test/v1" || slices.Contains(connected.Readiness.Blockers, "llm_connection_required") {
+		t.Fatalf("connected agent=%+v err=%v", connected, err)
+	}
 	created, err := service.Create(t.Context(), manager, CreateInput{DisplayName: "Disabled", Handle: "disabled-agent", Kind: "builtin", Provider: "openai", Enabled: false})
 	if err != nil {
 		t.Fatal(err)
