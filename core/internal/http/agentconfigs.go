@@ -62,6 +62,15 @@ func (h *identityHandlers) deleteAgentLLMConnection(w standardhttp.ResponseWrite
 	w.WriteHeader(standardhttp.StatusNoContent)
 }
 
+func (h *identityHandlers) testAgentLLMConnection(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.agentConfig.TestLLMConnection(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "connectionID"))
+	if err != nil {
+		h.writeAgentConfigError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
 func (h *identityHandlers) agentProviderCredential(w standardhttp.ResponseWriter, r *standardhttp.Request) {
 	result, err := h.agentConfig.Credential(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "agentID"))
 	if err != nil {

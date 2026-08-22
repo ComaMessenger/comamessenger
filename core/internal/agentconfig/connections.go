@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -233,6 +234,81 @@ func (service *Service) DeleteLLMConnection(ctx context.Context, current identit
 	return tx.Commit(ctx)
 }
 
+func (service *Service) TestLLMConnection(ctx context.Context, current identity.User, connectionID string) (LLMConnection, error) {
+	if !canManageLLMConnections(current) {
+		return LLMConnection{}, ErrForbidden
+	}
+	if uuid.Validate(connectionID) != nil {
+		return LLMConnection{}, ErrNotFound
+	}
+	var provider, endpoint string
+	var nonce, ciphertext []byte
+	err := service.pool.QueryRow(ctx, `SELECT provider,endpoint_url,nonce,ciphertext FROM agent_llm_connections WHERE org_id=$1 AND id=$2`, current.OrgID, connectionID).Scan(&provider, &endpoint, &nonce, &ciphertext)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return LLMConnection{}, ErrNotFound
+	}
+	if err != nil {
+		return LLMConnection{}, err
+	}
+	apiKey, err := service.openLLMConnection(current.OrgID, connectionID, nonce, ciphertext)
+	if err != nil {
+		return LLMConnection{}, err
+	}
+	target, headers, err := llmConnectionTestTarget(provider, endpoint, apiKey)
+	if err != nil {
+		return LLMConnection{}, ErrInvalid
+	}
+	testContext, cancel := context.WithTimeout(ctx, 12*time.Second)
+	defer cancel()
+	request, err := http.NewRequestWithContext(testContext, http.MethodGet, target, nil)
+	if err != nil {
+		return LLMConnection{}, err
+	}
+	for name, value := range headers {
+		request.Header.Set(name, value)
+	}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.ResponseHeaderTimeout = 10 * time.Second
+	defer transport.CloseIdleConnections()
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   12 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return errors.New("LLM connection redirects are disabled")
+		},
+	}
+	status, errorCode := "healthy", ""
+	response, requestErr := client.Do(request)
+	if requestErr != nil {
+		status, errorCode = "unhealthy", "network_error"
+	} else {
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 64<<10))
+		_ = response.Body.Close()
+		if response.StatusCode < 200 || response.StatusCode >= 300 {
+			status, errorCode = "unhealthy", providerTestErrorCode(response.StatusCode)
+		}
+	}
+	tx, err := service.pool.Begin(ctx)
+	if err != nil {
+		return LLMConnection{}, err
+	}
+	defer tx.Rollback(ctx)
+	result, err := tx.Exec(ctx, `UPDATE agent_llm_connections SET health_status=$3,last_tested_at=now(),last_error_code=$4,updated_by=$5,updated_at=now() WHERE org_id=$1 AND id=$2`, current.OrgID, connectionID, status, errorCode, current.ActorID)
+	if err != nil {
+		return LLMConnection{}, err
+	}
+	if result.RowsAffected() != 1 {
+		return LLMConnection{}, ErrNotFound
+	}
+	if err := auditLLMConnection(ctx, tx, current, connectionID, "test", map[string]any{"status": status, "error_code": errorCode}); err != nil {
+		return LLMConnection{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return LLMConnection{}, err
+	}
+	return service.getLLMConnection(ctx, current.OrgID, connectionID)
+}
+
 func (service *Service) getLLMConnection(ctx context.Context, orgID, connectionID string) (LLMConnection, error) {
 	connection, err := scanLLMConnection(service.pool.QueryRow(ctx, llmConnectionSelect+` WHERE org_id=$1 AND id=$2`, orgID, connectionID))
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -268,6 +344,41 @@ func validLLMConnection(name, provider, endpoint, model, apiKey string) bool {
 		return err == nil && parsed.Host != "" && (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.User == nil && parsed.Fragment == ""
 	default:
 		return false
+	}
+}
+
+func llmConnectionTestTarget(provider, endpoint, apiKey string) (string, map[string]string, error) {
+	headers := map[string]string{"Accept": "application/json"}
+	switch provider {
+	case "openai":
+		headers["Authorization"] = "Bearer " + apiKey
+		return "https://api.openai.com/v1/models", headers, nil
+	case "anthropic":
+		headers["x-api-key"] = apiKey
+		headers["anthropic-version"] = "2023-06-01"
+		return "https://api.anthropic.com/v1/models", headers, nil
+	case "openai-compatible":
+		parsed, err := url.Parse(strings.TrimSpace(endpoint))
+		if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.User != nil {
+			return "", nil, ErrInvalid
+		}
+		headers["Authorization"] = "Bearer " + apiKey
+		return strings.TrimRight(parsed.String(), "/") + "/models", headers, nil
+	default:
+		return "", nil, ErrInvalid
+	}
+}
+
+func providerTestErrorCode(status int) string {
+	switch status {
+	case http.StatusUnauthorized:
+		return "unauthorized"
+	case http.StatusForbidden:
+		return "forbidden"
+	case http.StatusTooManyRequests:
+		return "rate_limited"
+	default:
+		return "provider_error"
 	}
 }
 

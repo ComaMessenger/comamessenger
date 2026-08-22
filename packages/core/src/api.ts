@@ -429,9 +429,7 @@ export class MessengerAPI {
     return this.request("/api/v1/agent-connections");
   }
   agentLlmConnection(id: string): Promise<AgentLlmConnection> {
-    return this.request(
-      `/api/v1/agent-connections/${encodeURIComponent(id)}`,
-    );
+    return this.request(`/api/v1/agent-connections/${encodeURIComponent(id)}`);
   }
   createAgentLlmConnection(
     input: CreateAgentLlmConnectionRequest,
@@ -445,15 +443,20 @@ export class MessengerAPI {
     id: string,
     input: UpdateAgentLlmConnectionRequest,
   ): Promise<AgentLlmConnection> {
-    return this.request(
-      `/api/v1/agent-connections/${encodeURIComponent(id)}`,
-      { method: "PATCH", body: JSON.stringify(input) },
-    );
+    return this.request(`/api/v1/agent-connections/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
   }
   deleteAgentLlmConnection(id: string): Promise<void> {
+    return this.request(`/api/v1/agent-connections/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+  }
+  testAgentLlmConnection(id: string): Promise<AgentLlmConnection> {
     return this.request(
-      `/api/v1/agent-connections/${encodeURIComponent(id)}`,
-      { method: "DELETE" },
+      `/api/v1/agent-connections/${encodeURIComponent(id)}/test`,
+      { method: "POST" },
     );
   }
   agentMcpServers(id: string): Promise<AgentMcpServer[]> {

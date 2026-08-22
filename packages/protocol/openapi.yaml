@@ -2059,7 +2059,8 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/CreateAgentLlmConnectionRequest" }
+            schema:
+              { $ref: "#/components/schemas/CreateAgentLlmConnectionRequest" }
       responses:
         "201":
           description: Workspace LLM connection created; the plaintext API key is never returned.
@@ -2092,7 +2093,8 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/UpdateAgentLlmConnectionRequest" }
+            schema:
+              { $ref: "#/components/schemas/UpdateAgentLlmConnectionRequest" }
       responses:
         "200":
           description: Workspace LLM connection updated.
@@ -2111,6 +2113,25 @@ paths:
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+  /api/v1/agent-connections/{connection_id}/test:
+    parameters:
+      - name: connection_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: testAgentLlmConnection
+      description: Verifies the encrypted credential against the provider without returning provider response data.
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Updated connection health. Provider failures are represented as an unhealthy result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentLlmConnection" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
   /api/v1/agents/{agent_id}/provider-credentials:
     parameters: [{ $ref: "#/components/parameters/AgentId" }]
     get:

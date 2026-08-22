@@ -1449,6 +1449,25 @@ export interface paths {
         patch: operations["updateAgentLlmConnection"];
         trace?: never;
     };
+    "/api/v1/agent-connections/{connection_id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Verifies the encrypted credential against the provider without returning provider response data. */
+        post: operations["testAgentLlmConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents/{agent_id}/provider-credentials": {
         parameters: {
             query?: never;
@@ -6663,6 +6682,31 @@ export interface operations {
         };
         responses: {
             /** @description Workspace LLM connection updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentLlmConnection"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    testAgentLlmConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Updated connection health. Provider failures are represented as an unhealthy result. */
             200: {
                 headers: {
                     [name: string]: unknown;

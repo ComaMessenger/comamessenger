@@ -3,6 +3,8 @@ package agentconfig
 import (
 	"bytes"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 
@@ -148,6 +150,16 @@ func TestLLMConnectionValidation(t *testing.T) {
 
 func TestWorkspaceLLMConnectionLifecycle(t *testing.T) {
 	pool := testdb.New(t)
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/models" || r.Header.Get("Authorization") != "Bearer provider-secret-value" {
+			t.Errorf("provider request path=%q authorization=%q", r.URL.Path, r.Header.Get("Authorization"))
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	}))
+	defer provider.Close()
 	const (
 		orgID    = "00000000-0000-7000-8000-000000000381"
 		ownerID  = "00000000-0000-7000-8000-000000000382"
@@ -181,7 +193,7 @@ func TestWorkspaceLLMConnectionLifecycle(t *testing.T) {
 		t.Fatalf("member create error = %v", err)
 	}
 	created, err := service.CreateLLMConnection(t.Context(), owner, CreateLLMConnectionInput{
-		Name: "Основное", Provider: "openai-compatible", EndpointURL: "http://ollama.internal:11434/v1", DefaultModel: "qwen3", APIKey: "provider-secret-value",
+		Name: "Основное", Provider: "openai-compatible", EndpointURL: provider.URL + "/v1", DefaultModel: "qwen3", APIKey: "provider-secret-value",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -196,6 +208,10 @@ func TestWorkspaceLLMConnectionLifecycle(t *testing.T) {
 	if bytes.Contains(ciphertext, []byte("provider-secret-value")) {
 		t.Fatal("LLM connection credential persisted as plaintext")
 	}
+	tested, err := service.TestLLMConnection(t.Context(), owner, created.ID)
+	if err != nil || tested.HealthStatus != "healthy" || tested.LastTestedAt == nil || tested.LastErrorCode != "" {
+		t.Fatalf("tested connection = %+v, err=%v", tested, err)
+	}
 	listed, err := service.ListLLMConnections(t.Context(), owner)
 	if err != nil || len(listed) != 1 || listed[0].ID != created.ID {
 		t.Fatalf("connections = %+v, err=%v", listed, err)
@@ -203,7 +219,7 @@ func TestWorkspaceLLMConnectionLifecycle(t *testing.T) {
 	updatedName := "Резервное"
 	updatedKey := "replacement-secret"
 	updated, err := service.UpdateLLMConnection(t.Context(), owner, created.ID, UpdateLLMConnectionInput{Name: &updatedName, APIKey: &updatedKey})
-	if err != nil || updated.Name != updatedName || updated.KeyHint == created.KeyHint {
+	if err != nil || updated.Name != updatedName || updated.KeyHint == created.KeyHint || updated.HealthStatus != "untested" {
 		t.Fatalf("updated connection = %+v, err=%v", updated, err)
 	}
 	if _, err := pool.Exec(t.Context(), `INSERT INTO agents(actor_id,org_id,owner_actor_id,kind,llm_connection_id) VALUES($1,$2,$3,'builtin',$4)`, agentID, orgID, ownerID, created.ID); err != nil {
@@ -225,7 +241,7 @@ func TestWorkspaceLLMConnectionLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	var auditCount int
-	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM audit_log WHERE target_id=$1 AND action LIKE 'agent.llm_connection.%'`, created.ID).Scan(&auditCount); err != nil || auditCount != 3 {
+	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM audit_log WHERE target_id=$1 AND action LIKE 'agent.llm_connection.%'`, created.ID).Scan(&auditCount); err != nil || auditCount != 4 {
 		t.Fatalf("audit count = %d, err=%v", auditCount, err)
 	}
 }
