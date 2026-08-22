@@ -112,6 +112,12 @@ export type AgentProviderCredentialView =
   components["schemas"]["AgentProviderCredentialView"];
 export type UpdateAgentProviderCredentialRequest =
   components["schemas"]["UpdateAgentProviderCredentialRequest"];
+export type AgentLlmConnection =
+  components["schemas"]["AgentLlmConnection"];
+export type CreateAgentLlmConnectionRequest =
+  components["schemas"]["CreateAgentLlmConnectionRequest"];
+export type UpdateAgentLlmConnectionRequest =
+  components["schemas"]["UpdateAgentLlmConnectionRequest"];
 export type AgentMcpServer = components["schemas"]["AgentMcpServer"];
 export type CreateAgentMcpServerRequest =
   components["schemas"]["CreateAgentMcpServerRequest"];

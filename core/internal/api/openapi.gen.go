@@ -92,6 +92,48 @@ func (e AgentRecipe) Valid() bool {
 	}
 }
 
+// Defines values for AgentLlmConnectionHealthStatus.
+const (
+	Healthy   AgentLlmConnectionHealthStatus = "healthy"
+	Unhealthy AgentLlmConnectionHealthStatus = "unhealthy"
+	Untested  AgentLlmConnectionHealthStatus = "untested"
+)
+
+// Valid indicates whether the value is a known member of the AgentLlmConnectionHealthStatus enum.
+func (e AgentLlmConnectionHealthStatus) Valid() bool {
+	switch e {
+	case Healthy:
+		return true
+	case Unhealthy:
+		return true
+	case Untested:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentLlmConnectionProvider.
+const (
+	AgentLlmConnectionProviderAnthropic        AgentLlmConnectionProvider = "anthropic"
+	AgentLlmConnectionProviderOpenai           AgentLlmConnectionProvider = "openai"
+	AgentLlmConnectionProviderOpenaiCompatible AgentLlmConnectionProvider = "openai-compatible"
+)
+
+// Valid indicates whether the value is a known member of the AgentLlmConnectionProvider enum.
+func (e AgentLlmConnectionProvider) Valid() bool {
+	switch e {
+	case AgentLlmConnectionProviderAnthropic:
+		return true
+	case AgentLlmConnectionProviderOpenai:
+		return true
+	case AgentLlmConnectionProviderOpenaiCompatible:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentMcpToolCallMode.
 const (
 	AgentMcpToolCallModeRead  AgentMcpToolCallMode = "read"
@@ -950,6 +992,27 @@ func (e ConnectionTestRequestKind) Valid() bool {
 	case S3:
 		return true
 	case Smtp:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CreateAgentLlmConnectionRequestProvider.
+const (
+	CreateAgentLlmConnectionRequestProviderAnthropic        CreateAgentLlmConnectionRequestProvider = "anthropic"
+	CreateAgentLlmConnectionRequestProviderOpenai           CreateAgentLlmConnectionRequestProvider = "openai"
+	CreateAgentLlmConnectionRequestProviderOpenaiCompatible CreateAgentLlmConnectionRequestProvider = "openai-compatible"
+)
+
+// Valid indicates whether the value is a known member of the CreateAgentLlmConnectionRequestProvider enum.
+func (e CreateAgentLlmConnectionRequestProvider) Valid() bool {
+	switch e {
+	case CreateAgentLlmConnectionRequestProviderAnthropic:
+		return true
+	case CreateAgentLlmConnectionRequestProviderOpenai:
+		return true
+	case CreateAgentLlmConnectionRequestProviderOpenaiCompatible:
 		return true
 	default:
 		return false
@@ -2192,6 +2255,27 @@ func (e StartAgentMcpToolCallRequestMode) Valid() bool {
 	}
 }
 
+// Defines values for UpdateAgentLlmConnectionRequestProvider.
+const (
+	UpdateAgentLlmConnectionRequestProviderAnthropic        UpdateAgentLlmConnectionRequestProvider = "anthropic"
+	UpdateAgentLlmConnectionRequestProviderOpenai           UpdateAgentLlmConnectionRequestProvider = "openai"
+	UpdateAgentLlmConnectionRequestProviderOpenaiCompatible UpdateAgentLlmConnectionRequestProvider = "openai-compatible"
+)
+
+// Valid indicates whether the value is a known member of the UpdateAgentLlmConnectionRequestProvider enum.
+func (e UpdateAgentLlmConnectionRequestProvider) Valid() bool {
+	switch e {
+	case UpdateAgentLlmConnectionRequestProviderAnthropic:
+		return true
+	case UpdateAgentLlmConnectionRequestProviderOpenai:
+		return true
+	case UpdateAgentLlmConnectionRequestProviderOpenaiCompatible:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UpdateAgentTriggerRequestMissedRunsPolicy.
 const (
 	UpdateAgentTriggerRequestMissedRunsPolicyLatest UpdateAgentTriggerRequestMissedRunsPolicy = "latest"
@@ -2792,6 +2876,28 @@ type AgentApiKey struct {
 	Scopes             []AgentScope       `json:"scopes"`
 }
 
+// AgentLlmConnection defines model for AgentLlmConnection.
+type AgentLlmConnection struct {
+	CreatedAt     time.Time                      `json:"created_at"`
+	DefaultModel  string                         `json:"default_model"`
+	Enabled       bool                           `json:"enabled"`
+	EndpointUrl   string                         `json:"endpoint_url"`
+	HealthStatus  AgentLlmConnectionHealthStatus `json:"health_status"`
+	Id            openapi_types.UUID             `json:"id"`
+	KeyHint       string                         `json:"key_hint"`
+	LastErrorCode string                         `json:"last_error_code"`
+	LastTestedAt  *time.Time                     `json:"last_tested_at"`
+	Name          string                         `json:"name"`
+	Provider      AgentLlmConnectionProvider     `json:"provider"`
+	UpdatedAt     time.Time                      `json:"updated_at"`
+}
+
+// AgentLlmConnectionHealthStatus defines model for AgentLlmConnection.HealthStatus.
+type AgentLlmConnectionHealthStatus string
+
+// AgentLlmConnectionProvider defines model for AgentLlmConnection.Provider.
+type AgentLlmConnectionProvider string
+
 // AgentMcpHeaders defines model for AgentMcpHeaders.
 type AgentMcpHeaders map[string]string
 
@@ -3310,6 +3416,19 @@ type CreateAgentKeyRequest struct {
 	RateLimitPerMinute int          `json:"rate_limit_per_minute"`
 	Scopes             []AgentScope `json:"scopes"`
 }
+
+// CreateAgentLlmConnectionRequest defines model for CreateAgentLlmConnectionRequest.
+type CreateAgentLlmConnectionRequest struct {
+	ApiKey       string                                  `json:"api_key"`
+	DefaultModel string                                  `json:"default_model"`
+	Enabled      *bool                                   `json:"enabled,omitempty"`
+	EndpointUrl  string                                  `json:"endpoint_url"`
+	Name         string                                  `json:"name"`
+	Provider     CreateAgentLlmConnectionRequestProvider `json:"provider"`
+}
+
+// CreateAgentLlmConnectionRequestProvider defines model for CreateAgentLlmConnectionRequest.Provider.
+type CreateAgentLlmConnectionRequestProvider string
 
 // CreateAgentMcpServerRequest defines model for CreateAgentMcpServerRequest.
 type CreateAgentMcpServerRequest struct {
@@ -4294,6 +4413,19 @@ type UnreadSnapshot struct {
 	Threads []ThreadUnread `json:"threads"`
 }
 
+// UpdateAgentLlmConnectionRequest defines model for UpdateAgentLlmConnectionRequest.
+type UpdateAgentLlmConnectionRequest struct {
+	ApiKey       *string                                  `json:"api_key,omitempty"`
+	DefaultModel *string                                  `json:"default_model,omitempty"`
+	Enabled      *bool                                    `json:"enabled,omitempty"`
+	EndpointUrl  *string                                  `json:"endpoint_url,omitempty"`
+	Name         *string                                  `json:"name,omitempty"`
+	Provider     *UpdateAgentLlmConnectionRequestProvider `json:"provider,omitempty"`
+}
+
+// UpdateAgentLlmConnectionRequestProvider defines model for UpdateAgentLlmConnectionRequest.Provider.
+type UpdateAgentLlmConnectionRequestProvider string
+
 // UpdateAgentMcpServerRequest defines model for UpdateAgentMcpServerRequest.
 type UpdateAgentMcpServerRequest struct {
 	AllowedTools *[]string `json:"allowed_tools,omitempty"`
@@ -4650,6 +4782,12 @@ type ListFollowedThreadsParams struct {
 	BeforeSeq *int64 `form:"before_seq,omitempty" json:"before_seq,omitempty"`
 	Limit     *int   `form:"limit,omitempty" json:"limit,omitempty"`
 }
+
+// CreateAgentLlmConnectionJSONRequestBody defines body for CreateAgentLlmConnection for application/json ContentType.
+type CreateAgentLlmConnectionJSONRequestBody = CreateAgentLlmConnectionRequest
+
+// UpdateAgentLlmConnectionJSONRequestBody defines body for UpdateAgentLlmConnection for application/json ContentType.
+type UpdateAgentLlmConnectionJSONRequestBody = UpdateAgentLlmConnectionRequest
 
 // UpdateAgentRuntimeCheckpointJSONRequestBody defines body for UpdateAgentRuntimeCheckpoint for application/json ContentType.
 type UpdateAgentRuntimeCheckpointJSONRequestBody = UpdateAgentRuntimeCheckpointRequest

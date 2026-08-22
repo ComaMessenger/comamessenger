@@ -164,6 +164,11 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Delete("/agents/{agentID}/keys/{keyID}", h.revokeAgentKey)
 		}
 		if h.agentConfig != nil {
+			protected.Get("/agent-connections", h.listAgentLLMConnections)
+			protected.Post("/agent-connections", h.createAgentLLMConnection)
+			protected.Get("/agent-connections/{connectionID}", h.agentLLMConnection)
+			protected.Patch("/agent-connections/{connectionID}", h.updateAgentLLMConnection)
+			protected.Delete("/agent-connections/{connectionID}", h.deleteAgentLLMConnection)
 			protected.Get("/agents/{agentID}/provider-credentials", h.agentProviderCredential)
 			protected.Put("/agents/{agentID}/provider-credentials", h.updateAgentProviderCredential)
 			protected.Get("/agents/{agentID}/mcp-servers", h.listAgentMCPServers)

@@ -8,6 +8,60 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+func (h *identityHandlers) listAgentLLMConnections(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.agentConfig.ListLLMConnections(r.Context(), authFromContext(r.Context()).User)
+	if err != nil {
+		h.writeAgentConfigError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) agentLLMConnection(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.agentConfig.LLMConnection(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "connectionID"))
+	if err != nil {
+		h.writeAgentConfigError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) createAgentLLMConnection(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input agentconfig.CreateLLMConnectionInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	result, err := h.agentConfig.CreateLLMConnection(r.Context(), authFromContext(r.Context()).User, input)
+	if err != nil {
+		h.writeAgentConfigError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusCreated, result)
+}
+
+func (h *identityHandlers) updateAgentLLMConnection(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input agentconfig.UpdateLLMConnectionInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	result, err := h.agentConfig.UpdateLLMConnection(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "connectionID"), input)
+	if err != nil {
+		h.writeAgentConfigError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) deleteAgentLLMConnection(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	if err := h.agentConfig.DeleteLLMConnection(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "connectionID")); err != nil {
+		h.writeAgentConfigError(w, r, err)
+		return
+	}
+	w.WriteHeader(standardhttp.StatusNoContent)
+}
+
 func (h *identityHandlers) agentProviderCredential(w standardhttp.ResponseWriter, r *standardhttp.Request) {
 	result, err := h.agentConfig.Credential(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "agentID"))
 	if err != nil {
@@ -109,6 +163,8 @@ func (h *identityHandlers) writeAgentConfigError(w standardhttp.ResponseWriter, 
 		h.writeError(w, r, standardhttp.StatusForbidden, "forbidden", "The agent configuration action is not allowed.")
 	case errors.Is(err, agentconfig.ErrNotFound):
 		h.writeError(w, r, standardhttp.StatusNotFound, "agent_configuration_not_found", "The agent configuration was not found.")
+	case errors.Is(err, agentconfig.ErrConflict):
+		h.writeError(w, r, standardhttp.StatusConflict, "agent_configuration_in_use", "The agent configuration is still in use.")
 	default:
 		h.internalError(w, r, err)
 	}

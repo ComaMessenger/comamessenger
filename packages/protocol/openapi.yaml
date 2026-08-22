@@ -2038,6 +2038,79 @@ paths:
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+  /api/v1/agent-connections:
+    get:
+      operationId: listAgentLlmConnections
+      description: Lists reusable workspace LLM connections without returning plaintext credentials.
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Workspace LLM connections.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AgentLlmConnection" }
+        "403": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createAgentLlmConnection
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateAgentLlmConnectionRequest" }
+      responses:
+        "201":
+          description: Workspace LLM connection created; the plaintext API key is never returned.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentLlmConnection" }
+        "403": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /api/v1/agent-connections/{connection_id}:
+    parameters:
+      - name: connection_id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getAgentLlmConnection
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Workspace LLM connection metadata and masked credential state.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentLlmConnection" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    patch:
+      operationId: updateAgentLlmConnection
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateAgentLlmConnectionRequest" }
+      responses:
+        "200":
+          description: Workspace LLM connection updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentLlmConnection" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteAgentLlmConnection
+      description: Deletes an unused connection. Connections assigned to agents must be detached first.
+      security: [{ bearerAuth: [] }]
+      responses:
+        "204": { description: Workspace LLM connection deleted. }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
   /api/v1/agents/{agent_id}/provider-credentials:
     parameters: [{ $ref: "#/components/parameters/AgentId" }]
     get:
@@ -3488,6 +3561,59 @@ components:
       properties:
         api_key: { type: string, maxLength: 16384 }
         clear: { type: boolean }
+    AgentLlmConnection:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          name,
+          provider,
+          endpoint_url,
+          default_model,
+          enabled,
+          key_hint,
+          health_status,
+          last_tested_at,
+          last_error_code,
+          created_at,
+          updated_at,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        provider: { type: string, enum: [openai, anthropic, openai-compatible] }
+        endpoint_url: { type: string, maxLength: 2048 }
+        default_model: { type: string, maxLength: 200 }
+        enabled: { type: boolean }
+        key_hint: { type: string, minLength: 1, maxLength: 80 }
+        health_status: { type: string, enum: [untested, healthy, unhealthy] }
+        last_tested_at: { type: [string, "null"], format: date-time }
+        last_error_code: { type: string, maxLength: 120 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CreateAgentLlmConnectionRequest:
+      type: object
+      additionalProperties: false
+      required: [name, provider, endpoint_url, default_model, api_key]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        provider: { type: string, enum: [openai, anthropic, openai-compatible] }
+        endpoint_url: { type: string, maxLength: 2048 }
+        default_model: { type: string, maxLength: 200 }
+        api_key: { type: string, minLength: 1, maxLength: 16384 }
+        enabled: { type: boolean, default: true }
+    UpdateAgentLlmConnectionRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        provider: { type: string, enum: [openai, anthropic, openai-compatible] }
+        endpoint_url: { type: string, maxLength: 2048 }
+        default_model: { type: string, maxLength: 200 }
+        api_key: { type: string, minLength: 1, maxLength: 16384 }
+        enabled: { type: boolean }
     AgentMcpServer:
       type: object
       additionalProperties: false

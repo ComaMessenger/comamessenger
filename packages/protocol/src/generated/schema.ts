@@ -1413,6 +1413,42 @@ export interface paths {
         patch: operations["updateAgentTrigger"];
         trace?: never;
     };
+    "/api/v1/agent-connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Lists reusable workspace LLM connections without returning plaintext credentials. */
+        get: operations["listAgentLlmConnections"];
+        put?: never;
+        post: operations["createAgentLlmConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent-connections/{connection_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getAgentLlmConnection"];
+        put?: never;
+        post?: never;
+        /** @description Deletes an unused connection. Connections assigned to agents must be detached first. */
+        delete: operations["deleteAgentLlmConnection"];
+        options?: never;
+        head?: never;
+        patch: operations["updateAgentLlmConnection"];
+        trace?: never;
+    };
     "/api/v1/agents/{agent_id}/provider-credentials": {
         parameters: {
             query?: never;
@@ -2507,6 +2543,45 @@ export interface components {
         UpdateAgentProviderCredentialRequest: {
             api_key: string;
             clear: boolean;
+        };
+        AgentLlmConnection: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @enum {string} */
+            provider: "openai" | "anthropic" | "openai-compatible";
+            endpoint_url: string;
+            default_model: string;
+            enabled: boolean;
+            key_hint: string;
+            /** @enum {string} */
+            health_status: "untested" | "healthy" | "unhealthy";
+            /** Format: date-time */
+            last_tested_at: string | null;
+            last_error_code: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CreateAgentLlmConnectionRequest: {
+            name: string;
+            /** @enum {string} */
+            provider: "openai" | "anthropic" | "openai-compatible";
+            endpoint_url: string;
+            default_model: string;
+            api_key: string;
+            /** @default true */
+            enabled: boolean;
+        };
+        UpdateAgentLlmConnectionRequest: {
+            name?: string;
+            /** @enum {string} */
+            provider?: "openai" | "anthropic" | "openai-compatible";
+            endpoint_url?: string;
+            default_model?: string;
+            api_key?: string;
+            enabled?: boolean;
         };
         AgentMcpServer: {
             /** Format: uuid */
@@ -6465,6 +6540,129 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentTrigger"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    listAgentLlmConnections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Workspace LLM connections. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentLlmConnection"][];
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    createAgentLlmConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAgentLlmConnectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Workspace LLM connection created; the plaintext API key is never returned. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentLlmConnection"];
+                };
+            };
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    getAgentLlmConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Workspace LLM connection metadata and masked credential state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentLlmConnection"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    deleteAgentLlmConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Workspace LLM connection deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    updateAgentLlmConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAgentLlmConnectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Workspace LLM connection updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentLlmConnection"];
                 };
             };
             403: components["responses"]["Error"];

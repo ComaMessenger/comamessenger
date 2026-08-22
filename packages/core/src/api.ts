@@ -88,6 +88,9 @@ import type {
   UpdateAgentRuntimeCheckpointRequest,
   AgentProviderCredentialView,
   UpdateAgentProviderCredentialRequest,
+  AgentLlmConnection,
+  CreateAgentLlmConnectionRequest,
+  UpdateAgentLlmConnectionRequest,
   AgentMcpServer,
   CreateAgentMcpServerRequest,
   UpdateAgentMcpServerRequest,
@@ -420,6 +423,37 @@ export class MessengerAPI {
     return this.request(
       `/api/v1/agents/${encodeURIComponent(id)}/provider-credentials`,
       { method: "PUT", body: JSON.stringify(input) },
+    );
+  }
+  agentLlmConnections(): Promise<AgentLlmConnection[]> {
+    return this.request("/api/v1/agent-connections");
+  }
+  agentLlmConnection(id: string): Promise<AgentLlmConnection> {
+    return this.request(
+      `/api/v1/agent-connections/${encodeURIComponent(id)}`,
+    );
+  }
+  createAgentLlmConnection(
+    input: CreateAgentLlmConnectionRequest,
+  ): Promise<AgentLlmConnection> {
+    return this.request("/api/v1/agent-connections", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+  updateAgentLlmConnection(
+    id: string,
+    input: UpdateAgentLlmConnectionRequest,
+  ): Promise<AgentLlmConnection> {
+    return this.request(
+      `/api/v1/agent-connections/${encodeURIComponent(id)}`,
+      { method: "PATCH", body: JSON.stringify(input) },
+    );
+  }
+  deleteAgentLlmConnection(id: string): Promise<void> {
+    return this.request(
+      `/api/v1/agent-connections/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
     );
   }
   agentMcpServers(id: string): Promise<AgentMcpServer[]> {

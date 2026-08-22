@@ -98,6 +98,7 @@ type RuntimeMCPServer struct {
 type Service struct {
 	pool           *pgxpool.Pool
 	credentialAEAD cipher.AEAD
+	connectionAEAD cipher.AEAD
 	mcpAEAD        cipher.AEAD
 }
 
@@ -106,11 +107,15 @@ func NewService(pool *pgxpool.Pool, secret string) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
+	connectionAEAD, err := makeAEAD("comamessenger/agent-llm-connections/v1", secret)
+	if err != nil {
+		return nil, err
+	}
 	mcpAEAD, err := makeAEAD("comamessenger/agent-mcp-headers/v1", secret)
 	if err != nil {
 		return nil, err
 	}
-	return &Service{pool: pool, credentialAEAD: credentialAEAD, mcpAEAD: mcpAEAD}, nil
+	return &Service{pool: pool, credentialAEAD: credentialAEAD, connectionAEAD: connectionAEAD, mcpAEAD: mcpAEAD}, nil
 }
 
 func makeAEAD(domain, secret string) (cipher.AEAD, error) {
