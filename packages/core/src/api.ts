@@ -60,6 +60,7 @@ import type {
   UpdatePreferencesRequest,
   AuditPage,
   Agent,
+  AgentVersion,
   AgentUsageReport,
   AgentApiKey,
   CreatedAgentApiKey,
@@ -618,6 +619,30 @@ export class MessengerAPI {
   resetAgentRecipe(id: string): Promise<Agent> {
     return this.request(
       `/api/v1/agents/${encodeURIComponent(id)}/reset-recipe`,
+      { method: "POST" },
+    );
+  }
+  agentVersions(id: string): Promise<AgentVersion[]> {
+    return this.request(`/api/v1/agents/${encodeURIComponent(id)}/versions`);
+  }
+  publishAgent(id: string): Promise<Agent> {
+    return this.request(`/api/v1/agents/${encodeURIComponent(id)}/publish`, {
+      method: "POST",
+    });
+  }
+  pauseAgent(id: string): Promise<Agent> {
+    return this.request(`/api/v1/agents/${encodeURIComponent(id)}/pause`, {
+      method: "POST",
+    });
+  }
+  resumeAgent(id: string): Promise<Agent> {
+    return this.request(`/api/v1/agents/${encodeURIComponent(id)}/resume`, {
+      method: "POST",
+    });
+  }
+  rollbackAgent(id: string, versionID: string): Promise<Agent> {
+    return this.request(
+      `/api/v1/agents/${encodeURIComponent(id)}/versions/${encodeURIComponent(versionID)}/rollback`,
       { method: "POST" },
     );
   }

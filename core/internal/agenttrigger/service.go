@@ -405,9 +405,9 @@ func (service *Service) dispatchAgent(ctx context.Context, orgID, agentID string
 				payloadData["command_arguments"] = commandArguments(item.body)
 			}
 			payload, _ := json.Marshal(payloadData)
-			if _, err := tx.Exec(ctx, `INSERT INTO agent_runs(id,org_id,agent_id,trigger_id,trigger_event_seq,chat_id,thread_root_id,requested_by,
+			if _, err := tx.Exec(ctx, `INSERT INTO agent_runs(id,org_id,agent_id,agent_version,trigger_id,trigger_event_seq,chat_id,thread_root_id,requested_by,
 					correlation_id,chain_depth,provider,model,input,timeout_at)
-				SELECT $1,agent.org_id,agent.actor_id,$2,$3,$4,$5,$6,$7,$8,agent.provider,agent.model,$9,
+				SELECT $1,agent.org_id,agent.actor_id,agent.published_version,$2,$3,$4,$5,$6,$7,$8,agent.provider,agent.model,$9,
 					now()+make_interval(secs=>agent.execution_timeout_seconds)
 				FROM agents agent WHERE agent.org_id=$10 AND agent.actor_id=$11
 				ON CONFLICT(agent_id,trigger_id,trigger_event_seq) WHERE trigger_id IS NOT NULL AND trigger_event_seq IS NOT NULL DO NOTHING`,
@@ -497,8 +497,8 @@ func (service *Service) dispatchSchedule(ctx context.Context, triggerID string, 
 			"trigger_type":   trigger.Type,
 			"trigger_id":     trigger.ID,
 		})
-		if _, err := tx.Exec(ctx, `INSERT INTO agent_runs(id,org_id,agent_id,trigger_id,scheduled_for,chat_id,correlation_id,provider,model,input,timeout_at)
-				SELECT $1,agent.org_id,agent.actor_id,$2,$3,$4,$5,agent.provider,agent.model,$6,
+		if _, err := tx.Exec(ctx, `INSERT INTO agent_runs(id,org_id,agent_id,agent_version,trigger_id,scheduled_for,chat_id,correlation_id,provider,model,input,timeout_at)
+				SELECT $1,agent.org_id,agent.actor_id,agent.published_version,$2,$3,$4,$5,agent.provider,agent.model,$6,
 					now()+make_interval(secs=>agent.execution_timeout_seconds)
 				FROM agents agent
 				JOIN actors actor ON actor.org_id=agent.org_id AND actor.id=agent.actor_id AND actor.status='active' AND actor.deleted_at IS NULL

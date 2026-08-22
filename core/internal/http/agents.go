@@ -114,6 +114,51 @@ func (h *identityHandlers) resetAgentRecipe(w standardhttp.ResponseWriter, r *st
 	writeJSON(h.logger, w, standardhttp.StatusOK, result)
 }
 
+func (h *identityHandlers) listAgentVersions(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.agents.Versions(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "agentID"))
+	if err != nil {
+		h.writeAgentError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) publishAgent(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.agents.Publish(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "agentID"))
+	if err != nil {
+		h.writeAgentError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) pauseAgent(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.agents.Pause(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "agentID"))
+	if err != nil {
+		h.writeAgentError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) resumeAgent(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.agents.Resume(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "agentID"))
+	if err != nil {
+		h.writeAgentError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) rollbackAgent(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.agents.Rollback(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "agentID"), chi.URLParam(r, "versionID"))
+	if err != nil {
+		h.writeAgentError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
 func (h *identityHandlers) deleteAgent(w standardhttp.ResponseWriter, r *standardhttp.Request) {
 	if err := h.agents.Delete(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "agentID")); err != nil {
 		h.writeAgentError(w, r, err)

@@ -36,7 +36,7 @@ func TestAgentModelKeyHashScopesVisibilityAndAudit(t *testing.T) {
 	}
 	created, err := service.Create(t.Context(), owner, CreateInput{
 		DisplayName: "History helper", Handle: "history-helper", Kind: "external",
-		Description: "Answers from workspace history", Enabled: true,
+		Description: "Answers from workspace history", Enabled: false,
 		AllowedScopes: []Scope{ScopeSearchRead, ScopeMessagesWrite, ScopeMessagesRead, ScopeSearchRead},
 		EndpointURL:   "https://agents.example.test/runtime", ProviderRateLimitPerMinute: 1, ChatIDs: []string{agentTestChatID, agentTestChatID},
 	})
@@ -46,11 +46,6 @@ func TestAgentModelKeyHashScopesVisibilityAndAudit(t *testing.T) {
 	if created.ID == "" || created.OwnerActorID != owner.ActorID || len(created.ChatIDs) != 1 || len(created.AllowedScopes) != 3 {
 		t.Fatalf("created agent = %+v", created)
 	}
-	visible, err := service.List(t.Context(), member)
-	if err != nil || len(visible) != 1 || visible[0].EndpointURL != "" {
-		t.Fatalf("member-visible agents = %+v, err=%v", visible, err)
-	}
-
 	expiresAt := time.Now().UTC().Add(time.Hour)
 	key, err := service.CreateKey(t.Context(), owner, created.ID, CreateKeyInput{
 		Name: "runtime", Scopes: []Scope{ScopeMessagesRead, ScopeMessagesWrite}, RateLimitPerMinute: 1, ExpiresAt: &expiresAt,
@@ -60,6 +55,14 @@ func TestAgentModelKeyHashScopesVisibilityAndAudit(t *testing.T) {
 	}
 	if key.Secret == "" || key.Prefix == "" || key.Secret[:len(key.Prefix)] != key.Prefix {
 		t.Fatalf("created API key = %+v", key)
+	}
+	created, err = service.Publish(t.Context(), owner, created.ID)
+	if err != nil || !created.Enabled || created.PublishedVersion == nil || *created.PublishedVersion != 1 {
+		t.Fatalf("published agent = %+v, err=%v", created, err)
+	}
+	visible, err := service.List(t.Context(), member)
+	if err != nil || len(visible) != 1 || visible[0].EndpointURL != "" {
+		t.Fatalf("member-visible agents = %+v, err=%v", visible, err)
 	}
 	if _, err := service.CreateKey(t.Context(), owner, created.ID, CreateKeyInput{
 		Name: "too broad", Scopes: []Scope{ScopeFilesRead}, RateLimitPerMinute: 10,
@@ -93,11 +96,21 @@ func TestAgentModelKeyHashScopesVisibilityAndAudit(t *testing.T) {
 	if err != nil || len(updated.AllowedScopes) != 1 || updated.AllowedScopes[0] != ScopeSearchRead {
 		t.Fatalf("updated agent = %+v, err=%v", updated, err)
 	}
+	if len(revokedRealtime) != 0 {
+		t.Fatalf("draft edit revoked a published key: %v", revokedRealtime)
+	}
+	narrowKey, err := service.CreateKey(t.Context(), owner, created.ID, CreateKeyInput{Name: "narrow runtime", Scopes: []Scope{ScopeSearchRead}, RateLimitPerMinute: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Publish(t.Context(), owner, created.ID); err != nil {
+		t.Fatal(err)
+	}
 	if _, _, err := service.AuthenticateKey(t.Context(), key.Secret); !errors.Is(err, identity.ErrUnauthorized) {
-		t.Fatalf("over-scoped key remained usable: %v", err)
+		t.Fatalf("over-scoped key remained usable after publish: %v", err)
 	}
 	if len(revokedRealtime) != 1 || revokedRealtime[0] != key.ID {
-		t.Fatalf("realtime revocations = %v", revokedRealtime)
+		t.Fatalf("realtime revocations after publish = %v", revokedRealtime)
 	}
 	var storedHash []byte
 	if err := pool.QueryRow(t.Context(), `SELECT key_hash FROM agent_api_keys WHERE id=$1`, key.ID).Scan(&storedHash); err != nil {
@@ -117,6 +130,9 @@ func TestAgentModelKeyHashScopesVisibilityAndAudit(t *testing.T) {
 	if err := service.RevokeKey(t.Context(), owner, created.ID, key.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("automatically revoked key revoke error = %v", err)
 	}
+	if err := service.RevokeKey(t.Context(), owner, created.ID, narrowKey.ID); err != nil {
+		t.Fatalf("revoke active narrow key: %v", err)
+	}
 	var revoked bool
 	if err := pool.QueryRow(t.Context(), `SELECT revoked_at IS NOT NULL FROM agent_api_keys WHERE id=$1`, key.ID).Scan(&revoked); err != nil || !revoked {
 		t.Fatalf("revoked=%v err=%v", revoked, err)
@@ -134,8 +150,10 @@ func TestAgentModelKeyHashScopesVisibilityAndAudit(t *testing.T) {
 		auditActions = append(auditActions, action)
 	}
 	rows.Close()
-	if len(auditActions) != 3 || auditActions[0] != "agent.create" || auditActions[1] != "agent.key.create" || auditActions[2] != "agent.update" {
-		t.Fatalf("agent audit actions = %v", auditActions)
+	for _, want := range []string{"agent.create", "agent.key.create", "agent.publish", "agent.update", "agent.key.revoke"} {
+		if !slices.Contains(auditActions, want) {
+			t.Fatalf("agent audit actions = %v, missing %q", auditActions, want)
+		}
 	}
 }
 
@@ -184,6 +202,61 @@ func TestAgentCreateValidationAndManagerPermission(t *testing.T) {
 	ordinary := identity.User{ActorID: agentTestOwnerID, OrgID: agentTestOrgID, OrgRole: "member"}
 	if _, err := service.Get(t.Context(), ordinary, created.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("disabled agent disclosure error = %v", err)
+	}
+}
+
+func TestAgentDraftPublishPauseResumeAndRollback(t *testing.T) {
+	pool := testdb.New(t)
+	seedAgentModel(t, pool)
+	service := NewService(pool)
+	owner := identity.User{ActorID: agentTestOwnerID, OrgID: agentTestOrgID, OrgRole: "owner"}
+
+	created, err := service.Create(t.Context(), owner, CreateInput{
+		DisplayName: "Lifecycle", Handle: "lifecycle", Kind: "external", Description: "version one",
+		EndpointURL: "https://agents.example.test/runtime", AllowedScopes: []Scope{ScopeMessagesRead}, ChatIDs: []string{agentTestChatID},
+	})
+	if err != nil || !created.HasUnpublishedChanges || created.DraftVersion == nil || *created.DraftVersion != 1 {
+		t.Fatalf("created draft=%+v err=%v", created, err)
+	}
+	if _, err := service.CreateKey(t.Context(), owner, created.ID, CreateKeyInput{Name: "runtime", Scopes: []Scope{ScopeMessagesRead}, RateLimitPerMinute: 100}); err != nil {
+		t.Fatal(err)
+	}
+	published, err := service.Publish(t.Context(), owner, created.ID)
+	if err != nil || published.OperationalStatus != "active" || published.PublishedVersion == nil || *published.PublishedVersion != 1 || published.HasUnpublishedChanges {
+		t.Fatalf("published=%+v err=%v", published, err)
+	}
+
+	changed := "version two"
+	draft, err := service.Update(t.Context(), owner, created.ID, UpdateInput{Description: &changed})
+	if err != nil || draft.Description != changed || !draft.HasUnpublishedChanges || draft.DraftVersion == nil || *draft.DraftVersion != 2 {
+		t.Fatalf("updated draft=%+v err=%v", draft, err)
+	}
+	var runtimeDescription string
+	if err := pool.QueryRow(t.Context(), `SELECT description FROM agents WHERE actor_id=$1`, created.ID).Scan(&runtimeDescription); err != nil || runtimeDescription != "version one" {
+		t.Fatalf("published config changed before publish: %q err=%v", runtimeDescription, err)
+	}
+	published, err = service.Publish(t.Context(), owner, created.ID)
+	if err != nil || published.Description != changed || published.PublishedVersion == nil || *published.PublishedVersion != 2 {
+		t.Fatalf("second publish=%+v err=%v", published, err)
+	}
+	versions, err := service.Versions(t.Context(), owner, created.ID)
+	if err != nil || len(versions) != 2 || versions[0].Version != 2 || versions[1].Version != 1 {
+		t.Fatalf("versions=%+v err=%v", versions, err)
+	}
+	paused, err := service.Pause(t.Context(), owner, created.ID)
+	if err != nil || paused.Enabled || paused.OperationalStatus != "paused" {
+		t.Fatalf("paused=%+v err=%v", paused, err)
+	}
+	resumed, err := service.Resume(t.Context(), owner, created.ID)
+	if err != nil || !resumed.Enabled || resumed.OperationalStatus != "active" {
+		t.Fatalf("resumed=%+v err=%v", resumed, err)
+	}
+	rolledBack, err := service.Rollback(t.Context(), owner, created.ID, versions[1].ID)
+	if err != nil || rolledBack.Description != "version one" || !rolledBack.HasUnpublishedChanges || rolledBack.DraftVersion == nil || *rolledBack.DraftVersion != 3 {
+		t.Fatalf("rollback draft=%+v err=%v", rolledBack, err)
+	}
+	if err := pool.QueryRow(t.Context(), `SELECT description FROM agents WHERE actor_id=$1`, created.ID).Scan(&runtimeDescription); err != nil || runtimeDescription != "version two" {
+		t.Fatalf("rollback changed published config: %q err=%v", runtimeDescription, err)
 	}
 }
 

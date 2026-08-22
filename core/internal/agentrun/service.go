@@ -36,6 +36,7 @@ type Run struct {
 	ID                string          `json:"id"`
 	OrgID             string          `json:"org_id"`
 	AgentID           string          `json:"agent_id"`
+	AgentVersion      *int            `json:"agent_version"`
 	TriggerID         *string         `json:"trigger_id,omitempty"`
 	TriggerEventSeq   *int64          `json:"trigger_event_seq,omitempty"`
 	ScheduledFor      *time.Time      `json:"scheduled_for,omitempty"`
@@ -233,14 +234,15 @@ func (service *Service) Invoke(ctx context.Context, current identity.User, agent
 	}
 	defer tx.Rollback(ctx)
 	var maxDepth int
+	var agentVersion *int
 	var provider, model string
-	err = tx.QueryRow(ctx, `SELECT agent.max_chain_depth,COALESCE(connection.provider,agent.provider),COALESCE(NULLIF(agent.model,''),connection.default_model,'')
+	err = tx.QueryRow(ctx, `SELECT agent.max_chain_depth,agent.published_version,COALESCE(connection.provider,agent.provider),COALESCE(NULLIF(agent.model,''),connection.default_model,'')
 		FROM agents agent
 		LEFT JOIN agent_llm_connections connection ON connection.org_id=agent.org_id AND connection.id=agent.llm_connection_id AND connection.enabled
 		JOIN chat_members member ON member.org_id=agent.org_id AND member.actor_id=agent.actor_id AND member.chat_id=$3
 		JOIN chats chat ON chat.org_id=agent.org_id AND chat.id=member.chat_id AND chat.archived_at IS NULL
 		WHERE agent.org_id=$1 AND agent.actor_id=$2 AND agent.enabled AND (agent.llm_connection_id IS NULL OR connection.id IS NOT NULL)
-		FOR UPDATE OF agent`, current.OrgID, agentID, input.ChatID).Scan(&maxDepth, &provider, &model)
+		FOR UPDATE OF agent`, current.OrgID, agentID, input.ChatID).Scan(&maxDepth, &agentVersion, &provider, &model)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Run{}, ErrNotFound
 	}
@@ -252,7 +254,7 @@ func (service *Service) Invoke(ctx context.Context, current identity.User, agent
 	}
 	requestedBy := current.ActorID
 	timeoutAt := service.now().UTC().Add(time.Duration(input.TimeoutSeconds) * time.Second)
-	_, err = tx.Exec(ctx, `INSERT INTO agent_runs(id,org_id,agent_id,chat_id,thread_root_id,requested_by,client_run_id,correlation_id,chain_depth,provider,model,input,timeout_at,max_attempts) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT(agent_id,client_run_id) DO NOTHING`, runID, current.OrgID, agentID, input.ChatID, input.ThreadRootID, requestedBy, input.ClientRunID, input.CorrelationID, input.ChainDepth, provider, model, input.Input, timeoutAt, input.MaxAttempts)
+	_, err = tx.Exec(ctx, `INSERT INTO agent_runs(id,org_id,agent_id,agent_version,chat_id,thread_root_id,requested_by,client_run_id,correlation_id,chain_depth,provider,model,input,timeout_at,max_attempts) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) ON CONFLICT(agent_id,client_run_id) DO NOTHING`, runID, current.OrgID, agentID, agentVersion, input.ChatID, input.ThreadRootID, requestedBy, input.ClientRunID, input.CorrelationID, input.ChainDepth, provider, model, input.Input, timeoutAt, input.MaxAttempts)
 	if err != nil {
 		return Run{}, fmt.Errorf("enqueue agent run: %w", err)
 	}
@@ -945,13 +947,13 @@ func (service *Service) RuntimeAgentID(ctx context.Context, current identity.Use
 	return service.runtimeAgentID(ctx, current, authentication, runID, leaseToken)
 }
 
-const runSelect = `SELECT run.id,run.org_id,run.agent_id,run.trigger_id,run.trigger_event_seq,run.scheduled_for,run.chat_id,run.thread_root_id,run.requested_by,run.client_run_id,run.correlation_id,run.chain_depth,run.status,run.provider,run.model,run.input,run.result_summary,run.input_tokens,run.output_tokens,run.cost::text,run.currency,run.error_code,run.attempt,run.max_attempts,run.created_at,run.started_at,run.finished_at,run.cancel_requested_at,run.timeout_at,run.lease_token FROM agent_runs run`
+const runSelect = `SELECT run.id,run.org_id,run.agent_id,run.agent_version,run.trigger_id,run.trigger_event_seq,run.scheduled_for,run.chat_id,run.thread_root_id,run.requested_by,run.client_run_id,run.correlation_id,run.chain_depth,run.status,run.provider,run.model,run.input,run.result_summary,run.input_tokens,run.output_tokens,run.cost::text,run.currency,run.error_code,run.attempt,run.max_attempts,run.created_at,run.started_at,run.finished_at,run.cancel_requested_at,run.timeout_at,run.lease_token FROM agent_runs run`
 
 type scanner interface{ Scan(...any) error }
 
 func scanRun(row scanner) (Run, error) {
 	var result Run
-	err := row.Scan(&result.ID, &result.OrgID, &result.AgentID, &result.TriggerID, &result.TriggerEventSeq, &result.ScheduledFor, &result.ChatID, &result.ThreadRootID, &result.RequestedBy, &result.ClientRunID, &result.CorrelationID, &result.ChainDepth, &result.Status, &result.Provider, &result.Model, &result.Input, &result.ResultSummary, &result.InputTokens, &result.OutputTokens, &result.Cost, &result.Currency, &result.ErrorCode, &result.Attempt, &result.MaxAttempts, &result.CreatedAt, &result.StartedAt, &result.FinishedAt, &result.CancelRequestedAt, &result.TimeoutAt, &result.LeaseToken)
+	err := row.Scan(&result.ID, &result.OrgID, &result.AgentID, &result.AgentVersion, &result.TriggerID, &result.TriggerEventSeq, &result.ScheduledFor, &result.ChatID, &result.ThreadRootID, &result.RequestedBy, &result.ClientRunID, &result.CorrelationID, &result.ChainDepth, &result.Status, &result.Provider, &result.Model, &result.Input, &result.ResultSummary, &result.InputTokens, &result.OutputTokens, &result.Cost, &result.Currency, &result.ErrorCode, &result.Attempt, &result.MaxAttempts, &result.CreatedAt, &result.StartedAt, &result.FinishedAt, &result.CancelRequestedAt, &result.TimeoutAt, &result.LeaseToken)
 	return result, err
 }
 func (service *Service) getByID(ctx context.Context, runID string) (Run, error) {

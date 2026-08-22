@@ -66,6 +66,7 @@ export type ConfirmEmailRequest = components["schemas"]["ConfirmEmailRequest"];
 export type EmailChangeResponse = components["schemas"]["EmailChangeResponse"];
 export type AuditPage = components["schemas"]["AuditPage"];
 export type Agent = components["schemas"]["Agent"];
+export type AgentVersion = components["schemas"]["AgentVersion"];
 export type AgentUsageReport = components["schemas"]["AgentUsageReport"];
 export type AgentUsageEntry = components["schemas"]["AgentUsageEntry"];
 export type AgentScope = components["schemas"]["AgentScope"];
@@ -112,8 +113,7 @@ export type AgentProviderCredentialView =
   components["schemas"]["AgentProviderCredentialView"];
 export type UpdateAgentProviderCredentialRequest =
   components["schemas"]["UpdateAgentProviderCredentialRequest"];
-export type AgentLlmConnection =
-  components["schemas"]["AgentLlmConnection"];
+export type AgentLlmConnection = components["schemas"]["AgentLlmConnection"];
 export type CreateAgentLlmConnectionRequest =
   components["schemas"]["CreateAgentLlmConnectionRequest"];
 export type UpdateAgentLlmConnectionRequest =

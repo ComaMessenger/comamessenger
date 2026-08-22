@@ -214,7 +214,9 @@ func (service *Service) DeleteLLMConnection(ctx context.Context, current identit
 	}
 	defer tx.Rollback(ctx)
 	var agentCount int
-	err = tx.QueryRow(ctx, `SELECT count(*) FROM agents WHERE org_id=$1 AND llm_connection_id=$2`, current.OrgID, connectionID).Scan(&agentCount)
+	err = tx.QueryRow(ctx, `SELECT
+		(SELECT count(*) FROM agents WHERE org_id=$1 AND llm_connection_id=$2)
+		+(SELECT count(*) FROM agent_drafts WHERE org_id=$1 AND llm_connection_id=$2)`, current.OrgID, connectionID).Scan(&agentCount)
 	if err != nil {
 		return err
 	}

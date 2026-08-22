@@ -376,6 +376,195 @@
         }
       }
     },
+    "/api/v1/agents/{agent_id}/versions": {
+      "get": {
+        "operationId": "listAgentVersions",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AgentId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Immutable published versions, newest first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AgentVersion"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/agents/{agent_id}/publish": {
+      "post": {
+        "operationId": "publishAgent",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AgentId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Draft atomically validated and published.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/agents/{agent_id}/pause": {
+      "post": {
+        "operationId": "pauseAgent",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AgentId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Published agent paused without changing its version.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/agents/{agent_id}/resume": {
+      "post": {
+        "operationId": "resumeAgent",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AgentId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paused published agent resumed after readiness validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/agents/{agent_id}/versions/{version_id}/rollback": {
+      "post": {
+        "operationId": "rollbackAgent",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AgentId"
+          },
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A new draft prepared from the selected published version.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/v1/me/avatar": {
       "put": {
         "operationId": "putMyAvatar",
@@ -7261,6 +7450,11 @@
           "execution_timeout_seconds",
           "chat_ids",
           "readiness",
+          "operational_status",
+          "draft_version",
+          "published_version",
+          "has_unpublished_changes",
+          "published_at",
           "avatar_version",
           "created_at",
           "updated_at"
@@ -7409,11 +7603,82 @@
           "readiness": {
             "$ref": "#/components/schemas/AgentReadiness"
           },
+          "operational_status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "active",
+              "paused",
+              "needs_attention"
+            ]
+          },
+          "draft_version": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
+          },
+          "published_version": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
+          },
+          "has_unpublished_changes": {
+            "type": "boolean"
+          },
+          "published_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
           },
           "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AgentVersion": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "agent_id",
+          "version",
+          "created_by",
+          "created_at",
+          "published_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "agent_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "created_by": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "published_at": {
             "type": "string",
             "format": "date-time"
           }
@@ -7433,7 +7698,8 @@
             "enum": [
               "needs_setup",
               "ready",
-              "enabled",
+              "active",
+              "paused",
               "error"
             ]
           },
@@ -9252,6 +9518,7 @@
           "id",
           "org_id",
           "agent_id",
+          "agent_version",
           "correlation_id",
           "chain_depth",
           "status",
@@ -9280,6 +9547,13 @@
           "agent_id": {
             "type": "string",
             "format": "uuid"
+          },
+          "agent_version": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
           },
           "trigger_id": {
             "type": "string",

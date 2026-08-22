@@ -68,6 +68,30 @@ func (e AgentKind) Valid() bool {
 	}
 }
 
+// Defines values for AgentOperationalStatus.
+const (
+	AgentOperationalStatusActive         AgentOperationalStatus = "active"
+	AgentOperationalStatusDraft          AgentOperationalStatus = "draft"
+	AgentOperationalStatusNeedsAttention AgentOperationalStatus = "needs_attention"
+	AgentOperationalStatusPaused         AgentOperationalStatus = "paused"
+)
+
+// Valid indicates whether the value is a known member of the AgentOperationalStatus enum.
+func (e AgentOperationalStatus) Valid() bool {
+	switch e {
+	case AgentOperationalStatusActive:
+		return true
+	case AgentOperationalStatusDraft:
+		return true
+	case AgentOperationalStatusNeedsAttention:
+		return true
+	case AgentOperationalStatusPaused:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentRecipe.
 const (
 	AgentRecipeCustom     AgentRecipe = "custom"
@@ -235,20 +259,23 @@ func (e AgentReadinessBlockers) Valid() bool {
 
 // Defines values for AgentReadinessState.
 const (
-	AgentReadinessStateEnabled    AgentReadinessState = "enabled"
+	AgentReadinessStateActive     AgentReadinessState = "active"
 	AgentReadinessStateError      AgentReadinessState = "error"
 	AgentReadinessStateNeedsSetup AgentReadinessState = "needs_setup"
+	AgentReadinessStatePaused     AgentReadinessState = "paused"
 	AgentReadinessStateReady      AgentReadinessState = "ready"
 )
 
 // Valid indicates whether the value is a known member of the AgentReadinessState enum.
 func (e AgentReadinessState) Valid() bool {
 	switch e {
-	case AgentReadinessStateEnabled:
+	case AgentReadinessStateActive:
 		return true
 	case AgentReadinessStateError:
 		return true
 	case AgentReadinessStateNeedsSetup:
+		return true
+	case AgentReadinessStatePaused:
 		return true
 	case AgentReadinessStateReady:
 		return true
@@ -2831,40 +2858,48 @@ type AddChatMemberRequestRole string
 
 // Agent defines model for Agent.
 type Agent struct {
-	AllowedScopes               []AgentScope         `json:"allowed_scopes"`
-	AvatarVersion               int64                `json:"avatar_version"`
-	ChatIds                     []openapi_types.UUID `json:"chat_ids"`
-	CreatedAt                   time.Time            `json:"created_at"`
-	DailyCostLimit              *string              `json:"daily_cost_limit"`
-	Description                 string               `json:"description"`
-	DisplayName                 string               `json:"display_name"`
-	Enabled                     bool                 `json:"enabled"`
-	EndpointUrl                 *string              `json:"endpoint_url,omitempty"`
-	ExecutionTimeoutSeconds     int                  `json:"execution_timeout_seconds"`
-	ExternalDataSharingApproved bool                 `json:"external_data_sharing_approved"`
-	Handle                      string               `json:"handle"`
-	Id                          openapi_types.UUID   `json:"id"`
-	Kind                        AgentKind            `json:"kind"`
-	LlmConnectionId             *openapi_types.UUID  `json:"llm_connection_id"`
-	MaxChainDepth               int                  `json:"max_chain_depth"`
-	MaxOutputTokens             int                  `json:"max_output_tokens"`
-	MaxToolIterations           int                  `json:"max_tool_iterations"`
-	Model                       string               `json:"model"`
-	MonthlyCostLimit            *string              `json:"monthly_cost_limit"`
-	OrgId                       openapi_types.UUID   `json:"org_id"`
-	OwnerActorId                openapi_types.UUID   `json:"owner_actor_id"`
-	PerChatConcurrency          int                  `json:"per_chat_concurrency"`
-	Provider                    string               `json:"provider"`
-	ProviderRateLimitPerMinute  int                  `json:"provider_rate_limit_per_minute"`
-	RateLimitPerMinute          int                  `json:"rate_limit_per_minute"`
-	Readiness                   AgentReadiness       `json:"readiness"`
-	Recipe                      AgentRecipe          `json:"recipe"`
-	RecipeVersion               int                  `json:"recipe_version"`
-	UpdatedAt                   time.Time            `json:"updated_at"`
+	AllowedScopes               []AgentScope           `json:"allowed_scopes"`
+	AvatarVersion               int64                  `json:"avatar_version"`
+	ChatIds                     []openapi_types.UUID   `json:"chat_ids"`
+	CreatedAt                   time.Time              `json:"created_at"`
+	DailyCostLimit              *string                `json:"daily_cost_limit"`
+	Description                 string                 `json:"description"`
+	DisplayName                 string                 `json:"display_name"`
+	DraftVersion                *int                   `json:"draft_version"`
+	Enabled                     bool                   `json:"enabled"`
+	EndpointUrl                 *string                `json:"endpoint_url,omitempty"`
+	ExecutionTimeoutSeconds     int                    `json:"execution_timeout_seconds"`
+	ExternalDataSharingApproved bool                   `json:"external_data_sharing_approved"`
+	Handle                      string                 `json:"handle"`
+	HasUnpublishedChanges       bool                   `json:"has_unpublished_changes"`
+	Id                          openapi_types.UUID     `json:"id"`
+	Kind                        AgentKind              `json:"kind"`
+	LlmConnectionId             *openapi_types.UUID    `json:"llm_connection_id"`
+	MaxChainDepth               int                    `json:"max_chain_depth"`
+	MaxOutputTokens             int                    `json:"max_output_tokens"`
+	MaxToolIterations           int                    `json:"max_tool_iterations"`
+	Model                       string                 `json:"model"`
+	MonthlyCostLimit            *string                `json:"monthly_cost_limit"`
+	OperationalStatus           AgentOperationalStatus `json:"operational_status"`
+	OrgId                       openapi_types.UUID     `json:"org_id"`
+	OwnerActorId                openapi_types.UUID     `json:"owner_actor_id"`
+	PerChatConcurrency          int                    `json:"per_chat_concurrency"`
+	Provider                    string                 `json:"provider"`
+	ProviderRateLimitPerMinute  int                    `json:"provider_rate_limit_per_minute"`
+	PublishedAt                 *time.Time             `json:"published_at"`
+	PublishedVersion            *int                   `json:"published_version"`
+	RateLimitPerMinute          int                    `json:"rate_limit_per_minute"`
+	Readiness                   AgentReadiness         `json:"readiness"`
+	Recipe                      AgentRecipe            `json:"recipe"`
+	RecipeVersion               int                    `json:"recipe_version"`
+	UpdatedAt                   time.Time              `json:"updated_at"`
 }
 
 // AgentKind defines model for Agent.Kind.
 type AgentKind string
+
+// AgentOperationalStatus defines model for Agent.OperationalStatus.
+type AgentOperationalStatus string
 
 // AgentRecipe defines model for Agent.Recipe.
 type AgentRecipe string
@@ -2997,6 +3032,7 @@ type AgentReadinessState string
 // AgentRun defines model for AgentRun.
 type AgentRun struct {
 	AgentId           openapi_types.UUID     `json:"agent_id"`
+	AgentVersion      *int                   `json:"agent_version"`
 	Attempt           int                    `json:"attempt"`
 	CancelRequestedAt *time.Time             `json:"cancel_requested_at,omitempty"`
 	ChainDepth        int                    `json:"chain_depth"`
@@ -3159,6 +3195,16 @@ type AgentUsageReport struct {
 
 // AgentUsageReportCurrency defines model for AgentUsageReport.Currency.
 type AgentUsageReportCurrency string
+
+// AgentVersion defines model for AgentVersion.
+type AgentVersion struct {
+	AgentId     openapi_types.UUID `json:"agent_id"`
+	CreatedAt   time.Time          `json:"created_at"`
+	CreatedBy   openapi_types.UUID `json:"created_by"`
+	Id          openapi_types.UUID `json:"id"`
+	PublishedAt time.Time          `json:"published_at"`
+	Version     int                `json:"version"`
+}
 
 // AuditEntry defines model for AuditEntry.
 type AuditEntry struct {
@@ -3336,6 +3382,7 @@ type ClaimAgentRunRequest struct {
 // ClaimedAgentRun defines model for ClaimedAgentRun.
 type ClaimedAgentRun struct {
 	AgentId           openapi_types.UUID     `json:"agent_id"`
+	AgentVersion      *int                   `json:"agent_version"`
 	Attempt           int                    `json:"attempt"`
 	CancelRequestedAt *time.Time             `json:"cancel_requested_at,omitempty"`
 	ChainDepth        int                    `json:"chain_depth"`
