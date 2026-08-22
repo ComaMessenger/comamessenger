@@ -493,3 +493,14 @@ func TestRealtimeRejectsOriginAndAuthentication(t *testing.T) {
 		t.Fatalf("malformed auth response = %+v", protocolError)
 	}
 }
+
+func TestRealtimeScopesIncludeAgentRuntimeCredentials(t *testing.T) {
+	for _, scope := range []string{"messages:read", "runtime:execute", "runtime:worker"} {
+		if !hasRealtimeScope([]string{scope}) {
+			t.Fatalf("scope %q was rejected for realtime", scope)
+		}
+	}
+	if hasRealtimeScope([]string{"search:read"}) {
+		t.Fatal("unrelated agent scope was accepted for realtime")
+	}
+}

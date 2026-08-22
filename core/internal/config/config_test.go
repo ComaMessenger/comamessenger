@@ -29,6 +29,7 @@ func setRequiredEnvironment(t *testing.T) {
 	t.Setenv("TRUSTED_PROXY_CIDRS", "")
 	t.Setenv("AGENT_TRIGGER_SHARD_INDEX", "")
 	t.Setenv("AGENT_TRIGGER_SHARD_COUNT", "")
+	t.Setenv("AGENT_RUNTIME_API_KEY", "")
 	for _, key := range []string{"WS_MAX_PENDING_CONNECTIONS", "WS_MAX_CONCURRENT_WRITES", "WS_TYPING_TTL", "WS_PRESENCE_TTL", "WS_ACTIVE_SUBSCRIPTION_TTL", "WS_EPHEMERAL_RATE_LIMIT", "WS_EPHEMERAL_RATE_WINDOW"} {
 		t.Setenv(key, "")
 	}
@@ -98,8 +99,28 @@ func TestFromEnvironmentDefaults(t *testing.T) {
 	if len(cfg.TrustedProxyCIDRs) != 2 {
 		t.Fatalf("TrustedProxyCIDRs = %v", cfg.TrustedProxyCIDRs)
 	}
-	if cfg.Agents.TriggerShardIndex != 0 || cfg.Agents.TriggerShardCount != 1 {
+	if cfg.Agents.TriggerShardIndex != 0 || cfg.Agents.TriggerShardCount != 1 || cfg.Agents.RuntimeAPIKey != "" {
 		t.Fatalf("unexpected agent trigger shard defaults: %#v", cfg.Agents)
+	}
+}
+
+func TestFromEnvironmentValidatesRuntimeWorkerKey(t *testing.T) {
+	setRequiredEnvironment(t)
+	valid := "coma_agent_" + strings.Repeat("a", 43)
+	t.Setenv("AGENT_RUNTIME_API_KEY", valid)
+	cfg, err := FromEnvironment()
+	if err != nil || cfg.Agents.RuntimeAPIKey != valid {
+		t.Fatalf("runtime key config = %q, err=%v", cfg.Agents.RuntimeAPIKey, err)
+	}
+
+	for _, invalid := range []string{"short", "coma_agent_short"} {
+		t.Run(invalid, func(t *testing.T) {
+			setRequiredEnvironment(t)
+			t.Setenv("AGENT_RUNTIME_API_KEY", invalid)
+			if _, err := FromEnvironment(); err == nil {
+				t.Fatal("FromEnvironment() accepted an invalid runtime worker key")
+			}
+		})
 	}
 }
 

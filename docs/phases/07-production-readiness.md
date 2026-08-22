@@ -46,6 +46,7 @@
 - [ ] Создать минимальные multi-stage images с non-root user и pinned base digests/versions.
 - [ ] Публиковать GHCR images с immutable semver/digest references; плавающий tag не использовать как единственную production-инструкцию.
 - [ ] Подготовить `compose.yaml`, `.env.example`, default local file volume и profiles для external/bundled S3-compatible storage, Postgres, Redis и agent runtime.
+- [x] Добавить неразрушающий генератор `.env`: независимые installation secrets, mode `0600`, автоматический скрытый runtime worker, идемпотентное создание и ротация его ключа без показа в UI.
 - [ ] Добавить Caddy reference config с HTTPS, WebSocket timeouts и upload limits.
 - [ ] Не публиковать admin services и Postgres/MinIO наружу по умолчанию.
 - [ ] Добавить startup validation обязательных секретов, public URLs и storage connectivity.

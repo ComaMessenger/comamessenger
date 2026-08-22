@@ -216,7 +216,7 @@ func (s *Server) ServeHTTP(w standardhttp.ResponseWriter, r *standardhttp.Reques
 
 func hasRealtimeScope(scopes []string) bool {
 	for _, scope := range scopes {
-		if scope == "messages:read" {
+		if scope == "messages:read" || scope == "runtime:execute" || scope == "runtime:worker" {
 			return true
 		}
 	}

@@ -18,4 +18,4 @@ RUN pnpm --filter @comamessenger/protocol build \
     && pnpm --filter @comamessenger/agent-runtime build
 
 USER node
-CMD ["pnpm", "--filter", "@comamessenger/agent-runtime", "exec", "tsx", "src/index.ts"]
+CMD ["./apps/agent-runtime/node_modules/.bin/tsx", "apps/agent-runtime/src/index.ts"]

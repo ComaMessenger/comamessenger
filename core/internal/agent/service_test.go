@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,6 +22,58 @@ const (
 	agentTestMemberID = "00000000-0000-7000-8000-000000000203"
 	agentTestChatID   = "00000000-0000-7000-8000-000000000204"
 )
+
+func TestEnsureRuntimeWorkerIsIdempotentHiddenAndRotatable(t *testing.T) {
+	pool := testdb.New(t)
+	service := NewService(pool)
+	firstSecret := "coma_agent_" + strings.Repeat("a", 43)
+	if ready, err := service.EnsureRuntimeWorker(t.Context(), firstSecret); err != nil || ready {
+		t.Fatalf("pre-bootstrap EnsureRuntimeWorker() ready=%v err=%v", ready, err)
+	}
+
+	seedAgentModel(t, pool)
+	owner := identity.User{ActorID: agentTestOwnerID, OrgID: agentTestOrgID, OrgRole: "owner"}
+
+	for range 2 {
+		ready, err := service.EnsureRuntimeWorker(t.Context(), firstSecret)
+		if err != nil || !ready {
+			t.Fatalf("EnsureRuntimeWorker() ready=%v err=%v", ready, err)
+		}
+	}
+	listed, err := service.List(t.Context(), owner)
+	if err != nil || len(listed) != 0 {
+		t.Fatalf("product agent list = %+v, err=%v", listed, err)
+	}
+	metrics, err := service.Metrics(t.Context(), owner)
+	if err != nil || metrics.AgentsTotal != 0 {
+		t.Fatalf("product metrics = %+v, err=%v", metrics, err)
+	}
+	var workerCount, activeKeyCount int
+	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM agents WHERE org_id=$1 AND system_role='runtime_worker'`, agentTestOrgID).Scan(&workerCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM agent_api_keys WHERE org_id=$1 AND revoked_at IS NULL`, agentTestOrgID).Scan(&activeKeyCount); err != nil {
+		t.Fatal(err)
+	}
+	if workerCount != 1 || activeKeyCount != 1 {
+		t.Fatalf("workers=%d active keys=%d", workerCount, activeKeyCount)
+	}
+	_, authenticated, err := service.AuthenticateKey(t.Context(), firstSecret)
+	if err != nil || authenticated.AuthenticationKind != "api_key" || !slices.Equal(authenticated.Scopes, []string{"runtime:worker"}) {
+		t.Fatalf("runtime authentication = %+v, err=%v", authenticated, err)
+	}
+
+	secondSecret := "coma_agent_" + strings.Repeat("b", 43)
+	if ready, err := service.EnsureRuntimeWorker(t.Context(), secondSecret); err != nil || !ready {
+		t.Fatalf("rotated EnsureRuntimeWorker() ready=%v err=%v", ready, err)
+	}
+	if _, _, err := service.AuthenticateKey(t.Context(), firstSecret); !errors.Is(err, identity.ErrUnauthorized) {
+		t.Fatalf("old runtime secret authentication error = %v", err)
+	}
+	if _, authenticated, err := service.AuthenticateKey(t.Context(), secondSecret); err != nil || !slices.Equal(authenticated.Scopes, []string{"runtime:worker"}) {
+		t.Fatalf("rotated runtime authentication = %+v, err=%v", authenticated, err)
+	}
+}
 
 func TestAgentModelKeyHashScopesVisibilityAndAudit(t *testing.T) {
 	pool := testdb.New(t)

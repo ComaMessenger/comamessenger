@@ -31,11 +31,13 @@ docs/                Product, architecture and phase documents
 ## Local start
 
 ```sh
-cp .env.example .env
-docker compose --env-file .env -f deploy/compose.yaml up --build
+./deploy/generate-env.sh
+docker compose --env-file .env -f deploy/compose.yaml --profile agents up --build
 ```
 
-The web application is available at `http://localhost:5173`, the API at `http://localhost:8080`, and the MinIO console at `http://localhost:9001`. PostgreSQL is the source of truth; the bundled Redis process provides realtime coordination and is not exposed outside the Compose network. If port 5173 is occupied, set `WEB_PORT` in `.env` before starting Compose.
+The generator creates `.env` with independent random secrets and mode `0600`; it never overwrites an existing file or prints secret values. Core automatically provisions the bundled runtime's hidden worker credential after the first-owner bootstrap. The web application is available at `http://localhost:5173` and the API at `http://localhost:8080`. PostgreSQL is the source of truth; the bundled Redis process provides realtime coordination and is not exposed outside the Compose network. If port 5173 is occupied, set `WEB_PORT` in `.env` before starting Compose.
+
+For a public host, begin with `./deploy/generate-env.sh --production`, then set the public URLs, allowed host and TLS-related values in `.env` before starting Compose. Keep the file outside version control and preserve it across upgrades.
 
 Web Push is optional. Generate VAPID keys with `docker compose --env-file .env -f deploy/compose.yaml run --rm --no-deps core vapid`, copy the two emitted variables into `.env`, set `VAPID_SUBJECT`, and restart Core.
 

@@ -38,6 +38,9 @@ REDIS_PASSWORD=<random>
 REDIS_URL=redis://:<same-password>@redis:6379/0
 REDIS_EPHEMERAL_SIGNING_KEY=<independent-random-32-byte-secret>
 
+# Shared only by Core and the bundled agent runtime. Core persists only its hash.
+AGENT_RUNTIME_API_KEY=coma_agent_<independent-random-32-byte-secret>
+
 S3_ENDPOINT=http://minio:9000
 S3_PUBLIC_ENDPOINT=https://rocket.hmns-test.ru
 S3_BUCKET=coma-test
@@ -47,14 +50,16 @@ MINIO_ROOT_USER=<same-access-key>
 MINIO_ROOT_PASSWORD=<same-secret-key>
 ```
 
-Generate independent secrets with a cryptographically secure generator such as `openssl rand -hex 32`. URL-encode the Postgres password before placing it inside `DATABASE_URL` if it contains reserved URL characters.
+Generate the file without printing secrets with `./deploy/generate-env.sh --production`, then replace the public URL and host values. Alternatively, generate each independent secret with a cryptographically secure generator such as `openssl rand -hex 32`. URL-encode the Postgres password before placing it inside `DATABASE_URL` if it contains reserved URL characters.
+
+`AGENT_RUNTIME_API_KEY` is an internal installation credential, not an OpenAI or Anthropic key. On startup Core creates a hidden `runtime_worker` identity for the bootstrapped organization and stores only the SHA-256 digest. The bundled runtime receives the same secret through Compose. Rotating the value and restarting both services revokes the previous worker key automatically.
 
 ## First deployment
 
 ```bash
 git clone https://github.com/ComaMessenger/comamessenger.git /opt/coma
 cd /opt/coma
-docker compose --env-file .env -f deploy/compose.yaml up -d --build --wait
+docker compose --env-file .env -f deploy/compose.yaml --profile agents up -d --build --wait
 ```
 
 Install the rendered Nginx site, run `nginx -t`, and only then reload Nginx. Keep the existing Certbot certificate when replacing an application behind an established domain.
@@ -83,7 +88,7 @@ Run the full smoke suite only before the environment is bootstrapped with data t
 ```bash
 cd /opt/coma
 git pull --ff-only
-docker compose --env-file .env -f deploy/compose.yaml up -d --build --wait
+docker compose --env-file .env -f deploy/compose.yaml --profile agents up -d --build --wait
 ```
 
 After deployment, verify HTTPS and the bootstrap endpoint. Do not run `down -v` during an update: the `-v` flag deletes persistent Postgres and MinIO data.

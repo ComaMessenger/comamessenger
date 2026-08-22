@@ -163,6 +163,7 @@ func main() {
 	agentService.SetRevokeSession(realtimeServer.RevokeSession)
 	realtimeCtx, stopRealtime := context.WithCancel(context.Background())
 	go agentService.RunRateLimitCleanup(realtimeCtx)
+	go agentService.RunRuntimeWorkerProvisioner(realtimeCtx, cfg.Agents.RuntimeAPIKey, logger)
 	if err := processingClient.Start(realtimeCtx); err != nil {
 		logger.Error("file processing startup failed", "error", err)
 		os.Exit(1)

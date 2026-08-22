@@ -96,6 +96,7 @@ type PushConfig struct {
 type AgentConfig struct {
 	TriggerShardIndex uint64
 	TriggerShardCount uint64
+	RuntimeAPIKey     string
 }
 
 type Config struct {
@@ -233,7 +234,11 @@ func FromEnvironment() (Config, error) {
 		EventLog:  eventLog,
 		Redis:     redisConfig,
 		Push:      PushConfig{VAPIDPublicKey: strings.TrimSpace(os.Getenv("VAPID_PUBLIC_KEY")), VAPIDPrivateKey: strings.TrimSpace(os.Getenv("VAPID_PRIVATE_KEY")), VAPIDSubject: valueOrDefault("VAPID_SUBJECT", "mailto:admin@localhost"), PollInterval: pushInterval},
-		Agents:    AgentConfig{TriggerShardIndex: triggerShardIndex, TriggerShardCount: triggerShardCount},
+		Agents: AgentConfig{
+			TriggerShardIndex: triggerShardIndex,
+			TriggerShardCount: triggerShardCount,
+			RuntimeAPIKey:     strings.TrimSpace(os.Getenv("AGENT_RUNTIME_API_KEY")),
+		},
 	}
 
 	if cfg.HTTPAddr == "" {
@@ -268,6 +273,9 @@ func FromEnvironment() (Config, error) {
 	}
 	if cfg.BootstrapToken != "" && len(cfg.BootstrapToken) < 32 {
 		return Config{}, fmt.Errorf("BOOTSTRAP_TOKEN must be at least 32 bytes when set")
+	}
+	if cfg.Agents.RuntimeAPIKey != "" && (!strings.HasPrefix(cfg.Agents.RuntimeAPIKey, "coma_agent_") || len(cfg.Agents.RuntimeAPIKey) < 54 || len(cfg.Agents.RuntimeAPIKey) > 256) {
+		return Config{}, fmt.Errorf("AGENT_RUNTIME_API_KEY must be a generated coma_agent_ secret")
 	}
 	if (cfg.Push.VAPIDPublicKey == "") != (cfg.Push.VAPIDPrivateKey == "") {
 		return Config{}, fmt.Errorf("VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY must be set together")

@@ -220,6 +220,7 @@
 ### 2.20 Деплой
 
 - `docker compose up`: ядро, Postgres и Redis; файлы лежат в отдельном local persistent volume. S3-compatible storage и agent-runtime включаются profiles. Redis disposable и не входит в backup contract.
+- Генератор self-hosted окружения создаёт независимый `AGENT_RUNTIME_API_KEY` вместе с остальными installation secrets и сохраняет `.env` с mode `0600`. Core использует его только для скрытого organization-level runtime worker, хранит в PostgreSQL SHA-256 digest и автоматически отзывает прежний credential при ротации; это не LLM provider key и он не появляется в продуктовом UI.
 - Одиночный бинарник с флагом `--sqlite` для демо/личного использования (позже; сначала только Postgres).
 - Helm-чарт после стабилизации.
 - Автомиграции при старте (с флагом отключения).

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"regexp"
 	"sort"
@@ -245,6 +246,136 @@ func (service *Service) SetRevokeSession(callback func(string)) {
 	service.revokeSession = callback
 }
 
+// EnsureRuntimeWorker provisions the installation-managed organization worker.
+// The plaintext secret is supplied by the deployment environment; only its
+// digest is stored in PostgreSQL. The worker is deliberately excluded from all
+// product-facing agent queries.
+func (service *Service) EnsureRuntimeWorker(ctx context.Context, secret string) (bool, error) {
+	secret = strings.TrimSpace(secret)
+	if secret == "" {
+		return false, nil
+	}
+	if !strings.HasPrefix(secret, "coma_agent_") || len(secret) < 54 || len(secret) > 256 {
+		return false, fmt.Errorf("invalid runtime worker secret")
+	}
+	digest := sha256.Sum256([]byte(secret))
+	prefix := secret[:20]
+
+	tx, err := service.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	if err != nil {
+		return false, fmt.Errorf("begin runtime worker provisioning: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('comamessenger.runtime-worker'))`); err != nil {
+		return false, fmt.Errorf("lock runtime worker provisioning: %w", err)
+	}
+
+	var organizationCount int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM organizations`).Scan(&organizationCount); err != nil {
+		return false, fmt.Errorf("count runtime worker organizations: %w", err)
+	}
+	if organizationCount == 0 {
+		return false, nil
+	}
+	if organizationCount != 1 {
+		return false, fmt.Errorf("installation runtime worker requires exactly one organization")
+	}
+	var orgID, ownerID string
+	if err := tx.QueryRow(ctx, `
+		SELECT organization.id, owner.id
+		FROM organizations organization
+		JOIN LATERAL (
+			SELECT id FROM actors
+			WHERE org_id=organization.id AND type='user' AND org_role='owner'
+			  AND status='active' AND deleted_at IS NULL
+			ORDER BY created_at,id LIMIT 1
+		) owner ON true`).Scan(&orgID, &ownerID); err != nil {
+		return false, fmt.Errorf("resolve runtime worker owner: %w", err)
+	}
+
+	var workerID string
+	err = tx.QueryRow(ctx, `SELECT actor_id FROM agents WHERE org_id=$1 AND system_role='runtime_worker' AND deleted_at IS NULL FOR UPDATE`, orgID).Scan(&workerID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		workerID, err = id.New()
+		if err != nil {
+			return false, err
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO actors(id,org_id,type,org_role,display_name,handle,status)
+			VALUES($1,$2,'agent','member','Coma runtime','coma_runtime_worker','active')`, workerID, orgID); err != nil {
+			return false, fmt.Errorf("insert runtime worker actor: %w", err)
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO agents(actor_id,org_id,owner_actor_id,kind,enabled,allowed_scopes,
+				rate_limit_per_minute,provider_rate_limit_per_minute,operational_status,system_role)
+			VALUES($1,$2,$3,'builtin',true,ARRAY['runtime:worker']::text[],100000,100000,'active','runtime_worker')`, workerID, orgID, ownerID); err != nil {
+			return false, fmt.Errorf("insert runtime worker agent: %w", err)
+		}
+	} else if err != nil {
+		return false, fmt.Errorf("find runtime worker: %w", err)
+	} else {
+		if _, err := tx.Exec(ctx, `UPDATE actors SET status='active',deleted_at=NULL WHERE org_id=$1 AND id=$2`, orgID, workerID); err != nil {
+			return false, fmt.Errorf("activate runtime worker actor: %w", err)
+		}
+		if _, err := tx.Exec(ctx, `
+			UPDATE agents SET owner_actor_id=$3,enabled=true,allowed_scopes=ARRAY['runtime:worker']::text[],
+				rate_limit_per_minute=100000,provider_rate_limit_per_minute=100000,operational_status='active',updated_at=now()
+			WHERE org_id=$1 AND actor_id=$2`, orgID, workerID, ownerID); err != nil {
+			return false, fmt.Errorf("activate runtime worker agent: %w", err)
+		}
+	}
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE agent_api_keys SET revoked_at=now()
+		WHERE org_id=$1 AND agent_id=$2 AND revoked_at IS NULL AND key_hash<>$3`, orgID, workerID, digest[:]); err != nil {
+		return false, fmt.Errorf("rotate runtime worker keys: %w", err)
+	}
+	var keyExists bool
+	if err := tx.QueryRow(ctx, `
+		SELECT EXISTS(SELECT 1 FROM agent_api_keys
+		WHERE org_id=$1 AND agent_id=$2 AND key_hash=$3 AND revoked_at IS NULL
+		  AND (expires_at IS NULL OR expires_at>now()))`, orgID, workerID, digest[:]).Scan(&keyExists); err != nil {
+		return false, fmt.Errorf("find runtime worker key: %w", err)
+	}
+	if !keyExists {
+		keyID, err := id.New()
+		if err != nil {
+			return false, err
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO agent_api_keys(id,org_id,agent_id,name,key_hash,key_prefix,scopes,rate_limit_per_minute,created_by)
+			VALUES($1,$2,$3,'Installation runtime worker',$4,$5,ARRAY['runtime:worker']::text[],100000,$6)`, keyID, orgID, workerID, digest[:], prefix, ownerID); err != nil {
+			return false, fmt.Errorf("insert runtime worker key: %w", err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return false, fmt.Errorf("commit runtime worker provisioning: %w", err)
+	}
+	return true, nil
+}
+
+func (service *Service) RunRuntimeWorkerProvisioner(ctx context.Context, secret string, logger *slog.Logger) {
+	if strings.TrimSpace(secret) == "" {
+		return
+	}
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		ready, err := service.EnsureRuntimeWorker(ctx, secret)
+		if err != nil {
+			logger.Warn("runtime worker provisioning failed; retrying", "error", err)
+		} else if ready {
+			logger.Info("runtime worker credential is ready")
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
 func (service *Service) Create(ctx context.Context, current identity.User, input CreateInput) (Agent, error) {
 	if !canBuild(current) {
 		return Agent{}, ErrForbidden
@@ -446,7 +577,7 @@ func (service *Service) List(ctx context.Context, current identity.User) ([]Agen
 	if manager {
 		selectQuery = agentSelect
 	}
-	rows, err := service.pool.Query(ctx, selectQuery+` WHERE agent.org_id=$1 AND agent.deleted_at IS NULL AND (agent.enabled OR $2) ORDER BY actor.display_name, actor.id`, current.OrgID, manager)
+	rows, err := service.pool.Query(ctx, selectQuery+` WHERE agent.org_id=$1 AND agent.deleted_at IS NULL AND agent.system_role IS NULL AND (agent.enabled OR $2) ORDER BY actor.display_name, actor.id`, current.OrgID, manager)
 	if err != nil {
 		return nil, fmt.Errorf("list agents: %w", err)
 	}
@@ -518,17 +649,17 @@ func (service *Service) Metrics(ctx context.Context, current identity.User) (Pro
 	}
 	var result ProductMetrics
 	err := service.pool.QueryRow(ctx, `SELECT
-		(SELECT count(*) FROM agents WHERE org_id=$1 AND deleted_at IS NULL),
-		(SELECT count(*) FROM agents WHERE org_id=$1 AND deleted_at IS NULL AND published_version IS NOT NULL),
+		(SELECT count(*) FROM agents WHERE org_id=$1 AND deleted_at IS NULL AND system_role IS NULL),
+		(SELECT count(*) FROM agents WHERE org_id=$1 AND deleted_at IS NULL AND system_role IS NULL AND published_version IS NOT NULL),
 		(SELECT count(*) FROM agent_runs WHERE org_id=$1 AND dry_run),
 		(SELECT count(*) FROM agent_runs WHERE org_id=$1 AND dry_run AND status='failed'),
 		COALESCE((SELECT avg(extract(epoch FROM first_test.created_at-actor.created_at))
 			FROM agents agent JOIN actors actor ON actor.org_id=agent.org_id AND actor.id=agent.actor_id
 			JOIN LATERAL (SELECT min(created_at) created_at FROM agent_runs WHERE org_id=agent.org_id AND agent_id=agent.actor_id AND dry_run) first_test ON first_test.created_at IS NOT NULL
-			WHERE agent.org_id=$1),0),
+			WHERE agent.org_id=$1 AND agent.system_role IS NULL),0),
 		COALESCE((SELECT avg(extract(epoch FROM agent.published_at-actor.created_at))
 			FROM agents agent JOIN actors actor ON actor.org_id=agent.org_id AND actor.id=agent.actor_id
-			WHERE agent.org_id=$1 AND agent.published_at IS NOT NULL),0)`, current.OrgID).Scan(
+			WHERE agent.org_id=$1 AND agent.system_role IS NULL AND agent.published_at IS NOT NULL),0)`, current.OrgID).Scan(
 		&result.AgentsTotal, &result.AgentsPublished, &result.TestRunsTotal, &result.TestRunsFailed,
 		&result.AverageSecondsToFirstTest, &result.AverageSecondsToFirstPublish,
 	)
@@ -544,7 +675,7 @@ func (service *Service) Get(ctx context.Context, current identity.User, agentID 
 	if manager {
 		selectQuery = agentSelect
 	}
-	result, err := scanAgent(service.pool.QueryRow(ctx, selectQuery+` WHERE agent.org_id=$1 AND agent.actor_id=$2 AND agent.deleted_at IS NULL AND (agent.enabled OR $3)`, current.OrgID, agentID, manager))
+	result, err := scanAgent(service.pool.QueryRow(ctx, selectQuery+` WHERE agent.org_id=$1 AND agent.actor_id=$2 AND agent.deleted_at IS NULL AND agent.system_role IS NULL AND (agent.enabled OR $3)`, current.OrgID, agentID, manager))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Agent{}, ErrNotFound
 	}

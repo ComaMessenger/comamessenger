@@ -103,6 +103,7 @@ services:
       BOOTSTRAP_TOKEN: ${BOOTSTRAP_TOKEN:-}
       AGENT_TRIGGER_SHARD_INDEX: ${AGENT_TRIGGER_SHARD_INDEX:-0}
       AGENT_TRIGGER_SHARD_COUNT: ${AGENT_TRIGGER_SHARD_COUNT:-1}
+      AGENT_RUNTIME_API_KEY: ${AGENT_RUNTIME_API_KEY:-}
       TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-127.0.0.1/32,::1/128,172.16.0.0/12}
       ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL:-15m}
       REFRESH_TOKEN_TTL: ${REFRESH_TOKEN_TTL:-720h}
@@ -196,6 +197,7 @@ services:
     build:
       context: ..
       dockerfile: apps/agent-runtime/Dockerfile
+    restart: unless-stopped
     environment:
       COMA_CORE_URL: http://core:8080
       COMA_AGENT_API_KEY: ${AGENT_RUNTIME_API_KEY:-}
