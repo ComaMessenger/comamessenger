@@ -433,7 +433,11 @@ func (service *Service) ResetRecipe(ctx context.Context, current identity.User, 
 
 func (service *Service) List(ctx context.Context, current identity.User) ([]Agent, error) {
 	manager := canManage(current)
-	rows, err := service.pool.Query(ctx, agentSelect+` WHERE agent.org_id=$1 AND agent.deleted_at IS NULL AND (agent.enabled OR $2) ORDER BY actor.display_name, actor.id`, current.OrgID, manager)
+	selectQuery := agentPublishedSelect
+	if manager {
+		selectQuery = agentSelect
+	}
+	rows, err := service.pool.Query(ctx, selectQuery+` WHERE agent.org_id=$1 AND agent.deleted_at IS NULL AND (agent.enabled OR $2) ORDER BY actor.display_name, actor.id`, current.OrgID, manager)
 	if err != nil {
 		return nil, fmt.Errorf("list agents: %w", err)
 	}
@@ -504,7 +508,11 @@ func (service *Service) Get(ctx context.Context, current identity.User, agentID 
 		return Agent{}, ErrNotFound
 	}
 	manager := canManage(current)
-	result, err := scanAgent(service.pool.QueryRow(ctx, agentSelect+` WHERE agent.org_id=$1 AND agent.actor_id=$2 AND agent.deleted_at IS NULL AND (agent.enabled OR $3)`, current.OrgID, agentID, manager))
+	selectQuery := agentPublishedSelect
+	if manager {
+		selectQuery = agentSelect
+	}
+	result, err := scanAgent(service.pool.QueryRow(ctx, selectQuery+` WHERE agent.org_id=$1 AND agent.actor_id=$2 AND agent.deleted_at IS NULL AND (agent.enabled OR $3)`, current.OrgID, agentID, manager))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Agent{}, ErrNotFound
 	}
@@ -1080,6 +1088,10 @@ const agentSelect = `
 	JOIN actors actor ON actor.org_id=agent.org_id AND actor.id=agent.actor_id
 	LEFT JOIN agent_drafts draft ON draft.org_id=agent.org_id AND draft.agent_id=agent.actor_id
 	LEFT JOIN agent_llm_connections connection ON connection.org_id=agent.org_id AND connection.id=CASE WHEN draft.agent_id IS NOT NULL THEN draft.llm_connection_id ELSE agent.llm_connection_id END`
+
+var agentPublishedSelect = strings.Replace(agentSelect,
+	"LEFT JOIN agent_drafts draft ON draft.org_id=agent.org_id AND draft.agent_id=agent.actor_id",
+	"LEFT JOIN agent_drafts draft ON draft.org_id=agent.org_id AND draft.agent_id=agent.actor_id AND false", 1)
 
 type scanner interface{ Scan(...any) error }
 

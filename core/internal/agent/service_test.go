@@ -231,6 +231,11 @@ func TestAgentDraftPublishPauseResumeAndRollback(t *testing.T) {
 	if err != nil || draft.Description != changed || !draft.HasUnpublishedChanges || draft.DraftVersion == nil || *draft.DraftVersion != 2 {
 		t.Fatalf("updated draft=%+v err=%v", draft, err)
 	}
+	ordinary := identity.User{ActorID: agentTestMemberID, OrgID: agentTestOrgID, OrgRole: "member"}
+	publicAgent, err := service.Get(t.Context(), ordinary, created.ID)
+	if err != nil || publicAgent.Description != "version one" || publicAgent.HasUnpublishedChanges {
+		t.Fatalf("published view leaked draft=%+v err=%v", publicAgent, err)
+	}
 	var runtimeDescription string
 	if err := pool.QueryRow(t.Context(), `SELECT description FROM agents WHERE actor_id=$1`, created.ID).Scan(&runtimeDescription); err != nil || runtimeDescription != "version one" {
 		t.Fatalf("published config changed before publish: %q err=%v", runtimeDescription, err)
