@@ -746,9 +746,24 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	if runtimeKey.Secret == "" {
 		t.Fatal("agent runtime key was not returned")
 	}
-	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/agents/"+createdAgent.ID, owner.AccessToken, map[string]any{
-		"enabled": true,
-	}, standardhttp.StatusOK, &createdAgent)
+	var dryRun agentrun.Run
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agents/"+createdAgent.ID+"/invoke", owner.AccessToken, map[string]any{
+		"chat_id": group.ID, "client_run_id": e2eID(t), "chain_depth": 0, "timeout_seconds": 60, "max_attempts": 1,
+		"dry_run": true, "input": map[string]any{"prompt": "test the draft", "sandbox": true, "publish": false},
+	}, standardhttp.StatusAccepted, &dryRun)
+	if !dryRun.DryRun || dryRun.AgentVersion == nil || *dryRun.AgentVersion != 1 {
+		t.Fatalf("draft dry run = %+v", dryRun)
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agent-runs/"+dryRun.ID+"/cancel", owner.AccessToken, nil, standardhttp.StatusOK, &dryRun)
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agents/"+createdAgent.ID+"/publish", owner.AccessToken, nil, standardhttp.StatusOK, &createdAgent)
+	if createdAgent.PublishedVersion == nil || *createdAgent.PublishedVersion != 1 || createdAgent.OperationalStatus != "active" {
+		t.Fatalf("published agent = %+v", createdAgent)
+	}
+	var productMetrics agent.ProductMetrics
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/agents/product-metrics", owner.AccessToken, nil, standardhttp.StatusOK, &productMetrics)
+	if productMetrics.AgentsTotal < 1 || productMetrics.AgentsPublished < 1 || productMetrics.TestRunsTotal < 1 {
+		t.Fatalf("agent product metrics = %+v", productMetrics)
+	}
 	var queuedRun agentrun.Run
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agents/"+createdAgent.ID+"/invoke", owner.AccessToken, map[string]any{"chat_id": group.ID, "client_run_id": e2eID(t), "chain_depth": 0, "timeout_seconds": 60, "max_attempts": 2, "input": map[string]any{"prompt": "manual e2e"}}, standardhttp.StatusAccepted, &queuedRun)
 	if queuedRun.Status != "queued" {
