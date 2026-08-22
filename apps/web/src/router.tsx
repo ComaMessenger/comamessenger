@@ -83,6 +83,30 @@ const routes = [
   }),
   createRoute({
     getParentRoute: () => root,
+    path: "/agents/activity",
+    component: marker,
+  }),
+  createRoute({
+    getParentRoute: () => root,
+    path: "/agents/$agentId",
+    component: marker,
+  }),
+  ...[
+    "behavior",
+    "knowledge",
+    "automations",
+    "test",
+    "activity",
+    "settings",
+  ].map((section) =>
+    createRoute({
+      getParentRoute: () => root,
+      path: `/agents/$agentId/${section}`,
+      component: marker,
+    }),
+  ),
+  createRoute({
+    getParentRoute: () => root,
     path: "/more",
     component: marker,
   }),

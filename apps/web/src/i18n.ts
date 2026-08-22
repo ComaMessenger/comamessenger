@@ -270,11 +270,51 @@ const ru = {
   agentPlatformHint:
     "Создавайте, проверяйте и наблюдайте за агентами в одном рабочем разделе.",
   agentPlatformNavigation: "Разделы платформы агентов",
+  agentDetailNavigation: "Настройка агента",
   agentTab_overview: "Обзор",
   agentTab_sandbox: "Песочница",
   agentTab_approvals: "Подтверждения",
   agentTab_runs: "Запуски",
   agentTab_connections: "Подключения",
+  agentTab_activity: "Активность",
+  agentTab_behavior: "Поведение",
+  agentTab_knowledge: "Знания",
+  agentTab_automations: "Автоматизации",
+  agentTab_test: "Проверка",
+  agentTab_settings: "Настройки",
+  agentConnectionsTitle: "Подключения LLM",
+  agentConnectionsDescription:
+    "Один раз подключите провайдера и используйте его в нескольких агентах без копирования ключей.",
+  agentConnectionAdd: "Добавить подключение",
+  agentConnectionChoose: "Выберите подключение",
+  agentConnectionChooseLater: "Подключить позже",
+  agentUsesWorkspaceConnection:
+    "Ключ провайдера хранится в подключении пространства и не дублируется в агенте.",
+  agentConnectionsEmpty: "Подключений пока нет",
+  agentConnectionsEmptyHint:
+    "Добавьте OpenAI, Anthropic или совместимый локальный сервер.",
+  agentConnectionCreateTitle: "Новое подключение",
+  agentConnectionCreateDescription:
+    "Ключ будет зашифрован на сервере и не вернётся в браузер после сохранения.",
+  agentConnectionSecurityHint:
+    "Агенты получают доступ к ключу только во время выполнения запроса.",
+  agentConnectionModelUnset: "модель не выбрана",
+  agentConnectionHealth_untested: "Не проверено",
+  agentConnectionHealth_healthy: "Работает",
+  agentConnectionHealth_unhealthy: "Ошибка",
+  agentProvider_openai: "OpenAI",
+  agentProvider_anthropic: "Anthropic",
+  "agentProvider_openai-compatible": "OpenAI-совместимый",
+  defaultModel: "Модель по умолчанию",
+  agentActivityTitle: "Активность агентов",
+  agentActivityDescription:
+    "История запусков и ошибок сгруппирована по агентам, чтобы быстрее находить причину.",
+  agentKnowledgeTitle: "Знания и источники",
+  agentKnowledgeDescription:
+    "Управляйте данными, на которые агент может опираться в ответах.",
+  agentKnowledgeEmpty: "Источники ещё не подключены",
+  agentKnowledgeEmptyHint:
+    "В следующих срезах здесь появятся чаты, файлы и управляемые базы знаний.",
   agentApprovalsTitle: "Действия на подтверждение",
   agentApprovalsHint:
     "Агент не выполнит эти действия, пока администратор явно их не одобрит.",
@@ -297,6 +337,9 @@ const ru = {
   agentReadiness_runtime_key_required: "Создайте ключ для системы выполнения.",
   agentReadiness_provider_model_required: "Укажите провайдера и модель.",
   agentReadiness_provider_credential_required: "Добавьте ключ LLM-провайдера.",
+  agentReadiness_llm_connection_required: "Выберите подключение LLM.",
+  agentReadiness_llm_connection_unavailable:
+    "Выбранное подключение LLM отключено или удалено.",
   agentReadiness_external_data_approval_required:
     "Подтвердите передачу данных внешнему провайдеру.",
   agentReadiness_trigger_required: "Добавьте хотя бы одно правило запуска.",
@@ -1088,11 +1131,51 @@ const en: Record<keyof typeof ru, string> = {
   agentPlatformHint:
     "Create, test, and observe agents in one dedicated workspace.",
   agentPlatformNavigation: "Agent platform sections",
+  agentDetailNavigation: "Agent configuration",
   agentTab_overview: "Overview",
   agentTab_sandbox: "Sandbox",
   agentTab_approvals: "Approvals",
   agentTab_runs: "Runs",
   agentTab_connections: "Connections",
+  agentTab_activity: "Activity",
+  agentTab_behavior: "Behavior",
+  agentTab_knowledge: "Knowledge",
+  agentTab_automations: "Automations",
+  agentTab_test: "Test",
+  agentTab_settings: "Settings",
+  agentConnectionsTitle: "LLM connections",
+  agentConnectionsDescription:
+    "Connect a provider once and reuse it across agents without copying credentials.",
+  agentConnectionAdd: "Add connection",
+  agentConnectionChoose: "Select a connection",
+  agentConnectionChooseLater: "Connect later",
+  agentUsesWorkspaceConnection:
+    "The provider key is stored in the workspace connection and is not duplicated in this agent.",
+  agentConnectionsEmpty: "No connections yet",
+  agentConnectionsEmptyHint:
+    "Add OpenAI, Anthropic, or an OpenAI-compatible local server.",
+  agentConnectionCreateTitle: "New connection",
+  agentConnectionCreateDescription:
+    "The key is encrypted on the server and is never returned to the browser after saving.",
+  agentConnectionSecurityHint:
+    "Agents can access the key only while executing a provider request.",
+  agentConnectionModelUnset: "model not selected",
+  agentConnectionHealth_untested: "Untested",
+  agentConnectionHealth_healthy: "Healthy",
+  agentConnectionHealth_unhealthy: "Error",
+  agentProvider_openai: "OpenAI",
+  agentProvider_anthropic: "Anthropic",
+  "agentProvider_openai-compatible": "OpenAI-compatible",
+  defaultModel: "Default model",
+  agentActivityTitle: "Agent activity",
+  agentActivityDescription:
+    "Runs and errors are grouped by agent so you can find the cause faster.",
+  agentKnowledgeTitle: "Knowledge and sources",
+  agentKnowledgeDescription:
+    "Manage the data an agent is allowed to use in its answers.",
+  agentKnowledgeEmpty: "No sources connected yet",
+  agentKnowledgeEmptyHint:
+    "Chats, files, and managed knowledge bases will appear here in the next slices.",
   agentApprovalsTitle: "Actions awaiting approval",
   agentApprovalsHint:
     "The agent will not execute these actions until an administrator explicitly approves them.",
@@ -1115,6 +1198,9 @@ const en: Record<keyof typeof ru, string> = {
   agentReadiness_runtime_key_required: "Create a runtime key.",
   agentReadiness_provider_model_required: "Choose a provider and model.",
   agentReadiness_provider_credential_required: "Add an LLM provider key.",
+  agentReadiness_llm_connection_required: "Select an LLM connection.",
+  agentReadiness_llm_connection_unavailable:
+    "The selected LLM connection is disabled or missing.",
   agentReadiness_external_data_approval_required:
     "Approve sharing data with the external provider.",
   agentReadiness_trigger_required: "Add at least one trigger.",

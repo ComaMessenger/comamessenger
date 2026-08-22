@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type {
   Agent,
+  AgentLlmConnection,
   AgentRun,
   AgentToolConfirmation,
   AgentScope,
@@ -31,6 +32,8 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { messageOf } from "../../errors";
+import { AgentConnectionsPage } from "../../agents/AgentConnectionsPage";
+import { agentRoute, type AgentDetailSection } from "../../agents/routes";
 import {
   Badge,
   Button,
@@ -108,6 +111,7 @@ function emptyDraft(template: Template = "custom"): Draft {
             "memory:write",
             "runtime:execute",
           ],
+    llm_connection_id: "",
     provider: "openai",
     model: "gpt-5-mini",
     endpoint_url: "",
@@ -134,6 +138,7 @@ function draftOf(agent: Agent): Draft {
     description: agent.description,
     enabled: agent.enabled,
     allowed_scopes: agent.allowed_scopes,
+    llm_connection_id: agent.llm_connection_id ?? "",
     provider: agent.provider,
     model: agent.model,
     endpoint_url: agent.endpoint_url ?? "",
@@ -164,15 +169,10 @@ export function AgentSettingsPage({
 }) {
   const { t } = useTranslation();
   const allowed = hasPermission(user, "agents.manage");
-  const tab = path.endsWith("/sandbox")
-    ? "sandbox"
-    : path.endsWith("/approvals")
-      ? "approvals"
-      : path.endsWith("/runs")
-        ? "runs"
-        : path.endsWith("/connections")
-          ? "connections"
-          : "overview";
+  const route = agentRoute(path);
+  const globalTab = route.kind === "global" ? route.section : null;
+  const detailSection: AgentDetailSection =
+    route.kind === "agent" ? route.section : "overview";
   const agents = useQuery({
     queryKey: ["agents"],
     queryFn: () => api.agents(),
@@ -183,7 +183,12 @@ export function AgentSettingsPage({
     queryFn: () => api.chats(),
     enabled: allowed,
   });
-  const [selectedID, setSelectedID] = useState<string | null>(null);
+  const connections = useQuery({
+    queryKey: ["agent-llm-connections"],
+    queryFn: () => api.agentLlmConnections(),
+    enabled: allowed,
+  });
+  const selectedID = route.kind === "agent" ? route.agentID : null;
   const [draft, setDraft] = useState<Draft>(() => ({
     ...emptyDraft(),
     display_name: t("agentTemplate_custom"),
@@ -198,9 +203,6 @@ export function AgentSettingsPage({
   useEffect(() => {
     if (selected) setDraft(draftOf(selected));
   }, [selected]);
-  useEffect(() => {
-    if (!selectedID && agents.data?.length) setSelectedID(agents.data[0]!.id);
-  }, [agents.data, selectedID]);
 
   function chooseTemplate(value: Template) {
     setWizardTemplate(value);
@@ -219,6 +221,9 @@ export function AgentSettingsPage({
         description: draft.description,
         enabled: draft.enabled,
         allowed_scopes: draft.allowed_scopes,
+        ...(draft.llm_connection_id
+          ? { llm_connection_id: draft.llm_connection_id }
+          : {}),
         provider: draft.provider,
         model: draft.model,
         endpoint_url: draft.endpoint_url,
@@ -254,15 +259,14 @@ export function AgentSettingsPage({
           {(
             [
               ["overview", "/agents", LayoutGrid],
-              ["sandbox", "/agents/sandbox", FlaskConical],
-              ["approvals", "/agents/approvals", ShieldCheck],
-              ["runs", "/agents/runs", Activity],
               ["connections", "/agents/connections", Plug],
+              ["approvals", "/agents/approvals", ShieldCheck],
+              ["activity", "/agents/activity", Activity],
             ] as const
           ).map(([id, target, Icon]) => (
             <button
               key={id}
-              className={tab === id ? "active" : ""}
+              className={globalTab === id ? "active" : ""}
               onClick={() => navigate(target)}
             >
               <Icon />
@@ -276,14 +280,18 @@ export function AgentSettingsPage({
           <SettingsAccessDenied />
         ) : agents.isLoading || chats.isLoading ? (
           <Skeleton />
-        ) : tab === "sandbox" ? (
-          <AgentSandbox
+        ) : globalTab === "connections" ? (
+          <AgentConnectionsPage
             api={api}
-            agents={agents.data ?? []}
-            chats={chats.data ?? []}
+            canManage={hasPermission(user, "integrations.manage")}
           />
-        ) : tab === "approvals" ? (
+        ) : globalTab === "approvals" ? (
           <AgentApprovals api={api} agents={agents.data ?? []} />
+        ) : globalTab === "activity" ? (
+          <AgentActivityDirectory
+            agents={agents.data ?? []}
+            navigate={navigate}
+          />
         ) : (
           <div className="agent-settings">
             <aside className="agent-catalog">
@@ -303,7 +311,7 @@ export function AgentSettingsPage({
                 <button
                   key={agent.id}
                   className={selectedID === agent.id ? "active" : ""}
-                  onClick={() => setSelectedID(agent.id)}
+                  onClick={() => navigate(`/agents/${agent.id}`)}
                 >
                   <Bot />
                   <span>
@@ -324,13 +332,13 @@ export function AgentSettingsPage({
                     {selected ? `@${selected.handle}` : t("agentsEmptyHint")}
                   </p>
                 </div>
-                {selected && tab === "overview" && (
+                {selected && detailSection === "behavior" && (
                   <Button disabled={pending} onClick={() => void save()}>
                     <Save />
                     {pending ? t("saving") : t("save")}
                   </Button>
                 )}
-                {selected && tab === "overview" && (
+                {selected && detailSection === "settings" && (
                   <Button
                     variant="ghost"
                     disabled={pending}
@@ -345,7 +353,7 @@ export function AgentSettingsPage({
                         })
                         .then(async (created) => {
                           await agents.refetch();
-                          setSelectedID(created.id);
+                          navigate(`/agents/${created.id}`);
                           setNotice(t("agentDuplicated"));
                         })
                         .catch((cause) => setError(messageOf(cause)))
@@ -358,7 +366,7 @@ export function AgentSettingsPage({
                 )}
                 {selected &&
                   selected.recipe !== "custom" &&
-                  tab === "overview" && (
+                  detailSection === "settings" && (
                     <Button
                       variant="ghost"
                       disabled={pending}
@@ -368,7 +376,7 @@ export function AgentSettingsPage({
                       {t("resetTemplate")}
                     </Button>
                   )}
-                {selected && tab === "overview" && (
+                {selected && detailSection === "settings" && (
                   <Button
                     variant="ghost"
                     disabled={pending}
@@ -379,25 +387,78 @@ export function AgentSettingsPage({
                   </Button>
                 )}
               </div>
+              {selected && (
+                <nav
+                  className="agent-detail-nav"
+                  aria-label={t("agentDetailNavigation")}
+                >
+                  {(
+                    [
+                      ["overview", LayoutGrid],
+                      ["behavior", Bot],
+                      ["knowledge", KeyRound],
+                      ["automations", Zap],
+                      ["test", FlaskConical],
+                      ["activity", Activity],
+                      ["settings", Plug],
+                    ] as const
+                  ).map(([section, Icon]) => (
+                    <button
+                      key={section}
+                      className={detailSection === section ? "active" : ""}
+                      onClick={() =>
+                        navigate(
+                          section === "overview"
+                            ? `/agents/${selected.id}`
+                            : `/agents/${selected.id}/${section}`,
+                        )
+                      }
+                    >
+                      <Icon />
+                      <span>{t(`agentTab_${section}`)}</span>
+                    </button>
+                  ))}
+                </nav>
+              )}
               <FormError message={error} />
               {notice && <Badge tone="success">{notice}</Badge>}
               {selected && <AgentReadiness agent={selected} />}
-              {selected && tab === "overview" && (
+              {selected && detailSection === "behavior" && (
                 <AgentConfiguration
                   draft={draft}
                   chats={chats.data ?? []}
+                  connections={connections.data ?? []}
                   onChange={setDraft}
                 />
               )}
-              {selected && (
-                <AgentOperations
+              {selected && detailSection === "test" && (
+                <AgentSandbox
                   api={api}
-                  agent={selected}
-                  section={tab}
-                  onChanged={() => void agents.refetch()}
+                  agents={[selected]}
+                  chats={chats.data ?? []}
                 />
               )}
-              {selected && tab === "overview" && deleteOpen && (
+              {selected && detailSection === "knowledge" && (
+                <AgentKnowledgePlaceholder />
+              )}
+              {selected &&
+                ["overview", "automations", "activity", "settings"].includes(
+                  detailSection,
+                ) && (
+                  <AgentOperations
+                    api={api}
+                    agent={selected}
+                    section={
+                      detailSection as
+                        | "overview"
+                        | "automations"
+                        | "activity"
+                        | "settings"
+                    }
+                    onChanged={() => void agents.refetch()}
+                  />
+                )}
+              {selected && detailSection === "settings" && deleteOpen && (
                 <Dialog
                   title={t("deleteAgentTitle")}
                   description={t("deleteAgentDescription", {
@@ -422,7 +483,7 @@ export function AgentSettingsPage({
                           .deleteAgent(selected.id)
                           .then(async () => {
                             setDeleteOpen(false);
-                            setSelectedID(null);
+                            navigate("/agents");
                             await agents.refetch();
                           })
                           .catch((cause) => setError(messageOf(cause)))
@@ -435,7 +496,7 @@ export function AgentSettingsPage({
                   </div>
                 </Dialog>
               )}
-              {selected && tab === "overview" && resetOpen && (
+              {selected && detailSection === "settings" && resetOpen && (
                 <Dialog
                   title={t("resetTemplateTitle")}
                   description={t("resetTemplateDescription", {
@@ -484,11 +545,12 @@ export function AgentSettingsPage({
           api={api}
           template={wizardTemplate}
           chats={chats.data ?? []}
+          connections={connections.data ?? []}
           onClose={() => setWizardTemplate(null)}
           onCreated={async (created) => {
             setWizardTemplate(null);
             await agents.refetch();
-            setSelectedID(created.id);
+            navigate(`/agents/${created.id}`);
           }}
         />
       )}
@@ -496,16 +558,81 @@ export function AgentSettingsPage({
   );
 }
 
+function AgentActivityDirectory({
+  agents,
+  navigate,
+}: {
+  agents: Agent[];
+  navigate(to: string): void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="agent-global-page">
+      <div className="agent-global-page__title">
+        <div>
+          <h2>{t("agentActivityTitle")}</h2>
+          <p>{t("agentActivityDescription")}</p>
+        </div>
+      </div>
+      {agents.length ? (
+        <div className="agent-directory-grid">
+          {agents.map((agent) => (
+            <button
+              key={agent.id}
+              onClick={() => navigate(`/agents/${agent.id}/activity`)}
+            >
+              <Activity />
+              <span>
+                <strong>{agent.display_name}</strong>
+                <small>
+                  @{agent.handle} ·{" "}
+                  {t(`agentReadinessState_${agent.readiness.state}`)}
+                </small>
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="agent-empty-state">
+          <Bot />
+          <h3>{t("agentsEmptyTitle")}</h3>
+          <p>{t("agentsEmptyHint")}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AgentKnowledgePlaceholder() {
+  const { t } = useTranslation();
+  return (
+    <SettingsSection
+      title={t("agentKnowledgeTitle")}
+      description={t("agentKnowledgeDescription")}
+      icon={<KeyRound />}
+      wide
+    >
+      <div className="agent-empty-state agent-empty-state--compact">
+        <KeyRound />
+        <h3>{t("agentKnowledgeEmpty")}</h3>
+        <p>{t("agentKnowledgeEmptyHint")}</p>
+      </div>
+    </SettingsSection>
+  );
+}
+
 function AgentCreationWizard({
   api,
   template,
   chats,
+  connections,
   onClose,
   onCreated,
 }: {
   api: MessengerAPI;
   template: Template;
   chats: Chat[];
+  connections: AgentLlmConnection[];
   onClose(): void;
   onCreated(agent: Agent): Promise<void>;
 }) {
@@ -544,7 +671,10 @@ function AgentCreationWizard({
     setPending(true);
     setError("");
     try {
-      await onCreated(await api.createAgent({ ...draft, enabled: false }));
+      const input = draft.llm_connection_id
+        ? { ...draft, enabled: false, provider: "", endpoint_url: "" }
+        : { ...draft, enabled: false, llm_connection_id: undefined };
+      await onCreated(await api.createAgent(input));
     } catch (cause) {
       setError(messageOf(cause));
     } finally {
@@ -659,6 +789,33 @@ function AgentCreationWizard({
                 <dd>{t(`agentRecipeLaunch_${draft.recipe}`)}</dd>
               </div>
             </dl>
+            <SelectField
+              required={false}
+              label={t("agentConnectionsTitle")}
+              name="wizard-agent-connection"
+              value={draft.llm_connection_id ?? ""}
+              onChange={(event) => {
+                const connection = connections.find(
+                  (item) => item.id === event.target.value,
+                );
+                setDraft({
+                  ...draft,
+                  llm_connection_id: connection?.id ?? "",
+                  provider: connection?.provider ?? draft.provider,
+                  endpoint_url: connection?.endpoint_url ?? "",
+                  model: connection?.default_model || draft.model || "",
+                });
+              }}
+            >
+              <option value="">{t("agentConnectionChooseLater")}</option>
+              {connections
+                .filter((connection) => connection.enabled)
+                .map((connection) => (
+                  <option key={connection.id} value={connection.id}>
+                    {connection.name} · {connection.default_model}
+                  </option>
+                ))}
+            </SelectField>
             <div className="agent-wizard__notice">
               <ShieldCheck />
               <span>{t("agentWizardSafeStart")}</span>
@@ -839,10 +996,12 @@ function AgentSandbox({
 function AgentConfiguration({
   draft,
   chats,
+  connections,
   onChange,
 }: {
   draft: Draft;
   chats: Chat[];
+  connections: AgentLlmConnection[];
   onChange(value: Draft): void;
 }) {
   const { t } = useTranslation();
@@ -938,18 +1097,31 @@ function AgentConfiguration({
           >
             <div className="settings-form-grid">
               <SelectField
-                label={t("provider")}
-                name="agent-provider"
-                value={draft.provider}
-                onChange={(e) =>
-                  onChange({ ...draft, provider: e.target.value })
-                }
+                required={false}
+                label={t("agentConnectionsTitle")}
+                name="agent-connection"
+                value={draft.llm_connection_id ?? ""}
+                onChange={(event) => {
+                  const connection = connections.find(
+                    (item) => item.id === event.target.value,
+                  );
+                  onChange({
+                    ...draft,
+                    llm_connection_id: connection?.id ?? "",
+                    provider: connection?.provider ?? draft.provider,
+                    endpoint_url: connection?.endpoint_url ?? "",
+                    model: connection?.default_model || draft.model || "",
+                  });
+                }}
               >
-                <option value="openai">OpenAI</option>
-                <option value="anthropic">Anthropic</option>
-                <option value="openai-compatible">
-                  {t("openAICompatible")}
-                </option>
+                <option value="">{t("agentConnectionChoose")}</option>
+                {connections
+                  .filter((connection) => connection.enabled)
+                  .map((connection) => (
+                    <option key={connection.id} value={connection.id}>
+                      {connection.name} · {connection.default_model}
+                    </option>
+                  ))}
               </SelectField>
               <Field
                 label={t("model")}
@@ -957,17 +1129,6 @@ function AgentConfiguration({
                 value={draft.model ?? ""}
                 onChange={(e) => onChange({ ...draft, model: e.target.value })}
               />
-              {draft.provider === "openai-compatible" && (
-                <Field
-                  label={t("providerEndpoint")}
-                  name="agent-provider-endpoint"
-                  value={draft.endpoint_url ?? ""}
-                  placeholder="https://llm.example.com/v1"
-                  onChange={(e) =>
-                    onChange({ ...draft, endpoint_url: e.target.value })
-                  }
-                />
-              )}
             </div>
             <SettingsToggle
               label={t("externalDataSharing")}
@@ -1157,7 +1318,7 @@ function AgentOperations({
 }: {
   api: MessengerAPI;
   agent: Agent;
-  section: "overview" | "runs" | "connections";
+  section: "overview" | "automations" | "activity" | "settings";
   onChanged(): void;
 }) {
   const { t } = useTranslation();
@@ -1180,6 +1341,7 @@ function AgentOperations({
   const credential = useQuery({
     queryKey: ["agent-credential", agent.id],
     queryFn: () => api.agentProviderCredential(agent.id),
+    enabled: !agent.llm_connection_id,
   });
   const [selectedRun, setSelectedRun] = useState<AgentRun | null>(null);
   const [providerKey, setProviderKey] = useState("");
@@ -1187,14 +1349,16 @@ function AgentOperations({
   const [error, setError] = useState("");
   const [triggerType, setTriggerType] = useState("mention");
   const [triggerValue, setTriggerValue] = useState("");
-  const refresh = () =>
-    Promise.all([
+  const refresh = () => {
+    const requests: Promise<unknown>[] = [
       usage.refetch(),
       runs.refetch(),
       triggers.refetch(),
       keys.refetch(),
-      credential.refetch(),
-    ]);
+    ];
+    if (!agent.llm_connection_id) requests.push(credential.refetch());
+    return Promise.all(requests);
+  };
   async function action(run: () => Promise<unknown>) {
     setError("");
     try {
@@ -1272,96 +1436,96 @@ function AgentOperations({
               </span>
             </div>
           </SettingsSection>
-          <SettingsSection
-            title={t("agentTriggers")}
-            description={t("agentTriggersHint")}
-            wide
-          >
-            <div className="agent-inline-form">
-              <SelectField
-                label={t("type")}
-                name="trigger-type"
-                value={triggerType}
-                onChange={(e) => setTriggerType(e.target.value)}
-              >
-                {[
-                  "mention",
-                  "command",
-                  "keyword",
-                  "every_message",
-                  "schedule",
-                  "event",
-                ].map((type) => (
-                  <option key={type} value={type}>
-                    {t(`agentTrigger_${type}`)}
-                  </option>
-                ))}
-              </SelectField>
-              {!["mention", "every_message"].includes(triggerType) && (
-                <Field
-                  required={false}
-                  label={t("configuration")}
-                  name="trigger-value"
-                  value={triggerValue}
-                  placeholder={
-                    triggerType === "schedule"
-                      ? "09:00"
-                      : triggerType === "event"
-                        ? "member.joined"
-                        : ""
-                  }
-                  onChange={(e) => setTriggerValue(e.target.value)}
-                />
-              )}
-              <Button onClick={() => void createTrigger()}>
-                <Plus />
-                {t("add")}
-              </Button>
-            </div>
-            <div className="agent-record-list">
-              {(triggers.data ?? []).map((trigger) => (
-                <div key={trigger.id}>
-                  <span>
-                    <strong>{t(`agentTrigger_${trigger.type}`)}</strong>
-                    <small>
-                      {triggerDetails(trigger.type, trigger.config)}
-                    </small>
-                  </span>
-                  <Badge tone={trigger.enabled ? "success" : "neutral"}>
-                    {trigger.enabled ? t("enabled") : t("disabled")}
-                  </Badge>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                      void action(() =>
-                        api.updateAgentTrigger(agent.id, trigger.id, {
-                          enabled: !trigger.enabled,
-                        }),
-                      )
-                    }
-                  >
-                    {trigger.enabled ? t("disable") : t("enable")}
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    aria-label={t("delete")}
-                    onClick={() =>
-                      void action(() =>
-                        api.deleteAgentTrigger(agent.id, trigger.id),
-                      )
-                    }
-                  >
-                    <Trash2 />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </SettingsSection>
         </>
       )}
-      {section === "runs" && (
+      {section === "automations" && (
+        <SettingsSection
+          title={t("agentTriggers")}
+          description={t("agentTriggersHint")}
+          wide
+        >
+          <div className="agent-inline-form">
+            <SelectField
+              label={t("type")}
+              name="trigger-type"
+              value={triggerType}
+              onChange={(e) => setTriggerType(e.target.value)}
+            >
+              {[
+                "mention",
+                "command",
+                "keyword",
+                "every_message",
+                "schedule",
+                "event",
+              ].map((type) => (
+                <option key={type} value={type}>
+                  {t(`agentTrigger_${type}`)}
+                </option>
+              ))}
+            </SelectField>
+            {!["mention", "every_message"].includes(triggerType) && (
+              <Field
+                required={false}
+                label={t("configuration")}
+                name="trigger-value"
+                value={triggerValue}
+                placeholder={
+                  triggerType === "schedule"
+                    ? "09:00"
+                    : triggerType === "event"
+                      ? "member.joined"
+                      : ""
+                }
+                onChange={(e) => setTriggerValue(e.target.value)}
+              />
+            )}
+            <Button onClick={() => void createTrigger()}>
+              <Plus />
+              {t("add")}
+            </Button>
+          </div>
+          <div className="agent-record-list">
+            {(triggers.data ?? []).map((trigger) => (
+              <div key={trigger.id}>
+                <span>
+                  <strong>{t(`agentTrigger_${trigger.type}`)}</strong>
+                  <small>{triggerDetails(trigger.type, trigger.config)}</small>
+                </span>
+                <Badge tone={trigger.enabled ? "success" : "neutral"}>
+                  {trigger.enabled ? t("enabled") : t("disabled")}
+                </Badge>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() =>
+                    void action(() =>
+                      api.updateAgentTrigger(agent.id, trigger.id, {
+                        enabled: !trigger.enabled,
+                      }),
+                    )
+                  }
+                >
+                  {trigger.enabled ? t("disable") : t("enable")}
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  aria-label={t("delete")}
+                  onClick={() =>
+                    void action(() =>
+                      api.deleteAgentTrigger(agent.id, trigger.id),
+                    )
+                  }
+                >
+                  <Trash2 />
+                </Button>
+              </div>
+            ))}
+          </div>
+        </SettingsSection>
+      )}
+      {section === "activity" && (
         <SettingsSection
           title={t("agentRuns")}
           description={t("agentRunsHint")}
@@ -1428,39 +1592,45 @@ function AgentOperations({
           )}
         </SettingsSection>
       )}
-      {section === "connections" && (
+      {section === "settings" && (
         <SettingsSection
           title={t("agentCredentials")}
           description={t("agentCredentialsHint")}
           icon={<KeyRound />}
           wide
         >
-          <div className="agent-inline-form">
-            <Field
-              required={false}
-              type="password"
-              label={t("providerKey")}
-              name="provider-key"
-              value={providerKey}
-              placeholder={credential.data?.key_hint || "••••"}
-              onChange={(e) => setProviderKey(e.target.value)}
-            />
-            <Button
-              disabled={!providerKey}
-              onClick={() =>
-                void action(async () => {
-                  await api.updateAgentProviderCredential(agent.id, {
-                    api_key: providerKey,
-                    clear: false,
-                  });
-                  setProviderKey("");
-                })
-              }
-            >
-              <Save />
-              {t("save")}
-            </Button>
-          </div>
+          {agent.llm_connection_id ? (
+            <div className="agent-wizard__notice">
+              <ShieldCheck />
+              <span>{t("agentUsesWorkspaceConnection")}</span>
+            </div>
+          ) : (
+            <div className="agent-inline-form">
+              <Field
+                required={false}
+                type="password"
+                label={t("providerKey")}
+                name="provider-key"
+                value={providerKey}
+                placeholder={credential.data?.key_hint || "••••"}
+                onChange={(e) => setProviderKey(e.target.value)}
+              />
+              <Button
+                disabled={!providerKey}
+                onClick={() =>
+                  void action(async () => {
+                    await api.updateAgentProviderCredential(agent.id, {
+                      api_key: providerKey,
+                      clear: false,
+                    });
+                    setProviderKey("");
+                  })
+                }
+              >
+                {t("save")}
+              </Button>
+            </div>
+          )}
           <div className="agent-record-list">
             {(keys.data ?? []).map((key) => (
               <div key={key.id}>
