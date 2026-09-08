@@ -1,0 +1,43 @@
+name: Deploy staging
+
+# Every push to main goes straight to https://rocket.hmns-test.ru.
+# Tests run locally before commit; CI still runs in parallel and reports on the commit.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+env:
+  STAGING_HOST: 185.72.144.68
+  STAGING_USER: root
+  STAGING_PATH: /opt/coma
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: staging
+      url: https://rocket.hmns-test.ru
+    steps:
+      - name: Prepare SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.STAGING_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Pinned host key of coma-messenger-dev (ssh-keyscan output).
+          echo "$STAGING_HOST ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMNoiFptnrVi6uAucpDcgo0/oJ3Rl7Dd8GABr2AlOkDL" >> ~/.ssh/known_hosts
+      - name: Deploy ${{ github.sha }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ServerAliveInterval=30 \
+            "$STAGING_USER@$STAGING_HOST" \
+            "cd '$STAGING_PATH' && git fetch --quiet origin && git checkout --quiet '${{ github.sha }}' -- deploy/deploy.sh && ./deploy/deploy.sh '${{ github.sha }}'"
+      - name: Smoke
+        run: curl -fsS -o /dev/null -w 'web %{http_code}\n' https://rocket.hmns-test.ru/
