@@ -118,7 +118,10 @@ export function GlobalSidebar({
         >
           <Search aria-hidden="true" />
           <span className="truncate">{t("search")}</span>
-          <Kbd>⌘K</Kbd>
+          <Kbd>
+            <span>⌘</span>
+            <span>K</span>
+          </Kbd>
         </button>
         <IconButton
           className="sidebar-new"

@@ -181,7 +181,7 @@
   height: 16px;
   flex: none;
 }
-.sidebar-search > span {
+.sidebar-search > .truncate {
   flex: 1;
 }
 .sidebar-new.ui-button {
@@ -214,7 +214,7 @@
   height: 18px;
   flex: none;
 }
-.sidebar-nav__item > span {
+.sidebar-nav__item > .truncate {
   flex: 1;
 }
 .sidebar-nav__item:hover {
@@ -318,8 +318,9 @@
   padding: 10px 10px 12px;
   border-block-end: 1px solid var(--coma-border);
 }
-.profile-menu__identity > span {
+.profile-menu__identity__copy {
   display: grid;
+  flex: 1;
   min-width: 0;
 }
 .profile-menu__identity strong {
@@ -401,6 +402,7 @@
 }
 .snooze-controls {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
 }
 .snooze-controls__presets {
@@ -418,14 +420,21 @@
 }
 .snooze-controls__custom > input {
   flex: 1;
+  width: 0;
   min-width: 0;
   height: 36px;
-  padding: 0 10px;
+  padding: 0 8px;
   border: 1px solid var(--coma-border);
   border-radius: 10px;
   background: var(--coma-surface);
   color: var(--coma-foreground);
   font-size: 13px;
+  letter-spacing: -0.01em;
+}
+.snooze-controls__apply.ui-button {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
 }
 
 /* Collapsed sidebar: icons only. */
@@ -443,9 +452,9 @@
 }
 .global-sidebar--collapsed .workspace-switcher > strong,
 .global-sidebar--collapsed .workspace-switcher > svg,
-.global-sidebar--collapsed .sidebar-search > span,
+.global-sidebar--collapsed .sidebar-search > .truncate,
 .global-sidebar--collapsed .sidebar-search > kbd,
-.global-sidebar--collapsed .sidebar-nav__item > span,
+.global-sidebar--collapsed .sidebar-nav__item > .truncate,
 .global-sidebar--collapsed .sidebar-profile__copy,
 .global-sidebar--collapsed .sidebar-profile__bell {
   display: none;

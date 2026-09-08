@@ -11,20 +11,11 @@ export { comaLogo };
 
 export function applyPublicBranding(branding: PublicBranding, baseURL: string) {
   if (/^#[0-9A-Fa-f]{6}$/.test(branding.accent_color)) {
-    const root = document.documentElement.style;
-    root.setProperty("--coma-primary", branding.accent_color);
-    root.setProperty(
-      "--coma-primary-hover",
-      `color-mix(in srgb, ${branding.accent_color} 82%, black)`,
-    );
-    root.setProperty(
-      "--coma-primary-soft",
-      `color-mix(in srgb, ${branding.accent_color} 14%, transparent)`,
-    );
-    root.setProperty(
-      "--coma-primary-disabled",
-      `color-mix(in srgb, ${branding.accent_color} 55%, transparent)`,
-    );
+    // The accent lands in a separate variable: theme.css derives --coma-primary
+    // from it per theme, so a dark workspace colour stays readable in dark mode.
+    const root = document.documentElement;
+    root.style.setProperty("--coma-accent", branding.accent_color);
+    root.dataset.branded = "true";
   }
   document.title = branding.workspace_name
     ? `${branding.workspace_name} — Coma`

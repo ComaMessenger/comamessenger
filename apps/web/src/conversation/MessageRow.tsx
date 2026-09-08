@@ -49,6 +49,7 @@ import { ConfirmDialog } from "../dialogs/ConfirmDialog";
 import { ForwardMessageDialog } from "../dialogs/ForwardMessageDialog";
 import { MessageDetailsDialog } from "../dialogs/MessageDetailsDialog";
 import { MessageFile } from "./MessageFile";
+import { useThreadPreview } from "./useThreadPreview";
 
 export type MessageRowProps = {
   message: ClientMessage;
@@ -69,7 +70,6 @@ export type MessageRowProps = {
   domIDPrefix?: string;
   showThreadIndicator?: boolean;
   compact?: boolean;
-  threadParticipants?: ChatMember[];
 };
 
 export function MessageRow({
@@ -91,7 +91,6 @@ export function MessageRow({
   domIDPrefix = "message",
   showThreadIndicator = true,
   compact = false,
-  threadParticipants = [],
 }: MessageRowProps) {
   const { t } = useTranslation();
   const { api, user } = useMessenger();
@@ -117,6 +116,7 @@ export function MessageRow({
     enabled: Boolean(message.reply_to_id && !replyMessage),
     staleTime: 5 * 60_000,
   });
+  const threadPreview = useThreadPreview(message, showThreadIndicator);
   const resolvedReply =
     replyMessage ?? replyQuery.data?.messages.find((item) => item.id === message.reply_to_id);
   const replyAuthor = members.find((item) => item.actor_id === resolvedReply?.actor_id);
@@ -361,22 +361,29 @@ export function MessageRow({
         )}
         {showThreadIndicator && message.thread_reply_count > 0 && (
           <button type="button" className="message__thread" onClick={onThread}>
-            {threadParticipants.length > 0 && (
+            {threadPreview.participantIDs.length > 0 ? (
               <AvatarStack>
-                {threadParticipants.slice(0, 3).map((member) => (
-                  <Avatar
-                    key={member.actor_id}
-                    name={member.display_name}
-                    seed={member.actor_id}
-                    actorID={member.actor_id}
-                    avatarVersion={member.avatar_version}
-                    size="xs"
-                  />
-                ))}
+                {threadPreview.participantIDs.map((actorID) => {
+                  const member = members.find((item) => item.actor_id === actorID);
+                  return (
+                    <Avatar
+                      key={actorID}
+                      name={member?.display_name ?? ""}
+                      seed={actorID}
+                      actorID={actorID}
+                      avatarVersion={member?.avatar_version}
+                      size="xs"
+                    />
+                  );
+                })}
               </AvatarStack>
+            ) : (
+              <MessagesSquare aria-hidden="true" />
             )}
-            {threadParticipants.length === 0 && <MessagesSquare aria-hidden="true" />}
             <strong>{t("threadReplies", { count: message.thread_reply_count })}</strong>
+            {threadPreview.lastReplyAt && (
+              <span>{t("threadLastReply", { time: formatTime(threadPreview.lastReplyAt) })}</span>
+            )}
           </button>
         )}
         {delivery && delivery !== "sent" && (

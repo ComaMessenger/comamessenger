@@ -153,3 +153,18 @@
   --coma-shadow-toolbar: none;
   --coma-thread-shadow: none;
 }
+
+/* Workspace accent (see apps/web/src/lib/branding.ts). Light keeps the colour
+   as is; dark lifts it towards white so text and outlines stay legible. */
+:root[data-branded] {
+  --coma-primary: var(--coma-accent);
+  --coma-primary-hover: color-mix(in srgb, var(--coma-accent) 82%, black);
+  --coma-primary-soft: color-mix(in srgb, var(--coma-accent) 14%, transparent);
+  --coma-primary-disabled: color-mix(in srgb, var(--coma-accent) 55%, transparent);
+}
+:root[data-branded][data-theme="dark"] {
+  --coma-primary: color-mix(in srgb, var(--coma-accent) 62%, white);
+  --coma-primary-hover: color-mix(in srgb, var(--coma-accent) 52%, white);
+  --coma-primary-soft: color-mix(in srgb, var(--coma-accent) 32%, transparent);
+  --coma-primary-disabled: color-mix(in srgb, var(--coma-accent) 45%, #8a93a8);
+}

@@ -36,7 +36,7 @@ export function ProfileMenu({ onClose }: { onClose(): void }) {
           size="xl"
           presence="online"
         />
-        <span>
+        <span className="profile-menu__identity__copy">
           <strong className="truncate">{user.display_name}</strong>
           <small className="truncate">
             @{user.handle} · {t("online").toLocaleLowerCase()}

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button, Chip } from "../ui";
+import { Check } from "lucide-react";
+import { Button, Chip, IconButton } from "../ui";
 import { localDateTimeInZone, minutesFromNow, tomorrowAtNine } from "../lib/timezone";
 import { useMessenger } from "./MessengerContext";
 
@@ -65,14 +66,16 @@ export function SnoozeControls({
             value={custom}
             onChange={(event) => setCustom(event.target.value)}
           />
-          <Button
+          <IconButton
             variant="primary"
-            size="sm"
+            size="icon"
+            className="snooze-controls__apply"
+            label={t("apply")}
             disabled={!custom || pending}
             onClick={() => void apply(localDateTimeInZone(custom, user.timezone))}
           >
-            {t("apply")}
-          </Button>
+            <Check aria-hidden="true" />
+          </IconButton>
         </div>
       )}
       {snoozedUntil && (

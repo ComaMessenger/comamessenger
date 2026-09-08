@@ -436,6 +436,7 @@
 .ui-kbd {
   display: inline-flex;
   align-items: center;
+  gap: 3px;
   height: 18px;
   padding: 0 5px;
   border: 1px solid var(--coma-border);
@@ -949,6 +950,17 @@
   color: #fff;
   font-size: 13px;
   font-weight: 700;
+}
+/* Higher specificity on purpose: generic `> span` rules in parents must never resize an avatar. */
+.ui-avatar.ui-avatar {
+  display: inline-flex;
+  flex: 0 0 var(--coma-avatar-size);
+  width: var(--coma-avatar-size);
+  min-width: var(--coma-avatar-size);
+  max-width: var(--coma-avatar-size);
+  height: var(--coma-avatar-size);
+  min-height: var(--coma-avatar-size);
+  max-height: var(--coma-avatar-size);
 }
 .ui-avatar__face {
   display: inline-flex;

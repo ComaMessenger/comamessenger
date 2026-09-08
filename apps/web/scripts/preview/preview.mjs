@@ -159,6 +159,7 @@ if (all || mode === "shell") {
   await shot("05-important", { path: "/important" });
   await shot("06-members", { path: "/members" });
   await shot("07-collapsed", { after: async (p) => { await p.getByRole("button", { name: "Свернуть боковую панель" }).click({ force: true }); } });
+  await shot("08-profile-menu", { path: `/chat/${chats[0].id}`, after: async (p) => { await p.locator(".sidebar-profile__identity").click(); await p.getByRole("button", { name: /Не беспокоить/ }).click(); await p.getByRole("button", { name: "Своё время…" }).click(); } });
 }
 if (all || mode === "mobile") {
   await shot("m01-chats", { mobile: true });
