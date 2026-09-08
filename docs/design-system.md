@@ -193,6 +193,9 @@ Every interactive component must define idle, hover, active, focus-visible, disa
 - Source-of-truth semantic tokens live in `packages/tokens` as platform-neutral typed data; Web consumes generated CSS custom properties.
 - Primitive React components remain Web-native in `apps/web`; a cross-platform `@coma/ui` package is not created in phase 3.
 - Component styles live in `apps/web` and reference semantic variables; domain components do not contain raw palette values.
-- Product composition lives in `apps/web/src/App.tsx` until routing and feature modules are introduced.
+- Product composition is split into feature modules under `apps/web/src`: `auth/`, `shell/` (messenger shell, realtime session, global sidebar), `chats/`, `conversation/`, `composer/`, `dialogs/`, `directories/`; `settings/` and `agents/` keep their own layout. `App.tsx` only resolves the server state and picks a screen.
+- Styles are split per module in `apps/web/src/styles/` (`index.css` imports them in order); primitives live in `ui.css`, legacy settings/agents styles in `settings.css` and `agents.css`.
+- Translations: base catalogs in `apps/web/src/i18n/{ru,en}.ts`; each feature module adds its own keys in `<module>/i18n.ts` through `defineCatalog` (duplicate keys throw in dev).
+- The redesign reference (Claude Design canvases) is stored in `design/claude-design/`; gaps between the mockups and the current API are tracked in `redesign/`.
 - Icons come from `lucide-react`; the supplied SVG is used only for the Coma brand mark. Unicode characters are not used as interface icons.
 - Shared client engine, store, outbox and markdown AST follow [ADR-0009](decisions/0009-client-engine-and-platform-ui.md).

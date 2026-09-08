@@ -8,7 +8,11 @@ export default defineConfig({
     env: { PORT: String(port) },
     reuseExistingServer: true,
   },
-  use: { baseURL: `http://127.0.0.1:${port}`, trace: "retain-on-failure" },
+  use: {
+    baseURL: `http://127.0.0.1:${port}`,
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
+  },
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"] } },
     { name: "phone", use: { ...devices["iPhone 13"] } },

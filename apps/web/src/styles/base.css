@@ -1,0 +1,209 @@
+/* Global reset, typography and shared helpers. Tokens live in @comamessenger/tokens. */
+* {
+  box-sizing: border-box;
+}
+:root {
+  font-family:
+    "Onest Variable",
+    Onest,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    "PingFang SC",
+    "Hiragino Sans GB",
+    "Microsoft YaHei",
+    "Noto Sans SC",
+    sans-serif;
+  color: var(--coma-foreground);
+  background: var(--coma-canvas);
+  font-size: 14px;
+  line-height: 20px;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  --coma-motion-fast: 120ms;
+  --coma-motion: 160ms;
+  --coma-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --coma-mobile-tabbar-height: calc(58px + env(safe-area-inset-bottom));
+  --coma-mobile-tabbar-compact-height: calc(40px + env(safe-area-inset-bottom));
+}
+:root[data-theme="dark"] *,
+:root[data-theme="dark"] *::before,
+:root[data-theme="dark"] *::after {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+html,
+body {
+  background: var(--coma-canvas);
+}
+button,
+input,
+textarea,
+select {
+  color: inherit;
+  font: inherit;
+}
+button {
+  cursor: pointer;
+}
+a {
+  color: var(--coma-primary);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--coma-primary) 30%, transparent);
+  outline-offset: 2px;
+}
+[data-folder-color="blue"] {
+  --folder-color: var(--coma-folder-blue);
+}
+[data-folder-color="violet"] {
+  --folder-color: var(--coma-folder-violet);
+}
+[data-folder-color="pink"] {
+  --folder-color: var(--coma-folder-pink);
+}
+[data-folder-color="red"] {
+  --folder-color: var(--coma-folder-red);
+}
+[data-folder-color="orange"] {
+  --folder-color: var(--coma-folder-orange);
+}
+[data-folder-color="amber"] {
+  --folder-color: var(--coma-folder-amber);
+}
+[data-folder-color="green"] {
+  --folder-color: var(--coma-folder-green);
+}
+[data-folder-color="teal"] {
+  --folder-color: var(--coma-folder-teal);
+}
+[data-folder-color="cyan"] {
+  --folder-color: var(--coma-folder-cyan);
+}
+[data-folder-color="slate"] {
+  --folder-color: var(--coma-folder-slate);
+}
+.truncate {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.clamp-2 {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.mobile-back {
+  display: none !important;
+}
+@keyframes coma-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes coma-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes coma-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes coma-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@keyframes coma-fade {
+  from {
+    opacity: 0;
+  }
+}
+@media (max-width: 640px) {
+  .mobile-back {
+    display: inline-flex !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+.component-catalog {
+  height: 100%;
+  padding: 32px;
+  overflow-y: auto;
+  background: var(--coma-canvas);
+}
+.component-catalog h1 {
+  font-size: 24px;
+  font-weight: 700;
+}
+.component-catalog section {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  max-width: 720px;
+  margin-block: 18px;
+  padding: 20px;
+  border-radius: 16px;
+  background: var(--coma-surface);
+}
+.component-catalog h2 {
+  width: 100%;
+  font-size: 16px;
+  font-weight: 600;
+}

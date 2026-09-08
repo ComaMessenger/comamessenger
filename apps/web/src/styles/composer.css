@@ -1,0 +1,461 @@
+/* Composer: floating two-level surface — text on top, toolbar below. */
+.composer-shell {
+  position: relative;
+  flex: none;
+  padding: 0 16px 16px;
+}
+.composer-shell > .composer {
+  max-width: 860px;
+  margin: 0 auto;
+}
+.composer {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--coma-border);
+  border-radius: 16px;
+  background: var(--coma-surface);
+  box-shadow: var(--coma-shadow-float);
+  transition:
+    border-color var(--coma-motion-fast) var(--coma-ease),
+    box-shadow var(--coma-motion-fast) var(--coma-ease);
+}
+.composer--focused {
+  border-color: var(--coma-border-strong);
+}
+.composer__reply {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px 8px 12px;
+  border-block-end: 1px solid var(--coma-border);
+}
+.composer__reply-bar {
+  width: 2px;
+  height: 30px;
+  flex: none;
+  border-radius: 1px;
+  background: var(--coma-primary);
+}
+.composer__reply-copy {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.composer__reply-copy strong {
+  color: var(--coma-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+.composer__reply-copy > span {
+  color: var(--coma-muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+.composer__attachments {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.composer-attachment {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  height: 72px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--coma-skeleton);
+}
+.composer-attachment--image {
+  width: 72px;
+}
+.composer-attachment--image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.composer-attachment--file {
+  gap: 8px;
+  max-width: 220px;
+  padding: 0 12px;
+  border: 1px solid var(--coma-border);
+  background: var(--coma-surface);
+}
+.composer-attachment__icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: var(--coma-primary);
+}
+.composer-attachment__copy {
+  display: grid;
+  min-width: 0;
+}
+.composer-attachment__copy strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+.composer-attachment__copy small {
+  color: var(--coma-subtle);
+  font-size: 11px;
+  font-weight: 500;
+}
+.composer-attachment__progress {
+  position: absolute;
+  inset: auto 6px 6px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--coma-border);
+}
+.composer-attachment__progress > span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--coma-primary);
+  transition: width var(--coma-motion) var(--coma-ease);
+}
+.composer-attachment--failed {
+  border: 1px solid var(--coma-danger-border);
+}
+.composer-attachment--failed .composer-attachment__copy small {
+  color: var(--coma-danger);
+}
+.composer-attachment__retry {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 0;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--coma-danger-soft) 85%, transparent);
+  color: var(--coma-danger);
+  font-size: 10px;
+  font-weight: 600;
+}
+.composer-attachment--file .composer-attachment__retry {
+  flex-direction: row;
+  gap: 6px;
+  font-size: 12px;
+}
+.composer-attachment__retry > svg {
+  width: 14px;
+  height: 14px;
+}
+.composer-attachment__remove {
+  position: absolute;
+  top: 4px;
+  inset-inline-end: 4px;
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--coma-ink);
+  color: #fff;
+  opacity: 0;
+  transition: opacity var(--coma-motion-fast) var(--coma-ease);
+}
+.composer-attachment__remove > svg {
+  width: 11px;
+  height: 11px;
+}
+.composer-attachment:hover .composer-attachment__remove,
+.composer-attachment__remove:focus-visible {
+  opacity: 1;
+}
+.composer__format {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 10px 0;
+}
+.composer__format > button {
+  display: inline-flex;
+  min-width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--coma-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.composer__format > button:hover {
+  background: var(--coma-surface-hover);
+  color: var(--coma-foreground);
+}
+.composer__format > button > svg {
+  width: 15px;
+  height: 15px;
+}
+.composer__format-underline {
+  text-decoration: underline;
+}
+.composer__format-divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 4px;
+  background: var(--coma-border);
+}
+.composer__input {
+  width: 100%;
+  min-height: 44px;
+  padding: 12px 14px 4px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--coma-foreground);
+  font-size: 14px;
+  line-height: 20px;
+  resize: none;
+}
+.composer__input::placeholder {
+  color: var(--coma-faint);
+}
+.composer__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 8px;
+}
+.composer__tools {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.composer__tools .ui-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+}
+.composer__tools .ui-button > svg {
+  width: 17px;
+  height: 17px;
+}
+.composer__counter {
+  margin: 0 4px;
+  color: var(--coma-subtle);
+  font-size: 12px;
+  font-weight: 500;
+}
+.composer__aa {
+  height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--coma-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.composer__aa:hover,
+.composer__aa--active {
+  background: var(--coma-surface-hover);
+  color: var(--coma-foreground);
+}
+.composer__aa--active {
+  background: var(--coma-primary-soft);
+  color: var(--coma-primary);
+}
+.composer__send-area {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+.composer__hint {
+  color: var(--coma-faint);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.composer__send {
+  display: flex;
+  overflow: hidden;
+  border-radius: 9px;
+  background: var(--coma-border);
+  color: #fff;
+  transition: background var(--coma-motion-fast) var(--coma-ease);
+}
+.composer__send--active {
+  background: var(--coma-primary);
+}
+.composer__send--active:hover {
+  background: var(--coma-primary-hover);
+}
+.composer__send-main,
+.composer__send-more {
+  display: inline-flex;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+.composer__send-main {
+  width: 32px;
+}
+.composer__send-main:disabled {
+  cursor: default;
+}
+.composer__send-main > svg {
+  width: 16px;
+  height: 16px;
+}
+.composer__send-more {
+  width: 22px;
+  border-inline-start: 1px solid rgba(255, 255, 255, 0.25);
+}
+.composer__send-more > svg {
+  width: 12px;
+  height: 12px;
+}
+.composer__emoji .EmojiPickerReact {
+  --epr-bg-color: var(--coma-surface);
+  --epr-category-label-bg-color: var(--coma-surface);
+  --epr-search-input-bg-color: var(--coma-surface-hover);
+  --epr-picker-border-color: var(--coma-border);
+  --epr-picker-border-radius: 16px;
+  --epr-text-color: var(--coma-foreground);
+  --epr-hover-bg-color: var(--coma-surface-hover);
+  --epr-highlight-color: var(--coma-primary);
+  box-shadow: var(--coma-shadow);
+}
+.composer-readonly {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--coma-surface-hover);
+  color: var(--coma-muted);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.composer-readonly > svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+.mention-menu {
+  min-width: 0;
+}
+.mention-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 36px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--coma-foreground);
+  text-align: start;
+}
+.mention-menu__item:hover,
+.mention-menu__item:focus-visible {
+  background: var(--coma-surface-hover);
+}
+.mention-menu__item strong {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.mention-menu__meta {
+  color: var(--coma-subtle);
+  font-size: 12px;
+  font-weight: 500;
+}
+.mention-menu__at {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  background: var(--coma-primary-soft);
+  color: var(--coma-primary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* Compact (thread) --------------------------------------------------------- */
+.composer-shell--compact .composer__input {
+  min-height: 40px;
+}
+.composer-shell--compact .composer__send-more {
+  display: none;
+}
+.composer-shell--compact .composer__send-main {
+  width: 54px;
+}
+
+@media (max-width: 640px) {
+  .composer-shell {
+    padding: 0 10px max(8px, env(safe-area-inset-bottom));
+  }
+  .composer__input {
+    font-size: 15px;
+    line-height: 21px;
+  }
+  .composer__toolbar {
+    padding: 4px 6px 6px;
+  }
+  .composer__tools .ui-button,
+  .composer__aa {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+  }
+  .composer__tools .ui-button > svg {
+    width: 19px;
+    height: 19px;
+  }
+  .composer__aa {
+    width: auto;
+    padding: 0 10px;
+    font-size: 14px;
+  }
+  .composer__hint {
+    display: none;
+  }
+  .composer__send {
+    border-radius: 12px;
+  }
+  .composer__send-main {
+    width: 40px;
+    height: 40px;
+  }
+  .composer__send-main > svg {
+    width: 18px;
+    height: 18px;
+  }
+  .composer__send-more {
+    display: none;
+  }
+  .composer-readonly {
+    margin: 0;
+  }
+}

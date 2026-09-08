@@ -1,0 +1,12 @@
+/* Entry point. Order matters: base → primitives → screens → legacy modules. */
+@import "./base.css";
+@import "./ui.css";
+@import "./auth.css";
+@import "./shell.css";
+@import "./chat-list.css";
+@import "./conversation.css";
+@import "./composer.css";
+@import "./dialogs.css";
+@import "./directories.css";
+@import "./settings.css";
+@import "./agents.css";

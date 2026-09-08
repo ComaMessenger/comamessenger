@@ -4,6 +4,7 @@ import type {
   InputHTMLAttributes,
   ReactElement,
   ReactNode,
+  Ref,
   RefObject,
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
@@ -21,7 +22,18 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, X } from "lucide-react";
+import {
+  AlertCircle,
+  Bot,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  Eye,
+  EyeOff,
+  Inbox,
+  Search,
+  X,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { stableAvatarIndex } from "@comamessenger/tokens";
 import type { MessengerAPI } from "@comamessenger/core";
@@ -31,9 +43,32 @@ export function cx(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
 }
 
+/* Buttons ------------------------------------------------------------------ */
+
+export type ButtonVariant =
+  | "primary"
+  | "secondary"
+  | "ghost"
+  | "danger"
+  | "danger-ghost"
+  | "ink"
+  | "ink-soft";
+export type ButtonSize =
+  | "xs"
+  | "sm"
+  | "md"
+  | "lg"
+  | "icon"
+  | "icon-sm"
+  | "icon-lg";
+
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary" | "ghost" | "danger";
-  size?: "sm" | "md" | "icon";
+  ref?: Ref<HTMLButtonElement>;
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  pending?: boolean;
+  block?: boolean;
+  neutral?: boolean;
 };
 
 export function Button({
@@ -41,6 +76,11 @@ export function Button({
   variant = "secondary",
   size = "md",
   type = "button",
+  pending = false,
+  block = false,
+  neutral = false,
+  disabled,
+  children,
   ...props
 }: ButtonProps) {
   return (
@@ -50,10 +90,18 @@ export function Button({
         "ui-button",
         `ui-button--${variant}`,
         `ui-button--${size}`,
+        pending && "ui-button--pending",
+        block && "ui-button--block",
+        neutral && "ui-button--neutral",
         className,
       )}
+      disabled={disabled || pending}
+      aria-busy={pending || undefined}
       {...props}
-    />
+    >
+      {pending && <Spinner />}
+      {children}
+    </button>
   );
 }
 
@@ -61,15 +109,20 @@ export function IconButton({
   label,
   className,
   children,
+  size = "icon",
+  variant = "ghost",
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
+  ref?: Ref<HTMLButtonElement>;
   label: string;
   children: ReactNode;
+  size?: "icon" | "icon-sm" | "icon-lg";
+  variant?: ButtonVariant;
 }) {
   return (
     <Button
-      size="icon"
-      variant="ghost"
+      size={size}
+      variant={variant}
       className={className}
       aria-label={label}
       title={label}
@@ -80,23 +133,217 @@ export function IconButton({
   );
 }
 
+export function Spinner({ size = "md" }: { size?: "md" | "lg" }) {
+  return (
+    <span
+      className={cx("ui-spinner", size === "lg" && "ui-spinner--lg")}
+      aria-hidden="true"
+    />
+  );
+}
+
+/* Fields ------------------------------------------------------------------- */
+
+export type FieldTone = "default" | "error" | "success";
+
 export function Field({
   label,
   hint,
+  error,
+  success,
+  optional,
+  prefix,
+  suffix,
+  mono = false,
+  compact = false,
   required = true,
+  className,
+  disabled,
   ...props
 }: InputHTMLAttributes<HTMLInputElement> & {
   label: string;
   name: string;
-  hint?: string;
+  hint?: ReactNode;
+  error?: ReactNode;
+  success?: ReactNode;
+  optional?: ReactNode;
+  prefix?: ReactNode;
+  suffix?: ReactNode;
+  mono?: boolean;
+  compact?: boolean;
 }) {
+  const labelID = useId();
   return (
-    <label className="ui-field">
-      <span className="ui-field__label">{label}</span>
-      <input {...props} required={required} />
-      {hint && <small>{hint}</small>}
+    <label
+      className={cx(
+        "ui-field",
+        Boolean(error) && "ui-field--error",
+        Boolean(success) && "ui-field--success",
+        disabled && "ui-field--disabled",
+        compact && "ui-field--compact",
+        className,
+      )}
+    >
+      <span className="ui-field__label">
+        <span id={labelID}>{label}</span>
+        {optional && <span className="ui-field__optional">{optional}</span>}
+      </span>
+      <span className={cx("ui-field__control", mono && "ui-field__control--mono")}>
+        {prefix && <span className="ui-field__affix">{prefix}</span>}
+        <input
+          {...props}
+          aria-labelledby={labelID}
+          required={required}
+          disabled={disabled}
+        />
+        {suffix}
+      </span>
+      {error ? (
+        <span className="ui-field__hint ui-field__hint--error" role="alert">
+          <AlertCircle aria-hidden="true" />
+          <span>{error}</span>
+        </span>
+      ) : success ? (
+        <span className="ui-field__hint ui-field__hint--success">
+          <Check aria-hidden="true" />
+          <span>{success}</span>
+        </span>
+      ) : hint ? (
+        <span className="ui-field__hint">{hint}</span>
+      ) : null}
     </label>
   );
+}
+
+export function PasswordField({
+  showLabel,
+  hideLabel,
+  ...props
+}: Omit<Parameters<typeof Field>[0], "type" | "suffix"> & {
+  showLabel: string;
+  hideLabel: string;
+}) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <Field
+      {...props}
+      type={visible ? "text" : "password"}
+      suffix={
+        <IconButton
+          size="icon-sm"
+          label={visible ? hideLabel : showLabel}
+          aria-pressed={visible}
+          tabIndex={-1}
+          onClick={() => setVisible((value) => !value)}
+        >
+          {visible ? <EyeOff /> : <Eye />}
+        </IconButton>
+      }
+    />
+  );
+}
+
+export function PasswordMeter({
+  value,
+  minimum,
+  label,
+  strongLabel,
+}: {
+  value: string;
+  minimum: number;
+  label: string;
+  strongLabel: string;
+}) {
+  const ratio = Math.min(1, value.length / minimum);
+  const strong = value.length >= minimum;
+  return (
+    <span className={cx("ui-meter", strong && "ui-meter--strong")}>
+      <span className="ui-meter__track">
+        <span style={{ width: `${Math.round(ratio * 100)}%` }} />
+      </span>
+      <span className="ui-meter__label">{strong ? strongLabel : label}</span>
+    </span>
+  );
+}
+
+export function TextareaField({
+  label,
+  hint,
+  optional,
+  className,
+  ...props
+}: TextareaHTMLAttributes<HTMLTextAreaElement> & {
+  label: string;
+  name: string;
+  hint?: ReactNode;
+  optional?: ReactNode;
+}) {
+  return (
+    <label className={cx("ui-field", className)}>
+      <span className="ui-field__label">
+        <span>{label}</span>
+        {optional && <span className="ui-field__optional">{optional}</span>}
+      </span>
+      <span className="ui-field__control ui-field__control--textarea">
+        <textarea {...props} />
+      </span>
+      {hint && <span className="ui-field__hint">{hint}</span>}
+    </label>
+  );
+}
+
+export function SearchField({
+  value,
+  onChange,
+  placeholder,
+  label,
+  size = "md",
+  autoFocus,
+  inputRef,
+  clearLabel,
+  className,
+  onKeyDown,
+}: {
+  value: string;
+  onChange(value: string): void;
+  placeholder: string;
+  label?: string;
+  size?: "md" | "lg";
+  autoFocus?: boolean;
+  inputRef?: RefObject<HTMLInputElement | null>;
+  clearLabel?: string;
+  className?: string;
+  onKeyDown?: InputHTMLAttributes<HTMLInputElement>["onKeyDown"];
+}) {
+  return (
+    <label className={cx("ui-search", size === "lg" && "ui-search--lg", className)}>
+      <Search aria-hidden="true" />
+      <input
+        ref={inputRef}
+        type="search"
+        value={value}
+        autoFocus={autoFocus}
+        onChange={(event) => onChange(event.currentTarget.value)}
+        onKeyDown={onKeyDown}
+        placeholder={placeholder}
+        aria-label={label ?? placeholder}
+      />
+      {value && clearLabel && (
+        <button
+          type="button"
+          className="ui-search__clear"
+          aria-label={clearLabel}
+          onClick={() => onChange("")}
+        >
+          <X aria-hidden="true" />
+        </button>
+      )}
+    </label>
+  );
+}
+
+export function Kbd({ children }: { children: ReactNode }) {
+  return <kbd className="ui-kbd">{children}</kbd>;
 }
 
 export function RadioOption({
@@ -123,20 +370,164 @@ export function RadioOption({
   );
 }
 
-export function TextareaField({
-  label,
-  ...props
-}: TextareaHTMLAttributes<HTMLTextAreaElement> & {
-  label: string;
-  name: string;
-}) {
+export function CheckMark({ checked }: { checked: boolean }) {
   return (
-    <label className="ui-field">
-      <span className="ui-field__label">{label}</span>
-      <textarea {...props} />
-    </label>
+    <span className={cx("ui-check", checked && "ui-check--on")} aria-hidden="true">
+      <Check strokeWidth={3} />
+    </span>
   );
 }
+
+export function Switch({
+  checked,
+  onChange,
+  label,
+  disabled,
+}: {
+  checked: boolean;
+  onChange(value: boolean): void;
+  label: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      className="ui-switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+    />
+  );
+}
+
+export function Chip({
+  active = false,
+  outline = false,
+  size = "md",
+  dot,
+  onRemove,
+  removeLabel,
+  className,
+  children,
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  active?: boolean;
+  outline?: boolean;
+  size?: "md" | "lg" | "xl";
+  dot?: string;
+  onRemove?(): void;
+  removeLabel?: string;
+}) {
+  return (
+    <button
+      type="button"
+      className={cx(
+        "ui-chip",
+        active && "ui-chip--active",
+        outline && "ui-chip--outline",
+        size !== "md" && `ui-chip--${size}`,
+        className,
+      )}
+      aria-pressed={
+        props["aria-pressed"] ?? (onRemove || props.role ? undefined : active)
+      }
+      {...props}
+    >
+      {dot && <span className="ui-chip__dot" data-folder-color={dot} />}
+      {children}
+      {onRemove && (
+        <span
+          role="button"
+          tabIndex={0}
+          className="ui-chip__remove"
+          aria-label={removeLabel}
+          onClick={(event) => {
+            event.stopPropagation();
+            onRemove();
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              event.stopPropagation();
+              onRemove();
+            }
+          }}
+        >
+          <X aria-hidden="true" />
+        </span>
+      )}
+    </button>
+  );
+}
+
+export function Tabs<T extends string>({
+  value,
+  onChange,
+  items,
+  label,
+  underline = false,
+  className,
+}: {
+  value: T;
+  onChange(value: T): void;
+  items: Array<{ id: T; label: ReactNode; icon?: ReactNode }>;
+  label: string;
+  underline?: boolean;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cx("ui-tabs", underline && "ui-tabs--underline", className)}
+      role="tablist"
+      aria-label={label}
+    >
+      {items.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          role="tab"
+          aria-selected={item.id === value}
+          onClick={() => onChange(item.id)}
+        >
+          {item.icon}
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function Segmented<T extends string>({
+  value,
+  onChange,
+  items,
+  label,
+}: {
+  value: T;
+  onChange(value: T): void;
+  items: Array<{ id: T; label: ReactNode }>;
+  label: string;
+}) {
+  return (
+    <div className="ui-segmented" role="radiogroup" aria-label={label}>
+      {items.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          role="radio"
+          aria-checked={item.id === value}
+          onClick={() => onChange(item.id)}
+        >
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* Popovers ----------------------------------------------------------------- */
 
 export function FloatingPopover({
   anchorRef,
@@ -152,7 +543,7 @@ export function FloatingPopover({
   children: ReactNode;
   className?: string;
   matchAnchorWidth?: boolean;
-  placement?: "bottom-start" | "side-start";
+  placement?: "bottom-start" | "bottom-end" | "side-start" | "top-start";
   width?: number;
   gap?: number;
   onDismiss(): void;
@@ -197,6 +588,7 @@ export function FloatingPopover({
             top,
             width: targetWidth,
             maxHeight,
+            ["--popover-max-height" as string]: `${maxHeight}px`,
             visibility: "visible",
           });
           return;
@@ -204,10 +596,15 @@ export function FloatingPopover({
       }
       const below = window.innerHeight - anchorBox.bottom - gap - viewportGap;
       const above = anchorBox.top - gap - viewportGap;
-      const openAbove = measuredHeight > below && above > below;
+      const openAbove =
+        placement === "top-start"
+          ? above >= Math.min(measuredHeight, below) || above > below
+          : measuredHeight > below && above > below;
       const availableHeight = Math.max(openAbove ? above : below, 120);
+      const preferredLeft =
+        placement === "bottom-end" ? anchorBox.right - targetWidth : anchorBox.left;
       const left = Math.min(
-        Math.max(anchorBox.left, viewportGap),
+        Math.max(preferredLeft, viewportGap),
         Math.max(viewportGap, window.innerWidth - targetWidth - viewportGap),
       );
       const top = openAbove
@@ -218,6 +615,7 @@ export function FloatingPopover({
         top,
         width: targetWidth,
         maxHeight: availableHeight,
+        ["--popover-max-height" as string]: `${availableHeight}px`,
         visibility: "visible",
       });
     }
@@ -226,10 +624,30 @@ export function FloatingPopover({
     const frame = window.requestAnimationFrame(position);
     window.addEventListener("resize", position);
     window.addEventListener("scroll", position, true);
+    // Lazy content (emoji picker, query results) changes the height after mount.
+    const observer =
+      typeof ResizeObserver === "undefined" || !layer.current
+        ? null
+        : new ResizeObserver(() => position());
+    if (layer.current) observer?.observe(layer.current);
+    // The anchor itself can move without a scroll event (layout shifts in a
+    // bottom-anchored feed); follow it while the popover is open.
+    let lastAnchor = "";
+    let watcher = window.requestAnimationFrame(function watch() {
+      const box = anchorRef.current?.getBoundingClientRect();
+      const key = box ? `${box.left},${box.top},${box.width},${box.height}` : "";
+      if (key !== lastAnchor) {
+        lastAnchor = key;
+        position();
+      }
+      watcher = window.requestAnimationFrame(watch);
+    });
     return () => {
       window.cancelAnimationFrame(frame);
+      window.cancelAnimationFrame(watcher);
       window.removeEventListener("resize", position);
       window.removeEventListener("scroll", position, true);
+      observer?.disconnect();
     };
   }, [anchorRef, gap, matchAnchorWidth, placement, width]);
 
@@ -277,11 +695,13 @@ export function SelectField({
   defaultValue,
   disabled,
   onChange,
+  hideLabel = false,
   ...props
 }: SelectHTMLAttributes<HTMLSelectElement> & {
   label: string;
   name: string;
   children: ReactNode;
+  hideLabel?: boolean;
 }) {
   const labelID = useId();
   const selectedLabelID = useId();
@@ -324,7 +744,10 @@ export function SelectField({
 
   return (
     <div className="ui-field ui-select-field">
-      <span className="ui-field__label" id={labelID}>
+      <span
+        className={cx("ui-field__label", hideLabel && "visually-hidden")}
+        id={labelID}
+      >
         {label}
       </span>
       <div className="ui-select">
@@ -388,29 +811,48 @@ export function SelectField({
   );
 }
 
+/* Dialog ------------------------------------------------------------------- */
+
 export function Dialog({
   title,
   description,
   onClose,
   children,
   className,
+  size = "md",
+  sheet = false,
+  plain = false,
+  footer,
+  hideClose = false,
+  bodyClassName,
 }: {
   title: string;
   description?: string;
   onClose: () => void;
   children: ReactNode;
   className?: string;
+  size?: "sm" | "md" | "lg";
+  /** On phones render as a bottom sheet instead of a full-screen dialog. */
+  sheet?: boolean;
+  /** Header without a bottom border (for short confirmations). */
+  plain?: boolean;
+  footer?: ReactNode;
+  hideClose?: boolean;
+  bodyClassName?: string;
 }) {
   const { t } = useTranslation();
   const dialog = useRef<HTMLElement>(null);
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     const first = dialog.current?.querySelector<HTMLElement>(
-      "button, input, textarea, select, [href], [tabindex]:not([tabindex='-1'])",
+      "[autofocus], input, textarea, select, button:not([data-dialog-close]), [href], [tabindex]:not([tabindex='-1'])",
     );
-    first?.focus();
+    (first ?? dialog.current)?.focus();
     function keyboard(event: globalThis.KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        onClose();
+      }
       if (event.key !== "Tab" || !dialog.current) return;
       const focusable = [
         ...dialog.current.querySelectorAll<HTMLElement>(
@@ -434,7 +876,7 @@ export function Dialog({
       previous?.focus();
     };
   }, [onClose]);
-  return (
+  return createPortal(
     <div
       className="ui-dialog-backdrop"
       role="presentation"
@@ -444,40 +886,73 @@ export function Dialog({
     >
       <section
         ref={dialog}
-        className={cx("ui-dialog", className)}
+        tabIndex={-1}
+        className={cx(
+          "ui-dialog",
+          size !== "md" && `ui-dialog--${size}`,
+          sheet && "ui-dialog--sheet",
+          plain && "ui-dialog--plain",
+          className,
+        )}
         role="dialog"
         aria-modal="true"
         aria-label={title}
       >
+        <span className="ui-dialog__handle" aria-hidden="true" />
         <header className="ui-dialog__head">
           <div>
             <h2>{title}</h2>
             {description && <p>{description}</p>}
           </div>
-          <IconButton label={t("close")} onClick={onClose}>
-            <X size={18} />
-          </IconButton>
+          {!hideClose && (
+            <IconButton
+              size="icon-sm"
+              label={t("close")}
+              data-dialog-close
+              onClick={onClose}
+            >
+              <X />
+            </IconButton>
+          )}
         </header>
-        {children}
+        <div className={cx("ui-dialog__body", bodyClassName)}>{children}</div>
+        {footer && <footer className="ui-dialog__foot">{footer}</footer>}
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }
+
+/* Avatar ------------------------------------------------------------------- */
+
+export type Presence = "online" | "away" | "offline";
 
 export function Avatar({
   name,
   seed,
   size = "md",
   online = false,
+  presence,
+  agent = false,
+  square = false,
   actorID,
   avatarVersion = 0,
+  className,
+  glyph,
 }: {
   name: string;
   seed?: string;
-  size?: "sm" | "md" | "lg" | "xl";
+  /** Overrides the initials, e.g. "#" for channels. */
+  glyph?: string;
+  size?: "xs" | "sm" | "md" | "lg" | "xl" | "xxl";
+  /** Legacy boolean form of `presence="online"`. */
   online?: boolean;
+  presence?: Presence;
+  agent?: boolean;
+  square?: boolean;
   actorID?: string;
   avatarVersion?: number;
+  className?: string;
 }) {
   const objectURLs = useContext(avatarObjectURLContext);
   const [source, setSource] = useState<string | null>(null);
@@ -495,23 +970,56 @@ export function Avatar({
       active = false;
     };
   }, [actorID, avatarVersion, objectURLs]);
-  const initials = name
-    .split(/\s+/)
+  const initials = initialsOf(name);
+  const resolvedPresence = presence ?? (online ? "online" : undefined);
+  return (
+    <span
+      className={cx(
+        "ui-avatar",
+        `ui-avatar--${size}`,
+        agent && "ui-avatar--agent",
+        square && "ui-avatar--square",
+        className,
+      )}
+      data-avatar-color={stableAvatarIndex(seed || name)}
+    >
+      <span className="ui-avatar__face">
+        {source ? <img src={source} alt="" /> : glyph || initials || "U"}
+      </span>
+      {agent && !square && (
+        <span className="ui-avatar__badge" aria-hidden="true">
+          <Bot strokeWidth={3} />
+        </span>
+      )}
+      {resolvedPresence && !agent && (
+        <i
+          aria-hidden="true"
+          className={cx(
+            resolvedPresence !== "online" &&
+              `ui-avatar__presence--${resolvedPresence}`,
+          )}
+        />
+      )}
+    </span>
+  );
+}
+
+export function initialsOf(name: string) {
+  const words = name
+    .trim()
+    .split(/[\s-]+/)
+    .filter((word) => /[\p{L}\p{N}]/u.test(word));
+  if (words.length === 0) return "";
+  if (words.length === 1) return words[0]!.slice(0, 2).toUpperCase();
+  return words
     .slice(0, 2)
     .map((part) => part[0])
     .join("")
     .toUpperCase();
-  return (
-    <span
-      className={cx("ui-avatar", `ui-avatar--${size}`)}
-      data-avatar-color={stableAvatarIndex(seed || name)}
-    >
-      <span className="ui-avatar__face">
-        {source ? <img src={source} alt="" /> : initials || "U"}
-      </span>
-      {online && <i aria-hidden="true" />}
-    </span>
-  );
+}
+
+export function AvatarStack({ children }: { children: ReactNode }) {
+  return <span className="ui-avatar-stack">{children}</span>;
 }
 
 const avatarObjectURLContext = createContext<AvatarObjectURLs | null>(null);
@@ -532,42 +1040,264 @@ export function AvatarProvider({
   );
 }
 
+/* Badges & status ---------------------------------------------------------- */
+
 export function Badge({
   children,
   tone = "neutral",
+  size = "md",
+  className,
 }: {
   children: ReactNode;
-  tone?: "neutral" | "primary" | "success";
+  tone?: "neutral" | "primary" | "success" | "danger" | "soft";
+  size?: "md" | "lg";
+  className?: string;
 }) {
   return (
-    <span className={cx("ui-badge", `ui-badge--${tone}`)}>{children}</span>
+    <span
+      className={cx(
+        "ui-badge",
+        `ui-badge--${tone}`,
+        size === "lg" && "ui-badge--lg",
+        className,
+      )}
+    >
+      {children}
+    </span>
   );
 }
 
+export function countLabel(value: number) {
+  return value > 99 ? "99+" : String(value);
+}
+
+export function Tag({
+  children,
+  tone = "neutral",
+  size = "md",
+}: {
+  children: ReactNode;
+  tone?: "neutral" | "agent" | "primary";
+  size?: "md" | "lg";
+}) {
+  return (
+    <span
+      className={cx(
+        "ui-tag",
+        tone !== "neutral" && `ui-tag--${tone}`,
+        size === "lg" && "ui-tag--lg",
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+export function PresenceDot({
+  state,
+  pulse = false,
+}: {
+  state?: Presence;
+  pulse?: boolean;
+}) {
+  return (
+    <span
+      className={cx(
+        "ui-presence",
+        state && `ui-presence--${state}`,
+        pulse && "ui-presence--pulse",
+      )}
+      aria-hidden="true"
+    />
+  );
+}
+
+/* Feedback ----------------------------------------------------------------- */
+
 export function FormError({ message }: { message: string }) {
-  return message ? (
-    <div className="ui-form-error form-span" role="alert">
-      {message}
+  return message ? <InlineError title={message} /> : null;
+}
+
+export function InlineError({
+  title,
+  hint,
+  onRetry,
+  retryLabel,
+  center = false,
+}: {
+  title: string;
+  hint?: string;
+  onRetry?(): void;
+  retryLabel?: string;
+  center?: boolean;
+}) {
+  return (
+    <div
+      className={cx("ui-inline-error", center && "ui-inline-error--center")}
+      role="alert"
+    >
+      <AlertCircle aria-hidden="true" />
+      <span className="ui-inline-error__copy">
+        <span>{title}</span>
+        {hint && <small>{hint}</small>}
+      </span>
+      {onRetry && retryLabel && (
+        <button type="button" className="ui-inline-error__action" onClick={onRetry}>
+          {retryLabel}
+        </button>
+      )}
     </div>
-  ) : null;
+  );
+}
+
+export function InlineSuccess({
+  title,
+  hint,
+}: {
+  title: string;
+  hint?: string;
+}) {
+  return (
+    <div className="ui-inline-success" role="status">
+      <CheckCircle2 aria-hidden="true" />
+      <span>
+        {title}
+        {hint && <small>{hint}</small>}
+      </span>
+    </div>
+  );
+}
+
+export function InkCard({
+  icon,
+  title,
+  children,
+  className,
+}: {
+  icon?: ReactNode;
+  title: ReactNode;
+  children?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cx("ui-ink-card", className)}>
+      {icon}
+      <div>
+        <strong>{title}</strong>
+        {children && <p>{children}</p>}
+      </div>
+    </div>
+  );
+}
+
+export function EmptyState({
+  icon,
+  title,
+  hint,
+  action,
+  compact = false,
+  className,
+}: {
+  icon?: ReactNode;
+  title: ReactNode;
+  hint?: ReactNode;
+  action?: ReactNode;
+  compact?: boolean;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cx("ui-empty", compact && "ui-empty--compact", className)}
+      role="status"
+    >
+      {!compact && (
+        <span className="ui-empty__icon" aria-hidden="true">
+          {icon ?? <Inbox />}
+        </span>
+      )}
+      <strong>{title}</strong>
+      {hint && <p>{hint}</p>}
+      {action}
+    </div>
+  );
 }
 
 export function Menu({
   label,
   children,
+  className,
+  touch = false,
 }: {
   label: string;
   children: ReactNode;
+  className?: string;
+  touch?: boolean;
 }) {
   return (
-    <div className="ui-menu" role="menu" aria-label={label}>
+    <div
+      className={cx("ui-menu", touch && "ui-menu--touch", className)}
+      role="menu"
+      aria-label={label}
+    >
       {children}
     </div>
   );
 }
 
-export function Popover({ children }: { children: ReactNode }) {
-  return <div className="ui-popover">{children}</div>;
+export function MenuItem({
+  icon,
+  children,
+  meta,
+  danger = false,
+  checked,
+  active = false,
+  className,
+  role = "menuitem",
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  icon?: ReactNode;
+  meta?: ReactNode;
+  danger?: boolean;
+  checked?: boolean;
+  active?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role={role}
+      aria-checked={checked}
+      className={cx(
+        "ui-menu__item",
+        danger && "ui-menu__item--danger",
+        active && "ui-menu__item--active",
+        className,
+      )}
+      {...props}
+    >
+      {icon}
+      <span>{children}</span>
+      {meta && <span className="ui-menu__meta">{meta}</span>}
+      {checked && <Check className="ui-menu__check" aria-hidden="true" />}
+    </button>
+  );
+}
+
+export function MenuDivider() {
+  return <div className="ui-menu__divider" role="separator" />;
+}
+
+export function MenuLabel({ children }: { children: ReactNode }) {
+  return <div className="ui-menu__label">{children}</div>;
+}
+
+export function Popover({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return <div className={cx("ui-popover", className)}>{children}</div>;
 }
 
 export function Tooltip({
@@ -587,17 +1317,76 @@ export function Tooltip({
 export function Toast({
   children,
   tone = "neutral",
+  ink = false,
+  icon,
+  action,
+  className,
 }: {
   children: ReactNode;
   tone?: "neutral" | "danger" | "success";
+  ink?: boolean;
+  icon?: ReactNode;
+  action?: ReactNode;
+  className?: string;
 }) {
   return (
-    <div className={cx("ui-toast", `ui-toast--${tone}`)} role="status">
-      {children}
+    <div
+      className={cx(
+        "ui-toast",
+        `ui-toast--${tone}`,
+        ink && "ui-toast--ink",
+        className,
+      )}
+      role="status"
+    >
+      {icon}
+      <span className="ui-toast__text">{children}</span>
+      {action}
     </div>
   );
 }
 
-export function Skeleton() {
-  return <span className="ui-skeleton" aria-hidden="true" />;
+export function Skeleton({
+  width,
+  height,
+  shape = "text",
+  className,
+}: {
+  width?: number | string;
+  height?: number | string;
+  shape?: "text" | "circle" | "rect";
+  className?: string;
+}) {
+  return (
+    <span
+      className={cx(
+        "ui-skeleton",
+        shape !== "text" && `ui-skeleton--${shape}`,
+        className,
+      )}
+      style={{ width, height: height ?? (shape === "circle" ? width : undefined) }}
+      aria-hidden="true"
+    />
+  );
+}
+
+export function SkeletonRow({
+  avatar = 40,
+  lines = ["62%", "80%"],
+}: {
+  avatar?: number;
+  lines?: [string, string];
+}) {
+  return (
+    <div className="ui-skeleton-row" aria-hidden="true">
+      <Skeleton shape="circle" width={avatar} />
+      <div>
+        <span className="ui-skeleton-row__lines">
+          <Skeleton width={lines[0]} height={14} />
+          <Skeleton width={32} height={12} />
+        </span>
+        <Skeleton width={lines[1]} />
+      </div>
+    </div>
+  );
 }

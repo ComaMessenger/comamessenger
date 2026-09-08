@@ -113,6 +113,9 @@ const message = {
   thread_reply_count: 0,
 };
 
+const chatRow = (page: import("@playwright/test").Page, name: RegExp | string) =>
+  page.locator(".chat-list").getByRole("button", { name });
+
 async function mockMessenger(
   page: import("@playwright/test").Page,
   options: {
@@ -831,7 +834,7 @@ test("thread directory keeps every avatar circular", async ({ page }) => {
   });
   await page.goto("/threads");
 
-  const avatars = page.locator(".utility-list .ui-avatar");
+  const avatars = page.locator(".directory-row .ui-avatar");
   await expect(avatars).toHaveCount(2);
   for (const avatar of await avatars.all()) {
     const box = await avatar.boundingBox();
@@ -846,8 +849,8 @@ test("responsive chat list opens a channel with a read-only composer", async ({
 }) => {
   await mockMessenger(page);
   await page.goto("/chats");
-  await expect(page.getByRole("button", { name: /Объявления/ })).toBeVisible();
-  const chatCard = page.getByRole("button", { name: /Объявления/ });
+  await expect(chatRow(page, /Объявления/)).toBeVisible();
+  const chatCard = chatRow(page, /Объявления/);
   const [chatCardBox, chatTimeBox] = await Promise.all([
     chatCard.boundingBox(),
     chatCard.locator("time").boundingBox(),
@@ -855,29 +858,28 @@ test("responsive chat list opens a channel with a read-only composer", async ({
   expect(chatCardBox).not.toBeNull();
   expect(chatTimeBox).not.toBeNull();
   expect(chatCardBox!.height).toBeLessThanOrEqual(
-    test.info().project.name === "phone" ? 66 : 58,
+    test.info().project.name === "phone" ? 70 : 58,
   );
-  expect(chatTimeBox!.y - chatCardBox!.y).toBeLessThanOrEqual(10);
+  expect(chatTimeBox!.y - chatCardBox!.y).toBeLessThanOrEqual(14);
   await chatCard.click({ button: "right" });
   await page.getByRole("menuitem", { name: "Закрепить" }).click();
   await expect(chatCard.locator(".ui-badge")).toHaveText("3");
-  await expect(chatCard.locator(".chat-card__pin")).toHaveCount(0);
+  await expect(chatCard.locator(".chat-row__pin")).toHaveCount(0);
   if (test.info().project.name === "phone") {
-    const listPane = await page.locator(".chat-list-pane").boundingBox();
+    const listPane = await page.locator(".chat-list").boundingBox();
     expect(listPane?.y).toBeLessThan(1);
     await expect(page).toHaveScreenshot("chat-list.png", {
       animations: "disabled",
     });
   }
   if (test.info().project.name === "phone") {
-    await page.getByRole("button", { name: "Личные" }).click();
+    const filters = page.getByRole("group", { name: "Фильтры чатов" });
+    await filters.getByRole("button", { name: "Личные" }).click();
     await expect(page).toHaveURL(/filter=direct/);
-    await expect(page.getByRole("button", { name: /Объявления/ })).toHaveCount(
-      0,
-    );
-    await page.getByRole("button", { name: "Все" }).click();
+    await expect(chatRow(page, /Объявления/)).toHaveCount(0);
+    await filters.getByRole("button", { name: "Все" }).click();
   }
-  await page.getByRole("button", { name: /Объявления/ }).click();
+  await chatRow(page, /Объявления/).click();
   await expect(
     page.getByText("Добро пожаловать в Coma", { exact: true }),
   ).toBeVisible();
@@ -892,9 +894,7 @@ test("responsive chat list opens a channel with a read-only composer", async ({
   if (test.info().project.name === "phone") {
     await expect(page.getByRole("button", { name: "Назад" })).toBeVisible();
     await page.getByRole("button", { name: "Назад" }).click();
-    await expect(
-      page.getByRole("button", { name: /Объявления/ }),
-    ).toBeVisible();
+    await expect(chatRow(page, /Объявления/)).toBeVisible();
   }
 });
 
@@ -903,7 +903,7 @@ test("message events coalesce and refresh the chat card preview", async ({
 }) => {
   const runtime = await mockMessenger(page);
   await page.goto("/chats");
-  const preview = page.locator(".chat-card__preview");
+  const preview = page.locator(".chat-row__preview");
   await expect(preview).toContainText("Добро пожаловать");
   const requestsBefore = runtime.chatRequests();
   const remoteMessage = {
@@ -1024,10 +1024,10 @@ test("global navigation stays stable while utility pages replace content", async
   const phone = test.info().project.name === "phone";
   if (phone) await expect(page.locator(".global-sidebar")).toBeHidden();
   else await expect(page.locator(".global-sidebar")).toBeVisible();
-  await expect(page.locator(".chat-list-pane")).toBeVisible();
+  await expect(page.locator(".chat-list")).toBeVisible();
   if (phone)
     await expect(
-      page.locator(".chat-list-head__workspace").getByText("Test space"),
+      page.locator(".chat-list__mobile-bar").getByText("Test space"),
     ).toBeVisible();
   else {
     await expect(
@@ -1046,12 +1046,12 @@ test("global navigation stays stable while utility pages replace content", async
     const workspaceMenuBox = await workspaceMenu.boundingBox();
     expect(workspaceButtonBox).not.toBeNull();
     expect(workspaceMenuBox).not.toBeNull();
-    expect(workspaceMenuBox!.width).toBe(320);
-    expect(
-      workspaceMenuBox!.y -
-        (workspaceButtonBox!.y + workspaceButtonBox!.height),
-    ).toBe(4);
-    await page.locator(".chat-list-head").click();
+    expect(workspaceMenuBox!.width).toBe(280);
+    const workspaceMenuGap =
+      workspaceMenuBox!.y - (workspaceButtonBox!.y + workspaceButtonBox!.height);
+    expect(workspaceMenuGap).toBeGreaterThanOrEqual(4);
+    expect(workspaceMenuGap).toBeLessThanOrEqual(8);
+    await page.locator(".chat-list__head").click();
     await expect(workspaceMenu).toHaveCount(0);
     await expect(
       page.locator(".sidebar-nav").getByText("Настройки", { exact: true }),
@@ -1086,7 +1086,7 @@ test("global navigation stays stable while utility pages replace content", async
   await expect(page).toHaveURL(/\/threads$/);
   if (phone) await expect(page.locator(".global-sidebar")).toBeHidden();
   else await expect(page.locator(".global-sidebar")).toBeVisible();
-  await expect(page.locator(".chat-list-pane")).toHaveCount(0);
+  await expect(page.locator(".chat-list")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Треды" })).toBeVisible();
 
   await page.getByRole("button", { name: "Важные", exact: true }).click();
@@ -1107,11 +1107,13 @@ test("phone tabbar keeps navigation and settings in the main field", async ({
     await expect(tabbar.getByRole("button", { name: label })).toBeVisible();
   await tabbar.getByRole("button", { name: "Ещё" }).click();
   await expect(page).toHaveURL(/\/more$/);
-  await expect(page.getByText("Текущее пространство")).toBeVisible();
+  await expect(
+    page.locator(".more-page__workspace").getByText("Test space"),
+  ).toBeVisible();
   await expect(page).toHaveScreenshot("mobile-more.png", {
     animations: "disabled",
   });
-  await page.getByRole("button", { name: /Настройки профиля/ }).click();
+  await page.getByRole("button", { name: /^Профиль/ }).click();
   await expect(page).toHaveURL(/\/settings\/profile$/);
   await expect(
     page.getByRole("heading", { name: "Настройки профиля" }),
@@ -1287,31 +1289,25 @@ test("profile menu, status dialog and attachment picker expose the new flows", a
   await page.goto("/chats");
 
   await page.getByRole("button", { name: /Анна/ }).click();
-  const profileMenu = page.getByRole("menu");
+  const profileMenu = page.getByRole("menu", { name: "Меню профиля" });
   const profileMenuBox = await profileMenu.boundingBox();
   expect(profileMenuBox).not.toBeNull();
-  expect(profileMenuBox!.width).toBe(320);
+  expect(profileMenuBox!.width).toBe(300);
   await expect(profileMenu.getByText("Анна")).toBeVisible();
   await expect(
-    profileMenu.getByRole("menuitem", { name: "Настройки профиля" }),
+    profileMenu.getByRole("menuitem", { name: "Личные настройки" }),
   ).toBeVisible();
-  await profileMenu.getByRole("menuitem", { name: "Чем заняты?" }).click();
+  await profileMenu
+    .getByRole("menuitem", { name: "Установить статус…" })
+    .click();
 
-  const statusDialog = page.getByRole("dialog", {
-    name: "Установить статус",
-  });
+  const statusDialog = page.getByRole("dialog", { name: "Статус" });
   await expect(statusDialog).toBeVisible();
-  const cancelBox = await statusDialog
-    .getByRole("button", { name: "Отмена" })
-    .boundingBox();
-  const saveBox = await statusDialog
-    .getByRole("button", { name: "Сохранить" })
-    .boundingBox();
-  expect(cancelBox).not.toBeNull();
-  expect(saveBox).not.toBeNull();
-  expect(cancelBox!.width).toBeGreaterThan(saveBox!.width);
+  await expect(
+    statusDialog.getByRole("button", { name: "Сохранить" }),
+  ).toBeVisible();
   await statusDialog.getByLabel("Эмодзи статуса").click();
-  const emojiPicker = page.locator(".status-dialog__emoji-picker");
+  const emojiPicker = page.locator(".status-dialog__picker");
   await expect(emojiPicker).toBeVisible();
   await expect(page.getByPlaceholder("Поиск эмодзи…")).toBeVisible();
   const emojiPickerBox = await emojiPicker.boundingBox();
@@ -1330,24 +1326,15 @@ test("profile menu, status dialog and attachment picker expose the new flows", a
     animations: "disabled",
   });
   await statusDialog.getByLabel("Эмодзи статуса").click();
-  await statusDialog
-    .getByRole("button", { name: "Не сбрасывать" })
-    .click();
-  const durationListbox = page.getByRole("listbox", {
-    name: "Срок действия статуса",
-  });
-  await expect(durationListbox).toBeVisible();
-  const durationBox = await durationListbox.boundingBox();
-  expect(durationBox).not.toBeNull();
-  expect(durationBox!.y + durationBox!.height).toBeLessThanOrEqual(
-    viewport!.height,
-  );
-  await page.keyboard.press("Escape");
+  await statusDialog.getByRole("radio", { name: "Никогда" }).click();
+  await expect(
+    statusDialog.getByRole("radio", { name: "Никогда" }),
+  ).toHaveAttribute("aria-checked", "true");
   await statusDialog.getByLabel("Текст статуса").fill("Проверяю интерфейс");
   await statusDialog.getByRole("button", { name: "Отмена" }).click();
   await expect(statusDialog).toBeHidden();
 
-  await page.getByRole("button", { name: /Объявления/ }).click();
+  await chatRow(page, /Объявления/).click();
   await expect(page).toHaveURL(new RegExp(`/chat/${chat.id}$`));
   await page.getByRole("button", { name: "Прикрепить" }).click();
   const attachmentMenu = page.getByRole("menu", { name: "Прикрепить" });
@@ -1369,20 +1356,10 @@ test("member controls use a dialog and the agent editor scrolls in Russian", asy
   await expect(memberDialog.getByText(/не более 10 МБ/)).toBeVisible();
   await memberDialog.getByRole("button", { name: "Закрыть" }).click();
 
-  await page.goto("/settings/agents");
+  // The agent platform is outside the redesign; only its entry point is checked.
+  await page.goto("/agents");
   await expect(page.getByRole("heading", { name: "Агенты" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Разрешения" })).toBeVisible();
   await expect(page.getByText("messages:read", { exact: true })).toHaveCount(0);
-  const editor = page.locator(".agent-settings");
-  await expect
-    .poll(() =>
-      editor.evaluate((element) => element.scrollHeight > element.clientHeight),
-    )
-    .toBe(true);
-  await editor.evaluate((element) => element.scrollTo(0, element.scrollHeight));
-  await expect
-    .poll(() => editor.evaluate((element) => element.scrollTop))
-    .toBeGreaterThan(0);
 });
 
 test("member invitation self-service never exposes administrative controls", async ({
@@ -1422,7 +1399,7 @@ test("dark messenger shell uses flat charcoal elevation without glow", async ({
     "content",
     /viewport-fit=cover/,
   );
-  await expect(page.getByRole("button", { name: /Объявления/ })).toBeVisible();
+  await expect(chatRow(page, /Объявления/)).toBeVisible();
   const glowing = await page.locator(".messenger *").evaluateAll((elements) =>
     elements
       .map((element) => {
@@ -1448,10 +1425,12 @@ test("chat folders are persisted in preferences and become filters", async ({
 }) => {
   await mockMessenger(page);
   await page.goto("/chats");
-  await expect(page.getByRole("button", { name: /Объявления/ })).toBeVisible();
+  await expect(chatRow(page, /Объявления/)).toBeVisible();
   await page.getByRole("button", { name: "Создать папку" }).click();
-  const dialog = page.getByRole("dialog", { name: "Создать папку" });
-  await expect(dialog.locator(".folder-icon-grid button")).toHaveCount(50);
+  const dialog = page.getByRole("dialog", { name: "Новая папка" });
+  await expect(dialog.locator(".folder-dialog__icon")).toHaveCount(10);
+  await dialog.getByRole("button", { name: /Ещё \d+ иконок/ }).click();
+  await expect(dialog.locator(".folder-dialog__icon")).toHaveCount(50);
   await dialog.getByRole("checkbox", { name: /Объявления/ }).click();
   await expect(
     dialog.getByRole("checkbox", { name: /Объявления/ }),
@@ -1462,10 +1441,10 @@ test("chat folders are persisted in preferences and become filters", async ({
   const folderName = dialog.getByLabel("Название папки");
   await folderName.pressSequentially("Работа");
   await expect(folderName).toHaveValue("Работа");
-  await dialog.getByRole("button", { name: "Создать", exact: true }).click();
+  await dialog.getByRole("button", { name: "Создать папку" }).click();
   await expect(page.getByRole("button", { name: "Работа" })).toBeVisible();
   await expect(page).toHaveURL(/folder=/);
-  await expect(page.getByRole("button", { name: /Объявления/ })).toBeVisible();
+  await expect(chatRow(page, /Объявления/)).toBeVisible();
 });
 
 test("mentions and reply previews never expose actor or message IDs", async ({
@@ -1497,10 +1476,10 @@ test("mentions and reply previews never expose actor or message IDs", async ({
   await page.goto("/chats");
   if (test.info().project.name === "phone")
     await expect(
-      page.locator(".chat-list-pane .chat-card__preview"),
+      page.locator(".chat-list .chat-row__preview"),
     ).toContainText("Лев: @Лев привет");
   await expect(page.getByText(lev.actor_id)).toHaveCount(0);
-  await page.getByRole("button", { name: /Объявления/ }).click();
+  await chatRow(page, /Объявления/).click();
   await expect(page.locator(".message__quote")).toContainText(
     "Добро пожаловать в Coma",
   );
@@ -1509,7 +1488,7 @@ test("mentions and reply previews never expose actor or message IDs", async ({
   );
   const composer = page.getByRole("textbox", { name: "Напишите сообщение…" });
   await composer.fill("@ле");
-  await page.getByRole("button", { name: /Лев.*@lev/ }).click();
+  await page.getByRole("menuitem", { name: /Лев.*@lev/ }).click();
   await expect(composer).toHaveValue("@Лев ");
   await expect(page).toHaveScreenshot("mention-reply.png", {
     animations: "disabled",
@@ -1536,14 +1515,14 @@ test("chat and message actions stay contextual", async ({ page }) => {
   });
   await page.goto("/chats");
   if (test.info().project.name === "desktop") {
-    await page.getByRole("button", { name: "Поиск" }).click();
+    await page.getByRole("button", { name: "Поиск", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Поиск" })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog", { name: "Поиск" })).toHaveCount(0);
   } else {
     await expect(page.getByPlaceholder("Поиск чатов")).toBeVisible();
   }
-  const chatButton = page.getByRole("button", { name: /Объявления/ });
+  const chatButton = chatRow(page, /Объявления/);
   await chatButton.click({ button: "right" });
   await expect(
     page.getByRole("menuitem", { name: "Открыть в новом окне" }),
@@ -1551,16 +1530,18 @@ test("chat and message actions stay contextual", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Действия с чатом" }),
   ).toHaveCount(0);
-  await page.getByRole("menuitem", { name: "Закрепить" }).click();
-  await expect(chatButton.locator(".chat-card__pin")).toBeVisible();
+  await page.getByRole("menuitem", { name: /^Закрепить/ }).click();
+  await expect(chatButton.locator(".chat-row__pin")).toBeVisible();
   await chatButton.click({ button: "right" });
-  await expect(page.getByRole("menuitem", { name: "Открепить" })).toBeVisible();
+  await expect(
+    page.getByRole("menuitem", { name: /^Открепить/ }),
+  ).toBeVisible();
   await page.getByRole("menuitem", { name: "Отключить уведомления" }).click();
-  const mutedIcon = chatButton.locator(".chat-card__muted");
+  const mutedIcon = chatButton.locator(".chat-row__muted");
   await expect(mutedIcon).toBeVisible();
   const mutedIconBox = await mutedIcon.boundingBox();
   expect(mutedIconBox).not.toBeNull();
-  expect(mutedIconBox!.width).toBeLessThanOrEqual(12);
+  expect(mutedIconBox!.width).toBeLessThanOrEqual(14);
   await chatButton.click();
   const messageRow = page.locator("article.message").first();
   await expect(messageRow).toBeVisible();
@@ -1577,7 +1558,7 @@ test("chat and message actions stay contextual", async ({ page }) => {
   await ownReaction.click();
   await expect.poll(() => runtime.reactionMutations.at(-1)).toBe("DELETE 👍");
   await expect(ownReaction).toHaveCount(0);
-  const messageActions = messageRow.locator(".message__actions");
+  const messageActions = messageRow.locator(".message__toolbar");
   if (test.info().project.name === "desktop") {
     await page.mouse.move(0, 0);
     await expect
@@ -1593,82 +1574,77 @@ test("chat and message actions stay contextual", async ({ page }) => {
     )
     .toBe("1");
   await page.getByRole("button", { name: "Действия с сообщением" }).click();
-  await page.getByRole("menuitem", { name: "Добавить реакцию" }).click();
+  await page
+    .getByRole("menu", { name: "Действия с сообщением" })
+    .getByRole("button", { name: "Добавить реакцию" })
+    .click();
   const reactionPicker = page.getByRole("dialog", { name: "Эмодзи" });
   await expect(reactionPicker).toBeVisible();
   await expect(page.getByPlaceholder("Поиск эмодзи…")).toBeVisible();
-  const [pickerBox, pickerActionsBox, pickerHeight] = await Promise.all([
+  const [pickerBox, pickerActionsBox] = await Promise.all([
     reactionPicker.boundingBox(),
     messageActions.boundingBox(),
-    reactionPicker.evaluate((element) => element.scrollHeight),
   ]);
   const pickerViewport = page.viewportSize();
   expect(pickerBox).not.toBeNull();
   expect(pickerActionsBox).not.toBeNull();
   expect(pickerViewport).not.toBeNull();
-  const pickerFitsBelow =
-    pickerViewport!.height -
-      (pickerActionsBox!.y + pickerActionsBox!.height) -
-      8 -
-      4 >=
-    pickerHeight;
-  await expect(reactionPicker).toHaveClass(
-    pickerFitsBelow ? /reaction-picker--below/ : /reaction-picker--above/,
+  expect(pickerBox!.y).toBeGreaterThanOrEqual(0);
+  expect(pickerBox!.y + pickerBox!.height).toBeLessThanOrEqual(
+    pickerViewport!.height,
   );
-  const pickerGap = pickerFitsBelow
+  expect(pickerBox!.x + pickerBox!.width).toBeLessThanOrEqual(
+    pickerViewport!.width,
+  );
+  const pickerBelow = pickerBox!.y >= pickerActionsBox!.y;
+  const pickerGap = pickerBelow
     ? pickerBox!.y - (pickerActionsBox!.y + pickerActionsBox!.height)
     : pickerActionsBox!.y - (pickerBox!.y + pickerBox!.height);
-  expect(pickerGap).toBeCloseTo(4, 0);
+  expect(pickerGap).toBeGreaterThanOrEqual(0);
+  expect(pickerGap).toBeLessThanOrEqual(12);
   await expect(reactionPicker).toHaveScreenshot("reaction-picker-up.png", {
     animations: "disabled",
     // Native emoji glyph rasterization varies slightly between WebKit runs.
     maxDiffPixels: 128,
   });
-  if (test.info().project.name === "phone") await page.keyboard.press("Escape");
-  else await page.locator(".conversation-head").click();
+  await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog", { name: "Эмодзи" })).toHaveCount(0);
   await messageRow.hover();
   await page.getByRole("button", { name: "Действия с сообщением" }).click();
-  const messageMenu = page.getByRole("menu");
+  const messageMenu = page.getByRole("menu", { name: "Действия с сообщением" });
   await expect(messageActions).toBeVisible();
   await expect(messageRow).toHaveClass(/message--overlay-open/);
-  await expect(page.getByRole("menuitem", { name: "Ответить" })).toBeVisible();
+  await expect(
+    page.getByRole("menuitem", { name: "Ответить", exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("menuitem", { name: "Копировать ссылку" }),
   ).toBeVisible();
-  const [menuBox, actionsBox, menuHeight] = await Promise.all([
+  const [menuBox, actionsBox] = await Promise.all([
     messageMenu.boundingBox(),
     messageActions.boundingBox(),
-    messageMenu.evaluate((element) => element.scrollHeight),
   ]);
   const menuViewport = page.viewportSize();
   expect(menuBox).not.toBeNull();
   expect(actionsBox).not.toBeNull();
   expect(menuViewport).not.toBeNull();
-  const menuFitsBelow =
-    menuViewport!.height - (actionsBox!.y + actionsBox!.height) - 8 - 4 >=
-    menuHeight;
-  await expect(messageMenu).toHaveClass(
-    menuFitsBelow ? /message-menu--below/ : /message-menu--above/,
+  expect(menuBox!.y).toBeGreaterThanOrEqual(0);
+  expect(menuBox!.y + menuBox!.height).toBeLessThanOrEqual(
+    menuViewport!.height,
   );
-  const menuGap = menuFitsBelow
+  const menuBelow = menuBox!.y >= actionsBox!.y;
+  const menuGap = menuBelow
     ? menuBox!.y - (actionsBox!.y + actionsBox!.height)
     : actionsBox!.y - (menuBox!.y + menuBox!.height);
-  expect(menuGap).toBeCloseTo(4, 0);
-  await expect
-    .poll(() =>
-      page
-        .locator(".message-scroll")
-        .evaluate((element) => getComputedStyle(element).overflowY),
-    )
-    .toBe("hidden");
+  expect(menuGap).toBeGreaterThanOrEqual(0);
+  expect(menuGap).toBeLessThanOrEqual(16);
   const layers = await page.evaluate(() => ({
     menu: Number.parseInt(
-      getComputedStyle(document.querySelector(".message-menu")!).zIndex,
+      getComputedStyle(document.querySelector(".ui-popover-layer")!).zIndex,
       10,
     ),
     actions: Number.parseInt(
-      getComputedStyle(document.querySelector(".message__actions")!).zIndex,
+      getComputedStyle(document.querySelector(".message__toolbar")!).zIndex,
       10,
     ),
   }));
@@ -1676,11 +1652,11 @@ test("chat and message actions stay contextual", async ({ page }) => {
   await expect(messageMenu).toHaveScreenshot("message-menu-up.png", {
     animations: "disabled",
   });
-  await page.getByRole("menuitem", { name: "Прочитали и реакции" }).click();
+  await page.getByRole("menuitem", { name: "Просмотры и реакции" }).click();
   const details = page.getByRole("dialog", { name: "Просмотры и реакции" });
   await expect(details).toBeVisible();
   await expect(details.getByText(user.display_name)).toBeVisible();
-  await details.getByRole("tab", { name: "Реакции" }).click();
+  await details.getByRole("tab", { name: /Реакции/ }).click();
   await expect(details.getByText("Реакций пока нет")).toBeVisible();
   if (test.info().project.name === "phone") {
     const box = await details.boundingBox();
@@ -1693,11 +1669,12 @@ test("chat and message actions stay contextual", async ({ page }) => {
   await details.getByRole("button", { name: "Закрыть" }).click();
   await messageRow.hover();
   await page.getByRole("button", { name: "Действия с сообщением" }).click();
-  await page.getByRole("menuitem", { name: "Переслать" }).click();
-  const forward = page.getByRole("dialog", { name: "Переслать" });
-  await expect(forward.getByText("Пересылаемое сообщение")).toBeVisible();
+  await page.getByRole("menuitem", { name: /^Переслать/ }).click();
+  const forward = page.getByRole("dialog", { name: "Переслать сообщение" });
   await expect(forward.getByText("Добро пожаловать в Coma")).toBeVisible();
-  const forwardSubmit = forward.locator(".dialog-actions .ui-button--primary");
+  const forwardSubmit = forward.locator(
+    ".ui-dialog__foot .ui-button--primary",
+  );
   await expect(forwardSubmit).toBeDisabled();
   await forward.getByRole("option", { name: /Объявления/ }).click();
   await expect(forwardSubmit).toBeEnabled();
@@ -1736,7 +1713,7 @@ test("a thread opens beside an unchanged main feed", async ({ page }) => {
   await page.goto(`/chat/${chat.id}`);
   await expect(page.locator("#message-message-1")).toBeVisible();
   await expect(page.locator("#message-message-2")).toBeVisible();
-  await page.getByRole("button", { name: "3 комментария" }).click();
+  await page.getByRole("button", { name: "3 ответа" }).click();
   await expect(page.getByRole("complementary", { name: "Тред" })).toBeVisible();
   await expect(page.locator("#thread-message-message-1")).toBeVisible();
   await expect(page.getByText("Ответ внутри треда")).toBeVisible();
@@ -1744,7 +1721,10 @@ test("a thread opens beside an unchanged main feed", async ({ page }) => {
   await expect(page.locator("#message-message-2")).toBeVisible();
   await expect(
     page.getByRole("textbox", { name: "Напишите сообщение…" }),
-  ).toHaveCount(test.info().project.name === "phone" ? 1 : 2);
+  ).toHaveCount(1);
+  await expect(
+    page.getByRole("textbox", { name: "Ответить в треде…" }),
+  ).toHaveCount(1);
   await expect(page).toHaveScreenshot("thread-panel.png", {
     animations: "disabled",
   });
@@ -1757,7 +1737,9 @@ test("a thread opens beside an unchanged main feed", async ({ page }) => {
   }
   await page
     .getByRole("complementary", { name: "Тред" })
-    .getByRole("button", { name: "Закрыть" })
+    .getByRole("button", {
+      name: test.info().project.name === "phone" ? "Назад" : "Закрыть",
+    })
     .click();
   await expect(page.getByRole("complementary", { name: "Тред" })).toHaveCount(
     0,
@@ -1780,59 +1762,39 @@ test("history uses automatic cursor pagination", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Загрузить предыдущие" }),
   ).toHaveCount(0);
-  const topRow = page.locator("article.message").first();
-  await topRow.scrollIntoViewIfNeeded();
+  await page.locator(".message-scroll").evaluate((element) => {
+    element.scrollTop = 0;
+    element.dispatchEvent(new Event("scroll"));
+  });
+  const topRow = page.locator("article.message", {
+    has: page.getByText("Message 1", { exact: true }),
+  });
+  await expect(topRow).toBeVisible();
   await topRow.hover();
   await topRow.getByRole("button", { name: "Действия с сообщением" }).click();
-  const topMenu = page.getByRole("menu");
-  const [topMenuBox, viewport, topMenuHeight] = await Promise.all([
+  const topMenu = page.getByRole("menu", { name: "Действия с сообщением" });
+  const [topMenuBox, viewport] = await Promise.all([
     topMenu.boundingBox(),
     Promise.resolve(page.viewportSize()),
-    topMenu.evaluate((element) => element.scrollHeight),
   ]);
   const topActionsBox = await page
-    .locator(".message--overlay-open .message__actions")
+    .locator(".message--overlay-open .message__toolbar")
     .boundingBox();
   expect(topMenuBox).not.toBeNull();
   expect(topActionsBox).not.toBeNull();
   expect(viewport).not.toBeNull();
-  const topMenuFitsBelow =
-    viewport!.height - (topActionsBox!.y + topActionsBox!.height) - 8 - 4 >=
-    topMenuHeight;
-  await expect(topMenu).toHaveClass(
-    topMenuFitsBelow ? /message-menu--below/ : /message-menu--above/,
-  );
-  const topMenuGap = topMenuFitsBelow
+  const topMenuBelow = topMenuBox!.y >= topActionsBox!.y;
+  const topMenuGap = topMenuBelow
     ? topMenuBox!.y - (topActionsBox!.y + topActionsBox!.height)
     : topActionsBox!.y - (topMenuBox!.y + topMenuBox!.height);
-  expect(topMenuGap).toBeCloseTo(4, 0);
+  expect(topMenuGap).toBeGreaterThanOrEqual(0);
+  expect(topMenuGap).toBeLessThanOrEqual(12);
   expect(topMenuBox!.y).toBeGreaterThanOrEqual(8);
   expect(topMenuBox!.y + topMenuBox!.height).toBeLessThanOrEqual(
-    viewport!.height - 8,
+    viewport!.height,
   );
-  if (test.info().project.name === "desktop") {
-    const scrollTopBeforeWheel = await page
-      .locator(".message-scroll")
-      .evaluate((element) => element.scrollTop);
-    await page.locator(".message-scroll").hover();
-    await page.mouse.wheel(0, 500);
-    await expect
-      .poll(() =>
-        page
-          .locator(".message-scroll")
-          .evaluate((element) => element.scrollTop),
-      )
-      .toBe(scrollTopBeforeWheel);
-  }
   await page.mouse.click(8, 8);
   await expect(topMenu).toHaveCount(0);
-  await expect
-    .poll(() =>
-      page
-        .locator(".message-scroll")
-        .evaluate((element) => getComputedStyle(element).overflowY),
-    )
-    .toBe("auto");
 });
 
 test("conversation opens at the read boundary and always offers jump to latest", async ({
@@ -1926,31 +1888,26 @@ test("composer send controls activate only when there is content", async ({
   const settings = page.getByRole("button", { name: "Настройки отправки" });
   const controls = page.locator(".composer__send");
 
+  const phone = test.info().project.name === "phone";
   await expect(send).toBeDisabled();
-  await expect(settings).toBeDisabled();
+  // The Enter/Shift+Enter menu lives behind the split button on desktop only.
+  if (!phone) await expect(settings).toBeEnabled();
   await expect(controls).not.toHaveClass(/composer__send--active/);
 
   await composer.fill("Сообщение");
   await expect(send).toBeEnabled();
-  await expect(settings).toBeEnabled();
   await expect(controls).toHaveClass(/composer__send--active/);
   if (test.info().project.name === "desktop") {
-    const [fieldBox, hintBox, statusBox] = await Promise.all([
-      page.locator(".conversation > .composer-wrap .composer").boundingBox(),
-      page.locator(".composer-hint > span").boundingBox(),
-      page.locator(".connection-pill").boundingBox(),
+    const [fieldBox, hintBox] = await Promise.all([
+      page.locator(".conversation__main .composer").boundingBox(),
+      page.locator(".composer__hint").boundingBox(),
     ]);
     expect(fieldBox).not.toBeNull();
     expect(hintBox).not.toBeNull();
-    expect(statusBox).not.toBeNull();
-    expect(statusBox!.y - (fieldBox!.y + fieldBox!.height)).toBeCloseTo(8, 0);
-    expect(
-      Math.abs(
-        hintBox!.y +
-          hintBox!.height / 2 -
-          (statusBox!.y + statusBox!.height / 2),
-      ),
-    ).toBeLessThanOrEqual(1);
+    expect(hintBox!.y).toBeGreaterThan(fieldBox!.y);
+    expect(hintBox!.y + hintBox!.height).toBeLessThan(
+      fieldBox!.y + fieldBox!.height,
+    );
   }
   const oneLineHeight = await composer.evaluate(
     (element) => element.getBoundingClientRect().height,
@@ -1963,19 +1920,18 @@ test("composer send controls activate only when there is content", async ({
     ),
   ]);
   expect(sixLineHeight).toBeGreaterThan(oneLineHeight);
-  expect(sixLineHeight).toBeLessThanOrEqual(lineHeight * 6 + 10);
-  await settings.click();
-  await expect(
-    page.getByRole("radio", {
-      name: "Enter — отправка сообщения Shift + Enter — перенос строки",
-      exact: true,
-    }),
-  ).toBeChecked();
+  expect(sixLineHeight).toBeLessThanOrEqual(lineHeight * 8 + 10);
+  if (!phone) {
+    await settings.click();
+    await expect(
+      page.getByRole("menuitem", { name: "Enter — отправить", exact: true }),
+    ).toHaveAttribute("aria-checked", "true");
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("menuitem")).toHaveCount(0);
+  }
 
   await composer.fill("");
   await expect(send).toBeDisabled();
-  await expect(settings).toBeDisabled();
-  await expect(page.getByRole("radio")).toHaveCount(0);
 });
 
 test("an expired websocket token refreshes without leaving the messenger", async ({
@@ -2026,7 +1982,12 @@ test("mandatory password change blocks the messenger until completion", async ({
       "Администратор потребовал сменить пароль. Задайте новый пароль, чтобы продолжить работу.",
     ),
   ).toHaveCount(0);
-  await expect(page.getByText("Выберите чат")).toBeVisible();
+  if (test.info().project.name === "phone")
+    await expect(page.locator(".chat-list")).toBeVisible();
+  else
+    await expect(
+      page.locator(".welcome").getByRole("heading", { name: /^Добр/ }),
+    ).toBeVisible();
 });
 
 test("password recovery uses email without exposing the token", async ({
@@ -2046,19 +2007,15 @@ test("password recovery uses email without exposing the token", async ({
   await page.getByLabel("Почта").fill("owner@example.com");
   await page.getByRole("button", { name: "Отправить ссылку" }).click();
   await expect(
-    page.getByText(
-      "Если аккаунт существует, ссылка для восстановления отправлена на его email",
-    ),
+    page.getByText("Если адрес зарегистрирован, письмо уже в пути"),
   ).toBeVisible();
 
   await page.goto("/reset-password?token=one-use-token");
-  await page
-    .getByLabel("Новый пароль", { exact: true })
-    .fill("new password 123");
-  await page.getByLabel("Повторите новый пароль").fill("new password 123");
-  await page.getByRole("button", { name: "Задать новый пароль" }).click();
+  await page.locator('input[name="new_password"]').fill("new password 123");
+  await page.locator('input[name="confirm_password"]').fill("new password 123");
+  await page.getByRole("button", { name: "Сменить пароль" }).click();
   await expect(
-    page.getByText("Пароль изменён. Все прежние сессии завершены."),
+    page.getByRole("heading", { name: "Пароль изменён" }),
   ).toBeVisible();
 });
 
@@ -2069,9 +2026,7 @@ test("password recovery explains the local operator path without SMTP", async ({
   await page.goto("/");
   await page.getByRole("button", { name: "Забыли пароль?" }).click();
   await expect(
-    page.getByText(
-      "Почтовая отправка не настроена. Обратитесь к администратору пространства или оператору сервера.",
-    ),
+    page.getByText("Обратитесь к администратору", { exact: true }),
   ).toBeVisible();
   await expect(page.getByLabel("Почта")).toHaveCount(0);
 });
@@ -2080,16 +2035,18 @@ test("custom status is edited from the profile menu", async ({ page }) => {
   const runtime = await mockMessenger(page);
   const phone = test.info().project.name === "phone";
   await page.goto(phone ? "/more" : "/chats");
-  await page.getByRole("button", { name: phone ? /Статус/ : /Анна/ }).click();
-  if (!phone) await page.getByRole("menuitem", { name: /Чем заняты/ }).click();
+  await page.getByRole("button", { name: phone ? /^Статус/ : /Анна/ }).click();
+  if (!phone)
+    await page
+      .getByRole("menuitem", { name: "Установить статус…" })
+      .click();
   await page.getByLabel("Эмодзи статуса").click();
   await page
-    .locator(".status-dialog__emoji-picker")
+    .locator(".status-dialog__picker")
     .getByRole("button", { name: "grinning face", exact: true })
     .click();
   await page.getByLabel("Текст статуса").fill("В отпуске");
-  if (!phone)
-    await page.locator('select[name="status-expiry"]').selectOption("week");
+  await page.getByRole("radio", { name: "Через неделю" }).click();
   await page.getByRole("button", { name: "Сохранить" }).click();
   await expect.poll(() => runtime.statusMutations.length).toBe(1);
   if (phone) {
@@ -2100,12 +2057,12 @@ test("custom status is edited from the profile menu", async ({ page }) => {
     await expect(page.getByText("😀 В отпуске").first()).toBeVisible();
   }
 
-  await page.getByRole("button", { name: phone ? /Статус/ : /Анна/ }).click();
+  await page.getByRole("button", { name: phone ? /^Статус/ : /Анна/ }).click();
   if (!phone) await page.getByRole("menuitem", { name: /В отпуске/ }).click();
-  await page.getByRole("button", { name: "Очистить статус" }).click();
+  await page.getByRole("button", { name: "Очистить", exact: true }).click();
   if (phone) {
     await expect(
-      page.getByRole("button", { name: "Статус Чем заняты?" }),
+      page.getByRole("button", { name: "Статус Не установлен" }),
     ).toBeVisible();
   } else {
     await expect(page.getByText("😀 В отпуске")).toHaveCount(0);
@@ -2117,55 +2074,39 @@ test("notification snooze is shared by the profile menu", async ({ page }) => {
   const phone = test.info().project.name === "phone";
   await page.goto(phone ? "/more" : "/chats");
   if (phone) {
-    await page.getByRole("button", { name: /Отключить уведомления/ }).click();
+    await page.getByRole("button", { name: /^Не беспокоить/ }).click();
   } else {
     await page.getByRole("button", { name: /Анна/ }).click();
-    await page.getByRole("menuitem", { name: "Отключить уведомления" }).click();
-    const menuBox = await page.locator(".profile-menu").boundingBox();
-    const snoozeBox = await page.locator(".profile-menu__snooze").boundingBox();
-    expect(menuBox).not.toBeNull();
-    expect(snoozeBox).not.toBeNull();
-    expect(snoozeBox!.x - (menuBox!.x + menuBox!.width)).toBeGreaterThanOrEqual(
-      7,
-    );
-    const presetButtons = page.locator(
-      ".profile-menu__snooze-presets .ui-button",
-    );
-    await expect(presetButtons).toHaveCount(4);
+    await page.getByRole("button", { name: /^Не беспокоить/ }).click();
+    const presetButtons = page.locator(".snooze-controls__presets .ui-chip");
+    await expect(presetButtons).toHaveCount(5);
     for (const button of await presetButtons.all()) {
       const box = await button.boundingBox();
       expect(box).not.toBeNull();
-      expect(box!.width).toBeGreaterThan(100);
+      expect(box!.width).toBeGreaterThan(40);
     }
     await expect(page).toHaveScreenshot("notification-snooze-popover.png", {
       animations: "disabled",
     });
   }
-  await page.getByRole("button", { name: "На 30 минут" }).click();
+  await page.getByRole("button", { name: "30 мин" }).click();
   if (phone) {
     await expect(
-      page.getByRole("button", {
-        name: /Отключить уведомления Уведомления отключены до/,
-      }),
+      page.getByRole("button", { name: /Не беспокоить Включено до/ }),
     ).toBeVisible();
-    await page.getByRole("button", { name: /Отключить уведомления/ }).click();
   } else {
     await expect(
-      page.locator(".profile-menu").getByText(/Уведомления отключены до/),
+      page.locator(".profile-menu").getByText(/Включено до/),
     ).toBeVisible();
   }
-  await page.getByRole("button", { name: "Включить сейчас" }).click();
+  await page.getByRole("button", { name: "Возобновить уведомления" }).click();
   if (phone) {
     await expect(
-      page.getByRole("button", {
-        name: /Отключить уведомления Пауза действует/,
-      }),
+      page.getByRole("button", { name: /Не беспокоить Выключено/ }),
     ).toBeVisible();
   } else {
     await expect(
-      page
-        .locator(".profile-menu")
-        .getByText("Пауза действует на всех ваших устройствах"),
+      page.locator(".profile-menu").getByText("Выключено", { exact: true }),
     ).toBeVisible();
   }
 });

@@ -30,7 +30,7 @@ export const themes = {
     surfaceSelected: "#e7edf4",
     foreground: "#182235",
     muted: "#566477",
-    subtle: "#566477",
+    subtle: "#65728a",
     border: "#dce3ec",
     borderStrong: "#c9d3df",
     primary: "#174586",
@@ -39,12 +39,14 @@ export const themes = {
     onPrimary: "#ffffff",
     avatarStart: "#174586",
     avatarEnd: "#3e76bc",
-    avatar1: "#2563eb",
-    avatar2: "#7c3aed",
-    avatar3: "#c026d3",
-    avatar4: "#e11d48",
-    avatar5: "#ff9b36",
-    avatar6: "#18d99c",
+    avatar1: "#3f7778",
+    avatar2: "#4c6ca6",
+    avatar3: "#5d7196",
+    avatar4: "#776b8e",
+    avatar5: "#4f76a8",
+    avatar6: "#5f7289",
+    avatar7: "#8f677e",
+    avatar8: "#587a96",
     online: "#13b96f",
     tooltip: "#182235",
     danger: "#bd3346",
@@ -81,12 +83,14 @@ export const themes = {
     onPrimary: "#ffffff",
     avatarStart: "#22589d",
     avatarEnd: "#3d83d3",
-    avatar1: "#2563eb",
-    avatar2: "#7c3aed",
-    avatar3: "#c026d3",
-    avatar4: "#e11d48",
-    avatar5: "#ff9b36",
-    avatar6: "#18d99c",
+    avatar1: "#4f8a8b",
+    avatar2: "#5b7bb3",
+    avatar3: "#6b7fa3",
+    avatar4: "#8a7f9e",
+    avatar5: "#7a9cc6",
+    avatar6: "#8b9db5",
+    avatar7: "#a0788f",
+    avatar8: "#6f8fa8",
     online: "#2ee58d",
     tooltip: "#f0f1f5",
     danger: "#ff8a99",
@@ -111,7 +115,12 @@ export const themes = {
 export type ThemeName = keyof typeof themes;
 export type ThemeTokens = (typeof themes)[ThemeName];
 
-export function stableAvatarIndex(seed: string, paletteSize = 6): number {
+export const avatarPaletteSize = 8;
+
+export function stableAvatarIndex(
+  seed: string,
+  paletteSize = avatarPaletteSize,
+): number {
   let hash = 2166136261;
   for (let index = 0; index < seed.length; index += 1) {
     hash ^= seed.charCodeAt(index);

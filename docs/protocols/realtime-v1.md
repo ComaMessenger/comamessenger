@@ -194,10 +194,10 @@ Unknown event type игнорируется по содержимому, но е
 | `EVENT_POLL_INTERVAL`                       |     200ms | recovery polling committed events          |
 | `EVENT_RETENTION`                           |       72h | временное окно delivery log                |
 | `EVENT_RETENTION_MIN_COUNT`                 |   100 000 | минимальный хвост событий организации      |
-| `WS_TYPING_TTL`                             |        6s | срок действия typing lease                  |
-| `WS_PRESENCE_TTL`                           |       60s | срок действия presence lease                |
-| `WS_ACTIVE_SUBSCRIPTION_TTL`                |       60s | срок active-screen lease                     |
-| `WS_EPHEMERAL_RATE_LIMIT/WINDOW`            |  30 / 10s | распределённый лимит ephemeral frames       |
+| `WS_TYPING_TTL`                             |        6s | срок действия typing lease                 |
+| `WS_PRESENCE_TTL`                           |       60s | срок действия presence lease               |
+| `WS_ACTIVE_SUBSCRIPTION_TTL`                |       60s | срок active-screen lease                   |
+| `WS_EPHEMERAL_RATE_LIMIT/WINDOW`            |  30 / 10s | распределённый лимит ephemeral frames      |
 
 Зависимые значения валидируются при старте Core: например, unacked window не может быть больше event queue, а Pong timeout должен быть короче heartbeat interval.
 
@@ -205,14 +205,15 @@ Unknown event type игнорируется по содержимому, но е
 
 Core отправляет WebSocket Ping каждые 25 секунд и ожидает Pong не более 10 секунд. Reader и writer имеют deadlines, а на соединение работает ровно один writer goroutine.
 
-| Код    | Причина                   | Поведение клиента                         |
-| ------ | ------------------------- | ----------------------------------------- |
-| `1000` | нормальное закрытие       | переподключаться только при необходимости |
-| `1008` | protocol/policy violation | не повторять без исправления запроса      |
-| `1012` | restart Core              | переподключиться с jitter                 |
-| `4001` | auth failed/expired       | refresh, затем reconnect                  |
-| `4008` | slow consumer             | reconnect с checkpoint                    |
-| `4009` | history unavailable       | выполнить full resync                     |
+| Код                                             | Причина                           | Поведение клиента                                  |
+| ----------------------------------------------- | --------------------------------- | -------------------------------------------------- |
+| `1000`                                          | нормальное закрытие               | переподключаться только при необходимости          |
+| `1008`                                          | protocol/policy violation         | не повторять без исправления запроса               |
+| `1012`                                          | restart Core                      | переподключиться с jitter                          |
+| `4001`                                          | auth failed/expired               | refresh, затем reconnect                           |
+| `4001` + error-frame `password_change_required` | требуется смена пароля (фаза 3.2) | без refresh/reconnect; показать экран смены пароля |
+| `4008`                                          | slow consumer                     | reconnect с checkpoint                             |
+| `4009`                                          | history unavailable               | выполнить full resync                              |
 
 Reconnect использует full jitter от 500 мс до 30 секунд и сбрасывает backoff после стабильного соединения.
 

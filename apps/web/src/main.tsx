@@ -7,7 +7,7 @@ import { router } from "./router";
 import "./i18n";
 import "@fontsource-variable/onest";
 import "@comamessenger/tokens/theme.css";
-import "./styles.css";
+import "./styles/index.css";
 
 const root = document.getElementById("root");
 
