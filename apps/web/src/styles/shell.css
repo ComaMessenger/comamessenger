@@ -638,6 +638,11 @@
   top: 22px;
   inset-inline-end: 22px;
 }
+/* Directory details have their own header row — keep the pill out of it. */
+.messenger--directory .connection-pill--floating {
+  top: auto;
+  bottom: 22px;
+}
 
 /* Welcome ------------------------------------------------------------------ */
 .welcome {

@@ -19,3 +19,10 @@ export const mobileQuery = "(max-width: 640px)";
 export function useIsMobile() {
   return useMediaQuery(mobileQuery);
 }
+
+/** Narrow desktop (641–900px): utility screens show either the list or the detail, not both. */
+export const narrowDesktopQuery = "(max-width: 900px)";
+
+export function useIsNarrowDesktop() {
+  return useMediaQuery(narrowDesktopQuery);
+}

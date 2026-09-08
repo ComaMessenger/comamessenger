@@ -23,6 +23,8 @@ import { Conversation } from "../conversation/Conversation";
 import { ThreadDirectory } from "../directories/ThreadDirectory";
 import { ImportantDirectory } from "../directories/ImportantDirectory";
 import { MembersDirectory } from "../directories/MembersDirectory";
+import { MemberProfilePage } from "../directories/MemberProfilePage";
+import { directoryFromPath } from "../directories/routes";
 import { MorePage } from "../directories/MorePage";
 import { CreateChatDialog } from "../dialogs/CreateChatDialog";
 import { ChatFolderDialog } from "../dialogs/ChatFolderDialog";
@@ -77,15 +79,12 @@ export function Messenger({
   const activeSettings = settingForPath(path);
   const showAgents = path === "/agents" || path.startsWith("/agents/");
   const showChatList = Boolean(selectedID) || path === "/chats";
+  const directory = directoryFromPath(path);
   const section: PrimarySection = showChatList
     ? "chats"
-    : path === "/threads"
-      ? "threads"
-      : path === "/important"
-        ? "important"
-        : path === "/members"
-          ? "members"
-          : showAgents
+    : directory
+      ? directory.kind
+      : showAgents
             ? "agents"
             : path === "/more" || activeSettings
               ? "more"
@@ -160,12 +159,16 @@ export function Messenger({
       onOpenThread={(id) => navigate(`/chat/${selectedID}/thread/${id}`)}
       onCloseThread={() => navigate(`/chat/${selectedID}`)}
     />
-  ) : section === "threads" ? (
-    <ThreadDirectory />
-  ) : section === "important" ? (
-    <ImportantDirectory />
-  ) : section === "members" ? (
-    <MembersDirectory />
+  ) : directory?.kind === "threads" ? (
+    <ThreadDirectory selectedID={directory.id} />
+  ) : directory?.kind === "important" ? (
+    <ImportantDirectory selectedID={directory.id} />
+  ) : directory?.kind === "members" ? (
+    isMobile && directory.id ? (
+      <MemberProfilePage actorID={directory.id} />
+    ) : (
+      <MembersDirectory selectedID={directory.id} />
+    )
   ) : path === "/more" ? (
     <MorePage />
   ) : showAgents ? (
@@ -204,6 +207,8 @@ export function Messenger({
             "messenger",
             sidebarCollapsed && "messenger--sidebar-collapsed",
             !showChatList && "messenger--utility",
+            directory && "messenger--directory",
+            directory?.id && "messenger--detail-open",
             selectedID && "messenger--chat-open",
             threadID && "messenger--thread-open",
             (showAgents || activeSettings) && "messenger--settings",

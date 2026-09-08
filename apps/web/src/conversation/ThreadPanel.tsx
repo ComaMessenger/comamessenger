@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronLeft, X } from "lucide-react";
+import { ArrowUpRight, Check, ChevronLeft, ExternalLink, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import type { Chat, ChatMember, ClientMessage, Message } from "@comamessenger/core";
 import { hasPermission } from "../settings";
-import { Chip, EmptyState, IconButton, InlineError, SkeletonRow, cx } from "../ui";
+import { Avatar, Chip, EmptyState, IconButton, InlineError, SkeletonRow, cx } from "../ui";
 import { getLocalDraft, setLocalDraft, syncDraft } from "../lib/drafts";
-import { minuteGap } from "../lib/format";
+import { formatAgePhrase, minuteGap } from "../lib/format";
 import { resolvedMentionActorIDs } from "../lib/mentions";
 import { canManageChat, isReadOnly } from "../lib/chats";
 import { useIsMobile } from "../lib/useMediaQuery";
@@ -24,16 +24,23 @@ export function ThreadPanel({
   members,
   rootID,
   onClose,
+  variant = "panel",
 }: {
   chat: Chat;
   chatName: string;
   members: ChatMember[];
   rootID: string;
   onClose(): void;
+  /** "page" — the /threads detail pane: chat-centric header, ink root card, unread separator. */
+  variant?: "panel" | "page";
 }) {
   const { t } = useTranslation();
   const isMobile = useIsMobile();
-  const { api, user, store, coordinator, outbox } = useMessenger();
+  const { api, user, store, coordinator, outbox, navigate } = useMessenger();
+  const isPage = variant === "page";
+  const unreadThread = useStore(store, (state) =>
+    state.unread.threads.find((item) => item.thread_root_id === rootID),
+  );
   const queryClient = useQueryClient();
   const storedMessages = useStore(store, (state) => state.messages[chat.id] ?? emptyMessages);
   const presence = useStore(store, (state) => state.presence);
@@ -59,6 +66,13 @@ export function ThreadPanel({
   }, [query.data?.messages, rootID, storedMessages]);
   const root = messages.find((message) => message.id === rootID);
   const replies = messages.filter((message) => message.thread_root_id === rootID);
+  const participantCount = new Set(replies.map((message) => message.actor_id)).size;
+  const lastReply = replies[replies.length - 1];
+  // Replies past the reader's marker — the "new" separator goes before the first of them.
+  const firstUnreadID =
+    isPage && unreadThread && unreadThread.unread_count > 0
+      ? replies.find((message) => message.created_seq > unreadThread.last_read_seq)?.id
+      : undefined;
   const canModerate = hasPermission(user, "chats.moderate") || canManageChat(chat);
 
   useEffect(() => {
@@ -99,17 +113,34 @@ export function ThreadPanel({
   const refresh = () => void query.refetch();
 
   return (
-    <aside className="thread-panel" aria-label={t("threadTitle")}>
-      <header className="thread-panel__head">
+    <aside className={cx("thread-panel", isPage && "thread-panel--page")} aria-label={t("threadTitle")}>
+      <header className={cx("thread-panel__head", isPage && "thread-panel__head--page")}>
         {isMobile && (
           <IconButton size="icon-lg" label={t("back")} onClick={onClose}>
             <ChevronLeft />
           </IconButton>
         )}
+        {isPage && (
+          <Avatar
+            name={chatName}
+            seed={chat.avatar_seed}
+            actorID={chat.direct_peer?.actor_id}
+            avatarVersion={chat.direct_peer?.avatar_version}
+            size="md"
+          />
+        )}
         <div className="thread-panel__title">
-          <strong>{t("threadTitle")}</strong>
+          <strong className="truncate">{isPage ? t("threadIn", { chat: chatName }) : t("threadTitle")}</strong>
           <span className="truncate">
-            {t("threadMeta", { replies: t("threadReplies", { count: replies.length }), chat: chatName })}
+            {isPage
+              ? [
+                  t("threadReplies", { count: replies.length }),
+                  t("threadParticipants", { count: participantCount }),
+                  lastReply && t("threadLastAgo", { age: formatAgePhrase(lastReply.created_at) }),
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+              : t("threadMeta", { replies: t("threadReplies", { count: replies.length }), chat: chatName })}
           </span>
         </div>
         <Chip
@@ -121,7 +152,13 @@ export function ThreadPanel({
           {following && <Check strokeWidth={2.4} />}
           {following ? t("threadSubscribed") : t("threadSubscribe")}
         </Chip>
-        {!isMobile && (
+        {isPage && !isMobile && (
+          <Chip size="lg" onClick={() => navigate(`/chat/${chat.id}/thread/${rootID}`)}>
+            {t("threadOpenInChat")}
+            <ExternalLink aria-hidden="true" />
+          </Chip>
+        )}
+        {!isMobile && !isPage && (
           <IconButton size="icon-sm" label={t("close")} onClick={onClose}>
             <X />
           </IconButton>
@@ -146,7 +183,7 @@ export function ThreadPanel({
                 </div>
               </div>
             ) : root ? (
-              <div className="thread-panel__root">
+              <div className={cx("thread-panel__root", isPage && "thread-panel__root--ink")}>
                 <MessageRow
                   message={root}
                   members={members}
@@ -163,6 +200,16 @@ export function ThreadPanel({
                   domIDPrefix="thread-message"
                   showThreadIndicator={false}
                 />
+                {isPage && (
+                  <button
+                    type="button"
+                    className="thread-panel__jump"
+                    onClick={() => navigate(`/chat/${chat.id}?message=${rootID}`)}
+                  >
+                    {t("threadJumpToMessage")}
+                    <ArrowUpRight aria-hidden="true" />
+                  </button>
+                )}
               </div>
             ) : null}
             {replies.length > 0 ? (
@@ -177,7 +224,7 @@ export function ThreadPanel({
             )}
             {replies.map((message, index) => {
               const previous = replies[index - 1];
-              return (
+              const row = (
                 <MessageRow
                   key={message.id}
                   message={message}
@@ -202,6 +249,16 @@ export function ThreadPanel({
                   domIDPrefix="thread-message"
                   showThreadIndicator={false}
                 />
+              );
+              if (message.id !== firstUnreadID) return row;
+              return (
+                <Fragment key={message.id}>
+                  <div className="thread-panel__separator thread-panel__separator--unread">
+                    <span>{t("threadNew")}</span>
+                    <i aria-hidden="true" />
+                  </div>
+                  {row}
+                </Fragment>
               );
             })}
             {Object.values(streams)

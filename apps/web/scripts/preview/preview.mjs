@@ -158,6 +158,7 @@ if (all || mode === "shell") {
   await shot("04-threads", { path: "/threads" });
   await shot("05-important", { path: "/important" });
   await shot("06-members", { path: "/members" });
+  await shot("06b-member", { path: `/members/${uid(3)}` });
   await shot("07-collapsed", { after: async (p) => { await p.getByRole("button", { name: "Свернуть боковую панель" }).click({ force: true }); } });
   await shot("08-profile-menu", { path: `/chat/${chats[0].id}`, after: async (p) => { await p.locator(".sidebar-profile__identity").click(); await p.getByRole("button", { name: /Не беспокоить/ }).click(); await p.getByRole("button", { name: "Своё время…" }).click(); } });
 }
@@ -167,6 +168,8 @@ if (all || mode === "mobile") {
   await shot("m03-thread", { mobile: true, path: `/chat/${chats[0].id}/thread/${uid(201)}` });
   await shot("m04-more", { mobile: true, path: "/more" });
   await shot("m05-members", { mobile: true, path: "/members" });
+  await shot("m06-member", { mobile: true, path: `/members/${uid(3)}` });
+  await shot("m07-threads", { mobile: true, path: "/threads" });
 }
 if (all || mode === "auth") {
   await shot("a01-login", { options: { signedOut: true } });

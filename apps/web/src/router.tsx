@@ -48,12 +48,27 @@ const routes = [
   }),
   createRoute({
     getParentRoute: () => root,
+    path: "/threads/$threadId",
+    component: marker,
+  }),
+  createRoute({
+    getParentRoute: () => root,
     path: "/important",
     component: marker,
   }),
   createRoute({
     getParentRoute: () => root,
+    path: "/important/$messageId",
+    component: marker,
+  }),
+  createRoute({
+    getParentRoute: () => root,
     path: "/members",
+    component: marker,
+  }),
+  createRoute({
+    getParentRoute: () => root,
+    path: "/members/$actorId",
     component: marker,
   }),
   createRoute({

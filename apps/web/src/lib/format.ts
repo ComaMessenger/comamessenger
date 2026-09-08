@@ -97,3 +97,23 @@ export function greetingKey(now = new Date()) {
 export function firstName(displayName: string) {
   return displayName.trim().split(/\s+/)[0] ?? displayName;
 }
+
+/** "12 min", "1 h", "yesterday", "Mon" — compact age for list rows. */
+export function formatAge(value: string, now = new Date()) {
+  const minutes = Math.max(0, Math.round((now.getTime() - new Date(value).getTime()) / 60_000));
+  if (minutes < 1) return i18n.t("justNow");
+  if (minutes < 60) return i18n.t("minutesShort", { count: minutes });
+  if (minutes < 24 * 60 && new Date(value).toDateString() === now.toDateString())
+    return i18n.t("hoursShort", { count: Math.round(minutes / 60) });
+  return formatListTime(value, now);
+}
+
+/** "12 min ago", "2 h ago", "yesterday", "Mon" — age as a phrase for sentences. */
+export function formatAgePhrase(value: string, now = new Date()) {
+  const minutes = Math.max(0, Math.round((now.getTime() - new Date(value).getTime()) / 60_000));
+  if (minutes < 1) return i18n.t("justNow");
+  if (minutes < 60) return i18n.t("minutesAgo", { count: minutes });
+  if (minutes < 24 * 60 && new Date(value).toDateString() === now.toDateString())
+    return i18n.t("hoursAgo", { count: Math.round(minutes / 60) });
+  return formatListTime(value, now).toLocaleLowerCase();
+}

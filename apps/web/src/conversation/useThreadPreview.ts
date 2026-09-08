@@ -11,6 +11,9 @@ export type ThreadPreview = {
   participantIDs: string[];
   /** ISO timestamp of the latest reply, if any reply is known. */
   lastReplyAt: string | null;
+  /** The latest reply itself (for list previews). */
+  lastReply: Message | null;
+  loaded: boolean;
 };
 
 /**
@@ -40,6 +43,11 @@ export function useThreadPreview(root: Message, enabled: boolean): ThreadPreview
       if (!participantIDs.includes(reply.actor_id)) participantIDs.push(reply.actor_id);
       if (participantIDs.length === 3) break;
     }
-    return { participantIDs, lastReplyAt: ordered[0]?.created_at ?? null };
+    return {
+      participantIDs,
+      lastReplyAt: ordered[0]?.created_at ?? null,
+      lastReply: ordered[0] ?? null,
+      loaded: loaded !== undefined,
+    };
   }, [loaded, root.id, stored]);
 }

@@ -1417,6 +1417,8 @@ test("dark messenger shell uses flat charcoal elevation without glow", async ({
   expect(glowing).toEqual([]);
   await expect(page).toHaveScreenshot("messenger-dark.png", {
     animations: "disabled",
+    // The greeting depends on the wall clock ("Добрый день" vs "вечер").
+    mask: [page.locator(".welcome__card h2")],
   });
 });
 
@@ -2087,6 +2089,8 @@ test("notification snooze is shared by the profile menu", async ({ page }) => {
     }
     await expect(page).toHaveScreenshot("notification-snooze-popover.png", {
       animations: "disabled",
+      // The greeting depends on the wall clock ("Добрый день" vs "вечер").
+      mask: [page.locator(".welcome__card h2")],
     });
   }
   await page.getByRole("button", { name: "30 мин" }).click();
@@ -2181,4 +2185,55 @@ test("an optimistic message retries with the same client command", async ({
     page.getByText("Сообщение из outbox", { exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Повторить" })).toHaveCount(0);
+});
+
+test("utility screens are master-detail on desktop and list-only on phones", async ({
+  page,
+}) => {
+  const phone = test.info().project.name === "phone";
+  await mockMessenger(page, {
+    chatPatch: { kind: "group", role: "admin" },
+    threads: [
+      { root: { ...message, id: "thread-root-1", body: "Всем привет!" }, reply_count: 1 },
+    ],
+  });
+
+  await page.goto("/threads");
+  await expect(page.getByRole("heading", { name: "Треды" })).toBeVisible();
+  const threadRow = page.locator(".directory-row").first();
+  await expect(threadRow).toContainText("Всем привет!");
+  if (phone) {
+    await expect(page.locator(".directory__detail")).toHaveCount(0);
+    await threadRow.click();
+    await expect(page).toHaveURL(new RegExp(`/chat/${chat.id}/thread/thread-root-1$`));
+  } else {
+    // The first thread opens by itself so the workspace is never empty.
+    const detail = page.locator(".directory__detail");
+    await expect(detail.getByText("Тред в «Объявления»")).toBeVisible();
+    await expect(detail.getByText("Ответ внутри треда")).toBeVisible();
+    await expect(detail.getByRole("textbox", { name: "Ответить в треде…" })).toBeVisible();
+    await threadRow.click();
+    await expect(page).toHaveURL(/\/threads\/thread-root-1$/);
+    await expect(page.locator(".directory-row--selected")).toHaveCount(1);
+  }
+
+  await page.goto("/members");
+  const memberRow = page.locator(".directory-row--member", { hasText: lev.display_name });
+  await expect(memberRow).toBeVisible();
+  await memberRow.click();
+  await expect(page).toHaveURL(new RegExp(`/members/${lev.actor_id}$`));
+  const profile = page.locator(".member-profile");
+  await expect(profile.getByRole("heading", { name: lev.display_name })).toBeVisible();
+  await expect(profile.getByRole("button", { name: "Написать" })).toBeVisible();
+  if (phone) {
+    await expect(page.locator(".directory-list")).toHaveCount(0);
+    await page.getByRole("button", { name: "Назад" }).click();
+    await expect(page).toHaveURL(/\/members$/);
+  } else {
+    await expect(page.locator(".directory-list")).toBeVisible();
+  }
+
+  await page.goto("/important");
+  await expect(page.getByRole("heading", { name: "Важные" })).toBeVisible();
+  await expect(page.getByText("Нет важных сообщений")).toBeVisible();
 });

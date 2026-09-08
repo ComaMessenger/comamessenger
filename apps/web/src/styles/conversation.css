@@ -497,11 +497,11 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 28px;
+  height: 32px;
   margin-top: 6px;
-  padding: 0 8px 0 4px;
+  padding: 0 10px 0 4px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 9px;
   background: transparent;
   color: var(--coma-primary);
 }
@@ -513,16 +513,16 @@
   height: 16px;
 }
 .message__thread .ui-avatar {
-  --coma-avatar-size: 20px;
-  font-size: 8px;
+  --coma-avatar-size: 22px;
+  font-size: 9px;
 }
 .message__thread strong {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
 }
 .message__thread > span {
   color: var(--coma-subtle);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   letter-spacing: -0.01em;
 }
@@ -806,6 +806,130 @@
 }
 .thread-panel .composer-shell {
   padding: 0 12px 12px;
+}
+
+/* Page variant: the /threads detail pane ------------------------------------- */
+.thread-panel--page {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+}
+.thread-panel__head--page {
+  gap: 12px;
+  height: auto;
+  min-height: 64px;
+  padding: 14px 20px;
+}
+.thread-panel__head--page .thread-panel__title strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+.thread-panel__head--page .ui-chip {
+  height: 34px;
+  border: 1px solid var(--coma-border);
+  background: transparent;
+  font-size: 13px;
+}
+.thread-panel__head--page .ui-chip:hover {
+  background: var(--coma-surface-hover);
+}
+.thread-panel__head--page .ui-chip > svg {
+  width: 14px;
+  height: 14px;
+}
+.thread-panel--page .thread-panel__scroll {
+  gap: 6px;
+  padding: 20px 24px 12px;
+}
+.thread-panel--page .thread-panel__scroll > * {
+  width: 100%;
+  max-width: 820px;
+}
+.thread-panel--page .composer-shell {
+  max-width: 844px;
+  padding: 0 24px 16px;
+}
+.thread-panel__root--ink {
+  padding: 8px 6px 12px 4px;
+  border-radius: 16px;
+  background: var(--coma-ink);
+  color: var(--coma-ink-foreground);
+}
+.thread-panel__root--ink .message__meta strong,
+.thread-panel__root--ink .message__content {
+  color: var(--coma-ink-foreground);
+}
+.thread-panel__root--ink .message__meta time,
+.thread-panel__root--ink .message__edited,
+.thread-panel__root--ink .message__hover-time {
+  color: var(--coma-ink-muted);
+}
+.thread-panel__root--ink .reaction-chip,
+.important-detail__message--pinned .reaction-chip {
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--coma-ink-foreground);
+}
+.thread-panel__root--ink .reaction-chip > span:last-child,
+.important-detail__message--pinned .reaction-chip > span:last-child {
+  color: var(--coma-ink-foreground);
+}
+.thread-panel__root--ink .reaction-chip--own,
+.important-detail__message--pinned .reaction-chip--own {
+  border-color: var(--coma-ink-accent);
+}
+.thread-panel__root--ink .reaction-chip--own > span:last-child,
+.important-detail__message--pinned .reaction-chip--own > span:last-child {
+  color: var(--coma-ink-accent);
+}
+.thread-panel__root--ink .reaction-chip--add,
+.important-detail__message--pinned .reaction-chip--add {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: transparent;
+  color: var(--coma-ink-muted);
+}
+.thread-panel__root--ink .ui-avatar,
+.important-detail__message--pinned .ui-avatar {
+  --coma-avatar-ring: var(--coma-ink);
+}
+.important-detail__message--pinned .ui-avatar-stack .ui-avatar__face {
+  box-shadow: 0 0 0 2px var(--coma-ink);
+}
+.important-detail__message--pinned .message__thread {
+  color: var(--coma-ink-accent);
+}
+.important-detail__message--pinned .message__thread:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.important-detail__message--pinned .message__thread > span {
+  color: var(--coma-ink-muted);
+}
+.thread-panel__jump {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  margin: 4px 0 0 56px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--coma-ink-accent);
+  color: var(--coma-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+.thread-panel__jump:hover {
+  filter: brightness(1.08);
+}
+.thread-panel__jump > svg {
+  width: 14px;
+  height: 14px;
+}
+.thread-panel__separator--unread > span {
+  color: var(--coma-primary);
+}
+.thread-panel__separator--unread > i {
+  background: var(--coma-primary);
 }
 
 /* Responsive ----------------------------------------------------------------- */
