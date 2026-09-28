@@ -129,7 +129,7 @@
 
 ## Риски и открытые вопросы
 
-Решено 2026-09-29: Expo CNG + EAS Build; отдельный UI поверх tokens без универсального пакета; `expo-sqlite` для локальных данных; iOS 16+ и Android 8.0+; только телефоны; preview на lock screen выключен по умолчанию (`push_preview`); публикация с личных аккаунтов Apple/Google; push через relay проекта.
+Решено 2026-09-29: Expo CNG + EAS Build; отдельный UI поверх tokens без универсального пакета; `expo-sqlite` для локальных данных; iOS 16.4+ и Android 8.0+; только телефоны; preview на lock screen выключен по умолчанию (`push_preview`); публикация с личных аккаунтов Apple/Google; push через relay проекта.
 
 Открыто:
 

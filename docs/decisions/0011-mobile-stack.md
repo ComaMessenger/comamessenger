@@ -14,7 +14,7 @@
 - Expo (SDK 57 на момент решения) с Continuous Native Generation: каталоги `ios/` и `android/` генерируются `expo prebuild` и не коммитятся, нативные изменения делаются config plugins.
 - Сборки и подпись — EAS Build; credentials живут в EAS, а не в репозитории. Для разработки используется development build, а не Expo Go.
 - Приложение живёт в `apps/mobile` в общем pnpm workspace и импортирует `@comamessenger/core`, `@comamessenger/protocol` и `@comamessenger/tokens` напрямую.
-- Минимальные версии: iOS 16, Android 8.0 (API 26). Только телефоны: `supportsTablet: false`, портретная ориентация.
+- Минимальные версии: iOS 16.4 (минимум SDK 57), Android 8.0 (API 26). Только телефоны: `supportsTablet: false`, портретная ориентация.
 
 ### Интерфейс
 
