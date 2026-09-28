@@ -107,3 +107,23 @@ export function initialsOf(name: string) {
     .join("")
     .toUpperCase();
 }
+
+/** Day separator in a feed: Today, Yesterday, or the date (with year when not current). */
+export function formatDaySeparator(
+  value: string,
+  locale: string,
+  labels: { today: string; yesterday: string },
+  now = new Date(),
+) {
+  const date = new Date(value);
+  if (date.toDateString() === now.toDateString()) return labels.today;
+  const previousDay = new Date(now);
+  previousDay.setDate(now.getDate() - 1);
+  if (date.toDateString() === previousDay.toDateString())
+    return labels.yesterday;
+  return new Intl.DateTimeFormat(locale, {
+    day: "numeric",
+    month: "long",
+    ...(date.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
+  }).format(date);
+}

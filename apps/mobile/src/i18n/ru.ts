@@ -64,6 +64,11 @@ export const ru = {
   // Shell
   tabChats: "Чаты",
   tabMore: "Ещё",
+  tabThreads: "Треды",
+  noThreads: "Вы ещё не подписаны на треды",
+  threadsEmptyHint:
+    "Ответьте в треде или подпишитесь на него — он появится здесь.",
+  threadsLoadFailed: "Не удалось загрузить список",
   realtimeConnecting: "Подключение…",
   realtimeReconnecting: "Нет сети, переподключаемся…",
 
@@ -89,8 +94,57 @@ export const ru = {
   // Conversation
   back: "Назад",
   noMessages: "Сообщений пока нет",
-  conversationPreviewNote:
-    "Отправка сообщений появится в следующей версии приложения.",
+  messageDeleted: "Сообщение удалено",
+  edited: "изменено",
+  forwardedFrom: "Переслано от {name}",
+  agentTag: "агент",
+  agent: "Агент",
+  agentWorking: "{name} работает…",
+  agentsWorking:
+    "{count, plural, one {Агент работает} few {# агента работают} many {# агентов работают} other {# агента работают}}",
+  agentState_thinking: "думает…",
+  agentState_tool: "использует инструмент…",
+  agentState_streaming: "отвечает…",
+  agentState_completed: "готово",
+  agentState_failed: "ошибка",
+  agentState_canceled: "отменено",
+  participant: "Участник",
+  today: "Сегодня",
+  newMessages: "Новые сообщения",
+  headerMembers:
+    "{count, plural, one {# участник} few {# участника} many {# участников} other {# участника}}",
+  typingOne: "{name} печатает…",
+  typingMany:
+    "{count, plural, one {# печатает} few {# печатают} many {# печатают} other {# печатают}}",
+  messagePlaceholder: "Сообщение…",
+  send: "Отправить",
+  channelReadOnly: "В канале публикуют только администраторы",
+  replyingTo: "Ответ {name}",
+  cancelReply: "Отменить ответ",
+  deliverySending: "Отправляется",
+  retrying: "Повторяем…",
+  notSent: "Не отправлено",
+  threadReplies:
+    "{count, plural, =0 {Нет ответов} one {# ответ} few {# ответа} many {# ответов} other {# ответа}}",
+  threadTitle: "Тред",
+  threadIn: "Тред в «{chat}»",
+  reply: "Ответить",
+  replyInThread: "Ответить в треде",
+  copyText: "Копировать текст",
+  textCopied: "Текст скопирован",
+  editMessage: "Редактировать",
+  editingMessage: "Редактирование",
+  deleteMessage: "Удалить",
+  deleteMessageTitle: "Удалить сообщение?",
+  deleteMessageHint:
+    "Сообщение исчезнет у всех участников. Это действие нельзя отменить.",
+  addReaction: "Добавить реакцию",
+  reactionCount: "{emoji}: {count}",
+  save: "Сохранить",
+  actionFailed: "Не получилось. Попробуйте ещё раз",
+  messageActions: "Действия с сообщением",
+  scrollToBottom: "К последнему сообщению",
+  loadFailed: "Не удалось загрузить сообщения",
 
   // More
   passwordChangeTitle: "Смените пароль",

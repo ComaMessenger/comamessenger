@@ -1,4 +1,4 @@
-# Server address → sign in → chat list → conversation → sign out.
+# Server address → sign in → chat list → send a message → threads → more.
 # Needs a seeded instance; see README. Run: maestro test e2e/sign-in.yaml
 appId: dev.comamessenger.app
 env:
@@ -61,9 +61,21 @@ env:
     id: chat-row-0
 - assertVisible:
     id: conversation
+- tapOn:
+    id: composer-input
+- inputText: Сообщение с телефона
+- tapOn:
+    id: composer-send
+- extendedWaitUntil:
+    visible: Сообщение с телефона
+    timeout: 10000
 - takeScreenshot: conversation
 - tapOn:
     id: conversation-back
+- tapOn:
+    id: tab-threads
+- assertVisible:
+    id: thread-list
 - tapOn:
     id: tab-more
 - takeScreenshot: more

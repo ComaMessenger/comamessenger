@@ -9,13 +9,17 @@ import {
   type ReactNode,
 } from "react";
 import { AppState } from "react-native";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outbox,
   RealtimeCoordinator,
   createMessengerStore,
+  type AgentStatusState,
 } from "@comamessenger/core";
 import { setLocale } from "@/i18n";
 import { checkpointStorage, outboxStorage } from "@/lib/database";
+import { hydrateDrafts } from "@/lib/drafts";
+import { reactionsKey } from "@/conversation/reactions";
 import { messageOf } from "@/lib/errors";
 import { useSession, useSignedIn } from "@/session/SessionProvider";
 
@@ -26,6 +30,8 @@ type MessengerValue = {
   coordinator: RealtimeCoordinator;
   outbox: Outbox;
   reload(): Promise<void>;
+  /** Coalesces chat list refreshes after local changes. */
+  scheduleReload(): void;
   chatLoading: boolean;
   chatError: string;
   /** Chats the user pinned on any device, in their order. */
@@ -49,6 +55,15 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
   const { api, user } = useSignedIn();
   const { sessionExpired, updateUser } = useSession();
   const store = useMemo(() => createMessengerStore(), []);
+  // Request-lived data (members, reactions, thread pages); event-lived state
+  // stays in the domain store, as on the web (ADR-0009).
+  const queryClient = useMemo(
+    () =>
+      new QueryClient({
+        defaultOptions: { queries: { retry: 1, staleTime: 15_000 } },
+      }),
+    [],
+  );
   const [chatLoading, setChatLoading] = useState(true);
   const [chatError, setChatError] = useState("");
   const [pinnedChatIDs, setPinnedChatIDs] = useState<string[]>([]);
@@ -90,6 +105,10 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
           state: store.getState().setRealtime,
           event: (event) => {
             const applied = store.getState().apply(event);
+            if (event.type.startsWith("reaction."))
+              void queryClient.invalidateQueries({
+                queryKey: reactionsKey(event.subject_id),
+              });
             const profileEvent =
               event.type === "actor.status.updated" ||
               event.type === "actor.avatar.updated";
@@ -129,12 +148,47 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
                 String(frame.actor_id),
                 frame.state as "online" | "away" | "offline",
               ),
+          agentStatus: (frame) =>
+            store.getState().setAgentStatus({
+              runID: String(frame.run_id),
+              actorID: String(frame.actor_id),
+              chatID: String(frame.chat_id),
+              threadRootID: frame.thread_root_id
+                ? String(frame.thread_root_id)
+                : null,
+              state: frame.state as AgentStatusState["state"],
+              expiresAt: String(frame.expires_at),
+            }),
+          messageStreaming: (frame) =>
+            store.getState().applyMessageStream({
+              streamID: String(frame.stream_id),
+              runID: String(frame.run_id),
+              actorID: String(frame.actor_id),
+              chatID: String(frame.chat_id),
+              threadRootID: frame.thread_root_id
+                ? String(frame.thread_root_id)
+                : null,
+              delta: String(frame.delta ?? ""),
+              index: Number(frame.index),
+              reset: Boolean(frame.reset),
+              done: Boolean(frame.done),
+              expiresAt: String(frame.expires_at),
+            }),
           ephemeralReset: () => store.getState().clearAgentEphemeral(),
           passwordChangeRequired: () => void api.me().then(updateUser),
           sessionExpired,
         },
       ),
-    [api, reload, scheduleReload, sessionExpired, store, updateUser, user.id],
+    [
+      api,
+      queryClient,
+      reload,
+      scheduleReload,
+      sessionExpired,
+      store,
+      updateUser,
+      user.id,
+    ],
   );
 
   const outbox = useMemo(
@@ -153,6 +207,10 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void reload();
+    void api
+      .drafts()
+      .then(hydrateDrafts)
+      .catch(() => undefined);
     void api
       .preferences()
       .then((preferences) => setLocale(preferences.locale))
@@ -189,15 +247,27 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
       coordinator,
       outbox,
       reload,
+      scheduleReload,
       chatLoading,
       chatError,
       pinnedChatIDs,
     }),
-    [store, coordinator, outbox, reload, chatLoading, chatError, pinnedChatIDs],
+    [
+      store,
+      coordinator,
+      outbox,
+      reload,
+      scheduleReload,
+      chatLoading,
+      chatError,
+      pinnedChatIDs,
+    ],
   );
   return (
-    <MessengerContext.Provider value={value}>
-      {children}
-    </MessengerContext.Provider>
+    <QueryClientProvider client={queryClient}>
+      <MessengerContext.Provider value={value}>
+        {children}
+      </MessengerContext.Provider>
+    </QueryClientProvider>
   );
 }

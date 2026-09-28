@@ -12,6 +12,7 @@ import {
   useFonts,
 } from "@expo-google-fonts/onest";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { SessionProvider, useSession } from "@/session/SessionProvider";
 import { useTheme } from "@/lib/theme";
@@ -28,9 +29,11 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <SessionProvider>
-          <RootNavigator ready={fontsLoaded} />
-        </SessionProvider>
+        <KeyboardProvider>
+          <SessionProvider>
+            <RootNavigator ready={fontsLoaded} />
+          </SessionProvider>
+        </KeyboardProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

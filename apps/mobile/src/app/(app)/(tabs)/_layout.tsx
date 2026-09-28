@@ -1,6 +1,11 @@
 import { Tabs } from "expo-router";
 import { StyleSheet, View, type ColorValue } from "react-native";
-import { Ellipsis, MessageSquare, type LucideIcon } from "lucide-react-native";
+import {
+  Ellipsis,
+  MessageSquare,
+  MessagesSquare,
+  type LucideIcon,
+} from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { radius } from "@comamessenger/tokens";
 import { useTheme } from "@/lib/theme";
@@ -48,6 +53,14 @@ export default function TabsLayout() {
           title: t("tabChats"),
           tabBarIcon: tabIcon(MessageSquare),
           tabBarButtonTestID: "tab-chats",
+        }}
+      />
+      <Tabs.Screen
+        name="threads"
+        options={{
+          title: t("tabThreads"),
+          tabBarIcon: tabIcon(MessagesSquare),
+          tabBarButtonTestID: "tab-threads",
         }}
       />
       <Tabs.Screen

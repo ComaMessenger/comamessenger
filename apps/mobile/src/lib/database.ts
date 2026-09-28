@@ -14,6 +14,13 @@ const migrations = [
      created_at TEXT NOT NULL,
      item TEXT NOT NULL
    );`,
+  `CREATE TABLE drafts (
+     chat_id TEXT NOT NULL,
+     thread_root_id TEXT NOT NULL DEFAULT '',
+     body TEXT NOT NULL,
+     version INTEGER NOT NULL DEFAULT 0,
+     PRIMARY KEY (chat_id, thread_root_id)
+   );`,
 ];
 
 async function open(): Promise<SQLite.SQLiteDatabase> {
@@ -61,6 +68,7 @@ export async function clearUserData(): Promise<void> {
   const db = await database;
   await db.withExclusiveTransactionAsync(async (tx) => {
     await tx.runAsync("DELETE FROM outbox");
+    await tx.runAsync("DELETE FROM drafts");
     await tx.runAsync(
       "DELETE FROM meta WHERE key IN ('checkpoint', 'user_id')",
     );
@@ -111,5 +119,37 @@ export const outboxStorage: OutboxStorage = {
     await (
       await database
     ).runAsync("DELETE FROM outbox WHERE client_msg_id = ?", [clientMsgID]);
+  },
+};
+
+export type LocalDraft = { body: string; version: number };
+
+/** Unsent composer text per chat or thread; mirrors the server copy's version. */
+export const draftStorage = {
+  async get(chatID: string, threadRootID: string | null): Promise<LocalDraft> {
+    const row = await (
+      await database
+    ).getFirstAsync<LocalDraft>(
+      "SELECT body, version FROM drafts WHERE chat_id = ? AND thread_root_id = ?",
+      [chatID, threadRootID ?? ""],
+    );
+    return row ?? { body: "", version: 0 };
+  },
+  async set(
+    chatID: string,
+    threadRootID: string | null,
+    draft: LocalDraft,
+  ): Promise<void> {
+    const db = await database;
+    if (!draft.body)
+      await db.runAsync(
+        "DELETE FROM drafts WHERE chat_id = ? AND thread_root_id = ?",
+        [chatID, threadRootID ?? ""],
+      );
+    else
+      await db.runAsync(
+        "INSERT INTO drafts (chat_id, thread_root_id, body, version) VALUES (?, ?, ?, ?) ON CONFLICT (chat_id, thread_root_id) DO UPDATE SET body = excluded.body, version = excluded.version",
+        [chatID, threadRootID ?? "", draft.body, draft.version],
+      );
   },
 };

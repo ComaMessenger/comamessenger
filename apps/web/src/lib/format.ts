@@ -1,4 +1,7 @@
-import { formatListTime as formatCompactTime } from "@comamessenger/core";
+import {
+  formatDaySeparator as formatFeedDay,
+  formatListTime as formatCompactTime,
+} from "@comamessenger/core";
 import i18n from "../i18n";
 
 export function activeLocale() {
@@ -38,17 +41,12 @@ export function formatListTime(value: string, now = new Date()) {
 }
 
 export function formatDaySeparator(value: string, now = new Date()) {
-  const date = new Date(value);
-  if (date.toDateString() === now.toDateString()) return i18n.t("today");
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString())
-    return i18n.t("yesterday");
-  return new Intl.DateTimeFormat(activeLocale(), {
-    day: "numeric",
-    month: "long",
-    ...(date.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
-  }).format(date);
+  return formatFeedDay(
+    value,
+    activeLocale(),
+    { today: i18n.t("today"), yesterday: i18n.t("yesterday") },
+    now,
+  );
 }
 
 export function minuteGap(a: string, b: string) {
