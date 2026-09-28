@@ -29,6 +29,8 @@
 - [ADR-0008: batch hydration и in-memory live fan-out](decisions/0008-live-fanout-capacity.md)
 - [ADR-0009: общий клиентский движок, общие токены и платформенный UI](decisions/0009-client-engine-and-platform-ui.md)
 - [ADR-0010: надёжная доставка Web Push](decisions/0010-web-push-delivery.md)
+- [ADR-0011: стек мобильного клиента](decisions/0011-mobile-stack.md)
+- [ADR-0012: push-relay для мобильных клиентов](decisions/0012-mobile-push-relay.md)
 
 ## Протоколы
 
