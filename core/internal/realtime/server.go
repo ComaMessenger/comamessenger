@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	standardhttp "net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -84,7 +85,7 @@ func (s *Server) Shutdown() { s.hub.Shutdown(errServiceRestart) }
 func (s *Server) RevokeSession(sessionID string) { s.hub.RevokeSession(sessionID) }
 
 func (s *Server) ServeHTTP(w standardhttp.ResponseWriter, r *standardhttp.Request) {
-	if !s.validOrigin(r.Header.Get("Origin")) {
+	if !s.validOrigin(r.Header.Get("Origin"), r.Host) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(standardhttp.StatusForbidden)
 		_ = json.NewEncoder(w).Encode(api.Error{
@@ -223,8 +224,16 @@ func hasRealtimeScope(scopes []string) bool {
 	return false
 }
 
-func (s *Server) validOrigin(origin string) bool {
-	return origin == "" || strings.TrimRight(origin, "/") == s.allowedOrigin
+// validOrigin accepts the Web client origin and the server's own host. Native
+// WebSocket clients (React Native on iOS) send the target URL as Origin; a
+// same-host page cannot hijack anything either, because authentication is the
+// access token in the first frame rather than an ambient cookie.
+func (s *Server) validOrigin(origin, host string) bool {
+	if origin == "" || strings.TrimRight(origin, "/") == s.allowedOrigin {
+		return true
+	}
+	parsed, err := url.Parse(origin)
+	return err == nil && parsed.Host != "" && strings.EqualFold(parsed.Host, host)
 }
 
 func (s *Server) writeInitialError(ctx context.Context, connection *websocket.Conn, code, message string) {

@@ -458,6 +458,14 @@ func TestRealtimeRejectsOriginAndAuthentication(t *testing.T) {
 		t.Fatalf("invalid origin dial = response %#v, error %v", response, err)
 	}
 
+	sameHost, _, err := websocket.Dial(context.Background(), wsURL, &websocket.DialOptions{
+		HTTPHeader: standardhttp.Header{"Origin": []string{httpServer.URL}},
+	})
+	if err != nil {
+		t.Fatalf("native client with same-host origin: %v", err)
+	}
+	sameHost.CloseNow()
+
 	connection, _, err := websocket.Dial(context.Background(), wsURL, &websocket.DialOptions{
 		HTTPHeader: standardhttp.Header{"Origin": []string{"http://allowed.test"}},
 	})

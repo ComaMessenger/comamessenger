@@ -92,3 +92,18 @@ export function formatListTime(
     ...(date.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
   }).format(date);
 }
+
+/** Two letters for an avatar: first letters of two words, or two of one word. */
+export function initialsOf(name: string) {
+  const words = name
+    .trim()
+    .split(/[\s-]+/)
+    .filter((word) => /[\p{L}\p{N}]/u.test(word));
+  if (words.length === 0) return "";
+  if (words.length === 1) return words[0]!.slice(0, 2).toUpperCase();
+  return words
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+}
