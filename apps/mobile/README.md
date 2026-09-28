@@ -24,6 +24,17 @@ A local Core is reachable at `http://localhost:8080` from the iOS Simulator and 
 | ---------------- | -------------------------------------------------------------------------------------------- |
 | `COMA_BUNDLE_ID` | iOS bundle identifier and Android package. Fixed before the first store build; see ADR-0011. |
 
+## End-to-end flows
+
+`e2e/` holds [Maestro](https://maestro.mobile.dev) flows that drive a simulator build against a real Core. The sign-in flow expects a seeded instance at `localhost:8080` with the account from the flow's `env` block; override values with `-e EMAIL=… -e PASSWORD=…`.
+
+```sh
+pnpm --filter @comamessenger/mobile ios   # build and install the development app
+maestro test e2e/sign-in.yaml
+```
+
+Maestro needs a JDK; the one bundled with Android Studio works: `export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"`.
+
 ## Checks
 
 ```sh

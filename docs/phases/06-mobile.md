@@ -58,15 +58,15 @@
 - [x] Выбрать стратегию Expo: Continuous Native Generation + EAS Build ([ADR-0011](../decisions/0011-mobile-stack.md)).
 - [x] Инициализировать `apps/mobile`: Expo SDK 57, expo-router, адаптеры SecureStore и SQLite, EAS-профили.
 - [ ] Настроить app variants, environment config, bundle IDs и signing без хранения секретов в репозитории.
-- [ ] Переиспользовать generated protocol client; выделить transport/session adapters для web/mobile.
-- [ ] Переиспользовать `packages/core` engine и `packages/tokens`, не переносить DOM/Web primitives в Native.
-- [ ] Хранить refresh/session material в SecureStore/Keychain/Keystore, не в AsyncStorage.
+- [x] Переиспользовать generated protocol client; выделить transport/session adapters для web/mobile.
+- [x] Переиспользовать `packages/core` engine и `packages/tokens`, не переносить DOM/Web primitives в Native. Хелперы списка чатов и инициалы перенесены в core; `websocketURL()` больше не зависит от сеттера `URL.protocol`, которого нет в React Native.
+- [x] Хранить refresh/session material в SecureStore/Keychain/Keystore, не в AsyncStorage. Keychain переживает переустановку, поэтому новая локальная БД стирает старый токен; локальные данные привязаны к `user_id`.
 - [ ] Настроить crash boundary, structured diagnostics и безопасный redaction.
 
 ### Навигация и интерфейс
 
-- [ ] Создать auth stack и основной tab/navigation flow.
-- [ ] Реализовать списки «Личные», «Чаты», «Каналы», «Треды» и unread badges.
+- [x] Создать auth stack и основной tab/navigation flow: адрес сервера (или ссылка-приглашение целиком), вход, восстановление пароля, приглашение, экран «нет связи», `coma://invite`, табы «Чаты» и «Ещё».
+- [ ] Реализовать списки «Личные», «Чаты», «Каналы», «Треды» и unread badges. Готов список чатов с фильтрами, поиском, закреплёнными и счётчиками; «Треды» — в M2.
 - [ ] Использовать производительную виртуализацию списка сообщений с измерением разных высот.
 - [ ] Реализовать composer, mentions, markdown rendering и attachments.
 - [ ] Добавить swipe reply через Gesture Handler/Reanimated, long-press actions и haptics.
@@ -79,7 +79,7 @@
 - [ ] Хранить ограниченный набор последних chats/messages/threads и пользовательские preferences.
 - [ ] Создать outbox с `client_msg_id`, retry/backoff и явным failed state.
 - [ ] Не разрешать offline-изменения, которые нельзя безопасно разрешить, без предупреждения пользователя.
-- [ ] Возобновлять durable events с checkpoint после foreground/network restore.
+- [x] Возобновлять durable events с checkpoint после foreground/network restore: уход в фон закрывает сокет, возврат — resume с checkpoint, перезагрузка списка и flush outbox. Same-host `Origin` нативного WebSocket принимается сервером.
 - [ ] Периодически сверять sidebar/unread snapshot для восстановления после `resync_required`.
 
 ### Push notifications
@@ -100,6 +100,10 @@
 - [ ] Поддержать background-friendly multipart upload в пределах возможностей платформы.
 - [ ] Безопасно открывать downloads через системный viewer/share sheet.
 - [ ] Не сохранять приватные файлы в публичные каталоги без явного действия пользователя.
+
+### Проверка
+
+- [x] Maestro-сценарий `apps/mobile/e2e/sign-in.yaml`: сервер → вход → список чатов (realtime live) → беседа → «Ещё».
 
 ## Контракты и данные
 

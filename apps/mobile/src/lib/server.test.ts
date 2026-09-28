@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { normalizeServerURL } from "./server";
+import { parseInviteDeepLink } from "./inviteLinks";
+import { displayServer, normalizeServerURL, parseServerInput } from "./server";
 
 describe("normalizeServerURL", () => {
   it("defaults to HTTPS and strips trailing slashes and default ports", () => {
@@ -32,5 +33,32 @@ describe("normalizeServerURL", () => {
       "acme ru",
     ])
       expect(normalizeServerURL(value)).toBeNull();
+  });
+});
+
+describe("parseServerInput", () => {
+  it("extracts the server and token from an invitation link", () => {
+    expect(parseServerInput("https://chat.acme.ru/invite/AbC_12-x")).toEqual({
+      serverURL: "https://chat.acme.ru",
+      inviteToken: "AbC_12-x",
+    });
+    expect(parseServerInput("chat.acme.ru")).toEqual({
+      serverURL: "https://chat.acme.ru",
+    });
+    expect(parseServerInput("http://chat.acme.ru/invite/x")).toBeNull();
+  });
+
+  it("shows the server without the scheme", () => {
+    expect(displayServer("https://acme.ru/coma")).toBe("acme.ru/coma");
+  });
+});
+
+describe("parseInviteDeepLink", () => {
+  it("reads the server and token from the app scheme", () => {
+    expect(
+      parseInviteDeepLink("coma://invite?server=chat.acme.ru&token=t0k-en"),
+    ).toEqual({ serverURL: "https://chat.acme.ru", inviteToken: "t0k-en" });
+    expect(parseInviteDeepLink("coma://invite?server=chat.acme.ru")).toBeNull();
+    expect(parseInviteDeepLink("https://chat.acme.ru/invite/x")).toBeNull();
   });
 });

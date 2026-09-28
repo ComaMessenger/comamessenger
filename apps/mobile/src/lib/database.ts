@@ -56,6 +56,27 @@ async function setMeta(key: string, value: string | null): Promise<void> {
     );
 }
 
+/** Drops everything tied to the signed-in account: realtime position and unsent messages. */
+export async function clearUserData(): Promise<void> {
+  const db = await database;
+  await db.withExclusiveTransactionAsync(async (tx) => {
+    await tx.runAsync("DELETE FROM outbox");
+    await tx.runAsync(
+      "DELETE FROM meta WHERE key IN ('checkpoint', 'user_id')",
+    );
+  });
+}
+
+/**
+ * Binds local data to the account that signed in. Another account on the same
+ * device must never resume the previous checkpoint or send its queued messages.
+ */
+export async function claimUserData(userID: string): Promise<void> {
+  const owner = await getMeta("user_id");
+  if (owner && owner !== userID) await clearUserData();
+  await setMeta("user_id", userID);
+}
+
 export const serverStorage = {
   get: () => getMeta("server_url"),
   set: (url: string | null) => setMeta("server_url", url),

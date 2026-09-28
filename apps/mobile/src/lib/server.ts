@@ -33,3 +33,24 @@ export function normalizeServerURL(input: string): string | null {
       : `:${port}`;
   return `${protocol}://${hostname}${portSuffix}${path.replace(/\/+$/, "")}`;
 }
+
+export type ServerTarget = { serverURL: string; inviteToken?: string };
+
+/**
+ * Accepts either an instance address or a full invitation link
+ * (`https://chat.acme.ru/invite/<token>`), which carries both.
+ */
+export function parseServerInput(input: string): ServerTarget | null {
+  const invite = /^(.*?)\/invite\/([A-Za-z0-9_-]+)\/?$/.exec(input.trim());
+  if (invite) {
+    const serverURL = normalizeServerURL(invite[1]!);
+    return serverURL ? { serverURL, inviteToken: invite[2]! } : null;
+  }
+  const serverURL = normalizeServerURL(input);
+  return serverURL ? { serverURL } : null;
+}
+
+/** Host shown to people: `https://chat.acme.ru/coma` → `chat.acme.ru/coma`. */
+export function displayServer(serverURL: string): string {
+  return serverURL.replace(/^https?:\/\//, "");
+}

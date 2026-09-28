@@ -1,0 +1,69 @@
+# Server address → sign in → chat list → conversation → sign out.
+# Needs a seeded instance; see README. Run: maestro test e2e/sign-in.yaml
+appId: dev.comamessenger.app
+env:
+  SERVER: localhost:8080
+  EMAIL: lev@example.test
+  PASSWORD: coma-mobile-dev-1
+  METRO: http%3A%2F%2Flocalhost%3A8081
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+# Development builds start in the dev-client launcher; point it at Metro.
+- openLink: exp+coma://expo-development-client/?url=${METRO}
+# First launch after a state reset shows the dev menu onboarding sheet.
+- runFlow:
+    when:
+      visible: Continue
+    commands:
+      - tapOn: Continue
+- runFlow:
+    when:
+      visible: Reload
+    commands:
+      - tapOn:
+          point: 91%,47%
+- extendedWaitUntil:
+    visible:
+      id: server-address
+    timeout: 60000
+- tapOn:
+    id: server-address
+- inputText: http://${SERVER}
+- tapOn:
+    id: server-continue
+- extendedWaitUntil:
+    visible:
+      id: login-email
+    timeout: 15000
+- tapOn:
+    id: login-email
+- inputText: ${EMAIL}
+# Typing into a secure field on the simulator drops characters; reveal first.
+- tapOn:
+    id: login-password-reveal
+- tapOn:
+    id: login-password
+- inputText: ${PASSWORD}
+- tapOn:
+    id: login-submit
+- extendedWaitUntil:
+    visible:
+      id: chat-list
+    timeout: 15000
+- extendedWaitUntil:
+    notVisible:
+      id: connection-banner
+    timeout: 15000
+- takeScreenshot: chats
+- tapOn:
+    id: chat-row-0
+- assertVisible:
+    id: conversation
+- takeScreenshot: conversation
+- tapOn:
+    id: conversation-back
+- tapOn:
+    id: tab-more
+- takeScreenshot: more
