@@ -1,3 +1,4 @@
+import { formatListTime as formatCompactTime } from "@comamessenger/core";
 import i18n from "../i18n";
 
 export function activeLocale() {
@@ -33,28 +34,7 @@ export function formatDateTime(value: string) {
 
 /** Compact time for list rows: today → HH:MM, this week → weekday, else → D MMM. */
 export function formatListTime(value: string, now = new Date()) {
-  const date = new Date(value);
-  const sameDay = date.toDateString() === now.toDateString();
-  if (sameDay) return formatTime(value);
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString())
-    return i18n.t("yesterday");
-  const days = (now.getTime() - date.getTime()) / 86_400_000;
-  if (days < 7)
-    return new Intl.DateTimeFormat(activeLocale(), { weekday: "short" }).format(
-      date,
-    );
-  if (date.getFullYear() === now.getFullYear())
-    return new Intl.DateTimeFormat(activeLocale(), {
-      day: "numeric",
-      month: "short",
-    }).format(date);
-  return new Intl.DateTimeFormat(activeLocale(), {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(date);
+  return formatCompactTime(value, activeLocale(), i18n.t("yesterday"), now);
 }
 
 export function formatDaySeparator(value: string, now = new Date()) {

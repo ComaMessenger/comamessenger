@@ -1,4 +1,5 @@
 export * from "./api";
+export * from "./chats";
 export * from "./markdown";
 export * from "./mentions";
 export * from "./links";

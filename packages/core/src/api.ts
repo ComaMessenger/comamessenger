@@ -161,10 +161,9 @@ export class MessengerAPI {
   adoptTokens(tokens: TokenResponse): TokenResponse {
     return this.acceptTokens(tokens);
   }
+  // Built from the string: React Native's URL has no protocol setter.
   websocketURL(): string {
-    const url = new URL("/api/v1/ws", this.apiURL);
-    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-    return url.toString();
+    return `${this.apiURL.replace(/^http/, "ws")}/api/v1/ws`;
   }
   async bootstrapStatus(): Promise<boolean> {
     return (

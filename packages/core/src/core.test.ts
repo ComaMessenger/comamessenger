@@ -10,6 +10,8 @@ import {
   updateMentionText,
 } from "./mentions";
 import { compactUUID, expandUUID } from "./links";
+import { chatPreview, formatListTime } from "./chats";
+import type { Chat } from "./types";
 import { RealtimeCoordinator, type CheckpointStorage } from "./realtime";
 import { Outbox, type OutboxItem, type OutboxStorage } from "./outbox";
 import type { ClientMessage, Message, RealtimeState } from "./types";
@@ -125,11 +127,43 @@ describe("domain store", () => {
       threadRootID: null,
       expiresAt: "2099-01-01T00:00:00Z",
     };
-    store.getState().applyMessageStream({ ...base, index: 1, delta: "Hel", reset: true, done: false });
-    store.getState().applyMessageStream({ ...base, index: 2, delta: "lo", reset: false, done: false });
-    store.getState().applyMessageStream({ ...base, index: 1, delta: "stale", reset: false, done: false });
+    store
+      .getState()
+      .applyMessageStream({
+        ...base,
+        index: 1,
+        delta: "Hel",
+        reset: true,
+        done: false,
+      });
+    store
+      .getState()
+      .applyMessageStream({
+        ...base,
+        index: 2,
+        delta: "lo",
+        reset: false,
+        done: false,
+      });
+    store
+      .getState()
+      .applyMessageStream({
+        ...base,
+        index: 1,
+        delta: "stale",
+        reset: false,
+        done: false,
+      });
     expect(store.getState().messageStreams.stream?.body).toBe("Hello");
-    store.getState().applyMessageStream({ ...base, index: 3, delta: "", reset: false, done: true });
+    store
+      .getState()
+      .applyMessageStream({
+        ...base,
+        index: 3,
+        delta: "",
+        reset: false,
+        done: true,
+      });
     expect(store.getState().messageStreams.stream).toBeUndefined();
     store.getState().setAgentStatus({
       runID: "run",
@@ -516,6 +550,17 @@ function nextTask() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+describe("websocket URL", () => {
+  it("maps the API scheme and keeps a path prefix", () => {
+    expect(new MessengerAPI("https://acme.ru/coma").websocketURL()).toBe(
+      "wss://acme.ru/coma/api/v1/ws",
+    );
+    expect(new MessengerAPI("http://localhost:8080").websocketURL()).toBe(
+      "ws://localhost:8080/api/v1/ws",
+    );
+  });
+});
+
 describe("native session transport", () => {
   afterEach(() => vi.unstubAllGlobals());
 
@@ -581,5 +626,59 @@ describe("native session transport", () => {
       code: "invalid_refresh_token",
     });
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("chat list helpers", () => {
+  const labels = { you: "You", deleted: "Deleted", attachment: "Attachment" };
+  const chat = (patch: Partial<Chat>) =>
+    ({ id: "c", kind: "group", topic: "Topic", ...patch }) as Chat;
+
+  it("builds sender-prefixed previews", () => {
+    const last = {
+      actor_id: "other",
+      actor_display_name: "Anna",
+      body: "hello",
+      deleted: false,
+    } as Chat["last_message"];
+    expect(chatPreview(chat({ last_message: last }), "me", labels)).toEqual({
+      sender: "Anna: ",
+      text: "hello",
+    });
+    expect(
+      chatPreview(chat({ kind: "direct", last_message: last }), "me", labels),
+    ).toEqual({ sender: "", text: "hello" });
+    expect(chatPreview(chat({}), "me", labels)).toEqual({
+      sender: "",
+      text: "Topic",
+    });
+  });
+
+  it("formats list times relative to now", () => {
+    const now = new Date(2026, 8, 29, 15, 0);
+    expect(
+      formatListTime(
+        new Date(2026, 8, 29, 9, 5).toISOString(),
+        "ru",
+        "вчера",
+        now,
+      ),
+    ).toBe("09:05");
+    expect(
+      formatListTime(
+        new Date(2026, 8, 28, 23, 0).toISOString(),
+        "ru",
+        "вчера",
+        now,
+      ),
+    ).toBe("вчера");
+    expect(
+      formatListTime(
+        new Date(2025, 0, 2).toISOString(),
+        "en",
+        "Yesterday",
+        now,
+      ),
+    ).toContain("2025");
   });
 });
