@@ -3,11 +3,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ChevronLeft, Info, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
-import type { Chat, Message } from "@comamessenger/core";
+import { feedRows, type Chat, type Message } from "@comamessenger/core";
 import { hasPermission } from "../settings";
 import { Avatar, EmptyState, IconButton, InlineError, PresenceDot, cx } from "../ui";
 import { getLocalDraft, setLocalDraft, syncDraft } from "../lib/drafts";
-import { formatDaySeparator, minuteGap } from "../lib/format";
+import { formatDaySeparator } from "../lib/format";
 import { resolvedMentionActorIDs } from "../lib/mentions";
 import { canManageChat, chatGlyph, isReadOnly, titleOf } from "../lib/chats";
 import { useIsMobile } from "../lib/useMediaQuery";
@@ -63,6 +63,10 @@ export function Conversation({
   );
   const scroller = useRef<HTMLDivElement>(null);
   const feed = useMessageFeed({ api, store, chatID, scroller, whenReady });
+  const rows = useMemo(
+    () => feedRows(feed.visible, feed.unreadAnchor),
+    [feed.visible, feed.unreadAnchor],
+  );
   const attachments = useAttachments(api);
   const [reply, setReply] = useState<Message | null>(null);
   const [body, setBody] = useState(() => getLocalDraft(chatID, null));
@@ -195,16 +199,7 @@ export function Conversation({
             )}
             <div className="message-feed__virtual" style={{ height: feed.virtual.getTotalSize() }}>
               {feed.virtual.getVirtualItems().map((row) => {
-                const message = feed.visible[row.index]!;
-                const previous = feed.visible[row.index - 1];
-                const newDay =
-                  !previous ||
-                  new Date(previous.created_at).toDateString() !==
-                    new Date(message.created_at).toDateString();
-                const firstUnread =
-                  feed.unreadAnchor > 0 &&
-                  message.created_seq > feed.unreadAnchor &&
-                  (!previous || previous.created_seq <= feed.unreadAnchor);
+                const { message, newDay, firstUnread, grouped } = rows[row.index]!;
                 return (
                   <div
                     key={message.id}
@@ -234,12 +229,7 @@ export function Conversation({
                       author={members.find((item) => item.actor_id === message.actor_id)}
                       own={message.actor_id === user.id || !message.actor_id}
                       canModerate={canModerate}
-                      grouped={
-                        !newDay &&
-                        !firstUnread &&
-                        previous?.actor_id === message.actor_id &&
-                        minuteGap(previous.created_at, message.created_at) < 5
-                      }
+                      grouped={grouped}
                       chatName={title}
                       pinned={pinnedIDs.has(message.id)}
                       onReply={() => setReply(message)}

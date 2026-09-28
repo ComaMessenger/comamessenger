@@ -1,5 +1,6 @@
 export * from "./api";
 export * from "./chats";
+export * from "./feed";
 export * from "./markdown";
 export * from "./mentions";
 export * from "./links";
