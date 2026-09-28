@@ -878,6 +878,26 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 		t.Fatalf("owner unread after marker = %+v", unread)
 	}
 
+	ownerCredentials := map[string]any{"email": "owner@example.test", "password": "correct horse battery staple"}
+	var nativeLogin nativeTokens
+	headers := e2eClientRequest(t, server.Client(), baseURL+"/api/v1/auth/login", "", ownerCredentials, standardhttp.StatusOK, &nativeLogin)
+	if nativeLogin.RefreshToken == "" || nativeLogin.AccessToken == "" || headers.Get("Set-Cookie") != "" {
+		t.Fatalf("native login = %+v, Set-Cookie=%q", nativeLogin, headers.Get("Set-Cookie"))
+	}
+	var nativeRefresh nativeTokens
+	e2eClientRequest(t, server.Client(), baseURL+"/api/v1/auth/refresh", "", map[string]any{"refresh_token": nativeLogin.RefreshToken}, standardhttp.StatusOK, &nativeRefresh)
+	if nativeRefresh.RefreshToken == "" || nativeRefresh.RefreshToken == nativeLogin.RefreshToken {
+		t.Fatalf("native refresh did not rotate the token: %+v", nativeRefresh)
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/me", nativeRefresh.AccessToken, nil, standardhttp.StatusOK, nil)
+	e2eClientRequest(t, server.Client(), baseURL+"/api/v1/auth/refresh", "", map[string]any{}, standardhttp.StatusUnauthorized, nil)
+	e2eClientRequest(t, server.Client(), baseURL+"/api/v1/auth/refresh", "", map[string]any{"refresh_token": nativeLogin.RefreshToken}, standardhttp.StatusUnauthorized, nil)
+	var browserLogin nativeTokens
+	headers = e2eClientRequest(t, server.Client(), baseURL+"/api/v1/auth/login", "http://attacker.test", ownerCredentials, standardhttp.StatusOK, &browserLogin)
+	if browserLogin.RefreshToken != "" || !strings.Contains(headers.Get("Set-Cookie"), refreshCookieName) {
+		t.Fatalf("native header with Origin must keep the cookie transport: %+v", browserLogin)
+	}
+
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/auth/logout", member.AccessToken, nil, standardhttp.StatusNoContent, nil)
 	closeCtx, closeCancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer closeCancel()
@@ -941,6 +961,40 @@ func e2eRequest(t *testing.T, client *standardhttp.Client, method, endpoint, tok
 			t.Fatal(err)
 		}
 	}
+}
+
+// e2eClientRequest sends a POST as the native mobile client would, optionally
+// with a browser Origin to check that the cookie transport cannot be bypassed.
+func e2eClientRequest(t *testing.T, client *standardhttp.Client, endpoint, origin string, body any, wantStatus int, output any) standardhttp.Header {
+	t.Helper()
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, err := standardhttp.NewRequestWithContext(context.Background(), standardhttp.MethodPost, endpoint, bytes.NewReader(encoded))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set(clientKindHeader, "native")
+	if origin != "" {
+		request.Header.Set("Origin", origin)
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != wantStatus {
+		data, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
+		t.Fatalf("POST %s status = %d, want %d: %s", endpoint, response.StatusCode, wantStatus, data)
+	}
+	if output != nil {
+		if err := json.NewDecoder(response.Body).Decode(output); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return response.Header
 }
 
 func e2eBinaryRequest(t *testing.T, client *standardhttp.Client, method, endpoint, token, contentType string, body []byte, wantStatus int) {

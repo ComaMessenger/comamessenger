@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMessengerStore } from "./store";
 import { parseMarkdown } from "./markdown";
 import {
@@ -13,7 +13,7 @@ import { compactUUID, expandUUID } from "./links";
 import { RealtimeCoordinator, type CheckpointStorage } from "./realtime";
 import { Outbox, type OutboxItem, type OutboxStorage } from "./outbox";
 import type { ClientMessage, Message, RealtimeState } from "./types";
-import { APIError, type MessengerAPI } from "./api";
+import { APIError, MessengerAPI, type RefreshTokenStore } from "./api";
 
 const message: ClientMessage = {
   id: "a",
@@ -515,3 +515,71 @@ describe("persistent outbox", () => {
 function nextTask() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
+
+describe("native session transport", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const user = { id: "user" };
+  function memoryStore(initial: string | null): RefreshTokenStore & {
+    token: string | null;
+  } {
+    return {
+      token: initial,
+      async load() {
+        return this.token;
+      },
+      async save(token) {
+        this.token = token;
+      },
+    };
+  }
+
+  it("keeps the refresh token in the store and sends it in the body", async () => {
+    const requests: { url: string; init: RequestInit }[] = [];
+    const responses = [
+      { access_token: "a1", refresh_token: "r1", user },
+      { access_token: "a2", refresh_token: "r2", user },
+    ];
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      requests.push({ url, init });
+      return new Response(JSON.stringify(responses.shift()), { status: 200 });
+    });
+    const store = memoryStore(null);
+    const api = new MessengerAPI("https://coma.test", undefined, store);
+
+    const login = await api.login({ email: "a@b.c", password: "secret" });
+    expect(login).not.toHaveProperty("refresh_token");
+    expect(store.token).toBe("r1");
+
+    await api.refresh();
+    expect(api.token()).toBe("a2");
+    expect(store.token).toBe("r2");
+    const refresh = requests[1]!;
+    expect(refresh.init.credentials).toBe("omit");
+    expect(new Headers(refresh.init.headers).get("X-Coma-Client")).toBe(
+      "native",
+    );
+    expect(JSON.parse(refresh.init.body as string)).toEqual({
+      refresh_token: "r1",
+    });
+  });
+
+  it("forgets a rejected refresh token without calling the server twice", async () => {
+    const fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ code: "invalid_refresh_token" }), {
+          status: 401,
+        }),
+    );
+    vi.stubGlobal("fetch", fetch);
+    const store = memoryStore("stale");
+    const api = new MessengerAPI("https://coma.test", undefined, store);
+
+    await expect(api.refresh()).rejects.toMatchObject({ status: 401 });
+    expect(store.token).toBeNull();
+    await expect(api.refresh()).rejects.toMatchObject({
+      code: "invalid_refresh_token",
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});

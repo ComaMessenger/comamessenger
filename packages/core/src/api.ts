@@ -131,12 +131,21 @@ export async function getHealth(apiURL: string): Promise<ServiceHealth> {
   }
 }
 
+/**
+ * Native apps cannot hold the HttpOnly refresh cookie. Passing a store switches
+ * auth requests to body transport; the store must be platform secure storage.
+ */
+export interface RefreshTokenStore {
+  load(): Promise<string | null>;
+  save(token: string | null): Promise<void>;
+}
 export class MessengerAPI {
   private accessToken: string | null = null;
   private refreshRequest: Promise<TokenResponse> | null = null;
   constructor(
     readonly apiURL: string,
     private readonly refreshStrategy?: RefreshStrategy,
+    private readonly refreshTokens?: RefreshTokenStore,
   ) {}
   token(): string | null {
     return this.accessToken;
@@ -165,7 +174,7 @@ export class MessengerAPI {
   async bootstrap(input: BootstrapRequest, token = ""): Promise<TokenResponse> {
     const headers = new Headers();
     if (token) headers.set("X-Coma-Bootstrap-Token", token);
-    return this.acceptTokens(
+    return this.acceptIssuedTokens(
       await this.request<TokenResponse>("/api/v1/bootstrap", {
         method: "POST",
         headers,
@@ -174,7 +183,7 @@ export class MessengerAPI {
     );
   }
   async login(input: LoginRequest): Promise<TokenResponse> {
-    return this.acceptTokens(
+    return this.acceptIssuedTokens(
       await this.request<TokenResponse>("/api/v1/auth/login", {
         method: "POST",
         body: JSON.stringify(input),
@@ -196,15 +205,11 @@ export class MessengerAPI {
   refresh(): Promise<TokenResponse> {
     if (!this.refreshRequest) {
       const request = () =>
-        this.request<TokenResponse>(
-          "/api/v1/auth/refresh",
-          { method: "POST" },
-          false,
-        );
+        this.refreshTokens ? this.refreshNative() : this.refreshWithCookie();
       this.refreshRequest = (
         this.refreshStrategy ? this.refreshStrategy(request) : request()
       )
-        .then((value) => this.acceptTokens(value))
+        .then((value) => this.acceptIssuedTokens(value))
         .finally(() => {
           this.refreshRequest = null;
         });
@@ -216,13 +221,14 @@ export class MessengerAPI {
       await this.request<void>("/api/v1/auth/logout", { method: "POST" });
     } finally {
       this.accessToken = null;
+      await this.refreshTokens?.save(null);
     }
   }
   async acceptInvitation(
     token: string,
     input: AcceptInvitationRequest,
   ): Promise<TokenResponse> {
-    return this.acceptTokens(
+    return this.acceptIssuedTokens(
       await this.request<TokenResponse>(
         `/api/v1/invitations/${encodeURIComponent(token)}/accept`,
         { method: "POST", body: JSON.stringify(input) },
@@ -541,12 +547,13 @@ export class MessengerAPI {
     const headers = new Headers({ "Content-Type": "application/json" });
     if (this.accessToken)
       headers.set("Authorization", `Bearer ${this.accessToken}`);
+    const credentials = this.transport(headers);
     const response = await fetch(
       `${this.apiURL}/api/v1/agent-runtime/provider/chat`,
       {
         method: "POST",
         headers,
-        credentials: "include",
+        credentials,
         body: JSON.stringify(input),
         signal,
       },
@@ -1151,6 +1158,53 @@ export class MessengerAPI {
     this.accessToken = tokens.access_token;
     return tokens;
   }
+  // The refresh token goes straight to secure storage and never reaches UI state.
+  private async acceptIssuedTokens({
+    refresh_token: refreshToken,
+    ...tokens
+  }: TokenResponse): Promise<TokenResponse> {
+    if (this.refreshTokens && refreshToken)
+      await this.refreshTokens.save(refreshToken);
+    return this.acceptTokens(tokens);
+  }
+  private refreshWithCookie(): Promise<TokenResponse> {
+    return this.request<TokenResponse>(
+      "/api/v1/auth/refresh",
+      { method: "POST" },
+      false,
+    );
+  }
+  private async refreshNative(): Promise<TokenResponse> {
+    const store = this.refreshTokens!;
+    const refreshToken = await store.load();
+    if (!refreshToken)
+      throw new APIError(
+        401,
+        "invalid_refresh_token",
+        "Refresh token is invalid.",
+      );
+    try {
+      return await this.request<TokenResponse>(
+        "/api/v1/auth/refresh",
+        {
+          method: "POST",
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        },
+        false,
+      );
+    } catch (error) {
+      if (error instanceof APIError && error.status === 401)
+        await store.save(null);
+      throw error;
+    }
+  }
+  // Browsers authenticate refresh with the HttpOnly cookie; native clients
+  // announce themselves and never send cookies.
+  private transport(headers: Headers): RequestCredentials {
+    if (!this.refreshTokens) return "include";
+    headers.set("X-Coma-Client", "native");
+    return "omit";
+  }
   private async request<T>(
     path: string,
     init: RequestInit = {},
@@ -1161,10 +1215,11 @@ export class MessengerAPI {
       headers.set("Content-Type", "application/json");
     if (this.accessToken)
       headers.set("Authorization", `Bearer ${this.accessToken}`);
+    const credentials = this.transport(headers);
     const response = await fetch(`${this.apiURL}${path}`, {
       ...init,
       headers,
-      credentials: "include",
+      credentials,
     });
     if (response.status === 401 && retry && path !== "/api/v1/auth/refresh") {
       try {
@@ -1196,9 +1251,10 @@ export class MessengerAPI {
     const headers = new Headers();
     if (this.accessToken)
       headers.set("Authorization", `Bearer ${this.accessToken}`);
+    const credentials = this.transport(headers);
     const response = await fetch(`${this.apiURL}${path}`, {
       headers,
-      credentials: "include",
+      credentials,
     });
     if (response.status === 401 && retry) {
       await this.refresh();

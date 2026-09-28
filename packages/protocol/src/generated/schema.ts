@@ -93,6 +93,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Browsers present the HttpOnly refresh cookie. Native clients send `X-Coma-Client: native` without an Origin header and pass the refresh token in the body instead. */
         post: operations["refresh"];
         delete?: never;
         options?: never;
@@ -2290,6 +2291,9 @@ export interface components {
             /** @default UTC */
             timezone: string;
         };
+        RefreshRequest: {
+            refresh_token: string;
+        };
         LoginRequest: {
             /** Format: email */
             email: string;
@@ -3064,6 +3068,8 @@ export interface components {
             access_token: string;
             /** Format: date-time */
             access_expires_at: string;
+            /** @description Present only for requests sent with `X-Coma-Client: native`. */
+            refresh_token?: string;
             user: components["schemas"]["User"];
         };
         Session: {
@@ -3754,7 +3760,7 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
-        /** @description Access token and user. Refresh token is set as an HttpOnly cookie. */
+        /** @description Access token and user. Browsers receive the refresh token as an HttpOnly cookie; native clients receive it as `refresh_token`. */
         Tokens: {
             headers: {
                 [name: string]: unknown;
@@ -3765,6 +3771,8 @@ export interface components {
         };
     };
     parameters: {
+        /** @description `native` switches refresh token transport from the HttpOnly cookie to JSON bodies. Ignored when an Origin header is present. */
+        ClientKind: "native";
         ChatId: string;
         ActorId: string;
         MessageId: string;
@@ -3857,6 +3865,8 @@ export interface operations {
             header?: {
                 /** @description Required outside development; configure it with BOOTSTRAP_TOKEN. */
                 "X-Coma-Bootstrap-Token"?: string;
+                /** @description `native` switches refresh token transport from the HttpOnly cookie to JSON bodies. Ignored when an Origin header is present. */
+                "X-Coma-Client"?: components["parameters"]["ClientKind"];
             };
             path?: never;
             cookie?: never;
@@ -3876,7 +3886,10 @@ export interface operations {
     login: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description `native` switches refresh token transport from the HttpOnly cookie to JSON bodies. Ignored when an Origin header is present. */
+                "X-Coma-Client"?: components["parameters"]["ClientKind"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -3893,11 +3906,18 @@ export interface operations {
     refresh: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description `native` switches refresh token transport from the HttpOnly cookie to JSON bodies. Ignored when an Origin header is present. */
+                "X-Coma-Client"?: components["parameters"]["ClientKind"];
+            };
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RefreshRequest"];
+            };
+        };
         responses: {
             200: components["responses"]["Tokens"];
             401: components["responses"]["Error"];
@@ -4978,7 +4998,10 @@ export interface operations {
     acceptInvitation: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description `native` switches refresh token transport from the HttpOnly cookie to JSON bodies. Ignored when an Origin header is present. */
+                "X-Coma-Client"?: components["parameters"]["ClientKind"];
+            };
             path: {
                 token: string;
             };

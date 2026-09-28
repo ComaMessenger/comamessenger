@@ -84,6 +84,9 @@
               "type": "string",
               "minLength": 32
             }
+          },
+          {
+            "$ref": "#/components/parameters/ClientKind"
           }
         ],
         "requestBody": {
@@ -115,6 +118,11 @@
     "/api/v1/auth/login": {
       "post": {
         "operationId": "login",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ClientKind"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -138,6 +146,22 @@
     "/api/v1/auth/refresh": {
       "post": {
         "operationId": "refresh",
+        "description": "Browsers present the HttpOnly refresh cookie. Native clients send `X-Coma-Client: native` without an Origin header and pass the refresh token in the body instead.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ClientKind"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "$ref": "#/components/responses/Tokens"
@@ -1733,6 +1757,9 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/ClientKind"
           }
         ],
         "requestBody": {
@@ -5937,7 +5964,7 @@
         }
       },
       "Tokens": {
-        "description": "Access token and user. Refresh token is set as an HttpOnly cookie.",
+        "description": "Access token and user. Browsers receive the refresh token as an HttpOnly cookie; native clients receive it as `refresh_token`.",
         "content": {
           "application/json": {
             "schema": {
@@ -5948,6 +5975,18 @@
       }
     },
     "parameters": {
+      "ClientKind": {
+        "name": "X-Coma-Client",
+        "in": "header",
+        "required": false,
+        "description": "`native` switches refresh token transport from the HttpOnly cookie to JSON bodies. Ignored when an Origin header is present.",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "native"
+          ]
+        }
+      },
       "ChatId": {
         "name": "chat_id",
         "in": "path",
@@ -7168,6 +7207,18 @@
           "timezone": {
             "type": "string",
             "default": "UTC"
+          }
+        }
+      },
+      "RefreshRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "refresh_token"
+        ],
+        "properties": {
+          "refresh_token": {
+            "type": "string"
           }
         }
       },
@@ -10006,6 +10057,10 @@
           "access_expires_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "refresh_token": {
+            "type": "string",
+            "description": "Present only for requests sent with `X-Coma-Client: native`."
           },
           "user": {
             "$ref": "#/components/schemas/User"

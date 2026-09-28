@@ -37,6 +37,8 @@ import (
 
 const refreshCookieName = "comamessenger_refresh"
 
+const clientKindHeader = "X-Coma-Client"
+
 type Dependencies struct {
 	Identity              *identity.Service
 	Agents                *agent.Service
@@ -444,8 +446,7 @@ func (h *identityHandlers) bootstrap(w standardhttp.ResponseWriter, r *standardh
 		h.internalError(w, r, err)
 		return
 	}
-	h.setRefreshCookie(w, tokens.RefreshToken)
-	writeJSON(h.logger, w, standardhttp.StatusCreated, tokens)
+	h.writeTokens(w, r, standardhttp.StatusCreated, tokens)
 }
 
 func (h *identityHandlers) login(w standardhttp.ResponseWriter, r *standardhttp.Request) {
@@ -463,8 +464,7 @@ func (h *identityHandlers) login(w standardhttp.ResponseWriter, r *standardhttp.
 		h.internalError(w, r, err)
 		return
 	}
-	h.setRefreshCookie(w, tokens.RefreshToken)
-	writeJSON(h.logger, w, standardhttp.StatusOK, tokens)
+	h.writeTokens(w, r, standardhttp.StatusOK, tokens)
 }
 
 func (h *identityHandlers) refresh(w standardhttp.ResponseWriter, r *standardhttp.Request) {
@@ -472,13 +472,13 @@ func (h *identityHandlers) refresh(w standardhttp.ResponseWriter, r *standardhtt
 		h.writeError(w, r, standardhttp.StatusForbidden, "origin_not_allowed", "Request origin is not allowed.")
 		return
 	}
-	cookie, err := r.Cookie(refreshCookieName)
+	refreshToken, err := h.requestRefreshToken(w, r)
 	if err != nil {
 		h.clearRefreshCookie(w)
 		h.writeError(w, r, standardhttp.StatusUnauthorized, "invalid_refresh_token", "Refresh token is invalid.")
 		return
 	}
-	tokens, err := h.service.Refresh(r.Context(), cookie.Value, h.requestDevice(r))
+	tokens, err := h.service.Refresh(r.Context(), refreshToken, h.requestDevice(r))
 	if errors.Is(err, identity.ErrInvalidRefreshToken) || errors.Is(err, identity.ErrRefreshReuse) {
 		h.clearRefreshCookie(w)
 		h.writeError(w, r, standardhttp.StatusUnauthorized, "invalid_refresh_token", "Refresh token is invalid.")
@@ -488,8 +488,7 @@ func (h *identityHandlers) refresh(w standardhttp.ResponseWriter, r *standardhtt
 		h.internalError(w, r, err)
 		return
 	}
-	h.setRefreshCookie(w, tokens.RefreshToken)
-	writeJSON(h.logger, w, standardhttp.StatusOK, tokens)
+	h.writeTokens(w, r, standardhttp.StatusOK, tokens)
 }
 
 func (h *identityHandlers) logout(w standardhttp.ResponseWriter, r *standardhttp.Request) {
@@ -765,8 +764,7 @@ func (h *identityHandlers) acceptInvitation(w standardhttp.ResponseWriter, r *st
 		}
 		return
 	}
-	h.setRefreshCookie(w, tokens.RefreshToken)
-	writeJSON(h.logger, w, standardhttp.StatusCreated, tokens)
+	h.writeTokens(w, r, standardhttp.StatusCreated, tokens)
 }
 
 func (h *identityHandlers) listChats(w standardhttp.ResponseWriter, r *standardhttp.Request) {
@@ -1053,6 +1051,47 @@ func (h *identityHandlers) rateLimit(name string, limiter *ipRateLimiter) func(s
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// Native clients cannot keep HttpOnly cookies, so they receive and present the
+// refresh token in JSON bodies. Browsers always attach Origin to POST requests,
+// which prevents a script on the Web origin from opting out of the cookie.
+func (h *identityHandlers) nativeClient(r *standardhttp.Request) bool {
+	return r.Header.Get(clientKindHeader) == "native" && r.Header.Get("Origin") == ""
+}
+
+type nativeTokens struct {
+	identity.Tokens
+	RefreshToken string `json:"refresh_token"`
+}
+
+func (h *identityHandlers) writeTokens(w standardhttp.ResponseWriter, r *standardhttp.Request, status int, tokens identity.Tokens) {
+	if h.nativeClient(r) {
+		writeJSON(h.logger, w, status, nativeTokens{Tokens: tokens, RefreshToken: tokens.RefreshToken})
+		return
+	}
+	h.setRefreshCookie(w, tokens.RefreshToken)
+	writeJSON(h.logger, w, status, tokens)
+}
+
+func (h *identityHandlers) requestRefreshToken(w standardhttp.ResponseWriter, r *standardhttp.Request) (string, error) {
+	if !h.nativeClient(r) {
+		cookie, err := r.Cookie(refreshCookieName)
+		if err != nil {
+			return "", err
+		}
+		return cookie.Value, nil
+	}
+	var input struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err := decodeJSON(w, r, &input); err != nil {
+		return "", err
+	}
+	if input.RefreshToken == "" {
+		return "", identity.ErrInvalidRefreshToken
+	}
+	return input.RefreshToken, nil
 }
 
 func (h *identityHandlers) setRefreshCookie(w standardhttp.ResponseWriter, value string) {

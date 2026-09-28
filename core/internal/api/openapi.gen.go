@@ -2693,6 +2693,21 @@ func (e UserPreferencesTheme) Valid() bool {
 	}
 }
 
+// Defines values for ClientKind.
+const (
+	ClientKindNative ClientKind = "native"
+)
+
+// Valid indicates whether the value is a known member of the ClientKind enum.
+func (e ClientKind) Valid() bool {
+	switch e {
+	case ClientKindNative:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListAgentToolConfirmationsParamsStatus.
 const (
 	ListAgentToolConfirmationsParamsStatusAll       ListAgentToolConfirmationsParamsStatus = "all"
@@ -2726,6 +2741,51 @@ func (e ListAgentToolConfirmationsParamsStatus) Valid() bool {
 	}
 }
 
+// Defines values for LoginParamsXComaClient.
+const (
+	LoginParamsXComaClientNative LoginParamsXComaClient = "native"
+)
+
+// Valid indicates whether the value is a known member of the LoginParamsXComaClient enum.
+func (e LoginParamsXComaClient) Valid() bool {
+	switch e {
+	case LoginParamsXComaClientNative:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RefreshParamsXComaClient.
+const (
+	RefreshParamsXComaClientNative RefreshParamsXComaClient = "native"
+)
+
+// Valid indicates whether the value is a known member of the RefreshParamsXComaClient enum.
+func (e RefreshParamsXComaClient) Valid() bool {
+	switch e {
+	case RefreshParamsXComaClientNative:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BootstrapParamsXComaClient.
+const (
+	BootstrapParamsXComaClientNative BootstrapParamsXComaClient = "native"
+)
+
+// Valid indicates whether the value is a known member of the BootstrapParamsXComaClient enum.
+func (e BootstrapParamsXComaClient) Valid() bool {
+	switch e {
+	case BootstrapParamsXComaClientNative:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GetBrandingAssetParamsKind.
 const (
 	GetBrandingAssetParamsKindFavicon GetBrandingAssetParamsKind = "favicon"
@@ -2738,6 +2798,21 @@ func (e GetBrandingAssetParamsKind) Valid() bool {
 	case GetBrandingAssetParamsKindFavicon:
 		return true
 	case GetBrandingAssetParamsKindLogo:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AcceptInvitationParamsXComaClient.
+const (
+	AcceptInvitationParamsXComaClientNative AcceptInvitationParamsXComaClient = "native"
+)
+
+// Valid indicates whether the value is a known member of the AcceptInvitationParamsXComaClient enum.
+func (e AcceptInvitationParamsXComaClient) Valid() bool {
+	switch e {
+	case AcceptInvitationParamsXComaClientNative:
 		return true
 	default:
 		return false
@@ -4338,6 +4413,11 @@ type RealtimeTypingFrameV1 struct {
 // RealtimeTypingFrameV1Op defines model for RealtimeTypingFrameV1.Op.
 type RealtimeTypingFrameV1Op string
 
+// RefreshRequest defines model for RefreshRequest.
+type RefreshRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
 // ResetPasswordRequest defines model for ResetPasswordRequest.
 type ResetPasswordRequest struct {
 	NewPassword string `json:"new_password"`
@@ -4502,7 +4582,10 @@ type ThreadUnread struct {
 type TokenResponse struct {
 	AccessExpiresAt time.Time `json:"access_expires_at"`
 	AccessToken     string    `json:"access_token"`
-	User            User      `json:"user"`
+
+	// RefreshToken Present only for requests sent with `X-Coma-Client: native`.
+	RefreshToken *string `json:"refresh_token,omitempty"`
+	User         User    `json:"user"`
 }
 
 // TransferOwnershipRequest defines model for TransferOwnershipRequest.
@@ -4788,6 +4871,9 @@ type AgentTriggerId = openapi_types.UUID
 // ChatId defines model for ChatId.
 type ChatId = openapi_types.UUID
 
+// ClientKind defines model for ClientKind.
+type ClientKind string
+
 // FileId defines model for FileId.
 type FileId = openapi_types.UUID
 
@@ -4815,11 +4901,35 @@ type ListAgentToolConfirmationsParams struct {
 // ListAgentToolConfirmationsParamsStatus defines parameters for ListAgentToolConfirmations.
 type ListAgentToolConfirmationsParamsStatus string
 
+// LoginParams defines parameters for Login.
+type LoginParams struct {
+	// XComaClient `native` switches refresh token transport from the HttpOnly cookie to JSON bodies. Ignored when an Origin header is present.
+	XComaClient *LoginParamsXComaClient `json:"X-Coma-Client,omitempty"`
+}
+
+// LoginParamsXComaClient defines parameters for Login.
+type LoginParamsXComaClient string
+
+// RefreshParams defines parameters for Refresh.
+type RefreshParams struct {
+	// XComaClient `native` switches refresh token transport from the HttpOnly cookie to JSON bodies. Ignored when an Origin header is present.
+	XComaClient *RefreshParamsXComaClient `json:"X-Coma-Client,omitempty"`
+}
+
+// RefreshParamsXComaClient defines parameters for Refresh.
+type RefreshParamsXComaClient string
+
 // BootstrapParams defines parameters for Bootstrap.
 type BootstrapParams struct {
 	// XComaBootstrapToken Required outside development; configure it with BOOTSTRAP_TOKEN.
 	XComaBootstrapToken *string `json:"X-Coma-Bootstrap-Token,omitempty"`
+
+	// XComaClient `native` switches refresh token transport from the HttpOnly cookie to JSON bodies. Ignored when an Origin header is present.
+	XComaClient *BootstrapParamsXComaClient `json:"X-Coma-Client,omitempty"`
 }
+
+// BootstrapParamsXComaClient defines parameters for Bootstrap.
+type BootstrapParamsXComaClient string
 
 // GetBrandingAssetParamsKind defines parameters for GetBrandingAsset.
 type GetBrandingAssetParamsKind string
@@ -4835,6 +4945,15 @@ type ListMessagesParams struct {
 type DeleteDraftParams struct {
 	ThreadRootId *openapi_types.UUID `form:"thread_root_id,omitempty" json:"thread_root_id,omitempty"`
 }
+
+// AcceptInvitationParams defines parameters for AcceptInvitation.
+type AcceptInvitationParams struct {
+	// XComaClient `native` switches refresh token transport from the HttpOnly cookie to JSON bodies. Ignored when an Origin header is present.
+	XComaClient *AcceptInvitationParamsXComaClient `json:"X-Coma-Client,omitempty"`
+}
+
+// AcceptInvitationParamsXComaClient defines parameters for AcceptInvitation.
+type AcceptInvitationParamsXComaClient string
 
 // GetMessageContextParams defines parameters for GetMessageContext.
 type GetMessageContextParams struct {
@@ -4974,6 +5093,9 @@ type ForgotPasswordJSONRequestBody = ForgotPasswordRequest
 
 // ResetPasswordJSONRequestBody defines body for ResetPassword for application/json ContentType.
 type ResetPasswordJSONRequestBody = ResetPasswordRequest
+
+// RefreshJSONRequestBody defines body for Refresh for application/json ContentType.
+type RefreshJSONRequestBody = RefreshRequest
 
 // BootstrapJSONRequestBody defines body for Bootstrap for application/json ContentType.
 type BootstrapJSONRequestBody = BootstrapRequest
