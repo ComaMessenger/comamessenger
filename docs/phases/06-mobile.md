@@ -56,7 +56,7 @@
 
 - [x] Выдавать refresh-токен в теле ответа для `X-Coma-Client: native` без Origin и принимать его в `POST /auth/refresh`; `MessengerAPI` принимает `RefreshTokenStore`.
 - [x] Выбрать стратегию Expo: Continuous Native Generation + EAS Build ([ADR-0011](../decisions/0011-mobile-stack.md)).
-- [ ] Инициализировать `apps/mobile`.
+- [x] Инициализировать `apps/mobile`: Expo SDK 57, expo-router, адаптеры SecureStore и SQLite, EAS-профили.
 - [ ] Настроить app variants, environment config, bundle IDs и signing без хранения секретов в репозитории.
 - [ ] Переиспользовать generated protocol client; выделить transport/session adapters для web/mobile.
 - [ ] Переиспользовать `packages/core` engine и `packages/tokens`, не переносить DOM/Web primitives в Native.
