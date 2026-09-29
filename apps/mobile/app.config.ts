@@ -3,6 +3,9 @@ import type { ExpoConfig } from "expo/config";
 // The bundle identifier is fixed by the first store build and depends on the
 // public Coma domain (ADR-0011); until that decision it comes from the env.
 const bundleIdentifier = process.env.COMA_BUNDLE_ID ?? "com.comamessenger.app";
+// Store build numbers come from the fastlane lanes (next after the stores).
+const buildNumber = process.env.COMA_BUILD_NUMBER;
+
 // Shared with the Notification Service Extension for the notification key.
 const appGroup = `group.${bundleIdentifier}`;
 
@@ -16,6 +19,7 @@ const config: ExpoConfig = {
   userInterfaceStyle: "automatic",
   ios: {
     bundleIdentifier,
+    ...(buildNumber ? { buildNumber } : {}),
     supportsTablet: false,
     deploymentTarget: "16.4",
     config: { usesNonExemptEncryption: false },
@@ -27,6 +31,7 @@ const config: ExpoConfig = {
   },
   android: {
     package: bundleIdentifier,
+    ...(buildNumber ? { versionCode: Number(buildNumber) } : {}),
     adaptiveIcon: {
       backgroundColor: "#174586",
       foregroundImage: "./assets/android-icon-foreground.png",
@@ -54,6 +59,7 @@ const config: ExpoConfig = {
       },
     ],
     "@bacons/apple-targets",
+    "./plugins/withAndroidReleaseSigning",
     [
       "expo-splash-screen",
       {

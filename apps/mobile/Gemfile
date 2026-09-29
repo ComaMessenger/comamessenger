@@ -1,0 +1,6 @@
+# frozen_string_literal: true
+
+source 'https://rubygems.org'
+
+# Store builds: bundle exec fastlane ios beta / android beta (see fastlane/Fastfile).
+gem 'fastlane', '~> 2.230'

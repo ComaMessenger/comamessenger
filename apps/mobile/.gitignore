@@ -14,3 +14,10 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 *.pem
+
+# fastlane
+/vendor/
+/build/
+fastlane/report.xml
+fastlane/README.md
+/.bundle/
