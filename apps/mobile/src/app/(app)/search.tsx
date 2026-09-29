@@ -71,7 +71,7 @@ export default function SearchScreen() {
     router.push(
       result.thread_root_id
         ? `/chat/${result.chat_id}/thread/${result.thread_root_id}`
-        : `/chat/${result.chat_id}`,
+        : `/chat/${result.chat_id}?message=${result.message_id}`,
     );
   }
 

@@ -38,7 +38,11 @@ function sortedUnique(messages: ClientMessage[]) {
  * State of one conversation feed — the chat itself or a thread inside it:
  * history and pagination, read markers, drafts, typing and sending.
  */
-export function useConversation(chatID: string, threadRootID: string | null) {
+export function useConversation(
+  chatID: string,
+  threadRootID: string | null,
+  focusMessageID: string | null = null,
+) {
   const { api, user } = useSignedIn();
   const { store, coordinator, outbox, scheduleReload } = useMessenger();
   const queryClient = useQueryClient();
@@ -68,6 +72,9 @@ export function useConversation(chatID: string, threadRootID: string | null) {
   const [loadError, setLoadError] = useState(false);
   const [hasOlder, setHasOlder] = useState(false);
   const [unreadAnchor, setUnreadAnchor] = useState(0);
+  // Opened from search: the feed shows a window around this message.
+  const [focused, setFocused] = useState(focusMessageID);
+  const [hasLater, setHasLater] = useState(false);
   const loadingOlder = useRef(false);
   const lastReadRequested = useRef(0);
   const lastTyping = useRef(0);
@@ -108,9 +115,20 @@ export function useConversation(chatID: string, threadRootID: string | null) {
       }
     }
     try {
+      if (focused) {
+        const window = await api.messageContext(focused, 51);
+        store.getState().replaceMessages(
+          chatID,
+          window.messages.filter((message) => !message.thread_root_id),
+        );
+        setHasOlder(window.has_earlier);
+        setHasLater(window.has_later);
+        return;
+      }
       const page = await api.messages(chatID, { limit: 50 });
       store.getState().replaceMessages(chatID, page.messages);
       setHasOlder(page.next_before_seq != null);
+      setHasLater(false);
     } catch (cause) {
       // Saved messages stay readable offline; the banner explains why.
       if (!(isNetworkError(cause) && store.getState().messages[chatID]?.length))
@@ -118,7 +136,7 @@ export function useConversation(chatID: string, threadRootID: string | null) {
     } finally {
       setLoading(false);
     }
-  }, [api, chatID, store, threadRootID]);
+  }, [api, chatID, focused, store, threadRootID]);
 
   useEffect(() => {
     void loadLatest();
@@ -331,8 +349,14 @@ export function useConversation(chatID: string, threadRootID: string | null) {
   );
   const retryOutbox = useCallback(() => void outbox.flush(), [outbox]);
 
+  /** Leaves the search window for the latest messages. */
+  const jumpToLatest = useCallback(() => setFocused(null), []);
+
   return {
     chat,
+    focusedMessageID: focused,
+    hasLater,
+    jumpToLatest,
     streams,
     workingAgents,
     members,

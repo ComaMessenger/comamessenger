@@ -5,16 +5,18 @@ appId: com.comamessenger.app
 - runFlow: open-app.yaml
 - tapOn:
     id: chat-row-0
+# A unique text per run keeps the flow independent of earlier runs.
+- evalScript: ${output.tag = String(Date.now()).slice(-6)}
 - tapOn:
     id: composer-input
-- inputText: Сообщение для треда
+- inputText: Тред ${output.tag}
 - tapOn:
     id: composer-send
 # Message rows are single accessible elements, so match by substring.
 - extendedWaitUntil:
-    visible: .*Сообщение для треда.*
+    visible: .*Тред ${output.tag}.*
     timeout: 15000
-- longPressOn: .*Сообщение для треда.*
+- longPressOn: .*Тред ${output.tag}.*
 - tapOn: Ответить в треде
 - extendedWaitUntil:
     visible: Тред
@@ -30,10 +32,14 @@ appId: com.comamessenger.app
 - takeScreenshot: thread
 - tapOn:
     id: conversation-back
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    notVisible: Тред в.*
+    timeout: 10000
 - extendedWaitUntil:
     visible: .*1 ответ.*
     timeout: 10000
-- longPressOn: .*Сообщение для треда.*
+- longPressOn: .*Тред ${output.tag}.*
 - tapOn: 👍
 - extendedWaitUntil:
     visible: .*👍.*
@@ -43,9 +49,21 @@ appId: com.comamessenger.app
     id: conversation-back
 - tapOn:
     id: open-search
-- inputText: для треда
+- inputText: ${output.tag}
 - extendedWaitUntil:
     visible:
-      text: .*для треда.*
+      text: .*${output.tag}.*
     timeout: 10000
 - takeScreenshot: search
+# Opening a search result jumps to the message and highlights it.
+- eraseText: 30
+- inputText: миграция
+- extendedWaitUntil:
+    visible: .*миграция готова.*
+    timeout: 10000
+- tapOn: .*миграция готова.*
+- extendedWaitUntil:
+    visible:
+      id: conversation
+    timeout: 10000
+- takeScreenshot: search-jump

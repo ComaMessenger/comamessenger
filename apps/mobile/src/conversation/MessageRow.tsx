@@ -70,6 +70,13 @@ export const MessageRow = memo(function MessageRow({
     minute: "2-digit",
   }).format(new Date(message.created_at));
   const actionable = !deleted && message.delivery !== "sending";
+  // Nested buttons (thread link, reactions) pass a long press on to the row
+  // menu; without it the release would count as a tap on them.
+  const openActions = () => {
+    if (!actionable) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    onActions(message);
+  };
 
   return (
     <ReanimatedSwipeable
@@ -92,11 +99,7 @@ export const MessageRow = memo(function MessageRow({
       <Pressable
         accessibilityHint={t("messageActions")}
         delayLongPress={350}
-        onLongPress={() => {
-          if (!actionable) return;
-          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          onActions(message);
-        }}
+        onLongPress={openActions}
         style={({ pressed }) => [
           styles.row,
           grouped && styles.rowGrouped,
@@ -204,6 +207,7 @@ export const MessageRow = memo(function MessageRow({
                   onPress={() =>
                     void reactions.toggle(group.emoji).catch(() => undefined)
                   }
+                  onLongPress={openActions}
                   style={[
                     styles.chip,
                     {
@@ -226,6 +230,7 @@ export const MessageRow = memo(function MessageRow({
             <Pressable
               accessibilityRole="button"
               onPress={() => onThread(message)}
+              onLongPress={openActions}
               style={styles.inline}
               hitSlop={8}
             >

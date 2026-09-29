@@ -52,15 +52,18 @@ const bottomTolerance = 64;
 export function ConversationView({
   chatID,
   threadRootID,
+  focusMessageID = null,
 }: {
   chatID: string;
   threadRootID: string | null;
+  focusMessageID?: string | null;
 }) {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
   const { api, user } = useSignedIn();
   const queryClient = useQueryClient();
-  const conversation = useConversation(chatID, threadRootID);
+  const conversation = useConversation(chatID, threadRootID, focusMessageID);
+  const [highlighted, setHighlighted] = useState(focusMessageID);
   const { chat, members, rows, markRead } = conversation;
   const [context, setContext] = useState<Context | null>(null);
   const [editBody, setEditBody] = useState("");
@@ -92,7 +95,12 @@ export function ConversationView({
 
   // A chat with unread messages opens on the first of them; reading them
   // (scrolling to the bottom) is what marks the chat read.
-  const firstUnreadIndex = rows.findIndex((row) => row.firstUnread);
+  // A message opened from search takes precedence over the unread boundary.
+  const focusIndex = conversation.focusedMessageID
+    ? rows.findIndex((row) => row.message.id === conversation.focusedMessageID)
+    : -1;
+  const firstUnreadIndex =
+    focusIndex >= 0 ? focusIndex : rows.findIndex((row) => row.firstUnread);
   const openedAt = useRef<number | null>(null);
   if (openedAt.current === null && rows.length && !conversation.loading) {
     openedAt.current = firstUnreadIndex;
@@ -101,6 +109,19 @@ export function ConversationView({
   useEffect(() => {
     if (openedAt.current !== null && openedAt.current >= 0) setShowJump(true);
   }, [rows.length]);
+  useEffect(() => {
+    if (!highlighted) return;
+    const timer = setTimeout(() => setHighlighted(null), 2500);
+    return () => clearTimeout(timer);
+  }, [highlighted]);
+
+  function jumpToBottom() {
+    if (conversation.hasLater) {
+      // The search window ends before the latest messages: load them first.
+      conversation.jumpToLatest();
+      setTimeout(() => list.current?.scrollToEnd({ animated: true }), 300);
+    } else list.current?.scrollToEnd({ animated: true });
+  }
 
   // New messages while the reader follows the bottom count as read.
   useEffect(() => {
@@ -260,13 +281,13 @@ export function ConversationView({
                 row.message.client_msg_id || row.message.id
               }
               initialScrollIndex={
-                openedAt.current !== null && openedAt.current > 0
+                openedAt.current !== null && openedAt.current >= 0
                   ? openedAt.current
                   : undefined
               }
               maintainVisibleContentPosition={{
                 startRenderingFromBottom: !(
-                  openedAt.current !== null && openedAt.current > 0
+                  openedAt.current !== null && openedAt.current >= 0
                 ),
                 autoscrollToBottomThreshold: 0.2,
               }}
@@ -352,24 +373,32 @@ export function ConversationView({
                         />
                       </View>
                     )}
-                    <MessageRow
-                      api={api}
-                      ownID={user.id}
-                      message={message}
-                      author={members.find(
-                        (member) => member.actor_id === message.actor_id,
-                      )}
-                      grouped={item.grouped && !(inThread && index === 1)}
-                      quoted={quoted}
-                      quotedAuthor={
-                        quoted ? authorName(quoted.actor_id) : undefined
+                    <View
+                      style={
+                        message.id === highlighted
+                          ? { backgroundColor: theme.primarySoft }
+                          : undefined
                       }
-                      showThread={!inThread}
-                      onReply={reply}
-                      onThread={openThread}
-                      onActions={setActionsFor}
-                      onRetry={conversation.retryOutbox}
-                    />
+                    >
+                      <MessageRow
+                        api={api}
+                        ownID={user.id}
+                        message={message}
+                        author={members.find(
+                          (member) => member.actor_id === message.actor_id,
+                        )}
+                        grouped={item.grouped && !(inThread && index === 1)}
+                        quoted={quoted}
+                        quotedAuthor={
+                          quoted ? authorName(quoted.actor_id) : undefined
+                        }
+                        showThread={!inThread}
+                        onReply={reply}
+                        onThread={openThread}
+                        onActions={setActionsFor}
+                        onRetry={conversation.retryOutbox}
+                      />
+                    </View>
                     {inThread && index === 0 && (
                       <View style={styles.separator}>
                         <View
@@ -398,7 +427,7 @@ export function ConversationView({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={t("scrollToBottom")}
-              onPress={() => list.current?.scrollToEnd({ animated: true })}
+              onPress={jumpToBottom}
               style={[
                 styles.jump,
                 { backgroundColor: theme.surface, borderColor: theme.border },
