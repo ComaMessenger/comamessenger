@@ -1670,6 +1670,42 @@ func (e MessageType) Valid() bool {
 	}
 }
 
+// Defines values for MobilePushDevicePlatform.
+const (
+	MobilePushDevicePlatformAndroid MobilePushDevicePlatform = "android"
+	MobilePushDevicePlatformIos     MobilePushDevicePlatform = "ios"
+)
+
+// Valid indicates whether the value is a known member of the MobilePushDevicePlatform enum.
+func (e MobilePushDevicePlatform) Valid() bool {
+	switch e {
+	case MobilePushDevicePlatformAndroid:
+		return true
+	case MobilePushDevicePlatformIos:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MobilePushDeviceRequestPlatform.
+const (
+	MobilePushDeviceRequestPlatformAndroid MobilePushDeviceRequestPlatform = "android"
+	MobilePushDeviceRequestPlatformIos     MobilePushDeviceRequestPlatform = "ios"
+)
+
+// Valid indicates whether the value is a known member of the MobilePushDeviceRequestPlatform enum.
+func (e MobilePushDeviceRequestPlatform) Valid() bool {
+	switch e {
+	case MobilePushDeviceRequestPlatformAndroid:
+		return true
+	case MobilePushDeviceRequestPlatformIos:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for NotificationScheduleDays0.
 const (
 	NotificationScheduleDays0All      NotificationScheduleDays0 = "all"
@@ -4042,6 +4078,31 @@ type MessageWindow struct {
 	TargetId   openapi_types.UUID `json:"target_id"`
 }
 
+// MobilePushDevice defines model for MobilePushDevice.
+type MobilePushDevice struct {
+	CreatedAt time.Time                `json:"created_at"`
+	Id        openapi_types.UUID       `json:"id"`
+	Platform  MobilePushDevicePlatform `json:"platform"`
+	UpdatedAt time.Time                `json:"updated_at"`
+}
+
+// MobilePushDevicePlatform defines model for MobilePushDevice.Platform.
+type MobilePushDevicePlatform string
+
+// MobilePushDeviceRequest defines model for MobilePushDeviceRequest.
+type MobilePushDeviceRequest struct {
+	AppVersion *string `json:"app_version,omitempty"`
+	Locale     *string `json:"locale,omitempty"`
+
+	// NotificationKey Base64 of the 32-byte AES-256-GCM key the app decrypts notifications with.
+	NotificationKey string                          `json:"notification_key"`
+	Platform        MobilePushDeviceRequestPlatform `json:"platform"`
+	RelayHandle     string                          `json:"relay_handle"`
+}
+
+// MobilePushDeviceRequestPlatform defines model for MobilePushDeviceRequest.Platform.
+type MobilePushDeviceRequestPlatform string
+
 // NotificationSchedule defines model for NotificationSchedule.
 type NotificationSchedule struct {
 	Days NotificationSchedule_Days `json:"days"`
@@ -4136,8 +4197,11 @@ type PublishAgentRunRequestBodyFormat string
 
 // PushConfig defines model for PushConfig.
 type PushConfig struct {
-	Enabled   bool   `json:"enabled"`
-	PublicKey string `json:"public_key"`
+	Enabled bool `json:"enabled"`
+
+	// MobileRelayUrl Push relay this instance sends mobile notifications through; empty when mobile push is off. Apps register only with the relay they were built for.
+	MobileRelayUrl string `json:"mobile_relay_url"`
+	PublicKey      string `json:"public_key"`
 }
 
 // PushSubscription defines model for PushSubscription.
@@ -5186,6 +5250,9 @@ type PutChatFoldersJSONRequestBody = ChatFolders
 
 // PutPinnedChatsJSONRequestBody defines body for PutPinnedChats for application/json ContentType.
 type PutPinnedChatsJSONRequestBody = PinnedChatIds
+
+// PutMobilePushDeviceJSONRequestBody defines body for PutMobilePushDevice for application/json ContentType.
+type PutMobilePushDeviceJSONRequestBody = MobilePushDeviceRequest
 
 // PutPushSubscriptionJSONRequestBody defines body for PutPushSubscription for application/json ContentType.
 type PutPushSubscriptionJSONRequestBody = PushSubscriptionRequest

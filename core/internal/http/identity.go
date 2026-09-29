@@ -298,6 +298,8 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Get("/push/subscriptions", h.listPushSubscriptions)
 			protected.Put("/push/subscriptions", h.putPushSubscription)
 			protected.Delete("/push/subscriptions/{subscriptionID}", h.deletePushSubscription)
+			protected.Put("/push/devices", h.putMobileDevice)
+			protected.Delete("/push/devices/{deviceID}", h.deleteMobileDevice)
 			protected.Get("/preferences", h.getPreferences)
 			protected.Patch("/preferences", h.patchPreferences)
 			protected.Get("/preferences/chat-folders", h.getChatFolders)

@@ -1144,6 +1144,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/push/devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Registers a mobile device handle issued by the push relay (ADR-0012) for the current session family. Repeating the call with the same handle updates it. */
+        put: operations["putMobilePushDevice"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/push/devices/{device_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteMobilePushDevice"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/push/subscriptions/{subscription_id}": {
         parameters: {
             query?: never;
@@ -3638,6 +3671,27 @@ export interface components {
         PushConfig: {
             enabled: boolean;
             public_key: string;
+            /** @description Push relay this instance sends mobile notifications through; empty when mobile push is off. Apps register only with the relay they were built for. */
+            mobile_relay_url: string;
+        };
+        MobilePushDeviceRequest: {
+            /** @enum {string} */
+            platform: "ios" | "android";
+            relay_handle: string;
+            /** @description Base64 of the 32-byte AES-256-GCM key the app decrypts notifications with. */
+            notification_key: string;
+            app_version?: string;
+            locale?: string;
+        };
+        MobilePushDevice: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            platform: "ios" | "android";
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
         };
         PushSubscriptionRequest: {
             /** Format: uri */
@@ -6066,6 +6120,53 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PushSubscription"];
                 };
+            };
+            422: components["responses"]["Error"];
+        };
+    };
+    putMobilePushDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MobilePushDeviceRequest"];
+            };
+        };
+        responses: {
+            /** @description Registered device. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MobilePushDevice"];
+                };
+            };
+            422: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    deleteMobilePushDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                device_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Device removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             422: components["responses"]["Error"];
         };

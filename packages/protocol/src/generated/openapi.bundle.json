@@ -3346,6 +3346,74 @@
         }
       }
     },
+    "/api/v1/push/devices": {
+      "put": {
+        "operationId": "putMobilePushDevice",
+        "description": "Registers a mobile device handle issued by the push relay (ADR-0012) for the current session family. Repeating the call with the same handle updates it.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MobilePushDeviceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Registered device.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MobilePushDevice"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/push/devices/{device_id}": {
+      "delete": {
+        "operationId": "deleteMobilePushDevice",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Device removed."
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/v1/push/subscriptions/{subscription_id}": {
       "delete": {
         "operationId": "deletePushSubscription",
@@ -12122,7 +12190,8 @@
         "additionalProperties": false,
         "required": [
           "enabled",
-          "public_key"
+          "public_key",
+          "mobile_relay_url"
         ],
         "properties": {
           "enabled": {
@@ -12130,6 +12199,76 @@
           },
           "public_key": {
             "type": "string"
+          },
+          "mobile_relay_url": {
+            "type": "string",
+            "description": "Push relay this instance sends mobile notifications through; empty when mobile push is off. Apps register only with the relay they were built for."
+          }
+        }
+      },
+      "MobilePushDeviceRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "platform",
+          "relay_handle",
+          "notification_key"
+        ],
+        "properties": {
+          "platform": {
+            "type": "string",
+            "enum": [
+              "ios",
+              "android"
+            ]
+          },
+          "relay_handle": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 256
+          },
+          "notification_key": {
+            "type": "string",
+            "description": "Base64 of the 32-byte AES-256-GCM key the app decrypts notifications with."
+          },
+          "app_version": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "locale": {
+            "type": "string",
+            "maxLength": 16
+          }
+        }
+      },
+      "MobilePushDevice": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "platform",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "ios",
+              "android"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },

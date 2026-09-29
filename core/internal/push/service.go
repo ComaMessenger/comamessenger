@@ -150,7 +150,7 @@ func NewService(pool *pgxpool.Pool, cfg config.PushConfig) *Service {
 	return &Service{pool: pool, config: cfg}
 }
 func (s *Service) Config() map[string]any {
-	return map[string]any{"enabled": s.config.VAPIDPublicKey != "", "public_key": s.config.VAPIDPublicKey}
+	return map[string]any{"enabled": s.config.VAPIDPublicKey != "", "public_key": s.config.VAPIDPublicKey, "mobile_relay_url": s.config.RelayURL}
 }
 func (s *Service) Subscribe(ctx context.Context, user identity.User, sessionID, userAgent string, input SubscriptionInput) (Subscription, error) {
 	input.Endpoint = strings.TrimSpace(input.Endpoint)
@@ -612,6 +612,7 @@ type Worker struct {
 	active      ActiveCheck
 	emailSender EmailSender
 	client      *http.Client
+	relay       RelayClient
 }
 
 func NewWorker(logger *slog.Logger, pool *pgxpool.Pool, cfg config.PushConfig, active ActiveCheck, emailSenders ...EmailSender) *Worker {
@@ -619,13 +620,24 @@ func NewWorker(logger *slog.Logger, pool *pgxpool.Pool, cfg config.PushConfig, a
 	if len(emailSenders) > 0 {
 		emailSender = emailSenders[0]
 	}
-	return &Worker{logger: logger, pool: pool, config: cfg, active: active, emailSender: emailSender, client: &http.Client{Timeout: 10 * time.Second}}
+	client := &http.Client{Timeout: 10 * time.Second}
+	var relay RelayClient
+	if cfg.RelayURL != "" {
+		relay = NewHTTPRelay(cfg.RelayURL, client)
+	}
+	return &Worker{logger: logger, pool: pool, config: cfg, active: active, emailSender: emailSender, client: client, relay: relay}
+}
+
+// WithRelay replaces the push relay client, e.g. with a test double.
+func (w *Worker) WithRelay(relay RelayClient) *Worker {
+	w.relay = relay
+	return w
 }
 func (w *Worker) Run(ctx context.Context) {
 	if w.config.VAPIDPrivateKey == "" {
 		w.logger.Info("web push disabled; VAPID keys are not configured")
 	}
-	if w.config.VAPIDPrivateKey == "" && w.emailSender == nil {
+	if w.config.VAPIDPrivateKey == "" && w.emailSender == nil && w.relay == nil {
 		return
 	}
 	ticker := time.NewTicker(w.config.PollInterval)
@@ -647,6 +659,11 @@ func (w *Worker) tick(ctx context.Context) error {
 	}
 	if w.config.VAPIDPrivateKey != "" {
 		if err := w.deliver(ctx); err != nil {
+			return err
+		}
+	}
+	if w.relay != nil {
+		if err := w.deliverMobile(ctx); err != nil {
 			return err
 		}
 	}
@@ -757,13 +774,21 @@ func (w *Worker) materialize(ctx context.Context) error {
 			  WHERE COALESCE((preferences->>'email_digest')::boolean,false)
 			  ON CONFLICT DO NOTHING
 			  RETURNING 1
+			), mobile_items AS (
+			  INSERT INTO mobile_push_deliveries(org_id,event_seq,device_id)
+			  SELECT e.org_id,e.seq,d.id
+			  FROM eligible e
+			  JOIN mobile_push_devices d ON d.org_id=e.org_id AND d.actor_id=e.recipient_id
+			  WHERE $3 AND COALESCE((e.preferences->>'push_enabled')::boolean,true) AND `+liveFamily+`
+			  ON CONFLICT DO NOTHING
+			  RETURNING 1
 			)
 			INSERT INTO notification_deliveries(org_id,event_seq,subscription_id)
 			SELECT e.org_id,e.seq,s.id
 			FROM eligible e
 			JOIN web_push_subscriptions s ON s.org_id=e.org_id AND s.actor_id=e.recipient_id
 			WHERE COALESCE((e.preferences->>'push_enabled')::boolean,true)
-			ON CONFLICT DO NOTHING`, j.org, j.seq)
+			ON CONFLICT DO NOTHING`, j.org, j.seq, w.relay != nil)
 		if err != nil {
 			return err
 		}
@@ -805,26 +830,13 @@ func (w *Worker) deliver(ctx context.Context) error {
 			_, _ = w.pool.Exec(ctx, `UPDATE notification_deliveries SET sent_at=now(),last_error='suppressed_active',lease_token=NULL,lease_until=NULL WHERE org_id=$1 AND event_seq=$2 AND subscription_id=$3 AND lease_token=$4`, org, seq, subID, leaseToken)
 			continue
 		}
-		title := author
-		if name != nil && *name != "" {
-			title += " · " + *name
+		content := buildNotification(eventType, eventData, author, locale, preview, chatID, threadID, body, name)
+		payload := map[string]any{"title": content.Title, "body": content.Body}
+		if content.ChatID != "" {
+			payload["chat_id"] = content.ChatID
 		}
-		genericBody := "Новое сообщение"
-		if locale == "en" {
-			genericBody = "New message"
-		}
-		payload := map[string]any{"title": title, "body": genericBody}
-		if chatID != nil {
-			payload["chat_id"] = *chatID
-			payload["url"] = "/chat/" + *chatID
-		}
-		if eventType == "message.created" && preview && body != nil {
-			payload["body"] = truncate(*body, 180)
-		} else if eventType != "message.created" {
-			payload["body"] = categoryBody(eventType, eventData, author, locale)
-		}
-		if threadID != nil && chatID != nil {
-			payload["url"] = "/chat/" + *chatID + "/thread/" + *threadID
+		if content.URL != "" {
+			payload["url"] = content.URL
 		}
 		encoded, _ := json.Marshal(payload)
 		response, sendErr := webpush.SendNotificationWithContext(ctx, encoded, &webpush.Subscription{Endpoint: endpoint, Keys: webpush.Keys{P256dh: p256dh, Auth: auth}}, &webpush.Options{Subscriber: w.config.VAPIDSubject, VAPIDPublicKey: w.config.VAPIDPublicKey, VAPIDPrivateKey: w.config.VAPIDPrivateKey, TTL: 120})
@@ -964,6 +976,40 @@ func digestMessage(items []digestItem) (string, string) {
 		fmt.Fprintf(&body, "• %s · %s: %s\n", item.author, chatName, description)
 	}
 	return subject, strings.TrimSpace(body.String())
+}
+
+// notificationContent is what a push shows. Message text is included only
+// when the recipient enabled push_preview (ADR-0010).
+type notificationContent struct {
+	Title        string `json:"title"`
+	Body         string `json:"body"`
+	URL          string `json:"url,omitempty"`
+	ChatID       string `json:"chat_id,omitempty"`
+	ThreadRootID string `json:"thread_root_id,omitempty"`
+}
+
+func buildNotification(eventType string, eventData []byte, author, locale string, preview bool, chatID, threadID, body, chatName *string) notificationContent {
+	content := notificationContent{Title: author, Body: "Новое сообщение"}
+	if chatName != nil && *chatName != "" {
+		content.Title += " · " + *chatName
+	}
+	if locale == "en" {
+		content.Body = "New message"
+	}
+	if eventType == "message.created" && preview && body != nil {
+		content.Body = truncate(*body, 180)
+	} else if eventType != "message.created" {
+		content.Body = categoryBody(eventType, eventData, author, locale)
+	}
+	if chatID != nil {
+		content.ChatID = *chatID
+		content.URL = "/chat/" + *chatID
+		if threadID != nil {
+			content.ThreadRootID = *threadID
+			content.URL += "/thread/" + *threadID
+		}
+	}
+	return content
 }
 
 func categoryBody(eventType string, raw []byte, author, locale string) string {
