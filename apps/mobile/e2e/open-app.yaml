@@ -1,0 +1,18 @@
+# Shared start for flows that reuse the signed-in state of sign-in.yaml.
+appId: dev.comamessenger.app
+env:
+  METRO: http%3A%2F%2Flocalhost%3A8081
+---
+- launchApp:
+    stopApp: true
+- openLink: exp+coma://expo-development-client/?url=${METRO}
+- runFlow:
+    when:
+      visible: Reload
+    commands:
+      - tapOn:
+          point: 91%,47%
+- extendedWaitUntil:
+    visible:
+      id: chat-list
+    timeout: 60000

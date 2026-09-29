@@ -1,0 +1,29 @@
+# Picks a photo from the simulator library, sends it and checks the preview.
+# Run after sign-in.yaml: maestro test e2e/attachments.yaml
+appId: dev.comamessenger.app
+---
+- runFlow: open-app.yaml
+- tapOn:
+    id: chat-row-0
+- tapOn:
+    id: composer-attach
+- tapOn: Фото и видео
+- extendedWaitUntil:
+    visible: .*(Photos|Фото|Recents|Недавние).*
+    timeout: 15000
+# Second photo of the simulator's sample library.
+- tapOn:
+    point: 50%,28%
+- tapOn: (Add|Добавить)
+# The send button becomes enabled once the upload finishes.
+- extendedWaitUntil:
+    visible:
+      id: composer-send
+      enabled: true
+    timeout: 30000
+- takeScreenshot: attachment-ready
+- tapOn:
+    id: composer-send
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: attachment-sent

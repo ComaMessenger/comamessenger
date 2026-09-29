@@ -1,0 +1,51 @@
+# Thread reply, reaction and search on a message the flow sends itself.
+# Run after sign-in.yaml (reuses its session): maestro test e2e/conversation.yaml
+appId: dev.comamessenger.app
+---
+- runFlow: open-app.yaml
+- tapOn:
+    id: chat-row-0
+- tapOn:
+    id: composer-input
+- inputText: Сообщение для треда
+- tapOn:
+    id: composer-send
+# Message rows are single accessible elements, so match by substring.
+- extendedWaitUntil:
+    visible: .*Сообщение для треда.*
+    timeout: 15000
+- longPressOn: .*Сообщение для треда.*
+- tapOn: Ответить в треде
+- extendedWaitUntil:
+    visible: Тред
+    timeout: 10000
+- tapOn:
+    id: composer-input
+- inputText: Ответ в треде
+- tapOn:
+    id: composer-send
+- extendedWaitUntil:
+    visible: .*Ответ в треде.*
+    timeout: 10000
+- takeScreenshot: thread
+- tapOn:
+    id: conversation-back
+- extendedWaitUntil:
+    visible: .*1 ответ.*
+    timeout: 10000
+- longPressOn: .*Сообщение для треда.*
+- tapOn: 👍
+- extendedWaitUntil:
+    visible: .*👍.*
+    timeout: 10000
+- takeScreenshot: reactions
+- tapOn:
+    id: conversation-back
+- tapOn:
+    id: open-search
+- inputText: для треда
+- extendedWaitUntil:
+    visible:
+      text: .*для треда.*
+    timeout: 10000
+- takeScreenshot: search

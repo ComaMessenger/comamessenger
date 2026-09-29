@@ -29,6 +29,9 @@ import { Avatar } from "@/ui/Avatar";
 import { Text, fonts } from "@/ui/Text";
 import type { Attachment } from "@/files/useAttachments";
 
+const inputMinHeight = 40;
+const inputMaxHeight = 140;
+
 export type ComposerContext =
   | { kind: "reply"; author: string; text: string }
   | { kind: "edit"; text: string };
@@ -287,7 +290,13 @@ export function Composer({
             accessibilityLabel={placeholder ?? t("messagePlaceholder")}
             selectionColor={theme.primary}
             multiline
-            style={[styles.input, { color: theme.foreground }]}
+            style={[
+              styles.input,
+              { color: theme.foreground },
+              // iOS keeps a multiline input at its tallest size after the
+              // text is cleared; an empty field is pinned back to one line.
+              !draft.text && { height: inputMinHeight },
+            ]}
           />
           <Pressable
             testID="composer-send"
@@ -342,7 +351,8 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: fonts.regular,
     fontSize: 17,
-    maxHeight: 140,
+    minHeight: inputMinHeight,
+    maxHeight: inputMaxHeight,
     paddingTop: spacing[2],
     paddingBottom: spacing[2],
   },
