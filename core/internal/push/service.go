@@ -178,7 +178,8 @@ func (s *Service) Unsubscribe(ctx context.Context, user identity.User, subscript
 	return nil
 }
 func (s *Service) ListSubscriptions(ctx context.Context, user identity.User, currentSessionID string) ([]SubscriptionInfo, error) {
-	rows, err := s.pool.Query(ctx, `SELECT id,user_agent,created_at,updated_at,session_id=$3 FROM web_push_subscriptions WHERE org_id=$1 AND actor_id=$2 ORDER BY updated_at DESC,id`, user.OrgID, user.ActorID, currentSessionID)
+	rows, err := s.pool.Query(ctx, `SELECT id,user_agent,created_at,updated_at,EXISTS (SELECT 1 FROM sessions origin JOIN sessions current ON current.family_id=origin.family_id WHERE origin.id=ws.session_id AND current.id=$3)
+		FROM web_push_subscriptions ws WHERE org_id=$1 AND actor_id=$2 AND `+liveSubscription+` ORDER BY updated_at DESC,id`, user.OrgID, user.ActorID, currentSessionID)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +198,7 @@ func (s *Service) Test(ctx context.Context, user identity.User) (TestResult, err
 	if s.config.VAPIDPublicKey == "" || s.config.VAPIDPrivateKey == "" {
 		return TestResult{}, ErrUnavailable
 	}
-	rows, err := s.pool.Query(ctx, `SELECT id,endpoint,p256dh,auth FROM web_push_subscriptions WHERE org_id=$1 AND actor_id=$2 ORDER BY id`, user.OrgID, user.ActorID)
+	rows, err := s.pool.Query(ctx, `SELECT id,endpoint,p256dh,auth FROM web_push_subscriptions ws WHERE org_id=$1 AND actor_id=$2 AND `+liveSubscription+` ORDER BY id`, user.OrgID, user.ActorID)
 	if err != nil {
 		return TestResult{}, err
 	}
@@ -784,10 +785,10 @@ func (w *Worker) materialize(ctx context.Context) error {
 			  RETURNING 1
 			)
 			INSERT INTO notification_deliveries(org_id,event_seq,subscription_id)
-			SELECT e.org_id,e.seq,s.id
+			SELECT e.org_id,e.seq,ws.id
 			FROM eligible e
-			JOIN web_push_subscriptions s ON s.org_id=e.org_id AND s.actor_id=e.recipient_id
-			WHERE COALESCE((e.preferences->>'push_enabled')::boolean,true)
+			JOIN web_push_subscriptions ws ON ws.org_id=e.org_id AND ws.actor_id=e.recipient_id
+			WHERE COALESCE((e.preferences->>'push_enabled')::boolean,true) AND `+liveSubscription+`
 			ON CONFLICT DO NOTHING`, j.org, j.seq, w.relay != nil)
 		if err != nil {
 			return err
@@ -799,6 +800,10 @@ func (w *Worker) materialize(ctx context.Context) error {
 	return tx.Commit(ctx)
 }
 func (w *Worker) deliver(ctx context.Context) error {
+	// Signed-out browsers must not keep receiving notifications (ADR-0010).
+	if _, err := w.pool.Exec(ctx, `DELETE FROM web_push_subscriptions ws WHERE NOT `+liveSubscription); err != nil {
+		return err
+	}
 	leaseToken, err := id.New()
 	if err != nil {
 		return err

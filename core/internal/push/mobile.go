@@ -163,6 +163,12 @@ func sealPayload(key []byte, plaintext []byte) (string, error) {
 // liveFamily is true while the device's session family still has a usable session.
 const liveFamily = `EXISTS (SELECT 1 FROM sessions s WHERE s.family_id=d.session_family_id AND s.revoked_at IS NULL AND s.expires_at>now())`
 
+// liveSubscription is the same rule for a browser subscription. It keeps the
+// session row it was created with; refresh rotation revokes that row but
+// leaves it in the family, so the family is found through it.
+const liveSubscription = `EXISTS (SELECT 1 FROM sessions origin JOIN sessions live ON live.family_id=origin.family_id
+	WHERE origin.id=ws.session_id AND live.revoked_at IS NULL AND live.expires_at>now())`
+
 func (w *Worker) deliverMobile(ctx context.Context) error {
 	if _, err := w.pool.Exec(ctx, `DELETE FROM mobile_push_devices d WHERE NOT `+liveFamily); err != nil {
 		return err
