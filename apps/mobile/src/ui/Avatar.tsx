@@ -1,7 +1,9 @@
 import { StyleSheet, View } from "react-native";
+import { Image } from "expo-image";
 import { initialsOf } from "@comamessenger/core";
 import { stableAvatarIndex, type ThemeTokens } from "@comamessenger/tokens";
 import { useTheme } from "@/lib/theme";
+import { useAvatarSource } from "@/files/sources";
 import { Text } from "./Text";
 
 export type Presence = "online" | "away" | "offline";
@@ -18,6 +20,8 @@ export function Avatar({
   glyph,
   agent = false,
   presence,
+  actorID,
+  avatarVersion,
 }: {
   name: string;
   seed: string;
@@ -25,8 +29,12 @@ export function Avatar({
   glyph?: string;
   agent?: boolean;
   presence?: Presence;
+  /** With a version above zero, the uploaded photo replaces the initials. */
+  actorID?: string;
+  avatarVersion?: number;
 }) {
   const theme = useTheme();
+  const photo = useAvatarSource(actorID, avatarVersion);
   const dot = Math.round(size * 0.28);
   return (
     <View
@@ -54,6 +62,14 @@ export function Avatar({
         >
           {glyph ?? (initialsOf(name) || "?")}
         </Text>
+        {photo && (
+          <Image
+            source={photo}
+            cachePolicy="disk"
+            transition={120}
+            style={[StyleSheet.absoluteFill, { borderRadius: size / 2 }]}
+          />
+        )}
       </View>
       {presence === "online" && (
         <View

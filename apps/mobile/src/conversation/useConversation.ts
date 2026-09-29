@@ -253,9 +253,9 @@ export function useConversation(chatID: string, threadRootID: string | null) {
   );
 
   const send = useCallback(
-    async (replyTo: ClientMessage | null) => {
+    async (replyTo: ClientMessage | null, fileIDs: string[] = []) => {
       const content = body.trim();
-      if (!content || (chat && isReadOnly(chat))) return;
+      if ((!content && !fileIDs.length) || (chat && isReadOnly(chat))) return;
       setBody("");
       lastTyping.current = 0;
       coordinator.typing(chatID, false, threadRootID);
@@ -270,6 +270,7 @@ export function useConversation(chatID: string, threadRootID: string | null) {
           members,
           presence,
         ),
+        file_ids: fileIDs.length ? fileIDs : undefined,
       });
     },
     [body, chat, chatID, coordinator, members, outbox, presence, threadRootID],

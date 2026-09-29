@@ -146,6 +146,34 @@ export const ru = {
   scrollToBottom: "К последнему сообщению",
   loadFailed: "Не удалось загрузить сообщения",
 
+  // Files
+  attach: "Прикрепить",
+  attachPhotos: "Фото и видео",
+  attachCamera: "Камера",
+  attachFile: "Файл",
+  attachmentLimit: "Можно прикрепить не больше {limit} файлов",
+  uploadFailed: "Не загрузилось",
+  removeAttachment: "Убрать вложение",
+  openFile: "Открыть",
+  fileUnavailable: "Файл недоступен",
+  close: "Закрыть",
+  share: "Поделиться",
+  unitBytes: "Б",
+  unitKilobytes: "КБ",
+  unitMegabytes: "МБ",
+  unitGigabytes: "ГБ",
+  changePhoto: "Сменить фото",
+  removePhoto: "Удалить фото",
+
+  // Search
+  search: "Поиск",
+  searchPlaceholder: "Сообщения и файлы",
+  searchHint: "Ищет по сообщениям и файлам во всех ваших чатах.",
+  searchEmpty: "Ничего не нашлось",
+  messagesTab: "Сообщения",
+  filesTab: "Файлы",
+  searchFailed: "Поиск не удался",
+
   // More
   notifications: "Уведомления",
   notificationsOn: "Включены на этом телефоне",

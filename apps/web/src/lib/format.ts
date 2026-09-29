@@ -1,4 +1,5 @@
 import {
+  formatBytes as formatByteSize,
   formatDaySeparator as formatFeedDay,
   formatListTime as formatCompactTime,
 } from "@comamessenger/core";
@@ -54,14 +55,12 @@ export function minuteGap(a: string, b: string) {
 }
 
 export function formatBytes(value: number) {
-  const locale = activeLocale();
-  const format = (amount: number, unit: string) =>
-    `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(amount)} ${unit}`;
-  if (value < 1000) return format(value, i18n.t("unitBytes"));
-  if (value < 1_000_000) return format(value / 1000, i18n.t("unitKilobytes"));
-  if (value < 1_000_000_000)
-    return format(value / 1_000_000, i18n.t("unitMegabytes"));
-  return format(value / 1_000_000_000, i18n.t("unitGigabytes"));
+  return formatByteSize(value, activeLocale(), {
+    bytes: i18n.t("unitBytes"),
+    kilobytes: i18n.t("unitKilobytes"),
+    megabytes: i18n.t("unitMegabytes"),
+    gigabytes: i18n.t("unitGigabytes"),
+  });
 }
 
 export function greetingKey(now = new Date()) {

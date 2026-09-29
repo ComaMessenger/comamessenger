@@ -1,0 +1,8 @@
+{
+  "ios": {
+    "CFBundleDisplayName": "Coma",
+    "NSCameraUsageDescription": "Coma uses the camera so you can send photos and videos to chats.",
+    "NSPhotoLibraryUsageDescription": "Coma opens your library so you can attach photos and videos to messages and pick a profile photo.",
+    "NSMicrophoneUsageDescription": "Coma uses the microphone when you record video for chats."
+  }
+}

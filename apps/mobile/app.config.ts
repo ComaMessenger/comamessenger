@@ -42,6 +42,17 @@ const config: ExpoConfig = {
     "expo-secure-store",
     "expo-sqlite",
     ["expo-notifications", { color: "#174586" }],
+    [
+      "expo-image-picker",
+      {
+        photosPermission:
+          "Coma opens your library so you can attach photos and videos to messages and pick a profile photo.",
+        cameraPermission:
+          "Coma uses the camera so you can send photos and videos to chats.",
+        microphonePermission:
+          "Coma uses the microphone when you record video for chats.",
+      },
+    ],
     "@bacons/apple-targets",
     [
       "expo-splash-screen",
@@ -53,6 +64,8 @@ const config: ExpoConfig = {
     ],
     ["expo-build-properties", { android: { minSdkVersion: 26 } }],
   ],
+  // Permission prompts in the phone's language; English is the fallback above.
+  locales: { ru: "./locales/ru.json", en: "./locales/en.json" },
   experiments: { typedRoutes: true },
   extra: {
     appGroup,

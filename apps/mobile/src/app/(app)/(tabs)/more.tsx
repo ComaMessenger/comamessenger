@@ -20,12 +20,30 @@ import { openWebClient } from "@/lib/web";
 import { Avatar } from "@/ui/Avatar";
 import { Text } from "@/ui/Text";
 import { registerForPush, type PushAvailability } from "@/push/registration";
+import { pickAndUploadAvatar } from "@/files/avatar";
+import { ActionSheet } from "@/ui/ActionSheet";
 
 export default function MoreScreen() {
   const { t } = useTranslation();
   const theme = useTheme();
   const { api, user } = useSignedIn();
-  const { signOut } = useSession();
+  const { signOut, updateUser } = useSession();
+  const [photoMenu, setPhotoMenu] = useState(false);
+
+  async function changePhoto(action: "change" | "remove") {
+    setPhotoMenu(false);
+    try {
+      if (action === "remove") await api.deleteMyAvatar();
+      else {
+        // Let the sheet finish closing before the system picker appears.
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        if (!(await pickAndUploadAvatar(api))) return;
+      }
+      updateUser(await api.me());
+    } catch {
+      Alert.alert(t("actionFailed"));
+    }
+  }
   const [push, setPush] = useState<PushAvailability | "off" | null>(null);
 
   const refreshPush = useCallback(
@@ -67,7 +85,19 @@ export default function MoreScreen() {
     <SafeAreaView edges={["top"]} style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={[styles.card, { backgroundColor: theme.surface }]}>
-          <Avatar name={user.display_name} seed={user.id} size={56} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("changePhoto")}
+            onPress={() => setPhotoMenu(true)}
+          >
+            <Avatar
+              name={user.display_name}
+              seed={user.id}
+              size={56}
+              actorID={user.id}
+              avatarVersion={user.avatar_version}
+            />
+          </Pressable>
           <View style={styles.grow}>
             <Text weight="semibold" size={18} numberOfLines={1}>
               {user.display_name}
@@ -144,6 +174,23 @@ export default function MoreScreen() {
           {t("appVersion", { version: Constants.expoConfig?.version ?? "" })}
         </Text>
       </ScrollView>
+      <ActionSheet<"change" | "remove">
+        visible={photoMenu}
+        options={[
+          { value: "change", label: t("changePhoto") },
+          ...(user.avatar_version > 0
+            ? [
+                {
+                  value: "remove" as const,
+                  label: t("removePhoto"),
+                  danger: true,
+                },
+              ]
+            : []),
+        ]}
+        onSelect={(action) => void changePhoto(action)}
+        onClose={() => setPhotoMenu(false)}
+      />
     </SafeAreaView>
   );
 }

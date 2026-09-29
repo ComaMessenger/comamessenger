@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Pressable,
   RefreshControl,
   StyleSheet,
   TextInput,
@@ -107,6 +108,16 @@ export default function ChatsScreen() {
         >
           {user.organization_name}
         </Text>
+        <Pressable
+          testID="open-search"
+          accessibilityRole="button"
+          accessibilityLabel={t("search")}
+          hitSlop={8}
+          onPress={() => router.push("/search")}
+          style={[styles.headerButton, { backgroundColor: theme.sidebar }]}
+        >
+          <Search size={22} color={theme.foreground} />
+        </Pressable>
       </View>
       <View style={[styles.search, { backgroundColor: theme.sidebar }]}>
         <Search size={20} color={theme.subtle} />
@@ -172,6 +183,13 @@ const styles = StyleSheet.create({
     paddingBottom: spacing[3],
   },
   grow: { flex: 1 },
+  headerButton: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.lg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   search: {
     flexDirection: "row",
     alignItems: "center",

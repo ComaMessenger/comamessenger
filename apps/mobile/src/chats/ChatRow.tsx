@@ -81,6 +81,10 @@ export const ChatRow = memo(function ChatRow({
         size={52}
         glyph={chat.kind === "channel" ? "#" : undefined}
         agent={peer?.type === "agent"}
+        actorID={chat.kind === "direct" ? peer?.actor_id : undefined}
+        avatarVersion={
+          chat.kind === "direct" ? peer?.avatar_version : undefined
+        }
         presence={
           chat.kind === "direct" && peer?.type !== "agent"
             ? presence

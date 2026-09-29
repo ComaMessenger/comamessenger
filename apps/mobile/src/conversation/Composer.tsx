@@ -6,7 +6,15 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { ArrowUp, Check, X } from "lucide-react-native";
+import {
+  ArrowUp,
+  Check,
+  FileText,
+  Paperclip,
+  RotateCw,
+  X,
+} from "lucide-react-native";
+import { Image } from "expo-image";
 import { useTranslation } from "react-i18next";
 import {
   decodeMentions,
@@ -19,6 +27,7 @@ import { radius, spacing } from "@comamessenger/tokens";
 import { useTheme } from "@/lib/theme";
 import { Avatar } from "@/ui/Avatar";
 import { Text, fonts } from "@/ui/Text";
+import type { Attachment } from "@/files/useAttachments";
 
 export type ComposerContext =
   | { kind: "reply"; author: string; text: string }
@@ -37,6 +46,10 @@ export function Composer({
   onCancelContext,
   readonly,
   placeholder,
+  attachments = [],
+  onAttach,
+  onRemoveAttachment,
+  onRetryAttachment,
 }: {
   body: string;
   onChangeBody(body: string): void;
@@ -46,12 +59,20 @@ export function Composer({
   onCancelContext(): void;
   readonly: boolean;
   placeholder?: string;
+  attachments?: Attachment[];
+  onAttach?(): void;
+  onRemoveAttachment?(id: string): void;
+  onRetryAttachment?(id: string): void;
 }) {
   const { t } = useTranslation();
   const theme = useTheme();
   const input = useRef<TextInput>(null);
   const draft = useMemo(() => decodeMentions(body), [body]);
-  const canSend = Boolean(draft.text.trim());
+  const uploading = attachments.some((item) => item.status === "uploading");
+  const canSend =
+    (Boolean(draft.text.trim()) ||
+      attachments.some((item) => item.status === "ready")) &&
+    !uploading;
 
   const mention = /@([\p{L}\p{N}_.-]*)$/u.exec(draft.text);
   const query = mention?.[1]?.toLowerCase() ?? "";
@@ -161,7 +182,99 @@ export function Composer({
             </Pressable>
           </View>
         )}
+        {attachments.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.attachments}
+          >
+            {attachments.map((item) => {
+              const image = item.local.mime.startsWith("image/");
+              return (
+                <View
+                  key={item.id}
+                  style={[
+                    styles.attachment,
+                    {
+                      backgroundColor: theme.sidebar,
+                      borderColor:
+                        item.status === "failed" ? theme.danger : theme.border,
+                    },
+                  ]}
+                >
+                  {image ? (
+                    <Image
+                      source={{ uri: item.local.uri }}
+                      contentFit="cover"
+                      style={StyleSheet.absoluteFill}
+                    />
+                  ) : (
+                    <View style={styles.attachmentFile}>
+                      <FileText size={18} color={theme.muted} />
+                      <Text size={11} numberOfLines={2} style={styles.center}>
+                        {item.local.name}
+                      </Text>
+                    </View>
+                  )}
+                  {item.status === "uploading" && (
+                    <View
+                      style={[
+                        styles.progress,
+                        { backgroundColor: theme.overlay },
+                      ]}
+                    >
+                      <Text
+                        size={12}
+                        weight="semibold"
+                        style={{ color: "#ffffff" }}
+                      >
+                        {Math.round(item.progress * 100)}%
+                      </Text>
+                    </View>
+                  )}
+                  {item.status === "failed" && (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t("retry")}
+                      onPress={() => onRetryAttachment?.(item.id)}
+                      style={[
+                        styles.progress,
+                        { backgroundColor: theme.overlay },
+                      ]}
+                    >
+                      <RotateCw size={18} color="#ffffff" />
+                    </Pressable>
+                  )}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t("removeAttachment")}
+                    hitSlop={8}
+                    onPress={() => onRemoveAttachment?.(item.id)}
+                    style={[
+                      styles.remove,
+                      { backgroundColor: theme.foreground },
+                    ]}
+                  >
+                    <X size={12} color={theme.canvas} />
+                  </Pressable>
+                </View>
+              );
+            })}
+          </ScrollView>
+        )}
         <View style={styles.inputRow}>
+          {onAttach && context?.kind !== "edit" && (
+            <Pressable
+              testID="composer-attach"
+              accessibilityRole="button"
+              accessibilityLabel={t("attach")}
+              hitSlop={6}
+              onPress={onAttach}
+              style={styles.attach}
+            >
+              <Paperclip size={22} color={theme.muted} />
+            </Pressable>
+          )}
           <TextInput
             ref={input}
             testID="composer-input"
@@ -255,5 +368,41 @@ const styles = StyleSheet.create({
   },
   grow: { flex: 1 },
   readonly: { padding: spacing[4], borderTopWidth: StyleSheet.hairlineWidth },
+  attach: {
+    width: 36,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  attachments: { gap: spacing[2], paddingTop: spacing[1] },
+  attachment: {
+    width: 64,
+    height: 64,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  attachmentFile: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 2,
+    padding: 4,
+  },
+  progress: {
+    ...StyleSheet.absoluteFill,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  remove: {
+    position: "absolute",
+    top: 3,
+    right: 3,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   center: { textAlign: "center" },
 });

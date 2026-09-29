@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   StyleSheet,
   View,
@@ -36,6 +37,9 @@ import { MessageActions, type MessageAction } from "./MessageActions";
 import { MessageRow } from "./MessageRow";
 import { toggleReaction } from "./reactions";
 import { useConversation } from "./useConversation";
+import { attachmentLimit, useAttachments } from "@/files/useAttachments";
+import { pickFiles, type PickSource } from "@/files/pick";
+import { ActionSheet } from "@/ui/ActionSheet";
 
 type Context =
   | { kind: "reply"; message: ClientMessage }
@@ -61,6 +65,8 @@ export function ConversationView({
   const [editBody, setEditBody] = useState("");
   const [actionsFor, setActionsFor] = useState<ClientMessage | null>(null);
   const [showJump, setShowJump] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const attachments = useAttachments(api);
   const list = useRef<FlashListRef<FeedRow>>(null);
   const atBottom = useRef(true);
   const title = chat ? chatTitle(chat, t("directChat")) : "";
@@ -110,8 +116,10 @@ export function ConversationView({
       return;
     }
     const replyTo = context?.kind === "reply" ? context.message : null;
+    const fileIDs = attachments.ready.map((file) => file.id);
     setContext(null);
-    await conversation.send(replyTo);
+    attachments.reset();
+    await conversation.send(replyTo, fileIDs);
     list.current?.scrollToEnd({ animated: true });
   }
 
@@ -389,8 +397,38 @@ export function ConversationView({
           context={composerContext}
           onCancelContext={() => setContext(null)}
           readonly={conversation.readonly}
+          attachments={attachments.items}
+          onAttach={() => setPicking(true)}
+          onRemoveAttachment={attachments.remove}
+          onRetryAttachment={attachments.retry}
         />
       </KeyboardAvoidingView>
+      <ActionSheet<PickSource>
+        visible={picking}
+        title={t("attach")}
+        options={[
+          { value: "photos", label: t("attachPhotos") },
+          { value: "camera", label: t("attachCamera") },
+          { value: "file", label: t("attachFile") },
+        ]}
+        onClose={() => setPicking(false)}
+        onSelect={(source) => {
+          setPicking(false);
+          // iOS cannot present the system picker while our sheet is still dismissing.
+          setTimeout(
+            () =>
+              void pickFiles(source, attachmentLimit - attachments.items.length)
+                .then((files) => {
+                  if (attachments.add(files) > 0)
+                    Alert.alert(
+                      t("attachmentLimit", { limit: attachmentLimit }),
+                    );
+                })
+                .catch(() => Alert.alert(t("actionFailed"))),
+            Platform.OS === "ios" ? 400 : 0,
+          );
+        }}
+      />
       <MessageActions
         visible={actionsFor !== null}
         canThread={!inThread}

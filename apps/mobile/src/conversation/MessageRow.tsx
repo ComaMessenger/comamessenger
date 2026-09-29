@@ -24,6 +24,7 @@ import { useTheme } from "@/lib/theme";
 import { Avatar } from "@/ui/Avatar";
 import { Text } from "@/ui/Text";
 import { Markdown } from "./Markdown";
+import { MessageFiles } from "./MessageFiles";
 import { useReactions } from "./reactions";
 
 export type MessageRowProps = {
@@ -109,6 +110,8 @@ export const MessageRow = memo(function MessageRow({
               seed={message.actor_id}
               size={34}
               agent={agent}
+              actorID={message.actor_id}
+              avatarVersion={author?.avatar_version}
             />
           )}
         </View>
@@ -186,6 +189,9 @@ export const MessageRow = memo(function MessageRow({
             </Text>
           ) : (
             <Markdown source={message.body} />
+          )}
+          {!deleted && message.files.length > 0 && (
+            <MessageFiles api={api} files={message.files} />
           )}
           {reactions.groups.length > 0 && !deleted && (
             <View style={styles.reactions}>

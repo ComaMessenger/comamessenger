@@ -127,3 +127,20 @@ export function formatDaySeparator(
     ...(date.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
   }).format(date);
 }
+
+export type ByteUnits = {
+  bytes: string;
+  kilobytes: string;
+  megabytes: string;
+  gigabytes: string;
+};
+
+/** File size in decimal units with one fractional digit. */
+export function formatBytes(value: number, locale: string, units: ByteUnits) {
+  const format = (amount: number, unit: string) =>
+    `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(amount)} ${unit}`;
+  if (value < 1000) return format(value, units.bytes);
+  if (value < 1_000_000) return format(value / 1000, units.kilobytes);
+  if (value < 1_000_000_000) return format(value / 1_000_000, units.megabytes);
+  return format(value / 1_000_000_000, units.gigabytes);
+}
