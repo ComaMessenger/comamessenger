@@ -42,6 +42,7 @@
 - [Диагностика realtime](runbooks/realtime.md)
 - [Phase 2.5 realtime benchmark](benchmarks/phase-2.5-realtime.md)
 - [Files, object storage and search runbook](runbooks/files-search.md)
+- [Push relay](runbooks/push-relay.md)
 
 ## Работа с фазами
 
