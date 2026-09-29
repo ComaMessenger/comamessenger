@@ -494,6 +494,48 @@ describe("realtime coordinator", () => {
     expect(sessionExpired).toBe(1);
     coordinator.stop();
   });
+
+  it("does not retry forever when the first refresh is rejected", async () => {
+    let sessionExpired = 0;
+    let refreshes = 0;
+    let sockets = 0;
+    const api = {
+      token: () => null,
+      refresh: async () => {
+        refreshes += 1;
+        throw new APIError(401, "invalid_refresh_token", "revoked");
+      },
+      websocketURL: () => "ws://test",
+    } as unknown as MessengerAPI;
+    const states: RealtimeState[] = [];
+    const coordinator = new RealtimeCoordinator(
+      api,
+      {
+        get: async () => 0,
+        set: async () => undefined,
+        clear: async () => undefined,
+      },
+      () => {
+        sockets += 1;
+        throw new Error("no socket expected");
+      },
+      {
+        state: (state) => states.push(state),
+        event: () => false,
+        resync: async () => undefined,
+        sessionExpired: () => {
+          sessionExpired += 1;
+        },
+      },
+    );
+    coordinator.start();
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    expect(refreshes).toBe(1);
+    expect(sockets).toBe(0);
+    expect(sessionExpired).toBe(1);
+    expect(states.at(-1)).toBe("session_expired");
+    coordinator.stop();
+  });
 });
 
 describe("persistent outbox", () => {
