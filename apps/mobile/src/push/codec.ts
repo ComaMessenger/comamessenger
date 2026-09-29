@@ -54,6 +54,8 @@ export type NotificationContent = {
   url?: string;
   chatID?: string;
   eventSeq: number;
+  /** Unread chat messages of the recipient, for the app icon badge. */
+  badge?: number;
 };
 
 const routePattern = /^\/chat\/[0-9a-f-]{36}(\/thread\/[0-9a-f-]{36})?$/;
@@ -81,6 +83,10 @@ export function parseNotification(json: string): NotificationContent | null {
     url,
     chatID: typeof value.chat_id === "string" ? value.chat_id : undefined,
     eventSeq: typeof value.event_seq === "number" ? value.event_seq : 0,
+    badge:
+      typeof value.badge === "number" && value.badge >= 0
+        ? value.badge
+        : undefined,
   };
 }
 

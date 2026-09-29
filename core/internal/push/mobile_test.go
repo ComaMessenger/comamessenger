@@ -163,7 +163,7 @@ func TestMobileDeliveryFollowsTheSessionFamily(t *testing.T) {
 		t.Fatalf("relay message leaks or misses data: %+v", message)
 	}
 	payload := openPayload(t, key, message.Ciphertext)
-	if payload.Title != "Anna · Design" || payload.Body != "New message" || payload.URL != "/chat/"+chatID {
+	if payload.Title != "Anna · Design" || payload.Body != "New message" || payload.URL != "/chat/"+chatID || payload.Badge != 1 {
 		t.Fatalf("payload without preview = %+v", payload)
 	}
 
@@ -171,7 +171,7 @@ func TestMobileDeliveryFollowsTheSessionFamily(t *testing.T) {
 		t.Fatal(err)
 	}
 	send(t, "Visible text")
-	if got := openPayload(t, key, relay.messages[1].Ciphertext); got.Body != "Visible text" {
+	if got := openPayload(t, key, relay.messages[1].Ciphertext); got.Body != "Visible text" || got.Badge != 2 {
 		t.Fatalf("payload with preview = %+v", got)
 	}
 

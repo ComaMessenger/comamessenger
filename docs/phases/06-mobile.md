@@ -57,7 +57,7 @@
 - [x] Выдавать refresh-токен в теле ответа для `X-Coma-Client: native` без Origin и принимать его в `POST /auth/refresh`; `MessengerAPI` принимает `RefreshTokenStore`.
 - [x] Выбрать стратегию Expo: Continuous Native Generation + EAS Build ([ADR-0011](../decisions/0011-mobile-stack.md)).
 - [x] Инициализировать `apps/mobile`: Expo SDK 57, expo-router, адаптеры SecureStore и SQLite, EAS-профили.
-- [ ] Настроить app variants, environment config, bundle IDs и signing без хранения секретов в репозитории.
+- [x] Настроить bundle IDs и signing без хранения секретов в репозитории: `com.comamessenger.app`, fastlane (`apps/mobile/fastlane`), ASC API key и upload keystore вне git.
 - [x] Переиспользовать generated protocol client; выделить transport/session adapters для web/mobile.
 - [x] Переиспользовать `packages/core` engine и `packages/tokens`, не переносить DOM/Web primitives в Native. Хелперы списка чатов и инициалы перенесены в core; `websocketURL()` больше не зависит от сеттера `URL.protocol`, которого нет в React Native.
 - [x] Хранить refresh/session material в SecureStore/Keychain/Keystore, не в AsyncStorage. Keychain переживает переустановку, поэтому новая локальная БД стирает старый токен; локальные данные привязаны к `user_id`.
@@ -91,7 +91,7 @@
 - [x] Учитывать mute, active session, mention preferences и privacy preview settings на сервере (общий SQL отбора получателей с Web Push).
 - [x] Не включать чувствительный message body в push, если policy запрещает preview; relay текст не видит никогда.
 - [ ] Реализовать deep links для chat/message/thread и fallback при удалённом/недоступном объекте. Нажатие на push открывает чат или тред; fallback для удалённого объекта и ссылки на сообщение — позже.
-- [ ] Синхронизировать app icon badge с серверным unread snapshot. Бейдж обновляется из unread-состояния, пока приложение запущено и при уходе в фон; счётчик в самом push — позже.
+- [x] Синхронизировать app icon badge с серверным unread snapshot: из unread-состояния в приложении и из зашифрованного push (iOS NSE, Android background task).
 
 ### Файлы и platform integration
 

@@ -141,7 +141,19 @@ type mobilePayload struct {
 	Version int `json:"v"`
 	notificationContent
 	EventSeq int64 `json:"event_seq"`
+	// Badge is the recipient's unread chat messages, as the app counts them.
+	Badge int64 `json:"badge"`
 }
+
+// unreadTotal matches the app icon badge: unread top-level messages from
+// others across the recipient's active chats.
+const unreadTotal = `SELECT count(m.id)
+	FROM chat_members cm
+	JOIN chats c ON c.org_id=cm.org_id AND c.id=cm.chat_id AND c.archived_at IS NULL
+	LEFT JOIN chat_reads cr ON cr.org_id=cm.org_id AND cr.chat_id=cm.chat_id AND cr.actor_id=cm.actor_id
+	JOIN messages m ON m.org_id=cm.org_id AND m.chat_id=cm.chat_id AND m.thread_root_id IS NULL
+	  AND m.created_seq>COALESCE(cr.last_read_seq,0) AND m.actor_id<>cm.actor_id AND m.deleted_at IS NULL
+	WHERE cm.org_id=$1 AND cm.actor_id=$2`
 
 // sealPayload encrypts with AES-256-GCM and returns base64(nonce || ciphertext).
 func sealPayload(key []byte, plaintext []byte) (string, error) {
@@ -230,7 +242,11 @@ func (w *Worker) deliverMobile(ctx context.Context) error {
 			continue
 		}
 		content := buildNotification(item.eventType, item.eventData, item.author, item.locale, item.preview, item.chatID, item.threadID, item.body, item.chatName)
-		plaintext, _ := json.Marshal(mobilePayload{Version: 1, notificationContent: content, EventSeq: item.seq})
+		var badge int64
+		if err := w.pool.QueryRow(ctx, unreadTotal, item.org, item.actor).Scan(&badge); err != nil {
+			return err
+		}
+		plaintext, _ := json.Marshal(mobilePayload{Version: 1, notificationContent: content, EventSeq: item.seq, Badge: badge})
 		ciphertext, err := sealPayload(item.key, plaintext)
 		if err != nil {
 			return err

@@ -36,6 +36,22 @@ The app registers its APNs/FCM token with the relay, gets an opaque handle and p
 - Registration runs only when the instance reports the same relay in `GET /api/v1/push/config`; otherwise the More tab says the server does not support push for this app.
 - Push needs a physical device; simulators and emulators skip registration.
 
+## Store builds
+
+fastlane builds and uploads the same way as CreateYourBody: automatic signing with an App Store Connect API key and an Android upload keystore outside the repository. Fill `apps/mobile/.env` from `.env.example`, then:
+
+```sh
+export PATH=/opt/homebrew/opt/ruby/bin:$PATH   # Ruby 3+; the macOS system Ruby is too old
+bundle install
+bundle exec fastlane verify           # store access, next build numbers, upload keystore
+bundle exec fastlane ios beta         # TestFlight
+bundle exec fastlane android beta     # Google Play internal testing
+```
+
+- The app must exist in App Store Connect and Google Play Console first; Google Play also requires the very first `.aab` to be uploaded by hand.
+- The Android upload keystore lives outside git; `COMA_UPLOAD_*` in `~/.gradle/gradle.properties` point to it. Losing it means asking Google Play support to reset the upload key.
+- Build numbers are taken from the stores and increased by one.
+
 ## End-to-end flows
 
 `e2e/` holds [Maestro](https://maestro.mobile.dev) flows that drive a simulator build against a real Core. The sign-in flow expects a seeded instance at `localhost:8080` with the account from the flow's `env` block; override values with `-e EMAIL=… -e PASSWORD=…`.

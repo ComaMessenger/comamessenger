@@ -25,6 +25,7 @@ describe("notification codec", () => {
       url: `/chat/${chat}/thread/${thread}`,
       chat_id: chat,
       event_seq: 42,
+      badge: 3,
     };
     expect(parseNotification(JSON.stringify(payload))).toEqual({
       title: "Anna · Design",
@@ -32,6 +33,7 @@ describe("notification codec", () => {
       url: `/chat/${chat}/thread/${thread}`,
       chatID: chat,
       eventSeq: 42,
+      badge: 3,
     });
     expect(
       parseNotification(

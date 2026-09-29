@@ -29,6 +29,10 @@ if (Platform.OS === "android")
     if (error || !data?.data) return;
     const sealed = field(data.data, "c");
     const content = sealed ? await openNotification(sealed) : null;
+    if (content?.badge !== undefined)
+      await Notifications.setBadgeCountAsync(content.badge).catch(
+        () => undefined,
+      );
     await Notifications.scheduleNotificationAsync({
       content: {
         title: content?.title ?? field(data.data, "title") ?? "Coma",

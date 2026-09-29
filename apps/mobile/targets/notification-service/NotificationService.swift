@@ -26,6 +26,7 @@ class NotificationService: UNNotificationServiceExtension {
         content.userInfo["url"] = url
       }
       if let chatID = payload["chat_id"] as? String { content.threadIdentifier = chatID }
+      if let badge = payload["badge"] as? Int, badge >= 0 { content.badge = NSNumber(value: badge) }
     }
     content.userInfo.removeValue(forKey: "c")
     contentHandler(content)
