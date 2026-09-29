@@ -9,7 +9,17 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Constants from "expo-constants";
-import { Bell, ChevronRight, ExternalLink, LogOut } from "lucide-react-native";
+import {
+  Bell,
+  ChevronRight,
+  ExternalLink,
+  LogOut,
+  MonitorSmartphone,
+  SlidersHorizontal,
+  UserRound,
+  type LucideIcon,
+} from "lucide-react-native";
+import { router } from "expo-router";
 import * as Notifications from "expo-notifications";
 import { useTranslation } from "react-i18next";
 import { radius, spacing } from "@comamessenger/tokens";
@@ -109,6 +119,64 @@ export default function MoreScreen() {
               {displayServer(api.apiURL)}
             </Text>
           </View>
+        </View>
+
+        <View style={[styles.group, { backgroundColor: theme.surface }]}>
+          {(
+            [
+              [
+                "/settings/profile",
+                t("profile"),
+                UserRound,
+                "settings-profile",
+              ],
+              [
+                "/settings/notifications",
+                t("settingsNotifications"),
+                SlidersHorizontal,
+                "settings-notifications",
+              ],
+              [
+                "/settings/sessions",
+                t("sessions"),
+                MonitorSmartphone,
+                "settings-sessions",
+              ],
+            ] as const
+          ).map(
+            (
+              [href, label, Icon, testID]: readonly [
+                string,
+                string,
+                LucideIcon,
+                string,
+              ],
+              index,
+            ) => (
+              <View key={href}>
+                {index > 0 && (
+                  <View
+                    style={[styles.divider, { backgroundColor: theme.border }]}
+                  />
+                )}
+                <Pressable
+                  testID={testID}
+                  accessibilityRole="button"
+                  onPress={() => router.push(href as never)}
+                  style={({ pressed }) => [
+                    styles.item,
+                    pressed && { backgroundColor: theme.surfaceSelected },
+                  ]}
+                >
+                  <Icon size={22} color={theme.primary} />
+                  <Text weight="medium" size={17} style={styles.grow}>
+                    {label}
+                  </Text>
+                  <ChevronRight size={20} color={theme.subtle} />
+                </Pressable>
+              </View>
+            ),
+          )}
         </View>
 
         <View style={[styles.group, { backgroundColor: theme.surface }]}>

@@ -1,0 +1,29 @@
+# Profile, notification preferences and sessions screens.
+# Run after sign-in.yaml: maestro test e2e/settings.yaml
+appId: com.comamessenger.app
+---
+- runFlow: open-app.yaml
+- tapOn:
+    id: tab-more
+- tapOn:
+    id: settings-profile
+- extendedWaitUntil:
+    visible: Должность
+    timeout: 10000
+- takeScreenshot: settings-profile
+- tapOn: Назад
+- tapOn:
+    id: settings-notifications
+- extendedWaitUntil:
+    visible: Показывать текст сообщения
+    timeout: 10000
+- tapOn: Показывать текст сообщения
+- takeScreenshot: settings-notifications
+- tapOn: Показывать текст сообщения
+- tapOn: Назад
+- tapOn:
+    id: settings-sessions
+- extendedWaitUntil:
+    visible: Это устройство
+    timeout: 10000
+- takeScreenshot: settings-sessions

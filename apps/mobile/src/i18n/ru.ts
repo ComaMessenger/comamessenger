@@ -70,6 +70,7 @@ export const ru = {
     "Ответьте в треде или подпишитесь на него — он появится здесь.",
   threadsLoadFailed: "Не удалось загрузить список",
   realtimeConnecting: "Подключение…",
+  offlineCached: "Нет сети — показаны сохранённые данные",
   realtimeReconnecting: "Нет сети, переподключаемся…",
 
   // Chats
@@ -164,6 +165,31 @@ export const ru = {
   unitGigabytes: "ГБ",
   changePhoto: "Сменить фото",
   removePhoto: "Удалить фото",
+
+  // Settings
+  profile: "Профиль",
+  jobTitle: "Должность",
+  about: "О себе",
+  saved: "Сохранено",
+  settingsNotifications: "Настройки уведомлений",
+  pushEnabled: "Push-уведомления",
+  pushPreview: "Показывать текст сообщения",
+  pushPreviewHint: "Текст будет виден на экране блокировки.",
+  notifyMessages: "Сообщения",
+  notifyAll: "Все",
+  notifyDirectMentions: "Личные и упоминания",
+  notifyMentions: "Только упоминания",
+  notifyNone: "Никакие",
+  notifyThreads: "Ответы в тредах",
+  notifyReactions: "Реакции на мои сообщения",
+  sessions: "Сессии",
+  sessionsHint: "Устройства, где открыт ваш аккаунт.",
+  thisDevice: "Это устройство",
+  lastActive: "Активность: {time}",
+  revokeSession: "Завершить",
+  revokeSessionConfirm: "Завершить сессию на этом устройстве?",
+  revokeOthers: "Завершить все остальные",
+  revokeOthersConfirm: "Выйти из аккаунта на всех остальных устройствах?",
 
   // Search
   search: "Поиск",

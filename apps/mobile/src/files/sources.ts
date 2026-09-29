@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { MessengerAPI, ObjectLink } from "@comamessenger/core";
 import { useSession } from "@/session/SessionProvider";
+import { isNetworkError } from "@/lib/errors";
 import { absoluteURL } from "./auth";
 
 export type ImageSource = {
@@ -23,6 +24,21 @@ export function toSource(
   };
 }
 
+/**
+ * Without a link (offline) the image cache still has the bytes under the
+ * same key; the placeholder URL is never fetched when the key is cached.
+ */
+function offlineSource(api: MessengerAPI, cacheKey: string): ImageSource {
+  return {
+    uri: `${api.apiURL}/api/v1/offline/${encodeURIComponent(cacheKey)}`,
+    cacheKey,
+  };
+}
+
+// Offline the cached bytes should appear at once, not after a retry.
+const retryUnlessOffline = (failures: number, error: unknown) =>
+  failures < 1 && !isNetworkError(error);
+
 // Presigned links live for minutes; the image cache is keyed by object and
 // version, so a fresh link never downloads the same bytes twice.
 const linkStaleMs = 4 * 60_000;
@@ -35,10 +51,11 @@ export function useFileSource(fileID: string | undefined): ImageSource | null {
     queryFn: () => api!.fileLink(fileID!),
     enabled: Boolean(api && fileID),
     staleTime: linkStaleMs,
+    retry: retryUnlessOffline,
   });
-  return api && query.data && fileID
-    ? toSource(api, query.data, `file:${fileID}`)
-    : null;
+  if (!api || !fileID) return null;
+  if (query.data) return toSource(api, query.data, `file:${fileID}`);
+  return query.isError ? offlineSource(api, `file:${fileID}`) : null;
 }
 
 /** Avatar image of an actor; null while the actor has no avatar. */
@@ -53,9 +70,10 @@ export function useAvatarSource(
     queryFn: () => api!.avatarLink(actorID!),
     enabled,
     staleTime: linkStaleMs,
-    retry: false,
+    retry: retryUnlessOffline,
   });
-  return enabled && query.data
-    ? toSource(api!, query.data, `avatar:${actorID}:${version}`)
-    : null;
+  if (!enabled) return null;
+  const cacheKey = `avatar:${actorID}:${version}`;
+  if (query.data) return toSource(api!, query.data, cacheKey);
+  return query.isError ? offlineSource(api!, cacheKey) : null;
 }

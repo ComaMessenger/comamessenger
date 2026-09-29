@@ -10,10 +10,11 @@ import { useMessenger } from "./MessengerProvider";
 export function ConnectionBanner() {
   const { t } = useTranslation();
   const theme = useTheme();
-  const { store } = useMessenger();
+  const { store, stale } = useMessenger();
   const realtime = useStore(store, (state) => state.realtime);
-  const text =
-    realtime === "reconnecting"
+  const text = stale
+    ? t("offlineCached")
+    : realtime === "reconnecting"
       ? t("realtimeReconnecting")
       : realtime === "connecting" || realtime === "authenticating"
         ? t("realtimeConnecting")

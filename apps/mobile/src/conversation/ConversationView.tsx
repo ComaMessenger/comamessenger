@@ -31,6 +31,7 @@ import { chatTitle } from "@/chats/ChatRow";
 import { Avatar } from "@/ui/Avatar";
 import { Notice } from "@/ui/Notice";
 import { Text } from "@/ui/Text";
+import { ConnectionBanner } from "@/messenger/ConnectionBanner";
 import { AgentStreamRow } from "./AgentStreamRow";
 import { Composer, type ComposerContext } from "./Composer";
 import { MessageActions, type MessageAction } from "./MessageActions";
@@ -88,6 +89,18 @@ export function ConversationView({
       router.push(`/chat/${chatID}/thread/${message.id}`),
     [chatID],
   );
+
+  // A chat with unread messages opens on the first of them; reading them
+  // (scrolling to the bottom) is what marks the chat read.
+  const firstUnreadIndex = rows.findIndex((row) => row.firstUnread);
+  const openedAt = useRef<number | null>(null);
+  if (openedAt.current === null && rows.length && !conversation.loading) {
+    openedAt.current = firstUnreadIndex;
+    if (firstUnreadIndex >= 0) atBottom.current = false;
+  }
+  useEffect(() => {
+    if (openedAt.current !== null && openedAt.current >= 0) setShowJump(true);
+  }, [rows.length]);
 
   // New messages while the reader follows the bottom count as read.
   useEffect(() => {
@@ -225,6 +238,7 @@ export function ConversationView({
           ) : null}
         </View>
       </View>
+      <ConnectionBanner />
       <KeyboardAvoidingView behavior="padding" style={styles.grow}>
         <View style={styles.grow}>
           {conversation.loading ? (
@@ -245,8 +259,15 @@ export function ConversationView({
               keyExtractor={(row) =>
                 row.message.client_msg_id || row.message.id
               }
+              initialScrollIndex={
+                openedAt.current !== null && openedAt.current > 0
+                  ? openedAt.current
+                  : undefined
+              }
               maintainVisibleContentPosition={{
-                startRenderingFromBottom: true,
+                startRenderingFromBottom: !(
+                  openedAt.current !== null && openedAt.current > 0
+                ),
                 autoscrollToBottomThreshold: 0.2,
               }}
               onStartReached={() => void conversation.loadOlder()}

@@ -20,6 +20,7 @@ import { pendingInvite } from "@/lib/inviteLinks";
 import type { ServerTarget } from "@/lib/server";
 import { refreshTokenStore } from "@/lib/session";
 import { unregisterFromPush } from "@/push/registration";
+import { cacheUser, cachedUser } from "@/messenger/cache";
 
 export type SessionPhase =
   | { kind: "loading" }
@@ -82,15 +83,27 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       await claimUserData(tokens.user.id);
       setPhase({ kind: "signed-in", server, user: tokens.user });
     } catch (cause) {
+      if (!isNetworkError(cause)) {
+        setPhase({ kind: "signed-out", server });
+        return;
+      }
       // Without network the stored session is still valid; asking for the
-      // password again would needlessly create a second session.
+      // password again would needlessly create a second session. With a
+      // cached account the app opens on saved data and reconnects by itself.
+      const user = await cachedUser().catch(() => null);
       setPhase(
-        isNetworkError(cause)
-          ? { kind: "offline", server }
-          : { kind: "signed-out", server },
+        user
+          ? { kind: "signed-in", server, user }
+          : { kind: "offline", server },
       );
     }
   }, []);
+
+  // The account shown on an offline start.
+  useEffect(() => {
+    if (phase.kind === "signed-in")
+      void cacheUser(phase.user).catch(() => undefined);
+  }, [phase]);
 
   useEffect(() => {
     void (async () => {

@@ -25,14 +25,19 @@ env:
       - tapOn:
           point: 91%,47%
 - extendedWaitUntil:
-    visible:
-      id: server-address
+    visible: .*(Подключение|Вход).*
     timeout: 60000
-- tapOn:
-    id: server-address
-- inputText: http://${SERVER}
-- tapOn:
-    id: server-continue
+# The server step is skipped when the app still remembers the address.
+- runFlow:
+    when:
+      visible:
+        id: server-address
+    commands:
+      - tapOn:
+          id: server-address
+      - inputText: http://${SERVER}
+      - tapOn:
+          id: server-continue
 - extendedWaitUntil:
     visible:
       id: login-email
@@ -67,7 +72,7 @@ env:
 - tapOn:
     id: composer-send
 - extendedWaitUntil:
-    visible: Сообщение с телефона
+    visible: .*Сообщение с телефона.*
     timeout: 10000
 - takeScreenshot: conversation
 - tapOn:

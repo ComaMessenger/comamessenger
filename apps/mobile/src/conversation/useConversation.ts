@@ -15,6 +15,8 @@ import {
   type MessagePage,
 } from "@comamessenger/core";
 import { draftStorage } from "@/lib/database";
+import { isNetworkError } from "@/lib/errors";
+import { cachedMessages, withCache } from "@/messenger/cache";
 import { syncDraft } from "@/lib/drafts";
 import { useMessenger } from "@/messenger/MessengerProvider";
 import { useSignedIn } from "@/session/SessionProvider";
@@ -51,7 +53,7 @@ export function useConversation(chatID: string, threadRootID: string | null) {
   const statusesByRun = useStore(store, (state) => state.agentStatuses);
   const membersQuery = useQuery({
     queryKey: ["members", chatID],
-    queryFn: () => api.members(chatID),
+    queryFn: () => withCache(`members:${chatID}`, () => api.members(chatID)),
     staleTime: 60_000,
   });
   const members = useMemo(() => membersQuery.data ?? [], [membersQuery.data]);
@@ -98,12 +100,21 @@ export function useConversation(chatID: string, threadRootID: string | null) {
     lastReadRequested.current = marker?.last_read_seq ?? 0;
     if (threadRootID !== null) return;
     setLoadError(false);
+    if (!store.getState().messages[chatID]?.length) {
+      const saved = await cachedMessages(chatID).catch(() => []);
+      if (saved.length && !store.getState().messages[chatID]?.length) {
+        store.getState().replaceMessages(chatID, saved);
+        setLoading(false);
+      }
+    }
     try {
       const page = await api.messages(chatID, { limit: 50 });
       store.getState().replaceMessages(chatID, page.messages);
       setHasOlder(page.next_before_seq != null);
-    } catch {
-      setLoadError(true);
+    } catch (cause) {
+      // Saved messages stay readable offline; the banner explains why.
+      if (!(isNetworkError(cause) && store.getState().messages[chatID]?.length))
+        setLoadError(true);
     } finally {
       setLoading(false);
     }

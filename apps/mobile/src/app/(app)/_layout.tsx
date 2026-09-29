@@ -5,6 +5,7 @@ import { useSession, useSignedIn } from "@/session/SessionProvider";
 import { useTheme } from "@/lib/theme";
 import { openWebClient } from "@/lib/web";
 import { AuthScreen } from "@/ui/AuthScreen";
+import { PrivacyCover } from "@/ui/PrivacyCover";
 import { Button } from "@/ui/Button";
 
 export default function AppLayout() {
@@ -19,6 +20,7 @@ export default function AppLayout() {
           contentStyle: { backgroundColor: theme.canvas },
         }}
       />
+      <PrivacyCover />
     </MessengerProvider>
   );
 }

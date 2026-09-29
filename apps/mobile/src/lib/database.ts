@@ -21,6 +21,12 @@ const migrations = [
      version INTEGER NOT NULL DEFAULT 0,
      PRIMARY KEY (chat_id, thread_root_id)
    );`,
+  // Read-only copy of recent server state for offline start (M5).
+  `CREATE TABLE cache (
+     key TEXT PRIMARY KEY NOT NULL,
+     value TEXT NOT NULL,
+     updated_at INTEGER NOT NULL
+   );`,
 ];
 
 async function open(): Promise<SQLite.SQLiteDatabase> {
@@ -69,6 +75,7 @@ export async function clearUserData(): Promise<void> {
   await db.withExclusiveTransactionAsync(async (tx) => {
     await tx.runAsync("DELETE FROM outbox");
     await tx.runAsync("DELETE FROM drafts");
+    await tx.runAsync("DELETE FROM cache");
     await tx.runAsync(
       "DELETE FROM meta WHERE key IN ('checkpoint', 'user_id')",
     );
@@ -150,6 +157,37 @@ export const draftStorage = {
       await db.runAsync(
         "INSERT INTO drafts (chat_id, thread_root_id, body, version) VALUES (?, ?, ?, ?) ON CONFLICT (chat_id, thread_root_id) DO UPDATE SET body = excluded.body, version = excluded.version",
         [chatID, threadRootID ?? "", draft.body, draft.version],
+      );
+  },
+};
+
+// Bounded so the cache of a busy account stays small: the chat list plus the
+// latest messages of the most recently viewed chats.
+const cachedMessageChats = 50;
+
+/** JSON snapshot storage for offline start; never a source of permissions. */
+export const cacheStorage = {
+  async get<T>(key: string): Promise<T | null> {
+    const row = await (
+      await database
+    ).getFirstAsync<{ value: string }>(
+      "SELECT value FROM cache WHERE key = ?",
+      [key],
+    );
+    return row ? (JSON.parse(row.value) as T) : null;
+  },
+  async set(key: string, value: unknown): Promise<void> {
+    const db = await database;
+    await db.runAsync(
+      "INSERT INTO cache (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+      [key, JSON.stringify(value), Date.now()],
+    );
+    if (key.startsWith("messages:"))
+      await db.runAsync(
+        `DELETE FROM cache WHERE key LIKE 'messages:%' AND key NOT IN (
+           SELECT key FROM cache WHERE key LIKE 'messages:%' ORDER BY updated_at DESC LIMIT ?
+         )`,
+        [cachedMessageChats],
       );
   },
 };

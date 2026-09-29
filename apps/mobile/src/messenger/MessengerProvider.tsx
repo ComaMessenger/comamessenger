@@ -21,7 +21,8 @@ import { checkpointStorage, outboxStorage } from "@/lib/database";
 import { hydrateDrafts } from "@/lib/drafts";
 import { reactionsKey } from "@/conversation/reactions";
 import { usePushNotifications } from "@/push/usePushNotifications";
-import { messageOf } from "@/lib/errors";
+import { isNetworkError, messageOf } from "@/lib/errors";
+import { cacheShell, cachedShell, persistMessages } from "./cache";
 import { useSession, useSignedIn } from "@/session/SessionProvider";
 
 export type MessengerStore = ReturnType<typeof createMessengerStore>;
@@ -35,6 +36,8 @@ type MessengerValue = {
   scheduleReload(): void;
   chatLoading: boolean;
   chatError: string;
+  /** The chat list comes from the offline cache and the server is unreachable. */
+  stale: boolean;
   /** Chats the user pinned on any device, in their order. */
   pinnedChatIDs: string[];
 };
@@ -68,9 +71,13 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
   const [chatLoading, setChatLoading] = useState(true);
   const [chatError, setChatError] = useState("");
   const [pinnedChatIDs, setPinnedChatIDs] = useState<string[]>([]);
+  const [stale, setStale] = useState(false);
+  const hydrated = useRef(false);
+  const hydration = useRef<Promise<void>>(Promise.resolve());
   const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const reload = useCallback(async () => {
+    await hydration.current;
     try {
       const [chats, unread, pinned] = await Promise.all([
         api.chats(),
@@ -81,8 +88,14 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
       store.getState().setUnread(unread);
       setPinnedChatIDs(pinned);
       setChatError("");
+      setStale(false);
+      void cacheShell({ chats, unread, pinnedChatIDs: pinned }).catch(
+        () => undefined,
+      );
     } catch (cause) {
-      setChatError(messageOf(cause));
+      // Saved data stays on screen when the network is the only problem.
+      if (hydrated.current && isNetworkError(cause)) setStale(true);
+      else setChatError(messageOf(cause));
     } finally {
       setChatLoading(false);
     }
@@ -206,6 +219,37 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
     [api, scheduleReload, store],
   );
 
+  // Saved chats appear before the network answers; unsubscribed on sign-out.
+  useEffect(() => {
+    hydration.current = cachedShell()
+      .then((shell) => {
+        if (!shell || Object.keys(store.getState().chats).length) return;
+        hydrated.current = true;
+        store.getState().replaceChats(shell.chats);
+        store.getState().setUnread(shell.unread);
+        setPinnedChatIDs(shell.pinnedChatIDs);
+        setChatLoading(false);
+      })
+      .catch(() => undefined);
+    return persistMessages(store);
+  }, [store]);
+
+  // After an offline start the account is refreshed once the server answers.
+  const liveOnce = useRef(false);
+  useEffect(
+    () =>
+      store.subscribe((state) => {
+        if (state.realtime !== "live" || liveOnce.current) return;
+        liveOnce.current = true;
+        setStale(false);
+        void api
+          .me()
+          .then(updateUser)
+          .catch(() => undefined);
+      }),
+    [api, store, updateUser],
+  );
+
   useEffect(() => {
     void reload();
     void api
@@ -253,6 +297,7 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
       scheduleReload,
       chatLoading,
       chatError,
+      stale,
       pinnedChatIDs,
     }),
     [
@@ -263,6 +308,7 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
       scheduleReload,
       chatLoading,
       chatError,
+      stale,
       pinnedChatIDs,
     ],
   );
