@@ -1,5 +1,6 @@
 import "@/lib/polyfills";
 import "@/i18n";
+import "@/push/background";
 import { useEffect } from "react";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";

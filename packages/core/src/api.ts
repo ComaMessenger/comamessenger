@@ -31,6 +31,8 @@ import type {
   OrganizationMember,
   OrganizationSettings,
   PublicBranding,
+  MobilePushDevice,
+  MobilePushDeviceRequest,
   PushConfig,
   PushSubscriptionRecord,
   PushSubscriptionInfo,
@@ -1103,6 +1105,19 @@ export class MessengerAPI {
   }
   removePush(id: string): Promise<void> {
     return this.request(`/api/v1/push/subscriptions/${id}`, {
+      method: "DELETE",
+    });
+  }
+  putMobilePushDevice(
+    input: MobilePushDeviceRequest,
+  ): Promise<MobilePushDevice> {
+    return this.request("/api/v1/push/devices", {
+      method: "PUT",
+      body: JSON.stringify(input),
+    });
+  }
+  deleteMobilePushDevice(id: string): Promise<void> {
+    return this.request(`/api/v1/push/devices/${encodeURIComponent(id)}`, {
       method: "DELETE",
     });
   }

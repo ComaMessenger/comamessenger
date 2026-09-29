@@ -147,6 +147,14 @@ export const ru = {
   loadFailed: "Не удалось загрузить сообщения",
 
   // More
+  notifications: "Уведомления",
+  notificationsOn: "Включены на этом телефоне",
+  notificationsOff: "Выключены",
+  notificationsDenied: "Запрещены в настройках телефона",
+  notificationsUnsupported: "Сервер не поддерживает push для этого приложения",
+  enableNotifications: "Включить",
+  openSettings: "Настройки",
+  notificationChannel: "Сообщения",
   passwordChangeTitle: "Смените пароль",
   passwordChangeText:
     "Администратор попросил сменить пароль. Сделайте это в веб-версии, затем вернитесь в приложение.",

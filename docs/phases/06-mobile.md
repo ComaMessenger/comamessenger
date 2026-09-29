@@ -84,14 +84,14 @@
 
 ### Push notifications
 
-- [ ] Реализовать push-relay: регистрация platform token → `relay_handle`, доставка, `410` для удалённых handle.
-- [ ] Реализовать регистрацию устройства на инстансе (`relay_handle`, ключ уведомлений) с привязкой к session.
-- [ ] Шифровать payload ключом устройства; расшифровка в iOS Notification Service Extension и Android FCM handler.
-- [ ] Обновлять token при rotation и удалять при logout/revocation.
-- [ ] Учитывать mute, active session, mention preferences и privacy preview settings на сервере.
-- [ ] Не включать чувствительный message body в push, если policy запрещает preview.
-- [ ] Реализовать deep links для chat/message/thread и fallback при удалённом/недоступном объекте.
-- [ ] Синхронизировать app icon badge с серверным unread snapshot.
+- [x] Реализовать push-relay: регистрация platform token → `relay_handle`, доставка, `410` для удалённых handle (`core/cmd/push-relay`, [runbook](../runbooks/push-relay.md)).
+- [x] Реализовать регистрацию устройства на инстансе (`relay_handle`, ключ уведомлений) с привязкой к семейству сессий.
+- [x] Шифровать payload ключом устройства (AES-256-GCM); расшифровка в iOS Notification Service Extension и Android background task.
+- [x] Обновлять token при rotation и удалять при logout/revocation.
+- [x] Учитывать mute, active session, mention preferences и privacy preview settings на сервере (общий SQL отбора получателей с Web Push).
+- [x] Не включать чувствительный message body в push, если policy запрещает preview; relay текст не видит никогда.
+- [ ] Реализовать deep links для chat/message/thread и fallback при удалённом/недоступном объекте. Нажатие на push открывает чат или тред; fallback для удалённого объекта и ссылки на сообщение — позже.
+- [ ] Синхронизировать app icon badge с серверным unread snapshot. Бейдж обновляется из unread-состояния, пока приложение запущено и при уходе в фон; счётчик в самом push — позже.
 
 ### Файлы и platform integration
 
@@ -103,6 +103,7 @@
 
 ### Проверка
 
+- [ ] M3 (push) проверен тестами сервера и relay; клиент — только типами и юнит-тестами. Прогнать на физических устройствах после получения ключей APNs/FCM и выбора домена relay.
 - [ ] M2 (лента, отправка, треды, жесты) написан без запуска на устройстве; сценарий дополнен отправкой сообщения и вкладкой «Треды» — прогнать на сборке.
 - [x] Maestro-сценарий `apps/mobile/e2e/sign-in.yaml`: сервер → вход → список чатов (realtime live) → беседа → «Ещё».
 

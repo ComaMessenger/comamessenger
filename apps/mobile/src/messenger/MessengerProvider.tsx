@@ -20,6 +20,7 @@ import { setLocale } from "@/i18n";
 import { checkpointStorage, outboxStorage } from "@/lib/database";
 import { hydrateDrafts } from "@/lib/drafts";
 import { reactionsKey } from "@/conversation/reactions";
+import { usePushNotifications } from "@/push/usePushNotifications";
 import { messageOf } from "@/lib/errors";
 import { useSession, useSignedIn } from "@/session/SessionProvider";
 
@@ -222,6 +223,8 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
       if (reloadTimer.current !== null) clearTimeout(reloadTimer.current);
     };
   }, [api, coordinator, outbox, reload]);
+
+  usePushNotifications(api, store);
 
   // iOS suspends a backgrounded app, leaving a socket that looks open but is
   // dead. Close it explicitly and resume from the checkpoint on return.

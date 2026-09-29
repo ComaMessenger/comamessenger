@@ -19,6 +19,7 @@ import { isNetworkError } from "@/lib/errors";
 import { pendingInvite } from "@/lib/inviteLinks";
 import type { ServerTarget } from "@/lib/server";
 import { refreshTokenStore } from "@/lib/session";
+import { unregisterFromPush } from "@/push/registration";
 
 export type SessionPhase =
   | { kind: "loading" }
@@ -146,6 +147,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     if (phase.kind !== "signed-in" || !api) return;
+    await unregisterFromPush(api);
     await api.logout().catch(() => refreshTokenStore.save(null));
     await clearUserData();
     setPhase({ kind: "signed-out", server: phase.server });

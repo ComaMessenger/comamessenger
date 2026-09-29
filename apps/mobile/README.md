@@ -20,9 +20,21 @@ A local Core is reachable at `http://localhost:8080` from the iOS Simulator and 
 
 ## Configuration
 
-| Variable         | Purpose                                                                                      |
-| ---------------- | -------------------------------------------------------------------------------------------- |
-| `COMA_BUNDLE_ID` | iOS bundle identifier and Android package. Fixed before the first store build; see ADR-0011. |
+| Variable               | Purpose                                                                                                        |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `COMA_BUNDLE_ID`       | iOS bundle identifier and Android package. Fixed before the first store build; see ADR-0011.                   |
+| `APPLE_TEAM_ID`        | Apple Developer team; required to sign the app and its Notification Service Extension.                         |
+| `COMA_PUSH_RELAY_URL`  | Push relay this build's APNs/FCM keys belong to (ADR-0012). Empty disables push registration.                  |
+| `GOOGLE_SERVICES_FILE` | Path to the Firebase `google-services.json` for Android push; provided as an EAS file secret, never committed. |
+
+## Push notifications
+
+The app registers its APNs/FCM token with the relay, gets an opaque handle and passes it with a locally generated AES-256 key to the instance (`PUT /api/v1/push/devices`). Instances encrypt every notification with that key; the relay only forwards ciphertext and a neutral fallback text.
+
+- iOS decrypts in the Notification Service Extension (`targets/notification-service`, added by `@bacons/apple-targets`). The key is shared through the `group.<bundle id>` keychain access group.
+- Android receives data-only messages; `src/push/background.ts` decrypts them in a background task and shows the notification.
+- Registration runs only when the instance reports the same relay in `GET /api/v1/push/config`; otherwise the More tab says the server does not support push for this app.
+- Push needs a physical device; simulators and emulators skip registration.
 
 ## End-to-end flows
 
