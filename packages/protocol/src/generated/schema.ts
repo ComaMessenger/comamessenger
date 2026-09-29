@@ -3674,6 +3674,12 @@ export interface components {
             /** @description Push relay this instance sends mobile notifications through; empty when mobile push is off. Apps register only with the relay they were built for. */
             mobile_relay_url: string;
         };
+        ObjectLink: {
+            /** @description Short-lived object-store URL, or an API path when `authenticated` is true. */
+            url: string;
+            /** @description The URL is an API path that needs the bearer token. */
+            authenticated: boolean;
+        };
         MobilePushDeviceRequest: {
             /** @enum {string} */
             platform: "ios" | "android";
@@ -3825,6 +3831,8 @@ export interface components {
         };
     };
     parameters: {
+        /** @description `link` returns an ObjectLink instead of the bytes or a redirect; used by native clients. */
+        ObjectDelivery: "link";
         /** @description `native` switches refresh token transport from the HttpOnly cookie to JSON bodies. Ignored when an Origin header is present. */
         ClientKind: "native";
         ChatId: string;
@@ -5146,7 +5154,10 @@ export interface operations {
     };
     getActorAvatar: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `link` returns an ObjectLink instead of the bytes or a redirect; used by native clients. */
+                delivery?: components["parameters"]["ObjectDelivery"];
+            };
             header?: never;
             path: {
                 actor_id: components["parameters"]["ActorId"];
@@ -6583,7 +6594,10 @@ export interface operations {
     };
     downloadFile: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `link` returns an ObjectLink instead of the bytes or a redirect; used by native clients. */
+                delivery?: components["parameters"]["ObjectDelivery"];
+            };
             header?: never;
             path: {
                 file_id: components["parameters"]["FileId"];
@@ -6592,13 +6606,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Authorized local blob stream. */
+            /** @description Authorized local blob stream, or an ObjectLink with `delivery=link`. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/octet-stream": string;
+                    "application/json": components["schemas"]["ObjectLink"];
                 };
             };
             /** @description Short-lived authorized object-store URL. */

@@ -33,6 +33,7 @@ import type {
   PublicBranding,
   MobilePushDevice,
   MobilePushDeviceRequest,
+  ObjectLink,
   PushConfig,
   PushSubscriptionRecord,
   PushSubscriptionInfo,
@@ -929,6 +930,17 @@ export class MessengerAPI {
   }
   file(fileID: string): Promise<FileMetadata> {
     return this.request(`/api/v1/files/${encodeURIComponent(fileID)}`);
+  }
+  /** Where to fetch a file without following redirects; for native clients. */
+  fileLink(fileID: string): Promise<ObjectLink> {
+    return this.request(
+      `/api/v1/files/${encodeURIComponent(fileID)}/download?delivery=link`,
+    );
+  }
+  avatarLink(actorID: string): Promise<ObjectLink> {
+    return this.request(
+      `/api/v1/actors/${encodeURIComponent(actorID)}/avatar?delivery=link`,
+    );
   }
   downloadFile(fileID: string): Promise<Blob> {
     return this.requestBlob(

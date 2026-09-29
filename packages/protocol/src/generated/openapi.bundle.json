@@ -1915,6 +1915,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/ActorId"
+          },
+          {
+            "$ref": "#/components/parameters/ObjectDelivery"
           }
         ],
         "responses": {
@@ -3987,16 +3990,24 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/FileId"
+          },
+          {
+            "$ref": "#/components/parameters/ObjectDelivery"
           }
         ],
         "responses": {
           "200": {
-            "description": "Authorized local blob stream.",
+            "description": "Authorized local blob stream, or an ObjectLink with `delivery=link`.",
             "content": {
               "application/octet-stream": {
                 "schema": {
                   "type": "string",
                   "format": "binary"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObjectLink"
                 }
               }
             }
@@ -6043,6 +6054,18 @@
       }
     },
     "parameters": {
+      "ObjectDelivery": {
+        "name": "delivery",
+        "in": "query",
+        "required": false,
+        "description": "`link` returns an ObjectLink instead of the bytes or a redirect; used by native clients.",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "link"
+          ]
+        }
+      },
       "ClientKind": {
         "name": "X-Coma-Client",
         "in": "header",
@@ -12203,6 +12226,24 @@
           "mobile_relay_url": {
             "type": "string",
             "description": "Push relay this instance sends mobile notifications through; empty when mobile push is off. Apps register only with the relay they were built for."
+          }
+        }
+      },
+      "ObjectLink": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "url",
+          "authenticated"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Short-lived object-store URL, or an API path when `authenticated` is true."
+          },
+          "authenticated": {
+            "type": "boolean",
+            "description": "The URL is an API path that needs the bearer token."
           }
         }
       },

@@ -690,6 +690,11 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	e2eAck(t, ownerSocket, ownerAvatar.Seq)
 	e2eAck(t, memberSocket, memberAvatar.Seq)
 	e2eBinaryRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/actors/"+owner.User.ActorID+"/avatar", member.AccessToken, "", nil, standardhttp.StatusOK)
+	var avatarLink objectLink
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/actors/"+owner.User.ActorID+"/avatar?delivery=link", member.AccessToken, nil, standardhttp.StatusOK, &avatarLink)
+	if !avatarLink.Authenticated || avatarLink.URL != "/api/v1/actors/"+owner.User.ActorID+"/avatar" {
+		t.Fatalf("local avatar link = %+v", avatarLink)
+	}
 
 	fileBody := []byte("phasefourtoken searchable attachment")
 	var upload files.Upload

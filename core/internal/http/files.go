@@ -64,10 +64,35 @@ func (h *identityHandlers) deleteAvatar(w standardhttp.ResponseWriter, r *standa
 	writeJSON(h.logger, w, standardhttp.StatusOK, result)
 }
 
+// objectLink answers ?delivery=link: native clients cannot rely on the HTTP
+// stack dropping Authorization on a cross-host redirect, and S3 rejects a
+// presigned URL that also carries it. Local blobs keep bearer authentication.
+type objectLink struct {
+	URL           string `json:"url"`
+	Authenticated bool   `json:"authenticated"`
+}
+
+func (h *identityHandlers) writeObjectLink(w standardhttp.ResponseWriter, presigned string, reader io.Closer, localPath string) {
+	if reader != nil {
+		_ = reader.Close()
+		writeJSON(h.logger, w, standardhttp.StatusOK, objectLink{URL: localPath, Authenticated: true})
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, objectLink{URL: presigned})
+}
+
 func (h *identityHandlers) getActorAvatar(w standardhttp.ResponseWriter, r *standardhttp.Request) {
 	result, err := h.files.Avatar(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "actorID"))
 	if err != nil {
 		h.fileError(w, r, err)
+		return
+	}
+	if r.URL.Query().Get("delivery") == "link" {
+		var reader io.Closer
+		if result.Reader != nil {
+			reader = result.Reader
+		}
+		h.writeObjectLink(w, result.URL, reader, "/api/v1/actors/"+url.PathEscape(chi.URLParam(r, "actorID"))+"/avatar")
 		return
 	}
 	if result.Reader == nil {
@@ -148,6 +173,14 @@ func (h *identityHandlers) downloadFile(w standardhttp.ResponseWriter, r *standa
 	result, err := h.files.Download(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "fileID"))
 	if err != nil {
 		h.fileError(w, r, err)
+		return
+	}
+	if r.URL.Query().Get("delivery") == "link" {
+		var reader io.Closer
+		if result.Reader != nil {
+			reader = result.Reader
+		}
+		h.writeObjectLink(w, result.URL, reader, "/api/v1/files/"+url.PathEscape(chi.URLParam(r, "fileID"))+"/download")
 		return
 	}
 	if result.Reader != nil {

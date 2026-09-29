@@ -28,6 +28,7 @@ export type PushConfig = components["schemas"]["PushConfig"];
 export type MobilePushDeviceRequest =
   components["schemas"]["MobilePushDeviceRequest"];
 export type MobilePushDevice = components["schemas"]["MobilePushDevice"];
+export type ObjectLink = components["schemas"]["ObjectLink"];
 export type PushSubscriptionRecord = components["schemas"]["PushSubscription"];
 export type PushSubscriptionInfo =
   components["schemas"]["PushSubscriptionInfo"];

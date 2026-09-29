@@ -2744,6 +2744,36 @@ func (e ClientKind) Valid() bool {
 	}
 }
 
+// Defines values for ObjectDelivery.
+const (
+	ObjectDeliveryLink ObjectDelivery = "link"
+)
+
+// Valid indicates whether the value is a known member of the ObjectDelivery enum.
+func (e ObjectDelivery) Valid() bool {
+	switch e {
+	case ObjectDeliveryLink:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GetActorAvatarParamsDelivery.
+const (
+	GetActorAvatarParamsDeliveryLink GetActorAvatarParamsDelivery = "link"
+)
+
+// Valid indicates whether the value is a known member of the GetActorAvatarParamsDelivery enum.
+func (e GetActorAvatarParamsDelivery) Valid() bool {
+	switch e {
+	case GetActorAvatarParamsDeliveryLink:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListAgentToolConfirmationsParamsStatus.
 const (
 	ListAgentToolConfirmationsParamsStatusAll       ListAgentToolConfirmationsParamsStatus = "all"
@@ -2834,6 +2864,21 @@ func (e GetBrandingAssetParamsKind) Valid() bool {
 	case GetBrandingAssetParamsKindFavicon:
 		return true
 	case GetBrandingAssetParamsKindLogo:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DownloadFileParamsDelivery.
+const (
+	DownloadFileParamsDeliveryLink DownloadFileParamsDelivery = "link"
+)
+
+// Valid indicates whether the value is a known member of the DownloadFileParamsDelivery enum.
+func (e DownloadFileParamsDelivery) Valid() bool {
+	switch e {
+	case DownloadFileParamsDeliveryLink:
 		return true
 	default:
 		return false
@@ -4121,6 +4166,15 @@ type NotificationSchedule_Days struct {
 	union json.RawMessage
 }
 
+// ObjectLink defines model for ObjectLink.
+type ObjectLink struct {
+	// Authenticated The URL is an API path that needs the bearer token.
+	Authenticated bool `json:"authenticated"`
+
+	// Url Short-lived object-store URL, or an API path when `authenticated` is true.
+	Url string `json:"url"`
+}
+
 // OrganizationMember defines model for OrganizationMember.
 type OrganizationMember struct {
 	ActorId         openapi_types.UUID       `json:"actor_id"`
@@ -4944,6 +4998,9 @@ type FileId = openapi_types.UUID
 // MessageId defines model for MessageId.
 type MessageId = openapi_types.UUID
 
+// ObjectDelivery defines model for ObjectDelivery.
+type ObjectDelivery string
+
 // UploadId defines model for UploadId.
 type UploadId = openapi_types.UUID
 
@@ -4956,6 +5013,15 @@ type ListActorsParams struct {
 	AfterId *openapi_types.UUID `form:"after_id,omitempty" json:"after_id,omitempty"`
 	Limit   *int                `form:"limit,omitempty" json:"limit,omitempty"`
 }
+
+// GetActorAvatarParams defines parameters for GetActorAvatar.
+type GetActorAvatarParams struct {
+	// Delivery `link` returns an ObjectLink instead of the bytes or a redirect; used by native clients.
+	Delivery *GetActorAvatarParamsDelivery `form:"delivery,omitempty" json:"delivery,omitempty"`
+}
+
+// GetActorAvatarParamsDelivery defines parameters for GetActorAvatar.
+type GetActorAvatarParamsDelivery string
 
 // ListAgentToolConfirmationsParams defines parameters for ListAgentToolConfirmations.
 type ListAgentToolConfirmationsParams struct {
@@ -5009,6 +5075,15 @@ type ListMessagesParams struct {
 type DeleteDraftParams struct {
 	ThreadRootId *openapi_types.UUID `form:"thread_root_id,omitempty" json:"thread_root_id,omitempty"`
 }
+
+// DownloadFileParams defines parameters for DownloadFile.
+type DownloadFileParams struct {
+	// Delivery `link` returns an ObjectLink instead of the bytes or a redirect; used by native clients.
+	Delivery *DownloadFileParamsDelivery `form:"delivery,omitempty" json:"delivery,omitempty"`
+}
+
+// DownloadFileParamsDelivery defines parameters for DownloadFile.
+type DownloadFileParamsDelivery string
 
 // AcceptInvitationParams defines parameters for AcceptInvitation.
 type AcceptInvitationParams struct {
