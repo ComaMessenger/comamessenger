@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
   grow: { flex: 1 },
   badge: {
     minWidth: 24,
-    height: 24,
+    minHeight: 24,
     paddingHorizontal: 7,
     borderRadius: radius.full,
     alignItems: "center",

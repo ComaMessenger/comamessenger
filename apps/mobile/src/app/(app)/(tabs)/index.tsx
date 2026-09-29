@@ -22,7 +22,7 @@ import { ChatFilters } from "@/chats/ChatFilters";
 import { ChatRow, chatTitle } from "@/chats/ChatRow";
 import { ConnectionBanner } from "@/messenger/ConnectionBanner";
 import { Notice } from "@/ui/Notice";
-import { Text, fonts } from "@/ui/Text";
+import { Text, fonts, maxTextScale } from "@/ui/Text";
 import { WorkspaceMark } from "@/ui/WorkspaceMark";
 
 export default function ChatsScreen() {
@@ -122,6 +122,7 @@ export default function ChatsScreen() {
       <View style={[styles.search, { backgroundColor: theme.sidebar }]}>
         <Search size={20} color={theme.subtle} />
         <TextInput
+          maxFontSizeMultiplier={maxTextScale}
           value={query}
           onChangeText={setQuery}
           placeholder={t("searchChats")}

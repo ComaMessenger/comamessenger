@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TextInput,
   View,
+  useWindowDimensions,
 } from "react-native";
 import {
   ArrowUp,
@@ -26,7 +27,7 @@ import {
 import { radius, spacing } from "@comamessenger/tokens";
 import { useTheme } from "@/lib/theme";
 import { Avatar } from "@/ui/Avatar";
-import { Text, fonts } from "@/ui/Text";
+import { Text, fonts, maxTextScale } from "@/ui/Text";
 import type { Attachment } from "@/files/useAttachments";
 
 const inputMinHeight = 40;
@@ -71,6 +72,11 @@ export function Composer({
   const theme = useTheme();
   const input = useRef<TextInput>(null);
   const draft = useMemo(() => decodeMentions(body), [body]);
+  const { fontScale } = useWindowDimensions();
+  const emptyHeight = Math.max(
+    inputMinHeight,
+    Math.ceil(22 * Math.min(fontScale, maxTextScale)) + 16,
+  );
   const uploading = attachments.some((item) => item.status === "uploading");
   const canSend =
     (Boolean(draft.text.trim()) ||
@@ -290,12 +296,13 @@ export function Composer({
             accessibilityLabel={placeholder ?? t("messagePlaceholder")}
             selectionColor={theme.primary}
             multiline
+            maxFontSizeMultiplier={maxTextScale}
             style={[
               styles.input,
               { color: theme.foreground },
               // iOS keeps a multiline input at its tallest size after the
               // text is cleared; an empty field is pinned back to one line.
-              !draft.text && { height: inputMinHeight },
+              !draft.text && { height: emptyHeight },
             ]}
           />
           <Pressable

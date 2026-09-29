@@ -20,7 +20,7 @@ import { useSignedIn } from "@/session/SessionProvider";
 import { useTheme } from "@/lib/theme";
 import { chatTitle } from "@/chats/ChatRow";
 import { Notice } from "@/ui/Notice";
-import { Text, fonts } from "@/ui/Text";
+import { Text, fonts, maxTextScale } from "@/ui/Text";
 
 type Kind = "all" | "message" | "file";
 
@@ -95,6 +95,7 @@ export default function SearchScreen() {
         <View style={[styles.input, { backgroundColor: theme.sidebar }]}>
           <Search size={20} color={theme.subtle} />
           <TextInput
+            maxFontSizeMultiplier={maxTextScale}
             testID="search-input"
             value={input}
             onChangeText={setInput}

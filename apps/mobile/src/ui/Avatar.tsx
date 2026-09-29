@@ -56,6 +56,7 @@ export function Avatar({
         ]}
       >
         <Text
+          allowFontScaling={false}
           weight="semibold"
           size={Math.round(size * 0.36)}
           style={{ color: agent ? theme.canvas : "#ffffff" }}

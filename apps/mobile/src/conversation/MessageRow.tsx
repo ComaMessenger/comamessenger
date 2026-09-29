@@ -312,7 +312,7 @@ const styles = StyleSheet.create({
   italic: { fontStyle: "italic" },
   reactions: { flexDirection: "row", flexWrap: "wrap", gap: spacing[1] },
   chip: {
-    height: 28,
+    minHeight: 28,
     paddingHorizontal: 10,
     borderRadius: radius.full,
     borderWidth: 1,

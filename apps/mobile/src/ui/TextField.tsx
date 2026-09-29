@@ -10,7 +10,7 @@ import { Eye, EyeOff } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { spacing } from "@comamessenger/tokens";
 import { useTheme } from "@/lib/theme";
-import { Text, fonts } from "./Text";
+import { Text, fonts, maxTextScale } from "./Text";
 
 export const TextField = forwardRef<
   TextInput,
@@ -39,6 +39,7 @@ export const TextField = forwardRef<
         ]}
       >
         <TextInput
+          maxFontSizeMultiplier={maxTextScale}
           ref={ref}
           accessibilityLabel={label}
           placeholderTextColor={theme.subtle}

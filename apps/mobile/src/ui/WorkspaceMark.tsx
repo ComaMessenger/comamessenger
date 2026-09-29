@@ -26,6 +26,7 @@ export function WorkspaceMark({
       ]}
     >
       <Text
+        allowFontScaling={false}
         weight="bold"
         size={Math.round(size * 0.45)}
         style={{ color: theme.onPrimary }}

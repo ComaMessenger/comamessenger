@@ -58,7 +58,8 @@ export function ChatFilters({
 const styles = StyleSheet.create({
   row: { gap: spacing[2], paddingHorizontal: spacing[4] },
   chip: {
-    height: 36,
+    minHeight: 36,
+    paddingVertical: spacing[1],
     paddingHorizontal: spacing[4],
     borderRadius: radius.full,
     justifyContent: "center",

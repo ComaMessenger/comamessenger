@@ -9,6 +9,12 @@ export const fonts = {
 } as const;
 
 export type TextWeight = keyof typeof fonts;
+
+/**
+ * Dynamic Type is honoured up to twice the base size; beyond that dense rows
+ * (chat list, message meta) stop fitting on a phone screen.
+ */
+export const maxTextScale = 2;
 export type TextTone = "default" | "muted" | "subtle" | "primary" | "danger";
 
 /** Onest text in theme colours; custom fonts need a family per weight. */
@@ -29,6 +35,7 @@ export function Text({
   }[tone];
   return (
     <NativeText
+      maxFontSizeMultiplier={maxTextScale}
       {...props}
       style={[
         {
