@@ -2,7 +2,7 @@ import type { ExpoConfig } from "expo/config";
 
 // The bundle identifier is fixed by the first store build and depends on the
 // public Coma domain (ADR-0011); until that decision it comes from the env.
-const bundleIdentifier = process.env.COMA_BUNDLE_ID ?? "dev.comamessenger.app";
+const bundleIdentifier = process.env.COMA_BUNDLE_ID ?? "com.comamessenger.app";
 // Shared with the Notification Service Extension for the notification key.
 const appGroup = `group.${bundleIdentifier}`;
 

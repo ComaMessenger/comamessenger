@@ -1,5 +1,5 @@
 # Shared start for flows that reuse the signed-in state of sign-in.yaml.
-appId: dev.comamessenger.app
+appId: com.comamessenger.app
 env:
   METRO: http%3A%2F%2Flocalhost%3A8081
 ---

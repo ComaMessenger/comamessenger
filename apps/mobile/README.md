@@ -20,12 +20,12 @@ A local Core is reachable at `http://localhost:8080` from the iOS Simulator and 
 
 ## Configuration
 
-| Variable               | Purpose                                                                                                        |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `COMA_BUNDLE_ID`       | iOS bundle identifier and Android package. Fixed before the first store build; see ADR-0011.                   |
-| `APPLE_TEAM_ID`        | Apple Developer team; required to sign the app and its Notification Service Extension.                         |
-| `COMA_PUSH_RELAY_URL`  | Push relay this build's APNs/FCM keys belong to (ADR-0012). Empty disables push registration.                  |
-| `GOOGLE_SERVICES_FILE` | Path to the Firebase `google-services.json` for Android push; provided as an EAS file secret, never committed. |
+| Variable               | Purpose                                                                                                           |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `COMA_BUNDLE_ID`       | iOS bundle identifier and Android package; defaults to `com.comamessenger.app`. Never change it for store builds. |
+| `APPLE_TEAM_ID`        | Apple Developer team; required to sign the app and its Notification Service Extension.                            |
+| `COMA_PUSH_RELAY_URL`  | Push relay this build's APNs/FCM keys belong to (ADR-0012). Empty disables push registration.                     |
+| `GOOGLE_SERVICES_FILE` | Path to the Firebase `google-services.json` for Android push; provided as an EAS file secret, never committed.    |
 
 ## Push notifications
 

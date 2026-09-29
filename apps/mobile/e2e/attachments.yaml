@@ -1,6 +1,6 @@
 # Picks a photo from the simulator library, sends it and checks the preview.
 # Run after sign-in.yaml: maestro test e2e/attachments.yaml
-appId: dev.comamessenger.app
+appId: com.comamessenger.app
 ---
 - runFlow: open-app.yaml
 - tapOn:

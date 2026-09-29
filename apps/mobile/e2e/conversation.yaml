@@ -1,6 +1,6 @@
 # Thread reply, reaction and search on a message the flow sends itself.
 # Run after sign-in.yaml (reuses its session): maestro test e2e/conversation.yaml
-appId: dev.comamessenger.app
+appId: com.comamessenger.app
 ---
 - runFlow: open-app.yaml
 - tapOn:

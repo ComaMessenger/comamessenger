@@ -1,6 +1,6 @@
 # Server address → sign in → chat list → send a message → threads → more.
 # Needs a seeded instance; see README. Run: maestro test e2e/sign-in.yaml
-appId: dev.comamessenger.app
+appId: com.comamessenger.app
 env:
   SERVER: localhost:8080
   EMAIL: lev@example.test
