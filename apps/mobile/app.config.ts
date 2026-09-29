@@ -60,6 +60,7 @@ const config: ExpoConfig = {
     ],
     "@bacons/apple-targets",
     "./plugins/withAndroidReleaseSigning",
+    "./plugins/withAndroidGradleMemory",
     [
       "expo-splash-screen",
       {
