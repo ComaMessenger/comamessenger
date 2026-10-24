@@ -1119,6 +1119,8 @@ test("phone tabbar keeps navigation and settings in the main field", async ({
   ).toBeVisible();
   await expect(page).toHaveScreenshot("mobile-more.png", {
     animations: "disabled",
+    // The local host and port vary between isolated checkouts.
+    mask: [page.locator(".more-page__workspace-copy small")],
   });
   await page.getByRole("button", { name: /^Профиль/ }).click();
   await expect(page).toHaveURL(/\/settings\/profile$/);
@@ -1331,6 +1333,8 @@ test("profile menu, status dialog and attachment picker expose the new flows", a
   );
   await expect(page).toHaveScreenshot("status-dialog-emoji-picker.png", {
     animations: "disabled",
+    // The greeting in the backdrop depends on the wall clock.
+    mask: [page.locator(".welcome__card h2")],
   });
   await statusDialog.getByLabel("Эмодзи статуса").click();
   await statusDialog.getByRole("radio", { name: "Никогда" }).click();
