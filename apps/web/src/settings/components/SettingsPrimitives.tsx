@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { ShieldCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cx } from "../../ui";
@@ -16,16 +16,24 @@ export function SettingsSection({
   wide?: boolean;
   children: ReactNode;
 }) {
+  const headingID = useId();
+  const descriptionID = useId();
   return (
     <section
       className={cx("settings-section", wide && "settings-section--wide")}
+      aria-labelledby={headingID}
+      aria-describedby={descriptionID}
     >
       <header>
-        {icon}
-        <span>
-          <h2>{title}</h2>
-          <p>{description}</p>
-        </span>
+        {icon && (
+          <span className="settings-section__icon" aria-hidden="true">
+            {icon}
+          </span>
+        )}
+        <div className="settings-section__heading">
+          <h2 id={headingID}>{title}</h2>
+          <p id={descriptionID}>{description}</p>
+        </div>
       </header>
       <div className="settings-section__content">{children}</div>
     </section>

@@ -1,18 +1,27 @@
 import { useState } from "react";
-import { Alert, ScrollView, StyleSheet } from "react-native";
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { APIError } from "@comamessenger/core";
-import { spacing } from "@comamessenger/tokens";
+import { radius, spacing } from "@comamessenger/tokens";
 import { useSession, useSignedIn } from "@/session/SessionProvider";
 import { messageOf } from "@/lib/errors";
 import { Button } from "@/ui/Button";
 import { ScreenHeader } from "@/ui/ScreenHeader";
 import { TextField } from "@/ui/TextField";
+import { useTheme } from "@/lib/theme";
 
 export default function ProfileScreen() {
   const { t } = useTranslation();
+  const theme = useTheme();
   const { api, user } = useSignedIn();
   const { updateUser } = useSession();
   const [displayName, setDisplayName] = useState(user.display_name);
@@ -50,58 +59,84 @@ export default function ProfileScreen() {
   }
 
   return (
-    <SafeAreaView edges={["top", "bottom"]} style={styles.screen}>
+    <SafeAreaView
+      edges={["top", "bottom"]}
+      style={[styles.screen, { backgroundColor: theme.canvas }]}
+    >
       <ScreenHeader title={t("profile")} />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
+      <KeyboardAvoidingView
+        style={styles.screen}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <TextField
-          label={t("displayName")}
-          value={displayName}
-          onChangeText={setDisplayName}
-          autoComplete="name"
-          maxLength={120}
-        />
-        <TextField
-          label={t("handle")}
-          value={handle}
-          onChangeText={(value) => {
-            setHandle(value);
-            setHandleTaken(false);
-          }}
-          autoCapitalize="none"
-          autoCorrect={false}
-          error={handleTaken ? t("joinHandleTaken") : undefined}
-          hint={t("joinHandleHint", {
-            handle: handle.trim().toLowerCase() || user.handle,
-          })}
-        />
-        <TextField
-          label={t("jobTitle")}
-          value={title}
-          onChangeText={setTitle}
-          maxLength={120}
-        />
-        <TextField
-          label={t("about")}
-          value={about}
-          onChangeText={setAbout}
-          maxLength={280}
-          multiline
-        />
-        <Button
-          label={t("save")}
-          pending={pending}
-          disabled={!changed || !displayName.trim() || !handle.trim()}
-          onPress={() => void save()}
-        />
-      </ScrollView>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View
+            style={[
+              styles.form,
+              { backgroundColor: theme.surface, borderColor: theme.border },
+            ]}
+          >
+            <TextField
+              label={t("displayName")}
+              value={displayName}
+              onChangeText={setDisplayName}
+              autoComplete="name"
+              maxLength={120}
+            />
+            <TextField
+              label={t("handle")}
+              value={handle}
+              onChangeText={(value) => {
+                setHandle(value);
+                setHandleTaken(false);
+              }}
+              autoCapitalize="none"
+              autoCorrect={false}
+              error={handleTaken ? t("joinHandleTaken") : undefined}
+              hint={t("joinHandleHint", {
+                handle: handle.trim().toLowerCase() || user.handle,
+              })}
+            />
+            <TextField
+              label={t("jobTitle")}
+              value={title}
+              onChangeText={setTitle}
+              maxLength={120}
+            />
+            <TextField
+              label={t("about")}
+              value={about}
+              onChangeText={setAbout}
+              maxLength={280}
+              multiline
+            />
+            <Button
+              label={t("save")}
+              pending={pending}
+              disabled={!changed || !displayName.trim() || !handle.trim()}
+              onPress={() => void save()}
+            />
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  content: { padding: spacing[4], gap: spacing[4] },
+  content: {
+    padding: spacing[4],
+    width: "100%",
+    maxWidth: 640,
+    alignSelf: "center",
+  },
+  form: {
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    padding: spacing[4],
+    gap: spacing[4],
+  },
 });

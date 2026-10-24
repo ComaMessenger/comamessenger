@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import { Eye, EyeOff } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
-import { spacing } from "@comamessenger/tokens";
+import { radius, spacing } from "@comamessenger/tokens";
 import { useTheme } from "@/lib/theme";
 import { Text, fonts, maxTextScale } from "./Text";
 
@@ -24,19 +24,15 @@ export const TextField = forwardRef<
     ? theme.danger
     : focused
       ? theme.primary
-      : theme.border;
+      : theme.borderStrong;
   const Icon = revealed ? EyeOff : Eye;
   return (
     <View style={styles.field}>
-      <Text tone="muted" size={15}>
+      <Text weight="medium" size={14}>
         {label}
       </Text>
       <View
-        style={[
-          styles.box,
-          { borderColor, backgroundColor: theme.surface },
-          focused && { borderWidth: 1.5 },
-        ]}
+        style={[styles.box, { borderColor, backgroundColor: theme.surface }]}
       >
         <TextInput
           maxFontSizeMultiplier={maxTextScale}
@@ -54,7 +50,11 @@ export const TextField = forwardRef<
             setFocused(false);
             props.onBlur?.(event);
           }}
-          style={[styles.input, { color: theme.foreground }]}
+          style={[
+            styles.input,
+            { color: theme.foreground },
+            props.multiline && styles.multiline,
+          ]}
         />
         {secureTextEntry && (
           <Pressable
@@ -63,7 +63,7 @@ export const TextField = forwardRef<
             accessibilityLabel={
               revealed ? t("hidePassword") : t("showPassword")
             }
-            hitSlop={12}
+            style={styles.reveal}
             onPress={() => setRevealed((value) => !value)}
           >
             <Icon size={20} color={theme.subtle} />
@@ -86,18 +86,27 @@ export const TextField = forwardRef<
 const styles = StyleSheet.create({
   field: { gap: spacing[2] },
   box: {
-    minHeight: 52,
-    borderRadius: 14,
+    minHeight: 48,
+    borderRadius: radius.md,
     borderWidth: 1,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: spacing[4],
-    gap: spacing[2],
+    paddingLeft: spacing[3],
+    paddingRight: spacing[1],
   },
   input: {
     flex: 1,
     fontFamily: fonts.regular,
-    fontSize: 17,
+    fontSize: 16,
     paddingVertical: spacing[3],
+    minHeight: 46,
+    paddingRight: spacing[2],
+  },
+  multiline: { minHeight: 104, textAlignVertical: "top" },
+  reveal: {
+    width: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

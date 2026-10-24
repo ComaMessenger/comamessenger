@@ -21,13 +21,24 @@ export function Notice({
   const theme = useTheme();
   const colors = {
     danger: { background: theme.dangerSoft, title: theme.danger },
-    success: { background: theme.primarySoft, title: theme.success },
-    neutral: { background: theme.surface, title: theme.foreground },
+    success: { background: theme.successSoft, title: theme.successText },
+    neutral: { background: theme.sidebar, title: theme.foreground },
   }[tone];
   return (
     <View
       accessibilityRole={tone === "danger" ? "alert" : undefined}
-      style={[styles.notice, { backgroundColor: colors.background }]}
+      style={[
+        styles.notice,
+        {
+          backgroundColor: colors.background,
+          borderColor:
+            tone === "danger"
+              ? theme.dangerBorder
+              : tone === "success"
+                ? theme.successBorder
+                : theme.border,
+        },
+      ]}
     >
       <Text weight="semibold" size={15} style={{ color: colors.title }}>
         {title}
@@ -47,6 +58,11 @@ export function Notice({
 }
 
 const styles = StyleSheet.create({
-  notice: { borderRadius: radius.lg, padding: spacing[4], gap: spacing[1] },
+  notice: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.md,
+    padding: spacing[3],
+    gap: spacing[1],
+  },
   action: { marginTop: spacing[2] },
 });

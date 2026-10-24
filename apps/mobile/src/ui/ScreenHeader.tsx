@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
-import { spacing } from "@comamessenger/tokens";
+import { radius, spacing } from "@comamessenger/tokens";
 import { useTheme } from "@/lib/theme";
 import { Text } from "./Text";
 
@@ -18,14 +18,22 @@ export function ScreenHeader({
   const { t } = useTranslation();
   const theme = useTheme();
   return (
-    <View style={[styles.header, { borderBottomColor: theme.border }]}>
+    <View
+      style={[
+        styles.header,
+        { borderBottomColor: theme.border, backgroundColor: theme.surface },
+      ]}
+    >
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={t("back")}
-        hitSlop={12}
+        style={({ pressed }) => [
+          styles.back,
+          pressed && { backgroundColor: theme.surfaceSelected },
+        ]}
         onPress={() => router.back()}
       >
-        <ChevronLeft size={28} color={theme.primary} />
+        <ChevronLeft size={24} color={theme.muted} />
       </Pressable>
       <Text
         accessibilityRole="header"
@@ -45,10 +53,18 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing[3],
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[3],
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: spacing[2],
+    minHeight: 60,
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[2],
+    borderBottomWidth: 1,
+  },
+  back: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.md,
   },
   title: { flex: 1 },
 });

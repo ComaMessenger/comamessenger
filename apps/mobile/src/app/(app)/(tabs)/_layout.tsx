@@ -22,9 +22,15 @@ function tabIcon(Icon: LucideIcon) {
     const theme = useTheme();
     return (
       <View
-        style={[styles.pill, focused && { backgroundColor: theme.primarySoft }]}
+        style={[
+          styles.indicator,
+          {
+            borderColor: focused ? theme.border : "transparent",
+            backgroundColor: focused ? theme.surfaceSelected : "transparent",
+          },
+        ]}
       >
-        <Icon size={24} color={String(color)} />
+        <Icon size={22} color={String(color)} />
       </View>
     );
   };
@@ -43,6 +49,9 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: theme.surface,
           borderTopColor: theme.border,
+          borderTopWidth: 1,
+          elevation: 0,
+          shadowOpacity: 0,
         },
         sceneStyle: { backgroundColor: theme.canvas },
       }}
@@ -76,10 +85,11 @@ export default function TabsLayout() {
 }
 
 const styles = StyleSheet.create({
-  pill: {
-    width: 56,
+  indicator: {
+    width: 48,
     height: 32,
-    borderRadius: radius.full,
+    borderWidth: 1,
+    borderRadius: radius.md,
     alignItems: "center",
     justifyContent: "center",
   },

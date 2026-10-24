@@ -80,7 +80,12 @@ export function GlobalSidebar({
     { id: "members", path: "/members", label: t("members"), icon: Users },
   ];
   if (hasPermission(user, "agents.manage"))
-    items.push({ id: "agents", path: "/agents", label: t("agentsTitle"), icon: Bot });
+    items.push({
+      id: "agents",
+      path: "/agents",
+      label: t("agentsTitle"),
+      icon: Bot,
+    });
 
   return (
     <aside
@@ -91,12 +96,11 @@ export function GlobalSidebar({
         <button
           type="button"
           className="workspace-switcher"
+          aria-label={`${t("workspaceMenu")} · ${user.organization_name}`}
+          title={collapsed ? user.organization_name : undefined}
           aria-expanded={workspaceOpen}
           aria-haspopup="menu"
-          onClick={() => {
-            if (collapsed) onToggleCollapsed();
-            setWorkspaceOpen((open) => !open);
-          }}
+          onClick={() => setWorkspaceOpen((open) => !open)}
         >
           <Logo size="sm" />
           <strong className="truncate" title={user.organization_name}>
@@ -104,7 +108,7 @@ export function GlobalSidebar({
           </strong>
           <ChevronDown aria-hidden="true" />
         </button>
-        {workspaceOpen && !collapsed && (
+        {workspaceOpen && (
           <WorkspaceMenu onClose={() => setWorkspaceOpen(false)} />
         )}
       </div>
@@ -143,6 +147,7 @@ export function GlobalSidebar({
               type="button"
               className={cx("sidebar-nav__item", isActive && "active")}
               aria-current={isActive ? "page" : undefined}
+              aria-label={item.label}
               title={collapsed ? item.label : undefined}
               onClick={() => navigate(item.path)}
             >
@@ -172,6 +177,8 @@ export function GlobalSidebar({
           <button
             type="button"
             className="sidebar-profile__identity"
+            aria-label={user.display_name}
+            title={collapsed ? user.display_name : undefined}
             aria-expanded={profileOpen}
             aria-haspopup="menu"
             onClick={() => setProfileOpen((open) => !open)}

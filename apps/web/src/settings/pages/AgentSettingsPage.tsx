@@ -284,14 +284,15 @@ export function AgentSettingsPage({
                     : canBuild || canPublish || canObserve,
             )
             .map(([id, target, Icon]) => (
-            <button
-              key={id}
-              className={globalTab === id ? "active" : ""}
-              onClick={() => navigate(target)}
-            >
-              <Icon />
-              <span>{t(`agentTab_${id}`)}</span>
-            </button>
+              <button
+                key={id}
+                className={globalTab === id ? "active" : ""}
+                aria-current={globalTab === id ? "page" : undefined}
+                onClick={() => navigate(target)}
+              >
+                <Icon />
+                <span>{t(`agentTab_${id}`)}</span>
+              </button>
             ))}
         </nav>
       </header>
@@ -318,7 +319,10 @@ export function AgentSettingsPage({
             <aside className="agent-catalog">
               {canBuild && (
                 <>
-                  <Button onClick={() => chooseTemplate("custom")}>
+                  <Button
+                    variant="primary"
+                    onClick={() => chooseTemplate("custom")}
+                  >
                     <Plus />
                     {t("createAgent")}
                   </Button>
@@ -338,6 +342,7 @@ export function AgentSettingsPage({
                 <button
                   key={agent.id}
                   className={selectedID === agent.id ? "active" : ""}
+                  aria-current={selectedID === agent.id ? "page" : undefined}
                   onClick={() => navigate(`/agents/${agent.id}`)}
                 >
                   <Bot />
@@ -360,7 +365,11 @@ export function AgentSettingsPage({
                   </p>
                 </div>
                 {canBuild && selected && detailSection === "behavior" && (
-                  <Button disabled={pending} onClick={() => void save()}>
+                  <Button
+                    variant="primary"
+                    disabled={pending}
+                    onClick={() => void save()}
+                  >
                     <Save />
                     {pending ? t("saving") : t("save")}
                   </Button>
@@ -391,7 +400,8 @@ export function AgentSettingsPage({
                     {t("duplicateAgent")}
                   </Button>
                 )}
-                {canBuild && selected &&
+                {canBuild &&
+                  selected &&
                   selected.recipe !== "custom" &&
                   detailSection === "settings" && (
                     <Button
@@ -438,20 +448,23 @@ export function AgentSettingsPage({
                           : canBuild,
                     )
                     .map(([section, Icon]) => (
-                    <button
-                      key={section}
-                      className={detailSection === section ? "active" : ""}
-                      onClick={() =>
-                        navigate(
-                          section === "overview"
-                            ? `/agents/${selected.id}`
-                            : `/agents/${selected.id}/${section}`,
-                        )
-                      }
-                    >
-                      <Icon />
-                      <span>{t(`agentTab_${section}`)}</span>
-                    </button>
+                      <button
+                        key={section}
+                        className={detailSection === section ? "active" : ""}
+                        aria-current={
+                          detailSection === section ? "page" : undefined
+                        }
+                        onClick={() =>
+                          navigate(
+                            section === "overview"
+                              ? `/agents/${selected.id}`
+                              : `/agents/${selected.id}/${section}`,
+                          )
+                        }
+                      >
+                        <Icon />
+                        <span>{t(`agentTab_${section}`)}</span>
+                      </button>
                     ))}
                 </nav>
               )}
@@ -649,7 +662,9 @@ function AgentActivityDirectory({
           <span>
             <small>{t("agentMetricTimeToTest")}</small>
             <strong>
-              {formatProductDuration(metrics.data.average_seconds_to_first_test)}
+              {formatProductDuration(
+                metrics.data.average_seconds_to_first_test,
+              )}
             </strong>
           </span>
           <span>
@@ -758,9 +773,7 @@ function AgentCreationWizard({
     Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
   );
   const [citations, setCitations] = useState(template !== "custom");
-  const [fallback, setFallback] = useState(
-    t("agentWizardFallbackDefault"),
-  );
+  const [fallback, setFallback] = useState(t("agentWizardFallbackDefault"));
   const [tone, setTone] = useState(t("agentWizardToneFriendly"));
   const [customInstructions, setCustomInstructions] = useState("");
   const [error, setError] = useState("");
@@ -1165,9 +1178,15 @@ function AgentCreationWizard({
             {t("cancel")}
           </Button>
           {step < 5 ? (
-            <Button onClick={next}>{t("continue")}</Button>
+            <Button variant="primary" onClick={next}>
+              {t("continue")}
+            </Button>
           ) : (
-            <Button disabled={pending} onClick={() => void create()}>
+            <Button
+              variant="primary"
+              disabled={pending}
+              onClick={() => void create()}
+            >
               <Plus />
               {pending ? t("saving") : t("createAgent")}
             </Button>
@@ -1277,41 +1296,43 @@ function AgentLifecycle({
                 : t("agentNeverPublished")}
             </small>
           </div>
-          {canPublish && <div className="agent-lifecycle__actions">
-            {agent.has_unpublished_changes && (
-              <Button
-                disabled={Boolean(pending) || !agent.readiness.ready}
-                onClick={() =>
-                  void act("publish", () => api.publishAgent(agent.id))
-                }
-              >
-                <Save />
-                {t("agentPublish")}
-              </Button>
-            )}
-            {agent.operational_status === "active" && (
-              <Button
-                variant="ghost"
-                disabled={Boolean(pending)}
-                onClick={() =>
-                  void act("pause", () => api.pauseAgent(agent.id))
-                }
-              >
-                {t("agentPause")}
-              </Button>
-            )}
-            {agent.operational_status === "paused" && (
-              <Button
-                disabled={Boolean(pending)}
-                onClick={() =>
-                  void act("resume", () => api.resumeAgent(agent.id))
-                }
-              >
-                <Play />
-                {t("agentResume")}
-              </Button>
-            )}
-          </div>}
+          {canPublish && (
+            <div className="agent-lifecycle__actions">
+              {agent.has_unpublished_changes && (
+                <Button
+                  disabled={Boolean(pending) || !agent.readiness.ready}
+                  onClick={() =>
+                    void act("publish", () => api.publishAgent(agent.id))
+                  }
+                >
+                  <Save />
+                  {t("agentPublish")}
+                </Button>
+              )}
+              {agent.operational_status === "active" && (
+                <Button
+                  variant="ghost"
+                  disabled={Boolean(pending)}
+                  onClick={() =>
+                    void act("pause", () => api.pauseAgent(agent.id))
+                  }
+                >
+                  {t("agentPause")}
+                </Button>
+              )}
+              {agent.operational_status === "paused" && (
+                <Button
+                  disabled={Boolean(pending)}
+                  onClick={() =>
+                    void act("resume", () => api.resumeAgent(agent.id))
+                  }
+                >
+                  <Play />
+                  {t("agentResume")}
+                </Button>
+              )}
+            </div>
+          )}
         </div>
         <FormError message={error} />
         {notice && <Badge tone="success">{notice}</Badge>}
@@ -1964,48 +1985,52 @@ function AgentOperations({
           description={t("agentTriggersHint")}
           wide
         >
-          {canBuild && <div className="agent-inline-form">
-            <SelectField
-              label={t("type")}
-              name="trigger-type"
-              value={triggerType}
-              onChange={(e) => setTriggerType(e.target.value)}
-            >
-              {[
-                "manual",
-                "mention",
-                "command",
-                "keyword",
-                "every_message",
-                "schedule",
-                "event",
-              ].map((type) => (
-                <option key={type} value={type}>
-                  {t(`agentTrigger_${type}`)}
-                </option>
-              ))}
-            </SelectField>
-            {!["manual", "mention", "every_message"].includes(triggerType) && (
-              <Field
-                required={false}
-                label={t("configuration")}
-                name="trigger-value"
-                value={triggerValue}
-                placeholder={
-                  triggerType === "schedule"
-                    ? "09:00"
-                    : triggerType === "event"
-                      ? "member.joined"
-                      : ""
-                }
-                onChange={(e) => setTriggerValue(e.target.value)}
-              />
-            )}
-            <Button onClick={() => void createTrigger()}>
-              <Plus />
-              {t("add")}
-            </Button>
-          </div>}
+          {canBuild && (
+            <div className="agent-inline-form">
+              <SelectField
+                label={t("type")}
+                name="trigger-type"
+                value={triggerType}
+                onChange={(e) => setTriggerType(e.target.value)}
+              >
+                {[
+                  "manual",
+                  "mention",
+                  "command",
+                  "keyword",
+                  "every_message",
+                  "schedule",
+                  "event",
+                ].map((type) => (
+                  <option key={type} value={type}>
+                    {t(`agentTrigger_${type}`)}
+                  </option>
+                ))}
+              </SelectField>
+              {!["manual", "mention", "every_message"].includes(
+                triggerType,
+              ) && (
+                <Field
+                  required={false}
+                  label={t("configuration")}
+                  name="trigger-value"
+                  value={triggerValue}
+                  placeholder={
+                    triggerType === "schedule"
+                      ? "09:00"
+                      : triggerType === "event"
+                        ? "member.joined"
+                        : ""
+                  }
+                  onChange={(e) => setTriggerValue(e.target.value)}
+                />
+              )}
+              <Button onClick={() => void createTrigger()}>
+                <Plus />
+                {t("add")}
+              </Button>
+            </div>
+          )}
           <div className="agent-record-list">
             {(triggers.data ?? []).map((trigger) => (
               <div key={trigger.id}>
@@ -2016,31 +2041,35 @@ function AgentOperations({
                 <Badge tone={trigger.enabled ? "success" : "neutral"}>
                   {trigger.enabled ? t("enabled") : t("disabled")}
                 </Badge>
-                {canBuild && <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() =>
-                    void action(() =>
-                      api.updateAgentTrigger(agent.id, trigger.id, {
-                        enabled: !trigger.enabled,
-                      }),
-                    )
-                  }
-                >
-                  {trigger.enabled ? t("disable") : t("enable")}
-                </Button>}
-                {canBuild && <Button
-                  size="icon"
-                  variant="ghost"
-                  aria-label={t("delete")}
-                  onClick={() =>
-                    void action(() =>
-                      api.deleteAgentTrigger(agent.id, trigger.id),
-                    )
-                  }
-                >
-                  <Trash2 />
-                </Button>}
+                {canBuild && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      void action(() =>
+                        api.updateAgentTrigger(agent.id, trigger.id, {
+                          enabled: !trigger.enabled,
+                        }),
+                      )
+                    }
+                  >
+                    {trigger.enabled ? t("disable") : t("enable")}
+                  </Button>
+                )}
+                {canBuild && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    aria-label={t("delete")}
+                    onClick={() =>
+                      void action(() =>
+                        api.deleteAgentTrigger(agent.id, trigger.id),
+                      )
+                    }
+                  >
+                    <Trash2 />
+                  </Button>
+                )}
               </div>
             ))}
           </div>

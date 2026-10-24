@@ -1,4 +1,10 @@
-import { Alert, ScrollView, StyleSheet } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -10,10 +16,13 @@ import { spacing } from "@comamessenger/tokens";
 import { useSignedIn } from "@/session/SessionProvider";
 import { ScreenHeader } from "@/ui/ScreenHeader";
 import { ChoiceRow, Divider, SettingsGroup, SwitchRow } from "@/ui/Settings";
+import { useTheme } from "@/lib/theme";
+import { Notice } from "@/ui/Notice";
 
 /** Account-wide notification preferences; the same ones the web edits. */
 export default function NotificationSettingsScreen() {
   const { t } = useTranslation();
+  const theme = useTheme();
   const { api } = useSignedIn();
   const queryClient = useQueryClient();
   const preferences = useQuery({
@@ -41,8 +50,23 @@ export default function NotificationSettingsScreen() {
   const set = (change: UpdatePreferencesRequest) => update.mutate(change);
 
   return (
-    <SafeAreaView edges={["top"]} style={styles.screen}>
+    <SafeAreaView
+      edges={["top", "bottom"]}
+      style={[styles.screen, { backgroundColor: theme.canvas }]}
+    >
       <ScreenHeader title={t("settingsNotifications")} />
+      {preferences.isPending && (
+        <ActivityIndicator color={theme.muted} style={styles.loader} />
+      )}
+      {preferences.isError && !value && (
+        <View style={styles.content}>
+          <Notice
+            title={t("loadFailed")}
+            actionLabel={t("retry")}
+            onAction={() => void preferences.refetch()}
+          />
+        </View>
+      )}
       {value && (
         <ScrollView contentContainerStyle={styles.content}>
           <SettingsGroup
@@ -122,5 +146,12 @@ function ChoiceRowWithDivider({
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  content: { padding: spacing[4], gap: spacing[5] },
+  content: {
+    padding: spacing[4],
+    gap: spacing[5],
+    width: "100%",
+    maxWidth: 640,
+    alignSelf: "center",
+  },
+  loader: { marginTop: spacing[10] },
 });

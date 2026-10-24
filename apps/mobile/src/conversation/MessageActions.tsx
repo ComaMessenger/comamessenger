@@ -53,7 +53,7 @@ export function MessageActions({
       ]}
     >
       {icon}
-      <Text size={17} tone={danger ? "danger" : "default"}>
+      <Text size={16} tone={danger ? "danger" : "default"} style={styles.label}>
         {label}
       </Text>
     </Pressable>
@@ -79,20 +79,31 @@ export function MessageActions({
           styles.sheet,
           {
             backgroundColor: theme.surface,
+            borderColor: theme.border,
             paddingBottom: insets.bottom + spacing[2],
           },
         ]}
       >
-        <View style={styles.quick}>
+        <View style={[styles.quick, { borderBottomColor: theme.border }]}>
           {quickReactions.map((emoji) => (
             <Pressable
               key={emoji}
               accessibilityRole="button"
               accessibilityLabel={emoji}
               onPress={() => onReact(emoji)}
-              style={[styles.emoji, { backgroundColor: theme.sidebar }]}
+              style={({ pressed }) => [
+                styles.emoji,
+                {
+                  backgroundColor: pressed
+                    ? theme.surfaceSelected
+                    : theme.sidebar,
+                  borderColor: theme.border,
+                },
+              ]}
             >
-              <Text size={24}>{emoji}</Text>
+              <Text size={24} allowFontScaling={false}>
+                {emoji}
+              </Text>
             </Pressable>
           ))}
         </View>
@@ -136,17 +147,24 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     paddingTop: spacing[4],
+    borderWidth: 1,
+    paddingHorizontal: spacing[2],
   },
   quick: {
     flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing[1],
     justifyContent: "space-between",
     paddingHorizontal: spacing[4],
     paddingBottom: spacing[3],
+    marginBottom: spacing[2],
+    borderBottomWidth: 1,
   },
   emoji: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.full,
+    width: 44,
+    height: 44,
+    borderWidth: 1,
+    borderRadius: radius.md,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -156,5 +174,7 @@ const styles = StyleSheet.create({
     gap: spacing[4],
     minHeight: 52,
     paddingHorizontal: spacing[5],
+    borderRadius: radius.md,
   },
+  label: { flex: 1 },
 });

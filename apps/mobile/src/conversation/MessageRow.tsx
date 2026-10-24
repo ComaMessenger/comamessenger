@@ -131,12 +131,18 @@ export const MessageRow = memo(function MessageRow({
               </Text>
               {agent && (
                 <View
-                  style={[styles.tag, { backgroundColor: theme.primarySoft }]}
+                  style={[
+                    styles.tag,
+                    {
+                      backgroundColor: theme.sidebar,
+                      borderColor: theme.border,
+                    },
+                  ]}
                 >
                   <Text
-                    weight="bold"
+                    weight="medium"
                     size={10}
-                    tone="primary"
+                    tone="muted"
                     style={styles.tagText}
                   >
                     {t("agentTag")}
@@ -213,7 +219,7 @@ export const MessageRow = memo(function MessageRow({
                     {
                       backgroundColor: group.own
                         ? theme.primarySoft
-                        : theme.surface,
+                        : theme.sidebar,
                       borderColor: group.own ? theme.primary : theme.border,
                     },
                   ]}
@@ -231,11 +237,15 @@ export const MessageRow = memo(function MessageRow({
               accessibilityRole="button"
               onPress={() => onThread(message)}
               onLongPress={openActions}
-              style={styles.inline}
-              hitSlop={8}
+              style={[styles.inline, styles.thread]}
             >
               <MessagesSquare size={18} color={theme.primary} />
-              <Text weight="semibold" size={14} tone="primary">
+              <Text
+                weight="semibold"
+                size={14}
+                tone="primary"
+                style={styles.shrink}
+              >
                 {t("threadReplies", { count: message.thread_reply_count })}
               </Text>
             </Pressable>
@@ -262,15 +272,15 @@ export const MessageRow = memo(function MessageRow({
                   <Text tone="danger" size={13}>
                     {t("notSent")}
                   </Text>
-                  <Text
+                  <Pressable
                     accessibilityRole="button"
-                    tone="primary"
-                    weight="semibold"
-                    size={13}
+                    style={styles.retry}
                     onPress={onRetry}
                   >
-                    {t("retry")}
-                  </Text>
+                    <Text tone="primary" weight="semibold" size={13}>
+                      {t("retry")}
+                    </Text>
+                  </Pressable>
                 </>
               )}
             </View>
@@ -286,21 +296,28 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing[3],
     paddingHorizontal: spacing[4],
-    paddingTop: spacing[2],
-    paddingBottom: spacing[1],
+    paddingTop: spacing[3],
+    paddingBottom: spacing[2],
+    minHeight: 44,
   },
   rowGrouped: { paddingTop: 0 },
   gutter: { width: 34 },
   content: { flex: 1, gap: spacing[1] },
-  meta: { flexDirection: "row", alignItems: "center", gap: spacing[2] },
+  meta: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: spacing[2],
+  },
   shrink: { flexShrink: 1 },
   tag: {
-    height: 18,
-    paddingHorizontal: 7,
-    borderRadius: 6,
+    minHeight: 20,
+    paddingHorizontal: spacing[1],
+    borderRadius: radius.sm,
+    borderWidth: 1,
     justifyContent: "center",
   },
-  tagText: { textTransform: "uppercase", letterSpacing: 0.4 },
+  tagText: { letterSpacing: 0.2 },
   inline: { flexDirection: "row", alignItems: "center", gap: spacing[1] },
   quote: {
     borderLeftWidth: 2,
@@ -312,13 +329,21 @@ const styles = StyleSheet.create({
   italic: { fontStyle: "italic" },
   reactions: { flexDirection: "row", flexWrap: "wrap", gap: spacing[1] },
   chip: {
-    minHeight: 28,
-    paddingHorizontal: 10,
-    borderRadius: radius.full,
+    minHeight: 44,
+    minWidth: 44,
+    paddingHorizontal: spacing[2],
+    borderRadius: radius.md,
     borderWidth: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
+  },
+  thread: { minHeight: 44, alignSelf: "flex-start", gap: spacing[2] },
+  retry: {
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: "center",
+    paddingHorizontal: spacing[2],
   },
   swipeAction: { width: 64, alignItems: "center", justifyContent: "center" },
 });

@@ -31,7 +31,10 @@ function ImageAttachment({
       accessibilityRole="imagebutton"
       accessibilityLabel={file.name}
       onPress={onOpen}
-      style={[styles.image, { backgroundColor: theme.sidebar }]}
+      style={[
+        styles.image,
+        { backgroundColor: theme.sidebar, borderColor: theme.border },
+      ]}
     >
       {source && (
         <Image
@@ -76,8 +79,13 @@ function FileCard({ api, file }: { api: MessengerAPI; file: FileMetadata }) {
         },
       ]}
     >
-      <View style={[styles.icon, { backgroundColor: theme.primarySoft }]}>
-        <FileText size={20} color={theme.primary} />
+      <View
+        style={[
+          styles.icon,
+          { backgroundColor: theme.sidebar, borderColor: theme.border },
+        ]}
+      >
+        <FileText size={20} color={theme.muted} />
       </View>
       <View style={styles.grow}>
         <Text weight="medium" size={15} numberOfLines={1}>
@@ -133,7 +141,7 @@ export function MessageFiles({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={t("close")}
-              hitSlop={12}
+              style={styles.viewerButton}
               onPress={() => setViewing(null)}
             >
               <X size={26} color="#ffffff" />
@@ -142,7 +150,7 @@ export function MessageFiles({
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={t("share")}
-                hitSlop={12}
+                style={styles.viewerButton}
                 onPress={() =>
                   void openAttachment(api, viewing).catch(() =>
                     Alert.alert(t("fileUnavailable")),
@@ -172,9 +180,11 @@ const styles = StyleSheet.create({
   files: { gap: spacing[2] },
   gallery: { flexDirection: "row", flexWrap: "wrap", gap: spacing[1] },
   image: {
-    width: 220,
+    width: "100%",
+    maxWidth: 280,
     height: 160,
-    borderRadius: radius.lg,
+    borderRadius: radius.md,
+    borderWidth: 1,
     overflow: "hidden",
   },
   card: {
@@ -185,15 +195,23 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: 1,
     maxWidth: 320,
+    minHeight: 64,
   },
   icon: {
     width: 36,
     height: 36,
     borderRadius: radius.md,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
   grow: { flex: 1 },
+  viewerButton: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   viewer: { flex: 1, backgroundColor: "#000000" },
   viewerBar: {
     flexDirection: "row",

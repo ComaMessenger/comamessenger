@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Pressable,
   ScrollView,
@@ -30,7 +30,7 @@ import { Avatar } from "@/ui/Avatar";
 import { Text, fonts, maxTextScale } from "@/ui/Text";
 import type { Attachment } from "@/files/useAttachments";
 
-const inputMinHeight = 40;
+const inputMinHeight = 52;
 const inputMaxHeight = 140;
 
 export type ComposerContext =
@@ -71,11 +71,12 @@ export function Composer({
   const { t } = useTranslation();
   const theme = useTheme();
   const input = useRef<TextInput>(null);
+  const [focused, setFocused] = useState(false);
   const draft = useMemo(() => decodeMentions(body), [body]);
   const { fontScale } = useWindowDimensions();
   const emptyHeight = Math.max(
     inputMinHeight,
-    Math.ceil(22 * Math.min(fontScale, maxTextScale)) + 16,
+    Math.ceil(22 * Math.min(fontScale, maxTextScale)) + spacing[6],
   );
   const uploading = attachments.some((item) => item.status === "uploading");
   const canSend =
@@ -142,6 +143,8 @@ export function Composer({
                 seed={member.actor_id}
                 size={28}
                 agent={member.type === "agent"}
+                actorID={member.actor_id}
+                avatarVersion={member.avatar_version}
               />
               <Text
                 weight="medium"
@@ -151,7 +154,12 @@ export function Composer({
               >
                 {member.display_name}
               </Text>
-              <Text tone="subtle" size={14}>
+              <Text
+                tone="subtle"
+                size={14}
+                numberOfLines={1}
+                style={styles.handle}
+              >
                 @{member.handle}
               </Text>
             </Pressable>
@@ -161,7 +169,10 @@ export function Composer({
       <View
         style={[
           styles.card,
-          { backgroundColor: theme.surface, borderColor: theme.border },
+          {
+            backgroundColor: theme.surface,
+            borderColor: focused ? theme.primary : theme.borderStrong,
+          },
         ]}
       >
         {context && (
@@ -184,7 +195,7 @@ export function Composer({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={t("cancelReply")}
-              hitSlop={10}
+              style={styles.cancel}
               onPress={onCancelContext}
             >
               <X size={18} color={theme.subtle} />
@@ -257,54 +268,62 @@ export function Composer({
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={t("removeAttachment")}
-                    hitSlop={8}
                     onPress={() => onRemoveAttachment?.(item.id)}
                     style={[
                       styles.remove,
                       { backgroundColor: theme.foreground },
                     ]}
                   >
-                    <X size={12} color={theme.canvas} />
+                    <X size={16} color={theme.canvas} />
                   </Pressable>
                 </View>
               );
             })}
           </ScrollView>
         )}
-        <View style={styles.inputRow}>
-          {onAttach && context?.kind !== "edit" && (
-            <Pressable
-              testID="composer-attach"
-              accessibilityRole="button"
-              accessibilityLabel={t("attach")}
-              hitSlop={6}
-              onPress={onAttach}
-              style={styles.attach}
-            >
-              <Paperclip size={22} color={theme.muted} />
-            </Pressable>
-          )}
-          <TextInput
-            ref={input}
-            testID="composer-input"
-            value={draft.text}
-            onChangeText={(text) =>
-              onChangeBody(encodeMentions(updateMentionText(draft, text)))
-            }
-            placeholder={placeholder ?? t("messagePlaceholder")}
-            placeholderTextColor={theme.subtle}
-            accessibilityLabel={placeholder ?? t("messagePlaceholder")}
-            selectionColor={theme.primary}
-            multiline
-            maxFontSizeMultiplier={maxTextScale}
-            style={[
-              styles.input,
-              { color: theme.foreground },
-              // iOS keeps a multiline input at its tallest size after the
-              // text is cleared; an empty field is pinned back to one line.
-              !draft.text && { height: emptyHeight },
-            ]}
-          />
+        <TextInput
+          ref={input}
+          testID="composer-input"
+          value={draft.text}
+          onChangeText={(text) =>
+            onChangeBody(encodeMentions(updateMentionText(draft, text)))
+          }
+          placeholder={placeholder ?? t("messagePlaceholder")}
+          placeholderTextColor={theme.subtle}
+          accessibilityLabel={placeholder ?? t("messagePlaceholder")}
+          selectionColor={theme.primary}
+          multiline
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          maxFontSizeMultiplier={maxTextScale}
+          style={[
+            styles.input,
+            { color: theme.foreground },
+            // iOS keeps a multiline input at its tallest size after the
+            // text is cleared; an empty field is pinned back to one line.
+            !draft.text && { height: emptyHeight },
+          ]}
+        />
+        <View
+          style={[
+            styles.toolbar,
+            { backgroundColor: theme.sidebar, borderTopColor: theme.border },
+          ]}
+        >
+          <View style={styles.tools}>
+            {onAttach && context?.kind !== "edit" && (
+              <Pressable
+                testID="composer-attach"
+                accessibilityRole="button"
+                accessibilityLabel={t("attach")}
+                hitSlop={6}
+                onPress={onAttach}
+                style={styles.attach}
+              >
+                <Paperclip size={22} color={theme.muted} />
+              </Pressable>
+            )}
+          </View>
           <Pressable
             testID="composer-send"
             accessibilityRole="button"
@@ -314,15 +333,34 @@ export function Composer({
             accessibilityState={{ disabled: !canSend }}
             disabled={!canSend}
             onPress={onSend}
-            style={[
+            style={({ pressed }) => [
               styles.send,
-              { backgroundColor: canSend ? theme.primary : theme.border },
+              {
+                backgroundColor: canSend
+                  ? pressed
+                    ? theme.actionHover
+                    : theme.action
+                  : theme.surfaceSelected,
+              },
             ]}
           >
+            <Text
+              size={14}
+              weight="medium"
+              style={{ color: canSend ? theme.onAction : theme.subtle }}
+            >
+              {context?.kind === "edit" ? t("save") : t("send")}
+            </Text>
             {context?.kind === "edit" ? (
-              <Check size={20} color={theme.onPrimary} />
+              <Check
+                size={20}
+                color={canSend ? theme.onAction : theme.subtle}
+              />
             ) : (
-              <ArrowUp size={20} color={theme.onPrimary} />
+              <ArrowUp
+                size={20}
+                color={canSend ? theme.onAction : theme.subtle}
+              />
             )}
           </Pressable>
         </View>
@@ -339,11 +377,8 @@ const styles = StyleSheet.create({
   },
   card: {
     borderWidth: 1,
-    borderRadius: radius.xl,
-    paddingLeft: spacing[4],
-    paddingRight: spacing[2],
-    paddingVertical: spacing[2],
-    gap: spacing[2],
+    borderRadius: radius.lg,
+    overflow: "hidden",
   },
   context: {
     flexDirection: "row",
@@ -351,22 +386,41 @@ const styles = StyleSheet.create({
     gap: spacing[2],
     borderLeftWidth: 2,
     paddingLeft: spacing[2],
-    marginTop: spacing[1],
+    marginTop: spacing[3],
+    marginHorizontal: spacing[3],
   },
-  inputRow: { flexDirection: "row", alignItems: "flex-end", gap: spacing[2] },
+  toolbar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderTopWidth: 1,
+    padding: spacing[1],
+    gap: spacing[2],
+  },
+  tools: { flexDirection: "row", alignItems: "center" },
+  handle: { maxWidth: "45%", flexShrink: 1 },
+  cancel: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   input: {
-    flex: 1,
     fontFamily: fonts.regular,
-    fontSize: 17,
+    fontSize: 16,
     minHeight: inputMinHeight,
     maxHeight: inputMaxHeight,
-    paddingTop: spacing[2],
-    paddingBottom: spacing[2],
+    paddingHorizontal: spacing[3],
+    paddingTop: spacing[3],
+    paddingBottom: spacing[3],
+    textAlignVertical: "top",
   },
   send: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.lg,
+    flexDirection: "row",
+    minHeight: 44,
+    paddingHorizontal: spacing[3],
+    gap: spacing[2],
+    borderRadius: radius.md,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -386,15 +440,20 @@ const styles = StyleSheet.create({
   grow: { flex: 1 },
   readonly: { padding: spacing[4], borderTopWidth: StyleSheet.hairlineWidth },
   attach: {
-    width: 36,
-    height: 40,
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
     alignItems: "center",
     justifyContent: "center",
   },
-  attachments: { gap: spacing[2], paddingTop: spacing[1] },
+  attachments: {
+    gap: spacing[2],
+    paddingTop: spacing[3],
+    paddingHorizontal: spacing[3],
+  },
   attachment: {
-    width: 64,
-    height: 64,
+    width: 88,
+    height: 88,
     borderRadius: radius.md,
     borderWidth: 1,
     overflow: "hidden",
@@ -413,11 +472,11 @@ const styles = StyleSheet.create({
   },
   remove: {
     position: "absolute",
-    top: 3,
-    right: 3,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    top: 0,
+    right: 0,
+    width: 44,
+    height: 44,
+    borderBottomLeftRadius: radius.md,
     alignItems: "center",
     justifyContent: "center",
   },

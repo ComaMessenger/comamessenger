@@ -39,7 +39,11 @@ export function ResetPasswordScreen({
       await api.resetPassword({ token, new_password: password });
       setComplete(true);
     } catch (cause) {
-      if (cause instanceof APIError && cause.status >= 400 && cause.status < 500)
+      if (
+        cause instanceof APIError &&
+        cause.status >= 400 &&
+        cause.status < 500
+      )
         setExpired(true);
       else setError(messageOf(cause));
     } finally {
@@ -54,8 +58,8 @@ export function ResetPasswordScreen({
         header={
           <>
             <AuthLogo />
-            <div className="auth-ink-result">
-              <span className="auth-ink-result__icon auth-ink-result__icon--success">
+            <div className="auth-result">
+              <span className="auth-result__icon auth-result__icon--success">
                 <Check strokeWidth={2.6} aria-hidden="true" />
               </span>
               <h1 id="auth-title">{t("resetDoneTitle")}</h1>
@@ -65,7 +69,7 @@ export function ResetPasswordScreen({
         }
       >
         <div className="auth-form__actions">
-          <Button variant="primary" size="lg" block onClick={onComplete}>
+          <Button variant="primary" size="md" block onClick={onComplete}>
             {t("backToLogin")}
           </Button>
         </div>
@@ -75,13 +79,26 @@ export function ResetPasswordScreen({
   return (
     <AuthLayout
       title={t("resetTitle")}
-      lead={!expired && workspaceName ? t("resetLead", { workspace: workspaceName }) : undefined}
+      lead={
+        !expired && workspaceName
+          ? t("resetLead", { workspace: workspaceName })
+          : undefined
+      }
     >
-      <form className="auth-form" onSubmit={submit}>
+      <form className="auth-form" onSubmit={submit} aria-busy={pending}>
         {expired && (
-          <InlineError title={t("resetExpiredTitle")} hint={t("resetExpiredHint")} />
+          <InlineError
+            title={t("resetExpiredTitle")}
+            hint={t("resetExpiredHint")}
+          />
         )}
-        <div className={expired ? "auth-form__fields auth-form__fields--muted" : "auth-form__fields"}>
+        <div
+          className={
+            expired
+              ? "auth-form__fields auth-form__fields--muted"
+              : "auth-form__fields"
+          }
+        >
           <div className="auth-form__field">
             <PasswordField
               label={t("newPassword")}
@@ -99,7 +116,10 @@ export function ResetPasswordScreen({
               <PasswordMeter
                 value={password}
                 minimum={passwordMinimum}
-                label={t("passwordProgress", { count: password.length, minimum: passwordMinimum })}
+                label={t("passwordProgress", {
+                  count: password.length,
+                  minimum: passwordMinimum,
+                })}
                 strongLabel={t("passwordStrong")}
               />
             )}
@@ -123,7 +143,7 @@ export function ResetPasswordScreen({
           <Button
             type="submit"
             variant="primary"
-            size="lg"
+            size="md"
             block
             pending={pending}
             disabled={!canSubmit}

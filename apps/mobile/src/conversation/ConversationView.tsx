@@ -214,17 +214,20 @@ export function ConversationView({
     <SafeAreaView
       testID="conversation"
       edges={["top", "bottom"]}
-      style={styles.screen}
+      style={[styles.screen, { backgroundColor: theme.surface }]}
     >
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable
           testID="conversation-back"
           accessibilityRole="button"
           accessibilityLabel={t("back")}
-          hitSlop={12}
+          style={({ pressed }) => [
+            styles.back,
+            pressed && { backgroundColor: theme.surfaceSelected },
+          ]}
           onPress={() => router.back()}
         >
-          <ChevronLeft size={28} color={theme.primary} />
+          <ChevronLeft size={24} color={theme.muted} />
         </Pressable>
         {chat && !inThread && (
           <Avatar
@@ -233,6 +236,14 @@ export function ConversationView({
             size={36}
             glyph={chat.kind === "channel" ? "#" : undefined}
             agent={chat.direct_peer?.type === "agent"}
+            actorID={
+              chat.kind === "direct" ? chat.direct_peer?.actor_id : undefined
+            }
+            avatarVersion={
+              chat.kind === "direct"
+                ? chat.direct_peer?.avatar_version
+                : undefined
+            }
           />
         )}
         <View style={styles.grow}>
@@ -359,16 +370,16 @@ export function ConversationView({
                         <View
                           style={[
                             styles.line,
-                            { backgroundColor: theme.danger },
+                            { backgroundColor: theme.primary },
                           ]}
                         />
-                        <Text tone="danger" size={13} weight="semibold">
+                        <Text tone="primary" size={13} weight="semibold">
                           {t("newMessages")}
                         </Text>
                         <View
                           style={[
                             styles.line,
-                            { backgroundColor: theme.danger },
+                            { backgroundColor: theme.primary },
                           ]}
                         />
                       </View>
@@ -508,10 +519,18 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing[3],
-    paddingHorizontal: spacing[3],
+    gap: spacing[2],
+    paddingHorizontal: spacing[2],
     paddingVertical: spacing[2],
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 1,
+    minHeight: 64,
+  },
+  back: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.md,
   },
   grow: { flex: 1 },
   center: { marginTop: spacing[10] },
@@ -532,7 +551,7 @@ const styles = StyleSheet.create({
     bottom: spacing[3],
     width: 44,
     height: 44,
-    borderRadius: radius.full,
+    borderRadius: radius.md,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",

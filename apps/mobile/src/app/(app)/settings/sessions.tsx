@@ -16,6 +16,8 @@ import { useTheme } from "@/lib/theme";
 import { ScreenHeader } from "@/ui/ScreenHeader";
 import { Divider, SettingsGroup } from "@/ui/Settings";
 import { Text } from "@/ui/Text";
+import { Notice } from "@/ui/Notice";
+import { MonitorSmartphone } from "lucide-react-native";
 
 /** Short device name from a user agent: app or browser, and the platform. */
 function deviceName(userAgent: string): string {
@@ -83,8 +85,9 @@ export default function SessionsScreen() {
     <View key={session.id}>
       {index > 0 && <Divider />}
       <View style={styles.row}>
+        <MonitorSmartphone size={20} color={theme.muted} />
         <View style={styles.grow}>
-          <Text size={17} weight="medium">
+          <Text size={16} weight="medium">
             {deviceName(session.user_agent)}
           </Text>
           <Text tone="muted" size={14}>
@@ -102,14 +105,14 @@ export default function SessionsScreen() {
         {!session.current && (
           <Pressable
             accessibilityRole="button"
-            hitSlop={8}
+            style={styles.inlineAction}
             onPress={() =>
               confirm(t("revokeSessionConfirm"), () =>
                 revoke.mutate(session.id),
               )
             }
           >
-            <Text tone="danger" weight="semibold" size={16}>
+            <Text tone="danger" weight="medium" size={14}>
               {t("revokeSession")}
             </Text>
           </Pressable>
@@ -119,10 +122,21 @@ export default function SessionsScreen() {
   );
 
   return (
-    <SafeAreaView edges={["top"]} style={styles.screen}>
+    <SafeAreaView
+      edges={["top", "bottom"]}
+      style={[styles.screen, { backgroundColor: theme.canvas }]}
+    >
       <ScreenHeader title={t("sessions")} />
       {sessions.isPending ? (
         <ActivityIndicator style={styles.loader} color={theme.muted} />
+      ) : sessions.isError ? (
+        <View style={styles.content}>
+          <Notice
+            title={t("loadFailed")}
+            actionLabel={t("retry")}
+            onAction={() => void sessions.refetch()}
+          />
+        </View>
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
           <SettingsGroup hint={t("sessionsHint")}>
@@ -141,7 +155,7 @@ export default function SessionsScreen() {
                   }
                   style={styles.row}
                 >
-                  <Text tone="danger" weight="medium" size={17}>
+                  <Text tone="danger" weight="medium" size={16}>
                     {t("revokeOthers")}
                   </Text>
                 </Pressable>
@@ -156,7 +170,13 @@ export default function SessionsScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  content: { padding: spacing[4], gap: spacing[5] },
+  content: {
+    padding: spacing[4],
+    gap: spacing[5],
+    width: "100%",
+    maxWidth: 640,
+    alignSelf: "center",
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -166,5 +186,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[2],
   },
   grow: { flex: 1 },
+  inlineAction: { minHeight: 44, minWidth: 44, justifyContent: "center" },
   loader: { marginTop: spacing[10] },
 });

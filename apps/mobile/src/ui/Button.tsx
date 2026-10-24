@@ -23,11 +23,16 @@ export function Button({
   const inactive = disabled || pending;
   const background =
     variant === "primary"
-      ? theme.primary
+      ? theme.action
       : variant === "secondary"
         ? theme.surface
         : "transparent";
-  const foreground = variant === "primary" ? theme.onPrimary : theme.primary;
+  const foreground =
+    variant === "primary"
+      ? theme.onAction
+      : variant === "ghost"
+        ? theme.primary
+        : theme.foreground;
   return (
     <Pressable
       accessibilityRole="button"
@@ -37,16 +42,24 @@ export function Button({
       style={({ pressed }) => [
         styles.button,
         {
-          backgroundColor: background,
+          backgroundColor: pressed
+            ? variant === "primary"
+              ? theme.actionHover
+              : theme.surfaceSelected
+            : background,
           borderColor: variant === "secondary" ? theme.border : "transparent",
-          opacity: inactive && !pending ? 0.5 : pressed ? 0.85 : 1,
+          opacity: inactive && !pending ? 0.5 : 1,
         },
       ]}
     >
       {pending ? (
         <ActivityIndicator color={foreground} />
       ) : (
-        <Text weight="semibold" size={17} style={{ color: foreground }}>
+        <Text
+          weight="medium"
+          size={16}
+          style={{ color: foreground, textAlign: "center" }}
+        >
           {label}
         </Text>
       )}
@@ -56,11 +69,12 @@ export function Button({
 
 const styles = StyleSheet.create({
   button: {
-    minHeight: 52,
-    borderRadius: radius.full,
+    minHeight: 48,
+    borderRadius: radius.md,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: spacing[5],
+    paddingVertical: spacing[2],
   },
 });

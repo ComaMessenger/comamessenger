@@ -50,12 +50,15 @@ export default function ThreadsScreen() {
   );
 
   return (
-    <SafeAreaView edges={["top"]} style={styles.screen}>
+    <SafeAreaView
+      edges={["top"]}
+      style={[styles.screen, { backgroundColor: theme.surface }]}
+    >
       <Text
         accessibilityRole="header"
-        weight="bold"
-        size={24}
-        style={styles.title}
+        weight="semibold"
+        size={22}
+        style={[styles.title, { borderBottomColor: theme.border }]}
       >
         {t("tabThreads")}
       </Text>
@@ -99,12 +102,15 @@ export default function ThreadsScreen() {
                 </Text>
                 {count > 0 && (
                   <View
-                    style={[styles.badge, { backgroundColor: theme.primary }]}
+                    style={[
+                      styles.badge,
+                      { backgroundColor: theme.primarySoft },
+                    ]}
                   >
                     <Text
                       size={13}
                       weight="semibold"
-                      style={{ color: theme.onPrimary }}
+                      style={{ color: theme.primary }}
                     >
                       {count > 99 ? "99+" : count}
                     </Text>
@@ -157,22 +163,23 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   title: {
     paddingHorizontal: spacing[4],
-    paddingTop: spacing[2],
-    paddingBottom: spacing[3],
+    paddingTop: spacing[4],
+    paddingBottom: spacing[4],
+    borderBottomWidth: 1,
   },
   row: {
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
-    gap: spacing[1],
+    gap: spacing[2],
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   line: { flexDirection: "row", alignItems: "center", gap: spacing[2] },
   grow: { flex: 1 },
   badge: {
     minWidth: 22,
-    height: 22,
+    minHeight: 22,
     paddingHorizontal: 6,
-    borderRadius: radius.full,
+    borderRadius: radius.sm,
     alignItems: "center",
     justifyContent: "center",
   },

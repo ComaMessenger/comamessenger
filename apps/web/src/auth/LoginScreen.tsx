@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import {
   Button,
   Field,
-  InkCard,
   InlineError,
   InlineSuccess,
   PasswordField,
@@ -100,9 +99,12 @@ export function LoginScreen({
 
   if (recovery)
     return (
-      <AuthLayout title={t("forgotPassword")} lead={passwordRecoveryAvailable ? t("recoveryLead") : undefined}>
+      <AuthLayout
+        title={t("forgotPassword")}
+        lead={passwordRecoveryAvailable ? t("recoveryLead") : undefined}
+      >
         {passwordRecoveryAvailable ? (
-          <form className="auth-form" onSubmit={recover}>
+          <form className="auth-form" onSubmit={recover} aria-busy={pending}>
             <Field
               label={t("email")}
               name="email"
@@ -116,13 +118,16 @@ export function LoginScreen({
             />
             {errorBlock}
             {recoverySent && (
-              <InlineSuccess title={t("recoverySentTitle")} hint={t("recoverySentHint")} />
+              <InlineSuccess
+                title={t("recoverySentTitle")}
+                hint={t("recoverySentHint")}
+              />
             )}
             <div className="auth-form__actions">
               <Button
                 type="submit"
                 variant={recoverySent ? "secondary" : "primary"}
-                size="lg"
+                size="md"
                 block
                 pending={pending}
               >
@@ -132,18 +137,28 @@ export function LoginScreen({
                     ? t("recoverySendAgain")
                     : t("sendRecoveryLink")}
               </Button>
-              <Button variant="ghost" size="md" block disabled={pending} onClick={switchToLogin}>
+              <Button
+                variant="ghost"
+                size="md"
+                block
+                disabled={pending}
+                onClick={switchToLogin}
+              >
                 {t("backToLoginShort")}
               </Button>
             </div>
           </form>
         ) : (
           <div className="auth-form">
-            <InkCard icon={<UserRound aria-hidden="true" />} title={t("recoveryUnavailableTitle")}>
-              {t("recoveryUnavailableText")}
-            </InkCard>
+            <div className="auth-notice">
+              <UserRound aria-hidden="true" />
+              <div>
+                <strong>{t("recoveryUnavailableTitle")}</strong>
+                <p>{t("recoveryUnavailableText")}</p>
+              </div>
+            </div>
             <div className="auth-form__actions">
-              <Button variant="primary" size="lg" block onClick={switchToLogin}>
+              <Button variant="primary" size="md" block onClick={switchToLogin}>
                 {t("backToLoginShort")}
               </Button>
             </div>
@@ -154,7 +169,7 @@ export function LoginScreen({
 
   return (
     <AuthLayout title={t("signIn")} lead={lead}>
-      <form className="auth-form" onSubmit={submit}>
+      <form className="auth-form" onSubmit={submit} aria-busy={pending}>
         <Field
           label={t("email")}
           name="email"
@@ -179,7 +194,13 @@ export function LoginScreen({
         />
         {errorBlock}
         <div className="auth-form__actions">
-          <Button type="submit" variant="primary" size="lg" block pending={pending}>
+          <Button
+            type="submit"
+            variant="primary"
+            size="md"
+            block
+            pending={pending}
+          >
             {pending ? t("loggingIn") : t("login")}
           </Button>
           <Button

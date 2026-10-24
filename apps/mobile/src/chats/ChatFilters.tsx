@@ -38,13 +38,16 @@ export function ChatFilters({
             onPress={() => onChange(filter)}
             style={[
               styles.chip,
-              { backgroundColor: selected ? theme.primary : theme.sidebar },
+              {
+                backgroundColor: selected ? theme.surface : theme.sidebar,
+                borderColor: selected ? theme.borderStrong : "transparent",
+              },
             ]}
           >
             <Text
               weight="medium"
               size={15}
-              style={{ color: selected ? theme.onPrimary : theme.foreground }}
+              style={{ color: selected ? theme.primary : theme.muted }}
             >
               {t(labels[filter])}
             </Text>
@@ -56,12 +59,13 @@ export function ChatFilters({
 }
 
 const styles = StyleSheet.create({
-  row: { gap: spacing[2], paddingHorizontal: spacing[4] },
+  row: { gap: spacing[1], paddingHorizontal: spacing[4] },
   chip: {
-    minHeight: 36,
+    minHeight: 44,
     paddingVertical: spacing[1],
-    paddingHorizontal: spacing[4],
-    borderRadius: radius.full,
+    paddingHorizontal: spacing[3],
+    borderRadius: radius.md,
+    borderWidth: 1,
     justifyContent: "center",
   },
 });

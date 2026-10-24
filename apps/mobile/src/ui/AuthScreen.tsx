@@ -7,7 +7,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { spacing } from "@comamessenger/tokens";
+import { radius, spacing } from "@comamessenger/tokens";
 import { useTheme } from "@/lib/theme";
 import { Text } from "./Text";
 import { WorkspaceMark } from "./WorkspaceMark";
@@ -35,18 +35,37 @@ export function AuthScreen({
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
-          <WorkspaceMark name={markName} />
-          <View style={styles.heading}>
-            <Text accessibilityRole="header" weight="bold" size={32}>
-              {title}
-            </Text>
-            {lead ? (
-              <Text tone="muted" size={16}>
-                {lead}
+          <View style={styles.panel}>
+            <View style={styles.brand}>
+              <WorkspaceMark name={markName} size={36} />
+              <Text weight="semibold" size={18} style={styles.brandName}>
+                {markName}
               </Text>
-            ) : null}
+            </View>
+            <View
+              style={[
+                styles.card,
+                { backgroundColor: theme.surface, borderColor: theme.border },
+              ]}
+            >
+              <View style={styles.heading}>
+                <Text
+                  accessibilityRole="header"
+                  weight="semibold"
+                  size={26}
+                  style={styles.title}
+                >
+                  {title}
+                </Text>
+                {lead ? (
+                  <Text tone="muted" size={16}>
+                    {lead}
+                  </Text>
+                ) : null}
+              </View>
+              <View style={styles.form}>{children}</View>
+            </View>
           </View>
-          <View style={styles.form}>{children}</View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -56,11 +75,27 @@ export function AuthScreen({
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   content: {
-    paddingHorizontal: spacing[5],
+    flexGrow: 1,
+    paddingHorizontal: spacing[4],
     paddingTop: spacing[8],
     paddingBottom: spacing[8],
+    justifyContent: "center",
+  },
+  panel: { width: "100%", maxWidth: 480, alignSelf: "center", gap: spacing[6] },
+  brand: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[3],
+    paddingHorizontal: spacing[1],
+  },
+  brandName: { flex: 1 },
+  card: {
+    borderWidth: 1,
+    borderRadius: radius.xl,
+    padding: spacing[5],
     gap: spacing[6],
   },
+  title: { letterSpacing: -0.6 },
   heading: { gap: spacing[2] },
   form: { gap: spacing[4] },
 });

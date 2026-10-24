@@ -38,7 +38,8 @@ export function InviteScreen({
     try {
       await onAuthenticated(await api.acceptInvitation(token, input));
     } catch (cause) {
-      if (cause instanceof APIError && cause.status === 409) setHandleTaken(true);
+      if (cause instanceof APIError && cause.status === 409)
+        setHandleTaken(true);
       else if (
         cause instanceof APIError &&
         (cause.status === 404 || cause.status === 410 || cause.status === 422)
@@ -60,8 +61,8 @@ export function InviteScreen({
             <h1 id="auth-title" className="auth-card__title">
               {t("joinTitle")}
             </h1>
-            <div className="auth-ink-result">
-              <span className="auth-ink-result__icon">
+            <div className="auth-result">
+              <span className="auth-result__icon">
                 <Clock3 aria-hidden="true" />
               </span>
               <strong>{t("invitationInvalidTitle")}</strong>
@@ -71,7 +72,12 @@ export function InviteScreen({
         }
       >
         <div className="auth-form__actions">
-          <Button variant="primary" size="lg" block onClick={() => window.location.assign("/")}>
+          <Button
+            variant="primary"
+            size="md"
+            block
+            onClick={() => window.location.assign("/")}
+          >
             {t("goToLogin")}
           </Button>
         </div>
@@ -80,8 +86,14 @@ export function InviteScreen({
 
   return (
     <AuthLayout title={t("joinTitle")} lead={workspaceName || "Coma"}>
-      <form className="auth-form" onSubmit={submit}>
-        <Field label={t("displayName")} name="display_name" autoComplete="name" autoFocus disabled={pending} />
+      <form className="auth-form" onSubmit={submit} aria-busy={pending}>
+        <Field
+          label={t("displayName")}
+          name="display_name"
+          autoComplete="name"
+          autoFocus
+          disabled={pending}
+        />
         <Field
           label={t("bootstrapHandle")}
           name="handle"
@@ -96,7 +108,9 @@ export function InviteScreen({
             setHandleTaken(false);
           }}
           error={handleTaken ? t("joinHandleTaken") : undefined}
-          hint={t("joinHandleHint", { handle: handle.toLowerCase() || "maxim" })}
+          hint={t("joinHandleHint", {
+            handle: handle.toLowerCase() || "maxim",
+          })}
         />
         <PasswordField
           label={t("password")}
@@ -110,7 +124,13 @@ export function InviteScreen({
         />
         {error && <InlineError title={error} />}
         <div className="auth-form__actions">
-          <Button type="submit" variant="primary" size="lg" block pending={pending}>
+          <Button
+            type="submit"
+            variant="primary"
+            size="md"
+            block
+            pending={pending}
+          >
             {t("accept")}
           </Button>
         </div>

@@ -113,8 +113,10 @@ const message = {
   thread_reply_count: 0,
 };
 
-const chatRow = (page: import("@playwright/test").Page, name: RegExp | string) =>
-  page.locator(".chat-list").getByRole("button", { name });
+const chatRow = (
+  page: import("@playwright/test").Page,
+  name: RegExp | string,
+) => page.locator(".chat-list").getByRole("button", { name });
 
 async function mockMessenger(
   page: import("@playwright/test").Page,
@@ -232,6 +234,10 @@ async function mockMessenger(
       credentials_configured: false,
     },
   };
+  // Active fixtures must not expire as the wall clock advances.
+  const sessionExpiresAt = new Date(
+    Date.now() + 30 * 24 * 60 * 60 * 1000,
+  ).toISOString();
   let runtimeSessions = [
     {
       id: "session-current",
@@ -239,7 +245,7 @@ async function mockMessenger(
       ip_address: "127.0.0.1",
       created_at: "2026-08-19T00:00:00Z",
       last_seen_at: "2026-08-20T00:00:00Z",
-      expires_at: "2026-09-20T00:00:00Z",
+      expires_at: sessionExpiresAt,
       revoked_at: null as string | null,
       current: true,
     },
@@ -249,7 +255,7 @@ async function mockMessenger(
       ip_address: "10.0.0.2",
       created_at: "2026-08-19T00:00:00Z",
       last_seen_at: "2026-08-19T23:00:00Z",
-      expires_at: "2026-09-20T00:00:00Z",
+      expires_at: sessionExpiresAt,
       revoked_at: null as string | null,
       current: false,
     },
@@ -1048,7 +1054,8 @@ test("global navigation stays stable while utility pages replace content", async
     expect(workspaceMenuBox).not.toBeNull();
     expect(workspaceMenuBox!.width).toBe(280);
     const workspaceMenuGap =
-      workspaceMenuBox!.y - (workspaceButtonBox!.y + workspaceButtonBox!.height);
+      workspaceMenuBox!.y -
+      (workspaceButtonBox!.y + workspaceButtonBox!.height);
     expect(workspaceMenuGap).toBeGreaterThanOrEqual(4);
     expect(workspaceMenuGap).toBeLessThanOrEqual(8);
     await page.locator(".chat-list__head").click();
@@ -1393,7 +1400,7 @@ test("dark messenger shell uses flat charcoal elevation without glow", async ({
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute(
     "content",
-    "#181a1f",
+    "#151517",
   );
   await expect(page.locator('meta[name="viewport"]')).toHaveAttribute(
     "content",
@@ -1477,9 +1484,9 @@ test("mentions and reply previews never expose actor or message IDs", async ({
   });
   await page.goto("/chats");
   if (test.info().project.name === "phone")
-    await expect(
-      page.locator(".chat-list .chat-row__preview"),
-    ).toContainText("Лев: @Лев привет");
+    await expect(page.locator(".chat-list .chat-row__preview")).toContainText(
+      "Лев: @Лев привет",
+    );
   await expect(page.getByText(lev.actor_id)).toHaveCount(0);
   await chatRow(page, /Объявления/).click();
   await expect(page.locator(".message__quote")).toContainText(
@@ -1674,9 +1681,7 @@ test("chat and message actions stay contextual", async ({ page }) => {
   await page.getByRole("menuitem", { name: /^Переслать/ }).click();
   const forward = page.getByRole("dialog", { name: "Переслать сообщение" });
   await expect(forward.getByText("Добро пожаловать в Coma")).toBeVisible();
-  const forwardSubmit = forward.locator(
-    ".ui-dialog__foot .ui-button--primary",
-  );
+  const forwardSubmit = forward.locator(".ui-dialog__foot .ui-button--primary");
   await expect(forwardSubmit).toBeDisabled();
   await forward.getByRole("option", { name: /Объявления/ }).click();
   await expect(forwardSubmit).toBeEnabled();
@@ -2039,9 +2044,7 @@ test("custom status is edited from the profile menu", async ({ page }) => {
   await page.goto(phone ? "/more" : "/chats");
   await page.getByRole("button", { name: phone ? /^Статус/ : /Анна/ }).click();
   if (!phone)
-    await page
-      .getByRole("menuitem", { name: "Установить статус…" })
-      .click();
+    await page.getByRole("menuitem", { name: "Установить статус…" }).click();
   await page.getByLabel("Эмодзи статуса").click();
   await page
     .locator(".status-dialog__picker")
@@ -2194,7 +2197,10 @@ test("utility screens are master-detail on desktop and list-only on phones", asy
   await mockMessenger(page, {
     chatPatch: { kind: "group", role: "admin" },
     threads: [
-      { root: { ...message, id: "thread-root-1", body: "Всем привет!" }, reply_count: 1 },
+      {
+        root: { ...message, id: "thread-root-1", body: "Всем привет!" },
+        reply_count: 1,
+      },
     ],
   });
 
@@ -2205,25 +2211,33 @@ test("utility screens are master-detail on desktop and list-only on phones", asy
   if (phone) {
     await expect(page.locator(".directory__detail")).toHaveCount(0);
     await threadRow.click();
-    await expect(page).toHaveURL(new RegExp(`/chat/${chat.id}/thread/thread-root-1$`));
+    await expect(page).toHaveURL(
+      new RegExp(`/chat/${chat.id}/thread/thread-root-1$`),
+    );
   } else {
     // The first thread opens by itself so the workspace is never empty.
     const detail = page.locator(".directory__detail");
     await expect(detail.getByText("Тред в «Объявления»")).toBeVisible();
     await expect(detail.getByText("Ответ внутри треда")).toBeVisible();
-    await expect(detail.getByRole("textbox", { name: "Ответить в треде…" })).toBeVisible();
+    await expect(
+      detail.getByRole("textbox", { name: "Ответить в треде…" }),
+    ).toBeVisible();
     await threadRow.click();
     await expect(page).toHaveURL(/\/threads\/thread-root-1$/);
     await expect(page.locator(".directory-row--selected")).toHaveCount(1);
   }
 
   await page.goto("/members");
-  const memberRow = page.locator(".directory-row--member", { hasText: lev.display_name });
+  const memberRow = page.locator(".directory-row--member", {
+    hasText: lev.display_name,
+  });
   await expect(memberRow).toBeVisible();
   await memberRow.click();
   await expect(page).toHaveURL(new RegExp(`/members/${lev.actor_id}$`));
   const profile = page.locator(".member-profile");
-  await expect(profile.getByRole("heading", { name: lev.display_name })).toBeVisible();
+  await expect(
+    profile.getByRole("heading", { name: lev.display_name }),
+  ).toBeVisible();
   await expect(profile.getByRole("button", { name: "Написать" })).toBeVisible();
   if (phone) {
     await expect(page.locator(".directory-list")).toHaveCount(0);
@@ -2236,4 +2250,91 @@ test("utility screens are master-detail on desktop and list-only on phones", asy
   await page.goto("/important");
   await expect(page.getByRole("heading", { name: "Важные" })).toBeVisible();
   await expect(page.getByText("Нет важных сообщений")).toBeVisible();
+});
+
+test("Interface Lab utility headers remain inside the visible workspace", async ({
+  page,
+}) => {
+  await mockMessenger(page);
+  for (const path of [
+    "/settings/profile",
+    "/settings/notifications",
+    "/settings/security",
+    "/agents",
+  ]) {
+    await page.goto(path);
+    const heading = page.locator(".workspace h1").first();
+    await expect(heading).toBeVisible();
+    const box = await heading.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.y).toBeGreaterThanOrEqual(0);
+    expect(box!.y + box!.height).toBeLessThanOrEqual(
+      page.viewportSize()!.height,
+    );
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(page.viewportSize()!.width);
+    if (path === "/settings/profile") {
+      await expect(page).toHaveScreenshot("settings-profile.png", {
+        animations: "disabled",
+      });
+    }
+    if (path === "/agents") {
+      await expect(page).toHaveScreenshot("agents-overview.png", {
+        animations: "disabled",
+      });
+    }
+  }
+});
+
+test("tablet thread details and narrow agent hints keep usable widths", async ({
+  page,
+}) => {
+  test.skip(
+    test.info().project.name === "phone",
+    "explicit tablet and 320px viewport probes",
+  );
+  await page.setViewportSize({ width: 1024, height: 800 });
+  await mockMessenger(page, {
+    chatPatch: { kind: "group", role: "admin" },
+    threads: [
+      {
+        root: { ...message, id: "thread-root-1", body: "Всем привет!" },
+        reply_count: 1,
+      },
+    ],
+  });
+  await page.goto("/threads/thread-root-1");
+  const panel = page.locator(".thread-panel--page");
+  await expect(panel).toBeVisible();
+  const title = await panel.locator(".thread-panel__title").boundingBox();
+  const panelBox = await panel.boundingBox();
+  const openAction = await panel
+    .getByRole("button", { name: "Открыть в чате" })
+    .boundingBox();
+  expect(title!.width).toBeGreaterThan(48);
+  expect(openAction!.x + openAction!.width).toBeLessThanOrEqual(
+    panelBox!.x + panelBox!.width + 1,
+  );
+  await expect(page).toHaveScreenshot("thread-directory-tablet.png", {
+    animations: "disabled",
+  });
+
+  await page.setViewportSize({ width: 320, height: 760 });
+  await page.goto("/agents");
+  const editor = page.locator(".agent-editor");
+  await expect(editor).toBeVisible();
+  const editorBox = await editor.boundingBox();
+  const hintBox = await editor
+    .locator(".agent-editor__toolbar p")
+    .boundingBox();
+  expect(hintBox!.x + hintBox!.width).toBeLessThanOrEqual(
+    editorBox!.x + editorBox!.width + 1,
+  );
+  expect(await editor.evaluate((el) => el.scrollWidth)).toBeLessThanOrEqual(
+    Math.ceil(editorBox!.width),
+  );
+  await expect(page).toHaveScreenshot("agents-narrow.png", {
+    animations: "disabled",
+  });
 });

@@ -9,5 +9,5 @@ export function setTheme(value: string): void {
   document.documentElement.dataset.theme = resolved;
   document
     .querySelector('meta[name="theme-color"]')
-    ?.setAttribute("content", resolved === "dark" ? "#181a1f" : "#f3f6fa");
+    ?.setAttribute("content", resolved === "dark" ? "#151517" : "#f6f6f7");
 }

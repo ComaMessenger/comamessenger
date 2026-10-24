@@ -19,10 +19,15 @@ export function SettingsGroup({
     <View style={styles.section}>
       {title ? (
         <Text tone="muted" size={13} weight="medium" style={styles.caption}>
-          {title.toLocaleUpperCase()}
+          {title}
         </Text>
       ) : null}
-      <View style={[styles.group, { backgroundColor: theme.surface }]}>
+      <View
+        style={[
+          styles.group,
+          { backgroundColor: theme.surface, borderColor: theme.border },
+        ]}
+      >
         {children}
       </View>
       {hint ? (
@@ -54,9 +59,13 @@ export function SwitchRow({
       accessibilityState={{ checked: value, disabled }}
       disabled={disabled}
       onPress={() => onChange(!value)}
-      style={[styles.row, disabled && styles.disabled]}
+      style={({ pressed }) => [
+        styles.row,
+        disabled && styles.disabled,
+        pressed && { backgroundColor: theme.surfaceSelected },
+      ]}
     >
-      <Text size={17} style={styles.grow}>
+      <Text size={16} style={styles.grow}>
         {label}
       </Text>
       <Switch
@@ -92,7 +101,7 @@ export function ChoiceRow({
         pressed && { backgroundColor: theme.surfaceSelected },
       ]}
     >
-      <Text size={17} style={styles.grow}>
+      <Text size={16} style={styles.grow}>
         {label}
       </Text>
       {selected && <Check size={20} color={theme.primary} />}
@@ -107,14 +116,15 @@ export function Divider() {
 
 const styles = StyleSheet.create({
   section: { gap: spacing[2] },
-  caption: { paddingHorizontal: spacing[4] },
-  group: { borderRadius: radius.xl, overflow: "hidden" },
+  caption: { paddingHorizontal: spacing[1] },
+  group: { borderWidth: 1, borderRadius: radius.lg, overflow: "hidden" },
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing[3],
     minHeight: 52,
     paddingHorizontal: spacing[4],
+    paddingVertical: spacing[2],
   },
   grow: { flex: 1 },
   disabled: { opacity: 0.5 },

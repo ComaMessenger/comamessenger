@@ -1,11 +1,30 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUpRight, Check, ChevronLeft, ExternalLink, X } from "lucide-react";
+import {
+  ArrowUpRight,
+  Check,
+  ChevronLeft,
+  ExternalLink,
+  X,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
-import type { Chat, ChatMember, ClientMessage, Message } from "@comamessenger/core";
+import type {
+  Chat,
+  ChatMember,
+  ClientMessage,
+  Message,
+} from "@comamessenger/core";
 import { hasPermission } from "../settings";
-import { Avatar, Chip, EmptyState, IconButton, InlineError, SkeletonRow, cx } from "../ui";
+import {
+  Avatar,
+  Chip,
+  EmptyState,
+  IconButton,
+  InlineError,
+  SkeletonRow,
+  cx,
+} from "../ui";
 import { getLocalDraft, setLocalDraft, syncDraft } from "../lib/drafts";
 import { formatAgePhrase, minuteGap } from "../lib/format";
 import { resolvedMentionActorIDs } from "../lib/mentions";
@@ -31,7 +50,7 @@ export function ThreadPanel({
   members: ChatMember[];
   rootID: string;
   onClose(): void;
-  /** "page" — the /threads detail pane: chat-centric header, ink root card, unread separator. */
+  /** "page" — the /threads detail pane: chat-centric header, root card, unread separator. */
   variant?: "panel" | "page";
 }) {
   const { t } = useTranslation();
@@ -42,12 +61,21 @@ export function ThreadPanel({
     state.unread.threads.find((item) => item.thread_root_id === rootID),
   );
   const queryClient = useQueryClient();
-  const storedMessages = useStore(store, (state) => state.messages[chat.id] ?? emptyMessages);
+  const storedMessages = useStore(
+    store,
+    (state) => state.messages[chat.id] ?? emptyMessages,
+  );
   const presence = useStore(store, (state) => state.presence);
   const streams = useStore(store, (state) => state.messageStreams);
   const agentStatuses = useStore(store, (state) => state.agentStatuses);
-  const query = useQuery({ queryKey: ["thread", rootID], queryFn: () => api.thread(rootID) });
-  const followed = useQuery({ queryKey: ["threads"], queryFn: () => api.threads() });
+  const query = useQuery({
+    queryKey: ["thread", rootID],
+    queryFn: () => api.thread(rootID),
+  });
+  const followed = useQuery({
+    queryKey: ["threads"],
+    queryFn: () => api.threads(),
+  });
   const [followOverride, setFollowOverride] = useState<boolean | null>(null);
   const [body, setBody] = useState(() => getLocalDraft(chat.id, rootID));
   const [reply, setReply] = useState<Message | null>(null);
@@ -58,22 +86,30 @@ export function ThreadPanel({
   const messages = useMemo(() => {
     const values = [
       ...(query.data?.messages ?? []),
-      ...storedMessages.filter((message) => message.id === rootID || message.thread_root_id === rootID),
+      ...storedMessages.filter(
+        (message) => message.id === rootID || message.thread_root_id === rootID,
+      ),
     ];
-    return [...new Map(values.map((message) => [message.id, message])).values()].sort(
-      (left, right) => left.created_seq - right.created_seq,
-    );
+    return [
+      ...new Map(values.map((message) => [message.id, message])).values(),
+    ].sort((left, right) => left.created_seq - right.created_seq);
   }, [query.data?.messages, rootID, storedMessages]);
   const root = messages.find((message) => message.id === rootID);
-  const replies = messages.filter((message) => message.thread_root_id === rootID);
-  const participantCount = new Set(replies.map((message) => message.actor_id)).size;
+  const replies = messages.filter(
+    (message) => message.thread_root_id === rootID,
+  );
+  const participantCount = new Set(replies.map((message) => message.actor_id))
+    .size;
   const lastReply = replies[replies.length - 1];
   // Replies past the reader's marker — the "new" separator goes before the first of them.
   const firstUnreadID =
     isPage && unreadThread && unreadThread.unread_count > 0
-      ? replies.find((message) => message.created_seq > unreadThread.last_read_seq)?.id
+      ? replies.find(
+          (message) => message.created_seq > unreadThread.last_read_seq,
+        )?.id
       : undefined;
-  const canModerate = hasPermission(user, "chats.moderate") || canManageChat(chat);
+  const canModerate =
+    hasPermission(user, "chats.moderate") || canManageChat(chat);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -113,8 +149,16 @@ export function ThreadPanel({
   const refresh = () => void query.refetch();
 
   return (
-    <aside className={cx("thread-panel", isPage && "thread-panel--page")} aria-label={t("threadTitle")}>
-      <header className={cx("thread-panel__head", isPage && "thread-panel__head--page")}>
+    <aside
+      className={cx("thread-panel", isPage && "thread-panel--page")}
+      aria-label={t("threadTitle")}
+    >
+      <header
+        className={cx(
+          "thread-panel__head",
+          isPage && "thread-panel__head--page",
+        )}
+      >
         {isMobile && (
           <IconButton size="icon-lg" label={t("back")} onClick={onClose}>
             <ChevronLeft />
@@ -130,22 +174,33 @@ export function ThreadPanel({
           />
         )}
         <div className="thread-panel__title">
-          <strong className="truncate">{isPage ? t("threadIn", { chat: chatName }) : t("threadTitle")}</strong>
+          <strong className="truncate">
+            {isPage ? t("threadIn", { chat: chatName }) : t("threadTitle")}
+          </strong>
           <span className="truncate">
             {isPage
               ? [
                   t("threadReplies", { count: replies.length }),
                   t("threadParticipants", { count: participantCount }),
-                  lastReply && t("threadLastAgo", { age: formatAgePhrase(lastReply.created_at) }),
+                  lastReply &&
+                    t("threadLastAgo", {
+                      age: formatAgePhrase(lastReply.created_at),
+                    }),
                 ]
                   .filter(Boolean)
                   .join(" · ")
-              : t("threadMeta", { replies: t("threadReplies", { count: replies.length }), chat: chatName })}
+              : t("threadMeta", {
+                  replies: t("threadReplies", { count: replies.length }),
+                  chat: chatName,
+                })}
           </span>
         </div>
         <Chip
           size={isMobile ? "xl" : "lg"}
-          className={cx("thread-panel__follow", following && "thread-panel__follow--on")}
+          className={cx(
+            "thread-panel__follow",
+            following && "thread-panel__follow--on",
+          )}
           aria-pressed={following}
           onClick={() => void toggleFollow()}
         >
@@ -153,7 +208,10 @@ export function ThreadPanel({
           {following ? t("threadSubscribed") : t("threadSubscribe")}
         </Chip>
         {isPage && !isMobile && (
-          <Chip size="lg" onClick={() => navigate(`/chat/${chat.id}/thread/${rootID}`)}>
+          <Chip
+            size="lg"
+            onClick={() => navigate(`/chat/${chat.id}/thread/${rootID}`)}
+          >
             {t("threadOpenInChat")}
             <ExternalLink aria-hidden="true" />
           </Chip>
@@ -171,23 +229,37 @@ export function ThreadPanel({
             <SkeletonRow avatar={32} lines={["35%", "85%"]} />
           </div>
         ) : query.isError && !root ? (
-          <InlineError title={t("threadLoadFailed")} retryLabel={t("retry")} onRetry={refresh} />
+          <InlineError
+            title={t("threadLoadFailed")}
+            retryLabel={t("retry")}
+            onRetry={refresh}
+          />
         ) : (
           <>
             {root && root.deleted_at ? (
               <div className="thread-panel__root thread-panel__root--deleted">
-                <span className="thread-panel__deleted-avatar" aria-hidden="true" />
+                <span
+                  className="thread-panel__deleted-avatar"
+                  aria-hidden="true"
+                />
                 <div>
                   <strong>{t("threadRootDeleted")}</strong>
                   <small>{t("threadRootDeletedHint")}</small>
                 </div>
               </div>
             ) : root ? (
-              <div className={cx("thread-panel__root", isPage && "thread-panel__root--ink")}>
+              <div
+                className={cx(
+                  "thread-panel__root",
+                  isPage && "thread-panel__root--ink",
+                )}
+              >
                 <MessageRow
                   message={root}
                   members={members}
-                  author={members.find((item) => item.actor_id === root.actor_id)}
+                  author={members.find(
+                    (item) => item.actor_id === root.actor_id,
+                  )}
                   own={root.actor_id === user.id}
                   canModerate={canModerate}
                   grouped={false}
@@ -204,7 +276,9 @@ export function ThreadPanel({
                   <button
                     type="button"
                     className="thread-panel__jump"
-                    onClick={() => navigate(`/chat/${chat.id}?message=${rootID}`)}
+                    onClick={() =>
+                      navigate(`/chat/${chat.id}?message=${rootID}`)
+                    }
                   >
                     {t("threadJumpToMessage")}
                     <ArrowUpRight aria-hidden="true" />
@@ -219,7 +293,11 @@ export function ThreadPanel({
               </div>
             ) : (
               query.isSuccess && (
-                <EmptyState compact title={t("threadEmptyTitle")} hint={t("threadEmptyHint")} />
+                <EmptyState
+                  compact
+                  title={t("threadEmptyTitle")}
+                  hint={t("threadEmptyHint")}
+                />
               )
             )}
             {replies.map((message, index) => {
@@ -229,8 +307,12 @@ export function ThreadPanel({
                   key={message.id}
                   message={message}
                   members={members}
-                  replyMessage={messages.find((item) => item.id === message.reply_to_id)}
-                  author={members.find((item) => item.actor_id === message.actor_id)}
+                  replyMessage={messages.find(
+                    (item) => item.id === message.reply_to_id,
+                  )}
+                  author={members.find(
+                    (item) => item.actor_id === message.actor_id,
+                  )}
                   own={message.actor_id === user.id}
                   canModerate={canModerate}
                   grouped={
@@ -241,7 +323,9 @@ export function ThreadPanel({
                   compact
                   onReply={() => setReply(message)}
                   onJump={(id) =>
-                    document.getElementById(`thread-message-${id}`)?.scrollIntoView({ block: "center" })
+                    document
+                      .getElementById(`thread-message-${id}`)
+                      ?.scrollIntoView({ block: "center" })
                   }
                   onRetry={() => void outbox.flush()}
                   onThread={() => undefined}
@@ -262,12 +346,17 @@ export function ThreadPanel({
               );
             })}
             {Object.values(streams)
-              .filter((stream) => stream.chatID === chat.id && stream.threadRootID === rootID)
+              .filter(
+                (stream) =>
+                  stream.chatID === chat.id && stream.threadRootID === rootID,
+              )
               .map((stream) => (
                 <AgentStreamRow
                   key={stream.streamID}
                   body={stream.body}
-                  author={members.find((member) => member.actor_id === stream.actorID)}
+                  author={members.find(
+                    (member) => member.actor_id === stream.actorID,
+                  )}
                   state={agentStatuses[stream.runID]?.state ?? "streaming"}
                 />
               ))}
@@ -286,7 +375,10 @@ export function ThreadPanel({
         onBlur={() => void syncDraft(api, chat.id, rootID, body)}
         onSend={() => void send()}
         reply={reply}
-        replyAuthor={members.find((item) => item.actor_id === reply?.actor_id)?.display_name}
+        replyAuthor={
+          members.find((item) => item.actor_id === reply?.actor_id)
+            ?.display_name
+        }
         onCancelReply={() => setReply(null)}
         readonly={isReadOnly(chat)}
         placeholder={t("threadReplyPlaceholder")}

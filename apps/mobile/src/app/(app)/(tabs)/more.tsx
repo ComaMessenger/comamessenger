@@ -92,9 +92,25 @@ export default function MoreScreen() {
   }
 
   return (
-    <SafeAreaView edges={["top"]} style={styles.screen}>
+    <SafeAreaView
+      edges={["top"]}
+      style={[styles.screen, { backgroundColor: theme.canvas }]}
+    >
+      <Text
+        accessibilityRole="header"
+        weight="semibold"
+        size={22}
+        style={styles.title}
+      >
+        {t("tabMore")}
+      </Text>
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={[styles.card, { backgroundColor: theme.surface }]}>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: theme.surface, borderColor: theme.border },
+          ]}
+        >
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t("changePhoto")}
@@ -121,7 +137,12 @@ export default function MoreScreen() {
           </View>
         </View>
 
-        <View style={[styles.group, { backgroundColor: theme.surface }]}>
+        <View
+          style={[
+            styles.group,
+            { backgroundColor: theme.surface, borderColor: theme.border },
+          ]}
+        >
           {(
             [
               [
@@ -168,8 +189,8 @@ export default function MoreScreen() {
                     pressed && { backgroundColor: theme.surfaceSelected },
                   ]}
                 >
-                  <Icon size={22} color={theme.primary} />
-                  <Text weight="medium" size={17} style={styles.grow}>
+                  <Icon size={20} color={theme.muted} />
+                  <Text weight="medium" size={16} style={styles.grow}>
                     {label}
                   </Text>
                   <ChevronRight size={20} color={theme.subtle} />
@@ -179,11 +200,16 @@ export default function MoreScreen() {
           )}
         </View>
 
-        <View style={[styles.group, { backgroundColor: theme.surface }]}>
-          <View style={styles.item}>
-            <Bell size={22} color={theme.primary} />
-            <View style={styles.grow}>
-              <Text weight="medium" size={17}>
+        <View
+          style={[
+            styles.group,
+            { backgroundColor: theme.surface, borderColor: theme.border },
+          ]}
+        >
+          <View style={[styles.item, styles.notificationRow]}>
+            <Bell size={20} color={theme.muted} />
+            <View style={[styles.grow, styles.notificationBody]}>
+              <Text weight="medium" size={16}>
                 {t("notifications")}
               </Text>
               <Text tone="muted" size={14}>
@@ -193,7 +219,7 @@ export default function MoreScreen() {
             {(push === "off" || push === "denied") && (
               <Pressable
                 accessibilityRole="button"
-                hitSlop={8}
+                style={styles.inlineAction}
                 onPress={() =>
                   push === "denied"
                     ? void Linking.openSettings()
@@ -214,9 +240,9 @@ export default function MoreScreen() {
             onPress={() => void openWebClient(api.apiURL)}
             style={styles.item}
           >
-            <ExternalLink size={22} color={theme.primary} />
+            <ExternalLink size={20} color={theme.muted} />
             <View style={styles.grow}>
-              <Text weight="medium" size={17}>
+              <Text weight="medium" size={16}>
                 {t("openWeb")}
               </Text>
               <Text tone="muted" size={14}>
@@ -232,7 +258,7 @@ export default function MoreScreen() {
             style={styles.item}
           >
             <LogOut size={22} color={theme.danger} />
-            <Text weight="medium" size={17} tone="danger" style={styles.grow}>
+            <Text weight="medium" size={16} tone="danger" style={styles.grow}>
               {t("signOut")}
             </Text>
           </Pressable>
@@ -265,15 +291,28 @@ export default function MoreScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  content: { padding: spacing[4], gap: spacing[4] },
+  title: {
+    paddingHorizontal: spacing[4],
+    paddingTop: spacing[4],
+    paddingBottom: spacing[3],
+  },
+  content: {
+    paddingHorizontal: spacing[4],
+    paddingBottom: spacing[6],
+    gap: spacing[4],
+    width: "100%",
+    maxWidth: 640,
+    alignSelf: "center",
+  },
   card: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing[3],
     padding: spacing[4],
-    borderRadius: radius.xl,
+    borderRadius: radius.lg,
+    borderWidth: 1,
   },
-  group: { borderRadius: radius.xl, overflow: "hidden" },
+  group: { borderRadius: radius.lg, borderWidth: 1, overflow: "hidden" },
   item: {
     flexDirection: "row",
     alignItems: "center",
@@ -283,6 +322,9 @@ const styles = StyleSheet.create({
     minHeight: 56,
   },
   divider: { height: StyleSheet.hairlineWidth, marginLeft: 54 },
+  notificationRow: { flexWrap: "wrap" },
+  notificationBody: { minWidth: 140 },
+  inlineAction: { minHeight: 44, minWidth: 44, justifyContent: "center" },
   grow: { flex: 1 },
   version: { textAlign: "center" },
 });

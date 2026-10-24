@@ -24,7 +24,10 @@ export function ConnectionBanner() {
     <View
       testID="connection-banner"
       accessibilityLiveRegion="polite"
-      style={[styles.banner, { backgroundColor: theme.sidebar }]}
+      style={[
+        styles.banner,
+        { backgroundColor: theme.sidebar, borderBottomColor: theme.border },
+      ]}
     >
       <Text tone="muted" size={13} weight="medium">
         {text}
@@ -34,5 +37,10 @@ export function ConnectionBanner() {
 }
 
 const styles = StyleSheet.create({
-  banner: { alignItems: "center", paddingVertical: spacing[1] },
+  banner: {
+    alignItems: "center",
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[4],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
 });

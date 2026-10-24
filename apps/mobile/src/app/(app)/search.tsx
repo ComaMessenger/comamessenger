@@ -82,17 +82,28 @@ export default function SearchScreen() {
   ];
 
   return (
-    <SafeAreaView edges={["top"]} style={styles.screen}>
+    <SafeAreaView
+      edges={["top"]}
+      style={[styles.screen, { backgroundColor: theme.surface }]}
+    >
       <View style={styles.header}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t("back")}
-          hitSlop={12}
+          style={({ pressed }) => [
+            styles.back,
+            pressed && { backgroundColor: theme.surfaceSelected },
+          ]}
           onPress={() => router.back()}
         >
-          <ChevronLeft size={28} color={theme.primary} />
+          <ChevronLeft size={24} color={theme.muted} />
         </Pressable>
-        <View style={[styles.input, { backgroundColor: theme.sidebar }]}>
+        <View
+          style={[
+            styles.input,
+            { backgroundColor: theme.sidebar, borderColor: theme.border },
+          ]}
+        >
           <Search size={20} color={theme.subtle} />
           <TextInput
             maxFontSizeMultiplier={maxTextScale}
@@ -103,13 +114,14 @@ export default function SearchScreen() {
             placeholder={t("searchPlaceholder")}
             placeholderTextColor={theme.subtle}
             accessibilityLabel={t("search")}
+            selectionColor={theme.primary}
             returnKeyType="search"
             clearButtonMode="while-editing"
             style={[styles.field, { color: theme.foreground }]}
           />
         </View>
       </View>
-      <View style={styles.kinds}>
+      <View accessibilityRole="tablist" style={styles.kinds}>
         {kinds.map((item) => {
           const selected = item.value === kind;
           return (
@@ -120,13 +132,16 @@ export default function SearchScreen() {
               onPress={() => setKind(item.value)}
               style={[
                 styles.kind,
-                { backgroundColor: selected ? theme.primary : theme.sidebar },
+                {
+                  backgroundColor: selected ? theme.surface : theme.sidebar,
+                  borderColor: selected ? theme.borderStrong : "transparent",
+                },
               ]}
             >
               <Text
                 weight="medium"
                 size={15}
-                style={{ color: selected ? theme.onPrimary : theme.foreground }}
+                style={{ color: selected ? theme.primary : theme.muted }}
               >
                 {item.label}
               </Text>
@@ -233,26 +248,43 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[2],
   },
+  back: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.md,
+  },
   input: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: spacing[2],
-    height: 44,
-    borderRadius: radius.lg,
+    minHeight: 44,
+    borderRadius: radius.md,
+    borderWidth: 1,
     paddingHorizontal: spacing[3],
   },
-  field: { flex: 1, fontFamily: fonts.regular, fontSize: 17 },
+  field: {
+    flex: 1,
+    fontFamily: fonts.regular,
+    fontSize: 16,
+    minHeight: 44,
+    paddingVertical: spacing[2],
+  },
   kinds: {
     flexDirection: "row",
-    gap: spacing[2],
+    gap: spacing[1],
     paddingHorizontal: spacing[4],
     paddingBottom: spacing[2],
+    flexWrap: "wrap",
   },
   kind: {
-    height: 34,
-    paddingHorizontal: spacing[4],
-    borderRadius: radius.full,
+    minHeight: 44,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1],
+    borderRadius: radius.md,
+    borderWidth: 1,
     justifyContent: "center",
   },
   row: {

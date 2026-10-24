@@ -32,8 +32,12 @@ import { NotificationDialog } from "../dialogs/NotificationDialog";
 import { StatusDialog } from "../dialogs/StatusDialog";
 import { SearchPalette } from "../dialogs/SearchPalette";
 import { writeChatFilterToURL } from "../lib/chats";
-import { useIsMobile } from "../lib/useMediaQuery";
-import { MessengerContext, type MessengerContextValue, type ShellDialog } from "./MessengerContext";
+import { useIsMobile, useMediaQuery } from "../lib/useMediaQuery";
+import {
+  MessengerContext,
+  type MessengerContextValue,
+  type ShellDialog,
+} from "./MessengerContext";
 import { useMessengerSession } from "./useMessengerSession";
 import { GlobalSidebar, type PrimarySection } from "./GlobalSidebar";
 import { MobileTabBar } from "./MobileTabBar";
@@ -66,7 +70,15 @@ export function Messenger({
 }) {
   const { t } = useTranslation();
   const isMobile = useIsMobile();
-  const session = useMessengerSession({ api, user, path, navigate, onLogout, onUserUpdated });
+  const compactRail = useMediaQuery("(max-width: 840px)");
+  const session = useMessengerSession({
+    api,
+    user,
+    path,
+    navigate,
+    onLogout,
+    onUserUpdated,
+  });
   const { store, selectedID, threadID } = session;
   const selectedChat = useStore(store, (state) =>
     selectedID ? state.chats[selectedID] : undefined,
@@ -78,17 +90,18 @@ export function Messenger({
 
   const activeSettings = settingForPath(path);
   const showAgents = path === "/agents" || path.startsWith("/agents/");
-  const showChatList = Boolean(selectedID) || path === "/chats";
+  const showChatList =
+    !user.must_change_password && (Boolean(selectedID) || path === "/chats");
   const directory = directoryFromPath(path);
   const section: PrimarySection = showChatList
     ? "chats"
     : directory
       ? directory.kind
       : showAgents
-            ? "agents"
-            : path === "/more" || activeSettings
-              ? "more"
-              : "none";
+        ? "agents"
+        : path === "/more" || activeSettings
+          ? "more"
+          : "none";
 
   const logout = useCallback(async () => {
     await api.logout();
@@ -148,7 +161,12 @@ export function Messenger({
   }
 
   const workspace = user.must_change_password ? (
-    <SecuritySettingsPage api={api} user={user} navigate={navigate} onUserUpdated={onUserUpdated} />
+    <SecuritySettingsPage
+      api={api}
+      user={user}
+      navigate={navigate}
+      onUserUpdated={onUserUpdated}
+    />
   ) : selectedID ? (
     <Conversation
       key={selectedID}
@@ -174,25 +192,55 @@ export function Messenger({
   ) : showAgents ? (
     <AgentSettingsPage api={api} user={user} path={path} navigate={navigate} />
   ) : activeSettings?.id === "profile" ? (
-    <ProfileSettingsPage api={api} user={user} navigate={navigate} onLogout={() => void logout()} onUserUpdated={onUserUpdated} />
+    <ProfileSettingsPage
+      api={api}
+      user={user}
+      navigate={navigate}
+      onLogout={() => void logout()}
+      onUserUpdated={onUserUpdated}
+    />
   ) : activeSettings?.id === "notifications" ? (
-    <NotificationSettingsPage api={api} user={user} navigate={navigate} onEnable={() => setDialog({ kind: "notifications" })} />
+    <NotificationSettingsPage
+      api={api}
+      user={user}
+      navigate={navigate}
+      onEnable={() => setDialog({ kind: "notifications" })}
+    />
   ) : activeSettings?.id === "workspace" ? (
-    <WorkspaceOverviewPage user={user} navigate={navigate} renderLogo={(size) => <Logo size={logoSize(size)} />} />
+    <WorkspaceOverviewPage
+      user={user}
+      navigate={navigate}
+      renderLogo={(size) => <Logo size={logoSize(size)} />}
+    />
   ) : activeSettings?.id === "workspace-general" ? (
     <WorkspaceGeneralPage api={api} user={user} navigate={navigate} />
   ) : activeSettings?.id === "workspace-members" ? (
-    <WorkspaceMembersPage api={api} user={user} navigate={navigate} onUserUpdated={onUserUpdated} />
+    <WorkspaceMembersPage
+      api={api}
+      user={user}
+      navigate={navigate}
+      onUserUpdated={onUserUpdated}
+    />
   ) : activeSettings?.id === "workspace-invitations" ? (
     <WorkspaceInvitationsPage api={api} user={user} navigate={navigate} />
   ) : activeSettings?.id === "workspace-policies" ? (
     <WorkspacePoliciesPage api={api} user={user} navigate={navigate} />
   ) : activeSettings?.id === "customization" ? (
-    <CustomizationSettingsPage api={api} user={user} navigate={navigate} renderLogo={(size) => <Logo size={logoSize(size)} />} />
+    <CustomizationSettingsPage
+      api={api}
+      user={user}
+      navigate={navigate}
+      renderLogo={(size) => <Logo size={logoSize(size)} />}
+    />
   ) : activeSettings?.id === "infrastructure" ? (
     <InfrastructureSettingsPage api={api} user={user} navigate={navigate} />
   ) : activeSettings?.id === "security" ? (
-    <SecuritySettingsPage api={api} user={user} navigate={navigate} onUserUpdated={onUserUpdated} />
+    <SecuritySettingsPage
+      api={api}
+      user={user}
+      navigate={navigate}
+      onUserUpdated={onUserUpdated}
+    />
   ) : activeSettings?.id === "audit" ? (
     <AuditSettingsPage api={api} user={user} navigate={navigate} />
   ) : (
@@ -205,13 +253,14 @@ export function Messenger({
         <div
           className={cx(
             "messenger",
-            sidebarCollapsed && "messenger--sidebar-collapsed",
+            (sidebarCollapsed || compactRail) && "messenger--sidebar-collapsed",
             !showChatList && "messenger--utility",
             directory && "messenger--directory",
             directory?.id && "messenger--detail-open",
             selectedID && "messenger--chat-open",
             threadID && "messenger--thread-open",
-            (showAgents || activeSettings) && "messenger--settings",
+            (showAgents || activeSettings || user.must_change_password) &&
+              "messenger--settings",
           )}
         >
           <InAppNotifications
@@ -225,7 +274,7 @@ export function Messenger({
           {!isMobile && (
             <GlobalSidebar
               active={section}
-              collapsed={sidebarCollapsed}
+              collapsed={sidebarCollapsed || compactRail}
               onToggleCollapsed={toggleSidebar}
             />
           )}
@@ -242,7 +291,13 @@ export function Messenger({
           </main>
           {isMobile && (
             <MobileTabBar
-              active={section === "none" ? "chats" : section === "agents" ? "more" : section}
+              active={
+                section === "none"
+                  ? "chats"
+                  : section === "agents"
+                    ? "more"
+                    : section
+              }
               compact={Boolean(selectedID)}
               navigate={navigate}
             />
@@ -254,7 +309,9 @@ export function Messenger({
             <CreateChatDialog
               onClose={() => setDialog(null)}
               onCreated={(chat) => {
-                store.setState((state) => ({ chats: { ...state.chats, [chat.id]: chat } }));
+                store.setState((state) => ({
+                  chats: { ...state.chats, [chat.id]: chat },
+                }));
                 setDialog(null);
                 navigate(`/chat/${chat.id}`);
               }}
@@ -267,7 +324,11 @@ export function Messenger({
                 session.saveFolders([...session.folders, folder]).then(() => {
                   setDialog(null);
                   writeChatFilterToURL(`folder:${folder.id}`);
-                  window.dispatchEvent(new CustomEvent("coma-chat-filter", { detail: `folder:${folder.id}` }));
+                  window.dispatchEvent(
+                    new CustomEvent("coma-chat-filter", {
+                      detail: `folder:${folder.id}`,
+                    }),
+                  );
                 })
               }
             />
@@ -275,14 +336,18 @@ export function Messenger({
           {dialog?.kind === "notifications" && (
             <NotificationDialog onClose={() => setDialog(null)} />
           )}
-          {dialog?.kind === "status" && <StatusDialog onClose={() => setDialog(null)} />}
+          {dialog?.kind === "status" && (
+            <StatusDialog onClose={() => setDialog(null)} />
+          )}
           {dialog?.kind === "search" && (
             <SearchPalette
               request={dialog.request}
               onClose={() => setDialog(null)}
               onOpen={(chatID, messageID) => {
                 setDialog(null);
-                navigate(`/chat/${chatID}${messageID ? `?message=${messageID}` : ""}`);
+                navigate(
+                  `/chat/${chatID}${messageID ? `?message=${messageID}` : ""}`,
+                );
               }}
             />
           )}

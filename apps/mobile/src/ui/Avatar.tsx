@@ -8,9 +8,12 @@ import { Text } from "./Text";
 
 export type Presence = "online" | "away" | "offline";
 
-function paletteColor(theme: ThemeTokens, seed: string): string {
-  const key = `avatar${stableAvatarIndex(seed) + 1}` as keyof ThemeTokens;
-  return theme[key];
+function paletteColors(theme: ThemeTokens, seed: string) {
+  const index = stableAvatarIndex(seed) + 1;
+  return {
+    surface: theme[`avatarSurface${index}` as keyof ThemeTokens],
+    foreground: theme[`avatarForeground${index}` as keyof ThemeTokens],
+  };
 }
 
 export function Avatar({
@@ -35,6 +38,7 @@ export function Avatar({
 }) {
   const theme = useTheme();
   const photo = useAvatarSource(actorID, avatarVersion);
+  const colors = paletteColors(theme, seed);
   const dot = Math.round(size * 0.28);
   return (
     <View
@@ -49,9 +53,9 @@ export function Avatar({
             width: size,
             height: size,
             borderRadius: size / 2,
-            backgroundColor: agent
-              ? theme.foreground
-              : paletteColor(theme, seed),
+            backgroundColor: agent ? theme.sidebar : colors.surface,
+            borderWidth: agent ? 1 : 0,
+            borderColor: theme.border,
           },
         ]}
       >
@@ -59,7 +63,7 @@ export function Avatar({
           allowFontScaling={false}
           weight="semibold"
           size={Math.round(size * 0.36)}
-          style={{ color: agent ? theme.canvas : "#ffffff" }}
+          style={{ color: agent ? theme.muted : colors.foreground }}
         >
           {glyph ?? (initialsOf(name) || "?")}
         </Text>

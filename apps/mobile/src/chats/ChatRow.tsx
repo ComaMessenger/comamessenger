@@ -72,13 +72,14 @@ export const ChatRow = memo(function ChatRow({
       onPress={() => onOpen(chat.id)}
       style={({ pressed }) => [
         styles.row,
+        { borderBottomColor: theme.border },
         pressed && { backgroundColor: theme.surfaceSelected },
       ]}
     >
       <Avatar
         name={title}
         seed={chat.avatar_seed || chat.id}
-        size={52}
+        size={44}
         glyph={chat.kind === "channel" ? "#" : undefined}
         agent={peer?.type === "agent"}
         actorID={chat.kind === "direct" ? peer?.actor_id : undefined}
@@ -95,7 +96,7 @@ export const ChatRow = memo(function ChatRow({
         <View style={styles.line}>
           <Text
             weight="semibold"
-            size={17}
+            size={16}
             numberOfLines={1}
             style={styles.grow}
           >
@@ -103,7 +104,7 @@ export const ChatRow = memo(function ChatRow({
           </Text>
           {muted && <BellOff size={16} color={theme.subtle} />}
           <Text
-            size={14}
+            size={12}
             tone={mention ? "primary" : "subtle"}
             weight={mention ? "semibold" : "regular"}
           >
@@ -125,7 +126,7 @@ export const ChatRow = memo(function ChatRow({
                 styles.badge,
                 {
                   backgroundColor: mention
-                    ? theme.primary
+                    ? theme.primarySoft
                     : muted
                       ? theme.borderStrong
                       : theme.surfaceSelected,
@@ -135,7 +136,7 @@ export const ChatRow = memo(function ChatRow({
               <Text
                 size={13}
                 weight="semibold"
-                style={{ color: mention ? theme.onPrimary : theme.foreground }}
+                style={{ color: mention ? theme.primary : theme.foreground }}
               >
                 {countLabel(unreadCount)}
               </Text>
@@ -154,15 +155,17 @@ const styles = StyleSheet.create({
     gap: spacing[3],
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
+    minHeight: 80,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   body: { flex: 1, gap: 2 },
   line: { flexDirection: "row", alignItems: "center", gap: spacing[2] },
   grow: { flex: 1 },
   badge: {
-    minWidth: 24,
-    minHeight: 24,
-    paddingHorizontal: 7,
-    borderRadius: radius.full,
+    minWidth: 22,
+    minHeight: 22,
+    paddingHorizontal: 6,
+    borderRadius: radius.sm,
     alignItems: "center",
     justifyContent: "center",
   },

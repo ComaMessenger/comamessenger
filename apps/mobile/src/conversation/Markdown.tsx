@@ -111,7 +111,10 @@ export function Markdown({ source }: { source: string }) {
       blocks.push(
         <View
           key={index}
-          style={[styles.codeblock, { backgroundColor: theme.sidebar }]}
+          style={[
+            styles.codeblock,
+            { backgroundColor: theme.sidebar, borderColor: theme.border },
+          ]}
         >
           <Text size={14} style={{ fontFamily: monospace }}>
             {node.value}
@@ -159,7 +162,7 @@ const styles = StyleSheet.create({
   underline: { textDecorationLine: "underline" },
   strike: { textDecorationLine: "line-through" },
   inlineCode: { fontFamily: monospace, fontSize: 14 },
-  codeblock: { borderRadius: radius.md, padding: spacing[3] },
+  codeblock: { borderRadius: radius.md, borderWidth: 1, padding: spacing[3] },
   list: { gap: 2 },
   listItem: { flexDirection: "row", gap: spacing[2] },
   marker: { minWidth: 16, fontFamily: fonts.regular },

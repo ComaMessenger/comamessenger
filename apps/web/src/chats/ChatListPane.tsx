@@ -72,7 +72,6 @@ export function ChatListPane({
   const chatMap = useStore(store, (state) => state.chats);
   const unread = useStore(store, (state) => state.unread);
   const presence = useStore(store, (state) => state.presence);
-  const realtime = useStore(store, (state) => state.realtime);
   const [filter, setFilter] = useState<ChatFilter>(chatFilterFromURL);
   const [query, setQuery] = useState("");
   const [leaving, setLeaving] = useState<Chat | null>(null);
@@ -102,7 +101,8 @@ export function ChatListPane({
     .sort((left, right) => {
       const leftPin = pinnedOrder.get(left.id);
       const rightPin = pinnedOrder.get(right.id);
-      if (leftPin !== undefined && rightPin !== undefined) return leftPin - rightPin;
+      if (leftPin !== undefined && rightPin !== undefined)
+        return leftPin - rightPin;
       if (leftPin !== undefined) return -1;
       if (rightPin !== undefined) return 1;
       return (right.last_message_at ?? right.created_at).localeCompare(
@@ -142,7 +142,11 @@ export function ChatListPane({
   }
 
   const chips = (
-    <div className="chat-list__chips" role="group" aria-label={t("chatFilters")}>
+    <div
+      className="chat-list__chips"
+      role="group"
+      aria-label={t("chatFilters")}
+    >
       {systemChatFilters.map((item) => (
         <Chip
           key={item}
@@ -206,9 +210,6 @@ export function ChatListPane({
             <h1>{t("chatListTitle")}</h1>
             {!loading && <span className="tabular">{chats.length}</span>}
             <span className="chat-list__spacer" />
-            {realtime !== "live" && !loading && (
-              <ConnectionPill className="chat-list__connection" />
-            )}
             <IconButton
               size="icon-sm"
               className="chat-list__new"
@@ -229,7 +230,12 @@ export function ChatListPane({
         />
         {chips}
       </header>
-      <div className={cx("chat-list__scroll", loading && "chat-list__scroll--loading")}>
+      <div
+        className={cx(
+          "chat-list__scroll",
+          loading && "chat-list__scroll--loading",
+        )}
+      >
         {error && !loading && (
           <InlineError
             title={t("chatListRefreshFailed")}
@@ -240,17 +246,24 @@ export function ChatListPane({
         )}
         {loading ? (
           <div className="chat-list__skeleton" aria-busy="true">
-            {["62%", "48%", "70%", "40%", "55%", "66%", "45%"].map((width, index) => (
-              <SkeletonRow
-                key={index}
-                lines={[width, ["80%", "60%", "90%", "70%", "75%", "55%", "85%"][index]!]}
-              />
-            ))}
+            {["62%", "48%", "70%", "40%", "55%", "66%", "45%"].map(
+              (width, index) => (
+                <SkeletonRow
+                  key={index}
+                  lines={[
+                    width,
+                    ["80%", "60%", "90%", "70%", "75%", "55%", "85%"][index]!,
+                  ]}
+                />
+              ),
+            )}
           </div>
         ) : filtered.length ? (
           <div className="chat-list__rows">
             {filtered.map((chat) => {
-              const counts = unread.chats.find((item) => item.chat_id === chat.id);
+              const counts = unread.chats.find(
+                (item) => item.chat_id === chat.id,
+              );
               return (
                 <ChatRow
                   key={chat.id}
@@ -262,7 +275,9 @@ export function ChatListPane({
                   pinned={pinnedChatIDs.includes(chat.id)}
                   pinnedCount={pinnedChatIDs.length}
                   presence={
-                    chat.direct_peer ? presence[chat.direct_peer.actor_id] : undefined
+                    chat.direct_peer
+                      ? presence[chat.direct_peer.actor_id]
+                      : undefined
                   }
                   folders={folders}
                   onOpen={() => navigate(`/chat/${chat.id}`)}
@@ -276,9 +291,13 @@ export function ChatListPane({
                       .then(() => reload())
                   }
                   onMarkRead={() =>
-                    void api.markRead(chat.id, chat.last_activity_seq).then(() => reload())
+                    void api
+                      .markRead(chat.id, chat.last_activity_seq)
+                      .then(() => reload())
                   }
-                  onToggleFolder={(folderID) => void toggleFolder(folderID, chat.id)}
+                  onToggleFolder={(folderID) =>
+                    void toggleFolder(folderID, chat.id)
+                  }
                   onLeave={() => setLeaving(chat)}
                 />
               );
@@ -290,7 +309,11 @@ export function ChatListPane({
             title={t("chatListEmptyTitle")}
             hint={t("chatListEmptyHint")}
             action={
-              <Button variant="primary" size="sm" onClick={() => openDialog({ kind: "new-chat" })}>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => openDialog({ kind: "new-chat" })}
+              >
                 {t("newChat")}
               </Button>
             }
@@ -302,7 +325,9 @@ export function ChatListPane({
             hint={
               normalizedQuery
                 ? t("chatListEmptyFilterHint", {
-                    scope: t(scopeKey(filter), { name: activeFolder?.name ?? "" }),
+                    scope: t(scopeKey(filter), {
+                      name: activeFolder?.name ?? "",
+                    }),
                     query: query.trim(),
                   })
                 : t("chatListEmptyFilterHintNoQuery")
@@ -313,13 +338,20 @@ export function ChatListPane({
                   variant="secondary"
                   size="sm"
                   onClick={() =>
-                    openDialog({ kind: "search", request: { tab: "messages", query: query.trim() } })
+                    openDialog({
+                      kind: "search",
+                      request: { tab: "messages", query: query.trim() },
+                    })
                   }
                 >
                   {t("searchInMessages")}
                 </Button>
               ) : (
-                <Button variant="secondary" size="sm" onClick={() => selectFilter("all")}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => selectFilter("all")}
+                >
                   {t("all")}
                 </Button>
               )
@@ -327,13 +359,22 @@ export function ChatListPane({
           />
         )}
       </div>
+      <footer className="chat-list__footer">
+        <ConnectionPill className="chat-list__connection" />
+      </footer>
       {leaving && (
         <ConfirmDialog
           danger
           title={t("leaveGroupTitle", { name: titleOf(leaving, [], user.id) })}
-          description={leaving.kind === "channel" ? t("leaveChannelHint") : t("leaveGroupHint")}
+          description={
+            leaving.kind === "channel"
+              ? t("leaveChannelHint")
+              : t("leaveGroupHint")
+          }
           confirmLabel={
-            leaving.kind === "channel" ? t("leaveChannelConfirm") : t("leaveGroupConfirm")
+            leaving.kind === "channel"
+              ? t("leaveChannelConfirm")
+              : t("leaveGroupConfirm")
           }
           pending={leavePending}
           onConfirm={() => void leave()}

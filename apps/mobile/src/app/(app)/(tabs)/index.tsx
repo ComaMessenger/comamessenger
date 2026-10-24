@@ -96,13 +96,16 @@ export default function ChatsScreen() {
   );
 
   return (
-    <SafeAreaView edges={["top"]} style={styles.screen}>
+    <SafeAreaView
+      edges={["top"]}
+      style={[styles.screen, { backgroundColor: theme.surface }]}
+    >
       <View style={styles.header}>
-        <WorkspaceMark name={user.organization_name} size={40} />
+        <WorkspaceMark name={user.organization_name} size={32} />
         <Text
           accessibilityRole="header"
-          weight="bold"
-          size={24}
+          weight="semibold"
+          size={20}
           numberOfLines={1}
           style={styles.grow}
         >
@@ -114,12 +117,23 @@ export default function ChatsScreen() {
           accessibilityLabel={t("search")}
           hitSlop={8}
           onPress={() => router.push("/search")}
-          style={[styles.headerButton, { backgroundColor: theme.sidebar }]}
+          style={({ pressed }) => [
+            styles.headerButton,
+            {
+              backgroundColor: pressed ? theme.surfaceSelected : theme.surface,
+              borderColor: theme.border,
+            },
+          ]}
         >
           <Search size={22} color={theme.foreground} />
         </Pressable>
       </View>
-      <View style={[styles.search, { backgroundColor: theme.sidebar }]}>
+      <View
+        style={[
+          styles.search,
+          { backgroundColor: theme.sidebar, borderColor: theme.border },
+        ]}
+      >
         <Search size={20} color={theme.subtle} />
         <TextInput
           maxFontSizeMultiplier={maxTextScale}
@@ -128,6 +142,7 @@ export default function ChatsScreen() {
           placeholder={t("searchChats")}
           placeholderTextColor={theme.subtle}
           accessibilityLabel={t("searchChats")}
+          selectionColor={theme.primary}
           clearButtonMode="while-editing"
           returnKeyType="search"
           style={[styles.searchInput, { color: theme.foreground }]}
@@ -185,9 +200,10 @@ const styles = StyleSheet.create({
   },
   grow: { flex: 1 },
   headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.lg,
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -197,11 +213,18 @@ const styles = StyleSheet.create({
     gap: spacing[2],
     marginHorizontal: spacing[4],
     paddingHorizontal: spacing[4],
-    height: 44,
-    borderRadius: radius.lg,
+    minHeight: 44,
+    borderRadius: radius.md,
+    borderWidth: 1,
   },
-  searchInput: { flex: 1, fontFamily: fonts.regular, fontSize: 17 },
-  filters: { paddingVertical: spacing[3] },
+  searchInput: {
+    flex: 1,
+    fontFamily: fonts.regular,
+    fontSize: 16,
+    minHeight: 44,
+    paddingVertical: spacing[2],
+  },
+  filters: { paddingVertical: spacing[2] },
   loader: { marginTop: spacing[10] },
   state: { padding: spacing[5], gap: spacing[2], alignItems: "stretch" },
 });

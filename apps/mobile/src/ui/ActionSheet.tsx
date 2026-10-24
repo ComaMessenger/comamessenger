@@ -47,6 +47,7 @@ export function ActionSheet<T extends string>({
           styles.sheet,
           {
             backgroundColor: theme.surface,
+            borderColor: theme.border,
             paddingBottom: insets.bottom + spacing[2],
           },
         ]}
@@ -66,7 +67,7 @@ export function ActionSheet<T extends string>({
               pressed && { backgroundColor: theme.surfaceSelected },
             ]}
           >
-            <Text size={17} tone={option.danger ? "danger" : "default"}>
+            <Text size={16} tone={option.danger ? "danger" : "default"}>
               {option.label}
             </Text>
           </Pressable>
@@ -85,11 +86,14 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     paddingTop: spacing[3],
+    borderWidth: 1,
+    paddingHorizontal: spacing[2],
   },
   title: { paddingHorizontal: spacing[5], paddingBottom: spacing[2] },
   item: {
     minHeight: 52,
     justifyContent: "center",
     paddingHorizontal: spacing[5],
+    borderRadius: radius.md,
   },
 });
