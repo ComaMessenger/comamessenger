@@ -2,6 +2,16 @@
 
 Источник: [HTML-концепт](../design/prototypes/interface-lab/index.html). [План и зоны агентов](interface-lab-rollout.md). [Актуальная дизайн-система](../docs/design-system.md).
 
+## Веб-выкладка
+
+24 октября 2026 веб-редизайн опубликован на [rocket.hmns-test.ru](https://rocket.hmns-test.ru/) отдельным коммитом `17f87cf` в `main`. Полный редизайн Web/iOS/Android сохранён в `feat/mobile-m0` (`e6887cb`, стабилизация снимков — `312a05d`).
+
+- [Deploy staging](https://github.com/ComaMessenger/comamessenger/actions/runs/40116868911) — успешно.
+- [CI: TypeScript, Go, Compose/smoke](https://github.com/ComaMessenger/comamessenger/actions/runs/40116868906) — успешно.
+- Перед выкладкой на чистой базе main: lint/build/i18n, 72 unit tests и 66 уникальных браузерных сценариев прошли; 6 штатных platform skips. Два снимка стабилизированы относительно времени приветствия и локального host/port, затем повторно проверены со включённым сравнением.
+- На домене проверены HTML, JS/CSS/assets, `/healthz` и bootstrap status. CSS `index-DFrizAaw.css` побайтно совпал с локальной сборкой; API вернул `status: ok`, пространство осталось bootstrapped.
+- Серверная часть, протокол и мобильная платформа из feature-ветки не включались в веб-выкладку. Перенесена только чистая функция группировки ленты с её проверкой.
+
 ## Реализация
 
 - Общие TypeScript/CSS-токены для Web, iOS и Android: нейтральные темы, отдельный цвет основных действий, семантический акцент Coma, пастельные аватары, шкалы отступов и радиусов.
