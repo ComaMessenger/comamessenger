@@ -3,12 +3,22 @@ import { useTranslation } from "react-i18next";
 import { APIError, type BootstrapRequest } from "@comamessenger/core";
 import { Button, Field, InlineError, PasswordField } from "../ui";
 import { messageOf } from "../errors";
-import { formValue, handlePattern, slugPattern, suggestSlug } from "../lib/forms";
+import {
+  formValue,
+  handlePattern,
+  slugPattern,
+  suggestSlug,
+} from "../lib/forms";
 import { Logo } from "../shell/Logo";
 import { AuthLayout } from "./AuthLayout";
 import { passwordMinimum, type AuthProps } from "./types";
 
-export function BootstrapScreen({ api, error, onError, onAuthenticated }: AuthProps) {
+export function BootstrapScreen({
+  api,
+  error,
+  onError,
+  onAuthenticated,
+}: AuthProps) {
   const { t } = useTranslation();
   const [pending, setPending] = useState(false);
   const [tokenRejected, setTokenRejected] = useState(false);
@@ -41,9 +51,14 @@ export function BootstrapScreen({ api, error, onError, onAuthenticated }: AuthPr
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
     };
     try {
-      await onAuthenticated(await api.bootstrap(input, formValue(data, "bootstrap_token")));
+      await onAuthenticated(
+        await api.bootstrap(input, formValue(data, "bootstrap_token")),
+      );
     } catch (cause) {
-      if (cause instanceof APIError && (cause.status === 401 || cause.status === 403))
+      if (
+        cause instanceof APIError &&
+        (cause.status === 401 || cause.status === 403)
+      )
         setTokenRejected(true);
       else onError(messageOf(cause));
     } finally {
@@ -67,7 +82,11 @@ export function BootstrapScreen({ api, error, onError, onAuthenticated }: AuthPr
         </div>
       }
     >
-      <form className="auth-form auth-form--bootstrap" onSubmit={submit}>
+      <form
+        className="auth-form auth-form--bootstrap"
+        onSubmit={submit}
+        aria-busy={pending}
+      >
         <PasswordField
           label={t("bootstrapTokenLabel")}
           name="bootstrap_token"
@@ -79,7 +98,9 @@ export function BootstrapScreen({ api, error, onError, onAuthenticated }: AuthPr
           showLabel={t("showPassword")}
           hideLabel={t("hidePassword")}
         />
-        <h2 className="auth-section-label">{t("bootstrapSectionOrganization")}</h2>
+        <h2 className="auth-section-label">
+          {t("bootstrapSectionOrganization")}
+        </h2>
         <div className="auth-form__grid">
           <Field
             label={t("bootstrapName")}
@@ -119,7 +140,12 @@ export function BootstrapScreen({ api, error, onError, onAuthenticated }: AuthPr
         </div>
         <h2 className="auth-section-label">{t("bootstrapSectionOwner")}</h2>
         <div className="auth-form__grid">
-          <Field label={t("bootstrapOwnerName")} name="display_name" autoComplete="name" disabled={pending} />
+          <Field
+            label={t("bootstrapOwnerName")}
+            name="display_name"
+            autoComplete="name"
+            disabled={pending}
+          />
           <Field
             label={t("bootstrapHandle")}
             name="handle"
@@ -130,14 +156,26 @@ export function BootstrapScreen({ api, error, onError, onAuthenticated }: AuthPr
             value={handle}
             disabled={pending}
             onChange={(event) => setHandle(event.target.value)}
-            success={handleValid ? t("bootstrapHandleHint", { handle: handle.toLowerCase() }) : undefined}
+            success={
+              handleValid
+                ? t("bootstrapHandleHint", { handle: handle.toLowerCase() })
+                : undefined
+            }
             hint={
               handle.length > 0 && !handleValid
                 ? t("bootstrapHandleInvalid")
-                : t("bootstrapHandleHint", { handle: handle.toLowerCase() || "lev" })
+                : t("bootstrapHandleHint", {
+                    handle: handle.toLowerCase() || "lev",
+                  })
             }
           />
-          <Field label={t("email")} name="email" type="email" autoComplete="email" disabled={pending} />
+          <Field
+            label={t("email")}
+            name="email"
+            type="email"
+            autoComplete="email"
+            disabled={pending}
+          />
           <PasswordField
             label={t("password")}
             name="password"
@@ -150,12 +188,21 @@ export function BootstrapScreen({ api, error, onError, onAuthenticated }: AuthPr
           />
         </div>
         {tokenRejected ? (
-          <InlineError title={t("bootstrapTokenRejected")} hint={t("bootstrapTokenRejectedHint")} />
+          <InlineError
+            title={t("bootstrapTokenRejected")}
+            hint={t("bootstrapTokenRejectedHint")}
+          />
         ) : (
           error && <InlineError title={error} />
         )}
         <div className="auth-form__actions">
-          <Button type="submit" variant="primary" size="lg" block pending={pending}>
+          <Button
+            type="submit"
+            variant="primary"
+            size="md"
+            block
+            pending={pending}
+          >
             {pending ? t("creating") : t("createSpace")}
           </Button>
         </div>

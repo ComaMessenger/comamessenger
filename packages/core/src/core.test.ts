@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createMessengerStore } from "./store";
 import { parseMarkdown } from "./markdown";
+import { feedRows } from "./feed";
 import {
   decodeMentions,
   encodeMentions,
@@ -125,11 +126,35 @@ describe("domain store", () => {
       threadRootID: null,
       expiresAt: "2099-01-01T00:00:00Z",
     };
-    store.getState().applyMessageStream({ ...base, index: 1, delta: "Hel", reset: true, done: false });
-    store.getState().applyMessageStream({ ...base, index: 2, delta: "lo", reset: false, done: false });
-    store.getState().applyMessageStream({ ...base, index: 1, delta: "stale", reset: false, done: false });
+    store.getState().applyMessageStream({
+      ...base,
+      index: 1,
+      delta: "Hel",
+      reset: true,
+      done: false,
+    });
+    store.getState().applyMessageStream({
+      ...base,
+      index: 2,
+      delta: "lo",
+      reset: false,
+      done: false,
+    });
+    store.getState().applyMessageStream({
+      ...base,
+      index: 1,
+      delta: "stale",
+      reset: false,
+      done: false,
+    });
     expect(store.getState().messageStreams.stream?.body).toBe("Hello");
-    store.getState().applyMessageStream({ ...base, index: 3, delta: "", reset: false, done: true });
+    store.getState().applyMessageStream({
+      ...base,
+      index: 3,
+      delta: "",
+      reset: false,
+      done: true,
+    });
     expect(store.getState().messageStreams.stream).toBeUndefined();
     store.getState().setAgentStatus({
       runID: "run",
@@ -515,3 +540,36 @@ describe("persistent outbox", () => {
 function nextTask() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
+
+describe("feed layout", () => {
+  const at = (minute: number, actor = "a", seq = minute) =>
+    ({
+      ...message,
+      id: `m${seq}`,
+      actor_id: actor,
+      created_seq: seq,
+      created_at: new Date(2026, 8, 29, 10, minute).toISOString(),
+    }) as ClientMessage;
+
+  it("groups consecutive messages and breaks at the read boundary", () => {
+    const rows = feedRows(
+      [at(0), at(2), at(3, "b"), at(20, "b"), at(21, "b")],
+      20,
+    );
+    expect(rows.map((row) => row.grouped)).toEqual([
+      false,
+      true,
+      false,
+      false,
+      false,
+    ]);
+    expect(rows.map((row) => row.firstUnread)).toEqual([
+      false,
+      false,
+      false,
+      false,
+      true,
+    ]);
+    expect(rows[0]!.newDay).toBe(true);
+  });
+});

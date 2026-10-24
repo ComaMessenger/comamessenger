@@ -31,7 +31,15 @@ import {
   type ChatMember,
   type Message,
 } from "@comamessenger/core";
-import { Avatar, FloatingPopover, IconButton, Menu, MenuDivider, MenuItem, cx } from "../ui";
+import {
+  Avatar,
+  FloatingPopover,
+  IconButton,
+  Menu,
+  MenuDivider,
+  MenuItem,
+  cx,
+} from "../ui";
 import { EmojiPickerPanel } from "../lib/emoji";
 import type { PresenceMap } from "../lib/mentions";
 import { attachmentLimit, type ComposerAttachment } from "./useAttachments";
@@ -98,7 +106,8 @@ export function Composer({
   );
   const draft = useMemo(() => decodeMentions(body), [body]);
   const canSend =
-    (Boolean(body.trim()) || attachments.some((item) => item.status === "ready")) &&
+    (Boolean(body.trim()) ||
+      attachments.some((item) => item.status === "ready")) &&
     !attachments.some((item) => item.status === "uploading");
 
   useEffect(() => {
@@ -110,7 +119,8 @@ export function Composer({
     const maxHeight = lineHeight * 8;
     const nextHeight = Math.min(element.scrollHeight, maxHeight);
     element.style.height = `${nextHeight}px`;
-    element.style.overflowY = element.scrollHeight > maxHeight ? "auto" : "hidden";
+    element.style.overflowY =
+      element.scrollHeight > maxHeight ? "auto" : "hidden";
   }, [draft.text]);
 
   useEffect(() => {
@@ -132,7 +142,9 @@ export function Composer({
     Boolean(mention) &&
     members.length > 1 &&
     ("all".startsWith(mentionQuery) || "here".startsWith(mentionQuery));
-  const onlineCount = members.filter((member) => presence[member.actor_id] === "online").length;
+  const onlineCount = members.filter(
+    (member) => presence[member.actor_id] === "online",
+  ).length;
 
   function setVisibleText(nextText: string, cursor: number) {
     setBody(encodeMentions(updateMentionText(draft, nextText)));
@@ -165,7 +177,9 @@ export function Composer({
     const selected = draft.text.slice(lineStart, end) || t("formatText");
     const replacement = selected
       .split("\n")
-      .map((line, index) => (prefix === "ordered" ? `${index + 1}. ${line}` : `${prefix}${line}`))
+      .map((line, index) =>
+        prefix === "ordered" ? `${index + 1}. ${line}` : `${prefix}${line}`,
+      )
       .join("\n");
     setVisibleText(
       draft.text.slice(0, lineStart) + replacement + draft.text.slice(end),
@@ -175,15 +189,25 @@ export function Composer({
   function insertEmoji(emoji: string) {
     const start = input.current?.selectionStart ?? draft.text.length;
     const end = input.current?.selectionEnd ?? start;
-    setVisibleText(draft.text.slice(0, start) + emoji + draft.text.slice(end), start + emoji.length);
+    setVisibleText(
+      draft.text.slice(0, start) + emoji + draft.text.slice(end),
+      start + emoji.length,
+    );
     setEmojiOpen(false);
   }
   function insertMember(member: ChatMember) {
     if (!mention) return;
-    const next = insertMention(draft, mention.index, draft.text.length, member.actor_id, member.display_name);
+    const next = insertMention(
+      draft,
+      mention.index,
+      draft.text.length,
+      member.actor_id,
+      member.display_name,
+    );
     setBody(encodeMentions(next));
     const cursor =
-      (next.mentions.find((item) => item.start === mention.index)?.end ?? mention.index) + 1;
+      (next.mentions.find((item) => item.start === mention.index)?.end ??
+        mention.index) + 1;
     requestAnimationFrame(() => {
       input.current?.focus();
       input.current?.setSelectionRange(cursor, cursor);
@@ -192,7 +216,10 @@ export function Composer({
   function insertContextual(value: "all" | "here") {
     if (!mention) return;
     const replacement = `@${value} `;
-    setVisibleText(draft.text.slice(0, mention.index) + replacement, mention.index + replacement.length);
+    setVisibleText(
+      draft.text.slice(0, mention.index) + replacement,
+      mention.index + replacement.length,
+    );
   }
   function chooseSendMode(value: boolean) {
     setSendOnEnter(value);
@@ -215,7 +242,10 @@ export function Composer({
       </div>
     );
 
-  const showMentionMenu = focused && Boolean(mention) && (suggestions.length > 0 || showContextMentions);
+  const showMentionMenu =
+    focused &&
+    Boolean(mention) &&
+    (suggestions.length > 0 || showContextMentions);
 
   return (
     <div
@@ -232,15 +262,26 @@ export function Composer({
       }}
     >
       {banner}
-      <div className={cx("composer", focused && "composer--focused")} ref={root}>
+      <div
+        className={cx("composer", focused && "composer--focused")}
+        ref={root}
+      >
         {reply && (
           <div className="composer__reply">
             <span className="composer__reply-bar" aria-hidden="true" />
             <span className="composer__reply-copy">
-              <strong>{t("replyingTo", { name: replyAuthor ?? t("participant") })}</strong>
-              <span className="truncate">{messagePlainText(reply.body).slice(0, 160)}</span>
+              <strong>
+                {t("replyingTo", { name: replyAuthor ?? t("participant") })}
+              </strong>
+              <span className="truncate">
+                {messagePlainText(reply.body).slice(0, 160)}
+              </span>
             </span>
-            <IconButton size="icon-sm" label={t("cancel")} onClick={onCancelReply}>
+            <IconButton
+              size="icon-sm"
+              label={t("cancel")}
+              onClick={onCancelReply}
+            >
               <X />
             </IconButton>
           </div>
@@ -255,34 +296,76 @@ export function Composer({
                 onRetry={() => onRetryFile?.(attachment.id)}
               />
             ))}
+            <span className="composer__counter">
+              {t("attachmentsCount", {
+                count: attachments.length,
+                limit: attachmentLimit,
+              })}
+            </span>
           </div>
         )}
         {formatOpen && (
-          <div className="composer__format" role="toolbar" aria-label={t("formatting")}>
-            <button type="button" aria-label={t("bold")} onClick={() => wrap("**")}>
+          <div
+            className="composer__format"
+            role="toolbar"
+            aria-label={t("formatting")}
+          >
+            <button
+              type="button"
+              aria-label={t("bold")}
+              onClick={() => wrap("**")}
+            >
               <strong>B</strong>
             </button>
-            <button type="button" aria-label={t("italic")} onClick={() => wrap("_")}>
+            <button
+              type="button"
+              aria-label={t("italic")}
+              onClick={() => wrap("_")}
+            >
               <em>I</em>
             </button>
-            <button type="button" aria-label={t("underline")} onClick={() => wrap("++")}>
+            <button
+              type="button"
+              aria-label={t("underline")}
+              onClick={() => wrap("++")}
+            >
               <span className="composer__format-underline">U</span>
             </button>
-            <button type="button" aria-label={t("strike")} onClick={() => wrap("~~")}>
+            <button
+              type="button"
+              aria-label={t("strike")}
+              onClick={() => wrap("~~")}
+            >
               <s>S</s>
             </button>
             <span className="composer__format-divider" />
-            <button type="button" aria-label={t("link")} onClick={() => wrap("[", "](https://)", t("linkText"))}>
+            <button
+              type="button"
+              aria-label={t("link")}
+              onClick={() => wrap("[", "](https://)", t("linkText"))}
+            >
               <Link2 aria-hidden="true" />
             </button>
             <span className="composer__format-divider" />
-            <button type="button" aria-label={t("heading")} onClick={() => prefixLines("## ")}>
+            <button
+              type="button"
+              aria-label={t("heading")}
+              onClick={() => prefixLines("## ")}
+            >
               H
             </button>
-            <button type="button" aria-label={t("orderedList")} onClick={() => prefixLines("ordered")}>
+            <button
+              type="button"
+              aria-label={t("orderedList")}
+              onClick={() => prefixLines("ordered")}
+            >
               1.
             </button>
-            <button type="button" aria-label={t("bulletList")} onClick={() => prefixLines("- ")}>
+            <button
+              type="button"
+              aria-label={t("bulletList")}
+              onClick={() => prefixLines("- ")}
+            >
               •
             </button>
           </div>
@@ -292,12 +375,17 @@ export function Composer({
           className="composer__input"
           rows={1}
           value={draft.text}
-          onChange={(event) => setBody(encodeMentions(updateMentionText(draft, event.target.value)))}
+          onChange={(event) =>
+            setBody(
+              encodeMentions(updateMentionText(draft, event.target.value)),
+            )
+          }
           onFocus={() => setFocused(true)}
           onBlur={() => {
             onBlur();
             requestAnimationFrame(() => {
-              if (!root.current?.contains(document.activeElement)) setFocused(false);
+              if (!root.current?.contains(document.activeElement))
+                setFocused(false);
             });
           }}
           onKeyDown={keys}
@@ -320,14 +408,29 @@ export function Composer({
             >
               <Paperclip />
             </IconButton>
-            <input ref={mediaInput} hidden type="file" accept="image/*,video/*" multiple onChange={pickFiles} />
-            <input ref={fileInput} hidden type="file" multiple onChange={pickFiles} />
-            <input ref={markdownInput} hidden type="file" accept=".md,text/markdown,text/plain" multiple onChange={pickFiles} />
-            {attachments.length > 0 && (
-              <span className="composer__counter">
-                {t("attachmentsCount", { count: attachments.length, limit: attachmentLimit })}
-              </span>
-            )}
+            <input
+              ref={mediaInput}
+              hidden
+              type="file"
+              accept="image/*,video/*"
+              multiple
+              onChange={pickFiles}
+            />
+            <input
+              ref={fileInput}
+              hidden
+              type="file"
+              multiple
+              onChange={pickFiles}
+            />
+            <input
+              ref={markdownInput}
+              hidden
+              type="file"
+              accept=".md,text/markdown,text/plain"
+              multiple
+              onChange={pickFiles}
+            />
             <IconButton
               ref={emojiAnchor}
               size="icon-sm"
@@ -348,7 +451,10 @@ export function Composer({
                 onClick={() => {
                   const text = draft.text;
                   const separator = text && !/\s$/.test(text) ? " " : "";
-                  setVisibleText(`${text}${separator}@`, text.length + separator.length + 1);
+                  setVisibleText(
+                    `${text}${separator}@`,
+                    text.length + separator.length + 1,
+                  );
                 }}
               >
                 <AtSign />
@@ -356,7 +462,10 @@ export function Composer({
             )}
             <button
               type="button"
-              className={cx("composer__aa", formatOpen && "composer__aa--active")}
+              className={cx(
+                "composer__aa",
+                formatOpen && "composer__aa--active",
+              )}
               aria-label={t("formatting")}
               aria-pressed={formatOpen}
               onClick={() => setFormatOpen((open) => !open)}
@@ -367,12 +476,17 @@ export function Composer({
           <div className="composer__send-area">
             {!compact && (
               <span className="composer__hint">
-                {sendOnEnter ? t("composerEnterHint") : t("composerShiftEnterHint")}
+                {sendOnEnter
+                  ? t("composerEnterHint")
+                  : t("composerShiftEnterHint")}
               </span>
             )}
             <div
               ref={sendMenuAnchor}
-              className={cx("composer__send", canSend && "composer__send--active")}
+              className={cx(
+                "composer__send",
+                canSend && "composer__send--active",
+              )}
             >
               <button
                 type="button"
@@ -402,34 +516,65 @@ export function Composer({
       </div>
 
       {attachOpen && (
-        <FloatingPopover anchorRef={attachAnchor} placement="top-start" width={220} onDismiss={() => setAttachOpen(false)}>
+        <FloatingPopover
+          anchorRef={attachAnchor}
+          placement="top-start"
+          width={220}
+          onDismiss={() => setAttachOpen(false)}
+        >
           <Menu label={t("attach")}>
-            <MenuItem icon={<Image />} onClick={() => mediaInput.current?.click()}>
+            <MenuItem
+              icon={<Image />}
+              onClick={() => mediaInput.current?.click()}
+            >
               {t("attachMedia")}
             </MenuItem>
-            <MenuItem icon={<FileText />} onClick={() => fileInput.current?.click()}>
+            <MenuItem
+              icon={<FileText />}
+              onClick={() => fileInput.current?.click()}
+            >
               {t("attachFile")}
             </MenuItem>
-            <MenuItem icon={<Code2 />} onClick={() => markdownInput.current?.click()}>
+            <MenuItem
+              icon={<Code2 />}
+              onClick={() => markdownInput.current?.click()}
+            >
               {t("attachMarkdown")}
             </MenuItem>
           </Menu>
         </FloatingPopover>
       )}
       {emojiOpen && (
-        <FloatingPopover anchorRef={emojiAnchor} placement="top-start" width={340} className="composer__emoji" onDismiss={() => setEmojiOpen(false)}>
+        <FloatingPopover
+          anchorRef={emojiAnchor}
+          placement="top-start"
+          width={340}
+          className="composer__emoji"
+          onDismiss={() => setEmojiOpen(false)}
+        >
           <div role="dialog" aria-label={t("emoji")}>
             <EmojiPickerPanel height={360} onPick={insertEmoji} />
           </div>
         </FloatingPopover>
       )}
       {sendMenuOpen && (
-        <FloatingPopover anchorRef={sendMenuAnchor} placement="top-start" width={220} onDismiss={() => setSendMenuOpen(false)}>
+        <FloatingPopover
+          anchorRef={sendMenuAnchor}
+          placement="top-start"
+          width={220}
+          onDismiss={() => setSendMenuOpen(false)}
+        >
           <Menu label={t("sendSettings")}>
-            <MenuItem checked={sendOnEnter} onClick={() => chooseSendMode(true)}>
+            <MenuItem
+              checked={sendOnEnter}
+              onClick={() => chooseSendMode(true)}
+            >
               {t("composerEnterHint")}
             </MenuItem>
-            <MenuItem checked={!sendOnEnter} onClick={() => chooseSendMode(false)}>
+            <MenuItem
+              checked={!sendOnEnter}
+              onClick={() => chooseSendMode(false)}
+            >
               {t("composerShiftEnterHint")}
             </MenuItem>
             <MenuDivider />
@@ -440,7 +585,12 @@ export function Composer({
         </FloatingPopover>
       )}
       {showMentionMenu && (
-        <FloatingPopover anchorRef={root} placement="top-start" width={250} onDismiss={() => undefined}>
+        <FloatingPopover
+          anchorRef={root}
+          placement="top-start"
+          width={250}
+          onDismiss={() => undefined}
+        >
           <Menu label={t("participants")} className="mention-menu">
             {suggestions.map((member) => (
               <button
@@ -466,15 +616,31 @@ export function Composer({
             {showContextMentions && suggestions.length > 0 && <MenuDivider />}
             {showContextMentions && (
               <>
-                <button type="button" role="menuitem" className="mention-menu__item" onMouseDown={(event) => event.preventDefault()} onClick={() => insertContextual("all")}>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="mention-menu__item"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => insertContextual("all")}
+                >
                   <span className="mention-menu__at">@</span>
                   <strong>{t("mentionAll")}</strong>
-                  <span className="mention-menu__meta">{t("mentionAllMeta", { count: members.length })}</span>
+                  <span className="mention-menu__meta">
+                    {t("mentionAllMeta", { count: members.length })}
+                  </span>
                 </button>
-                <button type="button" role="menuitem" className="mention-menu__item" onMouseDown={(event) => event.preventDefault()} onClick={() => insertContextual("here")}>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="mention-menu__item"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => insertContextual("here")}
+                >
                   <span className="mention-menu__at">@</span>
                   <strong>{t("mentionHere")}</strong>
-                  <span className="mention-menu__meta">{t("mentionHereMeta", { count: onlineCount })}</span>
+                  <span className="mention-menu__meta">
+                    {t("mentionHereMeta", { count: onlineCount })}
+                  </span>
                 </button>
               </>
             )}

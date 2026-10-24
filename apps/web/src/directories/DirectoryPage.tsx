@@ -5,7 +5,7 @@ import { IconButton, cx } from "../ui";
 
 /**
  * Utility screens (threads, important, members) are master-detail on desktop:
- * a 360px list where the chat list normally sits, and the selected item on the right.
+ * a list aligned to the messenger chat list, and the selected item on the right.
  * On phones only the list renders; details live on their own routes.
  */
 export function DirectorySplit({
@@ -21,7 +21,13 @@ export function DirectorySplit({
   className?: string;
 }) {
   return (
-    <div className={cx("directory", detailOpen && "directory--detail-open", className)}>
+    <div
+      className={cx(
+        "directory",
+        detailOpen && "directory--detail-open",
+        className,
+      )}
+    >
       {list}
       <section className="directory__detail">{detail}</section>
     </div>
@@ -80,7 +86,12 @@ export function DirectoryDetailHead({
   return (
     <header className="directory-detail__head">
       {onBack && (
-        <IconButton className="mobile-back" size="icon-lg" label={t("back")} onClick={onBack}>
+        <IconButton
+          className="mobile-back"
+          size="icon-lg"
+          label={t("back")}
+          onClick={onBack}
+        >
           <ChevronLeft />
         </IconButton>
       )}
@@ -125,7 +136,11 @@ export function DirectoryRow({
   return (
     <button
       type="button"
-      className={cx("directory-row", selected && "directory-row--selected", className)}
+      className={cx(
+        "directory-row",
+        selected && "directory-row--selected",
+        className,
+      )}
       onClick={onClick}
       aria-label={label}
       aria-current={selected ? "true" : undefined}

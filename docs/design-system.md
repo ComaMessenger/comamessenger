@@ -2,75 +2,72 @@
 
 ## Direction
 
-Coma uses a calm workspace UI with its own identity. Early information-architecture research included Pachca, but the production language is deliberately distinct: a permanent compact navigation rail, a Telegram-like chat stream, an inset content workspace and a two-level composer. No Pachca brand assets or product copy are used.
+The approved visual source is [`design/prototypes/interface-lab/index.html`](../design/prototypes/interface-lab/index.html). It is an independent HTML concept inspired by common workspace UI patterns. No paid ReUI code, templates, icons or assets are included.
 
-Primary references:
-
-- supplied Coma logo and brand color `#174586`;
-- live Pachca web application inspected on 18 August 2026 only as competitive research;
-- https://pachca.com/help-center/features/menu;
-- https://pachca.com/help-center/features/actions-with-messages;
-- https://pachca.com/help-center/features/papki;
-- https://pachca.com/help-center/features/roli-v-chatah.
+Coma uses neutral connected surfaces, fine semantic borders, Onest typography, compact rectangular controls, pastel avatars and a two-level composer. The same foundations apply to the web client, mobile web, iOS and Android. Existing routes, permissions, API contracts, offline queues and interaction capabilities are retained. See [`redesign/interface-lab-rollout.md`](../redesign/interface-lab-rollout.md) for implementation scope and ownership.
 
 ## Foundations
 
 ### Layout
 
-- Desktop global navigation: `220px`, full viewport height.
-- Desktop chat stream: `320px`; it is a separate region rather than part of global navigation.
-- Primary control height: `36px`; compact control height: `32px`.
-- Sidebar row height: `34px`.
-- Conversation header: `70px`.
-- Content column: fluid; message content is capped at `880px` and centered.
-- Phone breakpoint: `640px`; desktop columns заменяются navigation stack, а не сжимаются в compact rail.
-- Tablet может временно скрывать sidebar по route/state; phone одновременно показывает ровно один основной экран: chat list, conversation или thread.
+- Desktop global navigation: `208px`, full viewport height; collapsed rail: `60px`.
+- Desktop chat stream: `300px`, separate from global navigation. The columns connect through fine dividing borders rather than separate floating cards.
+- Main web controls: `36px`; compact controls: `28–32px`; phone inputs and primary actions keep at least `44px` interaction areas.
+- Content is fluid; messages retain bounded readable line lengths and virtual scrolling.
+- At tablet widths up to `840px`, global navigation uses the compact rail. At `640px` and below, phone navigation shows one main screen at a time: chat list, conversation or thread.
+- Native iOS/Android use safe areas, platform navigation and keyboard-aware layouts. Primary native controls are `48px` high; icon touch targets are at least `44px`.
 
 ### Typography
 
-- Font: self-hosted variable Onest.
-- Base UI: `14px / 20px`, regular or medium.
-- Secondary labels: `12–13px / 16–18px`.
-- Screen headings: `18–24px`, weight `600`.
-- Avoid oversized marketing headings inside the product shell.
-- Body line-height token is `1.5`; vertical centering controls use flex/grid alignment, never a line-height equal to control height.
-- Font fallback: `"Onest Variable", Onest, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif`.
-- Timestamp/count styles use `font-variant-numeric: tabular-nums`.
+- Web: self-hosted variable Onest. Native: bundled Onest regular, medium, semibold and bold.
+- Body/UI: `14px / 20–21px`; compact metadata: `11–12px / 16–18px`; section headings: `17–18px`; page headings: `24px`, weight `600`.
+- Native body/input text is typically `16px`, keeping Dynamic Type support and larger touch targets.
+- Regular and medium weights do most work; semibold establishes hierarchy. Avoid oversized marketing headings in the product shell.
+- Align control contents with flex/grid. Timestamp/count styles use tabular numerals.
+- Fallbacks include system sans, Cyrillic and CJK families; long content must not expand layout columns.
 
 ### Radius scale
 
-| Token  | Value | Use                                  |
-| ------ | ----: | ------------------------------------ |
-| `sm`   |   6px | compact state surfaces               |
-| `md`   |   9px | buttons, inputs, nav rows            |
-| `lg`   |  12px | grouped controls, list icons         |
-| `xl`   |  16px | dialogs and the conversation surface |
-| `full` | 999px | primary CTA, status chips, reactions |
+| Token  | Value | Use                                          |
+| ------ | ----: | -------------------------------------------- |
+| `sm`   |   6px | compact chips, menu items, state surfaces    |
+| `md`   |   8px | buttons, inputs, nav rows                    |
+| `lg`   |  12px | cards, composer, grouped controls            |
+| `xl`   |  16px | dialogs and larger overlays                  |
+| `full` | 999px | presence dots, avatar circles, switch tracks |
 
-### Light color tokens
+### Semantic colors
 
-The default product theme is light and derives its accent from the supplied logo.
+| Role                             | Light     | Dark      |
+| -------------------------------- | --------- | --------- |
+| Canvas                           | `#f6f6f7` | `#151517` |
+| Sidebar/subtle surface           | `#fafafa` | `#222225` |
+| Main surface                     | `#ffffff` | `#1d1d20` |
+| Raised surface                   | `#ffffff` | `#27272c` |
+| Foreground                       | `#202023` | `#f0f0f2` |
+| Muted text                       | `#686873` | `#a0a0aa` |
+| Border                           | `#e5e5e9` | `#323237` |
+| Strong border                    | `#d2d2d9` | `#46464f` |
+| Brand accent (`primary`)         | `#174586` | `#86aff0` |
+| Main action (`action`)           | `#252528` | `#eeeeef` |
+| Text on main action (`onAction`) | `#ffffff` | `#222225` |
 
-- canvas: `#f3f6fa`;
-- sidebar: `#eef3f8`;
-- background and surface: `#ffffff`;
-- foreground: `#182235`;
-- muted: `#6b788b`;
-- border: `#dce3ec`;
-- primary: `#174586`;
-- primary soft: `#e3edf9`.
+`primary` remains the workspace accent for links, selection, focus and presence of an active feature. `action` is separate: primary buttons use a neutral high-contrast fill in both themes. Custom workspace branding changes the accent, preserving neutral action buttons. Semantic success, warning, danger and info colors accompany text, never carry meaning alone.
+
+Avatars have stable seeded `avatarSurface1..8` / `avatarForeground1..8` pairs. Images replace initials when an uploaded avatar is available.
 
 ### Dark color and elevation policy
 
-- Dark mode uses neutral charcoal surfaces; blue remains an action/selection accent rather than tinting the canvas.
-- Dark mode does not use decorative glow, text glow or luminous drop shadows. Depth is communicated by surface contrast and semantic borders.
-- Focus visibility remains mandatory, but uses an outline/ring with bounded opacity instead of a diffuse glow.
+- Dark mode uses neutral charcoal surfaces, not a blue-tinted canvas.
+- No decorative glow, gradients, text glow or luminous shadows. Surface contrast and semantic borders communicate depth; light-mode shadows remain subtle.
+- Focus visibility uses a bounded outline/ring and is preserved under reduced motion.
+- Short state transitions use `120–140ms`; respect system reduced-motion preferences.
 
 ## Components
 
 ### Buttons
 
-- `primary`: filled primary color with a 9px radius; use for one main action per surface.
+- `primary`: neutral `action` fill with `onAction` text and an 8px radius; use for one main action per surface.
 - `secondary`: bordered, compact rectangular control.
 - `ghost`: icon and contextual actions with transparent idle state.
 - `danger`: destructive actions only.
@@ -79,8 +76,8 @@ The default product theme is light and derives its accent from the supplied logo
 ### Inputs
 
 - Labels stay above the field.
-- Inputs are 42px high with 9px radius.
-- Focus uses primary border plus a subtle 3px ring.
+- Inputs are 36px high on desktop and at least 44px on phone, with an 8px radius.
+- Focus uses the primary accent border plus a subtle 2px ring.
 - Validation is rendered next to the form, never only as a toast.
 
 ### Sidebar
@@ -93,9 +90,9 @@ The desktop shell has three independent regions:
 
 Global navigation order is stable: Coma logo plus ellipsized workspace name, flat search plus accent create button, `Чаты`, `Треды`, `Важные`, `Участники`, then the current profile. It never turns into a chat list and never changes when a utility section opens. Workspace settings and sign-out live in the workspace switcher menu; `Настройки` is not a navigation item.
 
-The profile block is anchored to the viewport bottom rather than following navigation content. On desktop the global navigation can collapse to a `58px` icon rail; the preference is local to the browser and expanding the workspace switcher restores the full rail before opening its menu. Collapse never changes the chat stream, selected route or conversation state.
+The profile block is anchored to the viewport bottom rather than following navigation content. On desktop the global navigation can collapse to a `60px` icon rail; the preference is local to the browser. Workspace and profile menus remain available next to the compact rail. Collapse never changes the chat stream, selected route or conversation state.
 
-Search uses a flat semantic surface with no inner/outer shadow. The adjacent create button uses the primary accent. The workspace menu shows account identity, the current workspace and role-gated workspace settings.
+Search uses a flat semantic surface with no inner/outer shadow. The adjacent create button uses the neutral main-action fill. The workspace menu shows account identity, the current workspace and role-gated workspace settings.
 
 The chat stream is continuous, compact and independently scrollable. Rows follow a familiar Telegram-like information hierarchy without copying its assets: circular avatar, title and notification state, time, two-line preview and unread count. There is no visible overflow button. The chat menu opens by right click, keyboard context-menu command or touch long press, and provides pinning, notification state, read state, personal folder membership and leave actions. A muted chat shows `BellOff` beside its title; channel kind is not repeated with a megaphone icon.
 
@@ -111,7 +108,7 @@ Phone Web uses a familiar messenger list pattern without copying Telegram assets
 - filter chips start with `Все`, `Личные`, `Групповые`, `Каналы`, with `Все` selected by default; personal folders continue the same horizontal row;
 - `Личные` maps to `kind=direct`, `Групповые` to `kind=group`, and `Каналы` to `kind=channel`;
 - each card is at least `72px` high and contains a `48px` avatar, title, bounded preview, locale-formatted time and unread/mention state;
-- until file avatars ship in phase 4, avatar uses initials and a stable semantic color seed, not a random color per render;
+- avatars use uploaded images where available, with initials and a stable pastel semantic seed as fallback;
 - title and time occupy one row; preview and unread badge occupy the second row; text containers have `min-width: 0`;
 - touch targets are at least `44px`, and the list respects `safe-area-inset-*`;
 - opening a card navigates to the conversation screen; conversation and thread have an explicit Back action and preserve list scroll/filter state.
@@ -158,7 +155,7 @@ The composer is a floating two-level surface: text entry occupies the upper row 
 
 - Dialog width defaults to 500px with a 16px radius.
 - Header and body are separated by a 1px semantic border.
-- Popover menus use a 9–12px radius, compact 34–36px rows and no decorative gradients.
+- Popover menus use an 8–12px radius, compact 34–36px rows and no decorative gradients.
 - Destructive menu items form a separated group.
 
 ### Empty and loading states
@@ -190,7 +187,7 @@ Every interactive component must define idle, hover, active, focus-visible, disa
 
 ## Implementation
 
-- Source-of-truth semantic tokens live in `packages/tokens` as platform-neutral typed data; Web consumes generated CSS custom properties.
+- Shared semantic tokens live in `packages/tokens` as platform-neutral typed data with matching Web CSS custom properties. Native iOS/Android consume the same typed themes.
 - Primitive React components remain Web-native in `apps/web`; a cross-platform `@coma/ui` package is not created in phase 3.
 - Component styles live in `apps/web` and reference semantic variables; domain components do not contain raw palette values.
 - Product composition is split into feature modules under `apps/web/src`: `auth/`, `shell/` (messenger shell, realtime session, global sidebar), `chats/`, `conversation/`, `composer/`, `dialogs/`, `directories/`; `settings/` and `agents/` keep their own layout. `App.tsx` only resolves the server state and picks a screen.

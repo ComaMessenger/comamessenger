@@ -25,15 +25,17 @@ export function AuthLayout({
         className={cx("auth-card", wide && "auth-card--wide")}
         aria-labelledby="auth-title"
       >
-        {header ?? (
-          <>
-            <Logo size="lg" className="auth-card__logo" />
-            <h1 id="auth-title" className="auth-card__title">
-              {title}
-            </h1>
-            {lead && <p className="auth-card__lead">{lead}</p>}
-          </>
-        )}
+        <header className="auth-card__header">
+          {header ?? (
+            <>
+              <Logo size="lg" className="auth-card__logo" />
+              <h1 id="auth-title" className="auth-card__title">
+                {title}
+              </h1>
+              {lead && <p className="auth-card__lead">{lead}</p>}
+            </>
+          )}
+        </header>
         {children}
       </section>
       <span className="auth-footer">{t("authFooter")}</span>

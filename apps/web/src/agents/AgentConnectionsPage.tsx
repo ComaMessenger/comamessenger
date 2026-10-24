@@ -101,7 +101,7 @@ export function AgentConnectionsPage({
           <p>{t("agentConnectionsDescription")}</p>
         </div>
         {canManage && (
-          <Button onClick={() => setCreateOpen(true)}>
+          <Button variant="primary" onClick={() => setCreateOpen(true)}>
             <Plus />
             {t("agentConnectionAdd")}
           </Button>
@@ -294,6 +294,7 @@ export function AgentConnectionsPage({
               {t("cancel")}
             </Button>
             <Button
+              variant="primary"
               disabled={
                 pendingID === "new" ||
                 !draft.name.trim() ||

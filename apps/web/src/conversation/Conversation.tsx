@@ -3,11 +3,18 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ChevronLeft, Info, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
-import type { Chat, Message } from "@comamessenger/core";
+import { feedRows, type Chat, type Message } from "@comamessenger/core";
 import { hasPermission } from "../settings";
-import { Avatar, EmptyState, IconButton, InlineError, PresenceDot, cx } from "../ui";
+import {
+  Avatar,
+  EmptyState,
+  IconButton,
+  InlineError,
+  PresenceDot,
+  cx,
+} from "../ui";
 import { getLocalDraft, setLocalDraft, syncDraft } from "../lib/drafts";
-import { formatDaySeparator, minuteGap } from "../lib/format";
+import { formatDaySeparator } from "../lib/format";
 import { resolvedMentionActorIDs } from "../lib/mentions";
 import { canManageChat, chatGlyph, isReadOnly, titleOf } from "../lib/chats";
 import { useIsMobile } from "../lib/useMediaQuery";
@@ -40,10 +47,21 @@ export function Conversation({
 }) {
   const { t } = useTranslation();
   const isMobile = useIsMobile();
-  const { api, user, store, coordinator, outbox, scheduleReload, openDialog, whenReady } =
-    useMessenger();
+  const {
+    api,
+    user,
+    store,
+    coordinator,
+    outbox,
+    scheduleReload,
+    openDialog,
+    whenReady,
+  } = useMessenger();
   const queryClient = useQueryClient();
-  const typing = useStore(store, (state) => state.typing[chatID] ?? emptyActorIDs);
+  const typing = useStore(
+    store,
+    (state) => state.typing[chatID] ?? emptyActorIDs,
+  );
   const presence = useStore(store, (state) => state.presence);
   const messageStreams = useStore(store, (state) => state.messageStreams);
   const agentStatuses = useStore(store, (state) => state.agentStatuses);
@@ -63,6 +81,10 @@ export function Conversation({
   );
   const scroller = useRef<HTMLDivElement>(null);
   const feed = useMessageFeed({ api, store, chatID, scroller, whenReady });
+  const rows = useMemo(
+    () => feedRows(feed.visible, feed.unreadAnchor),
+    [feed.visible, feed.unreadAnchor],
+  );
   const attachments = useAttachments(api);
   const [reply, setReply] = useState<Message | null>(null);
   const [body, setBody] = useState(() => getLocalDraft(chatID, null));
@@ -71,10 +93,13 @@ export function Conversation({
   const title = titleOf(chat, members, user.id);
   const directPeer =
     chat?.kind === "direct"
-      ? (chat.direct_peer ?? members.find((member) => member.actor_id !== user.id))
+      ? (chat.direct_peer ??
+        members.find((member) => member.actor_id !== user.id))
       : undefined;
   const readonly = chat ? isReadOnly(chat) : false;
-  const canModerate = hasPermission(user, "chats.moderate") || (chat ? canManageChat(chat) : false);
+  const canModerate =
+    hasPermission(user, "chats.moderate") ||
+    (chat ? canManageChat(chat) : false);
   const visibleStreams = Object.values(messageStreams).filter(
     (item) => item.chatID === chatID && item.threadRootID === null,
   );
@@ -82,7 +107,9 @@ export function Conversation({
     (item) =>
       item.chatID === chatID &&
       item.threadRootID === null &&
-      (item.state === "thinking" || item.state === "tool" || item.state === "streaming"),
+      (item.state === "thinking" ||
+        item.state === "tool" ||
+        item.state === "streaming"),
   );
 
   useEffect(() => {
@@ -96,7 +123,12 @@ export function Conversation({
   async function send() {
     const content = body.trim();
     const uploaded = attachments.ready;
-    if ((!content && uploaded.length === 0) || attachments.uploading || readonly) return;
+    if (
+      (!content && uploaded.length === 0) ||
+      attachments.uploading ||
+      readonly
+    )
+      return;
     setBody("");
     setReply(null);
     setLocalDraft(chatID, null, "");
@@ -123,17 +155,24 @@ export function Conversation({
       {activeAgents.length === 1
         ? t("agentWorking", {
             name:
-              members.find((member) => member.actor_id === activeAgents[0]!.actorID)?.display_name ??
-              t("agent"),
+              members.find(
+                (member) => member.actor_id === activeAgents[0]!.actorID,
+              )?.display_name ?? t("agent"),
           })
         : t("agentsWorking", { count: activeAgents.length })}
     </span>
   ) : typing.length ? (
-    typingNames.length === 1 ? t("typingOne", { name: typingNames[0] }) : t("typingMany", { count: typing.length })
+    typingNames.length === 1 ? (
+      t("typingOne", { name: typingNames[0] })
+    ) : (
+      t("typingMany", { count: typing.length })
+    )
   ) : directPeer ? (
-    directPeer.status_text
-      ? `${directPeer.status_emoji} ${directPeer.status_text}`.trim()
-      : directPeer.title || `@${directPeer.handle}`
+    directPeer.status_text ? (
+      `${directPeer.status_emoji} ${directPeer.status_text}`.trim()
+    ) : (
+      directPeer.title || `@${directPeer.handle}`
+    )
   ) : chat?.topic ? (
     chat.topic
   ) : (
@@ -141,11 +180,18 @@ export function Conversation({
   );
 
   return (
-    <div className={cx("conversation", threadID && "conversation--thread-open")}>
+    <div
+      className={cx("conversation", threadID && "conversation--thread-open")}
+    >
       <div className="conversation__main">
         <header className="conversation-head">
           {isMobile && (
-            <IconButton size="icon-lg" className="conversation-head__back" label={t("back")} onClick={onBack}>
+            <IconButton
+              size="icon-lg"
+              className="conversation-head__back"
+              label={t("back")}
+              onClick={onBack}
+            >
               <ChevronLeft />
             </IconButton>
           )}
@@ -156,135 +202,183 @@ export function Conversation({
             avatarVersion={directPeer?.avatar_version}
             agent={directPeer?.type === "agent"}
             glyph={chatGlyph(chat)}
-            presence={directPeer && directPeer.type !== "agent" ? presence[directPeer.actor_id] : undefined}
+            presence={
+              directPeer && directPeer.type !== "agent"
+                ? presence[directPeer.actor_id]
+                : undefined
+            }
             size="md"
           />
-          <button type="button" className="conversation-head__title" onClick={() => setInfo(true)}>
+          <button
+            type="button"
+            className="conversation-head__title"
+            onClick={() => setInfo(true)}
+          >
             <h1 className="truncate">{title}</h1>
             <span className="truncate">{subtitle}</span>
           </button>
-          {!isMobile && (
+          <div className="conversation-head__actions">
+            {!isMobile && (
+              <IconButton
+                label={t("searchInChat")}
+                onClick={() =>
+                  openDialog({
+                    kind: "search",
+                    request: { tab: "messages", chatID },
+                  })
+                }
+              >
+                <Search />
+              </IconButton>
+            )}
             <IconButton
-              label={t("searchInChat")}
-              onClick={() => openDialog({ kind: "search", request: { tab: "messages", chatID } })}
+              size={isMobile ? "icon-lg" : "icon"}
+              label={t("chatInfo")}
+              onClick={() => setInfo(true)}
             >
-              <Search />
+              <Info />
             </IconButton>
-          )}
-          <IconButton size={isMobile ? "icon-lg" : "icon"} label={t("chatInfo")} onClick={() => setInfo(true)}>
-            <Info />
-          </IconButton>
+          </div>
         </header>
 
-        <div
-          className={cx("message-scroll", feed.feedReady && "message-scroll--ready")}
-          ref={scroller}
-          aria-live="polite"
-          onScroll={(event) => feed.onScroll(event.currentTarget)}
-        >
-          <div className="message-feed">
-            {feed.loadingPrevious && <span className="message-feed__loader" aria-hidden="true" />}
-            {feed.loadError && (
-              <InlineError title={t("historyLoadFailed")} retryLabel={t("retry")} onRetry={feed.retryInitial} />
+        <div className="conversation__stream">
+          <div
+            className={cx(
+              "message-scroll",
+              feed.feedReady && "message-scroll--ready",
             )}
-            {!feed.hasMore && chat && !feed.loadError && (
-              <ChatIntro chat={chat} title={title} onAddMembers={() => setInfo(true)} />
-            )}
-            {feed.feedReady && feed.visible.length === 0 && !feed.loadError && (
-              <EmptyState compact title={t("noMessages")} />
-            )}
-            <div className="message-feed__virtual" style={{ height: feed.virtual.getTotalSize() }}>
-              {feed.virtual.getVirtualItems().map((row) => {
-                const message = feed.visible[row.index]!;
-                const previous = feed.visible[row.index - 1];
-                const newDay =
-                  !previous ||
-                  new Date(previous.created_at).toDateString() !==
-                    new Date(message.created_at).toDateString();
-                const firstUnread =
-                  feed.unreadAnchor > 0 &&
-                  message.created_seq > feed.unreadAnchor &&
-                  (!previous || previous.created_seq <= feed.unreadAnchor);
-                return (
-                  <div
-                    key={message.id}
-                    ref={feed.virtual.measureElement}
-                    data-index={row.index}
-                    className="message-feed__row"
-                    style={{ transform: `translateY(${row.start}px)` }}
-                  >
-                    {newDay && (
-                      <div className="day-separator">
-                        <span>{formatDaySeparator(message.created_at)}</span>
-                      </div>
-                    )}
-                    {firstUnread && (
-                      <div className="unread-separator">
-                        <span>{t("newMessages")}</span>
-                      </div>
-                    )}
-                    <MessageRow
-                      message={message}
-                      members={members}
-                      replyMessage={
-                        message.reply_to_id
-                          ? feed.messages.find((item) => item.id === message.reply_to_id)
-                          : undefined
-                      }
-                      author={members.find((item) => item.actor_id === message.actor_id)}
-                      own={message.actor_id === user.id || !message.actor_id}
-                      canModerate={canModerate}
-                      grouped={
-                        !newDay &&
-                        !firstUnread &&
-                        previous?.actor_id === message.actor_id &&
-                        minuteGap(previous.created_at, message.created_at) < 5
-                      }
-                      chatName={title}
-                      pinned={pinnedIDs.has(message.id)}
-                      onReply={() => setReply(message)}
-                      onJump={(id) => void feed.jump(id)}
-                      onRetry={() => void outbox.flush()}
-                      onThread={() => onOpenThread(message.thread_root_id ?? message.id)}
-                      onPinnedChanged={() => {
-                        void queryClient.invalidateQueries({ queryKey: ["pins", chatID] });
-                        void queryClient.invalidateQueries({ queryKey: ["important"] });
-                      }}
-                      onChanged={(updated) => {
-                        store.getState().apply({
-                          op: "event",
-                          seq: Math.max(store.getState().checkpoint + 1, updated.created_seq),
-                          type: "message.updated",
-                          occurred_at: updated.created_at,
-                          actor_id: updated.actor_id,
-                          chat_id: updated.chat_id,
-                          subject_id: updated.id,
-                          data: updated,
-                        });
-                        scheduleReload();
-                      }}
-                    />
-                  </div>
-                );
-              })}
+            ref={scroller}
+            aria-live="polite"
+            onScroll={(event) => feed.onScroll(event.currentTarget)}
+          >
+            <div className="message-feed">
+              {feed.loadingPrevious && (
+                <span className="message-feed__loader" aria-hidden="true" />
+              )}
+              {feed.loadError && (
+                <InlineError
+                  title={t("historyLoadFailed")}
+                  retryLabel={t("retry")}
+                  onRetry={feed.retryInitial}
+                />
+              )}
+              {!feed.hasMore && chat && !feed.loadError && (
+                <ChatIntro
+                  chat={chat}
+                  title={title}
+                  onAddMembers={() => setInfo(true)}
+                />
+              )}
+              {feed.feedReady &&
+                feed.visible.length === 0 &&
+                !feed.loadError && (
+                  <EmptyState compact title={t("noMessages")} />
+                )}
+              <div
+                className="message-feed__virtual"
+                style={{ height: feed.virtual.getTotalSize() }}
+              >
+                {feed.virtual.getVirtualItems().map((row) => {
+                  const { message, newDay, firstUnread, grouped } =
+                    rows[row.index]!;
+                  return (
+                    <div
+                      key={message.id}
+                      ref={feed.virtual.measureElement}
+                      data-index={row.index}
+                      className="message-feed__row"
+                      style={{ transform: `translateY(${row.start}px)` }}
+                    >
+                      {newDay && (
+                        <div className="day-separator">
+                          <span>{formatDaySeparator(message.created_at)}</span>
+                        </div>
+                      )}
+                      {firstUnread && (
+                        <div className="unread-separator">
+                          <span>{t("newMessages")}</span>
+                        </div>
+                      )}
+                      <MessageRow
+                        message={message}
+                        members={members}
+                        replyMessage={
+                          message.reply_to_id
+                            ? feed.messages.find(
+                                (item) => item.id === message.reply_to_id,
+                              )
+                            : undefined
+                        }
+                        author={members.find(
+                          (item) => item.actor_id === message.actor_id,
+                        )}
+                        own={message.actor_id === user.id || !message.actor_id}
+                        canModerate={canModerate}
+                        grouped={grouped}
+                        chatName={title}
+                        pinned={pinnedIDs.has(message.id)}
+                        onReply={() => setReply(message)}
+                        onJump={(id) => void feed.jump(id)}
+                        onRetry={() => void outbox.flush()}
+                        onThread={() =>
+                          onOpenThread(message.thread_root_id ?? message.id)
+                        }
+                        onPinnedChanged={() => {
+                          void queryClient.invalidateQueries({
+                            queryKey: ["pins", chatID],
+                          });
+                          void queryClient.invalidateQueries({
+                            queryKey: ["important"],
+                          });
+                        }}
+                        onChanged={(updated) => {
+                          store.getState().apply({
+                            op: "event",
+                            seq: Math.max(
+                              store.getState().checkpoint + 1,
+                              updated.created_seq,
+                            ),
+                            type: "message.updated",
+                            occurred_at: updated.created_at,
+                            actor_id: updated.actor_id,
+                            chat_id: updated.chat_id,
+                            subject_id: updated.id,
+                            data: updated,
+                          });
+                          scheduleReload();
+                        }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+              {visibleStreams.map((stream) => (
+                <AgentStreamRow
+                  key={stream.streamID}
+                  body={stream.body}
+                  author={members.find(
+                    (item) => item.actor_id === stream.actorID,
+                  )}
+                  state={agentStatuses[stream.runID]?.state ?? "streaming"}
+                />
+              ))}
             </div>
-            {visibleStreams.map((stream) => (
-              <AgentStreamRow
-                key={stream.streamID}
-                body={stream.body}
-                author={members.find((item) => item.actor_id === stream.actorID)}
-                state={agentStatuses[stream.runID]?.state ?? "streaming"}
-              />
-            ))}
           </div>
-        </div>
 
-        {feed.showScrollDown && (
-          <button type="button" className="scroll-latest" aria-label={t("scrollToBottom")} onClick={feed.scrollToBottom}>
-            <ArrowDown aria-hidden="true" />
-            {feed.newBelow > 0 && <span>{t("newBelow", { count: feed.newBelow })}</span>}
-          </button>
-        )}
+          {feed.showScrollDown && (
+            <button
+              type="button"
+              className="scroll-latest"
+              aria-label={t("scrollToBottom")}
+              onClick={feed.scrollToBottom}
+            >
+              <ArrowDown aria-hidden="true" />
+              {feed.newBelow > 0 && (
+                <span>{t("newBelow", { count: feed.newBelow })}</span>
+              )}
+            </button>
+          )}
+        </div>
 
         <Composer
           members={members}
@@ -297,7 +391,10 @@ export function Conversation({
           onBlur={() => void syncDraft(api, chatID, null, body)}
           onSend={() => void send()}
           reply={reply}
-          replyAuthor={members.find((item) => item.actor_id === reply?.actor_id)?.display_name}
+          replyAuthor={
+            members.find((item) => item.actor_id === reply?.actor_id)
+              ?.display_name
+          }
           onCancelReply={() => setReply(null)}
           readonly={readonly}
           attachments={attachments.attachments}
@@ -308,7 +405,13 @@ export function Conversation({
       </div>
 
       {threadID && chat && (
-        <ThreadPanel chat={chat} chatName={title} members={members} rootID={threadID} onClose={onCloseThread} />
+        <ThreadPanel
+          chat={chat}
+          chatName={title}
+          members={members}
+          rootID={threadID}
+          onClose={onCloseThread}
+        />
       )}
       {info && chat && (
         <ChatInfoDialog

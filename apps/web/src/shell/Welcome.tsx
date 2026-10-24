@@ -26,8 +26,14 @@ export function Welcome() {
     retry: false,
   });
 
-  const unreadTotal = unread.chats.reduce((sum, item) => sum + item.unread_count, 0);
-  const mentionTotal = unread.chats.reduce((sum, item) => sum + item.mention_count, 0);
+  const unreadTotal = unread.chats.reduce(
+    (sum, item) => sum + item.unread_count,
+    0,
+  );
+  const mentionTotal = unread.chats.reduce(
+    (sum, item) => sum + item.mention_count,
+    0,
+  );
   const attentionChats = unread.chats
     .filter((item) => item.unread_count > 0 && chats[item.chat_id])
     .sort(
@@ -45,7 +51,9 @@ export function Welcome() {
     .join(" · ");
   const pendingApprovals = approvals.data?.length ?? 0;
   const hasAttention =
-    attentionChats.length > 0 || unreadThreads.length > 0 || pendingApprovals > 0;
+    attentionChats.length > 0 ||
+    unreadThreads.length > 0 ||
+    pendingApprovals > 0;
 
   return (
     <section className="welcome" aria-label={t("selectChat")}>
@@ -57,21 +65,32 @@ export function Welcome() {
             <h2>{t(greetingKey(), { name: firstName(user.display_name) })}</h2>
             <p>
               {unreadTotal
-                ? t("welcomeSummary", { unread: unreadTotal, mentions: mentionTotal })
+                ? t("welcomeSummary", {
+                    unread: unreadTotal,
+                    mentions: mentionTotal,
+                  })
                 : t("welcomeSummaryQuiet")}
             </p>
             <div className="welcome__actions">
-              <Button variant="ink" size="sm" onClick={() => openDialog({ kind: "new-chat" })}>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => openDialog({ kind: "new-chat" })}
+              >
                 <Plus strokeWidth={2.4} />
                 {t("newChat")}
               </Button>
-              <Button variant="ink-soft" size="sm" onClick={() => openDialog({ kind: "search" })}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => openDialog({ kind: "search" })}
+              >
                 <Search />
                 {t("searchShortcut")}
               </Button>
               {user.can_create_invitations && (
                 <Button
-                  variant="ink-soft"
+                  variant="secondary"
                   size="sm"
                   onClick={() => navigate("/settings/workspace/invitations")}
                 >
@@ -103,7 +122,9 @@ export function Welcome() {
                   />
                   <span className="welcome__tile-body">
                     <span className="welcome__tile-head">
-                      <strong className="truncate">{titleOf(chat, [], user.id)}</strong>
+                      <strong className="truncate">
+                        {titleOf(chat, [], user.id)}
+                      </strong>
                       {item.mention_count ? (
                         <Badge tone="primary">@</Badge>
                       ) : (
@@ -119,13 +140,21 @@ export function Welcome() {
                 </button>
               ))}
               {unreadThreads.length > 0 && (
-                <button type="button" className="welcome__tile" onClick={() => navigate("/threads")}>
+                <button
+                  type="button"
+                  className="welcome__tile"
+                  onClick={() => navigate("/threads")}
+                >
                   <span className="welcome__tile-icon">
                     <MessagesSquare aria-hidden="true" />
                   </span>
                   <span className="welcome__tile-body">
-                    <strong>{t("threadsWithReplies", { count: unreadThreads.length })}</strong>
-                    {threadTitles && <small className="truncate">{threadTitles}</small>}
+                    <strong>
+                      {t("threadsWithReplies", { count: unreadThreads.length })}
+                    </strong>
+                    {threadTitles && (
+                      <small className="truncate">{threadTitles}</small>
+                    )}
                   </span>
                 </button>
               )}
@@ -139,7 +168,9 @@ export function Welcome() {
                     <Bot aria-hidden="true" />
                   </span>
                   <span className="welcome__tile-body">
-                    <strong>{t("agentApprovalsPending", { count: pendingApprovals })}</strong>
+                    <strong>
+                      {t("agentApprovalsPending", { count: pendingApprovals })}
+                    </strong>
                     <small>{t("welcomeApprovalsHint")}</small>
                   </span>
                 </button>
