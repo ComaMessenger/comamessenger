@@ -51,6 +51,8 @@ type Message struct {
 	ThreadReplyCount  int64               `json:"thread_reply_count"`
 	Files             []filemodel.File    `json:"files"`
 	Blocks            *Blocks             `json:"blocks,omitempty"`
+	// AgentProvenance says why an agent wrote the message; absent otherwise.
+	AgentProvenance *Provenance `json:"agent_provenance,omitempty"`
 }
 
 type ForwardAttribution struct {
@@ -165,6 +167,15 @@ func (s *Service) create(ctx context.Context, user identity.User, chatID string,
 	if !can(user, kind, role, action) {
 		return Message{}, false, ErrForbidden
 	}
+	// An agent posts only to chats its published version writes to; chats
+	// it only reads are sources, never destinations.
+	var readOnly bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM agents WHERE org_id=$1 AND actor_id=$2 AND $3::uuid=ANY(read_only_chat_ids))`, user.OrgID, user.ActorID, chatID).Scan(&readOnly); err != nil {
+		return Message{}, false, fmt.Errorf("check agent chat role: %w", err)
+	}
+	if readOnly {
+		return Message{}, false, ErrForbidden
+	}
 
 	fingerprint := commandFingerprint(chatID, input)
 	existing, existingFingerprint, err := findByClientID(ctx, tx, user.ActorID, input.ClientMsgID)
@@ -241,6 +252,10 @@ func (s *Service) create(ctx context.Context, user identity.User, chatID string,
 				return Message{}, false, err
 			}
 		}
+		if err := hydrateAgentProvenance(ctx, tx, user.OrgID, created); err != nil {
+			return Message{}, false, err
+		}
+		result = created[0]
 	}
 	if err := insertEvent(ctx, tx, user, chatID, result.ID, seq, "message.created"); err != nil {
 		return Message{}, false, err
@@ -996,7 +1011,9 @@ func hydrateFiles(ctx context.Context, tx pgx.Tx, orgID string, messages []Messa
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("iterate message files: %w", err)
 	}
-	return nil
+	rows.Close()
+	// Every reader that loads files also shows why an agent wrote a message.
+	return hydrateAgentProvenance(ctx, tx, orgID, messages)
 }
 
 func validateMentions(ctx context.Context, tx pgx.Tx, orgID, chatID string, actorIDs []string) error {

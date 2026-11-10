@@ -128,9 +128,10 @@ type DetachMCPConnectionInput struct {
 }
 
 type mcpBinding struct {
-	ConnectionID             string   `json:"connection_id"`
-	AllowedTools             []string `json:"allowed_tools"`
-	RequireWriteConfirmation bool     `json:"require_write_confirmation"`
+	ConnectionID             string            `json:"connection_id"`
+	AllowedTools             []string          `json:"allowed_tools"`
+	RequireWriteConfirmation bool              `json:"require_write_confirmation"`
+	ConfirmationPolicy       map[string]string `json:"confirmation_policy,omitempty"`
 }
 
 // UnmarshalJSON treats a missing require_write_confirmation as true.
@@ -802,6 +803,20 @@ func (service *Service) RuntimeMCPServersForRun(ctx context.Context, current ide
 		_ = json.Unmarshal(catalog, &tools)
 		server.AllowedTools = effectiveTools(binding.AllowedTools, assignable, tools, catalogKnown)
 		server.RequireWriteConfirmation = binding.RequireWriteConfirmation || writesConfirmed
+		server.ToolConfirmation = make(map[string]string, len(server.AllowedTools))
+		for _, tool := range server.AllowedTools {
+			mode := "confirm"
+			if !writesConfirmed {
+				if chosen, ok := binding.ConfirmationPolicy[tool]; ok {
+					if chosen == "auto" {
+						mode = "auto"
+					}
+				} else if !binding.RequireWriteConfirmation {
+					mode = "auto"
+				}
+			}
+			server.ToolConfirmation[tool] = mode
+		}
 		server.Headers, err = service.openConnectionHeaders(current.OrgID, server.ID, legacyAgentID, encrypted)
 		if err != nil {
 			return nil, err

@@ -86,7 +86,8 @@ func validateBlockReferences(ctx context.Context, tx pgx.Tx, user identity.User,
 			}
 		}
 	}
-	for _, source := range blocks.Sources {
+	for index := range blocks.Sources {
+		source := &blocks.Sources[index]
 		var visible bool
 		var err error
 		switch source.Kind {
@@ -101,8 +102,19 @@ func validateBlockReferences(ctx context.Context, tx pgx.Tx, user identity.User,
 				WHERE mf.org_id=f.org_id AND mf.file_id=f.id)))`, user.OrgID, source.FileID, user.ActorID).Scan(&visible)
 		default:
 			// Knowledge documents are owned by another package; their access is
-			// re-checked when a client opens the source.
+			// re-checked when a client opens the source. A fragment must belong
+			// to the document; its position comes from Core, not the author.
 			visible = true
+			if source.ChunkID != "" {
+				var position int
+				err = tx.QueryRow(ctx, `SELECT position FROM knowledge_chunks WHERE org_id=$1 AND id=$2 AND document_id=$3`, user.OrgID, source.ChunkID, source.DocumentID).Scan(&position)
+				if errors.Is(err, pgx.ErrNoRows) {
+					return invalid("sources.chunk_id must be a fragment of the document")
+				}
+				if err == nil {
+					source.Position = &position
+				}
+			}
 		}
 		if err != nil {
 			return fmt.Errorf("validate message source: %w", err)

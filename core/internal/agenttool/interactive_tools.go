@@ -53,6 +53,8 @@ func blocksSchema(uuidSchema map[string]any) map[string]any {
 			"message_id":  uuidSchema,
 			"file_id":     uuidSchema,
 			"document_id": uuidSchema,
+			"chunk_id":    map[string]any{"type": "string", "format": "uuid", "description": "chunk_id of the search_knowledge fragment the answer relies on."},
+			"position":    map[string]any{"type": "integer", "minimum": 0},
 			"title":       text(0, 200),
 			"excerpt":     text(0, 500),
 		})},
@@ -64,13 +66,13 @@ func interactiveTools(executor *Executor, object func([]string, map[string]any) 
 	bodyFormat := map[string]any{"type": "string", "enum": []string{"plain", "markdown"}}
 	timestamp := map[string]any{"type": "string", "format": "date-time"}
 	return []Tool{
-		{Definition: Definition{Name: "post_card", Description: "Post a card with optional buttons and sources. body is the plain-text fallback; when omitted it is generated from the card. Pressing a button starts a new run of this agent with input.trigger_type=message_action.", Mode: "write", RequiredScope: agent.ScopeMessagesInteractive, NoConfirmation: true,
+		{Definition: Definition{Name: "post_card", Description: "Post a card with optional buttons and sources. body is the plain-text fallback; when omitted it is generated from the card. Pressing a button starts a new run of this agent with input.trigger_type=message_action.", Mode: "write", RequiredScope: agent.ScopeMessagesInteractive,
 			InputSchema: object([]string{"chat_id", "client_msg_id", "blocks"}, map[string]any{"chat_id": uuidSchema, "client_msg_id": uuidSchema, "thread_root_id": uuidSchema, "body": map[string]any{"type": "string", "maxLength": 65536}, "body_format": bodyFormat, "mentioned_actor_ids": map[string]any{"type": "array", "maxItems": 100, "uniqueItems": true, "items": uuidSchema}, "blocks": blocks})}, Handler: executor.postCard},
-		{Definition: Definition{Name: "update_card", Description: "Replace the card of a message this agent posted. Existing button responses are kept for actions with the same id.", Mode: "write", RequiredScope: agent.ScopeMessagesInteractive, NoConfirmation: true,
+		{Definition: Definition{Name: "update_card", Description: "Replace the card of a message this agent posted. Existing button responses are kept for actions with the same id.", Mode: "write", RequiredScope: agent.ScopeMessagesInteractive,
 			InputSchema: object([]string{"message_id", "blocks"}, map[string]any{"message_id": uuidSchema, "blocks": blocks, "body": map[string]any{"type": "string", "maxLength": 65536}, "body_format": bodyFormat, "expected_version": map[string]any{"type": "integer", "minimum": 1}})}, Handler: executor.updateCard},
 		{Definition: Definition{Name: "get_reactions", Description: "Read reactions on a message and which human chat members have not reacted yet.", Mode: "read", RequiredScope: agent.ScopeMessagesRead,
 			InputSchema: object([]string{"message_id"}, map[string]any{"message_id": uuidSchema})}, Handler: executor.getReactions},
-		{Definition: Definition{Name: "start_collection", Description: "Wait for chosen people to answer a message by reaction, button or reply. The server counts answers, sends reminders within quiet hours and per-person limits, and starts a run with input.trigger_type=collection when everyone answered or the deadline passed.", Mode: "write", RequiredScope: agent.ScopeMessagesInteractive, NoConfirmation: true,
+		{Definition: Definition{Name: "start_collection", Description: "Wait for chosen people to answer a message by reaction, button or reply. The server counts answers, sends reminders within quiet hours and per-person limits, and starts a run with input.trigger_type=collection when everyone answered or the deadline passed.", Mode: "write", RequiredScope: agent.ScopeMessagesInteractive,
 			InputSchema: object([]string{"message_id", "response"}, map[string]any{
 				"message_id": uuidSchema, "response": map[string]any{"type": "string", "enum": []string{"reaction", "action", "reply"}},
 				"match":                map[string]any{"type": "array", "maxItems": 20, "uniqueItems": true, "items": map[string]any{"type": "string", "minLength": 1, "maxLength": 64}, "description": "Emojis or action ids that count as an answer; empty means any."},
@@ -88,9 +90,9 @@ func interactiveTools(executor *Executor, object func([]string, map[string]any) 
 			})}, Handler: executor.startCollection},
 		{Definition: Definition{Name: "get_collection", Description: "Read a response collection with the server-counted answers and pending people.", Mode: "read", RequiredScope: agent.ScopeMessagesInteractive,
 			InputSchema: object([]string{"collection_id"}, map[string]any{"collection_id": uuidSchema})}, Handler: executor.getCollection},
-		{Definition: Definition{Name: "schedule_followup", Description: "Schedule this agent to run again later with the given note and context (input.trigger_type=followup). Pausing or deleting the agent cancels it.", Mode: "write", RequiredScope: agent.ScopeFollowupsWrite, NoConfirmation: true,
+		{Definition: Definition{Name: "schedule_followup", Description: "Schedule this agent to run again later with the given note and context (input.trigger_type=followup). Pausing or deleting the agent cancels it.", Mode: "write", RequiredScope: agent.ScopeFollowupsWrite,
 			InputSchema: object(nil, map[string]any{"at": timestamp, "delay_seconds": map[string]any{"type": "integer", "minimum": 60, "maximum": 2592000}, "chat_id": uuidSchema, "thread_root_id": uuidSchema, "note": map[string]any{"type": "string", "maxLength": 2000}, "context": map[string]any{"type": "object"}})}, Handler: executor.scheduleFollowup},
-		{Definition: Definition{Name: "send_direct_message", Description: "Send a direct message to one person who shares a chat with this agent. Follows the workspace confirmation policy for write tools.", Mode: "write", RequiredScope: agent.ScopeMessagesWrite,
+		{Definition: Definition{Name: "send_direct_message", Description: "Send a direct message to one person who shares a chat with this agent. Waits for a person to approve it unless the agent version lets it run by itself.", Mode: "write", RequiredScope: agent.ScopeMessagesWrite,
 			InputSchema: object([]string{"actor_id", "client_msg_id", "body"}, map[string]any{"actor_id": uuidSchema, "client_msg_id": uuidSchema, "body": map[string]any{"type": "string", "minLength": 1, "maxLength": 65536}, "body_format": bodyFormat})}, Handler: executor.sendDirectMessage},
 	}
 }

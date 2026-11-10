@@ -7,6 +7,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/message"
 	"github.com/go-chi/chi/v5"
 	standardhttp "net/http"
+	"strconv"
 )
 
 type publishAgentRunInput struct {
@@ -39,6 +40,26 @@ func (h *identityHandlers) listAgentRuns(w standardhttp.ResponseWriter, r *stand
 	}
 	writeJSON(h.logger, w, standardhttp.StatusOK, result)
 }
+func (h *identityHandlers) listWorkspaceAgentRuns(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	limit := 0
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "validation_failed", "limit must be an integer")
+			return
+		}
+		limit = parsed
+	}
+	result, err := h.agentRuns.ListWorkspace(r.Context(), authFromContext(r.Context()).User, agentrun.WorkspaceRunsInput{
+		Cursor: r.URL.Query().Get("cursor"), Limit: limit, AgentID: r.URL.Query().Get("agent_id"),
+	})
+	if err != nil {
+		h.writeAgentRunError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
 func (h *identityHandlers) getAgentRun(w standardhttp.ResponseWriter, r *standardhttp.Request) {
 	result, err := h.agentRuns.Get(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "runID"))
 	if err != nil {

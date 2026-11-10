@@ -261,3 +261,68 @@ func (s *Service) Tick(ctx context.Context) error {
 	}
 	return s.ProcessCollections(ctx)
 }
+
+// ConfirmationOutcome is a person's decision on a tool call an agent asked
+// to make, and the result of the call when it ran.
+type ConfirmationOutcome struct {
+	OrgID          string
+	AgentID        string
+	RunID          string
+	ConfirmationID string
+	ToolName       string
+	Status         string
+	ErrorCode      string
+	Result         json.RawMessage
+	DecidedBy      string
+}
+
+// maxOutcomeResultBytes bounds the tool result handed to the continuation.
+const maxOutcomeResultBytes = 16 << 10
+
+// EnqueueConfirmationOutcome wakes the agent after a person decided on its
+// pending call, with the decision and the call result, so it can continue
+// the work the original run left waiting (input.trigger_type=confirmation).
+// The continuation runs in the chat of the original run; nothing is queued
+// when that run had no chat or the agent is paused or deleted.
+func (s *Service) EnqueueConfirmationOutcome(ctx context.Context, outcome ConfirmationOutcome) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	var chatID, threadRootID *string
+	var chainDepth int
+	err = tx.QueryRow(ctx, `SELECT chat_id::text,thread_root_id::text,chain_depth FROM agent_runs WHERE org_id=$1 AND agent_id=$2 AND id=$3 AND NOT dry_run`,
+		outcome.OrgID, outcome.AgentID, outcome.RunID).Scan(&chatID, &threadRootID, &chainDepth)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && chatID == nil) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	input := map[string]any{
+		"trigger_type": "confirmation", "confirmation_id": outcome.ConfirmationID, "original_run_id": outcome.RunID,
+		"tool_name": outcome.ToolName, "status": outcome.Status,
+	}
+	if outcome.ErrorCode != "" {
+		input["error_code"] = outcome.ErrorCode
+	}
+	if len(outcome.Result) > 0 {
+		if len(outcome.Result) <= maxOutcomeResultBytes && json.Valid(outcome.Result) {
+			input["result"] = json.RawMessage(outcome.Result)
+		} else {
+			input["result_truncated"] = true
+		}
+	}
+	var requestedBy *string
+	if outcome.DecidedBy != "" {
+		requestedBy = &outcome.DecidedBy
+	}
+	if _, _, err := enqueueRun(ctx, tx, runRequest{
+		OrgID: outcome.OrgID, AgentID: outcome.AgentID, ChatID: *chatID, ThreadRootID: threadRootID,
+		RequestedBy: requestedBy, ClientRunID: stableID("confirmation", outcome.ConfirmationID), ChainDepth: chainDepth, Input: input,
+	}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}

@@ -136,6 +136,12 @@ func main() {
 		os.Exit(1)
 	}
 	agentService := agent.NewService(pool)
+	confirmationFloor, err := agent.ParseConfirmationFloor(cfg.Agents.ToolsRequireConfirmation)
+	if err != nil {
+		logger.Error("invalid AGENT_TOOLS_REQUIRE_CONFIRMATION", "error", err)
+		os.Exit(1)
+	}
+	agentService.SetConfirmationFloor(confirmationFloor)
 	agentConfigService, err := agentconfig.NewService(pool, cfg.IntegrationEncryptionKey)
 	if err != nil {
 		logger.Error("agent configuration initialization failed", "error", err)
@@ -227,6 +233,7 @@ func main() {
 		logger.Error("agent tool initialization failed", "error", err)
 		os.Exit(1)
 	}
+	agentToolExecutor.SetConfirmationFloor(confirmationFloor)
 	messageService.SetConfirmationDecider(agentToolExecutor)
 	go interactiveService.Run(realtimeCtx, 5*time.Second)
 	agentRunService := agentrun.NewService(pool)

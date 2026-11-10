@@ -116,6 +116,24 @@ func (e AgentRecipe) Valid() bool {
 	}
 }
 
+// Defines values for AgentConfirmationMode.
+const (
+	Auto    AgentConfirmationMode = "auto"
+	Confirm AgentConfirmationMode = "confirm"
+)
+
+// Valid indicates whether the value is a known member of the AgentConfirmationMode enum.
+func (e AgentConfirmationMode) Valid() bool {
+	switch e {
+	case Auto:
+		return true
+	case Confirm:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentFollowupStatus.
 const (
 	AgentFollowupStatusCanceled   AgentFollowupStatus = "canceled"
@@ -473,6 +491,30 @@ func (e AgentScope) Valid() bool {
 	case SearchRead:
 		return true
 	case TablesRead:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentTone.
+const (
+	Concise  AgentTone = "concise"
+	Empty    AgentTone = ""
+	Formal   AgentTone = "formal"
+	Friendly AgentTone = "friendly"
+)
+
+// Valid indicates whether the value is a known member of the AgentTone enum.
+func (e AgentTone) Valid() bool {
+	switch e {
+	case Concise:
+		return true
+	case Empty:
+		return true
+	case Formal:
+		return true
+	case Friendly:
 		return true
 	default:
 		return false
@@ -1555,6 +1597,7 @@ const (
 	ErrorCodeAgentConfigurationNotFound ErrorCode = "agent_configuration_not_found"
 	ErrorCodeAgentConflict              ErrorCode = "agent_conflict"
 	ErrorCodeAgentNotFound              ErrorCode = "agent_not_found"
+	ErrorCodeAgentNotReady              ErrorCode = "agent_not_ready"
 	ErrorCodeAgentTriggerConflict       ErrorCode = "agent_trigger_conflict"
 	ErrorCodeAgentTriggerNotFound       ErrorCode = "agent_trigger_not_found"
 	ErrorCodeAlreadyBootstrapped        ErrorCode = "already_bootstrapped"
@@ -1609,6 +1652,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeAgentConflict:
 		return true
 	case ErrorCodeAgentNotFound:
+		return true
+	case ErrorCodeAgentNotReady:
 		return true
 	case ErrorCodeAgentTriggerConflict:
 		return true
@@ -2198,6 +2243,54 @@ func (e MessageActionAudienceOrgRoles) Valid() bool {
 	case MessageActionAudienceOrgRolesMember:
 		return true
 	case MessageActionAudienceOrgRolesOwner:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageAgentProvenanceTrigger.
+const (
+	MessageAgentProvenanceTriggerCollection    MessageAgentProvenanceTrigger = "collection"
+	MessageAgentProvenanceTriggerCommand       MessageAgentProvenanceTrigger = "command"
+	MessageAgentProvenanceTriggerConfirmation  MessageAgentProvenanceTrigger = "confirmation"
+	MessageAgentProvenanceTriggerEvent         MessageAgentProvenanceTrigger = "event"
+	MessageAgentProvenanceTriggerEveryMessage  MessageAgentProvenanceTrigger = "every_message"
+	MessageAgentProvenanceTriggerFollowup      MessageAgentProvenanceTrigger = "followup"
+	MessageAgentProvenanceTriggerKeyword       MessageAgentProvenanceTrigger = "keyword"
+	MessageAgentProvenanceTriggerManual        MessageAgentProvenanceTrigger = "manual"
+	MessageAgentProvenanceTriggerMention       MessageAgentProvenanceTrigger = "mention"
+	MessageAgentProvenanceTriggerMessageAction MessageAgentProvenanceTrigger = "message_action"
+	MessageAgentProvenanceTriggerSchedule      MessageAgentProvenanceTrigger = "schedule"
+	MessageAgentProvenanceTriggerWebhook       MessageAgentProvenanceTrigger = "webhook"
+)
+
+// Valid indicates whether the value is a known member of the MessageAgentProvenanceTrigger enum.
+func (e MessageAgentProvenanceTrigger) Valid() bool {
+	switch e {
+	case MessageAgentProvenanceTriggerCollection:
+		return true
+	case MessageAgentProvenanceTriggerCommand:
+		return true
+	case MessageAgentProvenanceTriggerConfirmation:
+		return true
+	case MessageAgentProvenanceTriggerEvent:
+		return true
+	case MessageAgentProvenanceTriggerEveryMessage:
+		return true
+	case MessageAgentProvenanceTriggerFollowup:
+		return true
+	case MessageAgentProvenanceTriggerKeyword:
+		return true
+	case MessageAgentProvenanceTriggerManual:
+		return true
+	case MessageAgentProvenanceTriggerMention:
+		return true
+	case MessageAgentProvenanceTriggerMessageAction:
+		return true
+	case MessageAgentProvenanceTriggerSchedule:
+		return true
+	case MessageAgentProvenanceTriggerWebhook:
 		return true
 	default:
 		return false
@@ -3740,22 +3833,31 @@ type AddChatMemberRequestRole string
 
 // Agent defines model for Agent.
 type Agent struct {
-	AllowedScopes               []AgentScope         `json:"allowed_scopes"`
-	AvatarVersion               int64                `json:"avatar_version"`
-	ChatIds                     []openapi_types.UUID `json:"chat_ids"`
-	CreatedAt                   time.Time            `json:"created_at"`
-	DailyCostLimit              *string              `json:"daily_cost_limit"`
-	Description                 string               `json:"description"`
-	DisplayName                 string               `json:"display_name"`
-	DraftVersion                *int                 `json:"draft_version"`
-	Enabled                     bool                 `json:"enabled"`
-	EndpointUrl                 *string              `json:"endpoint_url,omitempty"`
-	ExecutionTimeoutSeconds     int                  `json:"execution_timeout_seconds"`
-	ExternalDataSharingApproved bool                 `json:"external_data_sharing_approved"`
-	Handle                      string               `json:"handle"`
-	HasUnpublishedChanges       bool                 `json:"has_unpublished_changes"`
-	Id                          openapi_types.UUID   `json:"id"`
-	Kind                        AgentKind            `json:"kind"`
+	AllowedScopes []AgentScope         `json:"allowed_scopes"`
+	AvatarVersion int64                `json:"avatar_version"`
+	ChatIds       []openapi_types.UUID `json:"chat_ids"`
+
+	// ConfirmationLocked Built-in tools the server always confirms (operator setting); their policy is always confirm.
+	ConfirmationLocked *[]string `json:"confirmation_locked,omitempty"`
+
+	// ConfirmationPolicy Confirmation of each built-in write tool (post_message, reply_in_thread, add_reaction, post_card, update_card, start_collection, schedule_followup, remember, send_direct_message). A request may name only the tools it changes; responses name all of them with the mode Core enforces. Tools in the server floor cannot be set to auto.
+	ConfirmationPolicy          *AgentConfirmationPolicy `json:"confirmation_policy,omitempty"`
+	CreatedAt                   time.Time                `json:"created_at"`
+	DailyCostLimit              *string                  `json:"daily_cost_limit"`
+	Description                 string                   `json:"description"`
+	DisplayName                 string                   `json:"display_name"`
+	DraftVersion                *int                     `json:"draft_version"`
+	Enabled                     bool                     `json:"enabled"`
+	EndpointUrl                 *string                  `json:"endpoint_url,omitempty"`
+	ExecutionTimeoutSeconds     int                      `json:"execution_timeout_seconds"`
+	ExternalDataSharingApproved bool                     `json:"external_data_sharing_approved"`
+	Handle                      string                   `json:"handle"`
+	HasUnpublishedChanges       bool                     `json:"has_unpublished_changes"`
+	Id                          openapi_types.UUID       `json:"id"`
+
+	// Instructions The trusted instructions the model receives: the task plus the lines Core derives from the version (tone, chats where the agent only reads or only writes). Chat lines are omitted for actors without agent management rights.
+	Instructions *string   `json:"instructions,omitempty"`
+	Kind         AgentKind `json:"kind"`
 
 	// KnowledgeCollectionIds Knowledge collections bound to the draft (or the published version when there is no draft). Empty for actors without agent management rights.
 	KnowledgeCollectionIds *[]openapi_types.UUID `json:"knowledge_collection_ids,omitempty"`
@@ -3777,10 +3879,19 @@ type Agent struct {
 	PublishedAt                *time.Time             `json:"published_at"`
 	PublishedVersion           *int                   `json:"published_version"`
 	RateLimitPerMinute         int                    `json:"rate_limit_per_minute"`
-	Readiness                  AgentReadiness         `json:"readiness"`
-	Recipe                     AgentRecipe            `json:"recipe"`
-	RecipeVersion              int                    `json:"recipe_version"`
-	UpdatedAt                  time.Time              `json:"updated_at"`
+
+	// ReadChatIds Agent chats it reads (history, search, members). Empty for actors without agent management rights.
+	ReadChatIds   *[]openapi_types.UUID `json:"read_chat_ids,omitempty"`
+	Readiness     AgentReadiness        `json:"readiness"`
+	Recipe        AgentRecipe           `json:"recipe"`
+	RecipeVersion int                   `json:"recipe_version"`
+
+	// Tone Empty means no tone instruction.
+	Tone      *AgentTone `json:"tone,omitempty"`
+	UpdatedAt time.Time  `json:"updated_at"`
+
+	// WriteChatIds Agent chats it posts to. A chat may be in both lists; chat_ids is their union.
+	WriteChatIds *[]openapi_types.UUID `json:"write_chat_ids,omitempty"`
 }
 
 // AgentKind defines model for Agent.Kind.
@@ -3805,6 +3916,12 @@ type AgentApiKey struct {
 	RevokedAt          *time.Time         `json:"revoked_at,omitempty"`
 	Scopes             []AgentScope       `json:"scopes"`
 }
+
+// AgentConfirmationMode auto runs the action by itself; confirm waits for a person's approval.
+type AgentConfirmationMode string
+
+// AgentConfirmationPolicy Confirmation of each built-in write tool (post_message, reply_in_thread, add_reaction, post_card, update_card, start_collection, schedule_followup, remember, send_direct_message). A request may name only the tools it changes; responses name all of them with the mode Core enforces. Tools in the server floor cannot be set to auto.
+type AgentConfirmationPolicy map[string]AgentConfirmationMode
 
 // AgentFollowup defines model for AgentFollowup.
 type AgentFollowup struct {
@@ -3854,8 +3971,11 @@ type AgentLlmConnectionProvider string
 // AgentMcpBinding defines model for AgentMcpBinding.
 type AgentMcpBinding struct {
 	// AllowedTools Must be assignable on the connection and, once Core knows the catalog, offered by the server.
-	AllowedTools []string           `json:"allowed_tools"`
-	ConnectionId openapi_types.UUID `json:"connection_id"`
+	AllowedTools []string `json:"allowed_tools"`
+
+	// ConfirmationPolicy Per-tool override of require_write_confirmation for allowed tools. A connection that requires confirmation turns every entry into confirm.
+	ConfirmationPolicy *map[string]AgentConfirmationMode `json:"confirmation_policy,omitempty"`
+	ConnectionId       openapi_types.UUID                `json:"connection_id"`
 
 	// RequireWriteConfirmation Calls to tools that are not read-only wait for a person's approval; Core then executes them. Omitted means true; a connection that requires confirmation forces it on.
 	RequireWriteConfirmation *bool `json:"require_write_confirmation,omitempty"`
@@ -4054,7 +4174,9 @@ type AgentRunLeaseRequest struct {
 
 // AgentRunPage defines model for AgentRunPage.
 type AgentRunPage struct {
-	Runs []AgentRun `json:"runs"`
+	// NextCursor Present when the workspace listing has more runs.
+	NextCursor *string    `json:"next_cursor,omitempty"`
+	Runs       []AgentRun `json:"runs"`
 }
 
 // AgentRunToolCall defines model for AgentRunToolCall.
@@ -4098,6 +4220,9 @@ type AgentRuntimeMcpServer struct {
 	Name                     string             `json:"name"`
 	RequireWriteConfirmation bool               `json:"require_write_confirmation"`
 	TimeoutMs                int                `json:"timeout_ms"`
+
+	// ToolConfirmation Effective mode of every allowed tool when it changes data.
+	ToolConfirmation *map[string]AgentConfirmationMode `json:"tool_confirmation,omitempty"`
 }
 
 // AgentRuntimeRunLeaseRequest defines model for AgentRuntimeRunLeaseRequest.
@@ -4108,6 +4233,9 @@ type AgentRuntimeRunLeaseRequest struct {
 
 // AgentScope defines model for AgentScope.
 type AgentScope string
+
+// AgentTone Empty means no tone instruction.
+type AgentTone string
 
 // AgentToolConfirmation defines model for AgentToolConfirmation.
 type AgentToolConfirmation struct {
@@ -4567,30 +4695,42 @@ type CreateAgentMcpServerRequest struct {
 
 // CreateAgentRequest defines model for CreateAgentRequest.
 type CreateAgentRequest struct {
-	AllowedScopes               []AgentScope              `json:"allowed_scopes"`
-	ChatIds                     []openapi_types.UUID      `json:"chat_ids"`
-	DailyCostLimit              *string                   `json:"daily_cost_limit,omitempty"`
-	Description                 *string                   `json:"description,omitempty"`
-	DisplayName                 string                    `json:"display_name"`
-	Enabled                     bool                      `json:"enabled"`
-	EndpointUrl                 *string                   `json:"endpoint_url,omitempty"`
-	ExecutionTimeoutSeconds     *int                      `json:"execution_timeout_seconds,omitempty"`
-	ExternalDataSharingApproved bool                      `json:"external_data_sharing_approved"`
-	Handle                      string                    `json:"handle"`
-	Kind                        CreateAgentRequestKind    `json:"kind"`
-	KnowledgeCollectionIds      *[]openapi_types.UUID     `json:"knowledge_collection_ids,omitempty"`
-	LlmConnectionId             *openapi_types.UUID       `json:"llm_connection_id,omitempty"`
-	MaxChainDepth               *int                      `json:"max_chain_depth,omitempty"`
-	MaxOutputTokens             *int                      `json:"max_output_tokens,omitempty"`
-	MaxToolIterations           *int                      `json:"max_tool_iterations,omitempty"`
-	McpBindings                 *[]AgentMcpBinding        `json:"mcp_bindings,omitempty"`
-	Model                       *string                   `json:"model,omitempty"`
-	MonthlyCostLimit            *string                   `json:"monthly_cost_limit,omitempty"`
-	PerChatConcurrency          *int                      `json:"per_chat_concurrency,omitempty"`
-	Provider                    *string                   `json:"provider,omitempty"`
-	ProviderRateLimitPerMinute  *int                      `json:"provider_rate_limit_per_minute,omitempty"`
-	RateLimitPerMinute          *int                      `json:"rate_limit_per_minute,omitempty"`
-	Recipe                      *CreateAgentRequestRecipe `json:"recipe,omitempty"`
+	AllowedScopes []AgentScope         `json:"allowed_scopes"`
+	ChatIds       []openapi_types.UUID `json:"chat_ids"`
+
+	// ConfirmationPolicy Confirmation of each built-in write tool (post_message, reply_in_thread, add_reaction, post_card, update_card, start_collection, schedule_followup, remember, send_direct_message). A request may name only the tools it changes; responses name all of them with the mode Core enforces. Tools in the server floor cannot be set to auto.
+	ConfirmationPolicy          *AgentConfirmationPolicy `json:"confirmation_policy,omitempty"`
+	DailyCostLimit              *string                  `json:"daily_cost_limit,omitempty"`
+	Description                 *string                  `json:"description,omitempty"`
+	DisplayName                 string                   `json:"display_name"`
+	Enabled                     bool                     `json:"enabled"`
+	EndpointUrl                 *string                  `json:"endpoint_url,omitempty"`
+	ExecutionTimeoutSeconds     *int                     `json:"execution_timeout_seconds,omitempty"`
+	ExternalDataSharingApproved bool                     `json:"external_data_sharing_approved"`
+	Handle                      string                   `json:"handle"`
+	Kind                        CreateAgentRequestKind   `json:"kind"`
+	KnowledgeCollectionIds      *[]openapi_types.UUID    `json:"knowledge_collection_ids,omitempty"`
+	LlmConnectionId             *openapi_types.UUID      `json:"llm_connection_id,omitempty"`
+	MaxChainDepth               *int                     `json:"max_chain_depth,omitempty"`
+	MaxOutputTokens             *int                     `json:"max_output_tokens,omitempty"`
+	MaxToolIterations           *int                     `json:"max_tool_iterations,omitempty"`
+	McpBindings                 *[]AgentMcpBinding       `json:"mcp_bindings,omitempty"`
+	Model                       *string                  `json:"model,omitempty"`
+	MonthlyCostLimit            *string                  `json:"monthly_cost_limit,omitempty"`
+	PerChatConcurrency          *int                     `json:"per_chat_concurrency,omitempty"`
+	Provider                    *string                  `json:"provider,omitempty"`
+	ProviderRateLimitPerMinute  *int                     `json:"provider_rate_limit_per_minute,omitempty"`
+	RateLimitPerMinute          *int                     `json:"rate_limit_per_minute,omitempty"`
+
+	// ReadChatIds Chats the agent reads. With write_chat_ids it replaces chat_ids by their union; a list that is omitted keeps its current value.
+	ReadChatIds *[]openapi_types.UUID     `json:"read_chat_ids,omitempty"`
+	Recipe      *CreateAgentRequestRecipe `json:"recipe,omitempty"`
+
+	// Tone Empty means no tone instruction.
+	Tone *AgentTone `json:"tone,omitempty"`
+
+	// WriteChatIds Chats the agent posts to.
+	WriteChatIds *[]openapi_types.UUID `json:"write_chat_ids,omitempty"`
 }
 
 // CreateAgentRequestKind defines model for CreateAgentRequest.Kind.
@@ -5250,6 +5390,9 @@ type McpTool struct {
 type Message struct {
 	ActorId openapi_types.UUID `json:"actor_id"`
 
+	// AgentProvenance Why an agent wrote the message. Visible to every reader of the message: it never carries a webhook payload, a follow-up note or text from another chat.
+	AgentProvenance *MessageAgentProvenance `json:"agent_provenance,omitempty"`
+
 	// Blocks Optional structured part of an agent message. The body always carries a plain-text fallback; clients that do not support the version render the body. Server-managed state (responses, closed, binding) is part of the document so durable events carry the current card.
 	Blocks            *MessageBlocks       `json:"blocks,omitempty"`
 	Body              string               `json:"body"`
@@ -5343,6 +5486,18 @@ type MessageActionResult struct {
 	Response MessageActionResponse `json:"response"`
 }
 
+// MessageAgentProvenance Why an agent wrote the message. Visible to every reader of the message: it never carries a webhook payload, a follow-up note or text from another chat.
+type MessageAgentProvenance struct {
+	RunId   openapi_types.UUID            `json:"run_id"`
+	Trigger MessageAgentProvenanceTrigger `json:"trigger"`
+
+	// TriggerLabel Short detail set by the agent's builders, e.g. "/summarize", "09:00 UTC" or the webhook name.
+	TriggerLabel *string `json:"trigger_label,omitempty"`
+}
+
+// MessageAgentProvenanceTrigger defines model for MessageAgentProvenance.Trigger.
+type MessageAgentProvenanceTrigger string
+
 // MessageBlocks Optional structured part of an agent message. The body always carries a plain-text fallback; clients that do not support the version render the body. Server-managed state (responses, closed, binding) is part of the document so durable events carry the current card.
 type MessageBlocks struct {
 	Actions *[]MessageAction `json:"actions,omitempty"`
@@ -5418,12 +5573,17 @@ type MessageReceiptList struct {
 
 // MessageSource defines model for MessageSource.
 type MessageSource struct {
+	// ChunkId Knowledge fragment of a document source the answer relies on.
+	ChunkId    *openapi_types.UUID `json:"chunk_id,omitempty"`
 	DocumentId *openapi_types.UUID `json:"document_id,omitempty"`
 	Excerpt    *string             `json:"excerpt,omitempty"`
 	FileId     *openapi_types.UUID `json:"file_id,omitempty"`
 	Kind       MessageSourceKind   `json:"kind"`
 	MessageId  *openapi_types.UUID `json:"message_id,omitempty"`
-	Title      *string             `json:"title,omitempty"`
+
+	// Position Position of the fragment in the document, filled by Core from chunk_id.
+	Position *int    `json:"position,omitempty"`
+	Title    *string `json:"title,omitempty"`
 }
 
 // MessageSourceKind defines model for MessageSource.Kind.
@@ -6080,28 +6240,40 @@ type UpdateAgentProviderCredentialRequest struct {
 
 // UpdateAgentRequest defines model for UpdateAgentRequest.
 type UpdateAgentRequest struct {
-	AllowedScopes               *[]AgentScope         `json:"allowed_scopes,omitempty"`
-	ChatIds                     *[]openapi_types.UUID `json:"chat_ids,omitempty"`
-	DailyCostLimit              *string               `json:"daily_cost_limit,omitempty"`
-	Description                 *string               `json:"description,omitempty"`
-	DisplayName                 *string               `json:"display_name,omitempty"`
-	Enabled                     *bool                 `json:"enabled,omitempty"`
-	EndpointUrl                 *string               `json:"endpoint_url,omitempty"`
-	ExecutionTimeoutSeconds     *int                  `json:"execution_timeout_seconds,omitempty"`
-	ExternalDataSharingApproved *bool                 `json:"external_data_sharing_approved,omitempty"`
-	Handle                      *string               `json:"handle,omitempty"`
-	KnowledgeCollectionIds      *[]openapi_types.UUID `json:"knowledge_collection_ids,omitempty"`
-	LlmConnectionId             *openapi_types.UUID   `json:"llm_connection_id,omitempty"`
-	MaxChainDepth               *int                  `json:"max_chain_depth,omitempty"`
-	MaxOutputTokens             *int                  `json:"max_output_tokens,omitempty"`
-	MaxToolIterations           *int                  `json:"max_tool_iterations,omitempty"`
-	McpBindings                 *[]AgentMcpBinding    `json:"mcp_bindings,omitempty"`
-	Model                       *string               `json:"model,omitempty"`
-	MonthlyCostLimit            *string               `json:"monthly_cost_limit,omitempty"`
-	PerChatConcurrency          *int                  `json:"per_chat_concurrency,omitempty"`
-	Provider                    *string               `json:"provider,omitempty"`
-	ProviderRateLimitPerMinute  *int                  `json:"provider_rate_limit_per_minute,omitempty"`
-	RateLimitPerMinute          *int                  `json:"rate_limit_per_minute,omitempty"`
+	AllowedScopes *[]AgentScope         `json:"allowed_scopes,omitempty"`
+	ChatIds       *[]openapi_types.UUID `json:"chat_ids,omitempty"`
+
+	// ConfirmationPolicy Confirmation of each built-in write tool (post_message, reply_in_thread, add_reaction, post_card, update_card, start_collection, schedule_followup, remember, send_direct_message). A request may name only the tools it changes; responses name all of them with the mode Core enforces. Tools in the server floor cannot be set to auto.
+	ConfirmationPolicy          *AgentConfirmationPolicy `json:"confirmation_policy,omitempty"`
+	DailyCostLimit              *string                  `json:"daily_cost_limit,omitempty"`
+	Description                 *string                  `json:"description,omitempty"`
+	DisplayName                 *string                  `json:"display_name,omitempty"`
+	Enabled                     *bool                    `json:"enabled,omitempty"`
+	EndpointUrl                 *string                  `json:"endpoint_url,omitempty"`
+	ExecutionTimeoutSeconds     *int                     `json:"execution_timeout_seconds,omitempty"`
+	ExternalDataSharingApproved *bool                    `json:"external_data_sharing_approved,omitempty"`
+	Handle                      *string                  `json:"handle,omitempty"`
+	KnowledgeCollectionIds      *[]openapi_types.UUID    `json:"knowledge_collection_ids,omitempty"`
+	LlmConnectionId             *openapi_types.UUID      `json:"llm_connection_id,omitempty"`
+	MaxChainDepth               *int                     `json:"max_chain_depth,omitempty"`
+	MaxOutputTokens             *int                     `json:"max_output_tokens,omitempty"`
+	MaxToolIterations           *int                     `json:"max_tool_iterations,omitempty"`
+	McpBindings                 *[]AgentMcpBinding       `json:"mcp_bindings,omitempty"`
+	Model                       *string                  `json:"model,omitempty"`
+	MonthlyCostLimit            *string                  `json:"monthly_cost_limit,omitempty"`
+	PerChatConcurrency          *int                     `json:"per_chat_concurrency,omitempty"`
+	Provider                    *string                  `json:"provider,omitempty"`
+	ProviderRateLimitPerMinute  *int                     `json:"provider_rate_limit_per_minute,omitempty"`
+	RateLimitPerMinute          *int                     `json:"rate_limit_per_minute,omitempty"`
+
+	// ReadChatIds Chats the agent reads. With write_chat_ids it replaces chat_ids by their union; a list that is omitted keeps its current value.
+	ReadChatIds *[]openapi_types.UUID `json:"read_chat_ids,omitempty"`
+
+	// Tone Empty means no tone instruction.
+	Tone *AgentTone `json:"tone,omitempty"`
+
+	// WriteChatIds Chats the agent posts to.
+	WriteChatIds *[]openapi_types.UUID `json:"write_chat_ids,omitempty"`
 }
 
 // UpdateAgentRuntimeCheckpointRequest defines model for UpdateAgentRuntimeCheckpointRequest.
@@ -6408,6 +6580,13 @@ type GetActorAvatarParams struct {
 
 // GetActorAvatarParamsDelivery defines parameters for GetActorAvatar.
 type GetActorAvatarParamsDelivery string
+
+// ListWorkspaceAgentRunsParams defines parameters for ListWorkspaceAgentRuns.
+type ListWorkspaceAgentRunsParams struct {
+	Cursor  *string             `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit   *int                `form:"limit,omitempty" json:"limit,omitempty"`
+	AgentId *openapi_types.UUID `form:"agent_id,omitempty" json:"agent_id,omitempty"`
+}
 
 // ListAgentFollowupsParams defines parameters for ListAgentFollowups.
 type ListAgentFollowupsParams struct {
