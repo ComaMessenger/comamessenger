@@ -224,3 +224,5 @@ export function stableAvatarIndex(
   }
   return Math.abs(hash) % paletteSize;
 }
+
+export * from "./mascot";

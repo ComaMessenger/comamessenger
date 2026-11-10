@@ -2045,6 +2045,38 @@ test("password recovery explains the local operator path without SMTP", async ({
   await expect(page.getByLabel("Почта")).toHaveCount(0);
 });
 
+test("the Coma mascot marks the loading and sign-in screens", async ({
+  page,
+}) => {
+  await mockMessenger(page, { signedOut: true });
+  // Hold the bootstrap check so the loading screen stays on screen.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/api/v1/bootstrap/status", async (route) => {
+    await held;
+    await route.fallback();
+  });
+  await page.goto("/");
+  await expect(page.locator(".auth-loading .coma-mascot")).toBeVisible();
+  await expect(page).toHaveScreenshot("loading.png", {
+    animations: "disabled",
+  });
+  release();
+  await expect(
+    page.getByRole("button", { name: "Забыли пароль?" }),
+  ).toBeVisible();
+  await expect(page.locator(".auth-card .coma-mascot")).toBeVisible();
+  await expect(page).toHaveScreenshot("sign-in.png", {
+    animations: "disabled",
+  });
+  await page.evaluate(() => {
+    document.documentElement.dataset.theme = "dark";
+  });
+  await expect(page).toHaveScreenshot("sign-in-dark.png", {
+    animations: "disabled",
+  });
+});
+
 test("custom status is edited from the profile menu", async ({ page }) => {
   const runtime = await mockMessenger(page);
   const phone = test.info().project.name === "phone";

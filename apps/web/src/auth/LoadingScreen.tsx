@@ -15,7 +15,7 @@ export function LoadingScreen({ slow }: { slow?: boolean }) {
   const showSlow = slow ?? timedOut;
   return (
     <main className="auth-shell auth-loading" aria-busy="true">
-      <Logo size="xl" className="auth-loading__logo" />
+      <Logo size="xl" animated className="auth-loading__logo" />
       <p className="auth-loading__label" role="status">
         <i className="ui-presence ui-presence--pulse" aria-hidden="true" />
         {t("loading")}
