@@ -2114,6 +2114,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agents/architect/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Opens a conversation with the agent Architect, or returns the person's active one for the same agent (or for a new agent). The Architect acts with the rights of the person and changes only drafts. */
+        post: operations["startAgentArchitectSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/architect/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["ArchitectSessionId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getAgentArchitectSession"];
+        put?: never;
+        post?: never;
+        /** @description Ends the conversation. The draft it built stays. */
+        delete: operations["closeAgentArchitectSession"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/architect/sessions/{session_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["ArchitectSessionId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Adds the person's message; the Architect answers synchronously after working on the draft. The answer is a question with options, a summary (`done`) or plain text. Usage is recorded in the workspace agent usage ledger. */
+        post: operations["sendAgentArchitectMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents/tool-confirmations": {
         parameters: {
             query?: never;
@@ -2494,7 +2549,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_conflict" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "integration_in_use" | "integration_usage_changed" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "webhook_not_found" | "webhook_rejected" | "workspace_not_found";
+        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_conflict" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "architect_budget_exceeded" | "architect_busy" | "architect_connection_required" | "architect_model_error" | "architect_session_expired" | "architect_session_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "integration_in_use" | "integration_usage_changed" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "webhook_not_found" | "webhook_rejected" | "workspace_not_found";
         File: {
             /** Format: uuid */
             id: string;
@@ -3851,6 +3906,85 @@ export interface components {
         AgentRunPage: {
             runs: components["schemas"]["AgentRun"][];
         };
+        StartArchitectSessionRequest: {
+            /**
+             * Format: uuid
+             * @description Existing agent whose draft the Architect edits; omitted for a new agent.
+             */
+            agent_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Workspace model connection; by default the first enabled one with a default model.
+             */
+            llm_connection_id?: string | null;
+            /** @enum {string} */
+            locale?: "ru" | "en";
+        };
+        SendArchitectMessageRequest: {
+            text: string;
+        };
+        ArchitectMessage: {
+            id: string;
+            /** @enum {string} */
+            role: "user" | "assistant";
+            /**
+             * @description `question` carries answer options; `done` means the draft is assembled.
+             * @enum {string}
+             */
+            kind: "text" | "question" | "done" | "notice";
+            text: string;
+            options: string[];
+            assumptions: string[];
+            /** Format: date-time */
+            created_at: string;
+        };
+        ArchitectTestExample: {
+            prompt: string;
+            expectation: string;
+            /** Format: uuid */
+            chat_id: string | null;
+        };
+        ArchitectSession: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: uuid
+             * @description The draft agent; null until the Architect creates it.
+             */
+            agent_id: string | null;
+            /** @enum {string} */
+            status: "active" | "closed" | "expired";
+            /** @enum {string} */
+            locale: "ru" | "en";
+            questions_asked: number;
+            max_questions: number;
+            messages: components["schemas"]["ArchitectMessage"][];
+            test_examples: components["schemas"]["ArchitectTestExample"][];
+            assumptions: string[];
+            connection: {
+                /** Format: uuid */
+                id: string | null;
+                name: string;
+                model: string;
+                available: boolean;
+            };
+            usage: {
+                /** Format: int64 */
+                input_tokens: number;
+                /** Format: int64 */
+                output_tokens: number;
+                cost: string;
+                currency: string;
+            };
+            /** @description An answer is being prepared. */
+            thinking: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
         AgentTrigger: {
             /** Format: uuid */
             id: string;
@@ -4880,6 +5014,7 @@ export interface components {
         UploadId: string;
         FileId: string;
         AgentId: string;
+        ArchitectSessionId: string;
         AgentKeyId: string;
         AgentRunId: string;
         KnowledgeCollectionId: string;
@@ -9375,6 +9510,161 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             422: components["responses"]["Error"];
+        };
+    };
+    startAgentArchitectSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartArchitectSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description The active conversation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchitectSession"];
+                };
+            };
+            /** @description A new conversation. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchitectSession"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            /** @description `architect_connection_required`: the workspace has no enabled model connection with a default model. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAgentArchitectSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["ArchitectSessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The conversation of the current person. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchitectSession"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    closeAgentArchitectSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["ArchitectSessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Closed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    sendAgentArchitectMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: components["parameters"]["ArchitectSessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendArchitectMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description The conversation after the answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchitectSession"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            /** @description `architect_busy` (an answer is in progress) or `architect_connection_required`. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `architect_session_expired`: start a new conversation. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            422: components["responses"]["Error"];
+            /** @description `architect_budget_exceeded`: the Architect's spending limit was reached. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `architect_model_error`: the model did not answer; the message was not kept and can be sent again. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     listAgentToolConfirmations: {

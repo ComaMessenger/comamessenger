@@ -1,0 +1,408 @@
+/* Agent Architect: conversation and passport (phase 5.3 I). Semantic tokens
+   only; the passport folds above the conversation on narrow screens. */
+
+.architect {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 100%;
+  min-width: 0;
+}
+.architect__bar {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  padding: 12px 20px;
+  border-block-end: 1px solid var(--coma-border);
+  background: var(--coma-surface);
+}
+.architect__title {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+.architect__title h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.architect__title span {
+  display: block;
+  overflow: hidden;
+  color: var(--coma-muted);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.architect__avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: 36px;
+  block-size: 36px;
+  border-radius: 50%;
+  background: var(--coma-primary-soft);
+  color: var(--coma-primary);
+}
+.architect__avatar svg {
+  inline-size: 18px;
+  block-size: 18px;
+}
+.architect__avatar--sm {
+  inline-size: 30px;
+  block-size: 30px;
+}
+.architect__avatar--sm svg {
+  inline-size: 15px;
+  block-size: 15px;
+}
+
+.architect__layout {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  grid-template-areas: "talk passport";
+  min-block-size: 0;
+}
+.architect__talk {
+  grid-area: talk;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  inline-size: 100%;
+  max-inline-size: 720px;
+  margin-inline: auto;
+  padding: 24px 20px 32px;
+  min-width: 0;
+}
+.architect__passport {
+  grid-area: passport;
+  border-inline-start: 1px solid var(--coma-border);
+  background: var(--coma-surface-tint);
+  min-width: 0;
+}
+.architect__passport-sticky {
+  position: sticky;
+  inset-block-start: 61px;
+  max-block-size: calc(100dvh - 140px);
+  overflow-y: auto;
+}
+.architect__passport-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  inline-size: 100%;
+  padding: 16px 18px 6px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: default;
+}
+.architect__passport-toggle strong {
+  display: block;
+  font-size: 15px;
+}
+.architect__passport-toggle small {
+  color: var(--coma-muted);
+  font-size: 12.5px;
+}
+.architect__passport-toggle > svg {
+  display: none;
+}
+
+.architect__messages {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.architect-bubble {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.architect-bubble--me {
+  justify-content: flex-end;
+}
+.architect-bubble__body {
+  display: grid;
+  gap: 10px;
+  max-inline-size: min(560px, 100%);
+  min-width: 0;
+}
+.architect-bubble__text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--coma-border);
+  border-radius: 4px 14px 14px 14px;
+  background: var(--coma-surface-tint);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.architect-bubble--me .architect-bubble__text {
+  border-color: transparent;
+  border-radius: 14px 4px 14px 14px;
+  background: var(--coma-primary);
+  color: var(--coma-on-primary);
+}
+.architect-bubble--me > .architect-bubble__text {
+  max-inline-size: min(520px, 85%);
+}
+.architect-bubble--done .architect-bubble__text {
+  border-color: var(--coma-success-border);
+  background: var(--coma-success-soft);
+}
+.architect-bubble__text--pending {
+  color: var(--coma-muted);
+}
+.architect-bubble__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.architect-bubble__assumptions {
+  padding: 10px 14px;
+  border-radius: var(--coma-radius-md);
+  background: var(--coma-warning-soft);
+  font-size: 13px;
+}
+.architect-bubble__assumptions ul {
+  margin: 6px 0 0;
+  padding-inline-start: 18px;
+}
+
+.architect__composer {
+  display: grid;
+  gap: 8px;
+}
+.architect__input {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 8px 8px 8px 12px;
+  border: 1px solid var(--coma-border-strong);
+  border-radius: var(--coma-radius-lg);
+  background: var(--coma-surface);
+}
+.architect__input:focus-within {
+  border-color: var(--coma-primary);
+}
+.architect__input textarea {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  line-height: 1.5;
+  resize: none;
+  outline: none;
+}
+.architect__hint,
+.architect__note {
+  margin: 0;
+  color: var(--coma-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.architect__over {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  padding: 14px;
+  border-radius: var(--coma-radius-lg);
+  background: var(--coma-surface-tint);
+}
+.architect__over p {
+  margin: 0;
+}
+.architect-empty {
+  display: grid;
+  place-items: center;
+  padding: 48px 20px;
+}
+
+.architect-check {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--coma-border);
+  border-radius: var(--coma-radius-lg);
+  background: var(--coma-surface);
+}
+.architect-check h3 {
+  margin: 0;
+  font-size: 15px;
+}
+.architect-check ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.architect-check li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border-radius: var(--coma-radius-md);
+  background: var(--coma-surface-tint);
+}
+.architect-check li > div {
+  display: grid;
+  flex: 1 1 220px;
+  gap: 2px;
+  min-width: 0;
+}
+.architect-check q {
+  quotes: "«" "»";
+}
+.architect-check small {
+  color: var(--coma-muted);
+}
+.architect-check__blocked {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--coma-radius-md);
+  background: var(--coma-info-soft);
+  font-size: 13px;
+}
+.architect-check__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.architect-passport {
+  display: grid;
+  gap: 14px;
+  padding: 10px 18px 18px;
+}
+.architect-passport__progress {
+  display: grid;
+  gap: 6px;
+  color: var(--coma-muted);
+  font-size: 12.5px;
+}
+.architect-progress {
+  block-size: 4px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--coma-border);
+}
+.architect-progress i {
+  display: block;
+  block-size: 100%;
+  background: var(--coma-primary);
+  transition: inline-size 0.3s;
+}
+.architect-passport__items {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.architect-passport__items > li {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 10px;
+}
+.architect-passport__items > li > svg {
+  inline-size: 18px;
+  block-size: 18px;
+  margin-block-start: 2px;
+  color: var(--coma-faint);
+}
+.architect-passport__items > li.is-done > svg {
+  color: var(--coma-success);
+}
+.architect-passport__items b {
+  display: block;
+  font-weight: 600;
+}
+.architect-passport__items span,
+.architect-passport__items small {
+  display: block;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.architect-passport__items small {
+  margin-block-start: 4px;
+  color: var(--coma-muted);
+}
+.architect-passport__items em {
+  color: var(--coma-muted);
+}
+.architect-passport__items ul {
+  margin: 0;
+  padding-inline-start: 16px;
+  font-size: 13px;
+}
+.architect-passport__rights {
+  display: flex;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--coma-radius-md);
+  background: var(--coma-primary-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.architect-passport__rights svg {
+  flex: none;
+  inline-size: 18px;
+  block-size: 18px;
+  color: var(--coma-primary);
+}
+
+@media (max-width: 860px) {
+  .architect__layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "passport" "talk";
+  }
+  .architect__passport-sticky {
+    position: static;
+    max-block-size: none;
+  }
+  .architect__passport {
+    border-inline-start: 0;
+    border-block-end: 1px solid var(--coma-border);
+  }
+  .architect__passport-toggle {
+    padding: 12px 16px;
+    cursor: pointer;
+  }
+  .architect__passport-toggle > svg {
+    display: block;
+    flex: none;
+    transition: transform 0.2s;
+  }
+  .architect__passport--open .architect__passport-toggle > svg {
+    transform: rotate(180deg);
+  }
+  .architect__passport:not(.architect__passport--open)
+    .architect__passport-body {
+    display: none;
+  }
+  .architect__talk {
+    padding: 16px 16px 24px;
+  }
+  .architect__bar {
+    padding: 10px 16px;
+  }
+}

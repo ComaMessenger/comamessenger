@@ -134,6 +134,8 @@ import type {
   AgentResponseCollection,
   AgentFollowup,
   KnowledgeRunFragments,
+  ArchitectSession,
+  StartArchitectSessionRequest,
 } from "./types";
 
 type APIErrorPayload = components["schemas"]["Error"];
@@ -488,6 +490,31 @@ export class MessengerAPI {
     return this.request(
       `/api/v1/agents/${encodeURIComponent(id)}/provider-credentials`,
       { method: "PUT", body: JSON.stringify(input) },
+    );
+  }
+  startArchitectSession(
+    input: StartArchitectSessionRequest,
+  ): Promise<ArchitectSession> {
+    return this.request("/api/v1/agents/architect/sessions", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+  architectSession(id: string): Promise<ArchitectSession> {
+    return this.request(
+      `/api/v1/agents/architect/sessions/${encodeURIComponent(id)}`,
+    );
+  }
+  sendArchitectMessage(id: string, text: string): Promise<ArchitectSession> {
+    return this.request(
+      `/api/v1/agents/architect/sessions/${encodeURIComponent(id)}/messages`,
+      { method: "POST", body: JSON.stringify({ text }) },
+    );
+  }
+  closeArchitectSession(id: string): Promise<void> {
+    return this.request(
+      `/api/v1/agents/architect/sessions/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
     );
   }
   agentLlmConnections(): Promise<AgentLlmConnection[]> {
@@ -1205,7 +1232,9 @@ export class MessengerAPI {
   knowledgeEmbeddingConnections(): Promise<KnowledgeEmbeddingConnection[]> {
     return this.request("/api/v1/knowledge/embedding-connections");
   }
-  searchKnowledge(input: KnowledgeSearchRequest): Promise<KnowledgeSearchResult> {
+  searchKnowledge(
+    input: KnowledgeSearchRequest,
+  ): Promise<KnowledgeSearchResult> {
     return this.request("/api/v1/knowledge/search", {
       method: "POST",
       body: JSON.stringify(input),
