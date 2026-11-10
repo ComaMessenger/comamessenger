@@ -21,7 +21,26 @@ var ErrUnsupportedDocument = errors.New("unsupported document format")
 const (
 	maxSheetRows    = 50_000
 	maxSheetColumns = 200
+	// A cell may reference one shared string any number of times and a workbook
+	// may list one sheet under many names, so a few kilobytes on disk can expand
+	// into gigabytes of rows. These bounds cap what a single file may produce.
+	maxSheetCellBytes    = 4_000
+	maxWorkbookCellBytes = 8 << 20
+	maxWorkbookSheets    = 64
+	maxTableHeaderBytes  = 120
+	maxTableTextBytes    = 4 << 20
 )
+
+// truncateText cuts value to at most limit bytes without splitting a rune.
+func truncateText(value string, limit int) string {
+	if len(value) <= limit {
+		return value
+	}
+	for limit > 0 && !utf8.RuneStart(value[limit]) {
+		limit--
+	}
+	return value[:limit]
+}
 
 // DocumentSection is a heading with the paragraphs that follow it. Spreadsheet
 // rows become paragraphs and sheets become sections.
@@ -198,21 +217,31 @@ func tableRows(rows [][]string) []string {
 	if !usableHeader || len(rows) == 1 {
 		header, start = nil, 0
 	}
-	result := make([]string, 0, len(rows))
+	labels := make([]string, len(header))
+	for index, cell := range header {
+		labels[index] = truncateText(strings.Join(strings.Fields(truncateText(cell, maxSheetCellBytes)), " "), maxTableHeaderBytes)
+	}
+	result := make([]string, 0, min(len(rows), 1024))
+	produced := 0
 	for _, row := range rows[start:] {
 		cells := make([]string, 0, len(row))
 		for index, cell := range row {
-			cell = strings.Join(strings.Fields(cell), " ")
+			cell = strings.Join(strings.Fields(truncateText(cell, maxSheetCellBytes)), " ")
 			if cell == "" {
 				continue
 			}
-			if index < len(header) && strings.TrimSpace(header[index]) != "" {
-				cell = strings.Join(strings.Fields(header[index]), " ") + ": " + cell
+			if index < len(labels) && labels[index] != "" {
+				cell = labels[index] + ": " + cell
 			}
 			cells = append(cells, cell)
 		}
 		if len(cells) > 0 {
-			result = append(result, strings.Join(cells, "; "))
+			line := strings.Join(cells, "; ")
+			produced += len(line)
+			if produced > maxTableTextBytes {
+				break
+			}
+			result = append(result, line)
 		}
 	}
 	return result
@@ -438,12 +467,16 @@ func readXLSXSheets(data []byte) ([]SheetRows, error) {
 	styles := xlsxDateStyles(archive)
 	styles.date1904 = xlsxDate1904(archive)
 	result := make([]SheetRows, 0, len(sheets))
+	budget := maxWorkbookCellBytes
 	for _, sheet := range sheets {
-		rows, err := xlsxRows(archive, sheet.path, shared, styles)
+		if budget <= 0 {
+			break
+		}
+		rows, err := xlsxRows(archive, sheet.path, shared, styles, &budget)
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, SheetRows{Sheet: sheet.name, Rows: rows, Truncated: len(rows) >= maxSheetRows})
+		result = append(result, SheetRows{Sheet: sheet.name, Rows: rows, Truncated: len(rows) >= maxSheetRows || budget <= 0})
 	}
 	return result, nil
 }
@@ -659,9 +692,10 @@ func xlsxSheets(archive officeArchive) ([]xlsxSheet, error) {
 	}
 	defer closer.Close()
 	var result []xlsxSheet
+	seen := map[string]bool{}
 	for {
 		token, err := decoder.Token()
-		if errors.Is(err, io.EOF) {
+		if errors.Is(err, io.EOF) || len(result) >= maxWorkbookSheets {
 			return result, nil
 		}
 		if err != nil {
@@ -675,13 +709,17 @@ func xlsxSheets(archive officeArchive) ([]xlsxSheet, error) {
 		if sheetPath == "" {
 			sheetPath = "xl/worksheets/sheet" + strconv.Itoa(len(result)+1) + ".xml"
 		}
-		if _, exists := archive.files[sheetPath]; exists {
+		// One worksheet listed under several names is read once.
+		if _, exists := archive.files[sheetPath]; exists && !seen[sheetPath] {
+			seen[sheetPath] = true
 			result = append(result, xlsxSheet{name: strings.TrimSpace(xmlAttribute(element, "name")), path: sheetPath})
 		}
 	}
 }
 
-func xlsxRows(archive officeArchive, sheetPath string, shared []string, styles xlsxStyles) ([][]string, error) {
+// xlsxRows reads one worksheet. budget is the number of cell bytes the whole
+// workbook may still produce; reading stops once it is spent.
+func xlsxRows(archive officeArchive, sheetPath string, shared []string, styles xlsxStyles, budget *int) ([][]string, error) {
 	decoder, closer, err := archive.decoder(sheetPath)
 	if err != nil {
 		return nil, err
@@ -749,10 +787,12 @@ func xlsxRows(archive officeArchive, sheetPath string, shared []string, styles x
 				for len(row) < column {
 					row = append(row, "")
 				}
+				value = truncateText(value, maxSheetCellBytes)
+				*budget -= len(value) + 1
 				row = append(row, value)
 			case "row":
 				rows = append(rows, row)
-				if len(rows) >= maxSheetRows {
+				if len(rows) >= maxSheetRows || *budget <= 0 {
 					return rows, nil
 				}
 			}
