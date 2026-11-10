@@ -386,9 +386,7 @@ export class MessengerAPI {
   agentRun(runID: string): Promise<AgentRun> {
     return this.request(`/api/v1/agent-runs/${encodeURIComponent(runID)}`);
   }
-  agentRunToolCalls(
-    runID: string,
-  ): Promise<{ tool_calls: AgentRunToolCall[] }> {
+  agentRunToolCalls(runID: string): Promise<{ tool_calls: AgentRunToolCall[] }> {
     return this.request(
       `/api/v1/agent-runs/${encodeURIComponent(runID)}/tool-calls`,
     );
@@ -402,12 +400,7 @@ export class MessengerAPI {
     return this.request(`/api/v1/agents/response-collections?${query}`);
   }
   agentFollowups(
-    status:
-      | "pending"
-      | "dispatched"
-      | "canceled"
-      | "skipped"
-      | "all" = "pending",
+    status: "pending" | "dispatched" | "canceled" | "skipped" | "all" = "pending",
     agentID?: string,
   ): Promise<AgentFollowup[]> {
     const query = new URLSearchParams({ status });
