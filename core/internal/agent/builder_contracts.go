@@ -1,9 +1,14 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/comamessenger/comamessenger/core/internal/identity"
+	"github.com/comamessenger/comamessenger/core/internal/permission"
+	"github.com/jackc/pgx/v5"
 )
 
 // Confirmation modes of a write action.
@@ -245,4 +250,37 @@ func without(values, excluded []string) []string {
 		}
 	}
 	return result
+}
+
+// checkBuilderReach enforces that a builder binds only what they can see
+// themself: every newly added chat must be one they belong to (or they may
+// moderate chats), every newly added knowledge collection one they may read.
+// Bindings that already exist are left alone; they are checked again when a
+// person changes them or runs a check.
+func checkBuilderReach(ctx context.Context, tx pgx.Tx, current identity.User, previousChats, chats, previousCollections, collections []string) error {
+	addedChats := without(chats, previousChats)
+	if len(addedChats) > 0 && !permission.Allows(current.OrgRole, current.Permissions, permission.ChatsModerate) {
+		var count int
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM chat_members WHERE org_id=$1 AND actor_id=$2 AND chat_id=ANY($3::uuid[])`, current.OrgID, current.ActorID, addedChats).Scan(&count); err != nil {
+			return fmt.Errorf("check builder chats: %w", err)
+		}
+		if count != len(addedChats) {
+			return fmt.Errorf("%w: you can add the agent only to chats you are a member of", ErrForbidden)
+		}
+	}
+	addedCollections := without(collections, previousCollections)
+	if len(addedCollections) > 0 && !permission.Allows(current.OrgRole, current.Permissions, permission.KnowledgeManage) {
+		var readable int
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM knowledge_collections collection
+			WHERE collection.org_id=$1 AND collection.id=ANY($3::uuid[]) AND (collection.access='organization' OR EXISTS(
+				SELECT 1 FROM knowledge_collection_chats shared
+				JOIN chat_members member ON member.org_id=shared.org_id AND member.chat_id=shared.chat_id AND member.actor_id=$2
+				WHERE shared.org_id=collection.org_id AND shared.collection_id=collection.id))`, current.OrgID, current.ActorID, addedCollections).Scan(&readable); err != nil {
+			return fmt.Errorf("check builder collections: %w", err)
+		}
+		if readable != len(addedCollections) {
+			return fmt.Errorf("%w: you can bind only knowledge collections you may read", ErrForbidden)
+		}
+	}
+	return nil
 }

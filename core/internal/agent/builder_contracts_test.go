@@ -26,10 +26,12 @@ func TestConfirmationToneAndChatRolesFollowDraftPublishAndRollback(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer tx.Rollback(t.Context())
 	if _, err := tx.Exec(t.Context(), `INSERT INTO chats(id,org_id,kind,visibility,name,created_by) VALUES($1,$2,'group','private','Hall 1',$3)`, agentTestHallChatID, agentTestOrgID, agentTestOwnerID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tx.Exec(t.Context(), `INSERT INTO chat_members(chat_id,actor_id,org_id,role) VALUES($1,$2,$3,'owner')`, agentTestHallChatID, agentTestOwnerID, agentTestOrgID); err != nil {
+	// The member builds agents in the hall chat they belong to.
+	if _, err := tx.Exec(t.Context(), `INSERT INTO chat_members(chat_id,actor_id,org_id,role) VALUES($1,$2,$3,'owner'),($1,$4,$3,'member')`, agentTestHallChatID, agentTestOwnerID, agentTestOrgID, agentTestMemberID); err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Commit(t.Context()); err != nil {
@@ -172,5 +174,67 @@ func TestInstructionsAndChatRoles(t *testing.T) {
 	}
 	if _, err := ParseConfirmationFloor("get_chat_messages"); err == nil {
 		t.Fatal("floor accepted a read tool")
+	}
+}
+
+// TestBuilderBindsOnlyChatsAndCollectionsTheyCanSee covers review finding 9:
+// a builder adds the agent only to chats they belong to and binds only
+// knowledge collections they may read; existing bindings stay untouched
+// until someone changes them.
+func TestBuilderBindsOnlyChatsAndCollectionsTheyCanSee(t *testing.T) {
+	pool := testdb.New(t)
+	seedAgentModel(t, pool)
+	hidden := "00000000-0000-7000-8000-000000000231"
+	tx, err := pool.Begin(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(t.Context())
+	for _, statement := range []struct {
+		query string
+		args  []any
+	}{
+		{`INSERT INTO chats(id,org_id,kind,visibility,name,created_by) VALUES($1,$2,'group','private','Hall 1',$3)`, []any{agentTestHallChatID, agentTestOrgID, agentTestOwnerID}},
+		{`INSERT INTO chat_members(chat_id,actor_id,org_id,role) VALUES($1,$3,$2,'owner')`, []any{agentTestHallChatID, agentTestOrgID, agentTestOwnerID}},
+		{`INSERT INTO knowledge_collections(id,org_id,name,access,created_by,updated_by) VALUES($3,$1,'Хирургия','chats',$2,$2)`, []any{agentTestOrgID, agentTestOwnerID, hidden}},
+		{`INSERT INTO knowledge_collection_chats(org_id,collection_id,chat_id) VALUES($1,$2,$3)`, []any{agentTestOrgID, hidden, agentTestHallChatID}},
+	} {
+		if _, err := tx.Exec(t.Context(), statement.query, statement.args...); err != nil {
+			t.Fatalf("%s: %v", statement.query, err)
+		}
+	}
+	if err := tx.Commit(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(pool)
+	owner := identity.User{ActorID: agentTestOwnerID, OrgID: agentTestOrgID, OrgRole: "owner"}
+	builder := identity.User{ActorID: agentTestMemberID, OrgID: agentTestOrgID, OrgRole: "admin", Permissions: []permission.Code{permission.AgentsBuild}}
+	if _, err := pool.Exec(t.Context(), `INSERT INTO chat_members(chat_id,actor_id,org_id,role) VALUES($1,$2,$3,'member')`, agentTestChatID, agentTestMemberID, agentTestOrgID); err != nil {
+		t.Fatal(err)
+	}
+	created, err := service.Create(t.Context(), builder, CreateInput{DisplayName: "Reach", Handle: "reach", Kind: "external",
+		EndpointURL: "https://agents.example.test/runtime", ChatIDs: []string{agentTestChatID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	chats := []string{agentTestChatID, agentTestHallChatID}
+	if _, err := service.Update(t.Context(), builder, created.ID, UpdateInput{ChatIDs: &chats}); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("chat the builder is not in error = %v", err)
+	}
+	collections := []string{hidden}
+	if _, err := service.Update(t.Context(), builder, created.ID, UpdateInput{KnowledgeCollectionIDs: &collections}); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("collection the builder cannot read error = %v", err)
+	}
+	if _, err := service.Create(t.Context(), builder, CreateInput{DisplayName: "Reach 2", Handle: "reach-2", Kind: "external",
+		EndpointURL: "https://agents.example.test/runtime", ChatIDs: []string{agentTestHallChatID}}); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("create in a chat the builder is not in error = %v", err)
+	}
+	// The owner binds both; the builder may still edit other fields.
+	if _, err := service.Update(t.Context(), owner, created.ID, UpdateInput{ChatIDs: &chats, KnowledgeCollectionIDs: &collections}); err != nil {
+		t.Fatal(err)
+	}
+	description := "Отвечает по регламентам"
+	if _, err := service.Update(t.Context(), builder, created.ID, UpdateInput{Description: &description}); err != nil {
+		t.Fatalf("editing an agent with existing bindings: %v", err)
 	}
 }

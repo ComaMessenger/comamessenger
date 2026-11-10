@@ -489,6 +489,9 @@ func (service *Service) Create(ctx context.Context, current identity.User, input
 	if err := validateMCPBindings(ctx, tx, current.OrgID, normalized.MCPBindings); err != nil {
 		return Agent{}, err
 	}
+	if err := checkBuilderReach(ctx, tx, current, nil, normalized.ChatIDs, nil, normalized.KnowledgeCollectionIDs); err != nil {
+		return Agent{}, err
+	}
 	if len(normalized.ChatIDs) > 0 {
 		var count int
 		if err := tx.QueryRow(ctx, `SELECT count(*) FROM chats WHERE org_id=$1 AND id=ANY($2::uuid[]) AND archived_at IS NULL`, current.OrgID, normalized.ChatIDs).Scan(&count); err != nil {
@@ -852,6 +855,9 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 		if count != len(prospective.ChatIDs) {
 			return Agent{}, fmt.Errorf("%w: every chat must be active and belong to the organization", ErrInvalid)
 		}
+	}
+	if err := checkBuilderReach(ctx, tx, current, lockedAgent.ChatIDs, prospective.ChatIDs, lockedAgent.KnowledgeCollectionIDs, prospective.KnowledgeCollectionIDs); err != nil {
+		return Agent{}, err
 	}
 	if _, err := tx.Exec(ctx, `UPDATE actors SET display_name=$3,handle=$4 WHERE org_id=$1 AND id=$2`, current.OrgID, agentID, prospective.DisplayName, prospective.Handle); err != nil {
 		return Agent{}, mapWriteError("update agent actor", err)

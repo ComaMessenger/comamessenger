@@ -15,6 +15,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/agentauthz"
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
+	"github.com/comamessenger/comamessenger/core/internal/permission"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -311,6 +312,12 @@ func (service *Service) Invoke(ctx context.Context, current identity.User, agent
 	}
 	if input.ChainDepth < 0 || input.ChainDepth > maxDepth {
 		return Run{}, ErrForbidden
+	}
+	// A person runs or checks an agent only on a chat they belong to, and a
+	// check reads only knowledge collections they may read themself, so a
+	// draft cannot show its builder what the builder cannot see.
+	if err := checkRequesterReach(ctx, tx, current, input.ChatID, agentConfig, input.DryRun); err != nil {
+		return Run{}, err
 	}
 	if input.DryRun {
 		if agentConfig, err = withInstructions(agentConfig); err != nil {
@@ -1236,4 +1243,36 @@ func withInstructions(config json.RawMessage) (json.RawMessage, error) {
 	}
 	fields["instructions"] = agent.Instructions(snapshot.Description, snapshot.Tone, snapshot.ReadOnlyChatIDs, snapshot.WriteOnlyChatIDs)
 	return json.Marshal(fields)
+}
+
+func checkRequesterReach(ctx context.Context, tx pgx.Tx, current identity.User, chatID string, config json.RawMessage, dryRun bool) error {
+	var member bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM chat_members WHERE org_id=$1 AND chat_id=$2 AND actor_id=$3)`, current.OrgID, chatID, current.ActorID).Scan(&member); err != nil {
+		return err
+	}
+	if !member {
+		return ErrForbidden
+	}
+	if !dryRun || permission.Allows(current.OrgRole, current.Permissions, permission.KnowledgeManage) {
+		return nil
+	}
+	var snapshot struct {
+		Collections []string `json:"knowledge_collection_ids"`
+	}
+	_ = json.Unmarshal(config, &snapshot)
+	if len(snapshot.Collections) == 0 {
+		return nil
+	}
+	var hidden bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM knowledge_collections collection
+		WHERE collection.org_id=$1 AND collection.id=ANY($3::uuid[]) AND collection.access<>'organization' AND NOT EXISTS(
+			SELECT 1 FROM knowledge_collection_chats shared
+			JOIN chat_members member ON member.org_id=shared.org_id AND member.chat_id=shared.chat_id AND member.actor_id=$2
+			WHERE shared.org_id=collection.org_id AND shared.collection_id=collection.id))`, current.OrgID, current.ActorID, snapshot.Collections).Scan(&hidden); err != nil {
+		return err
+	}
+	if hidden {
+		return ErrForbidden
+	}
+	return nil
 }
