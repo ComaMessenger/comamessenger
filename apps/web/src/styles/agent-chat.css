@@ -177,6 +177,21 @@
   background: var(--coma-danger-soft);
   color: var(--coma-danger);
 }
+/* «Why» under an agent message. */
+.agent-why {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 0;
+  color: var(--coma-muted);
+  font-size: 12px;
+}
+.agent-why svg {
+  flex: none;
+  inline-size: 13px;
+  block-size: 13px;
+}
+
 .agent-sources {
   display: flex;
   flex-wrap: wrap;

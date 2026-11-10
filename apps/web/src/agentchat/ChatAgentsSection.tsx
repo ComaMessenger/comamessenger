@@ -91,7 +91,7 @@ function ChatAgentCard({
       await queryClient.invalidateQueries({ queryKey: chatAgentsKey(chatID) });
     } catch (cause) {
       toast({
-        message: cause instanceof APIError && cause.status === 409 ? t("acNotReady") : t("actionFailed"),
+        message: cause instanceof APIError && cause.code === "agent_not_ready" ? t("acNotReady") : t("actionFailed"),
         tone: "danger",
       });
     } finally {

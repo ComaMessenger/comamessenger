@@ -5,15 +5,13 @@ import type { AgentScope } from "@comamessenger/core";
  * do» are switches in plain language; scopes are derived from them and only
  * shown in advanced settings.
  *
- * Confirmation modes mirror the server: every write tool waits for a human
- * decision, except the interactive tools (cards, collections, follow-ups),
- * which are bounded by their own scopes and limits (docs/protocols/agents-v1.md).
- * The answer to the run itself is published without a tool and never waits.
+ * Whether an action waits for a person is part of the agent version
+ * (`confirmation_policy`, see ./confirmation.ts). The answer to the run itself
+ * is published without a tool and never waits.
  */
 
 export type KnowledgeSource = "search" | "files" | "members";
 export type Skill = "messages" | "reactions" | "cards" | "followups" | "memory";
-export type SkillMode = "self" | "confirm" | "mixed";
 
 export const knowledgeSources: KnowledgeSource[] = [
   "search",
@@ -28,13 +26,6 @@ export const skills: Skill[] = [
   "memory",
 ];
 
-export const skillMode: Record<Skill, SkillMode> = {
-  messages: "mixed",
-  reactions: "confirm",
-  cards: "self",
-  followups: "self",
-  memory: "mixed",
-};
 
 const sourceScopes: Record<KnowledgeSource, AgentScope[]> = {
   search: ["search:read"],
@@ -51,7 +42,15 @@ const skillScopes: Record<Skill, AgentScope[]> = {
 };
 
 /** Scopes the builder does not derive and therefore keeps as they are. */
-const preservedScopes: AgentScope[] = ["chats:read", "runtime:worker"];
+/*
+ * Reading spreadsheets (`query_table`) is its own switch in block «Что знает»
+ * and is kept as chosen.
+ */
+const preservedScopes: AgentScope[] = [
+  "chats:read",
+  "runtime:worker",
+  "tables:read",
+];
 
 export type Capabilities = {
   sources: KnowledgeSource[];
@@ -102,6 +101,7 @@ export const orderedScopes: AgentScope[] = [
   "search:read",
   "members:read",
   "knowledge:read",
+  "tables:read",
   "memory:read",
   "memory:write",
   "followups:write",

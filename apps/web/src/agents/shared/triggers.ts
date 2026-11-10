@@ -19,6 +19,7 @@ export const triggerTypes: TriggerType[] = [
   "schedule",
   "event",
   "every_message",
+  "webhook",
   "manual",
 ];
 
@@ -43,6 +44,10 @@ export type RuleForm = {
   days: number[];
   eventType: string;
   timezone: string;
+  /** Workspace webhook of a «when an external system reports» rule. */
+  webhookID: string;
+  /** Comma-separated external event types; empty means every event. */
+  webhookEvents: string;
 };
 
 export function emptyRule(
@@ -53,11 +58,14 @@ export function emptyRule(
     type,
     command: "",
     keywords: "",
-    chatID: type === "schedule" ? (defaults.chatID ?? "") : "",
+    chatID:
+      type === "schedule" || type === "webhook" ? (defaults.chatID ?? "") : "",
     time: "09:00",
     days: [],
     eventType: "member.joined",
     timezone: defaults.timezone,
+    webhookID: "",
+    webhookEvents: "",
   };
 }
 
@@ -117,6 +125,11 @@ export function ruleFromTrigger(trigger: AgentTrigger): RuleForm {
       ? String(config.event_types[0] ?? "member.joined")
       : "member.joined",
     timezone: trigger.timezone,
+    webhookID: String(config.webhook_id ?? ""),
+    webhookEvents:
+      trigger.type === "webhook" && Array.isArray(config.event_types)
+        ? (config.event_types as string[]).join(", ")
+        : "",
   };
 }
 
@@ -133,6 +146,17 @@ export function ruleProblem(form: RuleForm): string | null {
     return "agentRuleProblem_scheduleChat";
   if (form.type === "schedule" && !/^\d{2}:\d{2}$/.test(form.time))
     return "agentRuleProblem_time";
+  if (form.type === "webhook" && !form.webhookID)
+    return "agentRuleProblem_webhook";
+  if (form.type === "webhook" && !form.chatID)
+    return "agentRuleProblem_webhookChat";
+  if (
+    form.type === "webhook" &&
+    webhookEventTypes(form.webhookEvents).some(
+      (kind) => !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}$/.test(kind),
+    )
+  )
+    return "agentRuleProblem_webhookEvents";
   return null;
 }
 
@@ -157,6 +181,14 @@ export function triggerConfig(form: RuleForm): Record<string, unknown> {
         include_agent_messages: false,
         ...(form.chatID ? { chat_id: form.chatID } : {}),
       };
+    case "webhook": {
+      const events = webhookEventTypes(form.webhookEvents);
+      return {
+        webhook_id: form.webhookID,
+        chat_id: form.chatID,
+        ...(events.length ? { event_types: events } : {}),
+      };
+    }
     case "schedule": {
       const [hour, minute] = form.time.split(":").map(Number);
       return {
@@ -169,6 +201,17 @@ export function triggerConfig(form: RuleForm): Record<string, unknown> {
     default:
       return { include_agent_messages: false };
   }
+}
+
+export function webhookEventTypes(value: string): string[] {
+  return [
+    ...new Set(
+      value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  ];
 }
 
 export function triggerRequest(form: RuleForm): CreateAgentTriggerRequest {
@@ -207,6 +250,8 @@ export function describeRule(
   trigger: Pick<AgentTrigger, "type" | "config" | "timezone">,
   chats: Chat[],
   userTimezone: string,
+  /** Names of workspace webhooks, for «when an external system reports». */
+  webhookNames: ReadonlyMap<string, string> = new Map(),
 ): { when: string; then: string } {
   const form = ruleFromTrigger(trigger as AgentTrigger);
   const chat = chats.find((item) => item.id === form.chatID);
@@ -267,6 +312,21 @@ export function describeRule(
             })
           : t("agentRuleWhen_event", { event: event || t("agentEvent_other") }),
         then: t("agentRuleThen_task"),
+      };
+    }
+    case "webhook": {
+      const name = webhookNames.get(form.webhookID);
+      const events = webhookEventTypes(form.webhookEvents);
+      return {
+        when: name
+          ? t(events.length ? "agentRuleWhen_webhookEvents" : "agentRuleWhen_webhook", {
+              system: name,
+              events: events.join(", "),
+            })
+          : t("agentRuleWhen_webhookMissing"),
+        then: chat
+          ? t("agentRuleThen_writeTo", { chat: chatName(chat) })
+          : t("agentRuleThen_writeToMissing"),
       };
     }
     default:

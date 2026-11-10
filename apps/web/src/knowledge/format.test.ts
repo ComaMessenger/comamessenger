@@ -4,6 +4,7 @@ import {
   failureKey,
   highlightTerms,
   findQuotedFragment,
+  focusedFragment,
   splitHighlight,
   splitQuote,
   statusKey,
@@ -86,5 +87,23 @@ describe("agent quotes", () => {
       { text: ".", match: false },
     ]);
     expect(splitQuote("Текст", "другое")).toEqual([{ text: "Текст", match: false }]);
+  });
+});
+
+describe("focusedFragment", () => {
+  const fragments = [
+    { chunk_id: "a", position: 0, content: "Ключи от зала передаются следующему инструктору." },
+    { chunk_id: "b", position: 1, content: "Заболевший инструктор сообщает дежурному администратору до 8:00." },
+  ];
+  it("prefers the exact fragment of the source", () => {
+    expect(focusedFragment(fragments, "a", "Заболевший инструктор сообщает", 1)).toBe("a");
+  });
+  it("falls back to the position, then to the quote, after a new indexing", () => {
+    expect(focusedFragment(fragments, "gone", "", 1)).toBe("b");
+    expect(focusedFragment(fragments, "gone", "Ключи от зала передаются", 1)).toBe("a");
+  });
+  it("keeps the quote search for old messages", () => {
+    expect(focusedFragment(fragments, "", "Заболевший инструктор сообщает", null)).toBe("b");
+    expect(focusedFragment(fragments, "", "", null)).toBe("");
   });
 });

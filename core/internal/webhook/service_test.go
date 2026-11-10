@@ -70,6 +70,16 @@ func TestWebhookDeliveryStartsAgentOnceWithPayloadAsData(t *testing.T) {
 	if strings.Contains(string(encoded), created.Secret) {
 		t.Fatal("list returned the secret")
 	}
+	// Agent builders choose a webhook for a trigger but see no secret hint;
+	// members without either right see nothing.
+	builder := identity.User{ActorID: memberID, OrgID: orgID, OrgRole: "admin", Permissions: []permission.Code{permission.AgentsBuild}}
+	built, err := service.List(t.Context(), builder)
+	if err != nil || len(built) != 1 || built[0].Name != "Учёт" || built[0].SecretHint != "" {
+		t.Fatalf("builder list = %+v, err=%v", built, err)
+	}
+	if _, err := service.List(t.Context(), member); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("member list error = %v", err)
+	}
 	trigger, err := triggers.Create(t.Context(), owner, agentID, agenttrigger.CreateInput{Type: "webhook", Enabled: true,
 		Config: json.RawMessage(`{"webhook_id":"` + created.ID + `","chat_id":"` + chatID + `","event_types":["slot.released"]}`)})
 	if err != nil {

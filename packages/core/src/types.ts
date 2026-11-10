@@ -15,6 +15,8 @@ export type MessageActionResponse =
   components["schemas"]["MessageActionResponse"];
 export type MessageActionResult = components["schemas"]["MessageActionResult"];
 export type MessageSource = components["schemas"]["MessageSource"];
+export type MessageAgentProvenance =
+  components["schemas"]["MessageAgentProvenance"];
 export type ChatAgent = components["schemas"]["ChatAgent"];
 export type ChatAgentTrigger = components["schemas"]["ChatAgentTrigger"];
 export type FileMetadata = components["schemas"]["File"];
@@ -101,6 +103,11 @@ export type ConfirmEmailRequest = components["schemas"]["ConfirmEmailRequest"];
 export type EmailChangeResponse = components["schemas"]["EmailChangeResponse"];
 export type AuditPage = components["schemas"]["AuditPage"];
 export type Agent = components["schemas"]["Agent"];
+export type AgentTone = components["schemas"]["AgentTone"];
+export type AgentConfirmationMode =
+  components["schemas"]["AgentConfirmationMode"];
+export type AgentConfirmationPolicy =
+  components["schemas"]["AgentConfirmationPolicy"];
 export type AgentVersion = components["schemas"]["AgentVersion"];
 export type AgentUsageReport = components["schemas"]["AgentUsageReport"];
 export type AgentProductMetrics = components["schemas"]["AgentProductMetrics"];

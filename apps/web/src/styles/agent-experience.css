@@ -645,10 +645,48 @@
   inline-size: 13px;
   block-size: 13px;
 }
-.agent-mode--confirm,
-.agent-mode--mixed {
+.agent-mode--confirm {
   background: var(--coma-info-soft);
   color: var(--coma-info);
+}
+
+/* «Сам / после подтверждения» under a skill and per external tool. */
+.agent-line--action {
+  padding-inline-start: 38px;
+  border-block-start-style: dashed;
+}
+.agent-line--action .ui-segmented svg {
+  inline-size: 13px;
+  block-size: 13px;
+  margin-inline-end: 4px;
+  vertical-align: -2px;
+}
+.agent-external {
+  display: grid;
+  gap: 4px;
+}
+.agent-external__system {
+  padding: 4px 12px;
+  border: 1px solid var(--coma-border);
+  border-radius: var(--coma-radius-lg);
+}
+.agent-external__system > .agent-line:first-child {
+  border-block-start: 0;
+}
+.agent-external__system .agent-line--action {
+  padding-inline-start: 0;
+}
+.agent-instructions {
+  max-block-size: 260px;
+  overflow: auto;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--coma-radius-md);
+  background: var(--coma-surface-tint);
+  font: inherit;
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .agent-identity {
@@ -1242,10 +1280,15 @@
     grid-template-columns: minmax(0, 1fr);
     padding: 16px;
   }
-  .agent-line--skill {
+  .agent-line--skill,
+  .agent-line--action {
     flex-wrap: wrap;
   }
-  .agent-line--skill .agent-line__control {
+  .agent-line--action {
+    padding-inline-start: 0;
+  }
+  .agent-line--skill .agent-line__control,
+  .agent-line--action .agent-line__control {
     inline-size: 100%;
     justify-content: space-between;
   }

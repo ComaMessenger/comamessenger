@@ -381,6 +381,17 @@ export class MessengerAPI {
   agentRuns(id: string): Promise<AgentRunPage> {
     return this.request(`/api/v1/agents/${encodeURIComponent(id)}/runs`);
   }
+  /** Runs of every agent of the workspace, newest first (agents.observe). */
+  workspaceAgentRuns(
+    options: { cursor?: string; limit?: number; agentID?: string } = {},
+  ): Promise<AgentRunPage> {
+    const query = new URLSearchParams();
+    if (options.cursor) query.set("cursor", options.cursor);
+    if (options.limit) query.set("limit", String(options.limit));
+    if (options.agentID) query.set("agent_id", options.agentID);
+    const suffix = query.size ? `?${query}` : "";
+    return this.request(`/api/v1/agent-runs${suffix}`);
+  }
   agentRun(runID: string): Promise<AgentRun> {
     return this.request(`/api/v1/agent-runs/${encodeURIComponent(runID)}`);
   }

@@ -8,7 +8,7 @@ import type {
 import { useTranslation } from "react-i18next";
 import { messageOf } from "../../errors";
 import type { BuilderAnchor } from "../routes";
-import { draftOf, updateOf, type Draft } from "../shared/draft";
+import { draftChatIDs, draftOf, updateOf, type Draft } from "../shared/draft";
 
 const snapshot = (draft: Draft) => JSON.stringify(updateOf(draft));
 
@@ -27,7 +27,7 @@ export function publishBlockers(
 ): PublishBlocker[] {
   const result: PublishBlocker[] = [];
   const serverBlockers = new Set(agent.readiness.blockers);
-  if (draft.chat_ids.length === 0)
+  if (draftChatIDs(draft).length === 0)
     result.push({ key: "chat_required", anchor: "places" });
   if (agent.kind === "external" && serverBlockers.has("runtime_key_required"))
     result.push({ key: "runtime_key_required", anchor: "advanced" });

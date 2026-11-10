@@ -106,6 +106,20 @@ describe("MCP security boundaries", () => {
     ).toBe("Bearer top-secret");
   });
 
+  it("follows the per-tool confirmation of the agent version", async () => {
+    const fetcher = protocolFetcher([
+      { name: "write", description: "Write", inputSchema: { type: "object" } },
+    ]);
+    const tools = await resolveMCPTools(
+      [{ ...configuration, tool_confirmation: { write: "auto" } }],
+      new AbortController().signal,
+      fetcher,
+    );
+    expect(
+      tools.get("mcp__knowledge__write")?.definition.description,
+    ).not.toContain("a person must approve");
+  });
+
   it("allows internal endpoints only inside the operator's ranges", async () => {
     const fetcher = protocolFetcher([]);
     const internal = new MCPClient(

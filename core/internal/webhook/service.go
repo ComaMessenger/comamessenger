@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/comamessenger/comamessenger/core/internal/agentauthz"
 	"io"
 	"regexp"
 	"strconv"
@@ -156,8 +157,12 @@ func scanWebhook(row pgx.Row) (Webhook, error) {
 	return hook, err
 }
 
+// List returns the webhooks of the workspace. Agent builders see them too,
+// to start an agent by one, but without the secret hint or rejection
+// details, which only integrations.manage needs.
 func (service *Service) List(ctx context.Context, current identity.User) ([]Webhook, error) {
-	if !canManage(current) {
+	manager := canManage(current)
+	if !manager && !agentauthz.New().CanBuild(current) {
 		return nil, ErrForbidden
 	}
 	rows, err := service.pool.Query(ctx, webhookSelect+` WHERE hook.org_id=$1 ORDER BY lower(hook.name),hook.id`, current.OrgID)
@@ -170,6 +175,9 @@ func (service *Service) List(ctx context.Context, current identity.User) ([]Webh
 		hook, err := scanWebhook(rows)
 		if err != nil {
 			return nil, err
+		}
+		if !manager {
+			hook.SecretHint, hook.RejectedCount, hook.LastRejectedAt, hook.LastRejectedCode = "", 0, nil, ""
 		}
 		result = append(result, hook)
 	}

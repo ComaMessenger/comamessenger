@@ -9006,7 +9006,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Incoming webhooks without secrets. */
+            /** @description Incoming webhooks without secrets. Agent builders (agents.build) see them to start an agent by one, without the secret hint and rejection details. */
             200: {
                 headers: {
                     [name: string]: unknown;

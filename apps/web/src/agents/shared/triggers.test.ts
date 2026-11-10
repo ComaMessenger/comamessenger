@@ -118,3 +118,43 @@ describe("launch rules", () => {
     });
   });
 });
+
+describe("webhook rules", () => {
+  it("reads as a sentence with the webhook name and the target chat", () => {
+    const form = {
+      ...emptyRule("webhook", { chatID: "chat-1", timezone: "UTC" }),
+      webhookID: "hook-1",
+      webhookEvents: "slot.released, slot.released, slot.changed",
+    };
+    expect(ruleProblem(form)).toBeNull();
+    const request = triggerRequest(form);
+    expect(request.config).toEqual({
+      webhook_id: "hook-1",
+      chat_id: "chat-1",
+      event_types: ["slot.released", "slot.changed"],
+    });
+    expect(
+      describeRule(
+        t,
+        trigger("webhook", request.config, "UTC"),
+        [chat],
+        "UTC",
+        new Map([["hook-1", "Учёт"]]),
+      ),
+    ).toEqual({
+      when: 'agentRuleWhen_webhookEvents:{"system":"Учёт","events":"slot.released, slot.changed"}',
+      then: 'agentRuleThen_writeTo:{"chat":"Зал 1"}',
+    });
+  });
+
+  it("asks for a webhook, a chat and valid event names", () => {
+    const base = emptyRule("webhook", { chatID: "chat-1", timezone: "UTC" });
+    expect(ruleProblem(base)).toBe("agentRuleProblem_webhook");
+    expect(ruleProblem({ ...base, webhookID: "h", chatID: "" })).toBe(
+      "agentRuleProblem_webhookChat",
+    );
+    expect(
+      ruleProblem({ ...base, webhookID: "h", webhookEvents: "bad event" }),
+    ).toBe("agentRuleProblem_webhookEvents");
+  });
+});

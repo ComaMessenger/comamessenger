@@ -63,7 +63,10 @@ export async function resolveMCPTools(
         definition: {
           name: exposedName,
           description: `[MCP:${configuration.name}] ${typeof tool.description === "string" ? tool.description : tool.name}${
-            !readOnly && configuration.require_write_confirmation
+            !readOnly &&
+            (configuration.tool_confirmation?.[tool.name] ??
+              (configuration.require_write_confirmation ? "confirm" : "auto")) ===
+              "confirm"
               ? " (Changes data: a person must approve the call before it runs.)"
               : ""
           }`,

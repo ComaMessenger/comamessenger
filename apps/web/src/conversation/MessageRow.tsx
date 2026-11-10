@@ -52,6 +52,7 @@ import { MessageDetailsDialog } from "../dialogs/MessageDetailsDialog";
 import { MessageFile } from "./MessageFile";
 import { useThreadPreview } from "./useThreadPreview";
 import { MessageBlocksView } from "../agentchat/MessageBlocksView";
+import { AgentWhy } from "../agentchat/AgentWhy";
 
 export type MessageRowProps = {
   message: ClientMessage;
@@ -349,6 +350,7 @@ export function MessageRow({
             ))}
           </div>
         )}
+        {!message.deleted_at && <AgentWhy provenance={message.agent_provenance} />}
         {reactionGroups.length > 0 && !message.deleted_at && (
           <div className="message__reactions">
             {reactionGroups.map(([emoji, group]) => (

@@ -2754,7 +2754,7 @@ paths:
       security: [{ bearerAuth: [] }]
       responses:
         "200":
-          description: Incoming webhooks without secrets.
+          description: Incoming webhooks without secrets. Agent builders (agents.build) see them to start an agent by one, without the secret hint and rejection details.
           content:
             application/json:
               schema:
