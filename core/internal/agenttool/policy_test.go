@@ -115,7 +115,7 @@ func TestAgentVersionDecidesConfirmationAndChatRoles(t *testing.T) {
 	if err := pool.QueryRow(t.Context(), `SELECT input,chat_id::text FROM agent_runs WHERE agent_id=$1 AND input->>'trigger_type'='confirmation'`, agentID).Scan(&input, &chatID); err != nil {
 		t.Fatalf("continuation run: %v", err)
 	}
-	if input["confirmation_id"] != approved.ID || input["status"] != "completed" || input["tool_name"] != "remember" || input["result"] == nil || chatID != writeChat || input["original_run_id"] != runID {
+	if input["confirmation_id"] != approved.ID || input["status"] != "completed" || input["tool_name"] != "remember" || input["result_summary"] == nil || input["result"] != nil || chatID != writeChat || input["original_run_id"] != runID {
 		t.Fatalf("continuation input=%v chat=%s", input, chatID)
 	}
 }

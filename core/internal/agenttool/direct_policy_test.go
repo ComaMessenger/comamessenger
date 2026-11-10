@@ -217,6 +217,15 @@ func TestWritingToAPersonDirectlyNeedsApprovalWhateverTheTool(t *testing.T) {
 	if err != nil || approved.Status != "completed" || w.dmMessages(t) != 2 {
 		t.Fatalf("approved direct message = %+v err=%v messages=%d", approved, err, w.dmMessages(t))
 	}
+	// Finding 6: the continuation learns that the message was delivered, not
+	// its text; the full result stays with the confirmation.
+	var input string
+	if err := w.pool.QueryRow(t.Context(), `SELECT input::text FROM agent_runs WHERE input->>'confirmation_id'=$1`, approved.ID).Scan(&input); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(input, "слот ваш") || !strings.Contains(input, `"delivered": true`) {
+		t.Fatalf("continuation input = %s", input)
+	}
 }
 
 // TestDirectWritesKeepPersonLimitsAndQuietHours: even when an agent may write

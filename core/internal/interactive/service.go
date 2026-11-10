@@ -290,8 +290,13 @@ type ConfirmationOutcome struct {
 	DecidedBy      string
 }
 
-// maxOutcomeResultBytes bounds the tool result handed to the continuation.
-const maxOutcomeResultBytes = 16 << 10
+// maxOutcomeSummaryRunes bounds the tool result summary handed to the
+// continuation.
+const maxOutcomeSummaryRunes = 1000
+
+// messageTools write messages; their continuation learns only whether the
+// message was delivered, never its text.
+var messageTools = map[string]bool{"post_message": true, "reply_in_thread": true, "post_card": true, "update_card": true, "send_direct_message": true}
 
 // EnqueueConfirmationOutcome wakes the agent after a person decided on its
 // pending call, with the decision and the call result, so it can continue
@@ -321,11 +326,21 @@ func (s *Service) EnqueueConfirmationOutcome(ctx context.Context, outcome Confir
 	if outcome.ErrorCode != "" {
 		input["error_code"] = outcome.ErrorCode
 	}
+	// The full result stays with the confirmation, readable by people who
+	// approve agent actions. The run input is visible to everyone who may
+	// view the agent and the model may retell it in a group chat, so it
+	// carries only whether a message was delivered, or a short summary of
+	// another tool's output.
 	if len(outcome.Result) > 0 {
-		if len(outcome.Result) <= maxOutcomeResultBytes && json.Valid(outcome.Result) {
-			input["result"] = json.RawMessage(outcome.Result)
+		if messageTools[outcome.ToolName] {
+			input["delivered"] = outcome.Status == "completed"
 		} else {
-			input["result_truncated"] = true
+			summary := string(outcome.Result)
+			if runes := []rune(summary); len(runes) > maxOutcomeSummaryRunes {
+				summary = string(runes[:maxOutcomeSummaryRunes]) + "…"
+				input["result_truncated"] = true
+			}
+			input["result_summary"] = summary
 		}
 	}
 	var requestedBy *string
