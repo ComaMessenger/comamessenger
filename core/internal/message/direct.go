@@ -2,6 +2,7 @@ package message
 
 import (
 	"context"
+	"errors"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -40,4 +41,15 @@ func WithApprovedWrite(ctx context.Context) context.Context {
 func ApprovedWrite(ctx context.Context) bool {
 	approved, _ := ctx.Value(approvedWriteKey{}).(bool)
 	return approved
+}
+
+// agentChatRole tells whether user is an agent that only reads or only
+// writes in chatID. Humans have neither restriction.
+func agentChatRole(ctx context.Context, tx pgx.Tx, orgID, actorID, chatID string) (readOnly, writeOnly bool, err error) {
+	err = tx.QueryRow(ctx, `SELECT $3::uuid=ANY(read_only_chat_ids), $3::uuid=ANY(write_only_chat_ids) FROM agents WHERE org_id=$1 AND actor_id=$2`,
+		orgID, actorID, chatID).Scan(&readOnly, &writeOnly)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, false, nil
+	}
+	return readOnly, writeOnly, err
 }

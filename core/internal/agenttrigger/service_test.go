@@ -222,3 +222,40 @@ func mustTriggerID(t *testing.T) string {
 	}
 	return value
 }
+
+// TestWriteOnlyChatNeverStartsTheAgent covers review finding 3: a chat the
+// agent only writes to is not a source, so its messages neither start the
+// agent nor reach run.input.
+func TestWriteOnlyChatNeverStartsTheAgent(t *testing.T) {
+	pool := testdb.New(t)
+	seedTriggerModel(t, pool)
+	owner := identity.User{ActorID: triggerTestOwnerID, OrgID: triggerTestOrgID, OrgRole: "owner"}
+	empty := []string{}
+	write := []string{triggerTestChatID}
+	created, err := agent.NewService(pool).Create(t.Context(), owner, agent.CreateInput{
+		DisplayName: "Writer", Handle: "writer", Kind: "builtin", Enabled: true,
+		ReadChatIDs: &empty, WriteChatIDs: &write, Provider: "openai", Model: "test-model",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(t.Context(), `UPDATE agents SET write_only_chat_ids=ARRAY[$2::uuid] WHERE actor_id=$1`, created.ID, triggerTestChatID); err != nil {
+		t.Fatal(err)
+	}
+	service := agenttrigger.NewService(pool, nil)
+	everyMessage, err := service.Create(t.Context(), owner, created.ID, agenttrigger.CreateInput{Type: "every_message", Config: json.RawMessage(`{}`), Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := message.NewService(pool, 64*1024, 100, nil).Create(t.Context(), owner, triggerTestChatID, message.CreateInput{
+		ClientMsgID: mustTriggerID(t), Body: "пароль от сейфа 4711", BodyFormat: "plain",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if err := service.DispatchEvents(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	assertTriggerRuns(t, pool, everyMessage.ID, 0)
+}

@@ -352,6 +352,10 @@ func (service *Service) dispatchAgent(ctx context.Context, orgID, agentID string
 		LEFT JOIN message_agent_provenance provenance ON provenance.message_id=message.id
 		WHERE event.org_id=$1 AND event.seq>$2 AND (event.chat_id IS NULL OR EXISTS(
 			SELECT 1 FROM chat_members member WHERE member.org_id=event.org_id AND member.chat_id=event.chat_id AND member.actor_id=$3))
+		  -- A chat the agent only writes to is not a source: its messages and
+		  -- events never start the agent nor reach run.input.
+		  AND (event.chat_id IS NULL OR NOT EXISTS(
+			SELECT 1 FROM agents agent WHERE agent.org_id=event.org_id AND agent.actor_id=$3 AND event.chat_id=ANY(agent.write_only_chat_ids)))
 		ORDER BY event.seq LIMIT 100`, orgID, checkpoint, agentID)
 	if err != nil {
 		return err

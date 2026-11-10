@@ -140,6 +140,12 @@ func (s *Service) Get(ctx context.Context, user identity.User, messageID string)
 	if err != nil {
 		return Message{}, err
 	}
+	// In a chat it only writes to, an agent sees its own messages only.
+	if _, writeOnly, err := agentChatRole(ctx, tx, user.OrgID, user.ActorID, result.ChatID); err != nil {
+		return Message{}, err
+	} else if writeOnly && result.ActorID != user.ActorID {
+		return Message{}, ErrForbidden
+	}
 	items := []Message{result}
 	if err := hydrateThreadReplyCounts(ctx, tx, user.OrgID, items); err != nil {
 		return Message{}, err

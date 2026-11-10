@@ -30,6 +30,11 @@ type chatTarget struct {
 	argument string
 	message  bool
 	write    bool
+	// collection resolves a response collection to its message.
+	collection bool
+	// own lets the agent read its own message (a check-in card and its
+	// reactions) in a chat it only writes to.
+	own bool
 }
 
 var chatTargets = map[string][]chatTarget{
@@ -37,7 +42,8 @@ var chatTargets = map[string][]chatTarget{
 	"list_members":      {{argument: "chat_id"}},
 	"search_messages":   {{argument: "chat_id"}},
 	"get_thread":        {{argument: "message_id", message: true}},
-	"get_reactions":     {{argument: "message_id", message: true}},
+	"get_reactions":     {{argument: "message_id", message: true, own: true}},
+	"get_collection":    {{argument: "collection_id", collection: true, own: true}},
 	"post_message":      {{argument: "chat_id", write: true}},
 	"reply_in_thread":   {{argument: "chat_id", write: true}},
 	"post_card":         {{argument: "chat_id", write: true}},
@@ -65,14 +71,22 @@ func (executor *Executor) checkChatRoles(ctx context.Context, invocation Invocat
 			continue
 		}
 		chatID := value
-		if target.message {
-			err := executor.pool.QueryRow(ctx, `SELECT chat_id::text FROM messages WHERE org_id=$1 AND id=$2`, invocation.User.OrgID, value).Scan(&chatID)
+		author := ""
+		if target.message || target.collection {
+			query := `SELECT chat_id::text,actor_id::text FROM messages WHERE org_id=$1 AND id=$2`
+			if target.collection {
+				query = `SELECT m.chat_id::text,m.actor_id::text FROM agent_collections c JOIN messages m ON m.org_id=c.org_id AND m.id=c.message_id WHERE c.org_id=$1 AND c.id=$2`
+			}
+			err := executor.pool.QueryRow(ctx, query, invocation.User.OrgID, value).Scan(&chatID, &author)
 			if errors.Is(err, pgx.ErrNoRows) {
 				continue
 			}
 			if err != nil {
 				return err
 			}
+		}
+		if target.own && author == invocation.User.ActorID {
+			continue
 		}
 		if target.write && invocation.readOnlyChats[chatID] {
 			return errChatReadOnly

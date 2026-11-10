@@ -357,6 +357,13 @@ func (s *Service) List(ctx context.Context, user identity.User, chatID string, o
 	if _, _, err := requireMembership(ctx, tx, user, chatID); err != nil {
 		return Page{}, err
 	}
+	// An agent does not read the history of a chat it only writes to,
+	// whether through a tool or with its API key.
+	if _, writeOnly, err := agentChatRole(ctx, tx, user.OrgID, user.ActorID, chatID); err != nil {
+		return Page{}, err
+	} else if writeOnly {
+		return Page{}, ErrForbidden
+	}
 	rows, err := tx.Query(ctx, `
 		SELECT id, chat_id, actor_id, client_msg_id, type, body, body_format, reply_to_id,
 			thread_root_id, version, created_seq, created_at, edited_at, deleted_at, forwarded_from, mentioned_actor_ids, blocks

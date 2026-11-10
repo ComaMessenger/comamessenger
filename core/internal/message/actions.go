@@ -229,6 +229,12 @@ func (s *Service) PutReaction(ctx context.Context, user identity.User, messageID
 	if message.DeletedAt != nil {
 		return Reaction{}, false, ErrNotFound
 	}
+	// A reaction is a write: not in a chat the agent only reads.
+	if readOnly, _, err := agentChatRole(ctx, tx, user.OrgID, user.ActorID, message.ChatID); err != nil {
+		return Reaction{}, false, err
+	} else if readOnly {
+		return Reaction{}, false, ErrForbidden
+	}
 	result := Reaction{MessageID: messageID, ActorID: user.ActorID, Emoji: emoji}
 	err = tx.QueryRow(ctx, `SELECT created_at FROM reactions WHERE message_id = $1 AND actor_id = $2 AND emoji = $3`, messageID, user.ActorID, emoji).Scan(&result.CreatedAt)
 	if err == nil {
@@ -281,8 +287,16 @@ func (s *Service) ListReactions(ctx context.Context, user identity.User, message
 		return nil, fmt.Errorf("begin list reactions: %w", err)
 	}
 	defer tx.Rollback(ctx)
-	if _, _, _, err := lockMessage(ctx, tx, user, messageID); err != nil {
+	target, _, _, err := lockMessage(ctx, tx, user, messageID)
+	if err != nil {
 		return nil, err
+	}
+	// In a chat it only writes to, an agent sees reactions to its own
+	// messages only (a check-in card), not to the people's messages.
+	if _, writeOnly, err := agentChatRole(ctx, tx, user.OrgID, user.ActorID, target.ChatID); err != nil {
+		return nil, err
+	} else if writeOnly && target.ActorID != user.ActorID {
+		return nil, ErrForbidden
 	}
 	rows, err := tx.Query(ctx, `
 		SELECT message_id, actor_id, emoji, created_at
