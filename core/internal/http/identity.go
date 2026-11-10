@@ -31,6 +31,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/push"
 	"github.com/comamessenger/comamessenger/core/internal/search"
 	"github.com/comamessenger/comamessenger/core/internal/userstate"
+	"github.com/comamessenger/comamessenger/core/internal/webhook"
 	"github.com/comamessenger/comamessenger/core/internal/workspace"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -56,6 +57,7 @@ type Dependencies struct {
 	Files                 *files.Service
 	Search                *search.Service
 	Knowledge             *knowledge.Service
+	Webhooks              *webhook.Service
 	Realtime              standardhttp.Handler
 	CookieSecure          bool
 	RefreshTokenTTL       time.Duration
@@ -82,6 +84,8 @@ type identityHandlers struct {
 	files                 *files.Service
 	search                *search.Service
 	knowledge             *knowledge.Service
+	webhooks              *webhook.Service
+	webhookRate           *ipRateLimiter
 	realtime              standardhttp.Handler
 	allowedOrigin         string
 	cookieSecure          bool
@@ -108,7 +112,7 @@ type authenticated struct {
 
 func newIdentityHandlers(logger *slog.Logger, allowedOrigin string, dependencies Dependencies) *identityHandlers {
 	return &identityHandlers{
-		logger: logger, service: dependencies.Identity, agents: dependencies.Agents, agentConfig: dependencies.AgentConfig, agentProvider: dependencies.AgentProvider, agentTools: dependencies.AgentTools, agentRuns: dependencies.AgentRuns, agentTriggers: dependencies.AgentTriggers, chats: dependencies.Chats, messages: dependencies.Messages, userState: dependencies.UserState, push: dependencies.Push, workspace: dependencies.Workspace, files: dependencies.Files, search: dependencies.Search, knowledge: dependencies.Knowledge, realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
+		logger: logger, service: dependencies.Identity, agents: dependencies.Agents, agentConfig: dependencies.AgentConfig, agentProvider: dependencies.AgentProvider, agentTools: dependencies.AgentTools, agentRuns: dependencies.AgentRuns, agentTriggers: dependencies.AgentTriggers, chats: dependencies.Chats, messages: dependencies.Messages, userState: dependencies.UserState, push: dependencies.Push, workspace: dependencies.Workspace, files: dependencies.Files, search: dependencies.Search, knowledge: dependencies.Knowledge, webhooks: dependencies.Webhooks, webhookRate: newIPRateLimiter(600, 100), realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
 		cookieSecure: dependencies.CookieSecure, refreshTTL: dependencies.RefreshTokenTTL,
 		bootstrapRate: newIPRateLimiter(5, 5), loginRate: newIPRateLimiter(10, 10),
 		refreshRate: newIPRateLimiter(30, 20), invitationRate: newIPRateLimiter(10, 10), websocketRate: newIPRateLimiter(60, 20), actorRate: newIPRateLimiter(1200, 200),
@@ -132,6 +136,9 @@ func (h *identityHandlers) routes(router chi.Router) {
 	}
 	if h.realtime != nil {
 		router.With(h.rateLimit("websocket", h.websocketRate)).Handle("/ws", h.realtime)
+	}
+	if h.webhooks != nil {
+		router.With(h.rateLimit("webhook", h.webhookRate)).Post("/hooks/{webhookID}", h.receiveWebhook)
 	}
 
 	router.Group(func(protected chi.Router) {
@@ -188,6 +195,22 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Patch("/agents/{agentID}/mcp-servers/{serverID}", h.updateAgentMCPServer)
 			protected.Delete("/agents/{agentID}/mcp-servers/{serverID}", h.deleteAgentMCPServer)
 			protected.Post("/agent-runtime/mcp-servers", h.agentRuntimeMCPServers)
+			protected.Get("/integrations/mcp-connections", h.listMCPConnections)
+			protected.Post("/integrations/mcp-connections", h.createMCPConnection)
+			protected.Get("/integrations/mcp-connections/{connectionID}", h.getMCPConnection)
+			protected.Patch("/integrations/mcp-connections/{connectionID}", h.updateMCPConnection)
+			protected.Delete("/integrations/mcp-connections/{connectionID}", h.deleteMCPConnection)
+			protected.Post("/integrations/mcp-connections/{connectionID}/test", h.testMCPConnection)
+			protected.Get("/integrations/mcp-connections/{connectionID}/usage", h.mcpConnectionUsage)
+			protected.Post("/integrations/mcp-connections/{connectionID}/detach", h.detachMCPConnection)
+		}
+		if h.webhooks != nil {
+			protected.Get("/integrations/webhooks", h.listWebhooks)
+			protected.Post("/integrations/webhooks", h.createWebhook)
+			protected.Patch("/integrations/webhooks/{webhookID}", h.updateWebhook)
+			protected.Delete("/integrations/webhooks/{webhookID}", h.deleteWebhook)
+			protected.Post("/integrations/webhooks/{webhookID}/rotate-secret", h.rotateWebhookSecret)
+			protected.Get("/integrations/webhooks/{webhookID}/deliveries", h.webhookDeliveries)
 		}
 		if h.agentTools != nil {
 			protected.Get("/agent-tools", h.listAgentTools)

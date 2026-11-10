@@ -37,6 +37,20 @@ func TestDryRunSnapshotsDraftWithoutEnablingAgent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The dry run snapshots the draft bindings, so the connection exists first.
+	configService, err := agentconfig.NewService(pool, "0123456789abcdef0123456789abcdef")
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireConfirmation := true
+	mcpServer, err := configService.CreateMCPServer(t.Context(), owner, created.ID, agentconfig.CreateMCPServerInput{
+		Name: "dry-run-external", EndpointURL: "https://mcp.example.test/rpc", Enabled: true,
+		AllowedTools: []string{"write_record"}, TimeoutMS: 5000, MaxOutputBytes: 32768,
+		RequireWriteConfirmation: &requireConfirmation,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	service := agentrun.NewService(pool)
 	run, err := service.Invoke(t.Context(), owner, created.ID, agentrun.InvokeInput{
 		ChatID: runTestChatID, ClientRunID: mustRunID(t), DryRun: true, Input: json.RawMessage(`{"prompt":"check draft"}`),
@@ -69,19 +83,6 @@ func TestDryRunSnapshotsDraftWithoutEnablingAgent(t *testing.T) {
 		t.Fatal(err)
 	}
 	agentUser, authentication, err := agents.AuthenticateKey(t.Context(), key.Secret)
-	if err != nil {
-		t.Fatal(err)
-	}
-	configService, err := agentconfig.NewService(pool, "0123456789abcdef0123456789abcdef")
-	if err != nil {
-		t.Fatal(err)
-	}
-	requireConfirmation := true
-	mcpServer, err := configService.CreateMCPServer(t.Context(), owner, created.ID, agentconfig.CreateMCPServerInput{
-		Name: "dry-run-external", EndpointURL: "https://mcp.example.test/rpc", Enabled: true,
-		AllowedTools: []string{"write_record"}, TimeoutMS: 5000, MaxOutputBytes: 32768,
-		RequireWriteConfirmation: &requireConfirmation,
-	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,12 +179,8 @@ func TestAgentWorkerLeaseAndCheckpointContract(t *testing.T) {
 	if err != nil || !mcpServer.HeadersConfigured {
 		t.Fatalf("MCP server = %+v, err=%v", mcpServer, err)
 	}
-	runtimeMCP, err := configService.RuntimeMCPServers(t.Context(), agentUser, authentication)
-	if err != nil || len(runtimeMCP) != 1 || runtimeMCP[0].Headers["Authorization"] != "Bearer mcp-secret" {
-		t.Fatalf("runtime MCP servers = %+v, err=%v", runtimeMCP, err)
-	}
 	var encryptedHeaders []byte
-	if err := pool.QueryRow(t.Context(), `SELECT encrypted_headers FROM agent_mcp_servers WHERE id=$1`, mcpServer.ID).Scan(&encryptedHeaders); err != nil {
+	if err := pool.QueryRow(t.Context(), `SELECT encrypted_headers FROM integration_mcp_connections WHERE id=$1`, mcpServer.ID).Scan(&encryptedHeaders); err != nil {
 		t.Fatal(err)
 	}
 	if bytes.Contains(encryptedHeaders, []byte("mcp-secret")) {
@@ -228,6 +225,10 @@ func TestAgentWorkerLeaseAndCheckpointContract(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	runtimeMCP, err := configService.RuntimeMCPServersForRun(t.Context(), agentUser, authentication, created.ID, invoked.ID)
+	if err != nil || len(runtimeMCP) != 1 || runtimeMCP[0].Headers["Authorization"] != "Bearer mcp-secret" {
+		t.Fatalf("runtime MCP servers = %+v, err=%v", runtimeMCP, err)
+	}
 	mcpCall, err := service.StartMCPToolCall(t.Context(), agentUser, authentication, agentrun.StartMCPToolCallInput{
 		CallID: mustRunID(t), RunID: invoked.ID, LeaseToken: claimed.LeaseToken, ServerID: mcpServer.ID,
 		ToolName: "search", Mode: "read", InputBytes: 24,
@@ -240,11 +241,11 @@ func TestAgentWorkerLeaseAndCheckpointContract(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.StartMCPToolCall(t.Context(), agentUser, authentication, agentrun.StartMCPToolCallInput{
+	if pending, err := service.StartMCPToolCall(t.Context(), agentUser, authentication, agentrun.StartMCPToolCallInput{
 		CallID: mustRunID(t), RunID: invoked.ID, LeaseToken: claimed.LeaseToken, ServerID: mcpServer.ID,
 		ToolName: "search", Mode: "write", InputBytes: 24,
-	}); !errors.Is(err, agentrun.ErrForbidden) {
-		t.Fatalf("unconfirmed MCP write error = %v", err)
+	}); err != nil || !pending.ConfirmationRequired || pending.Preview {
+		t.Fatalf("MCP write needing confirmation = %+v, err = %v", pending, err)
 	}
 	providerCall, err := service.StartProviderCall(t.Context(), agentUser, authentication, agentrun.StartProviderCallInput{
 		CallID: mustRunID(t), RunID: invoked.ID, LeaseToken: claimed.LeaseToken, ReservedCost: "0.01000000", Currency: "USD",

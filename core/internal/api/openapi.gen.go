@@ -118,19 +118,19 @@ func (e AgentRecipe) Valid() bool {
 
 // Defines values for AgentLlmConnectionHealthStatus.
 const (
-	Healthy   AgentLlmConnectionHealthStatus = "healthy"
-	Unhealthy AgentLlmConnectionHealthStatus = "unhealthy"
-	Untested  AgentLlmConnectionHealthStatus = "untested"
+	AgentLlmConnectionHealthStatusHealthy   AgentLlmConnectionHealthStatus = "healthy"
+	AgentLlmConnectionHealthStatusUnhealthy AgentLlmConnectionHealthStatus = "unhealthy"
+	AgentLlmConnectionHealthStatusUntested  AgentLlmConnectionHealthStatus = "untested"
 )
 
 // Valid indicates whether the value is a known member of the AgentLlmConnectionHealthStatus enum.
 func (e AgentLlmConnectionHealthStatus) Valid() bool {
 	switch e {
-	case Healthy:
+	case AgentLlmConnectionHealthStatusHealthy:
 		return true
-	case Unhealthy:
+	case AgentLlmConnectionHealthStatusUnhealthy:
 		return true
-	case Untested:
+	case AgentLlmConnectionHealthStatusUntested:
 		return true
 	default:
 		return false
@@ -330,6 +330,7 @@ const (
 	RuntimeExecute      AgentScope = "runtime:execute"
 	RuntimeWorker       AgentScope = "runtime:worker"
 	SearchRead          AgentScope = "search:read"
+	TablesRead          AgentScope = "tables:read"
 )
 
 // Valid indicates whether the value is a known member of the AgentScope enum.
@@ -362,6 +363,8 @@ func (e AgentScope) Valid() bool {
 	case RuntimeWorker:
 		return true
 	case SearchRead:
+		return true
+	case TablesRead:
 		return true
 	default:
 		return false
@@ -443,6 +446,7 @@ const (
 	AgentTriggerTypeManual       AgentTriggerType = "manual"
 	AgentTriggerTypeMention      AgentTriggerType = "mention"
 	AgentTriggerTypeSchedule     AgentTriggerType = "schedule"
+	AgentTriggerTypeWebhook      AgentTriggerType = "webhook"
 )
 
 // Valid indicates whether the value is a known member of the AgentTriggerType enum.
@@ -461,6 +465,8 @@ func (e AgentTriggerType) Valid() bool {
 	case AgentTriggerTypeMention:
 		return true
 	case AgentTriggerTypeSchedule:
+		return true
+	case AgentTriggerTypeWebhook:
 		return true
 	default:
 		return false
@@ -1133,6 +1139,7 @@ const (
 	CreateAgentTriggerRequestTypeManual       CreateAgentTriggerRequestType = "manual"
 	CreateAgentTriggerRequestTypeMention      CreateAgentTriggerRequestType = "mention"
 	CreateAgentTriggerRequestTypeSchedule     CreateAgentTriggerRequestType = "schedule"
+	CreateAgentTriggerRequestTypeWebhook      CreateAgentTriggerRequestType = "webhook"
 )
 
 // Valid indicates whether the value is a known member of the CreateAgentTriggerRequestType enum.
@@ -1151,6 +1158,8 @@ func (e CreateAgentTriggerRequestType) Valid() bool {
 	case CreateAgentTriggerRequestTypeMention:
 		return true
 	case CreateAgentTriggerRequestTypeSchedule:
+		return true
+	case CreateAgentTriggerRequestTypeWebhook:
 		return true
 	default:
 		return false
@@ -1640,6 +1649,24 @@ func (e FinishAgentProviderCallRequestStatus) Valid() bool {
 	}
 }
 
+// Defines values for IntegrationWebhookDeliveryStatus.
+const (
+	Accepted IntegrationWebhookDeliveryStatus = "accepted"
+	Rejected IntegrationWebhookDeliveryStatus = "rejected"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationWebhookDeliveryStatus enum.
+func (e IntegrationWebhookDeliveryStatus) Valid() bool {
+	switch e {
+	case Accepted:
+		return true
+	case Rejected:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InvitationRole.
 const (
 	InvitationRoleAdmin  InvitationRole = "admin"
@@ -1811,6 +1838,27 @@ func (e KnowledgeFragmentMatch) Valid() bool {
 	case KnowledgeFragmentMatchSemantic:
 		return true
 	case KnowledgeFragmentMatchText:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for McpConnectionHealthStatus.
+const (
+	McpConnectionHealthStatusHealthy   McpConnectionHealthStatus = "healthy"
+	McpConnectionHealthStatusUnhealthy McpConnectionHealthStatus = "unhealthy"
+	McpConnectionHealthStatusUntested  McpConnectionHealthStatus = "untested"
+)
+
+// Valid indicates whether the value is a known member of the McpConnectionHealthStatus enum.
+func (e McpConnectionHealthStatus) Valid() bool {
+	switch e {
+	case McpConnectionHealthStatusHealthy:
+		return true
+	case McpConnectionHealthStatusUnhealthy:
+		return true
+	case McpConnectionHealthStatusUntested:
 		return true
 	default:
 		return false
@@ -3449,11 +3497,14 @@ type Agent struct {
 	Kind                        AgentKind            `json:"kind"`
 
 	// KnowledgeCollectionIds Knowledge collections bound to the draft (or the published version when there is no draft). Empty for actors without agent management rights.
-	KnowledgeCollectionIds     *[]openapi_types.UUID  `json:"knowledge_collection_ids,omitempty"`
-	LlmConnectionId            *openapi_types.UUID    `json:"llm_connection_id"`
-	MaxChainDepth              int                    `json:"max_chain_depth"`
-	MaxOutputTokens            int                    `json:"max_output_tokens"`
-	MaxToolIterations          int                    `json:"max_tool_iterations"`
+	KnowledgeCollectionIds *[]openapi_types.UUID `json:"knowledge_collection_ids,omitempty"`
+	LlmConnectionId        *openapi_types.UUID   `json:"llm_connection_id"`
+	MaxChainDepth          int                   `json:"max_chain_depth"`
+	MaxOutputTokens        int                   `json:"max_output_tokens"`
+	MaxToolIterations      int                   `json:"max_tool_iterations"`
+
+	// McpBindings Workspace MCP connections assigned to the draft (or the published version when there is no draft) with the allowed tools. Never contains secrets; empty for actors without agent management rights.
+	McpBindings                *[]AgentMcpBinding     `json:"mcp_bindings,omitempty"`
 	Model                      string                 `json:"model"`
 	MonthlyCostLimit           *string                `json:"monthly_cost_limit"`
 	OperationalStatus          AgentOperationalStatus `json:"operational_status"`
@@ -3522,6 +3573,15 @@ type AgentLlmConnectionHealthStatus string
 // AgentLlmConnectionProvider defines model for AgentLlmConnection.Provider.
 type AgentLlmConnectionProvider string
 
+// AgentMcpBinding defines model for AgentMcpBinding.
+type AgentMcpBinding struct {
+	AllowedTools []string           `json:"allowed_tools"`
+	ConnectionId openapi_types.UUID `json:"connection_id"`
+
+	// RequireWriteConfirmation Calls to tools that are not read-only wait for a person's approval; Core then executes them.
+	RequireWriteConfirmation bool `json:"require_write_confirmation"`
+}
+
 // AgentMcpHeaders defines model for AgentMcpHeaders.
 type AgentMcpHeaders map[string]string
 
@@ -3543,6 +3603,12 @@ type AgentMcpServer struct {
 
 // AgentMcpToolCall defines model for AgentMcpToolCall.
 type AgentMcpToolCall struct {
+	// Confirmation Present when a person must approve the write first. The runtime must not call the tool; Core executes it after approval.
+	Confirmation *struct {
+		ExpiresAt time.Time          `json:"expires_at"`
+		Id        openapi_types.UUID `json:"id"`
+		Status    string             `json:"status"`
+	} `json:"confirmation,omitempty"`
 	CorrelationId openapi_types.UUID   `json:"correlation_id"`
 	Id            openapi_types.UUID   `json:"id"`
 	Mode          AgentMcpToolCallMode `json:"mode"`
@@ -3696,6 +3762,8 @@ type AgentRuntimeCheckpoint struct {
 
 // AgentRuntimeMcpServer defines model for AgentRuntimeMcpServer.
 type AgentRuntimeMcpServer struct {
+	// AllowPrivateNetwork The connection may reach trusted private network addresses; link-local and cloud metadata addresses stay forbidden.
+	AllowPrivateNetwork      *bool              `json:"allow_private_network,omitempty"`
 	AllowedTools             []string           `json:"allowed_tools"`
 	EndpointUrl              string             `json:"endpoint_url"`
 	Headers                  AgentMcpHeaders    `json:"headers"`
@@ -4144,6 +4212,7 @@ type CreateAgentRequest struct {
 	MaxChainDepth               *int                      `json:"max_chain_depth,omitempty"`
 	MaxOutputTokens             *int                      `json:"max_output_tokens,omitempty"`
 	MaxToolIterations           *int                      `json:"max_tool_iterations,omitempty"`
+	McpBindings                 *[]AgentMcpBinding        `json:"mcp_bindings,omitempty"`
 	Model                       *string                   `json:"model,omitempty"`
 	MonthlyCostLimit            *string                   `json:"monthly_cost_limit,omitempty"`
 	PerChatConcurrency          *int                      `json:"per_chat_concurrency,omitempty"`
@@ -4197,6 +4266,15 @@ type CreateFileUploadRequest struct {
 	Size   int64   `json:"size"`
 }
 
+// CreateIntegrationWebhookRequest defines model for CreateIntegrationWebhookRequest.
+type CreateIntegrationWebhookRequest struct {
+	Description        *string `json:"description,omitempty"`
+	Enabled            *bool   `json:"enabled,omitempty"`
+	MaxBodyBytes       *int    `json:"max_body_bytes,omitempty"`
+	Name               string  `json:"name"`
+	RateLimitPerMinute *int    `json:"rate_limit_per_minute,omitempty"`
+}
+
 // CreateInvitationRequest defines model for CreateInvitationRequest.
 type CreateInvitationRequest struct {
 	Email openapi_types.Email          `json:"email"`
@@ -4230,6 +4308,18 @@ type CreateKnowledgeDocumentRequest struct {
 
 // CreateKnowledgeDocumentRequestKind defines model for CreateKnowledgeDocumentRequest.Kind.
 type CreateKnowledgeDocumentRequestKind string
+
+// CreateMcpConnectionRequest defines model for CreateMcpConnectionRequest.
+type CreateMcpConnectionRequest struct {
+	AllowPrivateNetwork *bool       `json:"allow_private_network,omitempty"`
+	Description         *string     `json:"description,omitempty"`
+	Enabled             *bool       `json:"enabled,omitempty"`
+	EndpointUrl         string      `json:"endpoint_url"`
+	Headers             *McpHeaders `json:"headers,omitempty"`
+	MaxOutputBytes      *int        `json:"max_output_bytes,omitempty"`
+	Name                string      `json:"name"`
+	TimeoutMs           *int        `json:"timeout_ms,omitempty"`
+}
 
 // CreateMessageRequest defines model for CreateMessageRequest.
 type CreateMessageRequest struct {
@@ -4270,6 +4360,12 @@ type CustomStatus struct {
 	Emoji     string     `json:"emoji"`
 	ExpiresAt *time.Time `json:"expires_at"`
 	Text      string     `json:"text"`
+}
+
+// DetachMcpConnectionRequest defines model for DetachMcpConnectionRequest.
+type DetachMcpConnectionRequest struct {
+	// AgentIds Exactly the agents currently using the connection, as shown to the administrator. A different set is rejected with 409.
+	AgentIds []openapi_types.UUID `json:"agent_ids"`
 }
 
 // DirectoryChat defines model for DirectoryChat.
@@ -4432,6 +4528,59 @@ type InfrastructureSettings struct {
 	S3      S3Configuration   `json:"s3"`
 	Smtp    SMTPConfiguration `json:"smtp"`
 	Version int64             `json:"version"`
+}
+
+// IntegrationWebhook defines model for IntegrationWebhook.
+type IntegrationWebhook struct {
+	CreatedAt          time.Time          `json:"created_at"`
+	CreatedBy          openapi_types.UUID `json:"created_by"`
+	Description        string             `json:"description"`
+	Enabled            bool               `json:"enabled"`
+	Id                 openapi_types.UUID `json:"id"`
+	LastReceivedAt     *time.Time         `json:"last_received_at"`
+	MaxBodyBytes       int                `json:"max_body_bytes"`
+	Name               string             `json:"name"`
+	RateLimitPerMinute int                `json:"rate_limit_per_minute"`
+	SecretHint         string             `json:"secret_hint"`
+
+	// TriggerCount Current agent triggers that start on this webhook.
+	TriggerCount int       `json:"trigger_count"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// IntegrationWebhookDelivery defines model for IntegrationWebhookDelivery.
+type IntegrationWebhookDelivery struct {
+	BodyBytes   int                              `json:"body_bytes"`
+	BodySha256  string                           `json:"body_sha256"`
+	DeliveryId  string                           `json:"delivery_id"`
+	ErrorCode   string                           `json:"error_code"`
+	EventType   string                           `json:"event_type"`
+	Id          openapi_types.UUID               `json:"id"`
+	ReceivedAt  time.Time                        `json:"received_at"`
+	RunsCreated int                              `json:"runs_created"`
+	Status      IntegrationWebhookDeliveryStatus `json:"status"`
+}
+
+// IntegrationWebhookDeliveryStatus defines model for IntegrationWebhookDelivery.Status.
+type IntegrationWebhookDeliveryStatus string
+
+// IntegrationWebhookWithSecret Returned only on creation and rotation; the secret is not shown again.
+type IntegrationWebhookWithSecret struct {
+	CreatedAt          time.Time          `json:"created_at"`
+	CreatedBy          openapi_types.UUID `json:"created_by"`
+	Description        string             `json:"description"`
+	Enabled            bool               `json:"enabled"`
+	Id                 openapi_types.UUID `json:"id"`
+	LastReceivedAt     *time.Time         `json:"last_received_at"`
+	MaxBodyBytes       int                `json:"max_body_bytes"`
+	Name               string             `json:"name"`
+	RateLimitPerMinute int                `json:"rate_limit_per_minute"`
+	Secret             string             `json:"secret"`
+	SecretHint         string             `json:"secret_hint"`
+
+	// TriggerCount Current agent triggers that start on this webhook.
+	TriggerCount int       `json:"trigger_count"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 // Invitation defines model for Invitation.
@@ -4613,6 +4762,60 @@ type LoginRequest struct {
 // MarkReadRequest defines model for MarkReadRequest.
 type MarkReadRequest struct {
 	LastReadSeq int64 `json:"last_read_seq"`
+}
+
+// McpConnection defines model for McpConnection.
+type McpConnection struct {
+	// AgentCount Agents whose draft or published configuration uses the connection.
+	AgentCount int `json:"agent_count"`
+
+	// AllowPrivateNetwork Explicit opt-in for a trusted system inside the private network.
+	AllowPrivateNetwork bool                      `json:"allow_private_network"`
+	CreatedAt           time.Time                 `json:"created_at"`
+	CreatedBy           openapi_types.UUID        `json:"created_by"`
+	Description         string                    `json:"description"`
+	Enabled             bool                      `json:"enabled"`
+	EndpointUrl         string                    `json:"endpoint_url"`
+	HeadersConfigured   bool                      `json:"headers_configured"`
+	HealthStatus        McpConnectionHealthStatus `json:"health_status"`
+	Id                  openapi_types.UUID        `json:"id"`
+	LastErrorCode       string                    `json:"last_error_code"`
+	LastTestedAt        *time.Time                `json:"last_tested_at"`
+	MaxOutputBytes      int                       `json:"max_output_bytes"`
+
+	// Name Namespaces the tools for models as mcp__<name>__<tool>.
+	Name string `json:"name"`
+
+	// SecretHint Masked first header such as Authorization with a few visible characters. Secrets are never returned.
+	SecretHint       string     `json:"secret_hint"`
+	TimeoutMs        int        `json:"timeout_ms"`
+	Tools            []McpTool  `json:"tools"`
+	ToolsRefreshedAt *time.Time `json:"tools_refreshed_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+}
+
+// McpConnectionHealthStatus defines model for McpConnection.HealthStatus.
+type McpConnectionHealthStatus string
+
+// McpConnectionUsage defines model for McpConnectionUsage.
+type McpConnectionUsage struct {
+	AgentId      openapi_types.UUID `json:"agent_id"`
+	AllowedTools []string           `json:"allowed_tools"`
+	DisplayName  string             `json:"display_name"`
+	Draft        bool               `json:"draft"`
+	Published    bool               `json:"published"`
+}
+
+// McpHeaders defines model for McpHeaders.
+type McpHeaders map[string]string
+
+// McpTool defines model for McpTool.
+type McpTool struct {
+	Description string `json:"description"`
+	Name        string `json:"name"`
+
+	// ReadOnly The server's readOnlyHint. Tools without it are treated as writes.
+	ReadOnly bool `json:"read_only"`
 }
 
 // Message defines model for Message.
@@ -5328,6 +5531,8 @@ type SignFilePartsRequest struct {
 
 // StartAgentMcpToolCallRequest defines model for StartAgentMcpToolCallRequest.
 type StartAgentMcpToolCallRequest struct {
+	// Arguments Tool arguments. Required for writes that need a person's approval; Core executes the approved call with exactly these arguments.
+	Arguments  *map[string]interface{}          `json:"arguments,omitempty"`
 	CallId     openapi_types.UUID               `json:"call_id"`
 	InputBytes int                              `json:"input_bytes"`
 	LeaseToken openapi_types.UUID               `json:"lease_token"`
@@ -5462,6 +5667,7 @@ type UpdateAgentRequest struct {
 	MaxChainDepth               *int                  `json:"max_chain_depth,omitempty"`
 	MaxOutputTokens             *int                  `json:"max_output_tokens,omitempty"`
 	MaxToolIterations           *int                  `json:"max_tool_iterations,omitempty"`
+	McpBindings                 *[]AgentMcpBinding    `json:"mcp_bindings,omitempty"`
 	Model                       *string               `json:"model,omitempty"`
 	MonthlyCostLimit            *string               `json:"monthly_cost_limit,omitempty"`
 	PerChatConcurrency          *int                  `json:"per_chat_concurrency,omitempty"`
@@ -5511,6 +5717,15 @@ type UpdateInfrastructureSettingsRequest struct {
 	Smtp            SMTPConfigurationUpdate `json:"smtp"`
 }
 
+// UpdateIntegrationWebhookRequest defines model for UpdateIntegrationWebhookRequest.
+type UpdateIntegrationWebhookRequest struct {
+	Description        *string `json:"description,omitempty"`
+	Enabled            *bool   `json:"enabled,omitempty"`
+	MaxBodyBytes       *int    `json:"max_body_bytes,omitempty"`
+	Name               *string `json:"name,omitempty"`
+	RateLimitPerMinute *int    `json:"rate_limit_per_minute,omitempty"`
+}
+
 // UpdateKnowledgeCollectionRequest defines model for UpdateKnowledgeCollectionRequest.
 type UpdateKnowledgeCollectionRequest struct {
 	Access      *UpdateKnowledgeCollectionRequestAccess `json:"access,omitempty"`
@@ -5529,6 +5744,20 @@ type UpdateKnowledgeCollectionRequestAccess string
 type UpdateKnowledgeDocumentRequest struct {
 	Body  *string `json:"body,omitempty"`
 	Title *string `json:"title,omitempty"`
+}
+
+// UpdateMcpConnectionRequest defines model for UpdateMcpConnectionRequest.
+type UpdateMcpConnectionRequest struct {
+	AllowPrivateNetwork *bool   `json:"allow_private_network,omitempty"`
+	Description         *string `json:"description,omitempty"`
+	Enabled             *bool   `json:"enabled,omitempty"`
+	EndpointUrl         *string `json:"endpoint_url,omitempty"`
+
+	// Headers Replaces all headers; an empty object removes them.
+	Headers        *McpHeaders `json:"headers,omitempty"`
+	MaxOutputBytes *int        `json:"max_output_bytes,omitempty"`
+	Name           *string     `json:"name,omitempty"`
+	TimeoutMs      *int        `json:"timeout_ms,omitempty"`
 }
 
 // UpdateMessageRequest defines model for UpdateMessageRequest.
@@ -5678,6 +5907,15 @@ type UserPreferencesSoundId string
 // UserPreferencesTheme defines model for UserPreferences.Theme.
 type UserPreferencesTheme string
 
+// WebhookReceipt defines model for WebhookReceipt.
+type WebhookReceipt struct {
+	DeliveryId  *string `json:"delivery_id,omitempty"`
+	RunsCreated int     `json:"runs_created"`
+
+	// Status accepted, duplicate, or a rejection code such as invalid_signature, stale_timestamp, rate_limited.
+	Status string `json:"status"`
+}
+
 // ActorId defines model for ActorId.
 type ActorId = openapi_types.UUID
 
@@ -5809,6 +6047,17 @@ type DownloadFileParams struct {
 
 // DownloadFileParamsDelivery defines parameters for DownloadFile.
 type DownloadFileParamsDelivery string
+
+// ReceiveIntegrationWebhookJSONBody defines parameters for ReceiveIntegrationWebhook.
+type ReceiveIntegrationWebhookJSONBody map[string]interface{}
+
+// ReceiveIntegrationWebhookParams defines parameters for ReceiveIntegrationWebhook.
+type ReceiveIntegrationWebhookParams struct {
+	XComaTimestamp string  `json:"X-Coma-Timestamp"`
+	XComaDelivery  string  `json:"X-Coma-Delivery"`
+	XComaEvent     *string `json:"X-Coma-Event,omitempty"`
+	XComaSignature string  `json:"X-Coma-Signature"`
+}
 
 // AcceptInvitationParams defines parameters for AcceptInvitation.
 type AcceptInvitationParams struct {
@@ -5996,6 +6245,24 @@ type CompleteFileUploadJSONRequestBody = CompleteFileUploadRequest
 
 // SignFileUploadPartsJSONRequestBody defines body for SignFileUploadParts for application/json ContentType.
 type SignFileUploadPartsJSONRequestBody = SignFilePartsRequest
+
+// ReceiveIntegrationWebhookJSONRequestBody defines body for ReceiveIntegrationWebhook for application/json ContentType.
+type ReceiveIntegrationWebhookJSONRequestBody ReceiveIntegrationWebhookJSONBody
+
+// CreateMcpConnectionJSONRequestBody defines body for CreateMcpConnection for application/json ContentType.
+type CreateMcpConnectionJSONRequestBody = CreateMcpConnectionRequest
+
+// UpdateMcpConnectionJSONRequestBody defines body for UpdateMcpConnection for application/json ContentType.
+type UpdateMcpConnectionJSONRequestBody = UpdateMcpConnectionRequest
+
+// DetachMcpConnectionJSONRequestBody defines body for DetachMcpConnection for application/json ContentType.
+type DetachMcpConnectionJSONRequestBody = DetachMcpConnectionRequest
+
+// CreateIntegrationWebhookJSONRequestBody defines body for CreateIntegrationWebhook for application/json ContentType.
+type CreateIntegrationWebhookJSONRequestBody = CreateIntegrationWebhookRequest
+
+// UpdateIntegrationWebhookJSONRequestBody defines body for UpdateIntegrationWebhook for application/json ContentType.
+type UpdateIntegrationWebhookJSONRequestBody = UpdateIntegrationWebhookRequest
 
 // CreateInvitationJSONRequestBody defines body for CreateInvitation for application/json ContentType.
 type CreateInvitationJSONRequestBody = CreateInvitationRequest

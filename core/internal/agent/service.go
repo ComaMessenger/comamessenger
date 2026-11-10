@@ -67,43 +67,43 @@ var handlePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{1,31}$`)
 var costLimitPattern = regexp.MustCompile(`^[0-9]+(?:\.[0-9]{1,8})?$`)
 
 type Agent struct {
-	ID                          string     `json:"id"`
-	OrgID                       string     `json:"org_id"`
-	OwnerActorID                string     `json:"owner_actor_id"`
-	DisplayName                 string     `json:"display_name"`
-	Handle                      string     `json:"handle"`
-	Kind                        string     `json:"kind"`
-	Recipe                      string     `json:"recipe"`
-	RecipeVersion               int        `json:"recipe_version"`
-	Description                 string     `json:"description"`
-	Enabled                     bool       `json:"enabled"`
-	AllowedScopes               []Scope    `json:"allowed_scopes"`
-	LLMConnectionID             *string    `json:"llm_connection_id"`
-	Provider                    string     `json:"provider"`
-	Model                       string     `json:"model"`
-	EndpointURL                 string     `json:"endpoint_url,omitempty"`
-	ExternalDataSharingApproved bool       `json:"external_data_sharing_approved"`
-	DailyCostLimit              *string    `json:"daily_cost_limit"`
-	MonthlyCostLimit            *string    `json:"monthly_cost_limit"`
-	MaxOutputTokens             int        `json:"max_output_tokens"`
-	MaxToolIterations           int        `json:"max_tool_iterations"`
-	MaxChainDepth               int        `json:"max_chain_depth"`
-	PerChatConcurrency          int        `json:"per_chat_concurrency"`
-	RateLimitPerMinute          int        `json:"rate_limit_per_minute"`
-	ProviderRateLimitPerMinute  int        `json:"provider_rate_limit_per_minute"`
-	ExecutionTimeoutSeconds     int        `json:"execution_timeout_seconds"`
-	ChatIDs                     []string   `json:"chat_ids"`
-	KnowledgeCollectionIDs      []string   `json:"knowledge_collection_ids"`
+	ID                          string       `json:"id"`
+	OrgID                       string       `json:"org_id"`
+	OwnerActorID                string       `json:"owner_actor_id"`
+	DisplayName                 string       `json:"display_name"`
+	Handle                      string       `json:"handle"`
+	Kind                        string       `json:"kind"`
+	Recipe                      string       `json:"recipe"`
+	RecipeVersion               int          `json:"recipe_version"`
+	Description                 string       `json:"description"`
+	Enabled                     bool         `json:"enabled"`
+	AllowedScopes               []Scope      `json:"allowed_scopes"`
+	LLMConnectionID             *string      `json:"llm_connection_id"`
+	Provider                    string       `json:"provider"`
+	Model                       string       `json:"model"`
+	EndpointURL                 string       `json:"endpoint_url,omitempty"`
+	ExternalDataSharingApproved bool         `json:"external_data_sharing_approved"`
+	DailyCostLimit              *string      `json:"daily_cost_limit"`
+	MonthlyCostLimit            *string      `json:"monthly_cost_limit"`
+	MaxOutputTokens             int          `json:"max_output_tokens"`
+	MaxToolIterations           int          `json:"max_tool_iterations"`
+	MaxChainDepth               int          `json:"max_chain_depth"`
+	PerChatConcurrency          int          `json:"per_chat_concurrency"`
+	RateLimitPerMinute          int          `json:"rate_limit_per_minute"`
+	ProviderRateLimitPerMinute  int          `json:"provider_rate_limit_per_minute"`
+	ExecutionTimeoutSeconds     int          `json:"execution_timeout_seconds"`
+	ChatIDs                     []string     `json:"chat_ids"`
+	KnowledgeCollectionIDs      []string     `json:"knowledge_collection_ids"`
 	MCPBindings                 []MCPBinding `json:"mcp_bindings"`
-	Readiness                   Readiness  `json:"readiness"`
-	OperationalStatus           string     `json:"operational_status"`
-	DraftVersion                *int       `json:"draft_version"`
-	PublishedVersion            *int       `json:"published_version"`
-	HasUnpublishedChanges       bool       `json:"has_unpublished_changes"`
-	PublishedAt                 *time.Time `json:"published_at"`
-	AvatarVersion               int64      `json:"avatar_version"`
-	CreatedAt                   time.Time  `json:"created_at"`
-	UpdatedAt                   time.Time  `json:"updated_at"`
+	Readiness                   Readiness    `json:"readiness"`
+	OperationalStatus           string       `json:"operational_status"`
+	DraftVersion                *int         `json:"draft_version"`
+	PublishedVersion            *int         `json:"published_version"`
+	HasUnpublishedChanges       bool         `json:"has_unpublished_changes"`
+	PublishedAt                 *time.Time   `json:"published_at"`
+	AvatarVersion               int64        `json:"avatar_version"`
+	CreatedAt                   time.Time    `json:"created_at"`
+	UpdatedAt                   time.Time    `json:"updated_at"`
 }
 
 type Readiness struct {
@@ -122,31 +122,31 @@ type Version struct {
 }
 
 type CreateInput struct {
-	DisplayName                 string   `json:"display_name"`
-	Handle                      string   `json:"handle"`
-	Kind                        string   `json:"kind"`
-	Recipe                      string   `json:"recipe"`
-	Description                 string   `json:"description"`
-	Enabled                     bool     `json:"enabled"`
-	AllowedScopes               []Scope  `json:"allowed_scopes"`
-	LLMConnectionID             *string  `json:"llm_connection_id"`
-	Provider                    string   `json:"provider"`
-	Model                       string   `json:"model"`
-	EndpointURL                 string   `json:"endpoint_url"`
-	ExternalDataSharingApproved bool     `json:"external_data_sharing_approved"`
-	DailyCostLimit              *string  `json:"daily_cost_limit"`
-	MonthlyCostLimit            *string  `json:"monthly_cost_limit"`
-	MaxOutputTokens             *int     `json:"max_output_tokens"`
-	MaxToolIterations           *int     `json:"max_tool_iterations"`
-	MaxChainDepth               *int     `json:"max_chain_depth"`
-	PerChatConcurrency          *int     `json:"per_chat_concurrency"`
-	RateLimitPerMinute          int      `json:"rate_limit_per_minute"`
-	ProviderRateLimitPerMinute  int      `json:"provider_rate_limit_per_minute"`
-	ExecutionTimeoutSeconds     int      `json:"execution_timeout_seconds"`
-	ChatIDs                     []string `json:"chat_ids"`
-	KnowledgeCollectionIDs      []string `json:"knowledge_collection_ids"`
+	DisplayName                 string       `json:"display_name"`
+	Handle                      string       `json:"handle"`
+	Kind                        string       `json:"kind"`
+	Recipe                      string       `json:"recipe"`
+	Description                 string       `json:"description"`
+	Enabled                     bool         `json:"enabled"`
+	AllowedScopes               []Scope      `json:"allowed_scopes"`
+	LLMConnectionID             *string      `json:"llm_connection_id"`
+	Provider                    string       `json:"provider"`
+	Model                       string       `json:"model"`
+	EndpointURL                 string       `json:"endpoint_url"`
+	ExternalDataSharingApproved bool         `json:"external_data_sharing_approved"`
+	DailyCostLimit              *string      `json:"daily_cost_limit"`
+	MonthlyCostLimit            *string      `json:"monthly_cost_limit"`
+	MaxOutputTokens             *int         `json:"max_output_tokens"`
+	MaxToolIterations           *int         `json:"max_tool_iterations"`
+	MaxChainDepth               *int         `json:"max_chain_depth"`
+	PerChatConcurrency          *int         `json:"per_chat_concurrency"`
+	RateLimitPerMinute          int          `json:"rate_limit_per_minute"`
+	ProviderRateLimitPerMinute  int          `json:"provider_rate_limit_per_minute"`
+	ExecutionTimeoutSeconds     int          `json:"execution_timeout_seconds"`
+	ChatIDs                     []string     `json:"chat_ids"`
+	KnowledgeCollectionIDs      []string     `json:"knowledge_collection_ids"`
 	MCPBindings                 []MCPBinding `json:"mcp_bindings"`
-	DuplicateFrom               string   `json:"-"`
+	DuplicateFrom               string       `json:"-"`
 }
 
 type DuplicateInput struct {
@@ -155,27 +155,27 @@ type DuplicateInput struct {
 }
 
 type UpdateInput struct {
-	DisplayName                 *string   `json:"display_name"`
-	Handle                      *string   `json:"handle"`
-	Description                 *string   `json:"description"`
-	Enabled                     *bool     `json:"enabled"`
-	AllowedScopes               *[]Scope  `json:"allowed_scopes"`
-	LLMConnectionID             *string   `json:"llm_connection_id"`
-	Provider                    *string   `json:"provider"`
-	Model                       *string   `json:"model"`
-	EndpointURL                 *string   `json:"endpoint_url"`
-	ExternalDataSharingApproved *bool     `json:"external_data_sharing_approved"`
-	DailyCostLimit              *string   `json:"daily_cost_limit"`
-	MonthlyCostLimit            *string   `json:"monthly_cost_limit"`
-	MaxOutputTokens             *int      `json:"max_output_tokens"`
-	MaxToolIterations           *int      `json:"max_tool_iterations"`
-	MaxChainDepth               *int      `json:"max_chain_depth"`
-	PerChatConcurrency          *int      `json:"per_chat_concurrency"`
-	RateLimitPerMinute          *int      `json:"rate_limit_per_minute"`
-	ProviderRateLimitPerMinute  *int      `json:"provider_rate_limit_per_minute"`
-	ExecutionTimeoutSeconds     *int      `json:"execution_timeout_seconds"`
-	ChatIDs                     *[]string `json:"chat_ids"`
-	KnowledgeCollectionIDs      *[]string `json:"knowledge_collection_ids"`
+	DisplayName                 *string       `json:"display_name"`
+	Handle                      *string       `json:"handle"`
+	Description                 *string       `json:"description"`
+	Enabled                     *bool         `json:"enabled"`
+	AllowedScopes               *[]Scope      `json:"allowed_scopes"`
+	LLMConnectionID             *string       `json:"llm_connection_id"`
+	Provider                    *string       `json:"provider"`
+	Model                       *string       `json:"model"`
+	EndpointURL                 *string       `json:"endpoint_url"`
+	ExternalDataSharingApproved *bool         `json:"external_data_sharing_approved"`
+	DailyCostLimit              *string       `json:"daily_cost_limit"`
+	MonthlyCostLimit            *string       `json:"monthly_cost_limit"`
+	MaxOutputTokens             *int          `json:"max_output_tokens"`
+	MaxToolIterations           *int          `json:"max_tool_iterations"`
+	MaxChainDepth               *int          `json:"max_chain_depth"`
+	PerChatConcurrency          *int          `json:"per_chat_concurrency"`
+	RateLimitPerMinute          *int          `json:"rate_limit_per_minute"`
+	ProviderRateLimitPerMinute  *int          `json:"provider_rate_limit_per_minute"`
+	ExecutionTimeoutSeconds     *int          `json:"execution_timeout_seconds"`
+	ChatIDs                     *[]string     `json:"chat_ids"`
+	KnowledgeCollectionIDs      *[]string     `json:"knowledge_collection_ids"`
 	MCPBindings                 *[]MCPBinding `json:"mcp_bindings"`
 }
 
@@ -724,7 +724,7 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 	if _, err := uuid.Parse(agentID); err != nil {
 		return Agent{}, ErrNotFound
 	}
-	if input.DisplayName == nil && input.Handle == nil && input.Description == nil && input.Enabled == nil && input.AllowedScopes == nil && input.LLMConnectionID == nil && input.Provider == nil && input.Model == nil && input.EndpointURL == nil && input.ExternalDataSharingApproved == nil && input.DailyCostLimit == nil && input.MonthlyCostLimit == nil && input.MaxOutputTokens == nil && input.MaxToolIterations == nil && input.MaxChainDepth == nil && input.PerChatConcurrency == nil && input.RateLimitPerMinute == nil && input.ProviderRateLimitPerMinute == nil && input.ExecutionTimeoutSeconds == nil && input.ChatIDs == nil && input.KnowledgeCollectionIDs == nil {
+	if input.DisplayName == nil && input.Handle == nil && input.Description == nil && input.Enabled == nil && input.AllowedScopes == nil && input.LLMConnectionID == nil && input.Provider == nil && input.Model == nil && input.EndpointURL == nil && input.ExternalDataSharingApproved == nil && input.DailyCostLimit == nil && input.MonthlyCostLimit == nil && input.MaxOutputTokens == nil && input.MaxToolIterations == nil && input.MaxChainDepth == nil && input.PerChatConcurrency == nil && input.RateLimitPerMinute == nil && input.ProviderRateLimitPerMinute == nil && input.ExecutionTimeoutSeconds == nil && input.ChatIDs == nil && input.KnowledgeCollectionIDs == nil && input.MCPBindings == nil {
 		return Agent{}, fmt.Errorf("%w: update must contain at least one field", ErrInvalid)
 	}
 	auditID, err := id.New()

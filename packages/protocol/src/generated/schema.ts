@@ -1749,6 +1749,193 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/integrations/mcp-connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Lists workspace MCP connections with masked secrets. Available to integrations.manage and agent builders. */
+        get: operations["listMcpConnections"];
+        put?: never;
+        /** @description Creates a workspace MCP connection. Requires integrations.manage. The endpoint is checked against internal, link-local and metadata addresses unless allow_private_network is set (metadata addresses are always refused). */
+        post: operations["createMcpConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/mcp-connections/{connection_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getMcpConnection"];
+        put?: never;
+        post?: never;
+        /** @description Deletes an unused connection. A connection used by an agent draft or version is refused with 409; disable or detach it instead. */
+        delete: operations["deleteMcpConnection"];
+        options?: never;
+        head?: never;
+        /** @description Updates a connection; disabling it stops every agent from using it. */
+        patch: operations["updateMcpConnection"];
+        trace?: never;
+    };
+    "/api/v1/integrations/mcp-connections/{connection_id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Opens an MCP session, refreshes the tool list and records health. Never calls a tool. */
+        post: operations["testMcpConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/mcp-connections/{connection_id}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getMcpConnectionUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/mcp-connections/{connection_id}/detach": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Removes the connection from every agent draft and published configuration after the administrator confirmed the listed impact. */
+        post: operations["detachMcpConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/webhooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listIntegrationWebhooks"];
+        put?: never;
+        /** @description Creates an incoming webhook. The response carries the signing secret once. */
+        post: operations["createIntegrationWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/webhooks/{webhook_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                webhook_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Deletes a webhook that no current agent trigger uses (409 otherwise). */
+        delete: operations["deleteIntegrationWebhook"];
+        options?: never;
+        head?: never;
+        patch: operations["updateIntegrationWebhook"];
+        trace?: never;
+    };
+    "/api/v1/integrations/webhooks/{webhook_id}/rotate-secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                webhook_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Issues a new signing secret; the previous one stops working immediately. */
+        post: operations["rotateIntegrationWebhookSecret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/webhooks/{webhook_id}/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                webhook_id: string;
+            };
+            cookie?: never;
+        };
+        /** @description The latest 100 journal entries; bodies are not stored, only size and SHA-256. */
+        get: operations["listIntegrationWebhookDeliveries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/hooks/{webhook_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                webhook_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Public endpoint for external systems. Requires headers X-Coma-Timestamp (unix seconds, within five minutes), X-Coma-Delivery (unique id, replays are ignored), optional X-Coma-Event and X-Coma-Signature: sha256=<hex HMAC-SHA256 of "<timestamp>.<delivery>.<body>" with the webhook secret>. The JSON object body reaches agents as untrusted data, never as instructions. */
+        post: operations["receiveIntegrationWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents/{agent_id}/provider-credentials": {
         parameters: {
             query?: never;
@@ -2692,7 +2879,7 @@ export interface components {
             created_at: string;
         };
         /** @enum {string} */
-        AgentScope: "chats:read" | "messages:read" | "messages:write" | "reactions:write" | "files:read" | "search:read" | "members:read" | "memory:read" | "memory:write" | "runtime:execute" | "runtime:worker" | "knowledge:read" | "messages:interactive" | "followups:write";
+        AgentScope: "chats:read" | "messages:read" | "messages:write" | "reactions:write" | "files:read" | "search:read" | "members:read" | "memory:read" | "memory:write" | "runtime:execute" | "runtime:worker" | "knowledge:read" | "messages:interactive" | "followups:write" | "tables:read";
         Agent: {
             /** Format: uuid */
             id: string;
@@ -2728,6 +2915,8 @@ export interface components {
             chat_ids: string[];
             /** @description Knowledge collections bound to the draft (or the published version when there is no draft). Empty for actors without agent management rights. */
             knowledge_collection_ids?: string[];
+            /** @description Workspace MCP connections assigned to the draft (or the published version when there is no draft) with the allowed tools. Never contains secrets; empty for actors without agent management rights. */
+            mcp_bindings?: components["schemas"]["AgentMcpBinding"][];
             /** Format: int64 */
             avatar_version: number;
             readiness: components["schemas"]["AgentReadiness"];
@@ -2803,6 +2992,7 @@ export interface components {
             execution_timeout_seconds: number;
             chat_ids: string[];
             knowledge_collection_ids?: string[];
+            mcp_bindings?: components["schemas"]["AgentMcpBinding"][];
         };
         UpdateAgentRequest: {
             display_name?: string;
@@ -2827,6 +3017,7 @@ export interface components {
             execution_timeout_seconds?: number;
             chat_ids?: string[];
             knowledge_collection_ids?: string[];
+            mcp_bindings?: components["schemas"]["AgentMcpBinding"][];
         };
         AgentUsageEntry: {
             /** Format: uuid */
@@ -3157,6 +3348,8 @@ export interface components {
             timeout_ms: number;
             max_output_bytes: number;
             require_write_confirmation: boolean;
+            /** @description The connection may reach trusted private network addresses; link-local and cloud metadata addresses stay forbidden. */
+            allow_private_network?: boolean;
         };
         StartAgentMcpToolCallRequest: {
             /** Format: uuid */
@@ -3171,6 +3364,10 @@ export interface components {
             /** @enum {string} */
             mode: "read" | "write";
             input_bytes: number;
+            /** @description Tool arguments. Required for writes that need a person's approval; Core executes the approved call with exactly these arguments. */
+            arguments?: {
+                [key: string]: unknown;
+            };
         };
         AgentMcpToolCall: {
             /** Format: uuid */
@@ -3182,6 +3379,14 @@ export interface components {
             mode: "read" | "write";
             /** @description Server-enforced instruction to return a simulated result without calling the external MCP tool. */
             preview: boolean;
+            /** @description Present when a person must approve the write first. The runtime must not call the tool; Core executes it after approval. */
+            confirmation?: {
+                /** Format: uuid */
+                id: string;
+                status: string;
+                /** Format: date-time */
+                expires_at: string;
+            };
         };
         FinishAgentMcpToolCallRequest: {
             /** Format: uuid */
@@ -3192,6 +3397,148 @@ export interface components {
             status: "completed" | "failed";
             output_bytes: number;
             error_code: string;
+        };
+        AgentMcpBinding: {
+            /** Format: uuid */
+            connection_id: string;
+            allowed_tools: string[];
+            /** @description Calls to tools that are not read-only wait for a person's approval; Core then executes them. */
+            require_write_confirmation: boolean;
+        };
+        McpTool: {
+            name: string;
+            description: string;
+            /** @description The server's readOnlyHint. Tools without it are treated as writes. */
+            read_only: boolean;
+        };
+        McpConnection: {
+            /** Format: uuid */
+            id: string;
+            /** @description Namespaces the tools for models as mcp__<name>__<tool>. */
+            name: string;
+            description: string;
+            endpoint_url: string;
+            enabled: boolean;
+            /** @description Explicit opt-in for a trusted system inside the private network. */
+            allow_private_network: boolean;
+            headers_configured: boolean;
+            /** @description Masked first header such as Authorization with a few visible characters. Secrets are never returned. */
+            secret_hint: string;
+            timeout_ms: number;
+            max_output_bytes: number;
+            tools: components["schemas"]["McpTool"][];
+            /** Format: date-time */
+            tools_refreshed_at: string | null;
+            /** @enum {string} */
+            health_status: "untested" | "healthy" | "unhealthy";
+            /** Format: date-time */
+            last_tested_at: string | null;
+            last_error_code: string;
+            /** @description Agents whose draft or published configuration uses the connection. */
+            agent_count: number;
+            /** Format: uuid */
+            created_by: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        McpHeaders: {
+            [key: string]: string;
+        };
+        CreateMcpConnectionRequest: {
+            name: string;
+            description?: string;
+            endpoint_url: string;
+            /** @default true */
+            enabled: boolean;
+            /** @default false */
+            allow_private_network: boolean;
+            headers?: components["schemas"]["McpHeaders"];
+            timeout_ms?: number;
+            max_output_bytes?: number;
+        };
+        UpdateMcpConnectionRequest: {
+            name?: string;
+            description?: string;
+            endpoint_url?: string;
+            enabled?: boolean;
+            allow_private_network?: boolean;
+            /** @description Replaces all headers; an empty object removes them. */
+            headers?: components["schemas"]["McpHeaders"];
+            timeout_ms?: number;
+            max_output_bytes?: number;
+        };
+        McpConnectionUsage: {
+            /** Format: uuid */
+            agent_id: string;
+            display_name: string;
+            published: boolean;
+            draft: boolean;
+            allowed_tools: string[];
+        };
+        DetachMcpConnectionRequest: {
+            /** @description Exactly the agents currently using the connection, as shown to the administrator. A different set is rejected with 409. */
+            agent_ids: string[];
+        };
+        IntegrationWebhook: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description: string;
+            enabled: boolean;
+            secret_hint: string;
+            rate_limit_per_minute: number;
+            max_body_bytes: number;
+            /** Format: date-time */
+            last_received_at: string | null;
+            /** @description Current agent triggers that start on this webhook. */
+            trigger_count: number;
+            /** Format: uuid */
+            created_by: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /** @description Returned only on creation and rotation; the secret is not shown again. */
+        IntegrationWebhookWithSecret: components["schemas"]["IntegrationWebhook"] & {
+            secret: string;
+        };
+        CreateIntegrationWebhookRequest: {
+            name: string;
+            description?: string;
+            /** @default true */
+            enabled: boolean;
+            rate_limit_per_minute?: number;
+            max_body_bytes?: number;
+        };
+        UpdateIntegrationWebhookRequest: {
+            name?: string;
+            description?: string;
+            enabled?: boolean;
+            rate_limit_per_minute?: number;
+            max_body_bytes?: number;
+        };
+        IntegrationWebhookDelivery: {
+            /** Format: uuid */
+            id: string;
+            delivery_id: string;
+            event_type: string;
+            /** @enum {string} */
+            status: "accepted" | "rejected";
+            error_code: string;
+            body_bytes: number;
+            body_sha256: string;
+            runs_created: number;
+            /** Format: date-time */
+            received_at: string;
+        };
+        WebhookReceipt: {
+            /** @description accepted, duplicate, or a rejection code such as invalid_signature, stale_timestamp, rate_limited. */
+            status: string;
+            delivery_id?: string;
+            runs_created: number;
         };
         StartAgentProviderCallRequest: {
             /** Format: uuid */
@@ -3271,7 +3618,7 @@ export interface components {
             /** Format: uuid */
             agent_id: string;
             /** @enum {string} */
-            type: "manual" | "mention" | "command" | "keyword" | "every_message" | "schedule" | "event";
+            type: "manual" | "mention" | "command" | "keyword" | "every_message" | "schedule" | "event" | "webhook";
             config: {
                 [key: string]: unknown;
             };
@@ -3288,7 +3635,7 @@ export interface components {
         };
         CreateAgentTriggerRequest: {
             /** @enum {string} */
-            type: "manual" | "mention" | "command" | "keyword" | "every_message" | "schedule" | "event";
+            type: "manual" | "mention" | "command" | "keyword" | "every_message" | "schedule" | "event" | "webhook";
             config: {
                 [key: string]: unknown;
             };
@@ -7992,6 +8339,401 @@ export interface operations {
             422: components["responses"]["Error"];
         };
     };
+    listMcpConnections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Workspace MCP connections. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpConnection"][];
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    createMcpConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMcpConnectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Connection created; headers are encrypted and never returned. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpConnection"];
+                };
+            };
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    getMcpConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Connection metadata with masked secret state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpConnection"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    deleteMcpConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Connection deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    updateMcpConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMcpConnectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Connection updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpConnection"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    testMcpConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Connection with updated health and tools. Failures are reported as unhealthy. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpConnection"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    getMcpConnectionUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Agents whose draft or published configuration uses the connection. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpConnectionUsage"][];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    detachMcpConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DetachMcpConnectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The agents that were detached. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpConnectionUsage"][];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    listIntegrationWebhooks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Incoming webhooks without secrets. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationWebhook"][];
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    createIntegrationWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateIntegrationWebhookRequest"];
+            };
+        };
+        responses: {
+            /** @description Webhook created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationWebhookWithSecret"];
+                };
+            };
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    deleteIntegrationWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                webhook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Webhook deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    updateIntegrationWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                webhook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateIntegrationWebhookRequest"];
+            };
+        };
+        responses: {
+            /** @description Webhook updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationWebhook"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    rotateIntegrationWebhookSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                webhook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Webhook with the new secret, shown once. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationWebhookWithSecret"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    listIntegrationWebhookDeliveries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                webhook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reception journal. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationWebhookDelivery"][];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    receiveIntegrationWebhook: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Coma-Timestamp": string;
+                "X-Coma-Delivery": string;
+                "X-Coma-Event"?: string;
+                "X-Coma-Signature": string;
+            };
+            path: {
+                webhook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Duplicate delivery; nothing was started again. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookReceipt"];
+                };
+            };
+            /** @description Delivery accepted and agent runs queued. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookReceipt"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+        };
+    };
     getAgentProviderCredential: {
         parameters: {
             query?: never;
@@ -8759,6 +9501,15 @@ export interface operations {
         responses: {
             /** @description MCP tool call authorized and started. */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentMcpToolCall"];
+                };
+            };
+            /** @description The write waits for a person's approval; the response carries the pending confirmation and the runtime must not call the tool. */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -177,7 +177,7 @@ type MCPToolCall struct {
 	Preview       bool   `json:"preview"`
 	// ConfirmationRequired: the runtime must not call the tool; the HTTP
 	// layer turns it into a pending confirmation.
-	ConfirmationRequired bool `json:"-"`
+	ConfirmationRequired bool   `json:"-"`
 	AgentID              string `json:"-"`
 	ConnectionID         string `json:"-"`
 }
