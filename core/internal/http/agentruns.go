@@ -216,6 +216,23 @@ func (h *identityHandlers) startAgentMCPToolCall(w standardhttp.ResponseWriter, 
 		h.writeAgentRunError(w, r, err)
 		return
 	}
+	if result.ConfirmationRequired {
+		if h.agentTools == nil {
+			h.writeAgentRunError(w, r, agentrun.ErrForbidden)
+			return
+		}
+		confirmation, err := h.agentTools.RequestMCPConfirmation(r.Context(), auth.User.OrgID, result.AgentID, input.RunID, input.CallID, result.CorrelationID,
+			result.ConnectionID, result.ToolName, input.Arguments)
+		if err != nil {
+			h.writeAgentToolError(w, r, err)
+			return
+		}
+		writeJSON(h.logger, w, standardhttp.StatusAccepted, map[string]any{
+			"id": result.ID, "correlation_id": result.CorrelationID, "tool_name": result.ToolName, "mode": result.Mode, "preview": false,
+			"confirmation": map[string]any{"id": confirmation.ID, "status": confirmation.Status, "expires_at": confirmation.ExpiresAt},
+		})
+		return
+	}
 	writeJSON(h.logger, w, standardhttp.StatusCreated, result)
 }
 

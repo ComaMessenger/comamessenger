@@ -9,7 +9,7 @@ func TestToolDefinitionsCompileAndRejectUnknownFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tools) != 18 || len(order) != 18 {
+	if len(tools) != 19 || len(order) != 19 {
 		t.Fatalf("tools=%d order=%d", len(tools), len(order))
 	}
 	definition := tools["get_chat_messages"].Definition
@@ -35,5 +35,11 @@ func TestToolDefinitionsCompileAndRejectUnknownFields(t *testing.T) {
 	}
 	if search := tools["search_knowledge"].Definition; search.Mode != "read" || search.RequiredScope != "knowledge:read" {
 		t.Fatalf("search_knowledge definition=%+v", search)
+	}
+	if table := tools["query_table"].Definition; table.Mode != "read" || table.RequiredScope != "tables:read" {
+		t.Fatalf("query_table definition=%+v", table)
+	}
+	if err := tools["query_table"].Definition.compiled.Validate(map[string]any{"filters": []any{map[string]any{"column": "Дата", "op": "regex", "value": "."}}}); err == nil {
+		t.Fatal("query_table accepted an unknown filter operator")
 	}
 }

@@ -93,13 +93,16 @@ type RuntimeMCPServer struct {
 	TimeoutMS                int               `json:"timeout_ms"`
 	MaxOutputBytes           int               `json:"max_output_bytes"`
 	RequireWriteConfirmation bool              `json:"require_write_confirmation"`
+	// AllowPrivateNetwork lets the runtime reach a trusted internal address.
+	AllowPrivateNetwork bool `json:"allow_private_network"`
 }
 
 type Service struct {
-	pool           *pgxpool.Pool
-	credentialAEAD cipher.AEAD
-	connectionAEAD cipher.AEAD
-	mcpAEAD        cipher.AEAD
+	pool            *pgxpool.Pool
+	credentialAEAD  cipher.AEAD
+	connectionAEAD  cipher.AEAD
+	mcpAEAD         cipher.AEAD
+	privateNetworks bool
 }
 
 func NewService(pool *pgxpool.Pool, secret string) (*Service, error) {
@@ -115,7 +118,7 @@ func NewService(pool *pgxpool.Pool, secret string) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Service{pool: pool, credentialAEAD: credentialAEAD, connectionAEAD: connectionAEAD, mcpAEAD: mcpAEAD}, nil
+	return &Service{pool: pool, credentialAEAD: credentialAEAD, connectionAEAD: connectionAEAD, mcpAEAD: mcpAEAD, privateNetworks: true}, nil
 }
 
 func makeAEAD(domain, secret string) (cipher.AEAD, error) {
@@ -314,238 +317,6 @@ var mcpNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 var mcpToolPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
 var headerNamePattern = regexp.MustCompile(`^[!#$%&'*+.^_` + "`" + `|~0-9A-Za-z-]+$`)
 
-func (service *Service) ListMCPServers(ctx context.Context, current identity.User, agentID string) ([]MCPServer, error) {
-	if !canManage(current) {
-		return nil, ErrForbidden
-	}
-	if uuid.Validate(agentID) != nil {
-		return nil, ErrNotFound
-	}
-	var exists bool
-	if err := service.pool.QueryRow(ctx, `SELECT true FROM agents WHERE org_id=$1 AND actor_id=$2`, current.OrgID, agentID).Scan(&exists); errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
-	} else if err != nil {
-		return nil, err
-	}
-	rows, err := service.pool.Query(ctx, mcpSelect+` WHERE server.org_id=$1 AND server.agent_id=$2 ORDER BY server.name`, current.OrgID, agentID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	result := make([]MCPServer, 0)
-	for rows.Next() {
-		server, err := scanMCPServer(rows)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, server)
-	}
-	return result, rows.Err()
-}
-
-func (service *Service) CreateMCPServer(ctx context.Context, current identity.User, agentID string, input CreateMCPServerInput) (MCPServer, error) {
-	if !canManage(current) {
-		return MCPServer{}, ErrForbidden
-	}
-	if input.TimeoutMS == 0 {
-		input.TimeoutMS = 10000
-	}
-	if input.MaxOutputBytes == 0 {
-		input.MaxOutputBytes = 262144
-	}
-	requireConfirmation := true
-	if input.RequireWriteConfirmation != nil {
-		requireConfirmation = *input.RequireWriteConfirmation
-	}
-	if uuid.Validate(agentID) != nil || !validMCPConfig(input.Name, input.EndpointURL, input.AllowedTools, input.Headers, input.TimeoutMS, input.MaxOutputBytes) {
-		return MCPServer{}, ErrInvalid
-	}
-	serverID, err := id.New()
-	if err != nil {
-		return MCPServer{}, err
-	}
-	encryptedHeaders, err := service.sealMCPHeaders(current.OrgID, agentID, serverID, input.Headers)
-	if err != nil {
-		return MCPServer{}, err
-	}
-	tx, err := service.pool.Begin(ctx)
-	if err != nil {
-		return MCPServer{}, err
-	}
-	defer tx.Rollback(ctx)
-	result, err := tx.Exec(ctx, `INSERT INTO agent_mcp_servers(id,org_id,agent_id,name,endpoint_url,enabled,allowed_tools,encrypted_headers,timeout_ms,max_output_bytes,require_write_confirmation)
-		SELECT $3,org_id,actor_id,$4,$5,$6,$7,$8,$9,$10,$11 FROM agents WHERE org_id=$1 AND actor_id=$2`, current.OrgID, agentID, serverID, strings.TrimSpace(input.Name), strings.TrimSpace(input.EndpointURL), input.Enabled, input.AllowedTools, encryptedHeaders, input.TimeoutMS, input.MaxOutputBytes, requireConfirmation)
-	if err != nil {
-		if isUniqueViolation(err) {
-			return MCPServer{}, ErrInvalid
-		}
-		return MCPServer{}, err
-	}
-	if result.RowsAffected() != 1 {
-		return MCPServer{}, ErrNotFound
-	}
-	if err := auditMCP(ctx, tx, current, serverID, "create", input.Headers != nil); err != nil {
-		return MCPServer{}, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return MCPServer{}, err
-	}
-	return service.getMCPServer(ctx, current.OrgID, agentID, serverID)
-}
-
-func (service *Service) UpdateMCPServer(ctx context.Context, current identity.User, agentID, serverID string, input UpdateMCPServerInput) (MCPServer, error) {
-	if !canManage(current) {
-		return MCPServer{}, ErrForbidden
-	}
-	if uuid.Validate(agentID) != nil || uuid.Validate(serverID) != nil || !hasMCPUpdate(input) {
-		return MCPServer{}, ErrInvalid
-	}
-	tx, err := service.pool.Begin(ctx)
-	if err != nil {
-		return MCPServer{}, err
-	}
-	defer tx.Rollback(ctx)
-	var currentServer MCPServer
-	var encryptedHeaders []byte
-	err = tx.QueryRow(ctx, mcpSelect+` WHERE server.org_id=$1 AND server.agent_id=$2 AND server.id=$3 FOR UPDATE`, current.OrgID, agentID, serverID).Scan(mcpScanTargets(&currentServer, &encryptedHeaders)...)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return MCPServer{}, ErrNotFound
-	}
-	if err != nil {
-		return MCPServer{}, err
-	}
-	name, endpoint := currentServer.Name, currentServer.EndpointURL
-	allowedTools := currentServer.AllowedTools
-	timeoutMS, maxOutputBytes := currentServer.TimeoutMS, currentServer.MaxOutputBytes
-	if input.Name != nil {
-		name = strings.TrimSpace(*input.Name)
-	}
-	if input.EndpointURL != nil {
-		endpoint = strings.TrimSpace(*input.EndpointURL)
-	}
-	if input.AllowedTools != nil {
-		allowedTools = *input.AllowedTools
-	}
-	if input.TimeoutMS != nil {
-		timeoutMS = *input.TimeoutMS
-	}
-	if input.MaxOutputBytes != nil {
-		maxOutputBytes = *input.MaxOutputBytes
-	}
-	var headers map[string]string
-	if input.Headers != nil {
-		headers = *input.Headers
-	}
-	if !validMCPConfig(name, endpoint, allowedTools, headers, timeoutMS, maxOutputBytes) {
-		return MCPServer{}, ErrInvalid
-	}
-	if input.Headers != nil {
-		encryptedHeaders, err = service.sealMCPHeaders(current.OrgID, agentID, serverID, headers)
-		if err != nil {
-			return MCPServer{}, err
-		}
-	}
-	_, err = tx.Exec(ctx, `UPDATE agent_mcp_servers SET
-		name=$4,endpoint_url=$5,enabled=COALESCE($6,enabled),allowed_tools=$7,encrypted_headers=$8,timeout_ms=$9,max_output_bytes=$10,
-		require_write_confirmation=COALESCE($11,require_write_confirmation),updated_at=now()
-		WHERE org_id=$1 AND agent_id=$2 AND id=$3`, current.OrgID, agentID, serverID, name, endpoint, input.Enabled, allowedTools, encryptedHeaders, timeoutMS, maxOutputBytes, input.RequireWriteConfirmation)
-	if err != nil {
-		if isUniqueViolation(err) {
-			return MCPServer{}, ErrInvalid
-		}
-		return MCPServer{}, err
-	}
-	if err := auditMCP(ctx, tx, current, serverID, "update", len(encryptedHeaders) > 0); err != nil {
-		return MCPServer{}, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return MCPServer{}, err
-	}
-	return service.getMCPServer(ctx, current.OrgID, agentID, serverID)
-}
-
-func (service *Service) DeleteMCPServer(ctx context.Context, current identity.User, agentID, serverID string) error {
-	if !canManage(current) {
-		return ErrForbidden
-	}
-	if uuid.Validate(agentID) != nil || uuid.Validate(serverID) != nil {
-		return ErrNotFound
-	}
-	tx, err := service.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	result, err := tx.Exec(ctx, `DELETE FROM agent_mcp_servers WHERE org_id=$1 AND agent_id=$2 AND id=$3`, current.OrgID, agentID, serverID)
-	if err != nil {
-		return err
-	}
-	if result.RowsAffected() != 1 {
-		return ErrNotFound
-	}
-	if err := auditMCP(ctx, tx, current, serverID, "delete", false); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
-}
-
-func (service *Service) RuntimeMCPServers(ctx context.Context, current identity.User, authentication access.Identity) ([]RuntimeMCPServer, error) {
-	if !agentauthz.New().IsRuntime(current, authentication) {
-		return nil, ErrForbidden
-	}
-	return service.RuntimeMCPServersForAgent(ctx, current, authentication, current.ActorID)
-}
-
-func (service *Service) RuntimeMCPServersForAgent(ctx context.Context, current identity.User, authentication access.Identity, agentID string) ([]RuntimeMCPServer, error) {
-	if !agentauthz.New().CanWork(current, authentication) || uuid.Validate(agentID) != nil {
-		return nil, ErrForbidden
-	}
-	rows, err := service.pool.Query(ctx, `SELECT id,name,endpoint_url,allowed_tools,encrypted_headers,timeout_ms,max_output_bytes,require_write_confirmation
-		FROM agent_mcp_servers WHERE org_id=$1 AND agent_id=$2 AND enabled ORDER BY name`, current.OrgID, agentID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	result := make([]RuntimeMCPServer, 0)
-	for rows.Next() {
-		var server RuntimeMCPServer
-		var encrypted []byte
-		if err := rows.Scan(&server.ID, &server.Name, &server.EndpointURL, &server.AllowedTools, &encrypted, &server.TimeoutMS, &server.MaxOutputBytes, &server.RequireWriteConfirmation); err != nil {
-			return nil, err
-		}
-		headers, err := service.openMCPHeaders(current.OrgID, agentID, server.ID, encrypted)
-		if err != nil {
-			return nil, err
-		}
-		server.Headers = headers
-		result = append(result, server)
-	}
-	return result, rows.Err()
-}
-
-const mcpSelect = `SELECT server.id,server.agent_id,server.name,server.endpoint_url,server.enabled,server.allowed_tools,
-	server.encrypted_headers IS NOT NULL,server.timeout_ms,server.max_output_bytes,server.require_write_confirmation,server.created_at,server.updated_at,server.encrypted_headers
-	FROM agent_mcp_servers server`
-
-func scanMCPServer(row pgx.Row) (MCPServer, error) {
-	var server MCPServer
-	var encrypted []byte
-	err := row.Scan(mcpScanTargets(&server, &encrypted)...)
-	return server, err
-}
-
-func mcpScanTargets(server *MCPServer, encrypted *[]byte) []any {
-	return []any{&server.ID, &server.AgentID, &server.Name, &server.EndpointURL, &server.Enabled, &server.AllowedTools, &server.HeadersConfigured, &server.TimeoutMS, &server.MaxOutputBytes, &server.RequireWriteConfirmation, &server.CreatedAt, &server.UpdatedAt, encrypted}
-}
-
-func (service *Service) getMCPServer(ctx context.Context, orgID, agentID, serverID string) (MCPServer, error) {
-	server, err := scanMCPServer(service.pool.QueryRow(ctx, mcpSelect+` WHERE server.org_id=$1 AND server.agent_id=$2 AND server.id=$3`, orgID, agentID, serverID))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return MCPServer{}, ErrNotFound
-	}
-	return server, err
-}
-
 func validMCPConfig(name, endpoint string, tools []string, headers map[string]string, timeoutMS, maxOutputBytes int) bool {
 	if !mcpNamePattern.MatchString(strings.TrimSpace(name)) || timeoutMS < 100 || timeoutMS > 120000 || maxOutputBytes < 1024 || maxOutputBytes > 4194304 || len(tools) > 128 || len(headers) > 32 {
 		return false
@@ -628,17 +399,6 @@ func (service *Service) openMCPHeaders(orgID, agentID, serverID string, encrypte
 
 func mcpAAD(orgID, agentID, serverID string) []byte {
 	return []byte(orgID + "\x00" + agentID + "\x00" + serverID + "\x001")
-}
-
-func auditMCP(ctx context.Context, tx pgx.Tx, current identity.User, serverID, operation string, headersConfigured bool) error {
-	auditID, err := id.New()
-	if err != nil {
-		return err
-	}
-	metadata, _ := json.Marshal(map[string]any{"operation": operation, "headers_configured": headersConfigured})
-	_, err = tx.Exec(ctx, `INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata)
-		VALUES($1,$2,$3,'agent.mcp_server.' || $4,'agent_mcp_server',$5,$6)`, auditID, current.OrgID, current.ActorID, operation, serverID, metadata)
-	return err
 }
 
 func isUniqueViolation(err error) bool {

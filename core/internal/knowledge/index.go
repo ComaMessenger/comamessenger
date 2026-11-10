@@ -133,6 +133,7 @@ func (s *Service) IndexDocument(ctx context.Context, documentID string, version 
 		return fmt.Errorf("claim knowledge document: %w", err)
 	}
 	var document files.ExtractedDocument
+	var sheets []files.SheetRows
 	if record.Kind == "page" {
 		if record.Body == nil {
 			s.markIndexFailed(ctx, documentID, version, "empty_document")
@@ -159,6 +160,8 @@ func (s *Service) IndexDocument(ctx context.Context, documentID string, version 
 		if err != nil {
 			return err
 		}
+		// A spreadsheet whose rows cannot be structured still keeps its text.
+		sheets, _ = spreadsheetSheets(source)
 	}
 	chunks := SplitDocument(document)
 	if len(chunks) == 0 {
@@ -197,6 +200,9 @@ func (s *Service) IndexDocument(ctx context.Context, documentID string, version 
 		FROM unnest($4::uuid[],$5::integer[],$6::text[],$7::text[]) AS chunk(id,position,section,content)`,
 		record.OrgID, record.CollectionID, documentID, ids, positions, sections, contents); err != nil {
 		return fmt.Errorf("insert knowledge chunks: %w", err)
+	}
+	if err := storeTables(ctx, tx, record.OrgID, record.CollectionID, documentID, version, sheets); err != nil {
+		return err
 	}
 	embeddingStatus := "none"
 	if record.EmbeddingConnectionID != nil {

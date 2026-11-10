@@ -140,6 +140,7 @@ func main() {
 		logger.Error("agent configuration initialization failed", "error", err)
 		os.Exit(1)
 	}
+	agentConfigService.SetPrivateNetworksAllowed(cfg.Agents.IntegrationsAllowPrivateNetworks)
 	identityService.SetBearerAuthenticator(agentService.AuthenticateKey)
 	if len(os.Args) > 1 && os.Args[1] == "admin" {
 		if err := runAdminCommand(startupCtx, identityService, os.Args[2:]); err != nil {
@@ -220,7 +221,7 @@ func main() {
 	interactiveLimits.MaxRemindersPerPersonPerDay = cfg.Agents.RemindersPerPersonPerDay
 	interactiveService := interactive.NewService(pool, messageService, chatService, logger, interactiveLimits)
 	messageService.SetActionHook(interactiveService.ActionHook())
-	agentToolExecutor, err := agenttool.NewExecutor(pool, agenttool.Services{Chats: chatService, Messages: messageService, Search: searchService, Files: fileService, Memory: agentmemory.NewService(pool), Knowledge: knowledgeService, Interactive: interactiveService}, true)
+	agentToolExecutor, err := agenttool.NewExecutor(pool, agenttool.Services{Chats: chatService, Messages: messageService, Search: searchService, Files: fileService, Memory: agentmemory.NewService(pool), Knowledge: knowledgeService, Interactive: interactiveService, MCP: agentConfigService}, true)
 	if err != nil {
 		logger.Error("agent tool initialization failed", "error", err)
 		os.Exit(1)
