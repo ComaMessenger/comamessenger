@@ -2384,6 +2384,8 @@ test("knowledge base: create a collection and upload documents with status", asy
   await expect(dialog.getByRole("note")).toContainText(
     "отправит тексты всех документов коллекции в модель «embed-small»",
   );
+  // Opening the select scrolls the body by a timing-dependent amount.
+  await dialog.locator(".ui-dialog__body").evaluate((body) => (body.scrollTop = 0));
   if (!phone)
     await expect(dialog).toHaveScreenshot("knowledge-collection-dialog.png", {
       animations: "disabled",
