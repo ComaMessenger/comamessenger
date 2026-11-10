@@ -52,9 +52,15 @@ func run(logger *slog.Logger) error {
 	if address == "" {
 		address = ":8090"
 	}
+	trusted, err := relay.ParseTrustedProxies(os.Getenv("RELAY_TRUSTED_PROXY_CIDRS"))
+	if err != nil {
+		return errors.New("RELAY_TRUSTED_PROXY_CIDRS must be a comma-separated list of CIDR prefixes")
+	}
+	api := relay.NewServer(logger, store, senders)
+	api.TrustProxies(trusted)
 	server := &http.Server{
 		Addr:              address,
-		Handler:           relay.NewServer(logger, store, senders).Handler(),
+		Handler:           api.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      20 * time.Second,
