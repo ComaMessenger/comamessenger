@@ -60,6 +60,12 @@ Runtime передаёт UUID provider tool call как `tool_call_id` и не �
 
 Менеджер агента видит очередь в разделе «Агенты → Подтверждения» и вызывает approve/deny API. При approve core повторно проверяет текущий allowlist агента и membership через доменный handler, выполняет сохранённые аргументы ровно в рамках этого confirmation и пишет решение/результат в аудит. Повторное решение и истёкший запрос возвращают conflict. Tool validation/authorization errors возвращаются модели как безопасный `tool_result`, чтобы один неверный вызов не обрывал весь run.
 
+## База знаний (`search_knowledge`)
+
+Инструмент `search_knowledge` требует scope `knowledge:read` и ищет только в коллекциях, привязанных к версии агента (`knowledge_collection_ids` черновика или опубликованной версии). Набор коллекций фиксируется в `agent_runs.agent_config` при постановке run'а в очередь, поэтому dry-run черновика ищет по коллекциям черновика, а откат версии возвращает её привязки. Коллекция с доступом `chats` видна агенту только в run'ах из выбранных чатов. Агент без привязки не видит ни одной коллекции, даже открытой всем участникам.
+
+Ответ содержит `fragments[]` с `chunk_id`, `document_id`, `document_title`, `collection`, `section` (путь заголовков), `position` (номер фрагмента в документе) и `text`; пустой список и `found=false` означают, что в базе знаний ответа нет. Каждый выданный фрагмент записывается в `agent_run_knowledge_chunks` с привязкой к `agent_tool_calls.id`; список доступен через `GET /api/v1/knowledge/runs/{run_id}/fragments` и остаётся после удаления документа (с `available=false`).
+
 ## Provider gateway
 
 Runtime отправляет vendor request без секрета в `POST /api/v1/agent-runtime/provider/chat`. Core проверяет активный run и lease, разрешение на внешнюю передачу данных, provider rate limit и бюджет, подставляет выбранные на сервере model/max output и только затем открывает upstream SSE. Provider credential никогда не возвращается runtime API.
