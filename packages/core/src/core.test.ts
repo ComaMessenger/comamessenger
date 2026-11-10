@@ -10,7 +10,7 @@ import {
   updateMentionText,
 } from "./mentions";
 import { compactUUID, expandUUID } from "./links";
-import { chatPreview, formatListTime } from "./chats";
+import { chatAvatarSource, chatPreview, formatListTime } from "./chats";
 import { feedRows } from "./feed";
 import { resolvedMentionActorIDs } from "./mentions";
 import type { Chat } from "./types";
@@ -687,6 +687,28 @@ describe("chat list helpers", () => {
     expect(chatPreview(chat({}), "me", labels)).toEqual({
       sender: "",
       text: "Topic",
+    });
+  });
+
+  it("picks the chat image for groups and the peer avatar for direct chats", () => {
+    expect(chatAvatarSource(chat({ avatar_version: 3 }))).toEqual({
+      chatID: "c",
+      avatarVersion: 3,
+    });
+    expect(
+      chatAvatarSource(chat({ kind: "channel", avatar_version: 0 })),
+    ).toEqual({ chatID: "c", avatarVersion: 0 });
+    expect(
+      chatAvatarSource(
+        chat({
+          kind: "direct",
+          avatar_version: 7,
+          direct_peer: { actor_id: "peer", avatar_version: 2 } as Chat["direct_peer"],
+        }),
+      ),
+    ).toEqual({ actorID: "peer", avatarVersion: 2 });
+    expect(chatAvatarSource(chat({ kind: "direct" }))).toEqual({
+      avatarVersion: 0,
     });
   });
 

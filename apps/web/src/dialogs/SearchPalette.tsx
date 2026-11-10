@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { chatAvatarSource } from "@comamessenger/core";
 import { FileText, Hash, Search } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -340,7 +341,7 @@ export function SearchPalette({
                     ? renderRow(
                         row,
                         <>
-                          <Avatar name={titleOf(row.chat, [], user.id)} seed={row.chat.avatar_seed} size="sm" />
+                          <Avatar name={titleOf(row.chat, [], user.id)} seed={row.chat.avatar_seed} {...chatAvatarSource(row.chat)} size="sm" />
                           <strong className="truncate">
                             <Highlight text={titleOf(row.chat, [], user.id)} query={deferredQuery} />
                           </strong>

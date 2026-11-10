@@ -936,6 +936,7 @@ export function Avatar({
   agent = false,
   square = false,
   actorID,
+  chatID,
   avatarVersion = 0,
   className,
   glyph,
@@ -951,6 +952,8 @@ export function Avatar({
   agent?: boolean;
   square?: boolean;
   actorID?: string;
+  /** A group chat or channel image; takes the place of `actorID`. */
+  chatID?: string;
   avatarVersion?: number;
   className?: string;
 }) {
@@ -959,9 +962,10 @@ export function Avatar({
   useEffect(() => {
     let active = true;
     setSource(null);
-    if (!objectURLs || !actorID || avatarVersion < 1) return;
+    const ownerID = chatID ?? actorID;
+    if (!objectURLs || !ownerID || avatarVersion < 1) return;
     void objectURLs
-      .get(actorID, avatarVersion)
+      .get(ownerID, avatarVersion, chatID ? "chat" : "actor")
       .then((url) => {
         if (active) setSource(url);
       })
@@ -969,7 +973,7 @@ export function Avatar({
     return () => {
       active = false;
     };
-  }, [actorID, avatarVersion, objectURLs]);
+  }, [actorID, chatID, avatarVersion, objectURLs]);
   const initials = initialsOf(name);
   const resolvedPresence = presence ?? (online ? "online" : undefined);
   return (

@@ -3,7 +3,7 @@ import { ArrowUpRight, Pin, PinOff, Star } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
-import { messagePlainText, type Chat, type Message, type MessagePin } from "@comamessenger/core";
+import { chatAvatarSource, messagePlainText, type Chat, type Message, type MessagePin } from "@comamessenger/core";
 import { hasPermission } from "../settings";
 import { Avatar, Chip, EmptyState, InlineError, SkeletonRow, cx } from "../ui";
 import { formatDay, formatListTime, minuteGap } from "../lib/format";
@@ -190,8 +190,7 @@ function ImportantRow({
         <Avatar
           name={chatName}
           seed={item.chat.avatar_seed}
-          actorID={item.chat.direct_peer?.actor_id}
-          avatarVersion={item.chat.direct_peer?.avatar_version}
+          {...chatAvatarSource(item.chat)}
           size="md"
         />
       }
@@ -278,8 +277,7 @@ function ImportantDetail({
           <Avatar
             name={chatName}
             seed={item.chat.avatar_seed}
-            actorID={item.chat.direct_peer?.actor_id}
-            avatarVersion={item.chat.direct_peer?.avatar_version}
+            {...chatAvatarSource(item.chat)}
             size="md"
           />
         }

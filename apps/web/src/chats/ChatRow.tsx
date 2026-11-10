@@ -1,7 +1,7 @@
 import { useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import { BellOff, Pin } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { chatPreview as corePreview, type Chat, type ChatFolder } from "@comamessenger/core";
+import { chatAvatarSource, chatPreview as corePreview, type Chat, type ChatFolder } from "@comamessenger/core";
 import { Avatar, Badge, countLabel, cx, type Presence } from "../ui";
 import { formatListTime } from "../lib/format";
 import { chatGlyph, isChatMuted, titleOf } from "../lib/chats";
@@ -116,8 +116,7 @@ export function ChatRow({
         <Avatar
           name={title}
           seed={chat.avatar_seed}
-          actorID={peer?.actor_id}
-          avatarVersion={peer?.avatar_version}
+          {...chatAvatarSource(chat)}
           agent={peer?.type === "agent"}
           glyph={chatGlyph(chat)}
           presence={chat.kind === "direct" && peer?.type !== "agent" ? presence : undefined}

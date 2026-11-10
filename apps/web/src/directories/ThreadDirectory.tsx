@@ -3,7 +3,7 @@ import { MessagesSquare, RefreshCw } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
-import { messagePlainText, type ChatMember, type Message, type ThreadSummary } from "@comamessenger/core";
+import { chatAvatarSource, messagePlainText, type ChatMember, type Message, type ThreadSummary } from "@comamessenger/core";
 import { Avatar, Badge, Chip, EmptyState, IconButton, InlineError, SkeletonRow, countLabel } from "../ui";
 import { formatAge } from "../lib/format";
 import { titleOf } from "../lib/chats";
@@ -167,8 +167,7 @@ function ThreadRow({
           <Avatar
             name={chatName}
             seed={chat?.avatar_seed ?? item.root.chat_id}
-            actorID={chat?.direct_peer?.actor_id}
-            avatarVersion={chat?.direct_peer?.avatar_version}
+            {...(chat ? chatAvatarSource(chat) : {})}
             size="md"
           />
           <span className="directory-thread-avatar__badge" aria-hidden="true">
@@ -229,7 +228,7 @@ function ThreadDetail({ item, onBack }: { item: ThreadSummary; onBack(): void })
     return (
       <div className="directory-detail__loading">
         <DirectoryDetailHead
-          leading={<Avatar name={titleOf(chat, [], user.id)} seed={chat.avatar_seed} size="md" />}
+          leading={<Avatar name={titleOf(chat, [], user.id)} seed={chat.avatar_seed} {...chatAvatarSource(chat)} size="md" />}
           title={t("threadIn", { chat: titleOf(chat, [], user.id) })}
         />
         <SkeletonRow avatar={36} lines={["40%", "100%"]} />

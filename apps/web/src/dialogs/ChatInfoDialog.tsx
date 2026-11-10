@@ -3,6 +3,7 @@ import { Download, FileText, Image as ImageIcon, Link2, Pin } from "lucide-react
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
+  chatAvatarSource,
   messagePlainText,
   type ActorSummary,
   type Chat,
@@ -60,6 +61,13 @@ export function ChatInfoDialog({
   const [newMembers, setNewMembers] = useState<ActorSummary[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  // The dialog keeps the chat it opened with; the new version shows at once
+  // while the realtime chat.updated event refreshes the list behind it.
+  const [avatarVersion, setAvatarVersion] = useState<number | null>(null);
+  const [avatarPending, setAvatarPending] = useState(false);
+  const [avatarError, setAvatarError] = useState("");
+  const avatarSource = chatAvatarSource(chat);
+  if (avatarVersion !== null && avatarSource.chatID) avatarSource.avatarVersion = avatarVersion;
   const notifications = useQuery({
     queryKey: ["chat-notifications", chat.id],
     queryFn: () => api.chatNotifications(chat.id),
@@ -87,6 +95,24 @@ export function ChatInfoDialog({
   const memberRows = allMembers ? members : members.slice(0, visibleMembers);
   const nameOf = (actorID: string) =>
     members.find((member) => member.actor_id === actorID)?.display_name ?? t("participant");
+
+  async function changeAvatar(file: File | null) {
+    setAvatarError("");
+    if (file && (file.size > 10_000_000 || !["image/png", "image/jpeg"].includes(file.type))) {
+      setAvatarError(t("chatAvatarValidation"));
+      return;
+    }
+    setAvatarPending(true);
+    try {
+      const updated = file ? await api.putChatAvatar(chat.id, file) : await api.deleteChatAvatar(chat.id);
+      setAvatarVersion(updated.avatar_version);
+      scheduleReload();
+    } catch (cause) {
+      setAvatarError(messageOf(cause));
+    } finally {
+      setAvatarPending(false);
+    }
+  }
 
   async function save() {
     setPending(true);
@@ -131,14 +157,43 @@ export function ChatInfoDialog({
       }
     >
       <div className="chat-info__identity">
-        <Avatar
-          name={title}
-          seed={chat.avatar_seed}
-          actorID={chat.direct_peer?.actor_id}
-          avatarVersion={chat.direct_peer?.avatar_version}
-          agent={chat.direct_peer?.type === "agent"}
-          size="xl"
-        />
+        {manageable ? (
+          <div className="chat-info__avatar">
+            <Avatar name={title} seed={chat.avatar_seed} {...avatarSource} size="xl" />
+            <label className="ui-button ui-button--ghost ui-button--sm">
+              {t("chatAvatarChange")}
+              <input
+                hidden
+                type="file"
+                accept="image/png,image/jpeg"
+                disabled={avatarPending}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void changeAvatar(file);
+                  event.target.value = "";
+                }}
+              />
+            </label>
+            {avatarSource.avatarVersion > 0 && (
+              <Button size="sm" variant="ghost" disabled={avatarPending} onClick={() => void changeAvatar(null)}>
+                {t("chatAvatarRemove")}
+              </Button>
+            )}
+            {avatarError && (
+              <small className="chat-info__avatar-error" role="alert">
+                {avatarError}
+              </small>
+            )}
+          </div>
+        ) : (
+          <Avatar
+            name={title}
+            seed={chat.avatar_seed}
+            {...avatarSource}
+            agent={chat.direct_peer?.type === "agent"}
+            size="xl"
+          />
+        )}
         {manageable ? (
           <div className="chat-info__fields">
             <Field

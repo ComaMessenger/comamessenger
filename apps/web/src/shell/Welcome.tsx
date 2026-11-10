@@ -2,7 +2,7 @@ import { Bot, MessagesSquare, Plus, Search } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
-import { messagePlainText } from "@comamessenger/core";
+import { chatAvatarSource, messagePlainText } from "@comamessenger/core";
 import { hasPermission } from "../settings";
 import { Avatar, Badge, Button, countLabel } from "../ui";
 import { firstName, greetingKey } from "../lib/format";
@@ -114,8 +114,7 @@ export function Welcome() {
                   <Avatar
                     name={titleOf(chat, [], user.id)}
                     seed={chat.avatar_seed}
-                    actorID={chat.direct_peer?.actor_id}
-                    avatarVersion={chat.direct_peer?.avatar_version}
+                    {...chatAvatarSource(chat)}
                     agent={chat.direct_peer?.type === "agent"}
                     glyph={chatGlyph(chat)}
                     size="md"
