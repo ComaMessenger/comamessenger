@@ -18,10 +18,13 @@ import {
 import { Image } from "expo-image";
 import { useTranslation } from "react-i18next";
 import {
+  commandQuery,
   decodeMentions,
   encodeMentions,
   insertMention,
+  matchCommands,
   updateMentionText,
+  type ChatCommand,
   type ChatMember,
 } from "@comamessenger/core";
 import { radius, spacing } from "@comamessenger/tokens";
@@ -54,6 +57,7 @@ export function Composer({
   onAttach,
   onRemoveAttachment,
   onRetryAttachment,
+  commands = [],
 }: {
   body: string;
   onChangeBody(body: string): void;
@@ -67,6 +71,8 @@ export function Composer({
   onAttach?(): void;
   onRemoveAttachment?(id: string): void;
   onRetryAttachment?(id: string): void;
+  /** Agent commands offered after typing "/" at the start of a message. */
+  commands?: ChatCommand[];
 }) {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -96,6 +102,10 @@ export function Composer({
         .slice(0, 5)
     : [];
 
+  const typedCommand = commands.length ? commandQuery(draft.text) : null;
+  const commandMatches =
+    typedCommand === null ? [] : matchCommands(commands, typedCommand).slice(0, 6);
+
   if (readonly)
     return (
       <View style={[styles.readonly, { borderTopColor: theme.border }]}>
@@ -118,8 +128,54 @@ export function Composer({
     input.current?.focus();
   }
 
+  function pickCommand(command: ChatCommand) {
+    onChangeBody(`/${command.command} `);
+    input.current?.focus();
+  }
+
   return (
     <View style={styles.wrap}>
+      {commandMatches.length > 0 && (
+        <ScrollView
+          testID="command-menu"
+          keyboardShouldPersistTaps="always"
+          accessibilityLabel={t("acCommandsLabel")}
+          style={[
+            styles.suggestions,
+            { backgroundColor: theme.surface, borderColor: theme.border },
+          ]}
+        >
+          {commandMatches.map((command) => (
+            <Pressable
+              key={`${command.agentID}/${command.command}`}
+              accessibilityRole="button"
+              accessibilityLabel={`/${command.command}, ${command.agentName}`}
+              onPress={() => pickCommand(command)}
+              style={({ pressed }) => [
+                styles.suggestion,
+                pressed && { backgroundColor: theme.surfaceSelected },
+              ]}
+            >
+              <Avatar
+                name={command.agentName}
+                seed={command.agentID}
+                size={28}
+                agent
+                actorID={command.agentID}
+                avatarVersion={command.avatarVersion}
+              />
+              <Text weight="semibold" size={15} numberOfLines={1}>
+                /{command.command}
+              </Text>
+              <Text tone="subtle" size={14} numberOfLines={1} style={styles.grow}>
+                {command.description
+                  ? `${command.agentName} · ${command.description}`
+                  : command.agentName}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      )}
       {suggestions.length > 0 && (
         <ScrollView
           keyboardShouldPersistTaps="always"

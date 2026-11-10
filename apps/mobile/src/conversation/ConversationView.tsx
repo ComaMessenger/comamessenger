@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -14,14 +14,17 @@ import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { router } from "expo-router";
 import * as Clipboard from "expo-clipboard";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ChevronLeft } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import {
   chatAvatarSource,
   decodeMentions,
   formatDaySeparator,
+  chatCommands,
+  grantsPermission,
   messagePlainText,
+  type ActionViewer,
   type ClientMessage,
   type FeedRow,
 } from "@comamessenger/core";
@@ -84,6 +87,28 @@ export function ConversationView({
     [members, t, user.id],
   );
 
+  const hasAgents = members.some((member) => member.type === "agent");
+  const chatAgents = useQuery({
+    queryKey: ["chat-agents", chatID],
+    queryFn: () => api.chatAgents(chatID),
+    enabled: hasAgents && !inThread,
+    staleTime: 60_000,
+  });
+  const commands = useMemo(
+    () => (hasAgents ? chatCommands(chatAgents.data ?? []) : []),
+    [chatAgents.data, hasAgents],
+  );
+  const myRole = members.find((member) => member.actor_id === user.id)?.role;
+  const viewer = useMemo<ActionViewer>(
+    () => ({
+      actorID: user.id,
+      chatRole: myRole,
+      orgRole: user.role,
+      hasPermission: (permission) =>
+        grantsPermission(user.role, user.permissions ?? [], permission),
+    }),
+    [myRole, user.id, user.permissions, user.role],
+  );
   const reply = useCallback(
     (message: ClientMessage) => setContext({ kind: "reply", message }),
     [],
@@ -402,6 +427,9 @@ export function ConversationView({
                         onThread={openThread}
                         onActions={setActionsFor}
                         onRetry={conversation.retryOutbox}
+                        members={members}
+                        viewer={viewer}
+                        onUpdated={conversation.applyMessage}
                       />
                     </View>
                     {inThread && index === 0 && (
@@ -456,6 +484,7 @@ export function ConversationView({
           onAttach={() => setPicking(true)}
           onRemoveAttachment={attachments.remove}
           onRetryAttachment={attachments.retry}
+          commands={inThread || context?.kind === "edit" ? [] : commands}
         />
       </KeyboardAvoidingView>
       <ActionSheet<PickSource>

@@ -17,6 +17,19 @@ func (h *identityHandlers) listAgents(w standardhttp.ResponseWriter, r *standard
 	writeJSON(h.logger, w, standardhttp.StatusOK, result)
 }
 
+func (h *identityHandlers) listChatAgents(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.agents.ChatAgents(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "chatID"))
+	if errors.Is(err, agent.ErrNotFound) {
+		h.writeError(w, r, standardhttp.StatusNotFound, "chat_not_found", "Chat was not found.")
+		return
+	}
+	if err != nil {
+		h.writeAgentError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
 func (h *identityHandlers) agentProductMetrics(w standardhttp.ResponseWriter, r *standardhttp.Request) {
 	result, err := h.agents.Metrics(r.Context(), authFromContext(r.Context()).User)
 	if err != nil {
