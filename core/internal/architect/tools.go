@@ -425,6 +425,11 @@ func (turn *turn) updateDraft(ctx context.Context, raw json.RawMessage) any {
 	if err != nil {
 		return fail("%v", err)
 	}
+	// The name people see in chats is not versioned: on a published agent it
+	// would change at once, bypassing publishing. Only the builder renames.
+	if input.Name != nil && (current.PublishedVersion != nil || current.Enabled) {
+		return fail("the name of a published agent changes only in the builder; leave name out and say so to the administrator")
+	}
 	update := agent.UpdateInput{}
 	if input.Name != nil {
 		name := strings.TrimSpace(*input.Name)

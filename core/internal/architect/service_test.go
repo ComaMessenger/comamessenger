@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -61,13 +62,15 @@ func (model *scriptedModel) push(steps ...func(ModelRequest) (ModelResponse, err
 
 func (model *scriptedModel) Complete(_ context.Context, request ModelRequest) (ModelResponse, error) {
 	model.mu.Lock()
-	defer model.mu.Unlock()
 	model.requests = append(model.requests, request)
 	if len(model.steps) == 0 {
+		model.mu.Unlock()
 		return ModelResponse{Text: "…", InputTokens: 10, OutputTokens: 1}, nil
 	}
 	step := model.steps[0]
 	model.steps = model.steps[1:]
+	model.mu.Unlock()
+	// Steps run unlocked so a step may act like a second browser tab.
 	return step(request)
 }
 
@@ -482,9 +485,21 @@ func TestArchitectQuestionLimitAndPublishedAgents(t *testing.T) {
 	if result := strings.Join(resultOf(t, lastRequest(f.model), "set_triggers"), ""); !strings.Contains(result, "already published") {
 		t.Fatalf("set_triggers on a published agent = %s", result)
 	}
+	// The name people see in chats is not versioned: renaming a published
+	// agent from a conversation would bypass publishing.
+	if result := strings.Join(resultOf(t, lastRequest(f.model), "update_draft"), ""); !strings.Contains(result, `"error"`) {
+		t.Fatalf("update_draft renamed a published agent: %s", result)
+	}
 	edited, err := f.agents.Get(ctx, owner, external.ID)
-	if err != nil || !edited.Enabled || !edited.HasUnpublishedChanges || *edited.PublishedVersion != *external.PublishedVersion || edited.DisplayName != "Внешний помощник" {
+	if err != nil || !edited.Enabled || *edited.PublishedVersion != *external.PublishedVersion || edited.DisplayName != "Внешний" {
 		t.Fatalf("edited published agent = %+v err=%v", edited, err)
+	}
+	f.model.push(calls(call("update_draft", map[string]any{"task": "Отвечает внешним сервисом."})), say("Задачу поправил в черновике."))
+	if _, err := f.service.Send(ctx, owner, edit.ID, SendInput{Text: "Поправь задачу"}); err != nil {
+		t.Fatal(err)
+	}
+	if drafted, err := f.agents.Get(ctx, owner, external.ID); err != nil || !drafted.HasUnpublishedChanges || drafted.DisplayName != "Внешний" || *drafted.PublishedVersion != *external.PublishedVersion {
+		t.Fatalf("draft change of a published agent = %+v err=%v", drafted, err)
 	}
 }
 
@@ -520,15 +535,19 @@ func TestArchitectSessionsArePersonalAndExpire(t *testing.T) {
 	if _, err := f.service.Send(ctx, builder, session.ID, SendInput{Text: "Hello"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.pool.Exec(ctx, `UPDATE agents SET daily_cost_limit=0.00000001 WHERE org_id=$1 AND system_role='architect'`, testOrgID); err != nil {
-		t.Fatal(err)
-	}
+	// The configured limits are written to the system agent (a manual edit
+	// of the row is overwritten by the deployment's configuration).
+	tight := DefaultLimits()
+	tight.DailyCostLimit = "0.00000001"
+	f.service.SetLimits(tight)
 	if _, err := f.service.Send(ctx, builder, session.ID, SendInput{Text: "Again"}); !errors.Is(err, ErrBudget) {
 		t.Fatalf("over budget error = %v", err)
 	}
-	if _, err := f.pool.Exec(ctx, `UPDATE agents SET daily_cost_limit=NULL WHERE org_id=$1 AND system_role='architect'`, testOrgID); err != nil {
-		t.Fatal(err)
+	var daily string
+	if err := f.pool.QueryRow(ctx, `SELECT daily_cost_limit::text FROM agents WHERE org_id=$1 AND system_role='architect'`, testOrgID).Scan(&daily); err != nil || daily != "0.00000001" {
+		t.Fatalf("daily limit = %q err=%v", daily, err)
 	}
+	f.service.SetLimits(DefaultLimits())
 
 	// A busy conversation refuses a parallel message.
 	if _, err := f.pool.Exec(ctx, `UPDATE agent_architect_sessions SET turn_started_at=now() WHERE id=$1`, session.ID); err != nil {
@@ -555,7 +574,7 @@ func TestArchitectSessionsArePersonalAndExpire(t *testing.T) {
 	}
 	// A week later expired conversations are purged.
 	f.service.now = func() time.Time { return time.Now().Add(SessionTTL + purgeAfter + time.Hour) }
-	if _, _, err := f.service.Start(ctx, builder, StartInput{}); err != nil {
+	if _, _, err := f.service.Cleanup(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.service.Get(ctx, builder, session.ID); !errors.Is(err, ErrNotFound) {
@@ -595,4 +614,223 @@ func mustStart(t *testing.T, f *fixture, current identity.User) Session {
 		t.Fatal(err)
 	}
 	return Session{ID: id}
+}
+
+// TestArchitectBudgetSurvivesNewConversations: the per-conversation cap
+// must not be a budget. Closing a conversation and opening a new one keeps
+// counting against the person's daily allowance, and the workspace system
+// agent starts with cost limits.
+func TestArchitectBudgetSurvivesNewConversations(t *testing.T) {
+	f := newFixture(t)
+	ctx := t.Context()
+	clock := time.Now()
+	f.service.now = func() time.Time { return clock }
+	rounds := []int{}
+	for round := 0; round < 4; round++ {
+		session, _, err := f.service.Start(ctx, builder, StartInput{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		sent := 0
+		for {
+			// Spread calls out so the per-minute rate is never the limit here.
+			clock = clock.Add(5 * time.Second)
+			_, err := f.service.Send(ctx, builder, session.ID, SendInput{Text: "Ещё"})
+			if errors.Is(err, ErrBudget) {
+				break
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if round == 0 && sent == 0 {
+				// Whatever rate the system agent row says, the person's
+				// allowance must stop them.
+				if _, err := f.pool.Exec(ctx, `UPDATE agents SET provider_rate_limit_per_minute=100000 WHERE system_role='architect'`); err != nil {
+					t.Fatal(err)
+				}
+			}
+			sent++
+			if sent > 500 {
+				t.Fatal("no budget stops the conversation")
+			}
+		}
+		rounds = append(rounds, sent)
+		if err := f.service.Close(ctx, builder, session.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if rounds[len(rounds)-1] != 0 || rounds[len(rounds)-2] != 0 {
+		t.Fatalf("new conversations reset the budget: model calls per round %v", rounds)
+	}
+	var daily, monthly *string
+	if err := f.pool.QueryRow(ctx, `SELECT daily_cost_limit::text,monthly_cost_limit::text FROM agents WHERE org_id=$1 AND system_role='architect'`, testOrgID).Scan(&daily, &monthly); err != nil {
+		t.Fatal(err)
+	}
+	if daily == nil || monthly == nil {
+		t.Fatalf("the Architect system agent has no cost limits: daily=%v monthly=%v", daily, monthly)
+	}
+}
+
+// TestArchitectFailedCallsCountTowardsTheRate: a model that keeps failing
+// without reporting tokens still spends the workspace's call rate.
+func TestArchitectFailedCallsCountTowardsTheRate(t *testing.T) {
+	f := newFixture(t)
+	ctx := t.Context()
+	session, _, err := f.service.Start(ctx, builder, StartInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 200 {
+		f.model.push(func(ModelRequest) (ModelResponse, error) { return ModelResponse{}, ErrModel })
+	}
+	for attempt := 1; attempt <= 200; attempt++ {
+		_, err := f.service.Send(ctx, builder, session.ID, SendInput{Text: "Повтори"})
+		if errors.Is(err, ErrBudget) {
+			// The per-conversation cap (80 calls) must not be what stops it.
+			if attempt > 60 {
+				t.Fatalf("failed calls were stopped only after %d attempts: they do not count towards the rate", attempt)
+			}
+			return
+		}
+		if !errors.Is(err, ErrModel) {
+			t.Fatalf("attempt %d error = %v", attempt, err)
+		}
+	}
+	t.Fatal("200 failed model calls in a row were never rate limited")
+}
+
+// TestArchitectTurnKeepsItsLease: a long turn (many model calls) renews its
+// lease, so a second request (another tab) cannot take the same
+// conversation over in the middle and double-spend or overwrite it.
+func TestArchitectTurnKeepsItsLease(t *testing.T) {
+	f := newFixture(t)
+	ctx := t.Context()
+	clock := time.Now()
+	f.service.now = func() time.Time { return clock }
+	session, _, err := f.service.Start(ctx, builder, StartInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var competing error
+	f.model.push(
+		func(ModelRequest) (ModelResponse, error) {
+			clock = clock.Add(4 * time.Minute)
+			return ModelResponse{ToolCalls: []ToolCall{call("list_chats", map[string]any{})}, InputTokens: 10, OutputTokens: 1}, nil
+		},
+		func(ModelRequest) (ModelResponse, error) {
+			clock = clock.Add(2 * time.Minute)
+			// Six minutes after the turn began, another request arrives.
+			_, competing = f.service.Send(ctx, builder, session.ID, SendInput{Text: "Вторая вкладка"})
+			return ModelResponse{Text: "Готово.", InputTokens: 10, OutputTokens: 1}, nil
+		},
+	)
+	result, err := f.service.Send(ctx, builder, session.ID, SendInput{Text: "Первая вкладка"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !errors.Is(competing, ErrBusy) {
+		t.Fatalf("a second request took over a running turn: %v", competing)
+	}
+	texts := []string{}
+	for _, message := range result.Messages {
+		texts = append(texts, message.Text)
+	}
+	if strings.Contains(strings.Join(texts, "|"), "Вторая вкладка") || texts[len(texts)-1] != "Готово." {
+		t.Fatalf("conversation after the turn = %v", texts)
+	}
+}
+
+// TestArchitectCleanupRunsForEveryWorkspace: expired and closed
+// conversations lose their model transcript (chat names, check answers) at
+// once and disappear after a week, without anyone opening the Architect.
+func TestArchitectCleanupRunsForEveryWorkspace(t *testing.T) {
+	f := newFixture(t)
+	ctx := t.Context()
+	session, _, err := f.service.Start(ctx, builder, StartInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.model.push(calls(call("list_chats", map[string]any{})), say("Готово."))
+	if _, err := f.service.Send(ctx, builder, session.ID, SendInput{Text: "Какие чаты есть?"}); err != nil {
+		t.Fatal(err)
+	}
+	closed, _, err := f.service.Start(ctx, owner, StartInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.service.Close(ctx, owner, closed.ID); err != nil {
+		t.Fatal(err)
+	}
+	transcript := func(id string) string {
+		var value string
+		if err := f.pool.QueryRow(ctx, `SELECT COALESCE((SELECT transcript::text FROM agent_architect_sessions WHERE id=$1),'gone')`, id).Scan(&value); err != nil {
+			t.Fatal(err)
+		}
+		return value
+	}
+	if !strings.Contains(transcript(session.ID), "Зал 1") {
+		t.Fatalf("active transcript = %s", transcript(session.ID))
+	}
+	cleared, deleted, err := f.service.Cleanup(ctx)
+	if err != nil || cleared != 1 || deleted != 0 || transcript(closed.ID) != "[]" || !strings.Contains(transcript(session.ID), "Зал 1") {
+		t.Fatalf("cleanup of a closed conversation: cleared=%d deleted=%d err=%v", cleared, deleted, err)
+	}
+	f.service.now = func() time.Time { return time.Now().Add(SessionTTL + time.Minute) }
+	if _, _, err := f.service.Cleanup(ctx); err != nil || transcript(session.ID) != "[]" {
+		t.Fatalf("expired transcript = %s err=%v", transcript(session.ID), err)
+	}
+	if expired, err := f.service.Get(ctx, builder, session.ID); err != nil || expired.Status != "expired" || len(expired.Messages) < 3 {
+		t.Fatalf("expired conversation stays readable: %+v err=%v", expired, err)
+	}
+	f.service.now = func() time.Time { return time.Now().Add(SessionTTL + purgeAfter + time.Hour) }
+	if _, deleted, err := f.service.Cleanup(ctx); err != nil || deleted != 2 || transcript(session.ID) != "gone" || transcript(closed.ID) != "gone" {
+		t.Fatalf("purge deleted=%d err=%v", deleted, err)
+	}
+}
+
+// TestArchitectRateIsAtomic: parallel conversations cannot all pass the
+// per-minute check before any of them is recorded.
+func TestArchitectRateIsAtomic(t *testing.T) {
+	f := newFixture(t)
+	ctx := t.Context()
+	limits := DefaultLimits()
+	limits.CallsPerMinute = 3
+	f.service.SetLimits(limits)
+	const parallel = 10
+	ids := make([]string, parallel)
+	for index := range ids {
+		ids[index] = fmt.Sprintf("00000000-0000-7000-8000-%012d", 9000+index)
+		if _, err := f.pool.Exec(ctx, `INSERT INTO agent_architect_sessions(id,org_id,user_id,llm_connection_id,expires_at) VALUES($1,$2,$3,$4,now()+interval '1 day')`,
+			ids[index], testOrgID, testBuilderID, f.conn.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var wait sync.WaitGroup
+	var mu sync.Mutex
+	passed, limited := 0, 0
+	for _, sessionID := range ids {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			_, err := f.service.Send(ctx, builder, sessionID, SendInput{Text: "Параллельно"})
+			mu.Lock()
+			defer mu.Unlock()
+			switch {
+			case err == nil:
+				passed++
+			case errors.Is(err, ErrBudget):
+				limited++
+			default:
+				t.Errorf("parallel send error = %v", err)
+			}
+		}()
+	}
+	wait.Wait()
+	var recorded int
+	if err := f.pool.QueryRow(ctx, `SELECT count(*) FROM agent_architect_calls WHERE org_id=$1`, testOrgID).Scan(&recorded); err != nil {
+		t.Fatal(err)
+	}
+	if passed != 3 || limited != parallel-3 || recorded != 3 {
+		t.Fatalf("passed=%d limited=%d recorded calls=%d, want 3/%d/3", passed, limited, recorded, parallel-3)
+	}
 }

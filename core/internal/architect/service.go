@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -57,7 +58,31 @@ const (
 	maxTranscriptBytes     = 768 << 10
 	maxOutputTokens        = 2048
 	turnLease              = 5 * time.Minute
+	// modelCallTimeout keeps every model call well inside the turn lease,
+	// which is renewed before each call.
+	modelCallTimeout = 2 * time.Minute
 )
+
+// Limits bound what the Architect may spend. Cost limits are set on the
+// workspace's hidden architect agent (the per-agent budget model); the rest
+// are counted in agent_architect_calls, which no conversation can reset.
+type Limits struct {
+	// DailyCostLimit and MonthlyCostLimit are USD amounts for the whole
+	// workspace, applied to the architect system agent.
+	DailyCostLimit   string
+	MonthlyCostLimit string
+	// CallsPerMinute bounds model calls of the workspace, failed ones too.
+	CallsPerMinute int
+	// UserDailyCalls and UserDailyTokens bound one person over 24 hours
+	// across all their conversations, closed and deleted ones included.
+	UserDailyCalls  int
+	UserDailyTokens int64
+}
+
+// DefaultLimits are deliberately modest: a conversation takes 5-20 calls.
+func DefaultLimits() Limits {
+	return Limits{DailyCostLimit: "5", MonthlyCostLimit: "50", CallsPerMinute: 30, UserDailyCalls: 150, UserDailyTokens: 1_500_000}
+}
 
 type Services struct {
 	Agents    *agent.Service
@@ -72,12 +97,16 @@ type Service struct {
 	pool     *pgxpool.Pool
 	services Services
 	model    Model
+	limits   Limits
 	now      func() time.Time
 }
 
 func NewService(pool *pgxpool.Pool, services Services, model Model) *Service {
-	return &Service{pool: pool, services: services, model: model, now: time.Now}
+	return &Service{pool: pool, services: services, model: model, limits: DefaultLimits(), now: time.Now}
 }
+
+// SetLimits replaces the spending limits (from the deployment environment).
+func (service *Service) SetLimits(limits Limits) { service.limits = limits }
 
 type Session struct {
 	ID             string            `json:"id"`
@@ -161,9 +190,6 @@ func (service *Service) Start(ctx context.Context, current identity.User, input 
 			return Session{}, false, err
 		}
 		agentID = &value
-	}
-	if _, err := service.pool.Exec(ctx, `DELETE FROM agent_architect_sessions WHERE org_id=$1 AND expires_at<$2`, current.OrgID, service.now().Add(-purgeAfter)); err != nil {
-		return Session{}, false, err
 	}
 	var existing string
 	err := service.pool.QueryRow(ctx, `SELECT id FROM agent_architect_sessions
@@ -313,9 +339,13 @@ func (service *Service) Send(ctx context.Context, current identity.User, session
 	if uuid.Validate(sessionID) != nil {
 		return Session{}, ErrNotFound
 	}
-	claimed, err := service.pool.Exec(ctx, `UPDATE agent_architect_sessions SET turn_started_at=$4
+	token, err := id.New()
+	if err != nil {
+		return Session{}, err
+	}
+	claimed, err := service.pool.Exec(ctx, `UPDATE agent_architect_sessions SET turn_started_at=$4,turn_token=$6
 		WHERE org_id=$1 AND id=$2 AND user_id=$3 AND status='active' AND expires_at>$4 AND (turn_started_at IS NULL OR turn_started_at<$5)`,
-		current.OrgID, sessionID, current.ActorID, service.now(), service.now().Add(-turnLease))
+		current.OrgID, sessionID, current.ActorID, service.now(), service.now().Add(-turnLease), token)
 	if err != nil {
 		return Session{}, err
 	}
@@ -332,7 +362,7 @@ func (service *Service) Send(ctx context.Context, current identity.User, session
 		}
 	}
 	defer func() {
-		_, _ = service.pool.Exec(context.WithoutCancel(ctx), `UPDATE agent_architect_sessions SET turn_started_at=NULL WHERE org_id=$1 AND id=$2`, current.OrgID, sessionID)
+		_, _ = service.pool.Exec(context.WithoutCancel(ctx), `UPDATE agent_architect_sessions SET turn_started_at=NULL,turn_token=NULL WHERE org_id=$1 AND id=$2 AND turn_token=$3`, current.OrgID, sessionID, token)
 	}()
 	row, err := service.load(ctx, current, sessionID)
 	if err != nil {
@@ -352,15 +382,16 @@ func (service *Service) Send(ctx context.Context, current identity.User, session
 	if err != nil {
 		return Session{}, err
 	}
-	turn := &turn{service: service, current: current, row: &row, connection: connection, architectID: architectID}
+	turn := &turn{service: service, current: current, row: &row, connection: connection, architectID: architectID, token: token}
 	turn.row.transcript = append(turn.row.transcript, Message{Role: "user", Text: text})
 	turn.visible(VisibleMessage{Role: "user", Kind: "text", Text: text})
 	runErr := turn.run(ctx)
-	if runErr != nil && !turn.changed {
-		// Nothing happened: the person keeps the message and can retry.
+	if runErr != nil && !turn.changed || errors.Is(runErr, ErrBusy) {
+		// Nothing happened, or another request owns the conversation now:
+		// the person keeps the message and can retry.
 		return Session{}, runErr
 	}
-	if err := service.save(ctx, current, turn.row); err != nil {
+	if err := service.save(ctx, current, turn.row, token); err != nil {
 		return Session{}, err
 	}
 	if runErr != nil {
@@ -369,7 +400,21 @@ func (service *Service) Send(ctx context.Context, current identity.User, session
 	return service.Get(ctx, current, sessionID)
 }
 
-func (service *Service) save(ctx context.Context, current identity.User, row *sessionRow) error {
+// renew extends the turn lease before a model call. A turn that lost its
+// lease (it ran longer than the lease and another request took over) stops.
+func (service *Service) renew(ctx context.Context, current identity.User, sessionID, token string) error {
+	result, err := service.pool.Exec(ctx, `UPDATE agent_architect_sessions SET turn_started_at=$4 WHERE org_id=$1 AND id=$2 AND turn_token=$3`,
+		current.OrgID, sessionID, token, service.now())
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() != 1 {
+		return ErrBusy
+	}
+	return nil
+}
+
+func (service *Service) save(ctx context.Context, current identity.User, row *sessionRow, token string) error {
 	messages, _ := json.Marshal(row.session.Messages)
 	transcript, _ := json.Marshal(row.transcript)
 	examples, _ := json.Marshal(row.session.TestExamples)
@@ -378,19 +423,68 @@ func (service *Service) save(ctx context.Context, current identity.User, row *se
 		return fmt.Errorf("%w: the conversation is too long, start a new one", ErrInvalid)
 	}
 	now := service.now().UTC()
-	_, err := service.pool.Exec(context.WithoutCancel(ctx), `UPDATE agent_architect_sessions SET agent_id=$4,questions_asked=$5,messages=$6,transcript=$7,
-		test_examples=$8,assumptions=$9,updated_at=$10,expires_at=$11 WHERE org_id=$1 AND id=$2 AND user_id=$3`,
-		current.OrgID, row.session.ID, current.ActorID, row.session.AgentID, row.session.QuestionsAsked, messages, transcript, examples, assumptions, now, now.Add(SessionTTL))
-	return err
+	result, err := service.pool.Exec(context.WithoutCancel(ctx), `UPDATE agent_architect_sessions SET agent_id=$4,questions_asked=$5,messages=$6,transcript=$7,
+		test_examples=$8,assumptions=$9,updated_at=$10,expires_at=$11 WHERE org_id=$1 AND id=$2 AND user_id=$3 AND turn_token=$12`,
+		current.OrgID, row.session.ID, current.ActorID, row.session.AgentID, row.session.QuestionsAsked, messages, transcript, examples, assumptions, now, now.Add(SessionTTL), token)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() != 1 {
+		return ErrBusy
+	}
+	return nil
+}
+
+// Cleanup runs across all workspaces. Conversations that can no longer
+// continue (expired or closed) lose their model transcript at once (it may
+// hold chat names and check answers); they stay readable as «expired» for
+// purgeAfter and are then deleted. The call ledger keeps 35 days.
+func (service *Service) Cleanup(ctx context.Context) (cleared, deleted int64, err error) {
+	now := service.now()
+	result, err := service.pool.Exec(ctx, `UPDATE agent_architect_sessions SET transcript='[]'::jsonb,turn_started_at=NULL,turn_token=NULL
+		WHERE (status='closed' OR expires_at<$1) AND transcript<>'[]'::jsonb`, now)
+	if err != nil {
+		return 0, 0, err
+	}
+	cleared = result.RowsAffected()
+	result, err = service.pool.Exec(ctx, `DELETE FROM agent_architect_sessions WHERE expires_at<$1 OR status='closed' AND updated_at<$1`, now.Add(-purgeAfter))
+	if err != nil {
+		return cleared, 0, err
+	}
+	deleted = result.RowsAffected()
+	if _, err := service.pool.Exec(ctx, `DELETE FROM agent_architect_calls WHERE created_at<$1`, now.Add(-35*24*time.Hour)); err != nil {
+		return cleared, deleted, err
+	}
+	return cleared, deleted, nil
+}
+
+// RunCleanup calls Cleanup every interval until ctx ends.
+func (service *Service) RunCleanup(ctx context.Context, interval time.Duration, logger *slog.Logger) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		if _, _, err := service.Cleanup(ctx); err != nil && ctx.Err() == nil && logger != nil {
+			logger.Warn("architect session cleanup failed", "error", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
 }
 
 // ensureArchitectAgent provisions the hidden system agent that owns the
-// Architect's usage records and budget limits in this workspace.
+// Architect's usage records and cost limits in this workspace, and keeps
+// those limits equal to the deployment's configuration.
 func (service *Service) ensureArchitectAgent(ctx context.Context, current identity.User) (string, error) {
+	daily, monthly := nullableLimit(service.limits.DailyCostLimit), nullableLimit(service.limits.MonthlyCostLimit)
 	var agentID string
 	err := service.pool.QueryRow(ctx, `SELECT actor_id FROM agents WHERE org_id=$1 AND system_role='architect' AND deleted_at IS NULL`, current.OrgID).Scan(&agentID)
 	if err == nil {
-		return agentID, nil
+		_, err = service.pool.Exec(ctx, `UPDATE agents SET daily_cost_limit=$3::numeric,monthly_cost_limit=$4::numeric,updated_at=now()
+			WHERE org_id=$1 AND actor_id=$2 AND (daily_cost_limit IS DISTINCT FROM $3::numeric OR monthly_cost_limit IS DISTINCT FROM $4::numeric)`, current.OrgID, agentID, daily, monthly)
+		return agentID, err
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return "", err
@@ -427,62 +521,108 @@ func (service *Service) ensureArchitectAgent(ctx context.Context, current identi
 	if _, err := tx.Exec(ctx, `INSERT INTO actors(id,org_id,type,org_role,display_name,handle,status) VALUES($1,$2,'agent','member','Architect',$3,'active')`, agentID, current.OrgID, handle); err != nil {
 		return "", err
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO agents(actor_id,org_id,owner_actor_id,kind,enabled,allowed_scopes,rate_limit_per_minute,provider_rate_limit_per_minute,operational_status,system_role)
-		VALUES($1,$2,$3,'builtin',false,ARRAY[]::text[],60,60,'draft','architect')`, agentID, current.OrgID, ownerID); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO agents(actor_id,org_id,owner_actor_id,kind,enabled,allowed_scopes,operational_status,system_role,daily_cost_limit,monthly_cost_limit)
+		VALUES($1,$2,$3,'builtin',false,ARRAY[]::text[],'draft','architect',$4::numeric,$5::numeric)`, agentID, current.OrgID, ownerID, daily, monthly); err != nil {
 		return "", err
 	}
 	return agentID, tx.Commit(ctx)
 }
 
-// reserve checks the Architect's budget before a model call: the system
-// agent's daily and monthly cost limits and provider rate (the existing
-// per-agent budget model; the workspace has no separate budget), plus a
-// hard cap per conversation.
-func (service *Service) reserve(ctx context.Context, current identity.User, architectID string, sessionID string) error {
-	var calls int
-	var tokens int64
-	if err := service.pool.QueryRow(ctx, `SELECT model_calls,input_tokens+output_tokens FROM agent_architect_sessions WHERE org_id=$1 AND id=$2`, current.OrgID, sessionID).Scan(&calls, &tokens); err != nil {
-		return err
+func nullableLimit(value string) any {
+	if strings.TrimSpace(value) == "" {
+		return nil
 	}
-	if calls >= maxModelCallsPerSesson || tokens >= maxTokensPerSession {
-		return ErrBudget
-	}
-	var daily, monthly, rate bool
-	err := service.pool.QueryRow(ctx, `SELECT
-		(agent.daily_cost_limit IS NULL OR COALESCE((SELECT sum(usage.cost) FROM agent_usage usage WHERE usage.agent_id=agent.actor_id AND usage.created_at>=date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'),0) < agent.daily_cost_limit),
-		(agent.monthly_cost_limit IS NULL OR COALESCE((SELECT sum(usage.cost) FROM agent_usage usage WHERE usage.agent_id=agent.actor_id AND usage.created_at>=date_trunc('month',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'),0) < agent.monthly_cost_limit),
-		((SELECT count(*) FROM agent_usage recent WHERE recent.agent_id=agent.actor_id AND recent.created_at>=now()-interval '1 minute') < agent.provider_rate_limit_per_minute)
-		FROM agents agent WHERE agent.org_id=$1 AND agent.actor_id=$2`, current.OrgID, architectID).Scan(&daily, &monthly, &rate)
-	if err != nil {
-		return err
-	}
-	if !daily || !monthly || !rate {
-		return ErrBudget
-	}
-	return nil
+	return strings.TrimSpace(value)
 }
 
-// account records one model call in agent_usage (the ledger every agent
-// cost goes to) and in the conversation counters.
-func (service *Service) account(ctx context.Context, current identity.User, architectID, sessionID string, connection agentconfig.ChatConnection, response ModelResponse, failed bool) error {
-	ctx = context.WithoutCancel(ctx)
-	if failed && response.InputTokens == 0 && response.OutputTokens == 0 {
-		_, err := service.pool.Exec(ctx, `UPDATE agent_architect_sessions SET model_calls=model_calls+1 WHERE org_id=$1 AND id=$2`, current.OrgID, sessionID)
-		return err
+// reserve admits one model call or refuses it with ErrBudget. Under a
+// per-workspace lock it checks, in order: the conversation cap, the
+// person's 24-hour allowance over all their conversations, the workspace
+// per-minute rate and the system agent's daily and monthly cost, then
+// records the call as started, so concurrent requests cannot all pass the
+// same check and a failed call still counts.
+func (service *Service) reserve(ctx context.Context, current identity.User, architectID string, sessionID string) (string, error) {
+	callID, err := id.New()
+	if err != nil {
+		return "", err
 	}
-	cost, source := agentprovider.EstimateCost(connection.Provider, connection.Model, response.InputTokens, response.OutputTokens)
-	usageID, err := id.New()
+	tx, err := service.pool.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "architect-budget/"+current.OrgID); err != nil {
+		return "", err
+	}
+	now := service.now()
+	var sessionCalls, userCalls, minuteCalls int
+	var sessionTokens, userTokens int64
+	var daily, monthly bool
+	err = tx.QueryRow(ctx, `SELECT
+		(SELECT model_calls FROM agent_architect_sessions WHERE org_id=$1 AND id=$2),
+		(SELECT input_tokens+output_tokens FROM agent_architect_sessions WHERE org_id=$1 AND id=$2),
+		(SELECT count(*) FROM agent_architect_calls WHERE org_id=$1 AND user_id=$3 AND created_at>$5),
+		(SELECT COALESCE(sum(input_tokens+output_tokens),0) FROM agent_architect_calls WHERE org_id=$1 AND user_id=$3 AND created_at>$5),
+		(SELECT count(*) FROM agent_architect_calls WHERE org_id=$1 AND created_at>$6),
+		(SELECT agent.daily_cost_limit IS NULL OR COALESCE((SELECT sum(usage.cost) FROM agent_usage usage WHERE usage.agent_id=agent.actor_id AND usage.created_at>=date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'),0) < agent.daily_cost_limit
+			FROM agents agent WHERE agent.org_id=$1 AND agent.actor_id=$4),
+		(SELECT agent.monthly_cost_limit IS NULL OR COALESCE((SELECT sum(usage.cost) FROM agent_usage usage WHERE usage.agent_id=agent.actor_id AND usage.created_at>=date_trunc('month',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'),0) < agent.monthly_cost_limit
+			FROM agents agent WHERE agent.org_id=$1 AND agent.actor_id=$4)`,
+		current.OrgID, sessionID, current.ActorID, architectID, now.Add(-24*time.Hour), now.Add(-time.Minute)).Scan(
+		&sessionCalls, &sessionTokens, &userCalls, &userTokens, &minuteCalls, &daily, &monthly)
+	if err != nil {
+		return "", err
+	}
+	limits := service.limits
+	if sessionCalls >= maxModelCallsPerSesson || sessionTokens >= maxTokensPerSession ||
+		limits.UserDailyCalls > 0 && userCalls >= limits.UserDailyCalls || limits.UserDailyTokens > 0 && userTokens >= limits.UserDailyTokens ||
+		limits.CallsPerMinute > 0 && minuteCalls >= limits.CallsPerMinute || !daily || !monthly {
+		return "", ErrBudget
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO agent_architect_calls(id,org_id,user_id,session_id,created_at) VALUES($1,$2,$3,$4,$5)`,
+		callID, current.OrgID, current.ActorID, sessionID, now); err != nil {
+		return "", err
+	}
+	return callID, tx.Commit(ctx)
+}
+
+// account settles one model call: the call ledger, agent_usage (the ledger
+// every agent cost goes to) and the conversation counters.
+func (service *Service) account(ctx context.Context, current identity.User, architectID, sessionID, callID string, connection agentconfig.ChatConnection, response ModelResponse, failed bool) error {
+	ctx = context.WithoutCancel(ctx)
+	status := "completed"
+	if failed {
+		status = "failed"
+	}
+	cost, source := "0", "unknown"
+	if response.InputTokens > 0 || response.OutputTokens > 0 || !failed {
+		cost, source = agentprovider.EstimateCost(connection.Provider, connection.Model, response.InputTokens, response.OutputTokens)
+	}
+	tx, err := service.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
-	if _, err := service.pool.Exec(ctx, `INSERT INTO agent_usage(id,org_id,agent_id,correlation_id,provider,model,input_tokens,output_tokens,cost,currency,price_source)
-		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'USD',$10)`, usageID, current.OrgID, architectID, sessionID, connection.Provider, connection.Model,
-		response.InputTokens, response.OutputTokens, cost, source); err != nil {
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `UPDATE agent_architect_calls SET status=$3,input_tokens=$4,output_tokens=$5,cost=$6::numeric,finished_at=$7 WHERE org_id=$1 AND id=$2`,
+		current.OrgID, callID, status, response.InputTokens, response.OutputTokens, cost, service.now()); err != nil {
 		return err
 	}
-	_, err = service.pool.Exec(ctx, `UPDATE agent_architect_sessions SET model_calls=model_calls+1,input_tokens=input_tokens+$3,output_tokens=output_tokens+$4,cost=cost+$5::numeric
-		WHERE org_id=$1 AND id=$2`, current.OrgID, sessionID, response.InputTokens, response.OutputTokens, cost)
-	return err
+	if source != "unknown" {
+		usageID, err := id.New()
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO agent_usage(id,org_id,agent_id,correlation_id,provider,model,input_tokens,output_tokens,cost,currency,price_source)
+			VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'USD',$10)`, usageID, current.OrgID, architectID, sessionID, connection.Provider, connection.Model,
+			response.InputTokens, response.OutputTokens, cost, source); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(ctx, `UPDATE agent_architect_sessions SET model_calls=model_calls+1,input_tokens=input_tokens+$3,output_tokens=output_tokens+$4,cost=cost+$5::numeric
+		WHERE org_id=$1 AND id=$2`, current.OrgID, sessionID, response.InputTokens, response.OutputTokens, cost); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 type turn struct {
@@ -491,6 +631,7 @@ type turn struct {
 	row         *sessionRow
 	connection  agentconfig.ChatConnection
 	architectID string
+	token       string
 	changed     bool
 }
 
@@ -509,15 +650,21 @@ func (turn *turn) visible(message VisibleMessage) {
 func (turn *turn) run(ctx context.Context) error {
 	session := &turn.row.session
 	for range maxModelCallsPerTurn {
-		if err := turn.service.reserve(ctx, turn.current, turn.architectID, session.ID); err != nil {
+		if err := turn.service.renew(ctx, turn.current, session.ID, turn.token); err != nil {
+			return err
+		}
+		callID, err := turn.service.reserve(ctx, turn.current, turn.architectID, session.ID)
+		if err != nil {
 			return err
 		}
 		tools := toolSpecs(session.QuestionsAsked < MaxQuestions)
-		response, err := turn.service.model.Complete(ctx, ModelRequest{
+		callCtx, cancel := context.WithTimeout(ctx, modelCallTimeout)
+		response, err := turn.service.model.Complete(callCtx, ModelRequest{
 			Provider: turn.connection.Provider, EndpointURL: turn.connection.EndpointURL, APIKey: turn.connection.APIKey, Model: turn.connection.Model,
 			System: systemPrompt(session.Locale, session.QuestionsAsked, session.AgentID != nil), Messages: turn.row.transcript, Tools: tools, MaxOutputTokens: maxOutputTokens,
 		})
-		if accountErr := turn.service.account(ctx, turn.current, turn.architectID, session.ID, turn.connection, response, err != nil); accountErr != nil {
+		cancel()
+		if accountErr := turn.service.account(ctx, turn.current, turn.architectID, session.ID, callID, turn.connection, response, err != nil); accountErr != nil {
 			return accountErr
 		}
 		if err != nil {

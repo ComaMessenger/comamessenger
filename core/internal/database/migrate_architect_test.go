@@ -97,6 +97,7 @@ func TestAgentArchitectMigration(t *testing.T) {
 	mustExec(t, db, `INSERT INTO agent_usage(id,org_id,agent_id,correlation_id,provider,model,input_tokens,output_tokens,cost,price_source)
 		VALUES('00000000-0000-7000-8000-000000004813',$1,$2,$3,'openai','gpt-5-mini',1000,100,0.0012,'configured')`, orgID, architectID, sessionOne)
 	mustExec(t, db, `INSERT INTO agent_architect_sessions(id,org_id,user_id,expires_at) VALUES($1,$2,$3,now()+interval '1 day')`, sessionOne, orgID, ownerID)
+	mustExec(t, db, `INSERT INTO agent_architect_calls(id,org_id,user_id,session_id,status,created_at) VALUES('00000000-0000-7000-8000-000000004814',$1,$2,$3,'failed',now())`, orgID, ownerID, sessionOne)
 	mustExec(t, db, `INSERT INTO agent_architect_sessions(id,org_id,user_id,agent_id,questions_asked,expires_at) VALUES($1,$2,$3,$4,4,now()+interval '1 day')`, sessionTwo, orgID, ownerID, productID)
 
 	if err := goose.DownToContext(ctx, db, ".", 47); err != nil {

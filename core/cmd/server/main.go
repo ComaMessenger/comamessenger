@@ -241,6 +241,11 @@ func main() {
 	architectService := architect.NewService(pool, architect.Services{
 		Agents: agentService, Triggers: agentTriggerService, Runs: agentRunService, Chats: chatService, Knowledge: knowledgeService, Config: agentConfigService,
 	}, architect.NewHTTPModel())
+	architectService.SetLimits(architect.Limits{
+		DailyCostLimit: cfg.Agents.Architect.DailyCostLimit, MonthlyCostLimit: cfg.Agents.Architect.MonthlyCostLimit,
+		CallsPerMinute: cfg.Agents.Architect.CallsPerMinute, UserDailyCalls: cfg.Agents.Architect.UserDailyCalls, UserDailyTokens: cfg.Agents.Architect.UserDailyTokens,
+	})
+	go architectService.RunCleanup(realtimeCtx, time.Hour, logger)
 	webhookService, err := webhook.NewService(pool, cfg.IntegrationEncryptionKey, agentTriggerService)
 	if err != nil {
 		logger.Error("webhook initialization failed", "error", err)
