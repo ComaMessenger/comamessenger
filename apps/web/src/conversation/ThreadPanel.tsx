@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
+import { chatAvatarSource } from "@comamessenger/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUpRight,
@@ -168,8 +169,7 @@ export function ThreadPanel({
           <Avatar
             name={chatName}
             seed={chat.avatar_seed}
-            actorID={chat.direct_peer?.actor_id}
-            avatarVersion={chat.direct_peer?.avatar_version}
+            {...chatAvatarSource(chat)}
             size="md"
           />
         )}

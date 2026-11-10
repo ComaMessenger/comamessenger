@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
-import { messagePlainText, type ClientMessage } from "@comamessenger/core";
+import { chatAvatarSource, messagePlainText, type ClientMessage } from "@comamessenger/core";
 import { Avatar, Button, CheckMark, Dialog, EmptyState, Field, SearchField, cx } from "../ui";
 import { isReadOnly, titleOf } from "../lib/chats";
 import { useMessenger } from "../shell/MessengerContext";
@@ -123,8 +123,7 @@ export function ForwardMessageDialog({
               <Avatar
                 name={title}
                 seed={chat.avatar_seed}
-                actorID={chat.direct_peer?.actor_id}
-                avatarVersion={chat.direct_peer?.avatar_version}
+                {...chatAvatarSource(chat)}
                 agent={chat.direct_peer?.type === "agent"}
                 size="sm"
               />

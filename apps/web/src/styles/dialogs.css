@@ -658,9 +658,25 @@
   align-items: flex-start;
   gap: 16px;
 }
-.chat-info__identity > .ui-avatar {
+.chat-info__identity > .ui-avatar,
+.chat-info__avatar > .ui-avatar {
   --coma-avatar-size: 56px;
   font-size: 20px;
+}
+.chat-info__avatar {
+  display: grid;
+  flex: none;
+  justify-items: center;
+  gap: 4px;
+  max-width: 112px;
+}
+.chat-info__avatar .ui-button {
+  white-space: nowrap;
+}
+.chat-info__avatar-error {
+  color: var(--coma-danger);
+  font-size: 12px;
+  text-align: center;
 }
 .chat-info__fields {
   display: grid;

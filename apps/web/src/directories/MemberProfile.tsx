@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { chatAvatarSource } from "@comamessenger/core";
 import { MessageSquare } from "lucide-react";
 import { useQueries } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -152,6 +153,7 @@ export function MemberProfile({
                     <Avatar
                       name={titleOf(chat, [], user.id)}
                       seed={chat.avatar_seed}
+                      {...chatAvatarSource(chat)}
                       size="xs"
                     />
                     <span>{titleOf(chat, [], user.id)}</span>

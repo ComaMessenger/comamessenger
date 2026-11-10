@@ -776,6 +776,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chats/{chat_id}/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Image of a group chat or channel, for its members and chat moderators. */
+        get: operations["getChatAvatar"];
+        /** @description Chat owners and admins, or members with chats.moderate. Direct chats are rejected with 422. */
+        put: operations["putChatAvatar"];
+        post?: never;
+        delete: operations["deleteChatAvatar"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chats/{chat_id}/join": {
         parameters: {
             query?: never;
@@ -3385,6 +3403,15 @@ export interface components {
             /** Format: int64 */
             avatar_version: number;
         };
+        ChatAvatarUpdate: {
+            /** Format: uuid */
+            chat_id: string;
+            /**
+             * Format: int64
+             * @description Zero when the chat has no image.
+             */
+            avatar_version: number;
+        };
         SetStatusRequest: {
             emoji: string;
             text: string;
@@ -3664,7 +3691,10 @@ export interface components {
             archived_at?: string | null;
             display_name: string;
             avatar_seed: string;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Direct chats carry the peer avatar version; group chats and channels their own image version, zero without an image (GET /api/v1/chats/{chat_id}/avatar).
+             */
             avatar_version: number;
             /** @enum {string} */
             notify_level: "default" | "all" | "mentions" | "none";
@@ -5665,6 +5695,90 @@ export interface operations {
                     };
                 };
             };
+        };
+    };
+    getChatAvatar: {
+        parameters: {
+            query?: {
+                /** @description `link` returns an ObjectLink instead of the bytes or a redirect; used by native clients. */
+                delivery?: components["parameters"]["ObjectDelivery"];
+            };
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized chat avatar. */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    putChatAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "image/png": string;
+                "image/jpeg": string;
+            };
+        };
+        responses: {
+            /** @description Chat avatar replaced. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatAvatarUpdate"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            507: components["responses"]["Error"];
+        };
+    };
+    deleteChatAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Chat avatar removed; the chat shows initials again. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatAvatarUpdate"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
         };
     };
     joinChat: {

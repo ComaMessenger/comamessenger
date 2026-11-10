@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ChevronLeft, Info, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
-import { feedRows, type Chat, type Message } from "@comamessenger/core";
+import { chatAvatarSource, feedRows, type Chat, type Message } from "@comamessenger/core";
 import { hasPermission } from "../settings";
 import {
   Avatar,
@@ -198,8 +198,7 @@ export function Conversation({
           <Avatar
             name={title}
             seed={chat?.avatar_seed}
-            actorID={directPeer?.actor_id}
-            avatarVersion={directPeer?.avatar_version}
+            {...(chat ? chatAvatarSource(chat) : {})}
             agent={directPeer?.type === "agent"}
             glyph={chatGlyph(chat)}
             presence={

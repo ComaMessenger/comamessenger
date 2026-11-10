@@ -24,6 +24,7 @@ export function Avatar({
   agent = false,
   presence,
   actorID,
+  chatID,
   avatarVersion,
 }: {
   name: string;
@@ -34,10 +35,12 @@ export function Avatar({
   presence?: Presence;
   /** With a version above zero, the uploaded photo replaces the initials. */
   actorID?: string;
+  /** A group chat or channel image; takes the place of `actorID`. */
+  chatID?: string;
   avatarVersion?: number;
 }) {
   const theme = useTheme();
-  const photo = useAvatarSource(actorID, avatarVersion);
+  const photo = useAvatarSource(actorID, avatarVersion, chatID);
   const colors = paletteColors(theme, seed);
   const dot = Math.round(size * 0.28);
   return (

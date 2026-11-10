@@ -131,7 +131,7 @@ func NewService(pool *pgxpool.Pool, callbacks ...func(string, int64)) *Service {
 func (s *Service) List(ctx context.Context, user identity.User) ([]Chat, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT c.id, c.kind, c.visibility, c.name, c.topic, cm.role, c.created_at, c.archived_at,
-			COALESCE(c.name, peer.display_name, 'Direct chat'), COALESCE(peer.id::text, c.id::text), COALESCE(peer.avatar_version, 0), cm.notify_level, cm.muted_until,
+			COALESCE(c.name, peer.display_name, 'Direct chat'), COALESCE(peer.id::text, c.id::text), COALESCE(peer.avatar_version, CASE WHEN c.avatar_file_id IS NULL THEN 0 ELSE c.avatar_version END), cm.notify_level, cm.muted_until,
 			peer.id, peer.display_name, peer.handle::text, peer.title, peer.about, peer.type, peer.status_emoji, peer.status_text, peer.status_expires_at, peer.avatar_version,
 			last.id, last.actor_id, last.actor_name, left(last.body, 280), last.created_seq, last.created_at, last.deleted,
 			COALESCE(last.created_seq, 0), c.last_message_at
@@ -162,7 +162,7 @@ func (s *Service) List(ctx context.Context, user identity.User) ([]Chat, error) 
 func (s *Service) Get(ctx context.Context, user identity.User, chatID string) (Chat, error) {
 	row := s.pool.QueryRow(ctx, `
 		SELECT c.id, c.kind, c.visibility, c.name, c.topic, cm.role, c.created_at, c.archived_at,
-			COALESCE(c.name, peer.display_name, 'Direct chat'), COALESCE(peer.id::text, c.id::text), COALESCE(peer.avatar_version, 0), cm.notify_level, cm.muted_until,
+			COALESCE(c.name, peer.display_name, 'Direct chat'), COALESCE(peer.id::text, c.id::text), COALESCE(peer.avatar_version, CASE WHEN c.avatar_file_id IS NULL THEN 0 ELSE c.avatar_version END), cm.notify_level, cm.muted_until,
 			peer.id, peer.display_name, peer.handle::text, peer.title, peer.about, peer.type, peer.status_emoji, peer.status_text, peer.status_expires_at, peer.avatar_version,
 			last.id, last.actor_id, last.actor_name, left(last.body, 280), last.created_seq, last.created_at, last.deleted,
 			COALESCE(last.created_seq, 0), c.last_message_at

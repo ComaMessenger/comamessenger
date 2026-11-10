@@ -1,4 +1,5 @@
 import { UserPlus } from "lucide-react";
+import { chatAvatarSource } from "@comamessenger/core";
 import { useTranslation } from "react-i18next";
 import type { Chat } from "@comamessenger/core";
 import { Avatar, Button } from "../ui";
@@ -21,8 +22,7 @@ export function ChatIntro({
       <Avatar
         name={title}
         seed={chat.avatar_seed}
-        actorID={chat.direct_peer?.actor_id}
-        avatarVersion={chat.direct_peer?.avatar_version}
+        {...chatAvatarSource(chat)}
         agent={chat.direct_peer?.type === "agent"}
         glyph={chatGlyph(chat)}
         size="xxl"

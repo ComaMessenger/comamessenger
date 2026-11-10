@@ -26,6 +26,7 @@ import type {
   CompletedFilePart,
   SearchPage,
   AvatarUpdate,
+  ChatAvatarUpdate,
   InfrastructureSettings,
   Invitation,
   InvitationSummary,
@@ -786,6 +787,19 @@ export class MessengerAPI {
       { method: "DELETE" },
     );
   }
+  /** PNG or JPEG only; group chats and channels, by chat owners and admins. */
+  putChatAvatar(chatID: string, file: Blob): Promise<ChatAvatarUpdate> {
+    return this.request(`/api/v1/chats/${encodeURIComponent(chatID)}/avatar`, {
+      method: "PUT",
+      headers: { "Content-Type": file.type },
+      body: file,
+    });
+  }
+  deleteChatAvatar(chatID: string): Promise<ChatAvatarUpdate> {
+    return this.request(`/api/v1/chats/${encodeURIComponent(chatID)}/avatar`, {
+      method: "DELETE",
+    });
+  }
   transferOrganizationOwnership(
     input: TransferOwnershipRequest,
   ): Promise<User> {
@@ -892,6 +906,11 @@ export class MessengerAPI {
       `/api/v1/actors/${encodeURIComponent(actorID)}/avatar`,
     );
   }
+  chatAvatar(chatID: string): Promise<Blob> {
+    return this.requestBlob(
+      `/api/v1/chats/${encodeURIComponent(chatID)}/avatar`,
+    );
+  }
   createFileUpload(input: {
     name: string;
     mime: string;
@@ -941,6 +960,11 @@ export class MessengerAPI {
   avatarLink(actorID: string): Promise<ObjectLink> {
     return this.request(
       `/api/v1/actors/${encodeURIComponent(actorID)}/avatar?delivery=link`,
+    );
+  }
+  chatAvatarLink(chatID: string): Promise<ObjectLink> {
+    return this.request(
+      `/api/v1/chats/${encodeURIComponent(chatID)}/avatar?delivery=link`,
     );
   }
   downloadFile(fileID: string): Promise<Blob> {

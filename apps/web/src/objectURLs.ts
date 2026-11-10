@@ -1,21 +1,26 @@
 import type { MessengerAPI } from "@comamessenger/core";
 
+export type AvatarOwner = "actor" | "chat";
+
 export class AvatarObjectURLs {
   private readonly entries = new Map<string, Promise<string>>();
   private readonly resolved = new Map<string, string>();
 
   constructor(private readonly api: MessengerAPI) {}
 
-  get(actorID: string, version: number): Promise<string> {
-    const key = `${actorID}:${version}`;
+  /** Object URL of an actor avatar or a chat image; older versions are revoked. */
+  get(id: string, version: number, owner: AvatarOwner = "actor"): Promise<string> {
+    const prefix = `${owner}:${id}:`;
+    const key = `${prefix}${version}`;
     const existing = this.entries.get(key);
     if (existing) return existing;
     for (const cached of [...this.entries.keys()]) {
-      if (cached.startsWith(`${actorID}:`) && cached !== key)
-        this.revoke(cached);
+      if (cached.startsWith(prefix) && cached !== key) this.revoke(cached);
     }
     let pending: Promise<string>;
-    pending = this.api.actorAvatar(actorID).then((blob) => {
+    pending = (
+      owner === "chat" ? this.api.chatAvatar(id) : this.api.actorAvatar(id)
+    ).then((blob) => {
       const url = URL.createObjectURL(blob);
       if (this.entries.get(key) !== pending) {
         URL.revokeObjectURL(url);

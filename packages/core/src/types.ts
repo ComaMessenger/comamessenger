@@ -21,6 +21,7 @@ export type CompletedFilePart = components["schemas"]["CompletedFilePart"];
 export type SearchPage = components["schemas"]["SearchPage"];
 export type SearchResult = components["schemas"]["SearchResult"];
 export type AvatarUpdate = components["schemas"]["AvatarUpdate"];
+export type ChatAvatarUpdate = components["schemas"]["ChatAvatarUpdate"];
 export type MessagePage = components["schemas"]["MessagePage"];
 export type Reaction = components["schemas"]["Reaction"];
 export type MessageReceipt = components["schemas"]["MessageReceipt"];

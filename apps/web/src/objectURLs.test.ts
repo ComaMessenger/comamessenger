@@ -24,4 +24,29 @@ describe("avatar object URL cache", () => {
     expect(revoke).toHaveBeenCalledTimes(2);
     vi.unstubAllGlobals();
   });
+
+  it("keeps chat images apart from actor avatars with the same id", async () => {
+    const actorAvatar = vi.fn(async () => new Blob(["actor"]));
+    const chatAvatar = vi.fn(async () => new Blob(["chat"]));
+    const create = vi.fn(() => `blob:${create.mock.calls.length}`);
+    const revoke = vi.fn();
+    vi.stubGlobal("URL", {
+      ...URL,
+      createObjectURL: create,
+      revokeObjectURL: revoke,
+    });
+    const cache = new AvatarObjectURLs({
+      actorAvatar,
+      chatAvatar,
+    } as unknown as MessengerAPI);
+    const actor = await cache.get("same", 1);
+    const chat = await cache.get("same", 1, "chat");
+    expect(chat).not.toBe(actor);
+    expect(chatAvatar).toHaveBeenCalledWith("same");
+    await cache.get("same", 2, "chat");
+    expect(revoke).toHaveBeenCalledWith(chat);
+    expect(revoke).not.toHaveBeenCalledWith(actor);
+    cache.dispose();
+    vi.unstubAllGlobals();
+  });
 });

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { chatAvatarSource } from "@comamessenger/core";
 import { ChevronDown, ChevronUp, Upload } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
@@ -174,7 +175,7 @@ export function ChatFolderDialog({
                 }
               >
                 <CheckMark checked={checked} />
-                <Avatar name={title} seed={chat.avatar_seed} size="xs" />
+                <Avatar name={title} seed={chat.avatar_seed} {...chatAvatarSource(chat)} size="xs" />
                 <span className="truncate">{title}</span>
               </button>
             );

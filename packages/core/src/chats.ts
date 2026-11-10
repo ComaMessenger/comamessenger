@@ -26,6 +26,25 @@ export function canManageChat(chat: Chat) {
   return chat.kind !== "direct" && chat.role !== "member";
 }
 
+/**
+ * Where a chat's picture comes from: the peer's avatar for a direct chat, the
+ * chat's own image for a group or channel. A zero version means initials.
+ */
+export function chatAvatarSource(chat: Chat): {
+  actorID?: string;
+  chatID?: string;
+  avatarVersion: number;
+} {
+  if (chat.kind === "direct")
+    return chat.direct_peer
+      ? {
+          actorID: chat.direct_peer.actor_id,
+          avatarVersion: chat.direct_peer.avatar_version,
+        }
+      : { avatarVersion: 0 };
+  return { chatID: chat.id, avatarVersion: chat.avatar_version };
+}
+
 export function matchesFilter(
   chat: Chat,
   filter: ChatFilter,
