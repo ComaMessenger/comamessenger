@@ -189,7 +189,9 @@ func (s *S3BlobStore) PresignDownload(ctx context.Context, key string, expiresIn
 	if err != nil {
 		return nil, err
 	}
-	result, err := s.presigner.PresignGetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(objectKey)}, s3.WithPresignExpires(expiresIn))
+	// Uploaded files keep the content type their uploader declared. Forcing a
+	// download keeps a stored HTML file from rendering on the bucket's origin.
+	result, err := s.presigner.PresignGetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(objectKey), ResponseContentDisposition: aws.String("attachment")}, s3.WithPresignExpires(expiresIn))
 	if err != nil {
 		return nil, fmt.Errorf("presign S3 download: %w", err)
 	}
