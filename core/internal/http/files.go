@@ -206,12 +206,18 @@ func (h *identityHandlers) downloadFile(w standardhttp.ResponseWriter, r *standa
 		h.fileError(w, r, err)
 		return
 	}
+	h.writeDownload(w, r, result, "/api/v1/files/"+url.PathEscape(chi.URLParam(r, "fileID"))+"/download")
+}
+
+// writeDownload streams a file, redirects to a presigned URL, or with
+// ?delivery=link describes where to fetch it; selfPath is the streaming route.
+func (h *identityHandlers) writeDownload(w standardhttp.ResponseWriter, r *standardhttp.Request, result files.Download, selfPath string) {
 	if r.URL.Query().Get("delivery") == "link" {
 		var reader io.Closer
 		if result.Reader != nil {
 			reader = result.Reader
 		}
-		h.writeObjectLink(w, result.URL, reader, "/api/v1/files/"+url.PathEscape(chi.URLParam(r, "fileID"))+"/download")
+		h.writeObjectLink(w, result.URL, reader, selfPath)
 		return
 	}
 	if result.Reader != nil {

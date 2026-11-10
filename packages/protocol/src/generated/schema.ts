@@ -1517,6 +1517,61 @@ export interface paths {
         patch: operations["updateKnowledgeDocument"];
         trace?: never;
     };
+    "/api/v1/knowledge/documents/{document_id}/fragments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: components["parameters"]["KnowledgeDocumentId"];
+            };
+            cookie?: never;
+        };
+        /** @description Extracted text of a readable document as indexed fragments in reading order (up to 1000). */
+        get: operations["listKnowledgeDocumentFragments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/documents/{document_id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: components["parameters"]["KnowledgeDocumentId"];
+            };
+            cookie?: never;
+        };
+        /** @description Original upload of a `file` document for anyone who may read its collection, including members of the chats a restricted collection is shared with. Pages return 404. */
+        get: operations["downloadKnowledgeDocumentFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/embedding-connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Workspace LLM connections with an embedding model, for choosing a collection's embedding connection. Requires knowledge.manage; never returns endpoints or credentials. */
+        get: operations["listKnowledgeEmbeddingConnections"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/knowledge/search": {
         parameters: {
             query?: never;
@@ -2251,6 +2306,8 @@ export interface components {
              */
             embedding_connection_id: string | null;
             document_count: number;
+            /** @description True when the embedding connection is enabled, has an embedding model and is approved to receive document text; otherwise search works by words only. Visible to every reader. */
+            semantic_search: boolean;
             can_manage: boolean;
             /** Format: uuid */
             created_by: string;
@@ -2331,6 +2388,30 @@ export interface components {
         UpdateKnowledgeDocumentRequest: {
             title?: string;
             body?: string;
+        };
+        KnowledgeDocumentFragments: {
+            fragments: {
+                /** Format: uuid */
+                chunk_id: string;
+                position: number;
+                section: string;
+                content: string;
+            }[];
+            /** @description More fragments exist than listed. */
+            truncated: boolean;
+        };
+        KnowledgeEmbeddingConnection: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @enum {string} */
+            provider: "openai" | "openai-compatible";
+            embedding_model: string;
+            enabled: boolean;
+            /** @description The connection is approved to receive document text for embeddings. */
+            data_sharing_approved: boolean;
+            /** @description Documents would be embedded through this connection right now. */
+            available: boolean;
         };
         KnowledgeSearchRequest: {
             query: string;
@@ -3582,6 +3663,7 @@ export interface components {
             role?: "admin" | "member" | null;
             /** @enum {string|null} */
             status?: "active" | "deactivated" | null;
+            /** @description Replaces explicit permissions. The owner sets them for administrators and members. An administrator with members.manage may set only member-grantable permissions (knowledge.manage), only for regular members other than themselves, without a role change, and only while holding those permissions personally. */
             permissions?: components["schemas"]["Permission"][] | null;
         };
         TransferOwnershipRequest: {
@@ -7441,6 +7523,85 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             422: components["responses"]["Error"];
+        };
+    };
+    listKnowledgeDocumentFragments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: components["parameters"]["KnowledgeDocumentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Document fragments. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeDocumentFragments"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    downloadKnowledgeDocumentFile: {
+        parameters: {
+            query?: {
+                /** @description `link` returns an ObjectLink instead of the bytes or a redirect; used by native clients. */
+                delivery?: components["parameters"]["ObjectDelivery"];
+            };
+            header?: never;
+            path: {
+                document_id: components["parameters"]["KnowledgeDocumentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized local blob stream, or an ObjectLink with `delivery=link`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                    "application/json": components["schemas"]["ObjectLink"];
+                };
+            };
+            /** @description Short-lived authorized object-store URL. */
+            307: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    listKnowledgeEmbeddingConnections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Embedding-capable connections. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeEmbeddingConnection"][];
+                };
+            };
+            403: components["responses"]["Error"];
         };
     };
     searchKnowledge: {
