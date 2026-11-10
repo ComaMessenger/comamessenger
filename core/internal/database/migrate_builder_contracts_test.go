@@ -155,6 +155,13 @@ func TestBuilderContractsMigration(t *testing.T) {
 	if agents != 1 || versions != 2 || runs != 1 || keys != 1 {
 		t.Fatalf("rows after Down agents=%d versions=%d runs=%d keys=%d", agents, versions, runs, keys)
 	}
+	// An agent restricted to reading some chats would write everywhere under
+	// the older schema: Down pauses it instead.
+	var enabled bool
+	var status string
+	if err := db.QueryRow(`SELECT enabled,operational_status FROM agents WHERE actor_id=$1`, agentID).Scan(&enabled, &status); err != nil || enabled || status != "paused" {
+		t.Fatalf("restricted agent after Down enabled=%v status=%s err=%v", enabled, status, err)
+	}
 	if err := goose.UpToContext(ctx, db, ".", builderContractsVersion); err != nil {
 		t.Fatalf("Up again after Down: %v", err)
 	}
