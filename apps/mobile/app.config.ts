@@ -1,7 +1,7 @@
 import type { ExpoConfig } from "expo/config";
 
-// The bundle identifier is fixed by the first store build and depends on the
-// public Coma domain (ADR-0011); until that decision it comes from the env.
+// The bundle identifier is fixed by the first store build (ADR-0011) and does
+// not follow the public domain coma-chat.com; the env override is for forks.
 const bundleIdentifier = process.env.COMA_BUNDLE_ID ?? "com.comamessenger.app";
 // Store build numbers come from the fastlane lanes (next after the stores).
 const buildNumber = process.env.COMA_BUILD_NUMBER;

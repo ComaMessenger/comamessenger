@@ -139,9 +139,10 @@
 
 Решено 2026-09-29: Expo CNG + EAS Build; отдельный UI поверх tokens без универсального пакета; `expo-sqlite` для локальных данных; iOS 16.4+ и Android 8.0+; только телефоны; preview на lock screen выключен по умолчанию (`push_preview`); публикация с личных аккаунтов Apple/Google; push через relay проекта.
 
+Решено 2026-11-10: публичный домен проекта — `coma-chat.com`. Relay — `https://push.coma-chat.com`, universal/App Links — `https://coma-chat.com/open`. Bundle ID остаётся `com.comamessenger.app`: он закреплён первой сборкой в сторах.
+
 Открыто:
 
-- Публичный домен Coma — от него зависят bundle ID, universal links и адрес push-relay; нужен до первой внутренней сборки.
 - Максимальный размер локального кэша.
 - Где хостить push-relay и как мониторить его доступность.
 
