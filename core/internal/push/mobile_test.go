@@ -216,3 +216,68 @@ func TestHTTPRelayMapsResponses(t *testing.T) {
 		t.Fatalf("unavailable error = %v", err)
 	}
 }
+
+// A phone that registers again with a new relay handle replaces its previous
+// device row; otherwise one installed app would receive every notification
+// once per handle it ever had.
+func TestMobileDeviceIsOnePerSessionFamily(t *testing.T) {
+	pool := testdb.New(t)
+	ctx := context.Background()
+	orgID, actorID, phoneID, tabletID := uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString()
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, statement := range []struct {
+		query string
+		args  []any
+	}{
+		{`INSERT INTO organizations(id,name,slug) VALUES($1,'One device','one-device')`, []any{orgID}},
+		{`INSERT INTO actors(id,org_id,type,org_role,display_name,handle,timezone) VALUES ($2,$1,'user','owner','Lev','lev','UTC')`, []any{orgID, actorID}},
+		{`INSERT INTO users(actor_id,org_id,email,password_hash) VALUES ($2,$1,'lev@example.test','hash')`, []any{orgID, actorID}},
+		{`INSERT INTO sessions(id,org_id,actor_id,family_id,refresh_hash,expires_at) VALUES($3,$1,$2,$3,decode(repeat('01',32),'hex'),now()+interval '1 day'),($4,$1,$2,$4,decode(repeat('02',32),'hex'),now()+interval '1 day')`, []any{orgID, actorID, phoneID, tabletID}},
+	} {
+		if _, err := tx.Exec(ctx, statement.query, statement.args...); err != nil {
+			_ = tx.Rollback(ctx)
+			t.Fatal(err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(pool, config.PushConfig{RelayURL: "https://relay.example.test", PollInterval: time.Second})
+	user := identity.User{OrgID: orgID, ActorID: actorID}
+	key := base64.StdEncoding.EncodeToString([]byte(strings.Repeat("k", 32)))
+	register := func(session, handle string) MobileDevice {
+		t.Helper()
+		device, err := service.RegisterMobileDevice(ctx, user, session, MobileDeviceInput{Platform: "ios", RelayHandle: strings.Repeat(handle, 43), NotificationKey: key})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return device
+	}
+	register(phoneID, "a")
+	other := register(tabletID, "t")
+	register(phoneID, "b")
+	last := register(phoneID, "c")
+	again := register(phoneID, "c")
+	if again.ID != last.ID {
+		t.Fatalf("the same handle must keep its device: %s != %s", again.ID, last.ID)
+	}
+	rows, err := pool.Query(ctx, `SELECT id::text, left(relay_handle,1) FROM mobile_push_devices WHERE org_id=$1 ORDER BY relay_handle`, orgID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	got := map[string]string{}
+	for rows.Next() {
+		var deviceID, handle string
+		if err := rows.Scan(&deviceID, &handle); err != nil {
+			t.Fatal(err)
+		}
+		got[handle] = deviceID
+	}
+	if len(got) != 2 || got["c"] != last.ID || got["t"] != other.ID {
+		t.Fatalf("devices = %v, want only the phone's latest handle and the other install", got)
+	}
+}
