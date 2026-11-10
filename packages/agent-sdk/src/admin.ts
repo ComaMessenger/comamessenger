@@ -183,6 +183,13 @@ export function scopesForRecipe(recipe: AgentRecipe): string[] {
     list_members: "members:read",
     remember: "memory:write",
     recall: "memory:read",
+    post_card: "messages:interactive",
+    update_card: "messages:interactive",
+    get_reactions: "messages:read",
+    start_collection: "messages:interactive",
+    get_collection: "messages:interactive",
+    schedule_followup: "followups:write",
+    send_direct_message: "messages:write",
   };
   for (const tool of recipe.tools) {
     const scope = byTool[tool];

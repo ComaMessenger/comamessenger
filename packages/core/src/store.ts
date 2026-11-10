@@ -141,7 +141,7 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
             const next: ClientMessage[] =
               byID >= 0
                 ? current.map((item, index) =>
-                    index === byID ? { ...item, ...delivered } : item,
+                    index === byID ? mergeMessage(item, delivered) : item,
                   )
                 : [...current, delivered];
             let withThreadCount = next;
@@ -292,8 +292,23 @@ function reconcileMessage(
   const next =
     index >= 0
       ? current.map((item, position) =>
-          position === index ? { ...item, ...delivered } : item,
+          position === index ? mergeMessage(item, delivered) : item,
         )
       : [...current, delivered];
   return { ...input, [incoming.chat_id]: uniqueSorted(next) };
+}
+
+/**
+ * Merges a server representation into the cached message. Realtime payloads
+ * omit hydrated lists (files, thread counters), so those are kept, but
+ * `blocks` is authoritative: an absent field means the card was removed, for
+ * example when the message was deleted.
+ */
+export function mergeMessage(
+  current: ClientMessage,
+  incoming: ClientMessage,
+): ClientMessage {
+  const merged: ClientMessage = { ...current, ...incoming };
+  if (incoming.blocks === undefined) delete merged.blocks;
+  return merged;
 }

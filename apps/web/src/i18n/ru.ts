@@ -330,6 +330,7 @@ export const ru = {
   agentTool_post_message: "Отправить сообщение",
   agentTool_reply_in_thread: "Ответить в треде",
   agentTool_add_reaction: "Добавить реакцию",
+  agentTool_send_direct_message: "Написать в личные сообщения",
   agentTool_remember: "Сохранить в памяти агента",
   agentReadiness: "Готовность",
   agentReadinessState_draft: "Черновик",

@@ -332,6 +332,7 @@ export const en: Record<keyof typeof ru, string> = {
   agentTool_post_message: "Post a message",
   agentTool_reply_in_thread: "Reply in a thread",
   agentTool_add_reaction: "Add a reaction",
+  agentTool_send_direct_message: "Send a direct message",
   agentTool_remember: "Save to agent memory",
   agentReadiness: "Readiness",
   agentReadinessState_draft: "Draft",
