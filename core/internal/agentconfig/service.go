@@ -94,6 +94,9 @@ type RuntimeMCPServer struct {
 	TimeoutMS                int               `json:"timeout_ms"`
 	MaxOutputBytes           int               `json:"max_output_bytes"`
 	RequireWriteConfirmation bool              `json:"require_write_confirmation"`
+	// ToolConfirmation is the effective mode of every allowed tool when it
+	// changes data: "auto" runs by itself, "confirm" waits for a person.
+	ToolConfirmation map[string]string `json:"tool_confirmation,omitempty"`
 	// AllowPrivateNetwork lets the runtime reach a listed internal address
 	// (and plain HTTP); AllowedPrivateCIDRs are the ranges it may resolve to.
 	AllowPrivateNetwork bool     `json:"allow_private_network"`
@@ -137,6 +140,9 @@ func (service *Service) Credential(ctx context.Context, current identity.User, a
 	if !canManage(current) {
 		return CredentialView{}, ErrForbidden
 	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return CredentialView{}, err
+	}
 	if uuid.Validate(agentID) != nil {
 		return CredentialView{}, ErrNotFound
 	}
@@ -163,6 +169,9 @@ func (service *Service) Credential(ctx context.Context, current identity.User, a
 func (service *Service) UpdateCredential(ctx context.Context, current identity.User, agentID string, input UpdateCredentialInput) (CredentialView, error) {
 	if !canManage(current) {
 		return CredentialView{}, ErrForbidden
+	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return CredentialView{}, err
 	}
 	if uuid.Validate(agentID) != nil || input.Clear == (strings.TrimSpace(input.APIKey) != "") || len(input.APIKey) > 16384 {
 		return CredentialView{}, ErrInvalid
@@ -420,4 +429,20 @@ func mask(value string) string {
 		return "••••"
 	}
 	return "••••" + value[len(value)-4:]
+}
+
+// requireProductAgent hides system agents (runtime worker, Architect) from
+// product APIs: for them these agents do not exist.
+func requireProductAgent(ctx context.Context, q interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, orgID, agentID string) error {
+	if uuid.Validate(agentID) != nil {
+		return ErrNotFound
+	}
+	var product bool
+	err := q.QueryRow(ctx, `SELECT system_role IS NULL FROM agents WHERE org_id=$1 AND actor_id=$2`, orgID, agentID).Scan(&product)
+	if errors.Is(err, pgx.ErrNoRows) || err == nil && !product {
+		return ErrNotFound
+	}
+	return err
 }

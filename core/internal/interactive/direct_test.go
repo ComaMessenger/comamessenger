@@ -8,14 +8,11 @@ import (
 	"time"
 
 	"github.com/comamessenger/comamessenger/core/internal/access"
-	"github.com/comamessenger/comamessenger/core/internal/agentmemory"
 	"github.com/comamessenger/comamessenger/core/internal/agenttool"
 	"github.com/comamessenger/comamessenger/core/internal/chat"
-	"github.com/comamessenger/comamessenger/core/internal/files"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/interactive"
 	"github.com/comamessenger/comamessenger/core/internal/message"
-	"github.com/comamessenger/comamessenger/core/internal/search"
 	"github.com/google/uuid"
 )
 
@@ -81,8 +78,7 @@ func TestInteractiveScopeCannotReachPeoplePrivately(t *testing.T) {
 	}
 }
 
-// TestDirectCardsRespectQuietHours: nothing private at night, unless the
-// person asked for it in this very run.
+// TestDirectCardsRespectQuietHours: nothing private at night.
 func TestDirectCardsRespectQuietHours(t *testing.T) {
 	w := setup(t)
 	now := time.Now().UTC()
@@ -92,18 +88,9 @@ func TestDirectCardsRespectQuietHours(t *testing.T) {
 	night := w.service(limits, now)
 	input := directCard("Ночная карточка")
 	input.ActorID = w.first.ActorID
-	if _, err := night.SendDirectCard(context.Background(), w.agent, w.runID, input); !errors.Is(err, interactive.ErrLimit) {
+	// Even an approved private card waits for the morning.
+	if _, err := night.SendDirectCard(message.WithApprovedWrite(context.Background()), w.agent, w.runID, input); !errors.Is(err, interactive.ErrLimit) {
 		t.Fatalf("a direct card was delivered in quiet hours: %v", err)
-	}
-	asked := uuid.NewString()
-	if _, err := w.pool.Exec(context.Background(), `INSERT INTO agent_runs(id,org_id,agent_id,chat_id,correlation_id,status,lease_token,lease_expires_at,started_at,timeout_at,agent_version,requested_by)
-		VALUES($1,$2,$3,$4,$5,'running',$6,now()+interval '5 minutes',now(),now()+interval '10 minutes',1,$7)`, asked, w.orgID, w.agent.ActorID, w.chatID, uuid.NewString(), uuid.NewString(), w.first.ActorID); err != nil {
-		t.Fatal(err)
-	}
-	input = directCard("Ответ на вашу просьбу")
-	input.ActorID = w.first.ActorID
-	if _, err := night.SendDirectCard(context.Background(), w.agent, asked, input); err != nil {
-		t.Fatalf("the requester's own answer was refused at night: %v", err)
 	}
 }
 
@@ -116,7 +103,8 @@ func TestDirectCardsNeedASharedGroupChat(t *testing.T) {
 	service := w.service(limits, time.Now())
 	first := directCard("Первая")
 	first.ActorID = w.first.ActorID
-	if _, err := service.SendDirectCard(context.Background(), w.agent, w.runID, first); err != nil {
+	approved := message.WithApprovedWrite(context.Background())
+	if _, err := service.SendDirectCard(approved, w.agent, w.runID, first); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := w.pool.Exec(context.Background(), `DELETE FROM chat_members WHERE chat_id=$1 AND actor_id=$2`, w.chatID, w.first.ActorID); err != nil {
@@ -124,39 +112,31 @@ func TestDirectCardsNeedASharedGroupChat(t *testing.T) {
 	}
 	second := directCard("Вторая")
 	second.ActorID = w.first.ActorID
-	if _, err := service.SendDirectCard(context.Background(), w.agent, w.runID, second); !errors.Is(err, interactive.ErrForbidden) {
+	if _, err := service.SendDirectCard(approved, w.agent, w.runID, second); !errors.Is(err, interactive.ErrForbidden) {
 		t.Fatalf("delivered to a person who left every shared chat: %v", err)
 	}
 }
 
-// TestEditingADirectCardCountsAsDelivery: update_card on a private card is a
-// new delivery under the same daily cap.
-func TestEditingADirectCardCountsAsDelivery(t *testing.T) {
+// TestDirectCardsFollowTheDirectMessageSetting: a private card is writing to
+// a person directly — the same setting as send_direct_message decides, in
+// the executor before the call and in the message service after it.
+func TestDirectCardsFollowTheDirectMessageSetting(t *testing.T) {
 	w := setup(t)
-	limits := interactive.DefaultLimits()
-	limits.QuietStartMinute, limits.QuietEndMinute = 0, 0
-	limits.MaxDirectMessagesPerPersonPerDay = 1
-	service := w.service(limits, time.Now())
-	executor, err := agenttool.NewExecutor(w.pool, agenttool.Services{Chats: chat.NewService(w.pool), Messages: w.messages, Search: &search.Service{}, Files: &files.Service{}, Memory: agentmemory.NewService(w.pool), Interactive: service}, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	input := directCard("Отчёт")
-	input.ActorID = w.first.ActorID
-	sent, err := service.SendDirectCard(context.Background(), w.agent, w.runID, input)
-	if err != nil {
-		t.Fatal(err)
-	}
-	scopes := append([]string{"messages:direct_cards"}, allScopes...)
+	scopes := append([]string{"messages:write"}, allScopes...)
 	if _, err := w.pool.Exec(context.Background(), `UPDATE agents SET allowed_scopes=$2 WHERE actor_id=$1`, w.agent.ActorID, scopes); err != nil {
 		t.Fatal(err)
 	}
 	authentication := access.Identity{AuthenticationKind: "api_key", ActorID: w.agent.ActorID, OrgID: w.orgID, KeyID: uuid.NewString(), Scopes: scopes}
-	encoded, _ := json.Marshal(map[string]any{"message_id": sent.ID, "blocks": map[string]any{"version": 1, "card": map[string]any{"title": "Совсем другой текст"}}})
-	_, err = executor.Invoke(context.Background(), agenttool.Invocation{User: w.agent, Identity: authentication, Name: "update_card", Arguments: encoded,
+	encoded, _ := json.Marshal(map[string]any{"actor_id": w.first.ActorID, "client_msg_id": uuid.NewString(), "blocks": map[string]any{"version": 1, "card": map[string]any{"title": "Отчёт"}}})
+	result, err := w.executor.Invoke(context.Background(), agenttool.Invocation{User: w.agent, Identity: authentication, Name: "send_direct_card", Arguments: encoded,
 		RunID: w.runID, LeaseToken: w.lease, CorrelationID: w.correlation, ToolCallID: uuid.NewString()})
-	if !errors.Is(err, interactive.ErrLimit) {
-		t.Fatalf("editing a private card bypassed the daily cap: %v", err)
+	if err != nil || result.Confirmation == nil || result.Confirmation.ToolName != "send_direct_card" {
+		t.Fatalf("a private card did not wait for approval under the default policy: %+v err=%v", result, err)
+	}
+	input := directCard("Мимо исполнителя")
+	input.ActorID = w.first.ActorID
+	if _, err := w.interactive.SendDirectCard(context.Background(), w.agent, w.runID, input); !errors.Is(err, interactive.ErrDirectNeedsConfirmation) {
+		t.Fatalf("the message service let an unapproved private card through: %v", err)
 	}
 }
 
@@ -177,15 +157,15 @@ func TestPrivateDeliveriesShareOnePerPersonCap(t *testing.T) {
 		for range limits.MaxDirectMessagesPerPersonPerDay {
 			input := directCard("Карточка")
 			input.ActorID = w.first.ActorID
-			if _, err := service.SendDirectCard(context.Background(), sender.agent, sender.run, input); err == nil {
+			if _, err := service.SendDirectCard(message.WithApprovedWrite(context.Background()), sender.agent, sender.run, input); err == nil {
 				delivered++
 			} else if !errors.Is(err, interactive.ErrLimit) {
 				t.Fatal(err)
 			}
 		}
 	}
-	if total := 2 * limits.MaxDirectMessagesPerPersonPerDay; delivered >= total {
-		t.Fatalf("two agents delivered %d private cards to one person; per-agent caps alone allow %d", delivered, total)
+	if delivered != limits.MaxDirectMessagesPerPersonPerDay {
+		t.Fatalf("two agents delivered %d private cards to one person; the per-person limit of all agents is %d", delivered, limits.MaxDirectMessagesPerPersonPerDay)
 	}
 	var fromAll int
 	if err := w.pool.QueryRow(context.Background(), `SELECT count(*) FROM messages m JOIN chats c ON c.id=m.chat_id AND c.kind='direct'

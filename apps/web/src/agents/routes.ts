@@ -1,5 +1,6 @@
 export type AgentGlobalSection =
   | "overview"
+  | "architect"
   | "connections"
   | "approvals"
   | "activity";
@@ -16,13 +17,15 @@ export type AgentDetailSection =
   | "automations"
   | "test"
   | "activity"
-  | "settings";
+  | "settings"
+  | "architect";
 
 export type AgentRoute =
   | { kind: "global"; section: AgentGlobalSection }
   | { kind: "agent"; agentID: string; section: AgentDetailSection };
 
 const globalSections = new Set<AgentGlobalSection>([
+  "architect",
   "connections",
   "approvals",
   "activity",
@@ -34,6 +37,7 @@ const detailSections = new Set<AgentDetailSection>([
   "test",
   "activity",
   "settings",
+  "architect",
 ]);
 
 export function agentRoute(path: string): AgentRoute {

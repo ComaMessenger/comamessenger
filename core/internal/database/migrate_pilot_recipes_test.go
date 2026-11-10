@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"net/url"
 	"os"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -110,39 +111,31 @@ func TestPilotRecipesMigration(t *testing.T) {
 	if err := seed.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	mustExec(t, db, `INSERT INTO agents(actor_id,org_id,owner_actor_id,kind,recipe,allowed_scopes) VALUES($1,$2,$3,'builtin','qa',ARRAY['messages:read','messages:interactive'])`, legacy, orgID, ownerID)
+	mustExec(t, db, `INSERT INTO agents(actor_id,org_id,owner_actor_id,kind,recipe) VALUES($1,$2,$3,'builtin','qa')`, legacy, orgID, ownerID)
 	if _, err := db.Exec(`INSERT INTO agents(actor_id,org_id,owner_actor_id,kind,recipe) VALUES($1,$2,$3,'builtin','control')`, pilotID, orgID, ownerID); err == nil {
 		t.Fatal("a pilot recipe id was accepted before the migration")
 	}
+	before := schemaSnapshot(t, db)
 
 	if err := goose.UpToContext(ctx, db, ".", pilot); err != nil {
 		t.Fatal(err)
 	}
-	mustExec(t, db, `INSERT INTO agents(actor_id,org_id,owner_actor_id,kind,recipe,description,allowed_scopes) VALUES($1,$2,$3,'builtin','control',$4,ARRAY['messages:read','messages:direct_cards'])`,
+	mustExec(t, db, `INSERT INTO agents(actor_id,org_id,owner_actor_id,kind,recipe,description) VALUES($1,$2,$3,'builtin','control',$4)`,
 		pilotID, orgID, ownerID, strings.Repeat("и", 3500))
-	var hasDirect bool
-	if err := db.QueryRow(`SELECT 'messages:direct_cards'=ANY(allowed_scopes) FROM agents WHERE actor_id=$1`, legacy).Scan(&hasDirect); err != nil || hasDirect {
-		t.Fatalf("an existing agent got the direct-card scope: %v %v", hasDirect, err)
-	}
-	if _, err := db.Exec(`UPDATE agents SET allowed_scopes=ARRAY['messages:read','tables:read','messages:interactive'] WHERE actor_id=$1`, legacy); err != nil {
-		t.Fatalf("earlier scopes no longer allowed: %v", err)
-	}
-	if _, err := db.Exec(`UPDATE agents SET allowed_scopes=ARRAY['messages:unknown'] WHERE actor_id=$1`, legacy); err == nil {
-		t.Fatal("the scope constraint was lost")
-	}
-	mustExec(t, db, `INSERT INTO agent_direct_deliveries(id,org_id,agent_id,actor_id,kind) VALUES(gen_random_uuid(),$1,$2,$3,'card')`, orgID, pilotID, ownerID)
+	mustExec(t, db, `UPDATE agents SET recipe='slots' WHERE actor_id=$1`, legacy)
 
+	// Down returns exactly the schema of the previous migration and succeeds
+	// with pilot agents and long instructions present.
 	if err := goose.DownToContext(ctx, db, ".", previous); err != nil {
 		t.Fatal(err)
 	}
+	if after := schemaSnapshot(t, db); !reflect.DeepEqual(before, after) {
+		t.Fatalf("down did not restore the schema:\nbefore=%v\nafter=%v", before, after)
+	}
 	var recipe string
 	var length int
-	if err := db.QueryRow(`SELECT recipe,length(description),'messages:direct_cards'=ANY(allowed_scopes) FROM agents WHERE actor_id=$1`, pilotID).Scan(&recipe, &length, &hasDirect); err != nil ||
-		recipe != "custom" || length != 2000 || hasDirect {
-		t.Fatalf("down: recipe=%s length=%d direct=%v err=%v", recipe, length, hasDirect, err)
-	}
-	if _, err := db.Exec(`UPDATE agents SET allowed_scopes=ARRAY['messages:direct_cards'] WHERE actor_id=$1`, legacy); err == nil {
-		t.Fatal("the direct-card scope survived the down migration")
+	if err := db.QueryRow(`SELECT recipe,length(description) FROM agents WHERE actor_id=$1`, pilotID).Scan(&recipe, &length); err != nil || recipe != "custom" || length != 2000 {
+		t.Fatalf("down: recipe=%s length=%d err=%v", recipe, length, err)
 	}
 	if err := goose.UpToContext(ctx, db, ".", pilot); err != nil {
 		t.Fatalf("up again: %v", err)

@@ -44,6 +44,7 @@ export function AgentCatalog({
   recipes,
   access,
   onCreate,
+  onArchitect,
   navigate,
 }: {
   agents: Agent[];
@@ -54,6 +55,8 @@ export function AgentCatalog({
   access: AgentAccess;
   /** Opens creation from a recipe, or a custom agent without one. */
   onCreate(recipe: AgentRecipe | null): void;
+  /** The main way to create an agent: a conversation with the Architect. */
+  onArchitect(): void;
   navigate(to: string): void;
 }) {
   const { t } = useTranslation();
@@ -82,10 +85,16 @@ export function AgentCatalog({
           <p>{t("agentCatalogLead")}</p>
         </div>
         {canBuild && (
-          <Button variant="primary" onClick={() => onCreate(null)}>
-            <Plus />
-            {t("agentBuildManually")}
-          </Button>
+          <div className="agent-page__actions">
+            <Button variant="secondary" onClick={() => onCreate(null)}>
+              <Plus />
+              {t("agentBuildManually")}
+            </Button>
+            <Button variant="primary" onClick={onArchitect}>
+              <Sparkles />
+              {t("architectCreate")}
+            </Button>
+          </div>
         )}
       </div>
 

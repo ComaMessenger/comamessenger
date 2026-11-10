@@ -1,4 +1,6 @@
 import { defineCatalog, type Catalog } from "../i18n/catalog";
+import { builderContractsCatalog } from "./builder/contractsI18n";
+import { architectCatalog } from "./architect/i18n";
 import { agentExperienceCatalog } from "./builder/i18n";
 
 /* Agent platform keys, moved verbatim from the base catalogs. */
@@ -231,4 +233,9 @@ function combine(...catalogs: Catalog[]): Catalog {
   return result;
 }
 
-export const agentsCatalog = combine(platformCatalog, agentExperienceCatalog);
+export const agentsCatalog = combine(
+  platformCatalog,
+  agentExperienceCatalog,
+  builderContractsCatalog,
+  architectCatalog,
+);

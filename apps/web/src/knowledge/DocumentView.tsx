@@ -24,7 +24,7 @@ import { StatusBadge, fileLabel } from "./CollectionView";
 import {
   documentFormat,
   failureKey,
-  findQuotedFragment,
+  focusedFragment,
   isProcessing,
   splitHighlight,
   splitQuote,
@@ -55,6 +55,7 @@ export function DocumentView({
   const focusQuery = focus.get("q") ?? "";
   // An agent source carries the quoted excerpt instead of a fragment id.
   const focusQuote = focus.get("quote") ?? "";
+  const focusPosition = focus.has("position") ? Number(focus.get("position")) : null;
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
@@ -254,6 +255,7 @@ export function DocumentView({
                 focusID={focusFragment}
                 query={focusQuery}
                 quote={focusQuote}
+                position={focusPosition}
               />
             )}
           </section>
@@ -293,16 +295,18 @@ function FragmentList({
   focusID: requestedID,
   query,
   quote,
+  position,
 }: {
   fragments: Array<{ chunk_id: string; position: number; section: string; content: string }>;
   truncated: boolean;
   focusID: string;
   query: string;
   quote: string;
+  position?: number | null;
 }) {
   const { t } = useTranslation();
   const focused = useRef<HTMLLIElement>(null);
-  const focusID = requestedID || (quote ? findQuotedFragment(fragments, quote) : "");
+  const focusID = focusedFragment(fragments, requestedID, quote, position ?? null);
   useEffect(() => {
     focused.current?.scrollIntoView({ block: "center" });
   }, [focusID, fragments.length]);
@@ -322,7 +326,7 @@ function FragmentList({
               {fragment.section && <strong className="truncate">{fragment.section}</strong>}
               {isFocus && (
                 <span className="knowledge-fragment__tag">
-                  {quote && !requestedID ? t("kbQuotedFragment") : t("kbFoundFragment")}
+                  {quote ? t("kbQuotedFragment") : t("kbFoundFragment")}
                 </span>
               )}
             </header>

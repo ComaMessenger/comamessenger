@@ -449,6 +449,7 @@
     "/api/v1/agents/{agent_id}/publish": {
       "post": {
         "operationId": "publishAgent",
+        "description": "Publishes the draft. When the draft lets actions run without a person's approval that waited before (or, on the first publish, that wait by default), the server answers 409 agent_confirmation_loosened with details.loosened (built-in tool names and \"mcp:<connection>/<tool>\") until the request acknowledges them.",
         "security": [
           {
             "bearerAuth": []
@@ -459,6 +460,16 @@
             "$ref": "#/components/parameters/AgentId"
           }
         ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishAgentRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Draft atomically validated and published.",
@@ -5908,7 +5919,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Incoming webhooks without secrets.",
+            "description": "Incoming webhooks without secrets. Agent builders (agents.build) see them to start an agent by one, without the secret hint and rejection details.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6600,6 +6611,205 @@
         }
       }
     },
+    "/api/v1/agents/architect/sessions": {
+      "post": {
+        "operationId": "startAgentArchitectSession",
+        "description": "Opens a conversation with the agent Architect, or returns the person's active one for the same agent (or for a new agent). The Architect acts with the rights of the person and changes only drafts.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartArchitectSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The active conversation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchitectSession"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "A new conversation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchitectSession"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "description": "`architect_connection_required`: the workspace has no enabled model connection with a default model.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agents/architect/sessions/{session_id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ArchitectSessionId"
+        }
+      ],
+      "get": {
+        "operationId": "getAgentArchitectSession",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The conversation of the current person.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchitectSession"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "closeAgentArchitectSession",
+        "description": "Ends the conversation. The draft it built stays.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Closed."
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/agents/architect/sessions/{session_id}/messages": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ArchitectSessionId"
+        }
+      ],
+      "post": {
+        "operationId": "sendAgentArchitectMessage",
+        "description": "Adds the person's message; the Architect answers synchronously after working on the draft. The answer is a question with options, a summary (`done`) or plain text. Usage is recorded in the workspace agent usage ledger.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendArchitectMessageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The conversation after the answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchitectSession"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "description": "`architect_busy` (an answer is in progress) or `architect_connection_required`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "`architect_session_expired`: start a new conversation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "description": "`architect_budget_exceeded`: the Architect's spending limit was reached.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`architect_model_error`: the model did not answer; the message was not kept and can be sent again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/agents/tool-confirmations": {
       "get": {
         "operationId": "listAgentToolConfirmations",
@@ -6904,6 +7114,66 @@
             }
           },
           "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/agent-runs": {
+      "get": {
+        "operationId": "listWorkspaceAgentRuns",
+        "description": "Runs of every agent of the workspace, newest first, for the activity feed. Requires agents.observe.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of runs; next_cursor continues it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRunPage"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
             "$ref": "#/components/responses/Error"
           }
         }
@@ -7721,6 +7991,15 @@
           "format": "uuid"
         }
       },
+      "ArchitectSessionId": {
+        "name": "session_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
       "AgentKeyId": {
         "name": "key_id",
         "in": "path",
@@ -7820,11 +8099,19 @@
           "action_conflict",
           "already_bootstrapped",
           "agent_budget_exceeded",
+          "agent_confirmation_loosened",
           "agent_conflict",
+          "agent_not_ready",
           "agent_configuration_not_found",
           "agent_not_found",
           "agent_trigger_conflict",
           "agent_trigger_not_found",
+          "architect_budget_exceeded",
+          "architect_busy",
+          "architect_connection_required",
+          "architect_model_error",
+          "architect_session_expired",
+          "architect_session_not_found",
           "chat_conflict",
           "chat_not_found",
           "forbidden",
@@ -7846,7 +8133,6 @@
           "payload_too_large",
           "password_change_required",
           "push_unavailable",
-          "quiet_hours",
           "rate_limited",
           "service_not_ready",
           "session_not_found",
@@ -9995,8 +10281,7 @@
           "knowledge:read",
           "messages:interactive",
           "followups:write",
-          "tables:read",
-          "messages:direct_cards"
+          "tables:read"
         ]
       },
       "Agent": {
@@ -10186,6 +10471,44 @@
               "$ref": "#/components/schemas/AgentMcpBinding"
             }
           },
+          "read_chat_ids": {
+            "description": "Agent chats it reads (history, search, members). Empty for actors without agent management rights.",
+            "type": "array",
+            "uniqueItems": true,
+            "maxItems": 100,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "write_chat_ids": {
+            "description": "Agent chats it posts to. A chat may be in both lists; chat_ids is their union.",
+            "type": "array",
+            "uniqueItems": true,
+            "maxItems": 100,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "tone": {
+            "$ref": "#/components/schemas/AgentTone"
+          },
+          "confirmation_policy": {
+            "$ref": "#/components/schemas/AgentConfirmationPolicy"
+          },
+          "confirmation_locked": {
+            "description": "Built-in tools the server always confirms (operator setting); their policy is always confirm.",
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "instructions": {
+            "type": "string",
+            "description": "The trusted instructions the model receives: the task plus the lines Core derives from the version (tone, chats where the agent only reads or only writes). Chat lines are omitted for actors without agent management rights."
+          },
           "avatar_version": {
             "type": "integer",
             "format": "int64",
@@ -10235,6 +10558,41 @@
             "type": "string",
             "format": "date-time"
           }
+        }
+      },
+      "PublishAgentRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "acknowledge_loosened": {
+            "type": "boolean",
+            "description": "The person publishing confirms that the actions listed by agent_confirmation_loosened will run without approval."
+          }
+        }
+      },
+      "AgentTone": {
+        "type": "string",
+        "enum": [
+          "",
+          "concise",
+          "friendly",
+          "formal"
+        ],
+        "description": "Empty means no tone instruction."
+      },
+      "AgentConfirmationMode": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "confirm"
+        ],
+        "description": "auto runs the action by itself; confirm waits for a person's approval."
+      },
+      "AgentConfirmationPolicy": {
+        "type": "object",
+        "description": "Confirmation of each built-in write tool (post_message, reply_in_thread, add_reaction, post_card, update_card, start_collection, schedule_followup, remember, send_direct_message). A request may name only the tools it changes; responses name all of them with the mode Core enforces. Tools in the server floor cannot be set to auto.",
+        "additionalProperties": {
+          "$ref": "#/components/schemas/AgentConfirmationMode"
         }
       },
       "AgentVersion": {
@@ -10481,6 +10839,32 @@
             "items": {
               "$ref": "#/components/schemas/AgentMcpBinding"
             }
+          },
+          "read_chat_ids": {
+            "description": "Chats the agent reads. With write_chat_ids it replaces chat_ids by their union; a list that is omitted keeps its current value.",
+            "type": "array",
+            "uniqueItems": true,
+            "maxItems": 100,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "write_chat_ids": {
+            "description": "Chats the agent posts to.",
+            "type": "array",
+            "uniqueItems": true,
+            "maxItems": 100,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "tone": {
+            "$ref": "#/components/schemas/AgentTone"
+          },
+          "confirmation_policy": {
+            "$ref": "#/components/schemas/AgentConfirmationPolicy"
           }
         }
       },
@@ -10598,6 +10982,36 @@
             "items": {
               "$ref": "#/components/schemas/AgentMcpBinding"
             }
+          },
+          "read_chat_ids": {
+            "description": "Chats the agent reads. With write_chat_ids it replaces chat_ids by their union; a list that is omitted keeps its current value.",
+            "type": "array",
+            "uniqueItems": true,
+            "maxItems": 100,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "write_chat_ids": {
+            "description": "Chats the agent posts to.",
+            "type": "array",
+            "uniqueItems": true,
+            "maxItems": 100,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "tone": {
+            "$ref": "#/components/schemas/AgentTone"
+          },
+          "confirmation_policy": {
+            "$ref": "#/components/schemas/AgentConfirmationPolicy"
+          },
+          "acknowledge_loosened": {
+            "type": "boolean",
+            "description": "With enabled=true, confirms the actions agent_confirmation_loosened listed."
           }
         }
       },
@@ -11946,6 +12360,13 @@
           "require_write_confirmation": {
             "type": "boolean"
           },
+          "tool_confirmation": {
+            "type": "object",
+            "description": "Effective mode of every allowed tool when it changes data.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/AgentConfirmationMode"
+            }
+          },
           "allow_private_network": {
             "type": "boolean",
             "description": "The connection may reach listed internal addresses and plain HTTP; link-local and cloud metadata addresses stay forbidden."
@@ -12131,6 +12552,13 @@
             "type": "boolean",
             "default": true,
             "description": "Calls to tools that are not read-only wait for a person's approval; Core then executes them. Omitted means true; a connection that requires confirmation forces it on."
+          },
+          "confirmation_policy": {
+            "type": "object",
+            "description": "Per-tool override of require_write_confirmation for allowed tools. A connection that requires confirmation turns every entry into confirm.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/AgentConfirmationMode"
+            }
           }
         }
       },
@@ -12515,6 +12943,10 @@
           "enabled": {
             "type": "boolean"
           },
+          "agent_use_allowed": {
+            "type": "boolean",
+            "description": "Released by integrations.manage so agent builders may start an agent by this webhook. Off by default; builders list only released webhooks."
+          },
           "secret_hint": {
             "type": "string",
             "maxLength": 80
@@ -12612,6 +13044,10 @@
             "type": "boolean",
             "default": true
           },
+          "agent_use_allowed": {
+            "type": "boolean",
+            "default": false
+          },
           "rate_limit_per_minute": {
             "type": "integer",
             "minimum": 1,
@@ -12639,6 +13075,9 @@
             "maxLength": 500
           },
           "enabled": {
+            "type": "boolean"
+          },
+          "agent_use_allowed": {
             "type": "boolean"
           },
           "rate_limit_per_minute": {
@@ -12964,6 +13403,281 @@
             "items": {
               "$ref": "#/components/schemas/AgentRun"
             }
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "Present when the workspace listing has more runs."
+          }
+        }
+      },
+      "StartArchitectSessionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "agent_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Existing agent whose draft the Architect edits; omitted for a new agent."
+          },
+          "llm_connection_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Workspace model connection; by default the first enabled one with a default model."
+          },
+          "locale": {
+            "type": "string",
+            "enum": [
+              "ru",
+              "en"
+            ]
+          }
+        }
+      },
+      "SendArchitectMessageRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          }
+        }
+      },
+      "ArchitectMessage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "role",
+          "kind",
+          "text",
+          "options",
+          "assumptions",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "text",
+              "question",
+              "done",
+              "notice"
+            ],
+            "description": "`question` carries answer options; `done` means the draft is assembled."
+          },
+          "text": {
+            "type": "string"
+          },
+          "options": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "type": "string"
+            }
+          },
+          "assumptions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ArchitectTestExample": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "prompt",
+          "expectation",
+          "chat_id"
+        ],
+        "properties": {
+          "prompt": {
+            "type": "string"
+          },
+          "expectation": {
+            "type": "string"
+          },
+          "chat_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "ArchitectSession": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "agent_id",
+          "status",
+          "locale",
+          "questions_asked",
+          "max_questions",
+          "messages",
+          "test_examples",
+          "assumptions",
+          "connection",
+          "usage",
+          "thinking",
+          "created_at",
+          "updated_at",
+          "expires_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "agent_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "The draft agent; null until the Architect creates it."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "closed",
+              "expired"
+            ]
+          },
+          "locale": {
+            "type": "string",
+            "enum": [
+              "ru",
+              "en"
+            ]
+          },
+          "questions_asked": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4
+          },
+          "max_questions": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArchitectMessage"
+            }
+          },
+          "test_examples": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArchitectTestExample"
+            }
+          },
+          "assumptions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "connection": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "name",
+              "model",
+              "available"
+            ],
+            "properties": {
+              "id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              },
+              "available": {
+                "type": "boolean"
+              }
+            }
+          },
+          "usage": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "input_tokens",
+              "output_tokens",
+              "cost",
+              "currency"
+            ],
+            "properties": {
+              "input_tokens": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0
+              },
+              "output_tokens": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0
+              },
+              "cost": {
+                "type": "string"
+              },
+              "currency": {
+                "type": "string"
+              }
+            }
+          },
+          "thinking": {
+            "type": "boolean",
+            "description": "An answer is being prepared."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -15153,6 +15867,46 @@
           },
           "blocks": {
             "$ref": "#/components/schemas/MessageBlocks"
+          },
+          "agent_provenance": {
+            "$ref": "#/components/schemas/MessageAgentProvenance"
+          }
+        }
+      },
+      "MessageAgentProvenance": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Why an agent wrote the message. Visible to every reader of the message: it never carries a webhook payload, a follow-up note or text from another chat.",
+        "required": [
+          "run_id",
+          "trigger"
+        ],
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "trigger": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "mention",
+              "command",
+              "keyword",
+              "every_message",
+              "schedule",
+              "event",
+              "webhook",
+              "followup",
+              "message_action",
+              "collection",
+              "confirmation"
+            ]
+          },
+          "trigger_label": {
+            "type": "string",
+            "maxLength": 120,
+            "description": "Short detail recorded when the message was written, e.g. \"/summarize\" or \"09:00 UTC\". Never a keyword pattern or a webhook name."
           }
         }
       },
@@ -15450,6 +16204,16 @@
           "document_id": {
             "type": "string",
             "format": "uuid"
+          },
+          "chunk_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Knowledge fragment of a document source the answer relies on."
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Position of the fragment in the document, filled by Core from chunk_id."
           },
           "title": {
             "type": "string",

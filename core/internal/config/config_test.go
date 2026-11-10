@@ -417,3 +417,29 @@ func TestIntegrationPrivateTargetsDefaultToNone(t *testing.T) {
 		t.Fatal("host without port accepted")
 	}
 }
+
+func TestFromEnvironmentArchitectLimits(t *testing.T) {
+	setRequiredEnvironment(t)
+	cfg, err := FromEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Agents.Architect; got != (ArchitectLimits{DailyCostLimit: "5", MonthlyCostLimit: "50", CallsPerMinute: 30, UserDailyCalls: 150, UserDailyTokens: 1_500_000}) {
+		t.Fatalf("default architect limits = %#v", got)
+	}
+	t.Setenv("ARCHITECT_DAILY_COST_LIMIT", "2.50")
+	t.Setenv("ARCHITECT_MONTHLY_COST_LIMIT", "off")
+	t.Setenv("ARCHITECT_USER_DAILY_CALLS", "40")
+	cfg, err = FromEnvironment()
+	if err != nil || cfg.Agents.Architect.DailyCostLimit != "2.50" || cfg.Agents.Architect.MonthlyCostLimit != "" || cfg.Agents.Architect.UserDailyCalls != 40 {
+		t.Fatalf("architect limits = %#v err=%v", cfg.Agents.Architect, err)
+	}
+	for key, value := range map[string]string{"ARCHITECT_DAILY_COST_LIMIT": "-1", "ARCHITECT_CALLS_PER_MINUTE": "0", "ARCHITECT_USER_DAILY_TOKENS": "lots"} {
+		t.Run(key, func(t *testing.T) {
+			t.Setenv(key, value)
+			if _, err := FromEnvironment(); err == nil {
+				t.Fatalf("%s=%s accepted", key, value)
+			}
+		})
+	}
+}

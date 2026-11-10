@@ -15,6 +15,8 @@ export type MessageActionResponse =
   components["schemas"]["MessageActionResponse"];
 export type MessageActionResult = components["schemas"]["MessageActionResult"];
 export type MessageSource = components["schemas"]["MessageSource"];
+export type MessageAgentProvenance =
+  components["schemas"]["MessageAgentProvenance"];
 export type ChatAgent = components["schemas"]["ChatAgent"];
 export type ChatAgentTrigger = components["schemas"]["ChatAgentTrigger"];
 export type FileMetadata = components["schemas"]["File"];
@@ -101,6 +103,11 @@ export type ConfirmEmailRequest = components["schemas"]["ConfirmEmailRequest"];
 export type EmailChangeResponse = components["schemas"]["EmailChangeResponse"];
 export type AuditPage = components["schemas"]["AuditPage"];
 export type Agent = components["schemas"]["Agent"];
+export type AgentTone = components["schemas"]["AgentTone"];
+export type AgentConfirmationMode =
+  components["schemas"]["AgentConfirmationMode"];
+export type AgentConfirmationPolicy =
+  components["schemas"]["AgentConfirmationPolicy"];
 export type AgentVersion = components["schemas"]["AgentVersion"];
 export type AgentUsageReport = components["schemas"]["AgentUsageReport"];
 export type AgentProductMetrics = components["schemas"]["AgentProductMetrics"];
@@ -114,6 +121,7 @@ export type CreateAgentRequest = components["schemas"]["CreateAgentRequest"];
 export type DuplicateAgentRequest =
   components["schemas"]["DuplicateAgentRequest"];
 export type UpdateAgentRequest = components["schemas"]["UpdateAgentRequest"];
+export type PublishAgentRequest = components["schemas"]["PublishAgentRequest"];
 export type CreateAgentKeyRequest =
   components["schemas"]["CreateAgentKeyRequest"];
 export type AgentPlatformSettings =
@@ -135,6 +143,12 @@ export type KnowledgeRunFragments =
   components["schemas"]["KnowledgeRunFragments"];
 export type InvokeAgentRequest = components["schemas"]["InvokeAgentRequest"];
 export type AgentTrigger = components["schemas"]["AgentTrigger"];
+export type ArchitectSession = components["schemas"]["ArchitectSession"];
+export type ArchitectMessage = components["schemas"]["ArchitectMessage"];
+export type ArchitectTestExample =
+  components["schemas"]["ArchitectTestExample"];
+export type StartArchitectSessionRequest =
+  components["schemas"]["StartArchitectSessionRequest"];
 export type CreateAgentTriggerRequest =
   components["schemas"]["CreateAgentTriggerRequest"];
 export type UpdateAgentTriggerRequest =

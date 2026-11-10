@@ -109,7 +109,7 @@ func TestAgentModelKeyHashScopesVisibilityAndAudit(t *testing.T) {
 	if key.Secret == "" || key.Prefix == "" || key.Secret[:len(key.Prefix)] != key.Prefix {
 		t.Fatalf("created API key = %+v", key)
 	}
-	created, err = service.Publish(t.Context(), owner, created.ID)
+	created, err = service.Publish(t.Context(), owner, created.ID, PublishOptions{})
 	if err != nil || !created.Enabled || created.PublishedVersion == nil || *created.PublishedVersion != 1 {
 		t.Fatalf("published agent = %+v, err=%v", created, err)
 	}
@@ -156,7 +156,7 @@ func TestAgentModelKeyHashScopesVisibilityAndAudit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Publish(t.Context(), owner, created.ID); err != nil {
+	if _, err := service.Publish(t.Context(), owner, created.ID, PublishOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := service.AuthenticateKey(t.Context(), key.Secret); !errors.Is(err, identity.ErrUnauthorized) {
@@ -261,7 +261,7 @@ func TestAgentCreateValidationAndManagerPermission(t *testing.T) {
 	if err != nil {
 		t.Fatalf("builder create error=%v", err)
 	}
-	if _, err := service.Publish(t.Context(), builder, built.ID); !errors.Is(err, ErrForbidden) {
+	if _, err := service.Publish(t.Context(), builder, built.ID, PublishOptions{}); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("builder publish error=%v", err)
 	}
 	publisher := identity.User{ActorID: agentTestMemberID, OrgID: agentTestOrgID, OrgRole: "admin", Permissions: []permission.Code{permission.AgentsPublish}}
@@ -269,7 +269,7 @@ func TestAgentCreateValidationAndManagerPermission(t *testing.T) {
 	if _, err := service.Update(t.Context(), publisher, built.ID, UpdateInput{Description: &forbiddenDescription}); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("publisher update error=%v", err)
 	}
-	if _, err := service.Publish(t.Context(), publisher, built.ID); errors.Is(err, ErrForbidden) {
+	if _, err := service.Publish(t.Context(), publisher, built.ID, PublishOptions{}); errors.Is(err, ErrForbidden) {
 		t.Fatalf("publisher was denied publish permission: %v", err)
 	}
 	observer := identity.User{ActorID: agentTestMemberID, OrgID: agentTestOrgID, OrgRole: "admin", Permissions: []permission.Code{permission.AgentsObserve}}
@@ -300,7 +300,7 @@ func TestAgentDraftPublishPauseResumeAndRollback(t *testing.T) {
 	if _, err := service.CreateKey(t.Context(), owner, created.ID, CreateKeyInput{Name: "runtime", Scopes: []Scope{ScopeMessagesRead}, RateLimitPerMinute: 100}); err != nil {
 		t.Fatal(err)
 	}
-	published, err := service.Publish(t.Context(), owner, created.ID)
+	published, err := service.Publish(t.Context(), owner, created.ID, PublishOptions{})
 	if err != nil || published.OperationalStatus != "active" || published.PublishedVersion == nil || *published.PublishedVersion != 1 || published.HasUnpublishedChanges {
 		t.Fatalf("published=%+v err=%v", published, err)
 	}
@@ -319,7 +319,7 @@ func TestAgentDraftPublishPauseResumeAndRollback(t *testing.T) {
 	if err := pool.QueryRow(t.Context(), `SELECT description FROM agents WHERE actor_id=$1`, created.ID).Scan(&runtimeDescription); err != nil || runtimeDescription != "version one" {
 		t.Fatalf("published config changed before publish: %q err=%v", runtimeDescription, err)
 	}
-	published, err = service.Publish(t.Context(), owner, created.ID)
+	published, err = service.Publish(t.Context(), owner, created.ID, PublishOptions{})
 	if err != nil || published.Description != changed || published.PublishedVersion == nil || *published.PublishedVersion != 2 {
 		t.Fatalf("second publish=%+v err=%v", published, err)
 	}
@@ -477,7 +477,7 @@ func TestKnowledgeCollectionsFollowDraftPublishAndRollback(t *testing.T) {
 	if _, err := service.CreateKey(t.Context(), owner, created.ID, CreateKeyInput{Name: "runtime", Scopes: []Scope{ScopeKnowledgeRead}, RateLimitPerMinute: 10}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Publish(t.Context(), owner, created.ID); err != nil {
+	if _, err := service.Publish(t.Context(), owner, created.ID, PublishOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	both := []string{first, second}
@@ -489,7 +489,7 @@ func TestKnowledgeCollectionsFollowDraftPublishAndRollback(t *testing.T) {
 	if err := pool.QueryRow(t.Context(), `SELECT knowledge_collection_ids::text[] FROM agents WHERE actor_id=$1`, created.ID).Scan(&live); err != nil || !slices.Equal(live, []string{first}) {
 		t.Fatalf("live bindings before publish = %v, err=%v", live, err)
 	}
-	if _, err := service.Publish(t.Context(), owner, created.ID); err != nil {
+	if _, err := service.Publish(t.Context(), owner, created.ID, PublishOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := pool.QueryRow(t.Context(), `SELECT knowledge_collection_ids::text[] FROM agents WHERE actor_id=$1`, created.ID).Scan(&live); err != nil || !slices.Equal(live, both) {
@@ -536,7 +536,7 @@ func TestChatAgentsDescribeTriggersForChatMembersOnly(t *testing.T) {
 	if _, err := service.CreateKey(t.Context(), owner, created.ID, CreateKeyInput{Name: "runtime", Scopes: []Scope{ScopeMessagesRead}, RateLimitPerMinute: 100}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Publish(t.Context(), owner, created.ID); err != nil {
+	if _, err := service.Publish(t.Context(), owner, created.ID, PublishOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	otherChat := "00000000-0000-7000-8000-000000000299"
@@ -639,7 +639,7 @@ func TestMCPBindingsFollowDraftPublishAndRollback(t *testing.T) {
 	if _, err := service.CreateKey(t.Context(), owner, created.ID, CreateKeyInput{Name: "runtime", Scopes: []Scope{ScopeMessagesRead}, RateLimitPerMinute: 10}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Publish(t.Context(), owner, created.ID); err != nil {
+	if _, err := service.Publish(t.Context(), owner, created.ID, PublishOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	// The connection requires confirmation, so a binding cannot switch it off.
@@ -653,7 +653,7 @@ func TestMCPBindingsFollowDraftPublishAndRollback(t *testing.T) {
 	if err := pool.QueryRow(t.Context(), `SELECT mcp_bindings::text FROM agents WHERE actor_id=$1`, created.ID).Scan(&live); err != nil || live != "[]" {
 		t.Fatalf("live bindings before publish = %s, err=%v", live, err)
 	}
-	if _, err := service.Publish(t.Context(), owner, created.ID); err != nil {
+	if _, err := service.Publish(t.Context(), owner, created.ID, PublishOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := pool.QueryRow(t.Context(), `SELECT mcp_bindings::text FROM agents WHERE actor_id=$1`, created.ID).Scan(&live); err != nil || !strings.Contains(live, connection) {

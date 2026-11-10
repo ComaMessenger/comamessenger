@@ -439,6 +439,8 @@ func TestCollectionCountsResponsesByReaction(t *testing.T) {
 	if _, _, err := w.messages.PutReaction(ctx, w.second, target.ID, "👍"); err != nil {
 		t.Fatal(err)
 	}
+	// Answers are recounted at most once a minute when nothing else is due.
+	w.interactive.SetClock(func() time.Time { return time.Now().Add(2 * time.Minute) })
 	if err := w.interactive.Tick(ctx); err != nil {
 		t.Fatal(err)
 	}

@@ -101,8 +101,12 @@ type Source struct {
 	ChatID     string `json:"chat_id,omitempty"`
 	FileID     string `json:"file_id,omitempty"`
 	DocumentID string `json:"document_id,omitempty"`
-	Title      string `json:"title,omitempty"`
-	Excerpt    string `json:"excerpt,omitempty"`
+	// ChunkID and Position point at the exact knowledge fragment of a
+	// document source; Core fills Position from the fragment.
+	ChunkID  string `json:"chunk_id,omitempty"`
+	Position *int   `json:"position,omitempty"`
+	Title    string `json:"title,omitempty"`
+	Excerpt  string `json:"excerpt,omitempty"`
 }
 
 func (blocks *Blocks) action(actionID string) (int, *Action) {
@@ -263,16 +267,22 @@ func normalizeBlocks(blocks *Blocks, allowSystem bool) error {
 		source := &blocks.Sources[index]
 		switch source.Kind {
 		case "message":
-			if uuid.Validate(source.MessageID) != nil || source.FileID != "" || source.DocumentID != "" {
+			if uuid.Validate(source.MessageID) != nil || source.FileID != "" || source.DocumentID != "" || source.ChunkID != "" || source.Position != nil {
 				return invalid("message source requires message_id")
 			}
 		case "file":
-			if uuid.Validate(source.FileID) != nil || source.MessageID != "" || source.DocumentID != "" {
+			if uuid.Validate(source.FileID) != nil || source.MessageID != "" || source.DocumentID != "" || source.ChunkID != "" || source.Position != nil {
 				return invalid("file source requires file_id")
 			}
 		case "document":
 			if uuid.Validate(source.DocumentID) != nil || source.MessageID != "" || source.FileID != "" {
 				return invalid("document source requires document_id")
+			}
+			if source.ChunkID != "" && uuid.Validate(source.ChunkID) != nil {
+				return invalid("sources.chunk_id must be a UUID")
+			}
+			if source.Position != nil && (*source.Position < 0 || *source.Position > 1000000) {
+				return invalid("sources.position is out of range")
 			}
 		default:
 			return invalid("sources.kind must be message, file or document")

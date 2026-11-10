@@ -29,9 +29,6 @@ var (
 	ErrNotFound  = errors.New("interactive object not found")
 	ErrForbidden = errors.New("interactive request forbidden")
 	ErrLimit     = errors.New("interactive limit reached")
-	// ErrQuietHours refuses a private delivery during the recipient's quiet
-	// hours; it is a limit, and its message says when the window ends.
-	ErrQuietHours = fmt.Errorf("%w: the person is in quiet hours", ErrLimit)
 )
 
 // Limits are server-side guard rails against agents that nag people. They are
@@ -45,19 +42,18 @@ type Limits struct {
 	// MaxRemindersPerPersonPerDay caps reminders one person receives from all
 	// agents in a rolling 24 hours.
 	MaxRemindersPerPersonPerDay int
-	// MaxDirectMessagesPerPersonPerDay caps private deliveries (messages,
-	// cards, card edits, direct reminders) to one person from one agent in a
-	// rolling 24 hours.
+	// MaxDirectMessagesPerPersonPerDay caps agent messages one person gets
+	// in direct chats from all agents in a rolling 24 hours (and, as before,
+	// send_direct_message deliveries from one agent).
 	MaxDirectMessagesPerPersonPerDay int
-	// MaxAgentDirectPerPersonPerDay caps private deliveries (direct messages,
-	// direct cards and their edits, direct reminders) one person receives
-	// from all agents together in a rolling 24 hours.
-	MaxAgentDirectPerPersonPerDay int
-	MaxOpenCollectionsPerAgent    int
-	MaxPendingFollowupsPerAgent   int
-	MaxFollowupDelay              time.Duration
-	MinFollowupDelay              time.Duration
-	MaxCollectionDuration         time.Duration
+	MaxOpenCollectionsPerAgent       int
+	MaxPendingFollowupsPerAgent      int
+	// MaxFollowupsPerAgentPerHour caps how often an agent schedules its own
+	// continuation, so a chain of follow-ups cannot run the model in a loop.
+	MaxFollowupsPerAgentPerHour int
+	MaxFollowupDelay            time.Duration
+	MinFollowupDelay            time.Duration
+	MaxCollectionDuration       time.Duration
 }
 
 func DefaultLimits() Limits {
@@ -66,9 +62,9 @@ func DefaultLimits() Limits {
 		QuietEndMinute:                   8 * 60,
 		MaxRemindersPerPersonPerDay:      6,
 		MaxDirectMessagesPerPersonPerDay: 10,
-		MaxAgentDirectPerPersonPerDay:    15,
 		MaxOpenCollectionsPerAgent:       20,
 		MaxPendingFollowupsPerAgent:      50,
+		MaxFollowupsPerAgentPerHour:      20,
 		MaxFollowupDelay:                 30 * 24 * time.Hour,
 		MinFollowupDelay:                 time.Minute,
 		MaxCollectionDuration:            30 * 24 * time.Hour,
@@ -82,13 +78,19 @@ type Service struct {
 	logger   *slog.Logger
 	limits   Limits
 	now      func() time.Time
+	// confirmationFloor lists tools the server always confirms.
+	confirmationFloor map[string]bool
 }
 
 func NewService(pool *pgxpool.Pool, messages *message.Service, chats *chat.Service, logger *slog.Logger, limits Limits) *Service {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Service{pool: pool, messages: messages, chats: chats, logger: logger, limits: limits, now: time.Now}
+	service := &Service{pool: pool, messages: messages, chats: chats, logger: logger, limits: limits, now: time.Now}
+	if messages != nil {
+		messages.SetDirectGuard(service.guardDirect)
+	}
+	return service
 }
 
 // SetClock replaces the time source; tests use it to move past deadlines.
@@ -117,7 +119,9 @@ type runRequest struct {
 
 // enqueueRun queues a published-agent run in the caller's transaction. The
 // client_run_id makes the wake idempotent; nothing is queued for a paused,
-// deleted or chat-less agent.
+// deleted or chat-less agent, nor beyond the agent's max_chain_depth: every
+// run an agent starts for itself (follow-up, collection report, continuation
+// after a decision) is one generation deeper than the run that started it.
 func enqueueRun(ctx context.Context, tx pgx.Tx, request runRequest) (string, bool, error) {
 	runID := uuid.Must(uuid.NewV7()).String()
 	correlationID := uuid.Must(uuid.NewV7()).String()
@@ -131,7 +135,7 @@ func enqueueRun(ctx context.Context, tx pgx.Tx, request runRequest) (string, boo
 			jsonb_build_object('id',agent.actor_id,'handle',actor.handle,'description',agent.description,'allowed_scopes',to_jsonb(agent.allowed_scopes),
 				'llm_connection_id',agent.llm_connection_id,'endpoint_url',COALESCE(connection.endpoint_url,agent.endpoint_url),
 				'external_data_sharing_approved',agent.external_data_sharing_approved,'max_output_tokens',agent.max_output_tokens,'max_tool_iterations',agent.max_tool_iterations),
-			$2,$3,$4,$5,$6,LEAST($7::int,agent.max_chain_depth),COALESCE(connection.provider,agent.provider),COALESCE(NULLIF(agent.model,''),connection.default_model,''),$8,
+			$2,$3,$4,$5,$6,$7::int,COALESCE(connection.provider,agent.provider),COALESCE(NULLIF(agent.model,''),connection.default_model,''),$8,
 			now()+make_interval(secs=>agent.execution_timeout_seconds)
 		FROM agents agent
 		JOIN actors actor ON actor.org_id=agent.org_id AND actor.id=agent.actor_id AND actor.status='active' AND actor.deleted_at IS NULL
@@ -140,6 +144,7 @@ func enqueueRun(ctx context.Context, tx pgx.Tx, request runRequest) (string, boo
 		JOIN chats chat ON chat.org_id=member.org_id AND chat.id=member.chat_id AND chat.archived_at IS NULL
 		WHERE agent.org_id=$9 AND agent.actor_id=$10 AND agent.enabled AND agent.deleted_at IS NULL
 			AND (agent.llm_connection_id IS NULL OR connection.id IS NOT NULL)
+			AND $7::int <= agent.max_chain_depth
 		ON CONFLICT(agent_id,client_run_id) DO NOTHING`,
 		runID, request.ChatID, request.ThreadRootID, request.RequestedBy, request.ClientRunID, correlationID, request.ChainDepth, payload, request.OrgID, request.AgentID)
 	if err != nil {
@@ -269,4 +274,84 @@ func (s *Service) Tick(ctx context.Context) error {
 		return err
 	}
 	return s.ProcessCollections(ctx)
+}
+
+// ConfirmationOutcome is a person's decision on a tool call an agent asked
+// to make, and the result of the call when it ran.
+type ConfirmationOutcome struct {
+	OrgID          string
+	AgentID        string
+	RunID          string
+	ConfirmationID string
+	ToolName       string
+	Status         string
+	ErrorCode      string
+	Result         json.RawMessage
+	DecidedBy      string
+}
+
+// maxOutcomeSummaryRunes bounds the tool result summary handed to the
+// continuation.
+const maxOutcomeSummaryRunes = 1000
+
+// messageTools write messages; their continuation learns only whether the
+// message was delivered, never its text.
+var messageTools = map[string]bool{"post_message": true, "reply_in_thread": true, "post_card": true, "update_card": true, "send_direct_message": true}
+
+// EnqueueConfirmationOutcome wakes the agent after a person decided on its
+// pending call, with the decision and the call result, so it can continue
+// the work the original run left waiting (input.trigger_type=confirmation).
+// The continuation runs in the chat of the original run; nothing is queued
+// when that run had no chat or the agent is paused or deleted.
+func (s *Service) EnqueueConfirmationOutcome(ctx context.Context, outcome ConfirmationOutcome) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	var chatID, threadRootID *string
+	var chainDepth int
+	err = tx.QueryRow(ctx, `SELECT chat_id::text,thread_root_id::text,chain_depth FROM agent_runs WHERE org_id=$1 AND agent_id=$2 AND id=$3 AND NOT dry_run`,
+		outcome.OrgID, outcome.AgentID, outcome.RunID).Scan(&chatID, &threadRootID, &chainDepth)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && chatID == nil) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	input := map[string]any{
+		"trigger_type": "confirmation", "confirmation_id": outcome.ConfirmationID, "original_run_id": outcome.RunID,
+		"tool_name": outcome.ToolName, "status": outcome.Status,
+	}
+	if outcome.ErrorCode != "" {
+		input["error_code"] = outcome.ErrorCode
+	}
+	// The full result stays with the confirmation, readable by people who
+	// approve agent actions. The run input is visible to everyone who may
+	// view the agent and the model may retell it in a group chat, so it
+	// carries only whether a message was delivered, or a short summary of
+	// another tool's output.
+	if len(outcome.Result) > 0 {
+		if messageTools[outcome.ToolName] {
+			input["delivered"] = outcome.Status == "completed"
+		} else {
+			summary := string(outcome.Result)
+			if runes := []rune(summary); len(runes) > maxOutcomeSummaryRunes {
+				summary = string(runes[:maxOutcomeSummaryRunes]) + "…"
+				input["result_truncated"] = true
+			}
+			input["result_summary"] = summary
+		}
+	}
+	var requestedBy *string
+	if outcome.DecidedBy != "" {
+		requestedBy = &outcome.DecidedBy
+	}
+	if _, _, err := enqueueRun(ctx, tx, runRequest{
+		OrgID: outcome.OrgID, AgentID: outcome.AgentID, ChatID: *chatID, ThreadRootID: threadRootID,
+		RequestedBy: requestedBy, ClientRunID: stableID("confirmation", outcome.ConfirmationID), ChainDepth: chainDepth + 1, Input: input,
+	}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }

@@ -46,39 +46,22 @@ describe("scopes derived from builder blocks", () => {
       ]),
     ).toEqual({ sources: ["files"], skills: ["messages", "followups"] });
   });
+});
 
-  it("keeps reading slot tables through edits of other blocks", () => {
-    const current = ["messages:read", "tables:read", "runtime:execute"] as const;
-    for (const hasKnowledge of [true, false])
-      expect(
-        scopesFor({
-          capabilities: { sources: [], skills: ["cards"] },
-          hasKnowledge,
-          current,
-        }),
-      ).toContain("tables:read");
+describe("spreadsheets", () => {
+  it("derives tables:read from the chosen source within bound collections", () => {
+    const capabilities = { sources: [], skills: [] };
     expect(
-      scopesFor({
-        capabilities: { sources: [], skills: [] },
-        hasKnowledge: true,
-        current: ["messages:read"],
-      }),
+      scopesFor({ capabilities, hasKnowledge: true, hasTables: true, current: [] }),
+    ).toContain("tables:read");
+    expect(
+      scopesFor({ capabilities, hasKnowledge: false, hasTables: true, current: [] }),
     ).not.toContain("tables:read");
-  });
-
-  it("writes to people privately only as its own skill", () => {
     expect(
-      scopesFor({
-        capabilities: { sources: [], skills: ["direct"] },
-        hasKnowledge: false,
-        current: [],
-      }),
-    ).toEqual(["messages:read", "messages:direct_cards", "runtime:execute"]);
+      scopesFor({ capabilities, hasKnowledge: true, current: ["tables:read"] }),
+    ).toContain("tables:read");
     expect(
-      capabilitiesOf(["messages:read", "messages:interactive"]).skills,
-    ).toEqual(["cards"]);
-    expect(
-      capabilitiesOf(["messages:interactive", "messages:direct_cards"]).skills,
-    ).toEqual(["cards", "direct"]);
+      scopesFor({ capabilities, hasKnowledge: true, hasTables: false, current: ["tables:read"] }),
+    ).not.toContain("tables:read");
   });
 });

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/comamessenger/comamessenger/core/internal/id"
@@ -41,6 +43,9 @@ func scanLegacyServer(row pgx.Row, agentID string) (MCPServer, error) {
 func (service *Service) ListMCPServers(ctx context.Context, current identity.User, agentID string) ([]MCPServer, error) {
 	if !canManage(current) {
 		return nil, ErrForbidden
+	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return nil, err
 	}
 	if uuid.Validate(agentID) != nil {
 		return nil, ErrNotFound
@@ -81,6 +86,9 @@ func (service *Service) getLegacyServer(ctx context.Context, orgID, agentID, con
 func (service *Service) CreateMCPServer(ctx context.Context, current identity.User, agentID string, input CreateMCPServerInput) (MCPServer, error) {
 	if !canManage(current) || !canManageIntegrations(current) {
 		return MCPServer{}, ErrForbidden
+	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return MCPServer{}, err
 	}
 	if input.TimeoutMS == 0 {
 		input.TimeoutMS = 10000
@@ -172,6 +180,9 @@ func (service *Service) UpdateMCPServer(ctx context.Context, current identity.Us
 	if !canManage(current) || !canManageIntegrations(current) {
 		return MCPServer{}, ErrForbidden
 	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return MCPServer{}, err
+	}
 	if uuid.Validate(agentID) != nil || uuid.Validate(serverID) != nil || !hasMCPUpdate(input) {
 		return MCPServer{}, ErrInvalid
 	}
@@ -208,7 +219,37 @@ func (service *Service) UpdateMCPServer(ctx context.Context, current identity.Us
 			return MCPServer{}, err
 		}
 		defer tx.Rollback(ctx)
-		binding, _ := json.Marshal([]mcpBinding{{ConnectionID: serverID, AllowedTools: tools, RequireWriteConfirmation: requireConfirmation}})
+		// The old per-agent API edits the published binding directly, so it
+		// may only tighten it: more tools or fewer confirmations go through
+		// the builder and a publish. Per-tool choices of kept tools survive.
+		var raw []byte
+		if err := tx.QueryRow(ctx, `SELECT COALESCE((SELECT item FROM agents, jsonb_array_elements(mcp_bindings) item
+			WHERE org_id=$1 AND actor_id=$2 AND item->>'connection_id'=$3::text LIMIT 1),'{}'::jsonb)`, current.OrgID, agentID, serverID).Scan(&raw); err != nil {
+			return MCPServer{}, err
+		}
+		bound := mcpBinding{}
+		_ = json.Unmarshal(raw, &bound)
+		for _, tool := range tools {
+			if !slices.Contains(bound.AllowedTools, tool) {
+				return MCPServer{}, fmt.Errorf("%w: adding tools is done in the agent builder and takes effect on publish", ErrInvalid)
+			}
+		}
+		if bound.RequireWriteConfirmation && !requireConfirmation {
+			return MCPServer{}, fmt.Errorf("%w: removing confirmations is done in the agent builder and takes effect on publish", ErrInvalid)
+		}
+		var policy map[string]string
+		for tool, mode := range bound.ConfirmationPolicy {
+			if slices.Contains(tools, tool) {
+				if policy == nil {
+					policy = map[string]string{}
+				}
+				if requireConfirmation && !bound.RequireWriteConfirmation {
+					mode = "confirm"
+				}
+				policy[tool] = mode
+			}
+		}
+		binding, _ := json.Marshal([]mcpBinding{{ConnectionID: serverID, AllowedTools: tools, RequireWriteConfirmation: requireConfirmation, ConfirmationPolicy: policy}})
 		if err := setLegacyBinding(ctx, tx, current.OrgID, agentID, serverID, binding); err != nil {
 			return MCPServer{}, err
 		}
@@ -231,6 +272,9 @@ func (service *Service) UpdateMCPServer(ctx context.Context, current identity.Us
 func (service *Service) DeleteMCPServer(ctx context.Context, current identity.User, agentID, serverID string) error {
 	if !canManage(current) || !canManageIntegrations(current) {
 		return ErrForbidden
+	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return err
 	}
 	if uuid.Validate(agentID) != nil || uuid.Validate(serverID) != nil {
 		return ErrNotFound

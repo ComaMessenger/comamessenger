@@ -2,6 +2,8 @@ package agenttool
 
 import (
 	"testing"
+
+	"github.com/comamessenger/comamessenger/core/internal/agent"
 )
 
 func TestToolDefinitionsCompileAndRejectUnknownFields(t *testing.T) {
@@ -26,12 +28,26 @@ func TestToolDefinitionsCompileAndRejectUnknownFields(t *testing.T) {
 	}
 	for name, scope := range map[string]string{"post_card": "messages:interactive", "update_card": "messages:interactive", "start_collection": "messages:interactive", "schedule_followup": "followups:write"} {
 		definition := tools[name].Definition
-		if definition.Mode != "write" || string(definition.RequiredScope) != scope || !definition.NoConfirmation {
+		if definition.Mode != "write" || string(definition.RequiredScope) != scope {
 			t.Fatalf("%s definition=%+v", name, definition)
 		}
 	}
-	if direct := tools["send_direct_message"].Definition; direct.Mode != "write" || direct.NoConfirmation {
-		t.Fatalf("send_direct_message must follow the confirmation policy: %+v", direct)
+	// Every built-in write tool has a confirmation setting in the agent
+	// version; read tools never wait for a person.
+	confirmable := map[string]bool{}
+	for _, name := range agent.ConfirmableTools() {
+		confirmable[name] = true
+	}
+	// send_direct_card has no setting of its own: it is writing to a person
+	// directly and follows send_direct_message (confirmationTarget).
+	confirmable["send_direct_card"] = true
+	for name, tool := range tools {
+		if (tool.Definition.Mode == "write") != confirmable[name] {
+			t.Fatalf("%s mode=%s confirmable=%v", name, tool.Definition.Mode, confirmable[name])
+		}
+	}
+	if agent.DefaultConfirmation("send_direct_message") != agent.ConfirmationConfirm || agent.DefaultConfirmation("post_card") != agent.ConfirmationAuto {
+		t.Fatal("unsafe confirmation defaults")
 	}
 	if search := tools["search_knowledge"].Definition; search.Mode != "read" || search.RequiredScope != "knowledge:read" {
 		t.Fatalf("search_knowledge definition=%+v", search)

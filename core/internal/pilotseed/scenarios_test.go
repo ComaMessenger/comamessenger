@@ -161,7 +161,11 @@ func TestControlFollowsAcknowledgementsFromRequestToResult(t *testing.T) {
 		t.Fatalf("not reacted = %v", reactions.NotReacted)
 	}
 	w.call(request, "list_members", map[string]any{"chat_id": w.seed.Chats["instructors"]})
-	progress := decode[message.Message](t, w.call(request, "send_direct_card", map[string]any{
+	// The requester called the agent in a shared chat, so the personal
+	// report is writing to a person directly: under the default policy it
+	// waits for approval (the «person started it» exception covers only a
+	// run started in the direct chat itself). Here Marina approves it.
+	progress := decode[message.Message](t, w.callApproved(request, marina, "send_direct_card", map[string]any{
 		"actor_id": marina.ActorID, "client_msg_id": uuid.NewString(),
 		"blocks": card("Порядок входа с понедельника", "Отметились 1 из 5", []map[string]any{{"text": "Дарья Ким", "state": "pending"}}, nil),
 	}))
@@ -169,7 +173,8 @@ func TestControlFollowsAcknowledgementsFromRequestToResult(t *testing.T) {
 	if report != w.directChat(control.ID, marina.ActorID) || w.count(`SELECT count(*) FROM chat_members WHERE chat_id=$1`, report) != 2 {
 		t.Fatalf("the progress card is not private to the requester: chat %s", report)
 	}
-	collection := decode[interactive.Collection](t, w.call(request, "start_collection", map[string]any{
+	// A collection with private reminders is approved once, at its start.
+	collection := decode[interactive.Collection](t, w.callApproved(request, marina, "start_collection", map[string]any{
 		"message_id": announcement, "response": "reaction", "match": []string{"✅"}, "expect_all_members": true,
 		"deadline_at": w.clock.Now().Add(3 * 24 * time.Hour).Format(time.RFC3339), "reminder_channel": "direct",
 		"remind_every_seconds": 86400, "max_reminders": 2, "reminder_text": "Пожалуйста, отметьтесь ✅ под сообщением о порядке входа.",
@@ -178,11 +183,16 @@ func TestControlFollowsAcknowledgementsFromRequestToResult(t *testing.T) {
 	if len(collection.ExpectedActorIDs) != 5 || len(collection.PendingActorIDs) != 4 {
 		t.Fatalf("collection = %+v", collection)
 	}
-	w.call(request, "update_card", map[string]any{"message_id": progress.ID, "blocks": card("Порядок входа с понедельника", "Отметились 1 из 5", nil,
+	w.callApproved(request, marina, "update_card", map[string]any{"message_id": progress.ID, "blocks": card("Порядок входа с понедельника", "Отметились 1 из 5", nil,
 		[]map[string]any{{"id": "refresh." + collection.ID, "label": "Обновить"}})})
 	w.finish(request)
-	if got := w.count(`SELECT count(*) FROM messages WHERE chat_id=$1 AND actor_id=$2`, w.seed.Chats["instructors"], control.ID); got != 0 {
-		t.Fatalf("the agent wrote %d messages into the shared chat", got)
+	// In the shared chat the agent only asked for approvals; the approval
+	// cards never show what goes to the direct chat (who did not react).
+	if got := w.count(`SELECT count(*) FROM messages WHERE chat_id=$1 AND actor_id=$2 AND (body LIKE '%Дарья%' OR COALESCE(blocks::text,'') LIKE '%Дарья%')`, w.seed.Chats["instructors"], control.ID); got != 0 {
+		t.Fatalf("the shared chat shows %d agent messages naming people", got)
+	}
+	if got := w.count(`SELECT count(*) FROM messages WHERE chat_id=$1 AND actor_id=$2 AND NOT COALESCE(blocks::text,'') LIKE '%tool_confirmation%'`, w.seed.Chats["instructors"], control.ID); got != 0 {
+		t.Fatalf("the agent wrote %d messages other than approval cards into the shared chat", got)
 	}
 
 	// A day later the server reminds the four silent people privately.
@@ -207,6 +217,10 @@ func TestControlFollowsAcknowledgementsFromRequestToResult(t *testing.T) {
 	if len(current.PendingActorIDs) != 4 {
 		t.Fatalf("refreshed collection = %+v", current)
 	}
+	// Marina pressed the button in her direct chat: updating the card there
+	// answers her own run and needs no approval.
+	w.call(refresh, "update_card", map[string]any{"message_id": progress.ID, "blocks": card("Порядок входа с понедельника", "Отметились 1 из 5", nil,
+		[]map[string]any{{"id": "refresh." + collection.ID, "label": "Обновить"}})})
 	w.finish(refresh)
 
 	for _, key := range []string{"daria", "vera", "oleg", "pavel"} {
@@ -214,12 +228,14 @@ func TestControlFollowsAcknowledgementsFromRequestToResult(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// «Everyone answered» is noticed within a minute.
+	w.clock.Advance(time.Minute + time.Second)
 	w.tick()
 	result := w.claim(control.ID, "collection")
 	if result.chatID != report || result.input["reason"] != "completed" || result.input["note"] != "card:"+progress.ID {
 		t.Fatalf("result run = %+v", result)
 	}
-	w.call(result, "update_card", map[string]any{"message_id": progress.ID, "blocks": card("Порядок входа с понедельника", "Отметились все 5", nil, nil)})
+	w.callApproved(result, marina, "update_card", map[string]any{"message_id": progress.ID, "blocks": card("Порядок входа с понедельника", "Отметились все 5", nil, nil)})
 	w.finish(result)
 }
 
@@ -237,7 +253,7 @@ func TestRemindersRespectPerPersonLimitsAndQuietHours(t *testing.T) {
 			t.Fatal(err)
 		}
 		r := w.claim(control.ID, "mention")
-		collection := decode[interactive.Collection](t, w.call(r, "start_collection", map[string]any{
+		collection := decode[interactive.Collection](t, w.callApproved(r, w.person("marina"), "start_collection", map[string]any{
 			"message_id": target, "response": "reaction", "expect_all_members": true, "deadline_in_seconds": 3 * 86400,
 			"reminder_channel": "direct", "remind_every_seconds": 3600, "max_reminders": 2, "reminder_text": "Отметьтесь, пожалуйста.",
 		}))
@@ -408,7 +424,7 @@ func TestSlotsAsksFreeInstructorsAndLeavesTheTableToPeople(t *testing.T) {
 	}))
 	collection := decode[interactive.Collection](t, w.call(request, "start_collection", map[string]any{
 		"message_id": poll.ID, "response": "action", "match": []string{"can", "cannot"}, "expected_actor_ids": candidates,
-		"deadline_in_seconds": 7200, "reminder_channel": "direct", "remind_every_seconds": 1800, "max_reminders": 1,
+		"deadline_in_seconds": 7200, "reminder_channel": "thread", "remind_every_seconds": 1800, "max_reminders": 1,
 		"reminder_text": "Ответьте, пожалуйста, на вопрос о слоте в чате «Расписание».", "note": "admin:" + daria.ActorID + "; card:" + poll.ID,
 	}))
 	w.finish(request)
@@ -421,6 +437,7 @@ func TestSlotsAsksFreeInstructorsAndLeavesTheTableToPeople(t *testing.T) {
 	if _, err := w.messages.PressAction(w.ctx, w.person("vera"), poll.ID, "cannot"); err != nil {
 		t.Fatal(err)
 	}
+	w.clock.Advance(time.Minute + time.Second)
 	w.tick()
 	report := w.claim(slots.ID, "collection")
 	result := decode[interactive.Collection](t, w.call(report, "get_collection", map[string]any{"collection_id": collection.ID}))
@@ -502,6 +519,7 @@ func TestHandoffAsksLeavingInstructorAndEscalatesUnacceptedSlot(t *testing.T) {
 		"deadline_at": nextStart.Add(-15 * time.Minute).Format(time.RFC3339), "note": `{"step":"collect","next":"` + vera + `"}`})
 	w.finish(ask)
 	w.say("igor", "hall1", "В группе на 15:00 двое новеньких, пусть начнёт с разминки на ковриках.", question.ID)
+	w.clock.Advance(time.Minute + time.Second)
 	w.tick()
 	collected := w.claim(handoff.ID, "collection")
 	thread := decode[message.Page](t, w.call(collected, "get_thread", map[string]any{"message_id": question.ID}))
@@ -595,10 +613,12 @@ func TestMentorGreetsNewcomerAndRemindsAboutOpenItems(t *testing.T) {
 	if remind.input["context"].(map[string]any)["member_id"] != vera.ActorID {
 		t.Fatalf("follow-up = %v", remind.input)
 	}
-	private := decode[message.Message](t, w.call(remind, "send_direct_card", map[string]any{"actor_id": vera.ActorID, "client_msg_id": uuid.NewString(),
-		"blocks": card("Осталось на первой неделе", "4 пункта", cardItems[:2], nil)}))
-	if private.ChatID != w.directChat(mentor.ID, vera.ActorID) {
-		t.Fatal("the reminder did not go to the newcomer privately")
+	// The reminder mentions the newcomer in the newcomers chat: no private
+	// write, so no approval and no direct-message limit.
+	reminder := decode[message.Message](t, w.call(remind, "post_card", map[string]any{"chat_id": w.seed.Chats["newcomers"], "client_msg_id": uuid.NewString(),
+		"mentioned_actor_ids": []string{vera.ActorID}, "blocks": card("Осталось на первой неделе", "4 пункта", cardItems[:2], nil)}))
+	if !slices.Contains(reminder.MentionedActorIDs, vera.ActorID) || w.directChat(mentor.ID, vera.ActorID) != "" {
+		t.Fatal("the reminder did not reach the newcomer in the newcomers chat")
 	}
 	keys := decode[struct {
 		Found     bool `json:"found"`
@@ -614,11 +634,17 @@ func TestMentorGreetsNewcomerAndRemindsAboutOpenItems(t *testing.T) {
 
 // TestWhatDidIMissSendsAPrivateSummaryWithLinks plays «Что я пропустил».
 func TestWhatDidIMissSendsAPrivateSummaryWithLinks(t *testing.T) {
-	limits := quietless()
-	limits.MaxDirectMessagesPerPersonPerDay = 1
-	w := newWorld(t, limits)
+	w := newWorld(t, quietless())
 	missed := w.publish("summarizer")
 	igor := w.person("igor")
+	summaryCard := func(sourceID string) map[string]any {
+		return map[string]any{"actor_id": igor.ActorID, "client_msg_id": uuid.NewString(),
+			"blocks": map[string]any{"version": 1, "card": map[string]any{"title": "Пока вас не было: 3 дня", "items": []map[string]any{{"text": "Расписание: нужен инструктор в зал 2 послезавтра 14:00–18:00"}}},
+				"sources": []map[string]any{{"kind": "message", "message_id": sourceID}}}}
+	}
+
+	// Asked in a shared chat: the personal summary is writing to a person
+	// directly and waits for approval under the default policy.
 	w.say("igor", "hall1", "/пропустил 3 дня", "")
 	if err := w.triggers.DispatchEvents(w.ctx); err != nil {
 		t.Fatal(err)
@@ -634,20 +660,37 @@ func TestWhatDidIMissSendsAPrivateSummaryWithLinks(t *testing.T) {
 	if _, err := w.tryCall(request, "get_chat_messages", map[string]any{"chat_id": w.seed.Chats["questions"]}); err == nil {
 		t.Fatal("the summary read a chat the agent is not in")
 	}
-	summary := decode[message.Message](t, w.call(request, "send_direct_card", map[string]any{"actor_id": igor.ActorID, "client_msg_id": uuid.NewString(),
-		"blocks": map[string]any{"version": 1, "card": map[string]any{"title": "Пока вас не было: 3 дня", "items": []map[string]any{{"text": "Расписание: нужен инструктор в зал 2 послезавтра 14:00–18:00"}}},
-			"sources": []map[string]any{{"kind": "message", "message_id": page.Messages[0].ID}}}}))
-	if summary.ChatID != w.directChat(missed.ID, igor.ActorID) || summary.Blocks == nil || len(summary.Blocks.Sources) != 1 {
+	if _, err := w.tryCall(request, "send_direct_card", summaryCard(page.Messages[0].ID)); err == nil || !strings.Contains(err.Error(), "confirmation") {
+		t.Fatalf("a personal summary asked from a shared chat went out without approval: %v", err)
+	}
+	if w.directChat(missed.ID, igor.ActorID) != "" {
+		t.Fatal("a direct chat was opened before approval")
+	}
+	w.finish(request)
+
+	// Asked in his own direct chat with the agent: the answer goes out at once.
+	direct, err := w.chats.Create(w.ctx, igor, chat.CreateInput{Kind: "direct", Visibility: "private", MemberIDs: []string{missed.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := w.messages.Create(w.ctx, igor, direct.ID, message.CreateInput{ClientMsgID: uuid.NewString(), Body: "/пропустил 3 дня"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.triggers.DispatchEvents(w.ctx); err != nil {
+		t.Fatal(err)
+	}
+	own := w.claim(missed.ID, "command")
+	if own.chatID != direct.ID {
+		t.Fatalf("direct request run chat = %s", own.chatID)
+	}
+	summary := decode[message.Message](t, w.call(own, "send_direct_card", summaryCard(page.Messages[0].ID)))
+	if summary.ChatID != direct.ID || summary.Blocks == nil || len(summary.Blocks.Sources) != 1 {
 		t.Fatalf("summary = %+v", summary)
 	}
 	if got := w.count(`SELECT count(*) FROM chat_members WHERE chat_id=$1`, summary.ChatID); got != 2 {
 		t.Fatalf("the summary chat has %d members", got)
 	}
-	if _, err := w.tryCall(request, "send_direct_card", map[string]any{"actor_id": igor.ActorID, "client_msg_id": uuid.NewString(),
-		"blocks": card("Ещё одна сводка", "—", nil, nil)}); !errors.Is(err, interactive.ErrLimit) {
-		t.Fatalf("the per-person direct limit did not apply: %v", err)
-	}
-	w.finish(request)
+	w.finish(own)
 }
 
 // TestSeedRefusesANonEmptyDatabase guards demo data from landing in a real

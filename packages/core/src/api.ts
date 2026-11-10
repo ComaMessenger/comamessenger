@@ -98,6 +98,7 @@ import type {
   CreateAgentTriggerRequest,
   UpdateAgentTriggerRequest,
   ClaimedAgentRun,
+  PublishAgentRequest,
   ClaimAgentRunRequest,
   AgentRunLeaseRequest,
   PublishAgentRunRequest,
@@ -135,6 +136,8 @@ import type {
   AgentResponseCollection,
   AgentFollowup,
   KnowledgeRunFragments,
+  ArchitectSession,
+  StartArchitectSessionRequest,
 } from "./types";
 
 type APIErrorPayload = components["schemas"]["Error"];
@@ -147,6 +150,8 @@ export class APIError extends Error {
     readonly status: number,
     readonly code: APIErrorCode,
     message: string,
+    /** Structured details some errors carry (e.g. `loosened` actions). */
+    readonly details: Record<string, unknown> = {},
   ) {
     super(message);
     this.name = "APIError";
@@ -382,6 +387,17 @@ export class MessengerAPI {
   agentRuns(id: string): Promise<AgentRunPage> {
     return this.request(`/api/v1/agents/${encodeURIComponent(id)}/runs`);
   }
+  /** Runs of every agent of the workspace, newest first (agents.observe). */
+  workspaceAgentRuns(
+    options: { cursor?: string; limit?: number; agentID?: string } = {},
+  ): Promise<AgentRunPage> {
+    const query = new URLSearchParams();
+    if (options.cursor) query.set("cursor", options.cursor);
+    if (options.limit) query.set("limit", String(options.limit));
+    if (options.agentID) query.set("agent_id", options.agentID);
+    const suffix = query.size ? `?${query}` : "";
+    return this.request(`/api/v1/agent-runs${suffix}`);
+  }
   agentRun(runID: string): Promise<AgentRun> {
     return this.request(`/api/v1/agent-runs/${encodeURIComponent(runID)}`);
   }
@@ -495,6 +511,31 @@ export class MessengerAPI {
     return this.request(
       `/api/v1/agents/${encodeURIComponent(id)}/provider-credentials`,
       { method: "PUT", body: JSON.stringify(input) },
+    );
+  }
+  startArchitectSession(
+    input: StartArchitectSessionRequest,
+  ): Promise<ArchitectSession> {
+    return this.request("/api/v1/agents/architect/sessions", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+  architectSession(id: string): Promise<ArchitectSession> {
+    return this.request(
+      `/api/v1/agents/architect/sessions/${encodeURIComponent(id)}`,
+    );
+  }
+  sendArchitectMessage(id: string, text: string): Promise<ArchitectSession> {
+    return this.request(
+      `/api/v1/agents/architect/sessions/${encodeURIComponent(id)}/messages`,
+      { method: "POST", body: JSON.stringify({ text }) },
+    );
+  }
+  closeArchitectSession(id: string): Promise<void> {
+    return this.request(
+      `/api/v1/agents/architect/sessions/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
     );
   }
   agentLlmConnections(): Promise<AgentLlmConnection[]> {
@@ -785,9 +826,10 @@ export class MessengerAPI {
   agentVersions(id: string): Promise<AgentVersion[]> {
     return this.request(`/api/v1/agents/${encodeURIComponent(id)}/versions`);
   }
-  publishAgent(id: string): Promise<Agent> {
+  publishAgent(id: string, input: PublishAgentRequest = {}): Promise<Agent> {
     return this.request(`/api/v1/agents/${encodeURIComponent(id)}/publish`, {
       method: "POST",
+      body: JSON.stringify(input),
     });
   }
   pauseAgent(id: string): Promise<Agent> {
@@ -1213,7 +1255,9 @@ export class MessengerAPI {
   knowledgeEmbeddingConnections(): Promise<KnowledgeEmbeddingConnection[]> {
     return this.request("/api/v1/knowledge/embedding-connections");
   }
-  searchKnowledge(input: KnowledgeSearchRequest): Promise<KnowledgeSearchResult> {
+  searchKnowledge(
+    input: KnowledgeSearchRequest,
+  ): Promise<KnowledgeSearchResult> {
     return this.request("/api/v1/knowledge/search", {
       method: "POST",
       body: JSON.stringify(input),
@@ -1539,6 +1583,7 @@ export class MessengerAPI {
         response.status,
         payload.code ?? "request_failed",
         payload.message ?? "Request failed.",
+        payload.details ?? {},
       );
     }
     if (response.status === 204) return undefined as T;

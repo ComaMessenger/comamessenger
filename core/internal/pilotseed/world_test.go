@@ -225,6 +225,35 @@ func (w *world) tryCall(r run, name string, arguments any) (json.RawMessage, err
 	return result.Output, nil
 }
 
+// callApproved plays a write the agent's policy sends to a person first: the
+// call returns a pending confirmation, and approver decides it as in the
+// chat card. It returns the tool output of the executed call.
+func (w *world) callApproved(r run, approver identity.User, name string, arguments any) json.RawMessage {
+	w.t.Helper()
+	encoded, err := json.Marshal(arguments)
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	var scopes []string
+	if err := w.pool.QueryRow(w.ctx, `SELECT allowed_scopes FROM agents WHERE actor_id=$1`, r.agent.ID).Scan(&scopes); err != nil {
+		w.t.Fatal(err)
+	}
+	authentication := access.Identity{AuthenticationKind: "api_key", ActorID: r.agent.ID, OrgID: w.seed.OrgID, KeyID: uuid.NewString(), Scopes: scopes}
+	result, err := w.executor.Invoke(w.ctx, agenttool.Invocation{User: identity.User{ActorID: r.agent.ID, OrgID: w.seed.OrgID, OrgRole: "member"}, Identity: authentication,
+		Name: name, Arguments: encoded, RunID: r.id, LeaseToken: r.lease, CorrelationID: r.correlation, ToolCallID: uuid.NewString()})
+	if err != nil {
+		w.t.Fatalf("%s: %v", name, err)
+	}
+	if result.Confirmation == nil {
+		w.t.Fatalf("%s ran without the approval its policy requires", name)
+	}
+	decided, err := w.executor.DecideConfirmation(w.ctx, approver, result.Confirmation.ID, true)
+	if err != nil || decided.Status != "completed" {
+		w.t.Fatalf("approve %s = %+v (%s), err=%v", name, decided, decided.Result, err)
+	}
+	return decided.Result
+}
+
 func decode[T any](t *testing.T, raw json.RawMessage) T {
 	t.Helper()
 	var value T

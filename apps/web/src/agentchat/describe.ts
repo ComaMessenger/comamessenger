@@ -8,6 +8,7 @@ const readScopes: Array<[string, string]> = [
   ["members:read", "acReadMembers"],
   ["chats:read", "acReadChats"],
   ["memory:read", "acReadMemory"],
+  ["tables:read", "acReadTables"],
 ];
 
 const writeScopes: Array<[string, string]> = [

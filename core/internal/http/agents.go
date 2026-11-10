@@ -5,7 +5,9 @@ import (
 	standardhttp "net/http"
 
 	"github.com/comamessenger/comamessenger/core/internal/agent"
+	"github.com/comamessenger/comamessenger/core/internal/api"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 func (h *identityHandlers) listAgents(w standardhttp.ResponseWriter, r *standardhttp.Request) {
@@ -167,7 +169,14 @@ func (h *identityHandlers) listAgentVersions(w standardhttp.ResponseWriter, r *s
 }
 
 func (h *identityHandlers) publishAgent(w standardhttp.ResponseWriter, r *standardhttp.Request) {
-	result, err := h.agents.Publish(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "agentID"))
+	var options agent.PublishOptions
+	if r.ContentLength != 0 {
+		if err := decodeJSON(w, r, &options); err != nil {
+			h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+			return
+		}
+	}
+	result, err := h.agents.Publish(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "agentID"), options)
 	if err != nil {
 		h.writeAgentError(w, r, err)
 		return
@@ -255,6 +264,12 @@ func (h *identityHandlers) writeAgentError(w standardhttp.ResponseWriter, r *sta
 	case errors.Is(err, agent.ErrRateLimited):
 		w.Header().Set("Retry-After", "60")
 		h.writeError(w, r, standardhttp.StatusTooManyRequests, "rate_limited", "The agent rate limit was exceeded.")
+	case errors.As(err, new(*agent.LooseningError)):
+		var loosening *agent.LooseningError
+		errors.As(err, &loosening)
+		details := map[string]any{"loosened": loosening.Loosened}
+		writeJSON(h.logger, w, standardhttp.StatusConflict, api.Error{Code: "agent_confirmation_loosened",
+			Message: "Publishing lets these actions run without a person's approval. Confirm to publish.", RequestId: middleware.GetReqID(r.Context()), Details: &details})
 	case errors.Is(err, agent.ErrNotReady):
 		h.writeError(w, r, standardhttp.StatusConflict, "agent_not_ready", "Complete the agent readiness checklist before enabling it.")
 	default:

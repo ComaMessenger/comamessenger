@@ -114,8 +114,8 @@ export const agentExperienceCatalog = defineCatalog(
 
     agentBlockKnowledge: "Что знает",
     agentBlockKnowledgeHint: "Откуда агент берёт информацию",
-    agentKnowsChats: "Сообщения чатов, где он работает",
-    agentKnowsChatsEmpty: "Чаты выбираются в блоке «Где работает»",
+    agentKnowsChats: "Читает чаты",
+    agentKnowsChatsEmpty: "Агент не читает ни одного чата.",
     agentAlways: "Всегда",
     agentSource_search: "Поиск по истории",
     agentSourceHint_search: "Находит старые сообщения в своих чатах",
@@ -156,29 +156,24 @@ export const agentExperienceCatalog = defineCatalog(
     agentBlockSkillsHint: "Действия и то, нужно ли на них разрешение человека",
     agentSkill_messages: "Писать сообщения",
     agentSkillHint_messages:
-      "Отвечает там, где его позвали. Сообщения в другие чаты и в личные — только после подтверждения",
+      "Пишет в свои чаты из блока «Где работает» и, если разрешено, людям в личные сообщения",
     agentSkill_cards: "Карточки с кнопками и сбор ответов",
     agentSkillHint_cards:
       "Просит отметиться, ждёт ответов, напоминает тем, кто молчит",
-    agentSkill_direct: "Писать людям лично",
-    agentSkillHint_direct:
-      "Личные отчёты, сводки и напоминания одному человеку: не в тихие часы и не чаще дневного предела",
     agentSkill_followups: "Возвращаться к задаче позже",
     agentSkillHint_followups: "Сам ставит себе напоминание и продолжает в срок",
     agentSkill_reactions: "Ставить реакции",
     agentSkillHint_reactions: "Например, отмечает, что принял сообщение",
     agentSkill_memory: "Запоминать между разговорами",
-    agentSkillHint_memory:
-      "Вспоминает заметки сам, новые записи сохраняет после подтверждения",
+    agentSkillHint_memory: "Сохраняет заметки и вспоминает их в следующих разговорах",
     agentMode_self: "Сам",
     agentMode_confirm: "После подтверждения",
-    agentMode_mixed: "Частично с подтверждением",
     agentSkillsPolicy:
-      "Какие действия ждут подтверждения, задают правила пространства. Решение принимают в разделе «Активность» или прямо в чате.",
+      "Режим вступает в силу после публикации. Подтверждение даёт человек с правом одобрять действия агентов — в разделе «Активность» или прямо в чате.",
 
     agentBlockTriggers: "Когда включается",
     agentBlockTriggersHint:
-      "Правила читаются как предложения и применяются сразу после сохранения",
+      "Правила читаются как предложения и применяются сразу после сохранения, без публикации",
     agentRulesEmpty:
       "Правил нет: агент работает только при ручном запуске и проверке.",
     agentRuleAdd: "Добавить правило",
@@ -270,8 +265,8 @@ export const agentExperienceCatalog = defineCatalog(
 
     agentBlockPlaces: "Где работает",
     agentBlockPlacesHint:
-      "Чаты, куда агент добавлен: только здесь он читает и пишет",
-    agentPlacesEmpty: "Агент пока не добавлен ни в один чат.",
+      "Чаты, куда агент пишет ответы и итоги",
+    agentPlacesEmpty: "Агент пока никуда не пишет.",
     agentPlaceAdd: "Добавить чат",
     agentPlaceRemove: "Убрать агента из «{name}»",
 
@@ -584,8 +579,8 @@ export const agentExperienceCatalog = defineCatalog(
 
     agentBlockKnowledge: "What it knows",
     agentBlockKnowledgeHint: "Where the agent takes information from",
-    agentKnowsChats: "Messages of the chats it works in",
-    agentKnowsChatsEmpty: "Chats are chosen in «Where it works»",
+    agentKnowsChats: "Reads chats",
+    agentKnowsChatsEmpty: "The agent reads no chat.",
     agentAlways: "Always",
     agentSource_search: "Search the history",
     agentSourceHint_search: "Finds older messages in its chats",
@@ -625,29 +620,24 @@ export const agentExperienceCatalog = defineCatalog(
     agentBlockSkillsHint: "Actions and whether a person has to approve them",
     agentSkill_messages: "Write messages",
     agentSkillHint_messages:
-      "Answers where it was called. Messages to other chats and direct messages only after approval",
+      "Writes to its chats from «Where it works» and, when allowed, to people in direct messages",
     agentSkill_cards: "Cards with buttons and collecting answers",
     agentSkillHint_cards:
       "Asks people to check in, waits for answers, reminds those who are silent",
-    agentSkill_direct: "Write to people privately",
-    agentSkillHint_direct:
-      "Personal reports, summaries and reminders to one person: never in quiet hours, within a daily limit",
     agentSkill_followups: "Come back to a task later",
     agentSkillHint_followups: "Sets itself a reminder and continues on time",
     agentSkill_reactions: "Add reactions",
     agentSkillHint_reactions: "For example, marks that it took a message",
     agentSkill_memory: "Remember between conversations",
-    agentSkillHint_memory:
-      "Recalls notes by itself, saves new ones after approval",
+    agentSkillHint_memory: "Saves notes and recalls them in later conversations",
     agentMode_self: "By itself",
     agentMode_confirm: "After approval",
-    agentMode_mixed: "Partly with approval",
     agentSkillsPolicy:
-      "Workspace rules decide which actions wait for approval. Decide in Activity or right in the chat.",
+      "The mode takes effect when the agent is published. A person allowed to approve agent actions decides in Activity or right in the chat.",
 
     agentBlockTriggers: "When it starts",
     agentBlockTriggersHint:
-      "Rules read as sentences and apply as soon as they are saved",
+      "Rules read as sentences and apply as soon as they are saved, without publishing",
     agentRulesEmpty:
       "No rules: the agent works only when started manually or checked.",
     agentRuleAdd: "Add a rule",
@@ -739,8 +729,8 @@ export const agentExperienceCatalog = defineCatalog(
 
     agentBlockPlaces: "Where it works",
     agentBlockPlacesHint:
-      "Chats the agent was added to: it reads and writes only here",
-    agentPlacesEmpty: "The agent is not in any chat yet.",
+      "Chats where the agent posts answers and summaries",
+    agentPlacesEmpty: "The agent does not post anywhere yet.",
     agentPlaceAdd: "Add a chat",
     agentPlaceRemove: "Remove the agent from «{name}»",
 

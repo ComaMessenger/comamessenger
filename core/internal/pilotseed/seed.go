@@ -87,18 +87,21 @@ var chats = []chatSpec{
 	{key: "newcomers", name: "Новички", topic: "Первая неделя в центре", members: []string{"marina", "daria"}},
 }
 
-// agentPlaces binds each pilot recipe to its chats and whether it reads the
-// knowledge collection.
+// agentPlaces binds each pilot recipe to its chats, the chats it only writes
+// to and whether it reads the knowledge collection.
 var agentPlaces = []struct {
 	recipe, handle string
 	chats          []string
+	writeOnly      []string
 	knowledge      bool
 }{
 	{recipe: "control", handle: "control", chats: []string{"instructors"}},
 	{recipe: "qa", handle: "spravka", chats: []string{"questions"}, knowledge: true},
 	{recipe: "onboarding", handle: "mentor", chats: []string{"newcomers"}, knowledge: true},
 	{recipe: "slots", handle: "slots", chats: []string{"schedule"}, knowledge: true},
-	{recipe: "handoff", handle: "handoff", chats: []string{"hall1"}, knowledge: true},
+	// «Передача» reads the hall chats and reports unaccepted slots to the
+	// administrators in «Расписание», which never starts it.
+	{recipe: "handoff", handle: "handoff", chats: []string{"hall1"}, writeOnly: []string{"schedule"}, knowledge: true},
 	{recipe: "summarizer", handle: "missed", chats: []string{"hall1", "schedule", "instructors"}},
 }
 
@@ -172,6 +175,14 @@ func Seed(ctx context.Context, deps Deps, options Options) (Result, error) {
 		input := agent.CreateInput{
 			DisplayName: recipe.Name, Handle: place.handle, Kind: "builtin", Recipe: place.recipe, Locale: "ru",
 			Provider: "openai", Model: "gpt-5-mini", ChatIDs: chatIDs,
+		}
+		if len(place.writeOnly) > 0 {
+			read := append([]string(nil), chatIDs...)
+			write := append([]string(nil), chatIDs...)
+			for _, key := range place.writeOnly {
+				write = append(write, result.Chats[key])
+			}
+			input.ReadChatIDs, input.WriteChatIDs = &read, &write
 		}
 		if place.knowledge {
 			input.KnowledgeCollectionIDs = []string{result.CollectionID}

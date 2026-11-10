@@ -23,6 +23,10 @@ type MCPBinding struct {
 	// person for approval before Core executes it. Omitted means true; the
 	// connection's own policy can force it on but never off.
 	RequireWriteConfirmation bool `json:"require_write_confirmation"`
+	// ConfirmationPolicy overrides RequireWriteConfirmation for single
+	// tools ("auto" or "confirm"). A connection that requires confirmation
+	// for writes turns every entry into "confirm".
+	ConfirmationPolicy map[string]string `json:"confirmation_policy,omitempty"`
 }
 
 // UnmarshalJSON treats a missing require_write_confirmation as true.
@@ -72,7 +76,20 @@ func normalizeMCPBindings(input []MCPBinding) ([]MCPBinding, error) {
 			tools = append(tools, tool)
 		}
 		sort.Strings(tools)
-		result = append(result, MCPBinding{ConnectionID: connectionID, AllowedTools: tools, RequireWriteConfirmation: binding.RequireWriteConfirmation})
+		var policy map[string]string
+		for tool, mode := range binding.ConfirmationPolicy {
+			if _, allowed := known[tool]; !allowed {
+				return nil, fmt.Errorf("%w: confirmation set for a tool that is not allowed", ErrInvalid)
+			}
+			if mode != ConfirmationAuto && mode != ConfirmationConfirm {
+				return nil, fmt.Errorf("%w: confirmation must be auto or confirm", ErrInvalid)
+			}
+			if policy == nil {
+				policy = make(map[string]string, len(binding.ConfirmationPolicy))
+			}
+			policy[tool] = mode
+		}
+		result = append(result, MCPBinding{ConnectionID: connectionID, AllowedTools: tools, RequireWriteConfirmation: binding.RequireWriteConfirmation, ConfirmationPolicy: policy})
 	}
 	sort.Slice(result, func(left, right int) bool { return result[left].ConnectionID < result[right].ConnectionID })
 	return result, nil
@@ -117,6 +134,9 @@ func validateMCPBindings(ctx context.Context, tx pgx.Tx, orgID string, bindings 
 		}
 		if writesConfirmed {
 			bindings[index].RequireWriteConfirmation = true
+			for tool := range bindings[index].ConfirmationPolicy {
+				bindings[index].ConfirmationPolicy[tool] = ConfirmationConfirm
+			}
 		}
 	}
 	return nil

@@ -2,6 +2,7 @@ package agentrun
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,9 +11,11 @@ import (
 	"time"
 
 	"github.com/comamessenger/comamessenger/core/internal/access"
+	"github.com/comamessenger/comamessenger/core/internal/agent"
 	"github.com/comamessenger/comamessenger/core/internal/agentauthz"
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
+	"github.com/comamessenger/comamessenger/core/internal/permission"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -190,6 +193,15 @@ type FinishMCPToolCallInput struct {
 }
 type Page struct {
 	Runs []Run `json:"runs"`
+	// NextCursor continues a workspace listing; absent on the last page.
+	NextCursor *string `json:"next_cursor,omitempty"`
+}
+
+// WorkspaceRunsInput pages through the runs of every agent of the workspace.
+type WorkspaceRunsInput struct {
+	Cursor  string
+	Limit   int
+	AgentID string
 }
 type ClaimedRun struct {
 	Run
@@ -205,6 +217,9 @@ func NewService(pool *pgxpool.Pool) *Service { return &Service{pool: pool, now: 
 func (service *Service) Invoke(ctx context.Context, current identity.User, agentID string, input InvokeInput) (Run, error) {
 	if !canBuild(current) {
 		return Run{}, ErrForbidden
+	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return Run{}, err
 	}
 	if uuid.Validate(agentID) != nil || uuid.Validate(input.ChatID) != nil || uuid.Validate(input.ClientRunID) != nil {
 		return Run{}, ErrInvalid
@@ -265,7 +280,11 @@ func (service *Service) Invoke(ctx context.Context, current identity.User, agent
 				'max_output_tokens',COALESCE(draft.max_output_tokens,agent.max_output_tokens),
 				'max_tool_iterations',COALESCE(draft.max_tool_iterations,agent.max_tool_iterations),
 				'knowledge_collection_ids',to_jsonb(COALESCE(draft.knowledge_collection_ids,agent.knowledge_collection_ids)),
-				'mcp_bindings',CASE WHEN draft.agent_id IS NOT NULL THEN draft.mcp_bindings ELSE agent.mcp_bindings END
+				'mcp_bindings',CASE WHEN draft.agent_id IS NOT NULL THEN draft.mcp_bindings ELSE agent.mcp_bindings END,
+				'tone',CASE WHEN draft.agent_id IS NOT NULL THEN draft.tone ELSE agent.tone END,
+				'read_only_chat_ids',to_jsonb(CASE WHEN draft.agent_id IS NOT NULL THEN draft.read_only_chat_ids ELSE agent.read_only_chat_ids END),
+				'write_only_chat_ids',to_jsonb(CASE WHEN draft.agent_id IS NOT NULL THEN draft.write_only_chat_ids ELSE agent.write_only_chat_ids END),
+				'confirmation_policy',CASE WHEN draft.agent_id IS NOT NULL THEN draft.confirmation_policy ELSE agent.confirmation_policy END
 			)
 			FROM agents agent JOIN actors actor ON actor.org_id=agent.org_id AND actor.id=agent.actor_id
 			LEFT JOIN agent_drafts draft ON draft.org_id=agent.org_id AND draft.agent_id=agent.actor_id
@@ -297,6 +316,17 @@ func (service *Service) Invoke(ctx context.Context, current identity.User, agent
 	if input.ChainDepth < 0 || input.ChainDepth > maxDepth {
 		return Run{}, ErrForbidden
 	}
+	// A person runs or checks an agent only on a chat they belong to, and a
+	// check reads only knowledge collections they may read themself, so a
+	// draft cannot show its builder what the builder cannot see.
+	if err := checkRequesterReach(ctx, tx, current, input.ChatID, agentConfig, input.DryRun); err != nil {
+		return Run{}, err
+	}
+	if input.DryRun {
+		if agentConfig, err = withInstructions(agentConfig); err != nil {
+			return Run{}, err
+		}
+	}
 	requestedBy := current.ActorID
 	timeoutAt := service.now().UTC().Add(time.Duration(input.TimeoutSeconds) * time.Second)
 	_, err = tx.Exec(ctx, `INSERT INTO agent_runs(id,org_id,agent_id,agent_version,dry_run,agent_config,chat_id,thread_root_id,requested_by,client_run_id,correlation_id,chain_depth,provider,model,input,timeout_at,max_attempts) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) ON CONFLICT(agent_id,client_run_id) DO NOTHING`, runID, current.OrgID, agentID, agentVersion, input.DryRun, agentConfig, input.ChatID, input.ThreadRootID, requestedBy, input.ClientRunID, input.CorrelationID, input.ChainDepth, provider, model, input.Input, timeoutAt, input.MaxAttempts)
@@ -318,6 +348,9 @@ func (service *Service) List(ctx context.Context, current identity.User, agentID
 	if !canView(current) {
 		return Page{}, ErrForbidden
 	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return Page{}, err
+	}
 	rows, err := service.pool.Query(ctx, runSelect+` WHERE run.org_id=$1 AND run.agent_id=$2 ORDER BY run.created_at DESC LIMIT 100`, current.OrgID, agentID)
 	if err != nil {
 		return Page{}, err
@@ -332,6 +365,65 @@ func (service *Service) List(ctx context.Context, current identity.User, agentID
 		result.Runs = append(result.Runs, run)
 	}
 	return result, rows.Err()
+}
+
+// ListWorkspace returns the runs of all product agents of the workspace,
+// newest first, for the activity feed. It needs agents.observe.
+func (service *Service) ListWorkspace(ctx context.Context, current identity.User, input WorkspaceRunsInput) (Page, error) {
+	if !agentauthz.New().CanObserve(current) {
+		return Page{}, ErrForbidden
+	}
+	if input.Limit == 0 {
+		input.Limit = 50
+	}
+	if input.Limit < 1 || input.Limit > 200 || (input.AgentID != "" && uuid.Validate(input.AgentID) != nil) {
+		return Page{}, ErrInvalid
+	}
+	var cursorAt *time.Time
+	var cursorID *string
+	if input.Cursor != "" {
+		decoded, err := base64.RawURLEncoding.DecodeString(input.Cursor)
+		if err != nil {
+			return Page{}, ErrInvalid
+		}
+		at, runID, found := strings.Cut(string(decoded), "|")
+		parsed, parseErr := time.Parse(time.RFC3339Nano, at)
+		if !found || parseErr != nil || uuid.Validate(runID) != nil {
+			return Page{}, ErrInvalid
+		}
+		cursorAt, cursorID = &parsed, &runID
+	}
+	var agentFilter *string
+	if input.AgentID != "" {
+		agentFilter = &input.AgentID
+	}
+	rows, err := service.pool.Query(ctx, runSelect+`
+		JOIN agents agent ON agent.org_id=run.org_id AND agent.actor_id=run.agent_id AND agent.system_role IS NULL
+		WHERE run.org_id=$1 AND ($2::uuid IS NULL OR run.agent_id=$2)
+		  AND ($3::timestamptz IS NULL OR (run.created_at,run.id) < ($3,$4::uuid))
+		ORDER BY run.created_at DESC, run.id DESC LIMIT $5`, current.OrgID, agentFilter, cursorAt, cursorID, input.Limit+1)
+	if err != nil {
+		return Page{}, err
+	}
+	defer rows.Close()
+	result := Page{Runs: make([]Run, 0, input.Limit)}
+	for rows.Next() {
+		run, err := scanRun(rows)
+		if err != nil {
+			return Page{}, err
+		}
+		result.Runs = append(result.Runs, run)
+	}
+	if err := rows.Err(); err != nil {
+		return Page{}, err
+	}
+	if len(result.Runs) > input.Limit {
+		result.Runs = result.Runs[:input.Limit]
+		last := result.Runs[len(result.Runs)-1]
+		cursor := base64.RawURLEncoding.EncodeToString([]byte(last.CreatedAt.UTC().Format(time.RFC3339Nano) + "|" + last.ID))
+		result.NextCursor = &cursor
+	}
+	return result, nil
 }
 
 func (service *Service) RequestCancel(ctx context.Context, current identity.User, runID string) (Run, error) {
@@ -866,14 +958,16 @@ func (service *Service) StartMCPToolCall(ctx context.Context, current identity.U
 	var allowed, tools []byte
 	var assignable []string
 	err = service.pool.QueryRow(ctx, `SELECT run.dry_run,run.correlation_id::text,connection.name,binding.value->'allowed_tools',
-		COALESCE((binding.value->>'require_write_confirmation')::boolean,true) OR connection.writes_require_confirmation,
+		connection.writes_require_confirmation OR CASE WHEN binding.value->'confirmation_policy' ? $6
+			THEN binding.value->'confirmation_policy'->>$6 <> 'auto'
+			ELSE COALESCE((binding.value->>'require_write_confirmation')::boolean,true) END,
 		connection.tools,connection.tools_refreshed_at IS NOT NULL,connection.legacy_unverified,connection.assignable_tools
 		FROM agent_runs run JOIN agents agent ON agent.org_id=run.org_id AND agent.actor_id=run.agent_id
 		CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN run.dry_run AND run.agent_config ? 'mcp_bindings' THEN run.agent_config->'mcp_bindings' ELSE agent.mcp_bindings END) binding
 		JOIN integration_mcp_connections connection ON connection.org_id=run.org_id AND connection.id::text=binding.value->>'connection_id'
 			AND connection.enabled AND connection.agent_use_allowed
 		WHERE run.org_id=$1 AND run.agent_id=$2 AND run.id=$3 AND run.lease_token=$4 AND run.status='running' AND run.lease_expires_at>now()
-		  AND connection.id=$5`, current.OrgID, agentID, input.RunID, input.LeaseToken, input.ServerID).Scan(
+		  AND connection.id=$5`, current.OrgID, agentID, input.RunID, input.LeaseToken, input.ServerID, input.ToolName).Scan(
 		&dryRun, &correlationID, &connectionName, &allowed, &requireConfirmation, &tools, &toolsKnown, &legacyUnverified, &assignable)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return MCPToolCall{}, ErrForbidden
@@ -1134,4 +1228,73 @@ func (service *Service) getForOrg(ctx context.Context, orgID, agentID, clientRun
 		return Run{}, ErrNotFound
 	}
 	return run, err
+}
+
+// withInstructions adds the trusted instructions Core derives from the draft
+// snapshot (task, tone, chat roles), so a check run sees exactly what the
+// published agent would send to the model.
+func withInstructions(config json.RawMessage) (json.RawMessage, error) {
+	var fields map[string]any
+	if err := json.Unmarshal(config, &fields); err != nil {
+		return nil, fmt.Errorf("decode agent configuration: %w", err)
+	}
+	var snapshot struct {
+		Description      string   `json:"description"`
+		Tone             string   `json:"tone"`
+		ReadOnlyChatIDs  []string `json:"read_only_chat_ids"`
+		WriteOnlyChatIDs []string `json:"write_only_chat_ids"`
+	}
+	if err := json.Unmarshal(config, &snapshot); err != nil {
+		return nil, fmt.Errorf("decode agent configuration: %w", err)
+	}
+	fields["instructions"] = agent.Instructions(snapshot.Description, snapshot.Tone, snapshot.ReadOnlyChatIDs, snapshot.WriteOnlyChatIDs)
+	return json.Marshal(fields)
+}
+
+func checkRequesterReach(ctx context.Context, tx pgx.Tx, current identity.User, chatID string, config json.RawMessage, dryRun bool) error {
+	var member bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM chat_members WHERE org_id=$1 AND chat_id=$2 AND actor_id=$3)`, current.OrgID, chatID, current.ActorID).Scan(&member); err != nil {
+		return err
+	}
+	if !member {
+		return ErrForbidden
+	}
+	if !dryRun || permission.Allows(current.OrgRole, current.Permissions, permission.KnowledgeManage) {
+		return nil
+	}
+	var snapshot struct {
+		Collections []string `json:"knowledge_collection_ids"`
+	}
+	_ = json.Unmarshal(config, &snapshot)
+	if len(snapshot.Collections) == 0 {
+		return nil
+	}
+	var hidden bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM knowledge_collections collection
+		WHERE collection.org_id=$1 AND collection.id=ANY($3::uuid[]) AND collection.access<>'organization' AND NOT EXISTS(
+			SELECT 1 FROM knowledge_collection_chats shared
+			JOIN chat_members member ON member.org_id=shared.org_id AND member.chat_id=shared.chat_id AND member.actor_id=$2
+			WHERE shared.org_id=collection.org_id AND shared.collection_id=collection.id))`, current.OrgID, current.ActorID, snapshot.Collections).Scan(&hidden); err != nil {
+		return err
+	}
+	if hidden {
+		return ErrForbidden
+	}
+	return nil
+}
+
+// requireProductAgent hides system agents (runtime worker, Architect) from
+// product APIs: for them these agents do not exist.
+func requireProductAgent(ctx context.Context, q interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, orgID, agentID string) error {
+	if uuid.Validate(agentID) != nil {
+		return ErrNotFound
+	}
+	var product bool
+	err := q.QueryRow(ctx, `SELECT system_role IS NULL FROM agents WHERE org_id=$1 AND actor_id=$2`, orgID, agentID).Scan(&product)
+	if errors.Is(err, pgx.ErrNoRows) || err == nil && !product {
+		return ErrNotFound
+	}
+	return err
 }

@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQueries,
+  useQuery,
+} from "@tanstack/react-query";
 import type { Agent, AgentRun, Chat, MessengerAPI } from "@comamessenger/core";
 import { CalendarClock, ListChecks } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -14,8 +18,13 @@ import {
 } from "../shared/format";
 import { runSentence } from "./feed";
 
-/** Runs of how many agents the feed reads at most, newest agents first. */
+/**
+ * Without agents.observe the feed falls back to reading the runs of at most
+ * this many agents one by one; observers read the workspace feed page by
+ * page.
+ */
 const feedAgents = 20;
+const feedPage = 40;
 
 const today = (value: string) =>
   new Date(value).toDateString() === new Date().toDateString();
@@ -50,11 +59,24 @@ export function AgentActivityPage({
   const shown = agentID
     ? agents.filter((agent) => agent.id === agentID)
     : agents.slice(0, feedAgents);
+  const workspaceRuns = useInfiniteQuery({
+    queryKey: ["agent-runs", "workspace", agentID],
+    queryFn: ({ pageParam }) =>
+      api.workspaceAgentRuns({
+        cursor: pageParam || undefined,
+        limit: feedPage,
+        agentID: agentID || undefined,
+      }),
+    initialPageParam: "",
+    getNextPageParam: (page) => page.next_cursor || undefined,
+    enabled: canObserve,
+    refetchInterval: 30_000,
+  });
   const runs = useQueries({
     queries: shown.map((agent) => ({
       queryKey: ["agent-runs", agent.id],
       queryFn: () => api.agentRuns(agent.id),
-      enabled: canView,
+      enabled: canView && !canObserve,
       refetchInterval: 30_000,
     })),
   });
@@ -88,14 +110,19 @@ export function AgentActivityPage({
     const chat = chats.find((item) => item.id === id);
     return chat ? chatName(chat) : t("agentChatHidden");
   };
-  const feed: AgentRun[] = runs
-    .flatMap((query) => query.data?.runs ?? [])
-    .sort(
-      (left, right) =>
-        new Date(right.created_at).getTime() -
-        new Date(left.created_at).getTime(),
-    )
-    .slice(0, 40);
+  const feed: AgentRun[] = canObserve
+    ? (workspaceRuns.data?.pages.flatMap((page) => page.runs) ?? [])
+    : runs
+        .flatMap((query) => query.data?.runs ?? [])
+        .sort(
+          (left, right) =>
+            new Date(right.created_at).getTime() -
+            new Date(left.created_at).getTime(),
+        )
+        .slice(0, feedPage);
+  const feedLoading = canObserve
+    ? workspaceRuns.isLoading
+    : runs.some((query) => query.isLoading);
   const pendingApprovals = (approvals.data ?? []).filter(
     (item) => !agentID || item.agent_id === agentID,
   );
@@ -260,7 +287,7 @@ export function AgentActivityPage({
             <div className="agent-section__title">
               <h3>{t("agentFeedTitle")}</h3>
             </div>
-            {runs.some((query) => query.isLoading) ? (
+            {feedLoading ? (
               <Skeleton />
             ) : feed.length === 0 ? (
               <p className="agent-block__empty">{t("agentFeedEmpty")}</p>
@@ -304,6 +331,16 @@ export function AgentActivityPage({
                   );
                 })}
               </ol>
+            )}
+            {canObserve && workspaceRuns.hasNextPage && (
+              <Button
+                variant="ghost"
+                size="sm"
+                pending={workspaceRuns.isFetchingNextPage}
+                onClick={() => void workspaceRuns.fetchNextPage()}
+              >
+                {t("agentFeedMore")}
+              </Button>
             )}
           </section>
         )}

@@ -5,21 +5,13 @@ import type { AgentScope } from "@comamessenger/core";
  * do» are switches in plain language; scopes are derived from them and only
  * shown in advanced settings.
  *
- * Confirmation modes mirror the server: every write tool waits for a human
- * decision, except the interactive tools (cards, collections, follow-ups),
- * which are bounded by their own scopes and limits (docs/protocols/agents-v1.md).
- * The answer to the run itself is published without a tool and never waits.
+ * Whether an action waits for a person is part of the agent version
+ * (`confirmation_policy`, see ./confirmation.ts). The answer to the run itself
+ * is published without a tool and never waits.
  */
 
 export type KnowledgeSource = "search" | "files" | "members";
-export type Skill =
-  | "messages"
-  | "reactions"
-  | "cards"
-  | "direct"
-  | "followups"
-  | "memory";
-export type SkillMode = "self" | "confirm" | "mixed";
+export type Skill = "messages" | "reactions" | "cards" | "followups" | "memory";
 
 export const knowledgeSources: KnowledgeSource[] = [
   "search",
@@ -29,21 +21,11 @@ export const knowledgeSources: KnowledgeSource[] = [
 export const skills: Skill[] = [
   "messages",
   "cards",
-  "direct",
   "followups",
   "reactions",
   "memory",
 ];
 
-export const skillMode: Record<Skill, SkillMode> = {
-  messages: "mixed",
-  reactions: "confirm",
-  cards: "self",
-  // Bounded by quiet hours and per-person daily caps on the server.
-  direct: "self",
-  followups: "self",
-  memory: "mixed",
-};
 
 const sourceScopes: Record<KnowledgeSource, AgentScope[]> = {
   search: ["search:read"],
@@ -55,7 +37,6 @@ const skillScopes: Record<Skill, AgentScope[]> = {
   messages: ["messages:write"],
   reactions: ["reactions:write"],
   cards: ["messages:interactive"],
-  direct: ["messages:direct_cards"],
   followups: ["followups:write"],
   memory: ["memory:read", "memory:write"],
 };
@@ -85,10 +66,16 @@ export function capabilitiesOf(scopes: readonly AgentScope[]): Capabilities {
 export function scopesFor({
   capabilities,
   hasKnowledge,
+  hasTables,
   current,
 }: {
   capabilities: Capabilities;
   hasKnowledge: boolean;
+  /**
+   * Spreadsheets of the bound collections are a source (`query_table`).
+   * Omitted keeps the current choice.
+   */
+  hasTables?: boolean;
   current: readonly AgentScope[];
 }): AgentScope[] {
   const result = new Set<AgentScope>(["messages:read", "runtime:execute"]);
@@ -97,10 +84,10 @@ export function scopesFor({
   for (const skill of capabilities.skills)
     skillScopes[skill].forEach((scope) => result.add(scope));
   if (hasKnowledge) result.add("knowledge:read");
-  // Slot tables are read from bound collections. The builder has no switch
-  // for them, so a recipe that reads tables («Слоты», «Передача») keeps the
-  // scope through every edit; without a bound collection it reads nothing.
-  if (current.includes("tables:read")) result.add("tables:read");
+  // Spreadsheets live in knowledge collections: without one there is nothing
+  // to read.
+  if (hasKnowledge && (hasTables ?? current.includes("tables:read")))
+    result.add("tables:read");
   for (const scope of preservedScopes)
     if (current.includes(scope)) result.add(scope);
   return orderedScopes.filter((scope) => result.has(scope));
@@ -111,7 +98,6 @@ export const orderedScopes: AgentScope[] = [
   "messages:read",
   "messages:write",
   "messages:interactive",
-  "messages:direct_cards",
   "reactions:write",
   "files:read",
   "search:read",

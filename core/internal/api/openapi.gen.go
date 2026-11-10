@@ -92,6 +92,24 @@ func (e AgentOperationalStatus) Valid() bool {
 	}
 }
 
+// Defines values for AgentConfirmationMode.
+const (
+	Auto    AgentConfirmationMode = "auto"
+	Confirm AgentConfirmationMode = "confirm"
+)
+
+// Valid indicates whether the value is a known member of the AgentConfirmationMode enum.
+func (e AgentConfirmationMode) Valid() bool {
+	switch e {
+	case Auto:
+		return true
+	case Confirm:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentFollowupStatus.
 const (
 	AgentFollowupStatusCanceled   AgentFollowupStatus = "canceled"
@@ -461,7 +479,6 @@ const (
 	MembersRead         AgentScope = "members:read"
 	MemoryRead          AgentScope = "memory:read"
 	MemoryWrite         AgentScope = "memory:write"
-	MessagesDirectCards AgentScope = "messages:direct_cards"
 	MessagesInteractive AgentScope = "messages:interactive"
 	MessagesRead        AgentScope = "messages:read"
 	MessagesWrite       AgentScope = "messages:write"
@@ -489,8 +506,6 @@ func (e AgentScope) Valid() bool {
 		return true
 	case MemoryWrite:
 		return true
-	case MessagesDirectCards:
-		return true
 	case MessagesInteractive:
 		return true
 	case MessagesRead:
@@ -506,6 +521,30 @@ func (e AgentScope) Valid() bool {
 	case SearchRead:
 		return true
 	case TablesRead:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentTone.
+const (
+	Concise  AgentTone = "concise"
+	Empty    AgentTone = ""
+	Formal   AgentTone = "formal"
+	Friendly AgentTone = "friendly"
+)
+
+// Valid indicates whether the value is a known member of the AgentTone enum.
+func (e AgentTone) Valid() bool {
+	switch e {
+	case Concise:
+		return true
+	case Empty:
+		return true
+	case Formal:
+		return true
+	case Friendly:
 		return true
 	default:
 		return false
@@ -662,6 +701,87 @@ const (
 func (e AgentUsageReportCurrency) Valid() bool {
 	switch e {
 	case AgentUsageReportCurrencyUSD:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArchitectMessageKind.
+const (
+	ArchitectMessageKindDone     ArchitectMessageKind = "done"
+	ArchitectMessageKindNotice   ArchitectMessageKind = "notice"
+	ArchitectMessageKindQuestion ArchitectMessageKind = "question"
+	ArchitectMessageKindText     ArchitectMessageKind = "text"
+)
+
+// Valid indicates whether the value is a known member of the ArchitectMessageKind enum.
+func (e ArchitectMessageKind) Valid() bool {
+	switch e {
+	case ArchitectMessageKindDone:
+		return true
+	case ArchitectMessageKindNotice:
+		return true
+	case ArchitectMessageKindQuestion:
+		return true
+	case ArchitectMessageKindText:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArchitectMessageRole.
+const (
+	ArchitectMessageRoleAssistant ArchitectMessageRole = "assistant"
+	ArchitectMessageRoleUser      ArchitectMessageRole = "user"
+)
+
+// Valid indicates whether the value is a known member of the ArchitectMessageRole enum.
+func (e ArchitectMessageRole) Valid() bool {
+	switch e {
+	case ArchitectMessageRoleAssistant:
+		return true
+	case ArchitectMessageRoleUser:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArchitectSessionLocale.
+const (
+	ArchitectSessionLocaleEn ArchitectSessionLocale = "en"
+	ArchitectSessionLocaleRu ArchitectSessionLocale = "ru"
+)
+
+// Valid indicates whether the value is a known member of the ArchitectSessionLocale enum.
+func (e ArchitectSessionLocale) Valid() bool {
+	switch e {
+	case ArchitectSessionLocaleEn:
+		return true
+	case ArchitectSessionLocaleRu:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArchitectSessionStatus.
+const (
+	ArchitectSessionStatusActive  ArchitectSessionStatus = "active"
+	ArchitectSessionStatusClosed  ArchitectSessionStatus = "closed"
+	ArchitectSessionStatusExpired ArchitectSessionStatus = "expired"
+)
+
+// Valid indicates whether the value is a known member of the ArchitectSessionStatus enum.
+func (e ArchitectSessionStatus) Valid() bool {
+	switch e {
+	case ArchitectSessionStatusActive:
+		return true
+	case ArchitectSessionStatusClosed:
+		return true
+	case ArchitectSessionStatusExpired:
 		return true
 	default:
 		return false
@@ -1558,52 +1678,59 @@ func (e DurableEventTypeV1) Valid() bool {
 
 // Defines values for ErrorCode.
 const (
-	ErrorCodeActionClosed               ErrorCode = "action_closed"
-	ErrorCodeActionConflict             ErrorCode = "action_conflict"
-	ErrorCodeAgentBudgetExceeded        ErrorCode = "agent_budget_exceeded"
-	ErrorCodeAgentConfigurationNotFound ErrorCode = "agent_configuration_not_found"
-	ErrorCodeAgentConflict              ErrorCode = "agent_conflict"
-	ErrorCodeAgentNotFound              ErrorCode = "agent_not_found"
-	ErrorCodeAgentTriggerConflict       ErrorCode = "agent_trigger_conflict"
-	ErrorCodeAgentTriggerNotFound       ErrorCode = "agent_trigger_not_found"
-	ErrorCodeAlreadyBootstrapped        ErrorCode = "already_bootstrapped"
-	ErrorCodeChatConflict               ErrorCode = "chat_conflict"
-	ErrorCodeChatNotFound               ErrorCode = "chat_not_found"
-	ErrorCodeEmailTaken                 ErrorCode = "email_taken"
-	ErrorCodeFileConflict               ErrorCode = "file_conflict"
-	ErrorCodeFileNotFound               ErrorCode = "file_not_found"
-	ErrorCodeForbidden                  ErrorCode = "forbidden"
-	ErrorCodeIdempotencyConflict        ErrorCode = "idempotency_conflict"
-	ErrorCodeIntegrationInUse           ErrorCode = "integration_in_use"
-	ErrorCodeIntegrationUsageChanged    ErrorCode = "integration_usage_changed"
-	ErrorCodeInternalError              ErrorCode = "internal_error"
-	ErrorCodeInvalidCredentials         ErrorCode = "invalid_credentials"
-	ErrorCodeInvalidRefreshToken        ErrorCode = "invalid_refresh_token"
-	ErrorCodeInvalidRequest             ErrorCode = "invalid_request"
-	ErrorCodeInvitationInvalid          ErrorCode = "invitation_invalid"
-	ErrorCodeKnowledgeConflict          ErrorCode = "knowledge_conflict"
-	ErrorCodeKnowledgeNotFound          ErrorCode = "knowledge_not_found"
-	ErrorCodeLimitReached               ErrorCode = "limit_reached"
-	ErrorCodeMessageNotFound            ErrorCode = "message_not_found"
-	ErrorCodeOriginNotAllowed           ErrorCode = "origin_not_allowed"
-	ErrorCodePasswordChangeRequired     ErrorCode = "password_change_required"
-	ErrorCodePayloadTooLarge            ErrorCode = "payload_too_large"
-	ErrorCodePushUnavailable            ErrorCode = "push_unavailable"
-	ErrorCodeQuietHours                 ErrorCode = "quiet_hours"
-	ErrorCodeRateLimited                ErrorCode = "rate_limited"
-	ErrorCodeReauthenticationFailed     ErrorCode = "reauthentication_failed"
-	ErrorCodeServiceNotReady            ErrorCode = "service_not_ready"
-	ErrorCodeSessionNotFound            ErrorCode = "session_not_found"
-	ErrorCodeSmtpNotConfigured          ErrorCode = "smtp_not_configured"
-	ErrorCodeStorageFull                ErrorCode = "storage_full"
-	ErrorCodeTokenInvalid               ErrorCode = "token_invalid"
-	ErrorCodeUnauthorized               ErrorCode = "unauthorized"
-	ErrorCodeUnsupportedFormat          ErrorCode = "unsupported_format"
-	ErrorCodeValidationFailed           ErrorCode = "validation_failed"
-	ErrorCodeVersionConflict            ErrorCode = "version_conflict"
-	ErrorCodeWebhookNotFound            ErrorCode = "webhook_not_found"
-	ErrorCodeWebhookRejected            ErrorCode = "webhook_rejected"
-	ErrorCodeWorkspaceNotFound          ErrorCode = "workspace_not_found"
+	ErrorCodeActionClosed                ErrorCode = "action_closed"
+	ErrorCodeActionConflict              ErrorCode = "action_conflict"
+	ErrorCodeAgentBudgetExceeded         ErrorCode = "agent_budget_exceeded"
+	ErrorCodeAgentConfigurationNotFound  ErrorCode = "agent_configuration_not_found"
+	ErrorCodeAgentConfirmationLoosened   ErrorCode = "agent_confirmation_loosened"
+	ErrorCodeAgentConflict               ErrorCode = "agent_conflict"
+	ErrorCodeAgentNotFound               ErrorCode = "agent_not_found"
+	ErrorCodeAgentNotReady               ErrorCode = "agent_not_ready"
+	ErrorCodeAgentTriggerConflict        ErrorCode = "agent_trigger_conflict"
+	ErrorCodeAgentTriggerNotFound        ErrorCode = "agent_trigger_not_found"
+	ErrorCodeAlreadyBootstrapped         ErrorCode = "already_bootstrapped"
+	ErrorCodeArchitectBudgetExceeded     ErrorCode = "architect_budget_exceeded"
+	ErrorCodeArchitectBusy               ErrorCode = "architect_busy"
+	ErrorCodeArchitectConnectionRequired ErrorCode = "architect_connection_required"
+	ErrorCodeArchitectModelError         ErrorCode = "architect_model_error"
+	ErrorCodeArchitectSessionExpired     ErrorCode = "architect_session_expired"
+	ErrorCodeArchitectSessionNotFound    ErrorCode = "architect_session_not_found"
+	ErrorCodeChatConflict                ErrorCode = "chat_conflict"
+	ErrorCodeChatNotFound                ErrorCode = "chat_not_found"
+	ErrorCodeEmailTaken                  ErrorCode = "email_taken"
+	ErrorCodeFileConflict                ErrorCode = "file_conflict"
+	ErrorCodeFileNotFound                ErrorCode = "file_not_found"
+	ErrorCodeForbidden                   ErrorCode = "forbidden"
+	ErrorCodeIdempotencyConflict         ErrorCode = "idempotency_conflict"
+	ErrorCodeIntegrationInUse            ErrorCode = "integration_in_use"
+	ErrorCodeIntegrationUsageChanged     ErrorCode = "integration_usage_changed"
+	ErrorCodeInternalError               ErrorCode = "internal_error"
+	ErrorCodeInvalidCredentials          ErrorCode = "invalid_credentials"
+	ErrorCodeInvalidRefreshToken         ErrorCode = "invalid_refresh_token"
+	ErrorCodeInvalidRequest              ErrorCode = "invalid_request"
+	ErrorCodeInvitationInvalid           ErrorCode = "invitation_invalid"
+	ErrorCodeKnowledgeConflict           ErrorCode = "knowledge_conflict"
+	ErrorCodeKnowledgeNotFound           ErrorCode = "knowledge_not_found"
+	ErrorCodeLimitReached                ErrorCode = "limit_reached"
+	ErrorCodeMessageNotFound             ErrorCode = "message_not_found"
+	ErrorCodeOriginNotAllowed            ErrorCode = "origin_not_allowed"
+	ErrorCodePasswordChangeRequired      ErrorCode = "password_change_required"
+	ErrorCodePayloadTooLarge             ErrorCode = "payload_too_large"
+	ErrorCodePushUnavailable             ErrorCode = "push_unavailable"
+	ErrorCodeRateLimited                 ErrorCode = "rate_limited"
+	ErrorCodeReauthenticationFailed      ErrorCode = "reauthentication_failed"
+	ErrorCodeServiceNotReady             ErrorCode = "service_not_ready"
+	ErrorCodeSessionNotFound             ErrorCode = "session_not_found"
+	ErrorCodeSmtpNotConfigured           ErrorCode = "smtp_not_configured"
+	ErrorCodeStorageFull                 ErrorCode = "storage_full"
+	ErrorCodeTokenInvalid                ErrorCode = "token_invalid"
+	ErrorCodeUnauthorized                ErrorCode = "unauthorized"
+	ErrorCodeUnsupportedFormat           ErrorCode = "unsupported_format"
+	ErrorCodeValidationFailed            ErrorCode = "validation_failed"
+	ErrorCodeVersionConflict             ErrorCode = "version_conflict"
+	ErrorCodeWebhookNotFound             ErrorCode = "webhook_not_found"
+	ErrorCodeWebhookRejected             ErrorCode = "webhook_rejected"
+	ErrorCodeWorkspaceNotFound           ErrorCode = "workspace_not_found"
 )
 
 // Valid indicates whether the value is a known member of the ErrorCode enum.
@@ -1617,15 +1744,31 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeAgentConfigurationNotFound:
 		return true
+	case ErrorCodeAgentConfirmationLoosened:
+		return true
 	case ErrorCodeAgentConflict:
 		return true
 	case ErrorCodeAgentNotFound:
+		return true
+	case ErrorCodeAgentNotReady:
 		return true
 	case ErrorCodeAgentTriggerConflict:
 		return true
 	case ErrorCodeAgentTriggerNotFound:
 		return true
 	case ErrorCodeAlreadyBootstrapped:
+		return true
+	case ErrorCodeArchitectBudgetExceeded:
+		return true
+	case ErrorCodeArchitectBusy:
+		return true
+	case ErrorCodeArchitectConnectionRequired:
+		return true
+	case ErrorCodeArchitectModelError:
+		return true
+	case ErrorCodeArchitectSessionExpired:
+		return true
+	case ErrorCodeArchitectSessionNotFound:
 		return true
 	case ErrorCodeChatConflict:
 		return true
@@ -1670,8 +1813,6 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodePayloadTooLarge:
 		return true
 	case ErrorCodePushUnavailable:
-		return true
-	case ErrorCodeQuietHours:
 		return true
 	case ErrorCodeRateLimited:
 		return true
@@ -2213,6 +2354,54 @@ func (e MessageActionAudienceOrgRoles) Valid() bool {
 	case MessageActionAudienceOrgRolesMember:
 		return true
 	case MessageActionAudienceOrgRolesOwner:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageAgentProvenanceTrigger.
+const (
+	MessageAgentProvenanceTriggerCollection    MessageAgentProvenanceTrigger = "collection"
+	MessageAgentProvenanceTriggerCommand       MessageAgentProvenanceTrigger = "command"
+	MessageAgentProvenanceTriggerConfirmation  MessageAgentProvenanceTrigger = "confirmation"
+	MessageAgentProvenanceTriggerEvent         MessageAgentProvenanceTrigger = "event"
+	MessageAgentProvenanceTriggerEveryMessage  MessageAgentProvenanceTrigger = "every_message"
+	MessageAgentProvenanceTriggerFollowup      MessageAgentProvenanceTrigger = "followup"
+	MessageAgentProvenanceTriggerKeyword       MessageAgentProvenanceTrigger = "keyword"
+	MessageAgentProvenanceTriggerManual        MessageAgentProvenanceTrigger = "manual"
+	MessageAgentProvenanceTriggerMention       MessageAgentProvenanceTrigger = "mention"
+	MessageAgentProvenanceTriggerMessageAction MessageAgentProvenanceTrigger = "message_action"
+	MessageAgentProvenanceTriggerSchedule      MessageAgentProvenanceTrigger = "schedule"
+	MessageAgentProvenanceTriggerWebhook       MessageAgentProvenanceTrigger = "webhook"
+)
+
+// Valid indicates whether the value is a known member of the MessageAgentProvenanceTrigger enum.
+func (e MessageAgentProvenanceTrigger) Valid() bool {
+	switch e {
+	case MessageAgentProvenanceTriggerCollection:
+		return true
+	case MessageAgentProvenanceTriggerCommand:
+		return true
+	case MessageAgentProvenanceTriggerConfirmation:
+		return true
+	case MessageAgentProvenanceTriggerEvent:
+		return true
+	case MessageAgentProvenanceTriggerEveryMessage:
+		return true
+	case MessageAgentProvenanceTriggerFollowup:
+		return true
+	case MessageAgentProvenanceTriggerKeyword:
+		return true
+	case MessageAgentProvenanceTriggerManual:
+		return true
+	case MessageAgentProvenanceTriggerMention:
+		return true
+	case MessageAgentProvenanceTriggerMessageAction:
+		return true
+	case MessageAgentProvenanceTriggerSchedule:
+		return true
+	case MessageAgentProvenanceTriggerWebhook:
 		return true
 	default:
 		return false
@@ -2957,6 +3146,24 @@ func (e StartAgentMcpToolCallRequestMode) Valid() bool {
 	case StartAgentMcpToolCallRequestModeRead:
 		return true
 	case StartAgentMcpToolCallRequestModeWrite:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for StartArchitectSessionRequestLocale.
+const (
+	StartArchitectSessionRequestLocaleEn StartArchitectSessionRequestLocale = "en"
+	StartArchitectSessionRequestLocaleRu StartArchitectSessionRequestLocale = "ru"
+)
+
+// Valid indicates whether the value is a known member of the StartArchitectSessionRequestLocale enum.
+func (e StartArchitectSessionRequestLocale) Valid() bool {
+	switch e {
+	case StartArchitectSessionRequestLocaleEn:
+		return true
+	case StartArchitectSessionRequestLocaleRu:
 		return true
 	default:
 		return false
@@ -3755,22 +3962,31 @@ type AddChatMemberRequestRole string
 
 // Agent defines model for Agent.
 type Agent struct {
-	AllowedScopes               []AgentScope         `json:"allowed_scopes"`
-	AvatarVersion               int64                `json:"avatar_version"`
-	ChatIds                     []openapi_types.UUID `json:"chat_ids"`
-	CreatedAt                   time.Time            `json:"created_at"`
-	DailyCostLimit              *string              `json:"daily_cost_limit"`
-	Description                 string               `json:"description"`
-	DisplayName                 string               `json:"display_name"`
-	DraftVersion                *int                 `json:"draft_version"`
-	Enabled                     bool                 `json:"enabled"`
-	EndpointUrl                 *string              `json:"endpoint_url,omitempty"`
-	ExecutionTimeoutSeconds     int                  `json:"execution_timeout_seconds"`
-	ExternalDataSharingApproved bool                 `json:"external_data_sharing_approved"`
-	Handle                      string               `json:"handle"`
-	HasUnpublishedChanges       bool                 `json:"has_unpublished_changes"`
-	Id                          openapi_types.UUID   `json:"id"`
-	Kind                        AgentKind            `json:"kind"`
+	AllowedScopes []AgentScope         `json:"allowed_scopes"`
+	AvatarVersion int64                `json:"avatar_version"`
+	ChatIds       []openapi_types.UUID `json:"chat_ids"`
+
+	// ConfirmationLocked Built-in tools the server always confirms (operator setting); their policy is always confirm.
+	ConfirmationLocked *[]string `json:"confirmation_locked,omitempty"`
+
+	// ConfirmationPolicy Confirmation of each built-in write tool (post_message, reply_in_thread, add_reaction, post_card, update_card, start_collection, schedule_followup, remember, send_direct_message). A request may name only the tools it changes; responses name all of them with the mode Core enforces. Tools in the server floor cannot be set to auto.
+	ConfirmationPolicy          *AgentConfirmationPolicy `json:"confirmation_policy,omitempty"`
+	CreatedAt                   time.Time                `json:"created_at"`
+	DailyCostLimit              *string                  `json:"daily_cost_limit"`
+	Description                 string                   `json:"description"`
+	DisplayName                 string                   `json:"display_name"`
+	DraftVersion                *int                     `json:"draft_version"`
+	Enabled                     bool                     `json:"enabled"`
+	EndpointUrl                 *string                  `json:"endpoint_url,omitempty"`
+	ExecutionTimeoutSeconds     int                      `json:"execution_timeout_seconds"`
+	ExternalDataSharingApproved bool                     `json:"external_data_sharing_approved"`
+	Handle                      string                   `json:"handle"`
+	HasUnpublishedChanges       bool                     `json:"has_unpublished_changes"`
+	Id                          openapi_types.UUID       `json:"id"`
+
+	// Instructions The trusted instructions the model receives: the task plus the lines Core derives from the version (tone, chats where the agent only reads or only writes). Chat lines are omitted for actors without agent management rights.
+	Instructions *string   `json:"instructions,omitempty"`
+	Kind         AgentKind `json:"kind"`
 
 	// KnowledgeCollectionIds Knowledge collections bound to the draft (or the published version when there is no draft). Empty for actors without agent management rights.
 	KnowledgeCollectionIds *[]openapi_types.UUID `json:"knowledge_collection_ids,omitempty"`
@@ -3792,12 +4008,21 @@ type Agent struct {
 	PublishedAt                *time.Time             `json:"published_at"`
 	PublishedVersion           *int                   `json:"published_version"`
 	RateLimitPerMinute         int                    `json:"rate_limit_per_minute"`
-	Readiness                  AgentReadiness         `json:"readiness"`
+
+	// ReadChatIds Agent chats it reads (history, search, members). Empty for actors without agent management rights.
+	ReadChatIds *[]openapi_types.UUID `json:"read_chat_ids,omitempty"`
+	Readiness   AgentReadiness        `json:"readiness"`
 
 	// Recipe custom or a recipe id from GET /api/v1/agents/recipes. qa is «Справка», onboarding «Наставник», summarizer «Что я пропустил».
 	Recipe        AgentRecipeId `json:"recipe"`
 	RecipeVersion int           `json:"recipe_version"`
-	UpdatedAt     time.Time     `json:"updated_at"`
+
+	// Tone Empty means no tone instruction.
+	Tone      *AgentTone `json:"tone,omitempty"`
+	UpdatedAt time.Time  `json:"updated_at"`
+
+	// WriteChatIds Agent chats it posts to. A chat may be in both lists; chat_ids is their union.
+	WriteChatIds *[]openapi_types.UUID `json:"write_chat_ids,omitempty"`
 }
 
 // AgentKind defines model for Agent.Kind.
@@ -3819,6 +4044,12 @@ type AgentApiKey struct {
 	RevokedAt          *time.Time         `json:"revoked_at,omitempty"`
 	Scopes             []AgentScope       `json:"scopes"`
 }
+
+// AgentConfirmationMode auto runs the action by itself; confirm waits for a person's approval.
+type AgentConfirmationMode string
+
+// AgentConfirmationPolicy Confirmation of each built-in write tool (post_message, reply_in_thread, add_reaction, post_card, update_card, start_collection, schedule_followup, remember, send_direct_message). A request may name only the tools it changes; responses name all of them with the mode Core enforces. Tools in the server floor cannot be set to auto.
+type AgentConfirmationPolicy map[string]AgentConfirmationMode
 
 // AgentFollowup defines model for AgentFollowup.
 type AgentFollowup struct {
@@ -3868,8 +4099,11 @@ type AgentLlmConnectionProvider string
 // AgentMcpBinding defines model for AgentMcpBinding.
 type AgentMcpBinding struct {
 	// AllowedTools Must be assignable on the connection and, once Core knows the catalog, offered by the server.
-	AllowedTools []string           `json:"allowed_tools"`
-	ConnectionId openapi_types.UUID `json:"connection_id"`
+	AllowedTools []string `json:"allowed_tools"`
+
+	// ConfirmationPolicy Per-tool override of require_write_confirmation for allowed tools. A connection that requires confirmation turns every entry into confirm.
+	ConfirmationPolicy *map[string]AgentConfirmationMode `json:"confirmation_policy,omitempty"`
+	ConnectionId       openapi_types.UUID                `json:"connection_id"`
 
 	// RequireWriteConfirmation Calls to tools that are not read-only wait for a person's approval; Core then executes them. Omitted means true; a connection that requires confirmation forces it on.
 	RequireWriteConfirmation *bool `json:"require_write_confirmation,omitempty"`
@@ -4131,7 +4365,9 @@ type AgentRunLeaseRequest struct {
 
 // AgentRunPage defines model for AgentRunPage.
 type AgentRunPage struct {
-	Runs []AgentRun `json:"runs"`
+	// NextCursor Present when the workspace listing has more runs.
+	NextCursor *string    `json:"next_cursor,omitempty"`
+	Runs       []AgentRun `json:"runs"`
 }
 
 // AgentRunToolCall defines model for AgentRunToolCall.
@@ -4175,6 +4411,9 @@ type AgentRuntimeMcpServer struct {
 	Name                     string             `json:"name"`
 	RequireWriteConfirmation bool               `json:"require_write_confirmation"`
 	TimeoutMs                int                `json:"timeout_ms"`
+
+	// ToolConfirmation Effective mode of every allowed tool when it changes data.
+	ToolConfirmation *map[string]AgentConfirmationMode `json:"tool_confirmation,omitempty"`
 }
 
 // AgentRuntimeRunLeaseRequest defines model for AgentRuntimeRunLeaseRequest.
@@ -4185,6 +4424,9 @@ type AgentRuntimeRunLeaseRequest struct {
 
 // AgentScope defines model for AgentScope.
 type AgentScope string
+
+// AgentTone Empty means no tone instruction.
+type AgentTone string
 
 // AgentToolConfirmation defines model for AgentToolConfirmation.
 type AgentToolConfirmation struct {
@@ -4288,6 +4530,70 @@ type AgentVersion struct {
 	Id          openapi_types.UUID `json:"id"`
 	PublishedAt time.Time          `json:"published_at"`
 	Version     int                `json:"version"`
+}
+
+// ArchitectMessage defines model for ArchitectMessage.
+type ArchitectMessage struct {
+	Assumptions []string  `json:"assumptions"`
+	CreatedAt   time.Time `json:"created_at"`
+	Id          string    `json:"id"`
+
+	// Kind `question` carries answer options; `done` means the draft is assembled.
+	Kind    ArchitectMessageKind `json:"kind"`
+	Options []string             `json:"options"`
+	Role    ArchitectMessageRole `json:"role"`
+	Text    string               `json:"text"`
+}
+
+// ArchitectMessageKind `question` carries answer options; `done` means the draft is assembled.
+type ArchitectMessageKind string
+
+// ArchitectMessageRole defines model for ArchitectMessage.Role.
+type ArchitectMessageRole string
+
+// ArchitectSession defines model for ArchitectSession.
+type ArchitectSession struct {
+	// AgentId The draft agent; null until the Architect creates it.
+	AgentId     *openapi_types.UUID `json:"agent_id"`
+	Assumptions []string            `json:"assumptions"`
+	Connection  struct {
+		Available bool                `json:"available"`
+		Id        *openapi_types.UUID `json:"id"`
+		Model     string              `json:"model"`
+		Name      string              `json:"name"`
+	} `json:"connection"`
+	CreatedAt      time.Time              `json:"created_at"`
+	ExpiresAt      time.Time              `json:"expires_at"`
+	Id             openapi_types.UUID     `json:"id"`
+	Locale         ArchitectSessionLocale `json:"locale"`
+	MaxQuestions   int                    `json:"max_questions"`
+	Messages       []ArchitectMessage     `json:"messages"`
+	QuestionsAsked int                    `json:"questions_asked"`
+	Status         ArchitectSessionStatus `json:"status"`
+	TestExamples   []ArchitectTestExample `json:"test_examples"`
+
+	// Thinking An answer is being prepared.
+	Thinking  bool      `json:"thinking"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Usage     struct {
+		Cost         string `json:"cost"`
+		Currency     string `json:"currency"`
+		InputTokens  int64  `json:"input_tokens"`
+		OutputTokens int64  `json:"output_tokens"`
+	} `json:"usage"`
+}
+
+// ArchitectSessionLocale defines model for ArchitectSession.Locale.
+type ArchitectSessionLocale string
+
+// ArchitectSessionStatus defines model for ArchitectSession.Status.
+type ArchitectSessionStatus string
+
+// ArchitectTestExample defines model for ArchitectTestExample.
+type ArchitectTestExample struct {
+	ChatId      *openapi_types.UUID `json:"chat_id"`
+	Expectation string              `json:"expectation"`
+	Prompt      string              `json:"prompt"`
 }
 
 // AuditEntry defines model for AuditEntry.
@@ -4644,9 +4950,12 @@ type CreateAgentMcpServerRequest struct {
 
 // CreateAgentRequest defines model for CreateAgentRequest.
 type CreateAgentRequest struct {
-	AllowedScopes  []AgentScope         `json:"allowed_scopes"`
-	ChatIds        []openapi_types.UUID `json:"chat_ids"`
-	DailyCostLimit *string              `json:"daily_cost_limit,omitempty"`
+	AllowedScopes []AgentScope         `json:"allowed_scopes"`
+	ChatIds       []openapi_types.UUID `json:"chat_ids"`
+
+	// ConfirmationPolicy Confirmation of each built-in write tool (post_message, reply_in_thread, add_reaction, post_card, update_card, start_collection, schedule_followup, remember, send_direct_message). A request may name only the tools it changes; responses name all of them with the mode Core enforces. Tools in the server floor cannot be set to auto.
+	ConfirmationPolicy *AgentConfirmationPolicy `json:"confirmation_policy,omitempty"`
+	DailyCostLimit     *string                  `json:"daily_cost_limit,omitempty"`
 
 	// Description Instructions. For a recipe agent leave empty to get the catalog instructions in `locale`.
 	Description                 *string                `json:"description,omitempty"`
@@ -4673,8 +4982,17 @@ type CreateAgentRequest struct {
 	ProviderRateLimitPerMinute *int               `json:"provider_rate_limit_per_minute,omitempty"`
 	RateLimitPerMinute         *int               `json:"rate_limit_per_minute,omitempty"`
 
+	// ReadChatIds Chats the agent reads. With write_chat_ids it replaces chat_ids by their union; a list that is omitted keeps its current value.
+	ReadChatIds *[]openapi_types.UUID `json:"read_chat_ids,omitempty"`
+
 	// Recipe custom or a recipe id from GET /api/v1/agents/recipes. qa is «Справка», onboarding «Наставник», summarizer «Что я пропустил».
 	Recipe *AgentRecipeId `json:"recipe,omitempty"`
+
+	// Tone Empty means no tone instruction.
+	Tone *AgentTone `json:"tone,omitempty"`
+
+	// WriteChatIds Chats the agent posts to.
+	WriteChatIds *[]openapi_types.UUID `json:"write_chat_ids,omitempty"`
 }
 
 // CreateAgentRequestKind defines model for CreateAgentRequest.Kind.
@@ -4720,6 +5038,7 @@ type CreateFileUploadRequest struct {
 
 // CreateIntegrationWebhookRequest defines model for CreateIntegrationWebhookRequest.
 type CreateIntegrationWebhookRequest struct {
+	AgentUseAllowed    *bool   `json:"agent_use_allowed,omitempty"`
 	Description        *string `json:"description,omitempty"`
 	Enabled            *bool   `json:"enabled,omitempty"`
 	MaxBodyBytes       *int    `json:"max_body_bytes,omitempty"`
@@ -4987,6 +5306,8 @@ type InfrastructureSettings struct {
 
 // IntegrationWebhook defines model for IntegrationWebhook.
 type IntegrationWebhook struct {
+	// AgentUseAllowed Released by integrations.manage so agent builders may start an agent by this webhook. Off by default; builders list only released webhooks.
+	AgentUseAllowed    *bool              `json:"agent_use_allowed,omitempty"`
 	CreatedAt          time.Time          `json:"created_at"`
 	CreatedBy          openapi_types.UUID `json:"created_by"`
 	Description        string             `json:"description"`
@@ -5026,6 +5347,8 @@ type IntegrationWebhookDeliveryStatus string
 
 // IntegrationWebhookWithSecret Returned only on creation and rotation; the secret is not shown again.
 type IntegrationWebhookWithSecret struct {
+	// AgentUseAllowed Released by integrations.manage so agent builders may start an agent by this webhook. Off by default; builders list only released webhooks.
+	AgentUseAllowed    *bool              `json:"agent_use_allowed,omitempty"`
 	CreatedAt          time.Time          `json:"created_at"`
 	CreatedBy          openapi_types.UUID `json:"created_by"`
 	Description        string             `json:"description"`
@@ -5331,6 +5654,9 @@ type McpTool struct {
 type Message struct {
 	ActorId openapi_types.UUID `json:"actor_id"`
 
+	// AgentProvenance Why an agent wrote the message. Visible to every reader of the message: it never carries a webhook payload, a follow-up note or text from another chat.
+	AgentProvenance *MessageAgentProvenance `json:"agent_provenance,omitempty"`
+
 	// Blocks Optional structured part of an agent message. The body always carries a plain-text fallback; clients that do not support the version render the body. Server-managed state (responses, closed, binding) is part of the document so durable events carry the current card.
 	Blocks            *MessageBlocks       `json:"blocks,omitempty"`
 	Body              string               `json:"body"`
@@ -5424,6 +5750,18 @@ type MessageActionResult struct {
 	Response MessageActionResponse `json:"response"`
 }
 
+// MessageAgentProvenance Why an agent wrote the message. Visible to every reader of the message: it never carries a webhook payload, a follow-up note or text from another chat.
+type MessageAgentProvenance struct {
+	RunId   openapi_types.UUID            `json:"run_id"`
+	Trigger MessageAgentProvenanceTrigger `json:"trigger"`
+
+	// TriggerLabel Short detail recorded when the message was written, e.g. "/summarize" or "09:00 UTC". Never a keyword pattern or a webhook name.
+	TriggerLabel *string `json:"trigger_label,omitempty"`
+}
+
+// MessageAgentProvenanceTrigger defines model for MessageAgentProvenance.Trigger.
+type MessageAgentProvenanceTrigger string
+
 // MessageBlocks Optional structured part of an agent message. The body always carries a plain-text fallback; clients that do not support the version render the body. Server-managed state (responses, closed, binding) is part of the document so durable events carry the current card.
 type MessageBlocks struct {
 	Actions *[]MessageAction `json:"actions,omitempty"`
@@ -5499,12 +5837,17 @@ type MessageReceiptList struct {
 
 // MessageSource defines model for MessageSource.
 type MessageSource struct {
+	// ChunkId Knowledge fragment of a document source the answer relies on.
+	ChunkId    *openapi_types.UUID `json:"chunk_id,omitempty"`
 	DocumentId *openapi_types.UUID `json:"document_id,omitempty"`
 	Excerpt    *string             `json:"excerpt,omitempty"`
 	FileId     *openapi_types.UUID `json:"file_id,omitempty"`
 	Kind       MessageSourceKind   `json:"kind"`
 	MessageId  *openapi_types.UUID `json:"message_id,omitempty"`
-	Title      *string             `json:"title,omitempty"`
+
+	// Position Position of the fragment in the document, filled by Core from chunk_id.
+	Position *int    `json:"position,omitempty"`
+	Title    *string `json:"title,omitempty"`
 }
 
 // MessageSourceKind defines model for MessageSource.Kind.
@@ -5629,6 +5972,12 @@ type PublicBranding struct {
 	PasswordRecoveryAvailable bool    `json:"password_recovery_available"`
 	Version                   int64   `json:"version"`
 	WorkspaceName             string  `json:"workspace_name"`
+}
+
+// PublishAgentRequest defines model for PublishAgentRequest.
+type PublishAgentRequest struct {
+	// AcknowledgeLoosened The person publishing confirms that the actions listed by agent_confirmation_loosened will run without approval.
+	AcknowledgeLoosened *bool `json:"acknowledge_loosened,omitempty"`
 }
 
 // PublishAgentRunRequest defines model for PublishAgentRunRequest.
@@ -6014,6 +6363,11 @@ type SearchResult struct {
 // SearchResultKind defines model for SearchResult.Kind.
 type SearchResultKind string
 
+// SendArchitectMessageRequest defines model for SendArchitectMessageRequest.
+type SendArchitectMessageRequest struct {
+	Text string `json:"text"`
+}
+
 // Session defines model for Session.
 type Session struct {
 	CreatedAt  time.Time          `json:"created_at"`
@@ -6062,6 +6416,19 @@ type StartAgentProviderCallRequest struct {
 	ReservedCost string             `json:"reserved_cost"`
 	RunId        openapi_types.UUID `json:"run_id"`
 }
+
+// StartArchitectSessionRequest defines model for StartArchitectSessionRequest.
+type StartArchitectSessionRequest struct {
+	// AgentId Existing agent whose draft the Architect edits; omitted for a new agent.
+	AgentId *openapi_types.UUID `json:"agent_id,omitempty"`
+
+	// LlmConnectionId Workspace model connection; by default the first enabled one with a default model.
+	LlmConnectionId *openapi_types.UUID                 `json:"llm_connection_id,omitempty"`
+	Locale          *StartArchitectSessionRequestLocale `json:"locale,omitempty"`
+}
+
+// StartArchitectSessionRequestLocale defines model for StartArchitectSessionRequest.Locale.
+type StartArchitectSessionRequestLocale string
 
 // ThreadFollow defines model for ThreadFollow.
 type ThreadFollow struct {
@@ -6161,28 +6528,42 @@ type UpdateAgentProviderCredentialRequest struct {
 
 // UpdateAgentRequest defines model for UpdateAgentRequest.
 type UpdateAgentRequest struct {
-	AllowedScopes               *[]AgentScope         `json:"allowed_scopes,omitempty"`
-	ChatIds                     *[]openapi_types.UUID `json:"chat_ids,omitempty"`
-	DailyCostLimit              *string               `json:"daily_cost_limit,omitempty"`
-	Description                 *string               `json:"description,omitempty"`
-	DisplayName                 *string               `json:"display_name,omitempty"`
-	Enabled                     *bool                 `json:"enabled,omitempty"`
-	EndpointUrl                 *string               `json:"endpoint_url,omitempty"`
-	ExecutionTimeoutSeconds     *int                  `json:"execution_timeout_seconds,omitempty"`
-	ExternalDataSharingApproved *bool                 `json:"external_data_sharing_approved,omitempty"`
-	Handle                      *string               `json:"handle,omitempty"`
-	KnowledgeCollectionIds      *[]openapi_types.UUID `json:"knowledge_collection_ids,omitempty"`
-	LlmConnectionId             *openapi_types.UUID   `json:"llm_connection_id,omitempty"`
-	MaxChainDepth               *int                  `json:"max_chain_depth,omitempty"`
-	MaxOutputTokens             *int                  `json:"max_output_tokens,omitempty"`
-	MaxToolIterations           *int                  `json:"max_tool_iterations,omitempty"`
-	McpBindings                 *[]AgentMcpBinding    `json:"mcp_bindings,omitempty"`
-	Model                       *string               `json:"model,omitempty"`
-	MonthlyCostLimit            *string               `json:"monthly_cost_limit,omitempty"`
-	PerChatConcurrency          *int                  `json:"per_chat_concurrency,omitempty"`
-	Provider                    *string               `json:"provider,omitempty"`
-	ProviderRateLimitPerMinute  *int                  `json:"provider_rate_limit_per_minute,omitempty"`
-	RateLimitPerMinute          *int                  `json:"rate_limit_per_minute,omitempty"`
+	// AcknowledgeLoosened With enabled=true, confirms the actions agent_confirmation_loosened listed.
+	AcknowledgeLoosened *bool                 `json:"acknowledge_loosened,omitempty"`
+	AllowedScopes       *[]AgentScope         `json:"allowed_scopes,omitempty"`
+	ChatIds             *[]openapi_types.UUID `json:"chat_ids,omitempty"`
+
+	// ConfirmationPolicy Confirmation of each built-in write tool (post_message, reply_in_thread, add_reaction, post_card, update_card, start_collection, schedule_followup, remember, send_direct_message). A request may name only the tools it changes; responses name all of them with the mode Core enforces. Tools in the server floor cannot be set to auto.
+	ConfirmationPolicy          *AgentConfirmationPolicy `json:"confirmation_policy,omitempty"`
+	DailyCostLimit              *string                  `json:"daily_cost_limit,omitempty"`
+	Description                 *string                  `json:"description,omitempty"`
+	DisplayName                 *string                  `json:"display_name,omitempty"`
+	Enabled                     *bool                    `json:"enabled,omitempty"`
+	EndpointUrl                 *string                  `json:"endpoint_url,omitempty"`
+	ExecutionTimeoutSeconds     *int                     `json:"execution_timeout_seconds,omitempty"`
+	ExternalDataSharingApproved *bool                    `json:"external_data_sharing_approved,omitempty"`
+	Handle                      *string                  `json:"handle,omitempty"`
+	KnowledgeCollectionIds      *[]openapi_types.UUID    `json:"knowledge_collection_ids,omitempty"`
+	LlmConnectionId             *openapi_types.UUID      `json:"llm_connection_id,omitempty"`
+	MaxChainDepth               *int                     `json:"max_chain_depth,omitempty"`
+	MaxOutputTokens             *int                     `json:"max_output_tokens,omitempty"`
+	MaxToolIterations           *int                     `json:"max_tool_iterations,omitempty"`
+	McpBindings                 *[]AgentMcpBinding       `json:"mcp_bindings,omitempty"`
+	Model                       *string                  `json:"model,omitempty"`
+	MonthlyCostLimit            *string                  `json:"monthly_cost_limit,omitempty"`
+	PerChatConcurrency          *int                     `json:"per_chat_concurrency,omitempty"`
+	Provider                    *string                  `json:"provider,omitempty"`
+	ProviderRateLimitPerMinute  *int                     `json:"provider_rate_limit_per_minute,omitempty"`
+	RateLimitPerMinute          *int                     `json:"rate_limit_per_minute,omitempty"`
+
+	// ReadChatIds Chats the agent reads. With write_chat_ids it replaces chat_ids by their union; a list that is omitted keeps its current value.
+	ReadChatIds *[]openapi_types.UUID `json:"read_chat_ids,omitempty"`
+
+	// Tone Empty means no tone instruction.
+	Tone *AgentTone `json:"tone,omitempty"`
+
+	// WriteChatIds Chats the agent posts to.
+	WriteChatIds *[]openapi_types.UUID `json:"write_chat_ids,omitempty"`
 }
 
 // UpdateAgentRuntimeCheckpointRequest defines model for UpdateAgentRuntimeCheckpointRequest.
@@ -6228,6 +6609,7 @@ type UpdateInfrastructureSettingsRequest struct {
 
 // UpdateIntegrationWebhookRequest defines model for UpdateIntegrationWebhookRequest.
 type UpdateIntegrationWebhookRequest struct {
+	AgentUseAllowed    *bool   `json:"agent_use_allowed,omitempty"`
 	Description        *string `json:"description,omitempty"`
 	Enabled            *bool   `json:"enabled,omitempty"`
 	MaxBodyBytes       *int    `json:"max_body_bytes,omitempty"`
@@ -6447,6 +6829,9 @@ type AgentToolConfirmationId = openapi_types.UUID
 // AgentTriggerId defines model for AgentTriggerId.
 type AgentTriggerId = openapi_types.UUID
 
+// ArchitectSessionId defines model for ArchitectSessionId.
+type ArchitectSessionId = openapi_types.UUID
+
 // ChatId defines model for ChatId.
 type ChatId = openapi_types.UUID
 
@@ -6489,6 +6874,13 @@ type GetActorAvatarParams struct {
 
 // GetActorAvatarParamsDelivery defines parameters for GetActorAvatar.
 type GetActorAvatarParamsDelivery string
+
+// ListWorkspaceAgentRunsParams defines parameters for ListWorkspaceAgentRuns.
+type ListWorkspaceAgentRunsParams struct {
+	Cursor  *string             `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit   *int                `form:"limit,omitempty" json:"limit,omitempty"`
+	AgentId *openapi_types.UUID `form:"agent_id,omitempty" json:"agent_id,omitempty"`
+}
 
 // ListAgentFollowupsParams defines parameters for ListAgentFollowups.
 type ListAgentFollowupsParams struct {
@@ -6720,6 +7112,12 @@ type InvokeAgentToolJSONRequestBody = InvokeAgentToolRequest
 // CreateAgentJSONRequestBody defines body for CreateAgent for application/json ContentType.
 type CreateAgentJSONRequestBody = CreateAgentRequest
 
+// StartAgentArchitectSessionJSONRequestBody defines body for StartAgentArchitectSession for application/json ContentType.
+type StartAgentArchitectSessionJSONRequestBody = StartArchitectSessionRequest
+
+// SendAgentArchitectMessageJSONRequestBody defines body for SendAgentArchitectMessage for application/json ContentType.
+type SendAgentArchitectMessageJSONRequestBody = SendArchitectMessageRequest
+
 // UpdateAgentPlatformSettingsJSONRequestBody defines body for UpdateAgentPlatformSettings for application/json ContentType.
 type UpdateAgentPlatformSettingsJSONRequestBody = UpdateAgentPlatformSettingsRequest
 
@@ -6743,6 +7141,9 @@ type UpdateAgentMcpServerJSONRequestBody = UpdateAgentMcpServerRequest
 
 // UpdateAgentProviderCredentialJSONRequestBody defines body for UpdateAgentProviderCredential for application/json ContentType.
 type UpdateAgentProviderCredentialJSONRequestBody = UpdateAgentProviderCredentialRequest
+
+// PublishAgentJSONRequestBody defines body for PublishAgent for application/json ContentType.
+type PublishAgentJSONRequestBody = PublishAgentRequest
 
 // CreateAgentTriggerJSONRequestBody defines body for CreateAgentTrigger for application/json ContentType.
 type CreateAgentTriggerJSONRequestBody = CreateAgentTriggerRequest

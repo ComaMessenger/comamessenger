@@ -135,6 +135,13 @@ export function AdvancedSettings({
               </div>
             </section>
             <section>
+              <h4>{t("agentInstructionsTitle")}</h4>
+              <p className="agent-muted">{t("agentInstructionsLead")}</p>
+              <pre className="agent-instructions" data-testid="agent-instructions">
+                {agent.instructions ?? agent.description}
+              </pre>
+            </section>
+            <section>
               <h4>{t("agentPermissionsTitle")}</h4>
               <p className="agent-muted">{t("agentPermissionsDerived")}</p>
               <ul className="agent-scope-list">

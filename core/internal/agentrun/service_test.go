@@ -14,6 +14,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/message"
+	"github.com/comamessenger/comamessenger/core/internal/permission"
 	"github.com/comamessenger/comamessenger/core/internal/testdb"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -30,7 +31,7 @@ func TestDryRunSnapshotsDraftWithoutEnablingAgent(t *testing.T) {
 	owner := identity.User{ActorID: runTestOwnerID, OrgID: runTestOrgID, OrgRole: "owner"}
 	agents := agent.NewService(pool)
 	created, err := agents.Create(t.Context(), owner, agent.CreateInput{
-		DisplayName: "Draft tester", Handle: "draft-tester", Kind: "builtin", Description: "draft instructions",
+		DisplayName: "Draft tester", Handle: "draft-tester", Kind: "builtin", Description: "draft instructions", Tone: "friendly",
 		Provider: "openai", Model: "test", ExternalDataSharingApproved: true,
 		AllowedScopes: []agent.Scope{agent.ScopeMessagesRead, agent.ScopeRuntimeExecute}, ChatIDs: []string{runTestChatID},
 	})
@@ -59,9 +60,12 @@ func TestDryRunSnapshotsDraftWithoutEnablingAgent(t *testing.T) {
 		t.Fatalf("dry run=%+v err=%v", run, err)
 	}
 	var config struct {
-		Description string `json:"description"`
+		Description  string `json:"description"`
+		Instructions string `json:"instructions"`
 	}
-	if err := json.Unmarshal(run.AgentConfig, &config); err != nil || config.Description != "draft instructions" {
+	// The check run sees the instructions Core derives, tone line included.
+	if err := json.Unmarshal(run.AgentConfig, &config); err != nil || config.Description != "draft instructions" ||
+		config.Instructions != "draft instructions\n\nTone: be warm and friendly; use plain words and address people kindly." {
 		t.Fatalf("dry-run config=%+v err=%v", config, err)
 	}
 	if _, err := service.Invoke(t.Context(), owner, created.ID, agentrun.InvokeInput{
@@ -388,4 +392,88 @@ func mustRunID(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return value
+}
+
+func TestWorkspaceRunsPageForObservers(t *testing.T) {
+	pool := testdb.New(t)
+	seedRunWorkerModel(t, pool)
+	owner := identity.User{ActorID: runTestOwnerID, OrgID: runTestOrgID, OrgRole: "owner"}
+	created, err := agent.NewService(pool).Create(t.Context(), owner, agent.CreateInput{DisplayName: "Feed", Handle: "feed", Kind: "external",
+		EndpointURL: "https://agents.example.test/runtime", AllowedScopes: []agent.Scope{agent.ScopeMessagesRead}, ChatIDs: []string{runTestChatID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index := range 3 {
+		if _, err := pool.Exec(t.Context(), `INSERT INTO agent_runs(id,org_id,agent_id,correlation_id,chat_id,created_at) VALUES(gen_random_uuid(),$1,$2,gen_random_uuid(),$3,now()-make_interval(mins=>$4))`,
+			runTestOrgID, created.ID, runTestChatID, index); err != nil {
+			t.Fatal(err)
+		}
+	}
+	service := agentrun.NewService(pool)
+	first, err := service.ListWorkspace(t.Context(), owner, agentrun.WorkspaceRunsInput{Limit: 2})
+	if err != nil || len(first.Runs) != 2 || first.NextCursor == nil || !first.Runs[0].CreatedAt.After(first.Runs[1].CreatedAt) {
+		t.Fatalf("first page = %+v, err=%v", first, err)
+	}
+	second, err := service.ListWorkspace(t.Context(), owner, agentrun.WorkspaceRunsInput{Limit: 2, Cursor: *first.NextCursor, AgentID: created.ID})
+	if err != nil || len(second.Runs) != 1 || second.NextCursor != nil || second.Runs[0].ID == first.Runs[1].ID {
+		t.Fatalf("second page = %+v, err=%v", second, err)
+	}
+	if _, err := service.ListWorkspace(t.Context(), owner, agentrun.WorkspaceRunsInput{Cursor: "not-a-cursor"}); !errors.Is(err, agentrun.ErrInvalid) {
+		t.Fatalf("bad cursor error = %v", err)
+	}
+	member := identity.User{ActorID: runTestOwnerID, OrgID: runTestOrgID, OrgRole: "member"}
+	if _, err := service.ListWorkspace(t.Context(), member, agentrun.WorkspaceRunsInput{}); !errors.Is(err, agentrun.ErrForbidden) {
+		t.Fatalf("member error = %v", err)
+	}
+}
+
+// TestChecksRunOnlyWhereTheRequesterCanSee covers review finding 9 for runs:
+// a person checks or starts an agent only on a chat they belong to, and a
+// check does not read collections the person may not read.
+func TestChecksRunOnlyWhereTheRequesterCanSee(t *testing.T) {
+	pool := testdb.New(t)
+	seedRunWorkerModel(t, pool)
+	owner := identity.User{ActorID: runTestOwnerID, OrgID: runTestOrgID, OrgRole: "owner"}
+	builderID, hiddenChat, collectionID := mustRunID(t), mustRunID(t), mustRunID(t)
+	tx, err := pool.Begin(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(t.Context())
+	for _, statement := range []struct {
+		query string
+		args  []any
+	}{
+		{`INSERT INTO actors(id,org_id,type,org_role,display_name,handle) VALUES($1,$2,'user','admin','Builder','builder')`, []any{builderID, runTestOrgID}},
+		{`INSERT INTO chat_members(chat_id,actor_id,org_id,role) VALUES($3,$1,$2,'member')`, []any{builderID, runTestOrgID, runTestChatID}},
+		{`INSERT INTO chats(id,org_id,kind,visibility,name,created_by) VALUES($1,$2,'group','private','Хирургия',$3)`, []any{hiddenChat, runTestOrgID, runTestOwnerID}},
+		{`INSERT INTO chat_members(chat_id,actor_id,org_id,role) VALUES($1,$3,$2,'owner')`, []any{hiddenChat, runTestOrgID, runTestOwnerID}},
+		{`INSERT INTO knowledge_collections(id,org_id,name,access,created_by,updated_by) VALUES($1,$2,'Закрытая','chats',$3,$3)`, []any{collectionID, runTestOrgID, runTestOwnerID}},
+		{`INSERT INTO knowledge_collection_chats(org_id,collection_id,chat_id) VALUES($1,$2,$3)`, []any{runTestOrgID, collectionID, hiddenChat}},
+	} {
+		if _, err := tx.Exec(t.Context(), statement.query, statement.args...); err != nil {
+			t.Fatalf("%s: %v", statement.query, err)
+		}
+	}
+	if err := tx.Commit(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	agents := agent.NewService(pool)
+	created, err := agents.Create(t.Context(), owner, agent.CreateInput{DisplayName: "Reach", Handle: "reach-run", Kind: "builtin", Provider: "openai", Model: "test",
+		ExternalDataSharingApproved: true, AllowedScopes: []agent.Scope{agent.ScopeMessagesRead, agent.ScopeRuntimeExecute},
+		ChatIDs: []string{runTestChatID, hiddenChat}, KnowledgeCollectionIDs: []string{collectionID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	builder := identity.User{ActorID: builderID, OrgID: runTestOrgID, OrgRole: "admin", Permissions: []permission.Code{permission.AgentsBuild}}
+	service := agentrun.NewService(pool)
+	if _, err := service.Invoke(t.Context(), builder, created.ID, agentrun.InvokeInput{ChatID: hiddenChat, ClientRunID: mustRunID(t), DryRun: true}); !errors.Is(err, agentrun.ErrForbidden) {
+		t.Fatalf("check in a chat the builder is not in error = %v", err)
+	}
+	if _, err := service.Invoke(t.Context(), builder, created.ID, agentrun.InvokeInput{ChatID: runTestChatID, ClientRunID: mustRunID(t), DryRun: true}); !errors.Is(err, agentrun.ErrForbidden) {
+		t.Fatalf("check reading a collection the builder cannot read error = %v", err)
+	}
+	if _, err := service.Invoke(t.Context(), owner, created.ID, agentrun.InvokeInput{ChatID: runTestChatID, ClientRunID: mustRunID(t), DryRun: true}); err != nil {
+		t.Fatalf("owner check: %v", err)
+	}
 }

@@ -75,8 +75,21 @@ export function draftOf(agent: Agent): Draft {
     provider_rate_limit_per_minute: agent.provider_rate_limit_per_minute,
     execution_timeout_seconds: agent.execution_timeout_seconds,
     chat_ids: agent.chat_ids,
+    read_chat_ids: agent.read_chat_ids ?? agent.chat_ids,
+    write_chat_ids: agent.write_chat_ids ?? agent.chat_ids,
     knowledge_collection_ids: agent.knowledge_collection_ids ?? [],
+    mcp_bindings: agent.mcp_bindings ?? [],
+    tone: agent.tone ?? "",
+    confirmation_policy: agent.confirmation_policy ?? {},
   };
+}
+
+/** Every chat of the draft: where it reads and where it writes. */
+export function draftChatIDs(draft: Draft): string[] {
+  if (!draft.read_chat_ids && !draft.write_chat_ids) return draft.chat_ids;
+  return [
+    ...new Set([...(draft.read_chat_ids ?? []), ...(draft.write_chat_ids ?? [])]),
+  ].sort();
 }
 
 /** The request body of a draft save; the server keeps unspecified fields. */
@@ -102,7 +115,14 @@ export function updateOf(draft: Draft) {
     rate_limit_per_minute: draft.rate_limit_per_minute,
     provider_rate_limit_per_minute: draft.provider_rate_limit_per_minute,
     execution_timeout_seconds: draft.execution_timeout_seconds,
-    chat_ids: draft.chat_ids,
+    chat_ids: draftChatIDs(draft),
+    ...(draft.read_chat_ids ? { read_chat_ids: draft.read_chat_ids } : {}),
+    ...(draft.write_chat_ids ? { write_chat_ids: draft.write_chat_ids } : {}),
     knowledge_collection_ids: draft.knowledge_collection_ids ?? [],
+    ...(draft.mcp_bindings ? { mcp_bindings: draft.mcp_bindings } : {}),
+    ...(draft.tone !== undefined ? { tone: draft.tone } : {}),
+    ...(draft.confirmation_policy
+      ? { confirmation_policy: draft.confirmation_policy }
+      : {}),
   };
 }

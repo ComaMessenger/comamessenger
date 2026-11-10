@@ -100,6 +100,9 @@ func (service *Service) Create(ctx context.Context, current identity.User, agent
 	if !canBuild(current) {
 		return Trigger{}, ErrForbidden
 	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return Trigger{}, err
+	}
 	if uuid.Validate(agentID) != nil {
 		return Trigger{}, ErrNotFound
 	}
@@ -143,6 +146,9 @@ func (service *Service) List(ctx context.Context, current identity.User, agentID
 	if !canView(current) {
 		return nil, ErrForbidden
 	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return nil, err
+	}
 	rows, err := service.pool.Query(ctx, triggerSelect+` WHERE trigger.org_id=$1 AND trigger.agent_id=$2 AND trigger.superseded_at IS NULL ORDER BY trigger.created_at`, current.OrgID, agentID)
 	if err != nil {
 		return nil, err
@@ -162,6 +168,9 @@ func (service *Service) List(ctx context.Context, current identity.User, agentID
 func (service *Service) Update(ctx context.Context, current identity.User, agentID, triggerID string, input UpdateInput) (Trigger, error) {
 	if !canBuild(current) {
 		return Trigger{}, ErrForbidden
+	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return Trigger{}, err
 	}
 	existing, err := service.get(ctx, current.OrgID, triggerID)
 	if err != nil || existing.AgentID != agentID {
@@ -223,6 +232,9 @@ func (service *Service) Delete(ctx context.Context, current identity.User, agent
 	if !canBuild(current) {
 		return ErrForbidden
 	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return err
+	}
 	auditID, err := id.New()
 	if err != nil {
 		return err
@@ -276,7 +288,9 @@ func validateAgentAndScheduleChat(ctx context.Context, tx pgx.Tx, orgID, agentID
 		if err := json.Unmarshal(input.Config, &config); err != nil {
 			return ErrInvalid
 		}
-		if err := tx.QueryRow(ctx, `SELECT true FROM integration_webhooks WHERE org_id=$1 AND id=$2`, orgID, config.WebhookID).Scan(&exists); errors.Is(err, pgx.ErrNoRows) {
+		// Only webhooks integrations.manage released for agents: the payload of
+		// another system reaches the agent's run input.
+		if err := tx.QueryRow(ctx, `SELECT true FROM integration_webhooks WHERE org_id=$1 AND id=$2 AND agent_use_allowed`, orgID, config.WebhookID).Scan(&exists); errors.Is(err, pgx.ErrNoRows) {
 			return ErrInvalid
 		} else if err != nil {
 			return err
@@ -358,6 +372,9 @@ func (service *Service) dispatchAgent(ctx context.Context, orgID, agentID string
 			-- to another person (drafts, read marks and other private state).
 			AND event.chat_id IS NOT NULL AND (event.audience_actor_id IS NULL OR event.audience_actor_id=$3)
 			AND EXISTS(SELECT 1 FROM chat_members member WHERE member.org_id=event.org_id AND member.chat_id=event.chat_id AND member.actor_id=$3)
+			-- A chat the agent only writes to is not a source: its messages and
+			-- events never start the agent nor reach run.input.
+			AND NOT EXISTS(SELECT 1 FROM agents agent WHERE agent.org_id=event.org_id AND agent.actor_id=$3 AND event.chat_id=ANY(agent.write_only_chat_ids))
 		ORDER BY event.seq LIMIT 100`, orgID, checkpoint, agentID)
 	if err != nil {
 		return err
@@ -793,7 +810,9 @@ type WebhookDelivery struct {
 // as untrusted content, and the notice repeats that for the model.
 func (service *Service) DispatchWebhook(ctx context.Context, tx pgx.Tx, delivery WebhookDelivery) (int, error) {
 	rows, err := tx.Query(ctx, triggerSelect+` WHERE trigger.org_id=$1 AND trigger.type='webhook' AND trigger.enabled AND trigger.superseded_at IS NULL
-		AND trigger.config->>'webhook_id'=$2::text ORDER BY trigger.created_at,trigger.id`, delivery.OrgID, delivery.WebhookID)
+		AND trigger.config->>'webhook_id'=$2::text
+		AND EXISTS(SELECT 1 FROM integration_webhooks hook WHERE hook.org_id=trigger.org_id AND hook.id::text=$2::text AND hook.agent_use_allowed)
+		ORDER BY trigger.created_at,trigger.id`, delivery.OrgID, delivery.WebhookID)
 	if err != nil {
 		return 0, err
 	}
@@ -1006,3 +1025,19 @@ func scanTrigger(row scanner) (Trigger, error) {
 
 func canBuild(current identity.User) bool { return agentauthz.New().CanBuild(current) }
 func canView(current identity.User) bool  { return agentauthz.New().CanView(current) }
+
+// requireProductAgent hides system agents (runtime worker, Architect) from
+// product APIs: for them these agents do not exist.
+func requireProductAgent(ctx context.Context, q interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, orgID, agentID string) error {
+	if uuid.Validate(agentID) != nil {
+		return ErrNotFound
+	}
+	var product bool
+	err := q.QueryRow(ctx, `SELECT system_role IS NULL FROM agents WHERE org_id=$1 AND actor_id=$2`, orgID, agentID).Scan(&product)
+	if errors.Is(err, pgx.ErrNoRows) || err == nil && !product {
+		return ErrNotFound
+	}
+	return err
+}
