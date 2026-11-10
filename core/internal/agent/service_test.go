@@ -519,3 +519,75 @@ func TestKnowledgeCollectionsFollowDraftPublishAndRollback(t *testing.T) {
 		t.Fatalf("rolled back draft = %+v, err=%v", rolledBack, err)
 	}
 }
+
+func TestChatAgentsDescribeTriggersForChatMembersOnly(t *testing.T) {
+	pool := testdb.New(t)
+	seedAgentModel(t, pool)
+	service := NewService(pool)
+	owner := identity.User{ActorID: agentTestOwnerID, OrgID: agentTestOrgID, OrgRole: "owner"}
+	created, err := service.Create(t.Context(), owner, CreateInput{
+		DisplayName: "Handover", Handle: "handover", Kind: "external", Description: "Hands work over between slots",
+		EndpointURL: "https://agents.example.test/runtime", AllowedScopes: []Scope{ScopeMessagesRead, ScopeMessagesInteractive, ScopeRuntimeExecute},
+		ChatIDs: []string{agentTestChatID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.CreateKey(t.Context(), owner, created.ID, CreateKeyInput{Name: "runtime", Scopes: []Scope{ScopeMessagesRead}, RateLimitPerMinute: 100}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Publish(t.Context(), owner, created.ID); err != nil {
+		t.Fatal(err)
+	}
+	otherChat := "00000000-0000-7000-8000-000000000299"
+	if _, err := pool.Exec(t.Context(), `INSERT INTO agent_triggers(id,org_id,agent_id,type,config,enabled,timezone) VALUES
+		(gen_random_uuid(),$1,$2,'command','{"command":"handover"}',true,'UTC'),
+		(gen_random_uuid(),$1,$2,'schedule',jsonb_build_object('chat_id',$3::text,'hour',13,'minute',0,'days_of_week','[1,2]'::jsonb),true,'Europe/Moscow'),
+		(gen_random_uuid(),$1,$2,'schedule',jsonb_build_object('chat_id',$4::text,'hour',9,'minute',0,'days_of_week','[]'::jsonb),true,'UTC'),
+		(gen_random_uuid(),$1,$2,'command','{"command":"disabled"}',false,'UTC')`,
+		agentTestOrgID, created.ID, agentTestChatID, otherChat); err != nil {
+		t.Fatal(err)
+	}
+
+	listed, err := service.ChatAgents(t.Context(), owner, agentTestChatID)
+	if err != nil || len(listed.Agents) != 1 {
+		t.Fatalf("chat agents=%+v err=%v", listed, err)
+	}
+	item := listed.Agents[0]
+	if item.AgentID != created.ID || item.Description != "Hands work over between slots" || item.Status != "active" || !item.CanManage {
+		t.Fatalf("chat agent=%+v", item)
+	}
+	if slices.Contains(item.Scopes, ScopeRuntimeExecute) || !slices.Contains(item.Scopes, ScopeMessagesInteractive) {
+		t.Fatalf("chat agent scopes=%v", item.Scopes)
+	}
+	commands, schedules := []string{}, 0
+	for _, trigger := range item.Triggers {
+		if trigger.Type == "command" {
+			commands = append(commands, trigger.Command)
+		}
+		if trigger.Type == "schedule" {
+			schedules++
+			if trigger.Schedule == nil || trigger.Schedule.Hour != 13 || trigger.Schedule.Timezone != "Europe/Moscow" || !slices.Equal(trigger.Schedule.DaysOfWeek, []int{1, 2}) {
+				t.Fatalf("schedule=%+v", trigger.Schedule)
+			}
+		}
+	}
+	if !slices.Equal(commands, []string{"handover"}) || schedules != 1 {
+		t.Fatalf("triggers=%+v", item.Triggers)
+	}
+
+	ordinary := identity.User{ActorID: agentTestMemberID, OrgID: agentTestOrgID, OrgRole: "member"}
+	if _, err := service.ChatAgents(t.Context(), ordinary, agentTestChatID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("non-member chat agents error=%v", err)
+	}
+	if _, err := pool.Exec(t.Context(), `INSERT INTO chat_members(chat_id,actor_id,org_id,role) VALUES($1,$2,$3,'member')`, agentTestChatID, agentTestMemberID, agentTestOrgID); err != nil {
+		t.Fatal(err)
+	}
+	memberView, err := service.ChatAgents(t.Context(), ordinary, agentTestChatID)
+	if err != nil || len(memberView.Agents) != 1 || memberView.Agents[0].CanManage {
+		t.Fatalf("member chat agents=%+v err=%v", memberView, err)
+	}
+	if _, err := service.ChatAgents(t.Context(), owner, "not-a-uuid"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("invalid chat id error=%v", err)
+	}
+}

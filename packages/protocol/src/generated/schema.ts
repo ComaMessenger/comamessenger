@@ -842,6 +842,23 @@ export interface paths {
         patch: operations["updateChatMember"];
         trace?: never;
     };
+    "/api/v1/chats/{chat_id}/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Agents that are members of the chat, described for chat members: what they read, what they may do, how they are started (commands, schedules) and whether the current actor may pause them. Management-only data (models, limits, connections) is never included. */
+        get: operations["listChatAgents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chats/{chat_id}/messages": {
         parameters: {
             query?: never;
@@ -3776,6 +3793,40 @@ export interface components {
             /** Format: int64 */
             avatar_version: number;
         };
+        ChatAgentList: {
+            agents: components["schemas"]["ChatAgent"][];
+        };
+        ChatAgent: {
+            /** Format: uuid */
+            agent_id: string;
+            display_name: string;
+            handle: string;
+            description: string;
+            /** Format: int64 */
+            avatar_version: number;
+            /** @enum {string} */
+            status: "draft" | "active" | "paused" | "needs_attention";
+            /** @description Published capabilities; clients describe them in plain language. */
+            scopes: components["schemas"]["AgentScope"][];
+            knowledge_collection_count: number;
+            /** @description Enabled triggers that can start the agent in this chat. */
+            triggers: components["schemas"]["ChatAgentTrigger"][];
+            /** @description The current actor may pause, resume and configure the agent. */
+            can_manage: boolean;
+        };
+        ChatAgentTrigger: {
+            /** @enum {string} */
+            type: "mention" | "command" | "keyword" | "every_message" | "schedule" | "event";
+            /** @description Command without the leading slash (type command). */
+            command?: string;
+            schedule?: {
+                hour: number;
+                minute: number;
+                /** @description 0 is Sunday; empty means every day. */
+                days_of_week: number[];
+                timezone: string;
+            };
+        };
         AddChatMemberRequest: {
             /** Format: uuid */
             actor_id: string;
@@ -5912,6 +5963,29 @@ export interface operations {
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
             422: components["responses"]["Error"];
+        };
+    };
+    listChatAgents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Agents working in the chat. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatAgentList"];
+                };
+            };
+            404: components["responses"]["Error"];
         };
     };
     listMessages: {
