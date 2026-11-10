@@ -18,6 +18,8 @@ import type {
   Message,
   MessagePage,
   MessageActionResult,
+  ChatAgent,
+  KnowledgeDocument,
   MessagePin,
   MessageReceipt,
   MessageWindow,
@@ -1120,6 +1122,20 @@ export class MessengerAPI {
     return this.request(
       `/api/v1/messages/${id}/actions/${encodeURIComponent(actionID)}`,
       { method: "POST" },
+    );
+  }
+  /** Agents working in a chat, described for its members. */
+  async chatAgents(chatID: string): Promise<ChatAgent[]> {
+    return (
+      await this.request<{ agents: ChatAgent[] }>(
+        `/api/v1/chats/${encodeURIComponent(chatID)}/agents`,
+      )
+    ).agents;
+  }
+  /** A knowledge base document cited as a source; pages include the body. */
+  knowledgeDocument(id: string): Promise<KnowledgeDocument> {
+    return this.request(
+      `/api/v1/knowledge/documents/${encodeURIComponent(id)}`,
     );
   }
   followThread(id: string): Promise<unknown> {

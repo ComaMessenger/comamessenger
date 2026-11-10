@@ -2439,6 +2439,37 @@
         }
       }
     },
+    "/api/v1/chats/{chat_id}/agents": {
+      "get": {
+        "operationId": "listChatAgents",
+        "description": "Agents that are members of the chat, described for chat members: what they read, what they may do, how they are started (commands, schedules) and whether the current actor may pause them. Management-only data (models, limits, connections) is never included.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ChatId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agents working in the chat.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatAgentList"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/v1/chats/{chat_id}/messages": {
       "get": {
         "operationId": "listMessages",
@@ -13044,6 +13075,147 @@
             "type": "integer",
             "format": "int64",
             "minimum": 0
+          }
+        }
+      },
+      "ChatAgentList": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "agents"
+        ],
+        "properties": {
+          "agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatAgent"
+            }
+          }
+        }
+      },
+      "ChatAgent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "agent_id",
+          "display_name",
+          "handle",
+          "description",
+          "avatar_version",
+          "status",
+          "scopes",
+          "knowledge_collection_count",
+          "triggers",
+          "can_manage"
+        ],
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "handle": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "avatar_version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "active",
+              "paused",
+              "needs_attention"
+            ]
+          },
+          "scopes": {
+            "description": "Published capabilities; clients describe them in plain language.",
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/AgentScope"
+            }
+          },
+          "knowledge_collection_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "triggers": {
+            "description": "Enabled triggers that can start the agent in this chat.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatAgentTrigger"
+            }
+          },
+          "can_manage": {
+            "type": "boolean",
+            "description": "The current actor may pause, resume and configure the agent."
+          }
+        }
+      },
+      "ChatAgentTrigger": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "mention",
+              "command",
+              "keyword",
+              "every_message",
+              "schedule",
+              "event"
+            ]
+          },
+          "command": {
+            "type": "string",
+            "description": "Command without the leading slash (type command)."
+          },
+          "schedule": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "hour",
+              "minute",
+              "days_of_week",
+              "timezone"
+            ],
+            "properties": {
+              "hour": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 23
+              },
+              "minute": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 59
+              },
+              "days_of_week": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 6
+                },
+                "description": "0 is Sunday; empty means every day."
+              },
+              "timezone": {
+                "type": "string"
+              }
+            }
           }
         }
       },

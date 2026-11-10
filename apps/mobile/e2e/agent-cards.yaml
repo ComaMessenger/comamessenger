@@ -1,0 +1,55 @@
+# Agent cards in chat: a handover card with a "Принял слот" button, its
+# sources and the agent command menu (phase 5.3, scenario «Передача»).
+# Prerequisites: sign-in.yaml has run, and the signed-in person is the one the
+# card is addressed to in CHAT. The card comes from the pilot seed or from an
+# agent run (post_card with an action "accept" limited to that person) and the
+# chat has an agent with a command trigger.
+# Run: maestro test -e CHAT="Зал 1" e2e/agent-cards.yaml
+appId: com.comamessenger.app
+env:
+  CHAT: Зал 1
+  ACTION: Принял слот
+---
+- runFlow: open-app.yaml
+- tapOn: .*${CHAT}.*
+- extendedWaitUntil:
+    visible:
+      id: agent-card
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: agent-action-accept
+    direction: DOWN
+- takeScreenshot: agent-card
+- tapOn:
+    id: agent-action-accept
+# The server answers with the updated card; a second tap must not send again.
+- tapOn:
+    id: agent-action-accept
+    optional: true
+- extendedWaitUntil:
+    visible: .*· [0-9]{2}:[0-9]{2}.*
+    timeout: 10000
+- assertVisible:
+    id: agent-action-accept
+    selected: true
+- takeScreenshot: agent-card-accepted
+- runFlow:
+    when:
+      visible:
+        id: agent-source-0
+    commands:
+      - tapOn:
+          id: agent-source-0
+      - waitForAnimationToEnd
+      - takeScreenshot: agent-source
+      - back
+- tapOn:
+    id: composer-input
+- inputText: /
+- extendedWaitUntil:
+    visible:
+      id: command-menu
+    timeout: 10000
+- takeScreenshot: agent-command-menu
+- eraseText: 2

@@ -13,11 +13,17 @@ git fetch --prune origin
 git reset --hard --quiet "${ref}"
 echo "  at $(git log --oneline -1)"
 
+services=(core web agent-runtime)
+# The push relay runs only on the host that publishes the mobile app.
+if grep -Eq '^PUSH_RELAY_KEYS_DIR=.+' .env; then
+  services+=(push-relay)
+fi
+
 echo "▶ building images"
-"${compose[@]}" build --pull core web agent-runtime
+"${compose[@]}" build --pull "${services[@]}"
 
 echo "▶ restarting services"
-"${compose[@]}" up -d --remove-orphans --wait --wait-timeout 180 core web agent-runtime
+"${compose[@]}" up -d --remove-orphans --wait --wait-timeout 180 "${services[@]}"
 
 echo "▶ health"
 for _ in $(seq 1 30); do

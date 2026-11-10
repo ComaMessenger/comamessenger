@@ -31,6 +31,7 @@ import { useMessenger } from "../shell/MessengerContext";
 import { ActorPicker } from "./ActorPicker";
 import { usePinnedMessages } from "./PinnedMessagesDialog";
 import { downloadToDisk, useObjectURL } from "./useObjectURL";
+import { ChatAgentsSection } from "../agentchat/ChatAgentsSection";
 
 type NotifyLevel = "all" | "mentions" | "none";
 type AttachmentTab = "media" | "files" | "links" | "pinned";
@@ -49,7 +50,7 @@ export function ChatInfoDialog({
   onOpenMessage(messageID: string): void;
 }) {
   const { t } = useTranslation();
-  const { api, user, scheduleReload } = useMessenger();
+  const { api, user, scheduleReload, navigate } = useMessenger();
   const manageable = canManageChat(chat);
   const title = titleOf(chat, members, user.id);
   const [name, setName] = useState(chat.name ?? chat.display_name);
@@ -338,6 +339,17 @@ export function ChatInfoDialog({
           )
         )}
       </div>
+
+      {chat.kind !== "direct" && (
+        <ChatAgentsSection
+          chatID={chat.id}
+          members={members}
+          onNavigate={(path) => {
+            onClose();
+            navigate(path);
+          }}
+        />
+      )}
 
       {chat.kind !== "direct" && (
         <div className="chat-info__section">

@@ -15,8 +15,11 @@ import {
 import { useTranslation } from "react-i18next";
 import {
   messagePlainText,
+  renderableBlocks,
+  type ActionViewer,
   type ChatMember,
   type ClientMessage,
+  type Message,
   type MessengerAPI,
 } from "@comamessenger/core";
 import { radius, spacing } from "@comamessenger/tokens";
@@ -25,6 +28,7 @@ import { Avatar } from "@/ui/Avatar";
 import { Text } from "@/ui/Text";
 import { Markdown } from "./Markdown";
 import { MessageFiles } from "./MessageFiles";
+import { MessageBlocks } from "./MessageBlocks";
 import { useReactions } from "./reactions";
 
 export type MessageRowProps = {
@@ -40,6 +44,11 @@ export type MessageRowProps = {
   onThread(message: ClientMessage): void;
   onActions(message: ClientMessage): void;
   onRetry(): void;
+  /** Chat members, to name who answered a card. */
+  members?: ChatMember[];
+  /** The reader, to show which card buttons they may press. */
+  viewer?: ActionViewer;
+  onUpdated?(message: Message): void;
 };
 
 export const MessageRow = memo(function MessageRow({
@@ -55,6 +64,9 @@ export const MessageRow = memo(function MessageRow({
   onThread,
   onActions,
   onRetry,
+  members = [],
+  viewer,
+  onUpdated,
 }: MessageRowProps) {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
@@ -70,6 +82,8 @@ export const MessageRow = memo(function MessageRow({
     minute: "2-digit",
   }).format(new Date(message.created_at));
   const actionable = !deleted && message.delivery !== "sending";
+  // Unknown block versions fall back to the body; a card replaces its fallback text.
+  const blocks = viewer ? renderableBlocks(message) : null;
   // Nested buttons (thread link, reactions) pass a long press on to the row
   // menu; without it the release would count as a tap on them.
   const openActions = () => {
@@ -197,7 +211,18 @@ export const MessageRow = memo(function MessageRow({
               {t("messageDeleted")}
             </Text>
           ) : (
-            <Markdown source={message.body} />
+            !blocks?.card && <Markdown source={message.body} />
+          )}
+          {blocks && viewer && (
+            <MessageBlocks
+              api={api}
+              message={message}
+              blocks={blocks}
+              members={members}
+              authorName={name}
+              viewer={viewer}
+              onUpdated={(updated) => onUpdated?.(updated)}
+            />
           )}
           {!deleted && message.files.length > 0 && (
             <MessageFiles api={api} files={message.files} />

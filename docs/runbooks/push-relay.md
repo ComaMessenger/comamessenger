@@ -10,16 +10,17 @@ The relay forwards encrypted notifications from self-hosted instances to APNs an
 
 ## Configuration
 
-| Variable               | Purpose                                                                    |
-| ---------------------- | -------------------------------------------------------------------------- |
-| `RELAY_DATABASE_URL`   | PostgreSQL of the relay itself; the table is created on start.             |
-| `RELAY_LISTEN`         | Listen address, default `:8090`. Terminate TLS in front of it.             |
-| `APNS_KEY_FILE`        | Token-based APNs key (`AuthKey_XXXX.p8`).                                  |
-| `APNS_KEY_ID`          | Key ID of that key.                                                        |
-| `APNS_TEAM_ID`         | Apple Developer team ID.                                                   |
-| `APNS_TOPIC`           | Bundle identifier of the app.                                              |
-| `APNS_SANDBOX`         | `true` for development builds signed with a development profile.           |
-| `FCM_CREDENTIALS_FILE` | Google service account JSON with the Firebase Cloud Messaging API enabled. |
+| Variable                    | Purpose                                                                    |
+| --------------------------- | -------------------------------------------------------------------------- |
+| `RELAY_DATABASE_URL`        | PostgreSQL of the relay itself; the table is created on start.             |
+| `RELAY_LISTEN`              | Listen address, default `:8090`. Terminate TLS in front of it.             |
+| `RELAY_TRUSTED_PROXY_CIDRS` | Reverse proxies whose `X-Forwarded-For` is believed for rate limits.       |
+| `APNS_KEY_FILE`             | Token-based APNs key (`AuthKey_XXXX.p8`).                                  |
+| `APNS_KEY_ID`               | Key ID of that key.                                                        |
+| `APNS_TEAM_ID`              | Apple Developer team ID.                                                   |
+| `APNS_TOPIC`                | Bundle identifier of the app.                                              |
+| `APNS_SANDBOX`              | `true` for development builds signed with a development profile.           |
+| `FCM_CREDENTIALS_FILE`      | Google service account JSON with the Firebase Cloud Messaging API enabled. |
 
 At least one platform must be configured. Keys are mounted as files and never committed.
 
@@ -33,6 +34,17 @@ docker run --rm -p 8090:8090 \
 ```
 
 Instances point `PUSH_RELAY_URL` at the public HTTPS address of the relay.
+
+### With the bundled Compose profile
+
+`deploy/compose.yaml` has a `relay` profile that creates a separate database in the bundled PostgreSQL and runs the relay on `127.0.0.1:8090`:
+
+1. Put the APNs key and the FCM service account into a directory outside git and make them readable by uid `65532` (the image runs as `nonroot`).
+2. Set `PUSH_RELAY_KEYS_DIR` and the other `PUSH_RELAY_*` values from `.env.example`; file paths are relative to `/keys` inside the container.
+3. Install `deploy/nginx/push-relay.conf.example` for the relay domain. It overwrites `X-Forwarded-For`; `TRUSTED_PROXY_CIDRS` tells the relay which proxies to believe.
+4. `docker compose --env-file .env -f deploy/compose.yaml --profile relay up -d --build push-relay`. `deploy/deploy.sh` rebuilds the relay together with Core once `PUSH_RELAY_KEYS_DIR` is set.
+
+Without a trusted proxy configuration every request appears to come from the proxy and all clients share one rate-limit bucket.
 
 ## API
 

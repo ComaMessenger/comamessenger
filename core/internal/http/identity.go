@@ -158,6 +158,7 @@ func (h *identityHandlers) routes(router chi.Router) {
 		protected.Post("/invitations/{invitationID}/rotate", h.rotateInvitation)
 		if h.agents != nil {
 			protected.Get("/agents", h.listAgents)
+			protected.Get("/chats/{chatID}/agents", h.listChatAgents)
 			protected.Get("/agents/product-metrics", h.agentProductMetrics)
 			protected.Post("/agents", h.createAgent)
 			protected.Get("/agents/settings", h.agentPlatformSettings)
