@@ -800,6 +800,13 @@ async function mockAgents(
   return state;
 }
 
+/** Builder blocks that load their own data have rendered. */
+async function builderSettled(page: Page) {
+  await expect(
+    page.locator("#agent-block-skills .agent-external"),
+  ).toBeAttached();
+}
+
 async function expectNoHorizontalScroll(page: Page) {
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
@@ -1129,6 +1136,7 @@ test("launch rules read as sentences with subject forms", async ({ page }) => {
     type: "manual",
     timezone: "Europe/Moscow",
   });
+  await builderSettled(page);
   await expect(page).toHaveScreenshot("agents-builder-rules.png", {
     animations: "disabled",
   });
@@ -1172,9 +1180,15 @@ test("check shows the dry-run answer, a human trace and the verdict", async ({
     dry_run: true,
     input: { prompt: "Как оформить замену?", sandbox: true, publish: false },
   });
-  await expect(page).toHaveScreenshot("agents-check.png", {
-    animations: "disabled",
-  });
+  await builderSettled(page);
+  // The check panel itself: the builder header next to it is covered by the
+  // builder snapshots.
+  await expect(page.locator(".agent-builder__check")).toHaveScreenshot(
+    "agents-check.png",
+    {
+      animations: "disabled",
+    },
+  );
 });
 
 test("polling of a check stops after leaving the page", async ({ page }) => {
@@ -1367,6 +1381,7 @@ test("builder fits a phone and the dark theme", async ({ page }) => {
     page.getByRole("heading", { name: "Контроль", level: 2 }),
   ).toBeVisible();
   await expectNoHorizontalScroll(page);
+  await builderSettled(page);
   await expect(page).toHaveScreenshot("agents-builder-dark-390.png", {
     animations: "disabled",
   });
