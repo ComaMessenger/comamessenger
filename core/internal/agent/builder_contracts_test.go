@@ -257,3 +257,33 @@ func TestBuilderBindsOnlyChatsAndCollectionsTheyCanSee(t *testing.T) {
 		t.Fatalf("editing an agent with existing bindings: %v", err)
 	}
 }
+
+// TestSavingThePublishedConfigurationCreatesNoDraft covers review finding
+// 7e on the server: saving without changes leaves «nothing to publish».
+func TestSavingThePublishedConfigurationCreatesNoDraft(t *testing.T) {
+	pool := testdb.New(t)
+	seedAgentModel(t, pool)
+	service := NewService(pool)
+	owner := identity.User{ActorID: agentTestOwnerID, OrgID: agentTestOrgID, OrgRole: "owner"}
+	created, err := service.Create(t.Context(), owner, CreateInput{DisplayName: "Same", Handle: "same", Kind: "external",
+		EndpointURL: "https://agents.example.test/runtime", AllowedScopes: []Scope{ScopeMessagesRead}, ChatIDs: []string{agentTestChatID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.CreateKey(t.Context(), owner, created.ID, CreateKeyInput{Name: "runtime", Scopes: []Scope{ScopeMessagesRead}, RateLimitPerMinute: 10}); err != nil {
+		t.Fatal(err)
+	}
+	published, err := service.Publish(t.Context(), owner, created.ID, PublishOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	description := published.Description
+	same, err := service.Update(t.Context(), owner, created.ID, UpdateInput{Description: &description, ChatIDs: &published.ChatIDs, ConfirmationPolicy: published.ConfirmationPolicy})
+	if err != nil || same.HasUnpublishedChanges {
+		t.Fatalf("unchanged save = %+v err=%v", same, err)
+	}
+	changed := "Новая задача"
+	if draft, err := service.Update(t.Context(), owner, created.ID, UpdateInput{Description: &changed}); err != nil || !draft.HasUnpublishedChanges {
+		t.Fatalf("changed save = %+v err=%v", draft, err)
+	}
+}

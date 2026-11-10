@@ -873,8 +873,21 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 	if lockedAgent.DraftVersion != nil {
 		draftVersion = *lockedAgent.DraftVersion
 	}
-	if err := saveDraft(ctx, tx, current.OrgID, agentID, current.ActorID, draftVersion, prospective); err != nil {
-		return Agent{}, err
+	// Saving the published configuration unchanged creates no draft: the
+	// agent stays «nothing to publish».
+	unchanged := false
+	if input.Enabled == nil && !lockedAgent.HasUnpublishedChanges && lockedAgent.PublishedVersion != nil &&
+		prospective.DisplayName == lockedAgent.DisplayName && prospective.Handle == lockedAgent.Handle {
+		if published, err := normalizeCreate(inputFromAgent(lockedAgent)); err == nil {
+			before, beforeErr := versionConfig(published)
+			after, afterErr := versionConfig(prospective)
+			unchanged = beforeErr == nil && afterErr == nil && string(before) == string(after)
+		}
+	}
+	if !unchanged {
+		if err := saveDraft(ctx, tx, current.OrgID, agentID, current.ActorID, draftVersion, prospective); err != nil {
+			return Agent{}, err
+		}
 	}
 	revokedKeyIDs := make([]string, 0)
 	if input.Enabled != nil {
