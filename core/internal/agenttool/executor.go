@@ -194,7 +194,15 @@ func (executor *Executor) Invoke(ctx context.Context, invocation Invocation) (In
 		preview, err := json.Marshal(map[string]any{
 			"dry_run": true, "would_execute": definition.Name, "arguments": json.RawMessage(invocation.Arguments),
 		})
-		return InvokeResult{Output: preview}, err
+		if err != nil {
+			return InvokeResult{}, err
+		}
+		// The preview is recorded as a finished step so the check trace can
+		// say what the agent would have done; nothing else is written.
+		if err := executor.recordPreview(ctx, invocation, definition); err != nil {
+			return InvokeResult{}, err
+		}
+		return InvokeResult{Output: preview}, nil
 	}
 	if executor.requireWriteConfirmation && definition.Mode == "write" && !definition.NoConfirmation {
 		confirmation, err := executor.requestConfirmation(ctx, invocation, definition)
@@ -567,6 +575,23 @@ func (executor *Executor) startCall(ctx context.Context, callID string, invocati
 	_, err := executor.pool.Exec(ctx, `INSERT INTO agent_tool_calls(id,org_id,agent_id,run_id,correlation_id,tool_name,mode,required_scope,input_summary) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`, callID, invocation.User.OrgID, invocation.User.ActorID, runID, invocation.CorrelationID, definition.Name, definition.Mode, string(definition.RequiredScope), summary)
 	if err != nil {
 		return fmt.Errorf("record agent tool call: %w", err)
+	}
+	return nil
+}
+
+func (executor *Executor) recordPreview(ctx context.Context, invocation Invocation, definition Definition) error {
+	callID, err := id.New()
+	if err != nil {
+		return err
+	}
+	var runID any
+	if invocation.RunID != "" {
+		runID = invocation.RunID
+	}
+	summary, _ := json.Marshal(map[string]any{"argument_bytes": len(invocation.Arguments), "dry_run": true})
+	if _, err := executor.pool.Exec(ctx, `INSERT INTO agent_tool_calls(id,org_id,agent_id,run_id,correlation_id,tool_name,mode,required_scope,input_summary,status,finished_at)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'completed',now())`, callID, invocation.User.OrgID, invocation.User.ActorID, runID, invocation.CorrelationID, definition.Name, definition.Mode, string(definition.RequiredScope), summary); err != nil {
+		return fmt.Errorf("record agent tool preview: %w", err)
 	}
 	return nil
 }

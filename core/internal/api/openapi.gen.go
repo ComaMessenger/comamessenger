@@ -116,6 +116,30 @@ func (e AgentRecipe) Valid() bool {
 	}
 }
 
+// Defines values for AgentFollowupStatus.
+const (
+	AgentFollowupStatusCanceled   AgentFollowupStatus = "canceled"
+	AgentFollowupStatusDispatched AgentFollowupStatus = "dispatched"
+	AgentFollowupStatusPending    AgentFollowupStatus = "pending"
+	AgentFollowupStatusSkipped    AgentFollowupStatus = "skipped"
+)
+
+// Valid indicates whether the value is a known member of the AgentFollowupStatus enum.
+func (e AgentFollowupStatus) Valid() bool {
+	switch e {
+	case AgentFollowupStatusCanceled:
+		return true
+	case AgentFollowupStatusDispatched:
+		return true
+	case AgentFollowupStatusPending:
+		return true
+	case AgentFollowupStatusSkipped:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentLlmConnectionHealthStatus.
 const (
 	Healthy   AgentLlmConnectionHealthStatus = "healthy"
@@ -284,6 +308,51 @@ func (e AgentReadinessState) Valid() bool {
 	}
 }
 
+// Defines values for AgentResponseCollectionResponse.
+const (
+	AgentResponseCollectionResponseAction   AgentResponseCollectionResponse = "action"
+	AgentResponseCollectionResponseReaction AgentResponseCollectionResponse = "reaction"
+	AgentResponseCollectionResponseReply    AgentResponseCollectionResponse = "reply"
+)
+
+// Valid indicates whether the value is a known member of the AgentResponseCollectionResponse enum.
+func (e AgentResponseCollectionResponse) Valid() bool {
+	switch e {
+	case AgentResponseCollectionResponseAction:
+		return true
+	case AgentResponseCollectionResponseReaction:
+		return true
+	case AgentResponseCollectionResponseReply:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentResponseCollectionStatus.
+const (
+	AgentResponseCollectionStatusCanceled  AgentResponseCollectionStatus = "canceled"
+	AgentResponseCollectionStatusCompleted AgentResponseCollectionStatus = "completed"
+	AgentResponseCollectionStatusExpired   AgentResponseCollectionStatus = "expired"
+	AgentResponseCollectionStatusOpen      AgentResponseCollectionStatus = "open"
+)
+
+// Valid indicates whether the value is a known member of the AgentResponseCollectionStatus enum.
+func (e AgentResponseCollectionStatus) Valid() bool {
+	switch e {
+	case AgentResponseCollectionStatusCanceled:
+		return true
+	case AgentResponseCollectionStatusCompleted:
+		return true
+	case AgentResponseCollectionStatusExpired:
+		return true
+	case AgentResponseCollectionStatusOpen:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentRunStatus.
 const (
 	AgentRunStatusCanceled  AgentRunStatus = "canceled"
@@ -308,6 +377,45 @@ func (e AgentRunStatus) Valid() bool {
 	case AgentRunStatusRunning:
 		return true
 	case AgentRunStatusTimedOut:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentRunToolCallMode.
+const (
+	AgentRunToolCallModeRead  AgentRunToolCallMode = "read"
+	AgentRunToolCallModeWrite AgentRunToolCallMode = "write"
+)
+
+// Valid indicates whether the value is a known member of the AgentRunToolCallMode enum.
+func (e AgentRunToolCallMode) Valid() bool {
+	switch e {
+	case AgentRunToolCallModeRead:
+		return true
+	case AgentRunToolCallModeWrite:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentRunToolCallStatus.
+const (
+	AgentRunToolCallStatusCompleted AgentRunToolCallStatus = "completed"
+	AgentRunToolCallStatusFailed    AgentRunToolCallStatus = "failed"
+	AgentRunToolCallStatusRunning   AgentRunToolCallStatus = "running"
+)
+
+// Valid indicates whether the value is a known member of the AgentRunToolCallStatus enum.
+func (e AgentRunToolCallStatus) Valid() bool {
+	switch e {
+	case AgentRunToolCallStatusCompleted:
+		return true
+	case AgentRunToolCallStatusFailed:
+		return true
+	case AgentRunToolCallStatusRunning:
 		return true
 	default:
 		return false
@@ -3158,6 +3266,60 @@ func (e GetActorAvatarParamsDelivery) Valid() bool {
 	}
 }
 
+// Defines values for ListAgentFollowupsParamsStatus.
+const (
+	ListAgentFollowupsParamsStatusAll        ListAgentFollowupsParamsStatus = "all"
+	ListAgentFollowupsParamsStatusCanceled   ListAgentFollowupsParamsStatus = "canceled"
+	ListAgentFollowupsParamsStatusDispatched ListAgentFollowupsParamsStatus = "dispatched"
+	ListAgentFollowupsParamsStatusPending    ListAgentFollowupsParamsStatus = "pending"
+	ListAgentFollowupsParamsStatusSkipped    ListAgentFollowupsParamsStatus = "skipped"
+)
+
+// Valid indicates whether the value is a known member of the ListAgentFollowupsParamsStatus enum.
+func (e ListAgentFollowupsParamsStatus) Valid() bool {
+	switch e {
+	case ListAgentFollowupsParamsStatusAll:
+		return true
+	case ListAgentFollowupsParamsStatusCanceled:
+		return true
+	case ListAgentFollowupsParamsStatusDispatched:
+		return true
+	case ListAgentFollowupsParamsStatusPending:
+		return true
+	case ListAgentFollowupsParamsStatusSkipped:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListAgentResponseCollectionsParamsStatus.
+const (
+	ListAgentResponseCollectionsParamsStatusAll       ListAgentResponseCollectionsParamsStatus = "all"
+	ListAgentResponseCollectionsParamsStatusCanceled  ListAgentResponseCollectionsParamsStatus = "canceled"
+	ListAgentResponseCollectionsParamsStatusCompleted ListAgentResponseCollectionsParamsStatus = "completed"
+	ListAgentResponseCollectionsParamsStatusExpired   ListAgentResponseCollectionsParamsStatus = "expired"
+	ListAgentResponseCollectionsParamsStatusOpen      ListAgentResponseCollectionsParamsStatus = "open"
+)
+
+// Valid indicates whether the value is a known member of the ListAgentResponseCollectionsParamsStatus enum.
+func (e ListAgentResponseCollectionsParamsStatus) Valid() bool {
+	switch e {
+	case ListAgentResponseCollectionsParamsStatusAll:
+		return true
+	case ListAgentResponseCollectionsParamsStatusCanceled:
+		return true
+	case ListAgentResponseCollectionsParamsStatusCompleted:
+		return true
+	case ListAgentResponseCollectionsParamsStatusExpired:
+		return true
+	case ListAgentResponseCollectionsParamsStatusOpen:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListAgentToolConfirmationsParamsStatus.
 const (
 	ListAgentToolConfirmationsParamsStatusAll       ListAgentToolConfirmationsParamsStatus = "all"
@@ -3494,6 +3656,23 @@ type AgentApiKey struct {
 	Scopes             []AgentScope       `json:"scopes"`
 }
 
+// AgentFollowup defines model for AgentFollowup.
+type AgentFollowup struct {
+	AgentId    openapi_types.UUID  `json:"agent_id"`
+	ChatId     openapi_types.UUID  `json:"chat_id"`
+	CreatedAt  time.Time           `json:"created_at"`
+	DueAt      time.Time           `json:"due_at"`
+	FinishedAt *time.Time          `json:"finished_at"`
+	Id         openapi_types.UUID  `json:"id"`
+	Note       string              `json:"note"`
+	Reason     string              `json:"reason"`
+	RunId      *openapi_types.UUID `json:"run_id"`
+	Status     AgentFollowupStatus `json:"status"`
+}
+
+// AgentFollowupStatus defines model for AgentFollowup.Status.
+type AgentFollowupStatus string
+
 // AgentLlmConnection defines model for AgentLlmConnection.
 type AgentLlmConnection struct {
 	CreatedAt    time.Time `json:"created_at"`
@@ -3624,6 +3803,31 @@ type AgentReadinessBlockers string
 // AgentReadinessState defines model for AgentReadiness.State.
 type AgentReadinessState string
 
+// AgentResponseCollection defines model for AgentResponseCollection.
+type AgentResponseCollection struct {
+	AgentId        openapi_types.UUID              `json:"agent_id"`
+	CancelReason   string                          `json:"cancel_reason"`
+	ChatId         openapi_types.UUID              `json:"chat_id"`
+	ClosedAt       *time.Time                      `json:"closed_at"`
+	CreatedAt      time.Time                       `json:"created_at"`
+	DeadlineAt     time.Time                       `json:"deadline_at"`
+	ExpectedCount  int                             `json:"expected_count"`
+	Id             openapi_types.UUID              `json:"id"`
+	MessageId      openapi_types.UUID              `json:"message_id"`
+	NextReminderAt *time.Time                      `json:"next_reminder_at"`
+	Note           string                          `json:"note"`
+	RemindersSent  int                             `json:"reminders_sent"`
+	RespondedCount int                             `json:"responded_count"`
+	Response       AgentResponseCollectionResponse `json:"response"`
+	Status         AgentResponseCollectionStatus   `json:"status"`
+}
+
+// AgentResponseCollectionResponse defines model for AgentResponseCollection.Response.
+type AgentResponseCollectionResponse string
+
+// AgentResponseCollectionStatus defines model for AgentResponseCollection.Status.
+type AgentResponseCollectionStatus string
+
 // AgentRun defines model for AgentRun.
 type AgentRun struct {
 	AgentConfig       AgentRunConfig         `json:"agent_config"`
@@ -3686,6 +3890,25 @@ type AgentRunLeaseRequest struct {
 type AgentRunPage struct {
 	Runs []AgentRun `json:"runs"`
 }
+
+// AgentRunToolCall defines model for AgentRunToolCall.
+type AgentRunToolCall struct {
+	// DryRun A write step of a dry run that was only previewed.
+	DryRun     bool                   `json:"dry_run"`
+	ErrorCode  string                 `json:"error_code"`
+	FinishedAt *time.Time             `json:"finished_at"`
+	Id         openapi_types.UUID     `json:"id"`
+	Mode       AgentRunToolCallMode   `json:"mode"`
+	StartedAt  time.Time              `json:"started_at"`
+	Status     AgentRunToolCallStatus `json:"status"`
+	ToolName   string                 `json:"tool_name"`
+}
+
+// AgentRunToolCallMode defines model for AgentRunToolCall.Mode.
+type AgentRunToolCallMode string
+
+// AgentRunToolCallStatus defines model for AgentRunToolCall.Status.
+type AgentRunToolCallStatus string
 
 // AgentRuntimeCheckpoint defines model for AgentRuntimeCheckpoint.
 type AgentRuntimeCheckpoint struct {
@@ -5738,6 +5961,24 @@ type GetActorAvatarParams struct {
 
 // GetActorAvatarParamsDelivery defines parameters for GetActorAvatar.
 type GetActorAvatarParamsDelivery string
+
+// ListAgentFollowupsParams defines parameters for ListAgentFollowups.
+type ListAgentFollowupsParams struct {
+	AgentId *openapi_types.UUID             `form:"agent_id,omitempty" json:"agent_id,omitempty"`
+	Status  *ListAgentFollowupsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
+}
+
+// ListAgentFollowupsParamsStatus defines parameters for ListAgentFollowups.
+type ListAgentFollowupsParamsStatus string
+
+// ListAgentResponseCollectionsParams defines parameters for ListAgentResponseCollections.
+type ListAgentResponseCollectionsParams struct {
+	AgentId *openapi_types.UUID                       `form:"agent_id,omitempty" json:"agent_id,omitempty"`
+	Status  *ListAgentResponseCollectionsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
+}
+
+// ListAgentResponseCollectionsParamsStatus defines parameters for ListAgentResponseCollections.
+type ListAgentResponseCollectionsParamsStatus string
 
 // ListAgentToolConfirmationsParams defines parameters for ListAgentToolConfirmations.
 type ListAgentToolConfirmationsParams struct {

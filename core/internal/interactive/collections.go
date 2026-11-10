@@ -654,3 +654,69 @@ func (s *Service) deliverDirect(ctx context.Context, agent identity.User, runID,
 	}, message.AgentProvenance{RunID: runID})
 	return created, err
 }
+
+// CollectionSummary is the observer view of a response collection: counts,
+// not the people, so the activity feed never widens who sees whom answered.
+type CollectionSummary struct {
+	ID             string     `json:"id"`
+	AgentID        string     `json:"agent_id"`
+	ChatID         string     `json:"chat_id"`
+	MessageID      string     `json:"message_id"`
+	Response       string     `json:"response"`
+	Status         string     `json:"status"`
+	ExpectedCount  int        `json:"expected_count"`
+	RespondedCount int        `json:"responded_count"`
+	RemindersSent  int        `json:"reminders_sent"`
+	DeadlineAt     time.Time  `json:"deadline_at"`
+	NextReminderAt *time.Time `json:"next_reminder_at"`
+	Note           string     `json:"note"`
+	CancelReason   string     `json:"cancel_reason"`
+	CreatedAt      time.Time  `json:"created_at"`
+	ClosedAt       *time.Time `json:"closed_at"`
+}
+
+// ListCollections returns the newest collections of the organization for the
+// agent activity view. The caller authorizes the observer; responses are
+// counted against the current reactions, presses and replies.
+func (s *Service) ListCollections(ctx context.Context, orgID, agentID, status string) ([]CollectionSummary, error) {
+	if status == "all" {
+		status = ""
+	}
+	if status != "" && status != "open" && status != "completed" && status != "expired" && status != "canceled" {
+		return nil, fmt.Errorf("%w: unsupported status", ErrInvalid)
+	}
+	if agentID != "" && uuid.Validate(agentID) != nil {
+		return nil, fmt.Errorf("%w: agent_id must be a UUID", ErrInvalid)
+	}
+	rows, err := s.pool.Query(ctx, collectionSelect+` WHERE c.org_id=$1 AND ($2='' OR c.agent_id::text=$2) AND ($3='' OR c.status=$3) ORDER BY c.created_at DESC LIMIT 50`, orgID, agentID, status)
+	if err != nil {
+		return nil, err
+	}
+	collections := make([]Collection, 0)
+	for rows.Next() {
+		item, err := scanCollection(rows)
+		if err != nil {
+			rows.Close()
+			return nil, err
+		}
+		collections = append(collections, item)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	result := make([]CollectionSummary, 0, len(collections))
+	for index := range collections {
+		item := &collections[index]
+		if err := countResponses(ctx, s.pool, item); err != nil {
+			return nil, err
+		}
+		result = append(result, CollectionSummary{
+			ID: item.ID, AgentID: item.AgentID, ChatID: item.ChatID, MessageID: item.MessageID, Response: item.Response,
+			Status: item.Status, ExpectedCount: len(item.ExpectedActorIDs), RespondedCount: len(item.Responded),
+			RemindersSent: item.RemindersSent, DeadlineAt: item.DeadlineAt, NextReminderAt: item.NextReminderAt,
+			Note: item.Note, CancelReason: item.CancelReason, CreatedAt: item.CreatedAt, ClosedAt: item.ClosedAt,
+		})
+	}
+	return result, nil
+}

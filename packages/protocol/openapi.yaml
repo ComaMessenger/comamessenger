@@ -2783,6 +2783,56 @@ paths:
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+  /api/v1/agents/response-collections:
+    get:
+      operationId: listAgentResponseCollections
+      description: Response collections started by agents, newest first, with server-counted answers. Requires agents.observe.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: agent_id, in: query, schema: { type: string, format: uuid } }
+        - name: status
+          in: query
+          schema:
+            {
+              type: string,
+              enum: [open, completed, expired, canceled, all],
+              default: open,
+            }
+      responses:
+        "200":
+          description: Up to 50 collections.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AgentResponseCollection" }
+        "403": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /api/v1/agents/followups:
+    get:
+      operationId: listAgentFollowups
+      description: Follow-ups scheduled by agents, newest first, without their stored context. Requires agents.observe.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: agent_id, in: query, schema: { type: string, format: uuid } }
+        - name: status
+          in: query
+          schema:
+            {
+              type: string,
+              enum: [pending, dispatched, canceled, skipped, all],
+              default: pending,
+            }
+      responses:
+        "200":
+          description: Up to 50 follow-ups.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AgentFollowup" }
+        "403": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
   /api/v1/agents/{agent_id}/invoke:
     post:
       operationId: invokeAgent
@@ -2839,6 +2889,27 @@ paths:
               { schema: { $ref: "#/components/schemas/AgentRun" } }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+  /api/v1/agent-runs/{run_id}/tool-calls:
+    get:
+      operationId: listAgentRunToolCalls
+      description: Tool steps of a run in execution order. Dry-run write steps are previews of what the agent would have done. Requires an agents.* viewing permission.
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: "#/components/parameters/AgentRunId" }]
+      responses:
+        "200":
+          description: Recorded tool steps.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [tool_calls]
+                properties:
+                  tool_calls:
+                    type: array
+                    items: { $ref: "#/components/schemas/AgentRunToolCall" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
   /api/v1/agent-runtime/runs/claim:
     post:
       operationId: claimAgentRuntimeRun
@@ -4215,6 +4286,75 @@ components:
           type: string
           format: uuid
           description: Chat card mirroring this confirmation in the run's chat, when one was posted.
+    AgentRunToolCall:
+      type: object
+      additionalProperties: false
+      required:
+        [id, tool_name, mode, status, dry_run, error_code, started_at, finished_at]
+      properties:
+        id: { type: string, format: uuid }
+        tool_name: { type: string, minLength: 1, maxLength: 120 }
+        mode: { type: string, enum: [read, write] }
+        status: { type: string, enum: [running, completed, failed] }
+        dry_run:
+          description: A write step of a dry run that was only previewed.
+          type: boolean
+        error_code: { type: string, maxLength: 120 }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+    AgentResponseCollection:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          agent_id,
+          chat_id,
+          message_id,
+          response,
+          status,
+          expected_count,
+          responded_count,
+          reminders_sent,
+          deadline_at,
+          next_reminder_at,
+          note,
+          cancel_reason,
+          created_at,
+          closed_at,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        agent_id: { type: string, format: uuid }
+        chat_id: { type: string, format: uuid }
+        message_id: { type: string, format: uuid }
+        response: { type: string, enum: [reaction, action, reply] }
+        status: { type: string, enum: [open, completed, expired, canceled] }
+        expected_count: { type: integer, minimum: 0 }
+        responded_count: { type: integer, minimum: 0 }
+        reminders_sent: { type: integer, minimum: 0 }
+        deadline_at: { type: string, format: date-time }
+        next_reminder_at: { type: [string, "null"], format: date-time }
+        note: { type: string, maxLength: 2000 }
+        cancel_reason: { type: string, maxLength: 120 }
+        created_at: { type: string, format: date-time }
+        closed_at: { type: [string, "null"], format: date-time }
+    AgentFollowup:
+      type: object
+      additionalProperties: false
+      required:
+        [id, agent_id, chat_id, due_at, note, status, reason, run_id, created_at, finished_at]
+      properties:
+        id: { type: string, format: uuid }
+        agent_id: { type: string, format: uuid }
+        chat_id: { type: string, format: uuid }
+        due_at: { type: string, format: date-time }
+        note: { type: string, maxLength: 2000 }
+        status: { type: string, enum: [pending, dispatched, canceled, skipped] }
+        reason: { type: string, maxLength: 120 }
+        run_id: { type: [string, "null"], format: uuid }
+        created_at: { type: string, format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
     InvokeAgentRequest:
       type: object
       additionalProperties: false

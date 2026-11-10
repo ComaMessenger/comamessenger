@@ -104,6 +104,14 @@ export type AgentToolConfirmation =
   components["schemas"]["AgentToolConfirmation"];
 export type AgentRun = components["schemas"]["AgentRun"];
 export type AgentRunPage = components["schemas"]["AgentRunPage"];
+export type AgentRunToolCall = components["schemas"]["AgentRunToolCall"];
+export type AgentResponseCollection =
+  components["schemas"]["AgentResponseCollection"];
+export type AgentFollowup = components["schemas"]["AgentFollowup"];
+export type KnowledgeCollection = components["schemas"]["KnowledgeCollection"];
+export type KnowledgeDocument = components["schemas"]["KnowledgeDocument"];
+export type KnowledgeRunFragments =
+  components["schemas"]["KnowledgeRunFragments"];
 export type InvokeAgentRequest = components["schemas"]["InvokeAgentRequest"];
 export type AgentTrigger = components["schemas"]["AgentTrigger"];
 export type CreateAgentTriggerRequest =

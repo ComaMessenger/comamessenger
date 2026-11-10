@@ -245,7 +245,7 @@ func main() {
 		Addr: cfg.HTTPAddr,
 		Handler: serverhttp.NewHandler(logger, cfg.PublicAppURL, pool.Ping, serverhttp.Dependencies{
 			Identity: identityService, Agents: agentService, AgentConfig: agentConfigService, AgentProvider: agentProviderService, AgentTools: agentToolExecutor, AgentRuns: agentRunService, AgentTriggers: agentTriggerService, Chats: chatService,
-			Messages: messageService, UserState: userStateService, Push: pushService, Workspace: workspaceService, Files: fileService, Search: searchService, Knowledge: knowledgeService, Realtime: realtimeServer,
+			Messages: messageService, UserState: userStateService, Push: pushService, Workspace: workspaceService, Files: fileService, Search: searchService, Knowledge: knowledgeService, Interactive: interactiveService, Realtime: realtimeServer,
 			CookieSecure: cfg.Auth.CookieSecure, RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
 			BootstrapToken: cfg.BootstrapToken, RequireBootstrapToken: cfg.AppEnv != "development",
 			TrustedProxyCIDRs: cfg.TrustedProxyCIDRs, RevokeRealtimeSession: realtimeServer.RevokeSession,

@@ -26,6 +26,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/chat"
 	"github.com/comamessenger/comamessenger/core/internal/files"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
+	"github.com/comamessenger/comamessenger/core/internal/interactive"
 	"github.com/comamessenger/comamessenger/core/internal/knowledge"
 	"github.com/comamessenger/comamessenger/core/internal/message"
 	"github.com/comamessenger/comamessenger/core/internal/push"
@@ -56,6 +57,7 @@ type Dependencies struct {
 	Files                 *files.Service
 	Search                *search.Service
 	Knowledge             *knowledge.Service
+	Interactive           *interactive.Service
 	Realtime              standardhttp.Handler
 	CookieSecure          bool
 	RefreshTokenTTL       time.Duration
@@ -82,6 +84,7 @@ type identityHandlers struct {
 	files                 *files.Service
 	search                *search.Service
 	knowledge             *knowledge.Service
+	interactive           *interactive.Service
 	realtime              standardhttp.Handler
 	allowedOrigin         string
 	cookieSecure          bool
@@ -108,7 +111,7 @@ type authenticated struct {
 
 func newIdentityHandlers(logger *slog.Logger, allowedOrigin string, dependencies Dependencies) *identityHandlers {
 	return &identityHandlers{
-		logger: logger, service: dependencies.Identity, agents: dependencies.Agents, agentConfig: dependencies.AgentConfig, agentProvider: dependencies.AgentProvider, agentTools: dependencies.AgentTools, agentRuns: dependencies.AgentRuns, agentTriggers: dependencies.AgentTriggers, chats: dependencies.Chats, messages: dependencies.Messages, userState: dependencies.UserState, push: dependencies.Push, workspace: dependencies.Workspace, files: dependencies.Files, search: dependencies.Search, knowledge: dependencies.Knowledge, realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
+		logger: logger, service: dependencies.Identity, agents: dependencies.Agents, agentConfig: dependencies.AgentConfig, agentProvider: dependencies.AgentProvider, agentTools: dependencies.AgentTools, agentRuns: dependencies.AgentRuns, agentTriggers: dependencies.AgentTriggers, chats: dependencies.Chats, messages: dependencies.Messages, userState: dependencies.UserState, push: dependencies.Push, workspace: dependencies.Workspace, files: dependencies.Files, search: dependencies.Search, knowledge: dependencies.Knowledge, interactive: dependencies.Interactive, realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
 		cookieSecure: dependencies.CookieSecure, refreshTTL: dependencies.RefreshTokenTTL,
 		bootstrapRate: newIPRateLimiter(5, 5), loginRate: newIPRateLimiter(10, 10),
 		refreshRate: newIPRateLimiter(30, 20), invitationRate: newIPRateLimiter(10, 10), websocketRate: newIPRateLimiter(60, 20), actorRate: newIPRateLimiter(1200, 200),
@@ -196,11 +199,16 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Post("/agents/tool-confirmations/{confirmationID}/approve", h.approveAgentToolConfirmation)
 			protected.Post("/agents/tool-confirmations/{confirmationID}/deny", h.denyAgentToolConfirmation)
 		}
+		if h.interactive != nil {
+			protected.Get("/agents/response-collections", h.listAgentResponseCollections)
+			protected.Get("/agents/followups", h.listAgentFollowups)
+		}
 		if h.agentRuns != nil {
 			protected.Post("/agents/{agentID}/invoke", h.invokeAgent)
 			protected.Get("/agents/{agentID}/runs", h.listAgentRuns)
 			protected.Get("/agent-runs/{runID}", h.getAgentRun)
 			protected.Post("/agent-runs/{runID}/cancel", h.cancelAgentRun)
+			protected.Get("/agent-runs/{runID}/tool-calls", h.listAgentRunToolCalls)
 			protected.Post("/agent-runtime/runs/claim", h.claimAgentRun)
 			protected.Post("/agent-runtime/runs/{runID}/heartbeat", h.heartbeatAgentRun)
 			protected.Post("/agent-runtime/runs/{runID}/publish", h.publishAgentRun)

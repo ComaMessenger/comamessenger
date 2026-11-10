@@ -1903,6 +1903,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agents/response-collections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Response collections started by agents, newest first, with server-counted answers. Requires agents.observe. */
+        get: operations["listAgentResponseCollections"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/followups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Follow-ups scheduled by agents, newest first, without their stored context. Requires agents.observe. */
+        get: operations["listAgentFollowups"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents/{agent_id}/invoke": {
         parameters: {
             query?: never;
@@ -1961,6 +1995,23 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["cancelAgentRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent-runs/{run_id}/tool-calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Tool steps of a run in execution order. Dry-run write steps are previews of what the agent would have done. Requires an agents.* viewing permission. */
+        get: operations["listAgentRunToolCalls"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2957,6 +3008,69 @@ export interface components {
              * @description Chat card mirroring this confirmation in the run's chat, when one was posted.
              */
             card_message_id?: string;
+        };
+        AgentRunToolCall: {
+            /** Format: uuid */
+            id: string;
+            tool_name: string;
+            /** @enum {string} */
+            mode: "read" | "write";
+            /** @enum {string} */
+            status: "running" | "completed" | "failed";
+            /** @description A write step of a dry run that was only previewed. */
+            dry_run: boolean;
+            error_code: string;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            finished_at: string | null;
+        };
+        AgentResponseCollection: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            agent_id: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: uuid */
+            message_id: string;
+            /** @enum {string} */
+            response: "reaction" | "action" | "reply";
+            /** @enum {string} */
+            status: "open" | "completed" | "expired" | "canceled";
+            expected_count: number;
+            responded_count: number;
+            reminders_sent: number;
+            /** Format: date-time */
+            deadline_at: string;
+            /** Format: date-time */
+            next_reminder_at: string | null;
+            note: string;
+            cancel_reason: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            closed_at: string | null;
+        };
+        AgentFollowup: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            agent_id: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: date-time */
+            due_at: string;
+            note: string;
+            /** @enum {string} */
+            status: "pending" | "dispatched" | "canceled" | "skipped";
+            reason: string;
+            /** Format: uuid */
+            run_id: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            finished_at: string | null;
         };
         InvokeAgentRequest: {
             /** Format: uuid */
@@ -8330,6 +8444,56 @@ export interface operations {
             409: components["responses"]["Error"];
         };
     };
+    listAgentResponseCollections: {
+        parameters: {
+            query?: {
+                agent_id?: string;
+                status?: "open" | "completed" | "expired" | "canceled" | "all";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Up to 50 collections. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentResponseCollection"][];
+                };
+            };
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    listAgentFollowups: {
+        parameters: {
+            query?: {
+                agent_id?: string;
+                status?: "pending" | "dispatched" | "canceled" | "skipped" | "all";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Up to 50 follow-ups. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentFollowup"][];
+                };
+            };
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
     invokeAgent: {
         parameters: {
             query?: never;
@@ -8427,6 +8591,32 @@ export interface operations {
             };
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+        };
+    };
+    listAgentRunToolCalls: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: components["parameters"]["AgentRunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recorded tool steps. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        tool_calls: components["schemas"]["AgentRunToolCall"][];
+                    };
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     claimAgentRuntimeRun: {
