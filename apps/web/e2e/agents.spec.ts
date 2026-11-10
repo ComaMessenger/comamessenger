@@ -1200,10 +1200,17 @@ test("check shows the dry-run answer, a human trace and the verdict", async ({
     input: { prompt: "Как оформить замену?", sandbox: true, publish: false },
   });
   await builderSettled(page);
-  // The whole page: the builder settles on «nothing to publish» and stays.
+  // The whole page from the top: the address scrolled to the check panel,
+  // and how far depends on layout timing; under the sticky bar the «nothing
+  // to publish» line was hidden in some runs and not in others.
+  await page.evaluate(() => {
+    for (const element of document.querySelectorAll<HTMLElement>("*"))
+      if (element.scrollTop > 0) element.scrollTop = 0;
+    window.scrollTo(0, 0);
+  });
   await expect(
     page.getByText("Опубликованная версия совпадает с черновиком"),
-  ).toBeVisible();
+  ).toBeInViewport();
   await expect(page).toHaveScreenshot("agents-check.png", {
     animations: "disabled",
   });
