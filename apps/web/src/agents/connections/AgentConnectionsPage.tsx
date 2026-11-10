@@ -4,6 +4,7 @@ import type { AgentLlmConnection, MessengerAPI } from "@comamessenger/core";
 import { Plug, Plus, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { messageOf } from "../../errors";
+import { IntegrationsSection } from "./IntegrationsSection";
 import {
   Badge,
   Button,
@@ -200,6 +201,7 @@ export function AgentConnectionsPage({
           <p>{t("agentConnectionsEmptyHint")}</p>
         </div>
       )}
+      <IntegrationsSection api={api} canManage={canManage} />
       {createOpen && (
         <Dialog
           title={t("agentConnectionCreateTitle")}
