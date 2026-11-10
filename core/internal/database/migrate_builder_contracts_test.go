@@ -4,6 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io/fs"
+	"strconv"
+	"strings"
 	"net/url"
 	"os"
 	"reflect"
@@ -15,10 +18,35 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
-// TestBuilderContractsMigration applies 00001→00047 with agents, drafts,
-// versions, runs and keys, upgrades to 00048, checks that existing agents
+// builderContractsVersion is the number of the builder contracts migration;
+// the test runs against whatever migration precedes it in the tree.
+const builderContractsVersion = 49
+
+// previousMigration is the newest migration before version.
+func previousMigration(t *testing.T, version int64) int64 {
+	t.Helper()
+	entries, err := fs.ReadDir(migrations.Files, ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var previous int64
+	for _, entry := range entries {
+		number, _, found := strings.Cut(entry.Name(), "_")
+		parsed, err := strconv.ParseInt(number, 10, 64)
+		if !found || err != nil || !strings.HasSuffix(entry.Name(), ".sql") {
+			continue
+		}
+		if parsed < version && parsed > previous {
+			previous = parsed
+		}
+	}
+	return previous
+}
+
+// TestBuilderContractsMigration applies every migration before the builder
+// contracts with agents, drafts, versions, runs and keys, upgrades, checks that existing agents
 // keep the confirmations Core enforced before and gain no chat restriction,
-// then verifies that Down 00048 restores the 00047 schema exactly with rows
+// then verifies that its Down restores the previous schema exactly with rows
 // using the new columns present.
 func TestBuilderContractsMigration(t *testing.T) {
 	rawURL := os.Getenv("TEST_DATABASE_URL")
@@ -51,7 +79,8 @@ func TestBuilderContractsMigration(t *testing.T) {
 	if err := goose.SetDialect("postgres"); err != nil {
 		t.Fatal(err)
 	}
-	if err := goose.UpToContext(ctx, db, ".", 47); err != nil {
+	previous := previousMigration(t, builderContractsVersion)
+	if err := goose.UpToContext(ctx, db, ".", previous); err != nil {
 		t.Fatal(err)
 	}
 	const (
@@ -84,7 +113,7 @@ func TestBuilderContractsMigration(t *testing.T) {
 	}
 	before := schemaSnapshot(t, db)
 
-	if err := goose.UpToContext(ctx, db, ".", 48); err != nil {
+	if err := goose.UpToContext(ctx, db, ".", builderContractsVersion); err != nil {
 		t.Fatal(err)
 	}
 	var postMessage, postCard, tone string
@@ -103,7 +132,7 @@ func TestBuilderContractsMigration(t *testing.T) {
 	mustExec(t, db, `UPDATE agent_drafts SET tone='friendly',write_only_chat_ids=ARRAY[$2::uuid] WHERE agent_id=$1`, agentID, chatID)
 	mustExec(t, db, `INSERT INTO agent_versions(id,org_id,agent_id,version,config,created_by) VALUES(gen_random_uuid(),$1,$2,2,'{"recipe":"custom","tone":"formal","confirmation_policy":{"post_message":"auto"}}',$3)`, orgID, agentID, ownerID)
 
-	if err := goose.DownToContext(ctx, db, ".", 47); err != nil {
+	if err := goose.DownToContext(ctx, db, ".", previous); err != nil {
 		t.Fatal(err)
 	}
 	after := schemaSnapshot(t, db)
@@ -126,7 +155,7 @@ func TestBuilderContractsMigration(t *testing.T) {
 	if agents != 1 || versions != 2 || runs != 1 || keys != 1 {
 		t.Fatalf("rows after Down agents=%d versions=%d runs=%d keys=%d", agents, versions, runs, keys)
 	}
-	if err := goose.UpToContext(ctx, db, ".", 48); err != nil {
+	if err := goose.UpToContext(ctx, db, ".", builderContractsVersion); err != nil {
 		t.Fatalf("Up again after Down: %v", err)
 	}
 }
