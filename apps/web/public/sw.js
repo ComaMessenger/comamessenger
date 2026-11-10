@@ -3,8 +3,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(payload.title || "Coma", {
       body: payload.body || "New message",
-      icon: "/coma-logo.svg",
-      badge: "/coma-logo.svg",
+      icon: "/notification-icon.png",
+      badge: "/notification-badge.png",
       tag: payload.chat_id ? `chat:${payload.chat_id}` : "coma",
       data: {
         url:

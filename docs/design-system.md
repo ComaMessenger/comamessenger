@@ -88,7 +88,7 @@ The desktop shell has three independent regions:
 2. chat stream, present only on chat routes;
 3. the working area, where a conversation, Threads, Important or Members is rendered.
 
-Global navigation order is stable: Coma logo plus ellipsized workspace name, flat search plus accent create button, `Чаты`, `Треды`, `Важные`, `Участники`, then the current profile. It never turns into a chat list and never changes when a utility section opens. Workspace settings and sign-out live in the workspace switcher menu; `Настройки` is not a navigation item.
+Global navigation order is stable: Coma logo (the uploaded workspace logo, otherwise the Coma mascot, see `design/brand/README.md`) plus ellipsized workspace name, flat search plus accent create button, `Чаты`, `Треды`, `Важные`, `Участники`, then the current profile. It never turns into a chat list and never changes when a utility section opens. Workspace settings and sign-out live in the workspace switcher menu; `Настройки` is not a navigation item.
 
 The profile block is anchored to the viewport bottom rather than following navigation content. On desktop the global navigation can collapse to a `60px` icon rail; the preference is local to the browser. Workspace and profile menus remain available next to the compact rail. Collapse never changes the chat stream, selected route or conversation state.
 
