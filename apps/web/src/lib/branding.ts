@@ -1,5 +1,4 @@
 import type { PublicBranding } from "@comamessenger/core";
-import comaLogo from "../assets/coma-logo.svg";
 
 export const apiURL = import.meta.env.VITE_API_URL ?? window.location.origin;
 
@@ -7,7 +6,8 @@ export function brandingLogoURL() {
   return `${apiURL}/api/v1/branding/logo?v=${Date.now()}`;
 }
 
-export { comaLogo };
+/** Browser tab icon used when the workspace has not uploaded its own. */
+export const comaFavicon = `${import.meta.env.BASE_URL}favicon.svg`;
 
 export function applyPublicBranding(branding: PublicBranding, baseURL: string) {
   if (/^#[0-9A-Fa-f]{6}$/.test(branding.accent_color)) {
@@ -31,5 +31,5 @@ export function applyPublicBranding(branding: PublicBranding, baseURL: string) {
   }
   favicon.href = branding.favicon_url
     ? `${baseURL}${branding.favicon_url}`
-    : comaLogo;
+    : comaFavicon;
 }
