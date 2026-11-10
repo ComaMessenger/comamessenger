@@ -141,6 +141,12 @@ export type KnowledgeRunFragments =
   components["schemas"]["KnowledgeRunFragments"];
 export type InvokeAgentRequest = components["schemas"]["InvokeAgentRequest"];
 export type AgentTrigger = components["schemas"]["AgentTrigger"];
+export type ArchitectSession = components["schemas"]["ArchitectSession"];
+export type ArchitectMessage = components["schemas"]["ArchitectMessage"];
+export type ArchitectTestExample =
+  components["schemas"]["ArchitectTestExample"];
+export type StartArchitectSessionRequest =
+  components["schemas"]["StartArchitectSessionRequest"];
 export type CreateAgentTriggerRequest =
   components["schemas"]["CreateAgentTriggerRequest"];
 export type UpdateAgentTriggerRequest =

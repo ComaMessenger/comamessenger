@@ -44,6 +44,9 @@ func (service *Service) ListMCPServers(ctx context.Context, current identity.Use
 	if !canManage(current) {
 		return nil, ErrForbidden
 	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return nil, err
+	}
 	if uuid.Validate(agentID) != nil {
 		return nil, ErrNotFound
 	}
@@ -83,6 +86,9 @@ func (service *Service) getLegacyServer(ctx context.Context, orgID, agentID, con
 func (service *Service) CreateMCPServer(ctx context.Context, current identity.User, agentID string, input CreateMCPServerInput) (MCPServer, error) {
 	if !canManage(current) || !canManageIntegrations(current) {
 		return MCPServer{}, ErrForbidden
+	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return MCPServer{}, err
 	}
 	if input.TimeoutMS == 0 {
 		input.TimeoutMS = 10000
@@ -174,6 +180,9 @@ func (service *Service) UpdateMCPServer(ctx context.Context, current identity.Us
 	if !canManage(current) || !canManageIntegrations(current) {
 		return MCPServer{}, ErrForbidden
 	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return MCPServer{}, err
+	}
 	if uuid.Validate(agentID) != nil || uuid.Validate(serverID) != nil || !hasMCPUpdate(input) {
 		return MCPServer{}, ErrInvalid
 	}
@@ -263,6 +272,9 @@ func (service *Service) UpdateMCPServer(ctx context.Context, current identity.Us
 func (service *Service) DeleteMCPServer(ctx context.Context, current identity.User, agentID, serverID string) error {
 	if !canManage(current) || !canManageIntegrations(current) {
 		return ErrForbidden
+	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return err
 	}
 	if uuid.Validate(agentID) != nil || uuid.Validate(serverID) != nil {
 		return ErrNotFound

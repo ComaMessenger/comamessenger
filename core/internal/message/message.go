@@ -1048,7 +1048,8 @@ func validateMentions(ctx context.Context, tx pgx.Tx, orgID, chatID string, acto
 		SELECT count(*) FROM chat_members cm
 		JOIN actors a ON a.org_id = cm.org_id AND a.id = cm.actor_id
 		WHERE cm.org_id = $1 AND cm.chat_id = $2 AND cm.actor_id = ANY($3::uuid[])
-		  AND a.status = 'active' AND a.deleted_at IS NULL`, orgID, chatID, actorIDs).Scan(&count); err != nil {
+		  AND a.status = 'active' AND a.deleted_at IS NULL
+		  AND NOT EXISTS (SELECT 1 FROM agents sys WHERE sys.org_id = a.org_id AND sys.actor_id = a.id AND sys.system_role IS NOT NULL)`, orgID, chatID, actorIDs).Scan(&count); err != nil {
 		return fmt.Errorf("validate message mentions: %w", err)
 	}
 	if count != len(actorIDs) {

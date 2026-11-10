@@ -218,6 +218,9 @@ func (service *Service) Invoke(ctx context.Context, current identity.User, agent
 	if !canBuild(current) {
 		return Run{}, ErrForbidden
 	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return Run{}, err
+	}
 	if uuid.Validate(agentID) != nil || uuid.Validate(input.ChatID) != nil || uuid.Validate(input.ClientRunID) != nil {
 		return Run{}, ErrInvalid
 	}
@@ -344,6 +347,9 @@ func (service *Service) Invoke(ctx context.Context, current identity.User, agent
 func (service *Service) List(ctx context.Context, current identity.User, agentID string) (Page, error) {
 	if !canView(current) {
 		return Page{}, ErrForbidden
+	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return Page{}, err
 	}
 	rows, err := service.pool.Query(ctx, runSelect+` WHERE run.org_id=$1 AND run.agent_id=$2 ORDER BY run.created_at DESC LIMIT 100`, current.OrgID, agentID)
 	if err != nil {
@@ -1275,4 +1281,20 @@ func checkRequesterReach(ctx context.Context, tx pgx.Tx, current identity.User, 
 		return ErrForbidden
 	}
 	return nil
+}
+
+// requireProductAgent hides system agents (runtime worker, Architect) from
+// product APIs: for them these agents do not exist.
+func requireProductAgent(ctx context.Context, q interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, orgID, agentID string) error {
+	if uuid.Validate(agentID) != nil {
+		return ErrNotFound
+	}
+	var product bool
+	err := q.QueryRow(ctx, `SELECT system_role IS NULL FROM agents WHERE org_id=$1 AND actor_id=$2`, orgID, agentID).Scan(&product)
+	if errors.Is(err, pgx.ErrNoRows) || err == nil && !product {
+		return ErrNotFound
+	}
+	return err
 }

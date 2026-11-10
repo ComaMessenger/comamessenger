@@ -6,7 +6,7 @@ import type {
   Chat,
   MessengerAPI,
 } from "@comamessenger/core";
-import { ArrowLeft, Pause, Play, Save, Send } from "lucide-react";
+import { ArrowLeft, Pause, Play, Save, Send, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   Avatar,
@@ -227,6 +227,23 @@ export function AgentBuilder({
           </span>
         </div>
         <div className="agent-builder__actions">
+          {canBuild && (
+            <Button
+              variant="ghost"
+              disabled={Boolean(pending)}
+              onClick={() =>
+                void builder
+                  .saveIfDirty()
+                  .then(
+                    (saved) =>
+                      saved && navigate(`/agents/${agent.id}/architect`),
+                  )
+              }
+            >
+              <Sparkles />
+              {t("architectEditExisting")}
+            </Button>
+          )}
           {canBuild && dirty && (
             <Button
               variant="ghost"

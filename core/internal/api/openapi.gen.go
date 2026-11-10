@@ -677,6 +677,87 @@ func (e AgentUsageReportCurrency) Valid() bool {
 	}
 }
 
+// Defines values for ArchitectMessageKind.
+const (
+	ArchitectMessageKindDone     ArchitectMessageKind = "done"
+	ArchitectMessageKindNotice   ArchitectMessageKind = "notice"
+	ArchitectMessageKindQuestion ArchitectMessageKind = "question"
+	ArchitectMessageKindText     ArchitectMessageKind = "text"
+)
+
+// Valid indicates whether the value is a known member of the ArchitectMessageKind enum.
+func (e ArchitectMessageKind) Valid() bool {
+	switch e {
+	case ArchitectMessageKindDone:
+		return true
+	case ArchitectMessageKindNotice:
+		return true
+	case ArchitectMessageKindQuestion:
+		return true
+	case ArchitectMessageKindText:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArchitectMessageRole.
+const (
+	ArchitectMessageRoleAssistant ArchitectMessageRole = "assistant"
+	ArchitectMessageRoleUser      ArchitectMessageRole = "user"
+)
+
+// Valid indicates whether the value is a known member of the ArchitectMessageRole enum.
+func (e ArchitectMessageRole) Valid() bool {
+	switch e {
+	case ArchitectMessageRoleAssistant:
+		return true
+	case ArchitectMessageRoleUser:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArchitectSessionLocale.
+const (
+	ArchitectSessionLocaleEn ArchitectSessionLocale = "en"
+	ArchitectSessionLocaleRu ArchitectSessionLocale = "ru"
+)
+
+// Valid indicates whether the value is a known member of the ArchitectSessionLocale enum.
+func (e ArchitectSessionLocale) Valid() bool {
+	switch e {
+	case ArchitectSessionLocaleEn:
+		return true
+	case ArchitectSessionLocaleRu:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArchitectSessionStatus.
+const (
+	ArchitectSessionStatusActive  ArchitectSessionStatus = "active"
+	ArchitectSessionStatusClosed  ArchitectSessionStatus = "closed"
+	ArchitectSessionStatusExpired ArchitectSessionStatus = "expired"
+)
+
+// Valid indicates whether the value is a known member of the ArchitectSessionStatus enum.
+func (e ArchitectSessionStatus) Valid() bool {
+	switch e {
+	case ArchitectSessionStatusActive:
+		return true
+	case ArchitectSessionStatusClosed:
+		return true
+	case ArchitectSessionStatusExpired:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AuditEntryActorRole.
 const (
 	AuditEntryActorRoleAdmin       AuditEntryActorRole = "admin"
@@ -1591,52 +1672,58 @@ func (e DurableEventTypeV1) Valid() bool {
 
 // Defines values for ErrorCode.
 const (
-	ErrorCodeActionClosed               ErrorCode = "action_closed"
-	ErrorCodeActionConflict             ErrorCode = "action_conflict"
-	ErrorCodeAgentBudgetExceeded        ErrorCode = "agent_budget_exceeded"
-	ErrorCodeAgentConfigurationNotFound ErrorCode = "agent_configuration_not_found"
-	ErrorCodeAgentConfirmationLoosened  ErrorCode = "agent_confirmation_loosened"
-	ErrorCodeAgentConflict              ErrorCode = "agent_conflict"
-	ErrorCodeAgentNotFound              ErrorCode = "agent_not_found"
-	ErrorCodeAgentNotReady              ErrorCode = "agent_not_ready"
-	ErrorCodeAgentTriggerConflict       ErrorCode = "agent_trigger_conflict"
-	ErrorCodeAgentTriggerNotFound       ErrorCode = "agent_trigger_not_found"
-	ErrorCodeAlreadyBootstrapped        ErrorCode = "already_bootstrapped"
-	ErrorCodeChatConflict               ErrorCode = "chat_conflict"
-	ErrorCodeChatNotFound               ErrorCode = "chat_not_found"
-	ErrorCodeEmailTaken                 ErrorCode = "email_taken"
-	ErrorCodeFileConflict               ErrorCode = "file_conflict"
-	ErrorCodeFileNotFound               ErrorCode = "file_not_found"
-	ErrorCodeForbidden                  ErrorCode = "forbidden"
-	ErrorCodeIdempotencyConflict        ErrorCode = "idempotency_conflict"
-	ErrorCodeIntegrationInUse           ErrorCode = "integration_in_use"
-	ErrorCodeIntegrationUsageChanged    ErrorCode = "integration_usage_changed"
-	ErrorCodeInternalError              ErrorCode = "internal_error"
-	ErrorCodeInvalidCredentials         ErrorCode = "invalid_credentials"
-	ErrorCodeInvalidRefreshToken        ErrorCode = "invalid_refresh_token"
-	ErrorCodeInvalidRequest             ErrorCode = "invalid_request"
-	ErrorCodeInvitationInvalid          ErrorCode = "invitation_invalid"
-	ErrorCodeKnowledgeConflict          ErrorCode = "knowledge_conflict"
-	ErrorCodeKnowledgeNotFound          ErrorCode = "knowledge_not_found"
-	ErrorCodeMessageNotFound            ErrorCode = "message_not_found"
-	ErrorCodeOriginNotAllowed           ErrorCode = "origin_not_allowed"
-	ErrorCodePasswordChangeRequired     ErrorCode = "password_change_required"
-	ErrorCodePayloadTooLarge            ErrorCode = "payload_too_large"
-	ErrorCodePushUnavailable            ErrorCode = "push_unavailable"
-	ErrorCodeRateLimited                ErrorCode = "rate_limited"
-	ErrorCodeReauthenticationFailed     ErrorCode = "reauthentication_failed"
-	ErrorCodeServiceNotReady            ErrorCode = "service_not_ready"
-	ErrorCodeSessionNotFound            ErrorCode = "session_not_found"
-	ErrorCodeSmtpNotConfigured          ErrorCode = "smtp_not_configured"
-	ErrorCodeStorageFull                ErrorCode = "storage_full"
-	ErrorCodeTokenInvalid               ErrorCode = "token_invalid"
-	ErrorCodeUnauthorized               ErrorCode = "unauthorized"
-	ErrorCodeUnsupportedFormat          ErrorCode = "unsupported_format"
-	ErrorCodeValidationFailed           ErrorCode = "validation_failed"
-	ErrorCodeVersionConflict            ErrorCode = "version_conflict"
-	ErrorCodeWebhookNotFound            ErrorCode = "webhook_not_found"
-	ErrorCodeWebhookRejected            ErrorCode = "webhook_rejected"
-	ErrorCodeWorkspaceNotFound          ErrorCode = "workspace_not_found"
+	ErrorCodeActionClosed                ErrorCode = "action_closed"
+	ErrorCodeActionConflict              ErrorCode = "action_conflict"
+	ErrorCodeAgentBudgetExceeded         ErrorCode = "agent_budget_exceeded"
+	ErrorCodeAgentConfigurationNotFound  ErrorCode = "agent_configuration_not_found"
+	ErrorCodeAgentConfirmationLoosened   ErrorCode = "agent_confirmation_loosened"
+	ErrorCodeAgentConflict               ErrorCode = "agent_conflict"
+	ErrorCodeAgentNotFound               ErrorCode = "agent_not_found"
+	ErrorCodeAgentNotReady               ErrorCode = "agent_not_ready"
+	ErrorCodeAgentTriggerConflict        ErrorCode = "agent_trigger_conflict"
+	ErrorCodeAgentTriggerNotFound        ErrorCode = "agent_trigger_not_found"
+	ErrorCodeAlreadyBootstrapped         ErrorCode = "already_bootstrapped"
+	ErrorCodeArchitectBudgetExceeded     ErrorCode = "architect_budget_exceeded"
+	ErrorCodeArchitectBusy               ErrorCode = "architect_busy"
+	ErrorCodeArchitectConnectionRequired ErrorCode = "architect_connection_required"
+	ErrorCodeArchitectModelError         ErrorCode = "architect_model_error"
+	ErrorCodeArchitectSessionExpired     ErrorCode = "architect_session_expired"
+	ErrorCodeArchitectSessionNotFound    ErrorCode = "architect_session_not_found"
+	ErrorCodeChatConflict                ErrorCode = "chat_conflict"
+	ErrorCodeChatNotFound                ErrorCode = "chat_not_found"
+	ErrorCodeEmailTaken                  ErrorCode = "email_taken"
+	ErrorCodeFileConflict                ErrorCode = "file_conflict"
+	ErrorCodeFileNotFound                ErrorCode = "file_not_found"
+	ErrorCodeForbidden                   ErrorCode = "forbidden"
+	ErrorCodeIdempotencyConflict         ErrorCode = "idempotency_conflict"
+	ErrorCodeIntegrationInUse            ErrorCode = "integration_in_use"
+	ErrorCodeIntegrationUsageChanged     ErrorCode = "integration_usage_changed"
+	ErrorCodeInternalError               ErrorCode = "internal_error"
+	ErrorCodeInvalidCredentials          ErrorCode = "invalid_credentials"
+	ErrorCodeInvalidRefreshToken         ErrorCode = "invalid_refresh_token"
+	ErrorCodeInvalidRequest              ErrorCode = "invalid_request"
+	ErrorCodeInvitationInvalid           ErrorCode = "invitation_invalid"
+	ErrorCodeKnowledgeConflict           ErrorCode = "knowledge_conflict"
+	ErrorCodeKnowledgeNotFound           ErrorCode = "knowledge_not_found"
+	ErrorCodeMessageNotFound             ErrorCode = "message_not_found"
+	ErrorCodeOriginNotAllowed            ErrorCode = "origin_not_allowed"
+	ErrorCodePasswordChangeRequired      ErrorCode = "password_change_required"
+	ErrorCodePayloadTooLarge             ErrorCode = "payload_too_large"
+	ErrorCodePushUnavailable             ErrorCode = "push_unavailable"
+	ErrorCodeRateLimited                 ErrorCode = "rate_limited"
+	ErrorCodeReauthenticationFailed      ErrorCode = "reauthentication_failed"
+	ErrorCodeServiceNotReady             ErrorCode = "service_not_ready"
+	ErrorCodeSessionNotFound             ErrorCode = "session_not_found"
+	ErrorCodeSmtpNotConfigured           ErrorCode = "smtp_not_configured"
+	ErrorCodeStorageFull                 ErrorCode = "storage_full"
+	ErrorCodeTokenInvalid                ErrorCode = "token_invalid"
+	ErrorCodeUnauthorized                ErrorCode = "unauthorized"
+	ErrorCodeUnsupportedFormat           ErrorCode = "unsupported_format"
+	ErrorCodeValidationFailed            ErrorCode = "validation_failed"
+	ErrorCodeVersionConflict             ErrorCode = "version_conflict"
+	ErrorCodeWebhookNotFound             ErrorCode = "webhook_not_found"
+	ErrorCodeWebhookRejected             ErrorCode = "webhook_rejected"
+	ErrorCodeWorkspaceNotFound           ErrorCode = "workspace_not_found"
 )
 
 // Valid indicates whether the value is a known member of the ErrorCode enum.
@@ -1663,6 +1750,18 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeAgentTriggerNotFound:
 		return true
 	case ErrorCodeAlreadyBootstrapped:
+		return true
+	case ErrorCodeArchitectBudgetExceeded:
+		return true
+	case ErrorCodeArchitectBusy:
+		return true
+	case ErrorCodeArchitectConnectionRequired:
+		return true
+	case ErrorCodeArchitectModelError:
+		return true
+	case ErrorCodeArchitectSessionExpired:
+		return true
+	case ErrorCodeArchitectSessionNotFound:
 		return true
 	case ErrorCodeChatConflict:
 		return true
@@ -3044,6 +3143,24 @@ func (e StartAgentMcpToolCallRequestMode) Valid() bool {
 	}
 }
 
+// Defines values for StartArchitectSessionRequestLocale.
+const (
+	StartArchitectSessionRequestLocaleEn StartArchitectSessionRequestLocale = "en"
+	StartArchitectSessionRequestLocaleRu StartArchitectSessionRequestLocale = "ru"
+)
+
+// Valid indicates whether the value is a known member of the StartArchitectSessionRequestLocale enum.
+func (e StartArchitectSessionRequestLocale) Valid() bool {
+	switch e {
+	case StartArchitectSessionRequestLocaleEn:
+		return true
+	case StartArchitectSessionRequestLocaleRu:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UpdateAgentLlmConnectionRequestProvider.
 const (
 	UpdateAgentLlmConnectionRequestProviderAnthropic        UpdateAgentLlmConnectionRequestProvider = "anthropic"
@@ -4342,6 +4459,70 @@ type AgentVersion struct {
 	Id          openapi_types.UUID `json:"id"`
 	PublishedAt time.Time          `json:"published_at"`
 	Version     int                `json:"version"`
+}
+
+// ArchitectMessage defines model for ArchitectMessage.
+type ArchitectMessage struct {
+	Assumptions []string  `json:"assumptions"`
+	CreatedAt   time.Time `json:"created_at"`
+	Id          string    `json:"id"`
+
+	// Kind `question` carries answer options; `done` means the draft is assembled.
+	Kind    ArchitectMessageKind `json:"kind"`
+	Options []string             `json:"options"`
+	Role    ArchitectMessageRole `json:"role"`
+	Text    string               `json:"text"`
+}
+
+// ArchitectMessageKind `question` carries answer options; `done` means the draft is assembled.
+type ArchitectMessageKind string
+
+// ArchitectMessageRole defines model for ArchitectMessage.Role.
+type ArchitectMessageRole string
+
+// ArchitectSession defines model for ArchitectSession.
+type ArchitectSession struct {
+	// AgentId The draft agent; null until the Architect creates it.
+	AgentId     *openapi_types.UUID `json:"agent_id"`
+	Assumptions []string            `json:"assumptions"`
+	Connection  struct {
+		Available bool                `json:"available"`
+		Id        *openapi_types.UUID `json:"id"`
+		Model     string              `json:"model"`
+		Name      string              `json:"name"`
+	} `json:"connection"`
+	CreatedAt      time.Time              `json:"created_at"`
+	ExpiresAt      time.Time              `json:"expires_at"`
+	Id             openapi_types.UUID     `json:"id"`
+	Locale         ArchitectSessionLocale `json:"locale"`
+	MaxQuestions   int                    `json:"max_questions"`
+	Messages       []ArchitectMessage     `json:"messages"`
+	QuestionsAsked int                    `json:"questions_asked"`
+	Status         ArchitectSessionStatus `json:"status"`
+	TestExamples   []ArchitectTestExample `json:"test_examples"`
+
+	// Thinking An answer is being prepared.
+	Thinking  bool      `json:"thinking"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Usage     struct {
+		Cost         string `json:"cost"`
+		Currency     string `json:"currency"`
+		InputTokens  int64  `json:"input_tokens"`
+		OutputTokens int64  `json:"output_tokens"`
+	} `json:"usage"`
+}
+
+// ArchitectSessionLocale defines model for ArchitectSession.Locale.
+type ArchitectSessionLocale string
+
+// ArchitectSessionStatus defines model for ArchitectSession.Status.
+type ArchitectSessionStatus string
+
+// ArchitectTestExample defines model for ArchitectTestExample.
+type ArchitectTestExample struct {
+	ChatId      *openapi_types.UUID `json:"chat_id"`
+	Expectation string              `json:"expectation"`
+	Prompt      string              `json:"prompt"`
 }
 
 // AuditEntry defines model for AuditEntry.
@@ -6107,6 +6288,11 @@ type SearchResult struct {
 // SearchResultKind defines model for SearchResult.Kind.
 type SearchResultKind string
 
+// SendArchitectMessageRequest defines model for SendArchitectMessageRequest.
+type SendArchitectMessageRequest struct {
+	Text string `json:"text"`
+}
+
 // Session defines model for Session.
 type Session struct {
 	CreatedAt  time.Time          `json:"created_at"`
@@ -6155,6 +6341,19 @@ type StartAgentProviderCallRequest struct {
 	ReservedCost string             `json:"reserved_cost"`
 	RunId        openapi_types.UUID `json:"run_id"`
 }
+
+// StartArchitectSessionRequest defines model for StartArchitectSessionRequest.
+type StartArchitectSessionRequest struct {
+	// AgentId Existing agent whose draft the Architect edits; omitted for a new agent.
+	AgentId *openapi_types.UUID `json:"agent_id,omitempty"`
+
+	// LlmConnectionId Workspace model connection; by default the first enabled one with a default model.
+	LlmConnectionId *openapi_types.UUID                 `json:"llm_connection_id,omitempty"`
+	Locale          *StartArchitectSessionRequestLocale `json:"locale,omitempty"`
+}
+
+// StartArchitectSessionRequestLocale defines model for StartArchitectSessionRequest.Locale.
+type StartArchitectSessionRequestLocale string
 
 // ThreadFollow defines model for ThreadFollow.
 type ThreadFollow struct {
@@ -6555,6 +6754,9 @@ type AgentToolConfirmationId = openapi_types.UUID
 // AgentTriggerId defines model for AgentTriggerId.
 type AgentTriggerId = openapi_types.UUID
 
+// ArchitectSessionId defines model for ArchitectSessionId.
+type ArchitectSessionId = openapi_types.UUID
+
 // ChatId defines model for ChatId.
 type ChatId = openapi_types.UUID
 
@@ -6822,6 +7024,12 @@ type InvokeAgentToolJSONRequestBody = InvokeAgentToolRequest
 
 // CreateAgentJSONRequestBody defines body for CreateAgent for application/json ContentType.
 type CreateAgentJSONRequestBody = CreateAgentRequest
+
+// StartAgentArchitectSessionJSONRequestBody defines body for StartAgentArchitectSession for application/json ContentType.
+type StartAgentArchitectSessionJSONRequestBody = StartArchitectSessionRequest
+
+// SendAgentArchitectMessageJSONRequestBody defines body for SendAgentArchitectMessage for application/json ContentType.
+type SendAgentArchitectMessageJSONRequestBody = SendArchitectMessageRequest
 
 // UpdateAgentPlatformSettingsJSONRequestBody defines body for UpdateAgentPlatformSettings for application/json ContentType.
 type UpdateAgentPlatformSettingsJSONRequestBody = UpdateAgentPlatformSettingsRequest

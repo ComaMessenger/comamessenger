@@ -23,6 +23,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/agenttool"
 	"github.com/comamessenger/comamessenger/core/internal/agenttrigger"
 	"github.com/comamessenger/comamessenger/core/internal/api"
+	"github.com/comamessenger/comamessenger/core/internal/architect"
 	"github.com/comamessenger/comamessenger/core/internal/chat"
 	"github.com/comamessenger/comamessenger/core/internal/files"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
@@ -50,6 +51,7 @@ type Dependencies struct {
 	AgentTools            *agenttool.Executor
 	AgentRuns             *agentrun.Service
 	AgentTriggers         *agenttrigger.Service
+	Architect             *architect.Service
 	Chats                 *chat.Service
 	Messages              *message.Service
 	UserState             *userstate.Service
@@ -78,6 +80,7 @@ type identityHandlers struct {
 	agentTools            *agenttool.Executor
 	agentRuns             *agentrun.Service
 	agentTriggers         *agenttrigger.Service
+	architect             *architect.Service
 	chats                 *chat.Service
 	messages              *message.Service
 	userState             *userstate.Service
@@ -116,7 +119,7 @@ type authenticated struct {
 
 func newIdentityHandlers(logger *slog.Logger, allowedOrigin string, dependencies Dependencies) *identityHandlers {
 	return &identityHandlers{
-		logger: logger, service: dependencies.Identity, agents: dependencies.Agents, agentConfig: dependencies.AgentConfig, agentProvider: dependencies.AgentProvider, agentTools: dependencies.AgentTools, agentRuns: dependencies.AgentRuns, agentTriggers: dependencies.AgentTriggers, chats: dependencies.Chats, messages: dependencies.Messages, userState: dependencies.UserState, push: dependencies.Push, workspace: dependencies.Workspace, files: dependencies.Files, search: dependencies.Search, knowledge: dependencies.Knowledge, interactive: dependencies.Interactive, webhooks: dependencies.Webhooks, webhookRate: newIPRateLimiter(600, 100), webhookFailures: newIPRateLimiter(30, 10), realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
+		logger: logger, service: dependencies.Identity, agents: dependencies.Agents, agentConfig: dependencies.AgentConfig, agentProvider: dependencies.AgentProvider, agentTools: dependencies.AgentTools, agentRuns: dependencies.AgentRuns, agentTriggers: dependencies.AgentTriggers, architect: dependencies.Architect, chats: dependencies.Chats, messages: dependencies.Messages, userState: dependencies.UserState, push: dependencies.Push, workspace: dependencies.Workspace, files: dependencies.Files, search: dependencies.Search, knowledge: dependencies.Knowledge, interactive: dependencies.Interactive, webhooks: dependencies.Webhooks, webhookRate: newIPRateLimiter(600, 100), webhookFailures: newIPRateLimiter(30, 10), realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
 		cookieSecure: dependencies.CookieSecure, refreshTTL: dependencies.RefreshTokenTTL,
 		bootstrapRate: newIPRateLimiter(5, 5), loginRate: newIPRateLimiter(10, 10),
 		refreshRate: newIPRateLimiter(30, 20), invitationRate: newIPRateLimiter(10, 10), websocketRate: newIPRateLimiter(60, 20), actorRate: newIPRateLimiter(1200, 200),
@@ -249,6 +252,12 @@ func (h *identityHandlers) routes(router chi.Router) {
 		}
 		if h.agentProvider != nil {
 			protected.Post("/agent-runtime/provider/chat", h.proxyAgentProviderChat)
+		}
+		if h.architect != nil {
+			protected.Post("/agents/architect/sessions", h.startArchitectSession)
+			protected.Get("/agents/architect/sessions/{sessionID}", h.getArchitectSession)
+			protected.Delete("/agents/architect/sessions/{sessionID}", h.closeArchitectSession)
+			protected.Post("/agents/architect/sessions/{sessionID}/messages", h.sendArchitectMessage)
 		}
 		if h.agentTriggers != nil {
 			protected.Get("/agents/{agentID}/triggers", h.listAgentTriggers)

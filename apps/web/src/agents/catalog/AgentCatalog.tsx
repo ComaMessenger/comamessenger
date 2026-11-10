@@ -31,6 +31,7 @@ export function AgentCatalog({
   approvals,
   access,
   onCreate,
+  onArchitect,
   navigate,
 }: {
   agents: Agent[];
@@ -38,6 +39,8 @@ export function AgentCatalog({
   approvals: AgentToolConfirmation[];
   access: AgentAccess;
   onCreate(template: AgentTemplate): void;
+  /** The main way to create an agent: a conversation with the Architect. */
+  onArchitect(): void;
   navigate(to: string): void;
 }) {
   const { t } = useTranslation();
@@ -66,10 +69,16 @@ export function AgentCatalog({
           <p>{t("agentCatalogLead")}</p>
         </div>
         {canBuild && (
-          <Button variant="primary" onClick={() => onCreate("custom")}>
-            <Plus />
-            {t("agentBuildManually")}
-          </Button>
+          <div className="agent-page__actions">
+            <Button variant="secondary" onClick={() => onCreate("custom")}>
+              <Plus />
+              {t("agentBuildManually")}
+            </Button>
+            <Button variant="primary" onClick={onArchitect}>
+              <Sparkles />
+              {t("architectCreate")}
+            </Button>
+          </div>
         )}
       </div>
 

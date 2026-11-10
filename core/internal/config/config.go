@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/netip"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -113,10 +114,23 @@ type AgentConfig struct {
 	// wait for a person (AGENT_TOOLS_REQUIRE_CONFIRMATION, comma-separated);
 	// agent versions cannot let them run by themselves.
 	ToolsRequireConfirmation string
+	// Architect bounds the spending of the agent Architect (phase 5.3 I).
+	Architect ArchitectLimits
 	// IntegrationsPrivateTargets lists the internal destinations (CIDR blocks,
 	// IPs, host:port) that workspace integrations marked as internal systems
 	// may reach. Empty by default: no integration reaches a private address.
 	IntegrationsPrivateTargets netguard.Targets
+}
+
+// ArchitectLimits mirror architect.Limits: workspace cost limits in USD (an
+// empty value means no limit), workspace calls per minute and one person's
+// allowance over 24 hours.
+type ArchitectLimits struct {
+	DailyCostLimit   string
+	MonthlyCostLimit string
+	CallsPerMinute   int
+	UserDailyCalls   int
+	UserDailyTokens  int64
 }
 
 type Config struct {
@@ -230,6 +244,10 @@ func FromEnvironment() (Config, error) {
 	if remindersPerDay < 1 || remindersPerDay > 100 {
 		return Config{}, fmt.Errorf("AGENT_REMINDERS_PER_PERSON_PER_DAY must be between 1 and 100")
 	}
+	architect, err := architectLimits()
+	if err != nil {
+		return Config{}, err
+	}
 	integrationsPrivate, err := netguard.ParseTargets(os.Getenv("INTEGRATIONS_ALLOWED_PRIVATE_TARGETS"))
 	if err != nil {
 		return Config{}, fmt.Errorf("INTEGRATIONS_ALLOWED_PRIVATE_TARGETS: %w", err)
@@ -277,6 +295,7 @@ func FromEnvironment() (Config, error) {
 			IntegrationsPrivateTargets: integrationsPrivate,
 			RemindersPerPersonPerDay:   int(remindersPerDay),
 			ToolsRequireConfirmation:   strings.TrimSpace(os.Getenv("AGENT_TOOLS_REQUIRE_CONFIRMATION")),
+			Architect:                  architect,
 		},
 	}
 
@@ -718,4 +737,52 @@ func quietHours(value string) (int, int, error) {
 		minutes[index] = parsed.Hour()*60 + parsed.Minute()
 	}
 	return minutes[0], minutes[1], nil
+}
+
+var costLimitValue = regexp.MustCompile(`^[0-9]{1,12}(\.[0-9]{1,8})?$`)
+
+// architectLimits reads ARCHITECT_* variables. Cost limits accept a USD
+// amount or "off"; counts must be positive.
+func architectLimits() (ArchitectLimits, error) {
+	cost := func(key, fallback string) (string, error) {
+		value := strings.TrimSpace(valueOrDefault(key, fallback))
+		if strings.EqualFold(value, "off") {
+			return "", nil
+		}
+		if !costLimitValue.MatchString(value) {
+			return "", fmt.Errorf("%s must be a USD amount like 5 or 12.50, or off", key)
+		}
+		return value, nil
+	}
+	count := func(key string, fallback uint64, max uint64) (uint64, error) {
+		value, err := uintValueOrDefault(key, fallback, 64)
+		if err != nil {
+			return 0, err
+		}
+		if value < 1 || value > max {
+			return 0, fmt.Errorf("%s must be between 1 and %d", key, max)
+		}
+		return value, nil
+	}
+	daily, err := cost("ARCHITECT_DAILY_COST_LIMIT", "5")
+	if err != nil {
+		return ArchitectLimits{}, err
+	}
+	monthly, err := cost("ARCHITECT_MONTHLY_COST_LIMIT", "50")
+	if err != nil {
+		return ArchitectLimits{}, err
+	}
+	perMinute, err := count("ARCHITECT_CALLS_PER_MINUTE", 30, 10000)
+	if err != nil {
+		return ArchitectLimits{}, err
+	}
+	userCalls, err := count("ARCHITECT_USER_DAILY_CALLS", 150, 100000)
+	if err != nil {
+		return ArchitectLimits{}, err
+	}
+	userTokens, err := count("ARCHITECT_USER_DAILY_TOKENS", 1_500_000, 1_000_000_000)
+	if err != nil {
+		return ArchitectLimits{}, err
+	}
+	return ArchitectLimits{DailyCostLimit: daily, MonthlyCostLimit: monthly, CallsPerMinute: int(perMinute), UserDailyCalls: int(userCalls), UserDailyTokens: int64(userTokens)}, nil
 }

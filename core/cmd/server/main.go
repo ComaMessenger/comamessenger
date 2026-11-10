@@ -20,6 +20,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/agentrun"
 	"github.com/comamessenger/comamessenger/core/internal/agenttool"
 	"github.com/comamessenger/comamessenger/core/internal/agenttrigger"
+	"github.com/comamessenger/comamessenger/core/internal/architect"
 	"github.com/comamessenger/comamessenger/core/internal/chat"
 	"github.com/comamessenger/comamessenger/core/internal/config"
 	"github.com/comamessenger/comamessenger/core/internal/coordination"
@@ -244,6 +245,14 @@ func main() {
 		os.Exit(1)
 	}
 	go agentTriggerService.Run(realtimeCtx, time.Second)
+	architectService := architect.NewService(pool, architect.Services{
+		Agents: agentService, Triggers: agentTriggerService, Runs: agentRunService, Chats: chatService, Knowledge: knowledgeService, Config: agentConfigService,
+	}, architect.NewHTTPModel())
+	architectService.SetLimits(architect.Limits{
+		DailyCostLimit: cfg.Agents.Architect.DailyCostLimit, MonthlyCostLimit: cfg.Agents.Architect.MonthlyCostLimit,
+		CallsPerMinute: cfg.Agents.Architect.CallsPerMinute, UserDailyCalls: cfg.Agents.Architect.UserDailyCalls, UserDailyTokens: cfg.Agents.Architect.UserDailyTokens,
+	})
+	go architectService.RunCleanup(realtimeCtx, time.Hour, logger)
 	webhookService, err := webhook.NewService(pool, cfg.IntegrationEncryptionKey, agentTriggerService)
 	if err != nil {
 		logger.Error("webhook initialization failed", "error", err)
@@ -259,7 +268,7 @@ func main() {
 	server := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: serverhttp.NewHandler(logger, cfg.PublicAppURL, pool.Ping, serverhttp.Dependencies{
-			Identity: identityService, Agents: agentService, AgentConfig: agentConfigService, AgentProvider: agentProviderService, AgentTools: agentToolExecutor, AgentRuns: agentRunService, AgentTriggers: agentTriggerService, Chats: chatService,
+			Identity: identityService, Agents: agentService, AgentConfig: agentConfigService, AgentProvider: agentProviderService, AgentTools: agentToolExecutor, AgentRuns: agentRunService, AgentTriggers: agentTriggerService, Architect: architectService, Chats: chatService,
 			Messages: messageService, UserState: userStateService, Push: pushService, Workspace: workspaceService, Files: fileService, Search: searchService, Knowledge: knowledgeService, Interactive: interactiveService, Webhooks: webhookService, Realtime: realtimeServer,
 			CookieSecure: cfg.Auth.CookieSecure, RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
 			BootstrapToken: cfg.BootstrapToken, RequireBootstrapToken: cfg.AppEnv != "development",
