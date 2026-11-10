@@ -825,6 +825,8 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agents", owner.AccessToken, map[string]any{
 		"display_name": "E2E agent", "handle": "e2e-agent", "kind": "external", "enabled": false, "endpoint_url": "https://agent.example.test/runtime",
 		"allowed_scopes": []string{"chats:read", "messages:read", "memory:read", "memory:write", "runtime:execute"}, "chat_ids": []string{group.ID},
+		// Memory writes run by themselves by default; this agent asks first.
+		"confirmation_policy": map[string]string{"remember": "confirm"},
 	}, standardhttp.StatusCreated, &createdAgent)
 	var runtimeKey agent.CreatedAPIKey
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agents/"+createdAgent.ID+"/keys", owner.AccessToken, map[string]any{

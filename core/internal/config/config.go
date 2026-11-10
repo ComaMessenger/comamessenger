@@ -110,6 +110,10 @@ type AgentConfig struct {
 	QuietEndMinute   int
 	// RemindersPerPersonPerDay caps agent reminders to one person per 24 hours.
 	RemindersPerPersonPerDay int
+	// ToolsRequireConfirmation lists built-in agent write tools that always
+	// wait for a person (AGENT_TOOLS_REQUIRE_CONFIRMATION, comma-separated);
+	// agent versions cannot let them run by themselves.
+	ToolsRequireConfirmation string
 	// Architect bounds the spending of the agent Architect (phase 5.3 I).
 	Architect ArchitectLimits
 	// IntegrationsPrivateTargets lists the internal destinations (CIDR blocks,
@@ -290,6 +294,7 @@ func FromEnvironment() (Config, error) {
 			QuietStartMinute:  quietStart, QuietEndMinute: quietEnd,
 			IntegrationsPrivateTargets: integrationsPrivate,
 			RemindersPerPersonPerDay:   int(remindersPerDay),
+			ToolsRequireConfirmation:   strings.TrimSpace(os.Getenv("AGENT_TOOLS_REQUIRE_CONFIRMATION")),
 			Architect:                  architect,
 		},
 	}

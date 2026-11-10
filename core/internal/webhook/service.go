@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/comamessenger/comamessenger/core/internal/agentauthz"
 	"io"
 	"regexp"
 	"strconv"
@@ -60,10 +61,13 @@ var (
 )
 
 type Webhook struct {
-	ID                 string     `json:"id"`
-	Name               string     `json:"name"`
-	Description        string     `json:"description"`
-	Enabled            bool       `json:"enabled"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Enabled     bool   `json:"enabled"`
+	// AgentUseAllowed is set by integrations.manage: only then may agent
+	// builders start an agent by this webhook.
+	AgentUseAllowed    bool       `json:"agent_use_allowed"`
 	SecretHint         string     `json:"secret_hint"`
 	RateLimitPerMinute int        `json:"rate_limit_per_minute"`
 	MaxBodyBytes       int        `json:"max_body_bytes"`
@@ -88,6 +92,7 @@ type CreateInput struct {
 	Name               string `json:"name"`
 	Description        string `json:"description"`
 	Enabled            *bool  `json:"enabled"`
+	AgentUseAllowed    bool   `json:"agent_use_allowed"`
 	RateLimitPerMinute int    `json:"rate_limit_per_minute"`
 	MaxBodyBytes       int    `json:"max_body_bytes"`
 }
@@ -96,6 +101,7 @@ type UpdateInput struct {
 	Name               *string `json:"name"`
 	Description        *string `json:"description"`
 	Enabled            *bool   `json:"enabled"`
+	AgentUseAllowed    *bool   `json:"agent_use_allowed"`
 	RateLimitPerMinute *int    `json:"rate_limit_per_minute"`
 	MaxBodyBytes       *int    `json:"max_body_bytes"`
 }
@@ -143,24 +149,28 @@ func canManage(current identity.User) bool {
 	return permission.Allows(current.OrgRole, current.Permissions, permission.IntegrationsManage)
 }
 
-const webhookSelect = `SELECT hook.id,hook.name,hook.description,hook.enabled,hook.secret_hint,hook.rate_limit_per_minute,hook.max_body_bytes,hook.last_received_at,
+const webhookSelect = `SELECT hook.id,hook.name,hook.description,hook.enabled,hook.agent_use_allowed,hook.secret_hint,hook.rate_limit_per_minute,hook.max_body_bytes,hook.last_received_at,
 	hook.rejected_count,hook.last_rejected_at,hook.last_rejected_code,
 	(SELECT count(*) FROM agent_triggers trigger WHERE trigger.org_id=hook.org_id AND trigger.type='webhook' AND trigger.superseded_at IS NULL AND trigger.config->>'webhook_id'=hook.id::text),
 	hook.created_by,hook.created_at,hook.updated_at FROM integration_webhooks hook`
 
 func scanWebhook(row pgx.Row) (Webhook, error) {
 	var hook Webhook
-	err := row.Scan(&hook.ID, &hook.Name, &hook.Description, &hook.Enabled, &hook.SecretHint, &hook.RateLimitPerMinute, &hook.MaxBodyBytes, &hook.LastReceivedAt,
+	err := row.Scan(&hook.ID, &hook.Name, &hook.Description, &hook.Enabled, &hook.AgentUseAllowed, &hook.SecretHint, &hook.RateLimitPerMinute, &hook.MaxBodyBytes, &hook.LastReceivedAt,
 		&hook.RejectedCount, &hook.LastRejectedAt, &hook.LastRejectedCode,
 		&hook.TriggerCount, &hook.CreatedBy, &hook.CreatedAt, &hook.UpdatedAt)
 	return hook, err
 }
 
+// List returns the webhooks of the workspace. Agent builders see only those
+// released for agents, to start an agent by one, and without the secret hint
+// or rejection details, which only integrations.manage needs.
 func (service *Service) List(ctx context.Context, current identity.User) ([]Webhook, error) {
-	if !canManage(current) {
+	manager := canManage(current)
+	if !manager && !agentauthz.New().CanBuild(current) {
 		return nil, ErrForbidden
 	}
-	rows, err := service.pool.Query(ctx, webhookSelect+` WHERE hook.org_id=$1 ORDER BY lower(hook.name),hook.id`, current.OrgID)
+	rows, err := service.pool.Query(ctx, webhookSelect+` WHERE hook.org_id=$1 AND (hook.agent_use_allowed OR $2) ORDER BY lower(hook.name),hook.id`, current.OrgID, manager)
 	if err != nil {
 		return nil, err
 	}
@@ -170,6 +180,9 @@ func (service *Service) List(ctx context.Context, current identity.User) ([]Webh
 		hook, err := scanWebhook(rows)
 		if err != nil {
 			return nil, err
+		}
+		if !manager {
+			hook.SecretHint, hook.RejectedCount, hook.LastRejectedAt, hook.LastRejectedCode = "", 0, nil, ""
 		}
 		result = append(result, hook)
 	}
@@ -219,12 +232,12 @@ func (service *Service) Create(ctx context.Context, current identity.User, input
 		return WebhookWithSecret{}, err
 	}
 	defer tx.Rollback(ctx)
-	if _, err := tx.Exec(ctx, `INSERT INTO integration_webhooks(id,org_id,name,description,enabled,secret_nonce,secret_ciphertext,secret_hint,rate_limit_per_minute,max_body_bytes,created_by,updated_by)
-		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11)`, webhookID, current.OrgID, name, description, enabled, nonce, ciphertext, secretHint(secret),
-		input.RateLimitPerMinute, input.MaxBodyBytes, current.ActorID); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO integration_webhooks(id,org_id,name,description,enabled,secret_nonce,secret_ciphertext,secret_hint,rate_limit_per_minute,max_body_bytes,created_by,updated_by,agent_use_allowed)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11,$12)`, webhookID, current.OrgID, name, description, enabled, nonce, ciphertext, secretHint(secret),
+		input.RateLimitPerMinute, input.MaxBodyBytes, current.ActorID, input.AgentUseAllowed); err != nil {
 		return WebhookWithSecret{}, err
 	}
-	if err := audit(ctx, tx, current, webhookID, "create", map[string]any{"name": name, "enabled": enabled}); err != nil {
+	if err := audit(ctx, tx, current, webhookID, "create", map[string]any{"name": name, "enabled": enabled, "agent_use_allowed": input.AgentUseAllowed}); err != nil {
 		return WebhookWithSecret{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -254,6 +267,9 @@ func (service *Service) Update(ctx context.Context, current identity.User, webho
 	if input.Enabled != nil {
 		existing.Enabled = *input.Enabled
 	}
+	if input.AgentUseAllowed != nil {
+		existing.AgentUseAllowed = *input.AgentUseAllowed
+	}
 	if input.RateLimitPerMinute != nil {
 		existing.RateLimitPerMinute = *input.RateLimitPerMinute
 	}
@@ -268,11 +284,11 @@ func (service *Service) Update(ctx context.Context, current identity.User, webho
 		return Webhook{}, err
 	}
 	defer tx.Rollback(ctx)
-	if _, err := tx.Exec(ctx, `UPDATE integration_webhooks SET name=$3,description=$4,enabled=$5,rate_limit_per_minute=$6,max_body_bytes=$7,updated_by=$8,updated_at=now()
-		WHERE org_id=$1 AND id=$2`, current.OrgID, webhookID, existing.Name, existing.Description, existing.Enabled, existing.RateLimitPerMinute, existing.MaxBodyBytes, current.ActorID); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE integration_webhooks SET name=$3,description=$4,enabled=$5,rate_limit_per_minute=$6,max_body_bytes=$7,updated_by=$8,agent_use_allowed=$9,updated_at=now()
+		WHERE org_id=$1 AND id=$2`, current.OrgID, webhookID, existing.Name, existing.Description, existing.Enabled, existing.RateLimitPerMinute, existing.MaxBodyBytes, current.ActorID, existing.AgentUseAllowed); err != nil {
 		return Webhook{}, err
 	}
-	if err := audit(ctx, tx, current, webhookID, "update", map[string]any{"name": existing.Name, "enabled": existing.Enabled,
+	if err := audit(ctx, tx, current, webhookID, "update", map[string]any{"name": existing.Name, "enabled": existing.Enabled, "agent_use_allowed": existing.AgentUseAllowed,
 		"rate_limit_per_minute": existing.RateLimitPerMinute, "max_body_bytes": existing.MaxBodyBytes}); err != nil {
 		return Webhook{}, err
 	}

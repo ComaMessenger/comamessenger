@@ -286,7 +286,9 @@ func validateAgentAndScheduleChat(ctx context.Context, tx pgx.Tx, orgID, agentID
 		if err := json.Unmarshal(input.Config, &config); err != nil {
 			return ErrInvalid
 		}
-		if err := tx.QueryRow(ctx, `SELECT true FROM integration_webhooks WHERE org_id=$1 AND id=$2`, orgID, config.WebhookID).Scan(&exists); errors.Is(err, pgx.ErrNoRows) {
+		// Only webhooks integrations.manage released for agents: the payload of
+		// another system reaches the agent's run input.
+		if err := tx.QueryRow(ctx, `SELECT true FROM integration_webhooks WHERE org_id=$1 AND id=$2 AND agent_use_allowed`, orgID, config.WebhookID).Scan(&exists); errors.Is(err, pgx.ErrNoRows) {
 			return ErrInvalid
 		} else if err != nil {
 			return err
@@ -364,6 +366,10 @@ func (service *Service) dispatchAgent(ctx context.Context, orgID, agentID string
 		LEFT JOIN message_agent_provenance provenance ON provenance.message_id=message.id
 		WHERE event.org_id=$1 AND event.seq>$2 AND (event.chat_id IS NULL OR EXISTS(
 			SELECT 1 FROM chat_members member WHERE member.org_id=event.org_id AND member.chat_id=event.chat_id AND member.actor_id=$3))
+		  -- A chat the agent only writes to is not a source: its messages and
+		  -- events never start the agent nor reach run.input.
+		  AND (event.chat_id IS NULL OR NOT EXISTS(
+			SELECT 1 FROM agents agent WHERE agent.org_id=event.org_id AND agent.actor_id=$3 AND event.chat_id=ANY(agent.write_only_chat_ids)))
 		ORDER BY event.seq LIMIT 100`, orgID, checkpoint, agentID)
 	if err != nil {
 		return err
@@ -753,7 +759,9 @@ type WebhookDelivery struct {
 // as untrusted content, and the notice repeats that for the model.
 func (service *Service) DispatchWebhook(ctx context.Context, tx pgx.Tx, delivery WebhookDelivery) (int, error) {
 	rows, err := tx.Query(ctx, triggerSelect+` WHERE trigger.org_id=$1 AND trigger.type='webhook' AND trigger.enabled AND trigger.superseded_at IS NULL
-		AND trigger.config->>'webhook_id'=$2::text ORDER BY trigger.created_at,trigger.id`, delivery.OrgID, delivery.WebhookID)
+		AND trigger.config->>'webhook_id'=$2::text
+		AND EXISTS(SELECT 1 FROM integration_webhooks hook WHERE hook.org_id=trigger.org_id AND hook.id::text=$2::text AND hook.agent_use_allowed)
+		ORDER BY trigger.created_at,trigger.id`, delivery.OrgID, delivery.WebhookID)
 	if err != nil {
 		return 0, err
 	}

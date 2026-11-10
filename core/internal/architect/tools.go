@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -513,7 +514,7 @@ func (turn *turn) updateDraft(ctx context.Context, raw json.RawMessage) any {
 		}
 		update.MCPBindings = &bindings
 	}
-	if update == (agent.UpdateInput{}) {
+	if reflect.DeepEqual(update, agent.UpdateInput{}) {
 		return fail("nothing to change")
 	}
 	updated, err := turn.service.services.Agents.Update(ctx, turn.current, current.ID, update)

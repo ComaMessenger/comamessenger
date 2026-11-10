@@ -29,6 +29,7 @@ import { Text } from "@/ui/Text";
 import { Markdown } from "./Markdown";
 import { MessageFiles } from "./MessageFiles";
 import { MessageBlocks } from "./MessageBlocks";
+import { AgentWhy } from "./AgentWhy";
 import { useReactions } from "./reactions";
 
 export type MessageRowProps = {
@@ -227,6 +228,7 @@ export const MessageRow = memo(function MessageRow({
           {!deleted && message.files.length > 0 && (
             <MessageFiles api={api} files={message.files} />
           )}
+          {!deleted && <AgentWhy provenance={message.agent_provenance} />}
           {reactions.groups.length > 0 && !deleted && (
             <View style={styles.reactions}>
               {reactions.groups.map((group) => (

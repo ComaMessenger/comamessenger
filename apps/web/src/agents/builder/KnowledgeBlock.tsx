@@ -1,20 +1,27 @@
-import type { Chat, MessengerAPI } from "@comamessenger/core";
+import { useQueries, useQuery } from "@tanstack/react-query";
+import type {
+  Chat,
+  KnowledgeDocument,
+  MessengerAPI,
+} from "@comamessenger/core";
 import {
   BookOpen,
   MessagesSquare,
   Paperclip,
   Search,
+  Sheet,
   Users,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Switch, Tag } from "../../ui";
+import { collectionsKey, documentsKey } from "../../knowledge/shared";
+import { SelectField, Switch } from "../../ui";
 import {
   knowledgeSources,
   type Capabilities,
   type KnowledgeSource,
 } from "../shared/capabilities";
-import { chatName } from "../shared/format";
 import { BlockLine, BuilderBlock } from "./BuilderBlock";
+import { ChatListEditor } from "./ChatListEditor";
 import { KnowledgeCollectionPicker } from "./KnowledgeCollectionPicker";
 
 const sourceIcons: Record<KnowledgeSource, typeof Search> = {
@@ -23,31 +30,69 @@ const sourceIcons: Record<KnowledgeSource, typeof Search> = {
   members: Users,
 };
 
-/** Block 2: where the agent takes information from. */
+/** Spreadsheets `query_table` can read: CSV and XLSX files. */
+export function isSpreadsheet(document: KnowledgeDocument): boolean {
+  const name = (document.file_name ?? document.title).toLowerCase();
+  const mime = document.file_mime ?? "";
+  return (
+    document.kind === "file" &&
+    (name.endsWith(".csv") ||
+      name.endsWith(".xlsx") ||
+      mime === "text/csv" ||
+      mime ===
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+  );
+}
+
+/**
+ * Block 2: where the agent takes information from — the chats it reads, its
+ * own search, the knowledge base and spreadsheets from it.
+ */
 export function KnowledgeBlock({
   api,
   chats,
-  chatIDs,
+  readChatIDs,
   capabilities,
   collectionIDs,
   canManageKnowledge,
+  tables,
+  onReadChats,
   onCapabilities,
   onCollections,
+  onTables,
 }: {
   api: MessengerAPI;
   chats: Chat[];
-  chatIDs: string[];
+  readChatIDs: string[];
   capabilities: Capabilities;
   collectionIDs: string[];
   canManageKnowledge: boolean;
+  /** Whether the agent reads spreadsheets of its collections. */
+  tables: boolean;
+  onReadChats(ids: string[]): void;
   onCapabilities(value: Capabilities): void;
   onCollections(ids: string[]): void;
+  onTables(value: boolean, collectionIDs: string[]): void;
 }) {
   const { t } = useTranslation();
-  const names = chatIDs
-    .map((id) => chats.find((chat) => chat.id === id))
-    .filter((chat): chat is Chat => Boolean(chat))
-    .map(chatName);
+  const collections = useQuery({
+    queryKey: collectionsKey,
+    queryFn: () => api.knowledgeCollections(),
+  });
+  const documents = useQueries({
+    queries: (collections.data ?? []).map((collection) => ({
+      queryKey: documentsKey(collection.id),
+      queryFn: () => api.knowledgeDocuments(collection.id),
+    })),
+  });
+  const spreadsheets = documents
+    .flatMap((query) => query.data ?? [])
+    .filter(isSpreadsheet);
+  const bound = spreadsheets.filter((document) =>
+    collectionIDs.includes(document.collection_id),
+  );
+  const collectionName = (id: string) =>
+    collections.data?.find((collection) => collection.id === id)?.name ?? "";
   return (
     <BuilderBlock
       anchor="knowledge"
@@ -58,10 +103,16 @@ export function KnowledgeBlock({
       <BlockLine
         icon={<MessagesSquare />}
         title={t("agentKnowsChats")}
-        hint={names.length ? names.join(", ") : t("agentKnowsChatsEmpty")}
-      >
-        <Tag>{t("agentAlways")}</Tag>
-      </BlockLine>
+        hint={t("agentKnowsChatsHint")}
+      />
+      <ChatListEditor
+        name="agent-read-chat-add"
+        chats={chats}
+        chatIDs={readChatIDs}
+        emptyText={t("agentKnowsChatsEmpty")}
+        addLabel={t("agentKnowsChatsAdd")}
+        onChange={onReadChats}
+      />
       {knowledgeSources.map((source) => {
         const Icon = sourceIcons[source];
         const checked = capabilities.sources.includes(source);
@@ -100,6 +151,54 @@ export function KnowledgeBlock({
         canManage={canManageKnowledge}
         onChange={onCollections}
       />
+      <BlockLine
+        icon={<Sheet />}
+        title={t("agentTables")}
+        hint={
+          bound.length
+            ? t("agentTablesList", {
+                names: bound.map((document) => document.title).join(", "),
+              })
+            : t("agentTablesNone")
+        }
+      >
+        <Switch
+          label={t("agentTables")}
+          checked={tables}
+          onChange={(value) => onTables(value, collectionIDs)}
+        />
+      </BlockLine>
+      {spreadsheets.some(
+        (document) => !collectionIDs.includes(document.collection_id),
+      ) && (
+        <SelectField
+          required={false}
+          label={t("agentTablesAdd")}
+          name="agent-table-add"
+          value=""
+          onChange={(event) => {
+            const chosen = spreadsheets.find(
+              (document) => document.id === event.target.value,
+            );
+            if (chosen)
+              onTables(true, [...collectionIDs, chosen.collection_id]);
+          }}
+        >
+          <option value="">{t("agentTablesChoose")}</option>
+          {spreadsheets
+            .filter(
+              (document) => !collectionIDs.includes(document.collection_id),
+            )
+            .map((document) => (
+              <option key={document.id} value={document.id}>
+                {t("agentTableOption", {
+                  name: document.title,
+                  collection: collectionName(document.collection_id),
+                })}
+              </option>
+            ))}
+        </SelectField>
+      )}
     </BuilderBlock>
   );
 }

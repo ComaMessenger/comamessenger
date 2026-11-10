@@ -17,6 +17,9 @@ var sourceScopes = map[string][]agent.Scope{
 	"search":  {agent.ScopeSearchRead},
 	"files":   {agent.ScopeFilesRead},
 	"members": {agent.ScopeMembersRead},
+	// Spreadsheets of the bound knowledge collections (query_table); the web
+	// builder's «Таблицы из базы знаний» switch.
+	"tables": {agent.ScopeTablesRead},
 }
 
 var skillScopes = map[string][]agent.Scope{
@@ -27,7 +30,7 @@ var skillScopes = map[string][]agent.Scope{
 	"memory":    {agent.ScopeMemoryRead, agent.ScopeMemoryWrite},
 }
 
-var knownSources = []string{"search", "files", "members"}
+var knownSources = []string{"search", "files", "members", "tables"}
 var knownSkills = []string{"messages", "cards", "followups", "reactions", "memory"}
 
 // preservedScopes are not derived by the builder and therefore kept.
@@ -36,7 +39,7 @@ var preservedScopes = []agent.Scope{agent.ScopeChatsRead, agent.ScopeRuntimeWork
 var orderedScopes = []agent.Scope{
 	agent.ScopeChatsRead, agent.ScopeMessagesRead, agent.ScopeMessagesWrite, agent.ScopeMessagesInteractive,
 	agent.ScopeReactionsWrite, agent.ScopeFilesRead, agent.ScopeSearchRead, agent.ScopeMembersRead,
-	agent.ScopeKnowledgeRead, agent.ScopeMemoryRead, agent.ScopeMemoryWrite, agent.ScopeFollowupsWrite,
+	agent.ScopeKnowledgeRead, agent.ScopeTablesRead, agent.ScopeMemoryRead, agent.ScopeMemoryWrite, agent.ScopeFollowupsWrite,
 	agent.ScopeRuntimeExecute, agent.ScopeRuntimeWorker,
 }
 
@@ -81,6 +84,9 @@ func scopesFor(sources, skills []string, hasKnowledge bool, current []agent.Scop
 	}
 	if hasKnowledge {
 		result[agent.ScopeKnowledgeRead] = true
+	} else {
+		// Spreadsheets live in knowledge collections.
+		delete(result, agent.ScopeTablesRead)
 	}
 	for _, scope := range preservedScopes {
 		if slices.Contains(current, scope) {

@@ -91,6 +91,10 @@ export const integrationsCatalog = defineCatalog(
     webhookSecretSaved: "Я сохранил секрет",
     webhookRotate: "Новый секрет",
     webhookTriggers: "Запусков агентов",
+    webhookAgentUse: "Агентам",
+    webhookAgentUseLabel: "Разрешить агентам запускаться по «{name}»",
+    webhookAgentUseHint:
+      "Только после этого сборщики агентов увидят вебхук и смогут запускать агента по событиям этой системы.",
     webhookLastReceived: "Последнее событие",
     webhookNever: "ещё не было",
     webhookJournal: "Журнал",
@@ -196,6 +200,10 @@ export const integrationsCatalog = defineCatalog(
     webhookSecretSaved: "I saved the secret",
     webhookRotate: "New secret",
     webhookTriggers: "Agent starts",
+    webhookAgentUse: "Agents",
+    webhookAgentUseLabel: "Let agents start on «{name}»",
+    webhookAgentUseHint:
+      "Only then do agent builders see the webhook and start an agent on events of this system.",
     webhookLastReceived: "Last event",
     webhookNever: "none yet",
     webhookJournal: "Journal",

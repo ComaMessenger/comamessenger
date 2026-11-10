@@ -51,6 +51,8 @@ type Message struct {
 	ThreadReplyCount  int64               `json:"thread_reply_count"`
 	Files             []filemodel.File    `json:"files"`
 	Blocks            *Blocks             `json:"blocks,omitempty"`
+	// AgentProvenance says why an agent wrote the message; absent otherwise.
+	AgentProvenance *Provenance `json:"agent_provenance,omitempty"`
 }
 
 type ForwardAttribution struct {
@@ -109,6 +111,7 @@ type Service struct {
 	afterCommit  func(orgID string, highWatermark int64)
 	actionHook   ActionHook
 	decider      ConfirmationDecider
+	directGuard  DirectGuard
 }
 
 func NewService(pool *pgxpool.Pool, maxBodyBytes, maxPageSize int, afterCommit func(orgID string, highWatermark int64)) *Service {
@@ -164,6 +167,30 @@ func (s *Service) create(ctx context.Context, user identity.User, chatID string,
 	}
 	if !can(user, kind, role, action) {
 		return Message{}, false, ErrForbidden
+	}
+	// An agent posts only to chats its published version writes to; chats
+	// it only reads are sources, never destinations.
+	var isAgent, readOnly bool
+	if err := tx.QueryRow(ctx, `SELECT true, $3::uuid=ANY(read_only_chat_ids) FROM agents WHERE org_id=$1 AND actor_id=$2`, user.OrgID, user.ActorID, chatID).Scan(&isAgent, &readOnly); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return Message{}, false, fmt.Errorf("check agent chat role: %w", err)
+	}
+	if readOnly {
+		return Message{}, false, ErrForbidden
+	}
+	// Second line behind the tool executor: an agent writing to a person
+	// in a direct chat follows the «writes to people directly» policy, the
+	// per-person limits and quiet hours, whatever path the write took.
+	if isAgent && kind == "direct" {
+		if s.directGuard == nil {
+			return Message{}, false, ErrForbidden
+		}
+		write := DirectWrite{OrgID: user.OrgID, AgentID: user.ActorID, ChatID: chatID, Final: final}
+		if provenance != nil {
+			write.RunID = provenance.RunID
+		}
+		if err := s.directGuard(ctx, tx, write); err != nil {
+			return Message{}, false, err
+		}
 	}
 
 	fingerprint := commandFingerprint(chatID, input)
@@ -241,6 +268,10 @@ func (s *Service) create(ctx context.Context, user identity.User, chatID string,
 				return Message{}, false, err
 			}
 		}
+		if err := hydrateAgentProvenance(ctx, tx, user.OrgID, created); err != nil {
+			return Message{}, false, err
+		}
+		result = created[0]
 	}
 	if err := insertEvent(ctx, tx, user, chatID, result.ID, seq, "message.created"); err != nil {
 		return Message{}, false, err
@@ -283,7 +314,7 @@ func insertAgentProvenance(ctx context.Context, tx pgx.Tx, user identity.User, m
 		return fmt.Errorf("record agent message provenance: %w", err)
 	}
 	if result.RowsAffected() == 1 {
-		return nil
+		return recordProvenanceReason(ctx, tx, user.OrgID, messageID, provenance.RunID)
 	}
 	var existingRunID string
 	if err := tx.QueryRow(ctx, `SELECT run_id FROM message_agent_provenance WHERE message_id=$1`, messageID).Scan(&existingRunID); err != nil {
@@ -325,6 +356,13 @@ func (s *Service) List(ctx context.Context, user identity.User, chatID string, o
 	defer tx.Rollback(ctx)
 	if _, _, err := requireMembership(ctx, tx, user, chatID); err != nil {
 		return Page{}, err
+	}
+	// An agent does not read the history of a chat it only writes to,
+	// whether through a tool or with its API key.
+	if _, writeOnly, err := agentChatRole(ctx, tx, user.OrgID, user.ActorID, chatID); err != nil {
+		return Page{}, err
+	} else if writeOnly {
+		return Page{}, ErrForbidden
 	}
 	rows, err := tx.Query(ctx, `
 		SELECT id, chat_id, actor_id, client_msg_id, type, body, body_format, reply_to_id,
@@ -996,7 +1034,9 @@ func hydrateFiles(ctx context.Context, tx pgx.Tx, orgID string, messages []Messa
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("iterate message files: %w", err)
 	}
-	return nil
+	rows.Close()
+	// Every reader that loads files also shows why an agent wrote a message.
+	return hydrateAgentProvenance(ctx, tx, orgID, messages)
 }
 
 func validateMentions(ctx context.Context, tx pgx.Tx, orgID, chatID string, actorIDs []string) error {

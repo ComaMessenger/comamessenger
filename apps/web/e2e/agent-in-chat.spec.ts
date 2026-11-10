@@ -57,6 +57,15 @@ function message(
     files: [],
     thread_reply_count: 0,
     ...(blocks ? { blocks } : {}),
+    ...(id === ids.handover
+      ? {
+          agent_provenance: {
+            run_id: "00000000-0000-4000-8000-000000000590",
+            trigger: "schedule",
+            trigger_label: "13:00 Europe/Moscow",
+          },
+        }
+      : {}),
   };
 }
 
@@ -161,7 +170,13 @@ function history() {
       ],
       sources: [
         { kind: "message", message_id: ids.quoted, title: "Игорь, 13:04" },
-        { kind: "document", document_id: ids.document, title: "Расписание слотов.xlsx" },
+        {
+          kind: "document",
+          document_id: ids.document,
+          chunk_id: "00000000-0000-4000-8000-000000000571",
+          position: 0,
+          title: "Расписание слотов.xlsx",
+        },
       ],
     }),
     message(
@@ -582,6 +597,12 @@ test("Передача: заступающий принимает слот од�
   const slots = await reveal(page, ids.slots);
   await expect(slots.getByRole("button", { name: "Назначить Игоря" })).toBeDisabled();
   await expect(row.locator(".agent-blocks")).toHaveScreenshot("agent-handover-accepted.png", { animations: "disabled" });
+  // Why the agent wrote it, without anything secret.
+  await expect(row.getByTestId("agent-why")).toHaveText("По расписанию · 13:00 Europe/Moscow");
+  // The source opens the exact fragment, not a text search.
+  await row.getByRole("list", { name: "Источники" }).getByRole("button", { name: "Расписание слотов.xlsx" }).click();
+  await expect(page).toHaveURL(/fragment=00000000-0000-4000-8000-000000000571&position=0/);
+  await expect(page.locator(".knowledge-fragment--focus")).toContainText("Регламент действует для всех инструкторов центра.");
 });
 
 test("Справка: ответ с источниками и честное «не нашёл»", async ({ page }) => {

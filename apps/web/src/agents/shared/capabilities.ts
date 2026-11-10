@@ -5,15 +5,13 @@ import type { AgentScope } from "@comamessenger/core";
  * do» are switches in plain language; scopes are derived from them and only
  * shown in advanced settings.
  *
- * Confirmation modes mirror the server: every write tool waits for a human
- * decision, except the interactive tools (cards, collections, follow-ups),
- * which are bounded by their own scopes and limits (docs/protocols/agents-v1.md).
- * The answer to the run itself is published without a tool and never waits.
+ * Whether an action waits for a person is part of the agent version
+ * (`confirmation_policy`, see ./confirmation.ts). The answer to the run itself
+ * is published without a tool and never waits.
  */
 
 export type KnowledgeSource = "search" | "files" | "members";
 export type Skill = "messages" | "reactions" | "cards" | "followups" | "memory";
-export type SkillMode = "self" | "confirm" | "mixed";
 
 export const knowledgeSources: KnowledgeSource[] = [
   "search",
@@ -28,13 +26,6 @@ export const skills: Skill[] = [
   "memory",
 ];
 
-export const skillMode: Record<Skill, SkillMode> = {
-  messages: "mixed",
-  reactions: "confirm",
-  cards: "self",
-  followups: "self",
-  memory: "mixed",
-};
 
 const sourceScopes: Record<KnowledgeSource, AgentScope[]> = {
   search: ["search:read"],
@@ -75,10 +66,16 @@ export function capabilitiesOf(scopes: readonly AgentScope[]): Capabilities {
 export function scopesFor({
   capabilities,
   hasKnowledge,
+  hasTables,
   current,
 }: {
   capabilities: Capabilities;
   hasKnowledge: boolean;
+  /**
+   * Spreadsheets of the bound collections are a source (`query_table`).
+   * Omitted keeps the current choice.
+   */
+  hasTables?: boolean;
   current: readonly AgentScope[];
 }): AgentScope[] {
   const result = new Set<AgentScope>(["messages:read", "runtime:execute"]);
@@ -87,6 +84,10 @@ export function scopesFor({
   for (const skill of capabilities.skills)
     skillScopes[skill].forEach((scope) => result.add(scope));
   if (hasKnowledge) result.add("knowledge:read");
+  // Spreadsheets live in knowledge collections: without one there is nothing
+  // to read.
+  if (hasKnowledge && (hasTables ?? current.includes("tables:read")))
+    result.add("tables:read");
   for (const scope of preservedScopes)
     if (current.includes(scope)) result.add(scope);
   return orderedScopes.filter((scope) => result.has(scope));
@@ -102,6 +103,7 @@ export const orderedScopes: AgentScope[] = [
   "search:read",
   "members:read",
   "knowledge:read",
+  "tables:read",
   "memory:read",
   "memory:write",
   "followups:write",

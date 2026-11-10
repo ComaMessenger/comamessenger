@@ -468,7 +468,7 @@ func TestArchitectQuestionLimitAndPublishedAgents(t *testing.T) {
 	if _, err := f.agents.CreateKey(ctx, owner, external.ID, agent.CreateKeyInput{Name: "runtime", Scopes: []agent.Scope{agent.ScopeMessagesRead}, RateLimitPerMinute: 10}); err != nil {
 		t.Fatal(err)
 	}
-	if external, err = f.agents.Publish(ctx, owner, external.ID); err != nil || external.PublishedVersion == nil {
+	if external, err = f.agents.Publish(ctx, owner, external.ID, agent.PublishOptions{}); err != nil || external.PublishedVersion == nil {
 		t.Fatalf("publish = %+v err=%v", external, err)
 	}
 	edit, _, err := f.service.Start(ctx, owner, StartInput{AgentID: &external.ID})

@@ -47,3 +47,21 @@ describe("scopes derived from builder blocks", () => {
     ).toEqual({ sources: ["files"], skills: ["messages", "followups"] });
   });
 });
+
+describe("spreadsheets", () => {
+  it("derives tables:read from the chosen source within bound collections", () => {
+    const capabilities = { sources: [], skills: [] };
+    expect(
+      scopesFor({ capabilities, hasKnowledge: true, hasTables: true, current: [] }),
+    ).toContain("tables:read");
+    expect(
+      scopesFor({ capabilities, hasKnowledge: false, hasTables: true, current: [] }),
+    ).not.toContain("tables:read");
+    expect(
+      scopesFor({ capabilities, hasKnowledge: true, current: ["tables:read"] }),
+    ).toContain("tables:read");
+    expect(
+      scopesFor({ capabilities, hasKnowledge: true, hasTables: false, current: ["tables:read"] }),
+    ).not.toContain("tables:read");
+  });
+});

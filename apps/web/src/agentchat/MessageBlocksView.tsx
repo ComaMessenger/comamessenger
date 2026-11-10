@@ -457,7 +457,15 @@ function SourceList({ sources }: { sources: MessageSource[] }) {
     try {
       const document = await api.knowledgeDocument(documentID);
       client.setQueryData(documentKey(documentID), document);
-      navigate(knowledgePath(document.collection_id, document.id, { quote: source.excerpt }));
+      // The exact fragment first; its position and the quote are fallbacks
+      // for documents indexed again and for messages written before.
+      navigate(
+        knowledgePath(document.collection_id, document.id, {
+          fragment: source.chunk_id,
+          position: source.position,
+          quote: source.excerpt,
+        }),
+      );
     } catch {
       toast({ message: t("acDocumentFailed"), tone: "danger" });
     } finally {

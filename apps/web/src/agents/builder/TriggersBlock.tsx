@@ -3,9 +3,10 @@ import type {
   Agent,
   AgentTrigger,
   Chat,
+  IntegrationWebhook,
   MessengerAPI,
 } from "@comamessenger/core";
-import type { UseQueryResult } from "@tanstack/react-query";
+import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { ArrowRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { messageOf } from "../../errors";
@@ -64,6 +65,23 @@ export function TriggersBlock({
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const agentChats = chats.filter((chat) => chatIDs.includes(chat.id));
+  // Builders see workspace webhooks (without secrets) to start the agent by
+  // one; without access the rule is simply not offered.
+  const webhooks = useQuery({
+    queryKey: ["integration-webhooks"],
+    queryFn: () => api.integrationWebhooks(),
+    retry: false,
+  });
+  const webhookNames = new Map(
+    (webhooks.data ?? []).map((hook) => [hook.id, hook.name]),
+  );
+  // Only webhooks integrations.manage released for agents can start one.
+  const released = (webhooks.data ?? []).filter(
+    (hook) => hook.agent_use_allowed,
+  );
+  const offered = triggerTypes.filter(
+    (type) => type !== "webhook" || released.length > 0,
+  );
 
   async function act(work: () => Promise<unknown>) {
     setPending(true);
@@ -128,6 +146,7 @@ export function TriggersBlock({
                 key={trigger.id}
                 form={editing.form}
                 chats={agentChats}
+                webhooks={released}
                 pending={pending}
                 onChange={(form) => setEditing({ id: trigger.id, form })}
                 onSave={() => void save()}
@@ -139,6 +158,7 @@ export function TriggersBlock({
                 trigger={trigger}
                 chats={chats}
                 timezone={timezone}
+                webhookNames={webhookNames}
                 disabled={pending}
                 onToggle={(enabled) =>
                   void act(() =>
@@ -158,6 +178,7 @@ export function TriggersBlock({
             <RuleEditor
               form={editing.form}
               chats={agentChats}
+              webhooks={released}
               pending={pending}
               onChange={(form) => setEditing({ id: null, form })}
               onSave={() => void save()}
@@ -176,7 +197,7 @@ export function TriggersBlock({
           >
             <span>{t("agentRuleChoose")}</span>
             <div className="agent-chips">
-              {triggerTypes.map((type) => (
+              {offered.map((type) => (
                 <Chip key={type} onClick={() => start(type)}>
                   {t(`agentRuleType_${type}`)}
                 </Chip>
@@ -197,6 +218,7 @@ function RuleRow({
   trigger,
   chats,
   timezone,
+  webhookNames,
   disabled,
   onToggle,
   onEdit,
@@ -205,13 +227,14 @@ function RuleRow({
   trigger: AgentTrigger;
   chats: Chat[];
   timezone: string;
+  webhookNames: ReadonlyMap<string, string>;
   disabled: boolean;
   onToggle(enabled: boolean): void;
   onEdit(): void;
   onDelete(): void;
 }) {
   const { t } = useTranslation();
-  const sentence = describeRule(t, trigger, chats, timezone);
+  const sentence = describeRule(t, trigger, chats, timezone, webhookNames);
   return (
     <div className="agent-rule" data-enabled={trigger.enabled}>
       <p className="agent-rule__sentence">
@@ -258,6 +281,7 @@ function RuleRow({
 function RuleEditor({
   form,
   chats,
+  webhooks,
   pending,
   onChange,
   onSave,
@@ -265,6 +289,7 @@ function RuleEditor({
 }: {
   form: RuleForm;
   chats: Chat[];
+  webhooks: IntegrationWebhook[];
   pending: boolean;
   onChange(form: RuleForm): void;
   onSave(): void;
@@ -414,6 +439,47 @@ function RuleEditor({
               </option>
             ))}
           </SelectField>
+        </>
+      )}
+      {form.type === "webhook" && (
+        <>
+          <div className="agent-form-row">
+            <SelectField
+              label={t("agentRuleWebhook")}
+              name="agent-rule-webhook"
+              value={form.webhookID}
+              onChange={(event) => set({ webhookID: event.target.value })}
+            >
+              <option value="">{t("agentRuleWebhookChoose")}</option>
+              {webhooks.map((hook) => (
+                <option key={hook.id} value={hook.id}>
+                  {hook.name}
+                </option>
+              ))}
+            </SelectField>
+            <SelectField
+              label={t("agentRuleScheduleChat")}
+              name="agent-rule-webhook-chat"
+              value={form.chatID}
+              onChange={(event) => set({ chatID: event.target.value })}
+            >
+              <option value="">{t("agentChooseChat")}</option>
+              {chats.map((chat) => (
+                <option key={chat.id} value={chat.id}>
+                  {chatName(chat)}
+                </option>
+              ))}
+            </SelectField>
+          </div>
+          <Field
+            required={false}
+            label={t("agentRuleWebhookEvents")}
+            name="agent-rule-webhook-events"
+            value={form.webhookEvents}
+            hint={t("agentRuleWebhookEventsHint")}
+            placeholder={t("agentRuleWebhookEventsPlaceholder")}
+            onChange={(event) => set({ webhookEvents: event.target.value })}
+          />
         </>
       )}
       {form.type === "every_message" && (

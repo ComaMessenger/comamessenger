@@ -124,12 +124,22 @@ func (s *Service) ScheduleFollowup(ctx context.Context, agent identity.User, run
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "agent-followups/"+agent.ActorID); err != nil {
 		return Followup{}, err
 	}
-	var pending int
-	if err := tx.QueryRow(ctx, `SELECT count(*) FROM agent_followups WHERE org_id=$1 AND agent_id=$2 AND status='pending'`, agent.OrgID, agent.ActorID).Scan(&pending); err != nil {
+	var pending, lastHour, maxDepth int
+	if err := tx.QueryRow(ctx, `SELECT
+		(SELECT count(*) FROM agent_followups WHERE org_id=$1 AND agent_id=$2 AND status='pending'),
+		(SELECT count(*) FROM agent_followups WHERE org_id=$1 AND agent_id=$2 AND created_at>now()-interval '1 hour'),
+		(SELECT max_chain_depth FROM agents WHERE org_id=$1 AND actor_id=$2)`, agent.OrgID, agent.ActorID).Scan(&pending, &lastHour, &maxDepth); err != nil {
 		return Followup{}, err
 	}
 	if pending >= s.limits.MaxPendingFollowupsPerAgent {
 		return Followup{}, fmt.Errorf("%w: at most %d pending follow-ups per agent", ErrLimit, s.limits.MaxPendingFollowupsPerAgent)
+	}
+	if lastHour >= s.limits.MaxFollowupsPerAgentPerHour {
+		return Followup{}, fmt.Errorf("%w: at most %d follow-ups per agent per hour", ErrLimit, s.limits.MaxFollowupsPerAgentPerHour)
+	}
+	// The follow-up runs one generation deeper than this run.
+	if run.ChainDepth+1 > maxDepth {
+		return Followup{}, fmt.Errorf("%w: the chain of follow-ups reached the agent's depth limit", ErrLimit)
 	}
 	followupID := uuid.Must(uuid.NewV7()).String()
 	created, err := scanFollowup(tx.QueryRow(ctx, `INSERT INTO agent_followups(id,org_id,agent_id,agent_version,source_run_id,tool_call_id,chat_id,thread_root_id,due_at,context,note)
@@ -187,10 +197,11 @@ func (s *Service) dispatchFollowup(ctx context.Context, followupID string, now t
 		return err
 	}
 	var enabled, deleted, budgetLeft bool
-	err = tx.QueryRow(ctx, `SELECT agent.enabled, agent.deleted_at IS NOT NULL,
+	var maxDepth int
+	err = tx.QueryRow(ctx, `SELECT agent.enabled, agent.deleted_at IS NOT NULL, agent.max_chain_depth,
 		(agent.daily_cost_limit IS NULL OR COALESCE((SELECT sum(usage.cost) FROM agent_usage usage WHERE usage.agent_id=agent.actor_id AND usage.created_at>=date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'),0) < agent.daily_cost_limit)
 		AND (agent.monthly_cost_limit IS NULL OR COALESCE((SELECT sum(usage.cost) FROM agent_usage usage WHERE usage.agent_id=agent.actor_id AND usage.created_at>=date_trunc('month',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'),0) < agent.monthly_cost_limit)
-		FROM agents agent WHERE agent.org_id=$1 AND agent.actor_id=$2`, orgID, followup.AgentID).Scan(&enabled, &deleted, &budgetLeft)
+		FROM agents agent WHERE agent.org_id=$1 AND agent.actor_id=$2`, orgID, followup.AgentID).Scan(&enabled, &deleted, &maxDepth, &budgetLeft)
 	if errors.Is(err, pgx.ErrNoRows) {
 		deleted = true
 	} else if err != nil {
@@ -198,6 +209,10 @@ func (s *Service) dispatchFollowup(ctx context.Context, followupID string, now t
 	}
 	status, reason := "dispatched", ""
 	var runID *string
+	depth := 1
+	if sourceDepth != nil {
+		depth = *sourceDepth + 1
+	}
 	switch {
 	case deleted:
 		status, reason = "canceled", "agent_deleted"
@@ -205,11 +220,9 @@ func (s *Service) dispatchFollowup(ctx context.Context, followupID string, now t
 		status, reason = "canceled", "agent_paused"
 	case !budgetLeft:
 		status, reason = "skipped", "budget_exceeded"
+	case depth > maxDepth:
+		status, reason = "skipped", "chain_depth_exceeded"
 	default:
-		depth := 0
-		if sourceDepth != nil {
-			depth = *sourceDepth
-		}
 		id, _, err := enqueueRun(ctx, tx, runRequest{
 			OrgID: orgID, AgentID: followup.AgentID, ChatID: followup.ChatID, ThreadRootID: followup.ThreadRootID,
 			ClientRunID: followup.ID, ChainDepth: depth,

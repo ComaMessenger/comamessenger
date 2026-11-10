@@ -97,6 +97,7 @@ import type {
   CreateAgentTriggerRequest,
   UpdateAgentTriggerRequest,
   ClaimedAgentRun,
+  PublishAgentRequest,
   ClaimAgentRunRequest,
   AgentRunLeaseRequest,
   PublishAgentRunRequest,
@@ -148,6 +149,8 @@ export class APIError extends Error {
     readonly status: number,
     readonly code: APIErrorCode,
     message: string,
+    /** Structured details some errors carry (e.g. `loosened` actions). */
+    readonly details: Record<string, unknown> = {},
   ) {
     super(message);
     this.name = "APIError";
@@ -382,6 +385,17 @@ export class MessengerAPI {
   }
   agentRuns(id: string): Promise<AgentRunPage> {
     return this.request(`/api/v1/agents/${encodeURIComponent(id)}/runs`);
+  }
+  /** Runs of every agent of the workspace, newest first (agents.observe). */
+  workspaceAgentRuns(
+    options: { cursor?: string; limit?: number; agentID?: string } = {},
+  ): Promise<AgentRunPage> {
+    const query = new URLSearchParams();
+    if (options.cursor) query.set("cursor", options.cursor);
+    if (options.limit) query.set("limit", String(options.limit));
+    if (options.agentID) query.set("agent_id", options.agentID);
+    const suffix = query.size ? `?${query}` : "";
+    return this.request(`/api/v1/agent-runs${suffix}`);
   }
   agentRun(runID: string): Promise<AgentRun> {
     return this.request(`/api/v1/agent-runs/${encodeURIComponent(runID)}`);
@@ -804,9 +818,10 @@ export class MessengerAPI {
   agentVersions(id: string): Promise<AgentVersion[]> {
     return this.request(`/api/v1/agents/${encodeURIComponent(id)}/versions`);
   }
-  publishAgent(id: string): Promise<Agent> {
+  publishAgent(id: string, input: PublishAgentRequest = {}): Promise<Agent> {
     return this.request(`/api/v1/agents/${encodeURIComponent(id)}/publish`, {
       method: "POST",
+      body: JSON.stringify(input),
     });
   }
   pauseAgent(id: string): Promise<Agent> {
@@ -1560,6 +1575,7 @@ export class MessengerAPI {
         response.status,
         payload.code ?? "request_failed",
         payload.message ?? "Request failed.",
+        payload.details ?? {},
       );
     }
     if (response.status === 204) return undefined as T;

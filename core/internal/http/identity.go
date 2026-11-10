@@ -234,6 +234,7 @@ func (h *identityHandlers) routes(router chi.Router) {
 		if h.agentRuns != nil {
 			protected.Post("/agents/{agentID}/invoke", h.invokeAgent)
 			protected.Get("/agents/{agentID}/runs", h.listAgentRuns)
+			protected.Get("/agent-runs", h.listWorkspaceAgentRuns)
 			protected.Get("/agent-runs/{runID}", h.getAgentRun)
 			protected.Post("/agent-runs/{runID}/cancel", h.cancelAgentRun)
 			protected.Get("/agent-runs/{runID}/tool-calls", h.listAgentRunToolCalls)

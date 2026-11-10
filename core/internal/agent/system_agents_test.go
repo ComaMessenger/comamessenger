@@ -92,7 +92,7 @@ func TestSystemAgentsAreNotProductAgents(t *testing.T) {
 		}
 		_, err := agents.Update(ctx, owner, systemID, agent.UpdateInput{DisplayName: &name})
 		notFound("update", err)
-		_, err = agents.Publish(ctx, owner, systemID)
+		_, err = agents.Publish(ctx, owner, systemID, agent.PublishOptions{})
 		notFound("publish", err)
 		_, err = agents.Pause(ctx, owner, systemID)
 		notFound("pause", err)

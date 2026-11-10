@@ -94,6 +94,9 @@ type RuntimeMCPServer struct {
 	TimeoutMS                int               `json:"timeout_ms"`
 	MaxOutputBytes           int               `json:"max_output_bytes"`
 	RequireWriteConfirmation bool              `json:"require_write_confirmation"`
+	// ToolConfirmation is the effective mode of every allowed tool when it
+	// changes data: "auto" runs by itself, "confirm" waits for a person.
+	ToolConfirmation map[string]string `json:"tool_confirmation,omitempty"`
 	// AllowPrivateNetwork lets the runtime reach a listed internal address
 	// (and plain HTTP); AllowedPrivateCIDRs are the ranges it may resolve to.
 	AllowPrivateNetwork bool     `json:"allow_private_network"`

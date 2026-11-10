@@ -145,3 +145,26 @@ export function splitQuote(
     { text: text.slice(index + needle.length), match: false },
   ].filter((part) => part.text !== "");
 }
+
+/**
+ * The fragment to show in focus: the exact fragment an agent source names;
+ * after the document was indexed again, the fragment at the same position if
+ * it still contains the quote; then a fragment containing the quote (messages
+ * written before sources carried fragments); then the position alone.
+ */
+export function focusedFragment(
+  fragments: Array<{ chunk_id: string; position: number; content: string }>,
+  fragmentID: string,
+  quote: string,
+  position: number | null,
+): string {
+  if (fragmentID && fragments.some((fragment) => fragment.chunk_id === fragmentID))
+    return fragmentID;
+  const atPosition = position === null ? undefined : fragments.find((fragment) => fragment.position === position);
+  if (quote) {
+    const quoted = findQuotedFragment(fragments, quote);
+    if (atPosition && quoted && findQuotedFragment([atPosition], quote)) return atPosition.chunk_id;
+    if (quoted) return quoted;
+  }
+  return atPosition?.chunk_id ?? "";
+}

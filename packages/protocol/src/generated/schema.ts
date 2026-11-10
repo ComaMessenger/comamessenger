@@ -240,6 +240,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Publishes the draft. When the draft lets actions run without a person's approval that waited before (or, on the first publish, that wait by default), the server answers 409 agent_confirmation_loosened with details.loosened (built-in tool names and "mcp:<connection>/<tool>") until the request acknowledges them. */
         post: operations["publishAgent"];
         delete?: never;
         options?: never;
@@ -2283,6 +2284,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agent-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Runs of every agent of the workspace, newest first, for the activity feed. Requires agents.observe. */
+        get: operations["listWorkspaceAgentRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agent-runs/{run_id}": {
         parameters: {
             query?: never;
@@ -2549,7 +2567,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_conflict" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "architect_budget_exceeded" | "architect_busy" | "architect_connection_required" | "architect_model_error" | "architect_session_expired" | "architect_session_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "integration_in_use" | "integration_usage_changed" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "webhook_not_found" | "webhook_rejected" | "workspace_not_found";
+        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_confirmation_loosened" | "agent_conflict" | "agent_not_ready" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "architect_budget_exceeded" | "architect_busy" | "architect_connection_required" | "architect_model_error" | "architect_session_expired" | "architect_session_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "integration_in_use" | "integration_usage_changed" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "webhook_not_found" | "webhook_rejected" | "workspace_not_found";
         File: {
             /** Format: uuid */
             id: string;
@@ -3121,6 +3139,16 @@ export interface components {
             knowledge_collection_ids?: string[];
             /** @description Workspace MCP connections assigned to the draft (or the published version when there is no draft) with the allowed tools. Never contains secrets; empty for actors without agent management rights. */
             mcp_bindings?: components["schemas"]["AgentMcpBinding"][];
+            /** @description Agent chats it reads (history, search, members). Empty for actors without agent management rights. */
+            read_chat_ids?: string[];
+            /** @description Agent chats it posts to. A chat may be in both lists; chat_ids is their union. */
+            write_chat_ids?: string[];
+            tone?: components["schemas"]["AgentTone"];
+            confirmation_policy?: components["schemas"]["AgentConfirmationPolicy"];
+            /** @description Built-in tools the server always confirms (operator setting); their policy is always confirm. */
+            confirmation_locked?: string[];
+            /** @description The trusted instructions the model receives: the task plus the lines Core derives from the version (tone, chats where the agent only reads or only writes). Chat lines are omitted for actors without agent management rights. */
+            instructions?: string;
             /** Format: int64 */
             avatar_version: number;
             readiness: components["schemas"]["AgentReadiness"];
@@ -3135,6 +3163,24 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+        };
+        PublishAgentRequest: {
+            /** @description The person publishing confirms that the actions listed by agent_confirmation_loosened will run without approval. */
+            acknowledge_loosened?: boolean;
+        };
+        /**
+         * @description Empty means no tone instruction.
+         * @enum {string}
+         */
+        AgentTone: "" | "concise" | "friendly" | "formal";
+        /**
+         * @description auto runs the action by itself; confirm waits for a person's approval.
+         * @enum {string}
+         */
+        AgentConfirmationMode: "auto" | "confirm";
+        /** @description Confirmation of each built-in write tool (post_message, reply_in_thread, add_reaction, post_card, update_card, start_collection, schedule_followup, remember, send_direct_message). A request may name only the tools it changes; responses name all of them with the mode Core enforces. Tools in the server floor cannot be set to auto. */
+        AgentConfirmationPolicy: {
+            [key: string]: components["schemas"]["AgentConfirmationMode"];
         };
         AgentVersion: {
             /** Format: uuid */
@@ -3197,6 +3243,12 @@ export interface components {
             chat_ids: string[];
             knowledge_collection_ids?: string[];
             mcp_bindings?: components["schemas"]["AgentMcpBinding"][];
+            /** @description Chats the agent reads. With write_chat_ids it replaces chat_ids by their union; a list that is omitted keeps its current value. */
+            read_chat_ids?: string[];
+            /** @description Chats the agent posts to. */
+            write_chat_ids?: string[];
+            tone?: components["schemas"]["AgentTone"];
+            confirmation_policy?: components["schemas"]["AgentConfirmationPolicy"];
         };
         UpdateAgentRequest: {
             display_name?: string;
@@ -3222,6 +3274,14 @@ export interface components {
             chat_ids?: string[];
             knowledge_collection_ids?: string[];
             mcp_bindings?: components["schemas"]["AgentMcpBinding"][];
+            /** @description Chats the agent reads. With write_chat_ids it replaces chat_ids by their union; a list that is omitted keeps its current value. */
+            read_chat_ids?: string[];
+            /** @description Chats the agent posts to. */
+            write_chat_ids?: string[];
+            tone?: components["schemas"]["AgentTone"];
+            confirmation_policy?: components["schemas"]["AgentConfirmationPolicy"];
+            /** @description With enabled=true, confirms the actions agent_confirmation_loosened listed. */
+            acknowledge_loosened?: boolean;
         };
         AgentUsageEntry: {
             /** Format: uuid */
@@ -3615,6 +3675,10 @@ export interface components {
             timeout_ms: number;
             max_output_bytes: number;
             require_write_confirmation: boolean;
+            /** @description Effective mode of every allowed tool when it changes data. */
+            tool_confirmation?: {
+                [key: string]: components["schemas"]["AgentConfirmationMode"];
+            };
             /** @description The connection may reach listed internal addresses and plain HTTP; link-local and cloud metadata addresses stay forbidden. */
             allow_private_network?: boolean;
             /** @description Internal ranges the endpoint may resolve to (from the operator allowlist). Empty means public addresses only. */
@@ -3677,6 +3741,10 @@ export interface components {
              * @default true
              */
             require_write_confirmation: boolean;
+            /** @description Per-tool override of require_write_confirmation for allowed tools. A connection that requires confirmation turns every entry into confirm. */
+            confirmation_policy?: {
+                [key: string]: components["schemas"]["AgentConfirmationMode"];
+            };
         };
         McpTool: {
             name: string;
@@ -3775,6 +3843,8 @@ export interface components {
             name: string;
             description: string;
             enabled: boolean;
+            /** @description Released by integrations.manage so agent builders may start an agent by this webhook. Off by default; builders list only released webhooks. */
+            agent_use_allowed?: boolean;
             secret_hint: string;
             rate_limit_per_minute: number;
             max_body_bytes: number;
@@ -3806,6 +3876,8 @@ export interface components {
             description?: string;
             /** @default true */
             enabled: boolean;
+            /** @default false */
+            agent_use_allowed: boolean;
             rate_limit_per_minute?: number;
             max_body_bytes?: number;
         };
@@ -3813,6 +3885,7 @@ export interface components {
             name?: string;
             description?: string;
             enabled?: boolean;
+            agent_use_allowed?: boolean;
             rate_limit_per_minute?: number;
             max_body_bytes?: number;
         };
@@ -3905,6 +3978,8 @@ export interface components {
         };
         AgentRunPage: {
             runs: components["schemas"]["AgentRun"][];
+            /** @description Present when the workspace listing has more runs. */
+            next_cursor?: string;
         };
         StartArchitectSessionRequest: {
             /**
@@ -4582,6 +4657,16 @@ export interface components {
             thread_reply_count: number;
             files: components["schemas"]["File"][];
             blocks?: components["schemas"]["MessageBlocks"];
+            agent_provenance?: components["schemas"]["MessageAgentProvenance"];
+        };
+        /** @description Why an agent wrote the message. Visible to every reader of the message: it never carries a webhook payload, a follow-up note or text from another chat. */
+        MessageAgentProvenance: {
+            /** Format: uuid */
+            run_id: string;
+            /** @enum {string} */
+            trigger: "manual" | "mention" | "command" | "keyword" | "every_message" | "schedule" | "event" | "webhook" | "followup" | "message_action" | "collection" | "confirmation";
+            /** @description Short detail recorded when the message was written, e.g. "/summarize" or "09:00 UTC". Never a keyword pattern or a webhook name. */
+            trigger_label?: string;
         };
         /** @description Optional structured part of an agent message. The body always carries a plain-text fallback; clients that do not support the version render the body. Server-managed state (responses, closed, binding) is part of the document so durable events carry the current card. */
         MessageBlocks: {
@@ -4655,6 +4740,13 @@ export interface components {
             file_id?: string;
             /** Format: uuid */
             document_id?: string;
+            /**
+             * Format: uuid
+             * @description Knowledge fragment of a document source the answer relies on.
+             */
+            chunk_id?: string;
+            /** @description Position of the fragment in the document, filled by Core from chunk_id. */
+            position?: number;
             title?: string;
             excerpt?: string;
         };
@@ -5387,7 +5479,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PublishAgentRequest"];
+            };
+        };
         responses: {
             /** @description Draft atomically validated and published. */
             200: {
@@ -9061,7 +9157,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Incoming webhooks without secrets. */
+            /** @description Incoming webhooks without secrets. Agent builders (agents.build) see them to start an agent by one, without the secret hint and rejection details. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -9840,6 +9936,32 @@ export interface operations {
                 };
             };
             403: components["responses"]["Error"];
+        };
+    };
+    listWorkspaceAgentRuns: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+                agent_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of runs; next_cursor continues it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunPage"];
+                };
+            };
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
         };
     };
     getAgentRun: {

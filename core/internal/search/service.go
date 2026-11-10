@@ -122,6 +122,25 @@ func (s *Service) Search(ctx context.Context, user identity.User, input Input) (
 	if err := rows.Err(); err != nil {
 		return Page{}, fmt.Errorf("iterate search results: %w", err)
 	}
+	// An agent's search covers the chats it reads, not those it only
+	// writes to.
+	var writeOnly []string
+	if err := s.pool.QueryRow(ctx, `SELECT COALESCE((SELECT write_only_chat_ids::text[] FROM agents WHERE org_id=$1 AND actor_id=$2),'{}'::text[])`, user.OrgID, user.ActorID).Scan(&writeOnly); err != nil {
+		return Page{}, fmt.Errorf("load agent chat roles: %w", err)
+	}
+	if len(writeOnly) > 0 {
+		hidden := make(map[string]bool, len(writeOnly))
+		for _, chatID := range writeOnly {
+			hidden[chatID] = true
+		}
+		kept := results[:0]
+		for _, result := range results {
+			if !hidden[result.ChatID] {
+				kept = append(kept, result)
+			}
+		}
+		results = kept
+	}
 	page := Page{Results: results}
 	if len(results) > input.Limit {
 		page.Results = results[:input.Limit]

@@ -20,6 +20,8 @@ const knownTriggers = new Set([
   "message_action",
   "collection",
   "followup",
+  "webhook",
+  "confirmation",
 ]);
 
 export function runTrigger(run: AgentRun): string {

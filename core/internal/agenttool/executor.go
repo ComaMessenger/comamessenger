@@ -41,11 +41,7 @@ type Definition struct {
 	Mode          string         `json:"mode"`
 	RequiredScope agent.Scope    `json:"required_scope"`
 	InputSchema   map[string]any `json:"input_schema"`
-	// NoConfirmation exempts a write tool from the global write-confirmation
-	// policy. Interactive tools are bounded by their own scopes and server
-	// limits instead; dry_run still returns only a preview.
-	NoConfirmation bool `json:"-"`
-	compiled       *jsonschema.Schema
+	compiled      *jsonschema.Schema
 }
 
 type Handler func(context.Context, Invocation) (any, error)
@@ -67,6 +63,13 @@ type Invocation struct {
 	DryRun        bool
 	// callRecordID is the agent_tool_calls row of the executing call.
 	callRecordID string
+	// Facts of the agent version the run uses (the draft snapshot of a dry
+	// run, otherwise the published agent).
+	readOnlyChats  map[string]bool
+	writeOnlyChats map[string]bool
+	policy         map[string]string
+	runChatID      string
+	requestedBy    string
 }
 
 type Confirmation struct {
@@ -122,7 +125,14 @@ type Executor struct {
 	order                    []string
 	maxOutputBytes           int
 	requireWriteConfirmation bool
+	confirmationFloor        map[string]bool
 	authorizer               agentauthz.Authorizer
+}
+
+// SetConfirmationFloor installs the operator list of built-in write tools
+// that always wait for a person, whatever the agent version says.
+func (executor *Executor) SetConfirmationFloor(floor map[string]bool) {
+	executor.confirmationFloor = floor
 }
 
 func NewExecutor(pool *pgxpool.Pool, services Services, requireWriteConfirmation bool) (*Executor, error) {
@@ -158,14 +168,21 @@ func (executor *Executor) resolveInvocation(ctx context.Context, invocation Invo
 		return Invocation{}, ErrForbidden
 	}
 	var agentID string
-	var scopes []string
+	var scopes, readOnly, writeOnly []string
+	var policy []byte
 	err := executor.pool.QueryRow(ctx, `SELECT run.agent_id,
 		CASE WHEN run.dry_run AND run.agent_config ? 'allowed_scopes'
 		THEN ARRAY(SELECT jsonb_array_elements_text(run.agent_config->'allowed_scopes')) ELSE agent.allowed_scopes END,
-		run.dry_run FROM agent_runs run
+		run.dry_run,
+		CASE WHEN run.dry_run AND run.agent_config ? 'read_only_chat_ids'
+		THEN ARRAY(SELECT jsonb_array_elements_text(run.agent_config->'read_only_chat_ids')) ELSE agent.read_only_chat_ids::text[] END,
+		CASE WHEN run.dry_run AND run.agent_config ? 'write_only_chat_ids'
+		THEN ARRAY(SELECT jsonb_array_elements_text(run.agent_config->'write_only_chat_ids')) ELSE agent.write_only_chat_ids::text[] END,
+		agent.confirmation_policy,COALESCE(run.chat_id::text,''),COALESCE(run.requested_by::text,'')
+		FROM agent_runs run
 		JOIN agents agent ON agent.org_id=run.org_id AND agent.actor_id=run.agent_id
 		WHERE run.org_id=$1 AND run.id=$2 AND run.lease_token=$3 AND run.status='running' AND run.lease_expires_at>now()
-		AND ($4::boolean OR run.agent_id=$5)`, invocation.User.OrgID, invocation.RunID, invocation.LeaseToken, organizationWorker, invocation.User.ActorID).Scan(&agentID, &scopes, &invocation.DryRun)
+		AND ($4::boolean OR run.agent_id=$5)`, invocation.User.OrgID, invocation.RunID, invocation.LeaseToken, organizationWorker, invocation.User.ActorID).Scan(&agentID, &scopes, &invocation.DryRun, &readOnly, &writeOnly, &policy, &invocation.runChatID, &invocation.requestedBy)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Invocation{}, ErrForbidden
 	}
@@ -175,6 +192,10 @@ func (executor *Executor) resolveInvocation(ctx context.Context, invocation Invo
 	invocation.User = identity.User{ActorID: agentID, OrgID: invocation.User.OrgID, OrgRole: "member"}
 	invocation.Identity.ActorID = agentID
 	invocation.Identity.Scopes = scopes
+	invocation.readOnlyChats = setOf(readOnly)
+	invocation.writeOnlyChats = setOf(writeOnly)
+	invocation.policy = map[string]string{}
+	_ = json.Unmarshal(policy, &invocation.policy)
 	return invocation, nil
 }
 
@@ -198,6 +219,9 @@ func (executor *Executor) Invoke(ctx context.Context, invocation Invocation) (In
 	if err := validateArguments(definition, invocation.Arguments); err != nil {
 		return InvokeResult{}, err
 	}
+	if err := executor.checkChatRoles(ctx, invocation, definition); err != nil {
+		return InvokeResult{}, err
+	}
 	if invocation.DryRun && definition.Mode == "write" {
 		preview, err := json.Marshal(map[string]any{
 			"dry_run": true, "would_execute": definition.Name, "arguments": json.RawMessage(invocation.Arguments),
@@ -212,7 +236,15 @@ func (executor *Executor) Invoke(ctx context.Context, invocation Invocation) (In
 		}
 		return InvokeResult{Output: preview}, nil
 	}
-	if executor.requireWriteConfirmation && definition.Mode == "write" && !definition.NoConfirmation {
+	confirm := false
+	if executor.requireWriteConfirmation && definition.Mode == "write" {
+		policyTool, force, err := executor.confirmationTarget(ctx, invocation, definition)
+		if err != nil {
+			return InvokeResult{}, err
+		}
+		confirm = force || agent.EffectiveConfirmation(invocation.policy, executor.confirmationFloor, policyTool) == agent.ConfirmationConfirm
+	}
+	if confirm {
 		confirmation, err := executor.requestConfirmation(ctx, invocation, definition)
 		return InvokeResult{Confirmation: &confirmation}, err
 	}
@@ -283,7 +315,19 @@ func (executor *Executor) searchMessages(ctx context.Context, invocation Invocat
 		Limit  int    `json:"limit"`
 	}
 	_ = json.Unmarshal(invocation.Arguments, &input)
-	return executor.services.Search.Search(ctx, invocation.User, search.Input{Query: input.Query, ChatID: input.ChatID, Type: "message", Limit: input.Limit})
+	result, err := executor.services.Search.Search(ctx, invocation.User, search.Input{Query: input.Query, ChatID: input.ChatID, Type: "message", Limit: input.Limit})
+	if err != nil || len(invocation.writeOnlyChats) == 0 {
+		return result, err
+	}
+	// Chats the agent only writes to are not sources of its knowledge.
+	kept := result.Results[:0]
+	for _, item := range result.Results {
+		if !invocation.writeOnlyChats[item.ChatID] {
+			kept = append(kept, item)
+		}
+	}
+	result.Results = kept
+	return result, nil
 }
 
 func (executor *Executor) postMessage(ctx context.Context, invocation Invocation) (any, error) {
@@ -493,7 +537,25 @@ func (executor *Executor) ListConfirmations(ctx context.Context, current identit
 	return result, rows.Err()
 }
 
+// DecideConfirmation records a person's decision, runs an approved call and
+// wakes the agent with the outcome, so the work that waited can continue.
 func (executor *Executor) DecideConfirmation(ctx context.Context, current identity.User, confirmationID string, approve bool) (Confirmation, error) {
+	result, err := executor.decideConfirmation(ctx, current, confirmationID, approve)
+	if err != nil || executor.services.Interactive == nil {
+		return result, err
+	}
+	if result.Status == "completed" || result.Status == "failed" || result.Status == "denied" {
+		// Best effort: the decision and the call are already committed; a
+		// paused or deleted agent simply is not woken.
+		_ = executor.services.Interactive.EnqueueConfirmationOutcome(context.WithoutCancel(ctx), interactive.ConfirmationOutcome{
+			OrgID: current.OrgID, AgentID: result.AgentID, RunID: result.RunID, ConfirmationID: result.ID, ToolName: result.ToolName,
+			Status: result.Status, ErrorCode: result.ErrorCode, Result: result.Result, DecidedBy: current.ActorID,
+		})
+	}
+	return result, nil
+}
+
+func (executor *Executor) decideConfirmation(ctx context.Context, current identity.User, confirmationID string, approve bool) (Confirmation, error) {
 	if !executor.authorizer.CanApprove(current) {
 		return Confirmation{}, ErrForbidden
 	}
@@ -556,7 +618,19 @@ func (executor *Executor) DecideConfirmation(ctx context.Context, current identi
 	if err := validateArguments(tool.Definition, invocation.Arguments); err != nil {
 		return executor.finishAndResolve(ctx, current, confirmation, nil, err)
 	}
-	output, callErr := executor.execute(ctx, invocation, tool)
+	// Chat roles may have changed since the call was requested: the approved
+	// call follows the agent's current published roles.
+	var readOnly, writeOnly []string
+	if err := executor.pool.QueryRow(ctx, `SELECT read_only_chat_ids::text[],write_only_chat_ids::text[] FROM agents WHERE org_id=$1 AND actor_id=$2`, current.OrgID, confirmation.AgentID).Scan(&readOnly, &writeOnly); err != nil {
+		return Confirmation{}, err
+	}
+	invocation.readOnlyChats, invocation.writeOnlyChats = setOf(readOnly), setOf(writeOnly)
+	if err := executor.checkChatRoles(ctx, invocation, tool.Definition); err != nil {
+		return executor.finishAndResolve(ctx, current, confirmation, nil, err)
+	}
+	// A person decided on exactly this call; the message service's direct
+	// write gate accepts it, limits and quiet hours still apply.
+	output, callErr := executor.execute(message.WithApprovedWrite(ctx), invocation, tool)
 	return executor.finishAndResolve(ctx, current, confirmation, output, callErr)
 }
 

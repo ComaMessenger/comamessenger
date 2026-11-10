@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -95,15 +96,28 @@ type Agent struct {
 	ChatIDs                     []string     `json:"chat_ids"`
 	KnowledgeCollectionIDs      []string     `json:"knowledge_collection_ids"`
 	MCPBindings                 []MCPBinding `json:"mcp_bindings"`
-	Readiness                   Readiness    `json:"readiness"`
-	OperationalStatus           string       `json:"operational_status"`
-	DraftVersion                *int         `json:"draft_version"`
-	PublishedVersion            *int         `json:"published_version"`
-	HasUnpublishedChanges       bool         `json:"has_unpublished_changes"`
-	PublishedAt                 *time.Time   `json:"published_at"`
-	AvatarVersion               int64        `json:"avatar_version"`
-	CreatedAt                   time.Time    `json:"created_at"`
-	UpdatedAt                   time.Time    `json:"updated_at"`
+	// ReadChatIDs and WriteChatIDs split ChatIDs into chats the agent reads
+	// and chats it posts to; a chat may be in both.
+	ReadChatIDs  []string `json:"read_chat_ids"`
+	WriteChatIDs []string `json:"write_chat_ids"`
+	Tone         string   `json:"tone"`
+	// ConfirmationPolicy is the effective mode of every confirmable write
+	// tool; ConfirmationLocked lists the tools the server always confirms.
+	ConfirmationPolicy map[string]string `json:"confirmation_policy"`
+	ConfirmationLocked []string          `json:"confirmation_locked"`
+	// Instructions is the trusted configuration the model receives.
+	Instructions          string `json:"instructions"`
+	readOnlyChatIDs       []string
+	writeOnlyChatIDs      []string
+	Readiness             Readiness  `json:"readiness"`
+	OperationalStatus     string     `json:"operational_status"`
+	DraftVersion          *int       `json:"draft_version"`
+	PublishedVersion      *int       `json:"published_version"`
+	HasUnpublishedChanges bool       `json:"has_unpublished_changes"`
+	PublishedAt           *time.Time `json:"published_at"`
+	AvatarVersion         int64      `json:"avatar_version"`
+	CreatedAt             time.Time  `json:"created_at"`
+	UpdatedAt             time.Time  `json:"updated_at"`
 }
 
 type Readiness struct {
@@ -146,7 +160,16 @@ type CreateInput struct {
 	ChatIDs                     []string     `json:"chat_ids"`
 	KnowledgeCollectionIDs      []string     `json:"knowledge_collection_ids"`
 	MCPBindings                 []MCPBinding `json:"mcp_bindings"`
-	DuplicateFrom               string       `json:"-"`
+	// ReadChatIDs and WriteChatIDs are the API form; when either is set,
+	// ChatIDs becomes their union. ReadOnlyChatIDs and WriteOnlyChatIDs are
+	// the stored form (also the keys of a version config).
+	ReadChatIDs        *[]string         `json:"read_chat_ids,omitempty"`
+	WriteChatIDs       *[]string         `json:"write_chat_ids,omitempty"`
+	ReadOnlyChatIDs    []string          `json:"read_only_chat_ids,omitempty"`
+	WriteOnlyChatIDs   []string          `json:"write_only_chat_ids,omitempty"`
+	Tone               string            `json:"tone"`
+	ConfirmationPolicy map[string]string `json:"confirmation_policy,omitempty"`
+	DuplicateFrom      string            `json:"-"`
 }
 
 type DuplicateInput struct {
@@ -177,6 +200,14 @@ type UpdateInput struct {
 	ChatIDs                     *[]string     `json:"chat_ids"`
 	KnowledgeCollectionIDs      *[]string     `json:"knowledge_collection_ids"`
 	MCPBindings                 *[]MCPBinding `json:"mcp_bindings"`
+	ReadChatIDs                 *[]string     `json:"read_chat_ids"`
+	WriteChatIDs                *[]string     `json:"write_chat_ids"`
+	Tone                        *string       `json:"tone"`
+	// ConfirmationPolicy changes only the named tools.
+	ConfirmationPolicy map[string]string `json:"confirmation_policy"`
+	// AcknowledgeLoosened confirms, with enabled=true, that the listed
+	// actions will run without a person (see LooseningError).
+	AcknowledgeLoosened bool `json:"acknowledge_loosened"`
 }
 
 type PlatformSettings struct {
@@ -249,6 +280,34 @@ type Service struct {
 	pool          *pgxpool.Pool
 	now           func() time.Time
 	revokeSession func(string)
+	// confirmationFloor lists built-in tools the server always confirms.
+	confirmationFloor map[string]bool
+}
+
+// SetConfirmationFloor installs the operator list of built-in write tools
+// that always wait for a person, whatever the agent version says.
+func (service *Service) SetConfirmationFloor(floor map[string]bool) {
+	service.confirmationFloor = floor
+}
+
+// decorate fills the fields derived from the stored version.
+func (service *Service) decorate(value *Agent) {
+	applyConfirmationFloor(value.ConfirmationPolicy, service.confirmationFloor)
+	value.ConfirmationLocked = make([]string, 0, len(service.confirmationFloor))
+	for tool := range service.confirmationFloor {
+		value.ConfirmationLocked = append(value.ConfirmationLocked, tool)
+	}
+	sort.Strings(value.ConfirmationLocked)
+}
+
+func hideConfiguration(value *Agent) {
+	value.EndpointURL = ""
+	value.ChatIDs = []string{}
+	value.ReadChatIDs = []string{}
+	value.WriteChatIDs = []string{}
+	value.KnowledgeCollectionIDs = []string{}
+	value.MCPBindings = []MCPBinding{}
+	value.Readiness.Blockers = []string{}
 }
 
 func NewService(pool *pgxpool.Pool) *Service {
@@ -393,10 +452,14 @@ func (service *Service) Create(ctx context.Context, current identity.User, input
 	if !canBuild(current) {
 		return Agent{}, ErrForbidden
 	}
+	if err := checkConfirmationFloor(input.ConfirmationPolicy, service.confirmationFloor); err != nil {
+		return Agent{}, err
+	}
 	normalized, err := normalizeCreate(input)
 	if err != nil {
 		return Agent{}, err
 	}
+	applyConfirmationFloor(normalized.ConfirmationPolicy, service.confirmationFloor)
 	agentID, err := id.New()
 	if err != nil {
 		return Agent{}, err
@@ -430,6 +493,9 @@ func (service *Service) Create(ctx context.Context, current identity.User, input
 	if err := validateMCPBindings(ctx, tx, current.OrgID, normalized.MCPBindings); err != nil {
 		return Agent{}, err
 	}
+	if err := checkBuilderReach(ctx, tx, current, nil, normalized.ChatIDs, nil, normalized.KnowledgeCollectionIDs); err != nil {
+		return Agent{}, err
+	}
 	if len(normalized.ChatIDs) > 0 {
 		var count int
 		if err := tx.QueryRow(ctx, `SELECT count(*) FROM chats WHERE org_id=$1 AND id=ANY($2::uuid[]) AND archived_at IS NULL`, current.OrgID, normalized.ChatIDs).Scan(&count); err != nil {
@@ -448,13 +514,15 @@ func (service *Service) Create(ctx context.Context, current identity.User, input
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO agents(actor_id,org_id,owner_actor_id,kind,recipe,recipe_version,description,enabled,allowed_scopes,llm_connection_id,provider,model,endpoint_url,
 			external_data_sharing_approved,daily_cost_limit,monthly_cost_limit,max_output_tokens,max_tool_iterations,max_chain_depth,per_chat_concurrency,
-			rate_limit_per_minute,provider_rate_limit_per_minute,execution_timeout_seconds,knowledge_collection_ids,mcp_bindings)
-		VALUES($1,$2,$3,$4,$5,1,$6,$7,$8,$9,$10,$11,$12,$13,NULLIF($14,'')::numeric,NULLIF($15,'')::numeric,$16,$17,$18,$19,$20,$21,$22,$23,$24)`, agentID, current.OrgID, current.ActorID, normalized.Kind, normalized.Recipe,
+			rate_limit_per_minute,provider_rate_limit_per_minute,execution_timeout_seconds,knowledge_collection_ids,mcp_bindings,
+			confirmation_policy,tone,read_only_chat_ids,write_only_chat_ids)
+		VALUES($1,$2,$3,$4,$5,1,$6,$7,$8,$9,$10,$11,$12,$13,NULLIF($14,'')::numeric,NULLIF($15,'')::numeric,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)`, agentID, current.OrgID, current.ActorID, normalized.Kind, normalized.Recipe,
 		normalized.Description, normalized.Enabled, scopes, normalized.LLMConnectionID, normalized.Provider, normalized.Model, normalized.EndpointURL,
 		normalized.ExternalDataSharingApproved, costLimitValue(normalized.DailyCostLimit), costLimitValue(normalized.MonthlyCostLimit),
 		*normalized.MaxOutputTokens, *normalized.MaxToolIterations, *normalized.MaxChainDepth,
 		*normalized.PerChatConcurrency, normalized.RateLimitPerMinute, normalized.ProviderRateLimitPerMinute, normalized.ExecutionTimeoutSeconds,
-		uuidArray(normalized.KnowledgeCollectionIDs), bindingsJSON(normalized.MCPBindings)); err != nil {
+		uuidArray(normalized.KnowledgeCollectionIDs), bindingsJSON(normalized.MCPBindings),
+		policyJSON(normalized.ConfirmationPolicy), normalized.Tone, uuidArray(normalized.ReadOnlyChatIDs), uuidArray(normalized.WriteOnlyChatIDs)); err != nil {
 		return Agent{}, mapWriteError("insert agent", err)
 	}
 	if err := saveDraft(ctx, tx, current.OrgID, agentID, current.ActorID, 1, normalized); err != nil {
@@ -511,6 +579,7 @@ func (service *Service) Duplicate(ctx context.Context, current identity.User, ag
 		MaxOutputTokens: intPointer(source.MaxOutputTokens), MaxToolIterations: intPointer(source.MaxToolIterations), MaxChainDepth: intPointer(source.MaxChainDepth), PerChatConcurrency: intPointer(source.PerChatConcurrency),
 		RateLimitPerMinute: source.RateLimitPerMinute, ProviderRateLimitPerMinute: source.ProviderRateLimitPerMinute, ExecutionTimeoutSeconds: source.ExecutionTimeoutSeconds,
 		ChatIDs: source.ChatIDs, KnowledgeCollectionIDs: source.KnowledgeCollectionIDs, MCPBindings: source.MCPBindings, DuplicateFrom: source.ID,
+		ReadOnlyChatIDs: source.readOnlyChatIDs, WriteOnlyChatIDs: source.writeOnlyChatIDs, Tone: source.Tone, ConfirmationPolicy: source.ConfirmationPolicy,
 	}
 	if source.LLMConnectionID == nil {
 		createInput.Provider = source.Provider
@@ -614,12 +683,10 @@ func (service *Service) List(ctx context.Context, current identity.User) ([]Agen
 		if err != nil {
 			return nil, err
 		}
+		service.decorate(&item)
 		if !manager {
-			item.EndpointURL = ""
-			item.ChatIDs = []string{}
-			item.KnowledgeCollectionIDs = []string{}
-			item.MCPBindings = []MCPBinding{}
-			item.Readiness.Blockers = []string{}
+			hideConfiguration(&item)
+			item.Instructions = Instructions(item.Description, item.Tone, nil, nil)
 		}
 		result = append(result, item)
 	}
@@ -713,12 +780,16 @@ func (service *Service) Get(ctx context.Context, current identity.User, agentID 
 	if err != nil {
 		return Agent{}, fmt.Errorf("get agent: %w", err)
 	}
+	service.decorate(&result)
+	// The agent itself (its runtime) receives its full instructions; other
+	// non-managers see only the task and the tone, never chat identifiers.
 	if !manager {
-		result.EndpointURL = ""
-		result.ChatIDs = []string{}
-		result.KnowledgeCollectionIDs = []string{}
-		result.MCPBindings = []MCPBinding{}
-		result.Readiness.Blockers = []string{}
+		full := result.Instructions
+		hideConfiguration(&result)
+		result.Instructions = Instructions(result.Description, result.Tone, nil, nil)
+		if current.ActorID == result.ID {
+			result.Instructions = full
+		}
 	}
 	return result, nil
 }
@@ -733,8 +804,16 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 	if _, err := uuid.Parse(agentID); err != nil {
 		return Agent{}, ErrNotFound
 	}
-	if input.DisplayName == nil && input.Handle == nil && input.Description == nil && input.Enabled == nil && input.AllowedScopes == nil && input.LLMConnectionID == nil && input.Provider == nil && input.Model == nil && input.EndpointURL == nil && input.ExternalDataSharingApproved == nil && input.DailyCostLimit == nil && input.MonthlyCostLimit == nil && input.MaxOutputTokens == nil && input.MaxToolIterations == nil && input.MaxChainDepth == nil && input.PerChatConcurrency == nil && input.RateLimitPerMinute == nil && input.ProviderRateLimitPerMinute == nil && input.ExecutionTimeoutSeconds == nil && input.ChatIDs == nil && input.KnowledgeCollectionIDs == nil && input.MCPBindings == nil {
+	if input.DisplayName == nil && input.Handle == nil && input.Description == nil && input.Enabled == nil && input.AllowedScopes == nil && input.LLMConnectionID == nil && input.Provider == nil && input.Model == nil && input.EndpointURL == nil && input.ExternalDataSharingApproved == nil && input.DailyCostLimit == nil && input.MonthlyCostLimit == nil && input.MaxOutputTokens == nil && input.MaxToolIterations == nil && input.MaxChainDepth == nil && input.PerChatConcurrency == nil && input.RateLimitPerMinute == nil && input.ProviderRateLimitPerMinute == nil && input.ExecutionTimeoutSeconds == nil && input.ChatIDs == nil && input.KnowledgeCollectionIDs == nil && input.MCPBindings == nil && input.ReadChatIDs == nil && input.WriteChatIDs == nil && input.Tone == nil && input.ConfirmationPolicy == nil {
 		return Agent{}, fmt.Errorf("%w: update must contain at least one field", ErrInvalid)
+	}
+	// Enabling publishes the draft and disabling pauses the agent: both are
+	// publish decisions, so a builder alone cannot make them through Update.
+	if input.Enabled != nil && !canPublish(current) {
+		return Agent{}, ErrForbidden
+	}
+	if err := checkConfirmationFloor(input.ConfirmationPolicy, service.confirmationFloor); err != nil {
+		return Agent{}, err
 	}
 	auditID, err := id.New()
 	if err != nil {
@@ -751,10 +830,12 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 	} else if err != nil {
 		return Agent{}, fmt.Errorf("lock agent: %w", err)
 	}
+	service.decorate(&lockedAgent)
 	prospective, err := mergeUpdate(lockedAgent, input)
 	if err != nil {
 		return Agent{}, err
 	}
+	applyConfirmationFloor(prospective.ConfirmationPolicy, service.confirmationFloor)
 	if prospective.LLMConnectionID != nil {
 		provider, endpoint, defaultModel, err := resolveLLMConnection(ctx, tx, current.OrgID, *prospective.LLMConnectionID)
 		if err != nil {
@@ -779,7 +860,7 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 			return Agent{}, err
 		}
 	}
-	if input.ChatIDs != nil && len(prospective.ChatIDs) > 0 {
+	if (input.ChatIDs != nil || input.ReadChatIDs != nil || input.WriteChatIDs != nil) && len(prospective.ChatIDs) > 0 {
 		var count int
 		if err := tx.QueryRow(ctx, `SELECT count(*) FROM chats WHERE org_id=$1 AND id=ANY($2::uuid[]) AND archived_at IS NULL`, current.OrgID, prospective.ChatIDs).Scan(&count); err != nil {
 			return Agent{}, fmt.Errorf("validate agent chats: %w", err)
@@ -787,6 +868,9 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 		if count != len(prospective.ChatIDs) {
 			return Agent{}, fmt.Errorf("%w: every chat must be active and belong to the organization", ErrInvalid)
 		}
+	}
+	if err := checkBuilderReach(ctx, tx, current, lockedAgent.ChatIDs, prospective.ChatIDs, lockedAgent.KnowledgeCollectionIDs, prospective.KnowledgeCollectionIDs); err != nil {
+		return Agent{}, err
 	}
 	if _, err := tx.Exec(ctx, `UPDATE actors SET display_name=$3,handle=$4 WHERE org_id=$1 AND id=$2`, current.OrgID, agentID, prospective.DisplayName, prospective.Handle); err != nil {
 		return Agent{}, mapWriteError("update agent actor", err)
@@ -798,13 +882,27 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 	if lockedAgent.DraftVersion != nil {
 		draftVersion = *lockedAgent.DraftVersion
 	}
-	if err := saveDraft(ctx, tx, current.OrgID, agentID, current.ActorID, draftVersion, prospective); err != nil {
-		return Agent{}, err
+	// Saving the published configuration unchanged creates no draft: the
+	// agent stays «nothing to publish».
+	unchanged := false
+	if input.Enabled == nil && !lockedAgent.HasUnpublishedChanges && lockedAgent.PublishedVersion != nil &&
+		prospective.DisplayName == lockedAgent.DisplayName && prospective.Handle == lockedAgent.Handle {
+		if published, err := normalizeCreate(inputFromAgent(lockedAgent)); err == nil {
+			before, beforeErr := versionConfig(published)
+			after, afterErr := versionConfig(prospective)
+			unchanged = beforeErr == nil && afterErr == nil && string(before) == string(after)
+		}
+	}
+	if !unchanged {
+		if err := saveDraft(ctx, tx, current.OrgID, agentID, current.ActorID, draftVersion, prospective); err != nil {
+			return Agent{}, err
+		}
 	}
 	revokedKeyIDs := make([]string, 0)
 	if input.Enabled != nil {
 		if *input.Enabled {
-			revokedKeyIDs, err = service.publishDraft(ctx, tx, current, agentID, prospective, draftVersion)
+			revokedKeyIDs, err = service.publishDraft(ctx, tx, current, agentID, prospective, draftVersion, input.AcknowledgeLoosened)
+
 			if err != nil {
 				return Agent{}, err
 			}
@@ -814,7 +912,9 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 			return Agent{}, err
 		}
 	}
-	metadata, _ := json.Marshal(map[string]any{"draft_version": draftVersion, "published": input.Enabled != nil && *input.Enabled, "scopes": scopeStrings(prospective.AllowedScopes), "chat_ids": prospective.ChatIDs, "knowledge_collection_ids": uuidArray(prospective.KnowledgeCollectionIDs), "mcp_connection_ids": bindingConnectionIDs(prospective.MCPBindings)})
+	metadata, _ := json.Marshal(map[string]any{"draft_version": draftVersion, "published": input.Enabled != nil && *input.Enabled, "scopes": scopeStrings(prospective.AllowedScopes), "chat_ids": prospective.ChatIDs, "knowledge_collection_ids": uuidArray(prospective.KnowledgeCollectionIDs), "mcp_connection_ids": bindingConnectionIDs(prospective.MCPBindings),
+		"read_only_chat_ids": uuidArray(prospective.ReadOnlyChatIDs), "write_only_chat_ids": uuidArray(prospective.WriteOnlyChatIDs), "tone": prospective.Tone,
+		"confirmation_policy": prospective.ConfirmationPolicy})
 	if _, err := tx.Exec(ctx, `INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,'agent.update','agent',$4,$5)`, auditID, current.OrgID, current.ActorID, agentID, metadata); err != nil {
 		return Agent{}, fmt.Errorf("audit agent update: %w", err)
 	}
@@ -825,7 +925,14 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 	return service.Get(ctx, current, agentID)
 }
 
-func (service *Service) Publish(ctx context.Context, current identity.User, agentID string) (Agent, error) {
+// PublishOptions are the explicit decisions a publish may carry.
+type PublishOptions struct {
+	// AcknowledgeLoosened confirms that actions listed by a previous
+	// LooseningError will run without a person.
+	AcknowledgeLoosened bool `json:"acknowledge_loosened"`
+}
+
+func (service *Service) Publish(ctx context.Context, current identity.User, agentID string, options PublishOptions) (Agent, error) {
 	if !canPublish(current) {
 		return Agent{}, ErrForbidden
 	}
@@ -854,7 +961,8 @@ func (service *Service) Publish(ctx context.Context, current identity.User, agen
 	if err != nil {
 		return Agent{}, err
 	}
-	revokedKeyIDs, err := service.publishDraft(ctx, tx, current, agentID, prospective, *locked.DraftVersion)
+	applyConfirmationFloor(prospective.ConfirmationPolicy, service.confirmationFloor)
+	revokedKeyIDs, err := service.publishDraft(ctx, tx, current, agentID, prospective, *locked.DraftVersion, options.AcknowledgeLoosened)
 	if err != nil {
 		return Agent{}, err
 	}
@@ -1002,8 +1110,17 @@ func (service *Service) Rollback(ctx context.Context, current identity.User, age
 		return Agent{}, err
 	}
 	prospective := inputFromAgent(locked)
+	// Versions published before these fields existed restore the behaviour
+	// they had then: no tone, no chat restrictions, the legacy confirmations.
+	prospective.ConfirmationPolicy, prospective.ReadOnlyChatIDs, prospective.WriteOnlyChatIDs, prospective.Tone = nil, nil, nil, ""
 	if err := json.Unmarshal(raw, &prospective); err != nil {
 		return Agent{}, fmt.Errorf("decode agent version: %w", err)
+	}
+	if prospective.ConfirmationPolicy == nil {
+		prospective.ConfirmationPolicy = make(map[string]string, len(legacyConfirmationPolicy))
+		for tool, mode := range legacyConfirmationPolicy {
+			prospective.ConfirmationPolicy[tool] = mode
+		}
 	}
 	prospective.DisplayName = locked.DisplayName
 	prospective.Handle = locked.Handle
@@ -1013,6 +1130,7 @@ func (service *Service) Rollback(ctx context.Context, current identity.User, age
 	if err != nil {
 		return Agent{}, err
 	}
+	applyConfirmationFloor(prospective.ConfirmationPolicy, service.confirmationFloor)
 	if len(prospective.KnowledgeCollectionIDs) > 0 {
 		if err := tx.QueryRow(ctx, `SELECT COALESCE(array_agg(id::text ORDER BY id),'{}'::text[]) FROM knowledge_collections WHERE org_id=$1 AND id=ANY($2::uuid[])`, current.OrgID, prospective.KnowledgeCollectionIDs).Scan(&prospective.KnowledgeCollectionIDs); err != nil {
 			return Agent{}, fmt.Errorf("resolve version knowledge collections: %w", err)
@@ -1330,6 +1448,10 @@ const agentSelect = `
 	       COALESCE(draft.chat_ids,(SELECT array_agg(member.chat_id ORDER BY member.chat_id) FROM chat_members member WHERE member.org_id=agent.org_id AND member.actor_id=agent.actor_id),'{}'::uuid[]),
 	       COALESCE(draft.knowledge_collection_ids,agent.knowledge_collection_ids),
 	       CASE WHEN draft.agent_id IS NOT NULL THEN draft.mcp_bindings ELSE agent.mcp_bindings END,
+	       CASE WHEN draft.agent_id IS NOT NULL THEN draft.confirmation_policy ELSE agent.confirmation_policy END,
+	       CASE WHEN draft.agent_id IS NOT NULL THEN draft.tone ELSE agent.tone END,
+	       CASE WHEN draft.agent_id IS NOT NULL THEN draft.read_only_chat_ids ELSE agent.read_only_chat_ids END,
+	       CASE WHEN draft.agent_id IS NOT NULL THEN draft.write_only_chat_ids ELSE agent.write_only_chat_ids END,
 	       (CASE WHEN draft.agent_id IS NOT NULL THEN draft.llm_connection_id ELSE agent.llm_connection_id END) IS NOT NULL,
 	       connection.id IS NOT NULL AND connection.enabled,
 	       EXISTS(SELECT 1 FROM agent_provider_credentials credential WHERE credential.org_id=agent.org_id AND credential.agent_id=agent.actor_id),
@@ -1352,13 +1474,13 @@ func scanAgent(row scanner) (Agent, error) {
 	var result Agent
 	var scopes []string
 	var hasConnection, connectionAvailable, hasLegacyCredential, hasActiveKey, hasTrigger bool
-	var mcpBindings []byte
+	var mcpBindings, confirmationPolicy []byte
 	if err := row.Scan(&result.ID, &result.OrgID, &result.OwnerActorID, &result.DisplayName, &result.Handle,
 		&result.Kind, &result.Recipe, &result.RecipeVersion, &result.Description, &result.Enabled, &scopes, &result.LLMConnectionID, &result.Provider, &result.Model,
 		&result.EndpointURL, &result.ExternalDataSharingApproved, &result.DailyCostLimit, &result.MonthlyCostLimit, &result.MaxOutputTokens,
 		&result.MaxToolIterations, &result.MaxChainDepth, &result.PerChatConcurrency,
 		&result.RateLimitPerMinute, &result.ProviderRateLimitPerMinute, &result.ExecutionTimeoutSeconds, &result.ChatIDs,
-		&result.KnowledgeCollectionIDs, &mcpBindings, &hasConnection, &connectionAvailable, &hasLegacyCredential, &hasActiveKey, &hasTrigger,
+		&result.KnowledgeCollectionIDs, &mcpBindings, &confirmationPolicy, &result.Tone, &result.readOnlyChatIDs, &result.writeOnlyChatIDs, &hasConnection, &connectionAvailable, &hasLegacyCredential, &hasActiveKey, &hasTrigger,
 		&result.OperationalStatus, &result.DraftVersion, &result.PublishedVersion, &result.HasUnpublishedChanges, &result.PublishedAt,
 		&result.AvatarVersion, &result.CreatedAt, &result.UpdatedAt); err != nil {
 		return Agent{}, err
@@ -1371,6 +1493,19 @@ func scanAgent(row scanner) (Agent, error) {
 	if err := json.Unmarshal(mcpBindings, &result.MCPBindings); err != nil {
 		return Agent{}, fmt.Errorf("decode agent MCP bindings: %w", err)
 	}
+	stored := map[string]string{}
+	if err := json.Unmarshal(confirmationPolicy, &stored); err != nil {
+		return Agent{}, fmt.Errorf("decode agent confirmation policy: %w", err)
+	}
+	result.ConfirmationPolicy = make(map[string]string, len(confirmationDefaults))
+	for _, tool := range ConfirmableTools() {
+		result.ConfirmationPolicy[tool] = EffectiveConfirmation(stored, nil, tool)
+	}
+	result.readOnlyChatIDs = restrictTo(result.readOnlyChatIDs, result.ChatIDs)
+	result.writeOnlyChatIDs = restrictTo(result.writeOnlyChatIDs, result.ChatIDs)
+	result.ReadChatIDs = without(result.ChatIDs, result.writeOnlyChatIDs)
+	result.WriteChatIDs = without(result.ChatIDs, result.readOnlyChatIDs)
+	result.Instructions = Instructions(result.Description, result.Tone, result.readOnlyChatIDs, result.writeOnlyChatIDs)
 	result.Readiness = readinessFor(result, hasConnection, connectionAvailable, hasLegacyCredential, hasActiveKey, hasTrigger)
 	return result, nil
 }
@@ -1511,11 +1646,49 @@ func normalizeCreate(input CreateInput) (CreateInput, error) {
 		return CreateInput{}, err
 	}
 	input.AllowedScopes = scopes
+	if input.ReadChatIDs != nil || input.WriteChatIDs != nil {
+		var read, write []string
+		if input.ReadChatIDs != nil {
+			read = *input.ReadChatIDs
+		}
+		if input.WriteChatIDs != nil {
+			write = *input.WriteChatIDs
+		}
+		if read, err = normalizeUUIDs(read, 100); err != nil {
+			return CreateInput{}, err
+		}
+		if write, err = normalizeUUIDs(write, 100); err != nil {
+			return CreateInput{}, err
+		}
+		input.ChatIDs, input.ReadOnlyChatIDs, input.WriteOnlyChatIDs = chatRoles(read, write)
+		input.ReadChatIDs, input.WriteChatIDs = nil, nil
+	}
 	chatIDs, err := normalizeUUIDs(input.ChatIDs, 100)
 	if err != nil {
 		return CreateInput{}, err
 	}
 	input.ChatIDs = chatIDs
+	readOnly, err := normalizeUUIDs(input.ReadOnlyChatIDs, 100)
+	if err != nil {
+		return CreateInput{}, err
+	}
+	writeOnly, err := normalizeUUIDs(input.WriteOnlyChatIDs, 100)
+	if err != nil {
+		return CreateInput{}, err
+	}
+	// A chat cannot be both read-only and write-only; such input keeps it
+	// read-only, the safer of the two.
+	input.ReadOnlyChatIDs = restrictTo(readOnly, chatIDs)
+	input.WriteOnlyChatIDs = without(restrictTo(writeOnly, chatIDs), input.ReadOnlyChatIDs)
+	input.Tone = strings.TrimSpace(input.Tone)
+	if !validTone(input.Tone) {
+		return CreateInput{}, fmt.Errorf("%w: unsupported tone", ErrInvalid)
+	}
+	policy, err := normalizeConfirmationPolicy(input.ConfirmationPolicy)
+	if err != nil {
+		return CreateInput{}, err
+	}
+	input.ConfirmationPolicy = policy
 	knowledgeCollectionIDs, err := normalizeUUIDs(input.KnowledgeCollectionIDs, 50)
 	if err != nil {
 		return CreateInput{}, err
@@ -1609,6 +1782,29 @@ func mergeUpdate(existing Agent, input UpdateInput) (CreateInput, error) {
 	if input.MCPBindings != nil {
 		prospective.MCPBindings = *input.MCPBindings
 	}
+	prospective.ReadOnlyChatIDs = existing.readOnlyChatIDs
+	prospective.WriteOnlyChatIDs = existing.writeOnlyChatIDs
+	if input.ReadChatIDs != nil || input.WriteChatIDs != nil {
+		read, write := existing.ReadChatIDs, existing.WriteChatIDs
+		if input.ReadChatIDs != nil {
+			read = *input.ReadChatIDs
+		}
+		if input.WriteChatIDs != nil {
+			write = *input.WriteChatIDs
+		}
+		prospective.ReadChatIDs, prospective.WriteChatIDs = &read, &write
+	}
+	prospective.Tone = existing.Tone
+	if input.Tone != nil {
+		prospective.Tone = *input.Tone
+	}
+	prospective.ConfirmationPolicy = make(map[string]string, len(existing.ConfirmationPolicy)+len(input.ConfirmationPolicy))
+	for tool, mode := range existing.ConfirmationPolicy {
+		prospective.ConfirmationPolicy[tool] = mode
+	}
+	for tool, mode := range input.ConfirmationPolicy {
+		prospective.ConfirmationPolicy[tool] = mode
+	}
 	return normalizeCreate(prospective)
 }
 
@@ -1628,8 +1824,9 @@ func saveDraft(ctx context.Context, tx pgx.Tx, orgID, agentID, actorID string, v
 	_, err := tx.Exec(ctx, `
 		INSERT INTO agent_drafts(org_id,agent_id,version,recipe,description,allowed_scopes,llm_connection_id,provider,model,endpoint_url,
 			external_data_sharing_approved,daily_cost_limit,monthly_cost_limit,max_output_tokens,max_tool_iterations,max_chain_depth,
-			per_chat_concurrency,rate_limit_per_minute,provider_rate_limit_per_minute,execution_timeout_seconds,chat_ids,created_by,knowledge_collection_ids,mcp_bindings)
-		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NULLIF($12,'')::numeric,NULLIF($13,'')::numeric,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+			per_chat_concurrency,rate_limit_per_minute,provider_rate_limit_per_minute,execution_timeout_seconds,chat_ids,created_by,knowledge_collection_ids,mcp_bindings,
+			confirmation_policy,tone,read_only_chat_ids,write_only_chat_ids)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NULLIF($12,'')::numeric,NULLIF($13,'')::numeric,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)
 		ON CONFLICT(agent_id) DO UPDATE SET version=excluded.version,recipe=excluded.recipe,description=excluded.description,
 			allowed_scopes=excluded.allowed_scopes,llm_connection_id=excluded.llm_connection_id,provider=excluded.provider,model=excluded.model,
 			endpoint_url=excluded.endpoint_url,external_data_sharing_approved=excluded.external_data_sharing_approved,
@@ -1637,12 +1834,15 @@ func saveDraft(ctx context.Context, tx pgx.Tx, orgID, agentID, actorID string, v
 			max_tool_iterations=excluded.max_tool_iterations,max_chain_depth=excluded.max_chain_depth,per_chat_concurrency=excluded.per_chat_concurrency,
 			rate_limit_per_minute=excluded.rate_limit_per_minute,provider_rate_limit_per_minute=excluded.provider_rate_limit_per_minute,
 			execution_timeout_seconds=excluded.execution_timeout_seconds,chat_ids=excluded.chat_ids,
-			knowledge_collection_ids=excluded.knowledge_collection_ids,mcp_bindings=excluded.mcp_bindings,updated_at=now()`,
+			knowledge_collection_ids=excluded.knowledge_collection_ids,mcp_bindings=excluded.mcp_bindings,
+			confirmation_policy=excluded.confirmation_policy,tone=excluded.tone,read_only_chat_ids=excluded.read_only_chat_ids,
+			write_only_chat_ids=excluded.write_only_chat_ids,updated_at=now()`,
 		orgID, agentID, version, input.Recipe, input.Description, scopeStrings(input.AllowedScopes), input.LLMConnectionID,
 		input.Provider, input.Model, input.EndpointURL, input.ExternalDataSharingApproved, costLimitValue(input.DailyCostLimit),
 		costLimitValue(input.MonthlyCostLimit), *input.MaxOutputTokens, *input.MaxToolIterations, *input.MaxChainDepth,
 		*input.PerChatConcurrency, input.RateLimitPerMinute, input.ProviderRateLimitPerMinute, input.ExecutionTimeoutSeconds,
-		input.ChatIDs, actorID, uuidArray(input.KnowledgeCollectionIDs), bindingsJSON(input.MCPBindings))
+		input.ChatIDs, actorID, uuidArray(input.KnowledgeCollectionIDs), bindingsJSON(input.MCPBindings),
+		policyJSON(input.ConfirmationPolicy), input.Tone, uuidArray(input.ReadOnlyChatIDs), uuidArray(input.WriteOnlyChatIDs))
 	if err != nil {
 		return mapWriteError("save agent draft", err)
 	}
@@ -1660,10 +1860,11 @@ func inputFromAgent(value Agent) CreateInput {
 		PerChatConcurrency: intPointer(value.PerChatConcurrency), RateLimitPerMinute: value.RateLimitPerMinute,
 		ProviderRateLimitPerMinute: value.ProviderRateLimitPerMinute, ExecutionTimeoutSeconds: value.ExecutionTimeoutSeconds,
 		ChatIDs: value.ChatIDs, KnowledgeCollectionIDs: value.KnowledgeCollectionIDs, MCPBindings: value.MCPBindings,
+		ReadOnlyChatIDs: value.readOnlyChatIDs, WriteOnlyChatIDs: value.writeOnlyChatIDs, Tone: value.Tone, ConfirmationPolicy: value.ConfirmationPolicy,
 	}
 }
 
-func (service *Service) publishDraft(ctx context.Context, tx pgx.Tx, current identity.User, agentID string, input CreateInput, version int) ([]string, error) {
+func (service *Service) publishDraft(ctx context.Context, tx pgx.Tx, current identity.User, agentID string, input CreateInput, version int, acknowledgeLoosened bool) ([]string, error) {
 	var hasLegacyCredential, hasActiveKey, hasTrigger bool
 	if err := tx.QueryRow(ctx, `SELECT
 		EXISTS(SELECT 1 FROM agent_provider_credentials WHERE org_id=$1 AND agent_id=$2),
@@ -1696,16 +1897,65 @@ func (service *Service) publishDraft(ctx context.Context, tx pgx.Tx, current ide
 	if len(blockers) > 0 {
 		return nil, fmt.Errorf("%w: %s", ErrNotReady, strings.Join(blockers, ","))
 	}
+	var previousPolicyRaw, previousBindingsRaw []byte
+	var previousVersion *int
+	if err := tx.QueryRow(ctx, `SELECT confirmation_policy,mcp_bindings,published_version FROM agents WHERE org_id=$1 AND actor_id=$2`, current.OrgID, agentID).Scan(&previousPolicyRaw, &previousBindingsRaw, &previousVersion); err != nil {
+		return nil, fmt.Errorf("read published confirmation policy: %w", err)
+	}
+	// What stops waiting for a person compared with the version in force
+	// (or, on the first publish, with the safe defaults), built-in and
+	// external tools alike. The person publishing confirms it explicitly.
+	previousPolicy := map[string]string{}
+	previousBindings := []MCPBinding{}
+	if previousVersion == nil {
+		for tool, mode := range confirmationDefaults {
+			previousPolicy[tool] = mode
+		}
+	} else {
+		_ = json.Unmarshal(previousPolicyRaw, &previousPolicy)
+		_ = json.Unmarshal(previousBindingsRaw, &previousBindings)
+	}
+	loosened := loosenedTools(previousPolicy, input.ConfirmationPolicy)
+	nextExternal, err := autoExternalWrites(ctx, tx, current.OrgID, input.MCPBindings)
+	if err != nil {
+		return nil, err
+	}
+	previousExternal, err := autoExternalWrites(ctx, tx, current.OrgID, previousBindings)
+	if err != nil {
+		return nil, err
+	}
+	for _, key := range nextExternal {
+		if !slices.Contains(previousExternal, key) {
+			loosened = append(loosened, key)
+		}
+	}
+	if len(loosened) > 0 && !acknowledgeLoosened {
+		return nil, &LooseningError{Loosened: loosened}
+	}
 	if _, err := tx.Exec(ctx, `UPDATE agents SET recipe=$3,recipe_version=$4,description=$5,enabled=true,allowed_scopes=$6,llm_connection_id=$7,provider=$8,model=$9,
 		endpoint_url=$10,external_data_sharing_approved=$11,daily_cost_limit=NULLIF($12,'')::numeric,monthly_cost_limit=NULLIF($13,'')::numeric,
 		max_output_tokens=$14,max_tool_iterations=$15,max_chain_depth=$16,per_chat_concurrency=$17,rate_limit_per_minute=$18,
-		provider_rate_limit_per_minute=$19,execution_timeout_seconds=$20,knowledge_collection_ids=$21,mcp_bindings=$22,operational_status='active',published_version=$4,published_at=now(),updated_at=now()
+		provider_rate_limit_per_minute=$19,execution_timeout_seconds=$20,knowledge_collection_ids=$21,mcp_bindings=$22,
+		confirmation_policy=$23,tone=$24,read_only_chat_ids=$25,write_only_chat_ids=$26,
+		operational_status='active',published_version=$4,published_at=now(),updated_at=now()
 		WHERE org_id=$1 AND actor_id=$2`, current.OrgID, agentID, input.Recipe, version, input.Description,
 		scopeStrings(input.AllowedScopes), input.LLMConnectionID, input.Provider, input.Model, input.EndpointURL,
 		input.ExternalDataSharingApproved, costLimitValue(input.DailyCostLimit), costLimitValue(input.MonthlyCostLimit),
 		*input.MaxOutputTokens, *input.MaxToolIterations, *input.MaxChainDepth, *input.PerChatConcurrency,
-		input.RateLimitPerMinute, input.ProviderRateLimitPerMinute, input.ExecutionTimeoutSeconds, uuidArray(input.KnowledgeCollectionIDs), bindingsJSON(input.MCPBindings)); err != nil {
+		input.RateLimitPerMinute, input.ProviderRateLimitPerMinute, input.ExecutionTimeoutSeconds, uuidArray(input.KnowledgeCollectionIDs), bindingsJSON(input.MCPBindings),
+		policyJSON(input.ConfirmationPolicy), input.Tone, uuidArray(input.ReadOnlyChatIDs), uuidArray(input.WriteOnlyChatIDs)); err != nil {
 		return nil, mapWriteError("publish agent", err)
+	}
+	// Every publish records the confirmation policy it puts in force and the
+	// tools that stop waiting for a person compared with the previous one.
+	policyAuditID, err := id.New()
+	if err != nil {
+		return nil, err
+	}
+	policyMetadata, _ := json.Marshal(map[string]any{"version": version, "previous_version": previousVersion, "confirmation_policy": input.ConfirmationPolicy,
+		"loosened": loosened, "acknowledged": acknowledgeLoosened, "mcp_bindings": bindingsOrEmpty(input.MCPBindings)})
+	if _, err := tx.Exec(ctx, `INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,'agent.confirmation_policy.publish','agent',$4,$5)`, policyAuditID, current.OrgID, current.ActorID, agentID, policyMetadata); err != nil {
+		return nil, fmt.Errorf("audit agent confirmation policy: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM chat_members WHERE org_id=$1 AND actor_id=$2`, current.OrgID, agentID); err != nil {
 		return nil, fmt.Errorf("replace published agent memberships: %w", err)
@@ -1762,6 +2012,10 @@ func versionConfig(input CreateInput) ([]byte, error) {
 		"execution_timeout_seconds":      input.ExecutionTimeoutSeconds, "chat_ids": input.ChatIDs,
 		"knowledge_collection_ids": uuidArray(input.KnowledgeCollectionIDs),
 		"mcp_bindings":             bindingsOrEmpty(input.MCPBindings),
+		"confirmation_policy":      input.ConfirmationPolicy,
+		"tone":                     input.Tone,
+		"read_only_chat_ids":       uuidArray(input.ReadOnlyChatIDs),
+		"write_only_chat_ids":      uuidArray(input.WriteOnlyChatIDs),
 	})
 }
 
@@ -2021,4 +2275,12 @@ func cancelInteractiveWork(ctx context.Context, tx pgx.Tx, orgID, agentID, reaso
 		return fmt.Errorf("cancel paused agent follow-ups: %w", err)
 	}
 	return nil
+}
+
+func policyJSON(policy map[string]string) []byte {
+	if policy == nil {
+		policy = map[string]string{}
+	}
+	encoded, _ := json.Marshal(policy)
+	return encoded
 }

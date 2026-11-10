@@ -706,6 +706,24 @@ function Webhooks({ api }: { api: MessengerAPI }) {
                   <dt>{t("webhookTriggers")}</dt>
                   <dd>{hook.trigger_count}</dd>
                 </div>
+                <div>
+                  <dt>{t("webhookAgentUse")}</dt>
+                  <dd>
+                    <Switch
+                      label={t("webhookAgentUseLabel", { name: hook.name })}
+                      checked={hook.agent_use_allowed ?? false}
+                      disabled={pendingID === hook.id}
+                      onChange={(value) =>
+                        void run(hook.id, () =>
+                          api.updateIntegrationWebhook(hook.id, {
+                            agent_use_allowed: value,
+                          }),
+                        )
+                      }
+                    />
+                    <small>{t("webhookAgentUseHint")}</small>
+                  </dd>
+                </div>
                 {hook.rejected_count > 0 && (
                   <div>
                     <dt>{t("webhookRejected")}</dt>
@@ -829,6 +847,8 @@ function Webhooks({ api }: { api: MessengerAPI }) {
                     name: name.trim(),
                     description: description.trim(),
                     enabled: true,
+                    // Released for agents separately, on the webhook card.
+                    agent_use_allowed: false,
                   }),
                 );
                 if (created) {

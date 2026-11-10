@@ -5,10 +5,11 @@ import type {
   AgentTrigger,
   MessengerAPI,
 } from "@comamessenger/core";
+import { APIError } from "@comamessenger/core";
 import { useTranslation } from "react-i18next";
 import { messageOf } from "../../errors";
 import type { BuilderAnchor } from "../routes";
-import { draftOf, updateOf, type Draft } from "../shared/draft";
+import { draftChatIDs, draftOf, updateOf, type Draft } from "../shared/draft";
 
 const snapshot = (draft: Draft) => JSON.stringify(updateOf(draft));
 
@@ -27,7 +28,7 @@ export function publishBlockers(
 ): PublishBlocker[] {
   const result: PublishBlocker[] = [];
   const serverBlockers = new Set(agent.readiness.blockers);
-  if (draft.chat_ids.length === 0)
+  if (draftChatIDs(draft).length === 0)
     result.push({ key: "chat_required", anchor: "places" });
   if (agent.kind === "external" && serverBlockers.has("runtime_key_required"))
     result.push({ key: "runtime_key_required", anchor: "advanced" });
@@ -101,17 +102,40 @@ export function useAgentBuilder({
       if (success) setNotice(t(success));
       return true;
     } catch (cause) {
-      setError(messageOf(cause));
+      // Loosened confirmations are asked about in a dialog, not as an error.
+      if (!(cause instanceof APIError && cause.code === "agent_confirmation_loosened"))
+        setError(messageOf(cause));
       return false;
     } finally {
       setPending("");
     }
   }
 
+  // The saved copy is adopted only after the agents list is fresh, so the
+  // builder never shows the old «nothing to publish» state for a draft that
+  // was just saved.
   async function persist() {
     const updated = await api.updateAgent(agent.id, updateOf(draft));
+    await refetchAgents();
     saved.current = snapshot(draftOf(updated));
     setDraft(draftOf(updated));
+  }
+  // Actions the publish would let run without a person; the builder asks the
+  // publisher to confirm them before publishing again.
+  const [loosened, setLoosened] = useState<string[]>([]);
+  async function publishWith(acknowledge: boolean) {
+    if (dirty) await persist();
+    try {
+      await api.publishAgent(agent.id, acknowledge ? { acknowledge_loosened: true } : {});
+    } catch (cause) {
+      if (cause instanceof APIError && cause.code === "agent_confirmation_loosened") {
+        const listed = cause.details.loosened;
+        setLoosened(Array.isArray(listed) ? listed.map(String) : []);
+        throw cause;
+      }
+      throw cause;
+    }
+    setLoosened([]);
     await refetchAgents();
   }
 
@@ -127,16 +151,10 @@ export function useAgentBuilder({
     save: () => run("save", persist, "agentDraftSaved"),
     /** Saves pending edits first; used before a check and a publish. */
     saveIfDirty: () => (dirty ? run("save", persist) : Promise.resolve(true)),
-    publish: () =>
-      run(
-        "publish",
-        async () => {
-          if (dirty) await persist();
-          await api.publishAgent(agent.id);
-          await refetchAgents();
-        },
-        "agentPublishedNotice",
-      ),
+    loosened,
+    cancelLoosened: () => setLoosened([]),
+    publish: (acknowledge = false) =>
+      run("publish", () => publishWith(acknowledge), "agentPublishedNotice"),
     pause: () =>
       run(
         "pause",

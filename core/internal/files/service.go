@@ -521,6 +521,9 @@ func (s *Service) failUpload(ctx context.Context, uploadID string) {
 		FROM failed WHERE u.org_id = failed.org_id`, uploadID)
 }
 
+// getAccessible returns a file its uploader or a member of a chat it was
+// shared in may read. An agent does not read files through chats it only
+// writes to.
 func (s *Service) getAccessible(ctx context.Context, user identity.User, fileID string) (File, error) {
 	var result File
 	var sha []byte
@@ -533,13 +536,15 @@ func (s *Service) getAccessible(ctx context.Context, user identity.User, fileID 
 		    SELECT 1 FROM message_files mf
 		    JOIN messages m ON m.id = mf.message_id AND m.deleted_at IS NULL
 		    JOIN chat_members cm ON cm.chat_id = m.chat_id AND cm.actor_id = $3
-		    WHERE mf.file_id = f.id
+		    WHERE mf.file_id = f.id AND NOT EXISTS (
+		      SELECT 1 FROM agents ag WHERE ag.actor_id = $3 AND m.chat_id = ANY(ag.write_only_chat_ids))
 		  ) OR EXISTS (
 		    SELECT 1 FROM files original
 		    JOIN message_files mf ON mf.file_id = original.id
 		    JOIN messages m ON m.id = mf.message_id AND m.deleted_at IS NULL
 		    JOIN chat_members cm ON cm.chat_id = m.chat_id AND cm.actor_id = $3
-		    WHERE original.preview_file_id = f.id AND original.org_id = f.org_id
+		    WHERE original.preview_file_id = f.id AND original.org_id = f.org_id AND NOT EXISTS (
+		      SELECT 1 FROM agents ag WHERE ag.actor_id = $3 AND m.chat_id = ANY(ag.write_only_chat_ids))
 		  ))`, fileID, user.OrgID, user.ActorID).Scan(&result.ID, &result.Name, &result.MIME, &result.Size, &sha, &result.Status, &result.ProcessingStatus, &result.PreviewFileID, &result.CreatedAt, &result.ReadyAt, &result.UploaderID, &result.storageKey, &result.storageDriver)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return File{}, ErrNotFound
