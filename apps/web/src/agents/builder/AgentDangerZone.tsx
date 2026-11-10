@@ -22,7 +22,7 @@ export function AgentDangerZone({
   navigate(to: string): void;
   refetchAgents(): Promise<unknown>;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [dialog, setDialog] = useState<"" | "reset" | "delete">("");
   const [pending, setPending] = useState<Pending>("");
   const [error, setError] = useState("");
@@ -54,7 +54,10 @@ export function AgentDangerZone({
         setDialog("");
         navigate("/agents");
       } else {
-        await api.resetAgentRecipe(agent.id);
+        await api.resetAgentRecipe(
+          agent.id,
+          i18n.resolvedLanguage ?? i18n.language,
+        );
         setDialog("");
       }
       await refetchAgents();

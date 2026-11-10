@@ -2,6 +2,7 @@ import { useState } from "react";
 import type {
   Agent,
   AgentLlmConnection,
+  AgentRecipe,
   Chat,
   MessengerAPI,
 } from "@comamessenger/core";
@@ -9,7 +10,6 @@ import { Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { messageOf } from "../../errors";
 import { Button, Dialog, Field, FormError, SelectField } from "../../ui";
-import type { AgentTemplate } from "../agentTemplates";
 import { emptyDraft } from "../shared/draft";
 import { chatName } from "../shared/format";
 
@@ -26,11 +26,12 @@ export function defaultConnection(
 
 /**
  * A short start: name and first chat. Everything else is set in the builder,
- * which opens right after the draft is created.
+ * which opens right after the draft is created. A recipe agent gets its
+ * instructions, scopes and rules from Core.
  */
 export function CreateAgentDialog({
   api,
-  template,
+  recipe,
   chats,
   connections,
   timezone,
@@ -38,21 +39,20 @@ export function CreateAgentDialog({
   onCreated,
 }: {
   api: MessengerAPI;
-  template: AgentTemplate;
+  /** The catalog recipe, or null for a custom agent. */
+  recipe: AgentRecipe | null;
   chats: Chat[];
   connections: AgentLlmConnection[];
   timezone: string;
   onClose(): void;
   onCreated(agent: Agent): Promise<void>;
 }) {
-  const { t } = useTranslation();
-  const [name, setName] = useState(() =>
-    template === "custom" ? "" : t(`agentTemplate_${template}`),
-  );
+  const { t, i18n } = useTranslation();
+  const [name, setName] = useState(() => recipe?.name ?? "");
   const [chatID, setChatID] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
-  const chatRequired = template !== "custom";
+  const chatRequired = recipe !== null;
 
   async function create() {
     setError("");
@@ -66,15 +66,14 @@ export function CreateAgentDialog({
     }
     setPending(true);
     try {
-      const draft = emptyDraft(template);
+      const draft = emptyDraft(
+        recipe ?? undefined,
+        i18n.resolvedLanguage ?? i18n.language,
+      );
       const connection = defaultConnection(connections);
       const created = await api.createAgent({
         ...draft,
         display_name: name.trim(),
-        description:
-          template === "custom"
-            ? ""
-            : t(`agentTemplateDescription_${template}`),
         chat_ids: chatID ? [chatID] : [],
         enabled: false,
         ...(connection
@@ -88,7 +87,7 @@ export function CreateAgentDialog({
       });
       // Recipe rules are created by the server in UTC; they belong to the
       // creator's timezone so «every day at 09:00» means local 09:00.
-      if (template !== "custom" && timezone !== "UTC") {
+      if (recipe && timezone !== "UTC") {
         const triggers = await api.agentTriggers(created.id);
         await Promise.all(
           triggers
@@ -109,9 +108,9 @@ export function CreateAgentDialog({
   return (
     <Dialog
       title={
-        template === "custom"
-          ? t("agentCreateTitleCustom")
-          : t("agentCreateTitle", { role: t(`agentTemplate_${template}`) })
+        recipe
+          ? t("agentCreateTitle", { role: recipe.name })
+          : t("agentCreateTitleCustom")
       }
       description={t("agentCreateLead")}
       onClose={onClose}

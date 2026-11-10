@@ -1,22 +1,21 @@
-import type { Agent, Chat } from "@comamessenger/core";
-import { templateDescriptions } from "./draft";
+import type { Agent, AgentRecipe, Chat } from "@comamessenger/core";
 import { chatName, type Translate } from "./format";
+import { recipeOf } from "./recipes";
 
 /**
  * The task of an agent in one phrase. Built-in recipes left with their stock
- * instruction get the localized role phrase; otherwise the first sentence of
- * the instruction, bounded for a card.
+ * instruction get the recipe summary from Core; otherwise the first sentence
+ * of the instruction, bounded for a card.
  */
-export function agentTask(t: Translate, agent: Agent): string {
+export function agentTask(
+  t: Translate,
+  agent: Agent,
+  recipes?: readonly AgentRecipe[],
+): string {
   const description = (agent.description ?? "").trim();
-  if (agent.recipe !== "custom") {
-    const stock = [
-      templateDescriptions[agent.recipe],
-      t(`agentTemplateDescription_${agent.recipe}`),
-    ];
-    if (!description || stock.some((text) => description.startsWith(text)))
-      return t(`agentRoleTask_${agent.recipe}`);
-  }
+  const recipe = recipeOf(recipes, agent);
+  if (recipe && (!description || description === recipe.instructions.trim()))
+    return recipe.summary;
   if (!description) return t("agentNoTask");
   const first = description.split(/(?<=[.!?…])\s+/)[0] ?? description;
   return first.length > 160 ? `${first.slice(0, 157).trimEnd()}…` : first;

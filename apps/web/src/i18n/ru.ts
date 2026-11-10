@@ -285,12 +285,6 @@ export const ru = {
   yes: "Да",
   no: "Нет",
   agentWizardWhere: "Доступ",
-  agentRecipeLaunch_summarizer: "По команде /summarize и ежедневно в 09:00",
-  agentRecipeLaunch_qa: "Когда агента упоминают в выбранном чате",
-  agentRecipeLaunch_onboarding:
-    "При вступлении участника и при упоминании агента",
-  agentRecipeLaunch_custom:
-    "Вручную из песочницы; правила можно добавить позже",
   newAgentHint: "Настройте безопасные границы до включения",
   providerEndpoint: "Адрес API провайдера",
   continue: "Продолжить",

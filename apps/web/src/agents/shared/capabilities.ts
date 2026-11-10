@@ -87,6 +87,9 @@ export function scopesFor({
   for (const skill of capabilities.skills)
     skillScopes[skill].forEach((scope) => result.add(scope));
   if (hasKnowledge) result.add("knowledge:read");
+  // Slot tables are read from bound collections; a recipe that reads them
+  // keeps the scope while a collection stays bound.
+  if (hasKnowledge && current.includes("tables:read")) result.add("tables:read");
   for (const scope of preservedScopes)
     if (current.includes(scope)) result.add(scope);
   return orderedScopes.filter((scope) => result.has(scope));
@@ -102,6 +105,7 @@ export const orderedScopes: AgentScope[] = [
   "search:read",
   "members:read",
   "knowledge:read",
+  "tables:read",
   "memory:read",
   "memory:write",
   "followups:write",

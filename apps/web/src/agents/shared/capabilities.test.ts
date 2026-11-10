@@ -46,4 +46,29 @@ describe("scopes derived from builder blocks", () => {
       ]),
     ).toEqual({ sources: ["files"], skills: ["messages", "followups"] });
   });
+
+  it("keeps reading slot tables only while a collection is bound", () => {
+    const current = ["messages:read", "tables:read", "runtime:execute"] as const;
+    const capabilities = { sources: [], skills: ["cards"] } as const;
+    expect(
+      scopesFor({
+        capabilities: { sources: [], skills: [...capabilities.skills] },
+        hasKnowledge: true,
+        current,
+      }),
+    ).toEqual([
+      "messages:read",
+      "messages:interactive",
+      "knowledge:read",
+      "tables:read",
+      "runtime:execute",
+    ]);
+    expect(
+      scopesFor({
+        capabilities: { sources: [], skills: [...capabilities.skills] },
+        hasKnowledge: false,
+        current,
+      }),
+    ).not.toContain("tables:read");
+  });
 });

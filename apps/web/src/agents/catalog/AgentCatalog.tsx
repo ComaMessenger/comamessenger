@@ -1,34 +1,47 @@
-import type { Agent, AgentToolConfirmation, Chat } from "@comamessenger/core";
+import type {
+  Agent,
+  AgentRecipe,
+  AgentToolConfirmation,
+  Chat,
+} from "@comamessenger/core";
 import {
   AlertTriangle,
+  ArrowRightLeft,
   BookOpen,
-  FileText,
+  CalendarSearch,
+  Inbox,
+  ListChecks,
   MessageSquareText,
   Plus,
   ShieldCheck,
   Sparkles,
   UserRoundPlus,
+  type LucideIcon,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Avatar, Button } from "../../ui";
-import type { AgentTemplate } from "../agentTemplates";
+import { Avatar, Button, Skeleton } from "../../ui";
 import type { AgentAccess } from "../shared/access";
 import { AgentStatus } from "../shared/AgentStatus";
 import { toolLabel } from "../shared/format";
 import { humanStatus } from "../shared/status";
 import { agentPlaces, agentTask } from "../shared/summary";
 
-const roles = [
-  ["summarizer", FileText],
-  ["qa", BookOpen],
-  ["onboarding", UserRoundPlus],
-] as const;
+/** Icons of the recipe catalog; Core names them, the client draws them. */
+const recipeIcons: Record<string, LucideIcon> = {
+  "list-checks": ListChecks,
+  "book-open": BookOpen,
+  "user-round-plus": UserRoundPlus,
+  "calendar-search": CalendarSearch,
+  "arrow-right-left": ArrowRightLeft,
+  inbox: Inbox,
+};
 
 /** `/agents`: what agents exist, what waits for people, where to start. */
 export function AgentCatalog({
   agents,
   chats,
   approvals,
+  recipes,
   access,
   onCreate,
   navigate,
@@ -36,8 +49,11 @@ export function AgentCatalog({
   agents: Agent[];
   chats: Chat[];
   approvals: AgentToolConfirmation[];
+  /** The role catalog from Core; undefined while it loads. */
+  recipes: AgentRecipe[] | undefined;
   access: AgentAccess;
-  onCreate(template: AgentTemplate): void;
+  /** Opens creation from a recipe, or a custom agent without one. */
+  onCreate(recipe: AgentRecipe | null): void;
   navigate(to: string): void;
 }) {
   const { t } = useTranslation();
@@ -66,7 +82,7 @@ export function AgentCatalog({
           <p>{t("agentCatalogLead")}</p>
         </div>
         {canBuild && (
-          <Button variant="primary" onClick={() => onCreate("custom")}>
+          <Button variant="primary" onClick={() => onCreate(null)}>
             <Plus />
             {t("agentBuildManually")}
           </Button>
@@ -120,7 +136,7 @@ export function AgentCatalog({
                     </span>
                   </span>
                   <span className="agent-tile__task">
-                    {agentTask(t, agent)}
+                    {agentTask(t, agent, recipes)}
                   </span>
                   <span className="agent-tile__foot">
                     <span>{agentPlaces(t, agent, chats)}</span>
@@ -174,21 +190,27 @@ export function AgentCatalog({
             <span>{t("agentRolesLead")}</span>
           </div>
           <div className="agent-role-grid">
-            {roles.map(([role, Icon]) => (
-              <button
-                key={role}
-                className="agent-role"
-                onClick={() => onCreate(role)}
-              >
-                <span className="agent-role__icon" data-role={role}>
-                  <Icon aria-hidden="true" />
-                </span>
-                <strong>{t(`agentTemplate_${role}`)}</strong>
-                <span>{t(`agentRoleTask_${role}`)}</span>
-                <q>{t(`agentRoleExample_${role}`)}</q>
-              </button>
-            ))}
-            <button className="agent-role" onClick={() => onCreate("custom")}>
+            {recipes === undefined && (
+              <Skeleton shape="rect" height={132} className="agent-role" />
+            )}
+            {recipes?.map((recipe) => {
+              const Icon = recipeIcons[recipe.icon] ?? Sparkles;
+              return (
+                <button
+                  key={recipe.id}
+                  className="agent-role"
+                  onClick={() => onCreate(recipe)}
+                >
+                  <span className="agent-role__icon" data-role={recipe.id}>
+                    <Icon aria-hidden="true" />
+                  </span>
+                  <strong>{recipe.name}</strong>
+                  <span>{recipe.summary}</span>
+                  <q>{recipe.example}</q>
+                </button>
+              );
+            })}
+            <button className="agent-role" onClick={() => onCreate(null)}>
               <span className="agent-role__icon" data-role="custom">
                 <Plus aria-hidden="true" />
               </span>

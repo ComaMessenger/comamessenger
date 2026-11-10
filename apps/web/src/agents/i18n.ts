@@ -57,16 +57,6 @@ const platformCatalog = defineCatalog(
       "Агент {name} будет выключен. Инструкция, права, лимиты и правила запуска вернутся к текущей версии шаблона. Секреты и история запусков сохранятся.",
     resetTemplateConfirm: "Сбросить настройки",
     agentWizardStep: "Шаг {current} из {total}",
-    agentTemplate_custom: "Новый агент",
-    agentTemplate_summarizer: "Сводки",
-    agentTemplate_qa: "Ответы по истории",
-    agentTemplate_onboarding: "Адаптация",
-    agentTemplateDescription_summarizer:
-      "Составляй краткие сводки чатов и тредов: решения, открытые вопросы и следующие действия. Ссылайся на сообщения и не выдумывай факты.",
-    agentTemplateDescription_qa:
-      "Отвечай по доступной истории пространства и извлечённому содержимому файлов. Сначала ищи источники, ссылайся на них и отделяй факты от выводов.",
-    agentTemplateDescription_onboarding:
-      "Помогай новым участникам освоиться: объясняй устройство пространства по доступной истории и файлам, указывай источники и не раскрывай закрытые чаты.",
     agentLimits: "Лимиты и бюджет",
     maxOutputTokens: "Максимум токенов ответа",
     maxToolIterations: "Максимум вызовов инструментов",
@@ -174,16 +164,6 @@ const platformCatalog = defineCatalog(
       "Agent {name} will be disabled. Instructions, permissions, limits, and triggers will return to the current template version. Secrets and run history will be preserved.",
     resetTemplateConfirm: "Reset settings",
     agentWizardStep: "Step {current} of {total}",
-    agentTemplate_custom: "New agent",
-    agentTemplate_summarizer: "Summarizer",
-    agentTemplate_qa: "History Q&A",
-    agentTemplate_onboarding: "Onboarding",
-    agentTemplateDescription_summarizer:
-      "Summarize chats and threads with decisions, open questions, and next actions. Cite messages and never invent facts.",
-    agentTemplateDescription_qa:
-      "Answer from accessible workspace history and extracted file contents. Search first, cite sources, and distinguish evidence from inference.",
-    agentTemplateDescription_onboarding:
-      "Help new members get oriented using accessible history and files, cite sources, and never expose private chats.",
     agentLimits: "Limits and budget",
     maxOutputTokens: "Maximum output tokens",
     maxToolIterations: "Maximum tool iterations",

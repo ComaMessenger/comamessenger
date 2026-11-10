@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 
 /*
@@ -24,6 +25,32 @@ const owner = {
   status_text: "",
   status_expires_at: null,
   created_at: "2026-08-19T00:00:00Z",
+};
+
+// The role catalog exactly as Core serves it: generated from the Go catalog
+// by `UPDATE_RECIPE_FIXTURES=1 go test ./internal/agent -run Fixtures`.
+type RecipeFixture = {
+  id: string;
+  name: string;
+  instructions: string;
+  scopes: string[];
+  triggers: Array<{ type: string; config: Record<string, unknown> }>;
+  checks: Array<{ prompt: string; expectations: string[] }>;
+  needs: Array<{ kind: string; label: string }>;
+};
+const recipeCatalog: Record<string, RecipeFixture[]> = {
+  ru: JSON.parse(
+    readFileSync(
+      new URL("./fixtures/agent-recipes.ru.json", import.meta.url),
+      "utf8",
+    ),
+  ),
+  en: JSON.parse(
+    readFileSync(
+      new URL("./fixtures/agent-recipes.en.json", import.meta.url),
+      "utf8",
+    ),
+  ),
 };
 
 const hall = chatOf("00000000-0000-4000-8000-0000000000a1", "Зал 1");
@@ -285,6 +312,7 @@ function runOf(patch: Record<string, unknown>) {
 }
 
 export type AgentMock = {
+  created: Array<Record<string, unknown>>;
   patches: Array<{ id: string; body: Record<string, unknown> }>;
   published: string[];
   createdTriggers: Array<Record<string, unknown>>;
@@ -329,6 +357,7 @@ async function mockAgents(
       ];
   let polls = 0;
   const state: AgentMock = {
+    created: [],
     patches: [],
     published: [],
     createdTriggers: [],
@@ -467,8 +496,18 @@ async function mockAgents(
         ],
       };
     else if (path === "/agents" && method === "GET") body = agents;
+    else if (path === "/agents/recipes")
+      body = recipeCatalog[url.searchParams.get("locale") ?? "en"] ?? [];
     else if (path === "/agents" && method === "POST") {
       const input = json();
+      state.created.push({ ...input });
+      // Like Core: a recipe agent without instructions gets the catalog ones
+      // in its locale, and the recipe rules.
+      const recipe = (recipeCatalog[String(input.locale)] ?? []).find(
+        (item) => item.id === input.recipe,
+      );
+      if (recipe && !input.description) input.description = recipe.instructions;
+      delete input.locale;
       const created = agentOf({
         ...(input as Partial<MockAgent>),
         id: "00000000-0000-4000-8000-0000000000b9",
@@ -480,7 +519,21 @@ async function mockAgents(
         readiness: { state: "needs_setup", ready: false, blockers: [] },
       } as MockAgent);
       agents = [...agents, created];
-      triggers.set(created.id, []);
+      triggers.set(
+        created.id,
+        (recipe?.triggers ?? []).map((trigger, index) => ({
+          id: `trigger-recipe-${index}`,
+          org_id: orgID,
+          agent_id: created.id,
+          type: trigger.type,
+          config: trigger.config,
+          enabled: true,
+          timezone: "UTC",
+          missed_runs_policy: "skip",
+          created_at: "2026-11-10T09:00:00Z",
+          updated_at: "2026-11-10T09:00:00Z",
+        })),
+      );
       status = 201;
       body = created;
     } else if (path === "/agents/tool-confirmations") body = approvals;
@@ -608,6 +661,15 @@ async function mockAgents(
         triggers.set(agent.id, [...(triggers.get(agent.id) ?? []), created]);
         status = 201;
         body = created;
+      } else if (rest.startsWith("/triggers/") && method === "PATCH") {
+        const triggerID = rest.slice("/triggers/".length);
+        const list = triggers.get(agent.id) ?? [];
+        const updated = { ...list.find((item) => item.id === triggerID), ...json() };
+        triggers.set(
+          agent.id,
+          list.map((item) => (item.id === triggerID ? updated : item)),
+        );
+        body = updated;
       } else if (rest === "/runs")
         body = {
           runs:
@@ -771,9 +833,12 @@ test("catalog shows human statuses, the approval strip and ready roles", async (
   ).toBeVisible();
   await expect(page.getByText("Контроль: отправить сообщение")).toBeVisible();
   for (const role of [
-    "Сводки",
-    "Ответы по истории",
-    "Адаптация",
+    "Контроль",
+    "Справка",
+    "Наставник",
+    "Слоты",
+    "Передача",
+    "Что я пропустил",
     "Своя задача",
   ])
     await expect(page.locator(".agent-role", { hasText: role })).toBeVisible();
@@ -796,11 +861,11 @@ test("empty catalog explains what agents are for", async ({ page }) => {
     page.getByText(/участник чата, который действует/),
   ).toBeVisible();
   await expect(page.getByText(/ничего не отправляется/)).toBeVisible();
-  await page.locator(".agent-role", { hasText: "Ответы по истории" }).click();
+  await page.locator(".agent-role", { hasText: "Справка" }).click();
   const dialog = page.getByRole("dialog", {
-    name: "Новый агент: Ответы по истории",
+    name: "Новый агент: Справка",
   });
-  await expect(dialog.getByLabel("Имя")).toHaveValue("Ответы по истории");
+  await expect(dialog.getByLabel("Имя")).toHaveValue("Справка");
   await dialog.getByRole("button", { name: "Создать черновик" }).click();
   await expect(
     dialog.getByText("Выберите чат, в котором агент будет работать."),
@@ -1004,10 +1069,13 @@ test("check shows the dry-run answer, a human trace and the verdict", async ({
   await page.goto(`/agents/${ids.help}/test`);
   const check = page.locator(".agent-check");
   await expect(check).toBeInViewport();
-  await check.getByRole("button", { name: "Как оформить замену?" }).click();
+  const example = recipeCatalog.ru!.find((recipe) => recipe.id === "qa")!
+    .checks[0]!;
+  await check.getByRole("button", { name: example.prompt }).click();
   await expect(check.getByLabel("Сообщение агенту")).toHaveValue(
-    "Как оформить замену?",
+    example.prompt,
   );
+  await expect(check.getByText(example.expectations[0]!)).toBeVisible();
   await check.getByRole("button", { name: "Показать ответ агента" }).click();
   await expect(
     check.getByText(/Замену оформляет администратор зала/),
@@ -1032,7 +1100,7 @@ test("check shows the dry-run answer, a human trace and the verdict", async ({
   expect(mock.invocations[0]).toMatchObject({
     chat_id: rules.id,
     dry_run: true,
-    input: { prompt: "Как оформить замену?", sandbox: true, publish: false },
+    input: { prompt: example.prompt, sandbox: true, publish: false },
   });
   await expect(page).toHaveScreenshot("agents-check.png", {
     animations: "disabled",
@@ -1216,6 +1284,74 @@ test("activity shows what agents did next to the approval queue", async ({
   expect(mock.decisions).toEqual([
     "approve:00000000-0000-4000-8000-0000000000e1",
   ]);
+});
+
+test("a pilot role from Core opens a prefilled builder with what is left", async ({
+  page,
+}) => {
+  const mock = await mockAgents(page);
+  const slots = recipeCatalog.ru!.find((recipe) => recipe.id === "slots")!;
+  await page.goto("/agents");
+  const roles = page.locator(".agent-role");
+  await expect(roles).toHaveCount(7);
+  await page.locator(".agent-role", { hasText: "Слоты" }).click();
+  const dialog = page.getByRole("dialog", { name: "Новый агент: Слоты" });
+  await expect(dialog.getByLabel("Имя")).toHaveValue("Слоты");
+  await dialog.getByLabel("Где будет работать").click();
+  await page.getByRole("option", { name: "Инструкторы" }).click();
+  await dialog.getByRole("button", { name: "Создать черновик" }).click();
+
+  // The client sends the recipe, not its texts: Core fills them in.
+  await expect.poll(() => mock.created.length).toBe(1);
+  const request = mock.created[0]!;
+  expect(request.recipe).toBe("slots");
+  expect(request.description ?? "").toBe("");
+  expect(request.allowed_scopes).toEqual(slots.scopes);
+  expect(request.chat_ids).toEqual([instructors.id]);
+
+  await expect(
+    page.getByRole("heading", { name: "Слоты", level: 2 }),
+  ).toBeVisible();
+  const setup = page.getByRole("region", { name: "Роль «Слоты»" });
+  await expect(setup.getByText("Осталось выбрать 1 пункт")).toBeVisible();
+  await expect(
+    setup.getByRole("listitem").filter({ hasText: "Источник расписания слотов" }),
+  ).toContainText("Не выбрано");
+  await expect(
+    setup.getByRole("listitem").filter({ hasText: "Чаты, где агент работает" }),
+  ).toContainText("Выбрано");
+  await expect(setup.getByText("Сколько ждать ответов")).toBeVisible();
+  await expect(page.getByLabel("Чем занимается")).toHaveValue(
+    slots.instructions,
+  );
+
+  // The check offers the recipe examples with what a good answer does.
+  const check = page.locator("#agent-block-check");
+  const example = slots.checks[0]!;
+  await check.getByRole("button", { name: example.prompt }).click();
+  await expect(check.getByText("Хороший ответ:")).toBeVisible();
+  for (const line of example.expectations)
+    await expect(check.getByText(line)).toBeVisible();
+  await expect(page.getByText("tables:read")).toHaveCount(0);
+
+  // Binding the schedule collection completes the list.
+  const knowledge = page.locator("#agent-block-knowledge");
+  await knowledge
+    .getByRole("button", { name: "Добавить из базы знаний" })
+    .click();
+  await knowledge.getByRole("checkbox", { name: /Расписание залов/ }).click();
+  await expect(
+    setup.getByText("Всё нужное выбрано — проверьте агента на примерах"),
+  ).toBeVisible();
+  await expectNoHorizontalScroll(page);
+  await page.locator(".agent-builder__blocks").evaluate((element) =>
+    element.closest(".agent-platform__content")?.scrollTo(0, 0),
+  );
+  await setup.scrollIntoViewIfNeeded();
+  await expect(page).toHaveScreenshot("agents-builder-recipe.png", {
+    animations: "disabled",
+    fullPage: true,
+  });
 });
 
 test("builder fits a phone and the dark theme", async ({ page }) => {
