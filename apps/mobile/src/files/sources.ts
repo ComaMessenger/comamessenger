@@ -58,22 +58,29 @@ export function useFileSource(fileID: string | undefined): ImageSource | null {
   return query.isError ? offlineSource(api, `file:${fileID}`) : null;
 }
 
-/** Avatar image of an actor; null while the actor has no avatar. */
+/**
+ * Avatar image of an actor, or of a group chat or channel when `chatID` is
+ * set; null while there is no image.
+ */
 export function useAvatarSource(
   actorID: string | undefined,
   version: number | undefined,
+  chatID?: string,
 ): ImageSource | null {
   const { api } = useSession();
-  const enabled = Boolean(api && actorID && version && version > 0);
+  const ownerID = chatID ?? actorID;
+  const owner = chatID ? "chat" : "actor";
+  const enabled = Boolean(api && ownerID && version && version > 0);
   const query = useQuery({
-    queryKey: ["avatar-link", actorID, version],
-    queryFn: () => api!.avatarLink(actorID!),
+    queryKey: ["avatar-link", owner, ownerID, version],
+    queryFn: () =>
+      chatID ? api!.chatAvatarLink(chatID) : api!.avatarLink(actorID!),
     enabled,
     staleTime: linkStaleMs,
     retry: retryUnlessOffline,
   });
   if (!enabled) return null;
-  const cacheKey = `avatar:${actorID}:${version}`;
+  const cacheKey = `${chatID ? "chat-avatar" : "avatar"}:${ownerID}:${version}`;
   if (query.data) return toSource(api!, query.data, cacheKey);
   return query.isError ? offlineSource(api!, cacheKey) : null;
 }

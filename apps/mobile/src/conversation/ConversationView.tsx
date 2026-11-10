@@ -18,6 +18,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ChevronLeft } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import {
+  chatAvatarSource,
   decodeMentions,
   formatDaySeparator,
   messagePlainText,
@@ -236,14 +237,7 @@ export function ConversationView({
             size={36}
             glyph={chat.kind === "channel" ? "#" : undefined}
             agent={chat.direct_peer?.type === "agent"}
-            actorID={
-              chat.kind === "direct" ? chat.direct_peer?.actor_id : undefined
-            }
-            avatarVersion={
-              chat.kind === "direct"
-                ? chat.direct_peer?.avatar_version
-                : undefined
-            }
+            {...chatAvatarSource(chat)}
           />
         )}
         <View style={styles.grow}>

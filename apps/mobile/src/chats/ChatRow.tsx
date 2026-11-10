@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { BellOff } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import {
+  chatAvatarSource,
   chatPreview,
   formatListTime,
   isChatMuted,
@@ -82,10 +83,7 @@ export const ChatRow = memo(function ChatRow({
         size={44}
         glyph={chat.kind === "channel" ? "#" : undefined}
         agent={peer?.type === "agent"}
-        actorID={chat.kind === "direct" ? peer?.actor_id : undefined}
-        avatarVersion={
-          chat.kind === "direct" ? peer?.avatar_version : undefined
-        }
+        {...chatAvatarSource(chat)}
         presence={
           chat.kind === "direct" && peer?.type !== "agent"
             ? presence
