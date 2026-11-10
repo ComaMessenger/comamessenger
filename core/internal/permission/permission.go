@@ -16,6 +16,7 @@ const (
 	AgentsObserve      Code = "agents.observe"
 	AuditRead          Code = "audit.read"
 	ChatsModerate      Code = "chats.moderate"
+	KnowledgeManage    Code = "knowledge.manage"
 )
 
 var all = [...]Code{
@@ -32,7 +33,12 @@ var all = [...]Code{
 	AgentsObserve,
 	AuditRead,
 	ChatsModerate,
+	KnowledgeManage,
 }
+
+// memberGrantable lists permissions an owner may grant to a regular member.
+// Every other explicit permission requires the administrator role.
+var memberGrantable = [...]Code{KnowledgeManage}
 
 func All() []Code {
 	return append([]Code(nil), all[:]...)
@@ -47,17 +53,27 @@ func Valid(code Code) bool {
 	return false
 }
 
+// MemberGrantable reports whether the permission may be held by a member.
+func MemberGrantable(code Code) bool {
+	for _, candidate := range memberGrantable {
+		if candidate == code {
+			return true
+		}
+	}
+	return false
+}
+
 func Effective(role string, granted []Code) []Code {
 	if role == "owner" {
 		return All()
 	}
-	if role != "admin" {
+	if role != "admin" && role != "member" {
 		return []Code{}
 	}
 	result := make([]Code, 0, len(granted))
 	seen := make(map[Code]struct{}, len(granted))
 	for _, code := range granted {
-		if !Valid(code) {
+		if !Valid(code) || role == "member" && !MemberGrantable(code) {
 			continue
 		}
 		if _, exists := seen[code]; exists {
@@ -73,7 +89,7 @@ func Allows(role string, granted []Code, required Code) bool {
 	if role == "owner" {
 		return Valid(required)
 	}
-	if role != "admin" || !Valid(required) {
+	if !Valid(required) || role != "admin" && (role != "member" || !MemberGrantable(required)) {
 		return false
 	}
 	for _, code := range granted {

@@ -3,9 +3,8 @@
 -- agent follow-ups. Every addition is nullable or a new table, so older Core
 -- builds keep working against the migrated schema.
 
--- New agent scopes. The list carries every scope introduced by phase 5.3
--- (knowledge:read and tables:read belong to packages A and H), so the
--- migration order of parallel packages cannot drop another package's scope.
+-- New agent scopes on top of 00044 (knowledge:read). tables:read is reserved
+-- for package H so a later migration cannot be ordered into dropping it.
 ALTER TABLE agents DROP CONSTRAINT agents_allowed_scopes_check;
 ALTER TABLE agents ADD CONSTRAINT agents_allowed_scopes_check CHECK (allowed_scopes <@ ARRAY[
     'chats:read', 'messages:read', 'messages:write', 'reactions:write',
@@ -127,18 +126,23 @@ DROP TABLE IF EXISTS agent_collections;
 ALTER TABLE agent_tool_confirmations DROP COLUMN IF EXISTS card_message_id;
 DROP TABLE IF EXISTS message_action_responses;
 ALTER TABLE messages DROP COLUMN IF EXISTS blocks;
-UPDATE agent_api_keys SET revoked_at=COALESCE(revoked_at,now()) WHERE scopes && ARRAY['messages:interactive','followups:write']::text[];
-UPDATE agents SET allowed_scopes=array_remove(array_remove(allowed_scopes,'messages:interactive'),'followups:write');
-UPDATE agent_drafts SET allowed_scopes=array_remove(array_remove(allowed_scopes,'messages:interactive'),'followups:write');
+-- Restore exactly the scope constraints left by 00044_knowledge_base. Scopes
+-- this migration admitted (including tables:read, reserved for package H) are
+-- removed first, so the narrower constraints can be added back.
+UPDATE agent_api_keys SET revoked_at=COALESCE(revoked_at,now())
+    WHERE scopes && ARRAY['messages:interactive','followups:write','tables:read']::text[];
+UPDATE agent_api_keys SET scopes=array_remove(array_remove(array_remove(scopes,'messages:interactive'),'followups:write'),'tables:read');
+UPDATE agents SET allowed_scopes=array_remove(array_remove(array_remove(allowed_scopes,'messages:interactive'),'followups:write'),'tables:read');
+UPDATE agent_drafts SET allowed_scopes=array_remove(array_remove(array_remove(allowed_scopes,'messages:interactive'),'followups:write'),'tables:read');
 ALTER TABLE agent_api_keys DROP CONSTRAINT agent_api_keys_scopes_check;
 ALTER TABLE agent_api_keys ADD CONSTRAINT agent_api_keys_scopes_check CHECK (scopes <@ ARRAY[
     'chats:read', 'messages:read', 'messages:write', 'reactions:write',
     'files:read', 'search:read', 'members:read', 'memory:read', 'memory:write',
-    'runtime:execute', 'runtime:worker', 'knowledge:read', 'tables:read'
+    'runtime:execute', 'runtime:worker', 'knowledge:read'
 ]::text[]);
 ALTER TABLE agents DROP CONSTRAINT agents_allowed_scopes_check;
 ALTER TABLE agents ADD CONSTRAINT agents_allowed_scopes_check CHECK (allowed_scopes <@ ARRAY[
     'chats:read', 'messages:read', 'messages:write', 'reactions:write',
     'files:read', 'search:read', 'members:read', 'memory:read', 'memory:write',
-    'runtime:execute', 'runtime:worker', 'knowledge:read', 'tables:read'
+    'runtime:execute', 'runtime:worker', 'knowledge:read'
 ]::text[]);

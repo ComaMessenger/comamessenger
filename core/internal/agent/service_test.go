@@ -453,3 +453,69 @@ func seedAgentModel(t *testing.T, pool *pgxpool.Pool) {
 		t.Fatal(err)
 	}
 }
+
+func TestKnowledgeCollectionsFollowDraftPublishAndRollback(t *testing.T) {
+	pool := testdb.New(t)
+	seedAgentModel(t, pool)
+	service := NewService(pool)
+	owner := identity.User{ActorID: agentTestOwnerID, OrgID: agentTestOrgID, OrgRole: "owner"}
+	first, second := "00000000-0000-7000-8000-000000000211", "00000000-0000-7000-8000-000000000212"
+	if _, err := pool.Exec(t.Context(), `INSERT INTO knowledge_collections(id,org_id,name,created_by,updated_by) VALUES($1,$3,'Rules',$4,$4),($2,$3,'Slots',$4,$4)`, first, second, agentTestOrgID, agentTestOwnerID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Create(t.Context(), owner, CreateInput{DisplayName: "Unknown", Handle: "unknown-kb", Kind: "external", EndpointURL: "https://agents.example.test/runtime",
+		KnowledgeCollectionIDs: []string{"00000000-0000-7000-8000-000000000299"}}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("unknown collection error = %v", err)
+	}
+	created, err := service.Create(t.Context(), owner, CreateInput{
+		DisplayName: "Reference", Handle: "reference", Kind: "external", EndpointURL: "https://agents.example.test/runtime",
+		AllowedScopes: []Scope{ScopeKnowledgeRead}, ChatIDs: []string{agentTestChatID}, KnowledgeCollectionIDs: []string{first, first},
+	})
+	if err != nil || !slices.Equal(created.KnowledgeCollectionIDs, []string{first}) {
+		t.Fatalf("created agent = %+v, err=%v", created, err)
+	}
+	if _, err := service.CreateKey(t.Context(), owner, created.ID, CreateKeyInput{Name: "runtime", Scopes: []Scope{ScopeKnowledgeRead}, RateLimitPerMinute: 10}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Publish(t.Context(), owner, created.ID); err != nil {
+		t.Fatal(err)
+	}
+	both := []string{first, second}
+	draft, err := service.Update(t.Context(), owner, created.ID, UpdateInput{KnowledgeCollectionIDs: &both})
+	if err != nil || !slices.Equal(draft.KnowledgeCollectionIDs, both) || !draft.HasUnpublishedChanges {
+		t.Fatalf("draft = %+v, err=%v", draft, err)
+	}
+	var live []string
+	if err := pool.QueryRow(t.Context(), `SELECT knowledge_collection_ids::text[] FROM agents WHERE actor_id=$1`, created.ID).Scan(&live); err != nil || !slices.Equal(live, []string{first}) {
+		t.Fatalf("live bindings before publish = %v, err=%v", live, err)
+	}
+	if _, err := service.Publish(t.Context(), owner, created.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(t.Context(), `SELECT knowledge_collection_ids::text[] FROM agents WHERE actor_id=$1`, created.ID).Scan(&live); err != nil || !slices.Equal(live, both) {
+		t.Fatalf("live bindings after publish = %v, err=%v", live, err)
+	}
+	versions, err := service.Versions(t.Context(), owner, created.ID)
+	if err != nil || len(versions) != 2 {
+		t.Fatalf("versions = %+v, err=%v", versions, err)
+	}
+	var config map[string]any
+	var raw []byte
+	if err := pool.QueryRow(t.Context(), `SELECT config FROM agent_versions WHERE agent_id=$1 AND version=2`, created.ID).Scan(&raw); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(raw, &config); err != nil || len(config["knowledge_collection_ids"].([]any)) != 2 {
+		t.Fatalf("version config = %s, err=%v", raw, err)
+	}
+	// Rolling back to version 1 restores its bindings into the draft.
+	var firstVersionID string
+	for _, version := range versions {
+		if version.Version == 1 {
+			firstVersionID = version.ID
+		}
+	}
+	rolledBack, err := service.Rollback(t.Context(), owner, created.ID, firstVersionID)
+	if err != nil || !slices.Equal(rolledBack.KnowledgeCollectionIDs, []string{first}) {
+		t.Fatalf("rolled back draft = %+v, err=%v", rolledBack, err)
+	}
+}

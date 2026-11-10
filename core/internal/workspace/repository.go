@@ -258,19 +258,28 @@ func (r *Repository) UpdateMember(ctx context.Context, orgID, currentActorID, ta
 	if targetActorID == currentActorID && status != "active" {
 		return Member{}, fmt.Errorf("%w: current user cannot deactivate themselves", ErrInvalid)
 	}
-	if input.Permissions != nil && (role != "admin" || status != "active") {
-		return Member{}, fmt.Errorf("%w: only active administrators may have explicit permissions", ErrInvalid)
+	if input.Permissions != nil && (status != "active" || role != "admin" && (role != "member" || !memberGrantable(*input.Permissions))) {
+		return Member{}, fmt.Errorf("%w: only active administrators may have explicit permissions; members may only receive knowledge.manage", ErrInvalid)
 	}
 	_, err = tx.Exec(ctx, `UPDATE actors SET org_role=$3,status=$4 WHERE id=$1 AND org_id=$2`, targetActorID, orgID, role, status)
 	if err != nil {
 		return Member{}, fmt.Errorf("update organization member: %w", err)
 	}
-	if role != "admin" || status != "active" || input.Permissions != nil {
+	if status != "active" || input.Permissions != nil {
 		if _, err := tx.Exec(ctx, `DELETE FROM actor_permissions WHERE org_id=$1 AND actor_id=$2`, orgID, targetActorID); err != nil {
 			return Member{}, fmt.Errorf("clear actor permissions: %w", err)
 		}
+	} else if role == "member" {
+		if _, err := tx.Exec(ctx, `DELETE FROM actor_permissions WHERE org_id=$1 AND actor_id=$2 AND permission<>ALL($3::text[])`, orgID, targetActorID, memberGrantableCodes()); err != nil {
+			return Member{}, fmt.Errorf("clear administrator permissions: %w", err)
+		}
+	} else if role == "admin" && targetRole == "member" {
+		// Promotion grants the permissions administrators hold by default.
+		if _, err := tx.Exec(ctx, `INSERT INTO actor_permissions(org_id,actor_id,permission,granted_by) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`, orgID, targetActorID, string(permission.KnowledgeManage), currentActorID); err != nil {
+			return Member{}, fmt.Errorf("grant default administrator permissions: %w", err)
+		}
 	}
-	if role == "admin" && status == "active" && input.Permissions != nil {
+	if status == "active" && input.Permissions != nil {
 		for _, code := range *input.Permissions {
 			if _, err := tx.Exec(ctx, `INSERT INTO actor_permissions(org_id,actor_id,permission,granted_by) VALUES($1,$2,$3,$4)`, orgID, targetActorID, code, currentActorID); err != nil {
 				return Member{}, fmt.Errorf("grant actor permission: %w", err)
@@ -364,6 +373,25 @@ func (r *Repository) RequirePasswordChange(ctx context.Context, orgID, currentAc
 		return nil, err
 	}
 	return revoked, nil
+}
+
+func memberGrantable(codes []permission.Code) bool {
+	for _, code := range codes {
+		if !permission.MemberGrantable(code) {
+			return false
+		}
+	}
+	return true
+}
+
+func memberGrantableCodes() []string {
+	result := make([]string, 0, 1)
+	for _, code := range permission.All() {
+		if permission.MemberGrantable(code) {
+			result = append(result, string(code))
+		}
+	}
+	return result
 }
 
 func effectivePermissions(role string, stored []string) []permission.Code {

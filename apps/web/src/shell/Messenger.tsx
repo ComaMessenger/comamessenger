@@ -3,7 +3,6 @@ import type { MessengerAPI, User } from "@comamessenger/core";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import {
-  AgentSettingsPage,
   AuditSettingsPage,
   CustomizationSettingsPage,
   InfrastructureSettingsPage,
@@ -17,6 +16,7 @@ import {
   WorkspacePoliciesPage,
   settingForPath,
 } from "../settings";
+import { AgentsPage } from "../agents";
 import { cx } from "../ui";
 import { ChatListPane } from "../chats/ChatListPane";
 import { Conversation } from "../conversation/Conversation";
@@ -190,7 +190,7 @@ export function Messenger({
   ) : path === "/more" ? (
     <MorePage />
   ) : showAgents ? (
-    <AgentSettingsPage api={api} user={user} path={path} navigate={navigate} />
+    <AgentsPage api={api} user={user} path={path} navigate={navigate} />
   ) : activeSettings?.id === "profile" ? (
     <ProfileSettingsPage
       api={api}

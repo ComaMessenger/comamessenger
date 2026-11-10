@@ -9,7 +9,7 @@ func TestToolDefinitionsCompileAndRejectUnknownFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tools) != 17 || len(order) != 17 {
+	if len(tools) != 18 || len(order) != 18 {
 		t.Fatalf("tools=%d order=%d", len(tools), len(order))
 	}
 	definition := tools["get_chat_messages"].Definition
@@ -32,5 +32,8 @@ func TestToolDefinitionsCompileAndRejectUnknownFields(t *testing.T) {
 	}
 	if direct := tools["send_direct_message"].Definition; direct.Mode != "write" || direct.NoConfirmation {
 		t.Fatalf("send_direct_message must follow the confirmation policy: %+v", direct)
+	}
+	if search := tools["search_knowledge"].Definition; search.Mode != "read" || search.RequiredScope != "knowledge:read" {
+		t.Fatalf("search_knowledge definition=%+v", search)
 	}
 }
