@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "tsc -b",
+    "generate": "node ../../design/brand/generate.mjs sources",
     "lint": "tsc -b --pretty false",
     "test": "tsc -b --pretty false"
   },

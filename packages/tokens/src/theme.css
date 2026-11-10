@@ -38,6 +38,11 @@
   --coma-border: #e5e5e9;
   --coma-border-strong: #d2d2d9;
   --coma-primary: #174586;
+  /* Coma mascot: product colours, not the workspace accent (mascot.ts). */
+  --coma-mascot-plate: #ffffff;
+  --coma-mascot-body: #174586;
+  --coma-mascot-eyes: #ffffff;
+  --coma-mascot-feet: #242831;
   --coma-primary-hover: #12386f;
   --coma-primary-soft: #edf3fb;
   --coma-primary-disabled: #9daeca;
@@ -129,6 +134,10 @@
   --coma-border: #323237;
   --coma-border-strong: #46464f;
   --coma-primary: #86aff0;
+  --coma-mascot-plate: #151517;
+  --coma-mascot-body: #86aff0;
+  --coma-mascot-eyes: #ffffff;
+  --coma-mascot-feet: #ffffff;
   --coma-primary-hover: #a3c3f5;
   --coma-primary-soft: #243349;
   --coma-primary-disabled: #4b5b72;
