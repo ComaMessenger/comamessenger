@@ -112,7 +112,6 @@ export type AgentResponseCollection =
   components["schemas"]["AgentResponseCollection"];
 export type AgentFollowup = components["schemas"]["AgentFollowup"];
 export type KnowledgeCollection = components["schemas"]["KnowledgeCollection"];
-export type KnowledgeDocument = components["schemas"]["KnowledgeDocument"];
 export type KnowledgeRunFragments =
   components["schemas"]["KnowledgeRunFragments"];
 export type InvokeAgentRequest = components["schemas"]["InvokeAgentRequest"];

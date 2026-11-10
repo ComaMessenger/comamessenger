@@ -97,16 +97,16 @@ export function AgentCatalog({
 
       {agents.length > 0 ? (
         <section className="agent-section" aria-label={t("agentCatalogTitle")}>
-          <div className="agent-card-grid">
+          <div className="agent-tile-grid">
             {agents.map((agent) => {
               const status = humanStatus(agent, pendingByAgent.get(agent.id));
               return (
                 <button
                   key={agent.id}
-                  className="agent-card"
+                  className="agent-tile"
                   onClick={() => navigate(`/agents/${agent.id}`)}
                 >
-                  <span className="agent-card__head">
+                  <span className="agent-tile__head">
                     <Avatar
                       name={agent.display_name}
                       seed={agent.id}
@@ -119,10 +119,10 @@ export function AgentCatalog({
                       <AgentStatus status={status} withReason />
                     </span>
                   </span>
-                  <span className="agent-card__task">
+                  <span className="agent-tile__task">
                     {agentTask(t, agent)}
                   </span>
-                  <span className="agent-card__foot">
+                  <span className="agent-tile__foot">
                     <span>{agentPlaces(t, agent, chats)}</span>
                     <span>
                       {agent.published_version

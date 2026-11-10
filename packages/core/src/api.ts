@@ -116,7 +116,6 @@ import type {
   AgentResponseCollection,
   AgentFollowup,
   KnowledgeCollection,
-  KnowledgeDocument,
   KnowledgeRunFragments,
 } from "./types";
 

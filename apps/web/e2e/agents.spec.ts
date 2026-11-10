@@ -746,19 +746,19 @@ test("catalog shows human statuses, the approval strip and ready roles", async (
   await expect(
     page.getByRole("heading", { name: /Ваши агенты/ }),
   ).toBeVisible();
-  const help = page.locator(".agent-card", { hasText: "Справка" });
+  const help = page.locator(".agent-tile", { hasText: "Справка" });
   await expect(help.getByText("Работает", { exact: true })).toBeVisible();
   await expect(
     help.getByText(
       "Отвечай на вопросы по регламентам центра и всегда называй документ-источник.",
     ),
   ).toBeVisible();
-  const control = page.locator(".agent-card", { hasText: "Контроль" });
+  const control = page.locator(".agent-tile", { hasText: "Контроль" });
   await expect(control.getByText("Ждёт подтверждения")).toBeVisible();
   await expect(
     control.getByText("Следит, чтобы все отметились под важным сообщением"),
   ).toBeVisible();
-  const digest = page.locator(".agent-card", { hasText: "Сводки" });
+  const digest = page.locator(".agent-tile", { hasText: "Сводки" });
   await expect(digest.getByText("Черновик", { exact: true })).toBeVisible();
   await expect(
     page.getByText("1 действие ждёт подтверждения.", { exact: false }),
