@@ -1595,6 +1595,7 @@ const (
 	ErrorCodeActionConflict             ErrorCode = "action_conflict"
 	ErrorCodeAgentBudgetExceeded        ErrorCode = "agent_budget_exceeded"
 	ErrorCodeAgentConfigurationNotFound ErrorCode = "agent_configuration_not_found"
+	ErrorCodeAgentConfirmationLoosened  ErrorCode = "agent_confirmation_loosened"
 	ErrorCodeAgentConflict              ErrorCode = "agent_conflict"
 	ErrorCodeAgentNotFound              ErrorCode = "agent_not_found"
 	ErrorCodeAgentNotReady              ErrorCode = "agent_not_ready"
@@ -1648,6 +1649,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeAgentBudgetExceeded:
 		return true
 	case ErrorCodeAgentConfigurationNotFound:
+		return true
+	case ErrorCodeAgentConfirmationLoosened:
 		return true
 	case ErrorCodeAgentConflict:
 		return true
@@ -4779,6 +4782,7 @@ type CreateFileUploadRequest struct {
 
 // CreateIntegrationWebhookRequest defines model for CreateIntegrationWebhookRequest.
 type CreateIntegrationWebhookRequest struct {
+	AgentUseAllowed    *bool   `json:"agent_use_allowed,omitempty"`
 	Description        *string `json:"description,omitempty"`
 	Enabled            *bool   `json:"enabled,omitempty"`
 	MaxBodyBytes       *int    `json:"max_body_bytes,omitempty"`
@@ -5046,6 +5050,8 @@ type InfrastructureSettings struct {
 
 // IntegrationWebhook defines model for IntegrationWebhook.
 type IntegrationWebhook struct {
+	// AgentUseAllowed Released by integrations.manage so agent builders may start an agent by this webhook. Off by default; builders list only released webhooks.
+	AgentUseAllowed    *bool              `json:"agent_use_allowed,omitempty"`
 	CreatedAt          time.Time          `json:"created_at"`
 	CreatedBy          openapi_types.UUID `json:"created_by"`
 	Description        string             `json:"description"`
@@ -5085,6 +5091,8 @@ type IntegrationWebhookDeliveryStatus string
 
 // IntegrationWebhookWithSecret Returned only on creation and rotation; the secret is not shown again.
 type IntegrationWebhookWithSecret struct {
+	// AgentUseAllowed Released by integrations.manage so agent builders may start an agent by this webhook. Off by default; builders list only released webhooks.
+	AgentUseAllowed    *bool              `json:"agent_use_allowed,omitempty"`
 	CreatedAt          time.Time          `json:"created_at"`
 	CreatedBy          openapi_types.UUID `json:"created_by"`
 	Description        string             `json:"description"`
@@ -5491,7 +5499,7 @@ type MessageAgentProvenance struct {
 	RunId   openapi_types.UUID            `json:"run_id"`
 	Trigger MessageAgentProvenanceTrigger `json:"trigger"`
 
-	// TriggerLabel Short detail set by the agent's builders, e.g. "/summarize", "09:00 UTC" or the webhook name.
+	// TriggerLabel Short detail recorded when the message was written, e.g. "/summarize" or "09:00 UTC". Never a keyword pattern or a webhook name.
 	TriggerLabel *string `json:"trigger_label,omitempty"`
 }
 
@@ -5708,6 +5716,12 @@ type PublicBranding struct {
 	PasswordRecoveryAvailable bool    `json:"password_recovery_available"`
 	Version                   int64   `json:"version"`
 	WorkspaceName             string  `json:"workspace_name"`
+}
+
+// PublishAgentRequest defines model for PublishAgentRequest.
+type PublishAgentRequest struct {
+	// AcknowledgeLoosened The person publishing confirms that the actions listed by agent_confirmation_loosened will run without approval.
+	AcknowledgeLoosened *bool `json:"acknowledge_loosened,omitempty"`
 }
 
 // PublishAgentRunRequest defines model for PublishAgentRunRequest.
@@ -6240,8 +6254,10 @@ type UpdateAgentProviderCredentialRequest struct {
 
 // UpdateAgentRequest defines model for UpdateAgentRequest.
 type UpdateAgentRequest struct {
-	AllowedScopes *[]AgentScope         `json:"allowed_scopes,omitempty"`
-	ChatIds       *[]openapi_types.UUID `json:"chat_ids,omitempty"`
+	// AcknowledgeLoosened With enabled=true, confirms the actions agent_confirmation_loosened listed.
+	AcknowledgeLoosened *bool                 `json:"acknowledge_loosened,omitempty"`
+	AllowedScopes       *[]AgentScope         `json:"allowed_scopes,omitempty"`
+	ChatIds             *[]openapi_types.UUID `json:"chat_ids,omitempty"`
 
 	// ConfirmationPolicy Confirmation of each built-in write tool (post_message, reply_in_thread, add_reaction, post_card, update_card, start_collection, schedule_followup, remember, send_direct_message). A request may name only the tools it changes; responses name all of them with the mode Core enforces. Tools in the server floor cannot be set to auto.
 	ConfirmationPolicy          *AgentConfirmationPolicy `json:"confirmation_policy,omitempty"`
@@ -6319,6 +6335,7 @@ type UpdateInfrastructureSettingsRequest struct {
 
 // UpdateIntegrationWebhookRequest defines model for UpdateIntegrationWebhookRequest.
 type UpdateIntegrationWebhookRequest struct {
+	AgentUseAllowed    *bool   `json:"agent_use_allowed,omitempty"`
 	Description        *string `json:"description,omitempty"`
 	Enabled            *bool   `json:"enabled,omitempty"`
 	MaxBodyBytes       *int    `json:"max_body_bytes,omitempty"`
@@ -6829,6 +6846,9 @@ type UpdateAgentMcpServerJSONRequestBody = UpdateAgentMcpServerRequest
 
 // UpdateAgentProviderCredentialJSONRequestBody defines body for UpdateAgentProviderCredential for application/json ContentType.
 type UpdateAgentProviderCredentialJSONRequestBody = UpdateAgentProviderCredentialRequest
+
+// PublishAgentJSONRequestBody defines body for PublishAgent for application/json ContentType.
+type PublishAgentJSONRequestBody = PublishAgentRequest
 
 // CreateAgentTriggerJSONRequestBody defines body for CreateAgentTrigger for application/json ContentType.
 type CreateAgentTriggerJSONRequestBody = CreateAgentTriggerRequest

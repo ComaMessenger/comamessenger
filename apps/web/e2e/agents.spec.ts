@@ -323,6 +323,7 @@ export type AgentMock = {
   invocations: Array<Record<string, unknown>>;
   decisions: string[];
   workspaceRunQueries: string[];
+  publishBodies: unknown[];
   runPolls: () => number;
 };
 
@@ -333,6 +334,8 @@ async function mockAgents(
     theme?: "light" | "dark";
     noCollections?: boolean;
     userPatch?: Record<string, unknown>;
+    /** The server answers the first publish with these loosened actions. */
+    loosened?: string[];
   } = {},
 ): Promise<AgentMock> {
   let agents = options.empty ? [] : seedAgents();
@@ -368,6 +371,7 @@ async function mockAgents(
     invocations: [],
     decisions: [],
     workspaceRunQueries: [],
+    publishBodies: [],
     runPolls: () => polls,
   };
   await page.addInitScript((theme) => {
@@ -515,6 +519,7 @@ async function mockAgents(
           name: "Учётная система",
           description: "",
           enabled: true,
+          agent_use_allowed: true,
           secret_hint: "",
           rate_limit_per_minute: 60,
           max_body_bytes: 65536,
@@ -668,8 +673,22 @@ async function mockAgents(
         agents = agents.map((item) => (item.id === agent.id ? updated : item));
         body = updated;
       } else if (rest === "" && method === "GET") body = agent;
-      else if (rest === "/publish") {
+      else if (
+        rest === "/publish" &&
+        options.loosened &&
+        !(request.postDataJSON() as { acknowledge_loosened?: boolean } | null)
+          ?.acknowledge_loosened
+      ) {
+        status = 409;
+        body = {
+          code: "agent_confirmation_loosened",
+          message: "loosened",
+          request_id: "test",
+          details: { loosened: options.loosened },
+        };
+      } else if (rest === "/publish") {
         state.published.push(agent.id);
+        state.publishBodies.push(request.postDataJSON());
         const updated = {
           ...agent,
           enabled: true,
@@ -1181,14 +1200,13 @@ test("check shows the dry-run answer, a human trace and the verdict", async ({
     input: { prompt: "Как оформить замену?", sandbox: true, publish: false },
   });
   await builderSettled(page);
-  // The check panel itself: the builder header next to it is covered by the
-  // builder snapshots.
-  await expect(page.locator(".agent-builder__check")).toHaveScreenshot(
-    "agents-check.png",
-    {
-      animations: "disabled",
-    },
-  );
+  // The whole page: the builder settles on «nothing to publish» and stays.
+  await expect(
+    page.getByText("Опубликованная версия совпадает с черновиком"),
+  ).toBeVisible();
+  await expect(page).toHaveScreenshot("agents-check.png", {
+    animations: "disabled",
+  });
 });
 
 test("polling of a check stops after leaving the page", async ({ page }) => {
@@ -1273,6 +1291,33 @@ test("publishing saves the draft and the agent starts working", async ({
       "Опубликованная версия совпадает с черновиком — публиковать нечего.",
     ),
   ).toBeVisible();
+});
+
+test("publishing asks to confirm actions that stop waiting for a person", async ({
+  page,
+}) => {
+  const mock = await mockAgents(page, {
+    loosened: ["send_direct_message", "mcp:accounting/assign_instructor"],
+  });
+  await page.goto(`/agents/${ids.digest}`);
+  await page
+    .locator("#agent-block-model")
+    .getByRole("switch", { name: "Разрешить передачу данных модели" })
+    .click();
+  await page.getByRole("button", { name: "Опубликовать" }).click();
+  const dialog = page.getByRole("dialog", {
+    name: "Эти действия пойдут без подтверждения",
+  });
+  await expect(
+    dialog.getByText("Писать людям в личные сообщения"),
+  ).toBeVisible();
+  await expect(
+    dialog.getByText("«assign_instructor» во внешней системе «accounting»"),
+  ).toBeVisible();
+  expect(mock.published).toEqual([]);
+  await dialog.getByRole("button", { name: "Понятно, опубликовать" }).click();
+  await expect(page.getByText("Версия опубликована")).toBeVisible();
+  expect(mock.publishBodies.at(-1)).toEqual({ acknowledge_loosened: true });
 });
 
 test("switching agents never carries state from one agent to another", async ({

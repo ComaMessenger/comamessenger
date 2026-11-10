@@ -80,6 +80,11 @@ export const builderContractsCatalog = defineCatalog(
     agentFeedDoneNoChat_confirmation: "продолжил после решения человека",
     errorAgentNotReady:
       "Агент ещё не готов: выполните пункты из списка над конструктором.",
+    agentLoosenedTitle: "Эти действия пойдут без подтверждения",
+    agentLoosenedLead:
+      "После публикации агент будет делать это сам, не спрашивая человека. Проверьте, что так и задумано.",
+    agentLoosenedConfirm: "Понятно, опубликовать",
+    agentLoosenedExternal: "«{tool}» во внешней системе «{connection}»",
   },
   {
     agentTone: "Tone",
@@ -155,5 +160,10 @@ export const builderContractsCatalog = defineCatalog(
     agentFeedDoneNoChat_confirmation: "continued after a person's decision",
     errorAgentNotReady:
       "The agent is not ready yet: complete the items listed above the builder.",
+    agentLoosenedTitle: "These actions will run without approval",
+    agentLoosenedLead:
+      "After publishing, the agent does this by itself without asking a person. Check that this is intended.",
+    agentLoosenedConfirm: "Understood, publish",
+    agentLoosenedExternal: "«{tool}» in the external system «{connection}»",
   },
 );

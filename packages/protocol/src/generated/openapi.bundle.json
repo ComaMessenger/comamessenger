@@ -439,6 +439,7 @@
     "/api/v1/agents/{agent_id}/publish": {
       "post": {
         "operationId": "publishAgent",
+        "description": "Publishes the draft. When the draft lets actions run without a person's approval that waited before (or, on the first publish, that wait by default), the server answers 409 agent_confirmation_loosened with details.loosened (built-in tool names and \"mcp:<connection>/<tool>\") until the request acknowledges them.",
         "security": [
           {
             "bearerAuth": []
@@ -449,6 +450,16 @@
             "$ref": "#/components/parameters/AgentId"
           }
         ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishAgentRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Draft atomically validated and published.",
@@ -7829,6 +7840,7 @@
           "action_conflict",
           "already_bootstrapped",
           "agent_budget_exceeded",
+          "agent_confirmation_loosened",
           "agent_conflict",
           "agent_not_ready",
           "agent_configuration_not_found",
@@ -10102,6 +10114,16 @@
           }
         }
       },
+      "PublishAgentRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "acknowledge_loosened": {
+            "type": "boolean",
+            "description": "The person publishing confirms that the actions listed by agent_confirmation_loosened will run without approval."
+          }
+        }
+      },
       "AgentTone": {
         "type": "string",
         "enum": [
@@ -10540,6 +10562,10 @@
           },
           "confirmation_policy": {
             "$ref": "#/components/schemas/AgentConfirmationPolicy"
+          },
+          "acknowledge_loosened": {
+            "type": "boolean",
+            "description": "With enabled=true, confirms the actions agent_confirmation_loosened listed."
           }
         }
       },
@@ -12471,6 +12497,10 @@
           "enabled": {
             "type": "boolean"
           },
+          "agent_use_allowed": {
+            "type": "boolean",
+            "description": "Released by integrations.manage so agent builders may start an agent by this webhook. Off by default; builders list only released webhooks."
+          },
           "secret_hint": {
             "type": "string",
             "maxLength": 80
@@ -12568,6 +12598,10 @@
             "type": "boolean",
             "default": true
           },
+          "agent_use_allowed": {
+            "type": "boolean",
+            "default": false
+          },
           "rate_limit_per_minute": {
             "type": "integer",
             "minimum": 1,
@@ -12595,6 +12629,9 @@
             "maxLength": 500
           },
           "enabled": {
+            "type": "boolean"
+          },
+          "agent_use_allowed": {
             "type": "boolean"
           },
           "rate_limit_per_minute": {
@@ -15152,7 +15189,7 @@
           "trigger_label": {
             "type": "string",
             "maxLength": 120,
-            "description": "Short detail set by the agent's builders, e.g. \"/summarize\", \"09:00 UTC\" or the webhook name."
+            "description": "Short detail recorded when the message was written, e.g. \"/summarize\" or \"09:00 UTC\". Never a keyword pattern or a webhook name."
           }
         }
       },

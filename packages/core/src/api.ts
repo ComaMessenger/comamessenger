@@ -97,6 +97,7 @@ import type {
   CreateAgentTriggerRequest,
   UpdateAgentTriggerRequest,
   ClaimedAgentRun,
+  PublishAgentRequest,
   ClaimAgentRunRequest,
   AgentRunLeaseRequest,
   PublishAgentRunRequest,
@@ -146,6 +147,8 @@ export class APIError extends Error {
     readonly status: number,
     readonly code: APIErrorCode,
     message: string,
+    /** Structured details some errors carry (e.g. `loosened` actions). */
+    readonly details: Record<string, unknown> = {},
   ) {
     super(message);
     this.name = "APIError";
@@ -788,9 +791,10 @@ export class MessengerAPI {
   agentVersions(id: string): Promise<AgentVersion[]> {
     return this.request(`/api/v1/agents/${encodeURIComponent(id)}/versions`);
   }
-  publishAgent(id: string): Promise<Agent> {
+  publishAgent(id: string, input: PublishAgentRequest = {}): Promise<Agent> {
     return this.request(`/api/v1/agents/${encodeURIComponent(id)}/publish`, {
       method: "POST",
+      body: JSON.stringify(input),
     });
   }
   pauseAgent(id: string): Promise<Agent> {
@@ -1542,6 +1546,7 @@ export class MessengerAPI {
         response.status,
         payload.code ?? "request_failed",
         payload.message ?? "Request failed.",
+        payload.details ?? {},
       );
     }
     if (response.status === 204) return undefined as T;

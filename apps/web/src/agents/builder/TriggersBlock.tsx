@@ -75,8 +75,12 @@ export function TriggersBlock({
   const webhookNames = new Map(
     (webhooks.data ?? []).map((hook) => [hook.id, hook.name]),
   );
+  // Only webhooks integrations.manage released for agents can start one.
+  const released = (webhooks.data ?? []).filter(
+    (hook) => hook.agent_use_allowed,
+  );
   const offered = triggerTypes.filter(
-    (type) => type !== "webhook" || (webhooks.data ?? []).length > 0,
+    (type) => type !== "webhook" || released.length > 0,
   );
 
   async function act(work: () => Promise<unknown>) {
@@ -142,7 +146,7 @@ export function TriggersBlock({
                 key={trigger.id}
                 form={editing.form}
                 chats={agentChats}
-                webhooks={webhooks.data ?? []}
+                webhooks={released}
                 pending={pending}
                 onChange={(form) => setEditing({ id: trigger.id, form })}
                 onSave={() => void save()}
@@ -174,7 +178,7 @@ export function TriggersBlock({
             <RuleEditor
               form={editing.form}
               chats={agentChats}
-              webhooks={webhooks.data ?? []}
+              webhooks={released}
               pending={pending}
               onChange={(form) => setEditing({ id: null, form })}
               onSave={() => void save()}

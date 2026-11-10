@@ -119,6 +119,7 @@ export type CreateAgentRequest = components["schemas"]["CreateAgentRequest"];
 export type DuplicateAgentRequest =
   components["schemas"]["DuplicateAgentRequest"];
 export type UpdateAgentRequest = components["schemas"]["UpdateAgentRequest"];
+export type PublishAgentRequest = components["schemas"]["PublishAgentRequest"];
 export type CreateAgentKeyRequest =
   components["schemas"]["CreateAgentKeyRequest"];
 export type AgentPlatformSettings =

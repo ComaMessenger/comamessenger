@@ -240,6 +240,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Publishes the draft. When the draft lets actions run without a person's approval that waited before (or, on the first publish, that wait by default), the server answers 409 agent_confirmation_loosened with details.loosened (built-in tool names and "mcp:<connection>/<tool>") until the request acknowledges them. */
         post: operations["publishAgent"];
         delete?: never;
         options?: never;
@@ -2511,7 +2512,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_conflict" | "agent_not_ready" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "integration_in_use" | "integration_usage_changed" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "webhook_not_found" | "webhook_rejected" | "workspace_not_found";
+        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_confirmation_loosened" | "agent_conflict" | "agent_not_ready" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "integration_in_use" | "integration_usage_changed" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "webhook_not_found" | "webhook_rejected" | "workspace_not_found";
         File: {
             /** Format: uuid */
             id: string;
@@ -3108,6 +3109,10 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        PublishAgentRequest: {
+            /** @description The person publishing confirms that the actions listed by agent_confirmation_loosened will run without approval. */
+            acknowledge_loosened?: boolean;
+        };
         /**
          * @description Empty means no tone instruction.
          * @enum {string}
@@ -3220,6 +3225,8 @@ export interface components {
             write_chat_ids?: string[];
             tone?: components["schemas"]["AgentTone"];
             confirmation_policy?: components["schemas"]["AgentConfirmationPolicy"];
+            /** @description With enabled=true, confirms the actions agent_confirmation_loosened listed. */
+            acknowledge_loosened?: boolean;
         };
         AgentUsageEntry: {
             /** Format: uuid */
@@ -3781,6 +3788,8 @@ export interface components {
             name: string;
             description: string;
             enabled: boolean;
+            /** @description Released by integrations.manage so agent builders may start an agent by this webhook. Off by default; builders list only released webhooks. */
+            agent_use_allowed?: boolean;
             secret_hint: string;
             rate_limit_per_minute: number;
             max_body_bytes: number;
@@ -3812,6 +3821,8 @@ export interface components {
             description?: string;
             /** @default true */
             enabled: boolean;
+            /** @default false */
+            agent_use_allowed: boolean;
             rate_limit_per_minute?: number;
             max_body_bytes?: number;
         };
@@ -3819,6 +3830,7 @@ export interface components {
             name?: string;
             description?: string;
             enabled?: boolean;
+            agent_use_allowed?: boolean;
             rate_limit_per_minute?: number;
             max_body_bytes?: number;
         };
@@ -4519,7 +4531,7 @@ export interface components {
             run_id: string;
             /** @enum {string} */
             trigger: "manual" | "mention" | "command" | "keyword" | "every_message" | "schedule" | "event" | "webhook" | "followup" | "message_action" | "collection" | "confirmation";
-            /** @description Short detail set by the agent's builders, e.g. "/summarize", "09:00 UTC" or the webhook name. */
+            /** @description Short detail recorded when the message was written, e.g. "/summarize" or "09:00 UTC". Never a keyword pattern or a webhook name. */
             trigger_label?: string;
         };
         /** @description Optional structured part of an agent message. The body always carries a plain-text fallback; clients that do not support the version render the body. Server-managed state (responses, closed, binding) is part of the document so durable events carry the current card. */
@@ -5332,7 +5344,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PublishAgentRequest"];
+            };
+        };
         responses: {
             /** @description Draft atomically validated and published. */
             200: {
