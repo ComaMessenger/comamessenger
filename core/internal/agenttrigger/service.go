@@ -98,6 +98,9 @@ func (service *Service) Create(ctx context.Context, current identity.User, agent
 	if !canBuild(current) {
 		return Trigger{}, ErrForbidden
 	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return Trigger{}, err
+	}
 	if uuid.Validate(agentID) != nil {
 		return Trigger{}, ErrNotFound
 	}
@@ -141,6 +144,9 @@ func (service *Service) List(ctx context.Context, current identity.User, agentID
 	if !canView(current) {
 		return nil, ErrForbidden
 	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return nil, err
+	}
 	rows, err := service.pool.Query(ctx, triggerSelect+` WHERE trigger.org_id=$1 AND trigger.agent_id=$2 AND trigger.superseded_at IS NULL ORDER BY trigger.created_at`, current.OrgID, agentID)
 	if err != nil {
 		return nil, err
@@ -160,6 +166,9 @@ func (service *Service) List(ctx context.Context, current identity.User, agentID
 func (service *Service) Update(ctx context.Context, current identity.User, agentID, triggerID string, input UpdateInput) (Trigger, error) {
 	if !canBuild(current) {
 		return Trigger{}, ErrForbidden
+	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return Trigger{}, err
 	}
 	existing, err := service.get(ctx, current.OrgID, triggerID)
 	if err != nil || existing.AgentID != agentID {
@@ -220,6 +229,9 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 func (service *Service) Delete(ctx context.Context, current identity.User, agentID, triggerID string) error {
 	if !canBuild(current) {
 		return ErrForbidden
+	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return err
 	}
 	auditID, err := id.New()
 	if err != nil {
@@ -952,3 +964,19 @@ func scanTrigger(row scanner) (Trigger, error) {
 
 func canBuild(current identity.User) bool { return agentauthz.New().CanBuild(current) }
 func canView(current identity.User) bool  { return agentauthz.New().CanView(current) }
+
+// requireProductAgent hides system agents (runtime worker, Architect) from
+// product APIs: for them these agents do not exist.
+func requireProductAgent(ctx context.Context, q interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, orgID, agentID string) error {
+	if uuid.Validate(agentID) != nil {
+		return ErrNotFound
+	}
+	var product bool
+	err := q.QueryRow(ctx, `SELECT system_role IS NULL FROM agents WHERE org_id=$1 AND actor_id=$2`, orgID, agentID).Scan(&product)
+	if errors.Is(err, pgx.ErrNoRows) || err == nil && !product {
+		return ErrNotFound
+	}
+	return err
+}

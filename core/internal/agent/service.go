@@ -523,6 +523,9 @@ func (service *Service) ResetRecipe(ctx context.Context, current identity.User, 
 	if !canBuild(current) {
 		return Agent{}, ErrForbidden
 	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return Agent{}, err
+	}
 	if uuid.Validate(agentID) != nil {
 		return Agent{}, ErrNotFound
 	}
@@ -630,6 +633,9 @@ func (service *Service) Usage(ctx context.Context, current identity.User, agentI
 	if !canView(current) {
 		return UsageReport{}, ErrForbidden
 	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return UsageReport{}, err
+	}
 	if uuid.Validate(agentID) != nil {
 		return UsageReport{}, ErrNotFound
 	}
@@ -720,6 +726,9 @@ func (service *Service) Get(ctx context.Context, current identity.User, agentID 
 func (service *Service) Update(ctx context.Context, current identity.User, agentID string, input UpdateInput) (Agent, error) {
 	if !canBuild(current) {
 		return Agent{}, ErrForbidden
+	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return Agent{}, err
 	}
 	if _, err := uuid.Parse(agentID); err != nil {
 		return Agent{}, ErrNotFound
@@ -820,6 +829,9 @@ func (service *Service) Publish(ctx context.Context, current identity.User, agen
 	if !canPublish(current) {
 		return Agent{}, ErrForbidden
 	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return Agent{}, err
+	}
 	if uuid.Validate(agentID) != nil {
 		return Agent{}, ErrNotFound
 	}
@@ -872,6 +884,9 @@ func (service *Service) Resume(ctx context.Context, current identity.User, agent
 func (service *Service) setOperationalStatus(ctx context.Context, current identity.User, agentID string, enabled bool) (Agent, error) {
 	if !canPublish(current) {
 		return Agent{}, ErrForbidden
+	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return Agent{}, err
 	}
 	if uuid.Validate(agentID) != nil {
 		return Agent{}, ErrNotFound
@@ -933,6 +948,9 @@ func (service *Service) Versions(ctx context.Context, current identity.User, age
 	if !canView(current) {
 		return nil, ErrForbidden
 	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return nil, err
+	}
 	if uuid.Validate(agentID) != nil {
 		return nil, ErrNotFound
 	}
@@ -957,6 +975,9 @@ func (service *Service) Versions(ctx context.Context, current identity.User, age
 func (service *Service) Rollback(ctx context.Context, current identity.User, agentID, versionID string) (Agent, error) {
 	if !canPublish(current) {
 		return Agent{}, ErrForbidden
+	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return Agent{}, err
 	}
 	if uuid.Validate(agentID) != nil || uuid.Validate(versionID) != nil {
 		return Agent{}, ErrNotFound
@@ -1024,6 +1045,9 @@ func (service *Service) Rollback(ctx context.Context, current identity.User, age
 func (service *Service) Delete(ctx context.Context, current identity.User, agentID string) error {
 	if !canBuild(current) {
 		return ErrForbidden
+	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return err
 	}
 	if _, err := uuid.Parse(agentID); err != nil {
 		return ErrNotFound
@@ -1111,6 +1135,9 @@ func (service *Service) CreateKey(ctx context.Context, current identity.User, ag
 	if !canBuild(current) {
 		return CreatedAPIKey{}, ErrForbidden
 	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return CreatedAPIKey{}, err
+	}
 	if _, err := uuid.Parse(agentID); err != nil {
 		return CreatedAPIKey{}, ErrNotFound
 	}
@@ -1171,6 +1198,9 @@ func (service *Service) RevokeKey(ctx context.Context, current identity.User, ag
 	if !canBuild(current) {
 		return ErrForbidden
 	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return err
+	}
 	if _, err := uuid.Parse(agentID); err != nil {
 		return ErrNotFound
 	}
@@ -1207,6 +1237,9 @@ func (service *Service) RevokeKey(ctx context.Context, current identity.User, ag
 func (service *Service) ListKeys(ctx context.Context, current identity.User, agentID string) ([]APIKey, error) {
 	if !canBuild(current) {
 		return nil, ErrForbidden
+	}
+	if err := requireProductAgent(ctx, service.pool, current.OrgID, agentID); err != nil {
+		return nil, err
 	}
 	if _, err := uuid.Parse(agentID); err != nil {
 		return nil, ErrNotFound
@@ -1930,6 +1963,23 @@ func scopeSubset(scopes []Scope, allowed []string) bool {
 		}
 	}
 	return true
+}
+
+// requireProductAgent hides system agents (the installation runtime worker,
+// the Architect) from every product operation: they are not agents people
+// manage, so for these APIs they do not exist.
+func requireProductAgent(ctx context.Context, q interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, orgID, agentID string) error {
+	if uuid.Validate(agentID) != nil {
+		return ErrNotFound
+	}
+	var product bool
+	err := q.QueryRow(ctx, `SELECT system_role IS NULL FROM agents WHERE org_id=$1 AND actor_id=$2`, orgID, agentID).Scan(&product)
+	if errors.Is(err, pgx.ErrNoRows) || err == nil && !product {
+		return ErrNotFound
+	}
+	return err
 }
 
 func canBuild(current identity.User) bool   { return agentauthz.New().CanBuild(current) }

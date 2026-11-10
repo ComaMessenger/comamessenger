@@ -221,7 +221,7 @@ func (s *Service) ListActors(ctx context.Context, user identity.User, query, aft
 		CASE WHEN status_expires_at IS NULL OR status_expires_at>now() THEN status_text ELSE '' END,
 		CASE WHEN status_expires_at IS NULL OR status_expires_at>now() THEN status_expires_at END,
 		avatar_version
-		FROM actors WHERE org_id=$1 AND status='active' AND deleted_at IS NULL AND ($2='' OR display_name ILIKE '%'||$2||'%' OR handle::text ILIKE '%'||$2||'%' OR title ILIKE '%'||$2||'%') AND (NULLIF($3,'') IS NULL OR id>NULLIF($3,'')::uuid) ORDER BY id LIMIT $4`, user.OrgID, query, afterID, limit+1)
+		FROM actors WHERE org_id=$1 AND status='active' AND deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM agents sys WHERE sys.org_id = actors.org_id AND sys.actor_id = actors.id AND sys.system_role IS NOT NULL) AND ($2='' OR display_name ILIKE '%'||$2||'%' OR handle::text ILIKE '%'||$2||'%' OR title ILIKE '%'||$2||'%') AND (NULLIF($3,'') IS NULL OR id>NULLIF($3,'')::uuid) ORDER BY id LIMIT $4`, user.OrgID, query, afterID, limit+1)
 	if err != nil {
 		return ActorPage{}, fmt.Errorf("list actors: %w", err)
 	}
@@ -333,7 +333,8 @@ func (s *Service) Create(ctx context.Context, user identity.User, input CreateIn
 		command, err := tx.Exec(ctx, `
 			INSERT INTO chat_members (chat_id, actor_id, org_id, role)
 			SELECT $1, id, org_id, 'member' FROM actors
-			WHERE id = $2 AND org_id = $3 AND status = 'active' AND deleted_at IS NULL`, chatID, actorID, user.OrgID)
+			WHERE id = $2 AND org_id = $3 AND status = 'active' AND deleted_at IS NULL
+			  AND NOT EXISTS (SELECT 1 FROM agents sys WHERE sys.org_id = actors.org_id AND sys.actor_id = actors.id AND sys.system_role IS NOT NULL)`, chatID, actorID, user.OrgID)
 		if err != nil || command.RowsAffected() != 1 {
 			return Chat{}, fmt.Errorf("%w: member does not exist", ErrInvalid)
 		}
@@ -592,6 +593,7 @@ func (s *Service) AddMember(ctx context.Context, user identity.User, chatID stri
 		INSERT INTO chat_members (chat_id, actor_id, org_id, role)
 		SELECT $1, target.id, target.org_id, $4 FROM actors target
 		WHERE target.id = $2 AND target.org_id = $3 AND target.status = 'active' AND target.deleted_at IS NULL
+		  AND NOT EXISTS (SELECT 1 FROM agents sys WHERE sys.org_id = target.org_id AND sys.actor_id = target.id AND sys.system_role IS NOT NULL)
 		  AND (EXISTS (
 			SELECT 1 FROM chat_members manager JOIN chats c ON c.id = manager.chat_id
 			WHERE manager.chat_id = $1 AND manager.actor_id = $5 AND manager.role IN ('owner', 'admin')
@@ -792,7 +794,8 @@ func (s *Service) createDirect(ctx context.Context, user identity.User, input Cr
 	err = tx.QueryRow(ctx, `
 		INSERT INTO chats (id, org_id, kind, visibility, direct_pair_key, created_by)
 		SELECT $1, $2, 'direct', 'private', $3, $4
-		WHERE EXISTS (SELECT 1 FROM actors WHERE id = $5 AND org_id = $2 AND status = 'active' AND deleted_at IS NULL)
+		WHERE EXISTS (SELECT 1 FROM actors WHERE id = $5 AND org_id = $2 AND status = 'active' AND deleted_at IS NULL
+			AND NOT EXISTS (SELECT 1 FROM agents sys WHERE sys.org_id = actors.org_id AND sys.actor_id = actors.id AND sys.system_role IS NOT NULL))
 		ON CONFLICT (org_id, direct_pair_key) WHERE kind = 'direct'
 		DO UPDATE SET direct_pair_key = EXCLUDED.direct_pair_key
 		RETURNING id, xmax = 0`, chatID, user.OrgID, pairKey, user.ActorID, input.MemberIDs[0]).Scan(&actualID, &created)

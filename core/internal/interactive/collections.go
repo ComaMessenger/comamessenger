@@ -505,7 +505,7 @@ func (s *Service) sendReminders(ctx context.Context, tx pgx.Tx, collection Colle
 	rows, err := tx.Query(ctx, `SELECT a.id, a.timezone,
 			(SELECT count(*) FROM agent_reminders r WHERE r.collection_id=$2 AND r.actor_id=a.id),
 			(SELECT count(*) FROM agent_reminders r WHERE r.org_id=a.org_id AND r.actor_id=a.id AND r.sent_at>$4)
-		FROM actors a WHERE a.org_id=$1 AND a.id=ANY($3::uuid[]) AND a.status='active' AND a.deleted_at IS NULL ORDER BY a.id`,
+		FROM actors a WHERE a.org_id=$1 AND a.id=ANY($3::uuid[]) AND a.status='active' AND a.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM agents sys WHERE sys.org_id = a.org_id AND sys.actor_id = a.id AND sys.system_role IS NOT NULL) ORDER BY a.id`,
 		collection.orgID, collection.ID, collection.PendingActorIDs, now.Add(-24*time.Hour))
 	if err != nil {
 		return nil, err
