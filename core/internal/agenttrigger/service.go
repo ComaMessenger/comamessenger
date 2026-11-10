@@ -69,6 +69,8 @@ type event struct {
 	body         string
 	mentioned    []string
 	sourceDepth  *int
+	timezone     string
+	data         json.RawMessage
 }
 
 type Service struct {
@@ -346,7 +348,8 @@ func (service *Service) dispatchAgent(ctx context.Context, orgID, agentID string
 		return err
 	}
 	rows, err := tx.Query(ctx, `SELECT event.seq,event.type,event.actor_id,COALESCE(actor.type,'system'),event.chat_id,event.subject_id,
-			message.thread_root_id,COALESCE(message.body,''),COALESCE(message.mentioned_actor_ids,'{}'::uuid[]),provenance.chain_depth
+			message.thread_root_id,COALESCE(message.body,''),COALESCE(message.mentioned_actor_ids,'{}'::uuid[]),provenance.chain_depth,
+			COALESCE(actor.timezone,''),COALESCE(event.data,'{}'::jsonb)
 		FROM events event LEFT JOIN actors actor ON actor.org_id=event.org_id AND actor.id=event.actor_id
 		LEFT JOIN messages message ON message.org_id=event.org_id AND message.id=event.subject_id
 		LEFT JOIN message_agent_provenance provenance ON provenance.message_id=message.id
@@ -359,7 +362,7 @@ func (service *Service) dispatchAgent(ctx context.Context, orgID, agentID string
 	events := make([]event, 0)
 	for rows.Next() {
 		var item event
-		if err := rows.Scan(&item.seq, &item.kind, &item.actorID, &item.actorType, &item.chatID, &item.subjectID, &item.threadRootID, &item.body, &item.mentioned, &item.sourceDepth); err != nil {
+		if err := rows.Scan(&item.seq, &item.kind, &item.actorID, &item.actorType, &item.chatID, &item.subjectID, &item.threadRootID, &item.body, &item.mentioned, &item.sourceDepth, &item.timezone, &item.data); err != nil {
 			rows.Close()
 			return err
 		}
@@ -408,6 +411,13 @@ func (service *Service) dispatchAgent(ctx context.Context, orgID, agentID string
 				"source_chat_id": item.chatID, "chat_id": runChatID,
 				"thread_root_id": item.threadRootID, "message_body": item.body,
 				"trigger_type": trigger.Type, "trigger_id": trigger.ID,
+				// Who caused the event and their timezone, so an agent can
+				// answer the requester and read "by Friday" in their time.
+				"actor_id": item.actorID, "actor_timezone": item.timezone,
+			}
+			if trigger.Type == "event" {
+				// Event data names the subject, such as who joined a chat.
+				payloadData["event_data"] = item.data
 			}
 			if trigger.Type == "command" {
 				var config commandConfig

@@ -606,11 +606,20 @@ type DirectMessageInput struct {
 // chat with the agent. The person must already share a chat with the agent,
 // and the per-person daily cap applies.
 func (s *Service) SendDirectMessage(ctx context.Context, agent identity.User, runID string, input DirectMessageInput) (message.Message, error) {
-	if uuid.Validate(input.ActorID) != nil || uuid.Validate(input.ClientMsgID) != nil || uuid.Validate(runID) != nil {
-		return message.Message{}, fmt.Errorf("%w: actor_id, client_msg_id and run_id must be UUIDs", ErrInvalid)
+	if err := s.checkDirectRecipient(ctx, agent, input.ActorID, input.ClientMsgID, runID); err != nil {
+		return message.Message{}, err
 	}
-	if input.ActorID == agent.ActorID {
-		return message.Message{}, fmt.Errorf("%w: an agent cannot message itself", ErrInvalid)
+	return s.deliverDirect(ctx, agent, runID, input.ActorID, input.ClientMsgID, input.Body, input.BodyFormat, nil)
+}
+
+// checkDirectRecipient applies the rules of agent direct messages: the person
+// shares a chat with the agent and is under the per-person daily cap.
+func (s *Service) checkDirectRecipient(ctx context.Context, agent identity.User, actorID, clientMsgID, runID string) error {
+	if uuid.Validate(actorID) != nil || uuid.Validate(clientMsgID) != nil || uuid.Validate(runID) != nil {
+		return fmt.Errorf("%w: actor_id, client_msg_id and run_id must be UUIDs", ErrInvalid)
+	}
+	if actorID == agent.ActorID {
+		return fmt.Errorf("%w: an agent cannot message itself", ErrInvalid)
 	}
 	var shared bool
 	var sentToday int
@@ -621,17 +630,41 @@ func (s *Service) SendDirectMessage(ctx context.Context, agent identity.User, ru
 			WHERE mine.org_id=$1 AND mine.actor_id=$2 AND theirs.actor_id=$3),
 		(SELECT count(*) FROM messages m JOIN chats c ON c.org_id=m.org_id AND c.id=m.chat_id AND c.kind='direct'
 			WHERE m.org_id=$1 AND m.actor_id=$2 AND m.created_at>$4 AND c.direct_pair_key=$5)`,
-		agent.OrgID, agent.ActorID, input.ActorID, s.now().UTC().Add(-24*time.Hour), pairKey(agent.ActorID, input.ActorID)).Scan(&shared, &sentToday)
+		agent.OrgID, agent.ActorID, actorID, s.now().UTC().Add(-24*time.Hour), pairKey(agent.ActorID, actorID)).Scan(&shared, &sentToday)
 	if err != nil {
-		return message.Message{}, err
+		return err
 	}
 	if !shared {
-		return message.Message{}, ErrForbidden
+		return ErrForbidden
 	}
 	if sentToday >= s.limits.MaxDirectMessagesPerPersonPerDay {
-		return message.Message{}, fmt.Errorf("%w: daily direct message limit for this person", ErrLimit)
+		return fmt.Errorf("%w: daily direct message limit for this person", ErrLimit)
 	}
-	return s.deliverDirect(ctx, agent, runID, input.ActorID, input.ClientMsgID, input.Body, input.BodyFormat, nil)
+	return nil
+}
+
+// DirectCardInput is a post_card delivered privately to one person.
+type DirectCardInput struct {
+	ActorID     string
+	ClientMsgID string
+	Body        string
+	BodyFormat  string
+	Blocks      *message.Blocks
+}
+
+// SendDirectCard delivers an agent card to one person in their direct chat
+// with the agent: a private report or summary that needs buttons or sources.
+// It follows the rules of SendDirectMessage (a shared chat, the per-person
+// daily cap) and is bounded by them instead of a confirmation, like
+// collection reminders.
+func (s *Service) SendDirectCard(ctx context.Context, agent identity.User, runID string, input DirectCardInput) (message.Message, error) {
+	if input.Blocks == nil {
+		return message.Message{}, fmt.Errorf("%w: a direct card needs blocks", ErrInvalid)
+	}
+	if err := s.checkDirectRecipient(ctx, agent, input.ActorID, input.ClientMsgID, runID); err != nil {
+		return message.Message{}, err
+	}
+	return s.deliverDirect(ctx, agent, runID, input.ActorID, input.ClientMsgID, input.Body, input.BodyFormat, input.Blocks)
 }
 
 func pairKey(left, right string) string {

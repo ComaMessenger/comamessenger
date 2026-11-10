@@ -64,8 +64,8 @@ func interactiveTools(executor *Executor, object func([]string, map[string]any) 
 	bodyFormat := map[string]any{"type": "string", "enum": []string{"plain", "markdown"}}
 	timestamp := map[string]any{"type": "string", "format": "date-time"}
 	return []Tool{
-		{Definition: Definition{Name: "post_card", Description: "Post a card with optional buttons and sources. body is the plain-text fallback; when omitted it is generated from the card. Pressing a button starts a new run of this agent with input.trigger_type=message_action.", Mode: "write", RequiredScope: agent.ScopeMessagesInteractive, NoConfirmation: true,
-			InputSchema: object([]string{"chat_id", "client_msg_id", "blocks"}, map[string]any{"chat_id": uuidSchema, "client_msg_id": uuidSchema, "thread_root_id": uuidSchema, "body": map[string]any{"type": "string", "maxLength": 65536}, "body_format": bodyFormat, "mentioned_actor_ids": map[string]any{"type": "array", "maxItems": 100, "uniqueItems": true, "items": uuidSchema}, "blocks": blocks})}, Handler: executor.postCard},
+		{Definition: Definition{Name: "post_card", Description: "Post a card with optional buttons and sources. Give chat_id to post into a chat, or direct_actor_id to deliver it privately to one person who shares a chat with this agent (the per-person daily direct message limit applies; the result has the direct chat_id). body is the plain-text fallback; when omitted it is generated from the card. Pressing a button starts a new run of this agent with input.trigger_type=message_action.", Mode: "write", RequiredScope: agent.ScopeMessagesInteractive, NoConfirmation: true,
+			InputSchema: object([]string{"client_msg_id", "blocks"}, map[string]any{"chat_id": uuidSchema, "direct_actor_id": uuidSchema, "client_msg_id": uuidSchema, "thread_root_id": uuidSchema, "body": map[string]any{"type": "string", "maxLength": 65536}, "body_format": bodyFormat, "mentioned_actor_ids": map[string]any{"type": "array", "maxItems": 100, "uniqueItems": true, "items": uuidSchema}, "blocks": blocks})}, Handler: executor.postCard},
 		{Definition: Definition{Name: "update_card", Description: "Replace the card of a message this agent posted. Existing button responses are kept for actions with the same id.", Mode: "write", RequiredScope: agent.ScopeMessagesInteractive, NoConfirmation: true,
 			InputSchema: object([]string{"message_id", "blocks"}, map[string]any{"message_id": uuidSchema, "blocks": blocks, "body": map[string]any{"type": "string", "maxLength": 65536}, "body_format": bodyFormat, "expected_version": map[string]any{"type": "integer", "minimum": 1}})}, Handler: executor.updateCard},
 		{Definition: Definition{Name: "get_reactions", Description: "Read reactions on a message and which human chat members have not reacted yet.", Mode: "read", RequiredScope: agent.ScopeMessagesRead,
@@ -98,6 +98,7 @@ func interactiveTools(executor *Executor, object func([]string, map[string]any) 
 func (executor *Executor) postCard(ctx context.Context, invocation Invocation) (any, error) {
 	var input struct {
 		ChatID            string          `json:"chat_id"`
+		DirectActorID     string          `json:"direct_actor_id"`
 		ClientMsgID       string          `json:"client_msg_id"`
 		ThreadRootID      *string         `json:"thread_root_id"`
 		Body              string          `json:"body"`
@@ -107,6 +108,21 @@ func (executor *Executor) postCard(ctx context.Context, invocation Invocation) (
 	}
 	if err := json.Unmarshal(invocation.Arguments, &input); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrInvalid, err)
+	}
+	if (input.ChatID == "") == (input.DirectActorID == "") {
+		return nil, fmt.Errorf("%w: give exactly one of chat_id or direct_actor_id", ErrInvalid)
+	}
+	if input.DirectActorID != "" {
+		if input.ThreadRootID != nil || len(input.MentionedActorIDs) > 0 {
+			return nil, fmt.Errorf("%w: a direct card has no thread or mentions", ErrInvalid)
+		}
+		service, err := executor.interactiveService()
+		if err != nil {
+			return nil, err
+		}
+		return service.SendDirectCard(ctx, invocation.User, invocation.RunID, interactive.DirectCardInput{
+			ActorID: input.DirectActorID, ClientMsgID: input.ClientMsgID, Body: input.Body, BodyFormat: input.BodyFormat, Blocks: input.Blocks,
+		})
 	}
 	created, _, err := executor.services.Messages.CreateForAgentRun(ctx, invocation.User, input.ChatID, message.CreateInput{
 		ClientMsgID: input.ClientMsgID, Body: input.Body, BodyFormat: input.BodyFormat, ThreadRootID: input.ThreadRootID, ReplyToID: input.ThreadRootID,
