@@ -9,7 +9,7 @@ func TestToolDefinitionsCompileAndRejectUnknownFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tools) != 10 || len(order) != 10 {
+	if len(tools) != 17 || len(order) != 17 {
 		t.Fatalf("tools=%d order=%d", len(tools), len(order))
 	}
 	definition := tools["get_chat_messages"].Definition
@@ -23,5 +23,14 @@ func TestToolDefinitionsCompileAndRejectUnknownFields(t *testing.T) {
 	}
 	if tools["post_message"].Definition.Mode != "write" || tools["post_message"].Definition.RequiredScope != "messages:write" {
 		t.Fatalf("post_message definition=%+v", tools["post_message"].Definition)
+	}
+	for name, scope := range map[string]string{"post_card": "messages:interactive", "update_card": "messages:interactive", "start_collection": "messages:interactive", "schedule_followup": "followups:write"} {
+		definition := tools[name].Definition
+		if definition.Mode != "write" || string(definition.RequiredScope) != scope || !definition.NoConfirmation {
+			t.Fatalf("%s definition=%+v", name, definition)
+		}
+	}
+	if direct := tools["send_direct_message"].Definition; direct.Mode != "write" || direct.NoConfirmation {
+		t.Fatalf("send_direct_message must follow the confirmation policy: %+v", direct)
 	}
 }

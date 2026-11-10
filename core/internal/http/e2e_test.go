@@ -828,8 +828,21 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 		t.Fatalf("pending confirmation = %+v", confirmation)
 	}
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agents/tool-confirmations/"+confirmation.ID+"/approve", owner.AccessToken, nil, standardhttp.StatusOK, &confirmation)
-	if confirmation.Status != "completed" {
+	if confirmation.Status != "completed" || confirmation.CardMessageID == nil {
 		t.Fatalf("approved confirmation = %+v", confirmation)
+	}
+	// The pending confirmation is mirrored by a card in the run's chat and
+	// closed by the decision taken in the approvals queue.
+	var cardWindow message.Window
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/messages/"+*confirmation.CardMessageID+"/context?limit=3", owner.AccessToken, nil, standardhttp.StatusOK, &cardWindow)
+	var confirmationCard message.Message
+	for _, item := range cardWindow.Messages {
+		if item.ID == *confirmation.CardMessageID {
+			confirmationCard = item
+		}
+	}
+	if confirmationCard.Blocks == nil || confirmationCard.Blocks.Card == nil || confirmationCard.Blocks.Card.Status.Label != "Done" || !confirmationCard.Blocks.Actions[0].Closed {
+		t.Fatalf("confirmation card = %+v", confirmationCard)
 	}
 	var recalled []agentmemory.Entry
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agent-tools/recall", createdAgentKey.Secret, map[string]any{"run_id": runtimeRun.ID, "lease_token": runtimeRun.LeaseToken, "correlation_id": runtimeRun.CorrelationID, "tool_call_id": e2eID(t), "arguments": map[string]any{"namespace": "e2e", "keys": []string{"preference"}}}, standardhttp.StatusOK, &recalled)
@@ -868,14 +881,15 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 
 	var unread userstate.UnreadSnapshot
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/unread", owner.AccessToken, nil, standardhttp.StatusOK, &unread)
-	if len(unread.Chats) != 1 || unread.Chats[0].UnreadCount != 1 || unread.Chats[0].MentionCount != 1 {
+	// One mention from the member plus the agent's confirmation card.
+	if len(unread.Chats) != 1 || unread.Chats[0].UnreadCount != 2 || unread.Chats[0].MentionCount != 1 {
 		t.Fatalf("owner unread = %+v", unread)
 	}
 	var read userstate.ReadMarker
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/chats/"+group.ID+"/read", owner.AccessToken, map[string]any{
-		"last_read_seq": second.CreatedSeq,
+		"last_read_seq": max(second.CreatedSeq, confirmationCard.CreatedSeq),
 	}, standardhttp.StatusOK, &read)
-	if read.LastReadSeq != second.CreatedSeq {
+	if read.LastReadSeq != max(second.CreatedSeq, confirmationCard.CreatedSeq) {
 		t.Fatalf("read marker = %+v", read)
 	}
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/unread", owner.AccessToken, nil, standardhttp.StatusOK, &unread)
