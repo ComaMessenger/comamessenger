@@ -248,22 +248,15 @@ func (executor *Executor) sendDirectMessage(ctx context.Context, invocation Invo
 
 // postConfirmationCard mirrors a new pending confirmation into the run's chat.
 // It is best effort: the approvals queue remains authoritative, so a chat
-// where the agent cannot post simply gets no card. Argument values are shown
-// only when the call targets the same chat, so a card never leaks content
-// meant for another chat or a direct message.
+// where the agent cannot post simply gets no card. Everyone in the chat sees
+// the card, so it shows argument values only for writes into that same chat
+// (see cardArguments); everything else stays in the approvals queue.
 func (executor *Executor) postConfirmationCard(ctx context.Context, invocation Invocation, confirmation *Confirmation) {
 	var chatID, threadRootID *string
 	if err := executor.pool.QueryRow(ctx, `SELECT chat_id, thread_root_id FROM agent_runs WHERE org_id=$1 AND id=$2`, invocation.User.OrgID, invocation.RunID).Scan(&chatID, &threadRootID); err != nil || chatID == nil {
 		return
 	}
-	arguments := json.RawMessage(`{}`)
-	var target struct {
-		ChatID string `json:"chat_id"`
-	}
-	_ = json.Unmarshal(invocation.Arguments, &target)
-	if confirmation.ToolName != "send_direct_message" && (target.ChatID == "" || target.ChatID == *chatID) {
-		arguments = invocation.Arguments
-	}
+	arguments := executor.cardArguments(ctx, invocation, confirmation.ToolName, *chatID)
 	card, err := executor.services.Messages.CreateConfirmationCard(ctx, invocation.User, message.ConfirmationCardInput{
 		ChatID: *chatID, ThreadRootID: threadRootID, RunID: invocation.RunID, ConfirmationID: confirmation.ID,
 		ToolName: confirmation.ToolName, Arguments: arguments,
@@ -315,4 +308,51 @@ func (executor *Executor) DecideFromCard(ctx context.Context, user identity.User
 	default:
 		return err
 	}
+}
+
+// cardVisibleArguments lists the tools whose arguments a confirmation card may
+// show to the chat, and which of them: the text the agent would post there.
+var cardVisibleArguments = map[string][]string{
+	"post_message":    {"chat_id", "body", "body_format"},
+	"reply_in_thread": {"chat_id", "body", "body_format", "thread_root_id"},
+	"post_card":       {"chat_id", "body", "body_format", "blocks"},
+}
+
+// cardArguments is what a confirmation card in chatID shows. Only writes
+// into that chat show their text; a collection shows its reminder text and
+// how many people it would reach, so the person approving sees the reach.
+// Memory values, external system arguments, reactions on messages of other
+// chats and direct messages never appear on a card.
+func (executor *Executor) cardArguments(ctx context.Context, invocation Invocation, toolName, chatID string) json.RawMessage {
+	var arguments map[string]any
+	if json.Unmarshal(invocation.Arguments, &arguments) != nil {
+		return json.RawMessage(`{}`)
+	}
+	shown := map[string]any{}
+	if keys, ok := cardVisibleArguments[toolName]; ok && arguments["chat_id"] == chatID {
+		for _, key := range keys {
+			if value, exists := arguments[key]; exists {
+				shown[key] = value
+			}
+		}
+	}
+	if toolName == "start_collection" {
+		var messageChat string
+		messageID, _ := arguments["message_id"].(string)
+		if executor.pool.QueryRow(ctx, `SELECT chat_id::text FROM messages WHERE org_id=$1 AND id=$2`, invocation.User.OrgID, messageID).Scan(&messageChat) == nil && messageChat == chatID {
+			if count, err := executor.collectionRecipients(ctx, invocation, arguments); err == nil {
+				shown["recipients"] = count
+			}
+			for _, key := range []string{"reminder_channel", "reminder_text", "max_reminders"} {
+				if value, exists := arguments[key]; exists {
+					shown[key] = value
+				}
+			}
+		}
+	}
+	encoded, err := json.Marshal(shown)
+	if err != nil {
+		return json.RawMessage(`{}`)
+	}
+	return encoded
 }

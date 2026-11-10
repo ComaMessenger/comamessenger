@@ -547,6 +547,9 @@ func (s *Service) sendReminders(ctx context.Context, tx pgx.Tx, collection Colle
 	}
 	if len(eligible) > 0 {
 		agent := identity.User{ActorID: collection.AgentID, OrgID: collection.orgID, OrgRole: "member"}
+		// The executor decided on direct reminders when the collection was
+		// started; limits and quiet hours still apply to every delivery.
+		ctx := message.WithApprovedWrite(ctx)
 		round := strconv.FormatInt(collection.NextReminderAt.Unix(), 10)
 		source := &message.Blocks{Version: message.BlocksVersion, Sources: []message.Source{{Kind: "message", MessageID: collection.MessageID}}}
 		messageIDs := map[string]*string{}

@@ -111,6 +111,7 @@ type Service struct {
 	afterCommit  func(orgID string, highWatermark int64)
 	actionHook   ActionHook
 	decider      ConfirmationDecider
+	directGuard  DirectGuard
 }
 
 func NewService(pool *pgxpool.Pool, maxBodyBytes, maxPageSize int, afterCommit func(orgID string, highWatermark int64)) *Service {
@@ -169,12 +170,27 @@ func (s *Service) create(ctx context.Context, user identity.User, chatID string,
 	}
 	// An agent posts only to chats its published version writes to; chats
 	// it only reads are sources, never destinations.
-	var readOnly bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM agents WHERE org_id=$1 AND actor_id=$2 AND $3::uuid=ANY(read_only_chat_ids))`, user.OrgID, user.ActorID, chatID).Scan(&readOnly); err != nil {
+	var isAgent, readOnly bool
+	if err := tx.QueryRow(ctx, `SELECT true, $3::uuid=ANY(read_only_chat_ids) FROM agents WHERE org_id=$1 AND actor_id=$2`, user.OrgID, user.ActorID, chatID).Scan(&isAgent, &readOnly); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return Message{}, false, fmt.Errorf("check agent chat role: %w", err)
 	}
 	if readOnly {
 		return Message{}, false, ErrForbidden
+	}
+	// Second line behind the tool executor: an agent writing to a person
+	// in a direct chat follows the «writes to people directly» policy, the
+	// per-person limits and quiet hours, whatever path the write took.
+	if isAgent && kind == "direct" {
+		if s.directGuard == nil {
+			return Message{}, false, ErrForbidden
+		}
+		write := DirectWrite{OrgID: user.OrgID, AgentID: user.ActorID, ChatID: chatID, Final: final}
+		if provenance != nil {
+			write.RunID = provenance.RunID
+		}
+		if err := s.directGuard(ctx, tx, write); err != nil {
+			return Message{}, false, err
+		}
 	}
 
 	fingerprint := commandFingerprint(chatID, input)

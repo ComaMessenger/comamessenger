@@ -42,8 +42,9 @@ type Limits struct {
 	// MaxRemindersPerPersonPerDay caps reminders one person receives from all
 	// agents in a rolling 24 hours.
 	MaxRemindersPerPersonPerDay int
-	// MaxDirectMessagesPerPersonPerDay caps send_direct_message deliveries to
-	// one person from one agent in a rolling 24 hours.
+	// MaxDirectMessagesPerPersonPerDay caps agent messages one person gets
+	// in direct chats from all agents in a rolling 24 hours (and, as before,
+	// send_direct_message deliveries from one agent).
 	MaxDirectMessagesPerPersonPerDay int
 	MaxOpenCollectionsPerAgent       int
 	MaxPendingFollowupsPerAgent      int
@@ -73,13 +74,19 @@ type Service struct {
 	logger   *slog.Logger
 	limits   Limits
 	now      func() time.Time
+	// confirmationFloor lists tools the server always confirms.
+	confirmationFloor map[string]bool
 }
 
 func NewService(pool *pgxpool.Pool, messages *message.Service, chats *chat.Service, logger *slog.Logger, limits Limits) *Service {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Service{pool: pool, messages: messages, chats: chats, logger: logger, limits: limits, now: time.Now}
+	service := &Service{pool: pool, messages: messages, chats: chats, logger: logger, limits: limits, now: time.Now}
+	if messages != nil {
+		messages.SetDirectGuard(service.guardDirect)
+	}
+	return service
 }
 
 // SetClock replaces the time source; tests use it to move past deadlines.
