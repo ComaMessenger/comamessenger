@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -204,6 +205,9 @@ type UpdateInput struct {
 	Tone                        *string       `json:"tone"`
 	// ConfirmationPolicy changes only the named tools.
 	ConfirmationPolicy map[string]string `json:"confirmation_policy"`
+	// AcknowledgeLoosened confirms, with enabled=true, that the listed
+	// actions will run without a person (see LooseningError).
+	AcknowledgeLoosened bool `json:"acknowledge_loosened"`
 }
 
 type PlatformSettings struct {
@@ -875,7 +879,7 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 	revokedKeyIDs := make([]string, 0)
 	if input.Enabled != nil {
 		if *input.Enabled {
-			revokedKeyIDs, err = service.publishDraft(ctx, tx, current, agentID, prospective, draftVersion)
+			revokedKeyIDs, err = service.publishDraft(ctx, tx, current, agentID, prospective, draftVersion, input.AcknowledgeLoosened)
 
 			if err != nil {
 				return Agent{}, err
@@ -899,7 +903,14 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 	return service.Get(ctx, current, agentID)
 }
 
-func (service *Service) Publish(ctx context.Context, current identity.User, agentID string) (Agent, error) {
+// PublishOptions are the explicit decisions a publish may carry.
+type PublishOptions struct {
+	// AcknowledgeLoosened confirms that actions listed by a previous
+	// LooseningError will run without a person.
+	AcknowledgeLoosened bool `json:"acknowledge_loosened"`
+}
+
+func (service *Service) Publish(ctx context.Context, current identity.User, agentID string, options PublishOptions) (Agent, error) {
 	if !canPublish(current) {
 		return Agent{}, ErrForbidden
 	}
@@ -926,7 +937,7 @@ func (service *Service) Publish(ctx context.Context, current identity.User, agen
 		return Agent{}, err
 	}
 	applyConfirmationFloor(prospective.ConfirmationPolicy, service.confirmationFloor)
-	revokedKeyIDs, err := service.publishDraft(ctx, tx, current, agentID, prospective, *locked.DraftVersion)
+	revokedKeyIDs, err := service.publishDraft(ctx, tx, current, agentID, prospective, *locked.DraftVersion, options.AcknowledgeLoosened)
 	if err != nil {
 		return Agent{}, err
 	}
@@ -1807,7 +1818,7 @@ func inputFromAgent(value Agent) CreateInput {
 	}
 }
 
-func (service *Service) publishDraft(ctx context.Context, tx pgx.Tx, current identity.User, agentID string, input CreateInput, version int) ([]string, error) {
+func (service *Service) publishDraft(ctx context.Context, tx pgx.Tx, current identity.User, agentID string, input CreateInput, version int, acknowledgeLoosened bool) ([]string, error) {
 	var hasLegacyCredential, hasActiveKey, hasTrigger bool
 	if err := tx.QueryRow(ctx, `SELECT
 		EXISTS(SELECT 1 FROM agent_provider_credentials WHERE org_id=$1 AND agent_id=$2),
@@ -1840,10 +1851,40 @@ func (service *Service) publishDraft(ctx context.Context, tx pgx.Tx, current ide
 	if len(blockers) > 0 {
 		return nil, fmt.Errorf("%w: %s", ErrNotReady, strings.Join(blockers, ","))
 	}
-	var previousPolicyRaw []byte
+	var previousPolicyRaw, previousBindingsRaw []byte
 	var previousVersion *int
-	if err := tx.QueryRow(ctx, `SELECT confirmation_policy,published_version FROM agents WHERE org_id=$1 AND actor_id=$2`, current.OrgID, agentID).Scan(&previousPolicyRaw, &previousVersion); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT confirmation_policy,mcp_bindings,published_version FROM agents WHERE org_id=$1 AND actor_id=$2`, current.OrgID, agentID).Scan(&previousPolicyRaw, &previousBindingsRaw, &previousVersion); err != nil {
 		return nil, fmt.Errorf("read published confirmation policy: %w", err)
+	}
+	// What stops waiting for a person compared with the version in force
+	// (or, on the first publish, with the safe defaults), built-in and
+	// external tools alike. The person publishing confirms it explicitly.
+	previousPolicy := map[string]string{}
+	previousBindings := []MCPBinding{}
+	if previousVersion == nil {
+		for tool, mode := range confirmationDefaults {
+			previousPolicy[tool] = mode
+		}
+	} else {
+		_ = json.Unmarshal(previousPolicyRaw, &previousPolicy)
+		_ = json.Unmarshal(previousBindingsRaw, &previousBindings)
+	}
+	loosened := loosenedTools(previousPolicy, input.ConfirmationPolicy)
+	nextExternal, err := autoExternalWrites(ctx, tx, current.OrgID, input.MCPBindings)
+	if err != nil {
+		return nil, err
+	}
+	previousExternal, err := autoExternalWrites(ctx, tx, current.OrgID, previousBindings)
+	if err != nil {
+		return nil, err
+	}
+	for _, key := range nextExternal {
+		if !slices.Contains(previousExternal, key) {
+			loosened = append(loosened, key)
+		}
+	}
+	if len(loosened) > 0 && !acknowledgeLoosened {
+		return nil, &LooseningError{Loosened: loosened}
 	}
 	if _, err := tx.Exec(ctx, `UPDATE agents SET recipe=$3,recipe_version=$4,description=$5,enabled=true,allowed_scopes=$6,llm_connection_id=$7,provider=$8,model=$9,
 		endpoint_url=$10,external_data_sharing_approved=$11,daily_cost_limit=NULLIF($12,'')::numeric,monthly_cost_limit=NULLIF($13,'')::numeric,
@@ -1861,17 +1902,12 @@ func (service *Service) publishDraft(ctx context.Context, tx pgx.Tx, current ide
 	}
 	// Every publish records the confirmation policy it puts in force and the
 	// tools that stop waiting for a person compared with the previous one.
-	previousPolicy := map[string]string{}
-	_ = json.Unmarshal(previousPolicyRaw, &previousPolicy)
-	if previousVersion == nil {
-		previousPolicy = map[string]string{}
-	}
 	policyAuditID, err := id.New()
 	if err != nil {
 		return nil, err
 	}
 	policyMetadata, _ := json.Marshal(map[string]any{"version": version, "previous_version": previousVersion, "confirmation_policy": input.ConfirmationPolicy,
-		"loosened": loosenedTools(previousPolicy, input.ConfirmationPolicy), "mcp_bindings": bindingsOrEmpty(input.MCPBindings)})
+		"loosened": loosened, "acknowledged": acknowledgeLoosened, "mcp_bindings": bindingsOrEmpty(input.MCPBindings)})
 	if _, err := tx.Exec(ctx, `INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,'agent.confirmation_policy.publish','agent',$4,$5)`, policyAuditID, current.OrgID, current.ActorID, agentID, policyMetadata); err != nil {
 		return nil, fmt.Errorf("audit agent confirmation policy: %w", err)
 	}

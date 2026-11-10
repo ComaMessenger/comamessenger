@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/comamessenger/comamessenger/core/internal/id"
@@ -208,7 +210,37 @@ func (service *Service) UpdateMCPServer(ctx context.Context, current identity.Us
 			return MCPServer{}, err
 		}
 		defer tx.Rollback(ctx)
-		binding, _ := json.Marshal([]mcpBinding{{ConnectionID: serverID, AllowedTools: tools, RequireWriteConfirmation: requireConfirmation}})
+		// The old per-agent API edits the published binding directly, so it
+		// may only tighten it: more tools or fewer confirmations go through
+		// the builder and a publish. Per-tool choices of kept tools survive.
+		var raw []byte
+		if err := tx.QueryRow(ctx, `SELECT COALESCE((SELECT item FROM agents, jsonb_array_elements(mcp_bindings) item
+			WHERE org_id=$1 AND actor_id=$2 AND item->>'connection_id'=$3::text LIMIT 1),'{}'::jsonb)`, current.OrgID, agentID, serverID).Scan(&raw); err != nil {
+			return MCPServer{}, err
+		}
+		bound := mcpBinding{}
+		_ = json.Unmarshal(raw, &bound)
+		for _, tool := range tools {
+			if !slices.Contains(bound.AllowedTools, tool) {
+				return MCPServer{}, fmt.Errorf("%w: adding tools is done in the agent builder and takes effect on publish", ErrInvalid)
+			}
+		}
+		if bound.RequireWriteConfirmation && !requireConfirmation {
+			return MCPServer{}, fmt.Errorf("%w: removing confirmations is done in the agent builder and takes effect on publish", ErrInvalid)
+		}
+		var policy map[string]string
+		for tool, mode := range bound.ConfirmationPolicy {
+			if slices.Contains(tools, tool) {
+				if policy == nil {
+					policy = map[string]string{}
+				}
+				if requireConfirmation && !bound.RequireWriteConfirmation {
+					mode = "confirm"
+				}
+				policy[tool] = mode
+			}
+		}
+		binding, _ := json.Marshal([]mcpBinding{{ConnectionID: serverID, AllowedTools: tools, RequireWriteConfirmation: requireConfirmation, ConfirmationPolicy: policy}})
 		if err := setLegacyBinding(ctx, tx, current.OrgID, agentID, serverID, binding); err != nil {
 			return MCPServer{}, err
 		}

@@ -301,3 +301,30 @@ func TestConfirmationCardShowsOnlyWhatTheChatMaySee(t *testing.T) {
 		t.Fatalf("collection card lacks its reach: %s", text)
 	}
 }
+
+// TestApprovedCallFollowsCurrentChatRoles covers review finding 7c: a call
+// approved after the agent's chat roles changed runs under the new roles.
+func TestApprovedCallFollowsCurrentChatRoles(t *testing.T) {
+	w := newDirectWorld(t, interactive.DefaultLimits(), time.Date(2026, 11, 12, 12, 0, 0, 0, time.UTC))
+	if _, err := w.pool.Exec(t.Context(), `UPDATE agents SET allowed_scopes=allowed_scopes||ARRAY['reactions:write'], confirmation_policy=confirmation_policy || '{"add_reaction":"confirm"}' WHERE actor_id=$1`, w.agentID); err != nil {
+		t.Fatal(err)
+	}
+	w.authentication.Scopes = append(w.authentication.Scopes, "reactions:write")
+	runID, lease, correlation := w.run(t, w.groupChat, "")
+	pending, err := w.invoke(t, [3]string{runID, lease, correlation}, "add_reaction", `{"message_id":"`+w.groupMessage+`","emoji":"👍"}`)
+	if err != nil || pending.Confirmation == nil {
+		t.Fatalf("reaction confirmation = %+v err=%v", pending, err)
+	}
+	if _, err := w.pool.Exec(t.Context(), `UPDATE agents SET read_only_chat_ids=ARRAY[$2::uuid] WHERE actor_id=$1`, w.agentID, w.groupChat); err != nil {
+		t.Fatal(err)
+	}
+	owner := identity.User{ActorID: w.ownerID, OrgID: w.orgID, OrgRole: "owner"}
+	decided, err := w.executor.DecideConfirmation(t.Context(), owner, pending.Confirmation.ID, true)
+	if err != nil || decided.Status != "failed" {
+		t.Fatalf("approved reaction in a chat that became read-only = %+v err=%v", decided, err)
+	}
+	var reactions int
+	if err := w.pool.QueryRow(t.Context(), `SELECT count(*) FROM reactions WHERE message_id=$1`, w.groupMessage).Scan(&reactions); err != nil || reactions != 0 {
+		t.Fatalf("reactions = %d err=%v", reactions, err)
+	}
+}

@@ -2,6 +2,8 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -283,4 +285,59 @@ func checkBuilderReach(ctx context.Context, tx pgx.Tx, current identity.User, pr
 		}
 	}
 	return nil
+}
+
+// ErrLoosening rejects a publish that lets actions run without a person
+// unless the publisher acknowledged them.
+var ErrLoosening = errors.New("publishing lets actions run without approval")
+
+// LooseningError lists the actions that would stop waiting for a person:
+// built-in tool names and "mcp:<connection>/<tool>" for external systems.
+type LooseningError struct{ Loosened []string }
+
+func (err *LooseningError) Error() string {
+	return ErrLoosening.Error() + ": " + strings.Join(err.Loosened, ", ")
+}
+func (err *LooseningError) Unwrap() error { return ErrLoosening }
+
+// autoExternalWrites lists the external tools that change data and run
+// without a person under the bindings, as "mcp:<connection>/<tool>".
+func autoExternalWrites(ctx context.Context, tx pgx.Tx, orgID string, bindings []MCPBinding) ([]string, error) {
+	result := make([]string, 0)
+	for _, binding := range bindings {
+		var name string
+		var forced, catalogKnown bool
+		var catalog []byte
+		err := tx.QueryRow(ctx, `SELECT name,writes_require_confirmation,tools,tools_refreshed_at IS NOT NULL FROM integration_mcp_connections WHERE org_id=$1 AND id=$2`,
+			orgID, binding.ConnectionID).Scan(&name, &forced, &catalog, &catalogKnown)
+		if errors.Is(err, pgx.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("load MCP connection policy: %w", err)
+		}
+		if forced {
+			continue
+		}
+		var tools []struct {
+			Name     string `json:"name"`
+			ReadOnly bool   `json:"read_only"`
+		}
+		_ = json.Unmarshal(catalog, &tools)
+		readOnly := map[string]bool{}
+		for _, tool := range tools {
+			readOnly[tool.Name] = catalogKnown && tool.ReadOnly
+		}
+		for _, tool := range binding.AllowedTools {
+			if readOnly[tool] {
+				continue
+			}
+			mode, chosen := binding.ConfirmationPolicy[tool]
+			if (chosen && mode == ConfirmationAuto) || (!chosen && !binding.RequireWriteConfirmation) {
+				result = append(result, "mcp:"+name+"/"+tool)
+			}
+		}
+	}
+	sort.Strings(result)
+	return result, nil
 }

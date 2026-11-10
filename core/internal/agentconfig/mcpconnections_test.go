@@ -458,3 +458,32 @@ func TestMaskShowsAtMostLastFour(t *testing.T) {
 		}
 	}
 }
+
+// TestLegacyServerUpdateOnlyTightensThePublishedBinding covers review
+// finding 7b: the old per-agent API edits the published binding directly,
+// so it may remove tools or add confirmation but not loosen, and it keeps
+// the per-tool choices of the tools it keeps.
+func TestLegacyServerUpdateOnlyTightensThePublishedBinding(t *testing.T) {
+	f := newIntegrationFixture(t)
+	confirm := false
+	server, err := f.service.CreateMCPServer(t.Context(), f.owner, f.agentID, CreateMCPServerInput{Name: "accounting", EndpointURL: "https://mcp.example.test/rpc",
+		Enabled: true, AllowedTools: []string{"get_slots", "assign_instructor"}, TimeoutMS: 5000, MaxOutputBytes: 32768, RequireWriteConfirmation: &confirm})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.pool.Exec(t.Context(), `UPDATE agents SET mcp_bindings=jsonb_set(mcp_bindings,'{0,confirmation_policy}','{"assign_instructor":"confirm"}') WHERE actor_id=$1`, f.agentID); err != nil {
+		t.Fatal(err)
+	}
+	more := []string{"get_slots", "assign_instructor", "delete_slot"}
+	if _, err := f.service.UpdateMCPServer(t.Context(), f.owner, f.agentID, server.ID, UpdateMCPServerInput{AllowedTools: &more}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("adding a tool through the legacy API error = %v", err)
+	}
+	fewer := []string{"assign_instructor"}
+	if _, err := f.service.UpdateMCPServer(t.Context(), f.owner, f.agentID, server.ID, UpdateMCPServerInput{AllowedTools: &fewer}); err != nil {
+		t.Fatal(err)
+	}
+	var mode string
+	if err := f.pool.QueryRow(t.Context(), `SELECT mcp_bindings->0->'confirmation_policy'->>'assign_instructor' FROM agents WHERE actor_id=$1`, f.agentID).Scan(&mode); err != nil || mode != "confirm" {
+		t.Fatalf("per-tool confirmation after a legacy update = %q err=%v", mode, err)
+	}
+}

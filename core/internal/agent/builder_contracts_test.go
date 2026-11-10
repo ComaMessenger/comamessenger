@@ -65,7 +65,7 @@ func TestConfirmationToneAndChatRolesFollowDraftPublishAndRollback(t *testing.T)
 	if _, err := service.CreateKey(t.Context(), owner, created.ID, CreateKeyInput{Name: "runtime", Scopes: []Scope{ScopeMessagesRead}, RateLimitPerMinute: 10}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Publish(t.Context(), owner, created.ID); err != nil {
+	if _, err := service.Publish(t.Context(), owner, created.ID, PublishOptions{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -93,7 +93,24 @@ func TestConfirmationToneAndChatRolesFollowDraftPublishAndRollback(t *testing.T)
 		liveTone != "" || liveDirect != ConfirmationConfirm || len(liveReadOnly) != 0 {
 		t.Fatalf("live agent before publish tone=%q direct=%q readOnly=%v err=%v", liveTone, liveDirect, liveReadOnly, err)
 	}
-	if _, err := service.Publish(t.Context(), owner, created.ID); err != nil {
+	// An external system whose writes the binding lets run by themselves.
+	connection := "00000000-0000-7000-8000-000000000241"
+	if _, err := pool.Exec(t.Context(), `INSERT INTO integration_mcp_connections(id,org_id,name,endpoint_url,created_by,updated_by,agent_use_allowed,writes_require_confirmation,tools,tools_refreshed_at)
+		VALUES($1,$2,'accounting','https://mcp.example.test/rpc',$3,$3,true,false,'[{"name":"get_slots","read_only":true},{"name":"assign_instructor","read_only":false}]',now())`, connection, agentTestOrgID, agentTestOwnerID); err != nil {
+		t.Fatal(err)
+	}
+	bindings := []MCPBinding{{ConnectionID: connection, AllowedTools: []string{"get_slots", "assign_instructor"}, RequireWriteConfirmation: true, ConfirmationPolicy: map[string]string{"assign_instructor": "auto"}}}
+	if _, err := service.Update(t.Context(), owner, created.ID, UpdateInput{MCPBindings: &bindings}); err != nil {
+		t.Fatal(err)
+	}
+	// Finding 7a: what stops waiting for a person — built-in and external —
+	// must be acknowledged by the person publishing.
+	var loosening *LooseningError
+	if _, err := service.Publish(t.Context(), owner, created.ID, PublishOptions{}); !errors.As(err, &loosening) ||
+		!slices.Equal(loosening.Loosened, []string{"send_direct_message", "mcp:accounting/assign_instructor"}) {
+		t.Fatalf("publish without acknowledging error = %v", err)
+	}
+	if _, err := service.Publish(t.Context(), owner, created.ID, PublishOptions{AcknowledgeLoosened: true}); err != nil {
 		t.Fatal(err)
 	}
 	if err := pool.QueryRow(t.Context(), `SELECT tone,confirmation_policy->>'send_direct_message',read_only_chat_ids::text[] FROM agents WHERE actor_id=$1`, created.ID).Scan(&liveTone, &liveDirect, &liveReadOnly); err != nil ||
@@ -105,10 +122,12 @@ func TestConfirmationToneAndChatRolesFollowDraftPublishAndRollback(t *testing.T)
 		t.Fatal(err)
 	}
 	var audit struct {
-		Version  int      `json:"version"`
-		Loosened []string `json:"loosened"`
+		Version      int      `json:"version"`
+		Loosened     []string `json:"loosened"`
+		Acknowledged bool     `json:"acknowledged"`
 	}
-	if err := json.Unmarshal(auditRaw, &audit); err != nil || audit.Version != 2 || !slices.Equal(audit.Loosened, []string{"send_direct_message"}) {
+	if err := json.Unmarshal(auditRaw, &audit); err != nil || audit.Version != 2 || !audit.Acknowledged ||
+		!slices.Equal(audit.Loosened, []string{"send_direct_message", "mcp:accounting/assign_instructor"}) {
 		t.Fatalf("publish audit = %s, err=%v", auditRaw, err)
 	}
 
