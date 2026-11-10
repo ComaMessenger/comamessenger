@@ -211,6 +211,53 @@ services:
       core:
         condition: service_started
 
+  # Push relay of the published mobile app (docs/runbooks/push-relay.md). Only
+  # the publisher of an app build runs it; ordinary instances leave it off.
+  push-relay-init:
+    profiles: ["relay"]
+    image: pgvector/pgvector:pg16
+    restart: "no"
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-comamessenger}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-comamessenger}
+      PGDATABASE: ${POSTGRES_DB:-comamessenger}
+      RELAY_DATABASE: ${PUSH_RELAY_DATABASE:-coma_push_relay}
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        psql -tAc "SELECT 1 FROM pg_database WHERE datname = '$${RELAY_DATABASE}'" | grep -q 1 \
+          || createdb "$${RELAY_DATABASE}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  push-relay:
+    profiles: ["relay"]
+    build:
+      context: ..
+      dockerfile: core/Dockerfile
+      target: push-relay
+    restart: unless-stopped
+    environment:
+      RELAY_DATABASE_URL: ${PUSH_RELAY_DATABASE_URL:-postgres://comamessenger:comamessenger@postgres:5432/coma_push_relay?sslmode=disable}
+      RELAY_LISTEN: :8090
+      RELAY_TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-}
+      APNS_KEY_FILE: ${PUSH_RELAY_APNS_KEY_FILE:-}
+      APNS_KEY_ID: ${PUSH_RELAY_APNS_KEY_ID:-}
+      APNS_TEAM_ID: ${PUSH_RELAY_APNS_TEAM_ID:-}
+      APNS_TOPIC: ${PUSH_RELAY_APNS_TOPIC:-}
+      APNS_SANDBOX: ${PUSH_RELAY_APNS_SANDBOX:-false}
+      FCM_CREDENTIALS_FILE: ${PUSH_RELAY_FCM_CREDENTIALS_FILE:-}
+    volumes:
+      - ${PUSH_RELAY_KEYS_DIR:-./push-relay-keys}:/keys:ro
+    depends_on:
+      push-relay-init:
+        condition: service_completed_successfully
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${PUSH_RELAY_PORT:-8090}:8090"
+
 volumes:
   postgres-data:
   minio-data:

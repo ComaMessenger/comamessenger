@@ -27,6 +27,7 @@ import { MessageRow } from "./MessageRow";
 import { AgentStreamRow } from "./AgentStreamRow";
 import { ChatIntro } from "./ChatIntro";
 import { ThreadPanel } from "./ThreadPanel";
+import { useChatAgents } from "../agentchat/useChatAgents";
 
 const emptyActorIDs: string[] = [];
 
@@ -75,6 +76,7 @@ export function Conversation({
     staleTime: 30_000,
   });
   const members = membersQuery.data ?? [];
+  const { commands } = useChatAgents(chatID, members);
   const pinnedIDs = useMemo(
     () => new Set((pinsQuery.data ?? []).map((pin) => pin.message_id)),
     [pinsQuery.data],
@@ -400,6 +402,8 @@ export function Conversation({
           onFiles={attachments.add}
           onCancelFile={attachments.cancel}
           onRetryFile={attachments.retry}
+          commands={commands}
+          placeholder={commands.length ? t("acComposerPlaceholder") : undefined}
         />
       </div>
 

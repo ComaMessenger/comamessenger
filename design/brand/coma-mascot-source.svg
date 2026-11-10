@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="368" viewBox="0 0 320 368" fill="none" shape-rendering="crispEdges" role="img" aria-labelledby="coma-title">
+  <title id="coma-title">Coma</title>
+  <g transform="translate(-192 -176)">
+    <path id="body" fill="#4D70C4" d="M298 193H410V218H462V244H487V376H462V418H438V442H417V462H397V482H374V504H284V482H308V462H330V442H348V418H264V401H239V376H213V269H239V244H264V218H298Z"/>
+    <g id="eyes" fill="#242831">
+      <rect x="286" y="273" width="36" height="36"/>
+      <rect x="381" y="294" width="36" height="36"/>
+    </g>
+    <g id="feet" fill="#242831">
+      <rect x="260" y="504" width="48" height="26"/>
+      <rect x="349" y="504" width="48" height="26"/>
+    </g>
+  </g>
+</svg>

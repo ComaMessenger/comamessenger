@@ -24,6 +24,7 @@ import {
   encodeMentions,
   mentionedActorIDs,
   messagePlainText,
+  renderableBlocks,
   updateMentionText,
   type ChatMember,
   type ClientMessage,
@@ -50,6 +51,7 @@ import { ForwardMessageDialog } from "../dialogs/ForwardMessageDialog";
 import { MessageDetailsDialog } from "../dialogs/MessageDetailsDialog";
 import { MessageFile } from "./MessageFile";
 import { useThreadPreview } from "./useThreadPreview";
+import { MessageBlocksView } from "../agentchat/MessageBlocksView";
 
 export type MessageRowProps = {
   message: ClientMessage;
@@ -123,6 +125,10 @@ export function MessageRow({
   const name = author?.display_name ?? (own ? t("you") : t("participant"));
   const isAgent = author?.type === "agent";
   const overlayOpen = menuOpen || pickerOpen;
+  // Unknown block versions and deleted messages fall back to the body text.
+  const blocks = renderableBlocks(message);
+  // With a card the body is the server-generated text fallback of that card.
+  const hideBody = Boolean(blocks?.card);
 
   const reactionGroups = Object.entries(
     (reactionsQuery.data ?? []).reduce<Record<string, { count: number; own: boolean }>>(
@@ -317,13 +323,24 @@ export function MessageRow({
             </div>
           </div>
         ) : (
-          <div className={cx("message__body", message.deleted_at && "message__body--deleted")}>
-            {message.deleted_at ? (
-              <em>{t("messageDeleted")}</em>
-            ) : (
-              <Markdown source={message.body} />
-            )}
-          </div>
+          !hideBody && (
+            <div className={cx("message__body", message.deleted_at && "message__body--deleted")}>
+              {message.deleted_at ? (
+                <em>{t("messageDeleted")}</em>
+              ) : (
+                <Markdown source={message.body} />
+              )}
+            </div>
+          )
+        )}
+        {blocks && !editing && (
+          <MessageBlocksView
+            message={message}
+            blocks={blocks}
+            members={members}
+            authorName={name}
+            onChanged={onChanged}
+          />
         )}
         {!message.deleted_at && message.files.length > 0 && (
           <div className="message__files">

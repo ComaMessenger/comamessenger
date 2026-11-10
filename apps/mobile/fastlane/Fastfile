@@ -68,6 +68,17 @@ def next_android_code(package, json_key)
   codes.map(&:to_i).max.to_i + 1
 end
 
+# Gradle needs a JDK and the Android SDK; fall back to the Android Studio
+# defaults on macOS when the shell does not export them.
+def android_toolchain
+  env = {}
+  jdk = '/Applications/Android Studio.app/Contents/jbr/Contents/Home'
+  env['JAVA_HOME'] = jdk if ENV['JAVA_HOME'].to_s.empty? && File.directory?(jdk)
+  sdk = File.join(ENV.fetch('HOME'), 'Library', 'Android', 'sdk')
+  env['ANDROID_HOME'] = sdk if ENV['ANDROID_HOME'].to_s.empty? && File.directory?(sdk)
+  env
+end
+
 def prebuild(platform, build_number)
   Dir.chdir(APP_DIR) do
     # `pod install` inside prebuild needs the system CocoaPods, not a bundler shim.
@@ -175,7 +186,7 @@ platform :android do
     UI.message("Android beta: #{package} versionCode #{code}")
     prebuild('android', code)
     Dir.chdir(File.join(APP_DIR, 'android')) do
-      sh({ 'COMA_BUILD_NUMBER' => code.to_s }, './gradlew', 'bundleRelease')
+      sh({ 'COMA_BUILD_NUMBER' => code.to_s }.merge(android_toolchain), './gradlew', 'bundleRelease')
     end
     aab = File.join(APP_DIR, 'android/app/build/outputs/bundle/release/app-release.aab')
     UI.user_error!("Gradle produced no #{aab}") unless File.file?(aab)
