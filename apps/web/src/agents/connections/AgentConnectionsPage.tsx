@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { AgentLlmConnection, MessengerAPI } from "@comamessenger/core";
 import { Plug, Plus, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { messageOf } from "../errors";
+import { messageOf } from "../../errors";
 import {
   Badge,
   Button,
@@ -12,7 +12,7 @@ import {
   FormError,
   SelectField,
   Skeleton,
-} from "../ui";
+} from "../../ui";
 
 type Provider = "openai" | "anthropic" | "openai-compatible";
 

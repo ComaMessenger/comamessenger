@@ -30,6 +30,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/files"
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
+	"github.com/comamessenger/comamessenger/core/internal/knowledge"
 	"github.com/comamessenger/comamessenger/core/internal/message"
 	"github.com/comamessenger/comamessenger/core/internal/password"
 	"github.com/comamessenger/comamessenger/core/internal/permission"
@@ -117,6 +118,7 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 		Workspace:       workspaceService,
 		Files:           fileService,
 		Search:          searchService,
+		Knowledge:       knowledge.NewService(pool, fileService, nil, nil),
 		RefreshTokenTTL: 24 * time.Hour, RevokeRealtimeSession: realtimeServer.RevokeSession,
 	})
 	server.Start()
@@ -328,6 +330,9 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/invitations/"+path.Base(acceptURL.Path)+"/accept", "", map[string]any{
 		"display_name": "Admin", "handle": "admin", "password": "admin correct password", "timezone": "UTC",
 	}, standardhttp.StatusCreated, &admin)
+	if len(admin.User.Permissions) != 1 || admin.User.Permissions[0] != permission.KnowledgeManage {
+		t.Fatalf("new administrator default permissions = %#v", admin.User.Permissions)
+	}
 	var updatedAdmin workspace.Member
 	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/organization/members/"+admin.User.ActorID, owner.AccessToken, map[string]any{
 		"permissions": []string{"audit.read"},
@@ -342,6 +347,42 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	}
 	if _, err := pool.Exec(context.Background(), `UPDATE actors SET org_role='member' WHERE id=$1`, admin.User.ActorID); err == nil {
 		t.Fatal("database allowed an administrator with explicit permissions to become a member")
+	}
+
+	// knowledge.manage is the one permission a regular member may receive.
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/knowledge/collections", member.AccessToken, map[string]any{"name": "Регламенты"}, standardhttp.StatusForbidden, nil)
+	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/organization/members/"+member.User.ActorID, owner.AccessToken, map[string]any{
+		"permissions": []string{"audit.read"},
+	}, standardhttp.StatusUnprocessableEntity, nil)
+	var librarian workspace.Member
+	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/organization/members/"+member.User.ActorID, owner.AccessToken, map[string]any{
+		"permissions": []string{"knowledge.manage"},
+	}, standardhttp.StatusOK, &librarian)
+	if librarian.Role != "member" || len(librarian.Permissions) != 1 || librarian.Permissions[0] != permission.KnowledgeManage {
+		t.Fatalf("librarian = %+v", librarian)
+	}
+	var librarianMe identity.User
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/me", member.AccessToken, nil, standardhttp.StatusOK, &librarianMe)
+	if len(librarianMe.Permissions) != 1 || librarianMe.Permissions[0] != permission.KnowledgeManage {
+		t.Fatalf("librarian /me permissions = %#v", librarianMe.Permissions)
+	}
+	var collection knowledge.Collection
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/knowledge/collections", member.AccessToken, map[string]any{"name": "Регламенты"}, standardhttp.StatusCreated, &collection)
+	var knowledgePage knowledge.Document
+	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/knowledge/collections/"+collection.ID+"/documents", member.AccessToken, map[string]any{
+		"kind": "page", "title": "Пропуска", "body": "Пропуск выдаёт администратор.",
+	}, standardhttp.StatusCreated, &knowledgePage)
+	if knowledgePage.Status != "pending" || knowledgePage.Kind != "page" || knowledgePage.Body == nil {
+		t.Fatalf("created page = %+v", knowledgePage)
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/organization/members/"+member.User.ActorID, owner.AccessToken, map[string]any{
+		"permissions": []string{},
+	}, standardhttp.StatusOK, &librarian)
+	e2eRequest(t, server.Client(), standardhttp.MethodDelete, baseURL+"/api/v1/knowledge/documents/"+knowledgePage.ID, member.AccessToken, nil, standardhttp.StatusForbidden, nil)
+	var collections []knowledge.Collection
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/knowledge/collections", member.AccessToken, nil, standardhttp.StatusOK, &collections)
+	if len(collections) != 1 || collections[0].CanManage || collections[0].DocumentCount != 1 {
+		t.Fatalf("member collections = %+v", collections)
 	}
 
 	var organization workspace.Settings
@@ -865,8 +906,21 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 		t.Fatalf("pending confirmation = %+v", confirmation)
 	}
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agents/tool-confirmations/"+confirmation.ID+"/approve", owner.AccessToken, nil, standardhttp.StatusOK, &confirmation)
-	if confirmation.Status != "completed" {
+	if confirmation.Status != "completed" || confirmation.CardMessageID == nil {
 		t.Fatalf("approved confirmation = %+v", confirmation)
+	}
+	// The pending confirmation is mirrored by a card in the run's chat and
+	// closed by the decision taken in the approvals queue.
+	var cardWindow message.Window
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/messages/"+*confirmation.CardMessageID+"/context?limit=3", owner.AccessToken, nil, standardhttp.StatusOK, &cardWindow)
+	var confirmationCard message.Message
+	for _, item := range cardWindow.Messages {
+		if item.ID == *confirmation.CardMessageID {
+			confirmationCard = item
+		}
+	}
+	if confirmationCard.Blocks == nil || confirmationCard.Blocks.Card == nil || confirmationCard.Blocks.Card.Status.Label != "Done" || !confirmationCard.Blocks.Actions[0].Closed {
+		t.Fatalf("confirmation card = %+v", confirmationCard)
 	}
 	var recalled []agentmemory.Entry
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/agent-tools/recall", createdAgentKey.Secret, map[string]any{"run_id": runtimeRun.ID, "lease_token": runtimeRun.LeaseToken, "correlation_id": runtimeRun.CorrelationID, "tool_call_id": e2eID(t), "arguments": map[string]any{"namespace": "e2e", "keys": []string{"preference"}}}, standardhttp.StatusOK, &recalled)
@@ -905,14 +959,15 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 
 	var unread userstate.UnreadSnapshot
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/unread", owner.AccessToken, nil, standardhttp.StatusOK, &unread)
-	if len(unread.Chats) != 1 || unread.Chats[0].UnreadCount != 1 || unread.Chats[0].MentionCount != 1 {
+	// One mention from the member plus the agent's confirmation card.
+	if len(unread.Chats) != 1 || unread.Chats[0].UnreadCount != 2 || unread.Chats[0].MentionCount != 1 {
 		t.Fatalf("owner unread = %+v", unread)
 	}
 	var read userstate.ReadMarker
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/chats/"+group.ID+"/read", owner.AccessToken, map[string]any{
-		"last_read_seq": second.CreatedSeq,
+		"last_read_seq": max(second.CreatedSeq, confirmationCard.CreatedSeq),
 	}, standardhttp.StatusOK, &read)
-	if read.LastReadSeq != second.CreatedSeq {
+	if read.LastReadSeq != max(second.CreatedSeq, confirmationCard.CreatedSeq) {
 		t.Fatalf("read marker = %+v", read)
 	}
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/unread", owner.AccessToken, nil, standardhttp.StatusOK, &unread)

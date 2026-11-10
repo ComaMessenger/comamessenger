@@ -316,17 +316,20 @@ func (e AgentRunStatus) Valid() bool {
 
 // Defines values for AgentScope.
 const (
-	ChatsRead      AgentScope = "chats:read"
-	FilesRead      AgentScope = "files:read"
-	MembersRead    AgentScope = "members:read"
-	MemoryRead     AgentScope = "memory:read"
-	MemoryWrite    AgentScope = "memory:write"
-	MessagesRead   AgentScope = "messages:read"
-	MessagesWrite  AgentScope = "messages:write"
-	ReactionsWrite AgentScope = "reactions:write"
-	RuntimeExecute AgentScope = "runtime:execute"
-	RuntimeWorker  AgentScope = "runtime:worker"
-	SearchRead     AgentScope = "search:read"
+	ChatsRead           AgentScope = "chats:read"
+	FilesRead           AgentScope = "files:read"
+	FollowupsWrite      AgentScope = "followups:write"
+	KnowledgeRead       AgentScope = "knowledge:read"
+	MembersRead         AgentScope = "members:read"
+	MemoryRead          AgentScope = "memory:read"
+	MemoryWrite         AgentScope = "memory:write"
+	MessagesInteractive AgentScope = "messages:interactive"
+	MessagesRead        AgentScope = "messages:read"
+	MessagesWrite       AgentScope = "messages:write"
+	ReactionsWrite      AgentScope = "reactions:write"
+	RuntimeExecute      AgentScope = "runtime:execute"
+	RuntimeWorker       AgentScope = "runtime:worker"
+	SearchRead          AgentScope = "search:read"
 )
 
 // Valid indicates whether the value is a known member of the AgentScope enum.
@@ -336,11 +339,17 @@ func (e AgentScope) Valid() bool {
 		return true
 	case FilesRead:
 		return true
+	case FollowupsWrite:
+		return true
+	case KnowledgeRead:
+		return true
 	case MembersRead:
 		return true
 	case MemoryRead:
 		return true
 	case MemoryWrite:
+		return true
+	case MessagesInteractive:
 		return true
 	case MessagesRead:
 		return true
@@ -1205,6 +1214,42 @@ func (e CreateInvitationRequestRole) Valid() bool {
 	}
 }
 
+// Defines values for CreateKnowledgeCollectionRequestAccess.
+const (
+	CreateKnowledgeCollectionRequestAccessChats        CreateKnowledgeCollectionRequestAccess = "chats"
+	CreateKnowledgeCollectionRequestAccessOrganization CreateKnowledgeCollectionRequestAccess = "organization"
+)
+
+// Valid indicates whether the value is a known member of the CreateKnowledgeCollectionRequestAccess enum.
+func (e CreateKnowledgeCollectionRequestAccess) Valid() bool {
+	switch e {
+	case CreateKnowledgeCollectionRequestAccessChats:
+		return true
+	case CreateKnowledgeCollectionRequestAccessOrganization:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CreateKnowledgeDocumentRequestKind.
+const (
+	CreateKnowledgeDocumentRequestKindFile CreateKnowledgeDocumentRequestKind = "file"
+	CreateKnowledgeDocumentRequestKindPage CreateKnowledgeDocumentRequestKind = "page"
+)
+
+// Valid indicates whether the value is a known member of the CreateKnowledgeDocumentRequestKind enum.
+func (e CreateKnowledgeDocumentRequestKind) Valid() bool {
+	switch e {
+	case CreateKnowledgeDocumentRequestKindFile:
+		return true
+	case CreateKnowledgeDocumentRequestKindPage:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CreateMessageRequestBodyFormat.
 const (
 	CreateMessageRequestBodyFormatMarkdown CreateMessageRequestBodyFormat = "markdown"
@@ -1333,6 +1378,8 @@ func (e DurableEventTypeV1) Valid() bool {
 
 // Defines values for ErrorCode.
 const (
+	ErrorCodeActionClosed               ErrorCode = "action_closed"
+	ErrorCodeActionConflict             ErrorCode = "action_conflict"
 	ErrorCodeAgentBudgetExceeded        ErrorCode = "agent_budget_exceeded"
 	ErrorCodeAgentConfigurationNotFound ErrorCode = "agent_configuration_not_found"
 	ErrorCodeAgentConflict              ErrorCode = "agent_conflict"
@@ -1352,6 +1399,8 @@ const (
 	ErrorCodeInvalidRefreshToken        ErrorCode = "invalid_refresh_token"
 	ErrorCodeInvalidRequest             ErrorCode = "invalid_request"
 	ErrorCodeInvitationInvalid          ErrorCode = "invitation_invalid"
+	ErrorCodeKnowledgeConflict          ErrorCode = "knowledge_conflict"
+	ErrorCodeKnowledgeNotFound          ErrorCode = "knowledge_not_found"
 	ErrorCodeMessageNotFound            ErrorCode = "message_not_found"
 	ErrorCodeOriginNotAllowed           ErrorCode = "origin_not_allowed"
 	ErrorCodePasswordChangeRequired     ErrorCode = "password_change_required"
@@ -1374,6 +1423,10 @@ const (
 // Valid indicates whether the value is a known member of the ErrorCode enum.
 func (e ErrorCode) Valid() bool {
 	switch e {
+	case ErrorCodeActionClosed:
+		return true
+	case ErrorCodeActionConflict:
+		return true
 	case ErrorCodeAgentBudgetExceeded:
 		return true
 	case ErrorCodeAgentConfigurationNotFound:
@@ -1411,6 +1464,10 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeInvalidRequest:
 		return true
 	case ErrorCodeInvitationInvalid:
+		return true
+	case ErrorCodeKnowledgeConflict:
+		return true
+	case ErrorCodeKnowledgeNotFound:
 		return true
 	case ErrorCodeMessageNotFound:
 		return true
@@ -1637,6 +1694,129 @@ func (e InvitationSummaryStatus) Valid() bool {
 	}
 }
 
+// Defines values for KnowledgeCollectionAccess.
+const (
+	KnowledgeCollectionAccessChats        KnowledgeCollectionAccess = "chats"
+	KnowledgeCollectionAccessOrganization KnowledgeCollectionAccess = "organization"
+)
+
+// Valid indicates whether the value is a known member of the KnowledgeCollectionAccess enum.
+func (e KnowledgeCollectionAccess) Valid() bool {
+	switch e {
+	case KnowledgeCollectionAccessChats:
+		return true
+	case KnowledgeCollectionAccessOrganization:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KnowledgeDocumentEmbeddingStatus.
+const (
+	KnowledgeDocumentEmbeddingStatusFailed  KnowledgeDocumentEmbeddingStatus = "failed"
+	KnowledgeDocumentEmbeddingStatusNone    KnowledgeDocumentEmbeddingStatus = "none"
+	KnowledgeDocumentEmbeddingStatusPending KnowledgeDocumentEmbeddingStatus = "pending"
+	KnowledgeDocumentEmbeddingStatusReady   KnowledgeDocumentEmbeddingStatus = "ready"
+)
+
+// Valid indicates whether the value is a known member of the KnowledgeDocumentEmbeddingStatus enum.
+func (e KnowledgeDocumentEmbeddingStatus) Valid() bool {
+	switch e {
+	case KnowledgeDocumentEmbeddingStatusFailed:
+		return true
+	case KnowledgeDocumentEmbeddingStatusNone:
+		return true
+	case KnowledgeDocumentEmbeddingStatusPending:
+		return true
+	case KnowledgeDocumentEmbeddingStatusReady:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KnowledgeDocumentKind.
+const (
+	KnowledgeDocumentKindFile KnowledgeDocumentKind = "file"
+	KnowledgeDocumentKindPage KnowledgeDocumentKind = "page"
+)
+
+// Valid indicates whether the value is a known member of the KnowledgeDocumentKind enum.
+func (e KnowledgeDocumentKind) Valid() bool {
+	switch e {
+	case KnowledgeDocumentKindFile:
+		return true
+	case KnowledgeDocumentKindPage:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KnowledgeDocumentStatus.
+const (
+	KnowledgeDocumentStatusFailed     KnowledgeDocumentStatus = "failed"
+	KnowledgeDocumentStatusPending    KnowledgeDocumentStatus = "pending"
+	KnowledgeDocumentStatusProcessing KnowledgeDocumentStatus = "processing"
+	KnowledgeDocumentStatusReady      KnowledgeDocumentStatus = "ready"
+)
+
+// Valid indicates whether the value is a known member of the KnowledgeDocumentStatus enum.
+func (e KnowledgeDocumentStatus) Valid() bool {
+	switch e {
+	case KnowledgeDocumentStatusFailed:
+		return true
+	case KnowledgeDocumentStatusPending:
+		return true
+	case KnowledgeDocumentStatusProcessing:
+		return true
+	case KnowledgeDocumentStatusReady:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KnowledgeFragmentDocumentKind.
+const (
+	KnowledgeFragmentDocumentKindFile KnowledgeFragmentDocumentKind = "file"
+	KnowledgeFragmentDocumentKindPage KnowledgeFragmentDocumentKind = "page"
+)
+
+// Valid indicates whether the value is a known member of the KnowledgeFragmentDocumentKind enum.
+func (e KnowledgeFragmentDocumentKind) Valid() bool {
+	switch e {
+	case KnowledgeFragmentDocumentKindFile:
+		return true
+	case KnowledgeFragmentDocumentKindPage:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KnowledgeFragmentMatch.
+const (
+	KnowledgeFragmentMatchHybrid   KnowledgeFragmentMatch = "hybrid"
+	KnowledgeFragmentMatchSemantic KnowledgeFragmentMatch = "semantic"
+	KnowledgeFragmentMatchText     KnowledgeFragmentMatch = "text"
+)
+
+// Valid indicates whether the value is a known member of the KnowledgeFragmentMatch enum.
+func (e KnowledgeFragmentMatch) Valid() bool {
+	switch e {
+	case KnowledgeFragmentMatchHybrid:
+		return true
+	case KnowledgeFragmentMatchSemantic:
+		return true
+	case KnowledgeFragmentMatchText:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MessageBodyFormat.
 const (
 	MessageBodyFormatMarkdown MessageBodyFormat = "markdown"
@@ -1657,13 +1837,196 @@ func (e MessageBodyFormat) Valid() bool {
 
 // Defines values for MessageType.
 const (
-	Text MessageType = "text"
+	MessageTypeText MessageType = "text"
 )
 
 // Valid indicates whether the value is a known member of the MessageType enum.
 func (e MessageType) Valid() bool {
 	switch e {
-	case Text:
+	case MessageTypeText:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageActionBindingDecision.
+const (
+	Approve MessageActionBindingDecision = "approve"
+	Deny    MessageActionBindingDecision = "deny"
+)
+
+// Valid indicates whether the value is a known member of the MessageActionBindingDecision enum.
+func (e MessageActionBindingDecision) Valid() bool {
+	switch e {
+	case Approve:
+		return true
+	case Deny:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageActionBindingKind.
+const (
+	ToolConfirmation MessageActionBindingKind = "tool_confirmation"
+)
+
+// Valid indicates whether the value is a known member of the MessageActionBindingKind enum.
+func (e MessageActionBindingKind) Valid() bool {
+	switch e {
+	case ToolConfirmation:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageActionLimit.
+const (
+	PerActor MessageActionLimit = "per_actor"
+	Single   MessageActionLimit = "single"
+)
+
+// Valid indicates whether the value is a known member of the MessageActionLimit enum.
+func (e MessageActionLimit) Valid() bool {
+	switch e {
+	case PerActor:
+		return true
+	case Single:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageActionStyle.
+const (
+	MessageActionStyleDanger    MessageActionStyle = "danger"
+	MessageActionStylePrimary   MessageActionStyle = "primary"
+	MessageActionStyleSecondary MessageActionStyle = "secondary"
+)
+
+// Valid indicates whether the value is a known member of the MessageActionStyle enum.
+func (e MessageActionStyle) Valid() bool {
+	switch e {
+	case MessageActionStyleDanger:
+		return true
+	case MessageActionStylePrimary:
+		return true
+	case MessageActionStyleSecondary:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageActionAudienceChatRoles.
+const (
+	MessageActionAudienceChatRolesAdmin  MessageActionAudienceChatRoles = "admin"
+	MessageActionAudienceChatRolesMember MessageActionAudienceChatRoles = "member"
+	MessageActionAudienceChatRolesOwner  MessageActionAudienceChatRoles = "owner"
+)
+
+// Valid indicates whether the value is a known member of the MessageActionAudienceChatRoles enum.
+func (e MessageActionAudienceChatRoles) Valid() bool {
+	switch e {
+	case MessageActionAudienceChatRolesAdmin:
+		return true
+	case MessageActionAudienceChatRolesMember:
+		return true
+	case MessageActionAudienceChatRolesOwner:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageActionAudienceOrgRoles.
+const (
+	MessageActionAudienceOrgRolesAdmin  MessageActionAudienceOrgRoles = "admin"
+	MessageActionAudienceOrgRolesMember MessageActionAudienceOrgRoles = "member"
+	MessageActionAudienceOrgRolesOwner  MessageActionAudienceOrgRoles = "owner"
+)
+
+// Valid indicates whether the value is a known member of the MessageActionAudienceOrgRoles enum.
+func (e MessageActionAudienceOrgRoles) Valid() bool {
+	switch e {
+	case MessageActionAudienceOrgRolesAdmin:
+		return true
+	case MessageActionAudienceOrgRolesMember:
+		return true
+	case MessageActionAudienceOrgRolesOwner:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageCardItemsState.
+const (
+	MessageCardItemsStateDone    MessageCardItemsState = "done"
+	MessageCardItemsStateFailed  MessageCardItemsState = "failed"
+	MessageCardItemsStatePending MessageCardItemsState = "pending"
+)
+
+// Valid indicates whether the value is a known member of the MessageCardItemsState enum.
+func (e MessageCardItemsState) Valid() bool {
+	switch e {
+	case MessageCardItemsStateDone:
+		return true
+	case MessageCardItemsStateFailed:
+		return true
+	case MessageCardItemsStatePending:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageCardStatusTone.
+const (
+	MessageCardStatusToneDanger  MessageCardStatusTone = "danger"
+	MessageCardStatusToneInfo    MessageCardStatusTone = "info"
+	MessageCardStatusToneNeutral MessageCardStatusTone = "neutral"
+	MessageCardStatusToneSuccess MessageCardStatusTone = "success"
+	MessageCardStatusToneWarning MessageCardStatusTone = "warning"
+)
+
+// Valid indicates whether the value is a known member of the MessageCardStatusTone enum.
+func (e MessageCardStatusTone) Valid() bool {
+	switch e {
+	case MessageCardStatusToneDanger:
+		return true
+	case MessageCardStatusToneInfo:
+		return true
+	case MessageCardStatusToneNeutral:
+		return true
+	case MessageCardStatusToneSuccess:
+		return true
+	case MessageCardStatusToneWarning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageSourceKind.
+const (
+	MessageSourceKindDocument MessageSourceKind = "document"
+	MessageSourceKindFile     MessageSourceKind = "file"
+	MessageSourceKindMessage  MessageSourceKind = "message"
+)
+
+// Valid indicates whether the value is a known member of the MessageSourceKind enum.
+func (e MessageSourceKind) Valid() bool {
+	switch e {
+	case MessageSourceKindDocument:
+		return true
+	case MessageSourceKindFile:
+		return true
+	case MessageSourceKindMessage:
 		return true
 	default:
 		return false
@@ -1793,6 +2156,7 @@ const (
 	ChatsModerate      Permission = "chats.moderate"
 	IntegrationsManage Permission = "integrations.manage"
 	InvitationsManage  Permission = "invitations.manage"
+	KnowledgeManage    Permission = "knowledge.manage"
 	MembersManage      Permission = "members.manage"
 	WorkspacePolicies  Permission = "workspace.policies"
 	WorkspaceSettings  Permission = "workspace.settings"
@@ -1820,6 +2184,8 @@ func (e Permission) Valid() bool {
 	case IntegrationsManage:
 		return true
 	case InvitationsManage:
+		return true
+	case KnowledgeManage:
 		return true
 	case MembersManage:
 		return true
@@ -2414,6 +2780,24 @@ func (e UpdateChatRequestVisibility) Valid() bool {
 	case UpdateChatRequestVisibilityPrivate:
 		return true
 	case UpdateChatRequestVisibilityPublic:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UpdateKnowledgeCollectionRequestAccess.
+const (
+	UpdateKnowledgeCollectionRequestAccessChats        UpdateKnowledgeCollectionRequestAccess = "chats"
+	UpdateKnowledgeCollectionRequestAccessOrganization UpdateKnowledgeCollectionRequestAccess = "organization"
+)
+
+// Valid indicates whether the value is a known member of the UpdateKnowledgeCollectionRequestAccess enum.
+func (e UpdateKnowledgeCollectionRequestAccess) Valid() bool {
+	switch e {
+	case UpdateKnowledgeCollectionRequestAccessChats:
+		return true
+	case UpdateKnowledgeCollectionRequestAccessOrganization:
 		return true
 	default:
 		return false
@@ -3047,41 +3431,44 @@ type AddChatMemberRequestRole string
 
 // Agent defines model for Agent.
 type Agent struct {
-	AllowedScopes               []AgentScope           `json:"allowed_scopes"`
-	AvatarVersion               int64                  `json:"avatar_version"`
-	ChatIds                     []openapi_types.UUID   `json:"chat_ids"`
-	CreatedAt                   time.Time              `json:"created_at"`
-	DailyCostLimit              *string                `json:"daily_cost_limit"`
-	Description                 string                 `json:"description"`
-	DisplayName                 string                 `json:"display_name"`
-	DraftVersion                *int                   `json:"draft_version"`
-	Enabled                     bool                   `json:"enabled"`
-	EndpointUrl                 *string                `json:"endpoint_url,omitempty"`
-	ExecutionTimeoutSeconds     int                    `json:"execution_timeout_seconds"`
-	ExternalDataSharingApproved bool                   `json:"external_data_sharing_approved"`
-	Handle                      string                 `json:"handle"`
-	HasUnpublishedChanges       bool                   `json:"has_unpublished_changes"`
-	Id                          openapi_types.UUID     `json:"id"`
-	Kind                        AgentKind              `json:"kind"`
-	LlmConnectionId             *openapi_types.UUID    `json:"llm_connection_id"`
-	MaxChainDepth               int                    `json:"max_chain_depth"`
-	MaxOutputTokens             int                    `json:"max_output_tokens"`
-	MaxToolIterations           int                    `json:"max_tool_iterations"`
-	Model                       string                 `json:"model"`
-	MonthlyCostLimit            *string                `json:"monthly_cost_limit"`
-	OperationalStatus           AgentOperationalStatus `json:"operational_status"`
-	OrgId                       openapi_types.UUID     `json:"org_id"`
-	OwnerActorId                openapi_types.UUID     `json:"owner_actor_id"`
-	PerChatConcurrency          int                    `json:"per_chat_concurrency"`
-	Provider                    string                 `json:"provider"`
-	ProviderRateLimitPerMinute  int                    `json:"provider_rate_limit_per_minute"`
-	PublishedAt                 *time.Time             `json:"published_at"`
-	PublishedVersion            *int                   `json:"published_version"`
-	RateLimitPerMinute          int                    `json:"rate_limit_per_minute"`
-	Readiness                   AgentReadiness         `json:"readiness"`
-	Recipe                      AgentRecipe            `json:"recipe"`
-	RecipeVersion               int                    `json:"recipe_version"`
-	UpdatedAt                   time.Time              `json:"updated_at"`
+	AllowedScopes               []AgentScope         `json:"allowed_scopes"`
+	AvatarVersion               int64                `json:"avatar_version"`
+	ChatIds                     []openapi_types.UUID `json:"chat_ids"`
+	CreatedAt                   time.Time            `json:"created_at"`
+	DailyCostLimit              *string              `json:"daily_cost_limit"`
+	Description                 string               `json:"description"`
+	DisplayName                 string               `json:"display_name"`
+	DraftVersion                *int                 `json:"draft_version"`
+	Enabled                     bool                 `json:"enabled"`
+	EndpointUrl                 *string              `json:"endpoint_url,omitempty"`
+	ExecutionTimeoutSeconds     int                  `json:"execution_timeout_seconds"`
+	ExternalDataSharingApproved bool                 `json:"external_data_sharing_approved"`
+	Handle                      string               `json:"handle"`
+	HasUnpublishedChanges       bool                 `json:"has_unpublished_changes"`
+	Id                          openapi_types.UUID   `json:"id"`
+	Kind                        AgentKind            `json:"kind"`
+
+	// KnowledgeCollectionIds Knowledge collections bound to the draft (or the published version when there is no draft). Empty for actors without agent management rights.
+	KnowledgeCollectionIds     *[]openapi_types.UUID  `json:"knowledge_collection_ids,omitempty"`
+	LlmConnectionId            *openapi_types.UUID    `json:"llm_connection_id"`
+	MaxChainDepth              int                    `json:"max_chain_depth"`
+	MaxOutputTokens            int                    `json:"max_output_tokens"`
+	MaxToolIterations          int                    `json:"max_tool_iterations"`
+	Model                      string                 `json:"model"`
+	MonthlyCostLimit           *string                `json:"monthly_cost_limit"`
+	OperationalStatus          AgentOperationalStatus `json:"operational_status"`
+	OrgId                      openapi_types.UUID     `json:"org_id"`
+	OwnerActorId               openapi_types.UUID     `json:"owner_actor_id"`
+	PerChatConcurrency         int                    `json:"per_chat_concurrency"`
+	Provider                   string                 `json:"provider"`
+	ProviderRateLimitPerMinute int                    `json:"provider_rate_limit_per_minute"`
+	PublishedAt                *time.Time             `json:"published_at"`
+	PublishedVersion           *int                   `json:"published_version"`
+	RateLimitPerMinute         int                    `json:"rate_limit_per_minute"`
+	Readiness                  AgentReadiness         `json:"readiness"`
+	Recipe                     AgentRecipe            `json:"recipe"`
+	RecipeVersion              int                    `json:"recipe_version"`
+	UpdatedAt                  time.Time              `json:"updated_at"`
 }
 
 // AgentKind defines model for Agent.Kind.
@@ -3109,18 +3496,24 @@ type AgentApiKey struct {
 
 // AgentLlmConnection defines model for AgentLlmConnection.
 type AgentLlmConnection struct {
-	CreatedAt     time.Time                      `json:"created_at"`
-	DefaultModel  string                         `json:"default_model"`
-	Enabled       bool                           `json:"enabled"`
-	EndpointUrl   string                         `json:"endpoint_url"`
-	HealthStatus  AgentLlmConnectionHealthStatus `json:"health_status"`
-	Id            openapi_types.UUID             `json:"id"`
-	KeyHint       string                         `json:"key_hint"`
-	LastErrorCode string                         `json:"last_error_code"`
-	LastTestedAt  *time.Time                     `json:"last_tested_at"`
-	Name          string                         `json:"name"`
-	Provider      AgentLlmConnectionProvider     `json:"provider"`
-	UpdatedAt     time.Time                      `json:"updated_at"`
+	CreatedAt    time.Time `json:"created_at"`
+	DefaultModel string    `json:"default_model"`
+
+	// EmbeddingDataSharingApproved Explicit consent to send document text to the provider for embeddings.
+	EmbeddingDataSharingApproved *bool `json:"embedding_data_sharing_approved,omitempty"`
+
+	// EmbeddingModel Embedding model for the knowledge base; empty disables embeddings. Not available for anthropic.
+	EmbeddingModel *string                        `json:"embedding_model,omitempty"`
+	Enabled        bool                           `json:"enabled"`
+	EndpointUrl    string                         `json:"endpoint_url"`
+	HealthStatus   AgentLlmConnectionHealthStatus `json:"health_status"`
+	Id             openapi_types.UUID             `json:"id"`
+	KeyHint        string                         `json:"key_hint"`
+	LastErrorCode  string                         `json:"last_error_code"`
+	LastTestedAt   *time.Time                     `json:"last_tested_at"`
+	Name           string                         `json:"name"`
+	Provider       AgentLlmConnectionProvider     `json:"provider"`
+	UpdatedAt      time.Time                      `json:"updated_at"`
 }
 
 // AgentLlmConnectionHealthStatus defines model for AgentLlmConnection.HealthStatus.
@@ -3324,8 +3717,11 @@ type AgentScope string
 
 // AgentToolConfirmation defines model for AgentToolConfirmation.
 type AgentToolConfirmation struct {
-	AgentId       openapi_types.UUID          `json:"agent_id"`
-	Arguments     map[string]interface{}      `json:"arguments"`
+	AgentId   openapi_types.UUID     `json:"agent_id"`
+	Arguments map[string]interface{} `json:"arguments"`
+
+	// CardMessageId Chat card mirroring this confirmation in the run's chat, when one was posted.
+	CardMessageId *openapi_types.UUID         `json:"card_message_id,omitempty"`
 	CompletedAt   *time.Time                  `json:"completed_at,omitempty"`
 	CorrelationId openapi_types.UUID          `json:"correlation_id"`
 	DecidedAt     *time.Time                  `json:"decided_at,omitempty"`
@@ -3701,12 +4097,18 @@ type CreateAgentKeyRequest struct {
 
 // CreateAgentLlmConnectionRequest defines model for CreateAgentLlmConnectionRequest.
 type CreateAgentLlmConnectionRequest struct {
-	ApiKey       string                                  `json:"api_key"`
-	DefaultModel string                                  `json:"default_model"`
-	Enabled      *bool                                   `json:"enabled,omitempty"`
-	EndpointUrl  string                                  `json:"endpoint_url"`
-	Name         string                                  `json:"name"`
-	Provider     CreateAgentLlmConnectionRequestProvider `json:"provider"`
+	ApiKey       string `json:"api_key"`
+	DefaultModel string `json:"default_model"`
+
+	// EmbeddingDataSharingApproved Explicit consent to send document text to the provider for embeddings.
+	EmbeddingDataSharingApproved *bool `json:"embedding_data_sharing_approved,omitempty"`
+
+	// EmbeddingModel Embedding model for the knowledge base; empty disables embeddings. Not available for anthropic.
+	EmbeddingModel *string                                 `json:"embedding_model,omitempty"`
+	Enabled        *bool                                   `json:"enabled,omitempty"`
+	EndpointUrl    string                                  `json:"endpoint_url"`
+	Name           string                                  `json:"name"`
+	Provider       CreateAgentLlmConnectionRequestProvider `json:"provider"`
 }
 
 // CreateAgentLlmConnectionRequestProvider defines model for CreateAgentLlmConnectionRequest.Provider.
@@ -3737,6 +4139,7 @@ type CreateAgentRequest struct {
 	ExternalDataSharingApproved bool                      `json:"external_data_sharing_approved"`
 	Handle                      string                    `json:"handle"`
 	Kind                        CreateAgentRequestKind    `json:"kind"`
+	KnowledgeCollectionIds      *[]openapi_types.UUID     `json:"knowledge_collection_ids,omitempty"`
 	LlmConnectionId             *openapi_types.UUID       `json:"llm_connection_id,omitempty"`
 	MaxChainDepth               *int                      `json:"max_chain_depth,omitempty"`
 	MaxOutputTokens             *int                      `json:"max_output_tokens,omitempty"`
@@ -3803,8 +4206,35 @@ type CreateInvitationRequest struct {
 // CreateInvitationRequestRole defines model for CreateInvitationRequest.Role.
 type CreateInvitationRequestRole string
 
+// CreateKnowledgeCollectionRequest defines model for CreateKnowledgeCollectionRequest.
+type CreateKnowledgeCollectionRequest struct {
+	Access                *CreateKnowledgeCollectionRequestAccess `json:"access,omitempty"`
+	ChatIds               *[]openapi_types.UUID                   `json:"chat_ids,omitempty"`
+	Description           *string                                 `json:"description,omitempty"`
+	EmbeddingConnectionId *openapi_types.UUID                     `json:"embedding_connection_id,omitempty"`
+	Name                  string                                  `json:"name"`
+}
+
+// CreateKnowledgeCollectionRequestAccess defines model for CreateKnowledgeCollectionRequest.Access.
+type CreateKnowledgeCollectionRequestAccess string
+
+// CreateKnowledgeDocumentRequest defines model for CreateKnowledgeDocumentRequest.
+type CreateKnowledgeDocumentRequest struct {
+	Body   *string                            `json:"body,omitempty"`
+	FileId *openapi_types.UUID                `json:"file_id,omitempty"`
+	Kind   CreateKnowledgeDocumentRequestKind `json:"kind"`
+
+	// Title Required for pages; defaults to the file name for files.
+	Title *string `json:"title,omitempty"`
+}
+
+// CreateKnowledgeDocumentRequestKind defines model for CreateKnowledgeDocumentRequest.Kind.
+type CreateKnowledgeDocumentRequestKind string
+
 // CreateMessageRequest defines model for CreateMessageRequest.
 type CreateMessageRequest struct {
+	// Blocks Agent API keys with messages:interactive only. A blank body is replaced by a generated text fallback.
+	Blocks            *MessageBlocks                  `json:"blocks,omitempty"`
 	Body              string                          `json:"body"`
 	BodyFormat        *CreateMessageRequestBodyFormat `json:"body_format,omitempty"`
 	ClientMsgId       openapi_types.UUID              `json:"client_msg_id"`
@@ -4058,6 +4488,122 @@ type InvokeAgentToolRequest struct {
 	ToolCallId    openapi_types.UUID     `json:"tool_call_id"`
 }
 
+// KnowledgeCollection defines model for KnowledgeCollection.
+type KnowledgeCollection struct {
+	// Access `organization`: every member reads it; `chats`: only members of `chat_ids`, and agents only in runs from those chats.
+	Access    KnowledgeCollectionAccess `json:"access"`
+	CanManage bool                      `json:"can_manage"`
+
+	// ChatIds Empty for actors without knowledge.manage.
+	ChatIds       []openapi_types.UUID `json:"chat_ids"`
+	CreatedAt     time.Time            `json:"created_at"`
+	CreatedBy     openapi_types.UUID   `json:"created_by"`
+	Description   string               `json:"description"`
+	DocumentCount int                  `json:"document_count"`
+
+	// EmbeddingConnectionId Workspace LLM connection used for embeddings; null means word search only. Always null for actors without knowledge.manage.
+	EmbeddingConnectionId *openapi_types.UUID `json:"embedding_connection_id"`
+	Id                    openapi_types.UUID  `json:"id"`
+	Name                  string              `json:"name"`
+	UpdatedAt             time.Time           `json:"updated_at"`
+}
+
+// KnowledgeCollectionAccess `organization`: every member reads it; `chats`: only members of `chat_ids`, and agents only in runs from those chats.
+type KnowledgeCollectionAccess string
+
+// KnowledgeDocument defines model for KnowledgeDocument.
+type KnowledgeDocument struct {
+	// Body Markdown body; returned for pages by getKnowledgeDocument and on create/update.
+	Body           *string            `json:"body,omitempty"`
+	ChunkCount     int                `json:"chunk_count"`
+	CollectionId   openapi_types.UUID `json:"collection_id"`
+	ContentVersion int                `json:"content_version"`
+	CreatedAt      time.Time          `json:"created_at"`
+	CreatedBy      openapi_types.UUID `json:"created_by"`
+
+	// EmbeddingStatus `none` means word search only (no approved embedding connection).
+	EmbeddingStatus KnowledgeDocumentEmbeddingStatus `json:"embedding_status"`
+
+	// ErrorCode Set when status is failed: unsupported_format, file_unavailable, no_text_extracted, empty_document, indexing_failed.
+	ErrorCode string                  `json:"error_code"`
+	FileId    *openapi_types.UUID     `json:"file_id"`
+	FileMime  *string                 `json:"file_mime"`
+	FileName  *string                 `json:"file_name"`
+	FileSize  *int64                  `json:"file_size"`
+	Id        openapi_types.UUID      `json:"id"`
+	IndexedAt *time.Time              `json:"indexed_at"`
+	Kind      KnowledgeDocumentKind   `json:"kind"`
+	Status    KnowledgeDocumentStatus `json:"status"`
+	Title     string                  `json:"title"`
+	UpdatedAt time.Time               `json:"updated_at"`
+}
+
+// KnowledgeDocumentEmbeddingStatus `none` means word search only (no approved embedding connection).
+type KnowledgeDocumentEmbeddingStatus string
+
+// KnowledgeDocumentKind defines model for KnowledgeDocument.Kind.
+type KnowledgeDocumentKind string
+
+// KnowledgeDocumentStatus defines model for KnowledgeDocument.Status.
+type KnowledgeDocumentStatus string
+
+// KnowledgeFragment defines model for KnowledgeFragment.
+type KnowledgeFragment struct {
+	ChunkId        openapi_types.UUID            `json:"chunk_id"`
+	CollectionId   openapi_types.UUID            `json:"collection_id"`
+	CollectionName string                        `json:"collection_name"`
+	Content        string                        `json:"content"`
+	DocumentId     openapi_types.UUID            `json:"document_id"`
+	DocumentKind   KnowledgeFragmentDocumentKind `json:"document_kind"`
+	DocumentTitle  string                        `json:"document_title"`
+	Match          KnowledgeFragmentMatch        `json:"match"`
+
+	// Position Zero-based fragment index within the document.
+	Position int     `json:"position"`
+	Score    float32 `json:"score"`
+
+	// Section Heading path of the fragment, e.g. "Rules › Holidays"; sheet name for spreadsheets.
+	Section string `json:"section"`
+}
+
+// KnowledgeFragmentDocumentKind defines model for KnowledgeFragment.DocumentKind.
+type KnowledgeFragmentDocumentKind string
+
+// KnowledgeFragmentMatch defines model for KnowledgeFragment.Match.
+type KnowledgeFragmentMatch string
+
+// KnowledgeRunFragments defines model for KnowledgeRunFragments.
+type KnowledgeRunFragments struct {
+	Fragments []struct {
+		// Available False once the fragment or its document was removed.
+		Available     bool               `json:"available"`
+		ChunkId       openapi_types.UUID `json:"chunk_id"`
+		CollectionId  openapi_types.UUID `json:"collection_id"`
+		DocumentId    openapi_types.UUID `json:"document_id"`
+		DocumentTitle string             `json:"document_title"`
+		Position      int                `json:"position"`
+		Rank          int                `json:"rank"`
+		Section       string             `json:"section"`
+		ToolCallId    openapi_types.UUID `json:"tool_call_id"`
+	} `json:"fragments"`
+}
+
+// KnowledgeSearchRequest defines model for KnowledgeSearchRequest.
+type KnowledgeSearchRequest struct {
+	// CollectionIds Restrict to these readable collections; an unreadable id returns 404.
+	CollectionIds *[]openapi_types.UUID `json:"collection_ids,omitempty"`
+	Limit         *int                  `json:"limit,omitempty"`
+	Query         string                `json:"query"`
+}
+
+// KnowledgeSearchResult defines model for KnowledgeSearchResult.
+type KnowledgeSearchResult struct {
+	Fragments []KnowledgeFragment `json:"fragments"`
+
+	// Semantic Whether vector search contributed.
+	Semantic bool `json:"semantic"`
+}
+
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
 	Email    openapi_types.Email `json:"email"`
@@ -4071,7 +4617,10 @@ type MarkReadRequest struct {
 
 // Message defines model for Message.
 type Message struct {
-	ActorId           openapi_types.UUID   `json:"actor_id"`
+	ActorId openapi_types.UUID `json:"actor_id"`
+
+	// Blocks Optional structured part of an agent message. The body always carries a plain-text fallback; clients that do not support the version render the body. Server-managed state (responses, closed, binding) is part of the document so durable events carry the current card.
+	Blocks            *MessageBlocks       `json:"blocks,omitempty"`
 	Body              string               `json:"body"`
 	BodyFormat        MessageBodyFormat    `json:"body_format"`
 	ChatId            openapi_types.UUID   `json:"chat_id"`
@@ -4098,6 +4647,103 @@ type MessageBodyFormat string
 
 // MessageType defines model for Message.Type.
 type MessageType string
+
+// MessageAction defines model for MessageAction.
+type MessageAction struct {
+	// Allowed Absent audience means any active human chat member. Matching any listed actor, role or permission is enough. The server enforces it.
+	Allowed *MessageActionAudience `json:"allowed,omitempty"`
+
+	// Binding Server-only link to a domain command. tool_confirmation buttons decide an agent tool confirmation and require agents.approve.
+	Binding *struct {
+		ConfirmationId *openapi_types.UUID           `json:"confirmation_id,omitempty"`
+		Decision       *MessageActionBindingDecision `json:"decision,omitempty"`
+		Kind           MessageActionBindingKind      `json:"kind"`
+	} `json:"binding,omitempty"`
+	Closed bool `json:"closed"`
+
+	// Group Actions of one group are a single choice per person.
+	Group *string `json:"group,omitempty"`
+	Id    string  `json:"id"`
+	Label string  `json:"label"`
+
+	// Limit per_actor lets each allowed person press once; single closes the action after the first press.
+	Limit     MessageActionLimit      `json:"limit"`
+	Responses []MessageActionResponse `json:"responses"`
+	Style     MessageActionStyle      `json:"style"`
+}
+
+// MessageActionBindingDecision defines model for MessageAction.Binding.Decision.
+type MessageActionBindingDecision string
+
+// MessageActionBindingKind defines model for MessageAction.Binding.Kind.
+type MessageActionBindingKind string
+
+// MessageActionLimit per_actor lets each allowed person press once; single closes the action after the first press.
+type MessageActionLimit string
+
+// MessageActionStyle defines model for MessageAction.Style.
+type MessageActionStyle string
+
+// MessageActionAudience Absent audience means any active human chat member. Matching any listed actor, role or permission is enough. The server enforces it.
+type MessageActionAudience struct {
+	ActorIds    *[]openapi_types.UUID             `json:"actor_ids,omitempty"`
+	ChatRoles   *[]MessageActionAudienceChatRoles `json:"chat_roles,omitempty"`
+	OrgRoles    *[]MessageActionAudienceOrgRoles  `json:"org_roles,omitempty"`
+	Permissions *[]Permission                     `json:"permissions,omitempty"`
+}
+
+// MessageActionAudienceChatRoles defines model for MessageActionAudience.ChatRoles.
+type MessageActionAudienceChatRoles string
+
+// MessageActionAudienceOrgRoles defines model for MessageActionAudience.OrgRoles.
+type MessageActionAudienceOrgRoles string
+
+// MessageActionResponse defines model for MessageActionResponse.
+type MessageActionResponse struct {
+	ActorId     openapi_types.UUID `json:"actor_id"`
+	RespondedAt time.Time          `json:"responded_at"`
+}
+
+// MessageActionResult defines model for MessageActionResult.
+type MessageActionResult struct {
+	ActionId string                `json:"action_id"`
+	Message  Message               `json:"message"`
+	Replayed bool                  `json:"replayed"`
+	Response MessageActionResponse `json:"response"`
+}
+
+// MessageBlocks Optional structured part of an agent message. The body always carries a plain-text fallback; clients that do not support the version render the body. Server-managed state (responses, closed, binding) is part of the document so durable events carry the current card.
+type MessageBlocks struct {
+	Actions *[]MessageAction `json:"actions,omitempty"`
+	Card    *MessageCard     `json:"card,omitempty"`
+	Sources *[]MessageSource `json:"sources,omitempty"`
+
+	// Version Schema version; this Core writes 1.
+	Version int `json:"version"`
+}
+
+// MessageCard defines model for MessageCard.
+type MessageCard struct {
+	Fields *[]struct {
+		Label string `json:"label"`
+		Value string `json:"value"`
+	} `json:"fields,omitempty"`
+	Items *[]struct {
+		State *MessageCardItemsState `json:"state,omitempty"`
+		Text  string                 `json:"text"`
+	} `json:"items,omitempty"`
+	Status *struct {
+		Label string                `json:"label"`
+		Tone  MessageCardStatusTone `json:"tone"`
+	} `json:"status,omitempty"`
+	Title string `json:"title"`
+}
+
+// MessageCardItemsState defines model for MessageCard.Items.State.
+type MessageCardItemsState string
+
+// MessageCardStatusTone defines model for MessageCard.Status.Tone.
+type MessageCardStatusTone string
 
 // MessagePage defines model for MessagePage.
 type MessagePage struct {
@@ -4138,6 +4784,19 @@ type MessageReceipt struct {
 type MessageReceiptList struct {
 	Receipts []MessageReceipt `json:"receipts"`
 }
+
+// MessageSource defines model for MessageSource.
+type MessageSource struct {
+	DocumentId *openapi_types.UUID `json:"document_id,omitempty"`
+	Excerpt    *string             `json:"excerpt,omitempty"`
+	FileId     *openapi_types.UUID `json:"file_id,omitempty"`
+	Kind       MessageSourceKind   `json:"kind"`
+	MessageId  *openapi_types.UUID `json:"message_id,omitempty"`
+	Title      *string             `json:"title,omitempty"`
+}
+
+// MessageSourceKind defines model for MessageSource.Kind.
+type MessageSourceKind string
 
 // MessageWindow defines model for MessageWindow.
 type MessageWindow struct {
@@ -4744,12 +5403,18 @@ type UnreadSnapshot struct {
 
 // UpdateAgentLlmConnectionRequest defines model for UpdateAgentLlmConnectionRequest.
 type UpdateAgentLlmConnectionRequest struct {
-	ApiKey       *string                                  `json:"api_key,omitempty"`
-	DefaultModel *string                                  `json:"default_model,omitempty"`
-	Enabled      *bool                                    `json:"enabled,omitempty"`
-	EndpointUrl  *string                                  `json:"endpoint_url,omitempty"`
-	Name         *string                                  `json:"name,omitempty"`
-	Provider     *UpdateAgentLlmConnectionRequestProvider `json:"provider,omitempty"`
+	ApiKey       *string `json:"api_key,omitempty"`
+	DefaultModel *string `json:"default_model,omitempty"`
+
+	// EmbeddingDataSharingApproved Explicit consent to send document text to the provider for embeddings.
+	EmbeddingDataSharingApproved *bool `json:"embedding_data_sharing_approved,omitempty"`
+
+	// EmbeddingModel Embedding model for the knowledge base; empty disables embeddings. Not available for anthropic.
+	EmbeddingModel *string                                  `json:"embedding_model,omitempty"`
+	Enabled        *bool                                    `json:"enabled,omitempty"`
+	EndpointUrl    *string                                  `json:"endpoint_url,omitempty"`
+	Name           *string                                  `json:"name,omitempty"`
+	Provider       *UpdateAgentLlmConnectionRequestProvider `json:"provider,omitempty"`
 }
 
 // UpdateAgentLlmConnectionRequestProvider defines model for UpdateAgentLlmConnectionRequest.Provider.
@@ -4792,6 +5457,7 @@ type UpdateAgentRequest struct {
 	ExecutionTimeoutSeconds     *int                  `json:"execution_timeout_seconds,omitempty"`
 	ExternalDataSharingApproved *bool                 `json:"external_data_sharing_approved,omitempty"`
 	Handle                      *string               `json:"handle,omitempty"`
+	KnowledgeCollectionIds      *[]openapi_types.UUID `json:"knowledge_collection_ids,omitempty"`
 	LlmConnectionId             *openapi_types.UUID   `json:"llm_connection_id,omitempty"`
 	MaxChainDepth               *int                  `json:"max_chain_depth,omitempty"`
 	MaxOutputTokens             *int                  `json:"max_output_tokens,omitempty"`
@@ -4843,6 +5509,26 @@ type UpdateInfrastructureSettingsRequest struct {
 	ExpectedVersion int64                   `json:"expected_version"`
 	S3              S3ConfigurationUpdate   `json:"s3"`
 	Smtp            SMTPConfigurationUpdate `json:"smtp"`
+}
+
+// UpdateKnowledgeCollectionRequest defines model for UpdateKnowledgeCollectionRequest.
+type UpdateKnowledgeCollectionRequest struct {
+	Access      *UpdateKnowledgeCollectionRequestAccess `json:"access,omitempty"`
+	ChatIds     *[]openapi_types.UUID                   `json:"chat_ids,omitempty"`
+	Description *string                                 `json:"description,omitempty"`
+
+	// EmbeddingConnectionId null disables embeddings for the collection.
+	EmbeddingConnectionId *openapi_types.UUID `json:"embedding_connection_id,omitempty"`
+	Name                  *string             `json:"name,omitempty"`
+}
+
+// UpdateKnowledgeCollectionRequestAccess defines model for UpdateKnowledgeCollectionRequest.Access.
+type UpdateKnowledgeCollectionRequestAccess string
+
+// UpdateKnowledgeDocumentRequest defines model for UpdateKnowledgeDocumentRequest.
+type UpdateKnowledgeDocumentRequest struct {
+	Body  *string `json:"body,omitempty"`
+	Title *string `json:"title,omitempty"`
 }
 
 // UpdateMessageRequest defines model for UpdateMessageRequest.
@@ -5018,6 +5704,12 @@ type ClientKind string
 
 // FileId defines model for FileId.
 type FileId = openapi_types.UUID
+
+// KnowledgeCollectionId defines model for KnowledgeCollectionId.
+type KnowledgeCollectionId = openapi_types.UUID
+
+// KnowledgeDocumentId defines model for KnowledgeDocumentId.
+type KnowledgeDocumentId = openapi_types.UUID
 
 // MessageId defines model for MessageId.
 type MessageId = openapi_types.UUID
@@ -5310,6 +6002,21 @@ type CreateInvitationJSONRequestBody = CreateInvitationRequest
 
 // AcceptInvitationJSONRequestBody defines body for AcceptInvitation for application/json ContentType.
 type AcceptInvitationJSONRequestBody = AcceptInvitationRequest
+
+// CreateKnowledgeCollectionJSONRequestBody defines body for CreateKnowledgeCollection for application/json ContentType.
+type CreateKnowledgeCollectionJSONRequestBody = CreateKnowledgeCollectionRequest
+
+// UpdateKnowledgeCollectionJSONRequestBody defines body for UpdateKnowledgeCollection for application/json ContentType.
+type UpdateKnowledgeCollectionJSONRequestBody = UpdateKnowledgeCollectionRequest
+
+// CreateKnowledgeDocumentJSONRequestBody defines body for CreateKnowledgeDocument for application/json ContentType.
+type CreateKnowledgeDocumentJSONRequestBody = CreateKnowledgeDocumentRequest
+
+// UpdateKnowledgeDocumentJSONRequestBody defines body for UpdateKnowledgeDocument for application/json ContentType.
+type UpdateKnowledgeDocumentJSONRequestBody = UpdateKnowledgeDocumentRequest
+
+// SearchKnowledgeJSONRequestBody defines body for SearchKnowledge for application/json ContentType.
+type SearchKnowledgeJSONRequestBody = KnowledgeSearchRequest
 
 // UpdateMeJSONRequestBody defines body for UpdateMe for application/json ContentType.
 type UpdateMeJSONRequestBody = UpdateProfileRequest

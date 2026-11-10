@@ -16,6 +16,8 @@ func TestAllows(t *testing.T) {
 		{name: "legacy agent manager can build", role: "admin", granted: []Code{AgentsManage}, required: AgentsBuild, want: true},
 		{name: "builder cannot publish", role: "admin", granted: []Code{AgentsBuild}, required: AgentsPublish, want: false},
 		{name: "member never receives explicit permissions", role: "member", granted: []Code{AuditRead}, required: AuditRead, want: false},
+		{name: "member may receive the knowledge permission", role: "member", granted: []Code{KnowledgeManage}, required: KnowledgeManage, want: true},
+		{name: "member without the knowledge permission is denied", role: "member", required: KnowledgeManage, want: false},
 		{name: "unknown permission is denied", role: "owner", required: Code("unknown"), want: false},
 	}
 
@@ -39,5 +41,8 @@ func TestEffective(t *testing.T) {
 	}
 	if member := Effective("member", []Code{AuditRead}); member == nil || len(member) != 0 {
 		t.Fatalf("member permissions = %#v, want non-nil empty slice", member)
+	}
+	if member := Effective("member", []Code{AuditRead, KnowledgeManage}); len(member) != 1 || member[0] != KnowledgeManage {
+		t.Fatalf("member permissions = %#v, want knowledge.manage only", member)
 	}
 }

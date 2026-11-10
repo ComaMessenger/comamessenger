@@ -6,6 +6,15 @@ export type Chat = components["schemas"]["Chat"];
 export type DirectoryChat = components["schemas"]["DirectoryChat"];
 export type ChatMember = components["schemas"]["ChatMember"];
 export type Message = components["schemas"]["Message"];
+export type MessageBlocks = components["schemas"]["MessageBlocks"];
+export type MessageCard = components["schemas"]["MessageCard"];
+export type MessageAction = components["schemas"]["MessageAction"];
+export type MessageActionAudience =
+  components["schemas"]["MessageActionAudience"];
+export type MessageActionResponse =
+  components["schemas"]["MessageActionResponse"];
+export type MessageActionResult = components["schemas"]["MessageActionResult"];
+export type MessageSource = components["schemas"]["MessageSource"];
 export type FileMetadata = components["schemas"]["File"];
 export type FileUpload = components["schemas"]["FileUpload"];
 export type CompletedFilePart = components["schemas"]["CompletedFilePart"];

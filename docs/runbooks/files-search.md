@@ -77,7 +77,7 @@ credentials are intentionally not committed to the repository.
 
 Core atomically reserves quota before issuing an upload. Completion moves the
 reservation to used bytes. Abort, failed validation and expired sessions return
-the reservation. Ready files that were never attached to a message or avatar
+the reservation. Ready files that were never attached to a message, avatar or knowledge document
 are deleted after `FILE_UPLOAD_TTL`; attachment and cleanup lock the same row so
 they cannot race.
 
@@ -104,6 +104,36 @@ the underlying attachment for the workspace lifetime; uploader access remains
 available. Expired unattached uploads and replaced/deleted avatars are removed
 physically. A future workspace-retention feature must define bulk attachment
 deletion separately rather than silently changing this policy.
+
+## Knowledge base indexing
+
+Knowledge documents are uploaded through the regular file upload flow and then
+attached with `POST /api/v1/knowledge/collections/{id}/documents`; Markdown
+pages are stored in `knowledge_documents.body`. A file referenced by a document
+is excluded from unattached-file cleanup; deleting the document releases it to
+the regular cleanup after `FILE_UPLOAD_TTL`.
+
+Indexing runs as River jobs in the `knowledge-indexing` queue:
+`knowledge.index` extracts text (text/*, Markdown, CSV, XLSX, DOCX, PDF), cuts
+it into fragments of up to 2000 characters on section boundaries and replaces
+`knowledge_chunks` atomically; `knowledge.embed` runs only when the collection
+has an embedding connection with `embedding_model` set and
+`embedding_data_sharing_approved=true`, otherwise search stays full-text only.
+Each job carries the document `content_version`, so a stale job for an edited
+page is a no-op. Failed documents keep `status='failed'` and `error_code`
+(`unsupported_format`, `file_unavailable`, `no_text_extracted`,
+`empty_document`, `indexing_failed`); scanned PDFs without a text layer end in
+`no_text_extracted` because OCR is out of scope.
+
+Vector search is an exact scan per collection (no ANN index, because vector
+dimensions depend on the configured model). Add an HNSW index per dimension if
+a workspace grows beyond roughly 100k fragments.
+
+```sql
+SELECT status, embedding_status, count(*) FROM knowledge_documents GROUP BY 1, 2 ORDER BY 1, 2;
+SELECT state, kind, count(*) FROM river_job WHERE kind LIKE 'knowledge.%' GROUP BY 1, 2 ORDER BY 1, 2;
+SELECT collection_id, count(*), count(embedding) AS embedded FROM knowledge_chunks GROUP BY 1;
+```
 
 ## Backup and restore
 

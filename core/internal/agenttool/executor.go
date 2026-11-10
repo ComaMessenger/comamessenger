@@ -17,6 +17,8 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/files"
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
+	"github.com/comamessenger/comamessenger/core/internal/interactive"
+	"github.com/comamessenger/comamessenger/core/internal/knowledge"
 	"github.com/comamessenger/comamessenger/core/internal/message"
 	"github.com/comamessenger/comamessenger/core/internal/search"
 	"github.com/google/uuid"
@@ -39,7 +41,11 @@ type Definition struct {
 	Mode          string         `json:"mode"`
 	RequiredScope agent.Scope    `json:"required_scope"`
 	InputSchema   map[string]any `json:"input_schema"`
-	compiled      *jsonschema.Schema
+	// NoConfirmation exempts a write tool from the global write-confirmation
+	// policy. Interactive tools are bounded by their own scopes and server
+	// limits instead; dry_run still returns only a preview.
+	NoConfirmation bool `json:"-"`
+	compiled       *jsonschema.Schema
 }
 
 type Handler func(context.Context, Invocation) (any, error)
@@ -59,6 +65,8 @@ type Invocation struct {
 	CorrelationID string
 	ToolCallID    string
 	DryRun        bool
+	// callRecordID is the agent_tool_calls row of the executing call.
+	callRecordID string
 }
 
 type Confirmation struct {
@@ -78,6 +86,7 @@ type Confirmation struct {
 	DecidedAt     *time.Time      `json:"decided_at,omitempty"`
 	DecidedBy     *string         `json:"decided_by,omitempty"`
 	CompletedAt   *time.Time      `json:"completed_at,omitempty"`
+	CardMessageID *string         `json:"card_message_id,omitempty"`
 }
 
 type InvokeResult struct {
@@ -91,6 +100,11 @@ type Services struct {
 	Search   *search.Service
 	Files    *files.Service
 	Memory   *agentmemory.Service
+	// Knowledge is optional; without it search_knowledge reports an error.
+	Knowledge *knowledge.Service
+	// Interactive is optional; without it the collection, follow-up and
+	// direct message tools report forbidden.
+	Interactive *interactive.Service
 }
 
 type Executor struct {
@@ -182,7 +196,7 @@ func (executor *Executor) Invoke(ctx context.Context, invocation Invocation) (In
 		})
 		return InvokeResult{Output: preview}, err
 	}
-	if executor.requireWriteConfirmation && definition.Mode == "write" {
+	if executor.requireWriteConfirmation && definition.Mode == "write" && !definition.NoConfirmation {
 		confirmation, err := executor.requestConfirmation(ctx, invocation, definition)
 		return InvokeResult{Confirmation: &confirmation}, err
 	}
@@ -210,6 +224,7 @@ func (executor *Executor) execute(ctx context.Context, invocation Invocation, to
 	if err := executor.startCall(ctx, callID, invocation, definition); err != nil {
 		return nil, err
 	}
+	invocation.callRecordID = callID
 	result, callErr := tool.Handler(ctx, invocation)
 	encoded := json.RawMessage(nil)
 	if callErr == nil {
@@ -328,6 +343,39 @@ func (executor *Executor) recall(ctx context.Context, invocation Invocation) (an
 	return executor.services.Memory.Recall(ctx, invocation.User, agentmemory.RecallInput{Namespace: input.Namespace, Keys: input.Keys, Prefix: input.Prefix, Limit: input.Limit, EmbeddingModel: input.EmbeddingModel, QueryEmbedding: input.QueryEmbedding})
 }
 
+func (executor *Executor) searchKnowledge(ctx context.Context, invocation Invocation) (any, error) {
+	if executor.services.Knowledge == nil {
+		return nil, errors.New("knowledge base is not configured")
+	}
+	var input struct {
+		Query string `json:"query"`
+		Limit int    `json:"limit"`
+	}
+	_ = json.Unmarshal(invocation.Arguments, &input)
+	result, err := executor.services.Knowledge.SearchForAgent(ctx, knowledge.AgentSearchInput{
+		OrgID: invocation.User.OrgID, AgentID: invocation.User.ActorID, RunID: invocation.RunID,
+		ToolCallID: invocation.callRecordID, Query: input.Query, Limit: input.Limit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	type source struct {
+		ChunkID       string `json:"chunk_id"`
+		DocumentID    string `json:"document_id"`
+		DocumentTitle string `json:"document_title"`
+		Collection    string `json:"collection"`
+		Section       string `json:"section"`
+		Position      int    `json:"position"`
+		Text          string `json:"text"`
+	}
+	fragments := make([]source, len(result.Fragments))
+	for index, fragment := range result.Fragments {
+		fragments[index] = source{ChunkID: fragment.ChunkID, DocumentID: fragment.DocumentID, DocumentTitle: fragment.DocumentTitle,
+			Collection: fragment.CollectionName, Section: fragment.Section, Position: fragment.Position, Text: fragment.Content}
+	}
+	return map[string]any{"fragments": fragments, "found": len(fragments) > 0}, nil
+}
+
 func (executor *Executor) requestConfirmation(ctx context.Context, invocation Invocation, definition Definition) (Confirmation, error) {
 	confirmationID, err := id.New()
 	if err != nil {
@@ -366,6 +414,9 @@ func (executor *Executor) requestConfirmation(ctx context.Context, invocation In
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return Confirmation{}, err
+	}
+	if inserted.RowsAffected() == 1 {
+		executor.postConfirmationCard(ctx, invocation, &confirmation)
 	}
 	return confirmation, nil
 }
@@ -456,18 +507,19 @@ func (executor *Executor) DecideConfirmation(ctx context.Context, current identi
 		return Confirmation{}, err
 	}
 	if !approve {
+		executor.resolveConfirmationCard(ctx, current.OrgID, confirmation, current.ActorID)
 		return confirmation, nil
 	}
 	tool, exists := executor.tools[confirmation.ToolName]
 	if !exists || tool.Definition.Mode != "write" || !agentauthz.HasScope(scopes, string(tool.Definition.RequiredScope)) || tool.Definition.RequiredScope != confirmation.RequiredScope {
-		return executor.finishConfirmation(ctx, confirmation, nil, ErrForbidden)
+		return executor.finishAndResolve(ctx, current, confirmation, nil, ErrForbidden)
 	}
 	invocation := Invocation{User: identity.User{ActorID: confirmation.AgentID, OrgID: current.OrgID, OrgRole: "member"}, Identity: access.Identity{AuthenticationKind: "api_key", ActorID: confirmation.AgentID, OrgID: current.OrgID, Scopes: scopes}, Name: confirmation.ToolName, Arguments: confirmation.Arguments, RunID: confirmation.RunID, CorrelationID: confirmation.CorrelationID, ToolCallID: confirmation.ToolCallID}
 	if err := validateArguments(tool.Definition, invocation.Arguments); err != nil {
-		return executor.finishConfirmation(ctx, confirmation, nil, err)
+		return executor.finishAndResolve(ctx, current, confirmation, nil, err)
 	}
 	output, callErr := executor.execute(ctx, invocation, tool)
-	return executor.finishConfirmation(ctx, confirmation, output, callErr)
+	return executor.finishAndResolve(ctx, current, confirmation, output, callErr)
 }
 
 func (executor *Executor) finishConfirmation(ctx context.Context, confirmation Confirmation, output json.RawMessage, callErr error) (Confirmation, error) {
@@ -493,17 +545,17 @@ func jsonEqual(left, right json.RawMessage) bool {
 	return json.Unmarshal(left, &leftValue) == nil && json.Unmarshal(right, &rightValue) == nil && reflect.DeepEqual(leftValue, rightValue)
 }
 
-const confirmationFields = `confirmation.id,confirmation.agent_id,confirmation.run_id,confirmation.tool_call_id,confirmation.correlation_id,confirmation.tool_name,confirmation.required_scope,confirmation.arguments,confirmation.status,confirmation.result,confirmation.error_code,confirmation.requested_at,confirmation.expires_at,confirmation.decided_at,confirmation.decided_by,confirmation.completed_at`
+const confirmationFields = `confirmation.id,confirmation.agent_id,confirmation.run_id,confirmation.tool_call_id,confirmation.correlation_id,confirmation.tool_name,confirmation.required_scope,confirmation.arguments,confirmation.status,confirmation.result,confirmation.error_code,confirmation.requested_at,confirmation.expires_at,confirmation.decided_at,confirmation.decided_by,confirmation.completed_at,confirmation.card_message_id`
 const confirmationSelect = `SELECT ` + confirmationFields + ` FROM agent_tool_confirmations confirmation`
 
 type rowScanner interface{ Scan(...any) error }
 
 func scanConfirmation(row rowScanner, result *Confirmation) error {
-	return row.Scan(&result.ID, &result.AgentID, &result.RunID, &result.ToolCallID, &result.CorrelationID, &result.ToolName, &result.RequiredScope, &result.Arguments, &result.Status, &result.Result, &result.ErrorCode, &result.RequestedAt, &result.ExpiresAt, &result.DecidedAt, &result.DecidedBy, &result.CompletedAt)
+	return row.Scan(&result.ID, &result.AgentID, &result.RunID, &result.ToolCallID, &result.CorrelationID, &result.ToolName, &result.RequiredScope, &result.Arguments, &result.Status, &result.Result, &result.ErrorCode, &result.RequestedAt, &result.ExpiresAt, &result.DecidedAt, &result.DecidedBy, &result.CompletedAt, &result.CardMessageID)
 }
 
 func scanConfirmationWithScopes(row rowScanner, result *Confirmation, scopes *[]string) error {
-	return row.Scan(&result.ID, &result.AgentID, &result.RunID, &result.ToolCallID, &result.CorrelationID, &result.ToolName, &result.RequiredScope, &result.Arguments, &result.Status, &result.Result, &result.ErrorCode, &result.RequestedAt, &result.ExpiresAt, &result.DecidedAt, &result.DecidedBy, &result.CompletedAt, scopes)
+	return row.Scan(&result.ID, &result.AgentID, &result.RunID, &result.ToolCallID, &result.CorrelationID, &result.ToolName, &result.RequiredScope, &result.Arguments, &result.Status, &result.Result, &result.ErrorCode, &result.RequestedAt, &result.ExpiresAt, &result.DecidedAt, &result.DecidedBy, &result.CompletedAt, &result.CardMessageID, scopes)
 }
 
 func (executor *Executor) startCall(ctx context.Context, callID string, invocation Invocation, definition Definition) error {
@@ -552,12 +604,16 @@ func classifyError(err error) string {
 	switch {
 	case errors.Is(err, ErrForbidden):
 		return "forbidden"
-	case errors.Is(err, ErrInvalid), errors.Is(err, message.ErrInvalid), errors.Is(err, search.ErrInvalid), errors.Is(err, files.ErrInvalid), errors.Is(err, agentmemory.ErrInvalid):
+	case errors.Is(err, ErrInvalid), errors.Is(err, knowledge.ErrInvalid), errors.Is(err, message.ErrInvalid), errors.Is(err, search.ErrInvalid), errors.Is(err, files.ErrInvalid), errors.Is(err, agentmemory.ErrInvalid), errors.Is(err, interactive.ErrInvalid):
 		return "validation_failed"
-	case errors.Is(err, message.ErrNotFound), errors.Is(err, files.ErrNotFound), errors.Is(err, chat.ErrNotFound):
+	case errors.Is(err, message.ErrNotFound), errors.Is(err, files.ErrNotFound), errors.Is(err, chat.ErrNotFound), errors.Is(err, interactive.ErrNotFound):
 		return "not_found"
-	case errors.Is(err, message.ErrForbidden), errors.Is(err, files.ErrForbidden), errors.Is(err, chat.ErrForbidden):
+	case errors.Is(err, message.ErrForbidden), errors.Is(err, files.ErrForbidden), errors.Is(err, chat.ErrForbidden), errors.Is(err, interactive.ErrForbidden):
 		return "forbidden"
+	case errors.Is(err, interactive.ErrLimit):
+		return "limit_reached"
+	case errors.Is(err, message.ErrVersionConflict), errors.Is(err, message.ErrIdempotencyConflict):
+		return "conflict"
 	case errors.Is(err, ErrOutputTooLarge):
 		return "output_too_large"
 	default:
@@ -614,7 +670,7 @@ func rawTools(executor *Executor) []Tool {
 		}
 		return result
 	}
-	return []Tool{
+	return append([]Tool{
 		{Definition: Definition{Name: "get_chat_messages", Description: "Read recent root messages from a chat.", Mode: "read", RequiredScope: agent.ScopeMessagesRead, InputSchema: object([]string{"chat_id"}, map[string]any{"chat_id": uuidSchema, "before_seq": positive, "limit": limit})}, Handler: executor.getChatMessages},
 		{Definition: Definition{Name: "get_thread", Description: "Read replies in a message thread.", Mode: "read", RequiredScope: agent.ScopeMessagesRead, InputSchema: object([]string{"message_id"}, map[string]any{"message_id": uuidSchema, "before_seq": positive, "limit": limit})}, Handler: executor.getThread},
 		{Definition: Definition{Name: "search_messages", Description: "Search messages visible to the agent.", Mode: "read", RequiredScope: agent.ScopeSearchRead, InputSchema: object([]string{"query"}, map[string]any{"query": map[string]any{"type": "string", "minLength": 1, "maxLength": 200}, "chat_id": uuidSchema, "limit": limit})}, Handler: executor.searchMessages},
@@ -624,8 +680,9 @@ func rawTools(executor *Executor) []Tool {
 		{Definition: Definition{Name: "get_file_text", Description: "Read bounded extracted text from an accessible file.", Mode: "read", RequiredScope: agent.ScopeFilesRead, InputSchema: object([]string{"file_id"}, map[string]any{"file_id": uuidSchema, "max_chars": map[string]any{"type": "integer", "minimum": 1, "maximum": 100000}})}, Handler: executor.getFileText},
 		{Definition: Definition{Name: "list_members", Description: "List active members of a chat.", Mode: "read", RequiredScope: agent.ScopeMembersRead, InputSchema: object([]string{"chat_id"}, map[string]any{"chat_id": uuidSchema})}, Handler: executor.listMembers},
 		{Definition: Definition{Name: "remember", Description: "Store a namespaced JSON memory value with an optional vector embedding.", Mode: "write", RequiredScope: agent.ScopeMemoryWrite, InputSchema: object([]string{"key", "value"}, map[string]any{"namespace": map[string]any{"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"}, "key": map[string]any{"type": "string", "minLength": 1, "maxLength": 255}, "value": map[string]any{}, "embedding_model": map[string]any{"type": "string", "minLength": 1, "maxLength": 200}, "embedding": embeddingSchema()})}, Handler: executor.remember},
+		{Definition: Definition{Name: "search_knowledge", Description: "Search the knowledge base collections bound to this agent. Returns fragments with document title, section and position to cite as sources; an empty list means the knowledge base has no answer.", Mode: "read", RequiredScope: agent.ScopeKnowledgeRead, InputSchema: object([]string{"query"}, map[string]any{"query": map[string]any{"type": "string", "minLength": 1, "maxLength": 500}, "limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 20}})}, Handler: executor.searchKnowledge},
 		{Definition: Definition{Name: "recall", Description: "Recall namespaced memory by key/prefix or nearest vector using the same embedding model.", Mode: "read", RequiredScope: agent.ScopeMemoryRead, InputSchema: object(nil, map[string]any{"namespace": map[string]any{"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"}, "keys": map[string]any{"type": "array", "maxItems": 100, "uniqueItems": true, "items": map[string]any{"type": "string", "minLength": 1, "maxLength": 255}}, "prefix": map[string]any{"type": "string", "maxLength": 255}, "limit": limit, "embedding_model": map[string]any{"type": "string", "minLength": 1, "maxLength": 200}, "query_embedding": embeddingSchema()})}, Handler: executor.recall},
-	}
+	}, interactiveTools(executor, object, uuidSchema)...)
 }
 
 func embeddingSchema() map[string]any {

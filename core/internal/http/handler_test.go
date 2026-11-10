@@ -88,6 +88,8 @@ func TestRequiredAgentScopeUsesClosedAllowlist(t *testing.T) {
 		{standardhttp.MethodGet, "/api/v1/agent-runtime/private-future-route", "", false},
 		{standardhttp.MethodPost, "/api/v1/files/uploads", "", false},
 		{standardhttp.MethodGet, "/api/v1/agents", "", false},
+		// Buttons are pressed by people; agent API keys cannot press them.
+		{standardhttp.MethodPost, "/api/v1/messages/00000000-0000-7000-8000-000000000001/actions/accept", "", false},
 	}
 	for _, test := range tests {
 		t.Run(test.method+" "+test.path, func(t *testing.T) {

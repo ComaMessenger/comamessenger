@@ -17,6 +17,7 @@ import type {
   LoginRequest,
   Message,
   MessagePage,
+  MessageActionResult,
   MessagePin,
   MessageReceipt,
   MessageWindow,
@@ -1070,6 +1071,16 @@ export class MessengerAPI {
       method: "POST",
       body: JSON.stringify({ chat_id: chatID, client_msg_id: clientMsgID }),
     });
+  }
+  /** Presses a card button; the server decides who may press and replays repeats. */
+  pressMessageAction(
+    id: string,
+    actionID: string,
+  ): Promise<MessageActionResult> {
+    return this.request(
+      `/api/v1/messages/${id}/actions/${encodeURIComponent(actionID)}`,
+      { method: "POST" },
+    );
   }
   followThread(id: string): Promise<unknown> {
     return this.request(`/api/v1/messages/${id}/thread/follow`, {

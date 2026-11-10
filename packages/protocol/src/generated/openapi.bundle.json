@@ -2994,6 +2994,63 @@
         }
       }
     },
+    "/api/v1/messages/{message_id}/actions/{action_id}": {
+      "post": {
+        "operationId": "pressMessageAction",
+        "summary": "Press a button of an interactive message.",
+        "description": "Records the press of the current human user. The server decides who may press (chat membership plus the action audience), replays the original response when the same person presses again, closes single-use actions and emits message.updated with the new card state. Pressing a button of an agent card queues a run of that agent with input.trigger_type=message_action. Agent API keys cannot press buttons.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MessageId"
+          },
+          {
+            "name": "action_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The press was recorded, or the earlier press of the same person was replayed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageActionResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "description": "action_closed when the action is closed or already taken; action_conflict when the person already chose another action of the same group.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/v1/messages/{message_id}/thread/follow": {
       "put": {
         "operationId": "followThread",
@@ -4262,6 +4319,405 @@
             }
           },
           "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/knowledge/collections": {
+      "get": {
+        "operationId": "listKnowledgeCollections",
+        "description": "Collections the current actor may read. Holders of knowledge.manage see every collection.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Readable knowledge collections.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/KnowledgeCollection"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createKnowledgeCollection",
+        "description": "Requires knowledge.manage.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateKnowledgeCollectionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Collection created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeCollection"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/knowledge/collections/{collection_id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/KnowledgeCollectionId"
+        }
+      ],
+      "get": {
+        "operationId": "getKnowledgeCollection",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Readable knowledge collection.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeCollection"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateKnowledgeCollection",
+        "description": "Requires knowledge.manage. Changing the embedding connection drops existing vectors and re-embeds every ready document.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateKnowledgeCollectionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Collection updated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeCollection"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteKnowledgeCollection",
+        "description": "Requires knowledge.manage. Deletes documents and fragments and unbinds the collection from agents and drafts.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Collection deleted."
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/knowledge/collections/{collection_id}/documents": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/KnowledgeCollectionId"
+        }
+      ],
+      "get": {
+        "operationId": "listKnowledgeDocuments",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Documents of a readable collection with their processing status, newest first (up to 200).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/KnowledgeDocument"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createKnowledgeDocument",
+        "description": "Requires knowledge.manage. A `file` document takes a ready upload of the current user (text, Markdown, CSV, XLSX, DOCX or PDF) created through /files/uploads; a `page` is Markdown. Indexing runs asynchronously; poll the document for `status`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateKnowledgeDocumentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Document created and queued for indexing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeDocument"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/knowledge/documents/{document_id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/KnowledgeDocumentId"
+        }
+      ],
+      "get": {
+        "operationId": "getKnowledgeDocument",
+        "description": "Document status; pages include their Markdown body.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Knowledge document.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeDocument"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateKnowledgeDocument",
+        "description": "Requires knowledge.manage. A new page body increments content_version and re-indexes the page.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateKnowledgeDocumentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Document updated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeDocument"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteKnowledgeDocument",
+        "description": "Requires knowledge.manage. Removes the document and all of its fragments; an uploaded file is released to regular file cleanup.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Document deleted."
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/knowledge/search": {
+      "post": {
+        "operationId": "searchKnowledge",
+        "description": "Full-text search over readable collections, fused with vector search for collections whose embedding connection is enabled and approved for external data sharing.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeSearchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ranked fragments.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeSearchResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/knowledge/runs/{run_id}/fragments": {
+      "get": {
+        "operationId": "listKnowledgeRunFragments",
+        "description": "Fragments handed to the model by search_knowledge during a run, for sources and audit. Requires an agents.* viewing permission.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AgentRunId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Issued fragments in issue order.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeRunFragments"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
             "$ref": "#/components/responses/Error"
           }
         }
@@ -6289,6 +6745,24 @@
           "format": "uuid"
         }
       },
+      "KnowledgeCollectionId": {
+        "name": "collection_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "KnowledgeDocumentId": {
+        "name": "document_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
       "AgentToolConfirmationId": {
         "name": "confirmation_id",
         "in": "path",
@@ -6348,6 +6822,8 @@
       "ErrorCode": {
         "type": "string",
         "enum": [
+          "action_closed",
+          "action_conflict",
           "already_bootstrapped",
           "agent_budget_exceeded",
           "agent_conflict",
@@ -6366,6 +6842,8 @@
           "invalid_refresh_token",
           "invalid_request",
           "invitation_invalid",
+          "knowledge_conflict",
+          "knowledge_not_found",
           "message_not_found",
           "origin_not_allowed",
           "payload_too_large",
@@ -6549,6 +7027,518 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "KnowledgeCollection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "description",
+          "access",
+          "chat_ids",
+          "embedding_connection_id",
+          "document_count",
+          "can_manage",
+          "created_by",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "access": {
+            "description": "`organization`: every member reads it; `chats`: only members of `chat_ids`, and agents only in runs from those chats.",
+            "type": "string",
+            "enum": [
+              "organization",
+              "chats"
+            ]
+          },
+          "chat_ids": {
+            "description": "Empty for actors without knowledge.manage.",
+            "type": "array",
+            "uniqueItems": true,
+            "maxItems": 100,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "embedding_connection_id": {
+            "description": "Workspace LLM connection used for embeddings; null means word search only. Always null for actors without knowledge.manage.",
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "document_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "can_manage": {
+            "type": "boolean"
+          },
+          "created_by": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CreateKnowledgeCollectionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "access": {
+            "type": "string",
+            "enum": [
+              "organization",
+              "chats"
+            ],
+            "default": "organization"
+          },
+          "chat_ids": {
+            "type": "array",
+            "uniqueItems": true,
+            "maxItems": 100,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "embedding_connection_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "UpdateKnowledgeCollectionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "access": {
+            "type": "string",
+            "enum": [
+              "organization",
+              "chats"
+            ]
+          },
+          "chat_ids": {
+            "type": "array",
+            "uniqueItems": true,
+            "maxItems": 100,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "embedding_connection_id": {
+            "description": "null disables embeddings for the collection.",
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "KnowledgeDocument": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "collection_id",
+          "kind",
+          "title",
+          "file_id",
+          "file_name",
+          "file_mime",
+          "file_size",
+          "status",
+          "error_code",
+          "embedding_status",
+          "chunk_count",
+          "content_version",
+          "indexed_at",
+          "created_by",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "collection_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "file",
+              "page"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "file_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "file_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "file_mime": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "file_size": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "body": {
+            "description": "Markdown body; returned for pages by getKnowledgeDocument and on create/update.",
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "processing",
+              "ready",
+              "failed"
+            ]
+          },
+          "error_code": {
+            "description": "Set when status is failed: unsupported_format, file_unavailable, no_text_extracted, empty_document, indexing_failed.",
+            "type": "string",
+            "maxLength": 120
+          },
+          "embedding_status": {
+            "description": "`none` means word search only (no approved embedding connection).",
+            "type": "string",
+            "enum": [
+              "none",
+              "pending",
+              "ready",
+              "failed"
+            ]
+          },
+          "chunk_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "content_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "indexed_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "created_by": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CreateKnowledgeDocumentRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "file",
+              "page"
+            ]
+          },
+          "title": {
+            "description": "Required for pages; defaults to the file name for files.",
+            "type": "string",
+            "maxLength": 255
+          },
+          "file_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 1048576
+          }
+        }
+      },
+      "UpdateKnowledgeDocumentRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1048576
+          }
+        }
+      },
+      "KnowledgeSearchRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "query"
+        ],
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "collection_ids": {
+            "description": "Restrict to these readable collections; an unreadable id returns 404.",
+            "type": "array",
+            "uniqueItems": true,
+            "maxItems": 50,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 8
+          }
+        }
+      },
+      "KnowledgeFragment": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "chunk_id",
+          "collection_id",
+          "collection_name",
+          "document_id",
+          "document_title",
+          "document_kind",
+          "section",
+          "position",
+          "content",
+          "score",
+          "match"
+        ],
+        "properties": {
+          "chunk_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "collection_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "collection_name": {
+            "type": "string"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "document_title": {
+            "type": "string"
+          },
+          "document_kind": {
+            "type": "string",
+            "enum": [
+              "file",
+              "page"
+            ]
+          },
+          "section": {
+            "description": "Heading path of the fragment, e.g. \"Rules › Holidays\"; sheet name for spreadsheets.",
+            "type": "string"
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Zero-based fragment index within the document."
+          },
+          "content": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number"
+          },
+          "match": {
+            "type": "string",
+            "enum": [
+              "text",
+              "semantic",
+              "hybrid"
+            ]
+          }
+        }
+      },
+      "KnowledgeSearchResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fragments",
+          "semantic"
+        ],
+        "properties": {
+          "fragments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeFragment"
+            }
+          },
+          "semantic": {
+            "type": "boolean",
+            "description": "Whether vector search contributed."
+          }
+        }
+      },
+      "KnowledgeRunFragments": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fragments"
+        ],
+        "properties": {
+          "fragments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "tool_call_id",
+                "chunk_id",
+                "document_id",
+                "collection_id",
+                "document_title",
+                "section",
+                "position",
+                "rank",
+                "available"
+              ],
+              "properties": {
+                "tool_call_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "chunk_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "document_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "collection_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "document_title": {
+                  "type": "string"
+                },
+                "section": {
+                  "type": "string"
+                },
+                "position": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "rank": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "available": {
+                  "type": "boolean",
+                  "description": "False once the fragment or its document was removed."
+                }
+              }
+            }
           }
         }
       },
@@ -7724,7 +8714,10 @@
           "memory:read",
           "memory:write",
           "runtime:execute",
-          "runtime:worker"
+          "runtime:worker",
+          "knowledge:read",
+          "messages:interactive",
+          "followups:write"
         ]
       },
       "Agent": {
@@ -7897,6 +8890,16 @@
             "type": "array",
             "uniqueItems": true,
             "maxItems": 100,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "knowledge_collection_ids": {
+            "description": "Knowledge collections bound to the draft (or the published version when there is no draft). Empty for actors without agent management rights.",
+            "type": "array",
+            "uniqueItems": true,
+            "maxItems": 50,
             "items": {
               "type": "string",
               "format": "uuid"
@@ -8181,6 +9184,15 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          "knowledge_collection_ids": {
+            "type": "array",
+            "uniqueItems": true,
+            "maxItems": 50,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         }
       },
@@ -8278,6 +9290,15 @@
             "type": "array",
             "uniqueItems": true,
             "maxItems": 100,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "knowledge_collection_ids": {
+            "type": "array",
+            "uniqueItems": true,
+            "maxItems": 50,
             "items": {
               "type": "string",
               "format": "uuid"
@@ -8686,6 +9707,11 @@
           "completed_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "card_message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Chat card mirroring this confirmation in the run's chat, when one was posted."
           }
         }
       },
@@ -9058,6 +10084,15 @@
             "type": "string",
             "maxLength": 120
           },
+          "embedding_model": {
+            "description": "Embedding model for the knowledge base; empty disables embeddings. Not available for anthropic.",
+            "type": "string",
+            "maxLength": 200
+          },
+          "embedding_data_sharing_approved": {
+            "description": "Explicit consent to send document text to the provider for embeddings.",
+            "type": "boolean"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -9108,6 +10143,15 @@
           "enabled": {
             "type": "boolean",
             "default": true
+          },
+          "embedding_model": {
+            "description": "Embedding model for the knowledge base; empty disables embeddings. Not available for anthropic.",
+            "type": "string",
+            "maxLength": 200
+          },
+          "embedding_data_sharing_approved": {
+            "description": "Explicit consent to send document text to the provider for embeddings.",
+            "type": "boolean"
           }
         }
       },
@@ -9143,6 +10187,15 @@
             "maxLength": 16384
           },
           "enabled": {
+            "type": "boolean"
+          },
+          "embedding_model": {
+            "description": "Embedding model for the knowledge base; empty disables embeddings. Not available for anthropic.",
+            "type": "string",
+            "maxLength": 200
+          },
+          "embedding_data_sharing_approved": {
+            "description": "Explicit consent to send document text to the provider for embeddings.",
             "type": "boolean"
           }
         }
@@ -10290,7 +11343,8 @@
           "agents.approve",
           "agents.observe",
           "audit.read",
-          "chats.moderate"
+          "chats.moderate",
+          "knowledge.manage"
         ]
       },
       "TokenResponse": {
@@ -11768,6 +12822,338 @@
             "items": {
               "$ref": "#/components/schemas/File"
             }
+          },
+          "blocks": {
+            "$ref": "#/components/schemas/MessageBlocks"
+          }
+        }
+      },
+      "MessageBlocks": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Optional structured part of an agent message. The body always carries a plain-text fallback; clients that do not support the version render the body. Server-managed state (responses, closed, binding) is part of the document so durable events carry the current card.",
+        "required": [
+          "version"
+        ],
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Schema version; this Core writes 1."
+          },
+          "card": {
+            "$ref": "#/components/schemas/MessageCard"
+          },
+          "actions": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "$ref": "#/components/schemas/MessageAction"
+            }
+          },
+          "sources": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/MessageSource"
+            }
+          }
+        }
+      },
+      "MessageCard": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "status": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "label",
+              "tone"
+            ],
+            "properties": {
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 60
+              },
+              "tone": {
+                "type": "string",
+                "enum": [
+                  "neutral",
+                  "info",
+                  "success",
+                  "warning",
+                  "danger"
+                ]
+              }
+            }
+          },
+          "fields": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "label",
+                "value"
+              ],
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "value": {
+                  "type": "string",
+                  "maxLength": 500
+                }
+              }
+            }
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "text"
+              ],
+              "properties": {
+                "text": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                "state": {
+                  "type": "string",
+                  "enum": [
+                    "done",
+                    "pending",
+                    "failed"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "MessageAction": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "label",
+          "style",
+          "limit",
+          "closed",
+          "responses"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "primary",
+              "secondary",
+              "danger"
+            ]
+          },
+          "limit": {
+            "type": "string",
+            "enum": [
+              "per_actor",
+              "single"
+            ],
+            "description": "per_actor lets each allowed person press once; single closes the action after the first press."
+          },
+          "group": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+            "description": "Actions of one group are a single choice per person."
+          },
+          "allowed": {
+            "$ref": "#/components/schemas/MessageActionAudience"
+          },
+          "closed": {
+            "type": "boolean"
+          },
+          "responses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MessageActionResponse"
+            }
+          },
+          "binding": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Server-only link to a domain command. tool_confirmation buttons decide an agent tool confirmation and require agents.approve.",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "tool_confirmation"
+                ]
+              },
+              "confirmation_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "decision": {
+                "type": "string",
+                "enum": [
+                  "approve",
+                  "deny"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "MessageActionAudience": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Absent audience means any active human chat member. Matching any listed actor, role or permission is enough. The server enforces it.",
+        "properties": {
+          "actor_ids": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "chat_roles": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "owner",
+                "admin",
+                "member"
+              ]
+            }
+          },
+          "org_roles": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "owner",
+                "admin",
+                "member"
+              ]
+            }
+          },
+          "permissions": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/Permission"
+            }
+          }
+        }
+      },
+      "MessageActionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "actor_id",
+          "responded_at"
+        ],
+        "properties": {
+          "actor_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "responded_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "MessageSource": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "message",
+              "file",
+              "document"
+            ]
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "file_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "excerpt": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "MessageActionResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "message",
+          "action_id",
+          "response",
+          "replayed"
+        ],
+        "properties": {
+          "message": {
+            "$ref": "#/components/schemas/Message"
+          },
+          "action_id": {
+            "type": "string"
+          },
+          "response": {
+            "$ref": "#/components/schemas/MessageActionResponse"
+          },
+          "replayed": {
+            "type": "boolean"
           }
         }
       },
@@ -11875,6 +13261,14 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          "blocks": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageBlocks"
+              }
+            ],
+            "description": "Agent API keys with messages:interactive only. A blank body is replaced by a generated text fallback."
           }
         }
       },
