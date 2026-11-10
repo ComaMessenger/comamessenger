@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import {
   Bell,
+  BookOpen,
   Bot,
   ChevronDown,
   MessageCircle,
@@ -28,6 +29,7 @@ export type PrimarySection =
   | "important"
   | "members"
   | "agents"
+  | "knowledge"
   | "more"
   | "none";
 
@@ -78,6 +80,13 @@ export function GlobalSidebar({
     },
     { id: "important", path: "/important", label: t("important"), icon: Star },
     { id: "members", path: "/members", label: t("members"), icon: Users },
+    // Every member may read the collections opened to them.
+    {
+      id: "knowledge",
+      path: "/knowledge",
+      label: t("knowledgeBase"),
+      icon: BookOpen,
+    },
   ];
   if (hasPermission(user, "agents.manage"))
     items.push({

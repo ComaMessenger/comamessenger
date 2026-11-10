@@ -122,6 +122,21 @@ const routes = [
   ),
   createRoute({
     getParentRoute: () => root,
+    path: "/knowledge",
+    component: marker,
+  }),
+  createRoute({
+    getParentRoute: () => root,
+    path: "/knowledge/$collectionId",
+    component: marker,
+  }),
+  createRoute({
+    getParentRoute: () => root,
+    path: "/knowledge/$collectionId/$documentId",
+    component: marker,
+  }),
+  createRoute({
+    getParentRoute: () => root,
     path: "/more",
     component: marker,
   }),

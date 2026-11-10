@@ -11,6 +11,7 @@ import { conversationCatalog } from "../conversation/i18n";
 import { dialogsCatalog } from "../dialogs/i18n";
 import { directoriesCatalog } from "../directories/i18n";
 import { agentsCatalog } from "../agents/i18n";
+import { knowledgeCatalog } from "../knowledge/i18n";
 
 const catalogs = mergeCatalogs({ ru, en }, [
   authCatalog,
@@ -20,6 +21,7 @@ const catalogs = mergeCatalogs({ ru, en }, [
   dialogsCatalog,
   directoriesCatalog,
   agentsCatalog,
+  knowledgeCatalog,
 ]);
 
 const pseudo = Object.fromEntries(

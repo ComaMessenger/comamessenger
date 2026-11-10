@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import {
   Bell,
+  BookOpen,
   ChevronDown,
   ChevronRight,
   LogOut,
@@ -170,6 +171,13 @@ export function MorePage() {
             title={t("moreProfile")}
             hint={t("moreProfileHint")}
             onClick={() => navigate("/settings/profile")}
+          />
+          <div className="more-page__divider" />
+          <MoreRow
+            icon={<BookOpen aria-hidden="true" />}
+            title={t("knowledgeBase")}
+            hint={t("moreKnowledgeHint")}
+            onClick={() => navigate("/knowledge")}
           />
           {isAdmin && (
             <>

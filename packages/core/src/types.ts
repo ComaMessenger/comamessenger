@@ -20,6 +20,25 @@ export type FileUpload = components["schemas"]["FileUpload"];
 export type CompletedFilePart = components["schemas"]["CompletedFilePart"];
 export type SearchPage = components["schemas"]["SearchPage"];
 export type SearchResult = components["schemas"]["SearchResult"];
+export type KnowledgeCollection = components["schemas"]["KnowledgeCollection"];
+export type CreateKnowledgeCollectionRequest =
+  components["schemas"]["CreateKnowledgeCollectionRequest"];
+export type UpdateKnowledgeCollectionRequest =
+  components["schemas"]["UpdateKnowledgeCollectionRequest"];
+export type KnowledgeDocument = components["schemas"]["KnowledgeDocument"];
+export type CreateKnowledgeDocumentRequest =
+  components["schemas"]["CreateKnowledgeDocumentRequest"];
+export type UpdateKnowledgeDocumentRequest =
+  components["schemas"]["UpdateKnowledgeDocumentRequest"];
+export type KnowledgeDocumentFragments =
+  components["schemas"]["KnowledgeDocumentFragments"];
+export type KnowledgeEmbeddingConnection =
+  components["schemas"]["KnowledgeEmbeddingConnection"];
+export type KnowledgeSearchRequest =
+  components["schemas"]["KnowledgeSearchRequest"];
+export type KnowledgeSearchResult =
+  components["schemas"]["KnowledgeSearchResult"];
+export type KnowledgeFragment = components["schemas"]["KnowledgeFragment"];
 export type AvatarUpdate = components["schemas"]["AvatarUpdate"];
 export type ChatAvatarUpdate = components["schemas"]["ChatAvatarUpdate"];
 export type MessagePage = components["schemas"]["MessagePage"];
