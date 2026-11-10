@@ -56,15 +56,36 @@ func TestAgentMessageProvenanceAndChatRoles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if created.AgentProvenance == nil || created.AgentProvenance.Trigger != "webhook" || created.AgentProvenance.TriggerLabel != "Accounting slots" || created.AgentProvenance.RunID != runID {
+	// The webhook name is configuration, not something the chat should learn.
+	if created.AgentProvenance == nil || created.AgentProvenance.Trigger != "webhook" || created.AgentProvenance.TriggerLabel != "" || created.AgentProvenance.RunID != runID {
 		t.Fatalf("provenance = %+v", created.AgentProvenance)
 	}
 	if source := created.Blocks.Sources[0]; source.ChunkID != chunkID || source.Position == nil || *source.Position != 7 {
 		t.Fatalf("source = %+v", source)
 	}
 	page, err := service.List(ctx, fixture.member, fixture.groupID, ListOptions{})
-	if err != nil || len(page.Messages) != 1 || page.Messages[0].AgentProvenance == nil || page.Messages[0].AgentProvenance.Trigger != "webhook" {
+	if err != nil || len(page.Messages) < 1 || page.Messages[len(page.Messages)-1].AgentProvenance == nil || page.Messages[len(page.Messages)-1].AgentProvenance.Trigger != "webhook" {
 		t.Fatalf("listed = %+v, err=%v", page.Messages, err)
+	}
+	// The label is recorded when the message is written: editing the rule
+	// later does not rewrite old messages.
+	scheduleID, scheduleRun := mustID(t), mustID(t)
+	if _, err := pool.Exec(ctx, `INSERT INTO agent_triggers(id,org_id,agent_id,type,config,enabled,timezone,next_run_at) VALUES($1,$2,$3,'schedule','{"chat_id":"`+fixture.groupID+`","hour":9,"minute":0}',true,'Europe/Moscow',now())`, scheduleID, orgID, agentID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO agent_runs(id,org_id,agent_id,trigger_id,correlation_id,chat_id,input) VALUES($1,$2,$3,$4,gen_random_uuid(),$5,'{"trigger_type":"schedule"}')`, scheduleRun, orgID, agentID, scheduleID, fixture.groupID); err != nil {
+		t.Fatal(err)
+	}
+	daily, _, err := service.CreateForAgentRun(ctx, agent, fixture.groupID, CreateInput{ClientMsgID: mustID(t), Body: "Итоги", BodyFormat: "plain"}, AgentProvenance{RunID: scheduleRun})
+	if err != nil || daily.AgentProvenance == nil || daily.AgentProvenance.TriggerLabel != "09:00 Europe/Moscow" {
+		t.Fatalf("schedule provenance = %+v err=%v", daily.AgentProvenance, err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE agent_triggers SET config=jsonb_set(config,'{hour}','18') WHERE id=$1`, scheduleID); err != nil {
+		t.Fatal(err)
+	}
+	reread, err := service.Get(ctx, fixture.member, daily.ID)
+	if err != nil || reread.AgentProvenance == nil || reread.AgentProvenance.TriggerLabel != "09:00 Europe/Moscow" {
+		t.Fatalf("provenance after the rule changed = %+v err=%v", reread.AgentProvenance, err)
 	}
 	other := mustID(t)
 	if _, _, err := service.CreateForAgentRun(ctx, agent, fixture.groupID, CreateInput{ClientMsgID: mustID(t), Body: "x", BodyFormat: "plain",

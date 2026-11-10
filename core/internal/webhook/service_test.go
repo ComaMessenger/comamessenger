@@ -55,7 +55,13 @@ func TestWebhookDeliveryStartsAgentOnceWithPayloadAsData(t *testing.T) {
 	if _, err := service.Create(t.Context(), member, CreateInput{Name: "Учёт"}); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("member created a webhook: %v", err)
 	}
-	created, err := service.Create(t.Context(), owner, CreateInput{Name: "Учёт", RateLimitPerMinute: 5, MaxBodyBytes: 2048})
+	// A webhook nobody released for agents: builders neither see it nor
+	// start an agent by it.
+	private, err := service.Create(t.Context(), owner, CreateInput{Name: "Бухгалтерия"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := service.Create(t.Context(), owner, CreateInput{Name: "Учёт", RateLimitPerMinute: 5, MaxBodyBytes: 2048, AgentUseAllowed: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +69,7 @@ func TestWebhookDeliveryStartsAgentOnceWithPayloadAsData(t *testing.T) {
 		t.Fatalf("created = %+v", created)
 	}
 	listed, err := service.List(t.Context(), owner)
-	if err != nil || len(listed) != 1 {
+	if err != nil || len(listed) != 2 {
 		t.Fatalf("list = %+v, err=%v", listed, err)
 	}
 	encoded, _ := json.Marshal(listed)
@@ -74,11 +80,15 @@ func TestWebhookDeliveryStartsAgentOnceWithPayloadAsData(t *testing.T) {
 	// members without either right see nothing.
 	builder := identity.User{ActorID: memberID, OrgID: orgID, OrgRole: "admin", Permissions: []permission.Code{permission.AgentsBuild}}
 	built, err := service.List(t.Context(), builder)
-	if err != nil || len(built) != 1 || built[0].Name != "Учёт" || built[0].SecretHint != "" {
+	if err != nil || len(built) != 1 || built[0].Name != "Учёт" || built[0].SecretHint != "" || !built[0].AgentUseAllowed {
 		t.Fatalf("builder list = %+v, err=%v", built, err)
 	}
 	if _, err := service.List(t.Context(), member); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("member list error = %v", err)
+	}
+	if _, err := triggers.Create(t.Context(), owner, agentID, agenttrigger.CreateInput{Type: "webhook", Enabled: true,
+		Config: json.RawMessage(`{"webhook_id":"` + private.ID + `","chat_id":"` + chatID + `"}`)}); !errors.Is(err, agenttrigger.ErrInvalid) {
+		t.Fatalf("rule on a webhook not released for agents error = %v", err)
 	}
 	trigger, err := triggers.Create(t.Context(), owner, agentID, agenttrigger.CreateInput{Type: "webhook", Enabled: true,
 		Config: json.RawMessage(`{"webhook_id":"` + created.ID + `","chat_id":"` + chatID + `","event_types":["slot.released"]}`)})
@@ -181,7 +191,7 @@ func TestWebhookDeliveryStartsAgentOnceWithPayloadAsData(t *testing.T) {
 		t.Fatalf("journal = %v", statuses)
 	}
 	hooks, err := service.List(t.Context(), owner)
-	if err != nil || hooks[0].RejectedCount != 4 || hooks[0].LastRejectedCode != "invalid_signature" {
+	if err != nil || len(hooks) != 2 || hooks[1].RejectedCount != 4 || hooks[1].LastRejectedCode != "invalid_signature" {
 		t.Fatalf("rejected counter = %+v, err=%v", hooks, err)
 	}
 	var runs int
@@ -234,7 +244,7 @@ func TestUnsignedRequestsDoNotExhaustTheWebhook(t *testing.T) {
 		t.Fatal(err)
 	}
 	owner := identity.User{ActorID: ownerID, OrgID: orgID, OrgRole: "owner", Permissions: permission.Effective("owner", nil)}
-	created, err := service.Create(t.Context(), owner, CreateInput{Name: "Учёт", RateLimitPerMinute: 3})
+	created, err := service.Create(t.Context(), owner, CreateInput{Name: "Учёт", RateLimitPerMinute: 3, AgentUseAllowed: true})
 	if err != nil {
 		t.Fatal(err)
 	}

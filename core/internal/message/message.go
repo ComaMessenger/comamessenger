@@ -314,7 +314,7 @@ func insertAgentProvenance(ctx context.Context, tx pgx.Tx, user identity.User, m
 		return fmt.Errorf("record agent message provenance: %w", err)
 	}
 	if result.RowsAffected() == 1 {
-		return nil
+		return recordProvenanceReason(ctx, tx, user.OrgID, messageID, provenance.RunID)
 	}
 	var existingRunID string
 	if err := tx.QueryRow(ctx, `SELECT run_id FROM message_agent_provenance WHERE message_id=$1`, messageID).Scan(&existingRunID); err != nil {

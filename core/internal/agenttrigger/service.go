@@ -274,7 +274,9 @@ func validateAgentAndScheduleChat(ctx context.Context, tx pgx.Tx, orgID, agentID
 		if err := json.Unmarshal(input.Config, &config); err != nil {
 			return ErrInvalid
 		}
-		if err := tx.QueryRow(ctx, `SELECT true FROM integration_webhooks WHERE org_id=$1 AND id=$2`, orgID, config.WebhookID).Scan(&exists); errors.Is(err, pgx.ErrNoRows) {
+		// Only webhooks integrations.manage released for agents: the payload of
+		// another system reaches the agent's run input.
+		if err := tx.QueryRow(ctx, `SELECT true FROM integration_webhooks WHERE org_id=$1 AND id=$2 AND agent_use_allowed`, orgID, config.WebhookID).Scan(&exists); errors.Is(err, pgx.ErrNoRows) {
 			return ErrInvalid
 		} else if err != nil {
 			return err
@@ -745,7 +747,9 @@ type WebhookDelivery struct {
 // as untrusted content, and the notice repeats that for the model.
 func (service *Service) DispatchWebhook(ctx context.Context, tx pgx.Tx, delivery WebhookDelivery) (int, error) {
 	rows, err := tx.Query(ctx, triggerSelect+` WHERE trigger.org_id=$1 AND trigger.type='webhook' AND trigger.enabled AND trigger.superseded_at IS NULL
-		AND trigger.config->>'webhook_id'=$2::text ORDER BY trigger.created_at,trigger.id`, delivery.OrgID, delivery.WebhookID)
+		AND trigger.config->>'webhook_id'=$2::text
+		AND EXISTS(SELECT 1 FROM integration_webhooks hook WHERE hook.org_id=trigger.org_id AND hook.id::text=$2::text AND hook.agent_use_allowed)
+		ORDER BY trigger.created_at,trigger.id`, delivery.OrgID, delivery.WebhookID)
 	if err != nil {
 		return 0, err
 	}
