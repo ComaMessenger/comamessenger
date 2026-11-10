@@ -57,6 +57,13 @@ func TestPilotRecipesCreateNarrowAgents(t *testing.T) {
 					t.Errorf("%s/%s instructions use %s outside its tool list", recipe.ID, locale, mentioned)
 				}
 			}
+			for _, need := range recipe.Needs {
+				// A slot table is only readable with tables:read; neither the
+				// builder nor the Architect derives it from sources.
+				if need.Kind == "schedule" && !slices.Contains(recipe.Scopes, agent.ScopeTablesRead) {
+					t.Errorf("%s/%s reads the schedule without tables:read", recipe.ID, locale)
+				}
+			}
 			if runes := len([]rune(recipe.Instructions)); runes > 4000 || runes < 200 {
 				t.Errorf("%s/%s instructions have %d characters", recipe.ID, locale, runes)
 			}

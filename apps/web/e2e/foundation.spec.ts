@@ -1,6 +1,15 @@
+import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { knowledgeIDs, mockKnowledge } from "./knowledgeMock";
+
+// The agent role catalog as Core serves it (generated from the Go catalog).
+const agentRecipes: unknown = JSON.parse(
+  readFileSync(
+    new URL("./fixtures/agent-recipes.ru.json", import.meta.url),
+    "utf8",
+  ),
+);
 test("component catalog supports light, dark and phone", async ({ page }) => {
   await page.goto("/dev/components");
   await expect(page.getByRole("heading", { name: "Coma UI" })).toBeVisible();
@@ -351,7 +360,8 @@ async function mockMessenger(
     } else if (path.endsWith("/auth/password/reset")) {
       status = 204;
       body = undefined;
-    } else if (path.endsWith("/agents")) body = [];
+    } else if (path.endsWith("/agents/recipes")) body = agentRecipes;
+    else if (path.endsWith("/agents")) body = [];
     else if (path.endsWith("/chats")) {
       chatRequests += 1;
       body = { chats: [runtimeChat] };
