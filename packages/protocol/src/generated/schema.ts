@@ -1639,6 +1639,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agents/recipes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The built-in role catalog. Core is the only source of recipe names, instructions, scopes, rules and check examples. */
+        get: operations["listAgentRecipes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents/product-metrics": {
         parameters: {
             query?: never;
@@ -3027,6 +3044,54 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
+        /**
+         * @description custom or a recipe id from GET /api/v1/agents/recipes. qa is «Справка», onboarding «Наставник», summarizer «Что я пропустил».
+         * @enum {string}
+         */
+        AgentRecipeId: "custom" | "control" | "qa" | "onboarding" | "slots" | "handoff" | "summarizer";
+        AgentRecipe: {
+            id: components["schemas"]["AgentRecipeId"];
+            locale: string;
+            icon: string;
+            name: string;
+            /** @description The task in one phrase. */
+            summary: string;
+            /** @description A typical request to the agent. */
+            example: string;
+            /** @description Agent instructions a new agent of this recipe starts with. */
+            instructions: string;
+            scopes: components["schemas"]["AgentScope"][];
+            /** @description Agent tools the instructions rely on. */
+            tools: string[];
+            triggers: components["schemas"]["AgentRecipeTrigger"][];
+            params: components["schemas"]["AgentRecipeParam"][];
+            needs: components["schemas"]["AgentRecipeNeed"][];
+            checks: components["schemas"]["AgentRecipeCheck"][];
+        };
+        AgentRecipeTrigger: {
+            type: string;
+            /** @description The rule as a sentence for people. */
+            summary: string;
+            config: {
+                [key: string]: unknown;
+            };
+        };
+        AgentRecipeParam: {
+            key: string;
+            label: string;
+            value: string;
+        };
+        AgentRecipeNeed: {
+            /** @enum {string} */
+            kind: "chats" | "knowledge" | "schedule";
+            required: boolean;
+            label: string;
+            hint: string;
+        };
+        AgentRecipeCheck: {
+            prompt: string;
+            expectations: string[];
+        };
         /** @enum {string} */
         AgentScope: "chats:read" | "messages:read" | "messages:write" | "reactions:write" | "files:read" | "search:read" | "members:read" | "memory:read" | "memory:write" | "runtime:execute" | "runtime:worker" | "knowledge:read" | "messages:interactive" | "followups:write" | "tables:read";
         Agent: {
@@ -3040,8 +3105,7 @@ export interface components {
             handle: string;
             /** @enum {string} */
             kind: "builtin" | "external";
-            /** @enum {string} */
-            recipe: "custom" | "summarizer" | "qa" | "onboarding";
+            recipe: components["schemas"]["AgentRecipeId"];
             recipe_version: number;
             description: string;
             enabled: boolean;
@@ -3109,12 +3173,12 @@ export interface components {
             handle: string;
             /** @enum {string} */
             kind: "builtin" | "external";
-            /**
-             * @default custom
-             * @enum {string}
-             */
-            recipe: "custom" | "summarizer" | "qa" | "onboarding";
+            /** @default custom */
+            recipe: components["schemas"]["AgentRecipeId"];
+            /** @description Instructions. For a recipe agent leave empty to get the catalog instructions in `locale`. */
             description?: string;
+            /** @description Language of recipe instructions Core fills in (ru, en; falls back to en). Defaults to Accept-Language. */
+            locale?: string;
             enabled: boolean;
             allowed_scopes: components["schemas"]["AgentScope"][];
             /** Format: uuid */
@@ -5196,7 +5260,10 @@ export interface operations {
     };
     resetAgentRecipe: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Language of the reset instructions; without it the language of the current instructions is kept. */
+                locale?: string;
+            };
             header?: never;
             path: {
                 agent_id: components["parameters"]["AgentId"];
@@ -8264,6 +8331,30 @@ export interface operations {
             403: components["responses"]["Error"];
             409: components["responses"]["Error"];
             422: components["responses"]["Error"];
+        };
+    };
+    listAgentRecipes: {
+        parameters: {
+            query?: {
+                /** @description ru or en; defaults to Accept-Language and falls back to en. */
+                locale?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Localized recipes, pilot roles in catalog order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRecipe"][];
+                };
+            };
+            403: components["responses"]["Error"];
         };
     };
     getAgentProductMetrics: {

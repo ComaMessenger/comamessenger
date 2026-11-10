@@ -92,30 +92,6 @@ func (e AgentOperationalStatus) Valid() bool {
 	}
 }
 
-// Defines values for AgentRecipe.
-const (
-	AgentRecipeCustom     AgentRecipe = "custom"
-	AgentRecipeOnboarding AgentRecipe = "onboarding"
-	AgentRecipeQa         AgentRecipe = "qa"
-	AgentRecipeSummarizer AgentRecipe = "summarizer"
-)
-
-// Valid indicates whether the value is a known member of the AgentRecipe enum.
-func (e AgentRecipe) Valid() bool {
-	switch e {
-	case AgentRecipeCustom:
-		return true
-	case AgentRecipeOnboarding:
-		return true
-	case AgentRecipeQa:
-		return true
-	case AgentRecipeSummarizer:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for AgentFollowupStatus.
 const (
 	AgentFollowupStatusCanceled   AgentFollowupStatus = "canceled"
@@ -302,6 +278,60 @@ func (e AgentReadinessState) Valid() bool {
 	case AgentReadinessStatePaused:
 		return true
 	case AgentReadinessStateReady:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentRecipeId.
+const (
+	Control    AgentRecipeId = "control"
+	Custom     AgentRecipeId = "custom"
+	Handoff    AgentRecipeId = "handoff"
+	Onboarding AgentRecipeId = "onboarding"
+	Qa         AgentRecipeId = "qa"
+	Slots      AgentRecipeId = "slots"
+	Summarizer AgentRecipeId = "summarizer"
+)
+
+// Valid indicates whether the value is a known member of the AgentRecipeId enum.
+func (e AgentRecipeId) Valid() bool {
+	switch e {
+	case Control:
+		return true
+	case Custom:
+		return true
+	case Handoff:
+		return true
+	case Onboarding:
+		return true
+	case Qa:
+		return true
+	case Slots:
+		return true
+	case Summarizer:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentRecipeNeedKind.
+const (
+	AgentRecipeNeedKindChats     AgentRecipeNeedKind = "chats"
+	AgentRecipeNeedKindKnowledge AgentRecipeNeedKind = "knowledge"
+	AgentRecipeNeedKindSchedule  AgentRecipeNeedKind = "schedule"
+)
+
+// Valid indicates whether the value is a known member of the AgentRecipeNeedKind enum.
+func (e AgentRecipeNeedKind) Valid() bool {
+	switch e {
+	case AgentRecipeNeedKindChats:
+		return true
+	case AgentRecipeNeedKindKnowledge:
+		return true
+	case AgentRecipeNeedKindSchedule:
 		return true
 	default:
 		return false
@@ -1244,30 +1274,6 @@ func (e CreateAgentRequestKind) Valid() bool {
 	case CreateAgentRequestKindBuiltin:
 		return true
 	case CreateAgentRequestKindExternal:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for CreateAgentRequestRecipe.
-const (
-	CreateAgentRequestRecipeCustom     CreateAgentRequestRecipe = "custom"
-	CreateAgentRequestRecipeOnboarding CreateAgentRequestRecipe = "onboarding"
-	CreateAgentRequestRecipeQa         CreateAgentRequestRecipe = "qa"
-	CreateAgentRequestRecipeSummarizer CreateAgentRequestRecipe = "summarizer"
-)
-
-// Valid indicates whether the value is a known member of the CreateAgentRequestRecipe enum.
-func (e CreateAgentRequestRecipe) Valid() bool {
-	switch e {
-	case CreateAgentRequestRecipeCustom:
-		return true
-	case CreateAgentRequestRecipeOnboarding:
-		return true
-	case CreateAgentRequestRecipeQa:
-		return true
-	case CreateAgentRequestRecipeSummarizer:
 		return true
 	default:
 		return false
@@ -3778,9 +3784,11 @@ type Agent struct {
 	PublishedVersion           *int                   `json:"published_version"`
 	RateLimitPerMinute         int                    `json:"rate_limit_per_minute"`
 	Readiness                  AgentReadiness         `json:"readiness"`
-	Recipe                     AgentRecipe            `json:"recipe"`
-	RecipeVersion              int                    `json:"recipe_version"`
-	UpdatedAt                  time.Time              `json:"updated_at"`
+
+	// Recipe custom or a recipe id from GET /api/v1/agents/recipes. qa is «Справка», onboarding «Наставник», summarizer «Что я пропустил».
+	Recipe        AgentRecipeId `json:"recipe"`
+	RecipeVersion int           `json:"recipe_version"`
+	UpdatedAt     time.Time     `json:"updated_at"`
 }
 
 // AgentKind defines model for Agent.Kind.
@@ -3788,9 +3796,6 @@ type AgentKind string
 
 // AgentOperationalStatus defines model for Agent.OperationalStatus.
 type AgentOperationalStatus string
-
-// AgentRecipe defines model for Agent.Recipe.
-type AgentRecipe string
 
 // AgentApiKey defines model for AgentApiKey.
 type AgentApiKey struct {
@@ -3968,6 +3973,69 @@ type AgentReadinessBlockers string
 
 // AgentReadinessState defines model for AgentReadiness.State.
 type AgentReadinessState string
+
+// AgentRecipe defines model for AgentRecipe.
+type AgentRecipe struct {
+	Checks []AgentRecipeCheck `json:"checks"`
+
+	// Example A typical request to the agent.
+	Example string `json:"example"`
+	Icon    string `json:"icon"`
+
+	// Id custom or a recipe id from GET /api/v1/agents/recipes. qa is «Справка», onboarding «Наставник», summarizer «Что я пропустил».
+	Id AgentRecipeId `json:"id"`
+
+	// Instructions Agent instructions a new agent of this recipe starts with.
+	Instructions string             `json:"instructions"`
+	Locale       string             `json:"locale"`
+	Name         string             `json:"name"`
+	Needs        []AgentRecipeNeed  `json:"needs"`
+	Params       []AgentRecipeParam `json:"params"`
+	Scopes       []AgentScope       `json:"scopes"`
+
+	// Summary The task in one phrase.
+	Summary string `json:"summary"`
+
+	// Tools Agent tools the instructions rely on.
+	Tools    []string             `json:"tools"`
+	Triggers []AgentRecipeTrigger `json:"triggers"`
+}
+
+// AgentRecipeCheck defines model for AgentRecipeCheck.
+type AgentRecipeCheck struct {
+	Expectations []string `json:"expectations"`
+	Prompt       string   `json:"prompt"`
+}
+
+// AgentRecipeId custom or a recipe id from GET /api/v1/agents/recipes. qa is «Справка», onboarding «Наставник», summarizer «Что я пропустил».
+type AgentRecipeId string
+
+// AgentRecipeNeed defines model for AgentRecipeNeed.
+type AgentRecipeNeed struct {
+	Hint     string              `json:"hint"`
+	Kind     AgentRecipeNeedKind `json:"kind"`
+	Label    string              `json:"label"`
+	Required bool                `json:"required"`
+}
+
+// AgentRecipeNeedKind defines model for AgentRecipeNeed.Kind.
+type AgentRecipeNeedKind string
+
+// AgentRecipeParam defines model for AgentRecipeParam.
+type AgentRecipeParam struct {
+	Key   string `json:"key"`
+	Label string `json:"label"`
+	Value string `json:"value"`
+}
+
+// AgentRecipeTrigger defines model for AgentRecipeTrigger.
+type AgentRecipeTrigger struct {
+	Config map[string]interface{} `json:"config"`
+
+	// Summary The rule as a sentence for people.
+	Summary string `json:"summary"`
+	Type    string `json:"type"`
+}
 
 // AgentResponseCollection defines model for AgentResponseCollection.
 type AgentResponseCollection struct {
@@ -4567,37 +4635,41 @@ type CreateAgentMcpServerRequest struct {
 
 // CreateAgentRequest defines model for CreateAgentRequest.
 type CreateAgentRequest struct {
-	AllowedScopes               []AgentScope              `json:"allowed_scopes"`
-	ChatIds                     []openapi_types.UUID      `json:"chat_ids"`
-	DailyCostLimit              *string                   `json:"daily_cost_limit,omitempty"`
-	Description                 *string                   `json:"description,omitempty"`
-	DisplayName                 string                    `json:"display_name"`
-	Enabled                     bool                      `json:"enabled"`
-	EndpointUrl                 *string                   `json:"endpoint_url,omitempty"`
-	ExecutionTimeoutSeconds     *int                      `json:"execution_timeout_seconds,omitempty"`
-	ExternalDataSharingApproved bool                      `json:"external_data_sharing_approved"`
-	Handle                      string                    `json:"handle"`
-	Kind                        CreateAgentRequestKind    `json:"kind"`
-	KnowledgeCollectionIds      *[]openapi_types.UUID     `json:"knowledge_collection_ids,omitempty"`
-	LlmConnectionId             *openapi_types.UUID       `json:"llm_connection_id,omitempty"`
-	MaxChainDepth               *int                      `json:"max_chain_depth,omitempty"`
-	MaxOutputTokens             *int                      `json:"max_output_tokens,omitempty"`
-	MaxToolIterations           *int                      `json:"max_tool_iterations,omitempty"`
-	McpBindings                 *[]AgentMcpBinding        `json:"mcp_bindings,omitempty"`
-	Model                       *string                   `json:"model,omitempty"`
-	MonthlyCostLimit            *string                   `json:"monthly_cost_limit,omitempty"`
-	PerChatConcurrency          *int                      `json:"per_chat_concurrency,omitempty"`
-	Provider                    *string                   `json:"provider,omitempty"`
-	ProviderRateLimitPerMinute  *int                      `json:"provider_rate_limit_per_minute,omitempty"`
-	RateLimitPerMinute          *int                      `json:"rate_limit_per_minute,omitempty"`
-	Recipe                      *CreateAgentRequestRecipe `json:"recipe,omitempty"`
+	AllowedScopes  []AgentScope         `json:"allowed_scopes"`
+	ChatIds        []openapi_types.UUID `json:"chat_ids"`
+	DailyCostLimit *string              `json:"daily_cost_limit,omitempty"`
+
+	// Description Instructions. For a recipe agent leave empty to get the catalog instructions in `locale`.
+	Description                 *string                `json:"description,omitempty"`
+	DisplayName                 string                 `json:"display_name"`
+	Enabled                     bool                   `json:"enabled"`
+	EndpointUrl                 *string                `json:"endpoint_url,omitempty"`
+	ExecutionTimeoutSeconds     *int                   `json:"execution_timeout_seconds,omitempty"`
+	ExternalDataSharingApproved bool                   `json:"external_data_sharing_approved"`
+	Handle                      string                 `json:"handle"`
+	Kind                        CreateAgentRequestKind `json:"kind"`
+	KnowledgeCollectionIds      *[]openapi_types.UUID  `json:"knowledge_collection_ids,omitempty"`
+	LlmConnectionId             *openapi_types.UUID    `json:"llm_connection_id,omitempty"`
+
+	// Locale Language of recipe instructions Core fills in (ru, en; falls back to en). Defaults to Accept-Language.
+	Locale                     *string            `json:"locale,omitempty"`
+	MaxChainDepth              *int               `json:"max_chain_depth,omitempty"`
+	MaxOutputTokens            *int               `json:"max_output_tokens,omitempty"`
+	MaxToolIterations          *int               `json:"max_tool_iterations,omitempty"`
+	McpBindings                *[]AgentMcpBinding `json:"mcp_bindings,omitempty"`
+	Model                      *string            `json:"model,omitempty"`
+	MonthlyCostLimit           *string            `json:"monthly_cost_limit,omitempty"`
+	PerChatConcurrency         *int               `json:"per_chat_concurrency,omitempty"`
+	Provider                   *string            `json:"provider,omitempty"`
+	ProviderRateLimitPerMinute *int               `json:"provider_rate_limit_per_minute,omitempty"`
+	RateLimitPerMinute         *int               `json:"rate_limit_per_minute,omitempty"`
+
+	// Recipe custom or a recipe id from GET /api/v1/agents/recipes. qa is «Справка», onboarding «Наставник», summarizer «Что я пропустил».
+	Recipe *AgentRecipeId `json:"recipe,omitempty"`
 }
 
 // CreateAgentRequestKind defines model for CreateAgentRequest.Kind.
 type CreateAgentRequestKind string
-
-// CreateAgentRequestRecipe defines model for CreateAgentRequest.Recipe.
-type CreateAgentRequestRecipe string
 
 // CreateAgentTriggerRequest defines model for CreateAgentTriggerRequest.
 type CreateAgentTriggerRequest struct {
@@ -6418,6 +6490,12 @@ type ListAgentFollowupsParams struct {
 // ListAgentFollowupsParamsStatus defines parameters for ListAgentFollowups.
 type ListAgentFollowupsParamsStatus string
 
+// ListAgentRecipesParams defines parameters for ListAgentRecipes.
+type ListAgentRecipesParams struct {
+	// Locale ru or en; defaults to Accept-Language and falls back to en.
+	Locale *string `form:"locale,omitempty" json:"locale,omitempty"`
+}
+
 // ListAgentResponseCollectionsParams defines parameters for ListAgentResponseCollections.
 type ListAgentResponseCollectionsParams struct {
 	AgentId *openapi_types.UUID                       `form:"agent_id,omitempty" json:"agent_id,omitempty"`
@@ -6434,6 +6512,12 @@ type ListAgentToolConfirmationsParams struct {
 
 // ListAgentToolConfirmationsParamsStatus defines parameters for ListAgentToolConfirmations.
 type ListAgentToolConfirmationsParamsStatus string
+
+// ResetAgentRecipeParams defines parameters for ResetAgentRecipe.
+type ResetAgentRecipeParams struct {
+	// Locale Language of the reset instructions; without it the language of the current instructions is kept.
+	Locale *string `form:"locale,omitempty" json:"locale,omitempty"`
+}
 
 // LoginParams defines parameters for Login.
 type LoginParams struct {

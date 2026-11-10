@@ -375,6 +375,16 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/AgentId"
+          },
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "description": "Language of the reset instructions; without it the language of the current instructions is kept.",
+            "schema": {
+              "type": "string",
+              "maxLength": 35
+            }
           }
         ],
         "responses": {
@@ -4924,6 +4934,47 @@
             "$ref": "#/components/responses/Error"
           },
           "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/agents/recipes": {
+      "get": {
+        "operationId": "listAgentRecipes",
+        "description": "The built-in role catalog. Core is the only source of recipe names, instructions, scopes, rules and check examples.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "locale",
+            "in": "query",
+            "required": false,
+            "description": "ru or en; defaults to Accept-Language and falls back to en.",
+            "schema": {
+              "type": "string",
+              "maxLength": 35
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Localized recipes, pilot roles in catalog order.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AgentRecipe"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
             "$ref": "#/components/responses/Error"
           }
         }
@@ -9739,6 +9790,192 @@
           }
         }
       },
+      "AgentRecipeId": {
+        "type": "string",
+        "description": "custom or a recipe id from GET /api/v1/agents/recipes. qa is «Справка», onboarding «Наставник», summarizer «Что я пропустил».",
+        "enum": [
+          "custom",
+          "control",
+          "qa",
+          "onboarding",
+          "slots",
+          "handoff",
+          "summarizer"
+        ]
+      },
+      "AgentRecipe": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "locale",
+          "icon",
+          "name",
+          "summary",
+          "example",
+          "instructions",
+          "scopes",
+          "tools",
+          "triggers",
+          "params",
+          "needs",
+          "checks"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/AgentRecipeId"
+          },
+          "locale": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string",
+            "description": "The task in one phrase."
+          },
+          "example": {
+            "type": "string",
+            "description": "A typical request to the agent."
+          },
+          "instructions": {
+            "type": "string",
+            "maxLength": 4000,
+            "description": "Agent instructions a new agent of this recipe starts with."
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentScope"
+            }
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Agent tools the instructions rely on."
+          },
+          "triggers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentRecipeTrigger"
+            }
+          },
+          "params": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentRecipeParam"
+            }
+          },
+          "needs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentRecipeNeed"
+            }
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentRecipeCheck"
+            }
+          }
+        }
+      },
+      "AgentRecipeTrigger": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "summary",
+          "config"
+        ],
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string",
+            "description": "The rule as a sentence for people."
+          },
+          "config": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "AgentRecipeParam": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "label",
+          "value"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "AgentRecipeNeed": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "required",
+          "label",
+          "hint"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "chats",
+              "knowledge",
+              "schedule"
+            ]
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": "string"
+          },
+          "hint": {
+            "type": "string"
+          }
+        }
+      },
+      "AgentRecipeCheck": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "prompt",
+          "expectations"
+        ],
+        "properties": {
+          "prompt": {
+            "type": "string"
+          },
+          "expectations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "AgentScope": {
         "type": "string",
         "enum": [
@@ -9828,13 +10065,7 @@
             ]
           },
           "recipe": {
-            "type": "string",
-            "enum": [
-              "custom",
-              "summarizer",
-              "qa",
-              "onboarding"
-            ]
+            "$ref": "#/components/schemas/AgentRecipeId"
           },
           "recipe_version": {
             "type": "integer",
@@ -9842,7 +10073,7 @@
           },
           "description": {
             "type": "string",
-            "maxLength": 2000
+            "maxLength": 4000
           },
           "enabled": {
             "type": "boolean"
@@ -10131,18 +10362,18 @@
             ]
           },
           "recipe": {
-            "type": "string",
-            "enum": [
-              "custom",
-              "summarizer",
-              "qa",
-              "onboarding"
-            ],
+            "$ref": "#/components/schemas/AgentRecipeId",
             "default": "custom"
           },
           "description": {
             "type": "string",
-            "maxLength": 2000
+            "maxLength": 4000,
+            "description": "Instructions. For a recipe agent leave empty to get the catalog instructions in `locale`."
+          },
+          "locale": {
+            "type": "string",
+            "maxLength": 35,
+            "description": "Language of recipe instructions Core fills in (ru, en; falls back to en). Defaults to Accept-Language."
           },
           "enabled": {
             "type": "boolean"
@@ -10266,7 +10497,7 @@
           },
           "description": {
             "type": "string",
-            "maxLength": 2000
+            "maxLength": 4000
           },
           "enabled": {
             "type": "boolean"

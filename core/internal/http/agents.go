@@ -39,11 +39,32 @@ func (h *identityHandlers) agentProductMetrics(w standardhttp.ResponseWriter, r 
 	writeJSON(h.logger, w, standardhttp.StatusOK, result)
 }
 
+// listAgentRecipes serves the built-in role catalog in the requested
+// language (?locale=, then Accept-Language), falling back to English.
+func (h *identityHandlers) listAgentRecipes(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.agents.Recipes(r.Context(), authFromContext(r.Context()).User, requestLocale(r))
+	if err != nil {
+		h.writeAgentError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func requestLocale(r *standardhttp.Request) string {
+	if locale := r.URL.Query().Get("locale"); locale != "" {
+		return locale
+	}
+	return r.Header.Get("Accept-Language")
+}
+
 func (h *identityHandlers) createAgent(w standardhttp.ResponseWriter, r *standardhttp.Request) {
 	var input agent.CreateInput
 	if err := decodeJSON(w, r, &input); err != nil {
 		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
 		return
+	}
+	if input.Locale == "" {
+		input.Locale = r.Header.Get("Accept-Language")
 	}
 	if input.Enabled {
 		h.writeAgentError(w, r, agent.ErrNotReady)
@@ -128,7 +149,7 @@ func (h *identityHandlers) duplicateAgent(w standardhttp.ResponseWriter, r *stan
 }
 
 func (h *identityHandlers) resetAgentRecipe(w standardhttp.ResponseWriter, r *standardhttp.Request) {
-	result, err := h.agents.ResetRecipe(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "agentID"))
+	result, err := h.agents.ResetRecipeIn(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "agentID"), r.URL.Query().Get("locale"))
 	if err != nil {
 		h.writeAgentError(w, r, err)
 		return
