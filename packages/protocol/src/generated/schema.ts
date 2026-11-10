@@ -1401,6 +1401,118 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/knowledge/collections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Collections the current actor may read. Holders of knowledge.manage see every collection. */
+        get: operations["listKnowledgeCollections"];
+        put?: never;
+        /** @description Requires knowledge.manage. */
+        post: operations["createKnowledgeCollection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/collections/{collection_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: components["parameters"]["KnowledgeCollectionId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getKnowledgeCollection"];
+        put?: never;
+        post?: never;
+        /** @description Requires knowledge.manage. Deletes documents and fragments and unbinds the collection from agents and drafts. */
+        delete: operations["deleteKnowledgeCollection"];
+        options?: never;
+        head?: never;
+        /** @description Requires knowledge.manage. Changing the embedding connection drops existing vectors and re-embeds every ready document. */
+        patch: operations["updateKnowledgeCollection"];
+        trace?: never;
+    };
+    "/api/v1/knowledge/collections/{collection_id}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: components["parameters"]["KnowledgeCollectionId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listKnowledgeDocuments"];
+        put?: never;
+        /** @description Requires knowledge.manage. A `file` document takes a ready upload of the current user (text, Markdown, CSV, XLSX, DOCX or PDF) created through /files/uploads; a `page` is Markdown. Indexing runs asynchronously; poll the document for `status`. */
+        post: operations["createKnowledgeDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/documents/{document_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: components["parameters"]["KnowledgeDocumentId"];
+            };
+            cookie?: never;
+        };
+        /** @description Document status; pages include their Markdown body. */
+        get: operations["getKnowledgeDocument"];
+        put?: never;
+        post?: never;
+        /** @description Requires knowledge.manage. Removes the document and all of its fragments; an uploaded file is released to regular file cleanup. */
+        delete: operations["deleteKnowledgeDocument"];
+        options?: never;
+        head?: never;
+        /** @description Requires knowledge.manage. A new page body increments content_version and re-indexes the page. */
+        patch: operations["updateKnowledgeDocument"];
+        trace?: never;
+    };
+    "/api/v1/knowledge/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Full-text search over readable collections, fused with vector search for collections whose embedding connection is enabled and approved for external data sharing. */
+        post: operations["searchKnowledge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/runs/{run_id}/fragments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Fragments handed to the model by search_knowledge during a run, for sources and audit. Requires an agents.* viewing permission. */
+        get: operations["listKnowledgeRunFragments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents": {
         parameters: {
             query?: never;
@@ -2034,7 +2146,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "already_bootstrapped" | "agent_budget_exceeded" | "agent_conflict" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "workspace_not_found";
+        ErrorCode: "already_bootstrapped" | "agent_budget_exceeded" | "agent_conflict" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "workspace_not_found";
         File: {
             /** Format: uuid */
             id: string;
@@ -2082,6 +2194,155 @@ export interface components {
         SearchPage: {
             results: components["schemas"]["SearchResult"][];
             next_cursor: string | null;
+        };
+        KnowledgeCollection: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            description: string;
+            /**
+             * @description `organization`: every member reads it; `chats`: only members of `chat_ids`, and agents only in runs from those chats.
+             * @enum {string}
+             */
+            access: "organization" | "chats";
+            /** @description Empty for actors without knowledge.manage. */
+            chat_ids: string[];
+            /**
+             * Format: uuid
+             * @description Workspace LLM connection used for embeddings; null means word search only. Always null for actors without knowledge.manage.
+             */
+            embedding_connection_id: string | null;
+            document_count: number;
+            can_manage: boolean;
+            /** Format: uuid */
+            created_by: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CreateKnowledgeCollectionRequest: {
+            name: string;
+            description?: string;
+            /**
+             * @default organization
+             * @enum {string}
+             */
+            access: "organization" | "chats";
+            chat_ids?: string[];
+            /** Format: uuid */
+            embedding_connection_id?: string | null;
+        };
+        UpdateKnowledgeCollectionRequest: {
+            name?: string;
+            description?: string;
+            /** @enum {string} */
+            access?: "organization" | "chats";
+            chat_ids?: string[];
+            /**
+             * Format: uuid
+             * @description null disables embeddings for the collection.
+             */
+            embedding_connection_id?: string | null;
+        };
+        KnowledgeDocument: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            collection_id: string;
+            /** @enum {string} */
+            kind: "file" | "page";
+            title: string;
+            /** Format: uuid */
+            file_id: string | null;
+            file_name: string | null;
+            file_mime: string | null;
+            /** Format: int64 */
+            file_size: number | null;
+            /** @description Markdown body; returned for pages by getKnowledgeDocument and on create/update. */
+            body?: string;
+            /** @enum {string} */
+            status: "pending" | "processing" | "ready" | "failed";
+            /** @description Set when status is failed: unsupported_format, file_unavailable, no_text_extracted, empty_document, indexing_failed. */
+            error_code: string;
+            /**
+             * @description `none` means word search only (no approved embedding connection).
+             * @enum {string}
+             */
+            embedding_status: "none" | "pending" | "ready" | "failed";
+            chunk_count: number;
+            content_version: number;
+            /** Format: date-time */
+            indexed_at: string | null;
+            /** Format: uuid */
+            created_by: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CreateKnowledgeDocumentRequest: {
+            /** @enum {string} */
+            kind: "file" | "page";
+            /** @description Required for pages; defaults to the file name for files. */
+            title?: string;
+            /** Format: uuid */
+            file_id?: string;
+            body?: string;
+        };
+        UpdateKnowledgeDocumentRequest: {
+            title?: string;
+            body?: string;
+        };
+        KnowledgeSearchRequest: {
+            query: string;
+            /** @description Restrict to these readable collections; an unreadable id returns 404. */
+            collection_ids?: string[];
+            /** @default 8 */
+            limit: number;
+        };
+        KnowledgeFragment: {
+            /** Format: uuid */
+            chunk_id: string;
+            /** Format: uuid */
+            collection_id: string;
+            collection_name: string;
+            /** Format: uuid */
+            document_id: string;
+            document_title: string;
+            /** @enum {string} */
+            document_kind: "file" | "page";
+            /** @description Heading path of the fragment, e.g. "Rules › Holidays"; sheet name for spreadsheets. */
+            section: string;
+            /** @description Zero-based fragment index within the document. */
+            position: number;
+            content: string;
+            score: number;
+            /** @enum {string} */
+            match: "text" | "semantic" | "hybrid";
+        };
+        KnowledgeSearchResult: {
+            fragments: components["schemas"]["KnowledgeFragment"][];
+            /** @description Whether vector search contributed. */
+            semantic: boolean;
+        };
+        KnowledgeRunFragments: {
+            fragments: {
+                /** Format: uuid */
+                tool_call_id: string;
+                /** Format: uuid */
+                chunk_id: string;
+                /** Format: uuid */
+                document_id: string;
+                /** Format: uuid */
+                collection_id: string;
+                document_title: string;
+                section: string;
+                position: number;
+                rank: number;
+                /** @description False once the fragment or its document was removed. */
+                available: boolean;
+            }[];
         };
         CreateFileUploadRequest: {
             name: string;
@@ -2393,7 +2654,7 @@ export interface components {
             created_at: string;
         };
         /** @enum {string} */
-        AgentScope: "chats:read" | "messages:read" | "messages:write" | "reactions:write" | "files:read" | "search:read" | "members:read" | "memory:read" | "memory:write" | "runtime:execute" | "runtime:worker";
+        AgentScope: "chats:read" | "messages:read" | "messages:write" | "reactions:write" | "files:read" | "search:read" | "members:read" | "memory:read" | "memory:write" | "runtime:execute" | "runtime:worker" | "knowledge:read";
         Agent: {
             /** Format: uuid */
             id: string;
@@ -2427,6 +2688,8 @@ export interface components {
             provider_rate_limit_per_minute: number;
             execution_timeout_seconds: number;
             chat_ids: string[];
+            /** @description Knowledge collections bound to the draft (or the published version when there is no draft). Empty for actors without agent management rights. */
+            knowledge_collection_ids?: string[];
             /** Format: int64 */
             avatar_version: number;
             readiness: components["schemas"]["AgentReadiness"];
@@ -2501,6 +2764,7 @@ export interface components {
             /** @default 600 */
             execution_timeout_seconds: number;
             chat_ids: string[];
+            knowledge_collection_ids?: string[];
         };
         UpdateAgentRequest: {
             display_name?: string;
@@ -2524,6 +2788,7 @@ export interface components {
             provider_rate_limit_per_minute?: number;
             execution_timeout_seconds?: number;
             chat_ids?: string[];
+            knowledge_collection_ids?: string[];
         };
         AgentUsageEntry: {
             /** Format: uuid */
@@ -2754,6 +3019,10 @@ export interface components {
             /** Format: date-time */
             last_tested_at: string | null;
             last_error_code: string;
+            /** @description Embedding model for the knowledge base; empty disables embeddings. Not available for anthropic. */
+            embedding_model?: string;
+            /** @description Explicit consent to send document text to the provider for embeddings. */
+            embedding_data_sharing_approved?: boolean;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -2768,6 +3037,10 @@ export interface components {
             api_key: string;
             /** @default true */
             enabled: boolean;
+            /** @description Embedding model for the knowledge base; empty disables embeddings. Not available for anthropic. */
+            embedding_model?: string;
+            /** @description Explicit consent to send document text to the provider for embeddings. */
+            embedding_data_sharing_approved?: boolean;
         };
         UpdateAgentLlmConnectionRequest: {
             name?: string;
@@ -2777,6 +3050,10 @@ export interface components {
             default_model?: string;
             api_key?: string;
             enabled?: boolean;
+            /** @description Embedding model for the knowledge base; empty disables embeddings. Not available for anthropic. */
+            embedding_model?: string;
+            /** @description Explicit consent to send document text to the provider for embeddings. */
+            embedding_data_sharing_approved?: boolean;
         };
         AgentMcpServer: {
             /** Format: uuid */
@@ -3096,7 +3373,7 @@ export interface components {
             expires_at: string | null;
         };
         /** @enum {string} */
-        Permission: "members.manage" | "invitations.manage" | "workspace.settings" | "workspace.policies" | "branding.manage" | "integrations.manage" | "agents.manage" | "agents.build" | "agents.publish" | "agents.approve" | "agents.observe" | "audit.read" | "chats.moderate";
+        Permission: "members.manage" | "invitations.manage" | "workspace.settings" | "workspace.policies" | "branding.manage" | "integrations.manage" | "agents.manage" | "agents.build" | "agents.publish" | "agents.approve" | "agents.observe" | "audit.read" | "chats.moderate" | "knowledge.manage";
         TokenResponse: {
             access_token: string;
             /** Format: date-time */
@@ -3843,6 +4120,8 @@ export interface components {
         AgentId: string;
         AgentKeyId: string;
         AgentRunId: string;
+        KnowledgeCollectionId: string;
+        KnowledgeDocumentId: string;
         AgentToolConfirmationId: string;
         AgentTriggerId: string;
     };
@@ -6655,6 +6934,305 @@ export interface operations {
                 };
             };
             422: components["responses"]["Error"];
+        };
+    };
+    listKnowledgeCollections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Readable knowledge collections. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeCollection"][];
+                };
+            };
+            401: components["responses"]["Error"];
+        };
+    };
+    createKnowledgeCollection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateKnowledgeCollectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Collection created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeCollection"];
+                };
+            };
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    getKnowledgeCollection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: components["parameters"]["KnowledgeCollectionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Readable knowledge collection. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeCollection"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    deleteKnowledgeCollection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: components["parameters"]["KnowledgeCollectionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Collection deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    updateKnowledgeCollection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: components["parameters"]["KnowledgeCollectionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateKnowledgeCollectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Collection updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeCollection"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    listKnowledgeDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: components["parameters"]["KnowledgeCollectionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Documents of a readable collection with their processing status, newest first (up to 200). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeDocument"][];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    createKnowledgeDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: components["parameters"]["KnowledgeCollectionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateKnowledgeDocumentRequest"];
+            };
+        };
+        responses: {
+            /** @description Document created and queued for indexing. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeDocument"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    getKnowledgeDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: components["parameters"]["KnowledgeDocumentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Knowledge document. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeDocument"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    deleteKnowledgeDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: components["parameters"]["KnowledgeDocumentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Document deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    updateKnowledgeDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: components["parameters"]["KnowledgeDocumentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateKnowledgeDocumentRequest"];
+            };
+        };
+        responses: {
+            /** @description Document updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeDocument"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    searchKnowledge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KnowledgeSearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Ranked fragments. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeSearchResult"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    listKnowledgeRunFragments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: components["parameters"]["AgentRunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Issued fragments in issue order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeRunFragments"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     listAgents: {

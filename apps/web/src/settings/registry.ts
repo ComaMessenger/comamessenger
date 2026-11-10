@@ -16,6 +16,7 @@ export const permissions = [
   "agents.observe",
   "audit.read",
   "chats.moderate",
+  "knowledge.manage",
 ] as const satisfies readonly Permission[];
 
 export const permissionLabelKeys: Record<Permission, string> = {
@@ -32,6 +33,7 @@ export const permissionLabelKeys: Record<Permission, string> = {
   "agents.observe": "permissionAgentsObserve",
   "audit.read": "permissionAuditRead",
   "chats.moderate": "permissionChatsModerate",
+  "knowledge.manage": "permissionKnowledgeManage",
 };
 
 export type SettingsPageID =
