@@ -1,0 +1,69 @@
+# Thread reply, reaction and search on a message the flow sends itself.
+# Run after sign-in.yaml (reuses its session): maestro test e2e/conversation.yaml
+appId: com.comamessenger.app
+---
+- runFlow: open-app.yaml
+- tapOn:
+    id: chat-row-0
+# A unique text per run keeps the flow independent of earlier runs.
+- evalScript: ${output.tag = String(Date.now()).slice(-6)}
+- tapOn:
+    id: composer-input
+- inputText: Тред ${output.tag}
+- tapOn:
+    id: composer-send
+# Message rows are single accessible elements, so match by substring.
+- extendedWaitUntil:
+    visible: .*Тред ${output.tag}.*
+    timeout: 15000
+- longPressOn: .*Тред ${output.tag}.*
+- tapOn: Ответить в треде
+- extendedWaitUntil:
+    visible: Тред
+    timeout: 10000
+- tapOn:
+    id: composer-input
+- inputText: Ответ в треде
+- tapOn:
+    id: composer-send
+- extendedWaitUntil:
+    visible: .*Ответ в треде.*
+    timeout: 10000
+- takeScreenshot: thread
+- tapOn:
+    id: conversation-back
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    notVisible: Тред в.*
+    timeout: 10000
+- extendedWaitUntil:
+    visible: .*1 ответ.*
+    timeout: 10000
+- longPressOn: .*Тред ${output.tag}.*
+- tapOn: 👍
+- extendedWaitUntil:
+    visible: .*👍.*
+    timeout: 10000
+- takeScreenshot: reactions
+- tapOn:
+    id: conversation-back
+- tapOn:
+    id: open-search
+- inputText: ${output.tag}
+- extendedWaitUntil:
+    visible:
+      text: .*${output.tag}.*
+    timeout: 10000
+- takeScreenshot: search
+# Opening a search result jumps to the message and highlights it.
+- eraseText: 30
+- inputText: миграция
+- extendedWaitUntil:
+    visible: .*миграция готова.*
+    timeout: 10000
+- tapOn: .*миграция готова.*
+- extendedWaitUntil:
+    visible:
+      id: conversation
+    timeout: 10000
+- takeScreenshot: search-jump

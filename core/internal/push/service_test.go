@@ -339,4 +339,22 @@ func TestMaterializeAppliesGlobalRulesSnoozeAndSchedule(t *testing.T) {
 			t.Fatalf("sent_at = %v, error = %v", sentAt, err)
 		}
 	})
+	t.Run("refresh rotation keeps the browser subscribed", func(t *testing.T) {
+		rotatedID := uuid.NewString()
+		if _, err := pool.Exec(ctx, `INSERT INTO sessions(id,org_id,actor_id,family_id,refresh_hash,expires_at) VALUES($1,$2,$3,$4,decode(repeat('0a',32),'hex'),now()+interval '1 day')`, rotatedID, orgID, recipientID, sessionID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE sessions SET revoked_at=now(),replaced_by=$2 WHERE id=$1`, sessionID, rotatedID); err != nil {
+			t.Fatal(err)
+		}
+		if got := materialize(t, map[string]any{"push_enabled": true}, true); got != 1 {
+			t.Fatalf("deliveries after rotation = %d", got)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE sessions SET revoked_at=now() WHERE id=$1`, rotatedID); err != nil {
+			t.Fatal(err)
+		}
+		if got := materialize(t, map[string]any{"push_enabled": true}, true); got != 0 {
+			t.Fatalf("deliveries after logout = %d", got)
+		}
+	})
 }

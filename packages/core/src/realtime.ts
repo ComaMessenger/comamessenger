@@ -113,8 +113,15 @@ export class RealtimeCoordinator {
           Math.random() * 350;
         setTimeout(() => void this.connect(true), delay);
       };
-    } catch {
-      if (!this.stopped) setTimeout(() => void this.connect(true), 1000);
+    } catch (cause) {
+      if (this.stopped) return;
+      // A rejected refresh ends the session; retrying would loop forever.
+      if (cause instanceof APIError && cause.status === 401) {
+        this.callbacks.state("session_expired");
+        this.callbacks.sessionExpired?.();
+        return;
+      }
+      setTimeout(() => void this.connect(true), 1000);
     }
   }
   private async reauthenticate(expiredToken: string | null): Promise<void> {

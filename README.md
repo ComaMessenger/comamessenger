@@ -13,6 +13,7 @@ The Go server and agent runtime use `AGPL-3.0-only`. Clients, protocol packages,
 ```text
 core/                Go server
 apps/web/            React web client
+apps/mobile/         Expo iOS/Android phone client
 apps/agent-runtime/  TypeScript agent runtime
 packages/protocol/   OpenAPI contract and generated clients
 packages/core/       Platform-neutral client engine (API/realtime/store/outbox/markdown)

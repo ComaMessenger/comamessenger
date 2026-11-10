@@ -91,6 +91,9 @@ type PushConfig struct {
 	VAPIDPrivateKey string
 	VAPIDSubject    string
 	PollInterval    time.Duration
+	// RelayURL is the push relay of the published mobile app (ADR-0012).
+	// Empty disables mobile push.
+	RelayURL string
 }
 
 type AgentConfig struct {
@@ -233,7 +236,7 @@ func FromEnvironment() (Config, error) {
 		Realtime:  realtime,
 		EventLog:  eventLog,
 		Redis:     redisConfig,
-		Push:      PushConfig{VAPIDPublicKey: strings.TrimSpace(os.Getenv("VAPID_PUBLIC_KEY")), VAPIDPrivateKey: strings.TrimSpace(os.Getenv("VAPID_PRIVATE_KEY")), VAPIDSubject: valueOrDefault("VAPID_SUBJECT", "mailto:admin@localhost"), PollInterval: pushInterval},
+		Push:      PushConfig{VAPIDPublicKey: strings.TrimSpace(os.Getenv("VAPID_PUBLIC_KEY")), VAPIDPrivateKey: strings.TrimSpace(os.Getenv("VAPID_PRIVATE_KEY")), VAPIDSubject: valueOrDefault("VAPID_SUBJECT", "mailto:admin@localhost"), PollInterval: pushInterval, RelayURL: pushRelayURL()},
 		Agents: AgentConfig{
 			TriggerShardIndex: triggerShardIndex,
 			TriggerShardCount: triggerShardCount,
@@ -279,6 +282,9 @@ func FromEnvironment() (Config, error) {
 	}
 	if (cfg.Push.VAPIDPublicKey == "") != (cfg.Push.VAPIDPrivateKey == "") {
 		return Config{}, fmt.Errorf("VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY must be set together")
+	}
+	if cfg.Push.RelayURL != "" && !strings.HasPrefix(cfg.Push.RelayURL, "https://") && !(cfg.AppEnv == "development" && strings.HasPrefix(cfg.Push.RelayURL, "http://")) {
+		return Config{}, fmt.Errorf("PUSH_RELAY_URL must use https")
 	}
 	if cfg.Push.PollInterval < 100*time.Millisecond || cfg.Push.PollInterval > time.Minute {
 		return Config{}, fmt.Errorf("PUSH_POLL_INTERVAL must be between 100ms and 1m")
@@ -604,6 +610,15 @@ func (c RealtimeConfig) validate(messageMaxBodyBytes uint64) error {
 		return fmt.Errorf("WS_EPHEMERAL_RATE_WINDOW must be between 1s and 1m")
 	}
 	return nil
+}
+
+// pushRelayURL reads PUSH_RELAY_URL; "off" and empty both disable mobile push.
+func pushRelayURL() string {
+	value := strings.TrimRight(strings.TrimSpace(os.Getenv("PUSH_RELAY_URL")), "/")
+	if strings.EqualFold(value, "off") {
+		return ""
+	}
+	return value
 }
 
 func valueOrDefault(key, fallback string) string {

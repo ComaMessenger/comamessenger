@@ -1,0 +1,330 @@
+import { useCallback, useEffect, useState } from "react";
+import {
+  Alert,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import Constants from "expo-constants";
+import {
+  Bell,
+  ChevronRight,
+  ExternalLink,
+  LogOut,
+  MonitorSmartphone,
+  SlidersHorizontal,
+  UserRound,
+  type LucideIcon,
+} from "lucide-react-native";
+import { router } from "expo-router";
+import * as Notifications from "expo-notifications";
+import { useTranslation } from "react-i18next";
+import { radius, spacing } from "@comamessenger/tokens";
+import { useSession, useSignedIn } from "@/session/SessionProvider";
+import { displayServer } from "@/lib/server";
+import { useTheme } from "@/lib/theme";
+import { openWebClient } from "@/lib/web";
+import { Avatar } from "@/ui/Avatar";
+import { Text } from "@/ui/Text";
+import { registerForPush, type PushAvailability } from "@/push/registration";
+import { pickAndUploadAvatar } from "@/files/avatar";
+import { ActionSheet } from "@/ui/ActionSheet";
+
+export default function MoreScreen() {
+  const { t } = useTranslation();
+  const theme = useTheme();
+  const { api, user } = useSignedIn();
+  const { signOut, updateUser } = useSession();
+  const [photoMenu, setPhotoMenu] = useState(false);
+
+  async function changePhoto(action: "change" | "remove") {
+    setPhotoMenu(false);
+    try {
+      if (action === "remove") await api.deleteMyAvatar();
+      else {
+        // Let the sheet finish closing before the system picker appears.
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        if (!(await pickAndUploadAvatar(api))) return;
+      }
+      updateUser(await api.me());
+    } catch {
+      Alert.alert(t("actionFailed"));
+    }
+  }
+  const [push, setPush] = useState<PushAvailability | "off" | null>(null);
+
+  const refreshPush = useCallback(
+    (prompt: boolean) =>
+      registerForPush(api, { prompt })
+        .then(setPush)
+        .catch(() => setPush("off")),
+    [api],
+  );
+  useEffect(() => {
+    void Notifications.getPermissionsAsync().then((permission) =>
+      permission.granted
+        ? refreshPush(false)
+        : setPush(permission.canAskAgain ? "off" : "denied"),
+    );
+  }, [refreshPush]);
+
+  const pushStatus =
+    push === "ready"
+      ? t("notificationsOn")
+      : push === "denied"
+        ? t("notificationsDenied")
+        : push === "unsupported"
+          ? t("notificationsUnsupported")
+          : t("notificationsOff");
+
+  function confirmSignOut() {
+    Alert.alert(t("signOutConfirm"), undefined, [
+      { text: t("cancel"), style: "cancel" },
+      {
+        text: t("signOut"),
+        style: "destructive",
+        onPress: () => void signOut(),
+      },
+    ]);
+  }
+
+  return (
+    <SafeAreaView
+      edges={["top"]}
+      style={[styles.screen, { backgroundColor: theme.canvas }]}
+    >
+      <Text
+        accessibilityRole="header"
+        weight="semibold"
+        size={22}
+        style={styles.title}
+      >
+        {t("tabMore")}
+      </Text>
+      <ScrollView contentContainerStyle={styles.content}>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: theme.surface, borderColor: theme.border },
+          ]}
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("changePhoto")}
+            onPress={() => setPhotoMenu(true)}
+          >
+            <Avatar
+              name={user.display_name}
+              seed={user.id}
+              size={56}
+              actorID={user.id}
+              avatarVersion={user.avatar_version}
+            />
+          </Pressable>
+          <View style={styles.grow}>
+            <Text weight="semibold" size={18} numberOfLines={1}>
+              {user.display_name}
+            </Text>
+            <Text tone="muted" size={15} numberOfLines={1}>
+              @{user.handle} · {user.organization_name}
+            </Text>
+            <Text tone="subtle" size={13} numberOfLines={1}>
+              {displayServer(api.apiURL)}
+            </Text>
+          </View>
+        </View>
+
+        <View
+          style={[
+            styles.group,
+            { backgroundColor: theme.surface, borderColor: theme.border },
+          ]}
+        >
+          {(
+            [
+              [
+                "/settings/profile",
+                t("profile"),
+                UserRound,
+                "settings-profile",
+              ],
+              [
+                "/settings/notifications",
+                t("settingsNotifications"),
+                SlidersHorizontal,
+                "settings-notifications",
+              ],
+              [
+                "/settings/sessions",
+                t("sessions"),
+                MonitorSmartphone,
+                "settings-sessions",
+              ],
+            ] as const
+          ).map(
+            (
+              [href, label, Icon, testID]: readonly [
+                string,
+                string,
+                LucideIcon,
+                string,
+              ],
+              index,
+            ) => (
+              <View key={href}>
+                {index > 0 && (
+                  <View
+                    style={[styles.divider, { backgroundColor: theme.border }]}
+                  />
+                )}
+                <Pressable
+                  testID={testID}
+                  accessibilityRole="button"
+                  onPress={() => router.push(href as never)}
+                  style={({ pressed }) => [
+                    styles.item,
+                    pressed && { backgroundColor: theme.surfaceSelected },
+                  ]}
+                >
+                  <Icon size={20} color={theme.muted} />
+                  <Text weight="medium" size={16} style={styles.grow}>
+                    {label}
+                  </Text>
+                  <ChevronRight size={20} color={theme.subtle} />
+                </Pressable>
+              </View>
+            ),
+          )}
+        </View>
+
+        <View
+          style={[
+            styles.group,
+            { backgroundColor: theme.surface, borderColor: theme.border },
+          ]}
+        >
+          <View style={[styles.item, styles.notificationRow]}>
+            <Bell size={20} color={theme.muted} />
+            <View style={[styles.grow, styles.notificationBody]}>
+              <Text weight="medium" size={16}>
+                {t("notifications")}
+              </Text>
+              <Text tone="muted" size={14}>
+                {pushStatus}
+              </Text>
+            </View>
+            {(push === "off" || push === "denied") && (
+              <Pressable
+                accessibilityRole="button"
+                style={styles.inlineAction}
+                onPress={() =>
+                  push === "denied"
+                    ? void Linking.openSettings()
+                    : void refreshPush(true)
+                }
+              >
+                <Text weight="semibold" size={16} tone="primary">
+                  {push === "denied"
+                    ? t("openSettings")
+                    : t("enableNotifications")}
+                </Text>
+              </Pressable>
+            )}
+          </View>
+          <View style={[styles.divider, { backgroundColor: theme.border }]} />
+          <Pressable
+            accessibilityRole="link"
+            onPress={() => void openWebClient(api.apiURL)}
+            style={styles.item}
+          >
+            <ExternalLink size={20} color={theme.muted} />
+            <View style={styles.grow}>
+              <Text weight="medium" size={16}>
+                {t("openWeb")}
+              </Text>
+              <Text tone="muted" size={14}>
+                {t("openWebHint")}
+              </Text>
+            </View>
+            <ChevronRight size={20} color={theme.subtle} />
+          </Pressable>
+          <View style={[styles.divider, { backgroundColor: theme.border }]} />
+          <Pressable
+            accessibilityRole="button"
+            onPress={confirmSignOut}
+            style={styles.item}
+          >
+            <LogOut size={22} color={theme.danger} />
+            <Text weight="medium" size={16} tone="danger" style={styles.grow}>
+              {t("signOut")}
+            </Text>
+          </Pressable>
+        </View>
+
+        <Text tone="subtle" size={13} style={styles.version}>
+          {t("appVersion", { version: Constants.expoConfig?.version ?? "" })}
+        </Text>
+      </ScrollView>
+      <ActionSheet<"change" | "remove">
+        visible={photoMenu}
+        options={[
+          { value: "change", label: t("changePhoto") },
+          ...(user.avatar_version > 0
+            ? [
+                {
+                  value: "remove" as const,
+                  label: t("removePhoto"),
+                  danger: true,
+                },
+              ]
+            : []),
+        ]}
+        onSelect={(action) => void changePhoto(action)}
+        onClose={() => setPhotoMenu(false)}
+      />
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1 },
+  title: {
+    paddingHorizontal: spacing[4],
+    paddingTop: spacing[4],
+    paddingBottom: spacing[3],
+  },
+  content: {
+    paddingHorizontal: spacing[4],
+    paddingBottom: spacing[6],
+    gap: spacing[4],
+    width: "100%",
+    maxWidth: 640,
+    alignSelf: "center",
+  },
+  card: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[3],
+    padding: spacing[4],
+    borderRadius: radius.lg,
+    borderWidth: 1,
+  },
+  group: { borderRadius: radius.lg, borderWidth: 1, overflow: "hidden" },
+  item: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[3],
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    minHeight: 56,
+  },
+  divider: { height: StyleSheet.hairlineWidth, marginLeft: 54 },
+  notificationRow: { flexWrap: "wrap" },
+  notificationBody: { minWidth: 140 },
+  inlineAction: { minHeight: 44, minWidth: 44, justifyContent: "center" },
+  grow: { flex: 1 },
+  version: { textAlign: "center" },
+});

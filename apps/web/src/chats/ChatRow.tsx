@@ -1,7 +1,7 @@
 import { useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import { BellOff, Pin } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { messagePlainText, type Chat, type ChatFolder } from "@comamessenger/core";
+import { chatPreview as corePreview, type Chat, type ChatFolder } from "@comamessenger/core";
 import { Avatar, Badge, countLabel, cx, type Presence } from "../ui";
 import { formatListTime } from "../lib/format";
 import { chatGlyph, isChatMuted, titleOf } from "../lib/chats";
@@ -12,14 +12,11 @@ export function chatPreview(
   ownID: string,
   t: (key: string) => string,
 ): { sender: string; text: string } {
-  const last = chat.last_message;
-  if (!last) return { sender: "", text: chat.topic };
-  if (last.deleted) return { sender: "", text: t("previewDeleted") };
-  const text = messagePlainText(last.body).trim() || t("previewAttachment");
-  if (chat.kind === "direct")
-    return { sender: last.actor_id === ownID ? `${t("previewYou")}: ` : "", text };
-  const name = last.actor_id === ownID ? t("previewYou") : last.actor_display_name;
-  return { sender: name ? `${name}: ` : "", text };
+  return corePreview(chat, ownID, {
+    you: t("previewYou"),
+    deleted: t("previewDeleted"),
+    attachment: t("previewAttachment"),
+  });
 }
 
 export function ChatRow({

@@ -1,15 +1,15 @@
-import type { Chat, ChatMember } from "@comamessenger/core";
+import type { Chat, ChatFilter, ChatMember } from "@comamessenger/core";
 import i18n from "../i18n";
 
-export type SystemChatFilter = "all" | "direct" | "grouped" | "channel";
-export type ChatFilter = SystemChatFilter | `folder:${string}`;
-
-export const systemChatFilters: SystemChatFilter[] = [
-  "all",
-  "direct",
-  "grouped",
-  "channel",
-];
+export {
+  canManageChat,
+  isChatMuted,
+  isReadOnly,
+  matchesFilter,
+  systemChatFilters,
+  type ChatFilter,
+  type SystemChatFilter,
+} from "@comamessenger/core";
 
 export function titleOf(chat?: Chat, members: ChatMember[] = [], ownID = "") {
   if (!chat) return "Coma";
@@ -19,21 +19,6 @@ export function titleOf(chat?: Chat, members: ChatMember[] = [], ownID = "") {
     members.find((item) => item.actor_id !== ownID)?.display_name ||
     i18n.t("directChat")
   );
-}
-
-export function isChatMuted(chat: Chat, now = Date.now()) {
-  return (
-    chat.notify_level === "none" ||
-    Boolean(chat.muted_until && new Date(chat.muted_until).getTime() > now)
-  );
-}
-
-export function isReadOnly(chat: Chat) {
-  return chat.kind === "channel" && chat.role === "member";
-}
-
-export function canManageChat(chat: Chat) {
-  return chat.kind !== "direct" && chat.role !== "member";
 }
 
 export function chatFilterFromURL(): ChatFilter {
@@ -55,25 +40,6 @@ export function writeChatFilterToURL(next: ChatFilter) {
   } else if (next === "all") url.searchParams.delete("filter");
   else url.searchParams.set("filter", next);
   window.history.replaceState(window.history.state, "", url);
-}
-
-export function matchesFilter(
-  chat: Chat,
-  filter: ChatFilter,
-  folderChatIDs: string[] | undefined,
-) {
-  switch (filter) {
-    case "all":
-      return true;
-    case "direct":
-      return chat.kind === "direct";
-    case "grouped":
-      return chat.kind === "group";
-    case "channel":
-      return chat.kind === "channel";
-    default:
-      return folderChatIDs?.includes(chat.id) ?? false;
-  }
 }
 
 /** Channels show a hash instead of initials. */

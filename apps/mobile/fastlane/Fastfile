@@ -1,0 +1,200 @@
+# frozen_string_literal: true
+
+# Store builds of the Coma mobile app (docs/phases/06-mobile.md, M6).
+#
+#   bundle exec fastlane verify          # identities, store access, next build numbers
+#   bundle exec fastlane ios beta        # Release archive → TestFlight
+#   bundle exec fastlane android beta    # Release .aab → Google Play internal testing
+#
+# Invariants:
+#   * ios/ and android/ come from `expo prebuild` and are not committed; build
+#     numbers reach the native projects through COMA_BUILD_NUMBER;
+#   * signing uses an App Store Connect API key with automatic provisioning and
+#     an upload keystore outside the repository; no secrets live in git;
+#   * lanes publish only to TestFlight and Play internal testing.
+#
+# Configuration comes from apps/mobile/.env (see .env.example).
+
+require 'json'
+require 'shellwords'
+fastlane_require 'fileutils'
+
+opt_out_usage
+
+APP_DIR = File.expand_path('..', __dir__)
+ARTIFACTS_DIR = File.join(APP_DIR, 'build')
+
+def require_env(*names)
+  missing = names.select { |name| ENV[name].to_s.strip.empty? }
+  return if missing.empty?
+
+  UI.user_error!("Set #{missing.join(', ')} in apps/mobile/.env (see .env.example).")
+end
+
+def app_identity
+  raw = Dir.chdir(APP_DIR) { sh('npx', 'expo', 'config', '--type', 'public', '--json', log: false) }
+  config = JSON.parse(raw)
+  { bundle_id: config.dig('ios', 'bundleIdentifier'), package: config.dig('android', 'package'), version: config['version'] }
+end
+
+def env_path(name)
+  path = File.expand_path(ENV.fetch(name), APP_DIR)
+  UI.user_error!("#{name} points to a missing file: #{path}") unless File.file?(path)
+  path
+end
+
+def appstore_api_key
+  require_env('APPLE_KEY_ID', 'APPLE_ISSUER_ID', 'APPLE_PRIVATE_KEY_PATH')
+  app_store_connect_api_key(
+    key_id: ENV.fetch('APPLE_KEY_ID'),
+    issuer_id: ENV.fetch('APPLE_ISSUER_ID'),
+    key_filepath: env_path('APPLE_PRIVATE_KEY_PATH'),
+    duration: 1200,
+    in_house: false
+  )
+end
+
+def next_ios_build(bundle_id, api_key)
+  latest_testflight_build_number(app_identifier: bundle_id, api_key: api_key, initial_build_number: 0).to_i + 1
+end
+
+def next_android_code(package, json_key)
+  tracks = %w[internal alpha beta production]
+  codes = tracks.flat_map do |track|
+    google_play_track_version_codes(package_name: package, track: track, json_key: json_key)
+  rescue StandardError
+    []
+  end
+  codes.map(&:to_i).max.to_i + 1
+end
+
+def prebuild(platform, build_number)
+  Dir.chdir(APP_DIR) do
+    # `pod install` inside prebuild needs the system CocoaPods, not a bundler shim.
+    Bundler.with_unbundled_env do
+      sh({ 'COMA_BUILD_NUMBER' => build_number.to_s, 'CI' => '1' },
+         'npx', 'expo', 'prebuild', '--clean', '--platform', platform)
+    end
+  end
+end
+
+desc 'Show identities, store access and the next build numbers without building'
+lane :verify do
+  identity = app_identity
+  UI.message("Bundle id / package: #{identity[:bundle_id]} / #{identity[:package]}, version #{identity[:version]}")
+
+  api_key = appstore_api_key
+  app = Spaceship::ConnectAPI::App.find(identity[:bundle_id])
+  if app
+    UI.success("App Store Connect: #{app.name} (#{app.id}), next build #{next_ios_build(identity[:bundle_id], api_key)}")
+  else
+    UI.important("App Store Connect: no app with bundle id #{identity[:bundle_id]} yet — create it in App Store Connect → Apps.")
+  end
+
+  require_env('GOOGLE_PLAY_SERVICE_ACCOUNT_PATH')
+  json_key = env_path('GOOGLE_PLAY_SERVICE_ACCOUNT_PATH')
+  begin
+    # One uncaught request first: next_android_code tolerates empty tracks.
+    google_play_track_version_codes(package_name: identity[:package], track: 'internal', json_key: json_key)
+    UI.success("Google Play: #{identity[:package]}, next versionCode #{next_android_code(identity[:package], json_key)}")
+  rescue StandardError => e
+    UI.important("Google Play: #{identity[:package]} not reachable (#{e.message.lines.first&.strip}). " \
+                 'Create the app in Play Console, grant the service account access and upload the first .aab by hand.')
+  end
+  upload_key = ENV.fetch('HOME') + '/.gradle/gradle.properties'
+  signing = File.file?(upload_key) && File.read(upload_key).include?('COMA_UPLOAD_STORE_FILE')
+  UI.message("Android upload keystore: #{signing ? 'configured' : 'missing (COMA_UPLOAD_* in ~/.gradle/gradle.properties)'}")
+end
+
+platform :ios do
+  desc 'Release archive and TestFlight upload'
+  lane :beta do
+    require_env('APPLE_TEAM_ID')
+    team_id = ENV.fetch('APPLE_TEAM_ID')
+    identity = app_identity
+    bundle_id = identity[:bundle_id]
+    api_key = appstore_api_key
+    key_path = env_path('APPLE_PRIVATE_KEY_PATH')
+    UI.user_error!("Create #{bundle_id} in App Store Connect first.") unless Spaceship::ConnectAPI::App.find(bundle_id)
+
+    build = next_ios_build(bundle_id, api_key)
+    UI.message("iOS beta: #{bundle_id} build #{build}, team #{team_id}")
+    prebuild('ios', build)
+
+    workspace = Dir.glob(File.join(APP_DIR, 'ios', '*.xcworkspace')).first
+    UI.user_error!('prebuild produced no .xcworkspace') unless workspace
+    output_dir = File.join(ARTIFACTS_DIR, 'ios')
+    FileUtils.mkdir_p(output_dir)
+
+    # Automatic signing with the API key: xcodebuild registers the app and its
+    # Notification Service Extension, their App Group and push capabilities.
+    build_app(
+      workspace: workspace,
+      scheme: File.basename(workspace, '.xcworkspace'),
+      configuration: 'Release',
+      export_method: 'app-store',
+      export_team_id: team_id,
+      export_options: { signingStyle: 'automatic', teamID: team_id, uploadSymbols: true },
+      xcargs: [
+        '-allowProvisioningUpdates',
+        "-authenticationKeyPath #{key_path.shellescape}",
+        "-authenticationKeyID #{ENV.fetch('APPLE_KEY_ID').shellescape}",
+        "-authenticationKeyIssuerID #{ENV.fetch('APPLE_ISSUER_ID').shellescape}",
+        "DEVELOPMENT_TEAM=#{team_id}",
+        'CODE_SIGN_STYLE=Automatic'
+      ].join(' '),
+      output_directory: output_dir,
+      output_name: 'Coma.ipa',
+      buildlog_path: File.join(output_dir, 'logs')
+    )
+
+    # Internal testers see every processed build; no external review.
+    upload_to_testflight(
+      api_key: api_key,
+      app_identifier: bundle_id,
+      ipa: File.join(output_dir, 'Coma.ipa'),
+      skip_waiting_for_build_processing: true,
+      changelog: ENV.fetch('APPLE_TESTFLIGHT_CHANGELOG', "Build #{build}")
+    )
+    UI.success("TestFlight: #{bundle_id} build #{build}")
+  end
+end
+
+platform :android do
+  desc 'Release .aab and Google Play internal testing upload'
+  lane :beta do
+    require_env('GOOGLE_PLAY_SERVICE_ACCOUNT_PATH')
+    json_key = env_path('GOOGLE_PLAY_SERVICE_ACCOUNT_PATH')
+    properties = File.join(ENV.fetch('HOME'), '.gradle', 'gradle.properties')
+    unless File.file?(properties) && File.read(properties).include?('COMA_UPLOAD_STORE_FILE')
+      UI.user_error!('Add COMA_UPLOAD_* to ~/.gradle/gradle.properties (apps/mobile/plugins/withAndroidReleaseSigning.js).')
+    end
+
+    package = app_identity[:package]
+    code = next_android_code(package, json_key)
+    UI.message("Android beta: #{package} versionCode #{code}")
+    prebuild('android', code)
+    Dir.chdir(File.join(APP_DIR, 'android')) do
+      sh({ 'COMA_BUILD_NUMBER' => code.to_s }, './gradlew', 'bundleRelease')
+    end
+    aab = File.join(APP_DIR, 'android/app/build/outputs/bundle/release/app-release.aab')
+    UI.user_error!("Gradle produced no #{aab}") unless File.file?(aab)
+    output_dir = File.join(ARTIFACTS_DIR, 'android')
+    FileUtils.mkdir_p(output_dir)
+    FileUtils.cp(aab, File.join(output_dir, "coma-#{code}.aab"))
+
+    upload_to_play_store(
+      package_name: package,
+      track: ENV.fetch('GOOGLE_PLAY_TRACK', 'internal'),
+      aab: aab,
+      json_key: json_key,
+      release_status: ENV.fetch('GOOGLE_PLAY_RELEASE_STATUS', 'completed'),
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      skip_upload_changelogs: true
+    )
+    UI.success("Google Play internal: #{package} versionCode #{code}")
+  end
+end

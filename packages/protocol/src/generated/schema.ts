@@ -93,6 +93,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Browsers present the HttpOnly refresh cookie. Native clients send `X-Coma-Client: native` without an Origin header and pass the refresh token in the body instead. */
         post: operations["refresh"];
         delete?: never;
         options?: never;
@@ -1138,6 +1139,39 @@ export interface paths {
         put: operations["putPushSubscription"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/push/devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Registers a mobile device handle issued by the push relay (ADR-0012) for the current session family. Repeating the call with the same handle updates it. */
+        put: operations["putMobilePushDevice"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/push/devices/{device_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteMobilePushDevice"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2290,6 +2324,9 @@ export interface components {
             /** @default UTC */
             timezone: string;
         };
+        RefreshRequest: {
+            refresh_token: string;
+        };
         LoginRequest: {
             /** Format: email */
             email: string;
@@ -3064,6 +3101,8 @@ export interface components {
             access_token: string;
             /** Format: date-time */
             access_expires_at: string;
+            /** @description Present only for requests sent with `X-Coma-Client: native`. */
+            refresh_token?: string;
             user: components["schemas"]["User"];
         };
         Session: {
@@ -3632,6 +3671,33 @@ export interface components {
         PushConfig: {
             enabled: boolean;
             public_key: string;
+            /** @description Push relay this instance sends mobile notifications through; empty when mobile push is off. Apps register only with the relay they were built for. */
+            mobile_relay_url: string;
+        };
+        ObjectLink: {
+            /** @description Short-lived object-store URL, or an API path when `authenticated` is true. */
+            url: string;
+            /** @description The URL is an API path that needs the bearer token. */
+            authenticated: boolean;
+        };
+        MobilePushDeviceRequest: {
+            /** @enum {string} */
+            platform: "ios" | "android";
+            relay_handle: string;
+            /** @description Base64 of the 32-byte AES-256-GCM key the app decrypts notifications with. */
+            notification_key: string;
+            app_version?: string;
+            locale?: string;
+        };
+        MobilePushDevice: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            platform: "ios" | "android";
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
         };
         PushSubscriptionRequest: {
             /** Format: uri */
@@ -3754,7 +3820,7 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
-        /** @description Access token and user. Refresh token is set as an HttpOnly cookie. */
+        /** @description Access token and user. Browsers receive the refresh token as an HttpOnly cookie; native clients receive it as `refresh_token`. */
         Tokens: {
             headers: {
                 [name: string]: unknown;
@@ -3765,6 +3831,10 @@ export interface components {
         };
     };
     parameters: {
+        /** @description `link` returns an ObjectLink instead of the bytes or a redirect; used by native clients. */
+        ObjectDelivery: "link";
+        /** @description `native` switches refresh token transport from the HttpOnly cookie to JSON bodies. Ignored when an Origin header is present. */
+        ClientKind: "native";
         ChatId: string;
         ActorId: string;
         MessageId: string;
@@ -3857,6 +3927,8 @@ export interface operations {
             header?: {
                 /** @description Required outside development; configure it with BOOTSTRAP_TOKEN. */
                 "X-Coma-Bootstrap-Token"?: string;
+                /** @description `native` switches refresh token transport from the HttpOnly cookie to JSON bodies. Ignored when an Origin header is present. */
+                "X-Coma-Client"?: components["parameters"]["ClientKind"];
             };
             path?: never;
             cookie?: never;
@@ -3876,7 +3948,10 @@ export interface operations {
     login: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description `native` switches refresh token transport from the HttpOnly cookie to JSON bodies. Ignored when an Origin header is present. */
+                "X-Coma-Client"?: components["parameters"]["ClientKind"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -3893,11 +3968,18 @@ export interface operations {
     refresh: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description `native` switches refresh token transport from the HttpOnly cookie to JSON bodies. Ignored when an Origin header is present. */
+                "X-Coma-Client"?: components["parameters"]["ClientKind"];
+            };
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RefreshRequest"];
+            };
+        };
         responses: {
             200: components["responses"]["Tokens"];
             401: components["responses"]["Error"];
@@ -4978,7 +5060,10 @@ export interface operations {
     acceptInvitation: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description `native` switches refresh token transport from the HttpOnly cookie to JSON bodies. Ignored when an Origin header is present. */
+                "X-Coma-Client"?: components["parameters"]["ClientKind"];
+            };
             path: {
                 token: string;
             };
@@ -5069,7 +5154,10 @@ export interface operations {
     };
     getActorAvatar: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `link` returns an ObjectLink instead of the bytes or a redirect; used by native clients. */
+                delivery?: components["parameters"]["ObjectDelivery"];
+            };
             header?: never;
             path: {
                 actor_id: components["parameters"]["ActorId"];
@@ -6047,6 +6135,53 @@ export interface operations {
             422: components["responses"]["Error"];
         };
     };
+    putMobilePushDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MobilePushDeviceRequest"];
+            };
+        };
+        responses: {
+            /** @description Registered device. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MobilePushDevice"];
+                };
+            };
+            422: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    deleteMobilePushDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                device_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Device removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["Error"];
+        };
+    };
     deletePushSubscription: {
         parameters: {
             query?: never;
@@ -6459,7 +6594,10 @@ export interface operations {
     };
     downloadFile: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `link` returns an ObjectLink instead of the bytes or a redirect; used by native clients. */
+                delivery?: components["parameters"]["ObjectDelivery"];
+            };
             header?: never;
             path: {
                 file_id: components["parameters"]["FileId"];
@@ -6468,13 +6606,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Authorized local blob stream. */
+            /** @description Authorized local blob stream, or an ObjectLink with `delivery=link`. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/octet-stream": string;
+                    "application/json": components["schemas"]["ObjectLink"];
                 };
             };
             /** @description Short-lived authorized object-store URL. */

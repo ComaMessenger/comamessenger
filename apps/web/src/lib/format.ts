@@ -1,3 +1,8 @@
+import {
+  formatBytes as formatByteSize,
+  formatDaySeparator as formatFeedDay,
+  formatListTime as formatCompactTime,
+} from "@comamessenger/core";
 import i18n from "../i18n";
 
 export function activeLocale() {
@@ -33,42 +38,16 @@ export function formatDateTime(value: string) {
 
 /** Compact time for list rows: today → HH:MM, this week → weekday, else → D MMM. */
 export function formatListTime(value: string, now = new Date()) {
-  const date = new Date(value);
-  const sameDay = date.toDateString() === now.toDateString();
-  if (sameDay) return formatTime(value);
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString())
-    return i18n.t("yesterday");
-  const days = (now.getTime() - date.getTime()) / 86_400_000;
-  if (days < 7)
-    return new Intl.DateTimeFormat(activeLocale(), { weekday: "short" }).format(
-      date,
-    );
-  if (date.getFullYear() === now.getFullYear())
-    return new Intl.DateTimeFormat(activeLocale(), {
-      day: "numeric",
-      month: "short",
-    }).format(date);
-  return new Intl.DateTimeFormat(activeLocale(), {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(date);
+  return formatCompactTime(value, activeLocale(), i18n.t("yesterday"), now);
 }
 
 export function formatDaySeparator(value: string, now = new Date()) {
-  const date = new Date(value);
-  if (date.toDateString() === now.toDateString()) return i18n.t("today");
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString())
-    return i18n.t("yesterday");
-  return new Intl.DateTimeFormat(activeLocale(), {
-    day: "numeric",
-    month: "long",
-    ...(date.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
-  }).format(date);
+  return formatFeedDay(
+    value,
+    activeLocale(),
+    { today: i18n.t("today"), yesterday: i18n.t("yesterday") },
+    now,
+  );
 }
 
 export function minuteGap(a: string, b: string) {
@@ -76,14 +55,12 @@ export function minuteGap(a: string, b: string) {
 }
 
 export function formatBytes(value: number) {
-  const locale = activeLocale();
-  const format = (amount: number, unit: string) =>
-    `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(amount)} ${unit}`;
-  if (value < 1000) return format(value, i18n.t("unitBytes"));
-  if (value < 1_000_000) return format(value / 1000, i18n.t("unitKilobytes"));
-  if (value < 1_000_000_000)
-    return format(value / 1_000_000, i18n.t("unitMegabytes"));
-  return format(value / 1_000_000_000, i18n.t("unitGigabytes"));
+  return formatByteSize(value, activeLocale(), {
+    bytes: i18n.t("unitBytes"),
+    kilobytes: i18n.t("unitKilobytes"),
+    megabytes: i18n.t("unitMegabytes"),
+    gigabytes: i18n.t("unitGigabytes"),
+  });
 }
 
 export function greetingKey(now = new Date()) {

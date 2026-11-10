@@ -50,6 +50,28 @@ func (h *identityHandlers) deletePushSubscription(w standardhttp.ResponseWriter,
 	}
 	w.WriteHeader(standardhttp.StatusNoContent)
 }
+func (h *identityHandlers) putMobileDevice(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	var input push.MobileDeviceInput
+	if err := decodeJSON(w, r, &input); err != nil {
+		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	auth := authFromContext(r.Context())
+	result, err := h.push.RegisterMobileDevice(r.Context(), auth.User, auth.Identity.SessionID, input)
+	if err != nil {
+		h.pushError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+func (h *identityHandlers) deleteMobileDevice(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	auth := authFromContext(r.Context())
+	if err := h.push.DeleteMobileDevice(r.Context(), auth.User, chi.URLParam(r, "deviceID")); err != nil {
+		h.pushError(w, r, err)
+		return
+	}
+	w.WriteHeader(standardhttp.StatusNoContent)
+}
 func (h *identityHandlers) getPreferences(w standardhttp.ResponseWriter, r *standardhttp.Request) {
 	result, err := h.push.GetPreferences(r.Context(), authFromContext(r.Context()).User)
 	if err != nil {
@@ -151,7 +173,7 @@ func (h *identityHandlers) listChatOverrides(w standardhttp.ResponseWriter, r *s
 	writeJSON(h.logger, w, standardhttp.StatusOK, result)
 }
 func (h *identityHandlers) pushError(w standardhttp.ResponseWriter, r *standardhttp.Request, err error) {
-	if errors.Is(err, push.ErrUnavailable) {
+	if errors.Is(err, push.ErrUnavailable) || errors.Is(err, push.ErrMobileUnavailable) {
 		h.writeError(w, r, standardhttp.StatusServiceUnavailable, "push_unavailable", err.Error())
 		return
 	}

@@ -1,0 +1,2 @@
+# Identities come from app.config.ts; only the team is supplied from outside.
+team_id(ENV['APPLE_TEAM_ID']) if ENV['APPLE_TEAM_ID']

@@ -36,7 +36,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { stableAvatarIndex } from "@comamessenger/tokens";
-import type { MessengerAPI } from "@comamessenger/core";
+import { initialsOf, type MessengerAPI } from "@comamessenger/core";
 import { AvatarObjectURLs } from "./objectURLs";
 
 export function cx(...values: Array<string | false | null | undefined>) {
@@ -1004,19 +1004,6 @@ export function Avatar({
   );
 }
 
-export function initialsOf(name: string) {
-  const words = name
-    .trim()
-    .split(/[\s-]+/)
-    .filter((word) => /[\p{L}\p{N}]/u.test(word));
-  if (words.length === 0) return "";
-  if (words.length === 1) return words[0]!.slice(0, 2).toUpperCase();
-  return words
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
-}
 
 export function AvatarStack({ children }: { children: ReactNode }) {
   return <span className="ui-avatar-stack">{children}</span>;

@@ -1,0 +1,23 @@
+.expo/
+web-build/
+expo-env.d.ts
+.metro-health-check*
+
+# Continuous Native Generation: never commit generated projects
+/ios
+/android
+
+# Signing material lives in EAS
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# fastlane
+/vendor/
+/build/
+fastlane/report.xml
+fastlane/README.md
+/.bundle/

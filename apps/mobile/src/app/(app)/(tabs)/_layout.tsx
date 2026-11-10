@@ -1,0 +1,96 @@
+import { Tabs } from "expo-router";
+import { StyleSheet, View, type ColorValue } from "react-native";
+import {
+  Ellipsis,
+  MessageSquare,
+  MessagesSquare,
+  type LucideIcon,
+} from "lucide-react-native";
+import { useTranslation } from "react-i18next";
+import { radius } from "@comamessenger/tokens";
+import { useTheme } from "@/lib/theme";
+import { fonts } from "@/ui/Text";
+
+function tabIcon(Icon: LucideIcon) {
+  return function TabIcon({
+    focused,
+    color,
+  }: {
+    focused: boolean;
+    color: ColorValue;
+  }) {
+    const theme = useTheme();
+    return (
+      <View
+        style={[
+          styles.indicator,
+          {
+            borderColor: focused ? theme.border : "transparent",
+            backgroundColor: focused ? theme.surfaceSelected : "transparent",
+          },
+        ]}
+      >
+        <Icon size={22} color={String(color)} />
+      </View>
+    );
+  };
+}
+
+export default function TabsLayout() {
+  const { t } = useTranslation();
+  const theme = useTheme();
+  return (
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: theme.primary,
+        tabBarInactiveTintColor: theme.muted,
+        tabBarLabelStyle: { fontFamily: fonts.medium, fontSize: 12 },
+        tabBarStyle: {
+          backgroundColor: theme.surface,
+          borderTopColor: theme.border,
+          borderTopWidth: 1,
+          elevation: 0,
+          shadowOpacity: 0,
+        },
+        sceneStyle: { backgroundColor: theme.canvas },
+      }}
+    >
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: t("tabChats"),
+          tabBarIcon: tabIcon(MessageSquare),
+          tabBarButtonTestID: "tab-chats",
+        }}
+      />
+      <Tabs.Screen
+        name="threads"
+        options={{
+          title: t("tabThreads"),
+          tabBarIcon: tabIcon(MessagesSquare),
+          tabBarButtonTestID: "tab-threads",
+        }}
+      />
+      <Tabs.Screen
+        name="more"
+        options={{
+          title: t("tabMore"),
+          tabBarIcon: tabIcon(Ellipsis),
+          tabBarButtonTestID: "tab-more",
+        }}
+      />
+    </Tabs>
+  );
+}
+
+const styles = StyleSheet.create({
+  indicator: {
+    width: 48,
+    height: 32,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});

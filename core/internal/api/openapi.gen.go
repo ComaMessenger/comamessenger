@@ -1670,6 +1670,42 @@ func (e MessageType) Valid() bool {
 	}
 }
 
+// Defines values for MobilePushDevicePlatform.
+const (
+	MobilePushDevicePlatformAndroid MobilePushDevicePlatform = "android"
+	MobilePushDevicePlatformIos     MobilePushDevicePlatform = "ios"
+)
+
+// Valid indicates whether the value is a known member of the MobilePushDevicePlatform enum.
+func (e MobilePushDevicePlatform) Valid() bool {
+	switch e {
+	case MobilePushDevicePlatformAndroid:
+		return true
+	case MobilePushDevicePlatformIos:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MobilePushDeviceRequestPlatform.
+const (
+	MobilePushDeviceRequestPlatformAndroid MobilePushDeviceRequestPlatform = "android"
+	MobilePushDeviceRequestPlatformIos     MobilePushDeviceRequestPlatform = "ios"
+)
+
+// Valid indicates whether the value is a known member of the MobilePushDeviceRequestPlatform enum.
+func (e MobilePushDeviceRequestPlatform) Valid() bool {
+	switch e {
+	case MobilePushDeviceRequestPlatformAndroid:
+		return true
+	case MobilePushDeviceRequestPlatformIos:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for NotificationScheduleDays0.
 const (
 	NotificationScheduleDays0All      NotificationScheduleDays0 = "all"
@@ -2693,6 +2729,51 @@ func (e UserPreferencesTheme) Valid() bool {
 	}
 }
 
+// Defines values for ClientKind.
+const (
+	ClientKindNative ClientKind = "native"
+)
+
+// Valid indicates whether the value is a known member of the ClientKind enum.
+func (e ClientKind) Valid() bool {
+	switch e {
+	case ClientKindNative:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ObjectDelivery.
+const (
+	ObjectDeliveryLink ObjectDelivery = "link"
+)
+
+// Valid indicates whether the value is a known member of the ObjectDelivery enum.
+func (e ObjectDelivery) Valid() bool {
+	switch e {
+	case ObjectDeliveryLink:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GetActorAvatarParamsDelivery.
+const (
+	GetActorAvatarParamsDeliveryLink GetActorAvatarParamsDelivery = "link"
+)
+
+// Valid indicates whether the value is a known member of the GetActorAvatarParamsDelivery enum.
+func (e GetActorAvatarParamsDelivery) Valid() bool {
+	switch e {
+	case GetActorAvatarParamsDeliveryLink:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListAgentToolConfirmationsParamsStatus.
 const (
 	ListAgentToolConfirmationsParamsStatusAll       ListAgentToolConfirmationsParamsStatus = "all"
@@ -2726,6 +2807,51 @@ func (e ListAgentToolConfirmationsParamsStatus) Valid() bool {
 	}
 }
 
+// Defines values for LoginParamsXComaClient.
+const (
+	LoginParamsXComaClientNative LoginParamsXComaClient = "native"
+)
+
+// Valid indicates whether the value is a known member of the LoginParamsXComaClient enum.
+func (e LoginParamsXComaClient) Valid() bool {
+	switch e {
+	case LoginParamsXComaClientNative:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RefreshParamsXComaClient.
+const (
+	RefreshParamsXComaClientNative RefreshParamsXComaClient = "native"
+)
+
+// Valid indicates whether the value is a known member of the RefreshParamsXComaClient enum.
+func (e RefreshParamsXComaClient) Valid() bool {
+	switch e {
+	case RefreshParamsXComaClientNative:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BootstrapParamsXComaClient.
+const (
+	BootstrapParamsXComaClientNative BootstrapParamsXComaClient = "native"
+)
+
+// Valid indicates whether the value is a known member of the BootstrapParamsXComaClient enum.
+func (e BootstrapParamsXComaClient) Valid() bool {
+	switch e {
+	case BootstrapParamsXComaClientNative:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GetBrandingAssetParamsKind.
 const (
 	GetBrandingAssetParamsKindFavicon GetBrandingAssetParamsKind = "favicon"
@@ -2738,6 +2864,36 @@ func (e GetBrandingAssetParamsKind) Valid() bool {
 	case GetBrandingAssetParamsKindFavicon:
 		return true
 	case GetBrandingAssetParamsKindLogo:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DownloadFileParamsDelivery.
+const (
+	DownloadFileParamsDeliveryLink DownloadFileParamsDelivery = "link"
+)
+
+// Valid indicates whether the value is a known member of the DownloadFileParamsDelivery enum.
+func (e DownloadFileParamsDelivery) Valid() bool {
+	switch e {
+	case DownloadFileParamsDeliveryLink:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AcceptInvitationParamsXComaClient.
+const (
+	AcceptInvitationParamsXComaClientNative AcceptInvitationParamsXComaClient = "native"
+)
+
+// Valid indicates whether the value is a known member of the AcceptInvitationParamsXComaClient enum.
+func (e AcceptInvitationParamsXComaClient) Valid() bool {
+	switch e {
+	case AcceptInvitationParamsXComaClientNative:
 		return true
 	default:
 		return false
@@ -3967,6 +4123,31 @@ type MessageWindow struct {
 	TargetId   openapi_types.UUID `json:"target_id"`
 }
 
+// MobilePushDevice defines model for MobilePushDevice.
+type MobilePushDevice struct {
+	CreatedAt time.Time                `json:"created_at"`
+	Id        openapi_types.UUID       `json:"id"`
+	Platform  MobilePushDevicePlatform `json:"platform"`
+	UpdatedAt time.Time                `json:"updated_at"`
+}
+
+// MobilePushDevicePlatform defines model for MobilePushDevice.Platform.
+type MobilePushDevicePlatform string
+
+// MobilePushDeviceRequest defines model for MobilePushDeviceRequest.
+type MobilePushDeviceRequest struct {
+	AppVersion *string `json:"app_version,omitempty"`
+	Locale     *string `json:"locale,omitempty"`
+
+	// NotificationKey Base64 of the 32-byte AES-256-GCM key the app decrypts notifications with.
+	NotificationKey string                          `json:"notification_key"`
+	Platform        MobilePushDeviceRequestPlatform `json:"platform"`
+	RelayHandle     string                          `json:"relay_handle"`
+}
+
+// MobilePushDeviceRequestPlatform defines model for MobilePushDeviceRequest.Platform.
+type MobilePushDeviceRequestPlatform string
+
 // NotificationSchedule defines model for NotificationSchedule.
 type NotificationSchedule struct {
 	Days NotificationSchedule_Days `json:"days"`
@@ -3983,6 +4164,15 @@ type NotificationScheduleDays1 = []int
 // NotificationSchedule_Days defines model for NotificationSchedule.Days.
 type NotificationSchedule_Days struct {
 	union json.RawMessage
+}
+
+// ObjectLink defines model for ObjectLink.
+type ObjectLink struct {
+	// Authenticated The URL is an API path that needs the bearer token.
+	Authenticated bool `json:"authenticated"`
+
+	// Url Short-lived object-store URL, or an API path when `authenticated` is true.
+	Url string `json:"url"`
 }
 
 // OrganizationMember defines model for OrganizationMember.
@@ -4061,8 +4251,11 @@ type PublishAgentRunRequestBodyFormat string
 
 // PushConfig defines model for PushConfig.
 type PushConfig struct {
-	Enabled   bool   `json:"enabled"`
-	PublicKey string `json:"public_key"`
+	Enabled bool `json:"enabled"`
+
+	// MobileRelayUrl Push relay this instance sends mobile notifications through; empty when mobile push is off. Apps register only with the relay they were built for.
+	MobileRelayUrl string `json:"mobile_relay_url"`
+	PublicKey      string `json:"public_key"`
 }
 
 // PushSubscription defines model for PushSubscription.
@@ -4338,6 +4531,11 @@ type RealtimeTypingFrameV1 struct {
 // RealtimeTypingFrameV1Op defines model for RealtimeTypingFrameV1.Op.
 type RealtimeTypingFrameV1Op string
 
+// RefreshRequest defines model for RefreshRequest.
+type RefreshRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
 // ResetPasswordRequest defines model for ResetPasswordRequest.
 type ResetPasswordRequest struct {
 	NewPassword string `json:"new_password"`
@@ -4502,7 +4700,10 @@ type ThreadUnread struct {
 type TokenResponse struct {
 	AccessExpiresAt time.Time `json:"access_expires_at"`
 	AccessToken     string    `json:"access_token"`
-	User            User      `json:"user"`
+
+	// RefreshToken Present only for requests sent with `X-Coma-Client: native`.
+	RefreshToken *string `json:"refresh_token,omitempty"`
+	User         User    `json:"user"`
 }
 
 // TransferOwnershipRequest defines model for TransferOwnershipRequest.
@@ -4788,11 +4989,17 @@ type AgentTriggerId = openapi_types.UUID
 // ChatId defines model for ChatId.
 type ChatId = openapi_types.UUID
 
+// ClientKind defines model for ClientKind.
+type ClientKind string
+
 // FileId defines model for FileId.
 type FileId = openapi_types.UUID
 
 // MessageId defines model for MessageId.
 type MessageId = openapi_types.UUID
+
+// ObjectDelivery defines model for ObjectDelivery.
+type ObjectDelivery string
 
 // UploadId defines model for UploadId.
 type UploadId = openapi_types.UUID
@@ -4807,6 +5014,15 @@ type ListActorsParams struct {
 	Limit   *int                `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// GetActorAvatarParams defines parameters for GetActorAvatar.
+type GetActorAvatarParams struct {
+	// Delivery `link` returns an ObjectLink instead of the bytes or a redirect; used by native clients.
+	Delivery *GetActorAvatarParamsDelivery `form:"delivery,omitempty" json:"delivery,omitempty"`
+}
+
+// GetActorAvatarParamsDelivery defines parameters for GetActorAvatar.
+type GetActorAvatarParamsDelivery string
+
 // ListAgentToolConfirmationsParams defines parameters for ListAgentToolConfirmations.
 type ListAgentToolConfirmationsParams struct {
 	Status *ListAgentToolConfirmationsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
@@ -4815,11 +5031,35 @@ type ListAgentToolConfirmationsParams struct {
 // ListAgentToolConfirmationsParamsStatus defines parameters for ListAgentToolConfirmations.
 type ListAgentToolConfirmationsParamsStatus string
 
+// LoginParams defines parameters for Login.
+type LoginParams struct {
+	// XComaClient `native` switches refresh token transport from the HttpOnly cookie to JSON bodies. Ignored when an Origin header is present.
+	XComaClient *LoginParamsXComaClient `json:"X-Coma-Client,omitempty"`
+}
+
+// LoginParamsXComaClient defines parameters for Login.
+type LoginParamsXComaClient string
+
+// RefreshParams defines parameters for Refresh.
+type RefreshParams struct {
+	// XComaClient `native` switches refresh token transport from the HttpOnly cookie to JSON bodies. Ignored when an Origin header is present.
+	XComaClient *RefreshParamsXComaClient `json:"X-Coma-Client,omitempty"`
+}
+
+// RefreshParamsXComaClient defines parameters for Refresh.
+type RefreshParamsXComaClient string
+
 // BootstrapParams defines parameters for Bootstrap.
 type BootstrapParams struct {
 	// XComaBootstrapToken Required outside development; configure it with BOOTSTRAP_TOKEN.
 	XComaBootstrapToken *string `json:"X-Coma-Bootstrap-Token,omitempty"`
+
+	// XComaClient `native` switches refresh token transport from the HttpOnly cookie to JSON bodies. Ignored when an Origin header is present.
+	XComaClient *BootstrapParamsXComaClient `json:"X-Coma-Client,omitempty"`
 }
+
+// BootstrapParamsXComaClient defines parameters for Bootstrap.
+type BootstrapParamsXComaClient string
 
 // GetBrandingAssetParamsKind defines parameters for GetBrandingAsset.
 type GetBrandingAssetParamsKind string
@@ -4835,6 +5075,24 @@ type ListMessagesParams struct {
 type DeleteDraftParams struct {
 	ThreadRootId *openapi_types.UUID `form:"thread_root_id,omitempty" json:"thread_root_id,omitempty"`
 }
+
+// DownloadFileParams defines parameters for DownloadFile.
+type DownloadFileParams struct {
+	// Delivery `link` returns an ObjectLink instead of the bytes or a redirect; used by native clients.
+	Delivery *DownloadFileParamsDelivery `form:"delivery,omitempty" json:"delivery,omitempty"`
+}
+
+// DownloadFileParamsDelivery defines parameters for DownloadFile.
+type DownloadFileParamsDelivery string
+
+// AcceptInvitationParams defines parameters for AcceptInvitation.
+type AcceptInvitationParams struct {
+	// XComaClient `native` switches refresh token transport from the HttpOnly cookie to JSON bodies. Ignored when an Origin header is present.
+	XComaClient *AcceptInvitationParamsXComaClient `json:"X-Coma-Client,omitempty"`
+}
+
+// AcceptInvitationParamsXComaClient defines parameters for AcceptInvitation.
+type AcceptInvitationParamsXComaClient string
 
 // GetMessageContextParams defines parameters for GetMessageContext.
 type GetMessageContextParams struct {
@@ -4975,6 +5233,9 @@ type ForgotPasswordJSONRequestBody = ForgotPasswordRequest
 // ResetPasswordJSONRequestBody defines body for ResetPassword for application/json ContentType.
 type ResetPasswordJSONRequestBody = ResetPasswordRequest
 
+// RefreshJSONRequestBody defines body for Refresh for application/json ContentType.
+type RefreshJSONRequestBody = RefreshRequest
+
 // BootstrapJSONRequestBody defines body for Bootstrap for application/json ContentType.
 type BootstrapJSONRequestBody = BootstrapRequest
 
@@ -5064,6 +5325,9 @@ type PutChatFoldersJSONRequestBody = ChatFolders
 
 // PutPinnedChatsJSONRequestBody defines body for PutPinnedChats for application/json ContentType.
 type PutPinnedChatsJSONRequestBody = PinnedChatIds
+
+// PutMobilePushDeviceJSONRequestBody defines body for PutMobilePushDevice for application/json ContentType.
+type PutMobilePushDeviceJSONRequestBody = MobilePushDeviceRequest
 
 // PutPushSubscriptionJSONRequestBody defines body for PutPushSubscription for application/json ContentType.
 type PutPushSubscriptionJSONRequestBody = PushSubscriptionRequest

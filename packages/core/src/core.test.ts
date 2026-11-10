@@ -1,7 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMessengerStore } from "./store";
 import { parseMarkdown } from "./markdown";
-import { feedRows } from "./feed";
 import {
   decodeMentions,
   encodeMentions,
@@ -11,10 +10,14 @@ import {
   updateMentionText,
 } from "./mentions";
 import { compactUUID, expandUUID } from "./links";
+import { chatPreview, formatListTime } from "./chats";
+import { feedRows } from "./feed";
+import { resolvedMentionActorIDs } from "./mentions";
+import type { Chat } from "./types";
 import { RealtimeCoordinator, type CheckpointStorage } from "./realtime";
 import { Outbox, type OutboxItem, type OutboxStorage } from "./outbox";
 import type { ClientMessage, Message, RealtimeState } from "./types";
-import { APIError, type MessengerAPI } from "./api";
+import { APIError, MessengerAPI, type RefreshTokenStore } from "./api";
 
 const message: ClientMessage = {
   id: "a",
@@ -491,6 +494,48 @@ describe("realtime coordinator", () => {
     expect(sessionExpired).toBe(1);
     coordinator.stop();
   });
+
+  it("does not retry forever when the first refresh is rejected", async () => {
+    let sessionExpired = 0;
+    let refreshes = 0;
+    let sockets = 0;
+    const api = {
+      token: () => null,
+      refresh: async () => {
+        refreshes += 1;
+        throw new APIError(401, "invalid_refresh_token", "revoked");
+      },
+      websocketURL: () => "ws://test",
+    } as unknown as MessengerAPI;
+    const states: RealtimeState[] = [];
+    const coordinator = new RealtimeCoordinator(
+      api,
+      {
+        get: async () => 0,
+        set: async () => undefined,
+        clear: async () => undefined,
+      },
+      () => {
+        sockets += 1;
+        throw new Error("no socket expected");
+      },
+      {
+        state: (state) => states.push(state),
+        event: () => false,
+        resync: async () => undefined,
+        sessionExpired: () => {
+          sessionExpired += 1;
+        },
+      },
+    );
+    coordinator.start();
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    expect(refreshes).toBe(1);
+    expect(sockets).toBe(0);
+    expect(sessionExpired).toBe(1);
+    expect(states.at(-1)).toBe("session_expired");
+    coordinator.stop();
+  });
 });
 
 describe("persistent outbox", () => {
@@ -541,6 +586,139 @@ function nextTask() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+describe("websocket URL", () => {
+  it("maps the API scheme and keeps a path prefix", () => {
+    expect(new MessengerAPI("https://acme.ru/coma").websocketURL()).toBe(
+      "wss://acme.ru/coma/api/v1/ws",
+    );
+    expect(new MessengerAPI("http://localhost:8080").websocketURL()).toBe(
+      "ws://localhost:8080/api/v1/ws",
+    );
+  });
+});
+
+describe("native session transport", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const user = { id: "user" };
+  function memoryStore(initial: string | null): RefreshTokenStore & {
+    token: string | null;
+  } {
+    return {
+      token: initial,
+      async load() {
+        return this.token;
+      },
+      async save(token) {
+        this.token = token;
+      },
+    };
+  }
+
+  it("keeps the refresh token in the store and sends it in the body", async () => {
+    const requests: { url: string; init: RequestInit }[] = [];
+    const responses = [
+      { access_token: "a1", refresh_token: "r1", user },
+      { access_token: "a2", refresh_token: "r2", user },
+    ];
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      requests.push({ url, init });
+      return new Response(JSON.stringify(responses.shift()), { status: 200 });
+    });
+    const store = memoryStore(null);
+    const api = new MessengerAPI("https://coma.test", undefined, store);
+
+    const login = await api.login({ email: "a@b.c", password: "secret" });
+    expect(login).not.toHaveProperty("refresh_token");
+    expect(store.token).toBe("r1");
+
+    await api.refresh();
+    expect(api.token()).toBe("a2");
+    expect(store.token).toBe("r2");
+    const refresh = requests[1]!;
+    expect(refresh.init.credentials).toBe("omit");
+    expect(new Headers(refresh.init.headers).get("X-Coma-Client")).toBe(
+      "native",
+    );
+    expect(JSON.parse(refresh.init.body as string)).toEqual({
+      refresh_token: "r1",
+    });
+  });
+
+  it("forgets a rejected refresh token without calling the server twice", async () => {
+    const fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ code: "invalid_refresh_token" }), {
+          status: 401,
+        }),
+    );
+    vi.stubGlobal("fetch", fetch);
+    const store = memoryStore("stale");
+    const api = new MessengerAPI("https://coma.test", undefined, store);
+
+    await expect(api.refresh()).rejects.toMatchObject({ status: 401 });
+    expect(store.token).toBeNull();
+    await expect(api.refresh()).rejects.toMatchObject({
+      code: "invalid_refresh_token",
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("chat list helpers", () => {
+  const labels = { you: "You", deleted: "Deleted", attachment: "Attachment" };
+  const chat = (patch: Partial<Chat>) =>
+    ({ id: "c", kind: "group", topic: "Topic", ...patch }) as Chat;
+
+  it("builds sender-prefixed previews", () => {
+    const last = {
+      actor_id: "other",
+      actor_display_name: "Anna",
+      body: "hello",
+      deleted: false,
+    } as Chat["last_message"];
+    expect(chatPreview(chat({ last_message: last }), "me", labels)).toEqual({
+      sender: "Anna: ",
+      text: "hello",
+    });
+    expect(
+      chatPreview(chat({ kind: "direct", last_message: last }), "me", labels),
+    ).toEqual({ sender: "", text: "hello" });
+    expect(chatPreview(chat({}), "me", labels)).toEqual({
+      sender: "",
+      text: "Topic",
+    });
+  });
+
+  it("formats list times relative to now", () => {
+    const now = new Date(2026, 8, 29, 15, 0);
+    expect(
+      formatListTime(
+        new Date(2026, 8, 29, 9, 5).toISOString(),
+        "ru",
+        "вчера",
+        now,
+      ),
+    ).toBe("09:05");
+    expect(
+      formatListTime(
+        new Date(2026, 8, 28, 23, 0).toISOString(),
+        "ru",
+        "вчера",
+        now,
+      ),
+    ).toBe("вчера");
+    expect(
+      formatListTime(
+        new Date(2025, 0, 2).toISOString(),
+        "en",
+        "Yesterday",
+        now,
+      ),
+    ).toContain("2025");
+  });
+});
+
 describe("feed layout", () => {
   const at = (minute: number, actor = "a", seq = minute) =>
     ({
@@ -571,5 +749,16 @@ describe("feed layout", () => {
       true,
     ]);
     expect(rows[0]!.newDay).toBe(true);
+  });
+
+  it("expands @all and @here", () => {
+    const members = [{ actor_id: "x" }, { actor_id: "y" }];
+    expect(resolvedMentionActorIDs("hi @all", members, {}).sort()).toEqual([
+      "x",
+      "y",
+    ]);
+    expect(
+      resolvedMentionActorIDs("hi @here", members, { y: "online" }),
+    ).toEqual(["y"]);
   });
 });
