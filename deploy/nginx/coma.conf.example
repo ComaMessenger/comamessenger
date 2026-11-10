@@ -85,8 +85,15 @@ server {
         proxy_set_header Connection "upgrade";
     }
 
-    # MinIO path-style URLs for the local test bucket.
+    # MinIO path-style URLs for the local test bucket. The bucket shares the
+    # application origin here, so uploaded files must never run as pages or
+    # scripts: sandbox them and forbid MIME sniffing. Prefer a separate domain
+    # for the bucket in production.
     location ^~ /coma-test/ {
+        proxy_hide_header Content-Security-Policy;
+        add_header Content-Security-Policy "sandbox; default-src 'none'" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "no-referrer" always;
         proxy_pass http://coma_s3;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
