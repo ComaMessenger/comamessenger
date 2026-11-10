@@ -1,0 +1,49 @@
+# Reverse proxy for the push relay (docs/runbooks/push-relay.md).
+# Replace __RELAY_DOMAIN__ and __CERT_NAME__ when installing.
+
+upstream coma_push_relay {
+    server 127.0.0.1:8090;
+    keepalive 16;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name __RELAY_DOMAIN__;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name __RELAY_DOMAIN__;
+
+    ssl_certificate /etc/letsencrypt/live/__CERT_NAME__/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/__CERT_NAME__/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    # Requests carry device handles in the path and ciphertext in the body.
+    access_log off;
+    client_max_body_size 32k;
+    add_header X-Content-Type-Options "nosniff" always;
+
+    location / {
+        proxy_pass http://coma_push_relay;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        # Overwrite, never append: the relay keys rate limits by this address.
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 30s;
+    }
+}

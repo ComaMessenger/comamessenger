@@ -7,7 +7,9 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -58,6 +60,29 @@ type Server struct {
 	register *limiter
 	sendIP   *limiter
 	sendDev  *limiter
+	// trusted lists reverse proxies whose X-Forwarded-For entries are believed.
+	trusted []netip.Prefix
+}
+
+// TrustProxies makes rate limits use the client address reported by the given
+// reverse proxies. Without it every request is attributed to its TCP peer.
+func (s *Server) TrustProxies(prefixes []netip.Prefix) { s.trusted = prefixes }
+
+// ParseTrustedProxies reads a comma-separated list of CIDR prefixes.
+func ParseTrustedProxies(value string) ([]netip.Prefix, error) {
+	var prefixes []netip.Prefix
+	for _, item := range strings.Split(value, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		prefix, err := netip.ParsePrefix(item)
+		if err != nil {
+			return nil, err
+		}
+		prefixes = append(prefixes, prefix.Masked())
+	}
+	return prefixes, nil
 }
 
 func NewServer(logger *slog.Logger, store *Store, senders map[string]Sender) *Server {
@@ -77,12 +102,43 @@ func (s *Server) Handler() http.Handler {
 	return router
 }
 
-func clientIP(r *http.Request) string {
+// clientIP returns the address rate limits are keyed by: the TCP peer, or, when
+// the peer is a trusted proxy, the rightmost X-Forwarded-For entry that is not
+// itself a trusted proxy. Entries added by untrusted clients are never used.
+func (s *Server) clientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		return r.RemoteAddr
+		host = r.RemoteAddr
+	}
+	if !s.isTrusted(host) {
+		return host
+	}
+	forwarded := strings.Split(strings.Join(r.Header.Values("X-Forwarded-For"), ","), ",")
+	for index := len(forwarded) - 1; index >= 0; index-- {
+		candidate := strings.TrimSpace(forwarded[index])
+		address, err := netip.ParseAddr(candidate)
+		if err != nil {
+			break
+		}
+		if !s.isTrusted(candidate) {
+			return address.Unmap().String()
+		}
 	}
 	return host
+}
+
+func (s *Server) isTrusted(host string) bool {
+	address, err := netip.ParseAddr(host)
+	if err != nil {
+		return false
+	}
+	address = address.Unmap()
+	for _, prefix := range s.trusted {
+		if prefix.Contains(address) {
+			return true
+		}
+	}
+	return false
 }
 
 func decode(w http.ResponseWriter, r *http.Request, destination any) bool {
@@ -101,7 +157,7 @@ func validToken(platform, token string) bool {
 }
 
 func (s *Server) createDevice(w http.ResponseWriter, r *http.Request) {
-	if !s.register.allow(clientIP(r)) {
+	if !s.register.allow(s.clientIP(r)) {
 		w.WriteHeader(http.StatusTooManyRequests)
 		return
 	}
@@ -133,7 +189,7 @@ func (s *Server) updateDevice(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusGone)
 		return
 	}
-	if !s.register.allow(clientIP(r)) {
+	if !s.register.allow(s.clientIP(r)) {
 		w.WriteHeader(http.StatusTooManyRequests)
 		return
 	}
@@ -178,7 +234,7 @@ func (s *Server) send(w http.ResponseWriter, r *http.Request) {
 		FallbackBody  string `json:"fallback_body"`
 		CollapseID    string `json:"collapse_id"`
 	}
-	if !s.sendIP.allow(clientIP(r)) {
+	if !s.sendIP.allow(s.clientIP(r)) {
 		w.WriteHeader(http.StatusTooManyRequests)
 		return
 	}
