@@ -2870,6 +2870,21 @@ func (e GetBrandingAssetParamsKind) Valid() bool {
 	}
 }
 
+// Defines values for GetChatAvatarParamsDelivery.
+const (
+	GetChatAvatarParamsDeliveryLink GetChatAvatarParamsDelivery = "link"
+)
+
+// Valid indicates whether the value is a known member of the GetChatAvatarParamsDelivery enum.
+func (e GetChatAvatarParamsDelivery) Valid() bool {
+	switch e {
+	case GetChatAvatarParamsDeliveryLink:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DownloadFileParamsDelivery.
 const (
 	DownloadFileParamsDeliveryLink DownloadFileParamsDelivery = "link"
@@ -3472,8 +3487,10 @@ type ChangePasswordRequest struct {
 
 // Chat defines model for Chat.
 type Chat struct {
-	ArchivedAt      *time.Time         `json:"archived_at,omitempty"`
-	AvatarSeed      string             `json:"avatar_seed"`
+	ArchivedAt *time.Time `json:"archived_at,omitempty"`
+	AvatarSeed string     `json:"avatar_seed"`
+
+	// AvatarVersion Direct chats carry the peer avatar version; group chats and channels their own image version, zero without an image (GET /api/v1/chats/{chat_id}/avatar).
 	AvatarVersion   int64              `json:"avatar_version"`
 	CreatedAt       time.Time          `json:"created_at"`
 	DirectPeer      *ActorSummary      `json:"direct_peer,omitempty"`
@@ -3502,6 +3519,13 @@ type ChatRole string
 
 // ChatVisibility defines model for Chat.Visibility.
 type ChatVisibility string
+
+// ChatAvatarUpdate defines model for ChatAvatarUpdate.
+type ChatAvatarUpdate struct {
+	// AvatarVersion Zero when the chat has no image.
+	AvatarVersion int64              `json:"avatar_version"`
+	ChatId        openapi_types.UUID `json:"chat_id"`
+}
 
 // ChatFolder defines model for ChatFolder.
 type ChatFolder struct {
@@ -5063,6 +5087,15 @@ type BootstrapParamsXComaClient string
 
 // GetBrandingAssetParamsKind defines parameters for GetBrandingAsset.
 type GetBrandingAssetParamsKind string
+
+// GetChatAvatarParams defines parameters for GetChatAvatar.
+type GetChatAvatarParams struct {
+	// Delivery `link` returns an ObjectLink instead of the bytes or a redirect; used by native clients.
+	Delivery *GetChatAvatarParamsDelivery `form:"delivery,omitempty" json:"delivery,omitempty"`
+}
+
+// GetChatAvatarParamsDelivery defines parameters for GetChatAvatar.
+type GetChatAvatarParamsDelivery string
 
 // ListMessagesParams defines parameters for ListMessages.
 type ListMessagesParams struct {

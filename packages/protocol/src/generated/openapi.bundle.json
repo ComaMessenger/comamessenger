@@ -2100,6 +2100,145 @@
         }
       }
     },
+    "/api/v1/chats/{chat_id}/avatar": {
+      "get": {
+        "operationId": "getChatAvatar",
+        "description": "Image of a group chat or channel, for its members and chat moderators.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ChatId"
+          },
+          {
+            "$ref": "#/components/parameters/ObjectDelivery"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized chat avatar.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "put": {
+        "operationId": "putChatAvatar",
+        "description": "Chat owners and admins, or members with chats.moderate. Direct chats are rejected with 422.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ChatId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary",
+                "maxLength": 10000000
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary",
+                "maxLength": 10000000
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Chat avatar replaced.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatAvatarUpdate"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "507": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteChatAvatar",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ChatId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chat avatar removed; the chat shows initials again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatAvatarUpdate"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/v1/chats/{chat_id}/join": {
       "post": {
         "operationId": "joinChat",
@@ -10064,6 +10203,26 @@
           }
         }
       },
+      "ChatAvatarUpdate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "chat_id",
+          "avatar_version"
+        ],
+        "properties": {
+          "chat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "avatar_version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Zero when the chat has no image."
+          }
+        }
+      },
       "SetStatusRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -11143,7 +11302,8 @@
           "avatar_version": {
             "type": "integer",
             "format": "int64",
-            "minimum": 0
+            "minimum": 0,
+            "description": "Direct chats carry the peer avatar version; group chats and channels their own image version, zero without an image (GET /api/v1/chats/{chat_id}/avatar)."
           },
           "notify_level": {
             "type": "string",
