@@ -48,9 +48,12 @@ type Limits struct {
 	MaxDirectMessagesPerPersonPerDay int
 	MaxOpenCollectionsPerAgent       int
 	MaxPendingFollowupsPerAgent      int
-	MaxFollowupDelay                 time.Duration
-	MinFollowupDelay                 time.Duration
-	MaxCollectionDuration            time.Duration
+	// MaxFollowupsPerAgentPerHour caps how often an agent schedules its own
+	// continuation, so a chain of follow-ups cannot run the model in a loop.
+	MaxFollowupsPerAgentPerHour int
+	MaxFollowupDelay            time.Duration
+	MinFollowupDelay            time.Duration
+	MaxCollectionDuration       time.Duration
 }
 
 func DefaultLimits() Limits {
@@ -61,6 +64,7 @@ func DefaultLimits() Limits {
 		MaxDirectMessagesPerPersonPerDay: 10,
 		MaxOpenCollectionsPerAgent:       20,
 		MaxPendingFollowupsPerAgent:      50,
+		MaxFollowupsPerAgentPerHour:      20,
 		MaxFollowupDelay:                 30 * 24 * time.Hour,
 		MinFollowupDelay:                 time.Minute,
 		MaxCollectionDuration:            30 * 24 * time.Hour,
@@ -115,7 +119,9 @@ type runRequest struct {
 
 // enqueueRun queues a published-agent run in the caller's transaction. The
 // client_run_id makes the wake idempotent; nothing is queued for a paused,
-// deleted or chat-less agent.
+// deleted or chat-less agent, nor beyond the agent's max_chain_depth: every
+// run an agent starts for itself (follow-up, collection report, continuation
+// after a decision) is one generation deeper than the run that started it.
 func enqueueRun(ctx context.Context, tx pgx.Tx, request runRequest) (string, bool, error) {
 	runID := uuid.Must(uuid.NewV7()).String()
 	correlationID := uuid.Must(uuid.NewV7()).String()
@@ -129,7 +135,7 @@ func enqueueRun(ctx context.Context, tx pgx.Tx, request runRequest) (string, boo
 			jsonb_build_object('id',agent.actor_id,'handle',actor.handle,'description',agent.description,'allowed_scopes',to_jsonb(agent.allowed_scopes),
 				'llm_connection_id',agent.llm_connection_id,'endpoint_url',COALESCE(connection.endpoint_url,agent.endpoint_url),
 				'external_data_sharing_approved',agent.external_data_sharing_approved,'max_output_tokens',agent.max_output_tokens,'max_tool_iterations',agent.max_tool_iterations),
-			$2,$3,$4,$5,$6,LEAST($7::int,agent.max_chain_depth),COALESCE(connection.provider,agent.provider),COALESCE(NULLIF(agent.model,''),connection.default_model,''),$8,
+			$2,$3,$4,$5,$6,$7::int,COALESCE(connection.provider,agent.provider),COALESCE(NULLIF(agent.model,''),connection.default_model,''),$8,
 			now()+make_interval(secs=>agent.execution_timeout_seconds)
 		FROM agents agent
 		JOIN actors actor ON actor.org_id=agent.org_id AND actor.id=agent.actor_id AND actor.status='active' AND actor.deleted_at IS NULL
@@ -138,6 +144,7 @@ func enqueueRun(ctx context.Context, tx pgx.Tx, request runRequest) (string, boo
 		JOIN chats chat ON chat.org_id=member.org_id AND chat.id=member.chat_id AND chat.archived_at IS NULL
 		WHERE agent.org_id=$9 AND agent.actor_id=$10 AND agent.enabled AND agent.deleted_at IS NULL
 			AND (agent.llm_connection_id IS NULL OR connection.id IS NOT NULL)
+			AND $7::int <= agent.max_chain_depth
 		ON CONFLICT(agent_id,client_run_id) DO NOTHING`,
 		runID, request.ChatID, request.ThreadRootID, request.RequestedBy, request.ClientRunID, correlationID, request.ChainDepth, payload, request.OrgID, request.AgentID)
 	if err != nil {
@@ -327,7 +334,7 @@ func (s *Service) EnqueueConfirmationOutcome(ctx context.Context, outcome Confir
 	}
 	if _, _, err := enqueueRun(ctx, tx, runRequest{
 		OrgID: outcome.OrgID, AgentID: outcome.AgentID, ChatID: *chatID, ThreadRootID: threadRootID,
-		RequestedBy: requestedBy, ClientRunID: stableID("confirmation", outcome.ConfirmationID), ChainDepth: chainDepth, Input: input,
+		RequestedBy: requestedBy, ClientRunID: stableID("confirmation", outcome.ConfirmationID), ChainDepth: chainDepth + 1, Input: input,
 	}); err != nil {
 		return err
 	}

@@ -474,7 +474,7 @@ func (s *Service) closeCollection(ctx context.Context, tx pgx.Tx, collection Col
 	}
 	runID, _, err := enqueueRun(ctx, tx, runRequest{
 		OrgID: collection.orgID, AgentID: collection.AgentID, ChatID: reportChat, ThreadRootID: collection.ReportThreadRootID,
-		ClientRunID: stableID("collection-report", collection.ID), ChainDepth: depth,
+		ClientRunID: stableID("collection-report", collection.ID), ChainDepth: depth + 1,
 		Input: map[string]any{
 			"trigger_type": "collection", "reason": status, "collection_id": collection.ID, "message_id": collection.MessageID,
 			"chat_id": reportChat, "thread_root_id": collection.ReportThreadRootID, "note": collection.Note,
