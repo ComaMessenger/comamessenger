@@ -15,6 +15,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/interactive"
 	"github.com/comamessenger/comamessenger/core/internal/message"
 	"github.com/comamessenger/comamessenger/core/internal/pilotseed"
+	"github.com/comamessenger/comamessenger/core/internal/testdb"
 	"github.com/google/uuid"
 )
 
@@ -160,8 +161,8 @@ func TestControlFollowsAcknowledgementsFromRequestToResult(t *testing.T) {
 		t.Fatalf("not reacted = %v", reactions.NotReacted)
 	}
 	w.call(request, "list_members", map[string]any{"chat_id": w.seed.Chats["instructors"]})
-	progress := decode[message.Message](t, w.call(request, "post_card", map[string]any{
-		"direct_actor_id": marina.ActorID, "client_msg_id": uuid.NewString(),
+	progress := decode[message.Message](t, w.call(request, "send_direct_card", map[string]any{
+		"actor_id": marina.ActorID, "client_msg_id": uuid.NewString(),
 		"blocks": card("Порядок входа с понедельника", "Отметились 1 из 5", []map[string]any{{"text": "Дарья Ким", "state": "pending"}}, nil),
 	}))
 	report := progress.ChatID
@@ -594,7 +595,7 @@ func TestMentorGreetsNewcomerAndRemindsAboutOpenItems(t *testing.T) {
 	if remind.input["context"].(map[string]any)["member_id"] != vera.ActorID {
 		t.Fatalf("follow-up = %v", remind.input)
 	}
-	private := decode[message.Message](t, w.call(remind, "post_card", map[string]any{"direct_actor_id": vera.ActorID, "client_msg_id": uuid.NewString(),
+	private := decode[message.Message](t, w.call(remind, "send_direct_card", map[string]any{"actor_id": vera.ActorID, "client_msg_id": uuid.NewString(),
 		"blocks": card("Осталось на первой неделе", "4 пункта", cardItems[:2], nil)}))
 	if private.ChatID != w.directChat(mentor.ID, vera.ActorID) {
 		t.Fatal("the reminder did not go to the newcomer privately")
@@ -633,7 +634,7 @@ func TestWhatDidIMissSendsAPrivateSummaryWithLinks(t *testing.T) {
 	if _, err := w.tryCall(request, "get_chat_messages", map[string]any{"chat_id": w.seed.Chats["questions"]}); err == nil {
 		t.Fatal("the summary read a chat the agent is not in")
 	}
-	summary := decode[message.Message](t, w.call(request, "post_card", map[string]any{"direct_actor_id": igor.ActorID, "client_msg_id": uuid.NewString(),
+	summary := decode[message.Message](t, w.call(request, "send_direct_card", map[string]any{"actor_id": igor.ActorID, "client_msg_id": uuid.NewString(),
 		"blocks": map[string]any{"version": 1, "card": map[string]any{"title": "Пока вас не было: 3 дня", "items": []map[string]any{{"text": "Расписание: нужен инструктор в зал 2 послезавтра 14:00–18:00"}}},
 			"sources": []map[string]any{{"kind": "message", "message_id": page.Messages[0].ID}}}}))
 	if summary.ChatID != w.directChat(missed.ID, igor.ActorID) || summary.Blocks == nil || len(summary.Blocks.Sources) != 1 {
@@ -642,7 +643,7 @@ func TestWhatDidIMissSendsAPrivateSummaryWithLinks(t *testing.T) {
 	if got := w.count(`SELECT count(*) FROM chat_members WHERE chat_id=$1`, summary.ChatID); got != 2 {
 		t.Fatalf("the summary chat has %d members", got)
 	}
-	if _, err := w.tryCall(request, "post_card", map[string]any{"direct_actor_id": igor.ActorID, "client_msg_id": uuid.NewString(),
+	if _, err := w.tryCall(request, "send_direct_card", map[string]any{"actor_id": igor.ActorID, "client_msg_id": uuid.NewString(),
 		"blocks": card("Ещё одна сводка", "—", nil, nil)}); !errors.Is(err, interactive.ErrLimit) {
 		t.Fatalf("the per-person direct limit did not apply: %v", err)
 	}
@@ -669,5 +670,41 @@ func TestSeedRefusesANonEmptyDatabase(t *testing.T) {
 	var raw json.RawMessage
 	if err := w.pool.QueryRow(w.ctx, `SELECT blocks FROM messages WHERE id=$1`, w.seed.Messages["handover_card"]).Scan(&raw); err != nil || !strings.Contains(string(raw), "Принял слот") {
 		t.Fatalf("demo handover card = %s, err=%v", raw, err)
+	}
+}
+
+// TestSeedNextToRealDataCreatesNoAdministrators (security review, item 5):
+// with --allow-non-empty the demo people are plain members, and the existing
+// owner creates the demo chats and agents.
+func TestSeedNextToRealDataCreatesNoAdministrators(t *testing.T) {
+	pool := testdb.New(t)
+	orgID, ownerID := uuid.NewString(), uuid.NewString()
+	tx, err := pool.Begin(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(t.Context())
+	if _, err := tx.Exec(t.Context(), `INSERT INTO organizations(id,name,slug) VALUES($1,'Real clinic','real-clinic')`, orgID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(t.Context(), `INSERT INTO actors(id,org_id,type,org_role,display_name,handle) VALUES($1,$2,'user','owner','Real owner','real-owner')`, ownerID, orgID); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pilotseed.Seed(t.Context(), newDeps(t, pool), pilotseed.Options{Password: "demo-pilot-password"}); !errors.Is(err, pilotseed.ErrNotEmpty) {
+		t.Fatalf("seed without the flag = %v", err)
+	}
+	result, err := pilotseed.Seed(t.Context(), newDeps(t, pool), pilotseed.Options{Password: "demo-pilot-password", AllowNonEmpty: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var privileged int
+	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM actors WHERE org_id=$1 AND type='user' AND org_role IN ('owner','admin') AND id<>$2`, orgID, ownerID).Scan(&privileged); err != nil || privileged != 0 {
+		t.Fatalf("demo people with administrative rights: %d (err=%v)", privileged, err)
+	}
+	if result.OrgID != orgID || result.Owner().ActorID != ownerID || result.Agents["control"].OwnerActorID != ownerID {
+		t.Fatalf("demo created by %s in %s", result.Owner().ActorID, result.OrgID)
 	}
 }

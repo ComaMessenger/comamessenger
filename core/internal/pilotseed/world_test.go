@@ -80,21 +80,9 @@ func newWorld(t *testing.T, limits interactive.Limits) *world {
 	t.Helper()
 	ctx := context.Background()
 	pool := testdb.New(t)
-	store, err := storage.NewLocalBlobStore(t.TempDir(), 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	fileService, err := files.NewService(pool, store, "", 16<<20, 8<<20, 4<<20, time.Hour, time.Minute)
-	if err != nil {
-		t.Fatal(err)
-	}
-	knowledgeService := knowledge.NewService(pool, fileService, nil, nil)
-	if _, err := knowledge.NewIndexingClient(pool, knowledgeService, slog.New(slog.NewTextHandler(io.Discard, nil))); err != nil {
-		t.Fatal(err)
-	}
-	chats := chat.NewService(pool)
-	messages := message.NewService(pool, 64*1024, 100, nil)
-	agents := agent.NewService(pool)
+	deps := newDeps(t, pool)
+	chats, messages, agents := deps.Chats, deps.Messages, deps.Agents
+	fileService, knowledgeService := deps.Files, deps.Knowledge
 	moscow, _ := time.LoadLocation("Europe/Moscow")
 	// Today, 07:00 in the centre: before the first slot of the seeded table.
 	today := time.Now().In(moscow)
@@ -116,6 +104,25 @@ func newWorld(t *testing.T, limits interactive.Limits) *world {
 	triggers := agenttrigger.NewService(pool, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	return &world{t: t, ctx: ctx, pool: pool, clock: fake, seed: seed, messages: messages, chats: chats, interactive: interactiveService,
 		executor: executor, triggers: triggers, agents: agents}
+}
+
+// newDeps builds the services the seed writes through over a test database.
+func newDeps(t *testing.T, pool *pgxpool.Pool) pilotseed.Deps {
+	t.Helper()
+	store, err := storage.NewLocalBlobStore(t.TempDir(), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fileService, err := files.NewService(pool, store, "", 16<<20, 8<<20, 4<<20, time.Hour, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	knowledgeService := knowledge.NewService(pool, fileService, nil, nil)
+	if _, err := knowledge.NewIndexingClient(pool, knowledgeService, slog.New(slog.NewTextHandler(io.Discard, nil))); err != nil {
+		t.Fatal(err)
+	}
+	return pilotseed.Deps{Pool: pool, Hasher: plainHasher{}, Files: fileService, Knowledge: knowledgeService,
+		Chats: chat.NewService(pool), Messages: message.NewService(pool, 64*1024, 100, nil), Agents: agent.NewService(pool)}
 }
 
 // quietless are server limits without quiet hours, so reminders depend only on

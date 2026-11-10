@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bufio"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/comamessenger/comamessenger/core/internal/agent"
@@ -21,20 +24,34 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/storage"
 )
 
+// seedPilotStdin is where --password-stdin reads from; tests replace it.
+var seedPilotStdin io.Reader = os.Stdin
+
 // runSeedPilot implements `comamessenger seed-pilot`: it fills an empty
 // database with the fictional rehabilitation centre of the phase 5.3 pilot.
 // A database that already has an organization is refused unless
-// --allow-non-empty is given.
+// --allow-non-empty is given; there the demo people are plain members. The
+// shared demo password comes from SEED_PILOT_PASSWORD or stdin, never from
+// the command line, where it would stay in shell history and process lists.
 func runSeedPilot(args []string, stdout io.Writer) error {
 	flags := flag.NewFlagSet("seed-pilot", flag.ContinueOnError)
-	allowNonEmpty := flags.Bool("allow-non-empty", false, "seed into the existing organization of a non-empty database")
-	demoPassword := flags.String("password", os.Getenv("SEED_PILOT_PASSWORD"), "password of every demo account (or SEED_PILOT_PASSWORD), at least 12 characters")
+	flags.SetOutput(io.Discard)
+	allowNonEmpty := flags.Bool("allow-non-empty", false, "seed into the existing organization of a non-empty database; demo people get no administrative rights")
+	passwordStdin := flags.Bool("password-stdin", false, "read the demo password from the first line of stdin instead of SEED_PILOT_PASSWORD")
 	timezone := flags.String("timezone", "Europe/Moscow", "timezone of the demo people and the slot table")
 	if err := flags.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("seed-pilot: %w (the password comes from SEED_PILOT_PASSWORD or --password-stdin)", err)
 	}
-	if len(*demoPassword) < 12 {
-		return fmt.Errorf("set --password or SEED_PILOT_PASSWORD to at least 12 characters")
+	demoPassword := os.Getenv("SEED_PILOT_PASSWORD")
+	if *passwordStdin {
+		line, err := bufio.NewReader(seedPilotStdin).ReadString('\n')
+		if err != nil && !errors.Is(err, io.EOF) {
+			return fmt.Errorf("read the demo password from stdin: %w", err)
+		}
+		demoPassword = strings.TrimRight(line, "\r\n")
+	}
+	if len(demoPassword) < 12 {
+		return fmt.Errorf("set SEED_PILOT_PASSWORD or pass --password-stdin with a password of at least 12 characters")
 	}
 	cfg, err := config.FromEnvironment()
 	if err != nil {
@@ -78,11 +95,15 @@ func runSeedPilot(args []string, stdout io.Writer) error {
 	result, err := pilotseed.Seed(ctx, pilotseed.Deps{
 		Pool: pool, Hasher: hasher, Files: fileService, Knowledge: knowledgeService,
 		Chats: chat.NewService(pool), Messages: message.NewService(pool, int(cfg.Messaging.MaxBodyBytes), int(cfg.Messaging.MaxPageSize), nil), Agents: agent.NewService(pool),
-	}, pilotseed.Options{AllowNonEmpty: *allowNonEmpty, Password: *demoPassword, Timezone: *timezone})
+	}, pilotseed.Options{AllowNonEmpty: *allowNonEmpty, Password: demoPassword, Timezone: *timezone})
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(stdout, "Pilot demo centre created in organization %s.\nAccounts (password from --password):\n", result.OrgID)
+	fmt.Fprintf(stdout, "Pilot demo centre created in organization %s.\n", result.OrgID)
+	fmt.Fprintf(stdout, "WARNING: %d DEMO ACCOUNTS were created with predictable logins and one shared password.\n", len(pilotseed.People))
+	if *allowNonEmpty {
+		fmt.Fprintf(stdout, "They are plain members of the existing workspace. Deactivate them when the demo is over.\n")
+	}
 	for _, person := range pilotseed.People {
 		user := result.People[person.Key]
 		fmt.Fprintf(stdout, "  %-16s %-8s %s\n", user.DisplayName, user.OrgRole, user.Email)

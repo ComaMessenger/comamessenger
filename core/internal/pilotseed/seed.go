@@ -112,10 +112,13 @@ type Result struct {
 	Agents       map[string]agent.Agent
 	Messages     map[string]string
 	ScheduleDay  string
+	// Creator made the chats, the collection and the agents: the demo lead in
+	// a new demo organization, the existing owner in a non-empty one.
+	Creator identity.User
 }
 
-// Owner is the organization owner who created everything.
-func (result Result) Owner() identity.User { return result.People["marina"] }
+// Owner is the person who created the demo chats, knowledge and agents.
+func (result Result) Owner() identity.User { return result.Creator }
 
 // Seed creates the demo centre. It refuses a database that already has an
 // organization unless AllowNonEmpty is set.
@@ -144,7 +147,7 @@ func Seed(ctx context.Context, deps Deps, options Options) (Result, error) {
 	for _, spec := range chats {
 		memberIDs := make([]string, 0, len(spec.members))
 		for _, key := range spec.members {
-			if key != "marina" {
+			if result.People[key].ActorID != owner.ActorID {
 				memberIDs = append(memberIDs, result.People[key].ActorID)
 			}
 		}
@@ -245,11 +248,13 @@ func seedPeople(ctx context.Context, deps Deps, options Options, result *Result)
 		return err
 	}
 	var orgID string
+	existing := false
 	err = tx.QueryRow(ctx, `SELECT id FROM organizations ORDER BY created_at, id LIMIT 1`).Scan(&orgID)
 	switch {
 	case err == nil && !options.AllowNonEmpty:
 		return ErrNotEmpty
 	case err == nil:
+		existing = true
 		var taken bool
 		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM actors WHERE org_id=$1 AND handle=ANY($2::text[]))`, orgID, handles()).Scan(&taken); err != nil {
 			return err
@@ -277,15 +282,10 @@ func seedPeople(ctx context.Context, deps Deps, options Options, result *Result)
 			return err
 		}
 		role := person.Role
-		if role == "owner" && options.AllowNonEmpty {
-			// The existing workspace keeps its owner; the demo lead is an admin.
-			var hasOwner bool
-			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM actors WHERE org_id=$1 AND org_role='owner' AND deleted_at IS NULL)`, orgID).Scan(&hasOwner); err != nil {
-				return err
-			}
-			if hasOwner {
-				role = "admin"
-			}
+		if existing {
+			// Next to real data, demo accounts with known logins never get
+			// administrative rights.
+			role = "member"
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO actors(id,org_id,type,org_role,display_name,handle,timezone,title) VALUES($1,$2,'user',$3,$4,$5,$6,$7)`,
 			actorID, orgID, role, person.Name, person.Handle, options.Timezone, person.Title); err != nil {
@@ -298,12 +298,21 @@ func seedPeople(ctx context.Context, deps Deps, options Options, result *Result)
 		result.People[person.Key] = identity.User{ActorID: actorID, OrgID: orgID, OrgRole: role, Email: email, DisplayName: person.Name, Handle: person.Handle,
 			Timezone: options.Timezone, Status: "active", Permissions: permission.Effective(role, nil)}
 	}
+	result.Creator = result.People["marina"]
+	if existing {
+		var ownerID, name, handle, timezone string
+		if err := tx.QueryRow(ctx, `SELECT id,display_name,handle,timezone FROM actors WHERE org_id=$1 AND type='user' AND org_role='owner' AND status='active' AND deleted_at IS NULL ORDER BY created_at,id LIMIT 1`, orgID).
+			Scan(&ownerID, &name, &handle, &timezone); err != nil {
+			return fmt.Errorf("the existing organization has no active owner to create the demo: %w", err)
+		}
+		result.Creator = identity.User{ActorID: ownerID, OrgID: orgID, OrgRole: "owner", DisplayName: name, Handle: handle, Timezone: timezone, Status: "active", Permissions: permission.Effective("owner", nil)}
+	}
 	auditID, err := id.New()
 	if err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,'organization.demo_seed','organization',$2,'{"seed":"pilot-5.3"}')`,
-		auditID, orgID, result.People["marina"].ActorID); err != nil {
+		auditID, orgID, result.Creator.ActorID); err != nil {
 		return err
 	}
 	result.OrgID = orgID
