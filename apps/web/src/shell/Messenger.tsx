@@ -17,6 +17,7 @@ import {
   settingForPath,
 } from "../settings";
 import { AgentsPage } from "../agents";
+import { KnowledgePage, knowledgeFromPath } from "../knowledge";
 import { cx } from "../ui";
 import { ChatListPane } from "../chats/ChatListPane";
 import { Conversation } from "../conversation/Conversation";
@@ -93,15 +94,18 @@ export function Messenger({
   const showChatList =
     !user.must_change_password && (Boolean(selectedID) || path === "/chats");
   const directory = directoryFromPath(path);
+  const knowledge = knowledgeFromPath(path);
   const section: PrimarySection = showChatList
     ? "chats"
     : directory
       ? directory.kind
-      : showAgents
-        ? "agents"
-        : path === "/more" || activeSettings
-          ? "more"
-          : "none";
+      : knowledge
+        ? "knowledge"
+        : showAgents
+          ? "agents"
+          : path === "/more" || activeSettings
+            ? "more"
+            : "none";
 
   const logout = useCallback(async () => {
     await api.logout();
@@ -187,6 +191,8 @@ export function Messenger({
     ) : (
       <MembersDirectory selectedID={directory.id} />
     )
+  ) : knowledge ? (
+    <KnowledgePage route={knowledge} />
   ) : path === "/more" ? (
     <MorePage />
   ) : showAgents ? (
@@ -255,8 +261,9 @@ export function Messenger({
             "messenger",
             (sidebarCollapsed || compactRail) && "messenger--sidebar-collapsed",
             !showChatList && "messenger--utility",
-            directory && "messenger--directory",
-            directory?.id && "messenger--detail-open",
+            (directory || knowledge) && "messenger--directory",
+            (directory?.id || knowledge?.collectionID) &&
+              "messenger--detail-open",
             selectedID && "messenger--chat-open",
             threadID && "messenger--thread-open",
             (showAgents || activeSettings || user.must_change_password) &&
@@ -294,7 +301,7 @@ export function Messenger({
               active={
                 section === "none"
                   ? "chats"
-                  : section === "agents"
+                  : section === "agents" || section === "knowledge"
                     ? "more"
                     : section
               }

@@ -2232,6 +2232,60 @@ paths:
         "204": { description: Document deleted. }
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
+  /api/v1/knowledge/documents/{document_id}/fragments:
+    parameters:
+      - { $ref: "#/components/parameters/KnowledgeDocumentId" }
+    get:
+      operationId: listKnowledgeDocumentFragments
+      description: Extracted text of a readable document as indexed fragments in reading order (up to 1000).
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Document fragments.
+          content:
+            application/json:
+              {
+                schema:
+                  { $ref: "#/components/schemas/KnowledgeDocumentFragments" },
+              }
+        "404": { $ref: "#/components/responses/Error" }
+  /api/v1/knowledge/documents/{document_id}/file:
+    parameters:
+      - { $ref: "#/components/parameters/KnowledgeDocumentId" }
+    get:
+      operationId: downloadKnowledgeDocumentFile
+      description: Original upload of a `file` document for anyone who may read its collection, including members of the chats a restricted collection is shared with. Pages return 404.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/ObjectDelivery" }
+      responses:
+        "200":
+          description: Authorized local blob stream, or an ObjectLink with `delivery=link`.
+          content:
+            application/octet-stream:
+              { schema: { type: string, format: binary } }
+            application/json:
+              { schema: { $ref: "#/components/schemas/ObjectLink" } }
+        "307": { description: Short-lived authorized object-store URL. }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /api/v1/knowledge/embedding-connections:
+    get:
+      operationId: listKnowledgeEmbeddingConnections
+      description: Workspace LLM connections with an embedding model, for choosing a collection's embedding connection. Requires knowledge.manage; never returns endpoints or credentials.
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Embedding-capable connections.
+          content:
+            application/json:
+              schema:
+                {
+                  type: array,
+                  items:
+                    { $ref: "#/components/schemas/KnowledgeEmbeddingConnection" },
+                }
+        "403": { $ref: "#/components/responses/Error" }
   /api/v1/knowledge/search:
     post:
       operationId: searchKnowledge
@@ -3428,6 +3482,7 @@ components:
           chat_ids,
           embedding_connection_id,
           document_count,
+          semantic_search,
           can_manage,
           created_by,
           created_at,
@@ -3452,6 +3507,9 @@ components:
           type: [string, "null"]
           format: uuid
         document_count: { type: integer, minimum: 0 }
+        semantic_search:
+          description: True when the embedding connection is enabled, has an embedding model and is approved to receive document text; otherwise search works by words only. Visible to every reader.
+          type: boolean
         can_manage: { type: boolean }
         created_by: { type: string, format: uuid }
         created_at: { type: string, format: date-time }
@@ -3561,6 +3619,40 @@ components:
       properties:
         title: { type: string, minLength: 1, maxLength: 255 }
         body: { type: string, minLength: 1, maxLength: 1048576 }
+    KnowledgeDocumentFragments:
+      type: object
+      additionalProperties: false
+      required: [fragments, truncated]
+      properties:
+        fragments:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [chunk_id, position, section, content]
+            properties:
+              chunk_id: { type: string, format: uuid }
+              position: { type: integer, minimum: 0 }
+              section: { type: string }
+              content: { type: string }
+        truncated: { type: boolean, description: More fragments exist than listed. }
+    KnowledgeEmbeddingConnection:
+      type: object
+      additionalProperties: false
+      required:
+        [id, name, provider, embedding_model, enabled, data_sharing_approved, available]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        provider: { type: string, enum: [openai, openai-compatible] }
+        embedding_model: { type: string }
+        enabled: { type: boolean }
+        data_sharing_approved:
+          description: The connection is approved to receive document text for embeddings.
+          type: boolean
+        available:
+          description: Documents would be embedded through this connection right now.
+          type: boolean
     KnowledgeSearchRequest:
       type: object
       additionalProperties: false
@@ -5281,6 +5373,7 @@ components:
         role: { type: [string, "null"], enum: [admin, member, null] }
         status: { type: [string, "null"], enum: [active, deactivated, null] }
         permissions:
+          description: "Replaces explicit permissions. The owner sets them for administrators and members. An administrator with members.manage may set only member-grantable permissions (knowledge.manage), only for regular members other than themselves, without a role change, and only while holding those permissions personally."
           type: [array, "null"]
           uniqueItems: true
           items: { $ref: "#/components/schemas/Permission" }

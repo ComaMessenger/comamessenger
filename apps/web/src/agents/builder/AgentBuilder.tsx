@@ -257,6 +257,7 @@ export function AgentBuilder({
               chatIDs={draft.chat_ids}
               capabilities={capabilities}
               collectionIDs={draft.knowledge_collection_ids ?? []}
+              canManageKnowledge={access.canManageKnowledge}
               onCapabilities={setCapabilities}
               onCollections={setCollections}
             />

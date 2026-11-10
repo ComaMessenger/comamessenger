@@ -137,8 +137,13 @@ export const agentExperienceCatalog = defineCatalog(
     agentKnowledgeBaseHint:
       "Регламенты и инструкции, на которые агент ссылается в ответах",
     agentKnowledgeAdd: "Добавить из базы знаний",
-    agentKnowledgeEmpty:
-      "В базе знаний пока нет коллекций. Их создают в разделе «База знаний».",
+    agentKnowledgeEmptyCreate:
+      "В базе знаний пока нет коллекций. Создайте первую — агент сможет отвечать по её документам и ссылаться на них.",
+    agentKnowledgeEmptyReadOnly:
+      "В базе знаний пока нет коллекций. Их создают участники с правом управлять базой знаний.",
+    agentKnowledgeCreateFirst: "Создать коллекцию",
+    agentKnowledgeOpenBase: "Открыть базу знаний",
+    agentKnowledgeOpenCollection: "Открыть «{name}» в базе знаний",
     agentKnowledgeLoadFailed: "Не удалось загрузить базу знаний.",
     agentKnowledgeUnavailable: "Недоступная коллекция",
     agentKnowledgeUnavailableHint:
@@ -604,8 +609,13 @@ export const agentExperienceCatalog = defineCatalog(
     agentKnowledgeBaseHint:
       "Rules and instructions the agent cites in its answers",
     agentKnowledgeAdd: "Add from the knowledge base",
-    agentKnowledgeEmpty:
-      "The knowledge base has no collections yet. They are created in the Knowledge base section.",
+    agentKnowledgeEmptyCreate:
+      "The knowledge base has no collections yet. Create the first one — the agent will answer from its documents and cite them.",
+    agentKnowledgeEmptyReadOnly:
+      "The knowledge base has no collections yet. Members allowed to manage the knowledge base create them.",
+    agentKnowledgeCreateFirst: "Create a collection",
+    agentKnowledgeOpenBase: "Open the knowledge base",
+    agentKnowledgeOpenCollection: "Open «{name}» in the knowledge base",
     agentKnowledgeLoadFailed: "Could not load the knowledge base.",
     agentKnowledgeUnavailable: "Unavailable collection",
     agentKnowledgeUnavailableHint:

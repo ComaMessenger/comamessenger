@@ -1257,3 +1257,21 @@
     inline-size: 100%;
   }
 }
+
+.agent-knowledge__actions,
+.agent-knowledge__empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+.agent-knowledge__empty {
+  display: grid;
+  justify-items: start;
+}
+.agent-knowledge__empty .agent-muted {
+  margin: 0;
+}
+.agent-knowledge a.ui-button {
+  text-decoration: none;
+}

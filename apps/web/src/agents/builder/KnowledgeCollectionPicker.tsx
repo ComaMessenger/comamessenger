@@ -1,9 +1,52 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { KnowledgeCollection, MessengerAPI } from "@comamessenger/core";
-import { BookOpen, ChevronDown, FileText, Plus, X } from "lucide-react";
+import {
+  BookOpen,
+  ChevronDown,
+  ExternalLink,
+  FileText,
+  Plus,
+  X,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { knowledgePath } from "../../knowledge/routes";
+import { collectionsKey, documentsKey } from "../../knowledge/shared";
 import { Button, CheckMark, IconButton, Skeleton, cx } from "../../ui";
+
+/*
+ * Links to the Knowledge base section open in a new tab: the builder keeps
+ * unsaved edits, and the list refreshes when people come back to it.
+ */
+function KnowledgeLink({
+  to,
+  label,
+  icon = false,
+  children,
+}: {
+  to: string;
+  label?: string;
+  icon?: boolean;
+  children?: ReactNode;
+}) {
+  return (
+    <a
+      href={to}
+      target="_blank"
+      rel="noopener"
+      aria-label={label}
+      title={label}
+      className={cx(
+        "ui-button",
+        icon
+          ? "ui-button--ghost ui-button--icon"
+          : "ui-button--ghost ui-button--sm",
+      )}
+    >
+      {children}
+    </a>
+  );
+}
 
 /*
  * Self-contained choice of knowledge collections for one agent. Binding is
@@ -13,18 +56,22 @@ import { Button, CheckMark, IconButton, Skeleton, cx } from "../../ui";
 export function KnowledgeCollectionPicker({
   api,
   selected,
+  canManage,
   onChange,
 }: {
   api: MessengerAPI;
   selected: string[];
+  /** Holders of knowledge.manage are invited to create collections. */
+  canManage: boolean;
   onChange(ids: string[]): void;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const collections = useQuery({
-    queryKey: ["knowledge-collections"],
+    queryKey: collectionsKey,
     queryFn: () => api.knowledgeCollections(),
   });
+  const empty = collections.isSuccess && collections.data.length === 0;
   const byID = new Map(
     (collections.data ?? []).map((collection) => [collection.id, collection]),
   );
@@ -54,6 +101,17 @@ export function KnowledgeCollectionPicker({
               </small>
             </span>
             <span className="agent-line__control">
+              {collection && (
+                <KnowledgeLink
+                  icon
+                  to={knowledgePath(id)}
+                  label={t("agentKnowledgeOpenCollection", {
+                    name: collection.name,
+                  })}
+                >
+                  <ExternalLink />
+                </KnowledgeLink>
+              )}
               <IconButton
                 label={t("agentKnowledgeRemove", {
                   name: collection?.name ?? "",
@@ -66,15 +124,37 @@ export function KnowledgeCollectionPicker({
           </div>
         );
       })}
-      <Button
-        size="sm"
-        variant={open ? "secondary" : "ghost"}
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-      >
-        <Plus />
-        {t("agentKnowledgeAdd")}
-      </Button>
+      {empty && selected.length === 0 ? (
+        <div className="agent-knowledge__empty">
+          <p className="agent-muted">
+            {canManage
+              ? t("agentKnowledgeEmptyCreate")
+              : t("agentKnowledgeEmptyReadOnly")}
+          </p>
+          {canManage && (
+            <KnowledgeLink to={knowledgePath()}>
+              <Plus />
+              {t("agentKnowledgeCreateFirst")}
+            </KnowledgeLink>
+          )}
+        </div>
+      ) : (
+        <div className="agent-knowledge__actions">
+          <Button
+            size="sm"
+            variant={open ? "secondary" : "ghost"}
+            aria-expanded={open}
+            onClick={() => setOpen(!open)}
+          >
+            <Plus />
+            {t("agentKnowledgeAdd")}
+          </Button>
+          <KnowledgeLink to={knowledgePath()}>
+            <ExternalLink />
+            {t("agentKnowledgeOpenBase")}
+          </KnowledgeLink>
+        </div>
+      )}
       {open && (
         <div
           className="agent-knowledge__list"
@@ -96,7 +176,11 @@ export function KnowledgeCollectionPicker({
               />
             ))
           ) : (
-            <p className="agent-muted">{t("agentKnowledgeEmpty")}</p>
+            <p className="agent-muted">
+              {canManage
+                ? t("agentKnowledgeEmptyCreate")
+                : t("agentKnowledgeEmptyReadOnly")}
+            </p>
           )}
         </div>
       )}
@@ -130,7 +214,7 @@ function CollectionOption({
   const { t, i18n } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const documents = useQuery({
-    queryKey: ["knowledge-documents", collection.id],
+    queryKey: documentsKey(collection.id),
     queryFn: () => api.knowledgeDocuments(collection.id),
     enabled: expanded,
   });

@@ -3,6 +3,7 @@ package http
 import (
 	"errors"
 	standardhttp "net/http"
+	"net/url"
 	"strings"
 
 	"github.com/comamessenger/comamessenger/core/internal/agentauthz"
@@ -22,6 +23,9 @@ func (h *identityHandlers) knowledgeRoutes(protected chi.Router) {
 	protected.Get("/knowledge/documents/{documentID}", h.getKnowledgeDocument)
 	protected.Patch("/knowledge/documents/{documentID}", h.updateKnowledgeDocument)
 	protected.Delete("/knowledge/documents/{documentID}", h.deleteKnowledgeDocument)
+	protected.Get("/knowledge/documents/{documentID}/fragments", h.listKnowledgeDocumentFragments)
+	protected.Get("/knowledge/documents/{documentID}/file", h.downloadKnowledgeDocumentFile)
+	protected.Get("/knowledge/embedding-connections", h.listKnowledgeEmbeddingConnections)
 	protected.Post("/knowledge/search", h.searchKnowledge)
 	protected.Get("/knowledge/runs/{runID}/fragments", h.listKnowledgeRunFragments)
 }
@@ -100,6 +104,28 @@ func (h *identityHandlers) updateKnowledgeDocument(w standardhttp.ResponseWriter
 func (h *identityHandlers) deleteKnowledgeDocument(w standardhttp.ResponseWriter, r *standardhttp.Request) {
 	err := h.knowledge.DeleteDocument(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "documentID"))
 	h.writeKnowledge(w, r, standardhttp.StatusNoContent, nil, err)
+}
+
+func (h *identityHandlers) listKnowledgeDocumentFragments(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.knowledge.DocumentFragments(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "documentID"))
+	h.writeKnowledge(w, r, standardhttp.StatusOK, result, err)
+}
+
+// downloadKnowledgeDocumentFile serves the original upload to readers of the
+// collection, independent of who uploaded it or which chats carry it.
+func (h *identityHandlers) downloadKnowledgeDocumentFile(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	documentID := chi.URLParam(r, "documentID")
+	result, err := h.knowledge.DocumentSource(r.Context(), authFromContext(r.Context()).User, documentID)
+	if err != nil {
+		h.writeKnowledge(w, r, standardhttp.StatusOK, nil, err)
+		return
+	}
+	h.writeDownload(w, r, result, "/api/v1/knowledge/documents/"+url.PathEscape(documentID)+"/file")
+}
+
+func (h *identityHandlers) listKnowledgeEmbeddingConnections(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.knowledge.EmbeddingConnections(r.Context(), authFromContext(r.Context()).User)
+	h.writeKnowledge(w, r, standardhttp.StatusOK, result, err)
 }
 
 func (h *identityHandlers) searchKnowledge(w standardhttp.ResponseWriter, r *standardhttp.Request) {

@@ -211,27 +211,6 @@
   color: var(--coma-muted);
 }
 
-.knowledge-source__excerpt {
-  margin: 0 0 var(--coma-space-4);
-}
-.knowledge-source__excerpt figcaption {
-  margin-bottom: 6px;
-  color: var(--coma-muted);
-  font-size: 12px;
-}
-.knowledge-source__excerpt blockquote {
-  margin: 0;
-  padding: 2px 0 2px 12px;
-  border-left: 3px solid var(--coma-primary);
-  font-size: 13px;
-  line-height: 20px;
-}
-.knowledge-source__body {
-  font-size: 14px;
-  line-height: 22px;
-  overflow-wrap: anywhere;
-}
-
 .command-menu {
   padding: 6px;
   border: 1px solid var(--coma-border);

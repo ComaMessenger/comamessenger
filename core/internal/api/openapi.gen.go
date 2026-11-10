@@ -1940,6 +1940,24 @@ func (e KnowledgeDocumentStatus) Valid() bool {
 	}
 }
 
+// Defines values for KnowledgeEmbeddingConnectionProvider.
+const (
+	KnowledgeEmbeddingConnectionProviderOpenai           KnowledgeEmbeddingConnectionProvider = "openai"
+	KnowledgeEmbeddingConnectionProviderOpenaiCompatible KnowledgeEmbeddingConnectionProvider = "openai-compatible"
+)
+
+// Valid indicates whether the value is a known member of the KnowledgeEmbeddingConnectionProvider enum.
+func (e KnowledgeEmbeddingConnectionProvider) Valid() bool {
+	switch e {
+	case KnowledgeEmbeddingConnectionProviderOpenai:
+		return true
+	case KnowledgeEmbeddingConnectionProviderOpenaiCompatible:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for KnowledgeFragmentDocumentKind.
 const (
 	KnowledgeFragmentDocumentKindFile KnowledgeFragmentDocumentKind = "file"
@@ -3515,6 +3533,21 @@ func (e AcceptInvitationParamsXComaClient) Valid() bool {
 	}
 }
 
+// Defines values for DownloadKnowledgeDocumentFileParamsDelivery.
+const (
+	DownloadKnowledgeDocumentFileParamsDeliveryLink DownloadKnowledgeDocumentFileParamsDelivery = "link"
+)
+
+// Valid indicates whether the value is a known member of the DownloadKnowledgeDocumentFileParamsDelivery enum.
+func (e DownloadKnowledgeDocumentFileParamsDelivery) Valid() bool {
+	switch e {
+	case DownloadKnowledgeDocumentFileParamsDeliveryLink:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListOrganizationAuditParamsCategory.
 const (
 	ListOrganizationAuditParamsCategoryAgents         ListOrganizationAuditParamsCategory = "agents"
@@ -4827,7 +4860,10 @@ type KnowledgeCollection struct {
 	EmbeddingConnectionId *openapi_types.UUID `json:"embedding_connection_id"`
 	Id                    openapi_types.UUID  `json:"id"`
 	Name                  string              `json:"name"`
-	UpdatedAt             time.Time           `json:"updated_at"`
+
+	// SemanticSearch True when the embedding connection is enabled, has an embedding model and is approved to receive document text; otherwise search works by words only. Visible to every reader.
+	SemanticSearch bool      `json:"semantic_search"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 // KnowledgeCollectionAccess `organization`: every member reads it; `chats`: only members of `chat_ids`, and agents only in runs from those chats.
@@ -4868,6 +4904,36 @@ type KnowledgeDocumentKind string
 
 // KnowledgeDocumentStatus defines model for KnowledgeDocument.Status.
 type KnowledgeDocumentStatus string
+
+// KnowledgeDocumentFragments defines model for KnowledgeDocumentFragments.
+type KnowledgeDocumentFragments struct {
+	Fragments []struct {
+		ChunkId  openapi_types.UUID `json:"chunk_id"`
+		Content  string             `json:"content"`
+		Position int                `json:"position"`
+		Section  string             `json:"section"`
+	} `json:"fragments"`
+
+	// Truncated More fragments exist than listed.
+	Truncated bool `json:"truncated"`
+}
+
+// KnowledgeEmbeddingConnection defines model for KnowledgeEmbeddingConnection.
+type KnowledgeEmbeddingConnection struct {
+	// Available Documents would be embedded through this connection right now.
+	Available bool `json:"available"`
+
+	// DataSharingApproved The connection is approved to receive document text for embeddings.
+	DataSharingApproved bool                                 `json:"data_sharing_approved"`
+	EmbeddingModel      string                               `json:"embedding_model"`
+	Enabled             bool                                 `json:"enabled"`
+	Id                  openapi_types.UUID                   `json:"id"`
+	Name                string                               `json:"name"`
+	Provider            KnowledgeEmbeddingConnectionProvider `json:"provider"`
+}
+
+// KnowledgeEmbeddingConnectionProvider defines model for KnowledgeEmbeddingConnection.Provider.
+type KnowledgeEmbeddingConnectionProvider string
 
 // KnowledgeFragment defines model for KnowledgeFragment.
 type KnowledgeFragment struct {
@@ -5866,6 +5932,7 @@ type UpdateMessageRequestBodyFormat string
 
 // UpdateOrganizationMemberRequest defines model for UpdateOrganizationMemberRequest.
 type UpdateOrganizationMemberRequest struct {
+	// Permissions Replaces explicit permissions. The owner sets them for administrators and members. An administrator with members.manage may set only member-grantable permissions (knowledge.manage), only for regular members other than themselves, without a role change, and only while holding those permissions personally.
 	Permissions *[]Permission                          `json:"permissions,omitempty"`
 	Role        *UpdateOrganizationMemberRequestRole   `json:"role,omitempty"`
 	Status      *UpdateOrganizationMemberRequestStatus `json:"status,omitempty"`
@@ -6158,6 +6225,15 @@ type AcceptInvitationParams struct {
 
 // AcceptInvitationParamsXComaClient defines parameters for AcceptInvitation.
 type AcceptInvitationParamsXComaClient string
+
+// DownloadKnowledgeDocumentFileParams defines parameters for DownloadKnowledgeDocumentFile.
+type DownloadKnowledgeDocumentFileParams struct {
+	// Delivery `link` returns an ObjectLink instead of the bytes or a redirect; used by native clients.
+	Delivery *DownloadKnowledgeDocumentFileParamsDelivery `form:"delivery,omitempty" json:"delivery,omitempty"`
+}
+
+// DownloadKnowledgeDocumentFileParamsDelivery defines parameters for DownloadKnowledgeDocumentFile.
+type DownloadKnowledgeDocumentFileParamsDelivery string
 
 // GetMessageContextParams defines parameters for GetMessageContext.
 type GetMessageContextParams struct {

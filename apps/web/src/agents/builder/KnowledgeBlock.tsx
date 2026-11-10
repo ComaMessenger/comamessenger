@@ -30,6 +30,7 @@ export function KnowledgeBlock({
   chatIDs,
   capabilities,
   collectionIDs,
+  canManageKnowledge,
   onCapabilities,
   onCollections,
 }: {
@@ -38,6 +39,7 @@ export function KnowledgeBlock({
   chatIDs: string[];
   capabilities: Capabilities;
   collectionIDs: string[];
+  canManageKnowledge: boolean;
   onCapabilities(value: Capabilities): void;
   onCollections(ids: string[]): void;
 }) {
@@ -95,6 +97,7 @@ export function KnowledgeBlock({
       <KnowledgeCollectionPicker
         api={api}
         selected={collectionIDs}
+        canManage={canManageKnowledge}
         onChange={onCollections}
       />
     </BuilderBlock>

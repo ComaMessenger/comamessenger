@@ -6,6 +6,7 @@ import type {
 } from "@comamessenger/core";
 import { Cloud, Eye, Plug } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { collectionsKey } from "../../knowledge/shared";
 import { Button, SelectField, Switch, cx } from "../../ui";
 import type { Capabilities } from "../shared/capabilities";
 import type { Draft } from "../shared/draft";
@@ -41,7 +42,7 @@ export function ModelBlock({
     (connection) => connection.id === draft.llm_connection_id,
   );
   const collections = useQuery({
-    queryKey: ["knowledge-collections"],
+    queryKey: collectionsKey,
     queryFn: () => api.knowledgeCollections(),
     enabled: (draft.knowledge_collection_ids ?? []).length > 0,
   });

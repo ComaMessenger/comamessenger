@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { chatAvatarSource } from "@comamessenger/core";
-import { FileText, Hash, Search } from "lucide-react";
+import { BookOpen, FileText, Hash, Search } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
-import type { ActorSummary, Chat, DirectoryChat, SearchPage } from "@comamessenger/core";
+import type {
+  ActorSummary,
+  Chat,
+  DirectoryChat,
+  KnowledgeFragment,
+  SearchPage,
+} from "@comamessenger/core";
 import {
   Avatar,
   Chip,
@@ -22,6 +28,8 @@ import { formatListTime } from "../lib/format";
 import { useIsMobile } from "../lib/useMediaQuery";
 import { useMessenger, type SearchRequest } from "../shell/MessengerContext";
 import { Highlight } from "./ActorPicker";
+import { knowledgePath } from "../knowledge/routes";
+import { splitHighlight } from "../knowledge/format";
 
 type Tab = "people" | "messages";
 type SearchType = "all" | "message" | "file";
@@ -30,7 +38,25 @@ type Row =
   | { kind: "person"; actor: ActorSummary }
   | { kind: "chat"; chat: Chat }
   | { kind: "directory"; chat: DirectoryChat }
-  | { kind: "result"; result: SearchPage["results"][number] };
+  | { kind: "result"; result: SearchPage["results"][number] }
+  | { kind: "knowledge"; fragment: KnowledgeFragment };
+
+/** Knowledge snippets highlight word forms, as full-text search matched them. */
+function KnowledgeHighlight({ text, query }: { text: string; query: string }) {
+  return (
+    <>
+      {splitHighlight(text, query).map((part, index) =>
+        part.match ? (
+          <b key={index} className="text-highlight">
+            {part.text}
+          </b>
+        ) : (
+          part.text
+        ),
+      )}
+    </>
+  );
+}
 
 export function SearchPalette({
   request,
@@ -42,7 +68,7 @@ export function SearchPalette({
   onOpen(chatID: string, messageID?: string): void;
 }) {
   const { t } = useTranslation();
-  const { api, user, store } = useMessenger();
+  const { api, user, store, navigate } = useMessenger();
   const isMobile = useIsMobile();
   const chatMap = useStore(store, (state) => state.chats);
   const presence = useStore(store, (state) => state.presence);
@@ -52,6 +78,7 @@ export function SearchPalette({
   const [searchType, setSearchType] = useState<SearchType>("all");
   const [searchChat, setSearchChat] = useState(request?.chatID ?? "");
   const [results, setResults] = useState<SearchPage | null>(null);
+  const [knowledge, setKnowledge] = useState<KnowledgeFragment[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [active, setActive] = useState(0);
@@ -112,6 +139,29 @@ export function SearchPalette({
     };
   }, [api, attempt, deferredQuery, searchChat, searchType, tab]);
 
+  // Knowledge base documents form their own group in the unfiltered search;
+  // the server returns only fragments of collections the user may read.
+  const knowledgeEnabled =
+    tab === "messages" && deferredQuery.length >= 2 && searchType === "all" && !searchChat;
+  useEffect(() => {
+    if (!knowledgeEnabled) {
+      setKnowledge([]);
+      return;
+    }
+    let alive = true;
+    void api
+      .searchKnowledge({ query: deferredQuery, limit: 5 })
+      .then((result) => {
+        if (alive) setKnowledge(result.fragments);
+      })
+      .catch(() => {
+        if (alive) setKnowledge([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [api, attempt, deferredQuery, knowledgeEnabled]);
+
   async function loadMore() {
     if (!results?.next_cursor || pending) return;
     setPending(true);
@@ -147,7 +197,15 @@ export function SearchPalette({
     .slice(0, 4)
     .map((chat) => ({ kind: "directory", chat }));
   const resultRows: Row[] = (results?.results ?? []).map((result) => ({ kind: "result", result }));
-  const rows: Row[] = tab === "people" ? [...peopleRows, ...chatRows, ...directoryRows] : resultRows;
+  // One row per document: the best fragment represents it.
+  const knowledgeRows: Row[] = knowledge
+    .filter(
+      (fragment, index, all) =>
+        all.findIndex((other) => other.document_id === fragment.document_id) === index,
+    )
+    .map((fragment) => ({ kind: "knowledge", fragment }));
+  const rows: Row[] =
+    tab === "people" ? [...peopleRows, ...chatRows, ...directoryRows] : [...knowledgeRows, ...resultRows];
   const count = rows.length;
 
   async function openRow(row: Row) {
@@ -174,6 +232,14 @@ export function SearchPalette({
         const joined = await api.joinChat(row.chat.id);
         store.setState((state) => ({ chats: { ...state.chats, [joined.id]: joined } }));
         onOpen(joined.id);
+      } else if (row.kind === "knowledge") {
+        onClose();
+        navigate(
+          knowledgePath(row.fragment.collection_id, row.fragment.document_id, {
+            fragment: row.fragment.chunk_id,
+            query: deferredQuery,
+          }),
+        );
       } else onOpen(row.result.chat_id, row.result.message_id);
     } catch (cause) {
       setError(messageOf(cause));
@@ -377,17 +443,54 @@ export function SearchPalette({
             )
           ) : deferredQuery.length < 2 ? (
             <div className="search-palette__hint">{t("searchTypeMore")}</div>
-          ) : pending && !results ? (
+          ) : pending && !results && knowledgeRows.length === 0 ? (
             <>
               <SkeletonRow avatar={30} />
               <SkeletonRow avatar={30} />
             </>
-          ) : error ? (
+          ) : error && knowledgeRows.length === 0 ? (
             <InlineError title={t("searchUnavailable")} hint={error} onRetry={() => setAttempt((value) => value + 1)} retryLabel={t("retry")} center />
           ) : count === 0 ? (
             <EmptyState compact title={t("searchNothingFor", { query: deferredQuery })} hint={t("searchNothingHint")} />
           ) : (
             <>
+              {knowledgeRows.length > 0 && (
+                <span className="search-palette__section">{t("kbSearchSection")}</span>
+              )}
+              {knowledgeRows.map((row) =>
+                row.kind === "knowledge"
+                  ? renderRow(
+                      row,
+                      <div className="search-palette__result">
+                        <span className="search-palette__glyph" aria-hidden="true">
+                          <BookOpen />
+                        </span>
+                        <span className="search-palette__result-body">
+                          <span className="search-palette__result-head">
+                            <strong className="truncate">
+                              <KnowledgeHighlight text={row.fragment.document_title} query={deferredQuery} />
+                            </strong>
+                            <small className="truncate">
+                              {row.fragment.section
+                                ? t("kbSearchMeta", {
+                                    collection: row.fragment.collection_name,
+                                    section: row.fragment.section,
+                                  })
+                                : row.fragment.collection_name}
+                            </small>
+                          </span>
+                          <span className="search-palette__snippet clamp-2">
+                            <KnowledgeHighlight text={row.fragment.content} query={deferredQuery} />
+                          </span>
+                        </span>
+                      </div>,
+                      "search-palette__row--result search-palette__row--knowledge",
+                    )
+                  : null,
+              )}
+              {knowledgeRows.length > 0 && resultRows.length > 0 && (
+                <span className="search-palette__section">{t("messages")}</span>
+              )}
               {resultRows.map((row) =>
                 row.kind === "result"
                   ? renderRow(

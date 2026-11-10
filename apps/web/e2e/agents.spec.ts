@@ -295,7 +295,12 @@ export type AgentMock = {
 
 async function mockAgents(
   page: Page,
-  options: { empty?: boolean; theme?: "light" | "dark" } = {},
+  options: {
+    empty?: boolean;
+    theme?: "light" | "dark";
+    noCollections?: boolean;
+    userPatch?: Record<string, unknown>;
+  } = {},
 ): Promise<AgentMock> {
   let agents = options.empty ? [] : seedAgents();
   const triggers = new Map<string, Array<Record<string, unknown>>>(
@@ -392,9 +397,9 @@ async function mockAgents(
       body = {
         access_token: "test",
         access_expires_at: "2099-01-01T00:00:00Z",
-        user: owner,
+        user: { ...owner, ...options.userPatch },
       };
-    else if (path === "/me") body = owner;
+    else if (path === "/me") body = { ...owner, ...options.userPatch };
     else if (path === "/preferences")
       body = {
         theme: options.theme ?? "light",
@@ -421,7 +426,8 @@ async function mockAgents(
     else if (path === "/unread") body = { chats: [], threads: [] };
     else if (path === "/threads") body = { threads: [], next_before_seq: null };
     else if (path === "/agent-connections") body = [connection];
-    else if (path === "/knowledge/collections") body = collections;
+    else if (path === "/knowledge/collections")
+      body = options.noCollections ? [] : collections;
     else if (/^\/knowledge\/collections\/[^/]+\/documents$/.test(path))
       body = [
         {
@@ -852,6 +858,14 @@ test("builder blocks derive permissions from plain-language choices", async ({
   await expect(
     knowledge.getByText("Порядок замены инструктора.pdf"),
   ).toBeVisible();
+  await expect(
+    knowledge.getByRole("link", { name: "Открыть базу знаний" }),
+  ).toHaveAttribute("href", "/knowledge");
+  await expect(
+    knowledge.getByRole("link", {
+      name: "Открыть «Регламенты центра» в базе знаний",
+    }),
+  ).toHaveAttribute("href", `/knowledge/${collections[0]!.id}`);
 
   // 3. What it can do: the mode is stated, not a fake switch.
   const skills = page.locator("#agent-block-skills");
@@ -1220,4 +1234,38 @@ test("builder fits a phone and the dark theme", async ({ page }) => {
     page.getByRole("heading", { name: /Ваши агенты/ }),
   ).toBeVisible();
   await expectNoHorizontalScroll(page);
+});
+
+test("an empty knowledge base invites only those who may fill it", async ({
+  page,
+}) => {
+  await mockAgents(page, { noCollections: true });
+  await page.goto(`/agents/${ids.control}/knowledge`);
+  const knowledge = page.locator("#agent-block-knowledge");
+  await expect(
+    knowledge.getByText(/В базе знаний пока нет коллекций\. Создайте первую/),
+  ).toBeVisible();
+  const create = knowledge.getByRole("link", { name: "Создать коллекцию" });
+  await expect(create).toHaveAttribute("href", "/knowledge");
+  await expect(create).toHaveAttribute("target", "_blank");
+});
+
+test("without knowledge.manage the empty base does not ask to create", async ({
+  page,
+}) => {
+  await mockAgents(page, {
+    noCollections: true,
+    userPatch: {
+      role: "member",
+      permissions: ["agents.build", "agents.observe"],
+    },
+  });
+  await page.goto(`/agents/${ids.control}/knowledge`);
+  const knowledge = page.locator("#agent-block-knowledge");
+  await expect(
+    knowledge.getByText(/Их создают участники с правом управлять базой знаний/),
+  ).toBeVisible();
+  await expect(
+    knowledge.getByRole("link", { name: "Создать коллекцию" }),
+  ).toHaveCount(0);
 });
