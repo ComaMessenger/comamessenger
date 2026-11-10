@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   BookOpen,
   Check,
@@ -34,7 +35,9 @@ import { formatTime } from "../lib/format";
 import { hasPermission } from "../settings";
 import { useMessenger } from "../shell/MessengerContext";
 import { downloadToDisk } from "../dialogs/useObjectURL";
-import { KnowledgeDocumentDialog } from "./KnowledgeDocumentDialog";
+import { useToast } from "../shell/ToastProvider";
+import { knowledgePath } from "../knowledge/routes";
+import { documentKey } from "../knowledge/shared";
 
 type Props = {
   message: Message;
@@ -443,7 +446,24 @@ function ConfirmationCard({
 function SourceList({ sources }: { sources: MessageSource[] }) {
   const { t } = useTranslation();
   const { api, navigate } = useMessenger();
-  const [document, setDocument] = useState<MessageSource | null>(null);
+  const { toast } = useToast();
+  const client = useQueryClient();
+  const [opening, setOpening] = useState("");
+  // A cited document opens on its knowledge base page with the quoted
+  // fragment in focus; the server decides whether the reader may see it.
+  async function openDocument(source: MessageSource) {
+    const documentID = source.document_id!;
+    setOpening(documentID);
+    try {
+      const document = await api.knowledgeDocument(documentID);
+      client.setQueryData(documentKey(documentID), document);
+      navigate(knowledgePath(document.collection_id, document.id, { quote: source.excerpt }));
+    } catch {
+      toast({ message: t("acDocumentFailed"), tone: "danger" });
+    } finally {
+      setOpening("");
+    }
+  }
   return (
     <div className="agent-sources" role="list" aria-label={t("acSources")}>
       {sources.map((source, index) => {
@@ -460,7 +480,7 @@ function SourceList({ sources }: { sources: MessageSource[] }) {
             navigate(`/m/${compactUUID(source.message_id)}`);
           else if (source.kind === "file" && source.file_id)
             void downloadToDisk(api, source.file_id, source.title || "file").catch(() => undefined);
-          else if (source.kind === "document" && source.document_id) setDocument(source);
+          else if (source.kind === "document" && source.document_id) void openDocument(source);
         };
         const target = source.message_id ?? source.file_id ?? source.document_id;
         return (
@@ -468,7 +488,8 @@ function SourceList({ sources }: { sources: MessageSource[] }) {
             <button
               type="button"
               className="agent-source"
-              disabled={!target}
+              disabled={!target || opening === target}
+              aria-busy={opening === target || undefined}
               title={source.excerpt || label}
               onClick={open}
             >
@@ -478,14 +499,6 @@ function SourceList({ sources }: { sources: MessageSource[] }) {
           </span>
         );
       })}
-      {document?.document_id && (
-        <KnowledgeDocumentDialog
-          documentID={document.document_id}
-          title={document.title}
-          excerpt={document.excerpt}
-          onClose={() => setDocument(null)}
-        />
-      )}
     </div>
   );
 }

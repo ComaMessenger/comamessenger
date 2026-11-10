@@ -342,9 +342,6 @@ func (s *Service) UpdateMember(ctx context.Context, current identity.User, actor
 		return Member{}, fmt.Errorf("%w: no member changes supplied", ErrInvalid)
 	}
 	if input.Permissions != nil {
-		if current.OrgRole != "owner" {
-			return Member{}, ErrForbidden
-		}
 		seen := make(map[permission.Code]struct{}, len(*input.Permissions))
 		for _, code := range *input.Permissions {
 			if !permission.Valid(code) {
@@ -354,6 +351,9 @@ func (s *Service) UpdateMember(ctx context.Context, current identity.User, actor
 				return Member{}, fmt.Errorf("%w: duplicate permission %q", ErrInvalid, code)
 			}
 			seen[code] = struct{}{}
+		}
+		if current.OrgRole != "owner" && !canDelegateMemberPermissions(current, actorID, input) {
+			return Member{}, ErrForbidden
 		}
 	}
 	return s.repository.UpdateMember(ctx, current.OrgID, current.ActorID, actorID, input)
@@ -455,6 +455,27 @@ func validateIntegrations(value integrationSecrets) error {
 		}
 	}
 	return nil
+}
+
+// canDelegateMemberPermissions lets an administrator who manages members grant
+// or revoke the permissions a regular member may hold (knowledge.manage), as
+// long as the administrator holds every such permission personally. It never
+// covers the administrator's own account or a role change, and the repository
+// additionally refuses targets that are not regular members, so administrator
+// permissions remain an owner decision.
+func canDelegateMemberPermissions(current identity.User, targetActorID string, input UpdateMemberInput) bool {
+	if current.OrgRole != "admin" || targetActorID == current.ActorID || input.Role != nil || input.Permissions == nil {
+		return false
+	}
+	if !memberGrantable(*input.Permissions) {
+		return false
+	}
+	for _, code := range permission.All() {
+		if permission.MemberGrantable(code) && !allows(current, code) {
+			return false
+		}
+	}
+	return true
 }
 
 func allows(user identity.User, required permission.Code) bool {

@@ -385,6 +385,30 @@ func (s *Service) Download(ctx context.Context, user identity.User, fileID strin
 	if err != nil {
 		return Download{}, err
 	}
+	return s.deliver(ctx, file)
+}
+
+// DownloadAuthorized delivers a file of the organization without the
+// uploader/chat check. The caller must already have decided that the actor
+// may read the file through another resource, such as a knowledge collection.
+func (s *Service) DownloadAuthorized(ctx context.Context, orgID, fileID string) (Download, error) {
+	var file File
+	err := s.pool.QueryRow(ctx, `
+		SELECT f.id, f.name, f.mime, f.size, f.status, f.processing_status, f.preview_file_id,
+		       f.created_at, f.ready_at, f.uploader_id, f.storage_key, f.storage_driver
+		FROM files f WHERE f.id = $1 AND f.org_id = $2 AND f.status <> 'deleted'`, fileID, orgID).Scan(
+		&file.ID, &file.Name, &file.MIME, &file.Size, &file.Status, &file.ProcessingStatus, &file.PreviewFileID,
+		&file.CreatedAt, &file.ReadyAt, &file.UploaderID, &file.storageKey, &file.storageDriver)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Download{}, ErrNotFound
+	}
+	if err != nil {
+		return Download{}, fmt.Errorf("load authorized file: %w", err)
+	}
+	return s.deliver(ctx, file)
+}
+
+func (s *Service) deliver(ctx context.Context, file File) (Download, error) {
 	if file.Status != "ready" {
 		return Download{}, ErrConflict
 	}

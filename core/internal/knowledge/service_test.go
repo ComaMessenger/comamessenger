@@ -500,3 +500,139 @@ func TestEmbeddingsAddSemanticMatches(t *testing.T) {
 		t.Fatalf("search without embeddings = %+v, err = %v", plain, err)
 	}
 }
+
+func TestSourceFileFollowsCollectionReadAccess(t *testing.T) {
+	f := newFixture(t, nil, nil)
+	shared, err := f.service.CreateCollection(t.Context(), f.owner, CreateCollectionInput{Name: "Инструкторам", Access: "chats", ChatIDs: []string{f.chatID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	open, err := f.service.CreateCollection(t.Context(), f.owner, CreateCollectionInput{Name: "Всем"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The librarian uploads; nobody else is the uploader or shares a chat
+	// message with the file, so only collection access can open it.
+	restrictedFile := f.upload(t, f.librarian, "warmup.md", "text/markdown", []byte("# Разминка\n\nДесять минут перед занятием."))
+	restricted, err := f.service.CreateDocument(t.Context(), f.librarian, shared.ID, CreateDocumentInput{Kind: "file", FileID: restrictedFile})
+	if err != nil {
+		t.Fatal(err)
+	}
+	openFile := f.upload(t, f.librarian, "badge.txt", "text/plain", []byte("Пропуск выдаёт администратор."))
+	public, err := f.service.CreateDocument(t.Context(), f.librarian, open.ID, CreateDocumentInput{Kind: "file", FileID: openFile})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := f.service.CreateDocument(t.Context(), f.librarian, open.ID, CreateDocumentInput{Kind: "page", Title: "Памятка", Body: "Текст памятки"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := func(user identity.User, documentID string) (string, error) {
+		download, err := f.service.DocumentSource(t.Context(), user, documentID)
+		if err != nil {
+			return "", err
+		}
+		if download.Reader == nil {
+			t.Fatalf("local storage must stream the source")
+		}
+		defer download.Reader.Close()
+		data, err := io.ReadAll(download.Reader)
+		return string(data), err
+	}
+	// The file layer alone would refuse these readers.
+	if _, err := f.files.Download(t.Context(), f.member, restrictedFile); !errors.Is(err, files.ErrNotFound) {
+		t.Fatalf("plain file download by a reader err = %v", err)
+	}
+	for _, reader := range []identity.User{f.member, f.owner, f.librarian} {
+		if body, err := read(reader, restricted.ID); err != nil || !strings.Contains(body, "Десять минут") {
+			t.Fatalf("restricted source for %s = %q, err = %v", reader.ActorID, body, err)
+		}
+	}
+	if _, err := read(f.outsider, restricted.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("outsider restricted source err = %v", err)
+	}
+	if body, err := read(f.outsider, public.ID); err != nil || body != "Пропуск выдаёт администратор." {
+		t.Fatalf("organization-wide source = %q, err = %v", body, err)
+	}
+	if _, err := read(f.otherOwner, public.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("foreign organization source err = %v", err)
+	}
+	if _, err := read(f.member, page.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("page source err = %v", err)
+	}
+
+	// Removing the chat from the collection revokes the member's access.
+	if _, err := f.service.UpdateCollection(t.Context(), f.owner, shared.ID, UpdateCollectionInput{Access: ptr("organization")}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := read(f.outsider, restricted.ID); err != nil {
+		t.Fatalf("source after opening the collection err = %v", err)
+	}
+	other := uuid.NewString()
+	tx, err := f.pool.Begin(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(t.Context())
+	if _, err := tx.Exec(t.Context(), `INSERT INTO chats(id,org_id,kind,visibility,name,created_by) VALUES($1,$2,'group','private','Doctors',$3)`, other, f.orgID, f.owner.ActorID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(t.Context(), `INSERT INTO chat_members(chat_id,actor_id,org_id,role) VALUES($1,$2,$3,'owner')`, other, f.owner.ActorID, f.orgID); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.service.UpdateCollection(t.Context(), f.owner, shared.ID, UpdateCollectionInput{Access: ptr("chats"), ChatIDs: &[]string{other}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := read(f.member, restricted.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("source after unsharing the chat err = %v", err)
+	}
+}
+
+func TestDocumentFragmentsAndEmbeddingOptions(t *testing.T) {
+	f := newFixture(t, nil, nil)
+	ready, pending := uuid.NewString(), uuid.NewString()
+	if _, err := f.pool.Exec(t.Context(), `INSERT INTO agent_llm_connections(id,org_id,name,provider,endpoint_url,nonce,ciphertext,key_hint,created_by,updated_by,embedding_model,embedding_data_sharing_approved)
+		VALUES($1,$3,'Approved','openai-compatible','https://llm.example.test/v1',$4,$5,'••••',$6,$6,'embed-small',true),
+		      ($2,$3,'Not approved','openai','',$4,$5,'••••',$6,$6,'text-embedding-3-small',false)`,
+		ready, pending, f.orgID, make([]byte, 12), make([]byte, 16), f.owner.ActorID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.service.EmbeddingConnections(t.Context(), f.member); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("member embedding options err = %v", err)
+	}
+	options, err := f.service.EmbeddingConnections(t.Context(), f.librarian)
+	if err != nil || len(options) != 2 || options[0].ID != ready || !options[0].Available || options[1].Available || options[1].DataSharingApproved {
+		t.Fatalf("embedding options = %+v, err = %v", options, err)
+	}
+	semantic, err := f.service.CreateCollection(t.Context(), f.owner, CreateCollectionInput{Name: "Смысл", EmbeddingConnectionID: &ready})
+	if err != nil || !semantic.SemanticSearch {
+		t.Fatalf("semantic collection = %+v, err = %v", semantic, err)
+	}
+	words, err := f.service.CreateCollection(t.Context(), f.owner, CreateCollectionInput{Name: "Слова", EmbeddingConnectionID: &pending})
+	if err != nil || words.SemanticSearch {
+		t.Fatalf("unapproved collection = %+v, err = %v", words, err)
+	}
+	// Readers learn the search mode without seeing the connection.
+	visible, err := f.service.GetCollection(t.Context(), f.member, semantic.ID)
+	if err != nil || !visible.SemanticSearch || visible.EmbeddingConnectionID != nil {
+		t.Fatalf("reader view = %+v, err = %v", visible, err)
+	}
+
+	page, err := f.service.CreateDocument(t.Context(), f.owner, words.ID, CreateDocumentInput{Kind: "page", Title: "Правила", Body: policyMarkdown})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.index(t, page)
+	fragments, err := f.service.DocumentFragments(t.Context(), f.member, page.ID)
+	if err != nil || fragments.Truncated || len(fragments.Fragments) != 3 || fragments.Fragments[1].Section != "Правила центра › Отпуска" || fragments.Fragments[1].Position != 1 {
+		t.Fatalf("fragments = %+v, err = %v", fragments, err)
+	}
+	if _, err := f.service.DocumentFragments(t.Context(), f.otherOwner, page.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("foreign fragments err = %v", err)
+	}
+}
+
+func ptr(value string) *string { return &value }

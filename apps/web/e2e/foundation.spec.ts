@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { knowledgeIDs, mockKnowledge } from "./knowledgeMock";
 test("component catalog supports light, dark and phone", async ({ page }) => {
   await page.goto("/dev/components");
   await expect(page.getByRole("heading", { name: "Coma UI" })).toBeVisible();
@@ -2341,4 +2342,216 @@ test("tablet thread details and narrow agent hints keep usable widths", async ({
   await expect(page).toHaveScreenshot("agents-narrow.png", {
     animations: "disabled",
   });
+});
+
+// Knowledge base (phase 5.3, package G) -------------------------------------
+
+const knowledgeNow = new Date("2026-11-10T09:00:00Z");
+const openSearch = (page: import("@playwright/test").Page) =>
+  page
+    .getByRole("button", { name: "Поиск", exact: true })
+    .locator("visible=true")
+    .first()
+    .click();
+
+test("knowledge base: create a collection and upload documents with status", async ({
+  page,
+}) => {
+  const phone = test.info().project.name === "phone";
+  await page.clock.setFixedTime(knowledgeNow);
+  await mockMessenger(page);
+  const knowledge = await mockKnowledge(page, { empty: true });
+
+  await page.goto("/knowledge");
+  await expect(
+    page.getByRole("heading", { name: "База знаний" }),
+  ).toBeVisible();
+  await expect(page.getByText("База знаний пока пуста")).toBeVisible();
+  await expect(page.getByText(/Агенты отвечают по ним со ссылкой/)).toBeVisible();
+  await expect(page).toHaveScreenshot("knowledge-empty.png", {
+    animations: "disabled",
+  });
+
+  await page.getByRole("button", { name: "Создать коллекцию" }).click();
+  const dialog = page.getByRole("dialog", { name: "Новая коллекция" });
+  await dialog.getByLabel("Название").fill("Регламенты замен");
+  await dialog.getByText("Участники выбранных чатов").click();
+  await expect(dialog.getByRole("checkbox", { name: "Объявления" })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Создать" })).toBeDisabled();
+  await dialog.getByRole("checkbox", { name: "Объявления" }).click();
+  await dialog.getByRole("button", { name: "Подключение" }).click();
+  await page.getByRole("option", { name: /Локальная модель/ }).click();
+  await expect(dialog.getByRole("note")).toContainText(
+    "отправит тексты всех документов коллекции в модель «embed-small»",
+  );
+  // Opening the select scrolls the body by a timing-dependent amount.
+  await dialog.locator(".ui-dialog__body").evaluate((body) => (body.scrollTop = 0));
+  if (!phone)
+    await expect(dialog).toHaveScreenshot("knowledge-collection-dialog.png", {
+      animations: "disabled",
+    });
+  await dialog.getByRole("button", { name: "Создать" }).click();
+  await expect(page).toHaveURL(/\/knowledge\/00000000-/);
+  const detail = page.locator(".knowledge-detail");
+  await expect(detail.getByText("Регламенты замен", { exact: true })).toBeVisible();
+  await expect(detail.getByText("Участники 1 чата")).toBeVisible();
+  await expect(detail.getByText("поиск по смыслу включён")).toBeVisible();
+  await expect(detail.getByText(/Подходят TXT, Markdown, CSV, XLSX, DOCX и PDF/)).toBeVisible();
+
+  await page.getByTestId("knowledge-file-input").setInputFiles([
+    {
+      name: "Регламент замен.md",
+      mimeType: "text/markdown",
+      buffer: Buffer.from("# Замены\n\nЗамена оформляется у старшего инструктора."),
+    },
+    { name: "Схема зала.jpg", mimeType: "image/jpeg", buffer: Buffer.from("jpg") },
+  ]);
+  await expect(detail.getByText("Этот формат не поддерживается")).toBeVisible();
+  const row = detail.getByRole("button", { name: "Открыть Регламент замен.md" });
+  await expect(row).toBeVisible();
+  await expect(row).toContainText(/В очереди|Обрабатывается/);
+  await expect(row).toContainText("Готово", { timeout: 10_000 });
+  await expect(row).toContainText("1 фрагмент");
+
+  // A slow upload shows progress and can be cancelled.
+  await page.getByTestId("knowledge-file-input").setInputFiles({
+    name: "slow-scan.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.alloc(2048, 1),
+  });
+  await expect(detail.getByText(/Загружается · \d+%/)).toBeVisible();
+  await detail.getByRole("button", { name: "Отменить загрузку slow-scan.pdf" }).click();
+  await expect(detail.getByText(/Загрузка отменена/)).toBeVisible();
+  expect(knowledge.requests).toContain(
+    `POST /knowledge/collections/${knowledge.collections[0]!.id}/documents`,
+  );
+});
+
+test("knowledge base: pages, failure reasons and the source file", async ({
+  page,
+}) => {
+  const phone = test.info().project.name === "phone";
+  await page.clock.setFixedTime(knowledgeNow);
+  await mockMessenger(page);
+  const knowledge = await mockKnowledge(page);
+
+  await page.goto(`/knowledge/${knowledgeIDs.rules}`);
+  const detail = page.locator(".knowledge-detail");
+  await expect(detail.getByText("Регламенты центра", { exact: true })).toBeVisible();
+  await expect(detail.getByText(/В PDF нет текстового слоя/)).toBeVisible();
+  await expect(detail.getByText("поиск по смыслу включён")).toBeVisible();
+  await expect(page).toHaveScreenshot("knowledge-collection.png", {
+    animations: "disabled",
+  });
+
+  await detail.getByRole("button", { name: "Новая страница" }).click();
+  const editor = page.getByRole("dialog", { name: "Новая страница" });
+  await editor.getByLabel("Заголовок").fill("Пропуска");
+  await editor
+    .getByLabel("Текст в Markdown")
+    .fill("# Пропуска\n\n## Гостям\n\nГостевой пропуск выдаёт **администратор**.");
+  if (phone) await editor.getByRole("radio", { name: "Предпросмотр" }).click();
+  await expect(
+    editor.locator(".knowledge-editor__preview h2", { hasText: "Гостям" }),
+  ).toBeVisible();
+  await expect(
+    editor.locator(".knowledge-editor__preview strong", { hasText: "администратор" }),
+  ).toBeVisible();
+  await editor.getByRole("button", { name: "Создать" }).click();
+  await expect(page).toHaveURL(new RegExp(`/knowledge/${knowledgeIDs.rules}/00000000-`));
+  await expect(detail.getByText("Пропуска", { exact: true }).first()).toBeVisible();
+  await expect(detail.locator(".knowledge-status")).toHaveText("Готово", { timeout: 10_000 });
+  await expect(detail.locator(".knowledge-fragment").first()).toContainText("Гостевой пропуск");
+  await expect(detail.locator(".knowledge-fragment").first()).toContainText("Пропуска › Гостям");
+
+  await page.goto(`/knowledge/${knowledgeIDs.rules}/${knowledgeIDs.slots}`);
+  await expect(detail.getByText("Иванова; Слот: 09:00", { exact: false })).toBeVisible();
+  // A spreadsheet is saved; PDF and text would open in a new tab.
+  const download = page.waitForEvent("download");
+  await detail.getByRole("button", { name: "Открыть исходный файл" }).click();
+  expect((await download).suggestedFilename()).toBe("Расписание слотов.xlsx");
+  expect(knowledge.requests).toContain(`GET /knowledge/documents/${knowledgeIDs.slots}/file`);
+
+  await page.goto(`/knowledge/${knowledgeIDs.rules}/${knowledgeIDs.scan}`);
+  await detail.getByRole("button", { name: "Удалить" }).click();
+  await page.getByRole("dialog", { name: "Удалить «Скан приказа.pdf»?" }).getByRole("button", { name: "Удалить" }).click();
+  await expect(page).toHaveURL(new RegExp(`/knowledge/${knowledgeIDs.rules}$`));
+  await expect(detail.getByText("Скан приказа.pdf")).toHaveCount(0);
+});
+
+test("knowledge base documents appear in the common search with the fragment highlighted", async ({
+  page,
+}) => {
+  await page.clock.setFixedTime(knowledgeNow);
+  await mockMessenger(page);
+  await mockKnowledge(page);
+
+  await page.goto("/chats");
+  await openSearch(page);
+  const palette = page.getByRole("dialog", { name: "Поиск" });
+  await palette.getByRole("tab", { name: "Сообщения и треды" }).click();
+  await palette.getByRole("textbox", { name: "Поиск" }).fill("отпуск");
+  await expect(palette.getByText("База знаний", { exact: true })).toBeVisible();
+  const result = palette.getByRole("option", { name: /Правила центра/ });
+  await expect(result).toContainText("Регламенты центра · Правила центра › Отпуска");
+  await expect(result.locator(".text-highlight").first()).toHaveText(/отпуск/i);
+  await result.click();
+  await expect(page).toHaveURL(
+    new RegExp(`/knowledge/${knowledgeIDs.rules}/${knowledgeIDs.rulesPage}\\?fragment=`),
+  );
+  const focused = page.locator(".knowledge-fragment--focus");
+  await expect(focused).toContainText("Найденный фрагмент");
+  await expect(focused.locator("mark").first()).toHaveText("отпуск");
+});
+
+test("member without knowledge.manage reads the knowledge base only", async ({
+  page,
+}) => {
+  const phone = test.info().project.name === "phone";
+  await page.clock.setFixedTime(knowledgeNow);
+  await mockMessenger(page, { theme: "dark", userPatch: { role: "member" } });
+  const knowledge = await mockKnowledge(page, { manage: false });
+
+  await page.goto("/knowledge");
+  await expect(page.getByText("Документы, которые вам открыли для чтения")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Коллекция" })).toHaveCount(0);
+  await expect(page.getByText("Участники выбранных чатов")).toBeVisible();
+  if (phone) await page.getByRole("button", { name: /Регламенты центра/ }).click();
+  const detail = page.locator(".knowledge-detail");
+  await expect(detail.getByText("Только чтение")).toBeVisible();
+  await expect(detail.getByRole("button", { name: "Загрузить файлы" })).toHaveCount(0);
+  await expect(detail.getByRole("button", { name: "Настроить коллекцию" })).toHaveCount(0);
+  await expect(page).toHaveScreenshot("knowledge-readonly-dark.png", {
+    animations: "disabled",
+  });
+  await detail.getByRole("button", { name: "Открыть Правила центра" }).click();
+  await expect(detail.getByRole("button", { name: "Редактировать" })).toHaveCount(0);
+  await expect(detail.getByRole("button", { name: "Удалить" })).toHaveCount(0);
+  await expect(detail.getByText("Заявление на отпуск подаётся").first()).toBeVisible();
+  // Readers open the source of a file document, but cannot change it.
+  await page.goto(`/knowledge/${knowledgeIDs.rules}/${knowledgeIDs.slots}`);
+  await expect(detail.getByRole("button", { name: "Открыть исходный файл" })).toBeVisible();
+  await expect(detail.getByRole("button", { name: "Удалить" })).toHaveCount(0);
+  expect(knowledge.requests.filter((request) => !request.startsWith("GET"))).toEqual([]);
+  const results = await new AxeBuilder({ page }).include(".knowledge-detail").analyze();
+  expect(results.violations.filter((violation) => violation.impact === "critical")).toEqual([]);
+});
+
+test("workspace members page grants knowledge.manage to a member", async ({
+  page,
+}) => {
+  await mockMessenger(page);
+  const knowledge = await mockKnowledge(page);
+  await page.goto("/settings/workspace/members");
+  const lev = page.locator(".organization-member", { hasText: "Лев" });
+  await lev.getByRole("button", { name: "Управление участником" }).click();
+  const dialog = page.getByRole("dialog");
+  const toggle = dialog.getByRole("checkbox", { name: /Может управлять базой знаний/ });
+  await expect(toggle).not.toBeChecked();
+  await expect(dialog.getByText(/Других прав администратора не даёт/)).toBeVisible();
+  await toggle.click();
+  await expect(toggle).toBeChecked();
+  expect(knowledge.members.find((member) => member.handle === "lev")?.permissions).toEqual([
+    "knowledge.manage",
+  ]);
 });
