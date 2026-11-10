@@ -46,6 +46,7 @@ Provider chunks необходимо коалесцировать: не чаще
 | `run_canceled`                  | Пользователь отменил run            | без retry                       |
 | `lease_lost` / `agent_conflict` | Worker утратил capability           | прекратить side effects         |
 | `mcp_endpoint_forbidden`        | HTTP/private/local MCP endpoint     | исправить подключение           |
+| `mcp_redirect_refused`          | MCP-сервер ответил перенаправлением | указать конечный адрес          |
 | `tool_iteration_limit`          | Исчерпан loop tools                 | завершить с диагностикой        |
 
 Неизвестные ошибки нормализуются в безопасный code без provider body, URL, headers и credentials.
@@ -114,6 +115,32 @@ Core сам считает ответивших по текущим реакци
 
 Ответ содержит `fragments[]` с `chunk_id`, `document_id`, `document_title`, `collection`, `section` (путь заголовков), `position` (номер фрагмента в документе) и `text`; пустой список и `found=false` означают, что в базе знаний ответа нет. Каждый выданный фрагмент записывается в `agent_run_knowledge_chunks` с привязкой к `agent_tool_calls.id`; список доступен через `GET /api/v1/knowledge/runs/{run_id}/fragments` и остаётся после удаления документа (с `available=false`).
 
+## Интеграции пространства (фаза 5.3, пакет H)
+
+### MCP-подключения
+
+MCP-сервер внешней системы — подключение пространства (`/api/v1/integrations/mcp-connections`, право `integrations.manage`; список без секретов видят и сборщики агентов). Заголовки шифруются на сервере и не возвращаются в браузер; в ответах есть только `headers_configured` и маска `secret_hint`. Агенту подключение назначается полем `mcp_bindings` черновика: `[{connection_id, allowed_tools, require_write_confirmation}]`. Публикация копирует привязки в агента и в конфигурацию версии, откат возвращает их, dry-run берёт привязки черновика из снимка `agent_runs.agent_config.mcp_bindings`. Секрет в строки агента не копируется.
+
+`POST /api/v1/agent-runtime/mcp-servers` отдаёт runtime расшифрованные заголовки только для подключений, привязанных к версии run'а, и только включённых. Поле `allow_private_network` разрешает доверенный внутренний адрес. Удалить подключение, которое использует хотя бы один черновик или опубликованная версия, нельзя (`409 integration_in_use`): его отключают (`enabled=false`) или отвязывают `POST …/detach` со списком затронутых агентов из `GET …/usage`; другой список даёт `409 integration_usage_changed`.
+
+Режим вызова определяет Core, а не runtime: после проверки связи (`POST …/test`, только `initialize` и `tools/list`) инструмент считается чтением, только если сервер объявил `readOnlyHint: true`. До первой проверки (подключения, перенесённые из `agent_mcp_servers`) действует классификация runtime. Запись при `require_write_confirmation` не выполняется runtime'ом: `POST /api/v1/agent-runtime/mcp-tool-calls` с `arguments` отвечает `202` и `confirmation`, Core создаёт подтверждение (`tool_name = mcp__<имя>__<tool>`, `required_scope = mcp:<connection_id>`) и после одобрения сам вызывает инструмент, повторно проверяя опубликованные привязки. В dry-run запись возвращает `preview=true` и внешнего вызова нет.
+
+Старый API `/api/v1/agents/{id}/mcp-servers` остаётся представлением совместимости над подключениями и привязками; запись через него требует ещё и `integrations.manage`. Миграция `00047` копирует `agent_mcp_servers` в подключения с теми же id, таблицу не меняет.
+
+### Проверка адресов
+
+Core проверяет адрес при сохранении и каждый IP, к которому подключается (DNS rebinding не обходит проверку), запрещает redirects и прокси окружения. Без `allow_private_network` недоступны loopback, RFC 1918, CGNAT, ULA, link-local, имена `localhost`/`.local`/`.internal`/однословные и plain HTTP. С ним разрешены внутренние адреса и HTTP; link-local, адреса метаданных облака (`169.254.169.254`, `fd00:ec2::254`, `metadata.google.internal`…), multicast и unspecified запрещены всегда. Переменная `INTEGRATIONS_ALLOW_PRIVATE_NETWORKS=false` запрещает внутренние адреса всем подключениям. Runtime применяет ту же политику (`mcp_endpoint_forbidden`).
+
+### Табличный источник (`query_table`)
+
+Инструмент `query_table` (scope `tables:read`) читает CSV и XLSX из коллекций базы знаний, привязанных к версии агента, по тем же правилам видимости, что `search_knowledge`. Без `document_id` возвращает `tables[]` (документ, лист, столбцы, число строк). С `document_id` возвращает строки: `filters[]` по столбцам (`equals`, `not_equals`, `contains`, `starts_with`, `empty`, `not_empty`, `gte`, `lte`; без учёта регистра, числа сравниваются как числа), `columns[]`, `limit` до 200, `offset`. Строки хранятся в `knowledge_table_rows` и заменяются при переиндексации; документы, проиндексированные до `00047`, заполняются при первом обращении. Документ вне привязанных коллекций выглядит как несуществующий (`error: table_not_found`). Даты XLSX возвращаются в ISO 8601.
+
+### Входящие вебхуки
+
+Вебхук пространства (`/api/v1/integrations/webhooks`) — публичный адрес `POST /api/v1/hooks/{webhook_id}` с собственным секретом (показывается один раз, ротация `…/rotate-secret`). Запрос подписывается: `X-Coma-Timestamp` (unix-секунды, ±5 минут), `X-Coma-Delivery` (уникальный id), необязательный `X-Coma-Event`, `X-Coma-Signature: sha256=<hex HMAC-SHA256(секрет, "<timestamp>.<delivery>.<тело>")>`. Тело — JSON-объект не больше `max_body_bytes`. Повтор принятого `delivery` ответ `200 duplicate` без новых run'ов, превышение `rate_limit_per_minute` — `429`. Журнал (`…/deliveries`) хранит статус, размер и SHA-256 тела 30 дней; само тело не хранится.
+
+Триггер агента `type=webhook` с `config {webhook_id, chat_id, event_types?}` ставит run в очередь в той же транзакции, что и запись журнала. Полезная нагрузка попадает в `input.external_event.payload` рядом с `trust: "untrusted_data"`; runtime передаёт весь `input` модели внутри `<run_input untrusted="true">`, поэтому текст из внешней системы остаётся данными, а не инструкциями.
+
 ## Provider gateway
 
 Runtime отправляет vendor request без секрета в `POST /api/v1/agent-runtime/provider/chat`. Core проверяет активный run и lease, разрешение на внешнюю передачу данных, provider rate limit и бюджет, подставляет выбранные на сервере model/max output и только затем открывает upstream SSE. Provider credential никогда не возвращается runtime API.
@@ -130,7 +157,7 @@ Core наблюдает usage в SSE и записывает каждую фак
 
 Несколько core-реплик делят event и schedule triggers по стабильному PostgreSQL hash `agent_id`. У каждой реплики задаются `AGENT_TRIGGER_SHARD_INDEX` от `0` до `COUNT-1` и одинаковый `AGENT_TRIGGER_SHARD_COUNT` (1–1024). Значение по умолчанию `0/1`. Перекрывающиеся или пропущенные индексы являются ошибкой deployment-конфигурации, а уникальные ограничения run'ов остаются последним барьером идемпотентности.
 
-MCP runtime разрешает только HTTPS, запрещает redirects и локальные/private literal hostnames. DNS lookup выполняется транспортом при установлении соединения и возвращает только public IP; выбранный адрес закрепляется за сокетом, поэтому повторное DNS-разрешение между проверкой и connect отсутствует.
+MCP runtime разрешает только HTTPS, запрещает redirects и локальные/private literal hostnames (кроме подключений с `allow_private_network`, см. «Проверка адресов»). DNS lookup выполняется транспортом при установлении соединения и возвращает только public IP; выбранный адрес закрепляется за сокетом, поэтому повторное DNS-разрешение между проверкой и connect отсутствует.
 
 ## Compatibility
 

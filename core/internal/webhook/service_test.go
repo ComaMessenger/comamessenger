@@ -185,3 +185,15 @@ func TestWebhookDeliveryStartsAgentOnceWithPayloadAsData(t *testing.T) {
 		t.Fatalf("audit entries = %d, err=%v", audits, err)
 	}
 }
+
+// TestSignatureVector pins the signing scheme shared with external systems
+// and examples/agents/accounting-mcp/notify.ts.
+func TestSignatureVector(t *testing.T) {
+	got := Sign("whsec_test", "1700000000", "d-1", []byte(`{"slot_id":"s-2"}`))
+	if got != "sha256=393c836bf2323a343fc3b6ce5b20451968d8703f8a439a14a99c765f4ff05145" {
+		t.Fatalf("signature = %s", got)
+	}
+	if !validSignature("whsec_test", "1700000000", "d-1", []byte(`{"slot_id":"s-2"}`), "sha256=00, "+got) {
+		t.Fatal("a valid signature among several was rejected")
+	}
+}
