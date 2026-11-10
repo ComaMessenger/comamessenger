@@ -34,13 +34,16 @@ import (
 )
 
 const (
-	processingQueue          = "file-processing"
-	extractorVersion         = "builtin-v1"
-	maxProcessorInput        = 32 << 20
-	maxExtractedText         = 1 << 20
-	maxArchiveEntries        = 2_000
-	maxArchiveUnpacked       = 20 << 20
-	maxImagePixels     int64 = 40_000_000
+	processingQueue    = "file-processing"
+	extractorVersion   = "builtin-v1"
+	maxProcessorInput  = 32 << 20
+	maxExtractedText   = 1 << 20
+	maxArchiveEntries  = 2_000
+	maxArchiveUnpacked = 20 << 20
+	// Inflated bytes one PDF may cost: per stream and for the whole file.
+	maxPDFStreamUnpacked int64 = 20 << 20
+	maxPDFUnpacked       int64 = 64 << 20
+	maxImagePixels       int64 = 40_000_000
 )
 
 var pdfLiteralPattern = regexp.MustCompile(`(?s)\((?:\\.|[^\\)])*\)\s*(?:Tj|'|")`)
@@ -390,9 +393,32 @@ func extractDOCXText(data []byte) (string, error) {
 	return "", errors.New("DOCX document.xml is missing")
 }
 
+// collectPDFLiterals appends the text literals of one PDF chunk and reports
+// whether more text is still wanted.
+func collectPDFLiterals(output *strings.Builder, chunk []byte) bool {
+	for _, match := range pdfLiteralPattern.FindAll(chunk, -1) {
+		end := bytes.LastIndexByte(match, ')')
+		if end > 0 {
+			output.WriteString(unescapePDFLiteral(match[1:end]))
+			output.WriteByte(' ')
+		}
+		if output.Len() > 2*maxExtractedText {
+			return false
+		}
+	}
+	return true
+}
+
+// extractPDFText reads text literals from the raw file and its Flate streams.
+// Streams are inflated one at a time against a shared budget, so a file with
+// thousands of highly compressible streams cannot exhaust memory.
 func extractPDFText(data []byte) string {
-	chunks := [][]byte{data}
-	for offset := 0; offset < len(data); {
+	var output strings.Builder
+	if !collectPDFLiterals(&output, data) {
+		return output.String()
+	}
+	budget := int64(maxPDFUnpacked)
+	for offset := 0; offset < len(data) && budget > 0; {
 		stream := bytes.Index(data[offset:], []byte("stream"))
 		if stream < 0 {
 			break
@@ -413,23 +439,17 @@ func extractPDFText(data []byte) string {
 		if bytes.Contains(data[headerStart:stream], []byte("FlateDecode")) {
 			compressed := bytes.TrimSpace(data[stream:end])
 			if reader, err := zlib.NewReader(bytes.NewReader(compressed)); err == nil {
-				if decoded, err := readBounded(reader, maxArchiveUnpacked); err == nil {
-					chunks = append(chunks, decoded)
-				}
+				// Read at most what is left of the budget; an oversized stream
+				// spends it all and ends the scan.
+				decoded, _ := io.ReadAll(io.LimitReader(reader, min(budget, maxPDFStreamUnpacked)))
 				reader.Close()
+				budget -= int64(len(decoded))
+				if !collectPDFLiterals(&output, decoded) {
+					return output.String()
+				}
 			}
 		}
 		offset = end + len("endstream")
-	}
-	var output strings.Builder
-	for _, chunk := range chunks {
-		for _, match := range pdfLiteralPattern.FindAll(chunk, -1) {
-			end := bytes.LastIndexByte(match, ')')
-			if end > 0 {
-				output.WriteString(unescapePDFLiteral(match[1:end]))
-				output.WriteByte(' ')
-			}
-		}
 	}
 	return output.String()
 }
