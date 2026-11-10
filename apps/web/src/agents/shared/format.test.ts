@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { formatCost, formatDuration, toolLabel, type Translate } from "./format";
+import {
+  formatCost,
+  formatDuration,
+  toolLabel,
+  type Translate,
+} from "./format";
 
 const t = ((key: string, values?: Record<string, unknown>) =>
   key === "agentTool_post_message"

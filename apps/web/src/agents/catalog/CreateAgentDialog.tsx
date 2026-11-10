@@ -72,7 +72,9 @@ export function CreateAgentDialog({
         ...draft,
         display_name: name.trim(),
         description:
-          template === "custom" ? "" : t(`agentTemplateDescription_${template}`),
+          template === "custom"
+            ? ""
+            : t(`agentTemplateDescription_${template}`),
         chat_ids: chatID ? [chatID] : [],
         enabled: false,
         ...(connection

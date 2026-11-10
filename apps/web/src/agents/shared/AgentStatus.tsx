@@ -19,7 +19,9 @@ export function AgentStatus({
         : t(`agentStatus_${status.kind}`);
   return (
     <span className="agent-status-line">
-      <span className={cx("agent-status", `agent-status--${statusTone(status)}`)}>
+      <span
+        className={cx("agent-status", `agent-status--${statusTone(status)}`)}
+      >
         <i aria-hidden="true" />
         {label}
       </span>

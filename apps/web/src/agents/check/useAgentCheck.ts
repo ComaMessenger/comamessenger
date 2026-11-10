@@ -2,8 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Agent, AgentRun, MessengerAPI } from "@comamessenger/core";
 import { messageOf } from "../../errors";
 
-const finished = (run: AgentRun) =>
-  !["queued", "running"].includes(run.status);
+const finished = (run: AgentRun) => !["queued", "running"].includes(run.status);
 
 function wait(ms: number, signal: AbortSignal) {
   return new Promise<void>((resolve, reject) => {

@@ -1369,7 +1369,9 @@ test("member controls use a dialog and the agent editor scrolls in Russian", asy
 
   // The agent platform is outside the redesign; only its entry point is checked.
   await page.goto("/agents");
-  await expect(page.getByRole("heading", { name: "Агенты" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Агенты", exact: true }),
+  ).toBeVisible();
   await expect(page.getByText("messages:read", { exact: true })).toHaveCount(0);
 });
 

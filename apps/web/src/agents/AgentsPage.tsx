@@ -84,7 +84,9 @@ export function AgentsPage({
           agents={agents.data ?? []}
           chats={chats.data ?? []}
           initialAgentID={route.kind === "agent" ? route.agentID : ""}
-          focusApprovals={route.kind === "global" && route.section === "approvals"}
+          focusApprovals={
+            route.kind === "global" && route.section === "approvals"
+          }
           navigate={navigate}
         />
       );

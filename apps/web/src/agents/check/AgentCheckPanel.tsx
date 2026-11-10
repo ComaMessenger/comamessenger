@@ -78,7 +78,11 @@ export function AgentCheckPanel({
         <p className="agent-muted">{t("agentCheckNoRights")}</p>
       ) : (
         <>
-          <div className="agent-check__examples" role="group" aria-label={t("agentCheckExamples")}>
+          <div
+            className="agent-check__examples"
+            role="group"
+            aria-label={t("agentCheckExamples")}
+          >
             <span>{t("agentCheckExamples")}</span>
             <div className="agent-chips">
               {examples.map((example) => (
@@ -119,7 +123,9 @@ export function AgentCheckPanel({
             placeholder={t("agentCheckMessagePlaceholder")}
             onChange={(event) => setPrompt(event.target.value)}
           />
-          {blocking.length > 0 && <p className="agent-muted">{t("agentCheckNeeds")}</p>}
+          {blocking.length > 0 && (
+            <p className="agent-muted">{t("agentCheckNeeds")}</p>
+          )}
           {blocking.length > 0 && (
             <ul className="agent-reasons">
               {blocking.map((blocker) => (
@@ -130,7 +136,10 @@ export function AgentCheckPanel({
                       event.preventDefault();
                       document
                         .getElementById(blockID(blocker.anchor))
-                        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                        ?.scrollIntoView({
+                          behavior: "smooth",
+                          block: "start",
+                        });
                     }}
                   >
                     {t(`agentBlocker_${blocker.key}`)}
@@ -154,7 +163,9 @@ export function AgentCheckPanel({
             ) : (
               <Button
                 variant="primary"
-                disabled={blocking.length > 0 || !prompt.trim() || !selectedChat}
+                disabled={
+                  blocking.length > 0 || !prompt.trim() || !selectedChat
+                }
                 onClick={() => void start()}
               >
                 {check.run ? <Play /> : <Eye />}
@@ -173,11 +184,7 @@ export function AgentCheckPanel({
                 size="sm"
                 agent
               />
-              <CheckResult
-                api={api}
-                run={check.run}
-                chat={selectedChat}
-              />
+              <CheckResult api={api} run={check.run} chat={selectedChat} />
             </div>
           )}
         </>

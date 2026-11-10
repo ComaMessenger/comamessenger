@@ -15,7 +15,10 @@ describe("scopes derived from builder blocks", () => {
   it("maps knowledge and skills to their scopes in a stable order", () => {
     expect(
       scopesFor({
-        capabilities: { sources: ["search", "members"], skills: ["cards", "memory"] },
+        capabilities: {
+          sources: ["search", "members"],
+          skills: ["cards", "memory"],
+        },
         hasKnowledge: true,
         current: ["runtime:worker", "reactions:write"],
       }),

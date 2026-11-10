@@ -1,5 +1,14 @@
-import type { AgentRun, AgentToolConfirmation, Chat } from "@comamessenger/core";
-import { agentRunErrorText, chatName, toolLabel, type Translate } from "../shared/format";
+import type {
+  AgentRun,
+  AgentToolConfirmation,
+  Chat,
+} from "@comamessenger/core";
+import {
+  agentRunErrorText,
+  chatName,
+  toolLabel,
+  type Translate,
+} from "../shared/format";
 
 const knownTriggers = new Set([
   "mention",
@@ -15,19 +24,26 @@ const knownTriggers = new Set([
 
 export function runTrigger(run: AgentRun): string {
   if (run.dry_run || run.input.sandbox === true) return "check";
-  const type = typeof run.input.trigger_type === "string" ? run.input.trigger_type : "";
+  const type =
+    typeof run.input.trigger_type === "string" ? run.input.trigger_type : "";
   if (knownTriggers.has(type)) return type;
   if (run.scheduled_for) return "schedule";
   return "manual";
 }
 
 /** «answered a mention in “Hall 1”», «could not finish: …». */
-export function runSentence(t: Translate, run: AgentRun, chats: Chat[]): string {
+export function runSentence(
+  t: Translate,
+  run: AgentRun,
+  chats: Chat[],
+): string {
   const chat = chats.find((item) => item.id === run.chat_id);
   const where = chat ? chatName(chat) : "";
   const trigger = runTrigger(run);
   if (run.status === "queued" || run.status === "running")
-    return where ? t("agentFeedWorkingIn", { chat: where }) : t("agentFeedWorking");
+    return where
+      ? t("agentFeedWorkingIn", { chat: where })
+      : t("agentFeedWorking");
   if (run.status === "canceled") return t("agentFeedCanceled");
   if (run.status === "failed" || run.status === "timed_out")
     return t("agentFeedFailed", {

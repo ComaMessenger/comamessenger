@@ -50,8 +50,7 @@ export function PlacesBlock({
           name="agent-place-add"
           value=""
           onChange={(event) => {
-            if (event.target.value)
-              onChange([...chatIDs, event.target.value]);
+            if (event.target.value) onChange([...chatIDs, event.target.value]);
           }}
         >
           <option value="">{t("agentChooseChat")}</option>

@@ -749,7 +749,7 @@
   flex: none;
   color: var(--coma-muted);
 }
-.is-rotated {
+.agent-rotated {
   transform: rotate(180deg);
 }
 

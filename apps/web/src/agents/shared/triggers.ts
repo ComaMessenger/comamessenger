@@ -213,7 +213,10 @@ export function describeRule(
   const config = trigger.config as Record<string, unknown>;
   switch (trigger.type) {
     case "mention":
-      return { when: t("agentRuleWhen_mention"), then: t("agentRuleThen_reply") };
+      return {
+        when: t("agentRuleWhen_mention"),
+        then: t("agentRuleThen_reply"),
+      };
     case "command":
       return {
         when: t("agentRuleWhen_command", { command: form.command }),

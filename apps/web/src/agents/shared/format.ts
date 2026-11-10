@@ -11,7 +11,9 @@ export function chatName(chat: Chat): string {
 export function formatDuration(t: Translate, seconds: number): string {
   if (!Number.isFinite(seconds) || seconds <= 0) return "—";
   if (seconds < 60)
-    return t("agentDurationSeconds", { count: Math.max(1, Math.round(seconds)) });
+    return t("agentDurationSeconds", {
+      count: Math.max(1, Math.round(seconds)),
+    });
   if (seconds < 3600)
     return t("agentDurationMinutes", { count: Math.round(seconds / 60) });
   return t("agentDurationHours", { count: Math.round(seconds / 3600) });
@@ -59,11 +61,7 @@ export function formatDateTime(value: string, locale: string): string {
 }
 
 export function userTimezone(preferred?: string | null): string {
-  return (
-    preferred ||
-    Intl.DateTimeFormat().resolvedOptions().timeZone ||
-    "UTC"
-  );
+  return preferred || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 }
 
 const knownRunErrors = new Set([

@@ -76,7 +76,11 @@ export function KnowledgeCollectionPicker({
         {t("agentKnowledgeAdd")}
       </Button>
       {open && (
-        <div className="agent-knowledge__list" role="group" aria-label={t("agentKnowledgeAdd")}>
+        <div
+          className="agent-knowledge__list"
+          role="group"
+          aria-label={t("agentKnowledgeAdd")}
+        >
           {collections.isLoading ? (
             <Skeleton />
           ) : collections.isError ? (
@@ -157,7 +161,7 @@ function CollectionOption({
             aria-expanded={expanded}
             onClick={() => setExpanded(!expanded)}
           >
-            <ChevronDown className={cx(expanded && "is-rotated")} />
+            <ChevronDown className={cx(expanded && "agent-rotated")} />
           </IconButton>
         )}
       </div>

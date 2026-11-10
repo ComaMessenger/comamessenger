@@ -1,8 +1,4 @@
-import type {
-  Agent,
-  AgentToolConfirmation,
-  Chat,
-} from "@comamessenger/core";
+import type { Agent, AgentToolConfirmation, Chat } from "@comamessenger/core";
 import {
   AlertTriangle,
   BookOpen,
@@ -123,7 +119,9 @@ export function AgentCatalog({
                       <AgentStatus status={status} withReason />
                     </span>
                   </span>
-                  <span className="agent-card__task">{agentTask(t, agent)}</span>
+                  <span className="agent-card__task">
+                    {agentTask(t, agent)}
+                  </span>
                   <span className="agent-card__foot">
                     <span>{agentPlaces(t, agent, chats)}</span>
                     <span>

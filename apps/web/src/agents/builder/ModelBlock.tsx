@@ -155,9 +155,7 @@ export function ModelBlock({
         </BlockLine>
         <p className="agent-notice">
           <Eye aria-hidden="true" />
-          <span>
-            {t("agentDataSentence", { parts: parts.join("; ") })}
-          </span>
+          <span>{t("agentDataSentence", { parts: parts.join("; ") })}</span>
         </p>
       </div>
     </BuilderBlock>

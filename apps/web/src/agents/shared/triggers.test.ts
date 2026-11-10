@@ -56,19 +56,29 @@ describe("launch rules", () => {
       "agentRuleProblem_scheduleChat",
     );
     expect(
-      ruleProblem({ ...emptyRule("command", { timezone: "UTC" }), command: "/sum" }),
+      ruleProblem({
+        ...emptyRule("command", { timezone: "UTC" }),
+        command: "/sum",
+      }),
     ).toBeNull();
   });
 
   it("reads every trigger type as a sentence", () => {
-    expect(describeRule(t, trigger("mention", {}), [chat], "Europe/Moscow")).toEqual({
+    expect(
+      describeRule(t, trigger("mention", {}), [chat], "Europe/Moscow"),
+    ).toEqual({
       when: "agentRuleWhen_mention",
       then: "agentRuleThen_reply",
     });
     expect(
       describeRule(
         t,
-        trigger("schedule", { chat_id: "chat-1", hour: 9, minute: 0, days_of_week: [1, 2, 3, 4, 5] }),
+        trigger("schedule", {
+          chat_id: "chat-1",
+          hour: 9,
+          minute: 0,
+          days_of_week: [1, 2, 3, 4, 5],
+        }),
         [chat],
         "Europe/Moscow",
       ),
@@ -77,14 +87,30 @@ describe("launch rules", () => {
       then: 'agentRuleThen_writeTo:{"chat":"Зал 1"}',
     });
     expect(
-      describeRule(t, trigger("schedule", { chat_id: "chat-1", hour: 7, minute: 30 }, "UTC"), [chat], "Europe/Moscow")
-        .when,
+      describeRule(
+        t,
+        trigger("schedule", { chat_id: "chat-1", hour: 7, minute: 30 }, "UTC"),
+        [chat],
+        "Europe/Moscow",
+      ).when,
     ).toContain('"zone":" (UTC)"');
     expect(
-      describeRule(t, trigger("event", { event_types: ["member.joined"], chat_id: "chat-1" }), [chat], "UTC").when,
-    ).toBe('agentRuleWhen_eventIn:{"event":"agentEvent_member_joined","chat":"Зал 1"}');
+      describeRule(
+        t,
+        trigger("event", { event_types: ["member.joined"], chat_id: "chat-1" }),
+        [chat],
+        "UTC",
+      ).when,
+    ).toBe(
+      'agentRuleWhen_eventIn:{"event":"agentEvent_member_joined","chat":"Зал 1"}',
+    );
     expect(
-      describeRule(t, trigger("event", { event_types: ["chat.updated"] }), [], "UTC").when,
+      describeRule(
+        t,
+        trigger("event", { event_types: ["chat.updated"] }),
+        [],
+        "UTC",
+      ).when,
     ).toBe('agentRuleWhen_event:{"event":"agentEvent_other"}');
     expect(describeRule(t, trigger("manual", {}), [], "UTC")).toEqual({
       when: "agentRuleWhen_manual",

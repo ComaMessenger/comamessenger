@@ -1,5 +1,11 @@
 import type { Chat, MessengerAPI } from "@comamessenger/core";
-import { BookOpen, MessagesSquare, Paperclip, Search, Users } from "lucide-react";
+import {
+  BookOpen,
+  MessagesSquare,
+  Paperclip,
+  Search,
+  Users,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Switch, Tag } from "../../ui";
 import {

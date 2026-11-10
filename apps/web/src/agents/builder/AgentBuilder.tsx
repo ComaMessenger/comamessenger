@@ -229,7 +229,10 @@ export function AgentBuilder({
                       if (blocker.anchor === "advanced") setAdvancedOpen(true);
                       document
                         .getElementById(blockID(blocker.anchor))
-                        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                        ?.scrollIntoView({
+                          behavior: "smooth",
+                          block: "start",
+                        });
                     }}
                   >
                     {t(`agentBlocker_${blocker.key}`)}
@@ -257,7 +260,10 @@ export function AgentBuilder({
               onCapabilities={setCapabilities}
               onCollections={setCollections}
             />
-            <SkillsBlock capabilities={capabilities} onChange={setCapabilities} />
+            <SkillsBlock
+              capabilities={capabilities}
+              onChange={setCapabilities}
+            />
             <TriggersBlock
               api={api}
               agent={agent}
@@ -271,16 +277,18 @@ export function AgentBuilder({
               chatIDs={draft.chat_ids}
               onChange={(chat_ids) => setDraft({ ...draft, chat_ids })}
             />
-            <ModelBlock
-              api={api}
-              draft={draft}
-              chats={chats}
-              connections={connections}
-              capabilities={capabilities}
-              canIntegrate={canIntegrate}
-              onChange={setDraft}
-              navigate={navigate}
-            />
+            {agent.kind === "builtin" && (
+              <ModelBlock
+                api={api}
+                draft={draft}
+                chats={chats}
+                connections={connections}
+                capabilities={capabilities}
+                canIntegrate={canIntegrate}
+                onChange={setDraft}
+                navigate={navigate}
+              />
+            )}
           </fieldset>
           <AdvancedSettings
             api={api}

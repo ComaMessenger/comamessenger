@@ -99,9 +99,7 @@ export function AgentActivityPage({
   const pendingApprovals = (approvals.data ?? []).filter(
     (item) => !agentID || item.agent_id === agentID,
   );
-  const todayRuns = feed.filter(
-    (run) => today(run.created_at) && !run.dry_run,
-  );
+  const todayRuns = feed.filter((run) => today(run.created_at) && !run.dry_run);
   const failures = todayRuns.filter((run) =>
     ["failed", "timed_out"].includes(run.status),
   ).length;
@@ -190,7 +188,10 @@ export function AgentActivityPage({
                 <h3>{t("agentCollectionsTitle")}</h3>
               </div>
               {collections.data!.map((collection) => (
-                <div key={collection.id} className="agent-line agent-line--card">
+                <div
+                  key={collection.id}
+                  className="agent-line agent-line--card"
+                >
                   <span className="agent-line__icon" aria-hidden="true">
                     <ListChecks />
                   </span>
@@ -208,7 +209,10 @@ export function AgentActivityPage({
                           expected: collection.expected_count,
                         }),
                         t("agentCollectionDeadline", {
-                          time: formatDateTime(collection.deadline_at, i18n.language),
+                          time: formatDateTime(
+                            collection.deadline_at,
+                            i18n.language,
+                          ),
                         }),
                         collection.reminders_sent > 0
                           ? t("agentCollectionReminders", {

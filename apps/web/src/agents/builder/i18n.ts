@@ -95,7 +95,8 @@ export const agentExperienceCatalog = defineCatalog(
       "Публиковать может участник с правом публикации агентов.",
     agentPublishUpToDate:
       "Опубликованная версия совпадает с черновиком — публиковать нечего.",
-    agentBlocker_chat_required: "выберите хотя бы один чат в блоке «Где работает»",
+    agentBlocker_chat_required:
+      "выберите хотя бы один чат в блоке «Где работает»",
     agentBlocker_runtime_key_required:
       "создайте ключ внешней программы в расширенных настройках",
     agentBlocker_provider_model_required:
@@ -130,7 +131,8 @@ export const agentExperienceCatalog = defineCatalog(
     agentSource_files: "Файлы из сообщений",
     agentSourceHint_files: "Читает текст документов, отправленных в его чаты",
     agentSource_members: "Кто есть в чатах",
-    agentSourceHint_members: "Видит список участников, чтобы обращаться по имени",
+    agentSourceHint_members:
+      "Видит список участников, чтобы обращаться по имени",
     agentKnowledgeBase: "База знаний",
     agentKnowledgeBaseHint:
       "Регламенты и инструкции, на которые агент ссылается в ответах",
@@ -155,8 +157,7 @@ export const agentExperienceCatalog = defineCatalog(
     agentKnowledgeStatus_failed: "не удалось прочитать",
 
     agentBlockSkills: "Что умеет",
-    agentBlockSkillsHint:
-      "Действия и то, нужно ли на них разрешение человека",
+    agentBlockSkillsHint: "Действия и то, нужно ли на них разрешение человека",
     agentSkill_messages: "Писать сообщения",
     agentSkillHint_messages:
       "Отвечает там, где его позвали. Сообщения в другие чаты и в личные — только после подтверждения",
@@ -327,7 +328,8 @@ export const agentExperienceCatalog = defineCatalog(
 
     agentCheckTitle: "Проверка",
     agentCheckLead: "Агент отвечает как в чате, но ничего не отправляет",
-    agentCheckNoRights: "Проверять агента может участник с правом собирать агентов.",
+    agentCheckNoRights:
+      "Проверять агента может участник с правом собирать агентов.",
     agentCheckExamples: "Примеры",
     agentCheckChat: "На каком чате проверить",
     agentCheckInChat: "Проверка на сообщениях чата «{chat}».",
@@ -516,8 +518,10 @@ export const agentExperienceCatalog = defineCatalog(
     agentIntroText:
       "An agent is a chat member that follows your instruction: it sums up discussions, answers questions from documents and welcomes new people. It sees only the chats it was added to and does nothing important without a person's approval.",
     agentIntroStep1: "Pick a ready role or describe the job in your own words.",
-    agentIntroStep2: "Check the answers on examples — nothing is sent while checking.",
-    agentIntroStep3: "Publish, and the agent starts working in the chosen chats.",
+    agentIntroStep2:
+      "Check the answers on examples — nothing is sent while checking.",
+    agentIntroStep3:
+      "Publish, and the agent starts working in the chosen chats.",
     agentIntroReadOnly:
       "There are no agents yet. Members allowed to build agents create them.",
     agentRolesTitle: "Ready roles",
@@ -532,7 +536,8 @@ export const agentExperienceCatalog = defineCatalog(
     agentRoleExample_qa: "How do I arrange a replacement?",
     agentRoleExample_onboarding: "Hi! Where do I start?",
     agentRoleCustom: "Your own task",
-    agentRoleCustomTask: "Describe the job in words and set everything up yourself.",
+    agentRoleCustomTask:
+      "Describe the job in words and set everything up yourself.",
     agentRoleExample_custom: "Remind about the report on Fridays",
 
     agentCreateTitle: "New agent: {role}",
@@ -552,7 +557,8 @@ export const agentExperienceCatalog = defineCatalog(
 
     agentBackToCatalog: "All agents",
     agentStateUnsaved: "Unsaved edits",
-    agentStateDraftDiffers: "The draft differs from published version {version}",
+    agentStateDraftDiffers:
+      "The draft differs from published version {version}",
     agentStatePublished: "Version {version} published · {date}",
     agentStateNeverPublished: "Draft, not published yet",
     agentSaveDraft: "Save draft",
@@ -639,8 +645,10 @@ export const agentExperienceCatalog = defineCatalog(
       "Workspace rules decide which actions wait for approval. Decide in Activity or right in the chat.",
 
     agentBlockTriggers: "When it starts",
-    agentBlockTriggersHint: "Rules read as sentences and apply as soon as they are saved",
-    agentRulesEmpty: "No rules: the agent works only when started manually or checked.",
+    agentBlockTriggersHint:
+      "Rules read as sentences and apply as soon as they are saved",
+    agentRulesEmpty:
+      "No rules: the agent works only when started manually or checked.",
     agentRuleAdd: "Add a rule",
     agentRuleChoose: "When should the agent take on the job?",
     agentRuleType_mention: "When mentioned",
@@ -656,7 +664,8 @@ export const agentExperienceCatalog = defineCatalog(
       "The agent takes on the job when a message starts with the command.",
     agentRuleTypeHint_keyword:
       "The agent answers when a message contains one of the words. Case does not matter.",
-    agentRuleTypeHint_schedule: "The agent writes to the chosen chat at the set time.",
+    agentRuleTypeHint_schedule:
+      "The agent writes to the chosen chat at the set time.",
     agentRuleTypeHint_event:
       "The agent takes on the job when something happens in a chat.",
     agentRuleTypeHint_every_message:
@@ -706,7 +715,8 @@ export const agentExperienceCatalog = defineCatalog(
     agentRuleEdit: "Edit rule",
     agentRuleDelete: "Delete rule",
     agentRuleEnabled: "Rule «{rule}» is on",
-    agentRuleProblem_command: "A command is one word without spaces, e.g. summarize.",
+    agentRuleProblem_command:
+      "A command is one word without spaces, e.g. summarize.",
     agentRuleProblem_keyword: "Enter at least one word.",
     agentRuleProblem_scheduleChat:
       "Choose the chat the agent writes to on schedule.",
@@ -777,7 +787,8 @@ export const agentExperienceCatalog = defineCatalog(
     agentOwnModelKey: "Own model key",
     agentKeyRevoke: "Revoke key {name}",
     agentCopySecret: "Copy",
-    agentVersionsLead: "Any earlier version can become the draft and be published again.",
+    agentVersionsLead:
+      "Any earlier version can become the draft and be published again.",
     agentVersionCurrent: "Running now",
     agentManageTitle: "Manage",
 
@@ -844,7 +855,8 @@ export const agentExperienceCatalog = defineCatalog(
     agentStepWould_remember: "Would save a note",
     agentStepWould_post_card: "Would send a card with buttons",
     agentStepWould_update_card: "Would update a card",
-    agentStepWould_start_collection: "Would start collecting answers with reminders",
+    agentStepWould_start_collection:
+      "Would start collecting answers with reminders",
     agentStepWould_schedule_followup: "Would schedule coming back to the task",
     agentStepWould_send_direct_message: "Would send a direct message",
     agentStepExternal: "Used «{name}»",
@@ -855,9 +867,12 @@ export const agentExperienceCatalog = defineCatalog(
     agentTool_update_card: "Update a card",
     agentTool_start_collection: "Start collecting answers",
     agentTool_schedule_followup: "Schedule a follow-up",
-    agentVerdictAnswered: "This is how the agent would answer in «{chat}». Nothing was sent.",
-    agentVerdictAnsweredNoChat: "This is how the agent would answer. Nothing was sent.",
-    agentVerdictSilent: "The agent chose not to answer this message. Nothing was sent.",
+    agentVerdictAnswered:
+      "This is how the agent would answer in «{chat}». Nothing was sent.",
+    agentVerdictAnsweredNoChat:
+      "This is how the agent would answer. Nothing was sent.",
+    agentVerdictSilent:
+      "The agent chose not to answer this message. Nothing was sent.",
     agentVerdictWouldAlso:
       "{count, plural, one {Besides the answer, it would take # more action — see the list above.} other {Besides the answer, it would take # more actions — see the list above.}}",
     agentVerdictCanceled: "The check was stopped.",

@@ -105,7 +105,9 @@ export function AgentDangerZone({
       <FormError message={error} />
       {dialog && (
         <Dialog
-          title={t(dialog === "delete" ? "deleteAgentTitle" : "resetTemplateTitle")}
+          title={t(
+            dialog === "delete" ? "deleteAgentTitle" : "resetTemplateTitle",
+          )}
           description={t(
             dialog === "delete"
               ? "deleteAgentDescription"

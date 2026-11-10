@@ -478,10 +478,15 @@ async function mockAgents(
       status = 201;
       body = created;
     } else if (path === "/agents/tool-confirmations") body = approvals;
-    else if (/^\/agents\/tool-confirmations\/[^/]+\/(approve|deny)$/.test(path)) {
+    else if (
+      /^\/agents\/tool-confirmations\/[^/]+\/(approve|deny)$/.test(path)
+    ) {
       const [, , , confirmationID, decision] = path.split("/");
       state.decisions.push(`${decision}:${confirmationID}`);
-      body = { ...approvals[0], status: decision === "approve" ? "completed" : "denied" };
+      body = {
+        ...approvals[0],
+        status: decision === "approve" ? "completed" : "denied",
+      };
       approvals = approvals.filter((item) => item.id !== confirmationID);
     } else if (path === "/agents/response-collections")
       body = options.empty
@@ -655,10 +660,10 @@ async function mockAgents(
         agent_id: ids.help,
         dry_run: true,
         chat_id: rules.id,
-        status: polls > 1 ? "completed" : "running",
+        status: polls >= 1 ? "completed" : "running",
         input: { sandbox: true, publish: false },
         result_summary:
-          polls > 1
+          polls >= 1
             ? {
                 preview:
                   "Замену оформляет администратор зала: заполните заявку и согласуйте её с заступающим инструктором.\nИсточник: «Порядок замены инструктора», раздел «Замена в день занятия».",
@@ -727,7 +732,9 @@ async function expectNoHorizontalScroll(page: Page) {
   ).toBeLessThanOrEqual(page.viewportSize()!.width);
   const content = page.locator(".agent-platform__content");
   expect(
-    await content.evaluate((element) => element.scrollWidth - element.clientWidth),
+    await content.evaluate(
+      (element) => element.scrollWidth - element.clientWidth,
+    ),
   ).toBeLessThanOrEqual(1);
 }
 
@@ -736,7 +743,9 @@ test("catalog shows human statuses, the approval strip and ready roles", async (
 }) => {
   await mockAgents(page);
   await page.goto("/agents");
-  await expect(page.getByRole("heading", { name: /Ваши агенты/ })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /Ваши агенты/ }),
+  ).toBeVisible();
   const help = page.locator(".agent-card", { hasText: "Справка" });
   await expect(help.getByText("Работает", { exact: true })).toBeVisible();
   await expect(
@@ -755,7 +764,12 @@ test("catalog shows human statuses, the approval strip and ready roles", async (
     page.getByText("1 действие ждёт подтверждения.", { exact: false }),
   ).toBeVisible();
   await expect(page.getByText("Контроль: отправить сообщение")).toBeVisible();
-  for (const role of ["Сводки", "Ответы по истории", "Адаптация", "Своя задача"])
+  for (const role of [
+    "Сводки",
+    "Ответы по истории",
+    "Адаптация",
+    "Своя задача",
+  ])
     await expect(page.locator(".agent-role", { hasText: role })).toBeVisible();
   await expect(page.getByText("messages:read")).toHaveCount(0);
   await expect(page.getByText("@help")).toHaveCount(0);
@@ -772,13 +786,19 @@ test("empty catalog explains what agents are for", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Агенты берут на себя рутину в чатах" }),
   ).toBeVisible();
-  await expect(page.getByText(/участник чата, который действует/)).toBeVisible();
+  await expect(
+    page.getByText(/участник чата, который действует/),
+  ).toBeVisible();
   await expect(page.getByText(/ничего не отправляется/)).toBeVisible();
   await page.locator(".agent-role", { hasText: "Ответы по истории" }).click();
-  const dialog = page.getByRole("dialog", { name: "Новый агент: Ответы по истории" });
+  const dialog = page.getByRole("dialog", {
+    name: "Новый агент: Ответы по истории",
+  });
   await expect(dialog.getByLabel("Имя")).toHaveValue("Ответы по истории");
   await dialog.getByRole("button", { name: "Создать черновик" }).click();
-  await expect(dialog.getByText("Выберите чат, в котором агент будет работать.")).toBeVisible();
+  await expect(
+    dialog.getByText("Выберите чат, в котором агент будет работать."),
+  ).toBeVisible();
   await dialog.getByRole("button", { name: "Отмена" }).click();
   await expectNoHorizontalScroll(page);
   await expect(page).toHaveScreenshot("agents-catalog-empty.png", {
@@ -792,7 +812,9 @@ test("builder blocks derive permissions from plain-language choices", async ({
 }) => {
   const mock = await mockAgents(page);
   await page.goto(`/agents/${ids.digest}`);
-  await expect(page.getByRole("heading", { name: "Сводки", level: 2 })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Сводки", level: 2 }),
+  ).toBeVisible();
 
   // Publishing explains what is missing instead of a silent disabled button.
   const publish = page.getByRole("button", { name: "Опубликовать" });
@@ -809,16 +831,27 @@ test("builder blocks derive permissions from plain-language choices", async ({
   await identity.getByLabel("Имя").fill("Итоги дня");
   await identity
     .getByLabel("Чем занимается")
-    .fill("Каждый вечер подводит итоги дня в зале: решения, вопросы, кто что делает.");
+    .fill(
+      "Каждый вечер подводит итоги дня в зале: решения, вопросы, кто что делает.",
+    );
 
   // 2. What it knows
   const knowledge = page.locator("#agent-block-knowledge");
-  await expect(knowledge.getByText("Сообщения чатов, где он работает")).toBeVisible();
+  await expect(
+    knowledge.getByText("Сообщения чатов, где он работает"),
+  ).toBeVisible();
   await knowledge.getByRole("switch", { name: "Поиск по истории" }).click();
-  await knowledge.getByRole("button", { name: "Добавить из базы знаний" }).click();
+  await knowledge
+    .getByRole("button", { name: "Добавить из базы знаний" })
+    .click();
   await knowledge.getByRole("checkbox", { name: /Регламенты центра/ }).click();
-  await knowledge.getByRole("button", { name: "Показать документы" }).first().click();
-  await expect(knowledge.getByText("Порядок замены инструктора.pdf")).toBeVisible();
+  await knowledge
+    .getByRole("button", { name: "Показать документы" })
+    .first()
+    .click();
+  await expect(
+    knowledge.getByText("Порядок замены инструктора.pdf"),
+  ).toBeVisible();
 
   // 3. What it can do: the mode is stated, not a fake switch.
   const skills = page.locator("#agent-block-skills");
@@ -844,9 +877,17 @@ test("builder blocks derive permissions from plain-language choices", async ({
   await expect(
     model.getByText("Модель пространства", { exact: true }),
   ).toBeVisible();
-  await expect(model.getByText(/Во внешнюю модель уходят только: сообщения из «Зал 1», «Инструкторы»/)).toBeVisible();
-  await expect(model.getByText(/фрагменты документов из «Регламенты центра»/)).toBeVisible();
-  await model.getByRole("switch", { name: "Разрешить передачу данных модели" }).click();
+  await expect(
+    model.getByText(
+      /Во внешнюю модель уходят только: сообщения из «Зал 1», «Инструкторы»/,
+    ),
+  ).toBeVisible();
+  await expect(
+    model.getByText(/фрагменты документов из «Регламенты центра»/),
+  ).toBeVisible();
+  await model
+    .getByRole("switch", { name: "Разрешить передачу данных модели" })
+    .click();
 
   // Scopes appear only in advanced settings, collapsed by default.
   await expect(page.getByText("messages:interactive")).toHaveCount(0);
@@ -908,14 +949,21 @@ test("launch rules read as sentences with subject forms", async ({ page }) => {
   expect(mock.createdTriggers.at(-1)).toMatchObject({
     type: "schedule",
     timezone: "Europe/Moscow",
-    config: { chat_id: hall.id, hour: 18, minute: 30, days_of_week: [1, 2, 3, 4, 5] },
+    config: {
+      chat_id: hall.id,
+      hour: 18,
+      minute: 30,
+      days_of_week: [1, 2, 3, 4, 5],
+    },
   });
 
   await block.getByRole("button", { name: "Добавить правило" }).click();
   await block.getByRole("button", { name: "По ключевым словам" }).click();
   await block.getByLabel("Слова").fill("итоги, сводка");
   await block.getByRole("button", { name: "Сохранить правило" }).click();
-  await expect(block.getByText("Когда в сообщении есть «итоги, сводка»")).toBeVisible();
+  await expect(
+    block.getByText("Когда в сообщении есть «итоги, сводка»"),
+  ).toBeVisible();
   expect(mock.createdTriggers.at(-1)).toMatchObject({
     type: "keyword",
     timezone: "Europe/Moscow",
@@ -943,19 +991,29 @@ test("check shows the dry-run answer, a human trace and the verdict", async ({
   const check = page.locator(".agent-check");
   await expect(check).toBeInViewport();
   await check.getByRole("button", { name: "Как оформить замену?" }).click();
-  await expect(check.getByLabel("Сообщение агенту")).toHaveValue("Как оформить замену?");
+  await expect(check.getByLabel("Сообщение агенту")).toHaveValue(
+    "Как оформить замену?",
+  );
   await check.getByRole("button", { name: "Показать ответ агента" }).click();
-  await expect(check.getByText(/Замену оформляет администратор зала/)).toBeVisible();
+  await expect(
+    check.getByText(/Замену оформляет администратор зала/),
+  ).toBeVisible();
   await expect(check.getByText("Прочитал сообщения чата")).toBeVisible();
   await expect(check.getByText("Искал в базе знаний")).toBeVisible();
   await expect(
-    check.getByText("Нашёл в «Порядок замены инструктора», раздел «Замена в день занятия»"),
+    check.getByText(
+      "Нашёл в «Порядок замены инструктора», раздел «Замена в день занятия»",
+    ),
   ).toBeVisible();
-  await expect(check.getByText("Отправил бы карточку с кнопками")).toBeVisible();
+  await expect(
+    check.getByText("Отправил бы карточку с кнопками"),
+  ).toBeVisible();
   await expect(check.getByText("4 секунды")).toBeVisible();
   await expect(check.getByText(/около 0,0042\s\$/)).toBeVisible();
   await expect(
-    check.getByText(/Так агент ответил бы в «Вопросы по регламентам»\. Ничего не отправлено\./),
+    check.getByText(
+      /Так агент ответил бы в «Вопросы по регламентам»\. Ничего не отправлено\./,
+    ),
   ).toBeVisible();
   expect(mock.invocations[0]).toMatchObject({
     chat_id: rules.id,
@@ -969,36 +1027,40 @@ test("check shows the dry-run answer, a human trace and the verdict", async ({
 
 test("polling of a check stops after leaving the page", async ({ page }) => {
   const mock = await mockAgents(page);
-  await page.route("**/api/v1/agent-runs/00000000-0000-4000-8000-000000000601", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        id: "00000000-0000-4000-8000-000000000601",
-        org_id: orgID,
-        agent_id: ids.help,
-        agent_version: 2,
-        dry_run: true,
-        agent_config: {},
-        correlation_id: "00000000-0000-4000-8000-0000000000f0",
-        chain_depth: 0,
-        status: "running",
-        provider: "openai",
-        model: "gpt-5-mini",
-        input: {},
-        result_summary: {},
-        input_tokens: 0,
-        output_tokens: 0,
-        cost: "0",
-        currency: "USD",
-        error_code: "",
-        attempt: 1,
-        max_attempts: 1,
-        created_at: now.toISOString(),
-      }),
-    }).then(() => {
-      pending += 1;
-    }),
+  await page.route(
+    "**/api/v1/agent-runs/00000000-0000-4000-8000-000000000601",
+    (route) =>
+      route
+        .fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            id: "00000000-0000-4000-8000-000000000601",
+            org_id: orgID,
+            agent_id: ids.help,
+            agent_version: 2,
+            dry_run: true,
+            agent_config: {},
+            correlation_id: "00000000-0000-4000-8000-0000000000f0",
+            chain_depth: 0,
+            status: "running",
+            provider: "openai",
+            model: "gpt-5-mini",
+            input: {},
+            result_summary: {},
+            input_tokens: 0,
+            output_tokens: 0,
+            cost: "0",
+            currency: "USD",
+            error_code: "",
+            attempt: 1,
+            max_attempts: 1,
+            created_at: now.toISOString(),
+          }),
+        })
+        .then(() => {
+          pending += 1;
+        }),
   );
   let pending = 0;
   await page.goto(`/agents/${ids.help}`);
@@ -1008,7 +1070,9 @@ test("polling of a check stops after leaving the page", async ({ page }) => {
   await expect(check.getByText("Агент думает…")).toBeVisible();
   await expect.poll(() => pending).toBeGreaterThan(0);
   await page.getByRole("button", { name: "Ко всем агентам" }).click();
-  await expect(page.getByRole("heading", { name: /Ваши агенты/ })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /Ваши агенты/ }),
+  ).toBeVisible();
   const afterLeaving = pending;
   await page.waitForTimeout(2_500);
   expect(pending).toBe(afterLeaving);
@@ -1034,10 +1098,14 @@ test("publishing saves the draft and the agent starts working", async ({
   const bar = page.locator(".agent-builder__bar");
   await expect(bar.getByText("Работает", { exact: true })).toBeVisible();
   await expect(bar.getByText(/Опубликована версия 1/)).toBeVisible();
-  await expect(bar.getByRole("button", { name: "Поставить на паузу" })).toBeVisible();
+  await expect(
+    bar.getByRole("button", { name: "Поставить на паузу" }),
+  ).toBeVisible();
   await expect(publish).toBeDisabled();
   await expect(
-    page.getByText("Опубликованная версия совпадает с черновиком — публиковать нечего."),
+    page.getByText(
+      "Опубликованная версия совпадает с черновиком — публиковать нечего.",
+    ),
   ).toBeVisible();
 });
 
@@ -1046,18 +1114,32 @@ test("switching agents never carries state from one agent to another", async ({
 }) => {
   await mockAgents(page);
   await page.goto(`/agents/${ids.help}`);
-  await page.locator(".agent-check").getByLabel("Сообщение агенту").fill("Секретный вопрос");
+  await page
+    .locator(".agent-check")
+    .getByLabel("Сообщение агенту")
+    .fill("Секретный вопрос");
   const triggers = page.locator("#agent-block-triggers");
   await triggers.getByRole("button", { name: "Добавить правило" }).click();
   await triggers.getByRole("button", { name: "По команде" }).click();
   await triggers.getByLabel("Команда").fill("help");
-  await page.locator("#agent-block-identity").getByLabel("Имя").fill("Справка 2");
+  await page
+    .locator("#agent-block-identity")
+    .getByLabel("Имя")
+    .fill("Справка 2");
 
   await page.goto(`/agents/${ids.control}`);
-  await expect(page.getByRole("heading", { name: "Контроль", level: 2 })).toBeVisible();
-  await expect(page.locator(".agent-check").getByLabel("Сообщение агенту")).toHaveValue("");
-  await expect(page.locator("#agent-block-triggers").getByLabel("Команда")).toHaveCount(0);
-  await expect(page.locator("#agent-block-identity").getByLabel("Имя")).toHaveValue("Контроль");
+  await expect(
+    page.getByRole("heading", { name: "Контроль", level: 2 }),
+  ).toBeVisible();
+  await expect(
+    page.locator(".agent-check").getByLabel("Сообщение агенту"),
+  ).toHaveValue("");
+  await expect(
+    page.locator("#agent-block-triggers").getByLabel("Команда"),
+  ).toHaveCount(0);
+  await expect(
+    page.locator("#agent-block-identity").getByLabel("Имя"),
+  ).toHaveValue("Контроль");
 });
 
 test("old card addresses open the matching place of the builder", async ({
@@ -1065,12 +1147,17 @@ test("old card addresses open the matching place of the builder", async ({
 }) => {
   await mockAgents(page);
   await page.goto(`/agents/${ids.help}/settings`);
-  await expect(page.locator("#agent-block-advanced")).toHaveAttribute("open", "");
+  await expect(page.locator("#agent-block-advanced")).toHaveAttribute(
+    "open",
+    "",
+  );
   await expect(page.getByText("Работает сейчас")).toBeVisible();
   await page.goto(`/agents/${ids.help}/knowledge`);
   await expect(page.locator("#agent-block-knowledge")).toBeInViewport();
   await page.goto(`/agents/${ids.control}/activity`);
-  await expect(page.getByRole("heading", { name: "Активность агентов" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Активность агентов" }),
+  ).toBeVisible();
   await expect(page.locator(".agent-feed")).toContainText("Контроль");
   await expect(page.locator(".agent-feed")).not.toContainText("Справка");
 });
@@ -1080,7 +1167,9 @@ test("activity shows what agents did next to the approval queue", async ({
 }) => {
   const mock = await mockAgents(page);
   await page.goto("/agents/activity");
-  await expect(page.getByRole("heading", { name: "Активность агентов" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Активность агентов" }),
+  ).toBeVisible();
   const queue = page.locator("#agent-approvals");
   await expect(queue.getByText("Отправить сообщение в «Зал 1»")).toBeVisible();
   await expect(
@@ -1089,11 +1178,19 @@ test("activity shows what agents did next to the approval queue", async ({
       .getByText("Напоминаю: отметьтесь под сообщением о порядке входа."),
   ).toBeVisible();
   await expect(page.getByText("ответили 6 из 9")).toBeVisible();
-  await expect(page.getByText(/Контроль вернётся к задаче .* в «Инструкторы»/)).toBeVisible();
+  await expect(
+    page.getByText(/Контроль вернётся к задаче .* в «Инструкторы»/),
+  ).toBeVisible();
   const feed = page.locator(".agent-feed");
-  await expect(feed.getByText("ответил на упоминание в «Вопросы по регламентам»")).toBeVisible();
-  await expect(feed.getByText("вернулся к задаче в «Инструкторы»")).toBeVisible();
-  await expect(feed.getByText(/не справился: Исчерпан бюджет агента/)).toBeVisible();
+  await expect(
+    feed.getByText("ответил на упоминание в «Вопросы по регламентам»"),
+  ).toBeVisible();
+  await expect(
+    feed.getByText("вернулся к задаче в «Инструкторы»"),
+  ).toBeVisible();
+  await expect(
+    feed.getByText(/не справился: Исчерпан бюджет агента/),
+  ).toBeVisible();
   await expect(page.getByText("post_message")).toHaveCount(0);
   await expectNoHorizontalScroll(page);
   await expect(page).toHaveScreenshot("agents-activity.png", {
@@ -1111,12 +1208,16 @@ test("builder fits a phone and the dark theme", async ({ page }) => {
   await mockAgents(page, { theme: "dark" });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/agents/${ids.control}`);
-  await expect(page.getByRole("heading", { name: "Контроль", level: 2 })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Контроль", level: 2 }),
+  ).toBeVisible();
   await expectNoHorizontalScroll(page);
   await expect(page).toHaveScreenshot("agents-builder-dark-390.png", {
     animations: "disabled",
   });
   await page.goto("/agents");
-  await expect(page.getByRole("heading", { name: /Ваши агенты/ })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /Ваши агенты/ }),
+  ).toBeVisible();
   await expectNoHorizontalScroll(page);
 });

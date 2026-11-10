@@ -13,10 +13,14 @@ export type HumanStatus =
   | { kind: "working"; changed: boolean };
 
 export function humanStatus(agent: Agent, pendingApprovals = 0): HumanStatus {
-  if (pendingApprovals > 0) return { kind: "approval", count: pendingApprovals };
+  if (pendingApprovals > 0)
+    return { kind: "approval", count: pendingApprovals };
   const published = agent.published_version != null;
   const blocker = agent.readiness.blockers[0];
-  if (agent.operational_status === "needs_attention" || agent.readiness.state === "error")
+  if (
+    agent.operational_status === "needs_attention" ||
+    agent.readiness.state === "error"
+  )
     return {
       kind: "attention",
       reason: blocker ? `agentBlocker_${blocker}` : "agentAttention_runs",

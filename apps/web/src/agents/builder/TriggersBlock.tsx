@@ -169,7 +169,11 @@ export function TriggersBlock({
       <FormError message={error} />
       {!editing &&
         (choosing ? (
-          <div className="agent-rule-types" role="group" aria-label={t("agentRuleChoose")}>
+          <div
+            className="agent-rule-types"
+            role="group"
+            aria-label={t("agentRuleChoose")}
+          >
             <span>{t("agentRuleChoose")}</span>
             <div className="agent-chips">
               {triggerTypes.map((type) => (
@@ -358,7 +362,11 @@ function RuleEditor({
               ))}
             </SelectField>
           </div>
-          <div className="agent-days" role="group" aria-label={t("agentRuleDays")}>
+          <div
+            className="agent-days"
+            role="group"
+            aria-label={t("agentRuleDays")}
+          >
             <span>{t("agentRuleDays")}</span>
             <div className="agent-chips">
               <Chip

@@ -53,7 +53,8 @@ export function AdvancedSettings({
   refetchAgents(): Promise<unknown>;
 }) {
   const { t } = useTranslation();
-  const set = (patch: Partial<Draft>) => builder.setDraft({ ...draft, ...patch });
+  const set = (patch: Partial<Draft>) =>
+    builder.setDraft({ ...draft, ...patch });
   return (
     <details
       id={blockID("advanced")}
@@ -148,9 +149,10 @@ export function AdvancedSettings({
               </ul>
             </section>
           </fieldset>
-          {canBuild && (agent.kind === "external" || !agent.llm_connection_id) && (
-            <AgentKeys api={api} agent={agent} onChanged={refetchAgents} />
-          )}
+          {canBuild &&
+            (agent.kind === "external" || !agent.llm_connection_id) && (
+              <AgentKeys api={api} agent={agent} onChanged={refetchAgents} />
+            )}
           <VersionHistory
             api={api}
             agent={agent}
