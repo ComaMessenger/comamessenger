@@ -968,6 +968,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/messages/{message_id}/actions/{action_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Press a button of an interactive message.
+         * @description Records the press of the current human user. The server decides who may press (chat membership plus the action audience), replays the original response when the same person presses again, closes single-use actions and emits message.updated with the new card state. Pressing a button of an agent card queues a run of that agent with input.trigger_type=message_action. Agent API keys cannot press buttons.
+         */
+        post: operations["pressMessageAction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/messages/{message_id}/thread/follow": {
         parameters: {
             query?: never;
@@ -2146,7 +2166,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "already_bootstrapped" | "agent_budget_exceeded" | "agent_conflict" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "workspace_not_found";
+        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_conflict" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "workspace_not_found";
         File: {
             /** Format: uuid */
             id: string;
@@ -2654,7 +2674,7 @@ export interface components {
             created_at: string;
         };
         /** @enum {string} */
-        AgentScope: "chats:read" | "messages:read" | "messages:write" | "reactions:write" | "files:read" | "search:read" | "members:read" | "memory:read" | "memory:write" | "runtime:execute" | "runtime:worker" | "knowledge:read";
+        AgentScope: "chats:read" | "messages:read" | "messages:write" | "reactions:write" | "files:read" | "search:read" | "members:read" | "memory:read" | "memory:write" | "runtime:execute" | "runtime:worker" | "knowledge:read" | "messages:interactive" | "followups:write";
         Agent: {
             /** Format: uuid */
             id: string;
@@ -2914,6 +2934,11 @@ export interface components {
             decided_by?: string;
             /** Format: date-time */
             completed_at?: string;
+            /**
+             * Format: uuid
+             * @description Chat card mirroring this confirmation in the run's chat, when one was posted.
+             */
+            card_message_id?: string;
         };
         InvokeAgentRequest: {
             /** Format: uuid */
@@ -3769,6 +3794,88 @@ export interface components {
              */
             thread_reply_count: number;
             files: components["schemas"]["File"][];
+            blocks?: components["schemas"]["MessageBlocks"];
+        };
+        /** @description Optional structured part of an agent message. The body always carries a plain-text fallback; clients that do not support the version render the body. Server-managed state (responses, closed, binding) is part of the document so durable events carry the current card. */
+        MessageBlocks: {
+            /** @description Schema version; this Core writes 1. */
+            version: number;
+            card?: components["schemas"]["MessageCard"];
+            actions?: components["schemas"]["MessageAction"][];
+            sources?: components["schemas"]["MessageSource"][];
+        };
+        MessageCard: {
+            title: string;
+            status?: {
+                label: string;
+                /** @enum {string} */
+                tone: "neutral" | "info" | "success" | "warning" | "danger";
+            };
+            fields?: {
+                label: string;
+                value: string;
+            }[];
+            items?: {
+                text: string;
+                /** @enum {string} */
+                state?: "done" | "pending" | "failed";
+            }[];
+        };
+        MessageAction: {
+            id: string;
+            label: string;
+            /** @enum {string} */
+            style: "primary" | "secondary" | "danger";
+            /**
+             * @description per_actor lets each allowed person press once; single closes the action after the first press.
+             * @enum {string}
+             */
+            limit: "per_actor" | "single";
+            /** @description Actions of one group are a single choice per person. */
+            group?: string;
+            allowed?: components["schemas"]["MessageActionAudience"];
+            closed: boolean;
+            responses: components["schemas"]["MessageActionResponse"][];
+            /** @description Server-only link to a domain command. tool_confirmation buttons decide an agent tool confirmation and require agents.approve. */
+            binding?: {
+                /** @enum {string} */
+                kind: "tool_confirmation";
+                /** Format: uuid */
+                confirmation_id?: string;
+                /** @enum {string} */
+                decision?: "approve" | "deny";
+            };
+        };
+        /** @description Absent audience means any active human chat member. Matching any listed actor, role or permission is enough. The server enforces it. */
+        MessageActionAudience: {
+            actor_ids?: string[];
+            chat_roles?: ("owner" | "admin" | "member")[];
+            org_roles?: ("owner" | "admin" | "member")[];
+            permissions?: components["schemas"]["Permission"][];
+        };
+        MessageActionResponse: {
+            /** Format: uuid */
+            actor_id: string;
+            /** Format: date-time */
+            responded_at: string;
+        };
+        MessageSource: {
+            /** @enum {string} */
+            kind: "message" | "file" | "document";
+            /** Format: uuid */
+            message_id?: string;
+            /** Format: uuid */
+            file_id?: string;
+            /** Format: uuid */
+            document_id?: string;
+            title?: string;
+            excerpt?: string;
+        };
+        MessageActionResult: {
+            message: components["schemas"]["Message"];
+            action_id: string;
+            response: components["schemas"]["MessageActionResponse"];
+            replayed: boolean;
         };
         MessagePage: {
             messages: components["schemas"]["Message"][];
@@ -3802,6 +3909,8 @@ export interface components {
             run_id?: string;
             mentioned_actor_ids?: string[];
             file_ids?: string[];
+            /** @description Agent API keys with messages:interactive only. A blank body is replaced by a generated text fallback. */
+            blocks?: components["schemas"]["MessageBlocks"];
         };
         UpdateMessageRequest: {
             body: string;
@@ -6059,6 +6168,41 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    pressMessageAction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+                action_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The press was recorded, or the earlier press of the same person was replayed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageActionResult"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            /** @description action_closed when the action is closed or already taken; action_conflict when the person already chose another action of the same group. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             422: components["responses"]["Error"];
         };
     };

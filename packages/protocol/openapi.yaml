@@ -1321,6 +1321,46 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
+  /api/v1/messages/{message_id}/actions/{action_id}:
+    post:
+      operationId: pressMessageAction
+      summary: Press a button of an interactive message.
+      description: >-
+        Records the press of the current human user. The server decides who may
+        press (chat membership plus the action audience), replays the original
+        response when the same person presses again, closes single-use actions
+        and emits message.updated with the new card state. Pressing a button of
+        an agent card queues a run of that agent with
+        input.trigger_type=message_action. Agent API keys cannot press buttons.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/MessageId" }
+        - {
+            name: action_id,
+            in: path,
+            required: true,
+            schema: { type: string, pattern: "^[a-z0-9][a-z0-9_.-]{0,63}$" },
+          }
+      responses:
+        "200":
+          description: The press was recorded, or the earlier press of the same person was replayed.
+          content:
+            {
+              application/json:
+                {
+                  schema: { $ref: "#/components/schemas/MessageActionResult" },
+                },
+            }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409":
+          description: action_closed when the action is closed or already taken; action_conflict when the person already chose another action of the same group.
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/Error" } },
+            }
+        "422": { $ref: "#/components/responses/Error" }
   /api/v1/messages/{message_id}/thread/follow:
     put:
       operationId: followThread
@@ -3132,6 +3172,8 @@ components:
     ErrorCode:
       type: string
       enum:
+        - action_closed
+        - action_conflict
         - already_bootstrapped
         - agent_budget_exceeded
         - agent_conflict
@@ -3707,6 +3749,8 @@ components:
           runtime:execute,
           runtime:worker,
           knowledge:read,
+          messages:interactive,
+          followups:write,
         ]
     Agent:
       type: object
@@ -4115,6 +4159,10 @@ components:
         decided_at: { type: string, format: date-time }
         decided_by: { type: string, format: uuid }
         completed_at: { type: string, format: date-time }
+        card_message_id:
+          type: string
+          format: uuid
+          description: Chat card mirroring this confirmation in the run's chat, when one was posted.
     InvokeAgentRequest:
       type: object
       additionalProperties: false
@@ -5346,6 +5394,153 @@ components:
           type: array
           maxItems: 10
           items: { $ref: "#/components/schemas/File" }
+        blocks: { $ref: "#/components/schemas/MessageBlocks" }
+    MessageBlocks:
+      type: object
+      additionalProperties: false
+      description: >-
+        Optional structured part of an agent message. The body always carries a
+        plain-text fallback; clients that do not support the version render the
+        body. Server-managed state (responses, closed, binding) is part of the
+        document so durable events carry the current card.
+      required: [version]
+      properties:
+        version:
+          {
+            type: integer,
+            minimum: 1,
+            description: "Schema version; this Core writes 1.",
+          }
+        card: { $ref: "#/components/schemas/MessageCard" }
+        actions:
+          type: array
+          maxItems: 10
+          items: { $ref: "#/components/schemas/MessageAction" }
+        sources:
+          type: array
+          maxItems: 20
+          items: { $ref: "#/components/schemas/MessageSource" }
+    MessageCard:
+      type: object
+      additionalProperties: false
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        status:
+          type: object
+          additionalProperties: false
+          required: [label, tone]
+          properties:
+            label: { type: string, minLength: 1, maxLength: 60 }
+            tone:
+              { type: string, enum: [neutral, info, success, warning, danger] }
+        fields:
+          type: array
+          maxItems: 20
+          items:
+            type: object
+            additionalProperties: false
+            required: [label, value]
+            properties:
+              label: { type: string, minLength: 1, maxLength: 80 }
+              value: { type: string, maxLength: 500 }
+        items:
+          type: array
+          maxItems: 50
+          items:
+            type: object
+            additionalProperties: false
+            required: [text]
+            properties:
+              text: { type: string, minLength: 1, maxLength: 500 }
+              state: { type: string, enum: [done, pending, failed] }
+    MessageAction:
+      type: object
+      additionalProperties: false
+      required: [id, label, style, limit, closed, responses]
+      properties:
+        id: { type: string, pattern: "^[a-z0-9][a-z0-9_.-]{0,63}$" }
+        label: { type: string, minLength: 1, maxLength: 60 }
+        style: { type: string, enum: [primary, secondary, danger] }
+        limit:
+          type: string
+          enum: [per_actor, single]
+          description: per_actor lets each allowed person press once; single closes the action after the first press.
+        group:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9_.-]{0,63}$"
+          description: Actions of one group are a single choice per person.
+        allowed: { $ref: "#/components/schemas/MessageActionAudience" }
+        closed: { type: boolean }
+        responses:
+          type: array
+          items: { $ref: "#/components/schemas/MessageActionResponse" }
+        binding:
+          type: object
+          additionalProperties: false
+          description: Server-only link to a domain command. tool_confirmation buttons decide an agent tool confirmation and require agents.approve.
+          required: [kind]
+          properties:
+            kind: { type: string, enum: [tool_confirmation] }
+            confirmation_id: { type: string, format: uuid }
+            decision: { type: string, enum: [approve, deny] }
+    MessageActionAudience:
+      type: object
+      additionalProperties: false
+      description: Absent audience means any active human chat member. Matching any listed actor, role or permission is enough. The server enforces it.
+      properties:
+        actor_ids:
+          {
+            type: array,
+            maxItems: 100,
+            uniqueItems: true,
+            items: { type: string, format: uuid },
+          }
+        chat_roles:
+          {
+            type: array,
+            uniqueItems: true,
+            items: { type: string, enum: [owner, admin, member] },
+          }
+        org_roles:
+          {
+            type: array,
+            uniqueItems: true,
+            items: { type: string, enum: [owner, admin, member] },
+          }
+        permissions:
+          {
+            type: array,
+            uniqueItems: true,
+            items: { $ref: "#/components/schemas/Permission" },
+          }
+    MessageActionResponse:
+      type: object
+      additionalProperties: false
+      required: [actor_id, responded_at]
+      properties:
+        actor_id: { type: string, format: uuid }
+        responded_at: { type: string, format: date-time }
+    MessageSource:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [message, file, document] }
+        message_id: { type: string, format: uuid }
+        file_id: { type: string, format: uuid }
+        document_id: { type: string, format: uuid }
+        title: { type: string, maxLength: 200 }
+        excerpt: { type: string, maxLength: 500 }
+    MessageActionResult:
+      type: object
+      additionalProperties: false
+      required: [message, action_id, response, replayed]
+      properties:
+        message: { $ref: "#/components/schemas/Message" }
+        action_id: { type: string }
+        response: { $ref: "#/components/schemas/MessageActionResponse" }
+        replayed: { type: boolean }
     MessagePage:
       type: object
       additionalProperties: false
@@ -5387,6 +5582,9 @@ components:
           maxItems: 10
           uniqueItems: true
           items: { type: string, format: uuid }
+        blocks:
+          allOf: [{ $ref: "#/components/schemas/MessageBlocks" }]
+          description: Agent API keys with messages:interactive only. A blank body is replaced by a generated text fallback.
     UpdateMessageRequest:
       type: object
       additionalProperties: false

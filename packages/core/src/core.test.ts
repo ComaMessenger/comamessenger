@@ -57,6 +57,68 @@ describe("domain store", () => {
     expect(store.getState().messages.chat).toHaveLength(1);
     expect(store.getState().messages.chat?.[0]?.delivery).toBe("sent");
   });
+  it("keeps interactive blocks in sync with message events", () => {
+    const store = createMessengerStore();
+    const card: ClientMessage = {
+      ...message,
+      body: "Slot 14:00\n[Accept]",
+      blocks: {
+        version: 1,
+        card: { title: "Slot 14:00" },
+        actions: [
+          {
+            id: "accept",
+            label: "Accept",
+            style: "primary",
+            limit: "single",
+            closed: false,
+            responses: [],
+          },
+        ],
+      },
+    };
+    const event = (seq: number, type: string, data: ClientMessage) => ({
+      op: "event" as const,
+      seq,
+      type,
+      occurred_at: message.created_at,
+      actor_id: message.actor_id,
+      chat_id: message.chat_id,
+      subject_id: message.id,
+      data,
+    });
+    store.getState().apply(event(3, "message.created", card));
+    const pressed: ClientMessage = {
+      ...card,
+      version: 2,
+      blocks: {
+        version: 1,
+        card: { title: "Slot 14:00" },
+        actions: [
+          {
+            ...card.blocks!.actions![0]!,
+            closed: true,
+            responses: [
+              { actor_id: "member", responded_at: "2026-01-01T00:01:00Z" },
+            ],
+          },
+        ],
+      },
+    };
+    store.getState().apply(event(4, "message.updated", pressed));
+    const updated = store.getState().messages.chat?.[0];
+    expect(updated?.body).toBe("Slot 14:00\n[Accept]");
+    expect(updated?.blocks?.actions?.[0]?.closed).toBe(true);
+    expect(updated?.blocks?.actions?.[0]?.responses).toHaveLength(1);
+    const { blocks: _removed, ...tombstone } = {
+      ...pressed,
+      version: 3,
+      body: "",
+      deleted_at: "2026-01-01T00:02:00Z",
+    };
+    store.getState().apply(event(5, "message.deleted", tombstone));
+    expect(store.getState().messages.chat?.[0]?.blocks).toBeUndefined();
+  });
   it("reconciles a REST response even when the event checkpoint is newer", () => {
     const store = createMessengerStore(10);
     store.getState().optimistic({

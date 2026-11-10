@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/comamessenger/comamessenger/core/internal/agent"
+	"github.com/comamessenger/comamessenger/core/internal/agentauthz"
 	"github.com/comamessenger/comamessenger/core/internal/message"
 	"github.com/go-chi/chi/v5"
 )
@@ -50,6 +52,10 @@ func (h *identityHandlers) createMessage(w standardhttp.ResponseWriter, r *stand
 	var created bool
 	var err error
 	if auth.Identity.AuthenticationKind == "api_key" {
+		if input.Blocks != nil && !agentauthz.HasScope(auth.Identity.Scopes, string(agent.ScopeMessagesInteractive)) {
+			h.writeError(w, r, standardhttp.StatusForbidden, "forbidden", "Interactive blocks require the messages:interactive scope.")
+			return
+		}
 		if input.RunID == nil {
 			h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "agent_run_required", "Agent-authored messages must reference an active run.")
 			return
@@ -276,6 +282,15 @@ func (h *identityHandlers) listThread(w standardhttp.ResponseWriter, r *standard
 	writeJSON(h.logger, w, standardhttp.StatusOK, result)
 }
 
+func (h *identityHandlers) pressMessageAction(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.messages.PressAction(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "messageID"), chi.URLParam(r, "actionID"))
+	if err != nil {
+		h.messageError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
 func (h *identityHandlers) messageError(w standardhttp.ResponseWriter, r *standardhttp.Request, err error) {
 	switch {
 	case errors.Is(err, message.ErrForbidden):
@@ -284,6 +299,10 @@ func (h *identityHandlers) messageError(w standardhttp.ResponseWriter, r *standa
 		h.writeError(w, r, standardhttp.StatusNotFound, "message_not_found", "The message or chat was not found.")
 	case errors.Is(err, message.ErrIdempotencyConflict):
 		h.writeError(w, r, standardhttp.StatusConflict, "idempotency_conflict", "client_msg_id was already used for another message command.")
+	case errors.Is(err, message.ErrActionClosed):
+		h.writeError(w, r, standardhttp.StatusConflict, "action_closed", "This action is closed or was already taken.")
+	case errors.Is(err, message.ErrActionConflict):
+		h.writeError(w, r, standardhttp.StatusConflict, "action_conflict", "You already chose another option on this card.")
 	case errors.Is(err, message.ErrVersionConflict):
 		h.writeError(w, r, standardhttp.StatusConflict, "version_conflict", "The message was changed by another request.")
 	case errors.Is(err, message.ErrTooLarge):

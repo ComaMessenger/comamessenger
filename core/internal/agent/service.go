@@ -49,12 +49,16 @@ const (
 	ScopeRuntimeExecute Scope = "runtime:execute"
 	ScopeRuntimeWorker  Scope = "runtime:worker"
 	ScopeKnowledgeRead  Scope = "knowledge:read"
+	// ScopeMessagesInteractive allows cards, buttons and response collections.
+	ScopeMessagesInteractive Scope = "messages:interactive"
+	// ScopeFollowupsWrite allows an agent to schedule its own continuation.
+	ScopeFollowupsWrite Scope = "followups:write"
 )
 
 var validScopes = map[Scope]struct{}{
 	ScopeChatsRead: {}, ScopeMessagesRead: {}, ScopeMessagesWrite: {}, ScopeReactionsWrite: {},
 	ScopeFilesRead: {}, ScopeSearchRead: {}, ScopeMembersRead: {}, ScopeMemoryRead: {}, ScopeMemoryWrite: {},
-	ScopeRuntimeExecute: {}, ScopeRuntimeWorker: {}, ScopeKnowledgeRead: {},
+	ScopeRuntimeExecute: {}, ScopeRuntimeWorker: {}, ScopeKnowledgeRead: {}, ScopeMessagesInteractive: {}, ScopeFollowupsWrite: {},
 }
 
 var handlePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{1,31}$`)
@@ -563,6 +567,9 @@ func (service *Service) ResetRecipe(ctx context.Context, current identity.User, 
 	if _, err := tx.Exec(ctx, `UPDATE agents SET enabled=false,operational_status=CASE WHEN published_version IS NULL THEN 'draft' ELSE 'paused' END,recipe_version=recipe_version+1,updated_at=now() WHERE org_id=$1 AND actor_id=$2`, current.OrgID, agentID); err != nil {
 		return Agent{}, err
 	}
+	if err := cancelInteractiveWork(ctx, tx, current.OrgID, agentID, "agent_paused"); err != nil {
+		return Agent{}, err
+	}
 	revokedKeyIDs := make([]string, 0)
 	auditID, err := id.New()
 	if err != nil {
@@ -779,6 +786,8 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 			}
 		} else if _, err := tx.Exec(ctx, `UPDATE agents SET enabled=false,operational_status=CASE WHEN published_version IS NULL THEN 'draft' ELSE 'paused' END,updated_at=now() WHERE org_id=$1 AND actor_id=$2`, current.OrgID, agentID); err != nil {
 			return Agent{}, mapWriteError("pause agent", err)
+		} else if err := cancelInteractiveWork(ctx, tx, current.OrgID, agentID, "agent_paused"); err != nil {
+			return Agent{}, err
 		}
 	}
 	metadata, _ := json.Marshal(map[string]any{"draft_version": draftVersion, "published": input.Enabled != nil && *input.Enabled, "scopes": scopeStrings(prospective.AllowedScopes), "chat_ids": prospective.ChatIDs, "knowledge_collection_ids": uuidArray(prospective.KnowledgeCollectionIDs)})
@@ -886,6 +895,11 @@ func (service *Service) setOperationalStatus(ctx context.Context, current identi
 	}
 	if _, err := tx.Exec(ctx, `UPDATE agents SET enabled=$3,operational_status=$4,updated_at=now() WHERE org_id=$1 AND actor_id=$2`, current.OrgID, agentID, enabled, status); err != nil {
 		return Agent{}, err
+	}
+	if !enabled {
+		if err := cancelInteractiveWork(ctx, tx, current.OrgID, agentID, "agent_paused"); err != nil {
+			return Agent{}, err
+		}
 	}
 	auditID, err := id.New()
 	if err != nil {
@@ -1042,6 +1056,8 @@ func (service *Service) Delete(ctx context.Context, current identity.User, agent
 		{"disable deleted agent triggers", `UPDATE agent_triggers SET enabled=false,updated_at=now() WHERE org_id=$1 AND agent_id=$2 AND enabled`},
 		{"cancel queued deleted agent runs", `UPDATE agent_runs SET status='canceled',error_code='agent_deleted',cancel_requested_at=now(),finished_at=now() WHERE org_id=$1 AND agent_id=$2 AND status='queued'`},
 		{"request cancellation for running deleted agent runs", `UPDATE agent_runs SET cancel_requested_at=COALESCE(cancel_requested_at,now()),error_code='agent_deleted' WHERE org_id=$1 AND agent_id=$2 AND status='running'`},
+		{"cancel deleted agent follow-ups", `UPDATE agent_followups SET status='canceled',reason='agent_deleted',finished_at=now() WHERE org_id=$1 AND agent_id=$2 AND status='pending'`},
+		{"cancel deleted agent collections", `UPDATE agent_collections SET status='canceled',cancel_reason='agent_deleted',next_reminder_at=NULL,closed_at=now() WHERE org_id=$1 AND agent_id=$2 AND status='open'`},
 		{"deny pending deleted agent confirmations", `UPDATE agent_tool_confirmations SET status='denied',error_code='agent_deleted',completed_at=now() WHERE org_id=$1 AND agent_id=$2 AND status='pending'`},
 		{"remove deleted agent memberships", `DELETE FROM chat_members WHERE org_id=$1 AND actor_id=$2`},
 		{"remove deleted agent provider credential", `DELETE FROM agent_provider_credentials WHERE org_id=$1 AND agent_id=$2`},
@@ -1906,4 +1922,19 @@ func mapWriteError(operation string, err error) error {
 		return fmt.Errorf("%w: %s", ErrConflict, operation)
 	}
 	return fmt.Errorf("%s: %w", operation, err)
+}
+
+// cancelInteractiveWork applies the phase 5.3 pause rule: a paused agent
+// sends no more reminders and its pending follow-ups are canceled. Open
+// collections keep counting answers; resuming does not restore reminders.
+func cancelInteractiveWork(ctx context.Context, tx pgx.Tx, orgID, agentID, reason string) error {
+	if _, err := tx.Exec(ctx, `UPDATE agent_collections SET next_reminder_at=NULL,reminders_canceled_at=COALESCE(reminders_canceled_at,now())
+		WHERE org_id=$1 AND agent_id=$2 AND status='open' AND next_reminder_at IS NOT NULL`, orgID, agentID); err != nil {
+		return fmt.Errorf("cancel paused agent reminders: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE agent_followups SET status='canceled',reason=$3,finished_at=now()
+		WHERE org_id=$1 AND agent_id=$2 AND status='pending'`, orgID, agentID, reason); err != nil {
+		return fmt.Errorf("cancel paused agent follow-ups: %w", err)
+	}
+	return nil
 }

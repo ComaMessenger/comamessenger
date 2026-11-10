@@ -384,3 +384,18 @@ func TestFromEnvironmentRejectsDevelopmentSecretsInProduction(t *testing.T) {
 		})
 	}
 }
+
+func TestQuietHours(t *testing.T) {
+	start, end, err := quietHours("21:00-08:30")
+	if err != nil || start != 21*60 || end != 8*60+30 {
+		t.Fatalf("quietHours = %d %d %v", start, end, err)
+	}
+	if start, end, err := quietHours("off"); err != nil || start != end {
+		t.Fatalf("off = %d %d %v", start, end, err)
+	}
+	for _, value := range []string{"21-08", "25:00-08:00", "21:00"} {
+		if _, _, err := quietHours(value); err == nil {
+			t.Fatalf("quietHours(%q) accepted", value)
+		}
+	}
+}

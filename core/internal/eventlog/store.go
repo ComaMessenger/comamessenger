@@ -93,7 +93,7 @@ func (s *Store) Replay(ctx context.Context, user identity.User, sessionID string
 						'deleted_at', m.deleted_at,
 						'forwarded_from', m.forwarded_from,
 						'mentioned_actor_ids', m.mentioned_actor_ids
-					)
+					) || CASE WHEN m.blocks IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('blocks', m.blocks) END
 				ELSE e.data
 			END
 		FROM events e
@@ -160,7 +160,7 @@ func (s *Store) Live(ctx context.Context, orgID string, afterSeq, throughSeq int
 						'deleted_at', m.deleted_at,
 						'forwarded_from', m.forwarded_from,
 						'mentioned_actor_ids', m.mentioned_actor_ids
-					)
+					) || CASE WHEN m.blocks IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('blocks', m.blocks) END
 				ELSE e.data
 			END,
 			e.exclude_session_id,

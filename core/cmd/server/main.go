@@ -28,6 +28,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/files"
 	serverhttp "github.com/comamessenger/comamessenger/core/internal/http"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
+	"github.com/comamessenger/comamessenger/core/internal/interactive"
 	"github.com/comamessenger/comamessenger/core/internal/knowledge"
 	"github.com/comamessenger/comamessenger/core/internal/message"
 	"github.com/comamessenger/comamessenger/core/internal/password"
@@ -214,11 +215,18 @@ func main() {
 		logger.Error("knowledge indexing startup failed", "error", err)
 		os.Exit(1)
 	}
-	agentToolExecutor, err := agenttool.NewExecutor(pool, agenttool.Services{Chats: chatService, Messages: messageService, Search: searchService, Files: fileService, Memory: agentmemory.NewService(pool), Knowledge: knowledgeService}, true)
+	interactiveLimits := interactive.DefaultLimits()
+	interactiveLimits.QuietStartMinute, interactiveLimits.QuietEndMinute = cfg.Agents.QuietStartMinute, cfg.Agents.QuietEndMinute
+	interactiveLimits.MaxRemindersPerPersonPerDay = cfg.Agents.RemindersPerPersonPerDay
+	interactiveService := interactive.NewService(pool, messageService, chatService, logger, interactiveLimits)
+	messageService.SetActionHook(interactiveService.ActionHook())
+	agentToolExecutor, err := agenttool.NewExecutor(pool, agenttool.Services{Chats: chatService, Messages: messageService, Search: searchService, Files: fileService, Memory: agentmemory.NewService(pool), Knowledge: knowledgeService, Interactive: interactiveService}, true)
 	if err != nil {
 		logger.Error("agent tool initialization failed", "error", err)
 		os.Exit(1)
 	}
+	messageService.SetConfirmationDecider(agentToolExecutor)
+	go interactiveService.Run(realtimeCtx, 5*time.Second)
 	agentRunService := agentrun.NewService(pool)
 	agentProviderService := agentprovider.NewService(pool, agentConfigService, agentRunService)
 	agentTriggerService := agenttrigger.NewService(pool, logger)

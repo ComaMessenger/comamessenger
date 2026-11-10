@@ -266,6 +266,7 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Put("/messages/{messageID}/pin", h.putMessagePin)
 			protected.Delete("/messages/{messageID}/pin", h.deleteMessagePin)
 			protected.Post("/messages/{messageID}/forward", h.forwardMessage)
+			protected.Post("/messages/{messageID}/actions/{actionID}", h.pressMessageAction)
 			protected.Get("/messages/{messageID}/thread", h.listThread)
 			protected.Put("/messages/{messageID}/thread/follow", h.followThread)
 			protected.Delete("/messages/{messageID}/thread/follow", h.unfollowThread)

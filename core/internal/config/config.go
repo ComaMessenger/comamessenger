@@ -100,6 +100,13 @@ type AgentConfig struct {
 	TriggerShardIndex uint64
 	TriggerShardCount uint64
 	RuntimeAPIKey     string
+	// QuietStartMinute/QuietEndMinute bound the nightly window (minutes after
+	// midnight in the recipient's timezone) in which agents send no reminders.
+	// Equal values disable quiet hours.
+	QuietStartMinute int
+	QuietEndMinute   int
+	// RemindersPerPersonPerDay caps agent reminders to one person per 24 hours.
+	RemindersPerPersonPerDay int
 }
 
 type Config struct {
@@ -202,6 +209,17 @@ func FromEnvironment() (Config, error) {
 	if triggerShardCount < 1 || triggerShardCount > 1024 || triggerShardIndex >= triggerShardCount {
 		return Config{}, fmt.Errorf("AGENT_TRIGGER_SHARD_INDEX must be below AGENT_TRIGGER_SHARD_COUNT (1-1024)")
 	}
+	quietStart, quietEnd, err := quietHours(valueOrDefault("AGENT_QUIET_HOURS", "21:00-08:00"))
+	if err != nil {
+		return Config{}, err
+	}
+	remindersPerDay, err := uintValueOrDefault("AGENT_REMINDERS_PER_PERSON_PER_DAY", 6, 16)
+	if err != nil {
+		return Config{}, err
+	}
+	if remindersPerDay < 1 || remindersPerDay > 100 {
+		return Config{}, fmt.Errorf("AGENT_REMINDERS_PER_PERSON_PER_DAY must be between 1 and 100")
+	}
 
 	cfg := Config{
 		AppEnv:                   appEnv,
@@ -241,6 +259,8 @@ func FromEnvironment() (Config, error) {
 			TriggerShardIndex: triggerShardIndex,
 			TriggerShardCount: triggerShardCount,
 			RuntimeAPIKey:     strings.TrimSpace(os.Getenv("AGENT_RUNTIME_API_KEY")),
+			QuietStartMinute:  quietStart, QuietEndMinute: quietEnd,
+			RemindersPerPersonPerDay: int(remindersPerDay),
 		},
 	}
 
@@ -662,4 +682,24 @@ func uintValueOrDefault(key string, fallback uint64, bitSize int) (uint64, error
 		return 0, fmt.Errorf("%s must be an unsigned integer", key)
 	}
 	return parsed, nil
+}
+
+// quietHours parses "HH:MM-HH:MM" or "off" into minutes after midnight.
+func quietHours(value string) (int, int, error) {
+	if strings.EqualFold(value, "off") {
+		return 0, 0, nil
+	}
+	parts := strings.Split(value, "-")
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("AGENT_QUIET_HOURS must look like 21:00-08:00 or be off")
+	}
+	minutes := [2]int{}
+	for index, part := range parts {
+		parsed, err := time.Parse("15:04", strings.TrimSpace(part))
+		if err != nil {
+			return 0, 0, fmt.Errorf("AGENT_QUIET_HOURS must look like 21:00-08:00 or be off")
+		}
+		minutes[index] = parsed.Hour()*60 + parsed.Minute()
+	}
+	return minutes[0], minutes[1], nil
 }

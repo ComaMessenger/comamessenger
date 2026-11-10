@@ -608,7 +608,7 @@ func (s *Service) Forward(ctx context.Context, user identity.User, sourceMessage
 			(id, org_id, chat_id, actor_id, client_msg_id, create_fingerprint, body, body_format, created_seq, forwarded_from)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
 		RETURNING id, chat_id, actor_id, client_msg_id, type, body, body_format, reply_to_id,
-			thread_root_id, version, created_seq, created_at, edited_at, deleted_at, forwarded_from, mentioned_actor_ids`,
+			thread_root_id, version, created_seq, created_at, edited_at, deleted_at, forwarded_from, mentioned_actor_ids, blocks`,
 		messageID, user.OrgID, input.ChatID, user.ActorID, input.ClientMsgID, fingerprint[:], source.Body,
 		source.BodyFormat, seq, string(attributionJSON)), &result)
 	if err != nil {
@@ -631,7 +631,7 @@ func autoFollowThread(ctx context.Context, tx pgx.Tx, user identity.User, rootID
 	var root Message
 	err := scanMessage(tx.QueryRow(ctx, `
 		SELECT id, chat_id, actor_id, client_msg_id, type, body, body_format, reply_to_id, thread_root_id,
-			version, created_seq, created_at, edited_at, deleted_at, forwarded_from, mentioned_actor_ids
+			version, created_seq, created_at, edited_at, deleted_at, forwarded_from, mentioned_actor_ids, blocks
 		FROM messages WHERE org_id = $1 AND id = $2`, user.OrgID, rootID), &root)
 	if err != nil {
 		return 0, fmt.Errorf("load thread root for auto-follow: %w", err)

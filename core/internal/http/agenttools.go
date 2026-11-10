@@ -8,6 +8,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/agenttool"
 	"github.com/comamessenger/comamessenger/core/internal/chat"
 	"github.com/comamessenger/comamessenger/core/internal/files"
+	"github.com/comamessenger/comamessenger/core/internal/interactive"
 	"github.com/comamessenger/comamessenger/core/internal/message"
 	"github.com/go-chi/chi/v5"
 )
@@ -75,9 +76,9 @@ func (h *identityHandlers) decideAgentToolConfirmation(w standardhttp.ResponseWr
 
 func (h *identityHandlers) writeAgentToolError(w standardhttp.ResponseWriter, r *standardhttp.Request, err error) {
 	switch {
-	case errors.Is(err, agenttool.ErrInvalid), errors.Is(err, message.ErrInvalid), errors.Is(err, files.ErrInvalid):
+	case errors.Is(err, agenttool.ErrInvalid), errors.Is(err, message.ErrInvalid), errors.Is(err, files.ErrInvalid), errors.Is(err, interactive.ErrInvalid), errors.Is(err, interactive.ErrLimit):
 		h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "validation_failed", err.Error())
-	case errors.Is(err, agenttool.ErrForbidden), errors.Is(err, message.ErrForbidden), errors.Is(err, files.ErrForbidden), errors.Is(err, chat.ErrForbidden):
+	case errors.Is(err, agenttool.ErrForbidden), errors.Is(err, message.ErrForbidden), errors.Is(err, files.ErrForbidden), errors.Is(err, chat.ErrForbidden), errors.Is(err, interactive.ErrForbidden):
 		h.writeError(w, r, standardhttp.StatusForbidden, "forbidden", "The agent tool call is not allowed.")
 	case errors.Is(err, agenttool.ErrConfirmationNotFound):
 		h.writeError(w, r, standardhttp.StatusNotFound, "agent_confirmation_not_found", "The requested confirmation was not found.")
@@ -85,7 +86,7 @@ func (h *identityHandlers) writeAgentToolError(w standardhttp.ResponseWriter, r 
 		h.writeError(w, r, standardhttp.StatusConflict, "agent_confirmation_conflict", "The confirmation was already decided, expired, or does not match the original call.")
 	case errors.Is(err, message.ErrIdempotencyConflict), errors.Is(err, message.ErrVersionConflict):
 		h.writeError(w, r, standardhttp.StatusConflict, "message_conflict", "The agent run has already published a different final message.")
-	case errors.Is(err, message.ErrNotFound), errors.Is(err, files.ErrNotFound), errors.Is(err, chat.ErrNotFound):
+	case errors.Is(err, message.ErrNotFound), errors.Is(err, files.ErrNotFound), errors.Is(err, chat.ErrNotFound), errors.Is(err, interactive.ErrNotFound):
 		h.writeError(w, r, standardhttp.StatusNotFound, "message_not_found", "The requested tool resource was not found.")
 	case errors.Is(err, agenttool.ErrOutputTooLarge):
 		h.writeError(w, r, standardhttp.StatusBadGateway, "payload_too_large", "The agent tool output exceeded its limit.")
