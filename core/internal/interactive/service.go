@@ -29,6 +29,9 @@ var (
 	ErrNotFound  = errors.New("interactive object not found")
 	ErrForbidden = errors.New("interactive request forbidden")
 	ErrLimit     = errors.New("interactive limit reached")
+	// ErrQuietHours refuses a private delivery during the recipient's quiet
+	// hours; it is a limit, and its message says when the window ends.
+	ErrQuietHours = fmt.Errorf("%w: the person is in quiet hours", ErrLimit)
 )
 
 // Limits are server-side guard rails against agents that nag people. They are
@@ -42,14 +45,19 @@ type Limits struct {
 	// MaxRemindersPerPersonPerDay caps reminders one person receives from all
 	// agents in a rolling 24 hours.
 	MaxRemindersPerPersonPerDay int
-	// MaxDirectMessagesPerPersonPerDay caps send_direct_message deliveries to
-	// one person from one agent in a rolling 24 hours.
+	// MaxDirectMessagesPerPersonPerDay caps private deliveries (messages,
+	// cards, card edits, direct reminders) to one person from one agent in a
+	// rolling 24 hours.
 	MaxDirectMessagesPerPersonPerDay int
-	MaxOpenCollectionsPerAgent       int
-	MaxPendingFollowupsPerAgent      int
-	MaxFollowupDelay                 time.Duration
-	MinFollowupDelay                 time.Duration
-	MaxCollectionDuration            time.Duration
+	// MaxAgentDirectPerPersonPerDay caps private deliveries (direct messages,
+	// direct cards and their edits, direct reminders) one person receives
+	// from all agents together in a rolling 24 hours.
+	MaxAgentDirectPerPersonPerDay int
+	MaxOpenCollectionsPerAgent    int
+	MaxPendingFollowupsPerAgent   int
+	MaxFollowupDelay              time.Duration
+	MinFollowupDelay              time.Duration
+	MaxCollectionDuration         time.Duration
 }
 
 func DefaultLimits() Limits {
@@ -58,6 +66,7 @@ func DefaultLimits() Limits {
 		QuietEndMinute:                   8 * 60,
 		MaxRemindersPerPersonPerDay:      6,
 		MaxDirectMessagesPerPersonPerDay: 10,
+		MaxAgentDirectPerPersonPerDay:    15,
 		MaxOpenCollectionsPerAgent:       20,
 		MaxPendingFollowupsPerAgent:      50,
 		MaxFollowupDelay:                 30 * 24 * time.Hour,

@@ -307,8 +307,8 @@ var (
 var recipeCatalog = []recipeSpec{
 	{
 		id: "control", icon: "list-checks",
-		scopes: []Scope{ScopeRuntimeExecute, ScopeMessagesRead, ScopeMembersRead, ScopeMessagesInteractive},
-		tools:  []string{"get_thread", "get_chat_messages", "get_reactions", "list_members", "start_collection", "get_collection", "post_card", "update_card"},
+		scopes: []Scope{ScopeRuntimeExecute, ScopeMessagesRead, ScopeMembersRead, ScopeMessagesInteractive, ScopeDirectCards},
+		tools:  []string{"get_thread", "get_chat_messages", "get_reactions", "list_members", "start_collection", "get_collection", "send_direct_card", "update_card"},
 		name:   both("Контроль", "Follow-up"),
 		summary: both("Следит, чтобы все отметились под важным сообщением, и напоминает тем, кто молчит.",
 			"Makes sure everyone acknowledges an important message and reminds those who stay silent."),
@@ -322,7 +322,7 @@ var recipeCatalog = []recipeSpec{
 Когда тебя упомянули (input.trigger_type=mention):
 1. Целевое сообщение — корень треда (input.thread_root_id), если просьба написана в треде; иначе последнее сообщение автора просьбы перед ней. Автор просьбы — input.actor_id.
 2. Срок возьми из просьбы («до пятницы») относительно текущего времени и часового пояса автора (input.actor_timezone). Нет срока — {{deadline}}. Отметка — реакция; если в сообщении названа конкретная (например ✅), считай только её.
-3. Отчёт видит только автор: post_card с direct_actor_id = автор просьбы, заголовок — суть сообщения, статус «Отметились N из M» (get_reactions), в items — кто не отметился (имена из list_members).
+3. Отчёт видит только автор: send_direct_card с actor_id = автор просьбы, заголовок — суть сообщения, статус «Отметились N из M» (get_reactions), в items — кто не отметился (имена из list_members).
 4. start_collection: message_id целевого сообщения, response=reaction, expect_all_members=true, срок, reminder_channel=direct, напоминания {{remind}} (remind_every_seconds=86400, max_reminders=2), короткий вежливый reminder_text, report_chat_id = chat_id карточки, note = "card:<id карточки>".
 5. update_card: добавь кнопку с id "refresh.<collection_id>" и подписью «Обновить».
 6. В чат ответь одной фразой: за каким сообщением следишь, до какого срока и что напомнишь в личных сообщениях. Имён в общем чате не называй.
@@ -336,7 +336,7 @@ var recipeCatalog = []recipeSpec{
 When you are mentioned (input.trigger_type=mention):
 1. The target message is the thread root (input.thread_root_id) when the request is in a thread; otherwise the requester's last message before the request. The requester is input.actor_id.
 2. Take the deadline from the request ("by Friday") relative to the current time and the requester's timezone (input.actor_timezone). No deadline: {{deadline}}. An acknowledgement is a reaction; if the message names one (for example ✅), count only that one.
-3. Only the requester sees the report: post_card with direct_actor_id = the requester, the gist of the message as title, status "N of M acknowledged" (get_reactions), and items listing who has not acknowledged (names from list_members).
+3. Only the requester sees the report: send_direct_card with actor_id = the requester, the gist of the message as title, status "N of M acknowledged" (get_reactions), and items listing who has not acknowledged (names from list_members).
 4. start_collection: the target message_id, response=reaction, expect_all_members=true, the deadline, reminder_channel=direct, reminders {{remind}} (remind_every_seconds=86400, max_reminders=2), a short polite reminder_text, report_chat_id = the card's chat_id, note = "card:<card id>".
 5. update_card: add a button with id "refresh.<collection_id>" labelled "Refresh".
 6. Reply in the chat with one sentence: which message you follow, the deadline and that you will remind people privately. Do not name people in the shared chat.
@@ -410,8 +410,8 @@ The server sends reminders within quiet hours and per-person limits; never messa
 	},
 	{
 		id: "onboarding", icon: "user-round-plus",
-		scopes: []Scope{ScopeRuntimeExecute, ScopeMessagesRead, ScopeKnowledgeRead, ScopeMembersRead, ScopeMessagesInteractive, ScopeFollowupsWrite},
-		tools:  []string{"search_knowledge", "list_members", "post_card", "update_card", "schedule_followup"},
+		scopes: []Scope{ScopeRuntimeExecute, ScopeMessagesRead, ScopeKnowledgeRead, ScopeMembersRead, ScopeMessagesInteractive, ScopeFollowupsWrite, ScopeDirectCards},
+		tools:  []string{"search_knowledge", "list_members", "post_card", "update_card", "schedule_followup", "send_direct_card"},
 		name:   both("Наставник", "Mentor"),
 		summary: both("Встречает новичка, ведёт по чек-листу первой недели и отвечает на вопросы по базе знаний.",
 			"Welcomes a newcomer, walks them through a first-week checklist and answers questions from the knowledge base."),
@@ -431,7 +431,7 @@ The server sends reminders within quiet hours and per-person limits; never messa
 
 Нажали кнопку (input.trigger_type=message_action, нажимать может только новичок): отметь пункт в items как done, обнови статус «K из N» через update_card. Все пункты выполнены — поздравь одной фразой.
 
-Продолжение (input.trigger_type=followup): если есть невыполненные пункты — post_card с direct_actor_id = новичок: «Осталось: …» и подскажи, к кому обратиться (из базы знаний). Запланируй следующее напоминание, пока не прошла неделя. Всё выполнено — ничего не отправляй, кроме короткой отметки.
+Продолжение (input.trigger_type=followup): если есть невыполненные пункты — send_direct_card с actor_id = новичок: «Осталось: …» и подскажи, к кому обратиться (из базы знаний). Ответ quiet_hours — перенеси напоминание на конец тихих часов. Запланируй следующее напоминание, пока не прошла неделя. Всё выполнено — ничего не отправляй, кроме короткой отметки.
 
 Вопросы новичка (упоминание): отвечай только по базе знаний (search_knowledge) с источником. Нет ответа — скажи честно и предложи спросить администратора. Не придумывай правил.`,
 			`You are "Mentor". You help new staff settle in during their first week.
@@ -443,7 +443,7 @@ A new member joined the chat (input.trigger_type=event, event_type=member.joined
 
 A button pressed (input.trigger_type=message_action, only the newcomer can press): mark the item done, update the status "K of N" with update_card. All items done: congratulate in one sentence.
 
-Follow-up (input.trigger_type=followup): if items are still open, post_card with direct_actor_id = the newcomer: "Still to do: …" and who to ask (from the knowledge base). Schedule the next reminder until the week is over. Everything done: send nothing but a short note.
+Follow-up (input.trigger_type=followup): if items are still open, send_direct_card with actor_id = the newcomer: "Still to do: …" and who to ask (from the knowledge base). On quiet_hours, move the reminder to the end of the quiet hours. Schedule the next reminder until the week is over. Everything done: send nothing but a short note.
 
 Newcomer questions (mentions): answer only from the knowledge base (search_knowledge) with a source. No answer: say so and suggest asking an administrator. Never invent rules.`),
 		triggers: []localizedTrigger{
@@ -591,8 +591,8 @@ No next slot: ask nothing. Never fill in what people did not say.`),
 	},
 	{
 		id: "summarizer", icon: "inbox",
-		scopes: []Scope{ScopeRuntimeExecute, ScopeMessagesRead, ScopeSearchRead, ScopeMessagesInteractive},
-		tools:  []string{"get_chat_messages", "get_thread", "search_messages", "post_card"},
+		scopes: []Scope{ScopeRuntimeExecute, ScopeMessagesRead, ScopeSearchRead, ScopeDirectCards},
+		tools:  []string{"get_chat_messages", "get_thread", "search_messages", "send_direct_card"},
 		name:   both("Что я пропустил", "What did I miss"),
 		summary: both("По личной просьбе собирает сводку по чатам за время отсутствия со ссылками на сообщения.",
 			"On a personal request, summarizes the chats for the time someone was away, with links to messages."),
@@ -605,7 +605,7 @@ No next slot: ask nothing. Never fill in what people did not say.`),
 1. Кто просит — input.actor_id. Период возьми из просьбы («3 дня», «с понедельника») относительно текущего времени. Не указан — {{period}}.
 2. Прочитай сообщения каждого своего чата за период (get_chat_messages, при необходимости get_thread; search_messages — чтобы найти упоминания человека).
 3. Отбери главное: решения, изменения в расписании и порядках, вопросы и просьбы к этому человеку, упоминания его. Болтовню пропусти.
-4. Отправь только ему: post_card с direct_actor_id = автор просьбы. Заголовок «Пока вас не было: <период>», в items — 3–10 пунктов по чатам, в sources — сообщения, на которые опираешься (kind=message, message_id), чтобы по ним можно было перейти.
+4. Отправь только ему: send_direct_card с actor_id = автор просьбы. Заголовок «Пока вас не было: <период>», в items — 3–10 пунктов по чатам, в sources — сообщения, на которые опираешься (kind=message, message_id), чтобы по ним можно было перейти.
 5. В чат, где попросили, ответь одной фразой: «Отправил сводку в личные сообщения». Содержание сводки в общий чат не пиши.
 
 Пиши только то, что есть в сообщениях. Нет ничего важного — так и скажи. Сводка охватывает только чаты, где ты состоишь; скажи об этом, если человек спрашивает про другие.`,
@@ -614,7 +614,7 @@ No next slot: ask nothing. Never fill in what people did not say.`),
 1. The requester is input.actor_id. Take the period from the request ("3 days", "since Monday") relative to the current time. Not given: {{period}}.
 2. Read each of your chats for the period (get_chat_messages, get_thread when needed; search_messages to find mentions of the person).
 3. Keep what matters: decisions, changes to the schedule and procedures, questions and requests for this person, mentions of them. Skip small talk.
-4. Send it to them only: post_card with direct_actor_id = the requester. Title "While you were away: <period>", items with 3–10 points by chat, and sources listing the messages you rely on (kind=message, message_id) so they can open them.
+4. Send it to them only: send_direct_card with actor_id = the requester. Title "While you were away: <period>", items with 3–10 points by chat, and sources listing the messages you rely on (kind=message, message_id) so they can open them.
 5. In the chat where they asked, reply with one sentence: "I sent the summary to your direct messages." Never put the summary into the shared chat.
 
 Write only what the messages say. Nothing important: say so. The summary covers only chats you are a member of; say so if the person asks about others.`),

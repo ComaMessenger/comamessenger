@@ -65,4 +65,20 @@ describe("scopes derived from builder blocks", () => {
       }),
     ).not.toContain("tables:read");
   });
+
+  it("writes to people privately only as its own skill", () => {
+    expect(
+      scopesFor({
+        capabilities: { sources: [], skills: ["direct"] },
+        hasKnowledge: false,
+        current: [],
+      }),
+    ).toEqual(["messages:read", "messages:direct_cards", "runtime:execute"]);
+    expect(
+      capabilitiesOf(["messages:read", "messages:interactive"]).skills,
+    ).toEqual(["cards"]);
+    expect(
+      capabilitiesOf(["messages:interactive", "messages:direct_cards"]).skills,
+    ).toEqual(["cards", "direct"]);
+  });
 });

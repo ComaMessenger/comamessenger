@@ -716,6 +716,8 @@ func classifyError(err error) string {
 		return "not_found"
 	case errors.Is(err, message.ErrForbidden), errors.Is(err, files.ErrForbidden), errors.Is(err, chat.ErrForbidden), errors.Is(err, interactive.ErrForbidden):
 		return "forbidden"
+	case errors.Is(err, interactive.ErrQuietHours):
+		return "quiet_hours"
 	case errors.Is(err, interactive.ErrLimit):
 		return "limit_reached"
 	case errors.Is(err, message.ErrVersionConflict), errors.Is(err, message.ErrIdempotencyConflict):

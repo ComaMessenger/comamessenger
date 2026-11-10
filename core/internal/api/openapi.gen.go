@@ -461,6 +461,7 @@ const (
 	MembersRead         AgentScope = "members:read"
 	MemoryRead          AgentScope = "memory:read"
 	MemoryWrite         AgentScope = "memory:write"
+	MessagesDirectCards AgentScope = "messages:direct_cards"
 	MessagesInteractive AgentScope = "messages:interactive"
 	MessagesRead        AgentScope = "messages:read"
 	MessagesWrite       AgentScope = "messages:write"
@@ -487,6 +488,8 @@ func (e AgentScope) Valid() bool {
 	case MemoryRead:
 		return true
 	case MemoryWrite:
+		return true
+	case MessagesDirectCards:
 		return true
 	case MessagesInteractive:
 		return true
@@ -1580,11 +1583,13 @@ const (
 	ErrorCodeInvitationInvalid          ErrorCode = "invitation_invalid"
 	ErrorCodeKnowledgeConflict          ErrorCode = "knowledge_conflict"
 	ErrorCodeKnowledgeNotFound          ErrorCode = "knowledge_not_found"
+	ErrorCodeLimitReached               ErrorCode = "limit_reached"
 	ErrorCodeMessageNotFound            ErrorCode = "message_not_found"
 	ErrorCodeOriginNotAllowed           ErrorCode = "origin_not_allowed"
 	ErrorCodePasswordChangeRequired     ErrorCode = "password_change_required"
 	ErrorCodePayloadTooLarge            ErrorCode = "payload_too_large"
 	ErrorCodePushUnavailable            ErrorCode = "push_unavailable"
+	ErrorCodeQuietHours                 ErrorCode = "quiet_hours"
 	ErrorCodeRateLimited                ErrorCode = "rate_limited"
 	ErrorCodeReauthenticationFailed     ErrorCode = "reauthentication_failed"
 	ErrorCodeServiceNotReady            ErrorCode = "service_not_ready"
@@ -1654,6 +1659,8 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeKnowledgeNotFound:
 		return true
+	case ErrorCodeLimitReached:
+		return true
 	case ErrorCodeMessageNotFound:
 		return true
 	case ErrorCodeOriginNotAllowed:
@@ -1663,6 +1670,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodePayloadTooLarge:
 		return true
 	case ErrorCodePushUnavailable:
+		return true
+	case ErrorCodeQuietHours:
 		return true
 	case ErrorCodeRateLimited:
 		return true

@@ -55,12 +55,18 @@ const (
 	ScopeFollowupsWrite Scope = "followups:write"
 	// ScopeTablesRead allows filtering spreadsheet rows of bound collections.
 	ScopeTablesRead Scope = "tables:read"
+	// ScopeDirectCards allows send_direct_card: a card to one person in their
+	// direct chat with the agent, within quiet hours and daily caps. It is a
+	// separate skill people grant explicitly; messages:interactive alone
+	// never reaches a person privately.
+	ScopeDirectCards Scope = "messages:direct_cards"
 )
 
 var validScopes = map[Scope]struct{}{
 	ScopeChatsRead: {}, ScopeMessagesRead: {}, ScopeMessagesWrite: {}, ScopeReactionsWrite: {},
 	ScopeFilesRead: {}, ScopeSearchRead: {}, ScopeMembersRead: {}, ScopeMemoryRead: {}, ScopeMemoryWrite: {},
 	ScopeRuntimeExecute: {}, ScopeRuntimeWorker: {}, ScopeKnowledgeRead: {}, ScopeMessagesInteractive: {}, ScopeFollowupsWrite: {}, ScopeTablesRead: {},
+	ScopeDirectCards: {},
 }
 
 // maxDescriptionLength bounds agent instructions; pilot recipes describe a

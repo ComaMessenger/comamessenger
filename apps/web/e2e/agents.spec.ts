@@ -1324,6 +1324,11 @@ test("a pilot role from Core opens a prefilled builder with what is left", async
   await expect(page.getByLabel("Чем занимается")).toHaveValue(
     slots.instructions,
   );
+  // Instructions take as much as Core allows.
+  await expect(page.getByLabel("Чем занимается")).toHaveAttribute(
+    "maxlength",
+    "4000",
+  );
 
   // The check offers the recipe examples with what a good answer does.
   const check = page.locator("#agent-block-check");
@@ -1352,6 +1357,35 @@ test("a pilot role from Core opens a prefilled builder with what is left", async
     animations: "disabled",
     fullPage: true,
   });
+});
+
+test("writing to people privately is a skill a role asks for openly", async ({
+  page,
+}) => {
+  const mock = await mockAgents(page);
+  const missed = recipeCatalog.ru!.find((recipe) => recipe.id === "summarizer")!;
+  expect(missed.scopes).toContain("messages:direct_cards");
+  await page.goto("/agents");
+  await page.locator(".agent-role", { hasText: "Что я пропустил" }).click();
+  const dialog = page.getByRole("dialog", {
+    name: "Новый агент: Что я пропустил",
+  });
+  await dialog.getByLabel("Где будет работать").click();
+  await page.getByRole("option", { name: "Зал 1" }).click();
+  await dialog.getByRole("button", { name: "Создать черновик" }).click();
+  await expect.poll(() => mock.created.length).toBe(1);
+  expect(mock.created[0]!.allowed_scopes).toContain("messages:direct_cards");
+  const skills = page.locator("#agent-block-skills");
+  const direct = skills.locator(".agent-line", {
+    hasText: "Писать людям лично",
+  });
+  await expect(direct.getByRole("switch")).toBeChecked();
+  await expect(
+    skills
+      .locator(".agent-line", { hasText: "Карточки с кнопками и сбор ответов" })
+      .getByRole("switch"),
+  ).not.toBeChecked();
+  await expect(page.getByText("messages:direct_cards")).toHaveCount(0);
 });
 
 test("builder fits a phone and the dark theme", async ({ page }) => {

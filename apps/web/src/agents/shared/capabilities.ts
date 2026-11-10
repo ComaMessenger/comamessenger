@@ -12,7 +12,13 @@ import type { AgentScope } from "@comamessenger/core";
  */
 
 export type KnowledgeSource = "search" | "files" | "members";
-export type Skill = "messages" | "reactions" | "cards" | "followups" | "memory";
+export type Skill =
+  | "messages"
+  | "reactions"
+  | "cards"
+  | "direct"
+  | "followups"
+  | "memory";
 export type SkillMode = "self" | "confirm" | "mixed";
 
 export const knowledgeSources: KnowledgeSource[] = [
@@ -23,6 +29,7 @@ export const knowledgeSources: KnowledgeSource[] = [
 export const skills: Skill[] = [
   "messages",
   "cards",
+  "direct",
   "followups",
   "reactions",
   "memory",
@@ -32,6 +39,8 @@ export const skillMode: Record<Skill, SkillMode> = {
   messages: "mixed",
   reactions: "confirm",
   cards: "self",
+  // Bounded by quiet hours and per-person daily caps on the server.
+  direct: "self",
   followups: "self",
   memory: "mixed",
 };
@@ -46,6 +55,7 @@ const skillScopes: Record<Skill, AgentScope[]> = {
   messages: ["messages:write"],
   reactions: ["reactions:write"],
   cards: ["messages:interactive"],
+  direct: ["messages:direct_cards"],
   followups: ["followups:write"],
   memory: ["memory:read", "memory:write"],
 };
@@ -101,6 +111,7 @@ export const orderedScopes: AgentScope[] = [
   "messages:read",
   "messages:write",
   "messages:interactive",
+  "messages:direct_cards",
   "reactions:write",
   "files:read",
   "search:read",

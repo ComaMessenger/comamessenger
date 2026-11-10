@@ -9,7 +9,7 @@ func TestToolDefinitionsCompileAndRejectUnknownFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tools) != 19 || len(order) != 19 {
+	if len(tools) != 20 || len(order) != 20 {
 		t.Fatalf("tools=%d order=%d", len(tools), len(order))
 	}
 	definition := tools["get_chat_messages"].Definition

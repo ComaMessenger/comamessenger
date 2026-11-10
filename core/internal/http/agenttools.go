@@ -78,7 +78,11 @@ func (h *identityHandlers) decideAgentToolConfirmation(w standardhttp.ResponseWr
 
 func (h *identityHandlers) writeAgentToolError(w standardhttp.ResponseWriter, r *standardhttp.Request, err error) {
 	switch {
-	case errors.Is(err, agenttool.ErrInvalid), errors.Is(err, message.ErrInvalid), errors.Is(err, files.ErrInvalid), errors.Is(err, interactive.ErrInvalid), errors.Is(err, interactive.ErrLimit):
+	case errors.Is(err, interactive.ErrQuietHours):
+		h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "quiet_hours", err.Error())
+	case errors.Is(err, interactive.ErrLimit):
+		h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "limit_reached", err.Error())
+	case errors.Is(err, agenttool.ErrInvalid), errors.Is(err, message.ErrInvalid), errors.Is(err, files.ErrInvalid), errors.Is(err, interactive.ErrInvalid):
 		h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "validation_failed", err.Error())
 	case errors.Is(err, agenttool.ErrForbidden), errors.Is(err, message.ErrForbidden), errors.Is(err, files.ErrForbidden), errors.Is(err, chat.ErrForbidden), errors.Is(err, interactive.ErrForbidden):
 		h.writeError(w, r, standardhttp.StatusForbidden, "forbidden", "The agent tool call is not allowed.")

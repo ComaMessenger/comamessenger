@@ -160,6 +160,9 @@ export const agentExperienceCatalog = defineCatalog(
     agentSkill_cards: "Карточки с кнопками и сбор ответов",
     agentSkillHint_cards:
       "Просит отметиться, ждёт ответов, напоминает тем, кто молчит",
+    agentSkill_direct: "Писать людям лично",
+    agentSkillHint_direct:
+      "Личные отчёты, сводки и напоминания одному человеку: не в тихие часы и не чаще дневного предела",
     agentSkill_followups: "Возвращаться к задаче позже",
     agentSkillHint_followups: "Сам ставит себе напоминание и продолжает в срок",
     agentSkill_reactions: "Ставить реакции",
@@ -626,6 +629,9 @@ export const agentExperienceCatalog = defineCatalog(
     agentSkill_cards: "Cards with buttons and collecting answers",
     agentSkillHint_cards:
       "Asks people to check in, waits for answers, reminds those who are silent",
+    agentSkill_direct: "Write to people privately",
+    agentSkillHint_direct:
+      "Personal reports, summaries and reminders to one person: never in quiet hours, within a daily limit",
     agentSkill_followups: "Come back to a task later",
     agentSkillHint_followups: "Sets itself a reminder and continues on time",
     agentSkill_reactions: "Add reactions",

@@ -552,7 +552,15 @@ func (s *Service) sendReminders(ctx context.Context, tx pgx.Tx, collection Colle
 		messageIDs := map[string]*string{}
 		if collection.ReminderChannel == "direct" {
 			for _, actorID := range eligible {
+				// Direct reminders share the per-person private delivery caps
+				// with direct messages and cards from every agent.
+				release, err := s.ReserveDirectDelivery(ctx, agent, *collection.runID, actorID, "reminder", false)
+				if err != nil {
+					s.logger.Warn("agent reminder over the private delivery limit", "collection_id", collection.ID, "actor_id", actorID, "error", err)
+					continue
+				}
 				sent, err := s.deliverDirect(ctx, agent, *collection.runID, actorID, stableID("reminder", collection.ID, round, actorID), collection.reminderText, "plain", source)
+				release(err, sent.ID)
 				if err != nil {
 					s.logger.Warn("agent reminder delivery failed", "collection_id", collection.ID, "actor_id", actorID, "error", err)
 					continue
@@ -603,68 +611,140 @@ type DirectMessageInput struct {
 }
 
 // SendDirectMessage delivers an agent message to one person in their direct
-// chat with the agent. The person must already share a chat with the agent,
-// and the per-person daily cap applies.
+// chat with the agent, under the rules of ReserveDirectDelivery.
 func (s *Service) SendDirectMessage(ctx context.Context, agent identity.User, runID string, input DirectMessageInput) (message.Message, error) {
-	if err := s.checkDirectRecipient(ctx, agent, input.ActorID, input.ClientMsgID, runID); err != nil {
+	if uuid.Validate(input.ClientMsgID) != nil {
+		return message.Message{}, fmt.Errorf("%w: client_msg_id must be a UUID", ErrInvalid)
+	}
+	release, err := s.ReserveDirectDelivery(ctx, agent, runID, input.ActorID, "message", true)
+	if err != nil {
 		return message.Message{}, err
 	}
-	return s.deliverDirect(ctx, agent, runID, input.ActorID, input.ClientMsgID, input.Body, input.BodyFormat, nil)
+	sent, err := s.deliverDirect(ctx, agent, runID, input.ActorID, input.ClientMsgID, input.Body, input.BodyFormat, nil)
+	release(err, sent.ID)
+	return sent, err
 }
 
-// checkDirectRecipient applies the rules of agent direct messages: the person
-// shares a chat with the agent and is under the per-person daily cap.
-func (s *Service) checkDirectRecipient(ctx context.Context, agent identity.User, actorID, clientMsgID, runID string) error {
-	if uuid.Validate(actorID) != nil || uuid.Validate(clientMsgID) != nil || uuid.Validate(runID) != nil {
-		return fmt.Errorf("%w: actor_id, client_msg_id and run_id must be UUIDs", ErrInvalid)
-	}
-	if actorID == agent.ActorID {
-		return fmt.Errorf("%w: an agent cannot message itself", ErrInvalid)
-	}
-	var shared bool
-	var sentToday int
-	err := s.pool.QueryRow(ctx, `SELECT
-		EXISTS(SELECT 1 FROM chat_members mine JOIN chat_members theirs ON theirs.org_id=mine.org_id AND theirs.chat_id=mine.chat_id
-			JOIN chats c ON c.org_id=mine.org_id AND c.id=mine.chat_id AND c.archived_at IS NULL
-			JOIN actors a ON a.org_id=theirs.org_id AND a.id=theirs.actor_id AND a.type='user' AND a.status='active' AND a.deleted_at IS NULL
-			WHERE mine.org_id=$1 AND mine.actor_id=$2 AND theirs.actor_id=$3),
-		(SELECT count(*) FROM messages m JOIN chats c ON c.org_id=m.org_id AND c.id=m.chat_id AND c.kind='direct'
-			WHERE m.org_id=$1 AND m.actor_id=$2 AND m.created_at>$4 AND c.direct_pair_key=$5)`,
-		agent.OrgID, agent.ActorID, actorID, s.now().UTC().Add(-24*time.Hour), pairKey(agent.ActorID, actorID)).Scan(&shared, &sentToday)
-	if err != nil {
-		return err
-	}
-	if !shared {
-		return ErrForbidden
-	}
-	if sentToday >= s.limits.MaxDirectMessagesPerPersonPerDay {
-		return fmt.Errorf("%w: daily direct message limit for this person", ErrLimit)
-	}
-	return nil
-}
-
-// DirectCardInput is a post_card delivered privately to one person.
+// DirectCardInput is the payload of send_direct_card.
 type DirectCardInput struct {
-	ActorID     string
-	ClientMsgID string
-	Body        string
-	BodyFormat  string
-	Blocks      *message.Blocks
+	ActorID     string          `json:"actor_id"`
+	ClientMsgID string          `json:"client_msg_id"`
+	Body        string          `json:"body"`
+	BodyFormat  string          `json:"body_format"`
+	Blocks      *message.Blocks `json:"blocks"`
 }
 
 // SendDirectCard delivers an agent card to one person in their direct chat
-// with the agent: a private report or summary that needs buttons or sources.
-// It follows the rules of SendDirectMessage (a shared chat, the per-person
-// daily cap) and is bounded by them instead of a confirmation, like
-// collection reminders.
+// with the agent: a private report, summary or reminder with buttons or
+// sources, under the rules of ReserveDirectDelivery.
 func (s *Service) SendDirectCard(ctx context.Context, agent identity.User, runID string, input DirectCardInput) (message.Message, error) {
 	if input.Blocks == nil {
 		return message.Message{}, fmt.Errorf("%w: a direct card needs blocks", ErrInvalid)
 	}
-	if err := s.checkDirectRecipient(ctx, agent, input.ActorID, input.ClientMsgID, runID); err != nil {
+	if uuid.Validate(input.ClientMsgID) != nil {
+		return message.Message{}, fmt.Errorf("%w: client_msg_id must be a UUID", ErrInvalid)
+	}
+	release, err := s.ReserveDirectDelivery(ctx, agent, runID, input.ActorID, "card", true)
+	if err != nil {
 		return message.Message{}, err
 	}
-	return s.deliverDirect(ctx, agent, runID, input.ActorID, input.ClientMsgID, input.Body, input.BodyFormat, input.Blocks)
+	sent, err := s.deliverDirect(ctx, agent, runID, input.ActorID, input.ClientMsgID, input.Body, input.BodyFormat, input.Blocks)
+	release(err, sent.ID)
+	return sent, err
+}
+
+// ReserveDirectDelivery admits one private delivery from an agent to a person
+// and records it, or refuses it:
+//   - the person must share a group chat with the agent (a direct chat with
+//     the agent does not count, so leaving every shared chat stops delivery);
+//   - with quiet set, nothing is delivered during the person's quiet hours
+//     unless the person started this run (ErrQuietHours says when they end);
+//   - at most MaxDirectMessagesPerPersonPerDay from this agent and
+//     MaxAgentDirectPerPersonPerDay from all agents in a rolling day,
+//     counting messages, cards, card edits and direct reminders.
+//
+// The returned release must be called with the delivery outcome: a failed
+// delivery gives its place back.
+func (s *Service) ReserveDirectDelivery(ctx context.Context, agent identity.User, runID, actorID, kind string, quiet bool) (func(error, string), error) {
+	if uuid.Validate(actorID) != nil || uuid.Validate(runID) != nil {
+		return nil, fmt.Errorf("%w: actor_id and run_id must be UUIDs", ErrInvalid)
+	}
+	if actorID == agent.ActorID {
+		return nil, fmt.Errorf("%w: an agent cannot message itself", ErrInvalid)
+	}
+	now := s.now().UTC()
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "agent-direct/"+agent.OrgID+"/"+actorID); err != nil {
+		return nil, err
+	}
+	var shared bool
+	var timezone string
+	var requestedBy *string
+	var fromAgent, fromAll int
+	err = tx.QueryRow(ctx, `SELECT
+		EXISTS(SELECT 1 FROM chat_members mine JOIN chat_members theirs ON theirs.org_id=mine.org_id AND theirs.chat_id=mine.chat_id
+			JOIN chats c ON c.org_id=mine.org_id AND c.id=mine.chat_id AND c.archived_at IS NULL AND c.kind<>'direct'
+			WHERE mine.org_id=$1 AND mine.actor_id=$2 AND theirs.actor_id=$3),
+		COALESCE((SELECT timezone FROM actors WHERE org_id=$1 AND id=$3 AND type='user' AND status='active' AND deleted_at IS NULL),''),
+		(SELECT requested_by::text FROM agent_runs WHERE org_id=$1 AND agent_id=$2 AND id=$4),
+		(SELECT count(*) FROM agent_direct_deliveries WHERE org_id=$1 AND agent_id=$2 AND actor_id=$3 AND created_at>$5),
+		(SELECT count(*) FROM agent_direct_deliveries WHERE org_id=$1 AND actor_id=$3 AND created_at>$5)`,
+		agent.OrgID, agent.ActorID, actorID, runID, now.Add(-24*time.Hour)).Scan(&shared, &timezone, &requestedBy, &fromAgent, &fromAll)
+	if err != nil {
+		return nil, err
+	}
+	if !shared || timezone == "" {
+		return nil, ErrForbidden
+	}
+	if quiet && (requestedBy == nil || *requestedBy != actorID) {
+		if inside, ends := s.inQuietHours(now, timezone); inside {
+			return nil, fmt.Errorf("%w until %s", ErrQuietHours, ends.Format(time.RFC3339))
+		}
+	}
+	if fromAgent >= s.limits.MaxDirectMessagesPerPersonPerDay {
+		return nil, fmt.Errorf("%w: daily limit of private messages from this agent to this person", ErrLimit)
+	}
+	if fromAll >= s.limits.MaxAgentDirectPerPersonPerDay {
+		return nil, fmt.Errorf("%w: daily limit of private messages from all agents to this person", ErrLimit)
+	}
+	deliveryID := uuid.Must(uuid.NewV7()).String()
+	if _, err := tx.Exec(ctx, `INSERT INTO agent_direct_deliveries(id,org_id,agent_id,actor_id,kind,created_at) VALUES($1,$2,$3,$4,$5,$6)`,
+		deliveryID, agent.OrgID, agent.ActorID, actorID, kind, now); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return func(outcome error, messageID string) {
+		// A background context: the place is given back even if the
+		// caller's request was canceled.
+		background := context.WithoutCancel(ctx)
+		if outcome != nil {
+			_, _ = s.pool.Exec(background, `DELETE FROM agent_direct_deliveries WHERE id=$1`, deliveryID)
+		} else if uuid.Validate(messageID) == nil {
+			_, _ = s.pool.Exec(background, `UPDATE agent_direct_deliveries SET message_id=$2 WHERE id=$1`, deliveryID, messageID)
+		}
+	}, nil
+}
+
+// DirectRecipient returns the person of a direct chat when the message is in
+// a direct chat between the agent and that person, and "" otherwise.
+func (s *Service) DirectRecipient(ctx context.Context, agent identity.User, messageID string) (string, error) {
+	if uuid.Validate(messageID) != nil {
+		return "", fmt.Errorf("%w: message_id must be a UUID", ErrInvalid)
+	}
+	var recipient *string
+	err := s.pool.QueryRow(ctx, `SELECT (SELECT member.actor_id::text FROM chat_members member WHERE member.org_id=c.org_id AND member.chat_id=c.id AND member.actor_id<>$2 LIMIT 1)
+		FROM messages m JOIN chats c ON c.org_id=m.org_id AND c.id=m.chat_id AND c.kind='direct'
+		WHERE m.org_id=$1 AND m.id=$3`, agent.OrgID, agent.ActorID, messageID).Scan(&recipient)
+	if errors.Is(err, pgx.ErrNoRows) || recipient == nil {
+		return "", nil
+	}
+	return *recipient, err
 }
 
 func pairKey(left, right string) string {

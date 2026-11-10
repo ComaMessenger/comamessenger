@@ -2511,7 +2511,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_conflict" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "integration_in_use" | "integration_usage_changed" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "webhook_not_found" | "webhook_rejected" | "workspace_not_found";
+        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_conflict" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "integration_in_use" | "integration_usage_changed" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "limit_reached" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "quiet_hours" | "rate_limited" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "webhook_not_found" | "webhook_rejected" | "workspace_not_found";
         File: {
             /** Format: uuid */
             id: string;
@@ -3093,7 +3093,7 @@ export interface components {
             expectations: string[];
         };
         /** @enum {string} */
-        AgentScope: "chats:read" | "messages:read" | "messages:write" | "reactions:write" | "files:read" | "search:read" | "members:read" | "memory:read" | "memory:write" | "runtime:execute" | "runtime:worker" | "knowledge:read" | "messages:interactive" | "followups:write" | "tables:read";
+        AgentScope: "chats:read" | "messages:read" | "messages:write" | "reactions:write" | "files:read" | "search:read" | "members:read" | "memory:read" | "memory:write" | "runtime:execute" | "runtime:worker" | "knowledge:read" | "messages:interactive" | "followups:write" | "tables:read" | "messages:direct_cards";
         Agent: {
             /** Format: uuid */
             id: string;

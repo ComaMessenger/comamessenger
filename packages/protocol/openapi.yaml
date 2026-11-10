@@ -3679,11 +3679,13 @@ components:
         - invitation_invalid
         - knowledge_conflict
         - knowledge_not_found
+        - limit_reached
         - message_not_found
         - origin_not_allowed
         - payload_too_large
         - password_change_required
         - push_unavailable
+        - quiet_hours
         - rate_limited
         - service_not_ready
         - session_not_found
@@ -4376,6 +4378,7 @@ components:
           messages:interactive,
           followups:write,
           tables:read,
+          messages:direct_cards,
         ]
     Agent:
       type: object
