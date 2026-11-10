@@ -87,12 +87,43 @@ func (h *identityHandlers) getActorAvatar(w standardhttp.ResponseWriter, r *stan
 		h.fileError(w, r, err)
 		return
 	}
+	h.serveAvatar(w, r, result, "/api/v1/actors/"+url.PathEscape(chi.URLParam(r, "actorID"))+"/avatar")
+}
+
+func (h *identityHandlers) putChatAvatar(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.files.PutChatAvatar(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "chatID"), r.Header.Get("Content-Type"), r.Body)
+	if err != nil {
+		h.fileError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) deleteChatAvatar(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.files.DeleteChatAvatar(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "chatID"))
+	if err != nil {
+		h.fileError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) getChatAvatar(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.files.ChatAvatar(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "chatID"))
+	if err != nil {
+		h.fileError(w, r, err)
+		return
+	}
+	h.serveAvatar(w, r, result, "/api/v1/chats/"+url.PathEscape(chi.URLParam(r, "chatID"))+"/avatar")
+}
+
+func (h *identityHandlers) serveAvatar(w standardhttp.ResponseWriter, r *standardhttp.Request, result files.Download, localPath string) {
 	if r.URL.Query().Get("delivery") == "link" {
 		var reader io.Closer
 		if result.Reader != nil {
 			reader = result.Reader
 		}
-		h.writeObjectLink(w, result.URL, reader, "/api/v1/actors/"+url.PathEscape(chi.URLParam(r, "actorID"))+"/avatar")
+		h.writeObjectLink(w, result.URL, reader, localPath)
 		return
 	}
 	if result.Reader == nil {

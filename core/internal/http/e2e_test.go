@@ -696,6 +696,43 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 		t.Fatalf("local avatar link = %+v", avatarLink)
 	}
 
+	chatAvatarURL := baseURL + "/api/v1/chats/" + group.ID + "/avatar"
+	e2eBinaryRequest(t, server.Client(), standardhttp.MethodPut, chatAvatarURL, member.AccessToken, "image/png", avatarBuffer.Bytes(), standardhttp.StatusForbidden)
+	e2eBinaryRequest(t, server.Client(), standardhttp.MethodPut, chatAvatarURL, owner.AccessToken, "image/svg+xml", []byte(`<svg xmlns="http://www.w3.org/2000/svg"/>`), standardhttp.StatusUnprocessableEntity)
+	e2eBinaryRequest(t, server.Client(), standardhttp.MethodGet, chatAvatarURL, member.AccessToken, "", nil, standardhttp.StatusNotFound)
+	e2eBinaryRequest(t, server.Client(), standardhttp.MethodPut, chatAvatarURL, owner.AccessToken, "image/png", avatarBuffer.Bytes(), standardhttp.StatusOK)
+	ownerChatAvatar := e2eEvent(t, ownerSocket)
+	memberChatAvatar := e2eEvent(t, memberSocket)
+	if ownerChatAvatar.Type != "chat.updated" || memberChatAvatar.Type != "chat.updated" || memberChatAvatar.ChatID == nil || *memberChatAvatar.ChatID != group.ID {
+		t.Fatalf("chat avatar events owner=%+v member=%+v", ownerChatAvatar, memberChatAvatar)
+	}
+	e2eAck(t, ownerSocket, ownerChatAvatar.Seq)
+	e2eAck(t, memberSocket, memberChatAvatar.Seq)
+	var groupWithAvatar chat.Chat
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/chats/"+group.ID, member.AccessToken, nil, standardhttp.StatusOK, &groupWithAvatar)
+	if groupWithAvatar.AvatarVersion != 1 {
+		t.Fatalf("chat avatar version = %d", groupWithAvatar.AvatarVersion)
+	}
+	e2eBinaryRequest(t, server.Client(), standardhttp.MethodGet, chatAvatarURL, member.AccessToken, "", nil, standardhttp.StatusOK)
+	var chatAvatarLink objectLink
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, chatAvatarURL+"?delivery=link", member.AccessToken, nil, standardhttp.StatusOK, &chatAvatarLink)
+	if !chatAvatarLink.Authenticated || chatAvatarLink.URL != "/api/v1/chats/"+group.ID+"/avatar" {
+		t.Fatalf("local chat avatar link = %+v", chatAvatarLink)
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodDelete, chatAvatarURL, owner.AccessToken, nil, standardhttp.StatusOK, nil)
+	ownerChatAvatar = e2eEvent(t, ownerSocket)
+	memberChatAvatar = e2eEvent(t, memberSocket)
+	if ownerChatAvatar.Type != "chat.updated" || memberChatAvatar.Type != "chat.updated" {
+		t.Fatalf("chat avatar removal events owner=%+v member=%+v", ownerChatAvatar, memberChatAvatar)
+	}
+	e2eAck(t, ownerSocket, ownerChatAvatar.Seq)
+	e2eAck(t, memberSocket, memberChatAvatar.Seq)
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/chats/"+group.ID, member.AccessToken, nil, standardhttp.StatusOK, &groupWithAvatar)
+	if groupWithAvatar.AvatarVersion != 0 {
+		t.Fatalf("chat avatar version after removal = %d", groupWithAvatar.AvatarVersion)
+	}
+	e2eBinaryRequest(t, server.Client(), standardhttp.MethodGet, chatAvatarURL, member.AccessToken, "", nil, standardhttp.StatusNotFound)
+
 	fileBody := []byte("phasefourtoken searchable attachment")
 	var upload files.Upload
 	e2eRequest(t, server.Client(), standardhttp.MethodPost, baseURL+"/api/v1/files/uploads", owner.AccessToken, map[string]any{
