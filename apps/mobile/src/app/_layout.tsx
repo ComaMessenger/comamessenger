@@ -1,7 +1,7 @@
 import "@/lib/polyfills";
 import "@/i18n";
 import "@/push/background";
-import { useEffect } from "react";
+import { useCallback, useState } from "react";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
@@ -17,6 +17,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { SessionProvider, useSession } from "@/session/SessionProvider";
 import { useTheme } from "@/lib/theme";
+import { AnimatedSplash } from "@/ui/AnimatedSplash";
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -45,12 +46,19 @@ function RootNavigator({ ready }: { ready: boolean }) {
   const { phase } = useSession();
   const theme = useTheme();
   const loading = !ready || phase.kind === "loading";
+  const [splashVisible, setSplashVisible] = useState(true);
+  // The animated overlay takes over from the native splash once it is painted.
+  const hideNativeSplash = useCallback(() => void SplashScreen.hideAsync(), []);
+  const finishSplash = useCallback(() => setSplashVisible(false), []);
 
-  useEffect(() => {
-    if (!loading) void SplashScreen.hideAsync();
-  }, [loading]);
-
-  if (loading) return null;
+  const splash = splashVisible ? (
+    <AnimatedSplash
+      ready={!loading}
+      onShown={hideNativeSplash}
+      onDone={finishSplash}
+    />
+  ) : null;
+  if (loading) return splash;
   return (
     <>
       <StatusBar style="auto" />
@@ -75,6 +83,7 @@ function RootNavigator({ ready }: { ready: boolean }) {
           <Stack.Screen name="server" />
         </Stack.Protected>
       </Stack>
+      {splash}
     </>
   );
 }

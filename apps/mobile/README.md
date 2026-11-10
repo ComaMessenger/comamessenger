@@ -52,6 +52,8 @@ bundle exec fastlane android beta     # Google Play internal testing
 - For the first iOS build, register `group.com.comamessenger.app` as an App Group and assign it to both `com.comamessenger.app` and `com.comamessenger.app.notification-service` in Apple Developer (or Xcode). If the extension's App ID is missing, register it first and enable App Groups. Membership in the App Group also grants shared keychain access; do not repeat its identifier in `keychain-access-groups`.
 - The Android upload keystore lives outside git; `COMA_UPLOAD_*` in `~/.gradle/gradle.properties` point to it. Losing it means asking Google Play support to reset the upload key.
 - Build numbers are taken from the stores and increased by one.
+- `android beta` needs a JDK and the Android SDK. When `JAVA_HOME` or `ANDROID_HOME` is not set, the lane uses the Android Studio defaults on macOS.
+- App icons, splash images and the notification icon are generated from the mascot: `node design/brand/generate.mjs` (run from the repository root). Do not edit the PNG files in `assets/` by hand.
 
 ## End-to-end flows
 
