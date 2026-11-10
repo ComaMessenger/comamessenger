@@ -54,7 +54,7 @@ import {
   type AgentLaunch,
   type AgentTemplate as Template,
   recipeTriggerRequests,
-} from "../agentTemplates";
+} from "../../agents/agentTemplates";
 
 const scopes: AgentScope[] = [
   "chats:read",
