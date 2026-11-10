@@ -61,13 +61,22 @@ func (s *Service) RegisterMobileDevice(ctx context.Context, user identity.User, 
 		return MobileDevice{}, err
 	}
 	var result MobileDevice
+	// A session family is one installed app, so it owns one device row: a new
+	// relay handle replaces the previous one instead of adding a second target
+	// that would receive every notification again.
 	err = s.pool.QueryRow(ctx, `
-		INSERT INTO mobile_push_devices(id,org_id,actor_id,session_family_id,platform,relay_handle,notification_key,app_version,locale)
-		SELECT $1,$2,$3,family_id,$5,$6,$7,$8,$9 FROM sessions WHERE id=$4 AND actor_id=$3 AND revoked_at IS NULL
-		ON CONFLICT(org_id,relay_handle) DO UPDATE SET actor_id=EXCLUDED.actor_id,session_family_id=EXCLUDED.session_family_id,
-		  platform=EXCLUDED.platform,notification_key=EXCLUDED.notification_key,app_version=EXCLUDED.app_version,
-		  locale=EXCLUDED.locale,updated_at=now()
-		RETURNING id,platform,created_at,updated_at`,
+		WITH registered AS (
+			INSERT INTO mobile_push_devices(id,org_id,actor_id,session_family_id,platform,relay_handle,notification_key,app_version,locale)
+			SELECT $1,$2,$3,family_id,$5,$6,$7,$8,$9 FROM sessions WHERE id=$4 AND actor_id=$3 AND revoked_at IS NULL
+			ON CONFLICT(org_id,relay_handle) DO UPDATE SET actor_id=EXCLUDED.actor_id,session_family_id=EXCLUDED.session_family_id,
+			  platform=EXCLUDED.platform,notification_key=EXCLUDED.notification_key,app_version=EXCLUDED.app_version,
+			  locale=EXCLUDED.locale,updated_at=now()
+			RETURNING id,session_family_id,platform,created_at,updated_at
+		), replaced AS (
+			DELETE FROM mobile_push_devices device USING registered
+			WHERE device.org_id=$2 AND device.session_family_id=registered.session_family_id AND device.id<>registered.id
+		)
+		SELECT id,platform,created_at,updated_at FROM registered`,
 		deviceID, user.OrgID, user.ActorID, sessionID, input.Platform, input.RelayHandle, key, input.AppVersion, input.Locale,
 	).Scan(&result.ID, &result.Platform, &result.CreatedAt, &result.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {

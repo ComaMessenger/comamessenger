@@ -44,7 +44,25 @@ async function relayHandle(
  * Registers this phone for push with the relay and the instance. Runs only
  * when the instance sends through the same relay this build was made for.
  */
-export async function registerForPush(
+export function registerForPush(
+  api: MessengerAPI,
+  options: { prompt: boolean },
+): Promise<PushAvailability> {
+  // One registration at a time. Reading the platform token can itself fire the
+  // token listener, and overlapping runs each asked the relay for a new handle
+  // before the first one was saved: one phone ended up as many devices.
+  const running = inFlight.get(api);
+  if (running) return running;
+  const started = register(api, options).finally(() => inFlight.delete(api));
+  inFlight.set(api, started);
+  return started;
+}
+
+const inFlight = new Map<MessengerAPI, Promise<PushAvailability>>();
+/** Platform token each signed-in session has already registered. */
+const registered = new WeakMap<MessengerAPI, string>();
+
+async function register(
   api: MessengerAPI,
   options: { prompt: boolean },
 ): Promise<PushAvailability> {
@@ -64,6 +82,9 @@ export async function registerForPush(
     });
   const platform = Platform.OS === "ios" ? "ios" : "android";
   const token = (await Notifications.getDevicePushTokenAsync()).data as string;
+  // The same token for the same session is already registered; only a rotated
+  // token needs another round trip.
+  if (registered.get(api) === token) return "ready";
   const handle = await relayHandle(platform, token);
   const device = await api.putMobilePushDevice({
     platform,
@@ -78,11 +99,13 @@ export async function registerForPush(
     deviceID: device.id,
     server: api.apiURL,
   });
+  registered.set(api, token);
   return "ready";
 }
 
 /** Stops pushes for this account before signing out; the relay handle stays for reuse. */
 export async function unregisterFromPush(api: MessengerAPI): Promise<void> {
+  registered.delete(api);
   const state = await loadPushState();
   if (!state?.deviceID || state.server !== api.apiURL) return;
   await api.deleteMobilePushDevice(state.deviceID).catch(() => undefined);
