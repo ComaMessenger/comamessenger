@@ -42,15 +42,7 @@ const skillScopes: Record<Skill, AgentScope[]> = {
 };
 
 /** Scopes the builder does not derive and therefore keeps as they are. */
-/*
- * Reading spreadsheets (`query_table`) is its own switch in block «Что знает»
- * and is kept as chosen.
- */
-const preservedScopes: AgentScope[] = [
-  "chats:read",
-  "runtime:worker",
-  "tables:read",
-];
+const preservedScopes: AgentScope[] = ["chats:read", "runtime:worker"];
 
 export type Capabilities = {
   sources: KnowledgeSource[];
@@ -74,10 +66,16 @@ export function capabilitiesOf(scopes: readonly AgentScope[]): Capabilities {
 export function scopesFor({
   capabilities,
   hasKnowledge,
+  hasTables,
   current,
 }: {
   capabilities: Capabilities;
   hasKnowledge: boolean;
+  /**
+   * Spreadsheets of the bound collections are a source (`query_table`).
+   * Omitted keeps the current choice.
+   */
+  hasTables?: boolean;
   current: readonly AgentScope[];
 }): AgentScope[] {
   const result = new Set<AgentScope>(["messages:read", "runtime:execute"]);
@@ -86,6 +84,10 @@ export function scopesFor({
   for (const skill of capabilities.skills)
     skillScopes[skill].forEach((scope) => result.add(scope));
   if (hasKnowledge) result.add("knowledge:read");
+  // Spreadsheets live in knowledge collections: without one there is nothing
+  // to read.
+  if (hasKnowledge && (hasTables ?? current.includes("tables:read")))
+    result.add("tables:read");
   for (const scope of preservedScopes)
     if (current.includes(scope)) result.add(scope);
   return orderedScopes.filter((scope) => result.has(scope));

@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import type {
   Agent,
   AgentLlmConnection,
-  AgentScope,
   Chat,
   MessengerAPI,
 } from "@comamessenger/core";
@@ -114,17 +113,14 @@ export function AgentBuilder({
     });
   }
   function setTables(enabled: boolean, collectionIDs: string[]) {
-    const scopes: AgentScope[] = draft.allowed_scopes.filter(
-      (scope) => scope !== "tables:read" && scope !== "knowledge:read",
-    );
-    if (enabled) scopes.push("tables:read");
     setDraft({
       ...draft,
       knowledge_collection_ids: collectionIDs,
       allowed_scopes: scopesFor({
         capabilities,
         hasKnowledge: collectionIDs.length > 0,
-        current: scopes,
+        hasTables: enabled,
+        current: draft.allowed_scopes,
       }),
     });
   }

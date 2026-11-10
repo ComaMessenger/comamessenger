@@ -70,6 +70,38 @@ const connection = {
   updated_at: "2026-11-01T00:00:00Z",
 };
 
+const webhookID = "00000000-0000-4000-8000-0000000000f1";
+const mcpConnection = {
+  id: "00000000-0000-4000-8000-0000000000f2",
+  name: "accounting",
+  description: "Учётная система центра",
+  endpoint_url: "mcp.example.test",
+  enabled: true,
+  allow_private_network: false,
+  agent_use_allowed: true,
+  writes_require_confirmation: false,
+  assignable_tools: ["get_slots", "assign_instructor"],
+  headers_configured: true,
+  secret_hint: "",
+  timeout_ms: 10000,
+  max_output_bytes: 262144,
+  tools: [
+    { name: "get_slots", description: "Свободные слоты", read_only: true },
+    {
+      name: "assign_instructor",
+      description: "Назначить инструктора на слот",
+      read_only: false,
+    },
+  ],
+  tools_refreshed_at: "2026-11-10T08:00:00Z",
+  health_status: "healthy",
+  last_tested_at: "2026-11-10T08:00:00Z",
+  last_error_code: "",
+  agent_count: 0,
+  created_at: "2026-11-01T00:00:00Z",
+  updated_at: "2026-11-01T00:00:00Z",
+};
+
 const collections = [
   {
     id: "00000000-0000-4000-8000-0000000000d1",
@@ -290,6 +322,7 @@ export type AgentMock = {
   createdTriggers: Array<Record<string, unknown>>;
   invocations: Array<Record<string, unknown>>;
   decisions: string[];
+  workspaceRunQueries: string[];
   runPolls: () => number;
 };
 
@@ -334,6 +367,7 @@ async function mockAgents(
     createdTriggers: [],
     invocations: [],
     decisions: [],
+    workspaceRunQueries: [],
     runPolls: () => polls,
   };
   await page.addInitScript((theme) => {
@@ -373,6 +407,40 @@ async function mockAgents(
     }
     Object.assign(window, { WebSocket: FakeSocket });
   }, options.theme ?? "light");
+
+  const runsOf = (agentID: string) =>
+    agentID === ids.help
+      ? [
+          runOf({
+            id: "00000000-0000-4000-8000-000000000501",
+            agent_id: agentID,
+            chat_id: rules.id,
+            input: { trigger_type: "mention" },
+            created_at: at(9, 12),
+            started_at: at(9, 12),
+            finished_at: at(9, 12),
+          }),
+        ]
+      : agentID === ids.control
+        ? [
+            runOf({
+              id: "00000000-0000-4000-8000-000000000502",
+              agent_id: agentID,
+              chat_id: instructors.id,
+              input: { trigger_type: "followup" },
+              created_at: at(10, 0),
+            }),
+            runOf({
+              id: "00000000-0000-4000-8000-000000000503",
+              agent_id: agentID,
+              chat_id: instructors.id,
+              status: "failed",
+              error_code: "budget_exceeded",
+              input: { trigger_type: "keyword" },
+              created_at: at(8, 30),
+            }),
+          ]
+        : [];
 
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
@@ -426,6 +494,41 @@ async function mockAgents(
     else if (path === "/unread") body = { chats: [], threads: [] };
     else if (path === "/threads") body = { threads: [], next_before_seq: null };
     else if (path === "/agent-connections") body = [connection];
+    else if (path === "/agent-runs" && method === "GET") {
+      state.workspaceRunQueries.push(url.search);
+      body = {
+        runs: agents
+          .flatMap((agent) => runsOf(agent.id))
+          .filter(
+            (run) =>
+              !url.searchParams.get("agent_id") ||
+              run.agent_id === url.searchParams.get("agent_id"),
+          )
+          .sort((left, right) =>
+            right.created_at.localeCompare(left.created_at),
+          ),
+      };
+    } else if (path === "/integrations/webhooks")
+      body = [
+        {
+          id: webhookID,
+          name: "Учётная система",
+          description: "",
+          enabled: true,
+          secret_hint: "",
+          rate_limit_per_minute: 60,
+          max_body_bytes: 65536,
+          last_received_at: null,
+          rejected_count: 0,
+          last_rejected_at: null,
+          last_rejected_code: "",
+          trigger_count: 0,
+          created_by: owner.id,
+          created_at: "2026-11-09T08:00:00Z",
+          updated_at: "2026-11-09T08:00:00Z",
+        },
+      ];
+    else if (path === "/integrations/mcp-connections") body = [mcpConnection];
     else if (path === "/knowledge/collections")
       body = options.noCollections ? [] : collections;
     else if (/^\/knowledge\/collections\/[^/]+\/documents$/.test(path))
@@ -608,42 +711,7 @@ async function mockAgents(
         triggers.set(agent.id, [...(triggers.get(agent.id) ?? []), created]);
         status = 201;
         body = created;
-      } else if (rest === "/runs")
-        body = {
-          runs:
-            agent.id === ids.help
-              ? [
-                  runOf({
-                    id: "00000000-0000-4000-8000-000000000501",
-                    agent_id: agent.id,
-                    chat_id: rules.id,
-                    input: { trigger_type: "mention" },
-                    created_at: at(9, 12),
-                    started_at: at(9, 12),
-                    finished_at: at(9, 12),
-                  }),
-                ]
-              : agent.id === ids.control
-                ? [
-                    runOf({
-                      id: "00000000-0000-4000-8000-000000000502",
-                      agent_id: agent.id,
-                      chat_id: instructors.id,
-                      input: { trigger_type: "followup" },
-                      created_at: at(10, 0),
-                    }),
-                    runOf({
-                      id: "00000000-0000-4000-8000-000000000503",
-                      agent_id: agent.id,
-                      chat_id: instructors.id,
-                      status: "failed",
-                      error_code: "budget_exceeded",
-                      input: { trigger_type: "keyword" },
-                      created_at: at(8, 30),
-                    }),
-                  ]
-                : [],
-        };
+      } else if (rest === "/runs") body = { runs: runsOf(agent.id) };
       else if (rest === "/invoke") {
         const input = json();
         state.invocations.push(input);
@@ -843,9 +911,7 @@ test("builder blocks derive permissions from plain-language choices", async ({
 
   // 2. What it knows
   const knowledge = page.locator("#agent-block-knowledge");
-  await expect(
-    knowledge.getByText("Сообщения чатов, где он работает"),
-  ).toBeVisible();
+  await expect(knowledge.getByText("Читает чаты")).toBeVisible();
   await knowledge.getByRole("switch", { name: "Поиск по истории" }).click();
   await knowledge
     .getByRole("button", { name: "Добавить из базы знаний" })
@@ -867,18 +933,53 @@ test("builder blocks derive permissions from plain-language choices", async ({
     }),
   ).toHaveAttribute("href", `/knowledge/${collections[0]!.id}`);
 
-  // 3. What it can do: the mode is stated, not a fake switch.
+  // 3. What it can do: each action runs by itself or after approval.
   const skills = page.locator("#agent-block-skills");
-  const cards = skills.locator(".agent-line", {
-    hasText: "Карточки с кнопками и сбор ответов",
+  await skills
+    .locator(".agent-line--skill", {
+      hasText: "Карточки с кнопками и сбор ответов",
+    })
+    .getByRole("switch")
+    .click();
+  const cards = skills.locator(".agent-line--action", {
+    hasText: "Публиковать и обновлять карточки",
   });
-  await expect(cards.getByText("Сам", { exact: true })).toBeVisible();
-  await cards.getByRole("switch").click();
+  await expect(cards.getByRole("radio", { name: "Сам" })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
+  const direct = skills.locator(".agent-line--action", {
+    hasText: "Писать людям в личные сообщения",
+  });
   await expect(
-    skills
-      .locator(".agent-line", { hasText: "Ставить реакции" })
-      .getByText("После подтверждения"),
+    direct.getByRole("radio", { name: "После подтверждения" }),
+  ).toHaveAttribute("aria-checked", "true");
+  await direct.getByRole("radio", { name: "Сам" }).click();
+  await expect(
+    direct.getByText("Сделает это сам, без вашего участия"),
   ).toBeVisible();
+
+  // External systems: only tools the connection releases, with their mode.
+  await skills
+    .getByRole("button", { name: /Подключить внешнюю систему/ })
+    .click();
+  await page.getByRole("option", { name: "accounting" }).click();
+  const assign = skills.locator(".agent-line--action", {
+    hasText: "assign_instructor",
+  });
+  await expect(assign.getByText("изменяет данные")).toBeVisible();
+  await assign
+    .getByRole("switch", { name: "Разрешить «assign_instructor»" })
+    .click();
+  await expect(
+    assign.getByRole("radio", { name: "После подтверждения" }),
+  ).toHaveAttribute("aria-checked", "true");
+  await expect(skills.locator(".agent-external__system")).toHaveScreenshot(
+    "agents-builder-skills.png",
+    {
+      animations: "disabled",
+    },
+  );
 
   // 5. Where it works
   const places = page.locator("#agent-block-places");
@@ -911,9 +1012,25 @@ test("builder blocks derive permissions from plain-language choices", async ({
   await expect(advanced.getByText("knowledge:read")).toBeVisible();
   await expect(advanced.getByText("search:read")).toBeVisible();
 
+  await expect(advanced.getByText("Что получает модель")).toBeVisible();
+
+  await identity.getByRole("button", { name: "Официально" }).click();
   await page.getByRole("button", { name: "Сохранить черновик" }).click();
   await expect(page.getByText("Черновик сохранён")).toBeVisible();
   const saved = mock.patches.at(-1)!.body;
+  expect(saved.tone).toBe("formal");
+  expect(saved.write_chat_ids).toEqual(
+    expect.arrayContaining([hall.id, instructors.id]),
+  );
+  expect(
+    (saved.confirmation_policy as Record<string, string>).send_direct_message,
+  ).toBe("auto");
+  expect(saved.mcp_bindings).toEqual([
+    expect.objectContaining({
+      connection_id: mcpConnection.id,
+      allowed_tools: ["assign_instructor"],
+    }),
+  ]);
   expect(saved.display_name).toBe("Итоги дня");
   expect(saved.chat_ids).toEqual([hall.id, instructors.id]);
   expect(saved.knowledge_collection_ids).toEqual([collections[0]!.id]);
@@ -948,6 +1065,7 @@ test("launch rules read as sentences with subject forms", async ({ page }) => {
     "По расписанию",
     "При событии в чате",
     "На каждое сообщение",
+    "Когда внешняя система сообщает о событии",
     "Только вручную",
   ])
     await expect(block.getByRole("button", { name: type })).toBeVisible();
@@ -982,6 +1100,26 @@ test("launch rules read as sentences with subject forms", async ({ page }) => {
     type: "keyword",
     timezone: "Europe/Moscow",
     config: { pattern: "(итоги|сводка)" },
+  });
+
+  await block.getByRole("button", { name: "Добавить правило" }).click();
+  await block
+    .getByRole("button", { name: "Когда внешняя система сообщает о событии" })
+    .click();
+  await block.getByRole("button", { name: /Вебхук/ }).click();
+  await page.getByRole("option", { name: "Учётная система" }).click();
+  await block.getByLabel("Только события").fill("slot.released");
+  await block.getByRole("button", { name: "Сохранить правило" }).click();
+  await expect(
+    block.getByText("Когда «Учётная система» сообщает о slot.released"),
+  ).toBeVisible();
+  expect(mock.createdTriggers.at(-1)).toMatchObject({
+    type: "webhook",
+    config: {
+      webhook_id: webhookID,
+      chat_id: hall.id,
+      event_types: ["slot.released"],
+    },
   });
 
   await block.getByRole("button", { name: "Добавить правило" }).click();
@@ -1186,6 +1324,9 @@ test("activity shows what agents did next to the approval queue", async ({
   ).toBeVisible();
   const queue = page.locator("#agent-approvals");
   await expect(queue.getByText("Отправить сообщение в «Зал 1»")).toBeVisible();
+  // One paged workspace feed instead of runs read agent by agent.
+  await expect.poll(() => mock.workspaceRunQueries.length).toBeGreaterThan(0);
+  expect(mock.workspaceRunQueries[0]).toContain("limit=40");
   await expect(
     queue
       .locator("blockquote")

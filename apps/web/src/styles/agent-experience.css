@@ -655,6 +655,11 @@
   padding-inline-start: 38px;
   border-block-start-style: dashed;
 }
+.agent-line--action .ui-segmented > button {
+  flex: none;
+  min-width: max-content;
+  padding-inline: 10px;
+}
 .agent-line--action .ui-segmented svg {
   inline-size: 13px;
   block-size: 13px;
