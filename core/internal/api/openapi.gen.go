@@ -316,17 +316,19 @@ func (e AgentRunStatus) Valid() bool {
 
 // Defines values for AgentScope.
 const (
-	ChatsRead      AgentScope = "chats:read"
-	FilesRead      AgentScope = "files:read"
-	MembersRead    AgentScope = "members:read"
-	MemoryRead     AgentScope = "memory:read"
-	MemoryWrite    AgentScope = "memory:write"
-	MessagesRead   AgentScope = "messages:read"
-	MessagesWrite  AgentScope = "messages:write"
-	ReactionsWrite AgentScope = "reactions:write"
-	RuntimeExecute AgentScope = "runtime:execute"
-	RuntimeWorker  AgentScope = "runtime:worker"
-	SearchRead     AgentScope = "search:read"
+	ChatsRead           AgentScope = "chats:read"
+	FilesRead           AgentScope = "files:read"
+	FollowupsWrite      AgentScope = "followups:write"
+	MembersRead         AgentScope = "members:read"
+	MemoryRead          AgentScope = "memory:read"
+	MemoryWrite         AgentScope = "memory:write"
+	MessagesInteractive AgentScope = "messages:interactive"
+	MessagesRead        AgentScope = "messages:read"
+	MessagesWrite       AgentScope = "messages:write"
+	ReactionsWrite      AgentScope = "reactions:write"
+	RuntimeExecute      AgentScope = "runtime:execute"
+	RuntimeWorker       AgentScope = "runtime:worker"
+	SearchRead          AgentScope = "search:read"
 )
 
 // Valid indicates whether the value is a known member of the AgentScope enum.
@@ -336,11 +338,15 @@ func (e AgentScope) Valid() bool {
 		return true
 	case FilesRead:
 		return true
+	case FollowupsWrite:
+		return true
 	case MembersRead:
 		return true
 	case MemoryRead:
 		return true
 	case MemoryWrite:
+		return true
+	case MessagesInteractive:
 		return true
 	case MessagesRead:
 		return true
@@ -1333,6 +1339,8 @@ func (e DurableEventTypeV1) Valid() bool {
 
 // Defines values for ErrorCode.
 const (
+	ErrorCodeActionClosed               ErrorCode = "action_closed"
+	ErrorCodeActionConflict             ErrorCode = "action_conflict"
 	ErrorCodeAgentBudgetExceeded        ErrorCode = "agent_budget_exceeded"
 	ErrorCodeAgentConfigurationNotFound ErrorCode = "agent_configuration_not_found"
 	ErrorCodeAgentConflict              ErrorCode = "agent_conflict"
@@ -1374,6 +1382,10 @@ const (
 // Valid indicates whether the value is a known member of the ErrorCode enum.
 func (e ErrorCode) Valid() bool {
 	switch e {
+	case ErrorCodeActionClosed:
+		return true
+	case ErrorCodeActionConflict:
+		return true
 	case ErrorCodeAgentBudgetExceeded:
 		return true
 	case ErrorCodeAgentConfigurationNotFound:
@@ -1664,6 +1676,189 @@ const (
 func (e MessageType) Valid() bool {
 	switch e {
 	case Text:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageActionBindingDecision.
+const (
+	Approve MessageActionBindingDecision = "approve"
+	Deny    MessageActionBindingDecision = "deny"
+)
+
+// Valid indicates whether the value is a known member of the MessageActionBindingDecision enum.
+func (e MessageActionBindingDecision) Valid() bool {
+	switch e {
+	case Approve:
+		return true
+	case Deny:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageActionBindingKind.
+const (
+	ToolConfirmation MessageActionBindingKind = "tool_confirmation"
+)
+
+// Valid indicates whether the value is a known member of the MessageActionBindingKind enum.
+func (e MessageActionBindingKind) Valid() bool {
+	switch e {
+	case ToolConfirmation:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageActionLimit.
+const (
+	PerActor MessageActionLimit = "per_actor"
+	Single   MessageActionLimit = "single"
+)
+
+// Valid indicates whether the value is a known member of the MessageActionLimit enum.
+func (e MessageActionLimit) Valid() bool {
+	switch e {
+	case PerActor:
+		return true
+	case Single:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageActionStyle.
+const (
+	MessageActionStyleDanger    MessageActionStyle = "danger"
+	MessageActionStylePrimary   MessageActionStyle = "primary"
+	MessageActionStyleSecondary MessageActionStyle = "secondary"
+)
+
+// Valid indicates whether the value is a known member of the MessageActionStyle enum.
+func (e MessageActionStyle) Valid() bool {
+	switch e {
+	case MessageActionStyleDanger:
+		return true
+	case MessageActionStylePrimary:
+		return true
+	case MessageActionStyleSecondary:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageActionAudienceChatRoles.
+const (
+	MessageActionAudienceChatRolesAdmin  MessageActionAudienceChatRoles = "admin"
+	MessageActionAudienceChatRolesMember MessageActionAudienceChatRoles = "member"
+	MessageActionAudienceChatRolesOwner  MessageActionAudienceChatRoles = "owner"
+)
+
+// Valid indicates whether the value is a known member of the MessageActionAudienceChatRoles enum.
+func (e MessageActionAudienceChatRoles) Valid() bool {
+	switch e {
+	case MessageActionAudienceChatRolesAdmin:
+		return true
+	case MessageActionAudienceChatRolesMember:
+		return true
+	case MessageActionAudienceChatRolesOwner:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageActionAudienceOrgRoles.
+const (
+	MessageActionAudienceOrgRolesAdmin  MessageActionAudienceOrgRoles = "admin"
+	MessageActionAudienceOrgRolesMember MessageActionAudienceOrgRoles = "member"
+	MessageActionAudienceOrgRolesOwner  MessageActionAudienceOrgRoles = "owner"
+)
+
+// Valid indicates whether the value is a known member of the MessageActionAudienceOrgRoles enum.
+func (e MessageActionAudienceOrgRoles) Valid() bool {
+	switch e {
+	case MessageActionAudienceOrgRolesAdmin:
+		return true
+	case MessageActionAudienceOrgRolesMember:
+		return true
+	case MessageActionAudienceOrgRolesOwner:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageCardItemsState.
+const (
+	MessageCardItemsStateDone    MessageCardItemsState = "done"
+	MessageCardItemsStateFailed  MessageCardItemsState = "failed"
+	MessageCardItemsStatePending MessageCardItemsState = "pending"
+)
+
+// Valid indicates whether the value is a known member of the MessageCardItemsState enum.
+func (e MessageCardItemsState) Valid() bool {
+	switch e {
+	case MessageCardItemsStateDone:
+		return true
+	case MessageCardItemsStateFailed:
+		return true
+	case MessageCardItemsStatePending:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageCardStatusTone.
+const (
+	MessageCardStatusToneDanger  MessageCardStatusTone = "danger"
+	MessageCardStatusToneInfo    MessageCardStatusTone = "info"
+	MessageCardStatusToneNeutral MessageCardStatusTone = "neutral"
+	MessageCardStatusToneSuccess MessageCardStatusTone = "success"
+	MessageCardStatusToneWarning MessageCardStatusTone = "warning"
+)
+
+// Valid indicates whether the value is a known member of the MessageCardStatusTone enum.
+func (e MessageCardStatusTone) Valid() bool {
+	switch e {
+	case MessageCardStatusToneDanger:
+		return true
+	case MessageCardStatusToneInfo:
+		return true
+	case MessageCardStatusToneNeutral:
+		return true
+	case MessageCardStatusToneSuccess:
+		return true
+	case MessageCardStatusToneWarning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageSourceKind.
+const (
+	MessageSourceKindDocument MessageSourceKind = "document"
+	MessageSourceKindFile     MessageSourceKind = "file"
+	MessageSourceKindMessage  MessageSourceKind = "message"
+)
+
+// Valid indicates whether the value is a known member of the MessageSourceKind enum.
+func (e MessageSourceKind) Valid() bool {
+	switch e {
+	case MessageSourceKindDocument:
+		return true
+	case MessageSourceKindFile:
+		return true
+	case MessageSourceKindMessage:
 		return true
 	default:
 		return false
@@ -3309,8 +3504,11 @@ type AgentScope string
 
 // AgentToolConfirmation defines model for AgentToolConfirmation.
 type AgentToolConfirmation struct {
-	AgentId       openapi_types.UUID          `json:"agent_id"`
-	Arguments     map[string]interface{}      `json:"arguments"`
+	AgentId   openapi_types.UUID     `json:"agent_id"`
+	Arguments map[string]interface{} `json:"arguments"`
+
+	// CardMessageId Chat card mirroring this confirmation in the run's chat, when one was posted.
+	CardMessageId *openapi_types.UUID         `json:"card_message_id,omitempty"`
 	CompletedAt   *time.Time                  `json:"completed_at,omitempty"`
 	CorrelationId openapi_types.UUID          `json:"correlation_id"`
 	DecidedAt     *time.Time                  `json:"decided_at,omitempty"`
@@ -3781,6 +3979,8 @@ type CreateInvitationRequestRole string
 
 // CreateMessageRequest defines model for CreateMessageRequest.
 type CreateMessageRequest struct {
+	// Blocks Agent API keys with messages:interactive only. A blank body is replaced by a generated text fallback.
+	Blocks            *MessageBlocks                  `json:"blocks,omitempty"`
 	Body              string                          `json:"body"`
 	BodyFormat        *CreateMessageRequestBodyFormat `json:"body_format,omitempty"`
 	ClientMsgId       openapi_types.UUID              `json:"client_msg_id"`
@@ -4047,7 +4247,10 @@ type MarkReadRequest struct {
 
 // Message defines model for Message.
 type Message struct {
-	ActorId           openapi_types.UUID   `json:"actor_id"`
+	ActorId openapi_types.UUID `json:"actor_id"`
+
+	// Blocks Optional structured part of an agent message. The body always carries a plain-text fallback; clients that do not support the version render the body. Server-managed state (responses, closed, binding) is part of the document so durable events carry the current card.
+	Blocks            *MessageBlocks       `json:"blocks,omitempty"`
 	Body              string               `json:"body"`
 	BodyFormat        MessageBodyFormat    `json:"body_format"`
 	ChatId            openapi_types.UUID   `json:"chat_id"`
@@ -4074,6 +4277,103 @@ type MessageBodyFormat string
 
 // MessageType defines model for Message.Type.
 type MessageType string
+
+// MessageAction defines model for MessageAction.
+type MessageAction struct {
+	// Allowed Absent audience means any active human chat member. Matching any listed actor, role or permission is enough. The server enforces it.
+	Allowed *MessageActionAudience `json:"allowed,omitempty"`
+
+	// Binding Server-only link to a domain command. tool_confirmation buttons decide an agent tool confirmation and require agents.approve.
+	Binding *struct {
+		ConfirmationId *openapi_types.UUID           `json:"confirmation_id,omitempty"`
+		Decision       *MessageActionBindingDecision `json:"decision,omitempty"`
+		Kind           MessageActionBindingKind      `json:"kind"`
+	} `json:"binding,omitempty"`
+	Closed bool `json:"closed"`
+
+	// Group Actions of one group are a single choice per person.
+	Group *string `json:"group,omitempty"`
+	Id    string  `json:"id"`
+	Label string  `json:"label"`
+
+	// Limit per_actor lets each allowed person press once; single closes the action after the first press.
+	Limit     MessageActionLimit      `json:"limit"`
+	Responses []MessageActionResponse `json:"responses"`
+	Style     MessageActionStyle      `json:"style"`
+}
+
+// MessageActionBindingDecision defines model for MessageAction.Binding.Decision.
+type MessageActionBindingDecision string
+
+// MessageActionBindingKind defines model for MessageAction.Binding.Kind.
+type MessageActionBindingKind string
+
+// MessageActionLimit per_actor lets each allowed person press once; single closes the action after the first press.
+type MessageActionLimit string
+
+// MessageActionStyle defines model for MessageAction.Style.
+type MessageActionStyle string
+
+// MessageActionAudience Absent audience means any active human chat member. Matching any listed actor, role or permission is enough. The server enforces it.
+type MessageActionAudience struct {
+	ActorIds    *[]openapi_types.UUID             `json:"actor_ids,omitempty"`
+	ChatRoles   *[]MessageActionAudienceChatRoles `json:"chat_roles,omitempty"`
+	OrgRoles    *[]MessageActionAudienceOrgRoles  `json:"org_roles,omitempty"`
+	Permissions *[]Permission                     `json:"permissions,omitempty"`
+}
+
+// MessageActionAudienceChatRoles defines model for MessageActionAudience.ChatRoles.
+type MessageActionAudienceChatRoles string
+
+// MessageActionAudienceOrgRoles defines model for MessageActionAudience.OrgRoles.
+type MessageActionAudienceOrgRoles string
+
+// MessageActionResponse defines model for MessageActionResponse.
+type MessageActionResponse struct {
+	ActorId     openapi_types.UUID `json:"actor_id"`
+	RespondedAt time.Time          `json:"responded_at"`
+}
+
+// MessageActionResult defines model for MessageActionResult.
+type MessageActionResult struct {
+	ActionId string                `json:"action_id"`
+	Message  Message               `json:"message"`
+	Replayed bool                  `json:"replayed"`
+	Response MessageActionResponse `json:"response"`
+}
+
+// MessageBlocks Optional structured part of an agent message. The body always carries a plain-text fallback; clients that do not support the version render the body. Server-managed state (responses, closed, binding) is part of the document so durable events carry the current card.
+type MessageBlocks struct {
+	Actions *[]MessageAction `json:"actions,omitempty"`
+	Card    *MessageCard     `json:"card,omitempty"`
+	Sources *[]MessageSource `json:"sources,omitempty"`
+
+	// Version Schema version; this Core writes 1.
+	Version int `json:"version"`
+}
+
+// MessageCard defines model for MessageCard.
+type MessageCard struct {
+	Fields *[]struct {
+		Label string `json:"label"`
+		Value string `json:"value"`
+	} `json:"fields,omitempty"`
+	Items *[]struct {
+		State *MessageCardItemsState `json:"state,omitempty"`
+		Text  string                 `json:"text"`
+	} `json:"items,omitempty"`
+	Status *struct {
+		Label string                `json:"label"`
+		Tone  MessageCardStatusTone `json:"tone"`
+	} `json:"status,omitempty"`
+	Title string `json:"title"`
+}
+
+// MessageCardItemsState defines model for MessageCard.Items.State.
+type MessageCardItemsState string
+
+// MessageCardStatusTone defines model for MessageCard.Status.Tone.
+type MessageCardStatusTone string
 
 // MessagePage defines model for MessagePage.
 type MessagePage struct {
@@ -4114,6 +4414,19 @@ type MessageReceipt struct {
 type MessageReceiptList struct {
 	Receipts []MessageReceipt `json:"receipts"`
 }
+
+// MessageSource defines model for MessageSource.
+type MessageSource struct {
+	DocumentId *openapi_types.UUID `json:"document_id,omitempty"`
+	Excerpt    *string             `json:"excerpt,omitempty"`
+	FileId     *openapi_types.UUID `json:"file_id,omitempty"`
+	Kind       MessageSourceKind   `json:"kind"`
+	MessageId  *openapi_types.UUID `json:"message_id,omitempty"`
+	Title      *string             `json:"title,omitempty"`
+}
+
+// MessageSourceKind defines model for MessageSource.Kind.
+type MessageSourceKind string
 
 // MessageWindow defines model for MessageWindow.
 type MessageWindow struct {
