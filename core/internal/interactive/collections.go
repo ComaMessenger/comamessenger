@@ -385,7 +385,12 @@ func countResponses(ctx context.Context, q querier, collection *Collection) erro
 // ProcessCollections closes finished or expired collections, wakes the agent
 // with the result and sends due reminders.
 func (s *Service) ProcessCollections(ctx context.Context) error {
-	rows, err := s.pool.Query(ctx, `SELECT id FROM agent_collections WHERE status='open' ORDER BY COALESCE(next_reminder_at, deadline_at) LIMIT 200`)
+	// Only collections with something due: a reminder, the deadline, or a
+	// recount of answers at most once a minute.
+	now := s.now().UTC()
+	rows, err := s.pool.Query(ctx, `SELECT id FROM agent_collections WHERE status='open'
+		AND (deadline_at<=$1 OR next_reminder_at<=$1 OR checked_at IS NULL OR checked_at<=$1-interval '1 minute')
+		ORDER BY COALESCE(next_reminder_at, deadline_at) LIMIT 200`, now)
 	if err != nil {
 		return err
 	}
@@ -418,6 +423,9 @@ func (s *Service) processCollection(ctx context.Context, collectionID string) er
 	}
 	collection, err := s.loadCollection(ctx, tx, orgID, collectionID, "")
 	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE agent_collections SET checked_at=$2 WHERE id=$1`, collectionID, now); err != nil {
 		return err
 	}
 	var enabled bool
@@ -502,11 +510,23 @@ func (s *Service) sendReminders(ctx context.Context, tx pgx.Tx, collection Colle
 	if collection.runID == nil || collection.RemindEverySeconds == nil {
 		return nil, nil
 	}
+	// The agent must still be in the chat; otherwise the round cannot be
+	// delivered and retrying it every tick only repeats the failure.
+	if member, err := agentMember(ctx, tx, collection.orgID, collection.AgentID, collection.ChatID); err != nil {
+		return nil, err
+	} else if !member {
+		if _, err := tx.Exec(ctx, `UPDATE agent_collections SET reminders_canceled_at=COALESCE(reminders_canceled_at,now()) WHERE id=$1`, collection.ID); err != nil {
+			return nil, err
+		}
+		return nil, nil
+	}
+	// Only people who are still members of the chat are reminded.
 	rows, err := tx.Query(ctx, `SELECT a.id, a.timezone,
 			(SELECT count(*) FROM agent_reminders r WHERE r.collection_id=$2 AND r.actor_id=a.id),
 			(SELECT count(*) FROM agent_reminders r WHERE r.org_id=a.org_id AND r.actor_id=a.id AND r.sent_at>$4)
-		FROM actors a WHERE a.org_id=$1 AND a.id=ANY($3::uuid[]) AND a.status='active' AND a.deleted_at IS NULL ORDER BY a.id`,
-		collection.orgID, collection.ID, collection.PendingActorIDs, now.Add(-24*time.Hour))
+		FROM actors a JOIN chat_members cm ON cm.org_id=a.org_id AND cm.actor_id=a.id AND cm.chat_id=$5
+		WHERE a.org_id=$1 AND a.id=ANY($3::uuid[]) AND a.status='active' AND a.deleted_at IS NULL ORDER BY a.id`,
+		collection.orgID, collection.ID, collection.PendingActorIDs, now.Add(-24*time.Hour), collection.ChatID)
 	if err != nil {
 		return nil, err
 	}
@@ -572,7 +592,13 @@ func (s *Service) sendReminders(ctx context.Context, tx pgx.Tx, collection Colle
 				ThreadRootID: &root, ReplyToID: &collection.MessageID, MentionedActorIDs: eligible,
 			}, message.AgentProvenance{RunID: *collection.runID})
 			if err != nil {
-				return nil, fmt.Errorf("deliver thread reminder: %w", err)
+				// A failed round is postponed by one interval instead of being
+				// retried every tick until the deadline.
+				s.logger.Warn("agent thread reminder failed", "collection_id", collection.ID, "error", err)
+				if next.After(collection.DeadlineAt) {
+					return nil, nil
+				}
+				return &next, nil
 			}
 			for _, actorID := range eligible {
 				messageIDs[actorID] = &sent.ID
