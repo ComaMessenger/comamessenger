@@ -4,6 +4,9 @@ import { Avatar, Field, TextareaField } from "../../ui";
 import type { Draft } from "../shared/draft";
 import { BuilderBlock } from "./BuilderBlock";
 
+/** Agent instructions limit, as in Core and the API schema. */
+const maxInstructionsLength = 4000;
+
 /** Block 1: the name people see and the task in the agent's own words. */
 export function IdentityBlock({
   agent,
@@ -46,10 +49,10 @@ export function IdentityBlock({
         label={t("agentTask")}
         name="agent-task"
         rows={5}
-        maxLength={2000}
+        maxLength={maxInstructionsLength}
         value={draft.description ?? ""}
         placeholder={t("agentTaskPlaceholder")}
-        hint={t("agentTaskHint", { count: 2000 - length })}
+        hint={t("agentTaskHint", { count: maxInstructionsLength - length })}
         onChange={(event) =>
           onChange({ ...draft, description: event.target.value })
         }
