@@ -7,6 +7,7 @@ import {
   confirmationFields,
   confirmationStatus,
   isConfirmationCard,
+  grantsPermission,
   pressFailure,
   renderableBlocks,
 } from "./blocks";
@@ -228,5 +229,15 @@ describe("chat commands", () => {
     expect(commandQuery("текст /x")).toBeNull();
     expect(matchCommands(commands, "спр").map((item) => item.agentName)).toEqual(["Справка"]);
     expect(matchCommands(commands, "справ").map((item) => item.command)).toEqual(["спросить"]);
+  });
+});
+
+describe("grantsPermission", () => {
+  it("follows owner, explicit and agents.manage grants", () => {
+    expect(grantsPermission("owner", [], "agents.approve")).toBe(true);
+    expect(grantsPermission("admin", [], "agents.approve")).toBe(false);
+    expect(grantsPermission("member", ["agents.approve"], "agents.approve")).toBe(true);
+    expect(grantsPermission("admin", ["agents.manage"], "agents.approve")).toBe(true);
+    expect(grantsPermission("admin", ["agents.manage"], "chats.moderate")).toBe(false);
   });
 });

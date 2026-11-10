@@ -12,6 +12,7 @@ import {
   resolvedMentionActorIDs,
   updateMentionText,
   type ClientMessage,
+  type Message,
   type MessagePage,
 } from "@comamessenger/core";
 import { draftStorage } from "@/lib/database";
@@ -322,6 +323,12 @@ export function useConversation(
     [api, scheduleReload, store],
   );
 
+  /** Applies a message returned by a command (a card press) before its event arrives. */
+  const applyMessage = useCallback(
+    (updated: Message) => store.getState().reconcile(updated),
+    [store],
+  );
+
   const remove = useCallback(
     async (message: ClientMessage) => {
       store.getState().reconcile(await api.deleteMessage(message.id));
@@ -354,6 +361,7 @@ export function useConversation(
 
   return {
     chat,
+    applyMessage,
     focusedMessageID: focused,
     hasLater,
     jumpToLatest,

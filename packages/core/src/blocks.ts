@@ -272,3 +272,28 @@ export function confirmationFields(
 export function confirmationTool(blocks: MessageBlocks): string {
   return blocks.card?.title ?? "";
 }
+
+const granularAgentPermissions = new Set([
+  "agents.build",
+  "agents.publish",
+  "agents.approve",
+  "agents.observe",
+]);
+
+/**
+ * Mirrors Core's permission check for display decisions (which buttons look
+ * pressable). The server re-checks every press.
+ */
+export function grantsPermission(
+  role: string,
+  permissions: readonly string[],
+  required: string,
+): boolean {
+  if (role === "owner") return true;
+  if (role !== "admin" && role !== "member") return false;
+  return (
+    permissions.includes(required) ||
+    (permissions.includes("agents.manage") &&
+      granularAgentPermissions.has(required))
+  );
+}
