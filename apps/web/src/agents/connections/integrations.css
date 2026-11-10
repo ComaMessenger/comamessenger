@@ -1,0 +1,104 @@
+.integrations {
+  display: grid;
+  gap: 24px;
+  margin-block-start: 32px;
+}
+.integrations__block {
+  display: grid;
+  gap: 12px;
+}
+.integrations__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.integrations__heading h3,
+.integrations__heading p {
+  margin: 0;
+}
+.integrations__heading p,
+.integrations__switch p,
+.integrations__usage span {
+  color: var(--coma-muted);
+}
+.integrations__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.integrations__tools li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.integrations__pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+.integrations__switch {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+}
+.integrations__switch p {
+  margin: 4px 0 0;
+}
+.integrations__usage,
+.integrations__journal {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.integrations__usage li {
+  display: grid;
+  gap: 2px;
+  padding-block: 8px;
+  border-block-end: 1px solid var(--coma-border);
+}
+.integrations__journal li {
+  display: grid;
+  grid-template-columns: minmax(0, 11rem) auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
+  padding-block: 6px;
+  border-block-end: 1px solid var(--coma-border);
+}
+.integrations__secret {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+.integrations__secret dt {
+  color: var(--coma-muted);
+}
+.integrations__secret dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.integrations code {
+  overflow-wrap: anywhere;
+}
+.integrations__secret code {
+  overflow-wrap: anywhere;
+  font-family: var(--coma-font-mono, ui-monospace, monospace);
+}
+@media (max-width: 640px) {
+  .integrations__journal li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}
+.integrations__muted {
+  color: var(--coma-muted);
+}

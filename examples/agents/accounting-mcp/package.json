@@ -1,0 +1,18 @@
+{
+  "name": "comamessenger-accounting-mcp-example",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "scripts": {
+    "start": "node --experimental-strip-types main.ts",
+    "smoke": "node --experimental-strip-types smoke.ts",
+    "notify": "node --experimental-strip-types notify.ts",
+    "check": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.2"
+  }
+}

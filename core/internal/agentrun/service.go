@@ -165,6 +165,9 @@ type StartMCPToolCallInput struct {
 	ToolName   string `json:"tool_name"`
 	Mode       string `json:"mode"`
 	InputBytes int    `json:"input_bytes"`
+	// Arguments are needed only when the call waits for a person's approval:
+	// Core then executes the approved call with exactly these arguments.
+	Arguments json.RawMessage `json:"arguments,omitempty"`
 }
 type MCPToolCall struct {
 	ID            string `json:"id"`
@@ -172,6 +175,11 @@ type MCPToolCall struct {
 	ToolName      string `json:"tool_name"`
 	Mode          string `json:"mode"`
 	Preview       bool   `json:"preview"`
+	// ConfirmationRequired: the runtime must not call the tool; the HTTP
+	// layer turns it into a pending confirmation.
+	ConfirmationRequired bool   `json:"-"`
+	AgentID              string `json:"-"`
+	ConnectionID         string `json:"-"`
 }
 type FinishMCPToolCallInput struct {
 	RunID       string `json:"run_id"`
@@ -256,7 +264,8 @@ func (service *Service) Invoke(ctx context.Context, current identity.User, agent
 				'external_data_sharing_approved',COALESCE(draft.external_data_sharing_approved,agent.external_data_sharing_approved),
 				'max_output_tokens',COALESCE(draft.max_output_tokens,agent.max_output_tokens),
 				'max_tool_iterations',COALESCE(draft.max_tool_iterations,agent.max_tool_iterations),
-				'knowledge_collection_ids',to_jsonb(COALESCE(draft.knowledge_collection_ids,agent.knowledge_collection_ids))
+				'knowledge_collection_ids',to_jsonb(COALESCE(draft.knowledge_collection_ids,agent.knowledge_collection_ids)),
+				'mcp_bindings',CASE WHEN draft.agent_id IS NOT NULL THEN draft.mcp_bindings ELSE agent.mcp_bindings END
 			)
 			FROM agents agent JOIN actors actor ON actor.org_id=agent.org_id AND actor.id=agent.actor_id
 			LEFT JOIN agent_drafts draft ON draft.org_id=agent.org_id AND draft.agent_id=agent.actor_id
@@ -842,29 +851,102 @@ func (service *Service) providerUsage(ctx context.Context, orgID, agentID, runID
 
 func (service *Service) StartMCPToolCall(ctx context.Context, current identity.User, authentication access.Identity, input StartMCPToolCallInput) (MCPToolCall, error) {
 	if uuid.Validate(input.CallID) != nil || uuid.Validate(input.RunID) != nil || uuid.Validate(input.LeaseToken) != nil || uuid.Validate(input.ServerID) != nil ||
-		!mcpToolPattern.MatchString(input.ToolName) || (input.Mode != "read" && input.Mode != "write") || input.InputBytes < 0 || input.InputBytes > 262144 {
+		!mcpToolPattern.MatchString(input.ToolName) || (input.Mode != "read" && input.Mode != "write") || input.InputBytes < 0 || input.InputBytes > 262144 ||
+		len(input.Arguments) > 262144 || (len(input.Arguments) > 0 && !validObject(input.Arguments)) {
 		return MCPToolCall{}, ErrInvalid
 	}
 	agentID, err := service.runtimeAgentID(ctx, current, authentication, input.RunID, input.LeaseToken)
 	if err != nil {
 		return MCPToolCall{}, err
 	}
-	summary, _ := json.Marshal(map[string]any{"input_bytes": input.InputBytes, "mcp_server_id": input.ServerID})
-	var result MCPToolCall
-	err = service.pool.QueryRow(ctx, `INSERT INTO agent_tool_calls(id,org_id,agent_id,run_id,correlation_id,tool_name,mode,required_scope,input_summary)
-		SELECT $3,run.org_id,run.agent_id,run.id,run.correlation_id,'mcp__' || server.name || '__' || $7,$8,'mcp:' || server.name,$9
-		FROM agent_runs run JOIN agent_mcp_servers server ON server.org_id=run.org_id AND server.agent_id=run.agent_id AND server.id=$6
-		WHERE run.org_id=$1 AND run.agent_id=$2 AND run.id=$4 AND run.lease_token=$5 AND run.status='running' AND run.lease_expires_at>now()
-		AND server.enabled AND $7=ANY(server.allowed_tools) AND ($8='read' OR run.dry_run OR NOT server.require_write_confirmation)
-		RETURNING id,correlation_id,tool_name,mode,
-			(SELECT dry_run FROM agent_runs WHERE org_id=$1 AND agent_id=$2 AND id=$4) AND $8='write'`, current.OrgID, agentID, input.CallID, input.RunID, input.LeaseToken, input.ServerID, input.ToolName, input.Mode, summary).Scan(&result.ID, &result.CorrelationID, &result.ToolName, &result.Mode, &result.Preview)
+	// The binding comes from the draft snapshot of a dry run, otherwise from
+	// the published configuration. The tool must be allowlisted there.
+	var dryRun, requireConfirmation, toolsKnown, legacyUnverified bool
+	var correlationID, connectionName string
+	var allowed, tools []byte
+	var assignable []string
+	err = service.pool.QueryRow(ctx, `SELECT run.dry_run,run.correlation_id::text,connection.name,binding.value->'allowed_tools',
+		COALESCE((binding.value->>'require_write_confirmation')::boolean,true) OR connection.writes_require_confirmation,
+		connection.tools,connection.tools_refreshed_at IS NOT NULL,connection.legacy_unverified,connection.assignable_tools
+		FROM agent_runs run JOIN agents agent ON agent.org_id=run.org_id AND agent.actor_id=run.agent_id
+		CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN run.dry_run AND run.agent_config ? 'mcp_bindings' THEN run.agent_config->'mcp_bindings' ELSE agent.mcp_bindings END) binding
+		JOIN integration_mcp_connections connection ON connection.org_id=run.org_id AND connection.id::text=binding.value->>'connection_id'
+			AND connection.enabled AND connection.agent_use_allowed
+		WHERE run.org_id=$1 AND run.agent_id=$2 AND run.id=$3 AND run.lease_token=$4 AND run.status='running' AND run.lease_expires_at>now()
+		  AND connection.id=$5`, current.OrgID, agentID, input.RunID, input.LeaseToken, input.ServerID).Scan(
+		&dryRun, &correlationID, &connectionName, &allowed, &requireConfirmation, &tools, &toolsKnown, &legacyUnverified, &assignable)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return MCPToolCall{}, ErrForbidden
 	}
 	if err != nil {
 		return MCPToolCall{}, err
 	}
+	var allowedTools []string
+	_ = json.Unmarshal(allowed, &allowedTools)
+	if !containsString(allowedTools, input.ToolName) || (assignable != nil && !containsString(assignable, input.ToolName)) {
+		return MCPToolCall{}, ErrForbidden
+	}
+	mode, offered := effectiveMCPMode(input.Mode, input.ToolName, tools, toolsKnown, legacyUnverified)
+	if !offered {
+		return MCPToolCall{}, ErrForbidden
+	}
+	exposedName := "mcp__" + connectionName + "__" + input.ToolName
+	if mode == "write" && !dryRun && requireConfirmation {
+		// Core executes the approved call with exactly the stored arguments, so
+		// it never accepts a pending call without them.
+		if len(input.Arguments) == 0 {
+			return MCPToolCall{}, ErrInvalid
+		}
+		// Core does not record a call yet: a person decides first and Core
+		// executes the approved call itself.
+		return MCPToolCall{ID: input.CallID, CorrelationID: correlationID, ToolName: exposedName, Mode: mode, ConfirmationRequired: true,
+			AgentID: agentID, ConnectionID: input.ServerID}, nil
+	}
+	summary, _ := json.Marshal(map[string]any{"input_bytes": input.InputBytes, "mcp_server_id": input.ServerID})
+	result := MCPToolCall{ID: input.CallID, CorrelationID: correlationID, ToolName: exposedName, Mode: mode, Preview: dryRun && mode == "write"}
+	if _, err := service.pool.Exec(ctx, `INSERT INTO agent_tool_calls(id,org_id,agent_id,run_id,correlation_id,tool_name,mode,required_scope,input_summary)
+		VALUES($1,$2,$3,$4,$5,$6,$7,'mcp:' || $8,$9)`, input.CallID, current.OrgID, agentID, input.RunID, correlationID, exposedName, mode, connectionName, summary); err != nil {
+		return MCPToolCall{}, err
+	}
 	return result, nil
+}
+
+// effectiveMCPMode classifies a call by Core's own tool catalog: a tool is
+// read-only only when the catalog says so and the runtime agrees. Without a
+// catalog every call is a write, except for connections migrated from
+// per-agent servers, which keep the runtime's classification until their
+// first successful test. offered is false for a tool the server does not
+// list in a known catalog.
+func effectiveMCPMode(claimed, toolName string, catalog []byte, known, legacyUnverified bool) (string, bool) {
+	if !known {
+		if legacyUnverified {
+			return claimed, true
+		}
+		return "write", true
+	}
+	var tools []struct {
+		Name     string `json:"name"`
+		ReadOnly bool   `json:"read_only"`
+	}
+	_ = json.Unmarshal(catalog, &tools)
+	for _, tool := range tools {
+		if tool.Name == toolName {
+			if tool.ReadOnly && claimed == "read" {
+				return "read", true
+			}
+			return "write", true
+		}
+	}
+	return "write", false
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func (service *Service) FinishMCPToolCall(ctx context.Context, current identity.User, authentication access.Identity, callID string, input FinishMCPToolCallInput) error {

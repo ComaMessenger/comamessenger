@@ -13,6 +13,7 @@ Create and enable an agent in **Settings → Agents**, give it membership in at 
 
 - [TypeScript example](./typescript/README.md)
 - [Python example](./python/README.md)
+- [Accounting system MCP adapter](./accounting-mcp/README.md) — connect an external schedule to agents through a workspace MCP connection
 - [Published OpenAPI contract](../../packages/protocol/openapi.yaml)
 - [Published WebSocket v1 contract](../../docs/protocols/realtime-v1.md)
 

@@ -1,5 +1,6 @@
 import type { AgentRuntimeMcpServer } from "@comamessenger/core";
 import { lookup } from "node:dns";
+import { isIPv4, isIPv6 } from "node:net";
 import type { LookupAddress, LookupOptions } from "node:dns";
 import type { LookupFunction } from "node:net";
 import { Agent as UndiciAgent } from "undici";
@@ -53,14 +54,19 @@ export async function resolveMCPTools(
     for (const tool of tools) {
       if (!isCompatibleTool(tool) || !allowlist.has(tool.name)) continue;
       const readOnly = tool.annotations?.readOnlyHint === true;
-      if (configuration.require_write_confirmation && !readOnly) continue;
+      // Writes that need confirmation stay visible: Core turns the call into
+      // a pending approval and executes it itself after a person agrees.
       const exposedName = namespacedToolName(configuration.name, tool.name);
       if (resolved.has(exposedName))
         throw new MCPError("mcp_tool_name_collision");
       resolved.set(exposedName, {
         definition: {
           name: exposedName,
-          description: `[MCP:${configuration.name}] ${typeof tool.description === "string" ? tool.description : tool.name}`,
+          description: `[MCP:${configuration.name}] ${typeof tool.description === "string" ? tool.description : tool.name}${
+            !readOnly && configuration.require_write_confirmation
+              ? " (Changes data: a person must approve the call before it runs.)"
+              : ""
+          }`,
           inputSchema: isObject(tool.inputSchema)
             ? tool.inputSchema
             : { type: "object", additionalProperties: true },
@@ -86,7 +92,10 @@ export class MCPClient {
     private readonly configuration: AgentRuntimeMcpServer,
     private readonly fetcher: Fetcher = fetch,
   ) {
-    this.dispatcher = fetcher === fetch ? secureMCPDispatcher() : null;
+    this.dispatcher =
+      fetcher === fetch
+        ? secureMCPDispatcher(privatePolicy(configuration))
+        : null;
   }
 
   async listTools(signal: AbortSignal): Promise<MCPTool[]> {
@@ -148,7 +157,10 @@ export class MCPClient {
     signal: AbortSignal,
     notification = false,
   ): Promise<JSONRPCResponse | null> {
-    assertSafeMCPEndpoint(this.configuration.endpoint_url);
+    assertSafeMCPEndpoint(
+      this.configuration.endpoint_url,
+      privatePolicy(this.configuration),
+    );
     const controller = new AbortController();
     let timedOut = false;
     const timeout = setTimeout(() => {
@@ -211,98 +223,278 @@ export class MCPClient {
   }
 }
 
-function assertSafeMCPEndpoint(endpoint: string): void {
+/**
+ * Mirrors Core's netguard policy. Internal destinations are reachable only
+ * through a connection that Core released for a listed internal system
+ * (`allow_private_network` with `allowed_private_cidrs`); plain HTTP only
+ * then. Link-local, cloud metadata, multicast and unspecified addresses never
+ * are, including when wrapped in IPv4-mapped, IPv4-compatible, NAT64 or 6to4
+ * IPv6 forms.
+ */
+export function assertSafeMCPEndpoint(
+  endpoint: string,
+  policy: PrivatePolicy = NO_PRIVATE,
+): void {
   let parsed: URL;
   try {
     parsed = new URL(endpoint);
   } catch {
     throw new MCPError("mcp_endpoint_forbidden");
   }
-  const host = parsed.hostname.toLowerCase().replace(/\.$/, "");
-  if (
-    parsed.protocol !== "https:" ||
-    parsed.username ||
-    parsed.password ||
+  const host = parsed.hostname
+    .toLowerCase()
+    .replace(/\.$/, "")
+    .replace(/^\[|\]$/g, "");
+  const internalName =
     host === "localhost" ||
     host.endsWith(".localhost") ||
     host.endsWith(".local") ||
     host.endsWith(".internal") ||
-    isPrivateLiteralAddress(host)
+    host.endsWith(".lan") ||
+    host.endsWith(".home.arpa") ||
+    !host.includes(".");
+  const literal = parseAddress(host);
+  if (
+    !(
+      parsed.protocol === "https:" ||
+      (policy.allowPrivate && parsed.protocol === "http:")
+    ) ||
+    parsed.username ||
+    parsed.password ||
+    METADATA_HOSTS.has(host) ||
+    (!literal && internalName && !policy.allowPrivate) ||
+    (literal && !addressAllowed(literal, policy))
   ) {
     throw new MCPError("mcp_endpoint_forbidden");
   }
 }
 
-function secureMCPDispatcher(): UndiciAgent {
-  return new UndiciAgent({ connect: { lookup: safeMCPLookup } });
+export type PrivatePolicy = { allowPrivate: boolean; cidrs: string[] };
+
+const NO_PRIVATE: PrivatePolicy = { allowPrivate: false, cidrs: [] };
+
+export function privatePolicy(
+  configuration: Pick<
+    AgentRuntimeMcpServer,
+    "allow_private_network" | "allowed_private_cidrs"
+  >,
+): PrivatePolicy {
+  const cidrs = configuration.allowed_private_cidrs ?? [];
+  return {
+    allowPrivate:
+      configuration.allow_private_network === true && cidrs.length > 0,
+    cidrs,
+  };
 }
 
-const safeMCPLookup: LookupFunction = (
-  hostname: string,
-  options: LookupOptions,
-  callback,
-) => {
-  lookup(
-    hostname,
-    { ...options, all: true, verbatim: true },
-    (error, addresses) => {
-      if (error) {
-        callback(error, "", 0);
-        return;
-      }
-      try {
-        const allowed = publicMCPAddresses(addresses);
-        if (options.all) callback(null, allowed);
-        else callback(null, allowed[0]!.address, allowed[0]!.family);
-      } catch {
-        const denied = new Error(
-          "MCP endpoint resolved to a forbidden address",
-        );
-        Object.assign(denied, { code: "EACCES" });
-        callback(denied, "", 0);
-      }
-    },
-  );
-};
+const METADATA_HOSTS = new Set([
+  "metadata",
+  "metadata.google.internal",
+  "metadata.goog",
+  "metadata.azure.com",
+  "instance-data",
+  "instance-data.ec2.internal",
+]);
+
+function secureMCPDispatcher(policy: PrivatePolicy): UndiciAgent {
+  return new UndiciAgent({
+    connect: { lookup: safeMCPLookup(policy) },
+  });
+}
+
+function safeMCPLookup(policy: PrivatePolicy): LookupFunction {
+  return (hostname: string, options: LookupOptions, callback) => {
+    lookup(
+      hostname,
+      { ...options, all: true, verbatim: true },
+      (error, addresses) => {
+        if (error) {
+          callback(error, "", 0);
+          return;
+        }
+        try {
+          const allowed = allowedMCPAddresses(addresses, policy);
+          if (options.all) callback(null, allowed);
+          else callback(null, allowed[0]!.address, allowed[0]!.family);
+        } catch {
+          const denied = new Error(
+            "MCP endpoint resolved to a forbidden address",
+          );
+          Object.assign(denied, { code: "EACCES" });
+          callback(denied, "", 0);
+        }
+      },
+    );
+  };
+}
 
 export function publicMCPAddresses(
   addresses: readonly LookupAddress[],
 ): LookupAddress[] {
-  const allowed = addresses.filter(
-    ({ address }) => !isPrivateLiteralAddress(address),
-  );
+  return allowedMCPAddresses(addresses, NO_PRIVATE);
+}
+
+export function allowedMCPAddresses(
+  addresses: readonly LookupAddress[],
+  policy: PrivatePolicy,
+): LookupAddress[] {
+  const allowed = addresses.filter(({ address }) => {
+    const parsed = parseAddress(address);
+    return parsed !== null && addressAllowed(parsed, policy);
+  });
   if (allowed.length === 0) throw new MCPError("mcp_endpoint_forbidden");
   return allowed;
 }
 
-function isPrivateLiteralAddress(hostname: string): boolean {
-  const host = hostname.replace(/^\[|\]$/g, "");
-  const mapped = host.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
-  if (mapped) return isPrivateLiteralAddress(mapped[1]!);
-  if (
-    host === "::" ||
-    host === "::1" ||
-    /^f[cd][0-9a-f]:/i.test(host) ||
-    /^fe[89ab][0-9a-f]:/i.test(host) ||
-    /^ff[0-9a-f]{2}:/i.test(host)
-  )
-    return true;
-  const octets = host.split(".").map(Number);
-  if (
-    octets.length !== 4 ||
-    octets.some((value) => !Number.isInteger(value) || value < 0 || value > 255)
-  ) {
-    return false;
+/** An address as bytes: 4 for IPv4, 16 for IPv6. */
+type Address = number[];
+
+/** Parses a literal IPv4 or IPv6 address (with optional zone); null otherwise. */
+export function parseAddress(value: string): Address | null {
+  const host = value.replace(/^\[|\]$/g, "").replace(/%.*$/, "");
+  if (isIPv4(host)) return host.split(".").map(Number);
+  if (!isIPv6(host)) return null;
+  let text = host.toLowerCase();
+  let tail: number[] = [];
+  const dotted = text.match(/^(.*:)(\d+\.\d+\.\d+\.\d+)$/);
+  if (dotted) {
+    tail = dotted[2]!.split(".").map(Number);
+    text = dotted[1]!.endsWith("::") ? dotted[1]! : dotted[1]!.slice(0, -1);
   }
-  return (
-    octets[0] === 0 ||
-    octets[0] === 10 ||
-    octets[0] === 127 ||
-    (octets[0] === 169 && octets[1] === 254) ||
-    (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
-    (octets[0] === 192 && octets[1] === 168) ||
-    octets[0] >= 224
-  );
+  const [head, rest] = text.includes("::") ? text.split("::") : [text, null];
+  const groups = (part: string | undefined) =>
+    part
+      ? part
+          .split(":")
+          .filter(Boolean)
+          .map((group) => parseInt(group, 16))
+      : [];
+  const left = groups(head);
+  const right = rest === null ? [] : groups(rest);
+  const needed = 8 - tail.length / 2;
+  const middle =
+    rest === null ? [] : new Array(needed - left.length - right.length).fill(0);
+  const words = [...left, ...middle, ...right];
+  if (words.length !== needed) return null;
+  const bytes = words.flatMap((word) => [word >> 8, word & 0xff]);
+  return [...bytes, ...tail];
+}
+
+/** The IPv4 address embedded in mapped, compatible, NAT64 or 6to4 forms. */
+export function embeddedAddress(address: Address): Address {
+  if (address.length === 4) return address;
+  const zero = (from: number, to: number) =>
+    address.slice(from, to).every((byte) => byte === 0);
+  if (zero(0, 10) && address[10] === 0xff && address[11] === 0xff)
+    return address.slice(12);
+  if (
+    address[0] === 0x00 &&
+    address[1] === 0x64 &&
+    address[2] === 0xff &&
+    address[3] === 0x9b &&
+    zero(4, 12)
+  )
+    return address.slice(12);
+  if (address[0] === 0x20 && address[1] === 0x02) return address.slice(2, 6);
+  if (
+    zero(0, 12) &&
+    !(zero(12, 15) && (address[15] === 0 || address[15] === 1))
+  )
+    return address.slice(12);
+  return address;
+}
+
+function inPrefix(address: Address, prefix: Address, bits: number): boolean {
+  if (address.length !== prefix.length) return false;
+  for (let index = 0; index < bits; index++) {
+    const byte = Math.floor(index / 8);
+    const mask = 0x80 >> index % 8;
+    if ((address[byte]! & mask) !== (prefix[byte]! & mask)) return false;
+  }
+  return true;
+}
+
+function cidr(text: string): [Address, number] | null {
+  const [base, bits] = text.split("/");
+  const address = base ? parseAddress(base) : null;
+  if (!address) return null;
+  const length = bits === undefined ? address.length * 8 : Number(bits);
+  return Number.isInteger(length) && length >= 0 && length <= address.length * 8
+    ? [address, length]
+    : null;
+}
+
+const FORBIDDEN = [
+  "0.0.0.0/8",
+  "224.0.0.0/3",
+  "169.254.0.0/16",
+  "100.100.100.200/32",
+  "168.63.129.16/32",
+  "192.0.0.192/32",
+  "::/128",
+  "ff00::/8",
+  "fe80::/10",
+  "fd00:ec2::254/128",
+].map((value) => cidr(value)!);
+
+const INTERNAL = [
+  "10.0.0.0/8",
+  "127.0.0.0/8",
+  "172.16.0.0/12",
+  "192.168.0.0/16",
+  "100.64.0.0/10",
+  "192.0.0.0/24",
+  "198.18.0.0/15",
+  "192.0.2.0/24",
+  "198.51.100.0/24",
+  "203.0.113.0/24",
+  "::1/128",
+  "fc00::/7",
+  "2001:db8::/32",
+].map((value) => cidr(value)!);
+
+/**
+ * Classifies a literal address: "forbidden" is never reachable, "private"
+ * only through a listed internal system, "public" always. Host names that are
+ * not literal addresses are "public" here and checked after DNS.
+ */
+export function addressClass(
+  hostname: string,
+): "public" | "private" | "forbidden" {
+  const parsed = parseAddress(hostname);
+  if (!parsed) return "public";
+  return classify(parsed);
+}
+
+function classify(address: Address): "public" | "private" | "forbidden" {
+  for (const candidate of [address, embeddedAddress(address)]) {
+    if (FORBIDDEN.some(([prefix, bits]) => inPrefix(candidate, prefix, bits)))
+      return "forbidden";
+  }
+  const embedded = embeddedAddress(address);
+  if (
+    [address, embedded].some((candidate) =>
+      INTERNAL.some(([prefix, bits]) => inPrefix(candidate, prefix, bits)),
+    )
+  )
+    return "private";
+  return "public";
+}
+
+function addressAllowed(address: Address, policy: PrivatePolicy): boolean {
+  const kind = classify(address);
+  if (kind === "forbidden") return false;
+  if (kind === "public") return true;
+  if (!policy.allowPrivate) return false;
+  const embedded = embeddedAddress(address);
+  return policy.cidrs.some((value) => {
+    const parsed = cidr(value);
+    return (
+      parsed !== null &&
+      (inPrefix(address, parsed[0], parsed[1]) ||
+        inPrefix(embedded, parsed[0], parsed[1]))
+    );
+  });
 }
 
 function responseValue(value: unknown): JSONRPCResponse {

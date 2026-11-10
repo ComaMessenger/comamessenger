@@ -37,6 +37,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/search"
 	"github.com/comamessenger/comamessenger/core/internal/storage"
 	"github.com/comamessenger/comamessenger/core/internal/userstate"
+	"github.com/comamessenger/comamessenger/core/internal/webhook"
 	"github.com/comamessenger/comamessenger/core/internal/workspace"
 )
 
@@ -140,6 +141,7 @@ func main() {
 		logger.Error("agent configuration initialization failed", "error", err)
 		os.Exit(1)
 	}
+	agentConfigService.SetPrivateTargets(cfg.Agents.IntegrationsPrivateTargets)
 	identityService.SetBearerAuthenticator(agentService.AuthenticateKey)
 	if len(os.Args) > 1 && os.Args[1] == "admin" {
 		if err := runAdminCommand(startupCtx, identityService, os.Args[2:]); err != nil {
@@ -220,7 +222,7 @@ func main() {
 	interactiveLimits.MaxRemindersPerPersonPerDay = cfg.Agents.RemindersPerPersonPerDay
 	interactiveService := interactive.NewService(pool, messageService, chatService, logger, interactiveLimits)
 	messageService.SetActionHook(interactiveService.ActionHook())
-	agentToolExecutor, err := agenttool.NewExecutor(pool, agenttool.Services{Chats: chatService, Messages: messageService, Search: searchService, Files: fileService, Memory: agentmemory.NewService(pool), Knowledge: knowledgeService, Interactive: interactiveService}, true)
+	agentToolExecutor, err := agenttool.NewExecutor(pool, agenttool.Services{Chats: chatService, Messages: messageService, Search: searchService, Files: fileService, Memory: agentmemory.NewService(pool), Knowledge: knowledgeService, Interactive: interactiveService, MCP: agentConfigService}, true)
 	if err != nil {
 		logger.Error("agent tool initialization failed", "error", err)
 		os.Exit(1)
@@ -235,6 +237,12 @@ func main() {
 		os.Exit(1)
 	}
 	go agentTriggerService.Run(realtimeCtx, time.Second)
+	webhookService, err := webhook.NewService(pool, cfg.IntegrationEncryptionKey, agentTriggerService)
+	if err != nil {
+		logger.Error("webhook initialization failed", "error", err)
+		os.Exit(1)
+	}
+	go webhookService.Run(realtimeCtx, time.Hour, logger)
 	userStateService := userstate.NewService(pool, int(cfg.Messaging.MaxBodyBytes), afterCommit)
 	pushService := push.NewService(pool, cfg.Push)
 	pushWorker := push.NewWorker(logger, pool, cfg.Push, realtimeHub.ActorActiveIn, workspaceService)
@@ -245,7 +253,7 @@ func main() {
 		Addr: cfg.HTTPAddr,
 		Handler: serverhttp.NewHandler(logger, cfg.PublicAppURL, pool.Ping, serverhttp.Dependencies{
 			Identity: identityService, Agents: agentService, AgentConfig: agentConfigService, AgentProvider: agentProviderService, AgentTools: agentToolExecutor, AgentRuns: agentRunService, AgentTriggers: agentTriggerService, Chats: chatService,
-			Messages: messageService, UserState: userStateService, Push: pushService, Workspace: workspaceService, Files: fileService, Search: searchService, Knowledge: knowledgeService, Interactive: interactiveService, Realtime: realtimeServer,
+			Messages: messageService, UserState: userStateService, Push: pushService, Workspace: workspaceService, Files: fileService, Search: searchService, Knowledge: knowledgeService, Interactive: interactiveService, Webhooks: webhookService, Realtime: realtimeServer,
 			CookieSecure: cfg.Auth.CookieSecure, RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
 			BootstrapToken: cfg.BootstrapToken, RequireBootstrapToken: cfg.AppEnv != "development",
 			TrustedProxyCIDRs: cfg.TrustedProxyCIDRs, RevokeRealtimeSession: realtimeServer.RevokeSession,

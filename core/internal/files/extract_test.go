@@ -113,3 +113,35 @@ func TestDocumentKindRecognisesSpreadsheets(t *testing.T) {
 		t.Fatalf("image kind = %q", kind)
 	}
 }
+
+func TestExtractSheetsRendersDateStylesAsISO(t *testing.T) {
+	data := zipArchive(t, map[string]string{
+		"xl/workbook.xml": `<workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+			<sheets><sheet name="Слоты" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+		"xl/_rels/workbook.xml.rels": `<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>`,
+		"xl/styles.xml": `<styleSheet><numFmts count="1"><numFmt numFmtId="164" formatCode="dd.mm.yyyy"/></numFmts>
+			<cellXfs count="4"><xf numFmtId="0"/><xf numFmtId="164"/><xf numFmtId="20"/><xf numFmtId="22"/></cellXfs></styleSheet>`,
+		"xl/worksheets/sheet1.xml": `<worksheet><sheetData>
+			<row r="1"><c r="A1" t="inlineStr"><is><t>Дата</t></is></c><c r="B1" t="inlineStr"><is><t>Начало</t></is></c><c r="C1" t="inlineStr"><is><t>Создано</t></is></c><c r="D1" t="inlineStr"><is><t>Число</t></is></c></row>
+			<row r="2"><c r="A2" s="1"><v>46338</v></c><c r="B2" s="2"><v>0.375</v></c><c r="C2" s="3"><v>46338.5</v></c><c r="D2"><v>46338</v></c></row>
+		</sheetData></worksheet>`,
+	})
+	sheets, err := ExtractSheets("slots.xlsx", "", data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sheets) != 1 || sheets[0].Sheet != "Слоты" || len(sheets[0].Rows) != 2 {
+		t.Fatalf("sheets = %+v", sheets)
+	}
+	row := sheets[0].Rows[1]
+	if row[0] != "2026-11-12" || row[1] != "09:00" || row[2] != "2026-11-12 12:00" || row[3] != "46338" {
+		t.Fatalf("row = %#v", row)
+	}
+	csvSheets, err := ExtractSheets("slots.csv", "text/csv", []byte("a,b\n1,2\n"))
+	if err != nil || len(csvSheets) != 1 || len(csvSheets[0].Rows) != 2 || csvSheets[0].Sheet != "" {
+		t.Fatalf("csv sheets = %+v, err=%v", csvSheets, err)
+	}
+	if _, err := ExtractSheets("notes.docx", "", nil); !errors.Is(err, ErrUnsupportedDocument) {
+		t.Fatalf("docx error = %v", err)
+	}
+}

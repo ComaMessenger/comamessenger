@@ -5,6 +5,9 @@ import type { AgentRuntimeMcpServer } from "@comamessenger/core";
 import {
   MCPClient,
   MCPError,
+  addressClass,
+  allowedMCPAddresses,
+  parseAddress,
   publicMCPAddresses,
   resolveMCPTools,
 } from "./mcp.js";
@@ -63,7 +66,7 @@ describe("MCP security boundaries", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
-  it("enforces allowlist and suppresses unconfirmed write tools", async () => {
+  it("enforces the allowlist and marks writes that need approval", async () => {
     const fetcher = protocolFetcher([
       {
         name: "read",
@@ -88,12 +91,96 @@ describe("MCP security boundaries", () => {
       new AbortController().signal,
       fetcher,
     );
-    expect([...tools.keys()]).toEqual(["mcp__knowledge__read"]);
+    expect([...tools.keys()]).toEqual([
+      "mcp__knowledge__read",
+      "mcp__knowledge__write",
+    ]);
+    expect(tools.get("mcp__knowledge__read")?.mode).toBe("read");
+    const write = tools.get("mcp__knowledge__write");
+    expect(write?.mode).toBe("write");
+    expect(write?.definition.description).toContain("a person must approve");
     const firstRequest = vi.mocked(fetcher).mock.calls[0];
     expect(firstRequest?.[1]?.redirect).toBe("error");
     expect(
       (firstRequest?.[1]?.headers as Record<string, string>).Authorization,
     ).toBe("Bearer top-secret");
+  });
+
+  it("allows internal endpoints only inside the operator's ranges", async () => {
+    const fetcher = protocolFetcher([]);
+    const internal = new MCPClient(
+      {
+        ...configuration,
+        endpoint_url: "http://10.0.0.5:8080/mcp",
+        allow_private_network: true,
+        allowed_private_cidrs: ["10.0.0.0/24"],
+      },
+      fetcher,
+    );
+    await expect(
+      internal.listTools(new AbortController().signal),
+    ).resolves.toEqual([]);
+    for (const [endpoint_url, cidrs] of [
+      ["http://10.0.0.5:8080/mcp", []],
+      ["http://10.0.1.5:8080/mcp", ["10.0.0.0/24"]],
+      ["http://169.254.169.254/latest/meta-data", ["0.0.0.0/0", "::/0"]],
+      ["http://168.63.129.16/", ["0.0.0.0/0", "::/0"]],
+      ["http://metadata.google.internal/", ["0.0.0.0/0", "::/0"]],
+      ["http://[fe80::1]/", ["0.0.0.0/0", "::/0"]],
+    ] as const) {
+      const client = new MCPClient(
+        {
+          ...configuration,
+          endpoint_url,
+          allow_private_network: true,
+          allowed_private_cidrs: [...cidrs],
+        },
+        vi.fn() as unknown as typeof fetch,
+      );
+      await expect(
+        client.listTools(new AbortController().signal),
+      ).rejects.toMatchObject({ code: "mcp_endpoint_forbidden" });
+    }
+    expect(
+      allowedMCPAddresses(
+        [
+          { address: "169.254.169.254", family: 4 },
+          { address: "10.0.0.5", family: 4 },
+          { address: "10.0.1.5", family: 4 },
+        ],
+        { allowPrivate: true, cidrs: ["10.0.0.0/24"] },
+      ),
+    ).toEqual([{ address: "10.0.0.5", family: 4 }]);
+  });
+
+  it.each([
+    "https://[::ffff:169.254.169.254]/",
+    "https://[::ffff:a9fe:a9fe]/",
+    "https://[::ffff:127.0.0.1]/",
+    "https://[::7f00:1]/",
+    "https://[::a9fe:a9fe]/",
+    "https://[64:ff9b::a9fe:a9fe]/",
+    "https://[64:ff9b::10.0.0.1]/",
+    "https://[2002:a9fe:a9fe::1]/",
+    "https://[2002:7f00:1::]/",
+  ])("unwraps embedded IPv4 in %s", async (endpoint_url) => {
+    const client = new MCPClient(
+      { ...configuration, endpoint_url },
+      vi.fn() as unknown as typeof fetch,
+    );
+    await expect(
+      client.listTools(new AbortController().signal),
+    ).rejects.toMatchObject({ code: "mcp_endpoint_forbidden" });
+  });
+
+  it("parses IPv6 into bytes like Core does", () => {
+    expect(addressClass("::ffff:a9fe:a9fe")).toBe("forbidden");
+    expect(addressClass("64:ff9b::a00:1")).toBe("private");
+    expect(addressClass("2606:4700::1111")).toBe("public");
+    expect(addressClass("::1")).toBe("private");
+    expect(addressClass("::")).toBe("forbidden");
+    expect(parseAddress("2001:db8::1:0:0:1")).toHaveLength(16);
+    expect(parseAddress("not-an-address")).toBeNull();
   });
 
   it("pins DNS results to public addresses only", () => {

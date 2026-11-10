@@ -35,6 +35,11 @@
 ## Протоколы
 
 - [Realtime protocol v1](protocols/realtime-v1.md)
+- [Agent runtime protocol v1](protocols/agents-v1.md)
+
+## Интеграции
+
+- [Как подключить учётную систему](integrations/accounting-system.md)
 - [Phase 3.0: инвентаризация клиентских контрактов](phases/03-web-client-contracts.md)
 
 ## Эксплуатация

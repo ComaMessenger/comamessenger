@@ -5541,6 +5541,640 @@
         }
       }
     },
+    "/api/v1/integrations/mcp-connections": {
+      "get": {
+        "operationId": "listMcpConnections",
+        "description": "Lists workspace MCP connections with masked secrets. Available to integrations.manage and agent builders.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace MCP connections.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/McpConnection"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createMcpConnection",
+        "description": "Creates a workspace MCP connection. Requires integrations.manage. Internal addresses need allow_private_network and an entry in the operator's INTEGRATIONS_ALLOWED_PRIVATE_TARGETS; metadata and link-local addresses are always refused.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMcpConnectionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Connection created; headers are encrypted and never returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpConnection"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/mcp-connections/{connection_id}": {
+      "parameters": [
+        {
+          "name": "connection_id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getMcpConnection",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Connection metadata with masked secret state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpConnection"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateMcpConnection",
+        "description": "Updates a connection; disabling it stops every agent from using it.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMcpConnectionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Connection updated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpConnection"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteMcpConnection",
+        "description": "Deletes an unused connection. A connection used by an agent draft or version is refused with 409; disable or detach it instead.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Connection deleted."
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/mcp-connections/{connection_id}/test": {
+      "parameters": [
+        {
+          "name": "connection_id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "testMcpConnection",
+        "description": "Opens an MCP session, refreshes the tool list and records health. Never calls a tool.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Connection with updated health and tools. Failures are reported as unhealthy.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpConnection"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/mcp-connections/{connection_id}/usage": {
+      "parameters": [
+        {
+          "name": "connection_id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getMcpConnectionUsage",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agents whose draft or published configuration uses the connection.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/McpConnectionUsage"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/mcp-connections/{connection_id}/detach": {
+      "parameters": [
+        {
+          "name": "connection_id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "detachMcpConnection",
+        "description": "Removes the connection from every agent draft and published configuration after the administrator confirmed the listed impact.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DetachMcpConnectionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The agents that were detached.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/McpConnectionUsage"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/webhooks": {
+      "get": {
+        "operationId": "listIntegrationWebhooks",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Incoming webhooks without secrets.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/IntegrationWebhook"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createIntegrationWebhook",
+        "description": "Creates an incoming webhook. The response carries the signing secret once.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateIntegrationWebhookRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Webhook created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationWebhookWithSecret"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/webhooks/{webhook_id}": {
+      "parameters": [
+        {
+          "name": "webhook_id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "patch": {
+        "operationId": "updateIntegrationWebhook",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateIntegrationWebhookRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook updated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationWebhook"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteIntegrationWebhook",
+        "description": "Deletes a webhook that no current agent trigger uses (409 otherwise).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Webhook deleted."
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/webhooks/{webhook_id}/rotate-secret": {
+      "parameters": [
+        {
+          "name": "webhook_id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "rotateIntegrationWebhookSecret",
+        "description": "Issues a new signing secret; the previous one stops working immediately.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook with the new secret, shown once.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationWebhookWithSecret"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/webhooks/{webhook_id}/deliveries": {
+      "parameters": [
+        {
+          "name": "webhook_id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "listIntegrationWebhookDeliveries",
+        "description": "The latest 100 entries of the journal of correctly signed deliveries (kept 30 days, at most 1000 per webhook); bodies are not stored, only size and SHA-256.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reception journal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/IntegrationWebhookDelivery"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/hooks/{webhook_id}": {
+      "parameters": [
+        {
+          "name": "webhook_id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "receiveIntegrationWebhook",
+        "description": "Public endpoint for external systems. Requires headers X-Coma-Timestamp (unix seconds, within five minutes), X-Coma-Delivery (unique id, replays are ignored), optional X-Coma-Event and X-Coma-Signature: sha256=<hex HMAC-SHA256 of \"<timestamp>.<delivery>.<body>\" with the webhook secret>. The JSON object body reaches agents as untrusted data, never as instructions.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "X-Coma-Timestamp",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Coma-Delivery",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "X-Coma-Event",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 120
+            }
+          },
+          {
+            "name": "X-Coma-Signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Duplicate delivery; nothing was started again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookReceipt"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Delivery accepted and agent runs queued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/v1/agents/{agent_id}/provider-credentials": {
       "parameters": [
         {
@@ -6859,6 +7493,16 @@
               }
             }
           },
+          "202": {
+            "description": "The write waits for a person's approval; the response carries the pending confirmation and the runtime must not call the tool.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentMcpToolCall"
+                }
+              }
+            }
+          },
           "403": {
             "$ref": "#/components/responses/Error"
           },
@@ -7136,6 +7780,8 @@
           "file_conflict",
           "file_not_found",
           "idempotency_conflict",
+          "integration_in_use",
+          "integration_usage_changed",
           "internal_error",
           "invalid_credentials",
           "invalid_refresh_token",
@@ -7160,6 +7806,8 @@
           "unsupported_format",
           "validation_failed",
           "version_conflict",
+          "webhook_not_found",
+          "webhook_rejected",
           "workspace_not_found"
         ]
       },
@@ -9107,7 +9755,8 @@
           "runtime:worker",
           "knowledge:read",
           "messages:interactive",
-          "followups:write"
+          "followups:write",
+          "tables:read"
         ]
       },
       "Agent": {
@@ -9293,6 +9942,14 @@
             "items": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          "mcp_bindings": {
+            "description": "Workspace MCP connections assigned to the draft (or the published version when there is no draft) with the allowed tools. Never contains secrets; empty for actors without agent management rights.",
+            "type": "array",
+            "maxItems": 64,
+            "items": {
+              "$ref": "#/components/schemas/AgentMcpBinding"
             }
           },
           "avatar_version": {
@@ -9583,6 +10240,13 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          "mcp_bindings": {
+            "type": "array",
+            "maxItems": 64,
+            "items": {
+              "$ref": "#/components/schemas/AgentMcpBinding"
+            }
           }
         }
       },
@@ -9692,6 +10356,13 @@
             "items": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          "mcp_bindings": {
+            "type": "array",
+            "maxItems": 64,
+            "items": {
+              "$ref": "#/components/schemas/AgentMcpBinding"
             }
           }
         }
@@ -11040,6 +11711,17 @@
           },
           "require_write_confirmation": {
             "type": "boolean"
+          },
+          "allow_private_network": {
+            "type": "boolean",
+            "description": "The connection may reach listed internal addresses and plain HTTP; link-local and cloud metadata addresses stay forbidden."
+          },
+          "allowed_private_cidrs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Internal ranges the endpoint may resolve to (from the operator allowlist). Empty means public addresses only."
           }
         }
       },
@@ -11087,6 +11769,11 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 262144
+          },
+          "arguments": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Tool arguments. Required for writes that need a person's approval; Core executes the approved call with exactly these arguments."
           }
         }
       },
@@ -11122,6 +11809,29 @@
           "preview": {
             "type": "boolean",
             "description": "Server-enforced instruction to return a simulated result without calling the external MCP tool."
+          },
+          "confirmation": {
+            "description": "Present when a person must approve the write first. The runtime must not call the tool; Core executes it after approval.",
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "status",
+              "expires_at"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "status": {
+                "type": "string"
+              },
+              "expires_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
           }
         }
       },
@@ -11159,6 +11869,630 @@
           "error_code": {
             "type": "string",
             "maxLength": 120
+          }
+        }
+      },
+      "AgentMcpBinding": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "connection_id",
+          "allowed_tools"
+        ],
+        "properties": {
+          "connection_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "allowed_tools": {
+            "type": "array",
+            "maxItems": 128,
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+            },
+            "description": "Must be assignable on the connection and, once Core knows the catalog, offered by the server."
+          },
+          "require_write_confirmation": {
+            "type": "boolean",
+            "default": true,
+            "description": "Calls to tools that are not read-only wait for a person's approval; Core then executes them. Omitted means true; a connection that requires confirmation forces it on."
+          }
+        }
+      },
+      "McpTool": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "description",
+          "read_only"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "read_only": {
+            "type": "boolean",
+            "description": "The server's readOnlyHint. Tools without it are treated as writes."
+          }
+        }
+      },
+      "McpConnection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "description",
+          "endpoint_url",
+          "enabled",
+          "allow_private_network",
+          "headers_configured",
+          "secret_hint",
+          "timeout_ms",
+          "max_output_bytes",
+          "agent_use_allowed",
+          "writes_require_confirmation",
+          "assignable_tools",
+          "tools",
+          "tools_refreshed_at",
+          "health_status",
+          "last_tested_at",
+          "last_error_code",
+          "agent_count",
+          "created_by",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+            "description": "Namespaces the tools for models as mcp__<name>__<tool>."
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "endpoint_url": {
+            "type": "string",
+            "maxLength": 2048,
+            "description": "Full address for integrations.manage; only the host for other viewers (the path or query may carry a token)."
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "allow_private_network": {
+            "type": "boolean",
+            "description": "Internal system switch. Works only for addresses the server operator lists in INTEGRATIONS_ALLOWED_PRIVATE_TARGETS."
+          },
+          "agent_use_allowed": {
+            "type": "boolean",
+            "description": "Released by integrations.manage for agent bindings. Off by default."
+          },
+          "writes_require_confirmation": {
+            "type": "boolean",
+            "description": "Every non read-only call waits for a person's approval, whatever the binding says. On by default."
+          },
+          "assignable_tools": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Tools agents may be given; null means every tool of the catalog."
+          },
+          "headers_configured": {
+            "type": "boolean"
+          },
+          "secret_hint": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Masked first header with at most its last four characters; empty for viewers without integrations.manage. Secrets are never returned."
+          },
+          "timeout_ms": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 120000
+          },
+          "max_output_bytes": {
+            "type": "integer",
+            "minimum": 1024,
+            "maximum": 4194304
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/McpTool"
+            }
+          },
+          "tools_refreshed_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "health_status": {
+            "type": "string",
+            "enum": [
+              "untested",
+              "healthy",
+              "unhealthy"
+            ]
+          },
+          "last_tested_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "last_error_code": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "agent_count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Agents whose draft or published configuration uses the connection."
+          },
+          "created_by": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "McpHeaders": {
+        "type": "object",
+        "maxProperties": 32,
+        "additionalProperties": {
+          "type": "string",
+          "maxLength": 8192
+        }
+      },
+      "CreateMcpConnectionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "endpoint_url"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "endpoint_url": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          },
+          "allow_private_network": {
+            "type": "boolean",
+            "default": false
+          },
+          "headers": {
+            "$ref": "#/components/schemas/McpHeaders"
+          },
+          "timeout_ms": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 120000
+          },
+          "max_output_bytes": {
+            "type": "integer",
+            "minimum": 1024,
+            "maximum": 4194304
+          },
+          "agent_use_allowed": {
+            "type": "boolean",
+            "default": false
+          },
+          "writes_require_confirmation": {
+            "type": "boolean",
+            "default": true
+          },
+          "assignable_tools": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "maxItems": 256,
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+            }
+          }
+        }
+      },
+      "UpdateMcpConnectionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "endpoint_url": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "allow_private_network": {
+            "type": "boolean"
+          },
+          "headers": {
+            "description": "Replaces all headers; an empty object removes them. A new scheme, host or port without new headers drops the stored ones (last_error_code credentials_required) and the tool catalog.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/McpHeaders"
+              }
+            ]
+          },
+          "timeout_ms": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 120000
+          },
+          "max_output_bytes": {
+            "type": "integer",
+            "minimum": 1024,
+            "maximum": 4194304
+          },
+          "agent_use_allowed": {
+            "type": "boolean"
+          },
+          "writes_require_confirmation": {
+            "type": "boolean"
+          },
+          "assignable_tools": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "maxItems": 256,
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+            }
+          }
+        }
+      },
+      "McpConnectionUsage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "agent_id",
+          "display_name",
+          "published",
+          "draft",
+          "allowed_tools"
+        ],
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "published": {
+            "type": "boolean"
+          },
+          "draft": {
+            "type": "boolean"
+          },
+          "allowed_tools": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "DetachMcpConnectionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "agent_ids"
+        ],
+        "properties": {
+          "agent_ids": {
+            "description": "Exactly the agents currently using the connection, as shown to the administrator. A different set is rejected with 409.",
+            "type": "array",
+            "maxItems": 1000,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "IntegrationWebhook": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "description",
+          "enabled",
+          "secret_hint",
+          "rate_limit_per_minute",
+          "max_body_bytes",
+          "last_received_at",
+          "rejected_count",
+          "last_rejected_at",
+          "last_rejected_code",
+          "trigger_count",
+          "created_by",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "secret_hint": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "rate_limit_per_minute": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 6000
+          },
+          "max_body_bytes": {
+            "type": "integer",
+            "minimum": 1024,
+            "maximum": 262144
+          },
+          "last_received_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "rejected_count": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Requests without a valid signature; counted, not journaled."
+          },
+          "last_rejected_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "last_rejected_code": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "trigger_count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Current agent triggers that start on this webhook."
+          },
+          "created_by": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "IntegrationWebhookWithSecret": {
+        "description": "Returned only on creation and rotation; the secret is not shown again.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/IntegrationWebhook"
+          },
+          {
+            "type": "object",
+            "required": [
+              "secret"
+            ],
+            "properties": {
+              "secret": {
+                "type": "string",
+                "pattern": "^whsec_"
+              }
+            }
+          }
+        ]
+      },
+      "CreateIntegrationWebhookRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          },
+          "rate_limit_per_minute": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 6000
+          },
+          "max_body_bytes": {
+            "type": "integer",
+            "minimum": 1024,
+            "maximum": 262144
+          }
+        }
+      },
+      "UpdateIntegrationWebhookRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "rate_limit_per_minute": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 6000
+          },
+          "max_body_bytes": {
+            "type": "integer",
+            "minimum": 1024,
+            "maximum": 262144
+          }
+        }
+      },
+      "IntegrationWebhookDelivery": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "delivery_id",
+          "event_type",
+          "status",
+          "error_code",
+          "body_bytes",
+          "body_sha256",
+          "runs_created",
+          "received_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "delivery_id": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "event_type": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "rejected"
+            ]
+          },
+          "error_code": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "body_bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "body_sha256": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "runs_created": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "received_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "WebhookReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "runs_created"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "accepted, duplicate, or a rejection code such as invalid_signature, stale_timestamp, rate_limited."
+          },
+          "delivery_id": {
+            "type": "string"
+          },
+          "runs_created": {
+            "type": "integer",
+            "minimum": 0
           }
         }
       },
@@ -11436,7 +12770,8 @@
               "keyword",
               "every_message",
               "schedule",
-              "event"
+              "event",
+              "webhook"
             ]
           },
           "config": {
@@ -11490,7 +12825,8 @@
               "keyword",
               "every_message",
               "schedule",
-              "event"
+              "event",
+              "webhook"
             ]
           },
           "config": {

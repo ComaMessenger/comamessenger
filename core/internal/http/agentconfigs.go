@@ -155,7 +155,7 @@ func (h *identityHandlers) agentRuntimeMCPServers(w standardhttp.ResponseWriter,
 		h.writeAgentRunError(w, r, err)
 		return
 	}
-	result, err := h.agentConfig.RuntimeMCPServersForAgent(r.Context(), auth.User, auth.Identity, agentID)
+	result, err := h.agentConfig.RuntimeMCPServersForRun(r.Context(), auth.User, auth.Identity, agentID, input.RunID)
 	if err != nil {
 		h.writeAgentConfigError(w, r, err)
 		return

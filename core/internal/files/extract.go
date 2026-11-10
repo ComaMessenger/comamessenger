@@ -11,6 +11,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -218,9 +219,17 @@ func tableRows(rows [][]string) []string {
 }
 
 func extractCSV(data []byte) (ExtractedDocument, error) {
+	rows, err := readCSVRows(data)
+	if err != nil {
+		return ExtractedDocument{}, err
+	}
+	return ExtractedDocument{Sections: []DocumentSection{{Paragraphs: tableRows(rows)}}}, nil
+}
+
+func readCSVRows(data []byte) ([][]string, error) {
 	data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
 	if !utf8.Valid(data) {
-		return ExtractedDocument{}, fmt.Errorf("%w: CSV is not UTF-8", ErrUnsupportedDocument)
+		return nil, fmt.Errorf("%w: CSV is not UTF-8", ErrUnsupportedDocument)
 	}
 	reader := csv.NewReader(bytes.NewReader(data))
 	reader.FieldsPerRecord = -1
@@ -236,14 +245,14 @@ func extractCSV(data []byte) (ExtractedDocument, error) {
 			break
 		}
 		if err != nil {
-			return ExtractedDocument{}, fmt.Errorf("%w: %v", ErrUnsupportedDocument, err)
+			return nil, fmt.Errorf("%w: %v", ErrUnsupportedDocument, err)
 		}
 		if len(record) > maxSheetColumns {
 			record = record[:maxSheetColumns]
 		}
 		rows = append(rows, record)
 	}
-	return ExtractedDocument{Sections: []DocumentSection{{Paragraphs: tableRows(rows)}}}, nil
+	return rows, nil
 }
 
 type officeArchive struct {
@@ -375,29 +384,195 @@ func xmlAttribute(element xml.StartElement, local string) string {
 }
 
 func extractXLSX(data []byte) (ExtractedDocument, error) {
-	archive, err := openOfficeArchive(data, "XLSX")
-	if err != nil {
-		return ExtractedDocument{}, err
-	}
-	shared, err := xlsxSharedStrings(archive)
-	if err != nil {
-		return ExtractedDocument{}, err
-	}
-	sheets, err := xlsxSheets(archive)
+	sheets, err := readXLSXSheets(data)
 	if err != nil {
 		return ExtractedDocument{}, err
 	}
 	result := ExtractedDocument{}
 	for _, sheet := range sheets {
-		rows, err := xlsxRows(archive, sheet.path, shared)
-		if err != nil {
-			return ExtractedDocument{}, err
-		}
-		if paragraphs := tableRows(rows); len(paragraphs) > 0 {
-			result.Sections = append(result.Sections, DocumentSection{Heading: sheet.name, Paragraphs: paragraphs})
+		if paragraphs := tableRows(sheet.Rows); len(paragraphs) > 0 {
+			result.Sections = append(result.Sections, DocumentSection{Heading: sheet.Sheet, Paragraphs: paragraphs})
 		}
 	}
 	return result, nil
+}
+
+// SheetRows is one worksheet (or a whole CSV file) as raw cell rows.
+type SheetRows struct {
+	Sheet string
+	Rows  [][]string
+	// Truncated is set when the row limit cut the sheet.
+	Truncated bool
+}
+
+// ExtractSheets returns spreadsheet rows for CSV and XLSX files. Date and time
+// cells of XLSX workbooks are rendered as ISO 8601 text.
+func ExtractSheets(name, mimeType string, data []byte) ([]SheetRows, error) {
+	switch DocumentKind(name, mimeType) {
+	case "csv":
+		rows, err := readCSVRows(data)
+		if err != nil {
+			return nil, err
+		}
+		return []SheetRows{{Rows: rows, Truncated: len(rows) >= maxSheetRows}}, nil
+	case "xlsx":
+		return readXLSXSheets(data)
+	default:
+		return nil, ErrUnsupportedDocument
+	}
+}
+
+func readXLSXSheets(data []byte) ([]SheetRows, error) {
+	archive, err := openOfficeArchive(data, "XLSX")
+	if err != nil {
+		return nil, err
+	}
+	shared, err := xlsxSharedStrings(archive)
+	if err != nil {
+		return nil, err
+	}
+	sheets, err := xlsxSheets(archive)
+	if err != nil {
+		return nil, err
+	}
+	styles := xlsxDateStyles(archive)
+	styles.date1904 = xlsxDate1904(archive)
+	result := make([]SheetRows, 0, len(sheets))
+	for _, sheet := range sheets {
+		rows, err := xlsxRows(archive, sheet.path, shared, styles)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, SheetRows{Sheet: sheet.name, Rows: rows, Truncated: len(rows) >= maxSheetRows})
+	}
+	return result, nil
+}
+
+// xlsxStyles marks cell style indexes whose number format is a date or time.
+type xlsxStyles struct {
+	dates    map[int]bool
+	date1904 bool
+}
+
+func xlsxDateStyles(archive officeArchive) xlsxStyles {
+	result := xlsxStyles{dates: map[int]bool{}}
+	decoder, closer, err := archive.decoder("xl/styles.xml")
+	if err != nil {
+		return result
+	}
+	defer closer.Close()
+	custom := map[int]bool{}
+	inCellXfs := false
+	index := 0
+	for {
+		token, err := decoder.Token()
+		if err != nil {
+			return result
+		}
+		switch element := token.(type) {
+		case xml.StartElement:
+			switch element.Name.Local {
+			case "numFmt":
+				formatID, err := strconv.Atoi(xmlAttribute(element, "numFmtId"))
+				if err == nil {
+					custom[formatID] = dateFormatCode(xmlAttribute(element, "formatCode"))
+				}
+			case "cellXfs":
+				inCellXfs = true
+			case "xf":
+				if !inCellXfs {
+					continue
+				}
+				formatID, err := strconv.Atoi(xmlAttribute(element, "numFmtId"))
+				if err == nil && (builtinDateFormat(formatID) || custom[formatID]) {
+					result.dates[index] = true
+				}
+				index++
+			}
+		case xml.EndElement:
+			if element.Name.Local == "cellXfs" {
+				inCellXfs = false
+			}
+		}
+	}
+}
+
+func xlsxDate1904(archive officeArchive) bool {
+	decoder, closer, err := archive.decoder("xl/workbook.xml")
+	if err != nil {
+		return false
+	}
+	defer closer.Close()
+	for {
+		token, err := decoder.Token()
+		if err != nil {
+			return false
+		}
+		if element, ok := token.(xml.StartElement); ok && element.Name.Local == "workbookPr" {
+			value := strings.ToLower(xmlAttribute(element, "date1904"))
+			return value == "1" || value == "true"
+		}
+	}
+}
+
+func builtinDateFormat(id int) bool {
+	return (id >= 14 && id <= 22) || (id >= 45 && id <= 47) || (id >= 27 && id <= 36) || (id >= 50 && id <= 58)
+}
+
+// dateFormatCode recognizes custom date formats by their tokens, ignoring
+// quoted literals, escaped characters and bracketed colors or locales.
+func dateFormatCode(code string) bool {
+	var builder strings.Builder
+	quoted, bracket := false, false
+	for index := 0; index < len(code); index++ {
+		character := code[index]
+		switch {
+		case quoted:
+			quoted = character != '"'
+		case bracket:
+			bracket = character != ']'
+		case character == '"':
+			quoted = true
+		case character == '[':
+			bracket = true
+		case character == '\\':
+			index++
+		default:
+			builder.WriteByte(character)
+		}
+	}
+	plain := strings.ToLower(builder.String())
+	return strings.ContainsAny(plain, "ydh") || (strings.Contains(plain, "m") && strings.Contains(plain, "s"))
+}
+
+// excelSerialText renders an Excel serial date as ISO 8601 date, time or
+// date-time text.
+func excelSerialText(value string, date1904 bool) string {
+	serial, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+	if err != nil || serial < 0 || serial > 2958465 {
+		return value
+	}
+	days := int(serial)
+	seconds := int((serial-float64(days))*86400 + 0.5)
+	if seconds >= 86400 {
+		days, seconds = days+1, seconds-86400
+	}
+	clock := fmt.Sprintf("%02d:%02d", seconds/3600, seconds%3600/60)
+	if seconds%60 != 0 {
+		clock += fmt.Sprintf(":%02d", seconds%60)
+	}
+	if days == 0 && !date1904 {
+		return clock
+	}
+	base := time.Date(1899, time.December, 30, 0, 0, 0, 0, time.UTC)
+	if date1904 {
+		base = time.Date(1904, time.January, 1, 0, 0, 0, 0, time.UTC)
+	}
+	date := base.AddDate(0, 0, days).Format("2006-01-02")
+	if seconds == 0 {
+		return date
+	}
+	return date + " " + clock
 }
 
 func xlsxSharedStrings(archive officeArchive) ([]string, error) {
@@ -506,7 +681,7 @@ func xlsxSheets(archive officeArchive) ([]xlsxSheet, error) {
 	}
 }
 
-func xlsxRows(archive officeArchive, sheetPath string, shared []string) ([][]string, error) {
+func xlsxRows(archive officeArchive, sheetPath string, shared []string, styles xlsxStyles) ([][]string, error) {
 	decoder, closer, err := archive.decoder(sheetPath)
 	if err != nil {
 		return nil, err
@@ -515,6 +690,7 @@ func xlsxRows(archive officeArchive, sheetPath string, shared []string) ([][]str
 	var rows [][]string
 	var row []string
 	cellType, cellRef, cellValue := "", "", ""
+	cellStyle := -1
 	inCell := false
 	for {
 		token, err := decoder.Token()
@@ -532,6 +708,10 @@ func xlsxRows(archive officeArchive, sheetPath string, shared []string) ([][]str
 			case "c":
 				inCell = true
 				cellType, cellRef, cellValue = xmlAttribute(element, "t"), xmlAttribute(element, "r"), ""
+				cellStyle = -1
+				if style, err := strconv.Atoi(xmlAttribute(element, "s")); err == nil {
+					cellStyle = style
+				}
 			case "v", "t":
 				if !inCell {
 					continue
@@ -561,6 +741,10 @@ func xlsxRows(archive officeArchive, sheetPath string, shared []string) ([][]str
 					}
 				case "b":
 					value = map[string]string{"1": "TRUE", "0": "FALSE"}[strings.TrimSpace(cellValue)]
+				case "", "n":
+					if styles.dates[cellStyle] {
+						value = excelSerialText(cellValue, styles.date1904)
+					}
 				}
 				for len(row) < column {
 					row = append(row, "")

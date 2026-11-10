@@ -167,6 +167,23 @@ export type UpdateAgentMcpServerRequest =
   components["schemas"]["UpdateAgentMcpServerRequest"];
 export type AgentRuntimeMcpServer =
   components["schemas"]["AgentRuntimeMcpServer"];
+export type AgentMcpBinding = components["schemas"]["AgentMcpBinding"];
+export type McpTool = components["schemas"]["McpTool"];
+export type McpConnection = components["schemas"]["McpConnection"];
+export type CreateMcpConnectionRequest =
+  components["schemas"]["CreateMcpConnectionRequest"];
+export type UpdateMcpConnectionRequest =
+  components["schemas"]["UpdateMcpConnectionRequest"];
+export type McpConnectionUsage = components["schemas"]["McpConnectionUsage"];
+export type IntegrationWebhook = components["schemas"]["IntegrationWebhook"];
+export type IntegrationWebhookWithSecret =
+  components["schemas"]["IntegrationWebhookWithSecret"];
+export type CreateIntegrationWebhookRequest =
+  components["schemas"]["CreateIntegrationWebhookRequest"];
+export type UpdateIntegrationWebhookRequest =
+  components["schemas"]["UpdateIntegrationWebhookRequest"];
+export type IntegrationWebhookDelivery =
+  components["schemas"]["IntegrationWebhookDelivery"];
 export type AgentRuntimeRunLeaseRequest =
   components["schemas"]["AgentRuntimeRunLeaseRequest"];
 export type AgentMcpToolCall = components["schemas"]["AgentMcpToolCall"];

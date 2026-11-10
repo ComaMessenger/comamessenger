@@ -379,16 +379,21 @@ export class AgentRuntime {
     signal: AbortSignal,
   ): Promise<unknown> {
     const callID = crypto.randomUUID();
-    const inputBytes = encodedSize(arguments_);
-    const registered = await this.options.api.startAgentMcpToolCall({
-      call_id: callID,
-      run_id: run.id,
-      lease_token: run.lease_token,
-      server_id: tool.serverID,
-      tool_name: tool.toolName,
-      mode: tool.mode,
-      input_bytes: inputBytes,
-    });
+    const registered = await this.options.api.startAgentMcpToolCall(
+      mcpToolCallRequest(run, tool, callID, arguments_),
+    );
+    if (registered.confirmation) {
+      // Core holds the call for a person's decision and executes it itself
+      // after approval; the runtime never calls the tool in this case.
+      return {
+        status: "pending_confirmation",
+        executed: false,
+        confirmation_id: registered.confirmation.id,
+        expires_at: registered.confirmation.expires_at,
+        tool_name: tool.toolName,
+        note: "A person must approve this change. Tell the user it is waiting for approval; do not retry it.",
+      };
+    }
     try {
       const output = registered.preview
         ? {
@@ -608,4 +613,27 @@ function delay(ms: number, signal: AbortSignal): Promise<void> {
       { once: true },
     );
   });
+}
+
+/**
+ * Registration of an MCP call with Core. The arguments are always sent:
+ * Core may classify a claimed read as a write that needs approval and then
+ * executes the approved call itself with exactly these arguments.
+ */
+export function mcpToolCallRequest(
+  run: Pick<ClaimedAgentRun, "id" | "lease_token">,
+  tool: Pick<ResolvedMCPTool, "serverID" | "toolName" | "mode">,
+  callID: string,
+  arguments_: Record<string, unknown>,
+) {
+  return {
+    call_id: callID,
+    run_id: run.id,
+    lease_token: run.lease_token,
+    server_id: tool.serverID,
+    tool_name: tool.toolName,
+    mode: tool.mode,
+    input_bytes: encodedSize(arguments_),
+    arguments: arguments_,
+  };
 }

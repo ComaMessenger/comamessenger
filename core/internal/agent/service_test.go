@@ -591,3 +591,90 @@ func TestChatAgentsDescribeTriggersForChatMembersOnly(t *testing.T) {
 		t.Fatalf("invalid chat id error=%v", err)
 	}
 }
+func TestMCPBindingsFollowDraftPublishAndRollback(t *testing.T) {
+	pool := testdb.New(t)
+	seedAgentModel(t, pool)
+	service := NewService(pool)
+	owner := identity.User{ActorID: agentTestOwnerID, OrgID: agentTestOrgID, OrgRole: "owner"}
+	connection := "00000000-0000-7000-8000-000000000221"
+	hidden := "00000000-0000-7000-8000-000000000222"
+	// "accounting" is released for agents with a known catalog; "hidden" is not
+	// released by integrations.manage.
+	if _, err := pool.Exec(t.Context(), `INSERT INTO integration_mcp_connections(id,org_id,name,endpoint_url,encrypted_headers,secret_hint,created_by,updated_by,
+		agent_use_allowed,writes_require_confirmation,assignable_tools,tools,tools_refreshed_at)
+		VALUES($1,$2,'accounting','https://mcp.example.test/rpc','\x01'::bytea,'Authorization: ••••7f3a',$3,$3,true,true,'{get_slots,assign_instructor}',
+			'[{"name":"get_slots","read_only":true},{"name":"assign_instructor","read_only":false},{"name":"delete_slot","read_only":false}]',now()),
+		($4,$2,'hidden','https://hidden.example.test/rpc',NULL,'',$3,$3,false,true,NULL,'[]',NULL)`, connection, agentTestOrgID, agentTestOwnerID, hidden); err != nil {
+		t.Fatal(err)
+	}
+	for name, binding := range map[string]MCPBinding{
+		"not released":   {ConnectionID: hidden, AllowedTools: []string{"anything"}},
+		"not assignable": {ConnectionID: connection, AllowedTools: []string{"delete_slot"}},
+		"not in catalog": {ConnectionID: connection, AllowedTools: []string{"get_slots", "drop_database"}},
+	} {
+		if _, err := service.Create(t.Context(), owner, CreateInput{DisplayName: "Policy", Handle: "policy-check", Kind: "external", EndpointURL: "https://agents.example.test/runtime",
+			MCPBindings: []MCPBinding{binding}}); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("%s binding error = %v", name, err)
+		}
+	}
+	var omitted CreateInput
+	if err := json.Unmarshal([]byte(`{"mcp_bindings":[{"connection_id":"`+connection+`","allowed_tools":["get_slots"]}]}`), &omitted); err != nil || !omitted.MCPBindings[0].RequireWriteConfirmation {
+		t.Fatalf("binding without the confirmation field = %+v, err=%v", omitted.MCPBindings, err)
+	}
+	if _, err := service.Create(t.Context(), owner, CreateInput{DisplayName: "Unknown", Handle: "unknown-mcp", Kind: "external", EndpointURL: "https://agents.example.test/runtime",
+		MCPBindings: []MCPBinding{{ConnectionID: "00000000-0000-7000-8000-000000000299", AllowedTools: []string{"get_slots"}}}}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("unknown connection error = %v", err)
+	}
+	if _, err := service.Create(t.Context(), owner, CreateInput{DisplayName: "Bad tool", Handle: "bad-tool", Kind: "external", EndpointURL: "https://agents.example.test/runtime",
+		MCPBindings: []MCPBinding{{ConnectionID: connection, AllowedTools: []string{"bad tool"}}}}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("invalid tool name error = %v", err)
+	}
+	created, err := service.Create(t.Context(), owner, CreateInput{
+		DisplayName: "Слоты", Handle: "slots", Kind: "external", EndpointURL: "https://agents.example.test/runtime",
+		AllowedScopes: []Scope{ScopeMessagesRead}, ChatIDs: []string{agentTestChatID},
+	})
+	if err != nil || len(created.MCPBindings) != 0 {
+		t.Fatalf("created agent = %+v, err=%v", created, err)
+	}
+	if _, err := service.CreateKey(t.Context(), owner, created.ID, CreateKeyInput{Name: "runtime", Scopes: []Scope{ScopeMessagesRead}, RateLimitPerMinute: 10}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Publish(t.Context(), owner, created.ID); err != nil {
+		t.Fatal(err)
+	}
+	// The connection requires confirmation, so a binding cannot switch it off.
+	bindings := []MCPBinding{{ConnectionID: connection, AllowedTools: []string{"get_slots", "assign_instructor", "get_slots"}, RequireWriteConfirmation: false}}
+	draft, err := service.Update(t.Context(), owner, created.ID, UpdateInput{MCPBindings: &bindings})
+	if err != nil || len(draft.MCPBindings) != 1 || !slices.Equal(draft.MCPBindings[0].AllowedTools, []string{"assign_instructor", "get_slots"}) || !draft.HasUnpublishedChanges ||
+		!draft.MCPBindings[0].RequireWriteConfirmation {
+		t.Fatalf("draft = %+v, err=%v", draft, err)
+	}
+	var live string
+	if err := pool.QueryRow(t.Context(), `SELECT mcp_bindings::text FROM agents WHERE actor_id=$1`, created.ID).Scan(&live); err != nil || live != "[]" {
+		t.Fatalf("live bindings before publish = %s, err=%v", live, err)
+	}
+	if _, err := service.Publish(t.Context(), owner, created.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(t.Context(), `SELECT mcp_bindings::text FROM agents WHERE actor_id=$1`, created.ID).Scan(&live); err != nil || !strings.Contains(live, connection) {
+		t.Fatalf("live bindings after publish = %s, err=%v", live, err)
+	}
+	var raw string
+	if err := pool.QueryRow(t.Context(), `SELECT config::text FROM agent_versions WHERE agent_id=$1 AND version=2`, created.ID).Scan(&raw); err != nil || !strings.Contains(raw, `"mcp_bindings"`) || strings.Contains(raw, "Bear") {
+		t.Fatalf("version config = %s, err=%v", raw, err)
+	}
+	versions, err := service.Versions(t.Context(), owner, created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var firstVersionID string
+	for _, version := range versions {
+		if version.Version == 1 {
+			firstVersionID = version.ID
+		}
+	}
+	rolledBack, err := service.Rollback(t.Context(), owner, created.ID, firstVersionID)
+	if err != nil || len(rolledBack.MCPBindings) != 0 {
+		t.Fatalf("rolled back draft = %+v, err=%v", rolledBack, err)
+	}
+}
