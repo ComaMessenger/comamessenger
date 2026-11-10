@@ -2,6 +2,7 @@ package agenttool
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -21,6 +22,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/knowledge"
 	"github.com/comamessenger/comamessenger/core/internal/mcptest"
 	"github.com/comamessenger/comamessenger/core/internal/message"
+	"github.com/comamessenger/comamessenger/core/internal/netguard"
 	"github.com/comamessenger/comamessenger/core/internal/permission"
 	"github.com/comamessenger/comamessenger/core/internal/search"
 	"github.com/comamessenger/comamessenger/core/internal/storage"
@@ -96,6 +98,11 @@ func newSlotsWorld(t *testing.T) slotsWorld {
 	if err != nil {
 		t.Fatal(err)
 	}
+	loopback, err := netguard.ParseTargets("127.0.0.1/32")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.connections.SetPrivateTargets(loopback)
 	noop := func(string, int64) {}
 	w.executor, err = NewExecutor(pool, Services{Chats: chat.NewService(pool, noop), Messages: message.NewService(pool, 65536, 100, noop), Search: search.NewService(pool),
 		Files: fileService, Memory: agentmemory.NewService(pool), Knowledge: w.knowledge, MCP: w.connections}, true)
@@ -233,7 +240,7 @@ func TestSlotsRecipeWorksOnTableAndOnMCPAdapter(t *testing.T) {
 	defer server.Close()
 	server.RequireKey = "accounting-token"
 	connection, err := w.connections.CreateMCPConnection(t.Context(), w.owner, agentconfig.CreateMCPConnectionInput{
-		Name: "accounting", EndpointURL: server.URL, AllowPrivateNetwork: true, Headers: map[string]string{"Authorization": "Bearer accounting-token"},
+		Name: "accounting", EndpointURL: server.URL, AllowPrivateNetwork: true, AgentUseAllowed: true, Headers: map[string]string{"Authorization": "Bearer accounting-token"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -277,6 +284,12 @@ func TestSlotsRecipeWorksOnTableAndOnMCPAdapter(t *testing.T) {
 		ServerID: connection.ID, ToolName: "not_allowlisted", Mode: "read"}); !errors.Is(err, agentrun.ErrForbidden) {
 		t.Fatalf("not allowlisted tool error = %v", err)
 	}
+	// Core reclassifies the claimed read as a write that needs approval, so a
+	// call without arguments is refused instead of being approved empty.
+	if _, err := w.runs.StartMCPToolCall(t.Context(), w.agentUser, w.authentication, agentrun.StartMCPToolCallInput{CallID: uuid.NewString(), RunID: runID, LeaseToken: leaseToken,
+		ServerID: connection.ID, ToolName: "assign_instructor", Mode: "read"}); !errors.Is(err, agentrun.ErrInvalid) {
+		t.Fatalf("reclassified write without arguments = %v", err)
+	}
 	callID := uuid.NewString()
 	arguments := json.RawMessage(`{"slot_id":"s-2","instructor_id":"i-3"}`)
 	write, err := w.runs.StartMCPToolCall(t.Context(), w.agentUser, w.authentication, agentrun.StartMCPToolCallInput{CallID: callID, RunID: runID, LeaseToken: leaseToken,
@@ -316,5 +329,45 @@ func TestSlotsRecipeWorksOnTableAndOnMCPAdapter(t *testing.T) {
 	}
 	if server.Calls("assign_instructor") != 1 {
 		t.Fatal("dry run reached the external system")
+	}
+}
+
+// cancelingMCP cancels the approver's request context in the middle of the
+// external call, as a closed browser tab does, and reports whether its own
+// context survived.
+type cancelingMCP struct {
+	cancel   func()
+	survived bool
+}
+
+func (fake *cancelingMCP) ExecuteConfirmedMCPCall(ctx context.Context, _, _, _, _ string, _ json.RawMessage) (json.RawMessage, error) {
+	fake.cancel()
+	time.Sleep(20 * time.Millisecond)
+	fake.survived = ctx.Err() == nil
+	if !fake.survived {
+		return nil, ctx.Err()
+	}
+	return json.RawMessage(`{"assigned":true}`), nil
+}
+
+func TestApprovedMCPCallSurvivesApproverDisconnect(t *testing.T) {
+	w := newSlotsWorld(t)
+	runID, _, correlationID := w.startRun(t, false)
+	connectionID := uuid.NewString()
+	confirmation, err := w.executor.RequestMCPConfirmation(t.Context(), w.orgID, w.agentID, runID, uuid.NewString(), correlationID, connectionID,
+		"mcp__accounting__assign_instructor", json.RawMessage(`{"slot_id":"s-2"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	requestContext, cancel := context.WithCancel(t.Context())
+	fake := &cancelingMCP{cancel: cancel}
+	w.executor.services.MCP = fake
+	decided, err := w.executor.DecideConfirmation(requestContext, w.owner, confirmation.ID, true)
+	if err != nil || !fake.survived || decided.Status != "completed" {
+		t.Fatalf("decided = %+v, survived=%v, err=%v", decided, fake.survived, err)
+	}
+	var status string
+	if err := w.pool.QueryRow(t.Context(), `SELECT status FROM agent_tool_confirmations WHERE id=$1`, confirmation.ID).Scan(&status); err != nil || status != "completed" {
+		t.Fatalf("stored status = %q, err=%v", status, err)
 	}
 }

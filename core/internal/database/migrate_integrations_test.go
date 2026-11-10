@@ -118,6 +118,17 @@ func TestWorkspaceIntegrationsMigration(t *testing.T) {
 	if connections[1].ID != serverTwo || connections[1].Name == "crm" || !strings.HasPrefix(connections[1].Name, "crm-") || connections[1].Enabled || connections[1].Headers != nil {
 		t.Fatalf("duplicate name was not made unique: %+v", connections[1])
 	}
+	// Migrated connections stay usable by their agents with the policy the
+	// per-agent server had, and keep the runtime classification until tested.
+	var policyOne, policyTwo string
+	if err := db.QueryRowContext(ctx, `SELECT agent_use_allowed||','||writes_require_confirmation||','||array_to_string(assignable_tools,'|')||','||legacy_unverified
+		FROM integration_mcp_connections WHERE id=$1`, serverOne).Scan(&policyOne); err != nil || policyOne != "true,true,get_slots,true" {
+		t.Fatalf("migrated policy one = %q, err=%v", policyOne, err)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT agent_use_allowed||','||writes_require_confirmation||','||array_to_string(assignable_tools,'|')||','||legacy_unverified
+		FROM integration_mcp_connections WHERE id=$1`, serverTwo).Scan(&policyTwo); err != nil || policyTwo != "true,false,get_slots|assign,true" {
+		t.Fatalf("migrated policy two = %q, err=%v", policyTwo, err)
+	}
 	var publishedOne, publishedTwo, draftTwo []byte
 	if err := db.QueryRowContext(ctx, `SELECT (SELECT mcp_bindings FROM agents WHERE actor_id=$1),(SELECT mcp_bindings FROM agents WHERE actor_id=$2),
 		(SELECT mcp_bindings FROM agent_drafts WHERE agent_id=$2)`, agentOne, agentTwo).Scan(&publishedOne, &publishedTwo, &draftTwo); err != nil {
@@ -134,6 +145,9 @@ func TestWorkspaceIntegrationsMigration(t *testing.T) {
 	mustExec(t, db, `INSERT INTO integration_webhook_deliveries(id,org_id,webhook_id,delivery_id,status) VALUES('00000000-0000-7000-8000-000000004708',$1,'00000000-0000-7000-8000-000000004707','d1','accepted')`, orgID)
 	mustExec(t, db, `INSERT INTO agent_triggers(id,org_id,agent_id,type,config) VALUES('00000000-0000-7000-8000-000000004709',$1,$2,'webhook','{"webhook_id":"00000000-0000-7000-8000-000000004707"}')`, orgID, agentOne)
 	mustExec(t, db, `INSERT INTO agent_triggers(id,org_id,agent_id,type,config) VALUES('00000000-0000-7000-8000-000000004710',$1,$2,'manual','{}')`, orgID, agentOne)
+	// A run already started by the webhook trigger (FK agent_runs.trigger_id is RESTRICT).
+	mustExec(t, db, `INSERT INTO agent_runs(id,org_id,agent_id,trigger_id,correlation_id,status,input)
+		VALUES('00000000-0000-7000-8000-000000004711',$1,$2,'00000000-0000-7000-8000-000000004709','00000000-0000-7000-8000-000000004712','completed','{"trigger_type":"webhook"}')`, orgID, agentOne)
 
 	if err := goose.DownToContext(ctx, db, ".", 46); err != nil {
 		t.Fatal(err)
@@ -153,6 +167,10 @@ func TestWorkspaceIntegrationsMigration(t *testing.T) {
 	}
 	if legacy := legacyServers(t, db); !reflect.DeepEqual(legacy, legacyBefore) {
 		t.Fatalf("agent_mcp_servers changed: before %v after %v", legacyBefore, legacy)
+	}
+	var orphanRuns int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM agent_runs WHERE id='00000000-0000-7000-8000-000000004711' AND trigger_id IS NULL`).Scan(&orphanRuns); err != nil || orphanRuns != 1 {
+		t.Fatalf("webhook run after Down = %d, err=%v", orphanRuns, err)
 	}
 	var triggers int
 	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM agent_triggers WHERE agent_id=$1`, agentOne).Scan(&triggers); err != nil || triggers != 1 {

@@ -399,3 +399,21 @@ func TestQuietHours(t *testing.T) {
 		}
 	}
 }
+
+func TestIntegrationPrivateTargetsDefaultToNone(t *testing.T) {
+	setRequiredEnvironment(t)
+	t.Setenv("INTEGRATIONS_ALLOWED_PRIVATE_TARGETS", "")
+	cfg, err := FromEnvironment()
+	if err != nil || !cfg.Agents.IntegrationsPrivateTargets.Empty() {
+		t.Fatalf("default private targets = %#v, err=%v", cfg.Agents.IntegrationsPrivateTargets, err)
+	}
+	t.Setenv("INTEGRATIONS_ALLOWED_PRIVATE_TARGETS", "10.20.0.0/16, 192.168.1.15 erp.office.lan:8443")
+	cfg, err = FromEnvironment()
+	if err != nil || len(cfg.Agents.IntegrationsPrivateTargets.CIDRs) != 2 || len(cfg.Agents.IntegrationsPrivateTargets.HostPorts) != 1 {
+		t.Fatalf("private targets = %#v, err=%v", cfg.Agents.IntegrationsPrivateTargets, err)
+	}
+	t.Setenv("INTEGRATIONS_ALLOWED_PRIVATE_TARGETS", "erp.office.lan")
+	if _, err := FromEnvironment(); err == nil {
+		t.Fatal("host without port accepted")
+	}
+}

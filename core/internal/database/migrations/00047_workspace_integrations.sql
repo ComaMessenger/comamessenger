@@ -22,6 +22,15 @@ CREATE TABLE integration_mcp_connections (
     legacy_agent_id uuid,
     timeout_ms integer NOT NULL DEFAULT 10000 CHECK (timeout_ms BETWEEN 100 AND 120000),
     max_output_bytes integer NOT NULL DEFAULT 262144 CHECK (max_output_bytes BETWEEN 1024 AND 4194304),
+    -- Policy set by integrations.manage. Agents may bind the connection only
+    -- after it is released for agents; bindings can tighten, never loosen it.
+    agent_use_allowed boolean NOT NULL DEFAULT false,
+    writes_require_confirmation boolean NOT NULL DEFAULT true,
+    -- Tools agents may be given; NULL means every tool of the catalog.
+    assignable_tools text[] CHECK (assignable_tools IS NULL OR cardinality(assignable_tools) <= 256),
+    -- Migrated connections keep the runtime's read/write classification until
+    -- the first successful test refreshes Core's own catalog.
+    legacy_unverified boolean NOT NULL DEFAULT false,
     tools jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(tools) = 'array' AND octet_length(tools::text) <= 262144),
     tools_refreshed_at timestamptz,
     health_status text NOT NULL DEFAULT 'untested' CHECK (health_status IN ('untested', 'healthy', 'unhealthy')),
@@ -51,11 +60,13 @@ CREATE INDEX agent_drafts_mcp_bindings_idx ON agent_drafts USING gin(mcp_binding
 -- workspace get a stable suffix from the server id.
 INSERT INTO integration_mcp_connections(
     id,org_id,name,endpoint_url,enabled,encrypted_headers,legacy_agent_id,timeout_ms,max_output_bytes,
+    agent_use_allowed,writes_require_confirmation,assignable_tools,legacy_unverified,
     created_by,updated_by,created_at,updated_at)
 SELECT ranked.id,ranked.org_id,
        CASE WHEN ranked.position = 1 THEN ranked.base_name
             ELSE left(ranked.base_name, 55) || '-' || left(replace(ranked.id::text, '-', ''), 8) END,
        ranked.endpoint_url,ranked.enabled,ranked.encrypted_headers,ranked.agent_id,ranked.timeout_ms,ranked.max_output_bytes,
+       true,ranked.require_write_confirmation,ranked.allowed_tools,true,
        ranked.owner_actor_id,ranked.owner_actor_id,ranked.created_at,ranked.updated_at
 FROM (
     SELECT normalized.*,
@@ -97,6 +108,11 @@ CREATE TABLE integration_webhooks (
     rate_limit_per_minute integer NOT NULL DEFAULT 60 CHECK (rate_limit_per_minute BETWEEN 1 AND 6000),
     max_body_bytes integer NOT NULL DEFAULT 65536 CHECK (max_body_bytes BETWEEN 1024 AND 1048576),
     last_received_at timestamptz,
+    -- Requests without a valid signature are only counted, never journaled
+    -- one row per request.
+    rejected_count bigint NOT NULL DEFAULT 0 CHECK (rejected_count >= 0),
+    last_rejected_at timestamptz,
+    last_rejected_code text NOT NULL DEFAULT '' CHECK (length(last_rejected_code) <= 120),
     created_by uuid NOT NULL,
     updated_by uuid NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
@@ -106,8 +122,8 @@ CREATE TABLE integration_webhooks (
     FOREIGN KEY (org_id, updated_by) REFERENCES actors(org_id, id) ON DELETE RESTRICT
 );
 
--- Reception journal. An accepted delivery id is unique per webhook, which is
--- the replay guard inside the signed-timestamp window.
+-- Reception journal of correctly signed deliveries. An accepted delivery id
+-- is unique per webhook, which is the replay guard inside the signed window.
 CREATE TABLE integration_webhook_deliveries (
     id uuid PRIMARY KEY,
     org_id uuid NOT NULL,
@@ -172,6 +188,9 @@ ALTER TABLE knowledge_documents DROP COLUMN IF EXISTS tables_version;
 
 DROP INDEX IF EXISTS agent_triggers_webhook_idx;
 ALTER TABLE agent_triggers DROP CONSTRAINT agent_triggers_type_check;
+-- Runs started by webhook triggers keep their history without the trigger.
+UPDATE agent_runs SET trigger_id = NULL
+WHERE trigger_id IN (SELECT id FROM agent_triggers WHERE type = 'webhook');
 DELETE FROM agent_triggers WHERE type = 'webhook';
 ALTER TABLE agent_triggers ADD CONSTRAINT agent_triggers_type_check
     CHECK (type IN ('manual','mention','command','keyword','every_message','schedule','event'));

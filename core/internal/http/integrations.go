@@ -190,6 +190,14 @@ func (h *identityHandlers) receiveWebhook(w standardhttp.ResponseWriter, r *stan
 	if err := controller.SetReadDeadline(time.Now().Add(15 * time.Second)); err == nil {
 		defer controller.SetReadDeadline(time.Time{})
 	}
+	// Requests without a valid signature are limited per client address
+	// before any database work, so they cannot exhaust a webhook's quota.
+	failureKey := "webhook-failure:" + h.clientIP(r)
+	if h.webhookFailures != nil && h.webhookFailures.Exhausted(failureKey) {
+		w.Header().Set("Retry-After", "60")
+		h.writeError(w, r, standardhttp.StatusTooManyRequests, "rate_limited", "Too many rejected webhook requests.")
+		return
+	}
 	body, err := io.ReadAll(io.LimitReader(r.Body, webhook.MaxBodyBytes+1))
 	if err != nil {
 		h.writeError(w, r, standardhttp.StatusBadRequest, "invalid_request", "The request body could not be read.")
@@ -199,6 +207,9 @@ func (h *identityHandlers) receiveWebhook(w standardhttp.ResponseWriter, r *stan
 	if err != nil {
 		h.internalError(w, r, err)
 		return
+	}
+	if outcome.Unsigned && h.webhookFailures != nil {
+		h.webhookFailures.Allow(failureKey)
 	}
 	if outcome.Status >= 400 {
 		code := api.ErrorCode("webhook_rejected")

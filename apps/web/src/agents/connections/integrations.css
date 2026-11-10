@@ -99,3 +99,6 @@
     grid-template-columns: minmax(0, 1fr) auto;
   }
 }
+.integrations__muted {
+  color: var(--coma-muted);
+}

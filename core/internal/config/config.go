@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/comamessenger/comamessenger/core/internal/netguard"
 )
 
 type S3Config struct {
@@ -107,10 +109,10 @@ type AgentConfig struct {
 	QuietEndMinute   int
 	// RemindersPerPersonPerDay caps agent reminders to one person per 24 hours.
 	RemindersPerPersonPerDay int
-	// IntegrationsAllowPrivateNetworks permits workspace integrations to opt
-	// into private network addresses. When false, no connection may reach
-	// loopback, RFC 1918 or other internal ranges.
-	IntegrationsAllowPrivateNetworks bool
+	// IntegrationsPrivateTargets lists the internal destinations (CIDR blocks,
+	// IPs, host:port) that workspace integrations marked as internal systems
+	// may reach. Empty by default: no integration reaches a private address.
+	IntegrationsPrivateTargets netguard.Targets
 }
 
 type Config struct {
@@ -224,9 +226,9 @@ func FromEnvironment() (Config, error) {
 	if remindersPerDay < 1 || remindersPerDay > 100 {
 		return Config{}, fmt.Errorf("AGENT_REMINDERS_PER_PERSON_PER_DAY must be between 1 and 100")
 	}
-	integrationsPrivate, err := boolValueOrDefault("INTEGRATIONS_ALLOW_PRIVATE_NETWORKS", true)
+	integrationsPrivate, err := netguard.ParseTargets(os.Getenv("INTEGRATIONS_ALLOWED_PRIVATE_TARGETS"))
 	if err != nil {
-		return Config{}, err
+		return Config{}, fmt.Errorf("INTEGRATIONS_ALLOWED_PRIVATE_TARGETS: %w", err)
 	}
 
 	cfg := Config{
@@ -268,8 +270,8 @@ func FromEnvironment() (Config, error) {
 			TriggerShardCount: triggerShardCount,
 			RuntimeAPIKey:     strings.TrimSpace(os.Getenv("AGENT_RUNTIME_API_KEY")),
 			QuietStartMinute:  quietStart, QuietEndMinute: quietEnd,
-			IntegrationsAllowPrivateNetworks: integrationsPrivate,
-			RemindersPerPersonPerDay:         int(remindersPerDay),
+			IntegrationsPrivateTargets: integrationsPrivate,
+			RemindersPerPersonPerDay:   int(remindersPerDay),
 		},
 	}
 

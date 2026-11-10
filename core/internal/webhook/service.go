@@ -68,10 +68,14 @@ type Webhook struct {
 	RateLimitPerMinute int        `json:"rate_limit_per_minute"`
 	MaxBodyBytes       int        `json:"max_body_bytes"`
 	LastReceivedAt     *time.Time `json:"last_received_at"`
-	TriggerCount       int        `json:"trigger_count"`
-	CreatedBy          string     `json:"created_by"`
-	CreatedAt          time.Time  `json:"created_at"`
-	UpdatedAt          time.Time  `json:"updated_at"`
+	// Requests without a valid signature are counted here, not journaled.
+	RejectedCount    int64      `json:"rejected_count"`
+	LastRejectedAt   *time.Time `json:"last_rejected_at"`
+	LastRejectedCode string     `json:"last_rejected_code"`
+	TriggerCount     int        `json:"trigger_count"`
+	CreatedBy        string     `json:"created_by"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
 // WebhookWithSecret is returned exactly once, on creation or rotation.
@@ -140,12 +144,14 @@ func canManage(current identity.User) bool {
 }
 
 const webhookSelect = `SELECT hook.id,hook.name,hook.description,hook.enabled,hook.secret_hint,hook.rate_limit_per_minute,hook.max_body_bytes,hook.last_received_at,
+	hook.rejected_count,hook.last_rejected_at,hook.last_rejected_code,
 	(SELECT count(*) FROM agent_triggers trigger WHERE trigger.org_id=hook.org_id AND trigger.type='webhook' AND trigger.superseded_at IS NULL AND trigger.config->>'webhook_id'=hook.id::text),
 	hook.created_by,hook.created_at,hook.updated_at FROM integration_webhooks hook`
 
 func scanWebhook(row pgx.Row) (Webhook, error) {
 	var hook Webhook
 	err := row.Scan(&hook.ID, &hook.Name, &hook.Description, &hook.Enabled, &hook.SecretHint, &hook.RateLimitPerMinute, &hook.MaxBodyBytes, &hook.LastReceivedAt,
+		&hook.RejectedCount, &hook.LastRejectedAt, &hook.LastRejectedCode,
 		&hook.TriggerCount, &hook.CreatedBy, &hook.CreatedAt, &hook.UpdatedAt)
 	return hook, err
 }
@@ -374,12 +380,15 @@ func (service *Service) Deliveries(ctx context.Context, current identity.User, w
 }
 
 // Outcome is the public result of a receive attempt. Status is an HTTP
-// status; Code is a stable machine-readable reason.
+// status; Code is a stable machine-readable reason. Unsigned marks a request
+// that did not prove knowledge of the secret: callers rate-limit those per
+// client address.
 type Outcome struct {
 	Status      int    `json:"-"`
 	Code        string `json:"status"`
 	DeliveryID  string `json:"delivery_id,omitempty"`
 	RunsCreated int    `json:"runs_created"`
+	Unsigned    bool   `json:"-"`
 }
 
 // Headers abstracts http.Header for Receive.
@@ -387,76 +396,83 @@ type Headers interface{ Get(string) string }
 
 // Receive verifies and journals one delivery. body is already bounded by the
 // caller to MaxBodyBytes+1.
+//
+// Order matters: size, headers, timestamp and signature are checked before
+// anything is counted against the webhook. Requests without a valid
+// signature never consume the webhook's rate limit and never add journal
+// rows; they only bump an aggregate counter on the webhook. The per-minute
+// limit counts signed deliveries only.
 func (service *Service) Receive(ctx context.Context, webhookID string, headers Headers, body []byte) (Outcome, error) {
 	if uuid.Validate(webhookID) != nil {
-		return Outcome{Status: 404, Code: "not_found"}, nil
+		return Outcome{Status: 404, Code: "not_found", Unsigned: true}, nil
 	}
-	var orgID, name, hint string
+	var orgID, name string
 	var enabled bool
 	var rate, maxBody int
 	var nonce, ciphertext []byte
-	err := service.pool.QueryRow(ctx, `SELECT org_id,name,enabled,rate_limit_per_minute,max_body_bytes,secret_nonce,secret_ciphertext,secret_hint FROM integration_webhooks WHERE id=$1`, webhookID).Scan(
-		&orgID, &name, &enabled, &rate, &maxBody, &nonce, &ciphertext, &hint)
+	err := service.pool.QueryRow(ctx, `SELECT org_id,name,enabled,rate_limit_per_minute,max_body_bytes,secret_nonce,secret_ciphertext FROM integration_webhooks WHERE id=$1`, webhookID).Scan(
+		&orgID, &name, &enabled, &rate, &maxBody, &nonce, &ciphertext)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return Outcome{Status: 404, Code: "not_found"}, nil
+		return Outcome{Status: 404, Code: "not_found", Unsigned: true}, nil
 	}
 	if err != nil {
 		return Outcome{}, err
 	}
 	now := service.now().UTC()
-	var recent int
-	if err := service.pool.QueryRow(ctx, `SELECT count(*) FROM integration_webhook_deliveries WHERE webhook_id=$1 AND received_at>$2`, webhookID, now.Add(-time.Minute)).Scan(&recent); err != nil {
-		return Outcome{}, err
+	unsigned := func(status int, code string) (Outcome, error) {
+		if _, err := service.pool.Exec(ctx, `UPDATE integration_webhooks SET rejected_count=rejected_count+1,last_rejected_at=$2,last_rejected_code=$3 WHERE id=$1`,
+			webhookID, now, code); err != nil {
+			return Outcome{}, err
+		}
+		return Outcome{Status: status, Code: code, Unsigned: true}, nil
 	}
-	if recent >= rate {
-		return Outcome{Status: 429, Code: "rate_limited"}, nil
+	if len(body) > maxBody {
+		return unsigned(413, "body_too_large")
 	}
 	deliveryID := strings.TrimSpace(headers.Get(headerDelivery))
 	eventType := strings.TrimSpace(headers.Get(headerEvent))
-	digest := sha256.Sum256(body)
-	record := Delivery{DeliveryID: clip(deliveryID, 200), EventType: clip(eventType, 120), BodyBytes: len(body), BodySHA256: hex.EncodeToString(digest[:])}
-	reject := func(status int, code string) (Outcome, error) {
-		record.Status, record.ErrorCode = "rejected", code
-		if !deliveryPattern.MatchString(record.DeliveryID) {
-			record.DeliveryID = ""
-		}
-		if !eventPattern.MatchString(record.EventType) {
-			record.EventType = ""
-		}
-		if err := service.journal(ctx, nil, orgID, webhookID, &record, now); err != nil {
-			return Outcome{}, err
-		}
-		return Outcome{Status: status, Code: code, DeliveryID: record.DeliveryID}, nil
-	}
-	if !enabled {
-		return reject(403, "webhook_disabled")
-	}
-	if len(body) > maxBody {
-		return reject(413, "body_too_large")
-	}
 	if !deliveryPattern.MatchString(deliveryID) || (eventType != "" && !eventPattern.MatchString(eventType)) {
-		return reject(400, "invalid_headers")
+		return unsigned(400, "invalid_headers")
 	}
 	timestamp, err := strconv.ParseInt(strings.TrimSpace(headers.Get(headerTimestamp)), 10, 64)
 	if err != nil {
-		return reject(400, "invalid_timestamp")
+		return unsigned(400, "invalid_timestamp")
 	}
 	if skew := now.Sub(time.Unix(timestamp, 0)); skew > SignatureTolerance || skew < -SignatureTolerance {
-		return reject(401, "stale_timestamp")
+		return unsigned(401, "stale_timestamp")
 	}
 	secret, err := service.openSecret(orgID, webhookID, nonce, ciphertext)
 	if err != nil {
 		return Outcome{}, err
 	}
 	if !validSignature(secret, headers.Get(headerTimestamp), deliveryID, body, headers.Get(headerSignature)) {
-		return reject(401, "invalid_signature")
+		return unsigned(401, "invalid_signature")
 	}
-	var payload json.RawMessage
+	// From here on the sender holds the secret.
+	if !enabled {
+		return Outcome{Status: 403, Code: "webhook_disabled", DeliveryID: deliveryID}, nil
+	}
+	var recent int
+	if err := service.pool.QueryRow(ctx, `SELECT count(*) FROM integration_webhook_deliveries WHERE webhook_id=$1 AND received_at>$2`, webhookID, now.Add(-time.Minute)).Scan(&recent); err != nil {
+		return Outcome{}, err
+	}
+	if recent >= rate {
+		return Outcome{Status: 429, Code: "rate_limited", DeliveryID: deliveryID}, nil
+	}
+	digest := sha256.Sum256(body)
+	record := Delivery{DeliveryID: deliveryID, EventType: eventType, BodyBytes: len(body), BodySHA256: hex.EncodeToString(digest[:])}
+	reject := func(status int, code string) (Outcome, error) {
+		record.Status, record.ErrorCode = "rejected", code
+		if err := service.journal(ctx, nil, orgID, webhookID, &record, now); err != nil {
+			return Outcome{}, err
+		}
+		return Outcome{Status: status, Code: code, DeliveryID: deliveryID}, nil
+	}
 	trimmed := bytes.TrimSpace(body)
 	if len(trimmed) == 0 || trimmed[0] != '{' || !json.Valid(trimmed) {
 		return reject(400, "invalid_json")
 	}
-	payload = trimmed
+	payload := json.RawMessage(trimmed)
 	tx, err := service.pool.Begin(ctx)
 	if err != nil {
 		return Outcome{}, err
@@ -467,7 +483,6 @@ func (service *Service) Receive(ctx context.Context, webhookID string, headers H
 		var pgErr interface{ SQLState() string }
 		if errors.As(err, &pgErr) && pgErr.SQLState() == "23505" {
 			_ = tx.Rollback(ctx)
-			record.Status = ""
 			outcome, rejectErr := reject(200, "duplicate_delivery")
 			outcome.Code = "duplicate"
 			return outcome, rejectErr
@@ -488,13 +503,46 @@ func (service *Service) Receive(ctx context.Context, webhookID string, headers H
 	if _, err := tx.Exec(ctx, `UPDATE integration_webhooks SET last_received_at=$2 WHERE id=$1`, webhookID, now); err != nil {
 		return Outcome{}, err
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM integration_webhook_deliveries WHERE webhook_id=$1 AND received_at<$2`, webhookID, now.Add(-journalRetention)); err != nil {
-		return Outcome{}, err
-	}
 	if err := tx.Commit(ctx); err != nil {
 		return Outcome{}, err
 	}
 	return Outcome{Status: 202, Code: "accepted", DeliveryID: deliveryID, RunsCreated: runs}, nil
+}
+
+// JournalLimit is how many newest journal rows each webhook keeps.
+const JournalLimit = 1000
+
+// CleanupJournal removes journal rows older than the retention period and
+// beyond the newest JournalLimit rows of each webhook.
+func (service *Service) CleanupJournal(ctx context.Context) (int64, error) {
+	now := service.now().UTC()
+	result, err := service.pool.Exec(ctx, `DELETE FROM integration_webhook_deliveries delivery
+		WHERE delivery.received_at < $1
+		   OR delivery.id IN (
+			SELECT ranked.id FROM (
+				SELECT id,row_number() OVER (PARTITION BY webhook_id ORDER BY received_at DESC,id DESC) AS position
+				FROM integration_webhook_deliveries) ranked
+			WHERE ranked.position > $2)`, now.Add(-journalRetention), JournalLimit)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+// Run cleans the journal periodically until ctx ends.
+func (service *Service) Run(ctx context.Context, interval time.Duration, logger interface{ Error(string, ...any) }) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		if _, err := service.CleanupJournal(ctx); err != nil && ctx.Err() == nil && logger != nil {
+			logger.Error("webhook journal cleanup failed", "error", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
 }
 
 func (service *Service) journal(ctx context.Context, tx pgx.Tx, orgID, webhookID string, record *Delivery, now time.Time) error {
@@ -563,13 +611,6 @@ func secretAAD(orgID, webhookID string) []byte {
 
 func secretHint(secret string) string {
 	return secretPrefix + "••••" + secret[len(secret)-4:]
-}
-
-func clip(value string, limit int) string {
-	if len(value) <= limit {
-		return value
-	}
-	return value[:limit]
 }
 
 func audit(ctx context.Context, tx pgx.Tx, current identity.User, webhookID, operation string, metadata map[string]any) error {

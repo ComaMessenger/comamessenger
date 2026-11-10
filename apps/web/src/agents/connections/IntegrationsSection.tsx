@@ -64,6 +64,8 @@ type McpDraft = {
   header_name: string;
   header_value: string;
   allow_private_network: boolean;
+  agent_use_allowed: boolean;
+  writes_require_confirmation: boolean;
 };
 
 const emptyMcpDraft: McpDraft = {
@@ -73,6 +75,8 @@ const emptyMcpDraft: McpDraft = {
   header_name: "Authorization",
   header_value: "",
   allow_private_network: false,
+  agent_use_allowed: false,
+  writes_require_confirmation: true,
 };
 
 function McpConnections({
@@ -120,6 +124,8 @@ function McpConnections({
         endpoint_url: draft.endpoint_url.trim(),
         enabled: true,
         allow_private_network: draft.allow_private_network,
+        agent_use_allowed: draft.agent_use_allowed,
+        writes_require_confirmation: draft.writes_require_confirmation,
         ...(headers ? { headers } : {}),
       }),
     );
@@ -196,20 +202,66 @@ function McpConnections({
                   </dd>
                 </div>
                 <div>
+                  <dt>{t("mcpConnectionPolicy")}</dt>
+                  <dd>
+                    {connection.agent_use_allowed
+                      ? t("mcpConnectionAgentUseOn")
+                      : t("mcpConnectionAgentUseOff")}
+                    {" · "}
+                    {connection.writes_require_confirmation
+                      ? t("mcpConnectionWritesConfirmedOn")
+                      : t("mcpConnectionWritesConfirmedOff")}
+                  </dd>
+                </div>
+                <div>
                   <dt>{t("mcpConnectionTools")}</dt>
                   <dd>
                     {connection.tools.length ? (
                       <ul className="integrations__tools">
-                        {connection.tools.map((tool) => (
-                          <li key={tool.name} title={tool.description}>
-                            <code>{tool.name}</code>
-                            <Badge tone={tool.read_only ? "soft" : "primary"}>
-                              {tool.read_only
-                                ? t("mcpToolRead")
-                                : t("mcpToolWrite")}
-                            </Badge>
-                          </li>
-                        ))}
+                        {connection.tools.map((tool) => {
+                          const assignable =
+                            connection.assignable_tools == null ||
+                            connection.assignable_tools.includes(tool.name);
+                          return (
+                            <li key={tool.name} title={tool.description}>
+                              {canManage && (
+                                <Switch
+                                  label={t("mcpToolAssignable", {
+                                    tool: tool.name,
+                                  })}
+                                  checked={assignable}
+                                  disabled={pendingID === connection.id}
+                                  onChange={(value) => {
+                                    const current =
+                                      connection.assignable_tools ??
+                                      connection.tools.map((item) => item.name);
+                                    const next = value
+                                      ? [...current, tool.name]
+                                      : current.filter(
+                                          (name) => name !== tool.name,
+                                        );
+                                    void run(connection.id, () =>
+                                      api.updateMcpConnection(connection.id, {
+                                        assignable_tools: next,
+                                      }),
+                                    );
+                                  }}
+                                />
+                              )}
+                              <code>{tool.name}</code>
+                              <Badge tone={tool.read_only ? "soft" : "primary"}>
+                                {tool.read_only
+                                  ? t("mcpToolRead")
+                                  : t("mcpToolWrite")}
+                              </Badge>
+                              {!assignable && (
+                                <span className="integrations__muted">
+                                  {t("mcpToolNotAssignable")}
+                                </span>
+                              )}
+                            </li>
+                          );
+                        })}
                       </ul>
                     ) : (
                       t("mcpConnectionToolsUnknown")
@@ -253,6 +305,39 @@ function McpConnections({
                     }
                   >
                     {connection.enabled ? t("disable") : t("enable")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={pendingID === connection.id}
+                    onClick={() =>
+                      void run(connection.id, () =>
+                        api.updateMcpConnection(connection.id, {
+                          agent_use_allowed: !connection.agent_use_allowed,
+                        }),
+                      )
+                    }
+                  >
+                    {connection.agent_use_allowed
+                      ? t("mcpConnectionAgentUseRevoke")
+                      : t("mcpConnectionAgentUseGrant")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={pendingID === connection.id}
+                    onClick={() =>
+                      void run(connection.id, () =>
+                        api.updateMcpConnection(connection.id, {
+                          writes_require_confirmation:
+                            !connection.writes_require_confirmation,
+                        }),
+                      )
+                    }
+                  >
+                    {connection.writes_require_confirmation
+                      ? t("mcpConnectionWritesConfirmedRelax")
+                      : t("mcpConnectionWritesConfirmedRequire")}
                   </Button>
                   {connection.agent_count > 0 ? (
                     <Button
@@ -377,6 +462,38 @@ function McpConnections({
               <div>
                 <strong>{t("mcpConnectionPrivate")}</strong>
                 <p>{t("mcpConnectionPrivateHint")}</p>
+              </div>
+            </div>
+            <div className="integrations__switch">
+              <Switch
+                label={t("mcpConnectionAgentUse")}
+                checked={draft.agent_use_allowed}
+                onChange={(value) =>
+                  setDraft((current) => ({
+                    ...current,
+                    agent_use_allowed: value,
+                  }))
+                }
+              />
+              <div>
+                <strong>{t("mcpConnectionAgentUse")}</strong>
+                <p>{t("mcpConnectionAgentUseHint")}</p>
+              </div>
+            </div>
+            <div className="integrations__switch">
+              <Switch
+                label={t("mcpConnectionWritesConfirmed")}
+                checked={draft.writes_require_confirmation}
+                onChange={(value) =>
+                  setDraft((current) => ({
+                    ...current,
+                    writes_require_confirmation: value,
+                  }))
+                }
+              />
+              <div>
+                <strong>{t("mcpConnectionWritesConfirmed")}</strong>
+                <p>{t("mcpConnectionWritesConfirmedHint")}</p>
               </div>
             </div>
             <p className="agent-connection-form__security">
@@ -589,6 +706,17 @@ function Webhooks({ api }: { api: MessengerAPI }) {
                   <dt>{t("webhookTriggers")}</dt>
                   <dd>{hook.trigger_count}</dd>
                 </div>
+                {hook.rejected_count > 0 && (
+                  <div>
+                    <dt>{t("webhookRejected")}</dt>
+                    <dd>
+                      {t("webhookRejectedSummary", {
+                        count: hook.rejected_count,
+                        code: hook.last_rejected_code,
+                      })}
+                    </dd>
+                  </div>
+                )}
                 <div>
                   <dt>{t("webhookLastReceived")}</dt>
                   <dd>

@@ -11,6 +11,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/access"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/mcptest"
+	"github.com/comamessenger/comamessenger/core/internal/netguard"
 	"github.com/comamessenger/comamessenger/core/internal/permission"
 	"github.com/comamessenger/comamessenger/core/internal/testdb"
 	"github.com/google/uuid"
@@ -60,12 +61,23 @@ func newIntegrationFixture(t *testing.T) integrationFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The test MCP servers listen on loopback, which the operator lists.
+	f.service.SetPrivateTargets(mustTargets(t, "127.0.0.1/32"))
 	f.owner = identity.User{ActorID: ownerID, OrgID: f.orgID, OrgRole: "owner", Permissions: permission.Effective("owner", nil)}
 	f.builder = identity.User{ActorID: builderID, OrgID: f.orgID, OrgRole: "admin", Permissions: permission.Effective("admin", []permission.Code{permission.AgentsBuild})}
 	f.member = identity.User{ActorID: memberID, OrgID: f.orgID, OrgRole: "member", Permissions: permission.Effective("member", nil)}
 	f.runtimeUser = identity.User{ActorID: f.agentID, OrgID: f.orgID, OrgRole: "member"}
 	f.runtimeIdentity = access.Identity{ActorID: f.agentID, OrgID: f.orgID, AuthenticationKind: "api_key", KeyID: uuid.NewString(), Scopes: []string{"runtime:execute"}}
 	return f
+}
+
+func mustTargets(t *testing.T, value string) netguard.Targets {
+	t.Helper()
+	targets, err := netguard.ParseTargets(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return targets
 }
 
 func (f integrationFixture) bind(t *testing.T, connectionID string, tools []string, confirm bool) {
@@ -97,13 +109,14 @@ func TestMCPConnectionSecretNeverLeavesCore(t *testing.T) {
 		t.Fatalf("builder without integrations.manage created a connection: %v", err)
 	}
 	created, err := f.service.CreateMCPConnection(t.Context(), f.owner, CreateMCPConnectionInput{
-		Name: "accounting", Description: "Учёт", EndpointURL: server.URL + "/mcp", AllowPrivateNetwork: true,
+		Name: "accounting", Description: "Учёт", EndpointURL: server.URL + "/mcp?token=path-secret", AllowPrivateNetwork: true, AgentUseAllowed: true,
 		Headers: map[string]string{"Authorization": "Bearer " + secretToken},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !created.HeadersConfigured || created.SecretHint == "" || strings.Contains(created.SecretHint, secretToken) {
+	// The hint shows the last four characters only.
+	if !created.HeadersConfigured || created.SecretHint != "Authorization: ••••7f3a" || !created.WritesRequireConfirmation {
 		t.Fatalf("created = %+v", created)
 	}
 	tested, err := f.service.TestMCPConnection(t.Context(), f.owner, created.ID)
@@ -119,6 +132,13 @@ func TestMCPConnectionSecretNeverLeavesCore(t *testing.T) {
 	listed, err := f.service.ListMCPConnections(t.Context(), f.builder)
 	if err != nil || len(listed) != 1 {
 		t.Fatalf("builder list = %+v, err=%v", listed, err)
+	}
+	// Builders without integrations.manage see the host only and no hint.
+	if strings.Contains(listed[0].EndpointURL, "path-secret") || strings.Contains(listed[0].EndpointURL, "/mcp") || listed[0].SecretHint != "" {
+		t.Fatalf("builder sees %q / %q", listed[0].EndpointURL, listed[0].SecretHint)
+	}
+	if managed, _ := f.service.MCPConnection(t.Context(), f.owner, created.ID); !strings.Contains(managed.EndpointURL, "path-secret") {
+		t.Fatalf("manager endpoint = %q", managed.EndpointURL)
 	}
 	if _, err := f.service.ListMCPConnections(t.Context(), f.member); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("member list error = %v", err)
@@ -157,11 +177,15 @@ func TestMCPConnectionSecretNeverLeavesCore(t *testing.T) {
 	if _, err := f.service.RuntimeMCPServersForRun(t.Context(), f.owner, access.Identity{ActorID: f.owner.ActorID, OrgID: f.orgID, AuthenticationKind: "session"}, f.agentID, runID); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("browser session got runtime headers: %v", err)
 	}
-	// The deployment switch overrides the connection's private network opt-in.
-	f.service.SetPrivateNetworksAllowed(false)
+	if strings.Join(runtime[0].AllowedPrivateCIDRs, ",") != "127.0.0.1/32" {
+		t.Fatalf("runtime private CIDRs = %v", runtime[0].AllowedPrivateCIDRs)
+	}
+	// Without the operator allowlist the connection is unusable, also for the
+	// runtime, although it was saved while the address was listed.
+	f.service.SetPrivateTargets(netguard.Targets{})
 	runtime, err = f.service.RuntimeMCPServersForRun(t.Context(), f.runtimeUser, f.runtimeIdentity, f.agentID, runID)
-	if err != nil || runtime[0].AllowPrivateNetwork {
-		t.Fatalf("runtime private switch = %+v, err=%v", runtime, err)
+	if err != nil || len(runtime) != 0 {
+		t.Fatalf("runtime without allowlist = %+v, err=%v", runtime, err)
 	}
 	if tested, err := f.service.TestMCPConnection(t.Context(), f.owner, created.ID); err != nil || tested.HealthStatus != "unhealthy" || tested.LastErrorCode != "mcp_endpoint_forbidden" {
 		t.Fatalf("test under deny policy = %+v, err=%v", tested, err)
@@ -184,15 +208,21 @@ func TestMCPConnectionRejectsUnsafeDestinations(t *testing.T) {
 			t.Fatalf("unsafe connection accepted: %+v (%v)", input, err)
 		}
 	}
+	// Internal addresses work only inside the operator allowlist.
+	f.service.SetPrivateTargets(mustTargets(t, "127.0.0.1/32, 10.0.0.8/32"))
 	if _, err := f.service.CreateMCPConnection(t.Context(), f.owner, CreateMCPConnectionInput{Name: "erp", EndpointURL: "http://10.0.0.8:8080/mcp", AllowPrivateNetwork: true}); err != nil {
-		t.Fatalf("trusted internal address rejected: %v", err)
+		t.Fatalf("listed internal address rejected: %v", err)
 	}
-	f.service.SetPrivateNetworksAllowed(false)
-	if _, err := f.service.CreateMCPConnection(t.Context(), f.owner, CreateMCPConnectionInput{Name: "erp2", EndpointURL: "http://10.0.0.9:8080/mcp", AllowPrivateNetwork: true}); !errors.Is(err, ErrInvalid) {
-		t.Fatalf("private network accepted although the deployment forbids it: %v", err)
+	for _, input := range []CreateMCPConnectionInput{
+		{Name: "erp2", EndpointURL: "http://10.0.0.9:8080/mcp", AllowPrivateNetwork: true},
+		{Name: "postgres", EndpointURL: "http://postgres:5432/", AllowPrivateNetwork: true},
+		{Name: "unswitched", EndpointURL: "http://10.0.0.8:8080/mcp"},
+	} {
+		if _, err := f.service.CreateMCPConnection(t.Context(), f.owner, input); !errors.Is(err, ErrPrivateTargetNotAllowed) {
+			t.Fatalf("unlisted internal address %+v: %v", input, err)
+		}
 	}
 	// A public-looking endpoint that redirects inward is refused at test time.
-	f.service.SetPrivateNetworksAllowed(true)
 	redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "http://169.254.169.254/latest/meta-data", http.StatusTemporaryRedirect)
 	}))
@@ -273,8 +303,13 @@ func TestMigratedConnectionKeepsLegacyHeadersWorking(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.pool.Exec(t.Context(), `INSERT INTO integration_mcp_connections(id,org_id,name,endpoint_url,allow_private_network,encrypted_headers,legacy_agent_id,created_by,updated_by)
-		VALUES($1,$2,'legacy',$3,true,$4,$5,$6,$6)`, connectionID, f.orgID, server.URL, sealed, f.agentID, f.owner.ActorID); err != nil {
+	if _, err := f.pool.Exec(t.Context(), `INSERT INTO agent_mcp_servers(id,org_id,agent_id,name,endpoint_url,enabled,allowed_tools,encrypted_headers)
+		VALUES($1,$2,$3,'legacy','https://legacy.example.com/mcp',true,'{get_slots,assign_instructor}',$4)`, connectionID, f.orgID, f.agentID, sealed); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.pool.Exec(t.Context(), `INSERT INTO integration_mcp_connections(id,org_id,name,endpoint_url,allow_private_network,encrypted_headers,legacy_agent_id,
+		agent_use_allowed,assignable_tools,legacy_unverified,created_by,updated_by)
+		VALUES($1,$2,'legacy',$3,true,$4,$5,true,'{get_slots,assign_instructor}',true,$6,$6)`, connectionID, f.orgID, server.URL, sealed, f.agentID, f.owner.ActorID); err != nil {
 		t.Fatal(err)
 	}
 	f.bind(t, connectionID, []string{"get_slots", "assign_instructor"}, true)
@@ -294,6 +329,11 @@ func TestMigratedConnectionKeepsLegacyHeadersWorking(t *testing.T) {
 	if err := f.pool.QueryRow(t.Context(), `SELECT legacy_agent_id::text FROM integration_mcp_connections WHERE id=$1`, connectionID).Scan(&legacy); err != nil || legacy != nil {
 		t.Fatalf("legacy marker = %v, err=%v", legacy, err)
 	}
+	// The replaced secret does not survive in the pre-5.3 table.
+	var oldCopy []byte
+	if err := f.pool.QueryRow(t.Context(), `SELECT encrypted_headers FROM agent_mcp_servers WHERE id=$1`, connectionID).Scan(&oldCopy); err != nil || oldCopy != nil {
+		t.Fatalf("agent_mcp_servers still holds %d header bytes, err=%v", len(oldCopy), err)
+	}
 	runtime, err = f.service.RuntimeMCPServersForRun(t.Context(), f.runtimeUser, f.runtimeIdentity, f.agentID, f.run(t, false, map[string]any{}))
 	if err != nil || runtime[0].Headers["Authorization"] != "Bearer "+secretToken {
 		t.Fatalf("re-sealed runtime = %+v, err=%v", runtime, err)
@@ -310,5 +350,111 @@ func TestMigratedConnectionKeepsLegacyHeadersWorking(t *testing.T) {
 	}
 	if _, err := f.service.ExecuteConfirmedMCPCall(t.Context(), f.orgID, f.agentID, connectionID, "mcp__legacy__find_free_instructors", json.RawMessage(`{}`)); MCPErrorCode(err) != "mcp_tool_not_allowed" {
 		t.Fatalf("not allowlisted tool executed: %v", err)
+	}
+}
+
+func TestEndpointChangeDropsCredentialsAndCatalog(t *testing.T) {
+	f := newIntegrationFixture(t)
+	f.service.SetPrivateTargets(mustTargets(t, "127.0.0.0/8"))
+	server := mcptest.NewSlotsServer()
+	defer server.Close()
+	created, err := f.service.CreateMCPConnection(t.Context(), f.owner, CreateMCPConnectionInput{
+		Name: "accounting", EndpointURL: server.URL + "/mcp", AllowPrivateNetwork: true,
+		Headers: map[string]string{"Authorization": "Bearer " + secretToken},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tested, err := f.service.TestMCPConnection(t.Context(), f.owner, created.ID); err != nil || len(tested.Tools) != 3 {
+		t.Fatalf("tested = %+v, err=%v", tested, err)
+	}
+	// Same scheme, host and port: the credentials stay.
+	samePath := server.URL + "/v2/mcp"
+	kept, err := f.service.UpdateMCPConnection(t.Context(), f.owner, created.ID, UpdateMCPConnectionInput{EndpointURL: &samePath})
+	if err != nil || !kept.HeadersConfigured || kept.ToolsRefreshedAt == nil {
+		t.Fatalf("path change = %+v, err=%v", kept, err)
+	}
+	// Another host: the headers must not follow, the catalog is void.
+	otherHost := strings.Replace(server.URL, "127.0.0.1", "127.0.0.2", 1) + "/mcp"
+	moved, err := f.service.UpdateMCPConnection(t.Context(), f.owner, created.ID, UpdateMCPConnectionInput{EndpointURL: &otherHost})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if moved.HeadersConfigured || moved.SecretHint != "" || moved.LastErrorCode != "credentials_required" || len(moved.Tools) != 0 || moved.ToolsRefreshedAt != nil {
+		t.Fatalf("host change = %+v", moved)
+	}
+	var stored []byte
+	if err := f.pool.QueryRow(t.Context(), `SELECT encrypted_headers FROM integration_mcp_connections WHERE id=$1`, created.ID).Scan(&stored); err != nil || stored != nil {
+		t.Fatalf("headers kept after host change: %d bytes, err=%v", len(stored), err)
+	}
+	// Changing host and headers together keeps the new headers.
+	headers := map[string]string{"Authorization": "Bearer other-system-token-1234"}
+	back := server.URL + "/mcp"
+	rebuilt, err := f.service.UpdateMCPConnection(t.Context(), f.owner, created.ID, UpdateMCPConnectionInput{EndpointURL: &back, Headers: &headers})
+	if err != nil || !rebuilt.HeadersConfigured || rebuilt.LastErrorCode != "" {
+		t.Fatalf("host and headers = %+v, err=%v", rebuilt, err)
+	}
+}
+
+func TestConnectionPolicyBoundsAgentBindings(t *testing.T) {
+	f := newIntegrationFixture(t)
+	server := mcptest.NewSlotsServer()
+	defer server.Close()
+	created, err := f.service.CreateMCPConnection(t.Context(), f.owner, CreateMCPConnectionInput{
+		Name: "accounting", EndpointURL: server.URL + "/mcp", AllowPrivateNetwork: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.AgentUseAllowed || !created.WritesRequireConfirmation || created.AssignableTools != nil {
+		t.Fatalf("defaults = %+v", created)
+	}
+	if _, err := f.service.TestMCPConnection(t.Context(), f.owner, created.ID); err != nil {
+		t.Fatal(err)
+	}
+	// A binding that asks for no confirmation, tools beyond the policy and a
+	// tool the server does not offer.
+	encoded := []byte(`[{"connection_id":"` + created.ID + `","allowed_tools":["get_slots","assign_instructor","drop_database"],"require_write_confirmation":false}]`)
+	if _, err := f.pool.Exec(t.Context(), `UPDATE agents SET mcp_bindings=$2 WHERE actor_id=$1`, f.agentID, encoded); err != nil {
+		t.Fatal(err)
+	}
+	runID := f.run(t, false, map[string]any{})
+	runtime, err := f.service.RuntimeMCPServersForRun(t.Context(), f.runtimeUser, f.runtimeIdentity, f.agentID, runID)
+	if err != nil || len(runtime) != 0 {
+		t.Fatalf("connection not released for agents reached the runtime: %+v, err=%v", runtime, err)
+	}
+	allow := true
+	assignable := OptionalTools{Set: true, Value: []string{"get_slots", "assign_instructor"}}
+	if _, err := f.service.UpdateMCPConnection(t.Context(), f.owner, created.ID, UpdateMCPConnectionInput{AgentUseAllowed: &allow, AssignableTools: assignable}); err != nil {
+		t.Fatal(err)
+	}
+	runtime, err = f.service.RuntimeMCPServersForRun(t.Context(), f.runtimeUser, f.runtimeIdentity, f.agentID, runID)
+	if err != nil || len(runtime) != 1 || strings.Join(runtime[0].AllowedTools, ",") != "get_slots,assign_instructor" || !runtime[0].RequireWriteConfirmation {
+		t.Fatalf("runtime under policy = %+v, err=%v", runtime, err)
+	}
+	narrow := OptionalTools{Set: true, Value: []string{"get_slots"}}
+	if _, err := f.service.UpdateMCPConnection(t.Context(), f.owner, created.ID, UpdateMCPConnectionInput{AssignableTools: narrow}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.service.ExecuteConfirmedMCPCall(t.Context(), f.orgID, f.agentID, created.ID, "mcp__accounting__assign_instructor", json.RawMessage(`{"slot_id":"s-2","instructor_id":"i-3"}`)); MCPErrorCode(err) != "mcp_tool_not_allowed" {
+		t.Fatalf("approved call outside the policy: %v", err)
+	}
+	if server.Calls("assign_instructor") != 0 {
+		t.Fatal("a tool outside the policy reached the server")
+	}
+}
+
+func TestBindingWithoutConfirmationFieldDefaultsToConfirmation(t *testing.T) {
+	var binding mcpBinding
+	if err := json.Unmarshal([]byte(`{"connection_id":"x","allowed_tools":["a"]}`), &binding); err != nil || !binding.RequireWriteConfirmation {
+		t.Fatalf("binding = %+v, err=%v", binding, err)
+	}
+}
+
+func TestMaskShowsAtMostLastFour(t *testing.T) {
+	for value, want := range map[string]string{"short": "••••", "Bearer abcd": "••••", "Bearer secret-value-1234": "••••1234"} {
+		if got := mask(value); got != want {
+			t.Fatalf("mask(%q) = %q, want %q", value, got, want)
+		}
 	}
 }

@@ -62,6 +62,9 @@ func (service *Service) ListMCPServers(ctx context.Context, current identity.Use
 		if err != nil {
 			return nil, err
 		}
+		if !canManageIntegrations(current) {
+			server.EndpointURL = endpointHost(server.EndpointURL)
+		}
 		result = append(result, server)
 	}
 	return result, rows.Err()
@@ -119,9 +122,12 @@ func (service *Service) CreateMCPServer(ctx context.Context, current identity.Us
 	} else if err != nil {
 		return MCPServer{}, err
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO integration_mcp_connections(id,org_id,name,endpoint_url,enabled,encrypted_headers,secret_hint,timeout_ms,max_output_bytes,created_by,updated_by)
-		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10)`, connectionID, current.OrgID, name, strings.TrimSpace(input.EndpointURL), input.Enabled, encrypted,
-		headersHint(input.Headers), input.TimeoutMS, input.MaxOutputBytes, current.ActorID); err != nil {
+	// The old API configured one server per agent, so the connection's policy
+	// mirrors that agent's settings and the connection is released for agents.
+	if _, err := tx.Exec(ctx, `INSERT INTO integration_mcp_connections(id,org_id,name,endpoint_url,enabled,encrypted_headers,secret_hint,timeout_ms,max_output_bytes,
+		agent_use_allowed,writes_require_confirmation,assignable_tools,created_by,updated_by)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,true,$10,$11,$12,$12)`, connectionID, current.OrgID, name, strings.TrimSpace(input.EndpointURL), input.Enabled, encrypted,
+		headersHint(input.Headers), input.TimeoutMS, input.MaxOutputBytes, requireConfirmation, tools, current.ActorID); err != nil {
 		if isUniqueViolation(err) {
 			return MCPServer{}, ErrInvalid
 		}
@@ -204,6 +210,10 @@ func (service *Service) UpdateMCPServer(ctx context.Context, current identity.Us
 		defer tx.Rollback(ctx)
 		binding, _ := json.Marshal([]mcpBinding{{ConnectionID: serverID, AllowedTools: tools, RequireWriteConfirmation: requireConfirmation}})
 		if err := setLegacyBinding(ctx, tx, current.OrgID, agentID, serverID, binding); err != nil {
+			return MCPServer{}, err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE integration_mcp_connections SET assignable_tools=$3,writes_require_confirmation=$4,updated_by=$5,updated_at=now()
+			WHERE org_id=$1 AND id=$2`, current.OrgID, serverID, tools, requireConfirmation, current.ActorID); err != nil {
 			return MCPServer{}, err
 		}
 		if err := auditIntegration(ctx, tx, current, "mcp_connection", serverID, "bind", map[string]any{"legacy_agent_api": true, "agent_id": agentID, "allowed_tools": tools}); err != nil {

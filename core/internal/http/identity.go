@@ -86,6 +86,7 @@ type identityHandlers struct {
 	knowledge             *knowledge.Service
 	webhooks              *webhook.Service
 	webhookRate           *ipRateLimiter
+	webhookFailures       *ipRateLimiter
 	realtime              standardhttp.Handler
 	allowedOrigin         string
 	cookieSecure          bool
@@ -112,7 +113,7 @@ type authenticated struct {
 
 func newIdentityHandlers(logger *slog.Logger, allowedOrigin string, dependencies Dependencies) *identityHandlers {
 	return &identityHandlers{
-		logger: logger, service: dependencies.Identity, agents: dependencies.Agents, agentConfig: dependencies.AgentConfig, agentProvider: dependencies.AgentProvider, agentTools: dependencies.AgentTools, agentRuns: dependencies.AgentRuns, agentTriggers: dependencies.AgentTriggers, chats: dependencies.Chats, messages: dependencies.Messages, userState: dependencies.UserState, push: dependencies.Push, workspace: dependencies.Workspace, files: dependencies.Files, search: dependencies.Search, knowledge: dependencies.Knowledge, webhooks: dependencies.Webhooks, webhookRate: newIPRateLimiter(600, 100), realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
+		logger: logger, service: dependencies.Identity, agents: dependencies.Agents, agentConfig: dependencies.AgentConfig, agentProvider: dependencies.AgentProvider, agentTools: dependencies.AgentTools, agentRuns: dependencies.AgentRuns, agentTriggers: dependencies.AgentTriggers, chats: dependencies.Chats, messages: dependencies.Messages, userState: dependencies.UserState, push: dependencies.Push, workspace: dependencies.Workspace, files: dependencies.Files, search: dependencies.Search, knowledge: dependencies.Knowledge, webhooks: dependencies.Webhooks, webhookRate: newIPRateLimiter(600, 100), webhookFailures: newIPRateLimiter(30, 10), realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
 		cookieSecure: dependencies.CookieSecure, refreshTTL: dependencies.RefreshTokenTTL,
 		bootstrapRate: newIPRateLimiter(5, 5), loginRate: newIPRateLimiter(10, 10),
 		refreshRate: newIPRateLimiter(30, 20), invitationRate: newIPRateLimiter(10, 10), websocketRate: newIPRateLimiter(60, 20), actorRate: newIPRateLimiter(1200, 200),

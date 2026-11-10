@@ -27,6 +27,9 @@ const connection: McpConnection = {
   secret_hint: "Authorization: Bear••••3f9a",
   timeout_ms: 10000,
   max_output_bytes: 262144,
+  agent_use_allowed: true,
+  writes_require_confirmation: true,
+  assignable_tools: null,
   tools: [
     { name: "get_slots", description: "Slots", read_only: true },
     { name: "assign_instructor", description: "Assign", read_only: false },
@@ -50,6 +53,9 @@ const hook: IntegrationWebhook = {
   rate_limit_per_minute: 60,
   max_body_bytes: 65536,
   last_received_at: null,
+  rejected_count: 0,
+  last_rejected_at: null,
+  last_rejected_code: "",
   trigger_count: 0,
   created_by: "01900000-0000-7000-8000-000000000001",
   created_at: "2026-11-10T10:00:00Z",
@@ -108,6 +114,47 @@ describe("workspace integrations", () => {
       expect(detach).toHaveBeenCalledWith(connection.id, [
         "01900000-0000-7000-8000-000000000301",
       ]),
+    );
+  });
+
+  it("creates connections closed for agents with approval for changes, and narrows assignable tools", async () => {
+    const create = vi.fn().mockResolvedValue(connection);
+    const update = vi.fn().mockResolvedValue(connection);
+    const api = {
+      apiURL: "",
+      mcpConnections: vi.fn().mockResolvedValue([connection]),
+      integrationWebhooks: vi.fn().mockResolvedValue([]),
+      createMcpConnection: create,
+      updateMcpConnection: update,
+    };
+    renderSection(api);
+    const card = await screen.findByTestId("mcp-connection");
+    fireEvent.click(
+      within(card).getByRole("switch", {
+        name: "May be given to agents: assign_instructor",
+      }),
+    );
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith(connection.id, {
+        assignable_tools: ["get_slots"],
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Connect a system" }));
+    fireEvent.change(screen.getByLabelText("Short name"), {
+      target: { value: "erp" },
+    });
+    fireEvent.change(screen.getByLabelText("MCP server address"), {
+      target: { value: "https://erp.example.com/mcp" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "erp",
+          agent_use_allowed: false,
+          writes_require_confirmation: true,
+        }),
+      ),
     );
   });
 

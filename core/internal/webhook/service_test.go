@@ -136,10 +136,6 @@ func TestWebhookDeliveryStartsAgentOnceWithPayloadAsData(t *testing.T) {
 	if outcome := send(created.Secret, "d-4", "slot.released", now.Add(-10*time.Minute), body); outcome.Status != 401 || outcome.Code != "stale_timestamp" {
 		t.Fatalf("stale = %+v", outcome)
 	}
-	// Five attempts in the last minute exhaust the limit of five.
-	if outcome := send(created.Secret, "d-5", "slot.released", now, body); outcome.Status != 429 {
-		t.Fatalf("rate limit = %+v", outcome)
-	}
 	now = now.Add(2 * time.Minute)
 	if outcome := send(created.Secret, "d-6", "slot.released", now, []byte(`{"x":"`+strings.Repeat("a", 3000)+`"}`)); outcome.Status != 413 {
 		t.Fatalf("large body = %+v", outcome)
@@ -170,8 +166,13 @@ func TestWebhookDeliveryStartsAgentOnceWithPayloadAsData(t *testing.T) {
 	for _, entry := range journal {
 		statuses = append(statuses, entry.Status+":"+entry.ErrorCode)
 	}
-	if strings.Join(statuses, ",") != "rejected:webhook_disabled,rejected:invalid_signature,rejected:invalid_json,rejected:body_too_large,rejected:stale_timestamp,rejected:invalid_signature,accepted:,rejected:duplicate_delivery,accepted:" {
+	// Only signed deliveries are journaled; the rest is an aggregate count.
+	if strings.Join(statuses, ",") != "rejected:invalid_json,accepted:,rejected:duplicate_delivery,accepted:" {
 		t.Fatalf("journal = %v", statuses)
+	}
+	hooks, err := service.List(t.Context(), owner)
+	if err != nil || hooks[0].RejectedCount != 4 || hooks[0].LastRejectedCode != "invalid_signature" {
+		t.Fatalf("rejected counter = %+v, err=%v", hooks, err)
 	}
 	var runs int
 	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM agent_runs WHERE agent_id=$1`, agentID).Scan(&runs); err != nil || runs != 1 {
@@ -195,5 +196,93 @@ func TestSignatureVector(t *testing.T) {
 	}
 	if !validSignature("whsec_test", "1700000000", "d-1", []byte(`{"slot_id":"s-2"}`), "sha256=00, "+got) {
 		t.Fatal("a valid signature among several was rejected")
+	}
+}
+
+// TestUnsignedRequestsDoNotExhaustTheWebhook reproduces the review finding:
+// rate_limit_per_minute garbage POSTs used to make the next signed delivery
+// fail with 429 and added one journal row each.
+func TestUnsignedRequestsDoNotExhaustTheWebhook(t *testing.T) {
+	pool := testdb.New(t)
+	orgID, ownerID := uuid.NewString(), uuid.NewString()
+	tx, err := pool.Begin(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(t.Context())
+	if _, err := tx.Exec(t.Context(), `INSERT INTO organizations(id,name,slug) VALUES($1,'Flood','flood')`, orgID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(t.Context(), `INSERT INTO actors(id,org_id,type,org_role,display_name,handle) VALUES($1,$2,'user','owner','Owner','owner')`, ownerID, orgID); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	service, err := NewService(pool, "0123456789abcdef0123456789abcdef", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := identity.User{ActorID: ownerID, OrgID: orgID, OrgRole: "owner", Permissions: permission.Effective("owner", nil)}
+	created, err := service.Create(t.Context(), owner, CreateInput{Name: "Учёт", RateLimitPerMinute: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	service.now = func() time.Time { return now }
+	body := []byte(`{"slot_id":"s-2"}`)
+	signed := func(secret, delivery string) http.Header {
+		timestamp := strconv.FormatInt(now.Unix(), 10)
+		headers := http.Header{}
+		headers.Set("X-Coma-Timestamp", timestamp)
+		headers.Set("X-Coma-Delivery", delivery)
+		headers.Set("X-Coma-Signature", Sign(secret, timestamp, delivery, body))
+		return headers
+	}
+	for index := 0; index < 10; index++ {
+		outcome, err := service.Receive(t.Context(), created.ID, http.Header{}, body)
+		if err != nil || outcome.Status != 400 || !outcome.Unsigned {
+			t.Fatalf("garbage %d = %+v, err=%v", index, outcome, err)
+		}
+		forged, err := service.Receive(t.Context(), created.ID, signed("whsec_forged", "forged-"+strconv.Itoa(index)), body)
+		if err != nil || forged.Status != 401 || !forged.Unsigned {
+			t.Fatalf("forged %d = %+v, err=%v", index, forged, err)
+		}
+	}
+	outcome, err := service.Receive(t.Context(), created.ID, signed(created.Secret, "real-1"), body)
+	if err != nil || outcome.Status != 202 {
+		t.Fatalf("signed delivery after a flood = %+v, err=%v", outcome, err)
+	}
+	var rows int
+	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM integration_webhook_deliveries WHERE webhook_id=$1`, created.ID).Scan(&rows); err != nil || rows != 1 {
+		t.Fatalf("journal rows = %d, err=%v", rows, err)
+	}
+	// The webhook limit still applies to signed deliveries.
+	for _, delivery := range []string{"real-2", "real-3"} {
+		if outcome, _ := service.Receive(t.Context(), created.ID, signed(created.Secret, delivery), body); outcome.Status != 202 {
+			t.Fatalf("%s = %+v", delivery, outcome)
+		}
+	}
+	if outcome, _ := service.Receive(t.Context(), created.ID, signed(created.Secret, "real-4"), body); outcome.Status != 429 || outcome.Unsigned {
+		t.Fatalf("signed over the limit = %+v", outcome)
+	}
+	// Periodic cleanup bounds the journal by age and by row count.
+	if _, err := pool.Exec(t.Context(), `UPDATE integration_webhook_deliveries SET received_at=now()-interval '40 days' WHERE delivery_id='real-1'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(t.Context(), `INSERT INTO integration_webhook_deliveries(id,org_id,webhook_id,delivery_id,status,received_at)
+		SELECT gen_random_uuid(),$1,$2,'bulk-'||n,'accepted',now()-make_interval(secs=>n) FROM generate_series(1,$3::int) n`, orgID, created.ID, JournalLimit+5); err != nil {
+		t.Fatal(err)
+	}
+	removed, err := service.CleanupJournal(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM integration_webhook_deliveries WHERE webhook_id=$1`, created.ID).Scan(&rows); err != nil || rows != JournalLimit {
+		t.Fatalf("rows after cleanup = %d (removed %d), err=%v", rows, removed, err)
+	}
+	var old int
+	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM integration_webhook_deliveries WHERE delivery_id='real-1'`).Scan(&old); err != nil || old != 0 {
+		t.Fatalf("old row kept: %d, err=%v", old, err)
 	}
 }

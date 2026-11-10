@@ -815,17 +815,20 @@ func (service *Service) StartMCPToolCall(ctx context.Context, current identity.U
 	}
 	// The binding comes from the draft snapshot of a dry run, otherwise from
 	// the published configuration. The tool must be allowlisted there.
-	var dryRun, requireConfirmation, toolsKnown bool
+	var dryRun, requireConfirmation, toolsKnown, legacyUnverified bool
 	var correlationID, connectionName string
 	var allowed, tools []byte
+	var assignable []string
 	err = service.pool.QueryRow(ctx, `SELECT run.dry_run,run.correlation_id::text,connection.name,binding.value->'allowed_tools',
-		COALESCE((binding.value->>'require_write_confirmation')::boolean,true),connection.tools,connection.tools_refreshed_at IS NOT NULL
+		COALESCE((binding.value->>'require_write_confirmation')::boolean,true) OR connection.writes_require_confirmation,
+		connection.tools,connection.tools_refreshed_at IS NOT NULL,connection.legacy_unverified,connection.assignable_tools
 		FROM agent_runs run JOIN agents agent ON agent.org_id=run.org_id AND agent.actor_id=run.agent_id
 		CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN run.dry_run AND run.agent_config ? 'mcp_bindings' THEN run.agent_config->'mcp_bindings' ELSE agent.mcp_bindings END) binding
-		JOIN integration_mcp_connections connection ON connection.org_id=run.org_id AND connection.id::text=binding.value->>'connection_id' AND connection.enabled
+		JOIN integration_mcp_connections connection ON connection.org_id=run.org_id AND connection.id::text=binding.value->>'connection_id'
+			AND connection.enabled AND connection.agent_use_allowed
 		WHERE run.org_id=$1 AND run.agent_id=$2 AND run.id=$3 AND run.lease_token=$4 AND run.status='running' AND run.lease_expires_at>now()
 		  AND connection.id=$5`, current.OrgID, agentID, input.RunID, input.LeaseToken, input.ServerID).Scan(
-		&dryRun, &correlationID, &connectionName, &allowed, &requireConfirmation, &tools, &toolsKnown)
+		&dryRun, &correlationID, &connectionName, &allowed, &requireConfirmation, &tools, &toolsKnown, &legacyUnverified, &assignable)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return MCPToolCall{}, ErrForbidden
 	}
@@ -834,12 +837,20 @@ func (service *Service) StartMCPToolCall(ctx context.Context, current identity.U
 	}
 	var allowedTools []string
 	_ = json.Unmarshal(allowed, &allowedTools)
-	if !containsString(allowedTools, input.ToolName) {
+	if !containsString(allowedTools, input.ToolName) || (assignable != nil && !containsString(assignable, input.ToolName)) {
 		return MCPToolCall{}, ErrForbidden
 	}
-	mode := effectiveMCPMode(input.Mode, input.ToolName, tools, toolsKnown)
+	mode, offered := effectiveMCPMode(input.Mode, input.ToolName, tools, toolsKnown, legacyUnverified)
+	if !offered {
+		return MCPToolCall{}, ErrForbidden
+	}
 	exposedName := "mcp__" + connectionName + "__" + input.ToolName
 	if mode == "write" && !dryRun && requireConfirmation {
+		// Core executes the approved call with exactly the stored arguments, so
+		// it never accepts a pending call without them.
+		if len(input.Arguments) == 0 {
+			return MCPToolCall{}, ErrInvalid
+		}
 		// Core does not record a call yet: a person decides first and Core
 		// executes the approved call itself.
 		return MCPToolCall{ID: input.CallID, CorrelationID: correlationID, ToolName: exposedName, Mode: mode, ConfirmationRequired: true,
@@ -854,13 +865,18 @@ func (service *Service) StartMCPToolCall(ctx context.Context, current identity.U
 	return result, nil
 }
 
-// effectiveMCPMode trusts Core's own tool catalog over the runtime's claim:
-// once a connection was tested, a tool counts as read only when the catalog
-// says so and the runtime agrees. Before the first test the runtime's
-// classification is kept for compatibility with migrated connections.
-func effectiveMCPMode(claimed, toolName string, catalog []byte, known bool) string {
+// effectiveMCPMode classifies a call by Core's own tool catalog: a tool is
+// read-only only when the catalog says so and the runtime agrees. Without a
+// catalog every call is a write, except for connections migrated from
+// per-agent servers, which keep the runtime's classification until their
+// first successful test. offered is false for a tool the server does not
+// list in a known catalog.
+func effectiveMCPMode(claimed, toolName string, catalog []byte, known, legacyUnverified bool) (string, bool) {
 	if !known {
-		return claimed
+		if legacyUnverified {
+			return claimed, true
+		}
+		return "write", true
 	}
 	var tools []struct {
 		Name     string `json:"name"`
@@ -868,11 +884,14 @@ func effectiveMCPMode(claimed, toolName string, catalog []byte, known bool) stri
 	}
 	_ = json.Unmarshal(catalog, &tools)
 	for _, tool := range tools {
-		if tool.Name == toolName && tool.ReadOnly && claimed == "read" {
-			return "read"
+		if tool.Name == toolName {
+			if tool.ReadOnly && claimed == "read" {
+				return "read", true
+			}
+			return "write", true
 		}
 	}
-	return "write"
+	return "write", false
 }
 
 func containsString(values []string, target string) bool {

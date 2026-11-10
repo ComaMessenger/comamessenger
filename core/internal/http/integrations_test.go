@@ -46,7 +46,7 @@ func TestPublicWebhookEndpointVerifiesSignatureWithoutSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handlers := &identityHandlers{logger: slog.New(slog.NewTextHandler(io.Discard, nil)), webhooks: service, webhookRate: newIPRateLimiter(600, 100)}
+	handlers := &identityHandlers{logger: slog.New(slog.NewTextHandler(io.Discard, nil)), webhooks: service, webhookRate: newIPRateLimiter(600, 100), webhookFailures: newIPRateLimiter(30, 3)}
 	router := chi.NewRouter()
 	router.Post("/api/v1/hooks/{webhookID}", handlers.receiveWebhook)
 	send := func(secret, delivery string) (int, map[string]any) {
@@ -71,5 +71,18 @@ func TestPublicWebhookEndpointVerifiesSignatureWithoutSession(t *testing.T) {
 	}
 	if status, body := send(created.Secret, "delivery-1"); status != standardhttp.StatusOK || body["status"] != "duplicate" {
 		t.Fatalf("replay = %d %v", status, body)
+	}
+	// Unsigned requests from one address are cut off before the database.
+	for index := 0; index < 2; index++ {
+		if status, _ := send("whsec_forged", "forged"); status != standardhttp.StatusUnauthorized {
+			t.Fatalf("forged %d = %d", index, status)
+		}
+	}
+	if status, body := send("whsec_forged", "forged"); status != standardhttp.StatusTooManyRequests || body["code"] != "rate_limited" {
+		t.Fatalf("forged over the address limit = %d %v", status, body)
+	}
+	var rejected int
+	if err := pool.QueryRow(t.Context(), `SELECT rejected_count FROM integration_webhooks WHERE id=$1`, created.ID).Scan(&rejected); err != nil || rejected != 3 {
+		t.Fatalf("rejected count = %d, err=%v", rejected, err)
 	}
 }

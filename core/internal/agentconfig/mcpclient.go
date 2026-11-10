@@ -55,10 +55,11 @@ type mcpClient struct {
 }
 
 func newMCPClient(endpoint string, headers map[string]string, policy netguard.Policy, timeout time.Duration, maxBytes int) (*mcpClient, error) {
-	if _, err := policy.ValidateURL(endpoint); err != nil {
+	scoped, _, err := policy.ForURL(endpoint)
+	if err != nil {
 		return nil, mcpFailure("mcp_endpoint_forbidden")
 	}
-	return &mcpClient{http: policy.Client(timeout), endpoint: endpoint, headers: headers, maxBytes: maxBytes}, nil
+	return &mcpClient{http: scoped.Client(timeout), endpoint: endpoint, headers: headers, maxBytes: maxBytes}, nil
 }
 
 func (client *mcpClient) close() {

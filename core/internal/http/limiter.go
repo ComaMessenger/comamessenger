@@ -45,6 +45,18 @@ func (l *ipRateLimiter) Allow(key string) bool {
 	return entry.limiter.AllowN(now, 1)
 }
 
+// Exhausted reports, without consuming a token, whether key has no request
+// left right now.
+func (l *ipRateLimiter) Exhausted(key string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	entry, ok := l.entries[key]
+	if !ok {
+		return false
+	}
+	return entry.limiter.TokensAt(l.now()) < 1
+}
+
 func (l *ipRateLimiter) evict(now time.Time) {
 	if len(l.entries) < l.maxEntries {
 		return

@@ -566,7 +566,16 @@ func (executor *Executor) RequestMCPConfirmation(ctx context.Context, orgID, age
 	return executor.requestConfirmation(ctx, invocation, Definition{Name: exposedName, Mode: "write", RequiredScope: agent.Scope("mcp:" + connectionID)})
 }
 
+// confirmedCallTimeout bounds an approved external call independently of
+// the HTTP request that approved it (the connection timeout applies inside).
+const confirmedCallTimeout = 5 * time.Minute
+
 func (executor *Executor) executeConfirmedMCP(ctx context.Context, current identity.User, confirmation Confirmation, connectionID string) (Confirmation, error) {
+	// The approval is already recorded; closing the approver's tab must not
+	// cancel a write that may have reached the external system, nor leave the
+	// confirmation marked as failed because of it.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), confirmedCallTimeout)
+	defer cancel()
 	if executor.services.MCP == nil {
 		return executor.finishAndResolve(ctx, current, confirmation, nil, ErrForbidden)
 	}

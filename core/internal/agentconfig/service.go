@@ -21,6 +21,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/agentauthz"
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
+	"github.com/comamessenger/comamessenger/core/internal/netguard"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -93,16 +94,18 @@ type RuntimeMCPServer struct {
 	TimeoutMS                int               `json:"timeout_ms"`
 	MaxOutputBytes           int               `json:"max_output_bytes"`
 	RequireWriteConfirmation bool              `json:"require_write_confirmation"`
-	// AllowPrivateNetwork lets the runtime reach a trusted internal address.
-	AllowPrivateNetwork bool `json:"allow_private_network"`
+	// AllowPrivateNetwork lets the runtime reach a listed internal address
+	// (and plain HTTP); AllowedPrivateCIDRs are the ranges it may resolve to.
+	AllowPrivateNetwork bool     `json:"allow_private_network"`
+	AllowedPrivateCIDRs []string `json:"allowed_private_cidrs"`
 }
 
 type Service struct {
-	pool            *pgxpool.Pool
-	credentialAEAD  cipher.AEAD
-	connectionAEAD  cipher.AEAD
-	mcpAEAD         cipher.AEAD
-	privateNetworks bool
+	pool           *pgxpool.Pool
+	credentialAEAD cipher.AEAD
+	connectionAEAD cipher.AEAD
+	mcpAEAD        cipher.AEAD
+	privateTargets netguard.Targets
 }
 
 func NewService(pool *pgxpool.Pool, secret string) (*Service, error) {
@@ -118,7 +121,7 @@ func NewService(pool *pgxpool.Pool, secret string) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Service{pool: pool, credentialAEAD: credentialAEAD, connectionAEAD: connectionAEAD, mcpAEAD: mcpAEAD, privateNetworks: true}, nil
+	return &Service{pool: pool, credentialAEAD: credentialAEAD, connectionAEAD: connectionAEAD, mcpAEAD: mcpAEAD}, nil
 }
 
 func makeAEAD(domain, secret string) (cipher.AEAD, error) {
@@ -410,9 +413,11 @@ func aad(orgID, agentID string) []byte { return []byte(orgID + "\x00" + agentID 
 func canManage(current identity.User) bool {
 	return agentauthz.New().CanBuild(current)
 }
+
+// mask shows at most the last four characters; short values show none.
 func mask(value string) string {
-	if len(value) <= 8 {
+	if len(value) <= 12 {
 		return "••••"
 	}
-	return value[:4] + "••••" + value[len(value)-4:]
+	return "••••" + value[len(value)-4:]
 }

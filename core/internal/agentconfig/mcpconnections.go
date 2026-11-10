@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/netip"
 	"sort"
 	"strings"
 	"time"
@@ -31,25 +32,31 @@ import (
 var ErrUsageChanged = errors.New("integration usage changed")
 
 type MCPConnection struct {
-	ID                  string     `json:"id"`
-	Name                string     `json:"name"`
-	Description         string     `json:"description"`
-	EndpointURL         string     `json:"endpoint_url"`
-	Enabled             bool       `json:"enabled"`
-	AllowPrivateNetwork bool       `json:"allow_private_network"`
-	HeadersConfigured   bool       `json:"headers_configured"`
-	SecretHint          string     `json:"secret_hint"`
-	TimeoutMS           int        `json:"timeout_ms"`
-	MaxOutputBytes      int        `json:"max_output_bytes"`
-	Tools               []MCPTool  `json:"tools"`
-	ToolsRefreshedAt    *time.Time `json:"tools_refreshed_at"`
-	HealthStatus        string     `json:"health_status"`
-	LastTestedAt        *time.Time `json:"last_tested_at"`
-	LastErrorCode       string     `json:"last_error_code"`
-	AgentCount          int        `json:"agent_count"`
-	CreatedBy           string     `json:"created_by"`
-	CreatedAt           time.Time  `json:"created_at"`
-	UpdatedAt           time.Time  `json:"updated_at"`
+	ID                  string `json:"id"`
+	Name                string `json:"name"`
+	Description         string `json:"description"`
+	EndpointURL         string `json:"endpoint_url"`
+	Enabled             bool   `json:"enabled"`
+	AllowPrivateNetwork bool   `json:"allow_private_network"`
+	HeadersConfigured   bool   `json:"headers_configured"`
+	SecretHint          string `json:"secret_hint"`
+	TimeoutMS           int    `json:"timeout_ms"`
+	MaxOutputBytes      int    `json:"max_output_bytes"`
+	// AgentUseAllowed releases the connection for agent bindings.
+	AgentUseAllowed bool `json:"agent_use_allowed"`
+	// WritesRequireConfirmation holds every non read-only call for a person.
+	WritesRequireConfirmation bool `json:"writes_require_confirmation"`
+	// AssignableTools limits the tools agents may be given; nil means all.
+	AssignableTools  *[]string  `json:"assignable_tools"`
+	Tools            []MCPTool  `json:"tools"`
+	ToolsRefreshedAt *time.Time `json:"tools_refreshed_at"`
+	HealthStatus     string     `json:"health_status"`
+	LastTestedAt     *time.Time `json:"last_tested_at"`
+	LastErrorCode    string     `json:"last_error_code"`
+	AgentCount       int        `json:"agent_count"`
+	CreatedBy        string     `json:"created_by"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
 type CreateMCPConnectionInput struct {
@@ -61,17 +68,48 @@ type CreateMCPConnectionInput struct {
 	Headers             map[string]string `json:"headers"`
 	TimeoutMS           int               `json:"timeout_ms"`
 	MaxOutputBytes      int               `json:"max_output_bytes"`
+	AgentUseAllowed     bool              `json:"agent_use_allowed"`
+	// WritesRequireConfirmation defaults to true when omitted.
+	WritesRequireConfirmation *bool    `json:"writes_require_confirmation"`
+	AssignableTools           []string `json:"assignable_tools"`
 }
 
 type UpdateMCPConnectionInput struct {
-	Name                *string            `json:"name"`
-	Description         *string            `json:"description"`
-	EndpointURL         *string            `json:"endpoint_url"`
-	Enabled             *bool              `json:"enabled"`
-	AllowPrivateNetwork *bool              `json:"allow_private_network"`
-	Headers             *map[string]string `json:"headers"`
-	TimeoutMS           *int               `json:"timeout_ms"`
-	MaxOutputBytes      *int               `json:"max_output_bytes"`
+	Name                      *string            `json:"name"`
+	Description               *string            `json:"description"`
+	EndpointURL               *string            `json:"endpoint_url"`
+	Enabled                   *bool              `json:"enabled"`
+	AllowPrivateNetwork       *bool              `json:"allow_private_network"`
+	Headers                   *map[string]string `json:"headers"`
+	TimeoutMS                 *int               `json:"timeout_ms"`
+	MaxOutputBytes            *int               `json:"max_output_bytes"`
+	AgentUseAllowed           *bool              `json:"agent_use_allowed"`
+	WritesRequireConfirmation *bool              `json:"writes_require_confirmation"`
+	AssignableTools           OptionalTools      `json:"assignable_tools"`
+}
+
+// OptionalTools distinguishes an omitted field from an explicit null (all
+// tools assignable) and from a list.
+type OptionalTools struct {
+	Set   bool
+	Value []string
+}
+
+func (value *OptionalTools) UnmarshalJSON(data []byte) error {
+	value.Set = true
+	if string(data) == "null" {
+		value.Value = nil
+		return nil
+	}
+	var tools []string
+	if err := json.Unmarshal(data, &tools); err != nil {
+		return err
+	}
+	if tools == nil {
+		tools = []string{}
+	}
+	value.Value = tools
+	return nil
 }
 
 // MCPConnectionUsage is one agent that references a connection.
@@ -95,13 +133,91 @@ type mcpBinding struct {
 	RequireWriteConfirmation bool     `json:"require_write_confirmation"`
 }
 
-// SetPrivateNetworksAllowed is the deployment switch: when false, no
-// connection may reach private networks regardless of its own setting.
-func (service *Service) SetPrivateNetworksAllowed(allowed bool) { service.privateNetworks = allowed }
+// UnmarshalJSON treats a missing require_write_confirmation as true.
+func (binding *mcpBinding) UnmarshalJSON(data []byte) error {
+	type plain mcpBinding
+	decoded := plain{RequireWriteConfirmation: true}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	*binding = mcpBinding(decoded)
+	return nil
+}
+
+// SetPrivateTargets installs the operator allowlist of internal
+// destinations (INTEGRATIONS_ALLOWED_PRIVATE_TARGETS). Without it no
+// connection reaches a private address, whatever its own switch says.
+func (service *Service) SetPrivateTargets(targets netguard.Targets) { service.privateTargets = targets }
 
 func (service *Service) policy(connectionAllows bool) netguard.Policy {
-	return netguard.Policy{AllowPrivate: connectionAllows && service.privateNetworks}
+	return netguard.Policy{AllowPrivate: connectionAllows, Targets: service.privateTargets}
 }
+
+// effectiveTools is what an agent binding may actually call: its own list,
+// limited by the connection's assignable tools and, once Core has a
+// catalog, by the tools the server really offers.
+func effectiveTools(allowed []string, assignable *[]string, catalog []MCPTool, catalogKnown bool) []string {
+	result := make([]string, 0, len(allowed))
+	for _, tool := range allowed {
+		if assignable != nil && !containsTool(*assignable, tool) {
+			continue
+		}
+		if catalogKnown {
+			found := false
+			for _, item := range catalog {
+				if item.Name == tool {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
+		}
+		result = append(result, tool)
+	}
+	return result
+}
+
+func containsTool(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
+func validToolList(tools []string) bool {
+	if len(tools) > 256 {
+		return false
+	}
+	seen := map[string]struct{}{}
+	for _, tool := range tools {
+		if !mcpToolPattern.MatchString(tool) {
+			return false
+		}
+		if _, exists := seen[tool]; exists {
+			return false
+		}
+		seen[tool] = struct{}{}
+	}
+	return true
+}
+
+func endpointOrigin(raw string) string {
+	parsed, err := netguard.Policy{AllowPrivate: true, Targets: netguard.Targets{CIDRs: allNetworks}}.ValidateURL(raw)
+	if err != nil {
+		return raw
+	}
+	port := parsed.Port()
+	if port == "" {
+		port = map[string]string{"https": "443", "http": "80"}[parsed.Scheme]
+	}
+	return parsed.Scheme + "://" + strings.ToLower(parsed.Hostname()) + ":" + port
+}
+
+var allNetworks = []netip.Prefix{netip.MustParsePrefix("0.0.0.0/0"), netip.MustParsePrefix("::/0")}
 
 func canManageIntegrations(current identity.User) bool {
 	return permission.Allows(current.OrgRole, current.Permissions, permission.IntegrationsManage)
@@ -112,7 +228,8 @@ func canViewIntegrations(current identity.User) bool {
 }
 
 const mcpConnectionSelect = `SELECT connection.id,connection.name,connection.description,connection.endpoint_url,connection.enabled,connection.allow_private_network,
-	connection.encrypted_headers IS NOT NULL,connection.secret_hint,connection.timeout_ms,connection.max_output_bytes,connection.tools,connection.tools_refreshed_at,
+	connection.encrypted_headers IS NOT NULL,connection.secret_hint,connection.timeout_ms,connection.max_output_bytes,
+	connection.agent_use_allowed,connection.writes_require_confirmation,connection.assignable_tools,connection.tools,connection.tools_refreshed_at,
 	connection.health_status,connection.last_tested_at,connection.last_error_code,
 	(SELECT count(DISTINCT agent.actor_id) FROM agents agent LEFT JOIN agent_drafts draft ON draft.org_id=agent.org_id AND draft.agent_id=agent.actor_id
 	 WHERE agent.org_id=connection.org_id AND agent.deleted_at IS NULL
@@ -125,7 +242,8 @@ func scanMCPConnection(row pgx.Row) (MCPConnection, error) {
 	var connection MCPConnection
 	var tools []byte
 	err := row.Scan(&connection.ID, &connection.Name, &connection.Description, &connection.EndpointURL, &connection.Enabled, &connection.AllowPrivateNetwork,
-		&connection.HeadersConfigured, &connection.SecretHint, &connection.TimeoutMS, &connection.MaxOutputBytes, &tools, &connection.ToolsRefreshedAt,
+		&connection.HeadersConfigured, &connection.SecretHint, &connection.TimeoutMS, &connection.MaxOutputBytes,
+		&connection.AgentUseAllowed, &connection.WritesRequireConfirmation, &connection.AssignableTools, &tools, &connection.ToolsRefreshedAt,
 		&connection.HealthStatus, &connection.LastTestedAt, &connection.LastErrorCode, &connection.AgentCount, &connection.CreatedBy, &connection.CreatedAt, &connection.UpdatedAt)
 	if err != nil {
 		return MCPConnection{}, err
@@ -150,9 +268,20 @@ func (service *Service) ListMCPConnections(ctx context.Context, current identity
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, connection)
+		result = append(result, redactConnection(current, connection))
 	}
 	return result, rows.Err()
+}
+
+// redactConnection hides the full address (it may carry a token in the path
+// or query) and the secret hint from people without integrations.manage.
+func redactConnection(current identity.User, connection MCPConnection) MCPConnection {
+	if canManageIntegrations(current) {
+		return connection
+	}
+	connection.EndpointURL = endpointHost(connection.EndpointURL)
+	connection.SecretHint = ""
+	return connection
 }
 
 func (service *Service) MCPConnection(ctx context.Context, current identity.User, connectionID string) (MCPConnection, error) {
@@ -162,7 +291,8 @@ func (service *Service) MCPConnection(ctx context.Context, current identity.User
 	if uuid.Validate(connectionID) != nil {
 		return MCPConnection{}, ErrNotFound
 	}
-	return service.getMCPConnection(ctx, current.OrgID, connectionID)
+	connection, err := service.getMCPConnection(ctx, current.OrgID, connectionID)
+	return redactConnection(current, connection), err
 }
 
 func (service *Service) getMCPConnection(ctx context.Context, orgID, connectionID string) (MCPConnection, error) {
@@ -180,11 +310,24 @@ func (service *Service) validMCPConnection(name, description, endpoint string, a
 	if !validMCPConfig(name, "https://placeholder.example", nil, headers, timeoutMS, maxOutputBytes) {
 		return false
 	}
-	if allowPrivate && !service.privateNetworks {
-		return false
-	}
 	_, err := service.policy(allowPrivate).ValidateURL(endpoint)
 	return err == nil
+}
+
+// ErrPrivateTargetNotAllowed explains a rejected internal address: only the
+// server operator can list it.
+var ErrPrivateTargetNotAllowed = fmt.Errorf("%w: internal address is not in INTEGRATIONS_ALLOWED_PRIVATE_TARGETS", ErrInvalid)
+
+func (service *Service) endpointError(endpoint string, allowPrivate bool) error {
+	if _, err := service.policy(allowPrivate).ValidateURL(endpoint); err != nil {
+		// Reachable if every internal network were listed: the operator has
+		// to allow it (and the connection has to be marked internal).
+		if netguard.ListableInternal(endpoint) {
+			return ErrPrivateTargetNotAllowed
+		}
+		return ErrInvalid
+	}
+	return nil
 }
 
 func (service *Service) CreateMCPConnection(ctx context.Context, current identity.User, input CreateMCPConnectionInput) (MCPConnection, error) {
@@ -199,7 +342,17 @@ func (service *Service) CreateMCPConnection(ctx context.Context, current identit
 	}
 	name, description, endpoint := strings.TrimSpace(input.Name), strings.TrimSpace(input.Description), strings.TrimSpace(input.EndpointURL)
 	if !service.validMCPConnection(name, description, endpoint, input.AllowPrivateNetwork, input.Headers, input.TimeoutMS, input.MaxOutputBytes) {
+		if err := service.endpointError(endpoint, input.AllowPrivateNetwork); err != nil {
+			return MCPConnection{}, err
+		}
 		return MCPConnection{}, ErrInvalid
+	}
+	if input.AssignableTools != nil && !validToolList(input.AssignableTools) {
+		return MCPConnection{}, ErrInvalid
+	}
+	writesConfirmed := true
+	if input.WritesRequireConfirmation != nil {
+		writesConfirmed = *input.WritesRequireConfirmation
 	}
 	connectionID, err := id.New()
 	if err != nil {
@@ -219,9 +372,10 @@ func (service *Service) CreateMCPConnection(ctx context.Context, current identit
 	}
 	defer tx.Rollback(ctx)
 	if _, err := tx.Exec(ctx, `INSERT INTO integration_mcp_connections(id,org_id,name,description,endpoint_url,enabled,allow_private_network,encrypted_headers,secret_hint,
-		timeout_ms,max_output_bytes,created_by,updated_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12)`,
+		timeout_ms,max_output_bytes,agent_use_allowed,writes_require_confirmation,assignable_tools,created_by,updated_by)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$15)`,
 		connectionID, current.OrgID, name, description, endpoint, enabled, input.AllowPrivateNetwork, encrypted, headersHint(input.Headers),
-		input.TimeoutMS, input.MaxOutputBytes, current.ActorID); err != nil {
+		input.TimeoutMS, input.MaxOutputBytes, input.AgentUseAllowed, writesConfirmed, input.AssignableTools, current.ActorID); err != nil {
 		if isUniqueViolation(err) {
 			return MCPConnection{}, ErrInvalid
 		}
@@ -229,6 +383,7 @@ func (service *Service) CreateMCPConnection(ctx context.Context, current identit
 	}
 	if err := auditIntegration(ctx, tx, current, "mcp_connection", connectionID, "create", map[string]any{
 		"name": name, "endpoint_host": endpointHost(endpoint), "allow_private_network": input.AllowPrivateNetwork, "headers_configured": len(input.Headers) > 0, "enabled": enabled,
+		"agent_use_allowed": input.AgentUseAllowed, "writes_require_confirmation": writesConfirmed, "assignable_tools": input.AssignableTools,
 	}); err != nil {
 		return MCPConnection{}, err
 	}
@@ -246,7 +401,8 @@ func (service *Service) UpdateMCPConnection(ctx context.Context, current identit
 		return MCPConnection{}, ErrNotFound
 	}
 	if input.Name == nil && input.Description == nil && input.EndpointURL == nil && input.Enabled == nil && input.AllowPrivateNetwork == nil &&
-		input.Headers == nil && input.TimeoutMS == nil && input.MaxOutputBytes == nil {
+		input.Headers == nil && input.TimeoutMS == nil && input.MaxOutputBytes == nil && input.AgentUseAllowed == nil &&
+		input.WritesRequireConfirmation == nil && !input.AssignableTools.Set {
 		return MCPConnection{}, ErrInvalid
 	}
 	tx, err := service.pool.Begin(ctx)
@@ -255,20 +411,35 @@ func (service *Service) UpdateMCPConnection(ctx context.Context, current identit
 	}
 	defer tx.Rollback(ctx)
 	var name, description, endpoint, hint string
-	var enabled, allowPrivate bool
+	var enabled, allowPrivate, agentUse, writesConfirmed bool
 	var timeoutMS, maxOutputBytes int
 	var encrypted []byte
 	var legacyAgentID *string
-	err = tx.QueryRow(ctx, `SELECT name,description,endpoint_url,enabled,allow_private_network,timeout_ms,max_output_bytes,encrypted_headers,secret_hint,legacy_agent_id::text
+	var assignable []string
+	err = tx.QueryRow(ctx, `SELECT name,description,endpoint_url,enabled,allow_private_network,timeout_ms,max_output_bytes,encrypted_headers,secret_hint,legacy_agent_id::text,
+		agent_use_allowed,writes_require_confirmation,assignable_tools
 		FROM integration_mcp_connections WHERE org_id=$1 AND id=$2 FOR UPDATE`, current.OrgID, connectionID).Scan(
-		&name, &description, &endpoint, &enabled, &allowPrivate, &timeoutMS, &maxOutputBytes, &encrypted, &hint, &legacyAgentID)
+		&name, &description, &endpoint, &enabled, &allowPrivate, &timeoutMS, &maxOutputBytes, &encrypted, &hint, &legacyAgentID,
+		&agentUse, &writesConfirmed, &assignable)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return MCPConnection{}, ErrNotFound
 	}
 	if err != nil {
 		return MCPConnection{}, err
 	}
-	previousName := name
+	previousName, previousOrigin, previousLegacy := name, endpointOrigin(endpoint), legacyAgentID
+	if input.AgentUseAllowed != nil {
+		agentUse = *input.AgentUseAllowed
+	}
+	if input.WritesRequireConfirmation != nil {
+		writesConfirmed = *input.WritesRequireConfirmation
+	}
+	if input.AssignableTools.Set {
+		if input.AssignableTools.Value != nil && !validToolList(input.AssignableTools.Value) {
+			return MCPConnection{}, ErrInvalid
+		}
+		assignable = input.AssignableTools.Value
+	}
 	if input.Name != nil {
 		name = strings.TrimSpace(*input.Name)
 	}
@@ -301,22 +472,39 @@ func (service *Service) UpdateMCPConnection(ctx context.Context, current identit
 		checkName = name[:40]
 	}
 	if !service.validMCPConnection(checkName, description, endpoint, allowPrivate, headers, timeoutMS, maxOutputBytes) {
+		if err := service.endpointError(endpoint, allowPrivate); err != nil {
+			return MCPConnection{}, err
+		}
 		return MCPConnection{}, ErrInvalid
 	}
+	// A new scheme, host or port is a different system: stored credentials
+	// must not follow it, and the old tool catalog says nothing about it.
+	originChanged := endpointOrigin(endpoint) != previousOrigin
+	credentialsCleared := false
 	if input.Headers != nil {
 		encrypted, err = service.sealConnectionHeaders(current.OrgID, connectionID, headers)
 		if err != nil {
 			return MCPConnection{}, err
 		}
 		hint, legacyAgentID = headersHint(headers), nil
+	} else if originChanged && len(encrypted) > 0 {
+		encrypted, hint, legacyAgentID, credentialsCleared = nil, "", nil, true
 	}
-	endpointChanged := input.EndpointURL != nil || input.Headers != nil || input.AllowPrivateNetwork != nil
+	reset := input.EndpointURL != nil || input.Headers != nil || input.AllowPrivateNetwork != nil
+	errorCode := ""
+	if credentialsCleared {
+		errorCode = "credentials_required"
+	}
 	if _, err := tx.Exec(ctx, `UPDATE integration_mcp_connections SET name=$3,description=$4,endpoint_url=$5,enabled=$6,allow_private_network=$7,
 		encrypted_headers=$8,secret_hint=$9,legacy_agent_id=$10,timeout_ms=$11,max_output_bytes=$12,updated_by=$13,updated_at=now(),
-		health_status=CASE WHEN $14 THEN 'untested' ELSE health_status END,last_error_code=CASE WHEN $14 THEN '' ELSE last_error_code END,
-		last_tested_at=CASE WHEN $14 THEN NULL ELSE last_tested_at END
+		health_status=CASE WHEN $14 THEN 'untested' ELSE health_status END,last_error_code=CASE WHEN $14 THEN $16 ELSE last_error_code END,
+		last_tested_at=CASE WHEN $14 THEN NULL ELSE last_tested_at END,
+		tools=CASE WHEN $15 THEN '[]'::jsonb ELSE tools END,tools_refreshed_at=CASE WHEN $15 THEN NULL ELSE tools_refreshed_at END,
+		legacy_unverified=CASE WHEN $15 THEN false ELSE legacy_unverified END,
+		agent_use_allowed=$17,writes_require_confirmation=$18,assignable_tools=$19
 		WHERE org_id=$1 AND id=$2`, current.OrgID, connectionID, name, description, endpoint, enabled, allowPrivate,
-		encrypted, hint, legacyAgentID, timeoutMS, maxOutputBytes, current.ActorID, endpointChanged); err != nil {
+		encrypted, hint, legacyAgentID, timeoutMS, maxOutputBytes, current.ActorID, reset, originChanged, errorCode,
+		agentUse, writesConfirmed, assignable); err != nil {
 		if isUniqueViolation(err) {
 			return MCPConnection{}, ErrInvalid
 		}
@@ -324,9 +512,17 @@ func (service *Service) UpdateMCPConnection(ctx context.Context, current identit
 	}
 	if err := auditIntegration(ctx, tx, current, "mcp_connection", connectionID, "update", map[string]any{
 		"name": name, "endpoint_host": endpointHost(endpoint), "enabled": enabled, "allow_private_network": allowPrivate,
-		"headers_replaced": input.Headers != nil, "endpoint_changed": input.EndpointURL != nil,
+		"headers_replaced": input.Headers != nil, "endpoint_changed": input.EndpointURL != nil, "credentials_cleared": credentialsCleared,
+		"agent_use_allowed": agentUse, "writes_require_confirmation": writesConfirmed, "assignable_tools": assignable,
 	}); err != nil {
 		return MCPConnection{}, err
+	}
+	// The pre-5.3 row still holds the headers it was migrated from; once they
+	// are replaced or dropped, the old copy must not outlive them.
+	if previousLegacy != nil && legacyAgentID == nil {
+		if _, err := tx.Exec(ctx, `UPDATE agent_mcp_servers SET encrypted_headers=NULL WHERE org_id=$1 AND id=$2`, current.OrgID, connectionID); err != nil {
+			return MCPConnection{}, err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return MCPConnection{}, err
@@ -505,7 +701,8 @@ func (service *Service) TestMCPConnection(ctx context.Context, current identity.
 		encodedTools, _ = json.Marshal(tools)
 	}
 	result, err := tx.Exec(ctx, `UPDATE integration_mcp_connections SET health_status=$3,last_error_code=$4,last_tested_at=now(),
-		tools=COALESCE($5::jsonb,tools),tools_refreshed_at=CASE WHEN $5::jsonb IS NULL THEN tools_refreshed_at ELSE now() END,updated_at=now()
+		tools=COALESCE($5::jsonb,tools),tools_refreshed_at=CASE WHEN $5::jsonb IS NULL THEN tools_refreshed_at ELSE now() END,
+		legacy_unverified=CASE WHEN $5::jsonb IS NULL THEN legacy_unverified ELSE false END,updated_at=now()
 		WHERE org_id=$1 AND id=$2`, current.OrgID, connectionID, status, errorCode, encodedTools)
 	if err != nil {
 		return MCPConnection{}, err
@@ -525,6 +722,8 @@ func (service *Service) TestMCPConnection(ctx context.Context, current identity.
 type mcpTarget struct {
 	name, endpoint            string
 	allowPrivate, enabled     bool
+	agentUse                  bool
+	assignable                *[]string
 	headers                   map[string]string
 	timeoutMS, maxOutputBytes int
 	tools                     []MCPTool
@@ -536,9 +735,11 @@ func (service *Service) loadMCPTarget(ctx context.Context, orgID, connectionID s
 	var encrypted, tools []byte
 	var legacyAgentID *string
 	var refreshed *time.Time
-	err := service.pool.QueryRow(ctx, `SELECT name,endpoint_url,allow_private_network,enabled,encrypted_headers,legacy_agent_id::text,timeout_ms,max_output_bytes,tools,tools_refreshed_at
+	err := service.pool.QueryRow(ctx, `SELECT name,endpoint_url,allow_private_network,enabled,encrypted_headers,legacy_agent_id::text,timeout_ms,max_output_bytes,tools,tools_refreshed_at,
+		agent_use_allowed,assignable_tools
 		FROM integration_mcp_connections WHERE org_id=$1 AND id=$2`, orgID, connectionID).Scan(
-		&target.name, &target.endpoint, &target.allowPrivate, &target.enabled, &encrypted, &legacyAgentID, &target.timeoutMS, &target.maxOutputBytes, &tools, &refreshed)
+		&target.name, &target.endpoint, &target.allowPrivate, &target.enabled, &encrypted, &legacyAgentID, &target.timeoutMS, &target.maxOutputBytes, &tools, &refreshed,
+		&target.agentUse, &target.assignable)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return mcpTarget{}, ErrNotFound
 	}
@@ -562,10 +763,12 @@ func (service *Service) RuntimeMCPServersForRun(ctx context.Context, current ide
 		return nil, ErrForbidden
 	}
 	rows, err := service.pool.Query(ctx, `SELECT connection.id::text,connection.name,connection.endpoint_url,connection.allow_private_network,connection.encrypted_headers,
-		connection.legacy_agent_id::text,connection.timeout_ms,connection.max_output_bytes,binding.value
+		connection.legacy_agent_id::text,connection.timeout_ms,connection.max_output_bytes,binding.value,
+		connection.writes_require_confirmation,connection.assignable_tools,connection.tools,connection.tools_refreshed_at IS NOT NULL
 		FROM agent_runs run JOIN agents agent ON agent.org_id=run.org_id AND agent.actor_id=run.agent_id
 		CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN run.dry_run AND run.agent_config ? 'mcp_bindings' THEN run.agent_config->'mcp_bindings' ELSE agent.mcp_bindings END) binding
-		JOIN integration_mcp_connections connection ON connection.org_id=run.org_id AND connection.id::text=binding.value->>'connection_id' AND connection.enabled
+		JOIN integration_mcp_connections connection ON connection.org_id=run.org_id AND connection.id::text=binding.value->>'connection_id'
+			AND connection.enabled AND connection.agent_use_allowed
 		WHERE run.org_id=$1 AND run.agent_id=$2 AND run.id=$3 AND agent.deleted_at IS NULL
 		ORDER BY connection.name`, current.OrgID, agentID, runID)
 	if err != nil {
@@ -575,21 +778,30 @@ func (service *Service) RuntimeMCPServersForRun(ctx context.Context, current ide
 	result := make([]RuntimeMCPServer, 0)
 	for rows.Next() {
 		var server RuntimeMCPServer
-		var encrypted, encodedBinding []byte
+		var encrypted, encodedBinding, catalog []byte
 		var legacyAgentID *string
-		if err := rows.Scan(&server.ID, &server.Name, &server.EndpointURL, &server.AllowPrivateNetwork, &encrypted, &legacyAgentID, &server.TimeoutMS, &server.MaxOutputBytes, &encodedBinding); err != nil {
+		var allowPrivate, writesConfirmed, catalogKnown bool
+		var assignable *[]string
+		if err := rows.Scan(&server.ID, &server.Name, &server.EndpointURL, &allowPrivate, &encrypted, &legacyAgentID, &server.TimeoutMS, &server.MaxOutputBytes, &encodedBinding,
+			&writesConfirmed, &assignable, &catalog, &catalogKnown); err != nil {
 			return nil, err
 		}
 		var binding mcpBinding
 		if err := json.Unmarshal(encodedBinding, &binding); err != nil {
 			return nil, err
 		}
-		server.AllowPrivateNetwork = server.AllowPrivateNetwork && service.privateNetworks
-		server.AllowedTools = binding.AllowedTools
-		if server.AllowedTools == nil {
-			server.AllowedTools = []string{}
+		// Every address is checked at use, including connections migrated
+		// from per-agent servers under older rules.
+		scoped, _, err := service.policy(allowPrivate).ForURL(server.EndpointURL)
+		if err != nil {
+			continue
 		}
-		server.RequireWriteConfirmation = binding.RequireWriteConfirmation
+		server.AllowedPrivateCIDRs = scoped.PrivateCIDRs()
+		server.AllowPrivateNetwork = len(server.AllowedPrivateCIDRs) > 0
+		var tools []MCPTool
+		_ = json.Unmarshal(catalog, &tools)
+		server.AllowedTools = effectiveTools(binding.AllowedTools, assignable, tools, catalogKnown)
+		server.RequireWriteConfirmation = binding.RequireWriteConfirmation || writesConfirmed
 		server.Headers, err = service.openConnectionHeaders(current.OrgID, server.ID, legacyAgentID, encrypted)
 		if err != nil {
 			return nil, err
@@ -621,7 +833,8 @@ func (service *Service) ExecuteConfirmedMCPCall(ctx context.Context, orgID, agen
 		return nil, err
 	}
 	toolName, found := strings.CutPrefix(exposedName, "mcp__"+target.name+"__")
-	if !found || !target.enabled || !bindingAllows(bindings, connectionID, toolName) {
+	if !found || !target.enabled || !target.agentUse || !bindingAllows(bindings, connectionID, toolName) ||
+		len(effectiveTools([]string{toolName}, target.assignable, target.tools, target.toolsKnown)) == 0 {
 		return nil, mcpFailure("mcp_tool_not_allowed")
 	}
 	client, err := newMCPClient(target.endpoint, target.headers, service.policy(target.allowPrivate), time.Duration(target.timeoutMS)*time.Millisecond, target.maxOutputBytes)

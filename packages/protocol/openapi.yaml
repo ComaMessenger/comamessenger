@@ -2584,7 +2584,7 @@ paths:
         "403": { $ref: "#/components/responses/Error" }
     post:
       operationId: createMcpConnection
-      description: Creates a workspace MCP connection. Requires integrations.manage. The endpoint is checked against internal, link-local and metadata addresses unless allow_private_network is set (metadata addresses are always refused).
+      description: Creates a workspace MCP connection. Requires integrations.manage. Internal addresses need allow_private_network and an entry in the operator's INTEGRATIONS_ALLOWED_PRIVATE_TARGETS; metadata and link-local addresses are always refused.
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -2773,7 +2773,7 @@ paths:
       - { name: webhook_id, in: path, required: true, schema: { type: string, format: uuid } }
     get:
       operationId: listIntegrationWebhookDeliveries
-      description: The latest 100 journal entries; bodies are not stored, only size and SHA-256.
+      description: The latest 100 entries of the journal of correctly signed deliveries (kept 30 days, at most 1000 per webhook); bodies are not stored, only size and SHA-256.
       security: [{ bearerAuth: [] }]
       responses:
         "200":
@@ -4806,7 +4806,11 @@ components:
         require_write_confirmation: { type: boolean }
         allow_private_network:
           type: boolean
-          description: The connection may reach trusted private network addresses; link-local and cloud metadata addresses stay forbidden.
+          description: The connection may reach listed internal addresses and plain HTTP; link-local and cloud metadata addresses stay forbidden.
+        allowed_private_cidrs:
+          type: array
+          items: { type: string }
+          description: Internal ranges the endpoint may resolve to (from the operator allowlist). Empty means public addresses only.
     StartAgentMcpToolCallRequest:
       type: object
       additionalProperties: false
@@ -4858,16 +4862,18 @@ components:
     AgentMcpBinding:
       type: object
       additionalProperties: false
-      required: [connection_id, allowed_tools, require_write_confirmation]
+      required: [connection_id, allowed_tools]
       properties:
         connection_id: { type: string, format: uuid }
         allowed_tools:
           type: array
           maxItems: 128
           items: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$" }
+          description: Must be assignable on the connection and, once Core knows the catalog, offered by the server.
         require_write_confirmation:
           type: boolean
-          description: Calls to tools that are not read-only wait for a person's approval; Core then executes them.
+          default: true
+          description: Calls to tools that are not read-only wait for a person's approval; Core then executes them. Omitted means true; a connection that requires confirmation forces it on.
     McpTool:
       type: object
       additionalProperties: false
@@ -4893,6 +4899,9 @@ components:
           secret_hint,
           timeout_ms,
           max_output_bytes,
+          agent_use_allowed,
+          writes_require_confirmation,
+          assignable_tools,
           tools,
           tools_refreshed_at,
           health_status,
@@ -4910,16 +4919,29 @@ components:
           pattern: "^[a-z0-9][a-z0-9_-]{0,63}$"
           description: Namespaces the tools for models as mcp__<name>__<tool>.
         description: { type: string, maxLength: 500 }
-        endpoint_url: { type: string, maxLength: 2048 }
+        endpoint_url:
+          type: string
+          maxLength: 2048
+          description: Full address for integrations.manage; only the host for other viewers (the path or query may carry a token).
         enabled: { type: boolean }
         allow_private_network:
           type: boolean
-          description: Explicit opt-in for a trusted system inside the private network.
+          description: Internal system switch. Works only for addresses the server operator lists in INTEGRATIONS_ALLOWED_PRIVATE_TARGETS.
+        agent_use_allowed:
+          type: boolean
+          description: Released by integrations.manage for agent bindings. Off by default.
+        writes_require_confirmation:
+          type: boolean
+          description: Every non read-only call waits for a person's approval, whatever the binding says. On by default.
+        assignable_tools:
+          type: [array, "null"]
+          items: { type: string }
+          description: Tools agents may be given; null means every tool of the catalog.
         headers_configured: { type: boolean }
         secret_hint:
           type: string
           maxLength: 200
-          description: Masked first header such as Authorization with a few visible characters. Secrets are never returned.
+          description: Masked first header with at most its last four characters; empty for viewers without integrations.manage. Secrets are never returned.
         timeout_ms: { type: integer, minimum: 100, maximum: 120000 }
         max_output_bytes: { type: integer, minimum: 1024, maximum: 4194304 }
         tools:
@@ -4953,6 +4975,12 @@ components:
         headers: { $ref: "#/components/schemas/McpHeaders" }
         timeout_ms: { type: integer, minimum: 100, maximum: 120000 }
         max_output_bytes: { type: integer, minimum: 1024, maximum: 4194304 }
+        agent_use_allowed: { type: boolean, default: false }
+        writes_require_confirmation: { type: boolean, default: true }
+        assignable_tools:
+          type: [array, "null"]
+          maxItems: 256
+          items: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$" }
     UpdateMcpConnectionRequest:
       type: object
       additionalProperties: false
@@ -4964,10 +4992,16 @@ components:
         enabled: { type: boolean }
         allow_private_network: { type: boolean }
         headers:
-          description: Replaces all headers; an empty object removes them.
+          description: Replaces all headers; an empty object removes them. A new scheme, host or port without new headers drops the stored ones (last_error_code credentials_required) and the tool catalog.
           allOf: [{ $ref: "#/components/schemas/McpHeaders" }]
         timeout_ms: { type: integer, minimum: 100, maximum: 120000 }
         max_output_bytes: { type: integer, minimum: 1024, maximum: 4194304 }
+        agent_use_allowed: { type: boolean }
+        writes_require_confirmation: { type: boolean }
+        assignable_tools:
+          type: [array, "null"]
+          maxItems: 256
+          items: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$" }
     McpConnectionUsage:
       type: object
       additionalProperties: false
@@ -5003,6 +5037,9 @@ components:
           rate_limit_per_minute,
           max_body_bytes,
           last_received_at,
+          rejected_count,
+          last_rejected_at,
+          last_rejected_code,
           trigger_count,
           created_by,
           created_at,
@@ -5017,6 +5054,13 @@ components:
         rate_limit_per_minute: { type: integer, minimum: 1, maximum: 6000 }
         max_body_bytes: { type: integer, minimum: 1024, maximum: 262144 }
         last_received_at: { type: [string, "null"], format: date-time }
+        rejected_count:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Requests without a valid signature; counted, not journaled.
+        last_rejected_at: { type: [string, "null"], format: date-time }
+        last_rejected_code: { type: string, maxLength: 120 }
         trigger_count:
           type: integer
           minimum: 0

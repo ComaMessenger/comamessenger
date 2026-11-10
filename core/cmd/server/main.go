@@ -141,7 +141,7 @@ func main() {
 		logger.Error("agent configuration initialization failed", "error", err)
 		os.Exit(1)
 	}
-	agentConfigService.SetPrivateNetworksAllowed(cfg.Agents.IntegrationsAllowPrivateNetworks)
+	agentConfigService.SetPrivateTargets(cfg.Agents.IntegrationsPrivateTargets)
 	identityService.SetBearerAuthenticator(agentService.AuthenticateKey)
 	if len(os.Args) > 1 && os.Args[1] == "admin" {
 		if err := runAdminCommand(startupCtx, identityService, os.Args[2:]); err != nil {
@@ -242,6 +242,7 @@ func main() {
 		logger.Error("webhook initialization failed", "error", err)
 		os.Exit(1)
 	}
+	go webhookService.Run(realtimeCtx, time.Hour, logger)
 	userStateService := userstate.NewService(pool, int(cfg.Messaging.MaxBodyBytes), afterCommit)
 	pushService := push.NewService(pool, cfg.Push)
 	pushWorker := push.NewWorker(logger, pool, cfg.Push, realtimeHub.ActorActiveIn, workspaceService)

@@ -597,9 +597,29 @@ func TestMCPBindingsFollowDraftPublishAndRollback(t *testing.T) {
 	service := NewService(pool)
 	owner := identity.User{ActorID: agentTestOwnerID, OrgID: agentTestOrgID, OrgRole: "owner"}
 	connection := "00000000-0000-7000-8000-000000000221"
-	if _, err := pool.Exec(t.Context(), `INSERT INTO integration_mcp_connections(id,org_id,name,endpoint_url,encrypted_headers,secret_hint,created_by,updated_by)
-		VALUES($1,$2,'accounting','https://mcp.example.test/rpc','\x01'::bytea,'Authorization: Bear••••7f3a',$3,$3)`, connection, agentTestOrgID, agentTestOwnerID); err != nil {
+	hidden := "00000000-0000-7000-8000-000000000222"
+	// "accounting" is released for agents with a known catalog; "hidden" is not
+	// released by integrations.manage.
+	if _, err := pool.Exec(t.Context(), `INSERT INTO integration_mcp_connections(id,org_id,name,endpoint_url,encrypted_headers,secret_hint,created_by,updated_by,
+		agent_use_allowed,writes_require_confirmation,assignable_tools,tools,tools_refreshed_at)
+		VALUES($1,$2,'accounting','https://mcp.example.test/rpc','\x01'::bytea,'Authorization: ••••7f3a',$3,$3,true,true,'{get_slots,assign_instructor}',
+			'[{"name":"get_slots","read_only":true},{"name":"assign_instructor","read_only":false},{"name":"delete_slot","read_only":false}]',now()),
+		($4,$2,'hidden','https://hidden.example.test/rpc',NULL,'',$3,$3,false,true,NULL,'[]',NULL)`, connection, agentTestOrgID, agentTestOwnerID, hidden); err != nil {
 		t.Fatal(err)
+	}
+	for name, binding := range map[string]MCPBinding{
+		"not released":   {ConnectionID: hidden, AllowedTools: []string{"anything"}},
+		"not assignable": {ConnectionID: connection, AllowedTools: []string{"delete_slot"}},
+		"not in catalog": {ConnectionID: connection, AllowedTools: []string{"get_slots", "drop_database"}},
+	} {
+		if _, err := service.Create(t.Context(), owner, CreateInput{DisplayName: "Policy", Handle: "policy-check", Kind: "external", EndpointURL: "https://agents.example.test/runtime",
+			MCPBindings: []MCPBinding{binding}}); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("%s binding error = %v", name, err)
+		}
+	}
+	var omitted CreateInput
+	if err := json.Unmarshal([]byte(`{"mcp_bindings":[{"connection_id":"`+connection+`","allowed_tools":["get_slots"]}]}`), &omitted); err != nil || !omitted.MCPBindings[0].RequireWriteConfirmation {
+		t.Fatalf("binding without the confirmation field = %+v, err=%v", omitted.MCPBindings, err)
 	}
 	if _, err := service.Create(t.Context(), owner, CreateInput{DisplayName: "Unknown", Handle: "unknown-mcp", Kind: "external", EndpointURL: "https://agents.example.test/runtime",
 		MCPBindings: []MCPBinding{{ConnectionID: "00000000-0000-7000-8000-000000000299", AllowedTools: []string{"get_slots"}}}}); !errors.Is(err, ErrInvalid) {
@@ -622,9 +642,11 @@ func TestMCPBindingsFollowDraftPublishAndRollback(t *testing.T) {
 	if _, err := service.Publish(t.Context(), owner, created.ID); err != nil {
 		t.Fatal(err)
 	}
-	bindings := []MCPBinding{{ConnectionID: connection, AllowedTools: []string{"get_slots", "assign_instructor", "get_slots"}, RequireWriteConfirmation: true}}
+	// The connection requires confirmation, so a binding cannot switch it off.
+	bindings := []MCPBinding{{ConnectionID: connection, AllowedTools: []string{"get_slots", "assign_instructor", "get_slots"}, RequireWriteConfirmation: false}}
 	draft, err := service.Update(t.Context(), owner, created.ID, UpdateInput{MCPBindings: &bindings})
-	if err != nil || len(draft.MCPBindings) != 1 || !slices.Equal(draft.MCPBindings[0].AllowedTools, []string{"assign_instructor", "get_slots"}) || !draft.HasUnpublishedChanges {
+	if err != nil || len(draft.MCPBindings) != 1 || !slices.Equal(draft.MCPBindings[0].AllowedTools, []string{"assign_instructor", "get_slots"}) || !draft.HasUnpublishedChanges ||
+		!draft.MCPBindings[0].RequireWriteConfirmation {
 		t.Fatalf("draft = %+v, err=%v", draft, err)
 	}
 	var live string

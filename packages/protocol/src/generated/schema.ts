@@ -1776,7 +1776,7 @@ export interface paths {
         /** @description Lists workspace MCP connections with masked secrets. Available to integrations.manage and agent builders. */
         get: operations["listMcpConnections"];
         put?: never;
-        /** @description Creates a workspace MCP connection. Requires integrations.manage. The endpoint is checked against internal, link-local and metadata addresses unless allow_private_network is set (metadata addresses are always refused). */
+        /** @description Creates a workspace MCP connection. Requires integrations.manage. Internal addresses need allow_private_network and an entry in the operator's INTEGRATIONS_ALLOWED_PRIVATE_TARGETS; metadata and link-local addresses are always refused. */
         post: operations["createMcpConnection"];
         delete?: never;
         options?: never;
@@ -1924,7 +1924,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** @description The latest 100 journal entries; bodies are not stored, only size and SHA-256. */
+        /** @description The latest 100 entries of the journal of correctly signed deliveries (kept 30 days, at most 1000 per webhook); bodies are not stored, only size and SHA-256. */
         get: operations["listIntegrationWebhookDeliveries"];
         put?: never;
         post?: never;
@@ -3365,8 +3365,10 @@ export interface components {
             timeout_ms: number;
             max_output_bytes: number;
             require_write_confirmation: boolean;
-            /** @description The connection may reach trusted private network addresses; link-local and cloud metadata addresses stay forbidden. */
+            /** @description The connection may reach listed internal addresses and plain HTTP; link-local and cloud metadata addresses stay forbidden. */
             allow_private_network?: boolean;
+            /** @description Internal ranges the endpoint may resolve to (from the operator allowlist). Empty means public addresses only. */
+            allowed_private_cidrs?: string[];
         };
         StartAgentMcpToolCallRequest: {
             /** Format: uuid */
@@ -3418,8 +3420,12 @@ export interface components {
         AgentMcpBinding: {
             /** Format: uuid */
             connection_id: string;
+            /** @description Must be assignable on the connection and, once Core knows the catalog, offered by the server. */
             allowed_tools: string[];
-            /** @description Calls to tools that are not read-only wait for a person's approval; Core then executes them. */
+            /**
+             * @description Calls to tools that are not read-only wait for a person's approval; Core then executes them. Omitted means true; a connection that requires confirmation forces it on.
+             * @default true
+             */
             require_write_confirmation: boolean;
         };
         McpTool: {
@@ -3434,12 +3440,19 @@ export interface components {
             /** @description Namespaces the tools for models as mcp__<name>__<tool>. */
             name: string;
             description: string;
+            /** @description Full address for integrations.manage; only the host for other viewers (the path or query may carry a token). */
             endpoint_url: string;
             enabled: boolean;
-            /** @description Explicit opt-in for a trusted system inside the private network. */
+            /** @description Internal system switch. Works only for addresses the server operator lists in INTEGRATIONS_ALLOWED_PRIVATE_TARGETS. */
             allow_private_network: boolean;
+            /** @description Released by integrations.manage for agent bindings. Off by default. */
+            agent_use_allowed: boolean;
+            /** @description Every non read-only call waits for a person's approval, whatever the binding says. On by default. */
+            writes_require_confirmation: boolean;
+            /** @description Tools agents may be given; null means every tool of the catalog. */
+            assignable_tools: string[] | null;
             headers_configured: boolean;
-            /** @description Masked first header such as Authorization with a few visible characters. Secrets are never returned. */
+            /** @description Masked first header with at most its last four characters; empty for viewers without integrations.manage. Secrets are never returned. */
             secret_hint: string;
             timeout_ms: number;
             max_output_bytes: number;
@@ -3474,6 +3487,11 @@ export interface components {
             headers?: components["schemas"]["McpHeaders"];
             timeout_ms?: number;
             max_output_bytes?: number;
+            /** @default false */
+            agent_use_allowed: boolean;
+            /** @default true */
+            writes_require_confirmation: boolean;
+            assignable_tools?: string[] | null;
         };
         UpdateMcpConnectionRequest: {
             name?: string;
@@ -3481,10 +3499,13 @@ export interface components {
             endpoint_url?: string;
             enabled?: boolean;
             allow_private_network?: boolean;
-            /** @description Replaces all headers; an empty object removes them. */
+            /** @description Replaces all headers; an empty object removes them. A new scheme, host or port without new headers drops the stored ones (last_error_code credentials_required) and the tool catalog. */
             headers?: components["schemas"]["McpHeaders"];
             timeout_ms?: number;
             max_output_bytes?: number;
+            agent_use_allowed?: boolean;
+            writes_require_confirmation?: boolean;
+            assignable_tools?: string[] | null;
         };
         McpConnectionUsage: {
             /** Format: uuid */
@@ -3509,6 +3530,14 @@ export interface components {
             max_body_bytes: number;
             /** Format: date-time */
             last_received_at: string | null;
+            /**
+             * Format: int64
+             * @description Requests without a valid signature; counted, not journaled.
+             */
+            rejected_count: number;
+            /** Format: date-time */
+            last_rejected_at: string | null;
+            last_rejected_code: string;
             /** @description Current agent triggers that start on this webhook. */
             trigger_count: number;
             /** Format: uuid */

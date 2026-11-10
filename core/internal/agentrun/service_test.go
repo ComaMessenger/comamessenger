@@ -225,6 +225,10 @@ func TestAgentWorkerLeaseAndCheckpointContract(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	// Core's catalog marks "search" as read-only, as a connection test would.
+	if _, err := pool.Exec(t.Context(), `UPDATE integration_mcp_connections SET tools='[{"name":"search","description":"","read_only":true}]',tools_refreshed_at=now() WHERE id=$1`, mcpServer.ID); err != nil {
+		t.Fatal(err)
+	}
 	runtimeMCP, err := configService.RuntimeMCPServersForRun(t.Context(), agentUser, authentication, created.ID, invoked.ID)
 	if err != nil || len(runtimeMCP) != 1 || runtimeMCP[0].Headers["Authorization"] != "Bearer mcp-secret" {
 		t.Fatalf("runtime MCP servers = %+v, err=%v", runtimeMCP, err)
@@ -241,9 +245,17 @@ func TestAgentWorkerLeaseAndCheckpointContract(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if pending, err := service.StartMCPToolCall(t.Context(), agentUser, authentication, agentrun.StartMCPToolCallInput{
+	// A call that needs approval must carry its arguments: Core executes the
+	// approved call itself and would otherwise run it with none.
+	if _, err := service.StartMCPToolCall(t.Context(), agentUser, authentication, agentrun.StartMCPToolCallInput{
 		CallID: mustRunID(t), RunID: invoked.ID, LeaseToken: claimed.LeaseToken, ServerID: mcpServer.ID,
 		ToolName: "search", Mode: "write", InputBytes: 24,
+	}); !errors.Is(err, agentrun.ErrInvalid) {
+		t.Fatalf("pending MCP write without arguments error = %v", err)
+	}
+	if pending, err := service.StartMCPToolCall(t.Context(), agentUser, authentication, agentrun.StartMCPToolCallInput{
+		CallID: mustRunID(t), RunID: invoked.ID, LeaseToken: claimed.LeaseToken, ServerID: mcpServer.ID,
+		ToolName: "search", Mode: "write", InputBytes: 24, Arguments: json.RawMessage(`{"query":"slots"}`),
 	}); err != nil || !pending.ConfirmationRequired || pending.Preview {
 		t.Fatalf("MCP write needing confirmation = %+v, err = %v", pending, err)
 	}

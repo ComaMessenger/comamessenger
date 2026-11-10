@@ -3641,11 +3641,12 @@ type AgentLlmConnectionProvider string
 
 // AgentMcpBinding defines model for AgentMcpBinding.
 type AgentMcpBinding struct {
+	// AllowedTools Must be assignable on the connection and, once Core knows the catalog, offered by the server.
 	AllowedTools []string           `json:"allowed_tools"`
 	ConnectionId openapi_types.UUID `json:"connection_id"`
 
-	// RequireWriteConfirmation Calls to tools that are not read-only wait for a person's approval; Core then executes them.
-	RequireWriteConfirmation bool `json:"require_write_confirmation"`
+	// RequireWriteConfirmation Calls to tools that are not read-only wait for a person's approval; Core then executes them. Omitted means true; a connection that requires confirmation forces it on.
+	RequireWriteConfirmation *bool `json:"require_write_confirmation,omitempty"`
 }
 
 // AgentMcpHeaders defines model for AgentMcpHeaders.
@@ -3828,8 +3829,11 @@ type AgentRuntimeCheckpoint struct {
 
 // AgentRuntimeMcpServer defines model for AgentRuntimeMcpServer.
 type AgentRuntimeMcpServer struct {
-	// AllowPrivateNetwork The connection may reach trusted private network addresses; link-local and cloud metadata addresses stay forbidden.
-	AllowPrivateNetwork      *bool              `json:"allow_private_network,omitempty"`
+	// AllowPrivateNetwork The connection may reach listed internal addresses and plain HTTP; link-local and cloud metadata addresses stay forbidden.
+	AllowPrivateNetwork *bool `json:"allow_private_network,omitempty"`
+
+	// AllowedPrivateCidrs Internal ranges the endpoint may resolve to (from the operator allowlist). Empty means public addresses only.
+	AllowedPrivateCidrs      *[]string          `json:"allowed_private_cidrs,omitempty"`
 	AllowedTools             []string           `json:"allowed_tools"`
 	EndpointUrl              string             `json:"endpoint_url"`
 	Headers                  AgentMcpHeaders    `json:"headers"`
@@ -4422,14 +4426,17 @@ type CreateKnowledgeDocumentRequestKind string
 
 // CreateMcpConnectionRequest defines model for CreateMcpConnectionRequest.
 type CreateMcpConnectionRequest struct {
-	AllowPrivateNetwork *bool       `json:"allow_private_network,omitempty"`
-	Description         *string     `json:"description,omitempty"`
-	Enabled             *bool       `json:"enabled,omitempty"`
-	EndpointUrl         string      `json:"endpoint_url"`
-	Headers             *McpHeaders `json:"headers,omitempty"`
-	MaxOutputBytes      *int        `json:"max_output_bytes,omitempty"`
-	Name                string      `json:"name"`
-	TimeoutMs           *int        `json:"timeout_ms,omitempty"`
+	AgentUseAllowed           *bool       `json:"agent_use_allowed,omitempty"`
+	AllowPrivateNetwork       *bool       `json:"allow_private_network,omitempty"`
+	AssignableTools           *[]string   `json:"assignable_tools,omitempty"`
+	Description               *string     `json:"description,omitempty"`
+	Enabled                   *bool       `json:"enabled,omitempty"`
+	EndpointUrl               string      `json:"endpoint_url"`
+	Headers                   *McpHeaders `json:"headers,omitempty"`
+	MaxOutputBytes            *int        `json:"max_output_bytes,omitempty"`
+	Name                      string      `json:"name"`
+	TimeoutMs                 *int        `json:"timeout_ms,omitempty"`
+	WritesRequireConfirmation *bool       `json:"writes_require_confirmation,omitempty"`
 }
 
 // CreateMessageRequest defines model for CreateMessageRequest.
@@ -4649,10 +4656,15 @@ type IntegrationWebhook struct {
 	Enabled            bool               `json:"enabled"`
 	Id                 openapi_types.UUID `json:"id"`
 	LastReceivedAt     *time.Time         `json:"last_received_at"`
+	LastRejectedAt     *time.Time         `json:"last_rejected_at"`
+	LastRejectedCode   string             `json:"last_rejected_code"`
 	MaxBodyBytes       int                `json:"max_body_bytes"`
 	Name               string             `json:"name"`
 	RateLimitPerMinute int                `json:"rate_limit_per_minute"`
-	SecretHint         string             `json:"secret_hint"`
+
+	// RejectedCount Requests without a valid signature; counted, not journaled.
+	RejectedCount int64  `json:"rejected_count"`
+	SecretHint    string `json:"secret_hint"`
 
 	// TriggerCount Current agent triggers that start on this webhook.
 	TriggerCount int       `json:"trigger_count"`
@@ -4683,11 +4695,16 @@ type IntegrationWebhookWithSecret struct {
 	Enabled            bool               `json:"enabled"`
 	Id                 openapi_types.UUID `json:"id"`
 	LastReceivedAt     *time.Time         `json:"last_received_at"`
+	LastRejectedAt     *time.Time         `json:"last_rejected_at"`
+	LastRejectedCode   string             `json:"last_rejected_code"`
 	MaxBodyBytes       int                `json:"max_body_bytes"`
 	Name               string             `json:"name"`
 	RateLimitPerMinute int                `json:"rate_limit_per_minute"`
-	Secret             string             `json:"secret"`
-	SecretHint         string             `json:"secret_hint"`
+
+	// RejectedCount Requests without a valid signature; counted, not journaled.
+	RejectedCount int64  `json:"rejected_count"`
+	Secret        string `json:"secret"`
+	SecretHint    string `json:"secret_hint"`
 
 	// TriggerCount Current agent triggers that start on this webhook.
 	TriggerCount int       `json:"trigger_count"`
@@ -4880,29 +4897,40 @@ type McpConnection struct {
 	// AgentCount Agents whose draft or published configuration uses the connection.
 	AgentCount int `json:"agent_count"`
 
-	// AllowPrivateNetwork Explicit opt-in for a trusted system inside the private network.
-	AllowPrivateNetwork bool                      `json:"allow_private_network"`
-	CreatedAt           time.Time                 `json:"created_at"`
-	CreatedBy           openapi_types.UUID        `json:"created_by"`
-	Description         string                    `json:"description"`
-	Enabled             bool                      `json:"enabled"`
-	EndpointUrl         string                    `json:"endpoint_url"`
-	HeadersConfigured   bool                      `json:"headers_configured"`
-	HealthStatus        McpConnectionHealthStatus `json:"health_status"`
-	Id                  openapi_types.UUID        `json:"id"`
-	LastErrorCode       string                    `json:"last_error_code"`
-	LastTestedAt        *time.Time                `json:"last_tested_at"`
-	MaxOutputBytes      int                       `json:"max_output_bytes"`
+	// AgentUseAllowed Released by integrations.manage for agent bindings. Off by default.
+	AgentUseAllowed bool `json:"agent_use_allowed"`
+
+	// AllowPrivateNetwork Internal system switch. Works only for addresses the server operator lists in INTEGRATIONS_ALLOWED_PRIVATE_TARGETS.
+	AllowPrivateNetwork bool `json:"allow_private_network"`
+
+	// AssignableTools Tools agents may be given; null means every tool of the catalog.
+	AssignableTools *[]string          `json:"assignable_tools"`
+	CreatedAt       time.Time          `json:"created_at"`
+	CreatedBy       openapi_types.UUID `json:"created_by"`
+	Description     string             `json:"description"`
+	Enabled         bool               `json:"enabled"`
+
+	// EndpointUrl Full address for integrations.manage; only the host for other viewers (the path or query may carry a token).
+	EndpointUrl       string                    `json:"endpoint_url"`
+	HeadersConfigured bool                      `json:"headers_configured"`
+	HealthStatus      McpConnectionHealthStatus `json:"health_status"`
+	Id                openapi_types.UUID        `json:"id"`
+	LastErrorCode     string                    `json:"last_error_code"`
+	LastTestedAt      *time.Time                `json:"last_tested_at"`
+	MaxOutputBytes    int                       `json:"max_output_bytes"`
 
 	// Name Namespaces the tools for models as mcp__<name>__<tool>.
 	Name string `json:"name"`
 
-	// SecretHint Masked first header such as Authorization with a few visible characters. Secrets are never returned.
+	// SecretHint Masked first header with at most its last four characters; empty for viewers without integrations.manage. Secrets are never returned.
 	SecretHint       string     `json:"secret_hint"`
 	TimeoutMs        int        `json:"timeout_ms"`
 	Tools            []McpTool  `json:"tools"`
 	ToolsRefreshedAt *time.Time `json:"tools_refreshed_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
+
+	// WritesRequireConfirmation Every non read-only call waits for a person's approval, whatever the binding says. On by default.
+	WritesRequireConfirmation bool `json:"writes_require_confirmation"`
 }
 
 // McpConnectionHealthStatus defines model for McpConnection.HealthStatus.
@@ -5859,16 +5887,19 @@ type UpdateKnowledgeDocumentRequest struct {
 
 // UpdateMcpConnectionRequest defines model for UpdateMcpConnectionRequest.
 type UpdateMcpConnectionRequest struct {
-	AllowPrivateNetwork *bool   `json:"allow_private_network,omitempty"`
-	Description         *string `json:"description,omitempty"`
-	Enabled             *bool   `json:"enabled,omitempty"`
-	EndpointUrl         *string `json:"endpoint_url,omitempty"`
+	AgentUseAllowed     *bool     `json:"agent_use_allowed,omitempty"`
+	AllowPrivateNetwork *bool     `json:"allow_private_network,omitempty"`
+	AssignableTools     *[]string `json:"assignable_tools,omitempty"`
+	Description         *string   `json:"description,omitempty"`
+	Enabled             *bool     `json:"enabled,omitempty"`
+	EndpointUrl         *string   `json:"endpoint_url,omitempty"`
 
-	// Headers Replaces all headers; an empty object removes them.
-	Headers        *McpHeaders `json:"headers,omitempty"`
-	MaxOutputBytes *int        `json:"max_output_bytes,omitempty"`
-	Name           *string     `json:"name,omitempty"`
-	TimeoutMs      *int        `json:"timeout_ms,omitempty"`
+	// Headers Replaces all headers; an empty object removes them. A new scheme, host or port without new headers drops the stored ones (last_error_code credentials_required) and the tool catalog.
+	Headers                   *McpHeaders `json:"headers,omitempty"`
+	MaxOutputBytes            *int        `json:"max_output_bytes,omitempty"`
+	Name                      *string     `json:"name,omitempty"`
+	TimeoutMs                 *int        `json:"timeout_ms,omitempty"`
+	WritesRequireConfirmation *bool       `json:"writes_require_confirmation,omitempty"`
 }
 
 // UpdateMessageRequest defines model for UpdateMessageRequest.
