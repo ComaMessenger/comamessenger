@@ -9,6 +9,5 @@ module.exports = (config) => ({
     "com.apple.security.application-groups": [
       `group.${config.ios.bundleIdentifier}`,
     ],
-    "keychain-access-groups": [`group.${config.ios.bundleIdentifier}`],
   },
 });

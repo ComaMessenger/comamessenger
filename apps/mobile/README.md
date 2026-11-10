@@ -49,6 +49,7 @@ bundle exec fastlane android beta     # Google Play internal testing
 ```
 
 - The app must exist in App Store Connect and Google Play Console first; Google Play also requires the very first `.aab` to be uploaded by hand.
+- For the first iOS build, register `group.com.comamessenger.app` as an App Group and assign it to both `com.comamessenger.app` and `com.comamessenger.app.notification-service` in Apple Developer (or Xcode). If the extension's App ID is missing, register it first and enable App Groups. Membership in the App Group also grants shared keychain access; do not repeat its identifier in `keychain-access-groups`.
 - The Android upload keystore lives outside git; `COMA_UPLOAD_*` in `~/.gradle/gradle.properties` point to it. Losing it means asking Google Play support to reset the upload key.
 - Build numbers are taken from the stores and increased by one.
 

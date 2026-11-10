@@ -25,8 +25,9 @@ const config: ExpoConfig = {
     config: { usesNonExemptEncryption: false },
     appleTeamId: process.env.APPLE_TEAM_ID,
     entitlements: {
+      // App Groups also grant keychain access. Keep the default keychain group
+      // private to the app; only the push key explicitly uses this shared group.
       "com.apple.security.application-groups": [appGroup],
-      "keychain-access-groups": [appGroup],
     },
   },
   android: {
