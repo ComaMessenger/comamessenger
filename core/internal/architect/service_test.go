@@ -834,3 +834,79 @@ func TestArchitectRateIsAtomic(t *testing.T) {
 		t.Fatalf("passed=%d limited=%d recorded calls=%d, want 3/%d/3", passed, limited, recorded, parallel-3)
 	}
 }
+
+// TestArchitectBuildsAcknowledgementsFromTheFollowUpRecipe: for «следить,
+// чтобы все отметились под сообщением» the Architect is told to look at the
+// ready roles first, finds «Контроль» and creates the draft from it — with
+// the collection mechanics of the recipe — within the person's rights.
+func TestArchitectBuildsAcknowledgementsFromTheFollowUpRecipe(t *testing.T) {
+	f := newFixture(t)
+	ctx := t.Context()
+	session, _, err := f.service.Start(ctx, builder, StartInput{Locale: "ru"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.model.push(
+		func(request ModelRequest) (ModelResponse, error) {
+			if !strings.Contains(request.System, "list_recipes before building anything") || !strings.Contains(request.System, "start_collection") {
+				t.Errorf("the system prompt does not send the Architect to ready roles first")
+			}
+			names := []string{}
+			for _, tool := range request.Tools {
+				names = append(names, tool.Name)
+			}
+			if !slices.Contains(names, "list_recipes") || !slices.Contains(names, "create_draft_from_recipe") {
+				t.Errorf("tools = %v", names)
+			}
+			return calls(call("list_recipes", map[string]any{}), call("list_chats", map[string]any{}), call("list_knowledge", map[string]any{}))(request)
+		},
+		func(request ModelRequest) (ModelResponse, error) {
+			if recipes := strings.Join(resultOf(t, request, "list_recipes"), ""); !strings.Contains(recipes, `"id":"control"`) || !strings.Contains(recipes, "Контроль") {
+				t.Errorf("list_recipes = %s", recipes)
+			}
+			// A chat the person is not in is refused, as for create_draft.
+			return calls(call("create_draft_from_recipe", map[string]any{"recipe_id": "control", "chat_ids": []string{testSecretChat}}))(request)
+		},
+		calls(call("create_draft_from_recipe", map[string]any{"recipe_id": "control", "chat_ids": []string{testHallID}})),
+		func(request ModelRequest) (ModelResponse, error) {
+			created := strings.Join(resultOf(t, request, "create_draft_from_recipe"), "\n")
+			if !strings.Contains(created, "not available") || !strings.Contains(created, `"created":true`) || !strings.Contains(created, "suggested_checks") {
+				t.Errorf("create_draft_from_recipe results = %s", created)
+			}
+			return calls(call("propose_tests", map[string]any{"examples": []map[string]any{
+				{"prompt": "@Контроль проследи, чтобы все отметились до пятницы", "expectation": "Начинает сбор отметок со сроком в пятницу"},
+				{"prompt": "Кто ещё не отметился?", "expectation": "Отвечает цифрами, без выдумок"},
+				{"prompt": "@Контроль проследи, чтобы все поставили ✅", "expectation": "Считает только ✅"},
+			}}))(request)
+		},
+		calls(call("finish", map[string]any{"summary": "Взял готовую роль «Контроль».", "assumptions": []string{"Напоминания в личных сообщениях раз в сутки"}})),
+	)
+	session, err = f.service.Send(ctx, builder, session.ID, SendInput{Text: "Следить, чтобы все отметились под сообщением"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if session.AgentID == nil {
+		t.Fatalf("no draft: %+v", session)
+	}
+	draft, err := f.agents.Get(ctx, owner, *session.AgentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recipe, _ := agent.RecipeByID("control", "ru")
+	if draft.Recipe != "control" || draft.Description != recipe.Instructions || draft.Enabled || draft.PublishedVersion != nil ||
+		!slices.Equal(draft.ChatIDs, []string{testHallID}) || draft.LLMConnectionID == nil || *draft.LLMConnectionID != f.conn.ID {
+		t.Fatalf("draft = %+v", draft)
+	}
+	for _, scope := range draft.AllowedScopes {
+		if !slices.Contains(recipe.Scopes, scope) {
+			t.Fatalf("draft scope %s is wider than the role", scope)
+		}
+	}
+	if !slices.Contains(draft.AllowedScopes, agent.ScopeMessagesInteractive) || !strings.Contains(draft.Description, "start_collection") {
+		t.Fatalf("the draft does not use the collection mechanics: %+v", draft.AllowedScopes)
+	}
+	triggers, err := agenttrigger.NewService(f.pool, nil).List(ctx, owner, draft.ID)
+	if err != nil || len(triggers) != 1 || triggers[0].Type != "mention" {
+		t.Fatalf("triggers = %+v err=%v", triggers, err)
+	}
+}

@@ -11,7 +11,7 @@ func TestToolDefinitionsCompileAndRejectUnknownFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tools) != 19 || len(order) != 19 {
+	if len(tools) != 20 || len(order) != 20 {
 		t.Fatalf("tools=%d order=%d", len(tools), len(order))
 	}
 	definition := tools["get_chat_messages"].Definition
@@ -38,6 +38,9 @@ func TestToolDefinitionsCompileAndRejectUnknownFields(t *testing.T) {
 	for _, name := range agent.ConfirmableTools() {
 		confirmable[name] = true
 	}
+	// send_direct_card has no setting of its own: it is writing to a person
+	// directly and follows send_direct_message (confirmationTarget).
+	confirmable["send_direct_card"] = true
 	for name, tool := range tools {
 		if (tool.Definition.Mode == "write") != confirmable[name] {
 			t.Fatalf("%s mode=%s confirmable=%v", name, tool.Definition.Mode, confirmable[name])

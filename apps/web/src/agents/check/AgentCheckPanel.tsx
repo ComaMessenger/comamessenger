@@ -1,5 +1,10 @@
 import { useState } from "react";
-import type { Agent, Chat, MessengerAPI } from "@comamessenger/core";
+import type {
+  Agent,
+  AgentRecipe,
+  Chat,
+  MessengerAPI,
+} from "@comamessenger/core";
 import { Eye, Play, Square } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
@@ -17,7 +22,7 @@ import { chatName } from "../shared/format";
 import { CheckResult } from "./CheckResult";
 import { useAgentCheck } from "./useAgentCheck";
 
-const exampleCount = 3;
+const customExampleCount = 3;
 /** Blockers that make a check impossible, not only a publish. */
 const checkBlockers = new Set([
   "chat_required",
@@ -34,6 +39,7 @@ const checkBlockers = new Set([
 export function AgentCheckPanel({
   api,
   agent,
+  recipe,
   chats,
   chatIDs,
   blockers,
@@ -42,6 +48,8 @@ export function AgentCheckPanel({
 }: {
   api: MessengerAPI;
   agent: Agent;
+  /** Ready examples and what a good answer does come from the recipe. */
+  recipe?: AgentRecipe;
   chats: Chat[];
   /** Chats of the current draft. */
   chatIDs: string[];
@@ -58,9 +66,15 @@ export function AgentCheckPanel({
   const selectedChat =
     agentChats.find((chat) => chat.id === chatID) ?? agentChats[0];
   const blocking = blockers.filter((blocker) => checkBlockers.has(blocker.key));
-  const examples = Array.from({ length: exampleCount }, (_, index) =>
-    t(`agentExample_${agent.recipe}_${index + 1}`),
-  );
+  const examples = recipe
+    ? recipe.checks
+    : Array.from({ length: customExampleCount }, (_, index) => ({
+        prompt: t(`agentExample_custom_${index + 1}`),
+        expectations: [] as string[],
+      }));
+  const expected = examples.find(
+    (example) => example.prompt === prompt,
+  )?.expectations;
 
   async function start() {
     if (!selectedChat || !prompt.trim()) return;
@@ -87,14 +101,24 @@ export function AgentCheckPanel({
             <div className="agent-chips">
               {examples.map((example) => (
                 <Chip
-                  key={example}
-                  active={prompt === example}
-                  onClick={() => setPrompt(example)}
+                  key={example.prompt}
+                  active={prompt === example.prompt}
+                  onClick={() => setPrompt(example.prompt)}
                 >
-                  {example}
+                  {example.prompt}
                 </Chip>
               ))}
             </div>
+            {expected && expected.length > 0 && (
+              <div className="agent-check__expect">
+                <span>{t("agentCheckExpect")}</span>
+                <ul>
+                  {expected.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
           {agentChats.length > 1 && (
             <SelectField

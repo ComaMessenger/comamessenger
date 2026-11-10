@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { MessengerAPI, User } from "@comamessenger/core";
+import type { AgentRecipe, MessengerAPI, User } from "@comamessenger/core";
 import { useTranslation } from "react-i18next";
 import { EmptyState, Skeleton } from "../ui";
 import { SettingsAccessDenied } from "../settings/components/SettingsPrimitives";
 import { AgentActivityPage } from "./activity/AgentActivityPage";
 import { ArchitectPage } from "./architect/ArchitectPage";
 import { AgentPlatformHeader } from "./AgentPlatformHeader";
-import type { AgentTemplate } from "./agentTemplates";
 import { AgentBuilder } from "./builder/AgentBuilder";
 import { AgentCatalog } from "./catalog/AgentCatalog";
 import { CreateAgentDialog } from "./catalog/CreateAgentDialog";
@@ -15,6 +14,7 @@ import { AgentConnectionsPage } from "./connections/AgentConnectionsPage";
 import { agentRoute, builderAnchor } from "./routes";
 import { agentAccess } from "./shared/access";
 import { userTimezone } from "./shared/format";
+import { useRecipes } from "./shared/recipes";
 
 /** Agent platform shell: `/agents/*` routing and the shared queries. */
 export function AgentsPage({
@@ -53,7 +53,11 @@ export function AgentsPage({
     enabled: canApprove,
     refetchInterval: 15_000,
   });
-  const [creating, setCreating] = useState<AgentTemplate | null>(null);
+  const recipes = useRecipes(api, allowed);
+  // undefined: closed; null: a custom agent; a recipe: a catalog role.
+  const [creating, setCreating] = useState<AgentRecipe | null | undefined>(
+    undefined,
+  );
   const timezone = userTimezone(user.timezone);
   const selected =
     route.kind === "agent"
@@ -132,6 +136,9 @@ export function AgentsPage({
           connections={connections.data ?? []}
           timezone={timezone}
           anchor={builderAnchor(route.section)}
+          recipe={recipes.data?.find(
+            (recipe) => recipe.id === selected.recipe,
+          )}
           refetchAgents={agents.refetch}
           navigate={navigate}
         />
@@ -142,6 +149,7 @@ export function AgentsPage({
         agents={agents.data ?? []}
         chats={chats.data ?? []}
         approvals={approvals.data ?? []}
+        recipes={recipes.data}
         access={access}
         onCreate={setCreating}
         onArchitect={() => navigate("/agents/architect")}
@@ -159,16 +167,16 @@ export function AgentsPage({
         navigate={navigate}
       />
       <div className="agent-platform__content">{content()}</div>
-      {canBuild && creating && (
+      {canBuild && creating !== undefined && (
         <CreateAgentDialog
           api={api}
-          template={creating}
+          recipe={creating}
           chats={chats.data ?? []}
           connections={connections.data ?? []}
           timezone={timezone}
-          onClose={() => setCreating(null)}
+          onClose={() => setCreating(undefined)}
           onCreated={async (created) => {
-            setCreating(null);
+            setCreating(undefined);
             await agents.refetch();
             navigate(`/agents/${created.id}`);
           }}

@@ -1640,6 +1640,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agents/recipes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The built-in role catalog. Core is the only source of recipe names, instructions, scopes, rules and check examples. */
+        get: operations["listAgentRecipes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents/product-metrics": {
         parameters: {
             query?: never;
@@ -2567,7 +2584,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_confirmation_loosened" | "agent_conflict" | "agent_not_ready" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "architect_budget_exceeded" | "architect_busy" | "architect_connection_required" | "architect_model_error" | "architect_session_expired" | "architect_session_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "integration_in_use" | "integration_usage_changed" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "webhook_not_found" | "webhook_rejected" | "workspace_not_found";
+        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_confirmation_loosened" | "agent_conflict" | "agent_not_ready" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "architect_budget_exceeded" | "architect_busy" | "architect_connection_required" | "architect_model_error" | "architect_session_expired" | "architect_session_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "integration_in_use" | "integration_usage_changed" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "limit_reached" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "webhook_not_found" | "webhook_rejected" | "workspace_not_found";
         File: {
             /** Format: uuid */
             id: string;
@@ -3100,6 +3117,54 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
+        /**
+         * @description custom or a recipe id from GET /api/v1/agents/recipes. qa is «Справка», onboarding «Наставник», summarizer «Что я пропустил».
+         * @enum {string}
+         */
+        AgentRecipeId: "custom" | "control" | "qa" | "onboarding" | "slots" | "handoff" | "summarizer";
+        AgentRecipe: {
+            id: components["schemas"]["AgentRecipeId"];
+            locale: string;
+            icon: string;
+            name: string;
+            /** @description The task in one phrase. */
+            summary: string;
+            /** @description A typical request to the agent. */
+            example: string;
+            /** @description Agent instructions a new agent of this recipe starts with. */
+            instructions: string;
+            scopes: components["schemas"]["AgentScope"][];
+            /** @description Agent tools the instructions rely on. */
+            tools: string[];
+            triggers: components["schemas"]["AgentRecipeTrigger"][];
+            params: components["schemas"]["AgentRecipeParam"][];
+            needs: components["schemas"]["AgentRecipeNeed"][];
+            checks: components["schemas"]["AgentRecipeCheck"][];
+        };
+        AgentRecipeTrigger: {
+            type: string;
+            /** @description The rule as a sentence for people. */
+            summary: string;
+            config: {
+                [key: string]: unknown;
+            };
+        };
+        AgentRecipeParam: {
+            key: string;
+            label: string;
+            value: string;
+        };
+        AgentRecipeNeed: {
+            /** @enum {string} */
+            kind: "chats" | "knowledge" | "schedule";
+            required: boolean;
+            label: string;
+            hint: string;
+        };
+        AgentRecipeCheck: {
+            prompt: string;
+            expectations: string[];
+        };
         /** @enum {string} */
         AgentScope: "chats:read" | "messages:read" | "messages:write" | "reactions:write" | "files:read" | "search:read" | "members:read" | "memory:read" | "memory:write" | "runtime:execute" | "runtime:worker" | "knowledge:read" | "messages:interactive" | "followups:write" | "tables:read";
         Agent: {
@@ -3113,8 +3178,7 @@ export interface components {
             handle: string;
             /** @enum {string} */
             kind: "builtin" | "external";
-            /** @enum {string} */
-            recipe: "custom" | "summarizer" | "qa" | "onboarding";
+            recipe: components["schemas"]["AgentRecipeId"];
             recipe_version: number;
             description: string;
             enabled: boolean;
@@ -3210,12 +3274,12 @@ export interface components {
             handle: string;
             /** @enum {string} */
             kind: "builtin" | "external";
-            /**
-             * @default custom
-             * @enum {string}
-             */
-            recipe: "custom" | "summarizer" | "qa" | "onboarding";
+            /** @default custom */
+            recipe: components["schemas"]["AgentRecipeId"];
+            /** @description Instructions. For a recipe agent leave empty to get the catalog instructions in `locale`. */
             description?: string;
+            /** @description Language of recipe instructions Core fills in (ru, en; falls back to en). Defaults to Accept-Language. */
+            locale?: string;
             enabled: boolean;
             allowed_scopes: components["schemas"]["AgentScope"][];
             /** Format: uuid */
@@ -5423,7 +5487,10 @@ export interface operations {
     };
     resetAgentRecipe: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Language of the reset instructions; without it the language of the current instructions is kept. */
+                locale?: string;
+            };
             header?: never;
             path: {
                 agent_id: components["parameters"]["AgentId"];
@@ -8495,6 +8562,30 @@ export interface operations {
             403: components["responses"]["Error"];
             409: components["responses"]["Error"];
             422: components["responses"]["Error"];
+        };
+    };
+    listAgentRecipes: {
+        parameters: {
+            query?: {
+                /** @description ru or en; defaults to Accept-Language and falls back to en. */
+                locale?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Localized recipes, pilot roles in catalog order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRecipe"][];
+                };
+            };
+            403: components["responses"]["Error"];
         };
     };
     getAgentProductMetrics: {

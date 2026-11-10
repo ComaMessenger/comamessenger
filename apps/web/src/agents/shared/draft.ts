@@ -1,56 +1,37 @@
-import type { Agent, CreateAgentRequest } from "@comamessenger/core";
-import type { AgentTemplate as Template } from "../agentTemplates";
+import type {
+  Agent,
+  AgentRecipe,
+  CreateAgentRequest,
+} from "@comamessenger/core";
 
 export type Draft = CreateAgentRequest;
 
-/*
- * Client-side copy of the built-in recipe prompts. The server keeps its own
- * defaults in `recipeDefaults` (core/internal/agent) and exposes no endpoint to
- * read them, so this duplicate stays until the API publishes recipes.
- */
-export const templateDescriptions: Record<Template, string> = {
-  custom: "",
-  summarizer:
-    "You are the workspace Summarizer. On /summarize, summarize the current chat or thread with decisions, open questions and action items. For scheduled runs, produce a concise digest. Use message IDs as citations and never invent facts.",
-  qa: "You answer questions from accessible workspace history and extracted files. Search before answering, cite the exact message or file identifiers used, distinguish evidence from inference, and say when the answer is not available.",
-  onboarding:
-    "You are the onboarding guide. Greet new members in the configured chat, explain the workspace using only accessible history and files, link to source message IDs, and answer follow-up questions without exposing private chats.",
-};
+const customScopes: Draft["allowed_scopes"] = [
+  "messages:read",
+  "messages:write",
+  "search:read",
+  "files:read",
+  "memory:read",
+  "memory:write",
+  "runtime:execute",
+];
 
-export function emptyDraft(template: Template = "custom"): Draft {
+/**
+ * A new agent. A recipe agent carries no instructions of its own: Core fills
+ * them in from its catalog in `locale`, so recipe texts live only on the
+ * server.
+ */
+export function emptyDraft(recipe?: AgentRecipe, locale = "en"): Draft {
   const suffix = Math.random().toString(36).slice(2, 7);
   return {
-    display_name:
-      template === "summarizer"
-        ? "Summarizer"
-        : template === "qa"
-          ? "Workspace Q&A"
-          : template === "onboarding"
-            ? "Onboarding"
-            : "New agent",
-    handle: `${template === "custom" ? "agent" : template}_${suffix}`,
+    display_name: recipe?.name ?? "New agent",
+    handle: `${recipe ? recipe.id : "agent"}_${suffix}`,
     kind: "builtin",
-    recipe: template,
-    description: templateDescriptions[template],
+    recipe: recipe?.id ?? "custom",
+    description: "",
+    locale,
     enabled: false,
-    allowed_scopes:
-      template === "onboarding"
-        ? [
-            "messages:read",
-            "messages:write",
-            "search:read",
-            "files:read",
-            "runtime:execute",
-          ]
-        : [
-            "messages:read",
-            "messages:write",
-            "search:read",
-            "files:read",
-            "memory:read",
-            "memory:write",
-            "runtime:execute",
-          ],
+    allowed_scopes: recipe ? [...recipe.scopes] : customScopes,
     llm_connection_id: "",
     provider: "openai",
     model: "gpt-5-mini",

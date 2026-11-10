@@ -92,6 +92,12 @@ func interactiveTools(executor *Executor, object func([]string, map[string]any) 
 			InputSchema: object([]string{"collection_id"}, map[string]any{"collection_id": uuidSchema})}, Handler: executor.getCollection},
 		{Definition: Definition{Name: "schedule_followup", Description: "Schedule this agent to run again later with the given note and context (input.trigger_type=followup). Pausing or deleting the agent cancels it.", Mode: "write", RequiredScope: agent.ScopeFollowupsWrite,
 			InputSchema: object(nil, map[string]any{"at": timestamp, "delay_seconds": map[string]any{"type": "integer", "minimum": 60, "maximum": 2592000}, "chat_id": uuidSchema, "thread_root_id": uuidSchema, "note": map[string]any{"type": "string", "maxLength": 2000}, "context": map[string]any{"type": "object"}})}, Handler: executor.scheduleFollowup},
+		// send_direct_card is the card form of «writes to people directly»: the
+		// same scope, the same send_direct_message confirmation setting, the
+		// same per-person limit and quiet hours (see confirmationTarget and
+		// the message service direct guard).
+		{Definition: Definition{Name: "send_direct_card", Description: "Deliver a card privately to one person in their direct chat with this agent: a personal report, summary or reminder with buttons or sources. It is writing to a person directly: it follows the agent's setting for direct messages (it may wait for a person to approve it), the person's quiet hours and the daily limit of agent messages to one person. The person must share a group chat with this agent. The result has the direct chat_id, usable as report_chat_id of a collection.", Mode: "write", RequiredScope: agent.ScopeMessagesWrite,
+			InputSchema: object([]string{"actor_id", "client_msg_id", "blocks"}, map[string]any{"actor_id": uuidSchema, "client_msg_id": uuidSchema, "body": map[string]any{"type": "string", "maxLength": 65536}, "body_format": bodyFormat, "blocks": blocks})}, Handler: executor.sendDirectCard},
 		{Definition: Definition{Name: "send_direct_message", Description: "Send a direct message to one person who shares a chat with this agent. Waits for a person to approve it unless the agent version lets it run by itself.", Mode: "write", RequiredScope: agent.ScopeMessagesWrite,
 			InputSchema: object([]string{"actor_id", "client_msg_id", "body"}, map[string]any{"actor_id": uuidSchema, "client_msg_id": uuidSchema, "body": map[string]any{"type": "string", "minLength": 1, "maxLength": 65536}, "body_format": bodyFormat})}, Handler: executor.sendDirectMessage},
 	}
@@ -126,6 +132,18 @@ func (executor *Executor) updateCard(ctx context.Context, invocation Invocation)
 		return nil, fmt.Errorf("%w: %v", ErrInvalid, err)
 	}
 	return executor.services.Messages.UpdateCardForAgentRun(ctx, invocation.User, input.MessageID, input.UpdateCardInput)
+}
+
+func (executor *Executor) sendDirectCard(ctx context.Context, invocation Invocation) (any, error) {
+	service, err := executor.interactiveService()
+	if err != nil {
+		return nil, err
+	}
+	var input interactive.DirectCardInput
+	if err := json.Unmarshal(invocation.Arguments, &input); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalid, err)
+	}
+	return service.SendDirectCard(ctx, invocation.User, invocation.RunID, input)
 }
 
 type reactionGroup struct {

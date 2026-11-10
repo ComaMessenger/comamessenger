@@ -38,6 +38,30 @@ func (executor *Executor) confirmationTarget(ctx context.Context, invocation Inv
 	if definition.Name == directPolicyTool {
 		return directPolicyTool, false, nil
 	}
+	if definition.Name == "send_direct_card" {
+		// The card form of writing to a person directly. Like any write, it
+		// answers without the setting only in the direct chat of a run that
+		// person started there.
+		var target struct {
+			ActorID string `json:"actor_id"`
+		}
+		_ = json.Unmarshal(invocation.Arguments, &target)
+		if invocation.runChatID != "" && target.ActorID != "" && target.ActorID == invocation.requestedBy {
+			left, right := invocation.User.ActorID, target.ActorID
+			if right < left {
+				left, right = right, left
+			}
+			var ownDirect bool
+			if err := executor.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM chats WHERE org_id=$1 AND id::text=$2 AND kind='direct' AND direct_pair_key=$3)`,
+				invocation.User.OrgID, invocation.runChatID, left+":"+right).Scan(&ownDirect); err != nil {
+				return "", false, err
+			}
+			if ownDirect {
+				return "post_card", false, nil
+			}
+		}
+		return directPolicyTool, false, nil
+	}
 	var arguments map[string]any
 	if err := json.Unmarshal(invocation.Arguments, &arguments); err != nil {
 		return "", false, ErrInvalid

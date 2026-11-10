@@ -64,6 +64,10 @@ var validScopes = map[Scope]struct{}{
 	ScopeRuntimeExecute: {}, ScopeRuntimeWorker: {}, ScopeKnowledgeRead: {}, ScopeMessagesInteractive: {}, ScopeFollowupsWrite: {}, ScopeTablesRead: {},
 }
 
+// maxDescriptionLength bounds agent instructions; pilot recipes describe a
+// workflow step by step and need more than a paragraph.
+const maxDescriptionLength = 4000
+
 var handlePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{1,31}$`)
 var costLimitPattern = regexp.MustCompile(`^[0-9]+(?:\.[0-9]{1,8})?$`)
 
@@ -160,6 +164,9 @@ type CreateInput struct {
 	ChatIDs                     []string     `json:"chat_ids"`
 	KnowledgeCollectionIDs      []string     `json:"knowledge_collection_ids"`
 	MCPBindings                 []MCPBinding `json:"mcp_bindings"`
+	// Locale chooses the language of recipe instructions filled in by Core
+	// when a recipe agent is created without its own description.
+	Locale string `json:"locale"`
 	// ReadChatIDs and WriteChatIDs are the API form; when either is set,
 	// ChatIDs becomes their union. ReadOnlyChatIDs and WriteOnlyChatIDs are
 	// the stored form (also the keys of a version config).
@@ -545,7 +552,7 @@ func (service *Service) Create(ctx context.Context, current identity.User, input
 			return Agent{}, err
 		}
 	} else {
-		if err := insertRecipeTriggers(ctx, tx, current.OrgID, agentID, normalized.Recipe, normalized.ChatIDs, service.now().UTC()); err != nil {
+		if err := insertRecipeTriggers(ctx, tx, current.OrgID, agentID, normalized.Recipe, normalized.Locale, without(normalized.ChatIDs, normalized.WriteOnlyChatIDs), service.now().UTC()); err != nil {
 			return Agent{}, err
 		}
 	}
@@ -588,7 +595,15 @@ func (service *Service) Duplicate(ctx context.Context, current identity.User, ag
 	return service.Create(ctx, current, createInput)
 }
 
+// ResetRecipe resets a recipe agent to the current texts, scopes and rules of
+// its recipe in the language of its present instructions.
 func (service *Service) ResetRecipe(ctx context.Context, current identity.User, agentID string) (Agent, error) {
+	return service.ResetRecipeIn(ctx, current, agentID, "")
+}
+
+// ResetRecipeIn resets a recipe agent with instructions in the given locale;
+// an empty locale keeps the language of the present instructions.
+func (service *Service) ResetRecipeIn(ctx context.Context, current identity.User, agentID, locale string) (Agent, error) {
 	if !canBuild(current) {
 		return Agent{}, ErrForbidden
 	}
@@ -610,7 +625,11 @@ func (service *Service) ResetRecipe(ctx context.Context, current identity.User, 
 	if err != nil {
 		return Agent{}, err
 	}
-	description, scopes, ok := recipeDefaults(locked.Recipe)
+	if strings.TrimSpace(locale) == "" {
+		locale = guessRecipeLocale(locked.Description)
+	}
+	locale = NormalizeRecipeLocale(locale)
+	description, scopes, ok := recipeDefaults(locked.Recipe, locale)
 	if !ok {
 		return Agent{}, fmt.Errorf("%w: custom agents do not have template defaults", ErrInvalid)
 	}
@@ -620,7 +639,7 @@ func (service *Service) ResetRecipe(ctx context.Context, current identity.User, 
 	if _, err := tx.Exec(ctx, `UPDATE agent_triggers SET enabled=false,superseded_at=now(),updated_at=now() WHERE org_id=$1 AND agent_id=$2 AND superseded_at IS NULL`, current.OrgID, agentID); err != nil {
 		return Agent{}, err
 	}
-	if err := insertRecipeTriggers(ctx, tx, current.OrgID, agentID, locked.Recipe, locked.ChatIDs, service.now().UTC()); err != nil {
+	if err := insertRecipeTriggers(ctx, tx, current.OrgID, agentID, locked.Recipe, locale, without(locked.ChatIDs, locked.writeOnlyChatIDs), service.now().UTC()); err != nil {
 		return Agent{}, err
 	}
 	prospective := inputFromAgent(locked)
@@ -1602,7 +1621,7 @@ func normalizeCreate(input CreateInput) (CreateInput, error) {
 		}
 	}
 	if len([]rune(input.DisplayName)) < 1 || len([]rune(input.DisplayName)) > 120 || !handlePattern.MatchString(input.Handle) ||
-		(input.Kind != "builtin" && input.Kind != "external") || len([]rune(input.Description)) > 2000 || len(input.Provider) > 100 || len(input.Model) > 200 ||
+		(input.Kind != "builtin" && input.Kind != "external") || len([]rune(input.Description)) > maxDescriptionLength || len(input.Provider) > 100 || len(input.Model) > 200 ||
 		input.RateLimitPerMinute < 1 || input.RateLimitPerMinute > 100000 || input.ProviderRateLimitPerMinute < 1 || input.ProviderRateLimitPerMinute > 100000 ||
 		input.ExecutionTimeoutSeconds < 30 || input.ExecutionTimeoutSeconds > 3600 ||
 		*input.MaxOutputTokens < 1 || *input.MaxOutputTokens > 1000000 || *input.MaxToolIterations < 0 || *input.MaxToolIterations > 64 ||
@@ -1626,8 +1645,20 @@ func normalizeCreate(input CreateInput) (CreateInput, error) {
 			}
 		}
 	}
-	if input.Recipe != "custom" && input.Recipe != "summarizer" && input.Recipe != "qa" && input.Recipe != "onboarding" {
+	if input.Recipe != "custom" && !isRecipe(input.Recipe) {
 		return CreateInput{}, fmt.Errorf("%w: unsupported agent recipe", ErrInvalid)
+	}
+	input.Locale = NormalizeRecipeLocale(input.Locale)
+	if input.Recipe != "custom" {
+		// Core is the only source of recipe texts: a client creating a recipe
+		// agent sends no instructions or scopes and gets the catalog ones.
+		instructions, scopes, _ := recipeDefaults(input.Recipe, input.Locale)
+		if input.Description == "" {
+			input.Description = instructions
+		}
+		if len(input.AllowedScopes) == 0 {
+			input.AllowedScopes = scopes
+		}
 	}
 	if input.Recipe != "custom" && input.Kind != "builtin" {
 		return CreateInput{}, fmt.Errorf("%w: recipes require a builtin agent", ErrInvalid)
@@ -2019,37 +2050,15 @@ func versionConfig(input CreateInput) ([]byte, error) {
 	})
 }
 
-func insertRecipeTriggers(ctx context.Context, tx pgx.Tx, orgID, agentID, recipe string, chatIDs []string, now time.Time) error {
+func insertRecipeTriggers(ctx context.Context, tx pgx.Tx, orgID, agentID, recipe, locale string, chatIDs []string, now time.Time) error {
 	if recipe == "custom" {
 		return nil
 	}
 	if len(chatIDs) == 0 {
-		return fmt.Errorf("%w: recipe agents require at least one chat", ErrInvalid)
+		return fmt.Errorf("%w: recipe agents require at least one chat they read", ErrInvalid)
 	}
-	type recipeTrigger struct {
-		kind         string
-		config       map[string]any
-		timezone     string
-		missedPolicy string
-		nextRunAt    *time.Time
-	}
-	triggers := make([]recipeTrigger, 0, 2)
-	switch recipe {
-	case "summarizer":
-		triggers = append(triggers, recipeTrigger{kind: "command", config: map[string]any{"command": "summarize", "include_agent_messages": false}, timezone: "UTC", missedPolicy: "skip"})
-		next := time.Date(now.Year(), now.Month(), now.Day(), 9, 0, 0, 0, time.UTC)
-		if !next.After(now) {
-			next = next.Add(24 * time.Hour)
-		}
-		triggers = append(triggers, recipeTrigger{kind: "schedule", config: map[string]any{"chat_id": chatIDs[0], "hour": 9, "minute": 0, "days_of_week": []int{}}, timezone: "UTC", missedPolicy: "latest", nextRunAt: &next})
-	case "qa":
-		triggers = append(triggers, recipeTrigger{kind: "mention", config: map[string]any{"include_agent_messages": false}, timezone: "UTC", missedPolicy: "skip"})
-	case "onboarding":
-		triggers = append(triggers,
-			recipeTrigger{kind: "event", config: map[string]any{"event_types": []string{"member.joined"}, "include_agent_messages": false, "chat_id": chatIDs[0]}, timezone: "UTC", missedPolicy: "latest"},
-			recipeTrigger{kind: "mention", config: map[string]any{"include_agent_messages": false}, timezone: "UTC", missedPolicy: "skip"},
-		)
-	default:
+	triggers, ok := recipeTriggerRows(recipe, locale, chatIDs, now)
+	if !ok {
 		return fmt.Errorf("%w: unsupported agent recipe", ErrInvalid)
 	}
 	for _, trigger := range triggers {
@@ -2113,20 +2122,6 @@ func copyAgentTriggers(ctx context.Context, tx pgx.Tx, orgID, sourceAgentID, tar
 		}
 	}
 	return nil
-}
-
-func recipeDefaults(recipe string) (string, []Scope, bool) {
-	baseScopes := []Scope{ScopeMessagesRead, ScopeMessagesWrite, ScopeSearchRead, ScopeFilesRead, ScopeMemoryRead, ScopeMemoryWrite, ScopeRuntimeExecute}
-	switch recipe {
-	case "summarizer":
-		return "Summarize the selected chat or thread with decisions, open questions, and next actions. Cite message identifiers and never invent facts.", baseScopes, true
-	case "qa":
-		return "Answer from accessible workspace history and extracted files. Search first, cite exact sources, distinguish evidence from inference, and say when the answer is unavailable.", baseScopes, true
-	case "onboarding":
-		return "Help new members understand the workspace using only accessible history and files. Cite sources, answer follow-up questions, and never reveal private chats.", []Scope{ScopeMessagesRead, ScopeMessagesWrite, ScopeSearchRead, ScopeFilesRead, ScopeRuntimeExecute}, true
-	default:
-		return "", nil, false
-	}
 }
 
 func intPointer(value int) *int { return &value }

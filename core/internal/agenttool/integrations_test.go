@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/comamessenger/comamessenger/core/internal/access"
+	"github.com/comamessenger/comamessenger/core/internal/agent"
 	"github.com/comamessenger/comamessenger/core/internal/agentconfig"
 	"github.com/comamessenger/comamessenger/core/internal/agentmemory"
 	"github.com/comamessenger/comamessenger/core/internal/agentrun"
@@ -31,9 +32,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// slotsRecipe is the unchanged instruction of the "Слоты" agent in both
-// scenarios below. It names the question, not the data source.
-const slotsRecipe = "Найди свободные слоты на нужную дату и предложи инструкторов. Расписание бери из доступных инструментов расписания. Ничего не меняй без решения администратора."
+// slotsRecipe is the unchanged catalog instruction of the "Слоты" agent in
+// both scenarios below. It names the question, not the data source.
+var slotsRecipe = func() string {
+	recipe, _ := agent.RecipeByID("slots", "ru")
+	return recipe.Instructions
+}()
 
 const slotsSchedule = "Слот;Дата;Начало;Конец;Зал;Инструктор;Статус\n" +
 	"s-1;2026-11-12;09:00;10:00;Зал 1;Иванова;занят\n" +

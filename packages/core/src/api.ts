@@ -79,6 +79,7 @@ import type {
   AgentVersion,
   AgentUsageReport,
   AgentProductMetrics,
+  AgentRecipe,
   AgentApiKey,
   CreatedAgentApiKey,
   CreateAgentRequest,
@@ -431,6 +432,12 @@ export class MessengerAPI {
   }
   agentProductMetrics(): Promise<AgentProductMetrics> {
     return this.request("/api/v1/agents/product-metrics");
+  }
+  /** The built-in role catalog in `locale` (falls back to English). */
+  agentRecipes(locale: string): Promise<AgentRecipe[]> {
+    return this.request(
+      `/api/v1/agents/recipes?locale=${encodeURIComponent(locale)}`,
+    );
   }
   cancelAgentRun(runID: string): Promise<AgentRun> {
     return this.request(
@@ -809,9 +816,10 @@ export class MessengerAPI {
       body: JSON.stringify(input),
     });
   }
-  resetAgentRecipe(id: string): Promise<Agent> {
+  resetAgentRecipe(id: string, locale?: string): Promise<Agent> {
+    const query = locale ? `?locale=${encodeURIComponent(locale)}` : "";
     return this.request(
-      `/api/v1/agents/${encodeURIComponent(id)}/reset-recipe`,
+      `/api/v1/agents/${encodeURIComponent(id)}/reset-recipe${query}`,
       { method: "POST" },
     );
   }

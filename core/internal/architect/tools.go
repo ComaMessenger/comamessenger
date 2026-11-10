@@ -48,6 +48,13 @@ func toolSpecs(canAsk bool) []ToolSpec {
 		{Name: "list_chats", Description: "Chats the administrator can choose for the agent.", Parameters: object(map[string]any{})},
 		{Name: "list_knowledge", Description: "Knowledge base collections the administrator can give the agent.", Parameters: object(map[string]any{})},
 		{Name: "list_connections", Description: "Workspace integrations released for agents, with the tools each offers.", Parameters: object(map[string]any{})},
+		{Name: "list_recipes", Description: "Ready roles of the workspace with what each does, an example request, its launch rules, what it needs and its check examples. Look here first: most tasks fit one of them.", Parameters: object(map[string]any{})},
+		{Name: "create_draft_from_recipe", Description: "Create the agent draft from a ready role: its tested instructions, abilities, launch rules and check examples. Prefer it to create_draft whenever a role fits. Nothing is published.", Parameters: object(map[string]any{
+			"recipe_id":                map[string]any{"type": "string", "description": "id from list_recipes"},
+			"name":                     map[string]any{"type": "string", "description": "Optional name; the role name by default"},
+			"chat_ids":                 stringArray,
+			"knowledge_collection_ids": stringArray,
+		}, "recipe_id", "chat_ids")},
 		{Name: "create_draft", Description: "Create the agent draft. Call once, when the task is clear. Nothing is published.", Parameters: object(map[string]any{
 			"name":         map[string]any{"type": "string", "description": "Short human name, e.g. «Контроль»"},
 			"task":         map[string]any{"type": "string", "description": "One sentence: what the agent does"},
@@ -138,6 +145,10 @@ func (turn *turn) execute(ctx context.Context, call ToolCall) (any, *VisibleMess
 		return turn.listKnowledge(ctx), nil
 	case "list_connections":
 		return turn.listConnections(ctx), nil
+	case "list_recipes":
+		return turn.listRecipes(), nil
+	case "create_draft_from_recipe":
+		return turn.createDraftFromRecipe(ctx, call.Arguments), nil
 	case "create_draft":
 		return turn.createDraft(ctx, call.Arguments), nil
 	case "update_draft":
@@ -390,6 +401,105 @@ func (turn *turn) createDraft(ctx context.Context, raw json.RawMessage) any {
 		return fail("the draft was created but not linked to the conversation")
 	}
 	return map[string]any{"created": true, "draft": turn.passport(ctx, created)}
+}
+
+// listRecipes shows the role catalog in the conversation language. Recipe
+// texts are Core's own, so they are not marked as untrusted.
+func (turn *turn) listRecipes() any {
+	recipes := agent.Recipes(turn.row.session.Locale)
+	result := make([]map[string]any, 0, len(recipes))
+	for _, recipe := range recipes {
+		triggers := make([]string, 0, len(recipe.Triggers))
+		for _, trigger := range recipe.Triggers {
+			triggers = append(triggers, trigger.Summary)
+		}
+		needs := make([]string, 0, len(recipe.Needs))
+		for _, need := range recipe.Needs {
+			needs = append(needs, need.Label+": "+need.Hint)
+		}
+		checks := make([]map[string]any, 0, len(recipe.Checks))
+		for _, check := range recipe.Checks {
+			checks = append(checks, map[string]any{"prompt": check.Prompt, "expectation": strings.Join(check.Expectations, "; ")})
+		}
+		result = append(result, map[string]any{"id": recipe.ID, "name": recipe.Name, "does": recipe.Summary, "example": recipe.Example,
+			"launch": triggers, "needs": needs, "checks": checks})
+	}
+	return map[string]any{"recipes": result}
+}
+
+// createDraftFromRecipe creates the session draft from a catalog role. It
+// follows the same limits as create_draft: only chats and collections the
+// administrator can see, the workspace model connection, nothing published.
+func (turn *turn) createDraftFromRecipe(ctx context.Context, raw json.RawMessage) any {
+	var input struct {
+		RecipeID               string   `json:"recipe_id"`
+		Name                   string   `json:"name"`
+		ChatIDs                []string `json:"chat_ids"`
+		KnowledgeCollectionIDs []string `json:"knowledge_collection_ids"`
+	}
+	if err := decodeStrict(raw, &input); err != nil {
+		return fail("invalid arguments: %v", err)
+	}
+	if turn.row.session.AgentID != nil {
+		return fail("the draft already exists; change it with update_draft")
+	}
+	recipe, ok := agent.RecipeByID(strings.TrimSpace(input.RecipeID), turn.row.session.Locale)
+	if !ok {
+		return fail("unknown role %q; use list_recipes", input.RecipeID)
+	}
+	visibleChats, err := turn.chatSet(ctx)
+	if err != nil {
+		return fail("chats are unavailable")
+	}
+	chatIDs, denied := allowedIDs(input.ChatIDs, visibleChats)
+	if denied != "" {
+		return fail("chat %s is not available to this administrator; use list_chats", denied)
+	}
+	if len(chatIDs) == 0 {
+		return fail("a ready role needs at least one chat; use list_chats")
+	}
+	visibleCollections, err := turn.collectionSet(ctx)
+	if err != nil {
+		return fail("knowledge is unavailable")
+	}
+	collectionIDs, denied := allowedIDs(input.KnowledgeCollectionIDs, visibleCollections)
+	if denied != "" {
+		return fail("collection %s is not available to this administrator; use list_knowledge", denied)
+	}
+	// The role's abilities, read back through sources and skills so a draft
+	// never holds more than the builder and the Architect can express.
+	sources, skills := capabilitiesOf(recipe.Scopes)
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		name = recipe.Name
+	}
+	connectionID := turn.connection.ID
+	create := agent.CreateInput{
+		DisplayName: name, Kind: "builtin", Recipe: recipe.ID, Locale: recipe.Locale,
+		AllowedScopes:   scopesFor(sources, skills, len(collectionIDs) > 0, nil),
+		LLMConnectionID: &connectionID, ChatIDs: chatIDs, KnowledgeCollectionIDs: collectionIDs,
+	}
+	var created agent.Agent
+	for range 3 {
+		create.Handle = randomHandle()
+		created, err = turn.service.services.Agents.Create(ctx, turn.current, create)
+		if !errors.Is(err, agent.ErrConflict) {
+			break
+		}
+	}
+	if err != nil {
+		return fail("the draft was not created: %s", publicError(err))
+	}
+	turn.row.session.AgentID = &created.ID
+	turn.changed = true
+	if _, err := turn.service.pool.Exec(ctx, `UPDATE agent_architect_sessions SET agent_id=$3 WHERE org_id=$1 AND id=$2`, turn.current.OrgID, turn.row.session.ID, created.ID); err != nil {
+		return fail("the draft was created but not linked to the conversation")
+	}
+	checks := make([]map[string]any, 0, len(recipe.Checks))
+	for _, check := range recipe.Checks {
+		checks = append(checks, map[string]any{"prompt": check.Prompt, "expectation": strings.Join(check.Expectations, "; ")})
+	}
+	return map[string]any{"created": true, "recipe": recipe.ID, "draft": turn.passport(ctx, created), "suggested_checks": checks}
 }
 
 type bindingInput struct {

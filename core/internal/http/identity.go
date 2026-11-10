@@ -171,6 +171,7 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Get("/agents", h.listAgents)
 			protected.Get("/chats/{chatID}/agents", h.listChatAgents)
 			protected.Get("/agents/product-metrics", h.agentProductMetrics)
+			protected.Get("/agents/recipes", h.listAgentRecipes)
 			protected.Post("/agents", h.createAgent)
 			protected.Get("/agents/settings", h.agentPlatformSettings)
 			protected.Patch("/agents/settings", h.updateAgentPlatformSettings)

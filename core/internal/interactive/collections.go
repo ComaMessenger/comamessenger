@@ -632,35 +632,59 @@ type DirectMessageInput struct {
 }
 
 // SendDirectMessage delivers an agent message to one person in their direct
-// chat with the agent. The person must already share a chat with the agent,
-// and the per-person daily cap applies.
+// chat with the agent. The person must share a group chat with the agent;
+// the message service direct guard applies the send_direct_message setting,
+// quiet hours and the per-person limit of all agents.
 func (s *Service) SendDirectMessage(ctx context.Context, agent identity.User, runID string, input DirectMessageInput) (message.Message, error) {
-	if uuid.Validate(input.ActorID) != nil || uuid.Validate(input.ClientMsgID) != nil || uuid.Validate(runID) != nil {
-		return message.Message{}, fmt.Errorf("%w: actor_id, client_msg_id and run_id must be UUIDs", ErrInvalid)
-	}
-	if input.ActorID == agent.ActorID {
-		return message.Message{}, fmt.Errorf("%w: an agent cannot message itself", ErrInvalid)
-	}
-	var shared bool
-	var sentToday int
-	err := s.pool.QueryRow(ctx, `SELECT
-		EXISTS(SELECT 1 FROM chat_members mine JOIN chat_members theirs ON theirs.org_id=mine.org_id AND theirs.chat_id=mine.chat_id
-			JOIN chats c ON c.org_id=mine.org_id AND c.id=mine.chat_id AND c.archived_at IS NULL
-			JOIN actors a ON a.org_id=theirs.org_id AND a.id=theirs.actor_id AND a.type='user' AND a.status='active' AND a.deleted_at IS NULL
-			WHERE mine.org_id=$1 AND mine.actor_id=$2 AND theirs.actor_id=$3),
-		(SELECT count(*) FROM messages m JOIN chats c ON c.org_id=m.org_id AND c.id=m.chat_id AND c.kind='direct'
-			WHERE m.org_id=$1 AND m.actor_id=$2 AND m.created_at>$4 AND c.direct_pair_key=$5)`,
-		agent.OrgID, agent.ActorID, input.ActorID, s.now().UTC().Add(-24*time.Hour), pairKey(agent.ActorID, input.ActorID)).Scan(&shared, &sentToday)
-	if err != nil {
+	if err := s.checkDirectRecipient(ctx, agent, input.ActorID, input.ClientMsgID, runID); err != nil {
 		return message.Message{}, err
 	}
-	if !shared {
-		return message.Message{}, ErrForbidden
-	}
-	if sentToday >= s.limits.MaxDirectMessagesPerPersonPerDay {
-		return message.Message{}, fmt.Errorf("%w: daily direct message limit for this person", ErrLimit)
-	}
 	return s.deliverDirect(ctx, agent, runID, input.ActorID, input.ClientMsgID, input.Body, input.BodyFormat, nil)
+}
+
+// DirectCardInput is the payload of send_direct_card.
+type DirectCardInput struct {
+	ActorID     string          `json:"actor_id"`
+	ClientMsgID string          `json:"client_msg_id"`
+	Body        string          `json:"body"`
+	BodyFormat  string          `json:"body_format"`
+	Blocks      *message.Blocks `json:"blocks"`
+}
+
+// SendDirectCard is the card form of SendDirectMessage: a private report,
+// summary or reminder with buttons or sources, under exactly the same rules.
+func (s *Service) SendDirectCard(ctx context.Context, agent identity.User, runID string, input DirectCardInput) (message.Message, error) {
+	if input.Blocks == nil {
+		return message.Message{}, fmt.Errorf("%w: a direct card needs blocks", ErrInvalid)
+	}
+	if err := s.checkDirectRecipient(ctx, agent, input.ActorID, input.ClientMsgID, runID); err != nil {
+		return message.Message{}, err
+	}
+	return s.deliverDirect(ctx, agent, runID, input.ActorID, input.ClientMsgID, input.Body, input.BodyFormat, input.Blocks)
+}
+
+// checkDirectRecipient requires a group chat shared with the person: a direct
+// chat with the agent does not count, so a person who left every shared chat
+// gets nothing more. Policy, quiet hours and limits are the direct guard's.
+func (s *Service) checkDirectRecipient(ctx context.Context, agent identity.User, actorID, clientMsgID, runID string) error {
+	if uuid.Validate(actorID) != nil || uuid.Validate(clientMsgID) != nil || uuid.Validate(runID) != nil {
+		return fmt.Errorf("%w: actor_id, client_msg_id and run_id must be UUIDs", ErrInvalid)
+	}
+	if actorID == agent.ActorID {
+		return fmt.Errorf("%w: an agent cannot message itself", ErrInvalid)
+	}
+	var shared bool
+	err := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM chat_members mine JOIN chat_members theirs ON theirs.org_id=mine.org_id AND theirs.chat_id=mine.chat_id
+			JOIN chats c ON c.org_id=mine.org_id AND c.id=mine.chat_id AND c.archived_at IS NULL AND c.kind<>'direct'
+			JOIN actors a ON a.org_id=theirs.org_id AND a.id=theirs.actor_id AND a.type='user' AND a.status='active' AND a.deleted_at IS NULL
+			WHERE mine.org_id=$1 AND mine.actor_id=$2 AND theirs.actor_id=$3)`, agent.OrgID, agent.ActorID, actorID).Scan(&shared)
+	if err != nil {
+		return err
+	}
+	if !shared {
+		return ErrForbidden
+	}
+	return nil
 }
 
 func pairKey(left, right string) string {

@@ -51,6 +51,13 @@ func main() {
 		_, _ = os.Stdout.WriteString("VAPID_PUBLIC_KEY=" + publicKey + "\nVAPID_PRIVATE_KEY=" + privateKey + "\n")
 		return
 	}
+	if len(os.Args) >= 2 && os.Args[1] == "seed-pilot" {
+		if err := runSeedPilot(os.Args[2:], os.Stdout); err != nil {
+			slog.Error("pilot seed failed", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) == 2 && os.Args[1] == "healthcheck" {
 		client := &http.Client{Timeout: 2 * time.Second}
 		response, err := client.Get("http://localhost:8080/healthz")

@@ -349,6 +349,22 @@
   background: var(--coma-avatar-surface-7);
   color: var(--coma-avatar-foreground-7);
 }
+.agent-role__icon[data-role="control"] {
+  background: var(--coma-avatar-surface-8);
+  color: var(--coma-avatar-foreground-8);
+}
+.agent-role__icon[data-role="slots"] {
+  background: var(--coma-avatar-surface-4);
+  color: var(--coma-avatar-foreground-4);
+}
+.agent-role__icon[data-role="handoff"] {
+  background: var(--coma-avatar-surface-2);
+  color: var(--coma-avatar-foreground-2);
+}
+.agent-role__icon[data-role="summarizer"] {
+  background: var(--coma-avatar-surface-3);
+  color: var(--coma-avatar-foreground-3);
+}
 .agent-role__icon[data-role="custom"] {
   background: var(--coma-surface-selected);
   color: var(--coma-foreground);
@@ -805,6 +821,18 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+/* Recipe examples are whole sentences: they wrap instead of widening the page. */
+.agent-check__examples .ui-chip {
+  flex: 0 1 auto;
+  height: auto;
+  min-height: 28px;
+  max-width: 100%;
+  padding-block: 6px;
+  line-height: 1.35;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .agent-rules {
@@ -1327,4 +1355,133 @@
 }
 .agent-knowledge a.ui-button {
   text-decoration: none;
+}
+
+/* Builder opened from a catalog role: what is left to choose. */
+.agent-recipe-setup {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--coma-border);
+  border-radius: var(--coma-radius-lg);
+  background: var(--coma-surface);
+}
+.agent-recipe-setup__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.agent-recipe-setup__head > span:last-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.agent-recipe-setup h3 {
+  font-size: 15px;
+  font-weight: 600;
+}
+.agent-recipe-setup__head p,
+.agent-recipe-setup__status {
+  margin: 0;
+  color: var(--coma-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.agent-recipe-setup__status {
+  color: var(--coma-foreground);
+  font-weight: 600;
+}
+.agent-recipe-setup__needs {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.agent-recipe-setup__needs li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.agent-recipe-setup__needs li > svg {
+  flex: none;
+  inline-size: 16px;
+  block-size: 16px;
+  margin-block-start: 2px;
+  color: var(--coma-muted);
+}
+.agent-recipe-setup__needs li[data-done="true"] > svg {
+  color: var(--coma-success);
+}
+.agent-recipe-setup__needs li > span {
+  display: grid;
+  min-width: 0;
+}
+.agent-recipe-setup__needs a {
+  color: var(--coma-primary);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.agent-recipe-setup__needs small {
+  color: var(--coma-muted);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+.agent-recipe-setup__how {
+  display: grid;
+  gap: 6px;
+  padding-block-start: 10px;
+  border-block-start: 1px solid var(--coma-border);
+}
+.agent-recipe-setup__how h4 {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.agent-recipe-setup__how p {
+  margin: 0;
+}
+.agent-recipe-setup__how ul {
+  margin: 0;
+  padding-inline-start: 18px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.agent-recipe-setup__how dl {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  font-size: 13px;
+}
+.agent-recipe-setup__how dl > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+.agent-recipe-setup__how dt {
+  color: var(--coma-muted);
+}
+.agent-recipe-setup__how dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.agent-check__expect {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: var(--coma-radius-md);
+  background: var(--coma-surface-selected);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.agent-check__expect > span {
+  font-weight: 600;
+}
+.agent-check__expect ul {
+  margin: 0;
+  padding-inline-start: 18px;
 }

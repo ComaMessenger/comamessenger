@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import type {
   Agent,
   AgentLlmConnection,
+  AgentRecipe,
   Chat,
   MessengerAPI,
 } from "@comamessenger/core";
@@ -33,6 +34,7 @@ import { IdentityBlock } from "./IdentityBlock";
 import { KnowledgeBlock } from "./KnowledgeBlock";
 import { ModelBlock } from "./ModelBlock";
 import { PlacesBlock } from "./PlacesBlock";
+import { RecipeSetup } from "./RecipeSetup";
 import { SkillsBlock } from "./SkillsBlock";
 import { TriggersBlock } from "./TriggersBlock";
 import { publishBlockers, useAgentBuilder } from "./useAgentBuilder";
@@ -52,6 +54,7 @@ export function AgentBuilder({
   connections,
   timezone,
   anchor,
+  recipe,
   refetchAgents,
   navigate,
 }: {
@@ -62,6 +65,8 @@ export function AgentBuilder({
   connections: AgentLlmConnection[];
   timezone: string;
   anchor: BuilderAnchor;
+  /** The Core recipe of a role agent; undefined for custom agents. */
+  recipe?: AgentRecipe;
   refetchAgents(): Promise<unknown>;
   navigate(to: string): void;
 }) {
@@ -337,6 +342,9 @@ export function AgentBuilder({
       </div>
       <div className="agent-builder__layout">
         <div className="agent-builder__blocks">
+          {recipe && (
+            <RecipeSetup recipe={recipe} agent={agent} draft={draft} />
+          )}
           <fieldset disabled={!canBuild} className="agent-fieldset">
             <IdentityBlock agent={agent} draft={draft} onChange={setDraft} />
             <KnowledgeBlock
@@ -422,6 +430,7 @@ export function AgentBuilder({
           <AgentCheckPanel
             api={api}
             agent={agent}
+            recipe={recipe}
             chats={chats}
             chatIDs={chatIDs}
             blockers={blockers}

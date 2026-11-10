@@ -69,6 +69,8 @@ type event struct {
 	body         string
 	mentioned    []string
 	sourceDepth  *int
+	timezone     string
+	data         json.RawMessage
 }
 
 type Service struct {
@@ -360,16 +362,19 @@ func (service *Service) dispatchAgent(ctx context.Context, orgID, agentID string
 		return err
 	}
 	rows, err := tx.Query(ctx, `SELECT event.seq,event.type,event.actor_id,COALESCE(actor.type,'system'),event.chat_id,event.subject_id,
-			message.thread_root_id,COALESCE(message.body,''),COALESCE(message.mentioned_actor_ids,'{}'::uuid[]),provenance.chain_depth
+			message.thread_root_id,COALESCE(message.body,''),COALESCE(message.mentioned_actor_ids,'{}'::uuid[]),provenance.chain_depth,
+			COALESCE(actor.timezone,''),COALESCE(event.data,'{}'::jsonb)
 		FROM events event LEFT JOIN actors actor ON actor.org_id=event.org_id AND actor.id=event.actor_id
 		LEFT JOIN messages message ON message.org_id=event.org_id AND message.id=event.subject_id
 		LEFT JOIN message_agent_provenance provenance ON provenance.message_id=message.id
-		WHERE event.org_id=$1 AND event.seq>$2 AND (event.chat_id IS NULL OR EXISTS(
-			SELECT 1 FROM chat_members member WHERE member.org_id=event.org_id AND member.chat_id=event.chat_id AND member.actor_id=$3))
-		  -- A chat the agent only writes to is not a source: its messages and
-		  -- events never start the agent nor reach run.input.
-		  AND (event.chat_id IS NULL OR NOT EXISTS(
-			SELECT 1 FROM agents agent WHERE agent.org_id=event.org_id AND agent.actor_id=$3 AND event.chat_id=ANY(agent.write_only_chat_ids)))
+		WHERE event.org_id=$1 AND event.seq>$2
+			-- Only chat events of the agent's chats, and never events addressed
+			-- to another person (drafts, read marks and other private state).
+			AND event.chat_id IS NOT NULL AND (event.audience_actor_id IS NULL OR event.audience_actor_id=$3)
+			AND EXISTS(SELECT 1 FROM chat_members member WHERE member.org_id=event.org_id AND member.chat_id=event.chat_id AND member.actor_id=$3)
+			-- A chat the agent only writes to is not a source: its messages and
+			-- events never start the agent nor reach run.input.
+			AND NOT EXISTS(SELECT 1 FROM agents agent WHERE agent.org_id=event.org_id AND agent.actor_id=$3 AND event.chat_id=ANY(agent.write_only_chat_ids))
 		ORDER BY event.seq LIMIT 100`, orgID, checkpoint, agentID)
 	if err != nil {
 		return err
@@ -377,7 +382,7 @@ func (service *Service) dispatchAgent(ctx context.Context, orgID, agentID string
 	events := make([]event, 0)
 	for rows.Next() {
 		var item event
-		if err := rows.Scan(&item.seq, &item.kind, &item.actorID, &item.actorType, &item.chatID, &item.subjectID, &item.threadRootID, &item.body, &item.mentioned, &item.sourceDepth); err != nil {
+		if err := rows.Scan(&item.seq, &item.kind, &item.actorID, &item.actorType, &item.chatID, &item.subjectID, &item.threadRootID, &item.body, &item.mentioned, &item.sourceDepth, &item.timezone, &item.data); err != nil {
 			rows.Close()
 			return err
 		}
@@ -426,6 +431,16 @@ func (service *Service) dispatchAgent(ctx context.Context, orgID, agentID string
 				"source_chat_id": item.chatID, "chat_id": runChatID,
 				"thread_root_id": item.threadRootID, "message_body": item.body,
 				"trigger_type": trigger.Type, "trigger_id": trigger.ID,
+				// Who caused the event and their timezone, so an agent can
+				// answer the requester and read "by Friday" in their time.
+				"actor_id": item.actorID, "actor_timezone": item.timezone,
+			}
+			if trigger.Type == "event" {
+				// Only allowlisted fields of allowlisted events, such as who
+				// joined a chat; never the raw event data.
+				if data := eventDataFor(item.kind, item.data); data != nil {
+					payloadData["event_data"] = data
+				}
 			}
 			if trigger.Type == "command" {
 				var config commandConfig
@@ -607,6 +622,39 @@ type webhookConfig struct {
 	EventTypes []string `json:"event_types,omitempty"`
 }
 
+// agentEventTypes are the events an event rule may wake an agent on. Private
+// per-person events (drafts, read marks, preferences) never qualify: they are
+// addressed to one person and may hold text that was never sent.
+var agentEventTypes = map[string]bool{
+	"member.joined": true, "member.removed": true, "reaction.added": true, "message.pinned": true,
+}
+
+// agentEventFields are the event data fields an agent run may see, by event
+// type. Other events pass no data beyond their type and author.
+var agentEventFields = map[string][]string{
+	"member.joined":  {"actor_id", "role"},
+	"member.removed": {"actor_id", "role"},
+}
+
+// eventDataFor keeps only the allowlisted fields of an event's data.
+func eventDataFor(kind string, data json.RawMessage) map[string]any {
+	fields, ok := agentEventFields[kind]
+	if !ok {
+		return nil
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return map[string]any{}
+	}
+	result := make(map[string]any, len(fields))
+	for _, field := range fields {
+		if value, present := decoded[field]; present {
+			result[field] = value
+		}
+	}
+	return result
+}
+
 type eventConfig struct {
 	EventTypes           []string `json:"event_types"`
 	IncludeAgentMessages bool     `json:"include_agent_messages"`
@@ -679,6 +727,9 @@ func (service *Service) normalize(input CreateInput) (CreateInput, *time.Time, e
 			kind = strings.TrimSpace(kind)
 			if kind == "" || len(kind) > 120 {
 				return input, nil, ErrInvalid
+			}
+			if !agentEventTypes[kind] {
+				return input, nil, fmt.Errorf("%w: agents cannot be started by %q events; allowed: member.joined, member.removed, reaction.added, message.pinned", ErrInvalid, kind)
 			}
 			seen[kind] = struct{}{}
 		}
@@ -892,7 +943,9 @@ func matches(trigger Trigger, item event, agentID string) (bool, bool) {
 		var config eventConfig
 		_ = json.Unmarshal(trigger.Config, &config)
 		for _, kind := range config.EventTypes {
-			if item.kind == kind {
+			// Rules saved before the allowlist keep their types but never
+			// fire on events outside it.
+			if item.kind == kind && agentEventTypes[kind] {
 				return true, config.IncludeAgentMessages
 			}
 		}
