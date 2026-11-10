@@ -48,12 +48,13 @@ const (
 	ScopeMemoryWrite    Scope = "memory:write"
 	ScopeRuntimeExecute Scope = "runtime:execute"
 	ScopeRuntimeWorker  Scope = "runtime:worker"
+	ScopeKnowledgeRead  Scope = "knowledge:read"
 )
 
 var validScopes = map[Scope]struct{}{
 	ScopeChatsRead: {}, ScopeMessagesRead: {}, ScopeMessagesWrite: {}, ScopeReactionsWrite: {},
 	ScopeFilesRead: {}, ScopeSearchRead: {}, ScopeMembersRead: {}, ScopeMemoryRead: {}, ScopeMemoryWrite: {},
-	ScopeRuntimeExecute: {}, ScopeRuntimeWorker: {},
+	ScopeRuntimeExecute: {}, ScopeRuntimeWorker: {}, ScopeKnowledgeRead: {},
 }
 
 var handlePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{1,31}$`)
@@ -86,6 +87,7 @@ type Agent struct {
 	ProviderRateLimitPerMinute  int        `json:"provider_rate_limit_per_minute"`
 	ExecutionTimeoutSeconds     int        `json:"execution_timeout_seconds"`
 	ChatIDs                     []string   `json:"chat_ids"`
+	KnowledgeCollectionIDs      []string   `json:"knowledge_collection_ids"`
 	Readiness                   Readiness  `json:"readiness"`
 	OperationalStatus           string     `json:"operational_status"`
 	DraftVersion                *int       `json:"draft_version"`
@@ -135,6 +137,7 @@ type CreateInput struct {
 	ProviderRateLimitPerMinute  int      `json:"provider_rate_limit_per_minute"`
 	ExecutionTimeoutSeconds     int      `json:"execution_timeout_seconds"`
 	ChatIDs                     []string `json:"chat_ids"`
+	KnowledgeCollectionIDs      []string `json:"knowledge_collection_ids"`
 	DuplicateFrom               string   `json:"-"`
 }
 
@@ -164,6 +167,7 @@ type UpdateInput struct {
 	ProviderRateLimitPerMinute  *int      `json:"provider_rate_limit_per_minute"`
 	ExecutionTimeoutSeconds     *int      `json:"execution_timeout_seconds"`
 	ChatIDs                     *[]string `json:"chat_ids"`
+	KnowledgeCollectionIDs      *[]string `json:"knowledge_collection_ids"`
 }
 
 type PlatformSettings struct {
@@ -411,6 +415,9 @@ func (service *Service) Create(ctx context.Context, current identity.User, input
 			return Agent{}, fmt.Errorf("%w: the selected LLM connection has no default model", ErrInvalid)
 		}
 	}
+	if err := validateKnowledgeCollections(ctx, tx, current.OrgID, normalized.KnowledgeCollectionIDs); err != nil {
+		return Agent{}, err
+	}
 	if len(normalized.ChatIDs) > 0 {
 		var count int
 		if err := tx.QueryRow(ctx, `SELECT count(*) FROM chats WHERE org_id=$1 AND id=ANY($2::uuid[]) AND archived_at IS NULL`, current.OrgID, normalized.ChatIDs).Scan(&count); err != nil {
@@ -429,12 +436,13 @@ func (service *Service) Create(ctx context.Context, current identity.User, input
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO agents(actor_id,org_id,owner_actor_id,kind,recipe,recipe_version,description,enabled,allowed_scopes,llm_connection_id,provider,model,endpoint_url,
 			external_data_sharing_approved,daily_cost_limit,monthly_cost_limit,max_output_tokens,max_tool_iterations,max_chain_depth,per_chat_concurrency,
-			rate_limit_per_minute,provider_rate_limit_per_minute,execution_timeout_seconds)
-		VALUES($1,$2,$3,$4,$5,1,$6,$7,$8,$9,$10,$11,$12,$13,NULLIF($14,'')::numeric,NULLIF($15,'')::numeric,$16,$17,$18,$19,$20,$21,$22)`, agentID, current.OrgID, current.ActorID, normalized.Kind, normalized.Recipe,
+			rate_limit_per_minute,provider_rate_limit_per_minute,execution_timeout_seconds,knowledge_collection_ids)
+		VALUES($1,$2,$3,$4,$5,1,$6,$7,$8,$9,$10,$11,$12,$13,NULLIF($14,'')::numeric,NULLIF($15,'')::numeric,$16,$17,$18,$19,$20,$21,$22,$23)`, agentID, current.OrgID, current.ActorID, normalized.Kind, normalized.Recipe,
 		normalized.Description, normalized.Enabled, scopes, normalized.LLMConnectionID, normalized.Provider, normalized.Model, normalized.EndpointURL,
 		normalized.ExternalDataSharingApproved, costLimitValue(normalized.DailyCostLimit), costLimitValue(normalized.MonthlyCostLimit),
 		*normalized.MaxOutputTokens, *normalized.MaxToolIterations, *normalized.MaxChainDepth,
-		*normalized.PerChatConcurrency, normalized.RateLimitPerMinute, normalized.ProviderRateLimitPerMinute, normalized.ExecutionTimeoutSeconds); err != nil {
+		*normalized.PerChatConcurrency, normalized.RateLimitPerMinute, normalized.ProviderRateLimitPerMinute, normalized.ExecutionTimeoutSeconds,
+		uuidArray(normalized.KnowledgeCollectionIDs)); err != nil {
 		return Agent{}, mapWriteError("insert agent", err)
 	}
 	if err := saveDraft(ctx, tx, current.OrgID, agentID, current.ActorID, 1, normalized); err != nil {
@@ -490,7 +498,7 @@ func (service *Service) Duplicate(ctx context.Context, current identity.User, ag
 		ExternalDataSharingApproved: source.ExternalDataSharingApproved, DailyCostLimit: source.DailyCostLimit, MonthlyCostLimit: source.MonthlyCostLimit,
 		MaxOutputTokens: intPointer(source.MaxOutputTokens), MaxToolIterations: intPointer(source.MaxToolIterations), MaxChainDepth: intPointer(source.MaxChainDepth), PerChatConcurrency: intPointer(source.PerChatConcurrency),
 		RateLimitPerMinute: source.RateLimitPerMinute, ProviderRateLimitPerMinute: source.ProviderRateLimitPerMinute, ExecutionTimeoutSeconds: source.ExecutionTimeoutSeconds,
-		ChatIDs: source.ChatIDs, DuplicateFrom: source.ID,
+		ChatIDs: source.ChatIDs, KnowledgeCollectionIDs: source.KnowledgeCollectionIDs, DuplicateFrom: source.ID,
 	}
 	if source.LLMConnectionID == nil {
 		createInput.Provider = source.Provider
@@ -591,6 +599,7 @@ func (service *Service) List(ctx context.Context, current identity.User) ([]Agen
 		if !manager {
 			item.EndpointURL = ""
 			item.ChatIDs = []string{}
+			item.KnowledgeCollectionIDs = []string{}
 			item.Readiness.Blockers = []string{}
 		}
 		result = append(result, item)
@@ -685,6 +694,7 @@ func (service *Service) Get(ctx context.Context, current identity.User, agentID 
 	if !manager {
 		result.EndpointURL = ""
 		result.ChatIDs = []string{}
+		result.KnowledgeCollectionIDs = []string{}
 		result.Readiness.Blockers = []string{}
 	}
 	return result, nil
@@ -697,7 +707,7 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 	if _, err := uuid.Parse(agentID); err != nil {
 		return Agent{}, ErrNotFound
 	}
-	if input.DisplayName == nil && input.Handle == nil && input.Description == nil && input.Enabled == nil && input.AllowedScopes == nil && input.LLMConnectionID == nil && input.Provider == nil && input.Model == nil && input.EndpointURL == nil && input.ExternalDataSharingApproved == nil && input.DailyCostLimit == nil && input.MonthlyCostLimit == nil && input.MaxOutputTokens == nil && input.MaxToolIterations == nil && input.MaxChainDepth == nil && input.PerChatConcurrency == nil && input.RateLimitPerMinute == nil && input.ProviderRateLimitPerMinute == nil && input.ExecutionTimeoutSeconds == nil && input.ChatIDs == nil {
+	if input.DisplayName == nil && input.Handle == nil && input.Description == nil && input.Enabled == nil && input.AllowedScopes == nil && input.LLMConnectionID == nil && input.Provider == nil && input.Model == nil && input.EndpointURL == nil && input.ExternalDataSharingApproved == nil && input.DailyCostLimit == nil && input.MonthlyCostLimit == nil && input.MaxOutputTokens == nil && input.MaxToolIterations == nil && input.MaxChainDepth == nil && input.PerChatConcurrency == nil && input.RateLimitPerMinute == nil && input.ProviderRateLimitPerMinute == nil && input.ExecutionTimeoutSeconds == nil && input.ChatIDs == nil && input.KnowledgeCollectionIDs == nil {
 		return Agent{}, fmt.Errorf("%w: update must contain at least one field", ErrInvalid)
 	}
 	auditID, err := id.New()
@@ -733,6 +743,11 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 			return Agent{}, fmt.Errorf("%w: the selected LLM connection has no default model", ErrInvalid)
 		}
 	}
+	if input.KnowledgeCollectionIDs != nil {
+		if err := validateKnowledgeCollections(ctx, tx, current.OrgID, prospective.KnowledgeCollectionIDs); err != nil {
+			return Agent{}, err
+		}
+	}
 	if input.ChatIDs != nil && len(prospective.ChatIDs) > 0 {
 		var count int
 		if err := tx.QueryRow(ctx, `SELECT count(*) FROM chats WHERE org_id=$1 AND id=ANY($2::uuid[]) AND archived_at IS NULL`, current.OrgID, prospective.ChatIDs).Scan(&count); err != nil {
@@ -766,7 +781,7 @@ func (service *Service) Update(ctx context.Context, current identity.User, agent
 			return Agent{}, mapWriteError("pause agent", err)
 		}
 	}
-	metadata, _ := json.Marshal(map[string]any{"draft_version": draftVersion, "published": input.Enabled != nil && *input.Enabled, "scopes": scopeStrings(prospective.AllowedScopes), "chat_ids": prospective.ChatIDs})
+	metadata, _ := json.Marshal(map[string]any{"draft_version": draftVersion, "published": input.Enabled != nil && *input.Enabled, "scopes": scopeStrings(prospective.AllowedScopes), "chat_ids": prospective.ChatIDs, "knowledge_collection_ids": uuidArray(prospective.KnowledgeCollectionIDs)})
 	if _, err := tx.Exec(ctx, `INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata) VALUES($1,$2,$3,'agent.update','agent',$4,$5)`, auditID, current.OrgID, current.ActorID, agentID, metadata); err != nil {
 		return Agent{}, fmt.Errorf("audit agent update: %w", err)
 	}
@@ -947,6 +962,11 @@ func (service *Service) Rollback(ctx context.Context, current identity.User, age
 	prospective, err = normalizeCreate(prospective)
 	if err != nil {
 		return Agent{}, err
+	}
+	if len(prospective.KnowledgeCollectionIDs) > 0 {
+		if err := tx.QueryRow(ctx, `SELECT COALESCE(array_agg(id::text ORDER BY id),'{}'::text[]) FROM knowledge_collections WHERE org_id=$1 AND id=ANY($2::uuid[])`, current.OrgID, prospective.KnowledgeCollectionIDs).Scan(&prospective.KnowledgeCollectionIDs); err != nil {
+			return Agent{}, fmt.Errorf("resolve version knowledge collections: %w", err)
+		}
 	}
 	nextVersion := 1
 	if locked.PublishedVersion != nil {
@@ -1240,6 +1260,7 @@ const agentSelect = `
 	       COALESCE(draft.provider_rate_limit_per_minute,agent.provider_rate_limit_per_minute),
 	       COALESCE(draft.execution_timeout_seconds,agent.execution_timeout_seconds),
 	       COALESCE(draft.chat_ids,(SELECT array_agg(member.chat_id ORDER BY member.chat_id) FROM chat_members member WHERE member.org_id=agent.org_id AND member.actor_id=agent.actor_id),'{}'::uuid[]),
+	       COALESCE(draft.knowledge_collection_ids,agent.knowledge_collection_ids),
 	       (CASE WHEN draft.agent_id IS NOT NULL THEN draft.llm_connection_id ELSE agent.llm_connection_id END) IS NOT NULL,
 	       connection.id IS NOT NULL AND connection.enabled,
 	       EXISTS(SELECT 1 FROM agent_provider_credentials credential WHERE credential.org_id=agent.org_id AND credential.agent_id=agent.actor_id),
@@ -1267,7 +1288,7 @@ func scanAgent(row scanner) (Agent, error) {
 		&result.EndpointURL, &result.ExternalDataSharingApproved, &result.DailyCostLimit, &result.MonthlyCostLimit, &result.MaxOutputTokens,
 		&result.MaxToolIterations, &result.MaxChainDepth, &result.PerChatConcurrency,
 		&result.RateLimitPerMinute, &result.ProviderRateLimitPerMinute, &result.ExecutionTimeoutSeconds, &result.ChatIDs,
-		&hasConnection, &connectionAvailable, &hasLegacyCredential, &hasActiveKey, &hasTrigger,
+		&result.KnowledgeCollectionIDs, &hasConnection, &connectionAvailable, &hasLegacyCredential, &hasActiveKey, &hasTrigger,
 		&result.OperationalStatus, &result.DraftVersion, &result.PublishedVersion, &result.HasUnpublishedChanges, &result.PublishedAt,
 		&result.AvatarVersion, &result.CreatedAt, &result.UpdatedAt); err != nil {
 		return Agent{}, err
@@ -1421,6 +1442,11 @@ func normalizeCreate(input CreateInput) (CreateInput, error) {
 		return CreateInput{}, err
 	}
 	input.ChatIDs = chatIDs
+	knowledgeCollectionIDs, err := normalizeUUIDs(input.KnowledgeCollectionIDs, 50)
+	if err != nil {
+		return CreateInput{}, err
+	}
+	input.KnowledgeCollectionIDs = knowledgeCollectionIDs
 	if input.Recipe != "custom" && len(input.ChatIDs) == 0 {
 		return CreateInput{}, fmt.Errorf("%w: recipe agents require at least one chat", ErrInvalid)
 	}
@@ -1435,7 +1461,7 @@ func mergeUpdate(existing Agent, input UpdateInput) (CreateInput, error) {
 		ExternalDataSharingApproved: existing.ExternalDataSharingApproved, RateLimitPerMinute: existing.RateLimitPerMinute,
 		DailyCostLimit: existing.DailyCostLimit, MonthlyCostLimit: existing.MonthlyCostLimit,
 		ProviderRateLimitPerMinute: existing.ProviderRateLimitPerMinute, ExecutionTimeoutSeconds: existing.ExecutionTimeoutSeconds, ChatIDs: existing.ChatIDs,
-		MaxOutputTokens: intPointer(existing.MaxOutputTokens), MaxToolIterations: intPointer(existing.MaxToolIterations),
+		KnowledgeCollectionIDs: existing.KnowledgeCollectionIDs, MaxOutputTokens: intPointer(existing.MaxOutputTokens), MaxToolIterations: intPointer(existing.MaxToolIterations),
 		MaxChainDepth: intPointer(existing.MaxChainDepth), PerChatConcurrency: intPointer(existing.PerChatConcurrency),
 	}
 	if input.DisplayName != nil {
@@ -1498,6 +1524,9 @@ func mergeUpdate(existing Agent, input UpdateInput) (CreateInput, error) {
 	if input.ChatIDs != nil {
 		prospective.ChatIDs = *input.ChatIDs
 	}
+	if input.KnowledgeCollectionIDs != nil {
+		prospective.KnowledgeCollectionIDs = *input.KnowledgeCollectionIDs
+	}
 	return normalizeCreate(prospective)
 }
 
@@ -1517,20 +1546,21 @@ func saveDraft(ctx context.Context, tx pgx.Tx, orgID, agentID, actorID string, v
 	_, err := tx.Exec(ctx, `
 		INSERT INTO agent_drafts(org_id,agent_id,version,recipe,description,allowed_scopes,llm_connection_id,provider,model,endpoint_url,
 			external_data_sharing_approved,daily_cost_limit,monthly_cost_limit,max_output_tokens,max_tool_iterations,max_chain_depth,
-			per_chat_concurrency,rate_limit_per_minute,provider_rate_limit_per_minute,execution_timeout_seconds,chat_ids,created_by)
-		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NULLIF($12,'')::numeric,NULLIF($13,'')::numeric,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+			per_chat_concurrency,rate_limit_per_minute,provider_rate_limit_per_minute,execution_timeout_seconds,chat_ids,created_by,knowledge_collection_ids)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NULLIF($12,'')::numeric,NULLIF($13,'')::numeric,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
 		ON CONFLICT(agent_id) DO UPDATE SET version=excluded.version,recipe=excluded.recipe,description=excluded.description,
 			allowed_scopes=excluded.allowed_scopes,llm_connection_id=excluded.llm_connection_id,provider=excluded.provider,model=excluded.model,
 			endpoint_url=excluded.endpoint_url,external_data_sharing_approved=excluded.external_data_sharing_approved,
 			daily_cost_limit=excluded.daily_cost_limit,monthly_cost_limit=excluded.monthly_cost_limit,max_output_tokens=excluded.max_output_tokens,
 			max_tool_iterations=excluded.max_tool_iterations,max_chain_depth=excluded.max_chain_depth,per_chat_concurrency=excluded.per_chat_concurrency,
 			rate_limit_per_minute=excluded.rate_limit_per_minute,provider_rate_limit_per_minute=excluded.provider_rate_limit_per_minute,
-			execution_timeout_seconds=excluded.execution_timeout_seconds,chat_ids=excluded.chat_ids,updated_at=now()`,
+			execution_timeout_seconds=excluded.execution_timeout_seconds,chat_ids=excluded.chat_ids,
+			knowledge_collection_ids=excluded.knowledge_collection_ids,updated_at=now()`,
 		orgID, agentID, version, input.Recipe, input.Description, scopeStrings(input.AllowedScopes), input.LLMConnectionID,
 		input.Provider, input.Model, input.EndpointURL, input.ExternalDataSharingApproved, costLimitValue(input.DailyCostLimit),
 		costLimitValue(input.MonthlyCostLimit), *input.MaxOutputTokens, *input.MaxToolIterations, *input.MaxChainDepth,
 		*input.PerChatConcurrency, input.RateLimitPerMinute, input.ProviderRateLimitPerMinute, input.ExecutionTimeoutSeconds,
-		input.ChatIDs, actorID)
+		input.ChatIDs, actorID, uuidArray(input.KnowledgeCollectionIDs))
 	if err != nil {
 		return mapWriteError("save agent draft", err)
 	}
@@ -1547,7 +1577,7 @@ func inputFromAgent(value Agent) CreateInput {
 		MaxToolIterations: intPointer(value.MaxToolIterations), MaxChainDepth: intPointer(value.MaxChainDepth),
 		PerChatConcurrency: intPointer(value.PerChatConcurrency), RateLimitPerMinute: value.RateLimitPerMinute,
 		ProviderRateLimitPerMinute: value.ProviderRateLimitPerMinute, ExecutionTimeoutSeconds: value.ExecutionTimeoutSeconds,
-		ChatIDs: value.ChatIDs,
+		ChatIDs: value.ChatIDs, KnowledgeCollectionIDs: value.KnowledgeCollectionIDs,
 	}
 }
 
@@ -1587,12 +1617,12 @@ func (service *Service) publishDraft(ctx context.Context, tx pgx.Tx, current ide
 	if _, err := tx.Exec(ctx, `UPDATE agents SET recipe=$3,recipe_version=$4,description=$5,enabled=true,allowed_scopes=$6,llm_connection_id=$7,provider=$8,model=$9,
 		endpoint_url=$10,external_data_sharing_approved=$11,daily_cost_limit=NULLIF($12,'')::numeric,monthly_cost_limit=NULLIF($13,'')::numeric,
 		max_output_tokens=$14,max_tool_iterations=$15,max_chain_depth=$16,per_chat_concurrency=$17,rate_limit_per_minute=$18,
-		provider_rate_limit_per_minute=$19,execution_timeout_seconds=$20,operational_status='active',published_version=$4,published_at=now(),updated_at=now()
+		provider_rate_limit_per_minute=$19,execution_timeout_seconds=$20,knowledge_collection_ids=$21,operational_status='active',published_version=$4,published_at=now(),updated_at=now()
 		WHERE org_id=$1 AND actor_id=$2`, current.OrgID, agentID, input.Recipe, version, input.Description,
 		scopeStrings(input.AllowedScopes), input.LLMConnectionID, input.Provider, input.Model, input.EndpointURL,
 		input.ExternalDataSharingApproved, costLimitValue(input.DailyCostLimit), costLimitValue(input.MonthlyCostLimit),
 		*input.MaxOutputTokens, *input.MaxToolIterations, *input.MaxChainDepth, *input.PerChatConcurrency,
-		input.RateLimitPerMinute, input.ProviderRateLimitPerMinute, input.ExecutionTimeoutSeconds); err != nil {
+		input.RateLimitPerMinute, input.ProviderRateLimitPerMinute, input.ExecutionTimeoutSeconds, uuidArray(input.KnowledgeCollectionIDs)); err != nil {
 		return nil, mapWriteError("publish agent", err)
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM chat_members WHERE org_id=$1 AND actor_id=$2`, current.OrgID, agentID); err != nil {
@@ -1648,6 +1678,7 @@ func versionConfig(input CreateInput) ([]byte, error) {
 		"per_chat_concurrency": *input.PerChatConcurrency, "rate_limit_per_minute": input.RateLimitPerMinute,
 		"provider_rate_limit_per_minute": input.ProviderRateLimitPerMinute,
 		"execution_timeout_seconds":      input.ExecutionTimeoutSeconds, "chat_ids": input.ChatIDs,
+		"knowledge_collection_ids": uuidArray(input.KnowledgeCollectionIDs),
 	})
 }
 
@@ -1784,6 +1815,28 @@ func normalizeScopes(input []Scope) ([]Scope, error) {
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i] < result[j] })
 	return result, nil
+}
+
+// uuidArray keeps NOT NULL uuid[] columns and version configs free of nulls.
+func uuidArray(values []string) []string {
+	if values == nil {
+		return []string{}
+	}
+	return values
+}
+
+func validateKnowledgeCollections(ctx context.Context, tx pgx.Tx, orgID string, collectionIDs []string) error {
+	if len(collectionIDs) == 0 {
+		return nil
+	}
+	var count int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM knowledge_collections WHERE org_id=$1 AND id=ANY($2::uuid[])`, orgID, collectionIDs).Scan(&count); err != nil {
+		return fmt.Errorf("validate knowledge collections: %w", err)
+	}
+	if count != len(collectionIDs) {
+		return fmt.Errorf("%w: every knowledge collection must belong to the organization", ErrInvalid)
+	}
+	return nil
 }
 
 func normalizeUUIDs(input []string, limit int) ([]string, error) {

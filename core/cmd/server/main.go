@@ -28,6 +28,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/files"
 	serverhttp "github.com/comamessenger/comamessenger/core/internal/http"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
+	"github.com/comamessenger/comamessenger/core/internal/knowledge"
 	"github.com/comamessenger/comamessenger/core/internal/message"
 	"github.com/comamessenger/comamessenger/core/internal/password"
 	"github.com/comamessenger/comamessenger/core/internal/push"
@@ -203,7 +204,17 @@ func main() {
 	)
 	chatService := chat.NewService(pool, afterCommit)
 	searchService := search.NewService(pool)
-	agentToolExecutor, err := agenttool.NewExecutor(pool, agenttool.Services{Chats: chatService, Messages: messageService, Search: searchService, Files: fileService, Memory: agentmemory.NewService(pool)}, true)
+	knowledgeService := knowledge.NewService(pool, fileService, agentConfigService, knowledge.NewHTTPEmbedder())
+	knowledgeClient, err := knowledge.NewIndexingClient(pool, knowledgeService, logger)
+	if err != nil {
+		logger.Error("knowledge indexing initialization failed", "error", err)
+		os.Exit(1)
+	}
+	if err := knowledgeClient.Start(realtimeCtx); err != nil {
+		logger.Error("knowledge indexing startup failed", "error", err)
+		os.Exit(1)
+	}
+	agentToolExecutor, err := agenttool.NewExecutor(pool, agenttool.Services{Chats: chatService, Messages: messageService, Search: searchService, Files: fileService, Memory: agentmemory.NewService(pool), Knowledge: knowledgeService}, true)
 	if err != nil {
 		logger.Error("agent tool initialization failed", "error", err)
 		os.Exit(1)
@@ -226,7 +237,7 @@ func main() {
 		Addr: cfg.HTTPAddr,
 		Handler: serverhttp.NewHandler(logger, cfg.PublicAppURL, pool.Ping, serverhttp.Dependencies{
 			Identity: identityService, Agents: agentService, AgentConfig: agentConfigService, AgentProvider: agentProviderService, AgentTools: agentToolExecutor, AgentRuns: agentRunService, AgentTriggers: agentTriggerService, Chats: chatService,
-			Messages: messageService, UserState: userStateService, Push: pushService, Workspace: workspaceService, Files: fileService, Search: searchService, Realtime: realtimeServer,
+			Messages: messageService, UserState: userStateService, Push: pushService, Workspace: workspaceService, Files: fileService, Search: searchService, Knowledge: knowledgeService, Realtime: realtimeServer,
 			CookieSecure: cfg.Auth.CookieSecure, RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
 			BootstrapToken: cfg.BootstrapToken, RequireBootstrapToken: cfg.AppEnv != "development",
 			TrustedProxyCIDRs: cfg.TrustedProxyCIDRs, RevokeRealtimeSession: realtimeServer.RevokeSession,
@@ -260,6 +271,9 @@ func main() {
 	stopRealtime()
 	if err := processingClient.Stop(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		logger.Error("file processing shutdown failed", "error", err)
+	}
+	if err := knowledgeClient.Stop(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		logger.Error("knowledge indexing shutdown failed", "error", err)
 	}
 	if err := server.Shutdown(ctx); err != nil {
 		logger.Error("graceful shutdown failed", "error", err)
