@@ -4,6 +4,11 @@ export type AgentGlobalSection =
   | "approvals"
   | "activity";
 
+/*
+ * Sections of the pre-5.3 agent card. The builder is one page now; each old
+ * address opens the matching place of it (see `builderAnchor`), and
+ * `/agents/:id/activity` opens the activity feed filtered by the agent.
+ */
 export type AgentDetailSection =
   | "overview"
   | "behavior"
@@ -56,4 +61,32 @@ export function agentRoute(path: string): AgentRoute {
         ? sectionCandidate
         : "overview",
   };
+}
+
+export type BuilderAnchor =
+  | "top"
+  | "identity"
+  | "knowledge"
+  | "skills"
+  | "triggers"
+  | "places"
+  | "model"
+  | "check"
+  | "advanced";
+
+export function builderAnchor(section: AgentDetailSection): BuilderAnchor {
+  switch (section) {
+    case "behavior":
+      return "identity";
+    case "knowledge":
+      return "knowledge";
+    case "automations":
+      return "triggers";
+    case "test":
+      return "check";
+    case "settings":
+      return "advanced";
+    default:
+      return "top";
+  }
 }

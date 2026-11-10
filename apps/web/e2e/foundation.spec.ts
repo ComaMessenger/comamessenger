@@ -1370,7 +1370,9 @@ test("member controls use a dialog and the agent editor scrolls in Russian", asy
 
   // The agent platform is outside the redesign; only its entry point is checked.
   await page.goto("/agents");
-  await expect(page.getByRole("heading", { name: "Агенты" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Агенты", exact: true }),
+  ).toBeVisible();
   await expect(page.getByText("messages:read", { exact: true })).toHaveCount(0);
 });
 
@@ -2327,17 +2329,17 @@ test("tablet thread details and narrow agent hints keep usable widths", async ({
 
   await page.setViewportSize({ width: 320, height: 760 });
   await page.goto("/agents");
-  const editor = page.locator(".agent-editor");
-  await expect(editor).toBeVisible();
-  const editorBox = await editor.boundingBox();
-  const hintBox = await editor
-    .locator(".agent-editor__toolbar p")
+  const catalog = page.locator(".agent-page");
+  await expect(catalog).toBeVisible();
+  const catalogBox = await catalog.boundingBox();
+  const hintBox = await catalog
+    .locator(".agent-page__head p")
     .boundingBox();
   expect(hintBox!.x + hintBox!.width).toBeLessThanOrEqual(
-    editorBox!.x + editorBox!.width + 1,
+    catalogBox!.x + catalogBox!.width + 1,
   );
-  expect(await editor.evaluate((el) => el.scrollWidth)).toBeLessThanOrEqual(
-    Math.ceil(editorBox!.width),
+  expect(await catalog.evaluate((el) => el.scrollWidth)).toBeLessThanOrEqual(
+    Math.ceil(catalogBox!.width),
   );
   await expect(page).toHaveScreenshot("agents-narrow.png", {
     animations: "disabled",

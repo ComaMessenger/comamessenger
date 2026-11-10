@@ -1,23 +1,5 @@
-import type {
-  Agent,
-  AgentScope,
-  CreateAgentRequest,
-} from "@comamessenger/core";
+import type { Agent, CreateAgentRequest } from "@comamessenger/core";
 import type { AgentTemplate as Template } from "../agentTemplates";
-
-export const agentScopes: AgentScope[] = [
-  "chats:read",
-  "messages:read",
-  "messages:write",
-  "reactions:write",
-  "files:read",
-  "search:read",
-  "members:read",
-  "memory:read",
-  "memory:write",
-  "runtime:execute",
-  "runtime:worker",
-];
 
 export type Draft = CreateAgentRequest;
 
@@ -84,6 +66,7 @@ export function emptyDraft(template: Template = "custom"): Draft {
     provider_rate_limit_per_minute: 300,
     execution_timeout_seconds: 600,
     chat_ids: [],
+    knowledge_collection_ids: [],
   };
 }
 
@@ -111,5 +94,34 @@ export function draftOf(agent: Agent): Draft {
     provider_rate_limit_per_minute: agent.provider_rate_limit_per_minute,
     execution_timeout_seconds: agent.execution_timeout_seconds,
     chat_ids: agent.chat_ids,
+    knowledge_collection_ids: agent.knowledge_collection_ids ?? [],
+  };
+}
+
+/** The request body of a draft save; the server keeps unspecified fields. */
+export function updateOf(draft: Draft) {
+  return {
+    display_name: draft.display_name,
+    handle: draft.handle,
+    description: draft.description,
+    allowed_scopes: draft.allowed_scopes,
+    ...(draft.llm_connection_id
+      ? { llm_connection_id: draft.llm_connection_id }
+      : {}),
+    provider: draft.provider,
+    model: draft.model,
+    endpoint_url: draft.endpoint_url,
+    external_data_sharing_approved: draft.external_data_sharing_approved,
+    daily_cost_limit: draft.daily_cost_limit,
+    monthly_cost_limit: draft.monthly_cost_limit,
+    max_output_tokens: draft.max_output_tokens,
+    max_tool_iterations: draft.max_tool_iterations,
+    max_chain_depth: draft.max_chain_depth,
+    per_chat_concurrency: draft.per_chat_concurrency,
+    rate_limit_per_minute: draft.rate_limit_per_minute,
+    provider_rate_limit_per_minute: draft.provider_rate_limit_per_minute,
+    execution_timeout_seconds: draft.execution_timeout_seconds,
+    chat_ids: draft.chat_ids,
+    knowledge_collection_ids: draft.knowledge_collection_ids ?? [],
   };
 }

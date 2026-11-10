@@ -1,22 +1,23 @@
-import { Activity, LayoutGrid, Plug, ShieldCheck } from "lucide-react";
+import { Activity, LayoutGrid, Plug } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { AgentGlobalSection } from "./routes";
+import { countLabel } from "../ui";
 import type { AgentAccess } from "./shared/access";
 
 const tabs = [
   ["overview", "/agents", LayoutGrid],
-  ["connections", "/agents/connections", Plug],
-  ["approvals", "/agents/approvals", ShieldCheck],
   ["activity", "/agents/activity", Activity],
+  ["connections", "/agents/connections", Plug],
 ] as const;
 
 export function AgentPlatformHeader({
   globalTab,
   access: { canBuild, canPublish, canApprove, canObserve, canIntegrate },
+  pendingApprovals,
   navigate,
 }: {
-  globalTab: AgentGlobalSection | null;
+  globalTab: "overview" | "activity" | "connections" | null;
   access: AgentAccess;
+  pendingApprovals: number;
   navigate(to: string): void;
 }) {
   const { t } = useTranslation();
@@ -24,18 +25,16 @@ export function AgentPlatformHeader({
     <header className="agent-platform__header">
       <div>
         <h1>{t("agentsTitle")}</h1>
-        <p>{t("agentPlatformHint")}</p>
+        <p>{t("agentPlatformLead")}</p>
       </div>
       <nav aria-label={t("agentPlatformNavigation")}>
         {tabs
           .filter(([id]) =>
             id === "connections"
               ? canIntegrate
-              : id === "approvals"
-                ? canApprove
-                : id === "activity"
-                  ? canObserve
-                  : canBuild || canPublish || canObserve,
+              : id === "activity"
+                ? canObserve || canApprove
+                : canBuild || canPublish || canObserve,
           )
           .map(([id, target, Icon]) => (
             <button
@@ -45,7 +44,17 @@ export function AgentPlatformHeader({
               onClick={() => navigate(target)}
             >
               <Icon />
-              <span>{t(`agentTab_${id}`)}</span>
+              <span>{t(`agentNav_${id}`)}</span>
+              {id === "activity" && pendingApprovals > 0 && (
+                <span
+                  className="agent-platform__count"
+                  aria-label={t("agentPendingCount", {
+                    count: pendingApprovals,
+                  })}
+                >
+                  {countLabel(pendingApprovals)}
+                </span>
+              )}
             </button>
           ))}
       </nav>

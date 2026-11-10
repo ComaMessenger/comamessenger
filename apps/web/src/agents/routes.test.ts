@@ -23,3 +23,15 @@ describe("agentRoute", () => {
     });
   });
 });
+
+describe("builderAnchor", () => {
+  it("opens the matching block of the one-page builder", async () => {
+    const { builderAnchor } = await import("./routes");
+    expect(builderAnchor("behavior")).toBe("identity");
+    expect(builderAnchor("knowledge")).toBe("knowledge");
+    expect(builderAnchor("automations")).toBe("triggers");
+    expect(builderAnchor("test")).toBe("check");
+    expect(builderAnchor("settings")).toBe("advanced");
+    expect(builderAnchor("overview")).toBe("top");
+  });
+});

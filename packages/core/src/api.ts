@@ -121,6 +121,10 @@ import type {
   AgentProviderProxyRequest,
   StartAgentProviderCallRequest,
   FinishAgentProviderCallRequest,
+  AgentRunToolCall,
+  AgentResponseCollection,
+  AgentFollowup,
+  KnowledgeRunFragments,
 } from "./types";
 
 type APIErrorPayload = components["schemas"]["Error"];
@@ -370,6 +374,32 @@ export class MessengerAPI {
   }
   agentRun(runID: string): Promise<AgentRun> {
     return this.request(`/api/v1/agent-runs/${encodeURIComponent(runID)}`);
+  }
+  agentRunToolCalls(runID: string): Promise<{ tool_calls: AgentRunToolCall[] }> {
+    return this.request(
+      `/api/v1/agent-runs/${encodeURIComponent(runID)}/tool-calls`,
+    );
+  }
+  agentResponseCollections(
+    status: "open" | "completed" | "expired" | "canceled" | "all" = "open",
+    agentID?: string,
+  ): Promise<AgentResponseCollection[]> {
+    const query = new URLSearchParams({ status });
+    if (agentID) query.set("agent_id", agentID);
+    return this.request(`/api/v1/agents/response-collections?${query}`);
+  }
+  agentFollowups(
+    status: "pending" | "dispatched" | "canceled" | "skipped" | "all" = "pending",
+    agentID?: string,
+  ): Promise<AgentFollowup[]> {
+    const query = new URLSearchParams({ status });
+    if (agentID) query.set("agent_id", agentID);
+    return this.request(`/api/v1/agents/followups?${query}`);
+  }
+  knowledgeRunFragments(runID: string): Promise<KnowledgeRunFragments> {
+    return this.request(
+      `/api/v1/knowledge/runs/${encodeURIComponent(runID)}/fragments`,
+    );
   }
   agentUsage(id: string): Promise<AgentUsageReport> {
     return this.request(`/api/v1/agents/${encodeURIComponent(id)}/usage`);

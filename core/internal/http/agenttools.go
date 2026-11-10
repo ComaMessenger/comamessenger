@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	standardhttp "net/http"
+	"strings"
 
+	"github.com/comamessenger/comamessenger/core/internal/agentauthz"
 	"github.com/comamessenger/comamessenger/core/internal/agenttool"
 	"github.com/comamessenger/comamessenger/core/internal/chat"
 	"github.com/comamessenger/comamessenger/core/internal/files"
@@ -93,4 +95,44 @@ func (h *identityHandlers) writeAgentToolError(w standardhttp.ResponseWriter, r 
 	default:
 		h.internalError(w, r, err)
 	}
+}
+
+// listAgentResponseCollections and listAgentFollowups feed the agent activity
+// view: what agents are waiting for and what they planned to do later.
+func (h *identityHandlers) listAgentResponseCollections(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	current := authFromContext(r.Context()).User
+	if !agentauthz.New().CanObserve(current) {
+		h.writeAgentToolError(w, r, agenttool.ErrForbidden)
+		return
+	}
+	query := r.URL.Query()
+	result, err := h.interactive.ListCollections(r.Context(), current.OrgID, query.Get("agent_id"), defaultStatus(query.Get("status"), "open"))
+	if err != nil {
+		h.writeAgentToolError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) listAgentFollowups(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	current := authFromContext(r.Context()).User
+	if !agentauthz.New().CanObserve(current) {
+		h.writeAgentToolError(w, r, agenttool.ErrForbidden)
+		return
+	}
+	query := r.URL.Query()
+	result, err := h.interactive.ListOrganizationFollowups(r.Context(), current.OrgID, query.Get("agent_id"), defaultStatus(query.Get("status"), "pending"))
+	if err != nil {
+		h.writeAgentToolError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func defaultStatus(value, fallback string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return fallback
+	}
+	return value
 }

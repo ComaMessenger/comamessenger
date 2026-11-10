@@ -1,21 +1,21 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { MessengerAPI, User } from "@comamessenger/core";
-import { Skeleton } from "../ui";
+import { useTranslation } from "react-i18next";
+import { EmptyState, Skeleton } from "../ui";
 import { SettingsAccessDenied } from "../settings/components/SettingsPrimitives";
-import { AgentActivityDirectory } from "./activity/AgentActivityDirectory";
+import { AgentActivityPage } from "./activity/AgentActivityPage";
 import { AgentPlatformHeader } from "./AgentPlatformHeader";
-import type { AgentTemplate as Template } from "./agentTemplates";
-import { AgentApprovals } from "./approvals/AgentApprovals";
+import type { AgentTemplate } from "./agentTemplates";
+import { AgentBuilder } from "./builder/AgentBuilder";
 import { AgentCatalog } from "./catalog/AgentCatalog";
+import { CreateAgentDialog } from "./catalog/CreateAgentDialog";
 import { AgentConnectionsPage } from "./connections/AgentConnectionsPage";
-import { AgentEditor } from "./detail/AgentEditor";
-import { useAgentEditor } from "./detail/useAgentEditor";
-import { agentRoute, type AgentDetailSection } from "./routes";
+import { agentRoute, builderAnchor } from "./routes";
 import { agentAccess } from "./shared/access";
-import { AgentCreationWizard } from "./wizard/AgentCreationWizard";
+import { userTimezone } from "./shared/format";
 
-/** Agent platform shell: `/agents/*` routing, shared queries, creation wizard. */
+/** Agent platform shell: `/agents/*` routing and the shared queries. */
 export function AgentsPage({
   api,
   user,
@@ -27,12 +27,10 @@ export function AgentsPage({
   path: string;
   navigate(to: string): void;
 }) {
+  const { t } = useTranslation();
   const access = agentAccess(user);
-  const { canBuild, allowed } = access;
+  const { canBuild, canApprove, allowed } = access;
   const route = agentRoute(path);
-  const globalTab = route.kind === "global" ? route.section : null;
-  const detailSection: AgentDetailSection =
-    route.kind === "agent" ? route.section : "overview";
   const agents = useQuery({
     queryKey: ["agents"],
     queryFn: () => api.agents(),
@@ -48,77 +46,106 @@ export function AgentsPage({
     queryFn: () => api.agentLlmConnections(),
     enabled: allowed,
   });
-  const selectedID = route.kind === "agent" ? route.agentID : null;
-  const selected = agents.data?.find((agent) => agent.id === selectedID);
-  const editor = useAgentEditor({
-    api,
-    selected,
-    refetchAgents: agents.refetch,
-    navigate,
+  const approvals = useQuery({
+    queryKey: ["agent-tool-confirmations"],
+    queryFn: () => api.agentToolConfirmations("pending"),
+    enabled: canApprove,
+    refetchInterval: 15_000,
   });
-  const [wizardTemplate, setWizardTemplate] = useState<Template | null>(null);
+  const [creating, setCreating] = useState<AgentTemplate | null>(null);
+  const timezone = userTimezone(user.timezone);
+  const selected =
+    route.kind === "agent"
+      ? agents.data?.find((agent) => agent.id === route.agentID)
+      : undefined;
+  const showActivity =
+    (route.kind === "global" &&
+      (route.section === "activity" || route.section === "approvals")) ||
+    (route.kind === "agent" && route.section === "activity");
+  const globalTab =
+    route.kind === "global"
+      ? route.section === "approvals"
+        ? "activity"
+        : route.section
+      : showActivity
+        ? "activity"
+        : "overview";
 
-  function chooseTemplate(value: Template) {
-    setWizardTemplate(value);
-    editor.setError("");
+  function content() {
+    if (!allowed) return <SettingsAccessDenied />;
+    if (agents.isLoading || chats.isLoading) return <Skeleton />;
+    if (route.kind === "global" && route.section === "connections")
+      return <AgentConnectionsPage api={api} canManage={access.canIntegrate} />;
+    if (showActivity)
+      return (
+        <AgentActivityPage
+          api={api}
+          access={access}
+          agents={agents.data ?? []}
+          chats={chats.data ?? []}
+          initialAgentID={route.kind === "agent" ? route.agentID : ""}
+          focusApprovals={
+            route.kind === "global" && route.section === "approvals"
+          }
+          navigate={navigate}
+        />
+      );
+    if (route.kind === "agent") {
+      if (!selected)
+        return (
+          <EmptyState
+            title={t("agentNotFound")}
+            hint={t("agentNotFoundHint")}
+          />
+        );
+      return (
+        <AgentBuilder
+          key={selected.id}
+          api={api}
+          agent={selected}
+          access={access}
+          chats={chats.data ?? []}
+          connections={connections.data ?? []}
+          timezone={timezone}
+          anchor={builderAnchor(route.section)}
+          refetchAgents={agents.refetch}
+          navigate={navigate}
+        />
+      );
+    }
+    return (
+      <AgentCatalog
+        agents={agents.data ?? []}
+        chats={chats.data ?? []}
+        approvals={approvals.data ?? []}
+        access={access}
+        onCreate={setCreating}
+        navigate={navigate}
+      />
+    );
   }
 
   return (
     <section className="agent-platform">
       <AgentPlatformHeader
-        globalTab={globalTab}
+        globalTab={route.kind === "agent" && !showActivity ? null : globalTab}
         access={access}
+        pendingApprovals={approvals.data?.length ?? 0}
         navigate={navigate}
       />
-      <div className="agent-platform__content">
-        {!allowed ? (
-          <SettingsAccessDenied />
-        ) : agents.isLoading || chats.isLoading ? (
-          <Skeleton />
-        ) : globalTab === "connections" ? (
-          <AgentConnectionsPage api={api} canManage={access.canIntegrate} />
-        ) : globalTab === "approvals" ? (
-          <AgentApprovals api={api} agents={agents.data ?? []} />
-        ) : globalTab === "activity" ? (
-          <AgentActivityDirectory
-            api={api}
-            agents={agents.data ?? []}
-            navigate={navigate}
-          />
-        ) : (
-          <div className="agent-settings">
-            <AgentCatalog
-              agents={agents.data ?? []}
-              selectedID={selectedID}
-              canBuild={canBuild}
-              onChooseTemplate={chooseTemplate}
-              navigate={navigate}
-            />
-            <AgentEditor
-              api={api}
-              selected={selected}
-              section={detailSection}
-              access={access}
-              editor={editor}
-              chats={chats.data ?? []}
-              connections={connections.data ?? []}
-              refetchAgents={agents.refetch}
-              navigate={navigate}
-            />
-          </div>
-        )}
-      </div>
-      {canBuild && wizardTemplate && (
-        <AgentCreationWizard
+      <div className="agent-platform__content">{content()}</div>
+      {canBuild && creating && (
+        <CreateAgentDialog
           api={api}
-          template={wizardTemplate}
+          template={creating}
           chats={chats.data ?? []}
           connections={connections.data ?? []}
-          onClose={() => setWizardTemplate(null)}
+          timezone={timezone}
+          onClose={() => setCreating(null)}
           onCreated={async (created) => {
-            setWizardTemplate(null);
+            setCreating(null);
             await agents.refetch();
-            navigate(`/agents/${created.id}/test`);
+            navigate(`/agents/${created.id}`);
           }}
         />
       )}

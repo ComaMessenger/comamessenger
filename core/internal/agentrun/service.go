@@ -370,6 +370,52 @@ func (service *Service) Get(ctx context.Context, current identity.User, runID st
 	return run, err
 }
 
+// ToolCall is one recorded tool step of a run. Dry-run write steps are
+// recorded as previews: they show what the agent would have done.
+type ToolCall struct {
+	ID         string     `json:"id"`
+	ToolName   string     `json:"tool_name"`
+	Mode       string     `json:"mode"`
+	Status     string     `json:"status"`
+	DryRun     bool       `json:"dry_run"`
+	ErrorCode  string     `json:"error_code"`
+	StartedAt  time.Time  `json:"started_at"`
+	FinishedAt *time.Time `json:"finished_at"`
+}
+
+// ToolCalls lists the tool steps of a run in execution order for the
+// human-readable trace of the agent check and activity views.
+func (service *Service) ToolCalls(ctx context.Context, current identity.User, runID string) ([]ToolCall, error) {
+	if !canView(current) {
+		return nil, ErrForbidden
+	}
+	if uuid.Validate(runID) != nil {
+		return nil, ErrNotFound
+	}
+	var exists bool
+	if err := service.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM agent_runs WHERE org_id=$1 AND id=$2)`, current.OrgID, runID).Scan(&exists); err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, ErrNotFound
+	}
+	rows, err := service.pool.Query(ctx, `SELECT id,tool_name,mode,status,COALESCE(input_summary->>'dry_run','')='true',error_code,started_at,finished_at
+		FROM agent_tool_calls WHERE org_id=$1 AND run_id=$2 ORDER BY started_at,id LIMIT 200`, current.OrgID, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make([]ToolCall, 0)
+	for rows.Next() {
+		var item ToolCall
+		if err := rows.Scan(&item.ID, &item.ToolName, &item.Mode, &item.Status, &item.DryRun, &item.ErrorCode, &item.StartedAt, &item.FinishedAt); err != nil {
+			return nil, err
+		}
+		result = append(result, item)
+	}
+	return result, rows.Err()
+}
+
 func (service *Service) Claim(ctx context.Context, workerID string, lease time.Duration) (Run, error) {
 	return service.claim(ctx, "", "", workerID, lease)
 }

@@ -250,3 +250,12 @@ func (h *identityHandlers) writeAgentRunError(w standardhttp.ResponseWriter, r *
 		h.internalError(w, r, err)
 	}
 }
+
+func (h *identityHandlers) listAgentRunToolCalls(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.agentRuns.ToolCalls(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "runID"))
+	if err != nil {
+		h.writeAgentRunError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, map[string]any{"tool_calls": result})
+}

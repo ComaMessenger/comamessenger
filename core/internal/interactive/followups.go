@@ -254,3 +254,48 @@ func (s *Service) ListFollowups(ctx context.Context, agent identity.User, status
 	}
 	return result, rows.Err()
 }
+
+// FollowupSummary is the observer view of a follow-up without its stored
+// context, which may carry data the observer cannot read.
+type FollowupSummary struct {
+	ID         string     `json:"id"`
+	AgentID    string     `json:"agent_id"`
+	ChatID     string     `json:"chat_id"`
+	DueAt      time.Time  `json:"due_at"`
+	Note       string     `json:"note"`
+	Status     string     `json:"status"`
+	Reason     string     `json:"reason"`
+	RunID      *string    `json:"run_id"`
+	CreatedAt  time.Time  `json:"created_at"`
+	FinishedAt *time.Time `json:"finished_at"`
+}
+
+// ListOrganizationFollowups returns the newest follow-ups of the organization
+// for the agent activity view. The caller authorizes the observer.
+func (s *Service) ListOrganizationFollowups(ctx context.Context, orgID, agentID, status string) ([]FollowupSummary, error) {
+	if status == "all" {
+		status = ""
+	}
+	if status != "" && status != "pending" && status != "dispatched" && status != "canceled" && status != "skipped" {
+		return nil, fmt.Errorf("%w: unsupported status", ErrInvalid)
+	}
+	if agentID != "" && uuid.Validate(agentID) != nil {
+		return nil, fmt.Errorf("%w: agent_id must be a UUID", ErrInvalid)
+	}
+	rows, err := s.pool.Query(ctx, `SELECT id, agent_id, chat_id, due_at, note, status, reason, run_id, created_at, finished_at FROM agent_followups
+		WHERE org_id=$1 AND ($2='' OR agent_id::text=$2) AND ($3='' OR status=$3)
+		ORDER BY created_at DESC LIMIT 50`, orgID, agentID, status)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make([]FollowupSummary, 0)
+	for rows.Next() {
+		var item FollowupSummary
+		if err := rows.Scan(&item.ID, &item.AgentID, &item.ChatID, &item.DueAt, &item.Note, &item.Status, &item.Reason, &item.RunID, &item.CreatedAt, &item.FinishedAt); err != nil {
+			return nil, err
+		}
+		result = append(result, item)
+	}
+	return result, rows.Err()
+}
