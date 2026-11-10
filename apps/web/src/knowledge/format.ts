@@ -117,3 +117,31 @@ export function splitHighlight(
       return { text: part, match: terms.some((term) => lower.startsWith(term)) };
     });
 }
+
+const normalize = (value: string) =>
+  value.replace(/[…]+$|\.{3}$/u, "").replace(/\s+/gu, " ").trim().toLocaleLowerCase();
+
+/** The fragment an agent quoted: its excerpt is a (possibly cut) piece of it. */
+export function findQuotedFragment(
+  fragments: Array<{ chunk_id: string; content: string }>,
+  quote: string,
+): string {
+  const needle = normalize(quote).slice(0, 120);
+  if (needle.length < 8) return "";
+  return fragments.find((fragment) => normalize(fragment.content).includes(needle))?.chunk_id ?? "";
+}
+
+/** Splits text around the quoted passage, if the text contains it verbatim. */
+export function splitQuote(
+  text: string,
+  quote: string,
+): Array<{ text: string; match: boolean }> {
+  const needle = quote.replace(/[…]+$|\.{3}$/u, "").trim();
+  const index = needle ? text.toLocaleLowerCase().indexOf(needle.toLocaleLowerCase()) : -1;
+  if (index < 0) return [{ text, match: false }];
+  return [
+    { text: text.slice(0, index), match: false },
+    { text: text.slice(index, index + needle.length), match: true },
+    { text: text.slice(index + needle.length), match: false },
+  ].filter((part) => part.text !== "");
+}

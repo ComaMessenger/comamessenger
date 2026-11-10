@@ -16,7 +16,7 @@ export function knowledgeFromPath(path: string): KnowledgeRoute | null {
 export function knowledgePath(
   collectionID?: string,
   documentID?: string,
-  focus?: { fragment?: string; query?: string },
+  focus?: { fragment?: string; query?: string; quote?: string },
 ) {
   let path = "/knowledge";
   if (collectionID) path += `/${encodeURIComponent(collectionID)}`;
@@ -24,5 +24,6 @@ export function knowledgePath(
   const search = new URLSearchParams();
   if (focus?.fragment) search.set("fragment", focus.fragment);
   if (focus?.query) search.set("q", focus.query);
+  if (focus?.quote) search.set("quote", focus.quote);
   return search.size ? `${path}?${search}` : path;
 }

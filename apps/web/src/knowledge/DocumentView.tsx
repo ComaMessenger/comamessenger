@@ -21,7 +21,14 @@ import { ConfirmDialog } from "../dialogs/ConfirmDialog";
 import { DirectoryDetailHead } from "../directories/DirectoryPage";
 import { PageEditorDialog } from "./PageEditorDialog";
 import { StatusBadge, fileLabel } from "./CollectionView";
-import { documentFormat, failureKey, isProcessing, splitHighlight } from "./format";
+import {
+  documentFormat,
+  failureKey,
+  findQuotedFragment,
+  isProcessing,
+  splitHighlight,
+  splitQuote,
+} from "./format";
 import { knowledgePath } from "./routes";
 import {
   collectionKey,
@@ -46,6 +53,8 @@ export function DocumentView({
   const focus = new URLSearchParams(search);
   const focusFragment = focus.get("fragment") ?? "";
   const focusQuery = focus.get("q") ?? "";
+  // An agent source carries the quoted excerpt instead of a fragment id.
+  const focusQuote = focus.get("quote") ?? "";
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
@@ -244,6 +253,7 @@ export function DocumentView({
                 truncated={fragments.data?.truncated ?? false}
                 focusID={focusFragment}
                 query={focusQuery}
+                quote={focusQuote}
               />
             )}
           </section>
@@ -280,16 +290,19 @@ export function DocumentView({
 function FragmentList({
   fragments,
   truncated,
-  focusID,
+  focusID: requestedID,
   query,
+  quote,
 }: {
   fragments: Array<{ chunk_id: string; position: number; section: string; content: string }>;
   truncated: boolean;
   focusID: string;
   query: string;
+  quote: string;
 }) {
   const { t } = useTranslation();
   const focused = useRef<HTMLLIElement>(null);
+  const focusID = requestedID || (quote ? findQuotedFragment(fragments, quote) : "");
   useEffect(() => {
     focused.current?.scrollIntoView({ block: "center" });
   }, [focusID, fragments.length]);
@@ -307,12 +320,16 @@ function FragmentList({
             <header>
               <span>{t("kbFragment", { number: fragment.position + 1 })}</span>
               {fragment.section && <strong className="truncate">{fragment.section}</strong>}
-              {isFocus && <span className="knowledge-fragment__tag">{t("kbFoundFragment")}</span>}
+              {isFocus && (
+                <span className="knowledge-fragment__tag">
+                  {quote && !requestedID ? t("kbQuotedFragment") : t("kbFoundFragment")}
+                </span>
+              )}
             </header>
             <p>
-              {isFocus && query
-                ? splitHighlight(fragment.content, query).map((part, index) =>
-                    part.match ? <mark key={index}>{part.text}</mark> : part.text,
+              {isFocus && (query || quote)
+                ? (query ? splitHighlight(fragment.content, query) : splitQuote(fragment.content, quote)).map(
+                    (part, index) => (part.match ? <mark key={index}>{part.text}</mark> : part.text),
                   )
                 : fragment.content}
             </p>

@@ -662,6 +662,60 @@ func (e ChatVisibility) Valid() bool {
 	}
 }
 
+// Defines values for ChatAgentStatus.
+const (
+	ChatAgentStatusActive         ChatAgentStatus = "active"
+	ChatAgentStatusDraft          ChatAgentStatus = "draft"
+	ChatAgentStatusNeedsAttention ChatAgentStatus = "needs_attention"
+	ChatAgentStatusPaused         ChatAgentStatus = "paused"
+)
+
+// Valid indicates whether the value is a known member of the ChatAgentStatus enum.
+func (e ChatAgentStatus) Valid() bool {
+	switch e {
+	case ChatAgentStatusActive:
+		return true
+	case ChatAgentStatusDraft:
+		return true
+	case ChatAgentStatusNeedsAttention:
+		return true
+	case ChatAgentStatusPaused:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ChatAgentTriggerType.
+const (
+	ChatAgentTriggerTypeCommand      ChatAgentTriggerType = "command"
+	ChatAgentTriggerTypeEvent        ChatAgentTriggerType = "event"
+	ChatAgentTriggerTypeEveryMessage ChatAgentTriggerType = "every_message"
+	ChatAgentTriggerTypeKeyword      ChatAgentTriggerType = "keyword"
+	ChatAgentTriggerTypeMention      ChatAgentTriggerType = "mention"
+	ChatAgentTriggerTypeSchedule     ChatAgentTriggerType = "schedule"
+)
+
+// Valid indicates whether the value is a known member of the ChatAgentTriggerType enum.
+func (e ChatAgentTriggerType) Valid() bool {
+	switch e {
+	case ChatAgentTriggerTypeCommand:
+		return true
+	case ChatAgentTriggerTypeEvent:
+		return true
+	case ChatAgentTriggerTypeEveryMessage:
+		return true
+	case ChatAgentTriggerTypeKeyword:
+		return true
+	case ChatAgentTriggerTypeMention:
+		return true
+	case ChatAgentTriggerTypeSchedule:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ChatFolderColor.
 const (
 	Amber  ChatFolderColor = "amber"
@@ -3948,6 +4002,51 @@ type ChatRole string
 
 // ChatVisibility defines model for Chat.Visibility.
 type ChatVisibility string
+
+// ChatAgent defines model for ChatAgent.
+type ChatAgent struct {
+	AgentId       openapi_types.UUID `json:"agent_id"`
+	AvatarVersion int64              `json:"avatar_version"`
+
+	// CanManage The current actor may pause, resume and configure the agent.
+	CanManage                bool   `json:"can_manage"`
+	Description              string `json:"description"`
+	DisplayName              string `json:"display_name"`
+	Handle                   string `json:"handle"`
+	KnowledgeCollectionCount int    `json:"knowledge_collection_count"`
+
+	// Scopes Published capabilities; clients describe them in plain language.
+	Scopes []AgentScope    `json:"scopes"`
+	Status ChatAgentStatus `json:"status"`
+
+	// Triggers Enabled triggers that can start the agent in this chat.
+	Triggers []ChatAgentTrigger `json:"triggers"`
+}
+
+// ChatAgentStatus defines model for ChatAgent.Status.
+type ChatAgentStatus string
+
+// ChatAgentList defines model for ChatAgentList.
+type ChatAgentList struct {
+	Agents []ChatAgent `json:"agents"`
+}
+
+// ChatAgentTrigger defines model for ChatAgentTrigger.
+type ChatAgentTrigger struct {
+	// Command Command without the leading slash (type command).
+	Command  *string `json:"command,omitempty"`
+	Schedule *struct {
+		// DaysOfWeek 0 is Sunday; empty means every day.
+		DaysOfWeek []int  `json:"days_of_week"`
+		Hour       int    `json:"hour"`
+		Minute     int    `json:"minute"`
+		Timezone   string `json:"timezone"`
+	} `json:"schedule,omitempty"`
+	Type ChatAgentTriggerType `json:"type"`
+}
+
+// ChatAgentTriggerType defines model for ChatAgentTrigger.Type.
+type ChatAgentTriggerType string
 
 // ChatAvatarUpdate defines model for ChatAvatarUpdate.
 type ChatAvatarUpdate struct {

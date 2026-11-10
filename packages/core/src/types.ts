@@ -15,6 +15,8 @@ export type MessageActionResponse =
   components["schemas"]["MessageActionResponse"];
 export type MessageActionResult = components["schemas"]["MessageActionResult"];
 export type MessageSource = components["schemas"]["MessageSource"];
+export type ChatAgent = components["schemas"]["ChatAgent"];
+export type ChatAgentTrigger = components["schemas"]["ChatAgentTrigger"];
 export type FileMetadata = components["schemas"]["File"];
 export type FileUpload = components["schemas"]["FileUpload"];
 export type CompletedFilePart = components["schemas"]["CompletedFilePart"];

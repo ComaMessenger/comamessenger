@@ -3,7 +3,9 @@ import {
   documentFormat,
   failureKey,
   highlightTerms,
+  findQuotedFragment,
   splitHighlight,
+  splitQuote,
   statusKey,
 } from "./format";
 import { knowledgeFromPath, knowledgePath } from "./routes";
@@ -64,5 +66,25 @@ describe("knowledge routes", () => {
       "/knowledge/c1/d1?fragment=f1&q=%D0%BE%D1%82%D0%BF%D1%83%D1%81%D0%BA",
     );
     expect(knowledgePath()).toBe("/knowledge");
+  });
+});
+
+describe("agent quotes", () => {
+  const fragments = [
+    { chunk_id: "a", content: "Общие положения." },
+    { chunk_id: "b", content: "Заболевший инструктор сообщает дежурному\nадминистратору до 08:00. Замену подбирает он." },
+  ];
+  it("finds the cited fragment despite line breaks and a cut excerpt", () => {
+    expect(findQuotedFragment(fragments, "Заболевший инструктор сообщает дежурному администратору…")).toBe("b");
+    expect(findQuotedFragment(fragments, "Нет такого текста в документе")).toBe("");
+    expect(findQuotedFragment(fragments, "до")).toBe("");
+  });
+  it("marks the quoted passage when it is verbatim", () => {
+    expect(splitQuote("Пропуск выдаёт администратор.", "выдаёт администратор…")).toEqual([
+      { text: "Пропуск ", match: false },
+      { text: "выдаёт администратор", match: true },
+      { text: ".", match: false },
+    ]);
+    expect(splitQuote("Текст", "другое")).toEqual([{ text: "Текст", match: false }]);
   });
 });

@@ -18,6 +18,7 @@ import type {
   Message,
   MessagePage,
   MessageActionResult,
+  ChatAgent,
   MessagePin,
   MessageReceipt,
   MessageWindow,
@@ -1176,6 +1177,14 @@ export class MessengerAPI {
       `/api/v1/messages/${id}/actions/${encodeURIComponent(actionID)}`,
       { method: "POST" },
     );
+  }
+  /** Agents working in a chat, described for its members. */
+  async chatAgents(chatID: string): Promise<ChatAgent[]> {
+    return (
+      await this.request<{ agents: ChatAgent[] }>(
+        `/api/v1/chats/${encodeURIComponent(chatID)}/agents`,
+      )
+    ).agents;
   }
   followThread(id: string): Promise<unknown> {
     return this.request(`/api/v1/messages/${id}/thread/follow`, {

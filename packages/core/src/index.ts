@@ -1,5 +1,7 @@
 export * from "./api";
+export * from "./blocks";
 export * from "./chats";
+export * from "./commands";
 export * from "./feed";
 export * from "./markdown";
 export * from "./mentions";

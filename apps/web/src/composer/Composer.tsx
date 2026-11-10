@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -23,11 +24,14 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
+  commandQuery,
   decodeMentions,
   encodeMentions,
+  matchCommands,
   insertMention,
   messagePlainText,
   updateMentionText,
+  type ChatCommand,
   type ChatMember,
   type Message,
 } from "@comamessenger/core";
@@ -44,6 +48,7 @@ import { EmojiPickerPanel } from "../lib/emoji";
 import type { PresenceMap } from "../lib/mentions";
 import { attachmentLimit, type ComposerAttachment } from "./useAttachments";
 import { AttachmentItem } from "./AttachmentItem";
+import { CommandMenu } from "../agentchat/CommandMenu";
 
 const sendModeKey = "coma-send-on-enter";
 
@@ -66,6 +71,7 @@ export function Composer({
   compact = false,
   autoFocus = false,
   banner,
+  commands = [],
 }: {
   members: ChatMember[];
   presence?: PresenceMap;
@@ -86,6 +92,8 @@ export function Composer({
   compact?: boolean;
   autoFocus?: boolean;
   banner?: ReactNode;
+  /** Agent commands offered after typing "/" at the start of a message. */
+  commands?: ChatCommand[];
 }) {
   const { t } = useTranslation();
   const input = useRef<HTMLTextAreaElement>(null);
@@ -105,6 +113,20 @@ export function Composer({
     () => localStorage.getItem(sendModeKey) !== "false",
   );
   const draft = useMemo(() => decodeMentions(body), [body]);
+  const commandMenuID = useId();
+  const [commandIndex, setCommandIndex] = useState(0);
+  const [commandsDismissed, setCommandsDismissed] = useState<string | null>(
+    null,
+  );
+  const typedCommand = commands.length ? commandQuery(draft.text) : null;
+  const commandMatches =
+    typedCommand === null ? [] : matchCommands(commands, typedCommand);
+  const showCommandMenu =
+    focused && typedCommand !== null && commandsDismissed !== draft.text;
+  const activeCommand = Math.min(
+    commandIndex,
+    Math.max(0, commandMatches.length - 1),
+  );
   const canSend =
     (Boolean(body.trim()) ||
       attachments.some((item) => item.status === "ready")) &&
@@ -153,7 +175,39 @@ export function Composer({
       input.current?.setSelectionRange(cursor, cursor);
     });
   }
+  function insertCommand(command: ChatCommand) {
+    const text = `/${command.command} `;
+    setCommandIndex(0);
+    setVisibleText(text, text.length);
+  }
   function keys(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (showCommandMenu && !event.nativeEvent.isComposing) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        setCommandsDismissed(draft.text);
+        return;
+      }
+      if (commandMatches.length > 0) {
+        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+          event.preventDefault();
+          const step = event.key === "ArrowDown" ? 1 : -1;
+          setCommandIndex(
+            (activeCommand + step + commandMatches.length) %
+              commandMatches.length,
+          );
+          return;
+        }
+        if (
+          (event.key === "Enter" && !event.shiftKey) ||
+          event.key === "Tab"
+        ) {
+          event.preventDefault();
+          insertCommand(commandMatches[activeCommand]!);
+          return;
+        }
+      }
+    }
     const shouldSend = sendOnEnter ? !event.shiftKey : event.shiftKey;
     if (event.key === "Enter" && shouldSend && !event.nativeEvent.isComposing) {
       event.preventDefault();
@@ -375,11 +429,12 @@ export function Composer({
           className="composer__input"
           rows={1}
           value={draft.text}
-          onChange={(event) =>
+          onChange={(event) => {
+            setCommandIndex(0);
             setBody(
               encodeMentions(updateMentionText(draft, event.target.value)),
-            )
-          }
+            );
+          }}
           onFocus={() => setFocused(true)}
           onBlur={() => {
             onBlur();
@@ -389,6 +444,19 @@ export function Composer({
             });
           }}
           onKeyDown={keys}
+          role={commands.length ? "combobox" : undefined}
+          aria-autocomplete={commands.length ? "list" : undefined}
+          aria-expanded={commands.length ? showCommandMenu : undefined}
+          aria-controls={
+            showCommandMenu && commandMatches.length
+              ? commandMenuID
+              : undefined
+          }
+          aria-activedescendant={
+            showCommandMenu && commandMatches.length
+              ? `${commandMenuID}-${activeCommand}`
+              : undefined
+          }
           placeholder={placeholder ?? t("messagePlaceholder")}
           aria-label={placeholder ?? t("messagePlaceholder")}
         />
@@ -582,6 +650,23 @@ export function Composer({
               {t("sendLater")}
             </MenuItem>
           </Menu>
+        </FloatingPopover>
+      )}
+      {showCommandMenu && (
+        <FloatingPopover
+          anchorRef={root}
+          placement="top-start"
+          width={Math.min(420, window.innerWidth - 32)}
+          onDismiss={() => setCommandsDismissed(draft.text)}
+        >
+          <CommandMenu
+            id={commandMenuID}
+            commands={commandMatches}
+            query={typedCommand ?? ""}
+            activeIndex={activeCommand}
+            onHover={setCommandIndex}
+            onPick={insertCommand}
+          />
         </FloatingPopover>
       )}
       {showMentionMenu && (
