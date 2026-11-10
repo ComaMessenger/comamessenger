@@ -1,0 +1,676 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <!--
+      Coma — Agents Lab. Кликабельный прототип платформы агентов:
+      каталог, Архитектор (агент собирает агента), конструктор, применение в чатах, активность.
+      Данные вымышлены. Один файл без сборки; токены повторяют packages/tokens/src/theme.css.
+      SPDX-License-Identifier: Apache-2.0
+    -->
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Coma — Agents Lab</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --r-sm: 6px; --r-md: 8px; --r-lg: 12px; --r-xl: 16px;
+        --font: Onest, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+        --canvas: #f6f6f7; --sidebar: #fafafa; --surface: #ffffff; --raised: #ffffff;
+        --selected: #f0f0f3; --hover: #f1f1f3; --tint: #fafafa;
+        --fg: #202023; --muted: #686873; --border: #e5e5e9; --border-strong: #d2d2d9;
+        --primary: #174586; --primary-soft: #edf3fb; --on-primary: #ffffff;
+        --action: #252528; --action-hover: #3a3a40; --on-action: #ffffff;
+        --danger: #c43245; --danger-soft: #fff0f1;
+        --success: #18794e; --success-soft: #edf8f1;
+        --warning: #9c650b; --warning-soft: #fff8e7;
+        --shadow: 0 3px 12px rgba(20, 20, 30, 0.06), 0 1px 3px rgba(20, 20, 30, 0.03);
+        --shadow-float: 0 8px 24px rgba(20, 20, 30, 0.1);
+        --a1: #e5eee6; --a1f: #4d6b54; --a2: #e8edf4; --a2f: #4c6280;
+        --a4: #ece7f5; --a4f: #6f598e; --a7: #f3e8e9; --a7f: #8e505b; --a8: #f4ebde; --a8f: #806039;
+      }
+      [data-theme="dark"] {
+        color-scheme: dark;
+        --canvas: #151517; --sidebar: #222225; --surface: #1d1d20; --raised: #27272c;
+        --selected: #2b2b30; --hover: #2b2b30; --tint: #222225;
+        --fg: #f0f0f2; --muted: #a0a0aa; --border: #323237; --border-strong: #46464f;
+        --primary: #86aff0; --primary-soft: #243349; --on-primary: #172132;
+        --action: #eeeeef; --action-hover: #ffffff; --on-action: #222225;
+        --danger: #f08a97; --danger-soft: #3a2327;
+        --success: #6fcf9c; --success-soft: #1f3329;
+        --warning: #e3b35a; --warning-soft: #362d1b;
+        --shadow: 0 3px 12px rgba(0, 0, 0, 0.3);
+        --shadow-float: 0 8px 24px rgba(0, 0, 0, 0.45);
+        --a1: #2a3a2e; --a1f: #abd1b5; --a2: #2a3443; --a2f: #a9beda;
+        --a4: #352e45; --a4f: #c1acde; --a7: #43292e; --a7f: #e0b2bc; --a8: #40331f; --a8f: #dcc096;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; }
+      body {
+        font: 14px/1.45 var(--font); color: var(--fg); background: var(--canvas);
+        -webkit-font-smoothing: antialiased;
+      }
+      button, input, textarea, select { font: inherit; color: inherit; }
+      button { cursor: pointer; border: 0; background: none; padding: 0; text-align: left; }
+      h1, h2, h3, h4, p { margin: 0; }
+      h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+      h2 { font-size: 16px; font-weight: 600; }
+      h3 { font-size: 14px; font-weight: 600; }
+      svg { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+      .muted { color: var(--muted); }
+      .small { font-size: 12.5px; }
+      .row { display: flex; align-items: center; gap: 8px; }
+      .grow { flex: 1; min-width: 0; }
+      .wrap { flex-wrap: wrap; }
+
+      /* Prototype chrome */
+      .proto {
+        position: sticky; top: 0; z-index: 20; height: 48px; display: flex; align-items: center; gap: 12px;
+        padding: 0 16px; background: var(--action); color: var(--on-action);
+      }
+      .proto strong { font-weight: 600; white-space: nowrap; }
+      .proto nav { display: flex; gap: 2px; overflow-x: auto; flex: 1; scrollbar-width: none; }
+      .proto nav button {
+        color: inherit; opacity: 0.66; padding: 6px 12px; border-radius: 999px; white-space: nowrap; font-weight: 500;
+      }
+      .proto nav button.on { opacity: 1; background: color-mix(in srgb, var(--on-action) 16%, transparent); }
+      .proto .theme { opacity: 0.8; padding: 6px; border-radius: 999px; color: inherit; display: flex; }
+
+      /* App shell */
+      .app { display: grid; grid-template-columns: 208px minmax(0, 1fr); height: calc(100vh - 48px); min-height: 620px; }
+      .side { background: var(--sidebar); border-right: 1px solid var(--border); padding: 12px 8px; display: flex; flex-direction: column; gap: 2px; }
+      .ws { display: flex; align-items: center; gap: 8px; padding: 6px 8px 14px; font-weight: 600; }
+      .ws i { width: 28px; height: 28px; border-radius: 8px; background: var(--primary); color: var(--on-primary); display: grid; place-items: center; font-style: normal; font-size: 12px; }
+      .side button { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--r-md); font-weight: 500; }
+      .side button:hover { background: var(--hover); }
+      .side button.on { background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); }
+      .side .count { margin-left: auto; font-size: 12px; background: var(--selected); border-radius: 6px; padding: 0 6px; }
+      .main { min-width: 0; overflow: auto; background: var(--surface); }
+      .page { max-width: 1080px; margin: 0 auto; padding: 24px 24px 48px; }
+      .page-head { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+
+      /* Controls */
+      .btn {
+        display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 36px; padding: 0 14px;
+        border-radius: var(--r-md); font-weight: 500; white-space: nowrap; border: 1px solid var(--border-strong); background: var(--surface);
+      }
+      .btn:hover { background: var(--hover); }
+      .btn.primary { background: var(--action); color: var(--on-action); border-color: transparent; }
+      .btn.primary:hover { background: var(--action-hover); }
+      .btn.accent { background: var(--primary); color: var(--on-primary); border-color: transparent; }
+      .btn.ghost { border-color: transparent; background: none; }
+      .btn.sm { height: 28px; padding: 0 10px; font-size: 13px; }
+      .chip {
+        display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; font-size: 13px;
+        background: var(--tint); border: 1px solid var(--border); white-space: nowrap;
+      }
+      button.chip:hover { border-color: var(--primary); color: var(--primary); }
+      .chip.pick { background: var(--primary-soft); border-color: transparent; color: var(--primary); font-weight: 500; }
+      .tag { font-size: 11.5px; font-weight: 600; padding: 1px 6px; border-radius: 5px; background: var(--primary-soft); color: var(--primary); }
+      .state { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; }
+      .state::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+      .ok { color: var(--success); } .warn { color: var(--warning); } .bad { color: var(--danger); } .idle { color: var(--muted); }
+      .card { border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); }
+      .switch { width: 34px; height: 20px; border-radius: 999px; background: var(--border-strong); position: relative; flex: none; }
+      .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 0.15s; }
+      .switch.on { background: var(--primary); } .switch.on::after { transform: translateX(14px); }
+      .av { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-weight: 600; font-size: 13px; flex: none; }
+      .av.bot { border-radius: 10px; background: var(--primary-soft); color: var(--primary); }
+      .av.sm { width: 28px; height: 28px; font-size: 11px; } .av.bot.sm { border-radius: 8px; }
+      .c1 { background: var(--a1); color: var(--a1f); } .c2 { background: var(--a2); color: var(--a2f); }
+      .c4 { background: var(--a4); color: var(--a4f); } .c7 { background: var(--a7); color: var(--a7f); } .c8 { background: var(--a8); color: var(--a8f); }
+
+      /* Catalog */
+      .attention { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--warning-soft); border-radius: var(--r-lg); margin-bottom: 20px; flex-wrap: wrap; }
+      .attention svg { color: var(--warning); }
+      .agents { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; margin-bottom: 32px; }
+      .agent-card { padding: 14px; display: flex; flex-direction: column; gap: 10px; width: 100%; }
+      .agent-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow); }
+      .agent-card .what { color: var(--muted); font-size: 13px; min-height: 38px; }
+      .agent-card footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--border); padding-top: 10px; }
+      .hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 18px; border-radius: var(--r-xl); background: var(--primary-soft); margin-bottom: 28px; }
+      .hero h2 { margin-bottom: 4px; }
+      .roles { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+      .role { padding: 14px; display: flex; flex-direction: column; gap: 6px; width: 100%; }
+      .role:hover { border-color: var(--primary); }
+      .role .ico { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; margin-bottom: 4px; }
+      .role q { quotes: "«" "»"; color: var(--muted); font-size: 12.5px; }
+      .section-title { display: flex; align-items: baseline; gap: 10px; margin: 0 0 12px; }
+
+      /* Architect + builder split */
+      .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 400px); height: 100%; }
+      .split > section { min-width: 0; overflow: auto; }
+      .split > aside { border-left: 1px solid var(--border); background: var(--tint); overflow: auto; display: flex; flex-direction: column; }
+      .bar { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); z-index: 5; flex-wrap: wrap; }
+      .talk { max-width: 680px; margin: 0 auto; padding: 24px 20px 32px; display: flex; flex-direction: column; gap: 16px; }
+      .bubble { display: flex; gap: 10px; align-items: flex-start; }
+      .bubble .txt { padding: 10px 14px; border-radius: 4px 14px 14px 14px; background: var(--tint); border: 1px solid var(--border); max-width: 520px; }
+      .bubble.me { flex-direction: row-reverse; }
+      .bubble.me .txt { background: var(--primary); color: var(--on-primary); border-color: transparent; border-radius: 14px 4px 14px 14px; }
+      .options { display: flex; flex-wrap: wrap; gap: 8px; padding-left: 46px; }
+      .passport { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+      .passport .item { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; }
+      .passport .item svg { margin-top: 2px; color: var(--muted); }
+      .passport .item.done svg { color: var(--success); }
+      .passport .item b { font-weight: 600; display: block; }
+      .passport .empty { color: var(--muted); font-style: italic; }
+      .progress { height: 4px; border-radius: 4px; background: var(--border); overflow: hidden; }
+      .progress i { display: block; height: 100%; background: var(--primary); transition: width 0.3s; }
+
+      /* Builder */
+      .builder { max-width: 760px; margin: 0 auto; padding: 20px 20px 48px; display: flex; flex-direction: column; gap: 14px; }
+      .block { padding: 16px; }
+      .block > header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+      .block > header .n { width: 24px; height: 24px; border-radius: 50%; background: var(--selected); display: grid; place-items: center; font-size: 12px; font-weight: 600; flex: none; }
+      .block > header p { color: var(--muted); font-size: 12.5px; }
+      .field { border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 8px 10px; background: var(--surface); width: 100%; }
+      textarea.field { resize: vertical; min-height: 64px; }
+      .line { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border); flex-wrap: wrap; }
+      .line:first-of-type { border-top: 0; padding-top: 0; }
+      .rule { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border-radius: var(--r-md); background: var(--tint); margin-bottom: 8px; }
+      .rule em { font-style: normal; color: var(--muted); }
+      .rule .slot { padding: 3px 9px; border-radius: 6px; background: var(--surface); border: 1px solid var(--border-strong); font-weight: 500; }
+      .notice { display: flex; gap: 10px; padding: 10px 12px; border-radius: var(--r-md); background: var(--primary-soft); font-size: 13px; }
+      .adv { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+      .adv label { font-size: 12.5px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+      .test-head { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+      .test-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; flex: 1; }
+      .trace { font-size: 12.5px; color: var(--muted); border: 1px dashed var(--border-strong); border-radius: var(--r-md); padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+      .trace b { color: var(--fg); font-weight: 500; }
+
+      /* Chats */
+      .chats { display: grid; grid-template-columns: 280px minmax(0, 1fr) 300px; height: 100%; }
+      .chat-list { border-right: 1px solid var(--border); overflow: auto; padding: 12px 8px; background: var(--surface); }
+      .chat-list h3 { padding: 4px 10px 10px; }
+      .chat-item { display: flex; gap: 10px; padding: 9px 10px; border-radius: var(--r-md); width: 100%; align-items: center; }
+      .chat-item:hover { background: var(--hover); } .chat-item.on { background: var(--selected); }
+      .chat-item .hash { width: 36px; height: 36px; border-radius: 10px; background: var(--tint); border: 1px solid var(--border); display: grid; place-items: center; color: var(--muted); flex: none; }
+      .chat-item small { display: block; color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .conv { display: flex; flex-direction: column; min-width: 0; background: var(--surface); }
+      .conv-head { padding: 12px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+      .feed { flex: 1; overflow: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; }
+      .day { align-self: center; font-size: 12px; color: var(--muted); padding: 2px 10px; border-radius: 999px; background: var(--tint); }
+      .msg { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 10px; }
+      .msg header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .msg header time { color: var(--muted); font-size: 12px; }
+      .msg p + p, .msg p + ul { margin-top: 6px; }
+      .msg ul { margin: 6px 0 0; padding-left: 18px; }
+      .msg .mention { color: var(--primary); font-weight: 500; background: var(--primary-soft); padding: 0 4px; border-radius: 4px; }
+      .acard { margin-top: 8px; border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; max-width: 560px; }
+      .acard > header { padding: 10px 14px; background: var(--tint); border-bottom: 1px solid var(--border); font-weight: 600; justify-content: space-between; }
+      .acard .body { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+      .acard dl { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 6px 12px; margin: 0; }
+      .acard dt { color: var(--muted); } .acard dd { margin: 0; }
+      .acard footer { padding: 10px 14px; border-top: 1px solid var(--border); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+      .sources { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+      .sources .chip { font-size: 12.5px; padding: 3px 9px; }
+      .why { margin-top: 6px; font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+      .tally { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; }
+      .composer { margin: 0 20px 16px; border: 1px solid var(--border-strong); border-radius: var(--r-lg); padding: 10px 12px; display: flex; align-items: center; gap: 10px; position: relative; color: var(--muted); }
+      .slash { position: absolute; bottom: calc(100% + 8px); left: 0; width: min(420px, 100%); background: var(--raised); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--shadow-float); padding: 6px; color: var(--fg); }
+      .slash div { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border-radius: var(--r-md); }
+      .slash div:first-of-type { background: var(--hover); }
+      .slash code { font-family: var(--mono); font-size: 13px; font-weight: 600; min-width: 96px; }
+      .slash small { color: var(--muted); }
+      .live { display: inline-flex; gap: 6px; align-items: center; color: var(--primary); font-size: 12.5px; font-weight: 500; }
+      .live i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: pulse 1.1s infinite; }
+      @keyframes pulse { 50% { opacity: 0.25; } }
+      .info { border-left: 1px solid var(--border); background: var(--tint); overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+      .info .card { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+      .info li { margin: 2px 0; } .info ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
+      .note { font-size: 12.5px; color: var(--muted); border-left: 3px solid var(--primary); padding: 2px 0 2px 10px; }
+
+      /* Activity */
+      .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+      .tl { display: flex; flex-direction: column; }
+      .tl > div { display: grid; grid-template-columns: 56px 28px minmax(0, 1fr); gap: 10px; padding: 10px 0; border-top: 1px solid var(--border); align-items: start; }
+      .tl > div:first-child { border-top: 0; }
+      .tl time { color: var(--muted); font-size: 12.5px; padding-top: 5px; }
+      .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 24px; }
+      .stats .card { padding: 14px; } .stats b { font-size: 22px; font-weight: 600; display: block; }
+
+      @media (max-width: 1100px) { .chats { grid-template-columns: 240px minmax(0, 1fr); } .info { display: none; } }
+      @media (max-width: 860px) {
+        .app { grid-template-columns: minmax(0, 1fr); height: auto; }
+        .side { display: none; }
+        .split { grid-template-columns: minmax(0, 1fr); height: auto; }
+        .split > aside { border-left: 0; border-top: 1px solid var(--border); }
+        .chats { grid-template-columns: minmax(0, 1fr); height: auto; }
+        .chat-list { border-right: 0; border-bottom: 1px solid var(--border); display: flex; overflow-x: auto; gap: 4px; padding: 8px; }
+        .chat-list h3 { display: none; } .chat-item { width: auto; min-width: 200px; }
+        .conv { min-height: 640px; }
+        .cols, .hero { grid-template-columns: minmax(0, 1fr); }
+        .page { padding: 16px 16px 40px; }
+        .options { padding-left: 0; }
+        .acard dl { grid-template-columns: minmax(0, 1fr); gap: 0 0; } .acard dd { margin-bottom: 6px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="proto">
+      <strong>Coma · Agents Lab</strong>
+      <nav id="tabs"></nav>
+      <button class="theme" data-act="theme" aria-label="Сменить тему" title="Сменить тему"></button>
+    </div>
+    <div class="app">
+      <aside class="side" id="side"></aside>
+      <main class="main" id="main"></main>
+    </div>
+
+    <script>
+      const I = {
+        chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
+        thread: '<path d="M4 5h11v8H8l-4 3z"/><path d="M15 9h5v10l-3-2h-6v-2"/>',
+        star: '<path d="m12 3 2.7 5.6 6.1.8-4.5 4.3 1.1 6.1L12 16.9 6.6 19.8l1.1-6.1L3.2 9.4l6.1-.8z"/>',
+        users: '<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0M16 5a3 3 0 0 1 0 6M21 20a5 5 0 0 0-3-4.6"/>',
+        bot: '<rect x="4" y="8" width="16" height="11" rx="3"/><path d="M12 8V4M9 13v2M15 13v2M2 13v2M22 13v2"/>',
+        plus: '<path d="M12 5v14M5 12h14"/>',
+        spark: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.7 2.3L22 19l-2.3.7L19 22l-.7-2.3L16 19l2.3-.7z"/>',
+        check: '<path d="m5 12 5 5 9-10"/>',
+        circle: '<circle cx="12" cy="12" r="8"/>',
+        clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+        book: '<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/>',
+        route: '<circle cx="6" cy="18" r="2"/><circle cx="18" cy="6" r="2"/><path d="M8 18h7a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h7"/>',
+        list: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="m3 6 1.5 1.5L7 5M3 12l1.5 1.5L7 11M3 18l1.5 1.5L7 17"/>',
+        hand: '<path d="M12 21s-7-4.3-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.7-7 10-7 10z"/>',
+        doc: '<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/>',
+        plug: '<path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"/>',
+        sum: '<path d="M5 6h14M5 12h14M5 18h8"/>',
+        shield: '<path d="M12 3 5 6v6c0 4.4 3 7.6 7 9 4-1.4 7-4.6 7-9V6z"/>',
+        alert: '<path d="M12 4 2.5 20h19zM12 10v5M12 17.5v.5"/>',
+        send: '<path d="M21 3 10 14M21 3l-7 18-4-7-7-4z"/>',
+        hash: '<path d="M9 4 7 20M17 4l-2 16M4 9h17M3 15h17"/>',
+        sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M5 19l1.5-1.5M17.5 6.5 19 5"/>',
+        arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+        eye: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+        cloud: '<path d="M7 18a4.5 4.5 0 0 1-.6-9A6 6 0 0 1 18 10.5a3.8 3.8 0 0 1-.5 7.5z"/>',
+      };
+      const ic = (n) => `<svg viewBox="0 0 24 24" aria-hidden="true">${I[n]}</svg>`;
+      const av = (t, c, sm) => `<span class="av ${c}${sm ? " sm" : ""}">${t}</span>`;
+      const botAv = (sm) => `<span class="av bot${sm ? " sm" : ""}">${ic("bot")}</span>`;
+
+      const S = { view: "catalog", chat: "slot", step: 0, picks: [], advanced: false, tested: false, slash: false, taken: false, approved: false, staffed: false, acked: false };
+
+      const TABS = [
+        ["catalog", "Каталог"], ["architect", "Архитектор"], ["builder", "Конструктор"],
+        ["chats", "В чатах"], ["activity", "Активность"],
+      ];
+
+      const AGENTS = [
+        { n: "Передача", what: "Когда слот инструктора заканчивается, собирает, что передать следующему, и сообщает заступающему.", st: ["ok", "Работает"], meta: "6 передач сегодня", where: "Зал 1, Зал 2, Зал 3" },
+        { n: "Слоты", what: "Ищет инструктора на свободный слот: опрашивает подходящих и приносит ответы администратору.", st: ["warn", "Ждёт подтверждения"], meta: "1 слот", where: "Расписание" },
+        { n: "Контроль", what: "Следит, чтобы все отметились под важным сообщением, и напоминает тем, кто не отметился.", st: ["ok", "Работает"], meta: "6 из 9 отметились", where: "Инструкторы" },
+        { n: "Справка", what: "Отвечает на вопросы по регламентам и инструкциям со ссылкой на документ.", st: ["ok", "Работает"], meta: "23 ответа за неделю", where: "5 чатов" },
+        { n: "Наставник", what: "Встречает новых сотрудников и ведёт их по чек-листу первой недели.", st: ["ok", "Работает"], meta: "1 новичок сейчас", where: "Новички" },
+        { n: "Оформитель", what: "Превращает сообщение в служебную записку по шаблону центра.", st: ["warn", "Ждёт подтверждения"], meta: "1 действие", where: "Закупки" },
+      ];
+
+      const ROLES = [
+        ["sum", "c2", "Секретарь", "Сводки чатов, передача дел, «что я пропустил».", "Что передать следующему?"],
+        ["book", "c1", "Справочная", "Отвечает по регламентам и файлам, указывает источник.", "Как оформить замену?"],
+        ["route", "c4", "Диспетчер", "Разбирает обращения, назначает ответственного, следит за ответом.", "Сломался тренажёр в зале 2"],
+        ["list", "c8", "Контролёр", "Собирает ответы и отметки, напоминает тем, кто молчит.", "Проследи, чтобы все отметились"],
+        ["hand", "c7", "Наставник", "Встречает новичка, ведёт по чек-листу первых дней.", "Добро пожаловать в команду"],
+        ["doc", "c2", "Оформитель", "Свободный текст → документ по шаблону с подтверждением.", "/оформить записку на закупку"],
+        ["plug", "c1", "Связной", "Приносит данные из внешней системы и записывает обратно.", "Нужна интеграция"],
+      ];
+
+      /* ---------- Catalog ---------- */
+      function catalog() {
+        return `<div class="page">
+          <div class="page-head">
+            <div class="grow"><h1>Агенты</h1><p class="muted">Сотрудники-помощники, которые работают в ваших чатах.</p></div>
+            <button class="btn" data-go="builder">${ic("plus")}Собрать вручную</button>
+            <button class="btn primary" data-go="architect">${ic("spark")}Создать с Архитектором</button>
+          </div>
+          <div class="attention">
+            ${ic("alert")}<span class="grow"><b>2 действия ждут подтверждения.</b> Слоты нашёл инструктора на четверг, Оформитель подготовил записку.</span>
+            <button class="btn sm" data-go="activity">Посмотреть</button>
+          </div>
+          <div class="section-title"><h2>Ваши агенты</h2><span class="muted small">6 работают</span></div>
+          <div class="agents">
+            ${AGENTS.map((a) => `<button class="card agent-card" data-go="builder">
+              <div class="row">${botAv()}<div class="grow"><h3>${a.n}</h3><span class="state ${a.st[0]}">${a.st[1]}</span></div></div>
+              <p class="what">${a.what}</p>
+              <footer><span>${a.where}</span><span>${a.meta}</span></footer>
+            </button>`).join("")}
+          </div>
+          <div class="hero">
+            <div><h2>Опишите задачу словами — Архитектор соберёт агента</h2>
+              <p class="muted">Он задаст 2–3 уточняющих вопроса, сам настроит доступ и запуск и подготовит проверочные сообщения.</p></div>
+            <button class="btn accent" data-go="architect">${ic("spark")}Начать разговор</button>
+          </div>
+          <div class="section-title"><h2>Готовые роли</h2><span class="muted small">С чего начать, если не знаете, что поручить</span></div>
+          <div class="roles">
+            ${ROLES.map((r) => `<button class="card role" data-go="architect">
+              <span class="ico ${r[1]}">${ic(r[0])}</span><h3>${r[2]}</h3><p class="small">${r[3]}</p><q>${r[4]}</q>
+            </button>`).join("")}
+          </div>
+        </div>`;
+      }
+
+      /* ---------- Architect ---------- */
+      const SCRIPT = [
+        { q: "Здравствуйте! Опишите своими словами, какую работу вы хотите отдать агенту. Можно так, как объясняли бы новому сотруднику.",
+          opts: ["Передавать дела между слотами инструкторов", "Искать инструктора на свободный слот", "Следить, чтобы все отметились под сообщением"] },
+        { q: "Понял: когда один инструктор уходит, а другой заступает, агент передаст главное. Откуда брать расписание слотов?",
+          opts: ["Таблица «Расписание слотов» в базе знаний", "Администратор пишет его в чат"] },
+        { q: "Как собирать то, что нужно передать?",
+          opts: ["Спросить уходящего в личных сообщениях", "Собрать из сообщений чата зала", "И то, и другое"] },
+        { q: "Последнее. За сколько до начала слота сообщать заступающему?",
+          opts: ["За 15 минут", "За час", "Утром в день слота"] },
+      ];
+      const PASS = [
+        ["Кто он", ["Передача — передаёт дела между слотами инструкторов"]],
+        ["Что знает", ["Расписание: ", "pick"]],
+        ["Что умеет", ["Собирает, что передать: ", "pick"]],
+        ["Когда включается", ["Когда слот закончился; заступающему пишет: ", "pick"]],
+      ];
+      function architect() {
+        const done = S.step >= SCRIPT.length;
+        let talk = "";
+        SCRIPT.forEach((s, i) => {
+          if (i > S.step) return;
+          talk += `<div class="bubble">${botAv()}<div class="txt">${s.q}</div></div>`;
+          if (i < S.step) talk += `<div class="bubble me">${av("АК", "c7")}<div class="txt">${S.picks[i]}</div></div>`;
+          else talk += `<div class="options">${s.opts.map((o) => `<button class="chip" data-pick="${o}">${o}</button>`).join("")}</div>`;
+        });
+        if (done)
+          talk += `<div class="bubble">${botAv()}<div class="txt"><b>Готово, агент собран.</b><br>Я подготовил проверку на трёх случаях: обычная передача, уходящий ничего не ответил, следующего слота сегодня нет. Ничего не будет отправлено в чат, пока вы не опубликуете агента.</div></div>
+          <div class="options"><button class="btn primary" data-go="builder">${ic("eye")}Проверить на примерах</button><button class="btn" data-go="builder">Открыть в конструкторе</button></div>`;
+        const pass = PASS.map((p, i) => {
+          const ready = S.step > i;
+          const text = ready ? p[1].map((t) => (t === "pick" ? `<b style="display:inline">${S.picks[i]}</b>` : t)).join("") : `<span class="empty">Архитектор спросит об этом</span>`;
+          return `<div class="item ${ready ? "done" : ""}">${ic(ready ? "check" : "circle")}<div><b>${p[0]}</b><span class="small">${text}</span></div></div>`;
+        }).join("");
+        return `<div class="split">
+          <section>
+            <div class="bar">${botAv(true)}<div class="grow"><h3>Архитектор агентов</h3><span class="small muted">Собирает агента из разговора</span></div>
+              <button class="btn sm ghost" data-act="restart">Начать заново</button></div>
+            <div class="talk">${talk}
+              ${done ? "" : `<div class="composer" style="margin:8px 0 0"><span class="grow">Или напишите свой ответ…</span>${ic("send")}</div>`}
+            </div>
+          </section>
+          <aside>
+            <div class="test-head"><h3>Паспорт агента</h3><p class="small muted">Заполняется по ходу разговора</p>
+              <div class="progress" style="margin-top:10px"><i style="width:${(Math.min(S.step, 4) / 4) * 100}%"></i></div></div>
+            <div class="passport">
+              ${pass}
+              <div class="item ${done ? "done" : ""}">${ic(done ? "check" : "circle")}<div><b>Модель и данные</b><span class="small">${done ? "Подключение пространства · внешняя модель. Агент отправляет в неё расписание и сообщения из чатов залов." : `<span class="empty">Возьмёт подключение пространства</span>`}</span></div></div>
+              ${done ? `<div class="notice">${ic("shield")}<span>Права выведены из задачи: читать чаты залов и расписание, писать в личные сообщения. Больше агент ничего не может.</span></div>` : ""}
+            </div>
+          </aside>
+        </div>`;
+      }
+
+      /* ---------- Builder ---------- */
+      function builder() {
+        const sw = (on) => `<span class="switch ${on ? "on" : ""}"></span>`;
+        return `<div class="split">
+          <section>
+            <div class="bar">${botAv(true)}<div class="grow"><h3>Передача</h3><span class="state warn">Черновик отличается от опубликованной версии</span></div>
+              <button class="btn sm ghost" data-go="architect">${ic("spark")}Изменить через Архитектора</button>
+              <button class="btn sm primary">Опубликовать</button></div>
+            <div class="builder">
+              <div class="card block">
+                <header><span class="n">1</span><div><h3>Кто он</h3><p>Так агент представится сотрудникам</p></div></header>
+                <div class="row" style="margin-bottom:8px">${botAv()}<input class="field" value="Передача" aria-label="Имя" /></div>
+                <textarea class="field" aria-label="Задача">Когда слот инструктора заканчивается, спрашивает, что передать следующему, и перед началом слота сообщает заступающему главное по залу.</textarea>
+                <div class="row wrap" style="margin-top:8px"><span class="small muted">Тон:</span><span class="chip pick">Коротко и по делу</span><span class="chip">Дружелюбно</span><span class="chip">Официально</span></div>
+              </div>
+
+              <div class="card block">
+                <header><span class="n">2</span><div><h3>Что знает</h3><p>Откуда агент берёт информацию</p></div></header>
+                <div class="line">${ic("doc")}<span class="grow"><b>Расписание слотов.xlsx</b><br><span class="small muted">База знаний · обновлено сегодня в 08:10</span></span>${sw(true)}</div>
+                <div class="line">${av("З1", "c2", true)}<span class="grow"><b>Чаты залов: Зал 1, Зал 2, Зал 3</b><br><span class="small muted">Сообщения за время слота</span></span>${sw(true)}</div>
+                <div class="line">${ic("book")}<span class="grow"><b>Что передавать при смене инструктора</b><br><span class="small muted">База знаний · страница</span></span>${sw(true)}</div>
+                <div class="line"><button class="btn sm">${ic("plus")}Добавить из базы знаний</button><button class="btn sm ghost">Добавить чат</button></div>
+              </div>
+
+              <div class="card block">
+                <header><span class="n">3</span><div><h3>Что умеет</h3><p>Действия и то, нужно ли на них разрешение человека</p></div></header>
+                <div class="line"><span class="grow">Спрашивать уходящего инструктора в личных сообщениях</span><span class="chip pick">Сам</span>${sw(true)}</div>
+                <div class="line"><span class="grow">Писать заступающему перед слотом</span><span class="chip pick">Сам</span>${sw(true)}</div>
+                <div class="line"><span class="grow">Сообщать администратору, если заступающий не прочитал</span><span class="chip pick">Сам</span>${sw(true)}</div>
+                <div class="line"><span class="grow">Менять расписание слотов</span><span class="chip">${ic("shield")}После подтверждения</span>${sw(false)}</div>
+              </div>
+
+              <div class="card block">
+                <header><span class="n">4</span><div><h3>Когда включается</h3><p>Правила читаются как предложения</p></div></header>
+                <div class="rule"><em>Когда</em><span class="slot">слот закончился</span><em>→</em><span class="slot">спросить, что передать</span></div>
+                <div class="rule"><em>Когда</em><span class="slot">ответа нет 20 минут</span><em>→</em><span class="slot">собрать из чата зала</span></div>
+                <div class="rule"><em>За</em><span class="slot">15 минут до слота</span><em>→</em><span class="slot">написать заступающему</span></div>
+                <button class="btn sm">${ic("plus")}Добавить правило</button>
+              </div>
+
+              <div class="card block">
+                <header><span class="n">5</span><div><h3>Где работает</h3><p>Чаты, куда агент добавлен и может писать</p></div></header>
+                <div class="row wrap"><span class="chip pick">Зал 1</span><span class="chip pick">Зал 2</span><span class="chip pick">Зал 3</span><span class="chip pick">Личные сообщения</span><span class="chip">${ic("plus")}Добавить чат</span></div>
+              </div>
+
+              <div class="card block">
+                <header><span class="n">${ic("cloud")}</span><div><h3>Модель и данные</h3><p>Одно подключение на всё пространство</p></div></header>
+                <div class="line"><span class="grow"><b>Подключение пространства</b><br><span class="small muted">Внешняя модель · проверено 5 минут назад</span></span><span class="state ok">Доступно</span></div>
+                <div class="notice" style="margin-top:4px">${ic("eye")}<span>Во внешнюю модель уходят только сообщения из выбранных чатов и файлы из блока «Что знает».</span></div>
+              </div>
+
+              <button class="btn ghost" data-act="adv">${S.advanced ? "Скрыть расширенные настройки" : "Расширенные настройки: модель, лимиты, права"}</button>
+              ${S.advanced ? `<div class="card block"><div class="adv">
+                <label>Модель<select class="field"><option>По умолчанию для пространства</option></select></label>
+                <label>Бюджет в день, ₽<input class="field" value="300" /></label>
+                <label>Бюджет в месяц, ₽<input class="field" value="5000" /></label>
+                <label>Запусков в минуту<input class="field" value="10" /></label>
+                <label>Время на ответ, с<input class="field" value="60" /></label>
+                <label>Права (выведены из блоков 2–3)<input class="field" value="chats:read, messages:write" readonly /></label>
+              </div></div>` : ""}
+            </div>
+          </section>
+          <aside>
+            <div class="test-head"><h3>Проверка</h3><p class="small muted">Агент отвечает как в чате, но ничего не отправляет</p></div>
+            <div class="test-body">
+              <div class="row wrap"><span class="chip pick">Обычная передача</span><span class="chip">Уходящий молчит</span><span class="chip">Слота дальше нет</span></div>
+              <p class="small muted">Проверка на вчерашнем дне: зал 1, Игорь Сомов 09:00–13:00 → Вера Лисина 14:00–18:00.</p>
+              ${S.tested ? `<div class="bubble">${botAv(true)}<div class="txt"><b>Вера, перед вашим слотом в зале 1</b><br>Кондиционер течёт, под ним ведро — выливайте раз в час.<br>Группа 15:00: двое новеньких, Игорь просил начать с разминки на ковриках.<br>Велотренажёр №3 не использовать.</div></div>
+              <div class="trace"><span><b>Что сделал агент</b></span><span>Нашёл слоты в «Расписание слотов.xlsx»</span><span>Спросил бы Игоря в 13:00, взял его ответ</span><span>Добавил 2 сообщения из чата «Зал 1»</span><span>5 с · около 0,9 ₽</span></div>
+              <div class="notice">${ic("check")}<span>Сообщение ушло бы Вере в 13:45, за 15 минут до слота.</span></div>`
+              : `<button class="btn primary" data-act="test">${ic("eye")}Показать ответ агента</button>`}
+            </div>
+          </aside>
+        </div>`;
+      }
+
+      /* ---------- Chats ---------- */
+      const CHATS = {
+        slot: { n: "Зал 1", i: "З1", c: "c2", last: "Передача: Вера, перед вашим слотом", hint: "Передача · когда заканчивается слот" },
+        staff: { n: "Расписание", i: "РС", c: "c7", last: "Слоты: чт 14:00–18:00 · зал 2", hint: "Слоты · по упоминанию" },
+        ack: { n: "Инструкторы", i: "ИН", c: "c4", last: "Контроль: отметились 6 из 9", hint: "Контроль · по просьбе под сообщением" },
+        help: { n: "Вопросы по регламентам", i: "ВР", c: "c1", last: "Справка: Замена оформляется…", hint: "Справочная · по упоминанию" },
+        onb: { n: "Новички", i: "НВ", c: "c8", last: "Наставник: Первая неделя", hint: "Наставник · при вступлении в чат" },
+        form: { n: "Закупки", i: "ЗК", c: "c7", last: "Оформитель: Черновик записки", hint: "Оформитель · по команде" },
+      };
+      const m = (a, name, time, body, bot) =>
+        `<div class="msg">${a}<div><header><b>${name}</b>${bot ? '<span class="tag">агент</span>' : ""}<time>${time}</time></header>${body}</div></div>`;
+      const src = (...s) => `<div class="sources">${s.map((x) => `<span class="chip">${x}</span>`).join("")}</div>`;
+      const FEED = {
+        slot: () =>
+          m(av("ИС", "c1"), "Игорь Сомов", "11:20", "<p>Кондиционер опять течёт, поставил ведро. Администраторам написал.</p>") +
+          m(botAv(), "Передача", "13:00", `<p><span class="mention">@Игорь Сомов</span>, ваш слот 09:00–13:00 закончился. В 14:00 заступает Вера Лисина. Что ей передать?</p>
+            <div class="why">${ic("clock")}По расписанию слотов · зал 1</div>`, true) +
+          m(av("ИС", "c1"), "Игорь Сомов", "13:04", "<p>В группе на 15:00 двое новеньких, пусть начнёт с разминки на ковриках. Третий велотренажёр не трогать.</p>") +
+          m(botAv(), "Передача", "13:45", `<div class="acard"><header class="row"><span>Вера, перед вашим слотом 14:00–18:00</span><span class="state ${S.taken ? "ok" : "warn"}">${S.taken ? "Принято" : "Не прочитано"}</span></header>
+            <div class="body"><dl><dt>От Игоря</dt><dd>Группа 15:00: двое новеньких, начать с разминки на ковриках</dd>
+              <dt>Оборудование</dt><dd>Велотренажёр №3 не использовать</dd>
+              <dt>Зал</dt><dd>Течёт кондиционер, под ним ведро. Администраторы в курсе</dd></dl></div>
+            <footer>${S.taken ? `<span class="small muted">${ic("check")} Вера приняла слот в 13:52</span>` : `<button class="btn sm primary" data-act="take">Принял слот</button><button class="btn sm">Есть вопрос к Игорю</button>`}</footer></div>
+            ${src("Игорь, 13:04", "Игорь, 11:20", "Расписание слотов.xlsx")}`, true) +
+          (S.taken ? "" : m(botAv(), "Передача", "14:05", `<p><span class="mention">@Марина Орлова</span>, Вера Лисина не подтвердила, что приняла слот в зале 1. Слот начался 5 минут назад.</p>
+            <div class="why">${ic("clock")}Правило «заступающий не прочитал»</div>`, true)),
+        staff: () =>
+          m(av("МО", "c7"), "Марина Орлова", "10:15", `<p>Павел не сможет в четверг. Нужен инструктор в зал 2 с 14:00 до 18:00, две группы ЛФК.</p><p><span class="mention">@Слоты</span> найди, кто может</p>`) +
+          m(botAv(), "Слоты", "10:15", `<p>Спрошу инструкторов ЛФК, у которых в четверг после обеда нет слотов: Игоря Сомова, Веру Лисину и Олега Тарасова.</p>`, true) +
+          m(botAv(), "Слоты", "11:40", `<div class="acard"><header class="row"><span>Слот: чт 14:00–18:00 · зал 2</span><span class="state ${S.staffed ? "ok" : "warn"}">${S.staffed ? "Закрыт" : "2 из 3 ответили"}</span></header>
+            <div class="body"><div class="tally"><span>Игорь Сомов</span><b class="ok">Могу</b><span>Вера Лисина</span><b class="muted">Не могу</b><span>Олег Тарасов</span><b class="muted">Нет ответа · напомнил в 11:15</b></div>
+              ${S.staffed ? "" : `<p class="small muted">У Игоря в четверг утренний слот 09:00–13:00, получится полный день.</p>`}</div>
+            <footer>${S.staffed ? `<span class="small muted">${ic("check")} Назначен Игорь Сомов. Сообщил ему и Павлу, расписание обновлено</span>` : `<button class="btn sm primary" data-act="staff">Назначить Игоря</button><button class="btn sm">Подождать Олега</button><button class="btn sm ghost">Спросить ещё кого-то</button>`}</footer></div>
+            <div class="why">${ic("shield")}Расписание меняется только после решения администратора</div>`, true),
+        ack: () =>
+          m(av("МО", "c7"), "Марина Орлова", "09:30", `<p><b>С понедельника меняется порядок входа.</b> Инструкторы заходят через служебную дверь со стороны парковки, пропуск обязателен. Главный вход — только для посетителей.</p><p>Поставьте ✅, когда прочитаете.</p>
+            <div class="sources"><span class="chip pick">✅ ${S.acked ? "9" : "6"}</span></div>`) +
+          m(av("МО", "c7"), "Марина Орлова", "09:31", `<p><span class="mention">@Контроль</span> проследи, чтобы все отметились до пятницы</p>`) +
+          m(botAv(), "Контроль", "09:31", `<p>Слежу за сообщением выше. В чате 9 инструкторов, жду ✅ от каждого до пятницы 18:00. Тем, кто не отметится, напомню в личных сообщениях завтра в 10:00.</p>`, true) +
+          m(botAv(), "Контроль", "Чт, 10:00", `<div class="acard"><header class="row"><span>Порядок входа с понедельника</span><span class="state ${S.acked ? "ok" : "warn"}">${S.acked ? "Отметились все 9" : "Отметились 6 из 9"}</span></header>
+            <div class="body">${S.acked ? `<p>Последним отметился Олег Тарасов в пятницу в 12:20. Список сохранён.</p>` : `<p>Не отметились: <b>Олег Тарасов, Вера Лисина, Павел Нестеров</b>.</p><p class="small muted">Напомнил каждому в личных сообщениях. Следующее напоминание — в пятницу в 10:00.</p>`}</div>
+            <footer><button class="btn sm">Кто отметился</button>${S.acked ? "" : `<button class="btn sm ghost" data-act="ack">Показать итог в пятницу</button>`}</footer></div>
+            <div class="why">${ic("eye")}Отчёт видит только Марина Орлова</div>`, true),
+        help: () =>
+          m(av("ИС", "c1"), "Игорь Сомов", "11:02", `<p><span class="mention">@Справка</span> как оформить замену, если я заболел в день занятия?</p>`) +
+          m(botAv(), "Справка", "11:02", `<p>Замена в день занятия оформляется так:</p>
+            <ul><li>до 08:00 напишите дежурному администратору, какие занятия затронуты;</li>
+            <li>дежурный администратор подбирает замену из списка инструкторов того же профиля;</li>
+            <li>если замены нет, занятие переносят, участников оповещает администратор.</li></ul>
+            ${src("Регламент замен.pdf · п. 2.1", "Марина Орлова, 12 сентября")}`, true) +
+          m(av("ПН", "c2"), "Павел Нестеров", "11:20", `<p><span class="mention">@Справка</span> а сколько дней отпуска можно перенести на следующий год?</p>`) +
+          m(botAv(), "Справка", "11:20", `<p>В доступных мне документах ответа нет, придумывать не буду. Передал вопрос <span class="mention">@Марина Орлова</span> — она отвечает за кадровые вопросы.</p>
+            <div class="why">${ic("book")}Искал в 3 чатах и 12 файлах</div>`, true),
+        onb: () =>
+          m(botAv(), "Наставник", "09:00", `<p><span class="mention">@Вера Лисина</span>, добро пожаловать в команду! Я помогу освоиться в первую неделю. Вот с чего начать:</p>
+            <div class="acard"><header class="row"><span>Первая неделя</span><span class="state ${S.taken ? "ok" : "warn"}">${S.taken ? "3 из 5" : "2 из 5"}</span></header>
+            <div class="body">
+              <div class="row">${ic("check")}<span class="muted">Получить пропуск у администратора</span></div>
+              <div class="row">${ic("check")}<span class="muted">Прочитать правила работы в залах</span></div>
+              <div class="row">${ic(S.taken ? "check" : "circle")}<span class="${S.taken ? "muted" : ""}">Пройти инструктаж по оборудованию — Игорь Сомов</span></div>
+              <div class="row">${ic("circle")}<span>Познакомиться с врачами отделения</span></div>
+              <div class="row">${ic("circle")}<span>Провести занятие вместе с наставником</span></div></div>
+            <footer>${S.taken ? `<span class="small muted">${ic("check")} Инструктаж отмечен в 16:40</span>` : `<button class="btn sm primary" data-act="take">Инструктаж пройден</button>`}<button class="btn sm">Задать вопрос</button></footer></div>`, true) +
+          m(av("ВЛ", "c8"), "Вера Лисина", "09:12", "<p>А где брать ключи от зала 3?</p>") +
+          m(botAv(), "Наставник", "09:12", `<p>Ключи от залов выдаёт дежурный администратор на стойке, под подпись в журнале. Вернуть нужно в тот же день.</p>
+            ${src("Правила работы в залах · п. 4")}`, true) +
+          (S.taken ? "" : m(botAv(), "Наставник", "15:00", `<p><span class="mention">@Вера Лисина</span>, на сегодня остался инструктаж по оборудованию. Игорь Сомов в зале 1 до 19:00.</p>
+            <div class="why">${ic("clock")}Напоминание по чек-листу первой недели</div>`, true)),
+        form: () =>
+          m(av("ДК", "c4"), "Дарья Ким", "12:30", `<p>Нужно докупить 20 ковриков и 6 фитболов в зал 3, старые совсем стёрлись. Желательно до конца месяца.</p><p><span class="mention">/оформить</span> записку на закупку</p>`) +
+          m(botAv(), "Оформитель", "12:30", `<div class="acard"><header class="row"><span>Черновик: служебная записка на закупку</span><span class="state ${S.approved ? "ok" : "warn"}">${S.approved ? "Отправлено" : "Ждёт подтверждения"}</span></header>
+            <div class="body"><dl><dt>Кому</dt><dd>Марина Орлова, старший администратор</dd>
+              <dt>Что купить</dt><dd>Коврики гимнастические — 20 шт.; фитболы — 6 шт.</dd>
+              <dt>Куда</dt><dd>Зал 3</dd><dt>Срок</dt><dd>До 30 ноября</dd>
+              <dt>Обоснование</dt><dd>Износ текущего инвентаря</dd></dl></div>
+            <footer>${S.approved ? `<span class="small muted">${ic("check")} Дарья подтвердила · записка отправлена Марине Орловой</span>` : `<button class="btn sm primary" data-act="approve">Подтвердить и отправить</button><button class="btn sm">Исправить</button><button class="btn sm ghost">Отменить</button>`}</footer></div>
+            <div class="why">${ic("shield")}Агент ничего не отправляет без подтверждения автора</div>`, true) +
+          `<div class="msg">${botAv()}<div><header><b>Оформитель</b><span class="tag">агент</span><span class="live"><i></i>ищет шаблон</span></header><p class="muted">Готовлю вторую записку…</p></div></div>`,
+      };
+      const SIDE = {
+        slot: ["Передача", "Передаёт дела между слотами", ["Знает расписание слотов", "Спрашивает уходящего, пишет заступающему", "Сообщает администратору, если слот не принят"], "Здесь нет смен: один инструктор уходит в середине дня, другой заступает. Агент связывает их без участия администратора. Нажмите «Принял слот»."],
+        staff: ["Слоты", "Ищет инструктора на слот", ["Запускается по упоминанию", "Опрашивает подходящих по расписанию", "Не меняет расписание без решения человека"], "Администратор не обзванивает людей: агент опрашивает и приносит готовый выбор. Нажмите «Назначить Игоря»."],
+        ack: ["Контроль", "Следит за отметками", ["Запускается просьбой под сообщением", "Считает реакции участников чата", "Напоминает тем, кто не отметился"], "Агент не настраивается заранее: его зовут под конкретным сообщением. Нажмите «Показать итог в пятницу»."],
+        help: ["Справка", "Отвечает по регламентам", ["Читает 3 чата и 12 файлов", "Отвечает только на упоминание", "Не знает ответа — зовёт человека"], "Главное в этой роли — источник под ответом и честное «не нашёл» вместо выдумки."],
+        onb: ["Наставник", "Ведёт новичков", ["Запускается, когда человек вступает в чат", "Ведёт чек-лист первой недели", "Отвечает по базе знаний"], "Чек-лист — карточка с кнопкой прямо в чате. Нажмите «Инструктаж пройден». Ответы на вопросы берутся из базы знаний."],
+        form: ["Оформитель", "Готовит документы", ["Запускается командой /оформить", "Использует шаблоны центра", "Отправляет только после подтверждения"], "Команда выбирается в меню композера. Нажмите на поле ввода, чтобы увидеть меню, и «Подтвердить» в карточке."],
+      };
+      function chats() {
+        const c = CHATS[S.chat], s = SIDE[S.chat];
+        return `<div class="chats">
+          <div class="chat-list"><h3>Чаты</h3>
+            ${Object.entries(CHATS).map(([k, v]) => `<button class="chat-item ${k === S.chat ? "on" : ""}" data-chat="${k}">
+              ${av(v.i, v.c)}<span class="grow"><b>${v.n}</b><small>${v.last}</small></span></button>`).join("")}
+          </div>
+          <div class="conv">
+            <div class="conv-head">${av(c.i, c.c)}<span class="grow"><h3>${c.n}</h3><span class="small muted">${c.hint}</span></span><span class="chip">${ic("bot")}1 агент</span></div>
+            <div class="feed"><span class="day">Сегодня</span>${FEED[S.chat]()}</div>
+            <button class="composer" data-act="slash">
+              ${S.slash ? `<div class="slash">
+                <div>${botAv(true)}<code>/оформить</code><small>Оформитель · документ по шаблону</small></div>
+                <div>${botAv(true)}<code>/передать</code><small>Передача · что оставить следующему</small></div>
+                <div>${botAv(true)}<code>/спросить</code><small>Справка · ответ по регламентам</small></div>
+              </div>` : ""}
+              <span class="grow">${S.slash ? "/" : "Сообщение или / для команд агентов"}</span>${ic("send")}
+            </button>
+          </div>
+          <aside class="info">
+            <h3>Агенты в этом чате</h3>
+            <div class="card"><div class="row">${botAv(true)}<div class="grow"><b>${s[0]}</b><br><span class="small muted">${s[1]}</span></div><span class="state ok">Работает</span></div>
+              <ul>${s[2].map((x) => `<li>${x}</li>`).join("")}</ul>
+              <div class="row"><button class="btn sm" data-go="builder">Настроить</button><button class="btn sm ghost">Приостановить</button></div></div>
+            <button class="btn sm" data-go="catalog">${ic("plus")}Добавить агента в чат</button>
+            <p class="note">${s[3]}</p>
+          </aside>
+        </div>`;
+      }
+
+      /* ---------- Activity ---------- */
+      function activity() {
+        const t = (time, name, text, st) => `<div><time>${time}</time>${botAv(true)}<div><b>${name}</b> ${text}${st ? `<br><span class="state ${st[0]}">${st[1]}</span>` : ""}</div></div>`;
+        return `<div class="page">
+          <div class="page-head"><div class="grow"><h1>Активность</h1><p class="muted">Что агенты сделали сегодня и что ждёт вашего решения.</p></div>
+            <span class="chip pick">Сегодня</span><span class="chip">Неделя</span></div>
+          <div class="stats">
+            <div class="card"><b>46</b><span class="muted small">запусков за день</span></div>
+            <div class="card"><b>2</b><span class="muted small">ждут подтверждения</span></div>
+            <div class="card"><b>1</b><span class="muted small">ошибка</span></div>
+            <div class="card"><b>84 ₽</b><span class="muted small">расход за день из 300 ₽</span></div>
+          </div>
+          <div class="cols">
+            <div><div class="section-title"><h2>Ждут подтверждения</h2></div>
+              <div class="card acard" style="margin:0 0 12px;max-width:none"><header class="row"><span>Оформитель · отправить записку</span><span class="small muted">12:30</span></header>
+                <div class="body"><p>Отправить <b>Марине Орловой</b> служебную записку на закупку: 20 ковриков, 6 фитболов.</p><p class="small muted">Автор запроса: Дарья Ким.</p></div>
+                <footer><button class="btn sm primary">Разрешить</button><button class="btn sm">Отклонить</button><button class="btn sm ghost" data-go="chats">Открыть в чате</button></footer></div>
+              <div class="card acard" style="margin:0;max-width:none"><header class="row"><span>Слоты · изменить расписание</span><span class="small muted">11:40</span></header>
+                <div class="body"><p>Назначить <b>Игоря Сомова</b> на слот чт 14:00–18:00, зал 2, вместо Павла Нестерова.</p><p class="small muted">Игорь ответил «могу», Вера — «не могу», Олег не ответил.</p></div>
+                <footer><button class="btn sm primary">Разрешить</button><button class="btn sm">Отклонить</button><button class="btn sm ghost" data-go="chats">Открыть в чате</button></footer></div>
+            </div>
+            <div><div class="section-title"><h2>Лента</h2></div>
+              <div class="tl">
+                ${t("13:45", "Передача", "передал Вере Лисиной дела по залу 1 от Игоря Сомова")}
+                ${t("11:15", "Слоты", "напомнил Олегу Тарасову о слоте на четверг")}
+                ${t("10:00", "Контроль", "напомнил троим инструкторам отметиться под сообщением о порядке входа")}
+                ${t("12:30", "Оформитель", "подготовил записку на закупку", ["warn", "Ждёт автора"])}
+                ${t("11:20", "Справка", "не нашёл ответ, передал вопрос Марине Орловой")}
+                ${t("09:00", "Наставник", "не смог открыть «Правила работы в залах»", ["bad", "Ошибка: документ удалён из базы знаний"])}
+              </div>
+            </div>
+          </div>
+        </div>`;
+      }
+
+      /* ---------- Shell ---------- */
+      const VIEWS = { catalog, architect, builder, chats, activity };
+      function render() {
+        document.getElementById("tabs").innerHTML = TABS.map(([k, l]) => `<button class="${S.view === k ? "on" : ""}" data-go="${k}">${l}</button>`).join("");
+        document.querySelector(".theme").innerHTML = ic("sun");
+        const inChat = S.view === "chats";
+        document.getElementById("side").innerHTML = `<div class="ws"><i>РЦ</i>Реабилитационный центр</div>
+          <button class="${inChat ? "on" : ""}" data-go="chats">${ic("chat")}Чаты<span class="count">3</span></button>
+          <button>${ic("thread")}Треды</button><button>${ic("star")}Важные</button><button>${ic("users")}Участники</button>
+          <button class="${inChat ? "" : "on"}" data-go="catalog">${ic("bot")}Агенты<span class="count">2</span></button>`;
+        document.getElementById("main").innerHTML = VIEWS[S.view]();
+      }
+      document.addEventListener("click", (e) => {
+        const el = e.target.closest("[data-go],[data-act],[data-pick],[data-chat]");
+        if (!el) return;
+        const d = el.dataset;
+        if (d.go) { S.view = d.go; document.getElementById("main").scrollTop = 0; }
+        if (d.chat) { S.chat = d.chat; S.slash = false; }
+        if (d.pick) { S.picks[S.step] = d.pick; S.step += 1; }
+        if (d.act === "restart") { S.step = 0; S.picks = []; }
+        if (d.act === "adv") S.advanced = !S.advanced;
+        if (d.act === "test") S.tested = true;
+        if (d.act === "take") S.taken = true;
+        if (d.act === "approve") S.approved = true;
+        if (d.act === "staff") S.staffed = true;
+        if (d.act === "ack") S.acked = true;
+        if (d.act === "slash") S.slash = !S.slash;
+        if (d.act === "theme") {
+          const r = document.documentElement;
+          r.dataset.theme = r.dataset.theme === "dark" ? "light" : "dark";
+        }
+        render();
+      });
+      if (location.hash && VIEWS[location.hash.slice(1)]) S.view = location.hash.slice(1);
+      render();
+    </script>
+  </body>
+</html>
