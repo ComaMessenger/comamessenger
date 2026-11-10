@@ -125,6 +125,16 @@ page is a no-op. Failed documents keep `status='failed'` and `error_code`
 `empty_document`, `indexing_failed`); scanned PDFs without a text layer end in
 `no_text_extracted` because OCR is out of scope.
 
+Access follows the collection, not the file: anyone who may read a collection
+(every member for `organization`, members of the listed chats for `chats`,
+every holder of `knowledge.manage`) gets the extracted fragments through
+`GET /api/v1/knowledge/documents/{id}/fragments` and the original upload
+through `GET /api/v1/knowledge/documents/{id}/file`, even when they neither
+uploaded the file nor share a chat message with it. `knowledge.manage` is
+granted on the workspace members page by the owner or by an administrator
+who holds both `members.manage` and `knowledge.manage`; administrators may
+grant or revoke it only for regular members other than themselves.
+
 Vector search is an exact scan per collection (no ANN index, because vector
 dimensions depend on the configured model). Add an HNSW index per dimension if
 a workspace grows beyond roughly 100k fragments.
