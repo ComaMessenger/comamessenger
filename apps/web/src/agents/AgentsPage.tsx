@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { EmptyState, Skeleton } from "../ui";
 import { SettingsAccessDenied } from "../settings/components/SettingsPrimitives";
 import { AgentActivityPage } from "./activity/AgentActivityPage";
+import { ArchitectPage } from "./architect/ArchitectPage";
 import { AgentPlatformHeader } from "./AgentPlatformHeader";
 import type { AgentTemplate } from "./agentTemplates";
 import { AgentBuilder } from "./builder/AgentBuilder";
@@ -62,11 +63,19 @@ export function AgentsPage({
     (route.kind === "global" &&
       (route.section === "activity" || route.section === "approvals")) ||
     (route.kind === "agent" && route.section === "activity");
+  const architectFor =
+    route.kind === "global" && route.section === "architect"
+      ? { agentID: null }
+      : route.kind === "agent" && route.section === "architect"
+        ? { agentID: route.agentID }
+        : null;
   const globalTab =
     route.kind === "global"
       ? route.section === "approvals"
         ? "activity"
-        : route.section
+        : route.section === "architect"
+          ? "overview"
+          : route.section
       : showActivity
         ? "activity"
         : "overview";
@@ -76,6 +85,21 @@ export function AgentsPage({
     if (agents.isLoading || chats.isLoading) return <Skeleton />;
     if (route.kind === "global" && route.section === "connections")
       return <AgentConnectionsPage api={api} canManage={access.canIntegrate} />;
+    if (architectFor)
+      return (
+        <ArchitectPage
+          key={architectFor.agentID ?? "new"}
+          api={api}
+          agentID={architectFor.agentID}
+          agents={agents.data ?? []}
+          chats={chats.data ?? []}
+          connections={connections.data ?? []}
+          access={access}
+          timezone={timezone}
+          refetchAgents={agents.refetch}
+          navigate={navigate}
+        />
+      );
     if (showActivity)
       return (
         <AgentActivityPage
@@ -120,6 +144,7 @@ export function AgentsPage({
         approvals={approvals.data ?? []}
         access={access}
         onCreate={setCreating}
+        onArchitect={() => navigate("/agents/architect")}
         navigate={navigate}
       />
     );

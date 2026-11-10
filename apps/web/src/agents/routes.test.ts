@@ -16,6 +16,15 @@ describe("agentRoute", () => {
       agentID: "agent-1",
       section: "automations",
     });
+    expect(agentRoute("/agents/architect")).toEqual({
+      kind: "global",
+      section: "architect",
+    });
+    expect(agentRoute("/agents/agent-1/architect")).toEqual({
+      kind: "agent",
+      agentID: "agent-1",
+      section: "architect",
+    });
     expect(agentRoute("/agents/agent-1/unknown")).toEqual({
       kind: "agent",
       agentID: "agent-1",
