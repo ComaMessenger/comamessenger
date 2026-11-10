@@ -986,6 +986,14 @@ func (r *Repository) AcceptInvitation(ctx context.Context, acceptance Invitation
 	if err != nil {
 		return User{}, fmt.Errorf("insert invited user: %w", err)
 	}
+	var granted []permission.Code
+	if role == "admin" {
+		// Administrators manage the knowledge base by default; the owner may revoke it.
+		granted = []permission.Code{permission.KnowledgeManage}
+		if _, err := tx.Exec(ctx, `INSERT INTO actor_permissions(org_id,actor_id,permission) VALUES($1,$2,$3)`, orgID, acceptance.ActorID, string(permission.KnowledgeManage)); err != nil {
+			return User{}, fmt.Errorf("grant default administrator permissions: %w", err)
+		}
+	}
 	if err := insertSession(ctx, tx, orgID, acceptance.ActorID, NewSession{
 		ID: acceptance.SessionID, FamilyID: acceptance.FamilyID, RefreshHash: acceptance.RefreshHash,
 		ExpiresAt: acceptance.SessionExpires, Device: acceptance.Device,
@@ -1010,7 +1018,7 @@ func (r *Repository) AcceptInvitation(ctx context.Context, acceptance Invitation
 	}
 	return User{ActorID: acceptance.ActorID, OrgID: orgID, OrganizationName: organizationName, OrgRole: role, Email: email,
 		DisplayName: acceptance.DisplayName, Handle: acceptance.Handle, Timezone: acceptance.Timezone,
-		Status: "active", Permissions: permission.Effective(role, nil), CreatedAt: now}, nil
+		Status: "active", Permissions: permission.Effective(role, granted), CreatedAt: now}, nil
 }
 
 type permissionQueryRower interface {
@@ -1018,15 +1026,13 @@ type permissionQueryRower interface {
 }
 
 func loadPermissions(ctx context.Context, db permissionQueryRower, user *User) error {
-	if user.OrgRole != "admin" {
+	if user.OrgRole == "owner" {
 		user.Permissions = permission.Effective(user.OrgRole, nil)
-		if user.OrgRole == "owner" {
-			user.CanCreateInvitations = true
-			return nil
-		}
-		if err := db.QueryRow(ctx, `SELECT COALESCE((settings->>'allow_member_invitations')::bool,false) FROM organizations WHERE id=$1`, user.OrgID).Scan(&user.CanCreateInvitations); err != nil {
-			return fmt.Errorf("load invitation capability: %w", err)
-		}
+		user.CanCreateInvitations = true
+		return nil
+	}
+	if user.OrgRole != "admin" && user.OrgRole != "member" {
+		user.Permissions = permission.Effective(user.OrgRole, nil)
 		return nil
 	}
 	var stored []string
@@ -1041,6 +1047,12 @@ func loadPermissions(ctx context.Context, db permissionQueryRower, user *User) e
 		granted[index] = permission.Code(code)
 	}
 	user.Permissions = permission.Effective(user.OrgRole, granted)
+	if user.OrgRole == "member" {
+		if err := db.QueryRow(ctx, `SELECT COALESCE((settings->>'allow_member_invitations')::bool,false) FROM organizations WHERE id=$1`, user.OrgID).Scan(&user.CanCreateInvitations); err != nil {
+			return fmt.Errorf("load invitation capability: %w", err)
+		}
+		return nil
+	}
 	user.CanCreateInvitations = permission.Allows(user.OrgRole, user.Permissions, permission.InvitationsManage)
 	return nil
 }

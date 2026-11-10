@@ -144,6 +144,7 @@ func (s *Service) cleanupUnattached(ctx context.Context, limit int) (int, error)
 		WHERE f.status = 'ready' AND f.ready_at <= $1
 		  AND NOT EXISTS (SELECT 1 FROM message_files mf WHERE mf.file_id = f.id)
 		  AND NOT EXISTS (SELECT 1 FROM actors a WHERE a.org_id = f.org_id AND a.avatar_file_id = f.id)
+		  AND NOT EXISTS (SELECT 1 FROM knowledge_documents kd WHERE kd.org_id = f.org_id AND kd.file_id = f.id)
 		  AND NOT EXISTS (SELECT 1 FROM files parent WHERE parent.org_id = f.org_id AND parent.preview_file_id = f.id AND parent.status <> 'deleted')
 		ORDER BY f.ready_at, f.id
 		LIMIT $2
@@ -170,7 +171,8 @@ func (s *Service) cleanupUnattached(ctx context.Context, limit int) (int, error)
 			UPDATE files f SET status = 'deleted', deleted_at = now()
 			WHERE f.id = $1 AND f.status = 'ready'
 			  AND NOT EXISTS (SELECT 1 FROM message_files mf WHERE mf.file_id = f.id)
-			  AND NOT EXISTS (SELECT 1 FROM actors a WHERE a.org_id = f.org_id AND a.avatar_file_id = f.id)`, item.ID)
+			  AND NOT EXISTS (SELECT 1 FROM actors a WHERE a.org_id = f.org_id AND a.avatar_file_id = f.id)
+			  AND NOT EXISTS (SELECT 1 FROM knowledge_documents kd WHERE kd.org_id = f.org_id AND kd.file_id = f.id)`, item.ID)
 		if err != nil {
 			return 0, err
 		}

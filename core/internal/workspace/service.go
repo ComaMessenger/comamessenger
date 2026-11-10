@@ -345,9 +345,6 @@ func (s *Service) UpdateMember(ctx context.Context, current identity.User, actor
 		if current.OrgRole != "owner" {
 			return Member{}, ErrForbidden
 		}
-		if input.Role != nil && *input.Role != "admin" {
-			return Member{}, fmt.Errorf("%w: only administrators may have explicit permissions", ErrInvalid)
-		}
 		seen := make(map[permission.Code]struct{}, len(*input.Permissions))
 		for _, code := range *input.Permissions {
 			if !permission.Valid(code) {
