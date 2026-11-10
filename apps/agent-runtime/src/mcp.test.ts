@@ -5,6 +5,7 @@ import type { AgentRuntimeMcpServer } from "@comamessenger/core";
 import {
   MCPClient,
   MCPError,
+  allowedMCPAddresses,
   publicMCPAddresses,
   resolveMCPTools,
 } from "./mcp.js";
@@ -63,7 +64,7 @@ describe("MCP security boundaries", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
-  it("enforces allowlist and suppresses unconfirmed write tools", async () => {
+  it("enforces the allowlist and marks writes that need approval", async () => {
     const fetcher = protocolFetcher([
       {
         name: "read",
@@ -88,12 +89,56 @@ describe("MCP security boundaries", () => {
       new AbortController().signal,
       fetcher,
     );
-    expect([...tools.keys()]).toEqual(["mcp__knowledge__read"]);
+    expect([...tools.keys()]).toEqual([
+      "mcp__knowledge__read",
+      "mcp__knowledge__write",
+    ]);
+    expect(tools.get("mcp__knowledge__read")?.mode).toBe("read");
+    const write = tools.get("mcp__knowledge__write");
+    expect(write?.mode).toBe("write");
+    expect(write?.definition.description).toContain("a person must approve");
     const firstRequest = vi.mocked(fetcher).mock.calls[0];
     expect(firstRequest?.[1]?.redirect).toBe("error");
     expect(
       (firstRequest?.[1]?.headers as Record<string, string>).Authorization,
     ).toBe("Bearer top-secret");
+  });
+
+  it("allows trusted internal endpoints only with the private network switch", async () => {
+    const fetcher = protocolFetcher([]);
+    const internal = new MCPClient(
+      {
+        ...configuration,
+        endpoint_url: "http://10.0.0.5:8080/mcp",
+        allow_private_network: true,
+      },
+      fetcher,
+    );
+    await expect(
+      internal.listTools(new AbortController().signal),
+    ).resolves.toEqual([]);
+    for (const endpoint_url of [
+      "http://169.254.169.254/latest/meta-data",
+      "http://metadata.google.internal/",
+      "http://[fe80::1]/",
+    ]) {
+      const client = new MCPClient(
+        { ...configuration, endpoint_url, allow_private_network: true },
+        vi.fn() as unknown as typeof fetch,
+      );
+      await expect(
+        client.listTools(new AbortController().signal),
+      ).rejects.toMatchObject({ code: "mcp_endpoint_forbidden" });
+    }
+    expect(
+      allowedMCPAddresses(
+        [
+          { address: "169.254.169.254", family: 4 },
+          { address: "10.0.0.5", family: 4 },
+        ],
+        true,
+      ),
+    ).toEqual([{ address: "10.0.0.5", family: 4 }]);
   });
 
   it("pins DNS results to public addresses only", () => {

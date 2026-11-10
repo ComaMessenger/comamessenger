@@ -3499,6 +3499,8 @@ components:
         - file_conflict
         - file_not_found
         - idempotency_conflict
+        - integration_in_use
+        - integration_usage_changed
         - internal_error
         - invalid_credentials
         - invalid_refresh_token
@@ -3523,6 +3525,8 @@ components:
         - unsupported_format
         - validation_failed
         - version_conflict
+        - webhook_not_found
+        - webhook_rejected
         - workspace_not_found
     File:
       type: object

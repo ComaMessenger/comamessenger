@@ -1403,6 +1403,8 @@ const (
 	ErrorCodeFileNotFound               ErrorCode = "file_not_found"
 	ErrorCodeForbidden                  ErrorCode = "forbidden"
 	ErrorCodeIdempotencyConflict        ErrorCode = "idempotency_conflict"
+	ErrorCodeIntegrationInUse           ErrorCode = "integration_in_use"
+	ErrorCodeIntegrationUsageChanged    ErrorCode = "integration_usage_changed"
 	ErrorCodeInternalError              ErrorCode = "internal_error"
 	ErrorCodeInvalidCredentials         ErrorCode = "invalid_credentials"
 	ErrorCodeInvalidRefreshToken        ErrorCode = "invalid_refresh_token"
@@ -1426,6 +1428,8 @@ const (
 	ErrorCodeUnsupportedFormat          ErrorCode = "unsupported_format"
 	ErrorCodeValidationFailed           ErrorCode = "validation_failed"
 	ErrorCodeVersionConflict            ErrorCode = "version_conflict"
+	ErrorCodeWebhookNotFound            ErrorCode = "webhook_not_found"
+	ErrorCodeWebhookRejected            ErrorCode = "webhook_rejected"
 	ErrorCodeWorkspaceNotFound          ErrorCode = "workspace_not_found"
 )
 
@@ -1463,6 +1467,10 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeForbidden:
 		return true
 	case ErrorCodeIdempotencyConflict:
+		return true
+	case ErrorCodeIntegrationInUse:
+		return true
+	case ErrorCodeIntegrationUsageChanged:
 		return true
 	case ErrorCodeInternalError:
 		return true
@@ -1509,6 +1517,10 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeValidationFailed:
 		return true
 	case ErrorCodeVersionConflict:
+		return true
+	case ErrorCodeWebhookNotFound:
+		return true
+	case ErrorCodeWebhookRejected:
 		return true
 	case ErrorCodeWorkspaceNotFound:
 		return true

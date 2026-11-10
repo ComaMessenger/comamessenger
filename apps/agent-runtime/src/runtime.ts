@@ -388,7 +388,20 @@ export class AgentRuntime {
       tool_name: tool.toolName,
       mode: tool.mode,
       input_bytes: inputBytes,
+      ...(tool.mode === "write" ? { arguments: arguments_ } : {}),
     });
+    if (registered.confirmation) {
+      // Core holds the call for a person's decision and executes it itself
+      // after approval; the runtime never calls the tool in this case.
+      return {
+        status: "pending_confirmation",
+        executed: false,
+        confirmation_id: registered.confirmation.id,
+        expires_at: registered.confirmation.expires_at,
+        tool_name: tool.toolName,
+        note: "A person must approve this change. Tell the user it is waiting for approval; do not retry it.",
+      };
+    }
     try {
       const output = registered.preview
         ? {

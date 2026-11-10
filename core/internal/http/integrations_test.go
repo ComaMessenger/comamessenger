@@ -8,6 +8,7 @@ import (
 	standardhttp "net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -65,7 +66,7 @@ func TestPublicWebhookEndpointVerifiesSignatureWithoutSession(t *testing.T) {
 	if status, body := send(created.Secret, "delivery-1"); status != standardhttp.StatusAccepted || body["status"] != "accepted" {
 		t.Fatalf("accepted = %d %v", status, body)
 	}
-	if status, body := send("whsec_forged", "delivery-2"); status != standardhttp.StatusUnauthorized || body["code"] != "webhook_invalid_signature" {
+	if status, body := send("whsec_forged", "delivery-2"); status != standardhttp.StatusUnauthorized || body["code"] != "webhook_rejected" || !strings.Contains(body["message"].(string), "invalid_signature") {
 		t.Fatalf("forged = %d %v", status, body)
 	}
 	if status, body := send(created.Secret, "delivery-1"); status != standardhttp.StatusOK || body["status"] != "duplicate" {

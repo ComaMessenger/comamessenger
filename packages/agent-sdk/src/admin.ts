@@ -190,6 +190,7 @@ export function scopesForRecipe(recipe: AgentRecipe): string[] {
     get_collection: "messages:interactive",
     schedule_followup: "followups:write",
     send_direct_message: "messages:write",
+    query_table: "tables:read",
   };
   for (const tool of recipe.tools) {
     const scope = byTool[tool];

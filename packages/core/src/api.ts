@@ -102,6 +102,15 @@ import type {
   CreateAgentMcpServerRequest,
   UpdateAgentMcpServerRequest,
   AgentRuntimeMcpServer,
+  McpConnection,
+  CreateMcpConnectionRequest,
+  UpdateMcpConnectionRequest,
+  McpConnectionUsage,
+  IntegrationWebhook,
+  IntegrationWebhookWithSecret,
+  CreateIntegrationWebhookRequest,
+  UpdateIntegrationWebhookRequest,
+  IntegrationWebhookDelivery,
   AgentRuntimeRunLeaseRequest,
   AgentMcpToolCall,
   StartAgentMcpToolCallRequest,
@@ -500,6 +509,93 @@ export class MessengerAPI {
     return this.request(
       `/api/v1/agents/${encodeURIComponent(id)}/mcp-servers/${encodeURIComponent(serverID)}`,
       { method: "DELETE" },
+    );
+  }
+  mcpConnections(): Promise<McpConnection[]> {
+    return this.request("/api/v1/integrations/mcp-connections");
+  }
+  createMcpConnection(
+    input: CreateMcpConnectionRequest,
+  ): Promise<McpConnection> {
+    return this.request("/api/v1/integrations/mcp-connections", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+  updateMcpConnection(
+    id: string,
+    input: UpdateMcpConnectionRequest,
+  ): Promise<McpConnection> {
+    return this.request(
+      `/api/v1/integrations/mcp-connections/${encodeURIComponent(id)}`,
+      { method: "PATCH", body: JSON.stringify(input) },
+    );
+  }
+  deleteMcpConnection(id: string): Promise<void> {
+    return this.request(
+      `/api/v1/integrations/mcp-connections/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    );
+  }
+  testMcpConnection(id: string): Promise<McpConnection> {
+    return this.request(
+      `/api/v1/integrations/mcp-connections/${encodeURIComponent(id)}/test`,
+      { method: "POST" },
+    );
+  }
+  mcpConnectionUsage(id: string): Promise<McpConnectionUsage[]> {
+    return this.request(
+      `/api/v1/integrations/mcp-connections/${encodeURIComponent(id)}/usage`,
+    );
+  }
+  detachMcpConnection(
+    id: string,
+    agentIDs: string[],
+  ): Promise<McpConnectionUsage[]> {
+    return this.request(
+      `/api/v1/integrations/mcp-connections/${encodeURIComponent(id)}/detach`,
+      { method: "POST", body: JSON.stringify({ agent_ids: agentIDs }) },
+    );
+  }
+  integrationWebhooks(): Promise<IntegrationWebhook[]> {
+    return this.request("/api/v1/integrations/webhooks");
+  }
+  createIntegrationWebhook(
+    input: CreateIntegrationWebhookRequest,
+  ): Promise<IntegrationWebhookWithSecret> {
+    return this.request("/api/v1/integrations/webhooks", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+  updateIntegrationWebhook(
+    id: string,
+    input: UpdateIntegrationWebhookRequest,
+  ): Promise<IntegrationWebhook> {
+    return this.request(
+      `/api/v1/integrations/webhooks/${encodeURIComponent(id)}`,
+      { method: "PATCH", body: JSON.stringify(input) },
+    );
+  }
+  deleteIntegrationWebhook(id: string): Promise<void> {
+    return this.request(
+      `/api/v1/integrations/webhooks/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    );
+  }
+  rotateIntegrationWebhookSecret(
+    id: string,
+  ): Promise<IntegrationWebhookWithSecret> {
+    return this.request(
+      `/api/v1/integrations/webhooks/${encodeURIComponent(id)}/rotate-secret`,
+      { method: "POST" },
+    );
+  }
+  integrationWebhookDeliveries(
+    id: string,
+  ): Promise<IntegrationWebhookDelivery[]> {
+    return this.request(
+      `/api/v1/integrations/webhooks/${encodeURIComponent(id)}/deliveries`,
     );
   }
   agentRuntimeMcpServers(

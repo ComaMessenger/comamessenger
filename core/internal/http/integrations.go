@@ -201,10 +201,17 @@ func (h *identityHandlers) receiveWebhook(w standardhttp.ResponseWriter, r *stan
 		return
 	}
 	if outcome.Status >= 400 {
-		h.writeError(w, r, outcome.Status, apiCode("webhook_"+outcome.Code), "The webhook delivery was rejected: "+outcome.Code+".")
+		code := api.ErrorCode("webhook_rejected")
+		switch outcome.Status {
+		case standardhttp.StatusNotFound:
+			code = "webhook_not_found"
+		case standardhttp.StatusTooManyRequests:
+			code = "rate_limited"
+		case standardhttp.StatusRequestEntityTooLarge:
+			code = "payload_too_large"
+		}
+		h.writeError(w, r, outcome.Status, code, "The webhook delivery was rejected: "+outcome.Code+".")
 		return
 	}
 	writeJSON(h.logger, w, outcome.Status, outcome)
 }
-
-func apiCode(code string) api.ErrorCode { return api.ErrorCode(code) }
