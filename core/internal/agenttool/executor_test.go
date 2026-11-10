@@ -9,7 +9,7 @@ func TestToolDefinitionsCompileAndRejectUnknownFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tools) != 10 || len(order) != 10 {
+	if len(tools) != 11 || len(order) != 11 {
 		t.Fatalf("tools=%d order=%d", len(tools), len(order))
 	}
 	definition := tools["get_chat_messages"].Definition
@@ -23,5 +23,8 @@ func TestToolDefinitionsCompileAndRejectUnknownFields(t *testing.T) {
 	}
 	if tools["post_message"].Definition.Mode != "write" || tools["post_message"].Definition.RequiredScope != "messages:write" {
 		t.Fatalf("post_message definition=%+v", tools["post_message"].Definition)
+	}
+	if search := tools["search_knowledge"].Definition; search.Mode != "read" || search.RequiredScope != "knowledge:read" {
+		t.Fatalf("search_knowledge definition=%+v", search)
 	}
 }

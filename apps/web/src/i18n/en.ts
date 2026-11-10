@@ -153,6 +153,7 @@ export const en: Record<keyof typeof ru, string> = {
   permissionAgentsObserve: "View agent runs and diagnostics",
   permissionAuditRead: "Audit log",
   permissionChatsModerate: "Chat moderation",
+  permissionKnowledgeManage: "Knowledge base management",
   personalPreferences: "Personal preferences",
   appearance: "Appearance",
   appearanceHint: "Theme and language apply immediately across the interface.",

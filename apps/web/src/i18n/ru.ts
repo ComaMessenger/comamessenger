@@ -152,6 +152,7 @@ export const ru = {
   permissionAgentsObserve: "Просмотр запусков и диагностики",
   permissionAuditRead: "Журнал аудита",
   permissionChatsModerate: "Модерация чатов",
+  permissionKnowledgeManage: "Управление базой знаний",
   personalPreferences: "Личные настройки",
   appearance: "Внешний вид",
   appearanceHint: "Тема и язык интерфейса применяются сразу на всех экранах.",

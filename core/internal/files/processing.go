@@ -110,6 +110,38 @@ type processRecord struct {
 	PreviewFileID                                  *string
 }
 
+// SourceFile is the stored content of a ready file, read on behalf of a
+// trusted server component that has already authorized the caller.
+type SourceFile struct {
+	ID, Name, MIME string
+	Data           []byte
+}
+
+// ReadSource loads a ready file of the organization for server-side
+// processing such as knowledge indexing.
+func (s *Service) ReadSource(ctx context.Context, orgID, fileID string) (SourceFile, error) {
+	var key string
+	result := SourceFile{ID: fileID}
+	err := s.pool.QueryRow(ctx, `SELECT name, mime, storage_key FROM files WHERE org_id = $1 AND id = $2 AND status = 'ready'`, orgID, fileID).Scan(&result.Name, &result.MIME, &key)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return SourceFile{}, ErrNotFound
+	}
+	if err != nil {
+		return SourceFile{}, fmt.Errorf("load source file: %w", err)
+	}
+	reader, _, err := s.store.Open(ctx, key)
+	if err != nil {
+		return SourceFile{}, fmt.Errorf("open source file: %w", err)
+	}
+	data, readErr := readBounded(reader, maxProcessorInput)
+	closeErr := reader.Close()
+	if err := errors.Join(readErr, closeErr); err != nil {
+		return SourceFile{}, err
+	}
+	result.Data = data
+	return result, nil
+}
+
 // ProcessFile is idempotent. A failed processor never changes the original
 // file's ready state, so downloads remain available while River retries.
 func (s *Service) ProcessFile(ctx context.Context, fileID string) error {
@@ -182,6 +214,13 @@ func (s *Service) ProcessFile(ctx context.Context, fileID string) error {
 			s.markProcessingFailed(ctx, fileID)
 			return nil
 		}
+	case DocumentKind(record.Name, record.MIME) == "xlsx":
+		document, err := ExtractDocument(record.Name, record.MIME, data)
+		if err != nil {
+			s.markProcessingFailed(ctx, fileID)
+			return nil
+		}
+		extracted = document.Text()
 	default:
 		_, err = s.pool.Exec(ctx, `UPDATE files SET processing_status = 'skipped', extractor_version = $2 WHERE id = $1`, fileID, extractorVersion)
 		return err

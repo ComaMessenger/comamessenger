@@ -255,7 +255,8 @@ func (service *Service) Invoke(ctx context.Context, current identity.User, agent
 				'endpoint_url',COALESCE(connection.endpoint_url,CASE WHEN draft.agent_id IS NOT NULL THEN draft.endpoint_url ELSE agent.endpoint_url END),
 				'external_data_sharing_approved',COALESCE(draft.external_data_sharing_approved,agent.external_data_sharing_approved),
 				'max_output_tokens',COALESCE(draft.max_output_tokens,agent.max_output_tokens),
-				'max_tool_iterations',COALESCE(draft.max_tool_iterations,agent.max_tool_iterations)
+				'max_tool_iterations',COALESCE(draft.max_tool_iterations,agent.max_tool_iterations),
+				'knowledge_collection_ids',to_jsonb(COALESCE(draft.knowledge_collection_ids,agent.knowledge_collection_ids))
 			)
 			FROM agents agent JOIN actors actor ON actor.org_id=agent.org_id AND actor.id=agent.actor_id
 			LEFT JOIN agent_drafts draft ON draft.org_id=agent.org_id AND draft.agent_id=agent.actor_id
@@ -269,7 +270,8 @@ func (service *Service) Invoke(ctx context.Context, current identity.User, agent
 		err = tx.QueryRow(ctx, `SELECT agent.max_chain_depth,agent.published_version,COALESCE(connection.provider,agent.provider),COALESCE(NULLIF(agent.model,''),connection.default_model,''),
 			jsonb_build_object('id',agent.actor_id,'handle',actor.handle,'description',agent.description,'allowed_scopes',to_jsonb(agent.allowed_scopes),
 			'llm_connection_id',agent.llm_connection_id,'endpoint_url',COALESCE(connection.endpoint_url,agent.endpoint_url),
-			'external_data_sharing_approved',agent.external_data_sharing_approved,'max_output_tokens',agent.max_output_tokens,'max_tool_iterations',agent.max_tool_iterations)
+			'external_data_sharing_approved',agent.external_data_sharing_approved,'max_output_tokens',agent.max_output_tokens,'max_tool_iterations',agent.max_tool_iterations,
+			'knowledge_collection_ids',to_jsonb(agent.knowledge_collection_ids))
 			FROM agents agent JOIN actors actor ON actor.org_id=agent.org_id AND actor.id=agent.actor_id
 			LEFT JOIN agent_llm_connections connection ON connection.org_id=agent.org_id AND connection.id=agent.llm_connection_id AND connection.enabled
 			JOIN chat_members member ON member.org_id=agent.org_id AND member.actor_id=agent.actor_id AND member.chat_id=$3
