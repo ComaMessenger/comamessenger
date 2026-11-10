@@ -461,6 +461,34 @@ async function mockAgentChat(page: Page, viewerKey: PersonKey) {
     } else if (/\/messages\/[^/]+\/reactions$/.test(path)) body = { reactions: [] };
     else if (/\/messages\/[^/]+\/context$/.test(path))
       body = { messages, target_id: path.split("/").at(-2), has_earlier: false, has_later: false };
+    else if (path.endsWith("/knowledge/collections/00000000-0000-4000-8000-000000000560"))
+      body = {
+        id: "00000000-0000-4000-8000-000000000560",
+        name: "Регламенты центра",
+        description: "",
+        access: "organization",
+        chat_ids: [],
+        embedding_connection_id: null,
+        document_count: 1,
+        semantic_search: false,
+        can_manage: false,
+        created_by: people.marina.id,
+        created_at: "2026-11-01T00:00:00Z",
+        updated_at: "2026-11-01T00:00:00Z",
+      };
+    else if (path.endsWith(`/knowledge/documents/${ids.document}/fragments`))
+      body = {
+        fragments: [
+          { chunk_id: "00000000-0000-4000-8000-000000000571", position: 0, section: "Регламент замен", content: "Регламент действует для всех инструкторов центра." },
+          {
+            chunk_id: "00000000-0000-4000-8000-000000000572",
+            position: 1,
+            section: "Регламент замен › 2.1. Замена в день занятия",
+            content: "Заболевший инструктор сообщает дежурному администратору до 08:00. Администратор подбирает замену того же профиля.",
+          },
+        ],
+        truncated: false,
+      };
     else if (path.endsWith(`/knowledge/documents/${ids.document}`))
       body = {
         id: ids.document,
@@ -564,12 +592,23 @@ test("Справка: ответ с источниками и честное «�
   const sources = answer.getByRole("list", { name: "Источники" });
   await expect(sources.getByRole("button")).toHaveCount(2);
   await expect(answer.locator(".agent-blocks")).toHaveScreenshot("agent-answer-sources.png", { animations: "disabled" });
+  // The cited document opens on its knowledge base page, quoted fragment in focus.
   await sources.getByRole("button", { name: "Регламент замен · п. 2.1" }).click();
-  const dialog = page.getByRole("dialog", { name: "Регламент замен" });
-  await expect(dialog.getByText("Фрагмент, на который сослался агент")).toBeVisible();
-  await expect(dialog.getByRole("heading", { name: "2.1. Замена в день занятия" })).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(dialog).toHaveCount(0);
+  await expect(page).toHaveURL(new RegExp(`/knowledge/00000000-0000-4000-8000-000000000560/${ids.document}\\?quote=`));
+  const quoted = page.locator(".knowledge-fragment--focus");
+  await expect(quoted).toContainText("На этот фрагмент сослался агент");
+  await expect(quoted).toContainText("2.1. Замена в день занятия");
+  await expect(quoted.locator("mark")).toHaveText("Заболевший инструктор сообщает дежурному администратору до 08:00.");
+  await page.goBack();
+  await expect(page.locator(".conversation-head h1")).toHaveText("Инструкторы");
+  // Without read access to the collection the reader gets an explanation.
+  await page.route(`**/api/v1/knowledge/documents/${ids.document}`, (route) =>
+    route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ code: "knowledge_not_found", message: "not found" }) }),
+  );
+  const again = await reveal(page, ids.answer);
+  await again.getByRole("list", { name: "Источники" }).getByRole("button", { name: "Регламент замен · п. 2.1" }).click();
+  await expect(page.getByText("Документ недоступен: он удалён или у вас нет к нему доступа")).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/chat/${chatID}`));
   const notFound = await reveal(page, ids.notFound);
   await expect(notFound.getByText(/ответа нет, придумывать не буду/)).toBeVisible();
   await expect(notFound.locator(".agent-sources")).toHaveCount(0);

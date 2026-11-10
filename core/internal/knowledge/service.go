@@ -38,17 +38,20 @@ const (
 )
 
 type Collection struct {
-	ID                    string    `json:"id"`
-	Name                  string    `json:"name"`
-	Description           string    `json:"description"`
-	Access                string    `json:"access"`
-	ChatIDs               []string  `json:"chat_ids"`
-	EmbeddingConnectionID *string   `json:"embedding_connection_id"`
-	DocumentCount         int       `json:"document_count"`
-	CanManage             bool      `json:"can_manage"`
-	CreatedBy             string    `json:"created_by"`
-	CreatedAt             time.Time `json:"created_at"`
-	UpdatedAt             time.Time `json:"updated_at"`
+	ID                    string   `json:"id"`
+	Name                  string   `json:"name"`
+	Description           string   `json:"description"`
+	Access                string   `json:"access"`
+	ChatIDs               []string `json:"chat_ids"`
+	EmbeddingConnectionID *string  `json:"embedding_connection_id"`
+	DocumentCount         int      `json:"document_count"`
+	// SemanticSearch reports whether the collection's embedding connection is
+	// usable now (enabled, with an embedding model and approved data sharing).
+	SemanticSearch bool      `json:"semantic_search"`
+	CanManage      bool      `json:"can_manage"`
+	CreatedBy      string    `json:"created_by"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 type CreateCollectionInput struct {
@@ -156,6 +159,7 @@ const collectionSelect = `SELECT collection.id,collection.name,collection.descri
 	ARRAY(SELECT shared.chat_id::text FROM knowledge_collection_chats shared WHERE shared.org_id=collection.org_id AND shared.collection_id=collection.id ORDER BY shared.chat_id),
 	collection.embedding_connection_id::text,
 	(SELECT count(*) FROM knowledge_documents document WHERE document.org_id=collection.org_id AND document.collection_id=collection.id),
+	EXISTS(SELECT 1 FROM agent_llm_connections connection WHERE connection.org_id=collection.org_id AND connection.id=collection.embedding_connection_id AND ` + embeddingReadyCondition + `),
 	collection.created_by,collection.created_at,collection.updated_at
 	FROM knowledge_collections collection`
 
@@ -164,7 +168,7 @@ type rowScanner interface{ Scan(...any) error }
 func scanCollection(row rowScanner, manage bool) (Collection, error) {
 	var result Collection
 	err := row.Scan(&result.ID, &result.Name, &result.Description, &result.Access, &result.ChatIDs, &result.EmbeddingConnectionID,
-		&result.DocumentCount, &result.CreatedBy, &result.CreatedAt, &result.UpdatedAt)
+		&result.DocumentCount, &result.SemanticSearch, &result.CreatedBy, &result.CreatedAt, &result.UpdatedAt)
 	result.CanManage = manage
 	if !manage {
 		result.ChatIDs = []string{}

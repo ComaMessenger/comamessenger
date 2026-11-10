@@ -12,6 +12,7 @@ import { dialogsCatalog } from "../dialogs/i18n";
 import { directoriesCatalog } from "../directories/i18n";
 import { agentsCatalog } from "../agents/i18n";
 import { integrationsCatalog } from "../agents/connections/i18n";
+import { knowledgeCatalog } from "../knowledge/i18n";
 import { agentChatCatalog } from "../agentchat/i18n";
 
 const catalogs = mergeCatalogs({ ru, en }, [
@@ -23,6 +24,7 @@ const catalogs = mergeCatalogs({ ru, en }, [
   directoriesCatalog,
   agentsCatalog,
   integrationsCatalog,
+  knowledgeCatalog,
   agentChatCatalog,
 ]);
 

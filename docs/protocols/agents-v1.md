@@ -55,6 +55,8 @@ Provider chunks необходимо коалесцировать: не чаще
 
 Run с `input.sandbox=true` и `input.publish=false` выполняет обычный контекст/tool loop, но не создаёт сообщение. Предпросмотр возвращается в `result_summary.preview`. Это позволяет проверить поведение до включения triggers.
 
+Шаги run'а читаются через `GET /api/v1/agent-runs/{run_id}/tool-calls` (любое право `agents.*` на просмотр): имя tool'а, режим, статус, время. В `dry_run` write-tool не выполняется, но записывается как шаг с `dry_run=true` — по нему проверка в конструкторе показывает, что агент сделал бы.
+
 ## Подтверждения write-tools
 
 Runtime передаёт UUID provider tool call как `tool_call_id` и не передаёт флаг `confirmed`. Для write-tool core валидирует run, lease, scope, JSON Schema и сохраняет неизменяемый pending-запрос; HTTP `202` означает, что side effect ещё не выполнялся. Повтор `(organization, run_id, tool_call_id)` с теми же аргументами возвращает тот же запрос, а попытка изменить tool или аргументы отклоняется.
@@ -104,6 +106,8 @@ Core сам считает ответивших по текущим реакци
 `schedule_followup` сохраняет продолжение с `at` или `delay_seconds` (от 1 минуты до 30 дней), чатом (по умолчанию — чат текущего run), `note` и `context` (JSON-объект до 16 КиБ). Повтор того же `tool_call_id` возвращает тот же follow-up. Запись хранится в PostgreSQL и переживает рестарт Core. В срок worker ставит run с `input = {trigger_type: "followup", followup_id, scheduled_for, source_run_id, note, context, chat_id, thread_root_id}` и тем же chain depth, что у исходного run.
 
 Статусы: `pending → dispatched`; `canceled` с причиной `agent_paused` / `agent_deleted` (пауза и удаление отменяют ожидающие follow-up сразу); `skipped` с причиной `budget_exceeded` (дневной или месячный бюджет уже исчерпан) или `agent_unavailable` (агент вышел из чата, подключение выключено). Не больше 50 ожидающих follow-up на агента.
+
+Для раздела «Активность» открытые опросы и ожидающие продолжения читаются через `GET /api/v1/agents/response-collections` и `GET /api/v1/agents/followups` (право `agents.observe`, фильтры `status` и `agent_id`, до 50 записей). Опрос отдаётся счётчиками ответивших и ожидаемых без списка людей, продолжение — без сохранённого `context`.
 
 ### Личные сообщения
 

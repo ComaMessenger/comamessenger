@@ -19,7 +19,6 @@ import type {
   MessagePage,
   MessageActionResult,
   ChatAgent,
-  KnowledgeDocument,
   MessagePin,
   MessageReceipt,
   MessageWindow,
@@ -27,6 +26,16 @@ import type {
   FileUpload,
   CompletedFilePart,
   SearchPage,
+  KnowledgeCollection,
+  CreateKnowledgeCollectionRequest,
+  UpdateKnowledgeCollectionRequest,
+  KnowledgeDocument,
+  CreateKnowledgeDocumentRequest,
+  UpdateKnowledgeDocumentRequest,
+  KnowledgeDocumentFragments,
+  KnowledgeEmbeddingConnection,
+  KnowledgeSearchRequest,
+  KnowledgeSearchResult,
   AvatarUpdate,
   ChatAvatarUpdate,
   InfrastructureSettings,
@@ -121,6 +130,10 @@ import type {
   AgentProviderProxyRequest,
   StartAgentProviderCallRequest,
   FinishAgentProviderCallRequest,
+  AgentRunToolCall,
+  AgentResponseCollection,
+  AgentFollowup,
+  KnowledgeRunFragments,
 } from "./types";
 
 type APIErrorPayload = components["schemas"]["Error"];
@@ -370,6 +383,32 @@ export class MessengerAPI {
   }
   agentRun(runID: string): Promise<AgentRun> {
     return this.request(`/api/v1/agent-runs/${encodeURIComponent(runID)}`);
+  }
+  agentRunToolCalls(runID: string): Promise<{ tool_calls: AgentRunToolCall[] }> {
+    return this.request(
+      `/api/v1/agent-runs/${encodeURIComponent(runID)}/tool-calls`,
+    );
+  }
+  agentResponseCollections(
+    status: "open" | "completed" | "expired" | "canceled" | "all" = "open",
+    agentID?: string,
+  ): Promise<AgentResponseCollection[]> {
+    const query = new URLSearchParams({ status });
+    if (agentID) query.set("agent_id", agentID);
+    return this.request(`/api/v1/agents/response-collections?${query}`);
+  }
+  agentFollowups(
+    status: "pending" | "dispatched" | "canceled" | "skipped" | "all" = "pending",
+    agentID?: string,
+  ): Promise<AgentFollowup[]> {
+    const query = new URLSearchParams({ status });
+    if (agentID) query.set("agent_id", agentID);
+    return this.request(`/api/v1/agents/followups?${query}`);
+  }
+  knowledgeRunFragments(runID: string): Promise<KnowledgeRunFragments> {
+    return this.request(
+      `/api/v1/knowledge/runs/${encodeURIComponent(runID)}/fragments`,
+    );
   }
   agentUsage(id: string): Promise<AgentUsageReport> {
     return this.request(`/api/v1/agents/${encodeURIComponent(id)}/usage`);
@@ -1087,6 +1126,91 @@ export class MessengerAPI {
     }
     return this.request(`/api/v1/search?${query}`);
   }
+  knowledgeCollections(): Promise<KnowledgeCollection[]> {
+    return this.request("/api/v1/knowledge/collections");
+  }
+  knowledgeCollection(id: string): Promise<KnowledgeCollection> {
+    return this.request(
+      `/api/v1/knowledge/collections/${encodeURIComponent(id)}`,
+    );
+  }
+  createKnowledgeCollection(
+    input: CreateKnowledgeCollectionRequest,
+  ): Promise<KnowledgeCollection> {
+    return this.request("/api/v1/knowledge/collections", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+  updateKnowledgeCollection(
+    id: string,
+    input: UpdateKnowledgeCollectionRequest,
+  ): Promise<KnowledgeCollection> {
+    return this.request(
+      `/api/v1/knowledge/collections/${encodeURIComponent(id)}`,
+      { method: "PATCH", body: JSON.stringify(input) },
+    );
+  }
+  deleteKnowledgeCollection(id: string): Promise<void> {
+    return this.request(
+      `/api/v1/knowledge/collections/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    );
+  }
+  knowledgeDocuments(collectionID: string): Promise<KnowledgeDocument[]> {
+    return this.request(
+      `/api/v1/knowledge/collections/${encodeURIComponent(collectionID)}/documents`,
+    );
+  }
+  createKnowledgeDocument(
+    collectionID: string,
+    input: CreateKnowledgeDocumentRequest,
+  ): Promise<KnowledgeDocument> {
+    return this.request(
+      `/api/v1/knowledge/collections/${encodeURIComponent(collectionID)}/documents`,
+      { method: "POST", body: JSON.stringify(input) },
+    );
+  }
+  knowledgeDocument(id: string): Promise<KnowledgeDocument> {
+    return this.request(
+      `/api/v1/knowledge/documents/${encodeURIComponent(id)}`,
+    );
+  }
+  updateKnowledgeDocument(
+    id: string,
+    input: UpdateKnowledgeDocumentRequest,
+  ): Promise<KnowledgeDocument> {
+    return this.request(
+      `/api/v1/knowledge/documents/${encodeURIComponent(id)}`,
+      { method: "PATCH", body: JSON.stringify(input) },
+    );
+  }
+  deleteKnowledgeDocument(id: string): Promise<void> {
+    return this.request(
+      `/api/v1/knowledge/documents/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    );
+  }
+  knowledgeDocumentFragments(id: string): Promise<KnowledgeDocumentFragments> {
+    return this.request(
+      `/api/v1/knowledge/documents/${encodeURIComponent(id)}/fragments`,
+    );
+  }
+  /** Original upload of a file document, for anyone who reads its collection. */
+  downloadKnowledgeDocumentFile(id: string): Promise<Blob> {
+    return this.requestBlob(
+      `/api/v1/knowledge/documents/${encodeURIComponent(id)}/file`,
+    );
+  }
+  knowledgeEmbeddingConnections(): Promise<KnowledgeEmbeddingConnection[]> {
+    return this.request("/api/v1/knowledge/embedding-connections");
+  }
+  searchKnowledge(input: KnowledgeSearchRequest): Promise<KnowledgeSearchResult> {
+    return this.request("/api/v1/knowledge/search", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
   messages(
     chatID: string,
     options: { beforeSeq?: number; limit?: number; threadRootID?: string } = {},
@@ -1187,12 +1311,6 @@ export class MessengerAPI {
         `/api/v1/chats/${encodeURIComponent(chatID)}/agents`,
       )
     ).agents;
-  }
-  /** A knowledge base document cited as a source; pages include the body. */
-  knowledgeDocument(id: string): Promise<KnowledgeDocument> {
-    return this.request(
-      `/api/v1/knowledge/documents/${encodeURIComponent(id)}`,
-    );
   }
   followThread(id: string): Promise<unknown> {
     return this.request(`/api/v1/messages/${id}/thread/follow`, {

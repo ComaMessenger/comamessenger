@@ -29,6 +29,7 @@ import {
 } from "../../components/SettingsShell";
 import {
   canAccessSettingsPage,
+  hasPermission,
   permissionLabelKeys,
   permissions,
 } from "../../registry";
@@ -342,6 +343,19 @@ export function WorkspaceMembersPage({
                     </Button>
                   )}
                 </div>
+                {selectedMember.role === "member" &&
+                  selectedMember.actor_id !== user.id && (
+                    <KnowledgePermission
+                      member={selectedMember}
+                      canGrant={
+                        user.role === "owner" ||
+                        hasPermission(user, "knowledge.manage")
+                      }
+                      onChange={(permissions) =>
+                        void updateMember(selectedMember, { permissions })
+                      }
+                    />
+                  )}
                 {selectedMember.role === "admin" && user.role === "owner" && (
                   <fieldset className="member-management__permissions">
                     <legend>{t("administratorPermissions")}</legend>
@@ -421,5 +435,41 @@ export function WorkspaceMembersPage({
         </div>
       )}
     </SettingsShell>
+  );
+}
+
+/**
+ * knowledge.manage is the one permission a regular member may hold. The owner
+ * and administrators who hold it themselves grant it here; the server
+ * enforces the same rule.
+ */
+function KnowledgePermission({
+  member,
+  canGrant,
+  onChange,
+}: {
+  member: OrganizationMember;
+  canGrant: boolean;
+  onChange(permissions: Permission[]): void;
+}) {
+  const { t } = useTranslation();
+  const granted = member.permissions.includes("knowledge.manage");
+  return (
+    <fieldset className="member-management__permissions">
+      <legend>{t("kbPermissionTitle")}</legend>
+      <SettingsToggle
+        label={t("kbPermissionToggle")}
+        hint={canGrant ? t("kbPermissionHint") : t("kbPermissionNeedsOwn")}
+        checked={granted}
+        disabled={!canGrant || member.status !== "active"}
+        onChange={(checked) =>
+          onChange(
+            checked
+              ? [...member.permissions.filter((code) => code !== "knowledge.manage"), "knowledge.manage"]
+              : member.permissions.filter((code) => code !== "knowledge.manage"),
+          )
+        }
+      />
+    </fieldset>
   );
 }

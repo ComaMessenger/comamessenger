@@ -8,6 +8,8 @@
 @import "./composer.css";
 @import "./dialogs.css";
 @import "./directories.css";
+@import "./knowledge.css";
 @import "./settings.css";
 @import "./agents.css";
+@import "./agent-experience.css";
 @import "./agent-chat.css";

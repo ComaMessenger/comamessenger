@@ -384,6 +384,10 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	if len(collections) != 1 || collections[0].CanManage || collections[0].DocumentCount != 1 {
 		t.Fatalf("member collections = %+v", collections)
 	}
+	var pageFragments knowledge.DocumentFragments
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/knowledge/documents/"+knowledgePage.ID+"/fragments", member.AccessToken, nil, standardhttp.StatusOK, &pageFragments)
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/knowledge/documents/"+knowledgePage.ID+"/file", member.AccessToken, nil, standardhttp.StatusNotFound, nil)
+	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/knowledge/embedding-connections", member.AccessToken, nil, standardhttp.StatusForbidden, nil)
 
 	var organization workspace.Settings
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/organization", owner.AccessToken, nil, standardhttp.StatusOK, &organization)

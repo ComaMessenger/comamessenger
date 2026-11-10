@@ -7,6 +7,8 @@ export type AgentAccess = {
   canApprove: boolean;
   canObserve: boolean;
   canIntegrate: boolean;
+  /** knowledge.manage: may create collections in the Knowledge base. */
+  canManageKnowledge: boolean;
   /** Any agent permission opens the platform. */
   allowed: boolean;
 };
@@ -23,6 +25,7 @@ export function agentAccess(user: User): AgentAccess {
     canApprove,
     canObserve,
     canIntegrate,
+    canManageKnowledge: hasPermission(user, "knowledge.manage"),
     allowed: canBuild || canPublish || canApprove || canObserve || canIntegrate,
   };
 }
