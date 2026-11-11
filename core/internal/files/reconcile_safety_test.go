@@ -192,6 +192,38 @@ func runWrongStorageTest(t *testing.T, harness sealHarness) {
 	assertFilesIntact(t, pool, harness.store, kept)
 }
 
+// A read error while checking a voice recording leaves the upload open.
+func TestVoiceReadErrorKeepsTheUpload(t *testing.T) {
+	pool := testdb.New(t)
+	seedFileActors(t, pool)
+	harness := fakeSealHarness(t)
+	store := &faultyStore{BlobStore: harness.store, failReads: 1}
+	service, err := NewService(pool, store, "", 64<<20, 32<<20, 16<<20, time.Hour, 15*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := identity.User{ActorID: testOwnerID, OrgID: testOrgID, OrgRole: "owner"}
+	recorded, err := os.ReadFile("testdata/voice.m4a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	upload, err := service.CreateUpload(t.Context(), owner, CreateUploadInput{Name: "voice.m4a", MIME: "audio/mp4", Size: int64(len(recorded)), Voice: &Voice{DurationMs: 1400, Waveform: voiceWaveform(7)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	harness.put(t, upload, recorded)
+	if _, err := service.CompleteUpload(t.Context(), owner, upload.ID, nil); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("complete with a failing read = %v, want ErrUnavailable", err)
+	}
+	if _, err := harness.store.Stat(t.Context(), upload.File.storageKey); err != nil {
+		t.Fatalf("client object after a read error: %v", err)
+	}
+	ready, err := service.CompleteUpload(t.Context(), owner, upload.ID, nil)
+	if err != nil || ready.Voice == nil {
+		t.Fatalf("retry after a read error = %+v, %v", ready, err)
+	}
+}
+
 // A completion holds a lease: a second complete meanwhile gets ErrUnavailable
 // (503), expiry cleanup leaves it alone, and once the lease lapses (the
 // process died) a new request takes the upload over.

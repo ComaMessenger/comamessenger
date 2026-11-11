@@ -131,11 +131,16 @@ func TestCompletedUploadCannotBeReplacedThroughItsUploadURL(t *testing.T) {
 func runSealTest(t *testing.T, harness sealHarness) {
 	pool := testdb.New(t)
 	seedFileActors(t, pool)
+	// A 1 KiB multipart threshold: a voice recording must still go up as one PUT.
 	service, err := NewService(pool, harness.store, os.Getenv("TEST_S3_BUCKET"), 64<<20, 32<<20, 1<<10, time.Hour, 15*time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
 	owner := identity.User{ActorID: testOwnerID, OrgID: testOrgID, OrgRole: "owner"}
+	recorded, err := os.ReadFile("testdata/voice.m4a")
+	if err != nil {
+		t.Fatal(err)
+	}
 	download := func(fileID string) []byte {
 		t.Helper()
 		var key string
@@ -157,12 +162,13 @@ func runSealTest(t *testing.T, harness sealHarness) {
 	cases := []struct {
 		name, file, mime string
 		body             []byte
+		voice            *Voice
 	}{
-		{"binary file", "data.bin", "application/octet-stream", bytes.Repeat([]byte{0x01, 0xfe, 0x7f}, 300)},
-		{"ordinary file", "notes.txt", "text/plain", bytes.Repeat([]byte("plain text "), 20)},
+		{"voice", "voice.m4a", "audio/mp4", recorded, &Voice{DurationMs: 1400, Waveform: voiceWaveform(9)}},
+		{"ordinary file", "notes.txt", "text/plain", bytes.Repeat([]byte("plain text "), 20), nil},
 	}
 	for _, item := range cases {
-		upload, err := service.CreateUpload(t.Context(), owner, CreateUploadInput{Name: item.file, MIME: item.mime, Size: int64(len(item.body))})
+		upload, err := service.CreateUpload(t.Context(), owner, CreateUploadInput{Name: item.file, MIME: item.mime, Size: int64(len(item.body)), Voice: item.voice})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -187,23 +193,23 @@ func runSealTest(t *testing.T, harness sealHarness) {
 		if got := download(ready.ID); !bytes.Equal(got, item.body) {
 			t.Fatalf("%s: served bytes changed after a PUT to the old URL", item.name)
 		}
+		if item.voice != nil && (ready.Voice == nil || ready.Voice.DurationMs < 1300) {
+			t.Fatalf("voice metadata = %+v", ready.Voice)
+		}
 	}
-	assertUsage(t, pool, int64(len(cases[0].body))+int64(len(cases[1].body)), 0)
+	assertUsage(t, pool, int64(len(recorded))+int64(len(cases[1].body)), 0)
 
-	// An aborted upload fails its file and leaves no object behind.
-	upload, err := service.CreateUpload(t.Context(), owner, CreateUploadInput{Name: "dropped.bin", MIME: "application/octet-stream", Size: 64})
+	// A recording that is not audio is refused and leaves no object behind.
+	upload, err := service.CreateUpload(t.Context(), owner, CreateUploadInput{Name: "voice.m4a", MIME: "audio/mp4", Size: 64, Voice: &Voice{DurationMs: 1400, Waveform: voiceWaveform(9)}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	harness.put(t, upload, bytes.Repeat([]byte{0}, 64))
-	if err := service.AbortUpload(t.Context(), owner, upload.ID); err != nil {
-		t.Fatal(err)
-	}
 	if _, err := service.CompleteUpload(t.Context(), owner, upload.ID, nil); err == nil {
-		t.Fatal("an aborted upload completed")
+		t.Fatal("garbage voice completed")
 	}
 	if _, err := harness.store.Stat(t.Context(), upload.File.storageKey); err == nil {
-		t.Fatal("aborted upload key still stored")
+		t.Fatal("rejected upload key still stored")
 	}
 
 	// The upload URL of the failed file still works: a client PUTs again.
@@ -256,6 +262,7 @@ type faultyStore struct {
 	failCopies int
 	onCopy     func()
 	uploadTTLs []time.Duration
+	failReads  int
 	failStats  bool
 }
 
@@ -292,6 +299,10 @@ func (s *faultyStore) Copy(ctx context.Context, source, destination string) (sto
 }
 
 func (s *faultyStore) ReadRange(ctx context.Context, key string, offset, length int64) ([]byte, error) {
+	if s.failReads > 0 {
+		s.failReads--
+		return nil, errors.New("injected read failure")
+	}
 	return s.BlobStore.(storage.RangeReader).ReadRange(ctx, key, offset, length)
 }
 
@@ -365,5 +376,18 @@ func runRetryableSealTest(t *testing.T, harness sealHarness) {
 		if len(blobs) != 1 {
 			t.Fatalf("stored objects after retries = %d (%v), want the sealed copy only", len(blobs), blobs)
 		}
+	}
+}
+
+// noRangeStore hides ReadRange from an otherwise complete store.
+type noRangeStore struct{ storage.BlobStore }
+
+func TestNewServiceRequiresRangeReads(t *testing.T) {
+	local, err := storage.NewLocalBlobStore(t.TempDir(), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewService(nil, noRangeStore{local}, "", 10, 10, 5, time.Hour, time.Minute); err == nil {
+		t.Fatal("NewService accepted a store that cannot read byte ranges")
 	}
 }

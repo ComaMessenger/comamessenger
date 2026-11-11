@@ -132,6 +132,7 @@ func TestMobileDeliveryFollowsTheSessionFamily(t *testing.T) {
 
 	relay := &recordingRelay{}
 	worker := NewWorker(slog.New(slog.NewTextHandler(io.Discard, nil)), pool, cfg, nil).WithRelay(relay)
+	voiceMs := 0
 	send := func(t *testing.T, body string) {
 		t.Helper()
 		var seq int64
@@ -142,6 +143,16 @@ func TestMobileDeliveryFollowsTheSessionFamily(t *testing.T) {
 		if _, err := pool.Exec(ctx, `INSERT INTO messages(id,org_id,chat_id,actor_id,client_msg_id,create_fingerprint,body,body_format,created_seq)
 			VALUES($1,$2,$3,$4,$5,decode(repeat('02',32),'hex'),$6,'plain',$7)`, messageID, orgID, chatID, senderID, uuid.NewString(), body, seq); err != nil {
 			t.Fatal(err)
+		}
+		if voiceMs > 0 {
+			fileID := uuid.NewString()
+			if _, err := pool.Exec(ctx, `INSERT INTO files(id,org_id,uploader_id,storage_driver,storage_key,name,mime,size,status,voice_duration_ms,voice_waveform)
+				VALUES($1,$2,$3,'local',$4,'voice.m4a','audio/mp4',10,'ready',$5,decode(repeat('80',64),'hex'))`, fileID, orgID, senderID, "objects/"+fileID, voiceMs); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := pool.Exec(ctx, `INSERT INTO message_files(message_id,file_id,org_id,ordinal) VALUES($1,$2,$3,0)`, messageID, fileID, orgID); err != nil {
+				t.Fatal(err)
+			}
 		}
 		if _, err := pool.Exec(ctx, `INSERT INTO events(org_id,seq,type,actor_id,chat_id,subject_id) VALUES($1,$2,'message.created',$3,$4,$5)`, orgID, seq, senderID, chatID, messageID); err != nil {
 			t.Fatal(err)
@@ -174,13 +185,27 @@ func TestMobileDeliveryFollowsTheSessionFamily(t *testing.T) {
 	if got := openPayload(t, key, relay.messages[1].Ciphertext); got.Body != "Visible text" || got.Badge != 2 {
 		t.Fatalf("payload with preview = %+v", got)
 	}
+	// A voice message is named with its length, never anything more.
+	voiceMs = 14_200
+	send(t, "")
+	if got := openPayload(t, key, relay.messages[2].Ciphertext); got.Body != "Voice message · 0:14" {
+		t.Fatalf("voice payload with preview = %+v", got)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE users SET preferences='{"locale":"en","push_preview":false}' WHERE actor_id=$1`, recipientID); err != nil {
+		t.Fatal(err)
+	}
+	send(t, "")
+	if got := openPayload(t, key, relay.messages[3].Ciphertext); got.Body != "New message" {
+		t.Fatalf("voice payload without preview = %+v", got)
+	}
+	voiceMs = 0
 
 	// Logout revokes the live session of the family: no more deliveries, and the device is dropped.
 	if _, err := pool.Exec(ctx, `UPDATE sessions SET revoked_at=now() WHERE id=$1`, rotatedID); err != nil {
 		t.Fatal(err)
 	}
 	send(t, "After logout")
-	if len(relay.messages) != 2 {
+	if len(relay.messages) != 4 {
 		t.Fatalf("relay messages after logout = %d", len(relay.messages))
 	}
 	var devices int

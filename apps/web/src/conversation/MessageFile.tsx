@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { FileText, Paperclip } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { FileMetadata, MessengerAPI } from "@comamessenger/core";
+import { isVoiceFile, type FileMetadata, type MessengerAPI } from "@comamessenger/core";
 import { formatBytes } from "../lib/format";
+import { VoiceMessage } from "./VoiceMessage";
 
 export function useDownloadedObjectURL(api: MessengerAPI, fileID?: string): string | null {
   const [url, setURL] = useState<string | null>(null);
@@ -33,8 +34,13 @@ function extensionOf(name: string) {
   return match ? match[1]!.toUpperCase() : "";
 }
 
-/** Image preview card or a generic file card inside a message. */
+/** Voice player, image preview card or a generic file card inside a message. */
 export function MessageFile({ api, file }: { api: MessengerAPI; file: FileMetadata }) {
+  if (isVoiceFile(file)) return <VoiceMessage api={api} file={file} />;
+  return <AttachmentCard api={api} file={file} />;
+}
+
+function AttachmentCard({ api, file }: { api: MessengerAPI; file: FileMetadata }) {
   const { t } = useTranslation();
   const metadata = useQuery({
     queryKey: ["file", file.id],
