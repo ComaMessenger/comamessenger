@@ -35,7 +35,8 @@ environment variables.
 | Backend | Endpoint/addressing | Contract status |
 | --- | --- | --- |
 | Local filesystem | no S3 settings | automated contract on every test run |
-| MinIO Compose profile | `http://minio:9000`, path style | live contract passed 2026-08-21 |
+| versitygw, Compose profile `s3gw` (new installations) | `http://s3gw:9000`, host port 9100, path style | contract, copy `if-match` (412), upload sealing and wrong-storage reconciliation run in CI on every push (since 2026-11-11) |
+| MinIO, Compose profile `s3` (existing installations, staging) | `http://minio:9000`, path style | live contract passed 2026-08-21; the `minio/minio` image is no longer published, keep the local one |
 | AWS S3 | regional endpoint, virtual-host style (`S3_FORCE_PATH_STYLE=false`) | same opt-in release contract |
 | Yandex Object Storage | `https://storage.yandexcloud.net`; use provider region and normally path style | same opt-in release contract |
 | Selectel S3 | endpoint and pool/region shown in the Selectel panel, path style by default | same opt-in release contract; legacy pre-2023 settings must be migrated before 2026-09-15 |
@@ -49,13 +50,114 @@ For direct browser upload, bucket CORS must allow the application origin,
 multipart completion. Keep the bucket private: access is granted only through
 short-lived signed URLs after Core authorization.
 
-Start the optional local S3 profile:
+A provider must honour `x-amz-copy-source-if-match`: Core copies every
+presigned or multipart upload to a key the client never saw before checking
+and serving it, pinned to the ETag it read, so a still-valid upload URL
+cannot replace a checked object. `TestConfiguredS3CopyHonorsSourceETag` fails
+on a provider that ignores the header.
 
-```sh
-docker compose -f deploy/compose.yaml --profile s3 up -d minio minio-init
+A single presigned PUT URL lives at most 5 minutes; part URLs of a multipart
+upload and download URLs keep `FILE_PRESIGN_TTL`. Clients re-sign a part
+whose URL expired and retry `complete` on 429/503 after `Retry-After`.
+
+### Bucket ownership and reconciliation
+
+Give Core its own bucket, or at least its own `S3_PREFIX`. Reconciliation
+only ever touches keys Core writes (`objects/…`, `previews/…`, `avatars/…`;
+`files.OwnedKey`), with or without a prefix, so other applications in a
+shared bucket are left alone, but a shared bucket without a prefix still
+mixes listings and quotas.
+
+Reconciliation never deletes the object of a file that was ever ready
+(`ready_at` set) and is not deleted; a deleted file's object goes even if
+its direct delete failed. It stops without changing anything, logging
+`file storage looks misconfigured`, when the bucket is missing, when the
+bucket holds no Core objects while files exist, or when at least 3 objects
+checked for the first time in a pass are missing and none of them is there
+(a wrong or empty storage). Objects found are marked checked first, and files
+already noted missing do not count, so a few lost objects never stop later
+passes. A missing object is noted (`missing_since`) and fails its file only
+if still missing an hour later; when the object comes back the file is ready
+again. Only files that failed before they were ever ready are retired
+(status `deleted`, their key becomes an orphan) once every upload URL
+expired, counted from the failure. A failed COMMIT never deletes the new
+object (sealed upload, avatar, preview): the commit may have been applied
+with its answer lost, and an object no row points at is removed later as an
+orphan.
+
+Multipart uploads nobody completed (client uploads past their TTL,
+interrupted server-side copies) are aborted, only for Core keys. With an
+empty `S3_PREFIX` this sweep lists the whole bucket but still touches Core
+keys only. On MinIO with a non-empty `S3_PREFIX` the sweep finds nothing
+(its multipart listing does not return uploads by such a prefix), so
+incomplete uploads there stay until a lifecycle rule removes them. On AWS or another
+managed provider you may add a lifecycle rule as a second line of defence:
+
+```json
+{"Rules": [{"ID": "abort-incomplete-multipart", "Status": "Enabled",
+  "Filter": {"Prefix": "objects/"},
+  "AbortIncompleteMultipartUpload": {"DaysAfterInitiation": 1}}]}
 ```
 
-Run the exact contract against MinIO or a real provider:
+At startup Core refuses to run when the bucket does not exist (`file storage
+check failed: the bucket must exist`) and warns when it exists but holds none
+of the most recent files.
+
+### Bundled storage profiles
+
+- **Existing installations (staging included)** run MinIO under the `s3`
+  profile, unchanged: `S3_ENDPOINT=http://minio:9000`, host port 9000.
+  `deploy/deploy.sh` rebuilds and restarts only `core`, `web` and
+  `agent-runtime`; the MinIO container keeps running and is not recreated.
+  Nothing has to be changed after updating.
+- **New installations** use versitygw under the `s3gw` profile (posix
+  backend, pinned by digest, host port `S3_GATEWAY_PORT`, default 9100):
+
+  ```sh
+  docker compose --env-file .env -f deploy/compose.yaml --profile s3gw up -d --wait s3gw
+  docker compose --env-file .env -f deploy/compose.yaml --profile s3gw up s3gw-init
+  ```
+
+  `S3_GATEWAY_ACCESS_KEY`/`S3_GATEWAY_SECRET_KEY` have no default and the
+  gateway refuses to start without them (`deploy/generate-env.sh` creates
+  them). `s3gw-volume-init` creates the bucket `S3_BUCKET` as a directory;
+  `s3gw-init` sets bucket CORS for `PUBLIC_APP_URL` (GET, PUT, HEAD; exposes
+  `ETag`; other origins get 403). Set `S3_ENDPOINT=http://s3gw:9000`,
+  `S3_FORCE_PATH_STYLE=true`, `S3_ACCESS_KEY`/`S3_SECRET_KEY` to the gateway
+  pair, and in nginx proxy the bucket location to `coma_s3gw`
+  (`deploy/nginx/coma.conf.example`).
+
+### Moving from MinIO to the gateway
+
+versitygw cannot read MinIO's data directory, so objects are copied. MinIO is
+never changed, which keeps the way back open. Performed end to end on
+2026-11-11 against a local copy of the Compose stack: MinIO with objects,
+the copy, Core on the gateway, Core refusing a missing bucket and warning on
+an empty one, and the rollback.
+
+1. Add the gateway key pair to `.env`:
+   `S3_GATEWAY_ACCESS_KEY=coma$(openssl rand -hex 8)` and
+   `S3_GATEWAY_SECRET_KEY=$(openssl rand -hex 32)`. Make sure the Docker
+   host has free space for the bucket twice (gateway volume and a temporary
+   copy).
+2. Stop uploads: `docker compose --env-file .env -f deploy/compose.yaml stop core`.
+3. Copy and verify: `./deploy/migrate-minio-to-s3gw.sh`. It starts `s3gw`
+   next to MinIO, sets CORS, copies the bucket and compares keys, sizes and
+   SHA-256 of every object; it stops with an error on any difference.
+4. Switch Core: in `.env` set `S3_ENDPOINT=http://s3gw:9000`,
+   `S3_ACCESS_KEY`/`S3_SECRET_KEY` to the gateway pair; in nginx proxy the
+   bucket location to `coma_s3gw` and reload nginx.
+5. Start Core: `docker compose --env-file .env -f deploy/compose.yaml up -d --wait core`.
+   Its log must not contain `file storage check failed` or
+   `file storage looks empty`. Open an old file in the app.
+6. Rollback, if needed: restore the previous `S3_*` values and nginx, then
+   start Core again. Files uploaded after the switch exist only on the
+   gateway; copy them back the same way before switching.
+7. After a week without problems stop MinIO
+   (`docker compose --env-file .env -f deploy/compose.yaml --profile s3 stop minio`).
+   Keep its volume until a backup of the gateway volume exists.
+
+Run the exact contract against the profile or a real provider:
 
 ```sh
 TEST_S3_ENDPOINT=https://provider-endpoint \
@@ -65,7 +167,7 @@ TEST_S3_BUCKET=comamessenger-contract \
 TEST_S3_ACCESS_KEY=... \
 TEST_S3_SECRET_KEY=... \
 TEST_S3_FORCE_PATH_STYLE=true \
-go test ./internal/storage -run TestConfiguredS3BlobStoreContract -count=1 -v
+go test ./internal/storage -run TestConfiguredS3 -count=1 -v
 ```
 
 Use a disposable private bucket/prefix. The suite exercises put, head, get,

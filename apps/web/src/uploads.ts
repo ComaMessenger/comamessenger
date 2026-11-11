@@ -1,22 +1,38 @@
-import type {
-  CompletedFilePart,
-  FileMetadata,
-  MessengerAPI,
+import {
+  UploadHTTPError,
+  completeUploadWithRetry,
+  parseRetryAfter,
+  retryUploadStep,
+  sendPartWithResign,
+  shouldAbortUpload,
+  type CompletedFilePart,
+  type FileMetadata,
+  type MessengerAPI,
+  type UploadRetryOptions,
 } from "@comamessenger/core";
 
 const multipartPartBytes = 5 * 1024 * 1024;
 
+/**
+ * Uploads a file through the mode the instance chose. Completion is retried
+ * on 429/503 after Retry-After; a part whose URL expired is re-signed. The
+ * upload is aborted (deleting what was sent) only on a final error.
+ */
 export async function uploadAttachment(
   api: MessengerAPI,
   file: File,
   signal: AbortSignal,
   onProgress: (value: number) => void,
+  retry: Omit<UploadRetryOptions, "signal"> = {},
 ): Promise<FileMetadata> {
   let uploadID = "";
+  let completing = false;
+  const retryOptions = { ...retry, signal };
+  const contentType = file.type || "application/octet-stream";
   try {
     const upload = await api.createFileUpload({
       name: file.name,
-      mime: file.type || "application/octet-stream",
+      mime: contentType,
       size: file.size,
     });
     uploadID = upload.id;
@@ -25,13 +41,20 @@ export async function uploadAttachment(
         upload.upload_url ?? `/api/v1/files/uploads/${upload.id}/content`,
         api.apiURL,
       ).toString();
-      const response = await xhrUpload(
-        target,
-        file,
-        file.type || "application/octet-stream",
-        api.token(),
-        signal,
-        onProgress,
+      // Streaming completes with the PUT itself; a busy server keeps the
+      // upload open, so the content is sent again.
+      completing = true;
+      const response = await retryUploadStep(
+        () =>
+          xhrUpload(
+            target,
+            file,
+            contentType,
+            api.token(),
+            signal,
+            onProgress,
+          ),
+        retryOptions,
       );
       return JSON.parse(response.body) as FileMetadata;
     }
@@ -40,12 +63,13 @@ export async function uploadAttachment(
       await xhrUpload(
         upload.upload_url,
         file,
-        file.type || "application/octet-stream",
+        contentType,
         null,
         signal,
         onProgress,
       );
-      return api.completeFileUpload(upload.id);
+      completing = true;
+      return await completeUploadWithRetry(api, upload.id, [], retryOptions);
     }
     const count = Math.ceil(file.size / multipartPartBytes);
     const completed: CompletedFilePart[] = [];
@@ -58,25 +82,28 @@ export async function uploadAttachment(
       for (const part of signed.parts) {
         const start = (part.number - 1) * multipartPartBytes;
         const chunk = file.slice(start, start + multipartPartBytes);
-        const response = await xhrUpload(
-          part.url,
-          chunk,
-          file.type || "application/octet-stream",
-          null,
-          signal,
-          (partProgress) =>
+        const response = await sendPartWithResign(api, upload.id, part, (url) =>
+          xhrUpload(url, chunk, contentType, null, signal, (partProgress) =>
             onProgress(
               Math.min(1, (start + partProgress * chunk.size) / file.size),
             ),
+          ),
         );
         const etag = response.etag;
         if (!etag) throw new Error("Object storage did not expose ETag.");
         completed.push({ number: part.number, etag, size: chunk.size });
       }
     }
-    return api.completeFileUpload(upload.id, completed);
+    completing = true;
+    return await completeUploadWithRetry(
+      api,
+      upload.id,
+      completed,
+      retryOptions,
+    );
   } catch (cause) {
-    if (uploadID) await api.abortFileUpload(uploadID).catch(() => undefined);
+    if (uploadID && shouldAbortUpload(cause, completing))
+      await api.abortFileUpload(uploadID).catch(() => undefined);
     throw cause;
   }
 }
@@ -106,9 +133,15 @@ function xhrUpload(
           body: request.responseText,
           etag: request.getResponseHeader("ETag"),
         });
-      } else reject(new Error(`Upload failed with HTTP ${request.status}.`));
+      } else
+        reject(
+          new UploadHTTPError(
+            request.status,
+            parseRetryAfter(request.getResponseHeader("Retry-After")),
+          ),
+        );
     };
-    request.onerror = () => reject(new Error("Upload connection failed."));
+    request.onerror = () => reject(new TypeError("Upload connection failed."));
     request.onabort = () =>
       reject(new DOMException("Upload cancelled", "AbortError"));
     signal.addEventListener("abort", abort, { once: true });

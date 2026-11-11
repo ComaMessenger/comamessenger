@@ -124,11 +124,12 @@ func (s *Service) savedLimitValue() int {
 	return DefaultSavedLimit
 }
 
-// Lock order. Message deletion takes the organization row, then the message,
-// then the save rows of that message. Every saved-message path keeps that
-// order: shared locks only after the organization row, and nothing locked
-// before it except a transaction advisory lock of the saver (no other path
-// waits for it while holding the organization).
+// Lock order. The shared rule is at lockOrganization: a transaction that
+// allocates an event takes the organization row first, before any other row.
+// Message deletion then takes the message and the save rows of it. Every
+// saved-message path keeps that order: row locks only after the organization
+// row, and nothing taken before it except a transaction advisory lock of the
+// saver (no other path waits for it while holding the organization).
 //
 // A person's saves are serialized by that advisory lock rather than by their
 // `actors` row: writing a message takes the organization and then FOR SHARE

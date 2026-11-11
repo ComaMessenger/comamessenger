@@ -111,11 +111,17 @@ func (f *FCM) Send(ctx context.Context, deviceToken string, notification Notific
 	if notification.CollapseID != "" {
 		android["collapse_key"] = notification.CollapseID
 	}
+	data := map[string]string{
+		"c": notification.Ciphertext, "title": notification.FallbackTitle, "body": notification.FallbackBody,
+	}
+	// The app builds the notification from data; "silent" tells it to skip
+	// sound and vibration even when the ciphertext cannot be read.
+	if notification.Silent {
+		data["silent"] = "1"
+	}
 	body, err := json.Marshal(map[string]any{"message": map[string]any{
-		"token": deviceToken,
-		"data": map[string]string{
-			"c": notification.Ciphertext, "title": notification.FallbackTitle, "body": notification.FallbackBody,
-		},
+		"token":   deviceToken,
+		"data":    data,
 		"android": android,
 	}})
 	if err != nil {

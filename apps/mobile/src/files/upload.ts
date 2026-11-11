@@ -1,8 +1,15 @@
 import { File, Paths, UploadType } from "expo-file-system";
-import type {
-  CompletedFilePart,
-  FileMetadata,
-  MessengerAPI,
+import {
+  UploadHTTPError,
+  completeUploadWithRetry,
+  parseRetryAfter,
+  retryUploadStep,
+  sendPartWithResign,
+  shouldAbortUpload,
+  type CompletedFilePart,
+  type FileMetadata,
+  type MessengerAPI,
+  type UploadRetryOptions,
 } from "@comamessenger/core";
 import { absoluteURL, withAuthorization } from "./auth";
 
@@ -39,18 +46,36 @@ function header(headers: Record<string, string>, name: string) {
   return key ? headers[key] : undefined;
 }
 
+/** Throws UploadHTTPError (with Retry-After) for a non-2xx transfer. */
+function ensureOK<
+  T extends { status: number; headers: Record<string, string> },
+>(result: T): T {
+  if (result.status < 200 || result.status >= 300)
+    throw new UploadHTTPError(
+      result.status,
+      parseRetryAfter(header(result.headers, "retry-after")),
+    );
+  return result;
+}
+
 /**
  * Uploads a picked file from its local URI through whichever mode the
  * instance chose: streaming to Core, a presigned PUT, or S3 multipart parts.
- * Mirrors apps/web/src/uploads.ts without loading the file into memory.
+ * Mirrors apps/web/src/uploads.ts without loading the file into memory:
+ * completion is retried on 429/503 after Retry-After, a part whose URL
+ * expired is re-signed, and the upload is aborted (deleting what was sent)
+ * only on a final error.
  */
 export async function uploadFile(
   api: MessengerAPI,
   local: LocalFile,
   signal: AbortSignal,
   onProgress: Progress,
+  retry: Omit<UploadRetryOptions, "signal"> = {},
 ): Promise<FileMetadata> {
   let uploadID = "";
+  let completing = false;
+  const retryOptions = { ...retry, signal };
   try {
     const upload = await api.createFileUpload({
       name: local.name,
@@ -65,31 +90,33 @@ export async function uploadFile(
         api,
         upload.upload_url ?? `/api/v1/files/uploads/${upload.id}/content`,
       );
-      const result = await withAuthorization(api, (authorization) =>
-        put(
-          source,
-          target,
-          { ...contentType, Authorization: authorization },
-          signal,
-          onProgress,
-        ),
+      // Streaming completes with the PUT itself; a busy server keeps the
+      // upload open, so the content is sent again.
+      completing = true;
+      const result = await retryUploadStep(
+        async () =>
+          ensureOK(
+            await withAuthorization(api, (authorization) =>
+              put(
+                source,
+                target,
+                { ...contentType, Authorization: authorization },
+                signal,
+                onProgress,
+              ),
+            ),
+          ),
+        retryOptions,
       );
-      if (result.status < 200 || result.status >= 300)
-        throw new Error(`Upload failed with HTTP ${result.status}.`);
       return JSON.parse(result.body) as FileMetadata;
     }
     if (upload.mode === "presigned") {
       if (!upload.upload_url) throw new Error("Upload URL is missing.");
-      const result = await put(
-        source,
-        upload.upload_url,
-        contentType,
-        signal,
-        onProgress,
+      ensureOK(
+        await put(source, upload.upload_url, contentType, signal, onProgress),
       );
-      if (result.status < 200 || result.status >= 300)
-        throw new Error(`Upload failed with HTTP ${result.status}.`);
-      return api.completeFileUpload(upload.id);
+      completing = true;
+      return await completeUploadWithRetry(api, upload.id, [], retryOptions);
     }
     // Multipart: each part is copied to a temporary file so it can be sent
     // as a native upload with progress, then removed.
@@ -115,19 +142,21 @@ export async function uploadFile(
           );
           chunk.write(bytes);
           try {
-            const result = await put(
-              chunk,
-              part.url,
-              contentType,
-              signal,
-              (value) =>
-                onProgress(
-                  Math.min(1, (start + value * bytes.length) / local.size),
+            const result = await sendPartWithResign(
+              api,
+              upload.id,
+              part,
+              async (url) =>
+                ensureOK(
+                  await put(chunk, url, contentType, signal, (value) =>
+                    onProgress(
+                      Math.min(1, (start + value * bytes.length) / local.size),
+                    ),
+                  ),
                 ),
             );
             const etag = header(result.headers, "etag");
-            if (result.status < 200 || result.status >= 300 || !etag)
-              throw new Error(`Part upload failed with HTTP ${result.status}.`);
+            if (!etag) throw new Error("Object storage did not expose ETag.");
             completed.push({ number: part.number, etag, size: bytes.length });
           } finally {
             chunk.delete();
@@ -137,9 +166,16 @@ export async function uploadFile(
     } finally {
       handle.close();
     }
-    return api.completeFileUpload(upload.id, completed);
+    completing = true;
+    return await completeUploadWithRetry(
+      api,
+      upload.id,
+      completed,
+      retryOptions,
+    );
   } catch (cause) {
-    if (uploadID) await api.abortFileUpload(uploadID).catch(() => undefined);
+    if (uploadID && shouldAbortUpload(cause, completing))
+      await api.abortFileUpload(uploadID).catch(() => undefined);
     throw cause;
   }
 }

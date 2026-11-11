@@ -45,7 +45,12 @@
         "member.updated",
         "member.removed",
         "actor.status.updated",
-        "actor.avatar.updated"
+        "actor.avatar.updated",
+        "scheduled_message.created",
+        "scheduled_message.updated",
+        "scheduled_message.deleted",
+        "scheduled_message.sent",
+        "scheduled_message.failed"
       ]
     },
     "CloseCode": {

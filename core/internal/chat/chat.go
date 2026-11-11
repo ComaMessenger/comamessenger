@@ -68,6 +68,9 @@ type Preview struct {
 	CreatedSeq       int64     `json:"created_seq"`
 	CreatedAt        time.Time `json:"created_at"`
 	Deleted          bool      `json:"deleted"`
+	// VoiceDurationMs marks a voice message so a list can show
+	// "Voice message · 0:14" instead of an empty body.
+	VoiceDurationMs *int32 `json:"voice_duration_ms,omitempty"`
 }
 
 type CreateInput struct {
@@ -133,7 +136,7 @@ func (s *Service) List(ctx context.Context, user identity.User) ([]Chat, error) 
 		SELECT c.id, c.kind, c.visibility, c.name, c.topic, cm.role, c.created_at, c.archived_at,
 			COALESCE(c.name, peer.display_name, 'Direct chat'), COALESCE(peer.id::text, c.id::text), COALESCE(peer.avatar_version, CASE WHEN c.avatar_file_id IS NULL THEN 0 ELSE c.avatar_version END), cm.notify_level, cm.muted_until,
 			peer.id, peer.display_name, peer.handle::text, peer.title, peer.about, peer.type, peer.status_emoji, peer.status_text, peer.status_expires_at, peer.avatar_version,
-			last.id, last.actor_id, last.actor_name, left(last.body, 280), last.created_seq, last.created_at, last.deleted,
+			last.id, last.actor_id, last.actor_name, left(last.body, 280), last.created_seq, last.created_at, last.deleted, last.voice_duration_ms,
 			COALESCE(last.created_seq, 0), c.last_message_at
 		FROM chats c JOIN chat_members cm ON cm.chat_id = c.id
 		LEFT JOIN LATERAL (SELECT a.id,a.display_name,a.handle,a.title,a.about,a.type,a.avatar_version,
@@ -141,7 +144,9 @@ func (s *Service) List(ctx context.Context, user identity.User) ([]Chat, error) 
 			CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_text ELSE '' END status_text,
 			CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_expires_at END status_expires_at
 			FROM chat_members other JOIN actors a ON a.id=other.actor_id WHERE other.chat_id=c.id AND other.actor_id<>$1 LIMIT 1) peer ON c.kind='direct'
-		LEFT JOIN LATERAL (SELECT m.id,m.actor_id,a.display_name actor_name,m.body,m.created_seq,m.created_at,false deleted FROM messages m JOIN actors a ON a.id=m.actor_id WHERE m.chat_id=c.id AND m.deleted_at IS NULL ORDER BY m.created_seq DESC LIMIT 1) last ON true
+		LEFT JOIN LATERAL (SELECT m.id,m.actor_id,a.display_name actor_name,m.body,m.created_seq,m.created_at,false deleted,
+			(SELECT f.voice_duration_ms FROM message_files mf JOIN files f ON f.org_id=mf.org_id AND f.id=mf.file_id WHERE mf.message_id=m.id AND f.voice_duration_ms IS NOT NULL AND f.status<>'deleted' LIMIT 1) voice_duration_ms
+			FROM messages m JOIN actors a ON a.id=m.actor_id WHERE m.chat_id=c.id AND m.deleted_at IS NULL ORDER BY m.created_seq DESC LIMIT 1) last ON true
 		WHERE cm.actor_id = $1 AND c.org_id = $2 AND c.archived_at IS NULL
 		ORDER BY COALESCE(c.last_message_at, c.created_at) DESC`, user.ActorID, user.OrgID)
 	if err != nil {
@@ -164,7 +169,7 @@ func (s *Service) Get(ctx context.Context, user identity.User, chatID string) (C
 		SELECT c.id, c.kind, c.visibility, c.name, c.topic, cm.role, c.created_at, c.archived_at,
 			COALESCE(c.name, peer.display_name, 'Direct chat'), COALESCE(peer.id::text, c.id::text), COALESCE(peer.avatar_version, CASE WHEN c.avatar_file_id IS NULL THEN 0 ELSE c.avatar_version END), cm.notify_level, cm.muted_until,
 			peer.id, peer.display_name, peer.handle::text, peer.title, peer.about, peer.type, peer.status_emoji, peer.status_text, peer.status_expires_at, peer.avatar_version,
-			last.id, last.actor_id, last.actor_name, left(last.body, 280), last.created_seq, last.created_at, last.deleted,
+			last.id, last.actor_id, last.actor_name, left(last.body, 280), last.created_seq, last.created_at, last.deleted, last.voice_duration_ms,
 			COALESCE(last.created_seq, 0), c.last_message_at
 		FROM chats c JOIN chat_members cm ON cm.chat_id = c.id
 		LEFT JOIN LATERAL (SELECT a.id,a.display_name,a.handle,a.title,a.about,a.type,a.avatar_version,
@@ -172,7 +177,9 @@ func (s *Service) Get(ctx context.Context, user identity.User, chatID string) (C
 			CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_text ELSE '' END status_text,
 			CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_expires_at END status_expires_at
 			FROM chat_members other JOIN actors a ON a.id=other.actor_id WHERE other.chat_id=c.id AND other.actor_id<>$1 LIMIT 1) peer ON c.kind='direct'
-		LEFT JOIN LATERAL (SELECT m.id,m.actor_id,a.display_name actor_name,m.body,m.created_seq,m.created_at,false deleted FROM messages m JOIN actors a ON a.id=m.actor_id WHERE m.chat_id=c.id AND m.deleted_at IS NULL ORDER BY m.created_seq DESC LIMIT 1) last ON true
+		LEFT JOIN LATERAL (SELECT m.id,m.actor_id,a.display_name actor_name,m.body,m.created_seq,m.created_at,false deleted,
+			(SELECT f.voice_duration_ms FROM message_files mf JOIN files f ON f.org_id=mf.org_id AND f.id=mf.file_id WHERE mf.message_id=m.id AND f.voice_duration_ms IS NOT NULL AND f.status<>'deleted' LIMIT 1) voice_duration_ms
+			FROM messages m JOIN actors a ON a.id=m.actor_id WHERE m.chat_id=c.id AND m.deleted_at IS NULL ORDER BY m.created_seq DESC LIMIT 1) last ON true
 		WHERE cm.actor_id = $1 AND c.org_id = $2 AND c.id = $3 AND c.archived_at IS NULL`, user.ActorID, user.OrgID, chatID)
 	result, err := scanChat(row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -194,16 +201,17 @@ func scanChat(row rowScanner) (Chat, error) {
 	var lastSeq *int64
 	var lastAt *time.Time
 	var deleted *bool
+	var lastVoice *int32
 	if err := row.Scan(&chat.ID, &chat.Kind, &chat.Visibility, &chat.Name, &chat.Topic,
 		&chat.Role, &chat.CreatedAt, &chat.ArchivedAt, &chat.DisplayName, &chat.AvatarSeed, &chat.AvatarVersion, &chat.NotifyLevel, &chat.MutedUntil,
-		&peerID, &peerName, &peerHandle, &peerTitle, &peerAbout, &peerType, &peerStatusEmoji, &peerStatusText, &peerStatusExpiresAt, &peerAvatarVersion, &lastID, &lastActorID, &lastActorName, &lastBody, &lastSeq, &lastAt, &deleted, &chat.LastActivitySeq, &chat.LastMessageAt); err != nil {
+		&peerID, &peerName, &peerHandle, &peerTitle, &peerAbout, &peerType, &peerStatusEmoji, &peerStatusText, &peerStatusExpiresAt, &peerAvatarVersion, &lastID, &lastActorID, &lastActorName, &lastBody, &lastSeq, &lastAt, &deleted, &lastVoice, &chat.LastActivitySeq, &chat.LastMessageAt); err != nil {
 		return Chat{}, err
 	}
 	if peerID != nil {
 		chat.DirectPeer = &Actor{ID: *peerID, DisplayName: *peerName, Handle: *peerHandle, Title: *peerTitle, About: *peerAbout, Type: *peerType, StatusEmoji: *peerStatusEmoji, StatusText: *peerStatusText, StatusExpiresAt: peerStatusExpiresAt, AvatarVersion: *peerAvatarVersion}
 	}
 	if lastID != nil {
-		chat.LastMessage = &Preview{ID: *lastID, ActorID: *lastActorID, ActorDisplayName: *lastActorName, Body: *lastBody, CreatedSeq: *lastSeq, CreatedAt: *lastAt, Deleted: *deleted}
+		chat.LastMessage = &Preview{ID: *lastID, ActorID: *lastActorID, ActorDisplayName: *lastActorName, Body: *lastBody, CreatedSeq: *lastSeq, CreatedAt: *lastAt, Deleted: *deleted, VoiceDurationMs: lastVoice}
 	}
 	return chat, nil
 }

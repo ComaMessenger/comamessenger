@@ -41,6 +41,7 @@ REDIS_EPHEMERAL_SIGNING_KEY=<independent-random-32-byte-secret>
 # Shared only by Core and the bundled agent runtime. Core persists only its hash.
 AGENT_RUNTIME_API_KEY=coma_agent_<independent-random-32-byte-secret>
 
+# New installations: S3_ENDPOINT=http://s3gw:9000 with --profile s3gw (docs/runbooks/files-search.md).
 S3_ENDPOINT=http://minio:9000
 S3_PUBLIC_ENDPOINT=https://rocket.hmns-test.ru
 S3_BUCKET=coma-test

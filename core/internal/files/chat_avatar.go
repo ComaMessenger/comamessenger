@@ -117,6 +117,9 @@ func (s *Service) PutChatAvatar(ctx context.Context, current identity.User, chat
 		return ChatAvatarUpdate{}, err
 	}
 	defer tx.Rollback(ctx)
+	if err := lockOrganization(ctx, tx, current.OrgID); err != nil {
+		return ChatAvatarUpdate{}, err
+	}
 	state, err := lockChatAvatar(ctx, tx, current, chatID)
 	if err != nil {
 		return ChatAvatarUpdate{}, err
@@ -155,10 +158,13 @@ func (s *Service) PutChatAvatar(ctx context.Context, current identity.User, chat
 	if err != nil {
 		return ChatAvatarUpdate{}, err
 	}
+	// A failed COMMIT may still have been applied (its answer lost), so the
+	// new object is kept from here on; reconciliation removes it if no row
+	// points at it.
+	stored = true
 	if err := tx.Commit(ctx); err != nil {
 		return ChatAvatarUpdate{}, err
 	}
-	stored = true
 	if state.old.Key != "" {
 		_ = s.store.Delete(context.Background(), state.old.Key)
 	}
@@ -174,6 +180,9 @@ func (s *Service) DeleteChatAvatar(ctx context.Context, current identity.User, c
 		return ChatAvatarUpdate{}, err
 	}
 	defer tx.Rollback(ctx)
+	if err := lockOrganization(ctx, tx, current.OrgID); err != nil {
+		return ChatAvatarUpdate{}, err
+	}
 	state, err := lockChatAvatar(ctx, tx, current, chatID)
 	if err != nil {
 		return ChatAvatarUpdate{}, err

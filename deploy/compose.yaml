@@ -81,6 +81,78 @@ services:
       S3_BUCKET: ${S3_BUCKET:-comamessenger}
     restart: "no"
 
+  # S3 storage for new installations (STORAGE_DRIVER=s3, `--profile s3gw`):
+  # versitygw with its posix backend, pinned by digest. Core seals every
+  # client upload with a server-side copy pinned to the source ETag, which
+  # needs x-amz-copy-source-if-match; versitygw honours it (CI checks this).
+  # It has its own host port, so it can run next to the MinIO above while
+  # objects are moved (docs/runbooks/files-search.md). Installations already
+  # on MinIO keep the `s3` profile and need no change.
+  s3gw:
+    profiles: ["s3gw"]
+    image: versity/versitygw:v1.10.0@sha256:89cad13cc981986ee284cbafea4613f9533ce6fd5f37a2c96c4c4fb8adb3a316
+    restart: unless-stopped
+    # The root key pair has no default: the bucket may be proxied publicly.
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        if [ -z "$${ROOT_ACCESS_KEY}" ] || [ -z "$${ROOT_SECRET_KEY}" ]; then
+          echo "Set S3_GATEWAY_ACCESS_KEY and S3_GATEWAY_SECRET_KEY (deploy/generate-env.sh creates them)." >&2
+          exit 1
+        fi
+        exec /usr/local/bin/versitygw --port :9000 --health /health posix --sidecar /meta /data
+    environment:
+      ROOT_ACCESS_KEY: ${S3_GATEWAY_ACCESS_KEY:-}
+      ROOT_SECRET_KEY: ${S3_GATEWAY_SECRET_KEY:-}
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${S3_GATEWAY_PORT:-9100}:9000"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    depends_on:
+      s3gw-volume-init:
+        condition: service_completed_successfully
+    volumes:
+      - s3gw-data:/data
+      - s3gw-meta:/meta
+
+  # A bucket of the posix backend is a top-level directory.
+  s3gw-volume-init:
+    profiles: ["s3gw"]
+    image: alpine:3.23
+    command: ["/bin/sh", "-ec", "mkdir -p \"/data/$${S3_BUCKET}\""]
+    environment:
+      S3_BUCKET: ${S3_BUCKET:-comamessenger}
+    volumes:
+      - s3gw-data:/data
+    restart: "no"
+
+  # Browsers upload straight to the bucket: allow PUBLIC_APP_URL and expose
+  # ETag for multipart completion; other origins are refused. Multipart
+  # uploads nobody completed are aborted by Core's reconciliation, so the
+  # bucket needs no lifecycle rule.
+  s3gw-init:
+    profiles: ["s3gw"]
+    image: amazon/aws-cli:2.38.6@sha256:bdb0dd07c54dfc7fe6526387dcf23eaab269875a20d647ae4de8196ea04d6bd4
+    depends_on:
+      s3gw:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        aws --endpoint-url http://s3gw:9000 s3api put-bucket-cors --bucket "$${S3_BUCKET}" --cors-configuration \
+          "{\"CORSRules\":[{\"AllowedOrigins\":[\"$${PUBLIC_APP_URL}\"],\"AllowedMethods\":[\"GET\",\"PUT\",\"HEAD\"],\"AllowedHeaders\":[\"*\"],\"ExposeHeaders\":[\"ETag\"],\"MaxAgeSeconds\":3600}]}"
+        echo "CORS for $${PUBLIC_APP_URL} set on bucket $${S3_BUCKET}"
+    environment:
+      AWS_ACCESS_KEY_ID: ${S3_GATEWAY_ACCESS_KEY:-}
+      AWS_SECRET_ACCESS_KEY: ${S3_GATEWAY_SECRET_KEY:-}
+      AWS_DEFAULT_REGION: ${S3_REGION:-us-east-1}
+      S3_BUCKET: ${S3_BUCKET:-comamessenger}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:5173}
+    restart: "no"
+
   storage-init:
     image: alpine:3.23
     command: ["/bin/sh", "-ec", "mkdir -p /var/lib/coma/files && chown 65532:65532 /var/lib/coma/files && chmod 0700 /var/lib/coma/files"]
@@ -93,6 +165,10 @@ services:
       context: ..
       dockerfile: core/Dockerfile
     restart: unless-stopped
+    # Core waits for upload completions in flight before it exits (35 s plus
+    # 10 s for the default FILE_MAX_BYTES; see shutdownTimeout in
+    # core/cmd/server). Raise this with FILE_MAX_BYTES (1 s per 20 MiB).
+    stop_grace_period: 60s
     environment:
       APP_ENV: ${APP_ENV:-development}
       HTTP_ADDR: :8080
@@ -266,4 +342,6 @@ services:
 volumes:
   postgres-data:
   minio-data:
+  s3gw-data:
+  s3gw-meta:
   files-data:

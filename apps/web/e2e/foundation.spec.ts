@@ -2855,3 +2855,242 @@ test("workspace members page grants knowledge.manage to a member", async ({
     "knowledge.manage",
   ]);
 });
+
+const voiceWaveform = Array.from({ length: 64 }, (_, index) =>
+  Math.round(40 + 200 * Math.abs(Math.sin(index * 0.42))),
+);
+const voiceMessage = (id: string, seq: number, durationMs: number) => ({
+  ...message,
+  id,
+  client_msg_id: `client-${id}`,
+  body: "",
+  body_format: "plain",
+  created_seq: seq,
+  created_at: new Date(Date.UTC(2026, 7, 19, 6, 30 + seq)).toISOString(),
+  files: [
+    {
+      id: `00000000-0000-4000-8000-0000000009${String(seq).padStart(2, "0")}`,
+      name: "voice.m4a",
+      mime: "audio/mp4",
+      size: 23_000,
+      status: "ready",
+      processing_status: "skipped",
+      created_at: "2026-08-19T06:30:00Z",
+      uploader_id: lev.actor_id,
+      voice: { duration_ms: durationMs, waveform: voiceWaveform },
+    },
+  ],
+});
+
+/**
+ * Replaces Audio with a clock the test drives, so playback, speed and the
+ * end of a recording are deterministic in every browser.
+ */
+async function fakeVoiceAudio(page: import("@playwright/test").Page) {
+  await page.addInitScript(() => {
+    const players: FakeAudio[] = [];
+    class FakeAudio extends EventTarget {
+      src: string;
+      preload = "";
+      currentTime = 0;
+      duration = Number.NaN;
+      playbackRate = 1;
+      paused = true;
+      ended = false;
+      constructor(src: string) {
+        super();
+        this.src = src;
+        players.push(this);
+        setTimeout(() => {
+          this.duration = 14.2;
+          this.dispatchEvent(new Event("loadedmetadata"));
+        }, 0);
+      }
+      play() {
+        this.paused = false;
+        this.ended = false;
+        this.dispatchEvent(new Event("play"));
+        return Promise.resolve();
+      }
+      pause() {
+        if (this.paused) return;
+        this.paused = true;
+        this.dispatchEvent(new Event("pause"));
+      }
+      advance(seconds: number) {
+        if (this.paused) return;
+        this.currentTime = Math.min(
+          this.duration,
+          this.currentTime + seconds * this.playbackRate,
+        );
+        this.dispatchEvent(new Event("timeupdate"));
+        if (this.currentTime >= this.duration) {
+          this.ended = true;
+          this.paused = true;
+          this.dispatchEvent(new Event("pause"));
+          this.dispatchEvent(new Event("ended"));
+        }
+      }
+    }
+    Object.assign(window, {
+      Audio: FakeAudio,
+      __voicePlayers: players,
+    });
+  });
+}
+
+const voicePlayers = (page: import("@playwright/test").Page) =>
+  page.evaluate(() =>
+    (
+      window as unknown as {
+        __voicePlayers: Array<{
+          paused: boolean;
+          playbackRate: number;
+          currentTime: number;
+        }>;
+      }
+    ).__voicePlayers.map(({ paused, playbackRate, currentTime }) => ({
+      paused,
+      playbackRate,
+      currentTime,
+    })),
+  );
+
+const advanceVoice = (
+  page: import("@playwright/test").Page,
+  seconds: number,
+) =>
+  page.evaluate((value) => {
+    for (const player of (
+      window as unknown as {
+        __voicePlayers: Array<{ advance(seconds: number): void }>;
+      }
+    ).__voicePlayers)
+      player.advance(value);
+  }, seconds);
+
+async function mockVoiceChat(
+  page: import("@playwright/test").Page,
+  theme: "light" | "dark" = "light",
+) {
+  await fakeVoiceAudio(page);
+  const history = [
+    voiceMessage("voice-1", 3, 14_200),
+    voiceMessage("voice-2", 4, 6_000),
+    {
+      ...message,
+      id: "text-after",
+      client_msg_id: "client-text-after",
+      body: "Принято",
+      created_seq: 5,
+      created_at: "2026-08-19T06:40:00Z",
+    },
+  ];
+  await mockMessenger(page, {
+    theme,
+    chatPatch: {
+      kind: "group",
+      role: "member",
+      last_message: {
+        ...chat.last_message,
+        body: "",
+        voice_duration_ms: 14_200,
+      },
+    },
+    history,
+  });
+  const downloads: string[] = [];
+  await page.route("**/api/v1/files/*/download", async (route) => {
+    downloads.push(new URL(route.request().url()).pathname);
+    await route.fulfill({
+      status: 200,
+      contentType: "audio/mp4",
+      body: Buffer.from("fake m4a"),
+    });
+  });
+  return downloads;
+}
+
+test("voice messages play one at a time with seek, speed and autoplay", async ({
+  page,
+}) => {
+  const downloads = await mockVoiceChat(page);
+  await page.goto(`/chat/${chat.id}`);
+  if (test.info().project.name === "desktop")
+    await expect(chatRow(page, /Объявления/)).toContainText(
+      "Голосовое сообщение · 0:14",
+    );
+
+  const first = page.getByRole("group", { name: "Голосовое сообщение, 0:14" });
+  const second = page.getByRole("group", { name: "Голосовое сообщение, 0:06" });
+  await expect(first).toBeVisible();
+  await expect(second).toBeVisible();
+  await expect(first.getByRole("button", { name: /Скорость/ })).toHaveCount(0);
+  expect(downloads).toHaveLength(0);
+  await expect(first).toHaveScreenshot(
+    "voice-message.png",
+    { animations: "disabled" },
+  );
+
+  await first.getByRole("button", { name: "Слушать" }).click();
+  await expect(first.getByRole("button", { name: "Пауза" })).toBeVisible();
+  expect(downloads).toHaveLength(1);
+  const speed = first.getByRole("button", { name: "Скорость 1×" });
+  await expect(speed).toBeVisible();
+  await speed.click();
+  await expect(first.getByRole("button", { name: "Скорость 1,5×" })).toBeVisible();
+  expect((await voicePlayers(page))[0]?.playbackRate).toBe(1.5);
+
+  await advanceVoice(page, 2);
+  await expect(first).toContainText("0:03 / 0:14");
+  await expect(first).toHaveScreenshot(
+    "voice-message-playing.png",
+    { animations: "disabled" },
+  );
+
+  // Clicking the waveform seeks.
+  const wave = first.getByRole("slider", { name: "Перемотка" });
+  const box = await wave.boundingBox();
+  await page.mouse.click(box!.x + box!.width * 0.75, box!.y + box!.height / 2);
+  await expect(first).toContainText("0:11 / 0:14");
+  await wave.press("ArrowLeft");
+  await expect(first).toContainText("0:06 / 0:14");
+
+  // Starting another recording pauses the first.
+  await second.getByRole("button", { name: "Слушать" }).click();
+  await expect(second.getByRole("button", { name: "Пауза" })).toBeVisible();
+  await expect(first.getByRole("button", { name: "Слушать" })).toBeVisible();
+  let players = await voicePlayers(page);
+  expect(players.map((player) => player.paused)).toEqual([true, false]);
+
+  // When a recording ends, the next voice message in a row starts.
+  await first.getByRole("button", { name: "Слушать" }).click();
+  await expect(second.getByRole("button", { name: "Слушать" })).toBeVisible();
+  await advanceVoice(page, 30);
+  await expect(second.getByRole("button", { name: "Пауза" })).toBeVisible();
+  await expect(first.getByRole("button", { name: "Слушать" })).toBeVisible();
+  await expect(first).toContainText("0:14");
+  players = await voicePlayers(page);
+  expect(players.map((player) => player.paused)).toEqual([true, false]);
+
+  // The text message after the last recording ends the chain.
+  await advanceVoice(page, 30);
+  await expect(second.getByRole("button", { name: "Слушать" })).toBeVisible();
+  players = await voicePlayers(page);
+  expect(players.every((player) => player.paused)).toBe(true);
+});
+
+test("voice message keeps contrast in the dark theme", async ({ page }) => {
+  await mockVoiceChat(page, "dark");
+  await page.goto(`/chat/${chat.id}`);
+  const first = page.getByRole("group", { name: "Голосовое сообщение, 0:14" });
+  await first.getByRole("button", { name: "Слушать" }).click();
+  // The recording downloads first; advance the clock only once it plays.
+  await expect(first.getByRole("button", { name: "Пауза" })).toBeVisible();
+  await advanceVoice(page, 5);
+  await expect(first).toContainText("0:05 / 0:14");
+  await expect(first).toHaveScreenshot(
+    "voice-message-dark.png",
+    { animations: "disabled" },
+  );
+});

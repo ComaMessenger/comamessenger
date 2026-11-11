@@ -21,6 +21,9 @@ export type ChatAgent = components["schemas"]["ChatAgent"];
 export type ChatAgentTrigger = components["schemas"]["ChatAgentTrigger"];
 export type FileMetadata = components["schemas"]["File"];
 export type FileUpload = components["schemas"]["FileUpload"];
+export type VoiceInfo = components["schemas"]["VoiceInfo"];
+export type CreateFileUploadRequest =
+  components["schemas"]["CreateFileUploadRequest"];
 export type CompletedFilePart = components["schemas"]["CompletedFilePart"];
 export type SearchPage = components["schemas"]["SearchPage"];
 export type SearchResult = components["schemas"]["SearchResult"];
@@ -227,6 +230,16 @@ export type CreateMessageRequest =
   components["schemas"]["CreateMessageRequest"];
 export type UpdateMessageRequest =
   components["schemas"]["UpdateMessageRequest"];
+export type ScheduledMessage = components["schemas"]["ScheduledMessage"];
+/** data of scheduled_message.* realtime events: no text, fetch the record. */
+export type ScheduledMessageEvent =
+  components["schemas"]["ScheduledMessageEvent"];
+export type ScheduledMessageFailureReason =
+  components["schemas"]["ScheduledMessageFailureReason"];
+export type CreateScheduledMessageRequest =
+  components["schemas"]["CreateScheduledMessageRequest"];
+export type UpdateScheduledMessageRequest =
+  components["schemas"]["UpdateScheduledMessageRequest"];
 export type AcceptInvitationRequest =
   components["schemas"]["AcceptInvitationRequest"];
 export type CreateInvitationRequest =

@@ -9,6 +9,7 @@ import (
 
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/permission"
+	"github.com/comamessenger/comamessenger/core/internal/scheduledreset"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -233,7 +234,10 @@ func (r *Repository) UpdateMember(ctx context.Context, orgID, currentActorID, ta
 	if err := tx.QueryRow(ctx, `SELECT org_role FROM actors WHERE id=$1 AND org_id=$2 AND status='active'`, currentActorID, orgID).Scan(&currentRole); err != nil {
 		return Member{}, ErrForbidden
 	}
-	if err := tx.QueryRow(ctx, `SELECT org_role,status FROM actors WHERE id=$1 AND org_id=$2 AND deleted_at IS NULL FOR UPDATE`, targetActorID, orgID).Scan(&targetRole, &targetStatus); errors.Is(err, pgx.ErrNoRows) {
+	// NO KEY UPDATE: the member's keys never change here, and foreign key
+	// checks (FOR KEY SHARE) of concurrent session and audit writes must
+	// not wait for this lock while we wait for their rows.
+	if err := tx.QueryRow(ctx, `SELECT org_role,status FROM actors WHERE id=$1 AND org_id=$2 AND deleted_at IS NULL FOR NO KEY UPDATE`, targetActorID, orgID).Scan(&targetRole, &targetStatus); errors.Is(err, pgx.ErrNoRows) {
 		return Member{}, ErrNotFound
 	} else if err != nil {
 		return Member{}, err
@@ -264,6 +268,14 @@ func (r *Repository) UpdateMember(ctx context.Context, orgID, currentActorID, ta
 	_, err = tx.Exec(ctx, `UPDATE actors SET org_role=$3,status=$4 WHERE id=$1 AND org_id=$2`, targetActorID, orgID, role, status)
 	if err != nil {
 		return Member{}, fmt.Errorf("update organization member: %w", err)
+	}
+	// Leaving the active state is a security event: scheduled messages
+	// authorized before it never go out, even after a reactivation.
+	deactivated := targetStatus == "active" && status != "active"
+	if deactivated {
+		if err := scheduledreset.BumpEpochTx(ctx, tx, orgID, targetActorID); err != nil {
+			return Member{}, err
+		}
 	}
 	if status != "active" || input.Permissions != nil {
 		if _, err := tx.Exec(ctx, `DELETE FROM actor_permissions WHERE org_id=$1 AND actor_id=$2`, orgID, targetActorID); err != nil {
@@ -307,6 +319,9 @@ func (r *Repository) UpdateMember(ctx context.Context, orgID, currentActorID, ta
 		}
 		return Member{}, fmt.Errorf("commit member update: %w", err)
 	}
+	if deactivated {
+		scheduledreset.ReconcileAfter(ctx, r.pool, orgID, targetActorID)
+	}
 	var result Member
 	var stored []string
 	err = r.pool.QueryRow(ctx, `
@@ -334,7 +349,8 @@ func (r *Repository) RequirePasswordChange(ctx context.Context, orgID, currentAc
 	}
 	defer tx.Rollback(ctx)
 	var targetRole, targetStatus string
-	err = tx.QueryRow(ctx, `SELECT org_role,status FROM actors WHERE org_id=$1 AND id=$2 AND deleted_at IS NULL FOR UPDATE`, orgID, targetActorID).Scan(&targetRole, &targetStatus)
+	// NO KEY UPDATE: see UpdateMember.
+	err = tx.QueryRow(ctx, `SELECT org_role,status FROM actors WHERE org_id=$1 AND id=$2 AND deleted_at IS NULL FOR NO KEY UPDATE`, orgID, targetActorID).Scan(&targetRole, &targetStatus)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -347,6 +363,9 @@ func (r *Repository) RequirePasswordChange(ctx context.Context, orgID, currentAc
 	command, err := tx.Exec(ctx, `UPDATE users SET must_change_password_at=$3 WHERE org_id=$1 AND actor_id=$2`, orgID, targetActorID, now)
 	if err != nil || command.RowsAffected() != 1 {
 		return nil, ErrNotFound
+	}
+	if err := scheduledreset.BumpEpochTx(ctx, tx, orgID, targetActorID); err != nil {
+		return nil, err
 	}
 	rows, err := tx.Query(ctx, `UPDATE sessions SET revoked_at=COALESCE(revoked_at,$3) WHERE org_id=$1 AND actor_id=$2 AND revoked_at IS NULL RETURNING id`, orgID, targetActorID, now)
 	if err != nil {
@@ -372,6 +391,7 @@ func (r *Repository) RequirePasswordChange(ctx context.Context, orgID, currentAc
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
+	scheduledreset.ReconcileAfter(ctx, r.pool, orgID, targetActorID)
 	return revoked, nil
 }
 

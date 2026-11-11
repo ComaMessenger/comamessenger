@@ -13,6 +13,10 @@ git fetch --prune origin
 git reset --hard --quiet "${ref}"
 echo "  at $(git log --oneline -1)"
 
+# Two merged branches with the same migration number would stop Core from
+# starting; refuse before touching the running services.
+./scripts/check-migration-versions.sh
+
 services=(core web agent-runtime)
 # The push relay runs only on the host that publishes the mobile app.
 if grep -Eq '^PUSH_RELAY_KEYS_DIR=.+' .env; then
