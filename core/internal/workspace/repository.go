@@ -234,7 +234,10 @@ func (r *Repository) UpdateMember(ctx context.Context, orgID, currentActorID, ta
 	if err := tx.QueryRow(ctx, `SELECT org_role FROM actors WHERE id=$1 AND org_id=$2 AND status='active'`, currentActorID, orgID).Scan(&currentRole); err != nil {
 		return Member{}, ErrForbidden
 	}
-	if err := tx.QueryRow(ctx, `SELECT org_role,status FROM actors WHERE id=$1 AND org_id=$2 AND deleted_at IS NULL FOR UPDATE`, targetActorID, orgID).Scan(&targetRole, &targetStatus); errors.Is(err, pgx.ErrNoRows) {
+	// NO KEY UPDATE: the member's keys never change here, and foreign key
+	// checks (FOR KEY SHARE) of concurrent session and audit writes must
+	// not wait for this lock while we wait for their rows.
+	if err := tx.QueryRow(ctx, `SELECT org_role,status FROM actors WHERE id=$1 AND org_id=$2 AND deleted_at IS NULL FOR NO KEY UPDATE`, targetActorID, orgID).Scan(&targetRole, &targetStatus); errors.Is(err, pgx.ErrNoRows) {
 		return Member{}, ErrNotFound
 	} else if err != nil {
 		return Member{}, err
@@ -346,7 +349,8 @@ func (r *Repository) RequirePasswordChange(ctx context.Context, orgID, currentAc
 	}
 	defer tx.Rollback(ctx)
 	var targetRole, targetStatus string
-	err = tx.QueryRow(ctx, `SELECT org_role,status FROM actors WHERE org_id=$1 AND id=$2 AND deleted_at IS NULL FOR UPDATE`, orgID, targetActorID).Scan(&targetRole, &targetStatus)
+	// NO KEY UPDATE: see UpdateMember.
+	err = tx.QueryRow(ctx, `SELECT org_role,status FROM actors WHERE org_id=$1 AND id=$2 AND deleted_at IS NULL FOR NO KEY UPDATE`, orgID, targetActorID).Scan(&targetRole, &targetStatus)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}

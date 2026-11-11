@@ -17,8 +17,10 @@
 //     transaction; delivery refuses both.
 //   - Realtime events carry no text: the event log is long-lived and is
 //     replayed to new devices. Clients read the record itself.
-//   - The sent message's client_msg_id is derived from the record id in a
-//     private namespace and reserved: ordinary sends cannot take it.
+//   - The sent message's client_msg_id is derived from the record id, which
+//     the server generates. The derivation is no secret; the value is
+//     protected by being reserved: ordinary sends check the reservation
+//     under the organization lock and refuse it.
 //   - Files stay linked only to the scheduled record, so nobody but the
 //     uploader can read them until the message is actually sent.
 package scheduled
@@ -81,9 +83,17 @@ const (
 	// the text for the author to copy; both are removed after these delays.
 	sentRetention   = 7 * 24 * time.Hour
 	failedRetention = 30 * 24 * time.Hour
+	// A revoked session family mark outlives the scheduling horizon by a
+	// month before it may go.
+	familyMarkRetention = MaxHorizon + 30*24*time.Hour
 )
 
-// messageNamespace derives the client_msg_id of a scheduled message's send.
+// reconcileStopped is scheduledreset.Reconcile; tests replace it to prove a
+// failing person does not stop the cleanup pass.
+var reconcileStopped = scheduledreset.Reconcile
+
+// messageNamespace only makes the derived ids distinct from other UUIDv5
+// values; it is public and protects nothing by itself.
 var messageNamespace = uuid.MustParse("6f1c2b9e-3d4a-5e7f-8a1b-2c3d4e5f6a7b")
 
 // MessageClientID is the client_msg_id the sent message will carry.
@@ -575,44 +585,62 @@ func (s *Service) SendNow(ctx context.Context, author Author, scheduledID string
 	if err := validID(scheduledID); err != nil {
 		return ScheduledMessage{}, ErrNotFound
 	}
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return ScheduledMessage{}, fmt.Errorf("begin send scheduled message: %w", err)
-	}
-	defer tx.Rollback(ctx)
-	if err := lockOrganization(ctx, tx, author.User.OrgID); err != nil {
+	if err := s.prepareSendNow(ctx, author, scheduledID); err != nil {
 		return ScheduledMessage{}, err
-	}
-	current, err := lockOwn(ctx, tx, author.User, scheduledID)
-	if err != nil {
-		return ScheduledMessage{}, err
-	}
-	if current.Status != StatusPending {
-		return ScheduledMessage{}, ErrClosed
-	}
-	granted, err := authorize(ctx, tx, author)
-	if err != nil {
-		return ScheduledMessage{}, err
-	}
-	if err := tx.QueryRow(ctx, `UPDATE scheduled_messages SET send_at=now(), session_family_id=$2, security_epoch=$3 WHERE id=$1 RETURNING send_at`,
-		scheduledID, granted.familyID, granted.epoch).Scan(&current.SendAt); err != nil {
-		return ScheduledMessage{}, fmt.Errorf("move scheduled message to now: %w", err)
-	}
-	// If the immediate attempt below hits a transient error, the job retries
-	// it now rather than at the old time.
-	if err := s.cancel(ctx, tx, current.riverJobID); err != nil {
-		return ScheduledMessage{}, err
-	}
-	if err := s.schedule(ctx, tx, &current); err != nil {
-		return ScheduledMessage{}, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return ScheduledMessage{}, fmt.Errorf("commit send now: %w", err)
 	}
 	if err := s.Deliver(ctx, scheduledID, 0); err != nil {
 		return ScheduledMessage{}, err
 	}
 	return s.Get(ctx, author, scheduledID)
+}
+
+// prepareSendNow moves the message to now and bumps its version in its own
+// transaction. Bumping the version makes an edit based on the text the
+// author saw before pressing "send now" a version conflict, so the edit
+// cannot slip in between this commit and the delivery and change what goes
+// out.
+func (s *Service) prepareSendNow(ctx context.Context, author Author, scheduledID string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin send scheduled message: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	if err := lockOrganization(ctx, tx, author.User.OrgID); err != nil {
+		return err
+	}
+	current, err := lockOwn(ctx, tx, author.User, scheduledID)
+	if err != nil {
+		return err
+	}
+	if current.Status != StatusPending {
+		return ErrClosed
+	}
+	granted, err := authorize(ctx, tx, author)
+	if err != nil {
+		return err
+	}
+	if err := scan(tx.QueryRow(ctx, `
+		UPDATE scheduled_messages sm SET send_at=now(), session_family_id=$2, security_epoch=$3, version=version+1, updated_at=now()
+		WHERE sm.id=$1 RETURNING `+selectColumns, scheduledID, granted.familyID, granted.epoch), &current); err != nil {
+		return fmt.Errorf("move scheduled message to now: %w", err)
+	}
+	// If the immediate attempt hits a transient error, the job retries it
+	// now rather than at the old time.
+	if err := s.cancel(ctx, tx, current.riverJobID); err != nil {
+		return err
+	}
+	if err := s.schedule(ctx, tx, &current); err != nil {
+		return err
+	}
+	seq, err := insertEvent(ctx, tx, current, "scheduled_message.updated")
+	if err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit send now: %w", err)
+	}
+	s.notify(author.User.OrgID, seq)
+	return nil
 }
 
 // Snooze asks the job runner to come back later: the job woke up before the
@@ -795,16 +823,29 @@ func (s *Service) failLocked(ctx context.Context, tx pgx.Tx, current ScheduledMe
 // step right after the event did not run, and removes sent records after a
 // week and failed ones after a month.
 func (s *Service) Cleanup(ctx context.Context) (int64, error) {
+	// One person's failure must not keep the rest of the pass from running.
+	var problems []error
 	stopped, err := scheduledreset.Stopped(ctx, s.pool, 100)
 	if err != nil {
-		return 0, err
+		problems = append(problems, err)
 	}
 	for _, author := range stopped {
-		seq, err := scheduledreset.Reconcile(ctx, s.pool, author.OrgID, author.ActorID)
+		seq, err := reconcileStopped(ctx, s.pool, author.OrgID, author.ActorID)
 		if err != nil {
-			return 0, err
+			problems = append(problems, fmt.Errorf("reconcile %s: %w", author.ActorID, err))
+			continue
 		}
 		s.notify(author.OrgID, seq)
+	}
+	// A revoked family mark is useless once no pending message refers to
+	// it and every message it could have stamped is past its send time:
+	// a revoked family never authorizes again, so nothing new refers to it.
+	if _, err := s.pool.Exec(ctx, `
+		DELETE FROM revoked_session_families r
+		WHERE r.revoked_at < now() - $1::interval
+		  AND NOT EXISTS (SELECT 1 FROM scheduled_messages sm WHERE sm.session_family_id = r.family_id AND sm.status = 'pending')`,
+		familyMarkRetention.String()); err != nil {
+		problems = append(problems, fmt.Errorf("clean up revoked session families: %w", err))
 	}
 	command, err := s.pool.Exec(ctx, `
 		DELETE FROM scheduled_messages WHERE id IN (
@@ -812,9 +853,10 @@ func (s *Service) Cleanup(ctx context.Context) (int64, error) {
 			WHERE (status='sent' AND updated_at < now() - $1::interval) OR (status='failed' AND updated_at < now() - $2::interval)
 			LIMIT 1000)`, sentRetention.String(), failedRetention.String())
 	if err != nil {
-		return 0, fmt.Errorf("clean up scheduled messages: %w", err)
+		problems = append(problems, fmt.Errorf("clean up scheduled messages: %w", err))
+		return 0, errors.Join(problems...)
 	}
-	return command.RowsAffected(), nil
+	return command.RowsAffected(), errors.Join(problems...)
 }
 
 // RunCleanup repeats Cleanup until ctx ends.

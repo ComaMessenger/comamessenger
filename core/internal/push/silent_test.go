@@ -175,7 +175,8 @@ func TestAgentsCannotSendSilently(t *testing.T) {
 }
 
 // A relay from before quiet notifications refuses the unknown field; the
-// core then sends once more without it.
+// core then sends once more without it and remembers that for a while, so
+// later quiet notifications cost one request each, and probes again later.
 func TestHTTPRelayFallsBackForOlderRelays(t *testing.T) {
 	var bodies []map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -189,14 +190,26 @@ func TestHTTPRelayFallsBackForOlderRelays(t *testing.T) {
 		w.WriteHeader(http.StatusAccepted)
 	}))
 	defer server.Close()
-	relay := NewHTTPRelay(server.URL, server.Client())
-	if err := relay.Send(context.Background(), RelayMessage{Handle: "h", Ciphertext: "c", Silent: true}); err != nil {
-		t.Fatal(err)
+	client := NewHTTPRelay(server.URL, server.Client())
+	now := time.Now()
+	client.(*httpRelay).now = func() time.Time { return now }
+	quiet := RelayMessage{Handle: "h", Ciphertext: "c", Silent: true}
+	send := func(message RelayMessage, wantRequests int) {
+		t.Helper()
+		before := len(bodies)
+		if err := client.Send(context.Background(), message); err != nil {
+			t.Fatal(err)
+		}
+		if got := len(bodies) - before; got != wantRequests {
+			t.Fatalf("requests = %d, want %d", got, wantRequests)
+		}
 	}
-	if len(bodies) != 2 {
-		t.Fatalf("requests = %d", len(bodies))
-	}
-	if err := relay.Send(context.Background(), RelayMessage{Handle: "h", Ciphertext: "c"}); err != nil || len(bodies) != 3 {
-		t.Fatalf("ordinary send error=%v requests=%d", err, len(bodies))
+	send(quiet, 2)                                      // probe refused, then without the field
+	send(quiet, 1)                                      // remembered: straight without it
+	send(RelayMessage{Handle: "h", Ciphertext: "c"}, 1) // ordinary notifications unaffected
+	now = now.Add(legacyRelayProbe + time.Minute)       // time to try again
+	send(quiet, 2)                                      // still an old relay
+	if _, ok := bodies[len(bodies)-1]["silent"]; ok {
+		t.Fatal("last request still carried the field")
 	}
 }

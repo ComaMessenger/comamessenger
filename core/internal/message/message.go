@@ -79,7 +79,7 @@ type CreateInput struct {
 	// systemBlocks allows server-managed action bindings; set only by Core.
 	systemBlocks bool
 	// scheduledDelivery marks the send of a scheduled message, the only
-	// path allowed to use a client_msg_id from the scheduled namespace.
+	// path allowed to use a client_msg_id reserved by a scheduled message.
 	scheduledDelivery bool
 }
 
@@ -765,11 +765,25 @@ func (s *Service) validateBody(body, format *string, allowBlank bool) error {
 	return nil
 }
 
-// lockOrganization serializes the organization's event sequence. NO KEY
-// UPDATE is enough for that and, unlike FOR UPDATE, lets other transactions
-// insert rows that reference the organization (audit records, sessions)
-// meanwhile, so a security event that holds a person's row and writes an
-// audit record cannot deadlock with a send waiting for that row.
+// lockOrganization serializes the organization's event sequence.
+//
+// Lock order, shared by every transaction that writes events:
+//
+//	organizations → scheduled_messages → actors → users → sessions
+//
+// A transaction that allocates an event takes the organization row first,
+// before any other row; the same holds in chat, userstate, files
+// (avatars), identity (custom statuses) and scheduled. Chats and chat
+// members are locked exclusively only under the organization lock, so their
+// place among the rest does not matter. Security events (identity,
+// workspace) take only actors, users and sessions, in that order, and never
+// the organization row while holding them.
+//
+// NO KEY UPDATE is enough to serialize the sequence and, unlike FOR UPDATE,
+// does not block the FOR KEY SHARE locks of foreign key checks: a security
+// event that holds a person's row and inserts an audit record never waits
+// for the organization, so it cannot deadlock with a send waiting for that
+// person's row.
 func lockOrganization(ctx context.Context, tx pgx.Tx, orgID string) error {
 	var seq int64
 	if err := tx.QueryRow(ctx, `SELECT event_seq FROM organizations WHERE id = $1 FOR NO KEY UPDATE`, orgID).Scan(&seq); errors.Is(err, pgx.ErrNoRows) {

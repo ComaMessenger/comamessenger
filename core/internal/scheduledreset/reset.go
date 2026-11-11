@@ -28,6 +28,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -197,9 +198,29 @@ func Stopped(ctx context.Context, pool *pgxpool.Pool, limit int) ([]Author, erro
 	return result, rows.Err()
 }
 
-// ReconcileAfter runs Reconcile once a security event has committed. Its
-// failure is not the event's failure: delivery already refuses the stopped
-// messages and the periodic sweep marks them later.
+var afterCommit atomic.Pointer[func(orgID string, highWatermark int64)]
+
+// SetAfterCommit installs the realtime wake-up used once ReconcileAfter has
+// committed failure events, so the author's devices hear at once instead of
+// at the next poll. The server sets it at start-up, next to the services
+// that write the security events.
+func SetAfterCommit(callback func(orgID string, highWatermark int64)) {
+	if callback == nil {
+		afterCommit.Store(nil)
+		return
+	}
+	afterCommit.Store(&callback)
+}
+
+// ReconcileAfter runs Reconcile once a security event has committed and
+// wakes realtime delivery. Its failure is not the event's failure: delivery
+// already refuses the stopped messages and the periodic sweep marks them.
 func ReconcileAfter(ctx context.Context, pool *pgxpool.Pool, orgID, actorID string) {
-	_, _ = Reconcile(context.WithoutCancel(ctx), pool, orgID, actorID)
+	seq, err := Reconcile(context.WithoutCancel(ctx), pool, orgID, actorID)
+	if err != nil || seq == 0 {
+		return
+	}
+	if callback := afterCommit.Load(); callback != nil {
+		(*callback)(orgID, seq)
+	}
 }

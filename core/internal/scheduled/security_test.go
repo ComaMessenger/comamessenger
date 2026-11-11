@@ -9,9 +9,11 @@ import (
 	"time"
 
 	"github.com/comamessenger/comamessenger/core/internal/identity"
+	"github.com/comamessenger/comamessenger/core/internal/message"
 	"github.com/comamessenger/comamessenger/core/internal/scheduledreset"
 	"github.com/comamessenger/comamessenger/core/internal/workspace"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func (w *world) identityRepo() *identity.Repository { return identity.NewRepository(w.pool) }
@@ -43,6 +45,27 @@ func TestSigningOutKeepsScheduledMessages(t *testing.T) {
 		"session expired": func(t *testing.T, w *world) {
 			w.exec(t, `UPDATE sessions SET created_at=now()-interval '2 days', expires_at=now()-interval '1 day' WHERE actor_id=$1`, w.author.User.ActorID)
 		},
+		// A client that lost the response retries the refresh after logout.
+		"refresh after logout": func(t *testing.T, w *world) {
+			hash := w.setRefresh(t, w.author.SessionID, "live-token", false)
+			if err := w.identityRepo().RevokeSession(context.Background(), w.author.User.ActorID, w.author.SessionID, time.Now()); err != nil {
+				t.Fatal(err)
+			}
+			if err := w.rotate(hash); !errors.Is(err, identity.ErrRefreshReuse) {
+				t.Fatalf("refresh after logout error = %v", err)
+			}
+		},
+		// An expired session presented twice: the first refresh revokes
+		// the family as expired, the second looks like a replay.
+		"two refreshes after expiry": func(t *testing.T, w *world) {
+			hash := w.setRefresh(t, w.author.SessionID, "expired-token", true)
+			if err := w.rotate(hash); !errors.Is(err, identity.ErrInvalidRefreshToken) {
+				t.Fatalf("first refresh error = %v", err)
+			}
+			if err := w.rotate(hash); !errors.Is(err, identity.ErrRefreshReuse) {
+				t.Fatalf("second refresh error = %v", err)
+			}
+		},
 	}
 	for name, signOut := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -53,6 +76,9 @@ func TestSigningOutKeepsScheduledMessages(t *testing.T) {
 			w.deliver(t, item)
 			if status := w.load(t, item.ID).Status; status != StatusSent || w.sentCount(t, item) != 1 {
 				t.Fatalf("status = %s, want sent", status)
+			}
+			if got := w.count(t, `SELECT count(*) FROM revoked_session_families`); got != 0 {
+				t.Fatalf("revoked family marks = %d, want 0", got)
 			}
 		})
 	}
@@ -529,5 +555,159 @@ func TestNoLiveSessionCannotSchedule(t *testing.T) {
 	w2.exec(t, `UPDATE users SET must_change_password_at=now() WHERE actor_id=$1`, w2.author.User.ActorID)
 	if _, _, err := w2.service.Create(context.Background(), w2.author, w2.groupID, w2.input("x")); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("Create() with a required password change error = %v", err)
+	}
+}
+
+// setRefresh gives a session a known refresh token, live or expired.
+func (w *world) setRefresh(t *testing.T, sessionID, token string, expired bool) []byte {
+	t.Helper()
+	hash := sha256.Sum256([]byte(token))
+	expires := "now() + interval '1 day'"
+	if expired {
+		expires = "now() - interval '1 minute'"
+	}
+	w.exec(t, `UPDATE sessions SET refresh_hash=$2, created_at=now() - interval '2 days', expires_at=`+expires+` WHERE id=$1`, sessionID, hash[:])
+	return hash[:]
+}
+
+func (w *world) rotate(hash []byte) error {
+	fresh := sha256.Sum256([]byte(uuid.NewString()))
+	_, err := w.identityRepo().RotateSession(context.Background(), hash, identity.NewSession{
+		ID: uuid.NewString(), RefreshHash: fresh[:], ExpiresAt: time.Now().Add(time.Hour),
+	}, time.Now())
+	return err
+}
+
+// Item 8: an edit that reaches the server between "send now" committing and
+// the delivery is a version conflict, and the text the author saw goes out.
+func TestEditBetweenSendNowAndDeliveryConflicts(t *testing.T) {
+	ctx := context.Background()
+	w := newWorld(t)
+	item := w.create(t, w.groupID, w.input("as seen"))
+	if err := w.service.prepareSendNow(ctx, w.author, item.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := w.load(t, item.ID); got.Version != item.Version+1 || got.Status != StatusPending {
+		t.Fatalf("after prepare: version %d status %s", got.Version, got.Status)
+	}
+	body := "slipped in"
+	if _, err := w.service.Update(ctx, w.author, item.ID, UpdateInput{ExpectedVersion: item.Version, Body: &body}); !errors.Is(err, ErrVersionConflict) {
+		t.Fatalf("Update() error = %v, want ErrVersionConflict", err)
+	}
+	if err := w.service.Deliver(ctx, item.ID, 0); err != nil {
+		t.Fatal(err)
+	}
+	sent := w.load(t, item.ID)
+	var text string
+	if err := w.pool.QueryRow(ctx, `SELECT body FROM messages WHERE id=$1`, *sent.MessageID).Scan(&text); err != nil || text != "as seen" {
+		t.Fatalf("sent text = %q error=%v", text, err)
+	}
+	events := w.events(t, item.ID)
+	if len(events) < 2 || events[1].Type != "scheduled_message.updated" {
+		t.Fatalf("send now did not announce the new version: %#v", events)
+	}
+}
+
+// Item 3 of the first review, probed again: the reserved id stays reserved
+// after delivery, and after retention it can only replay the delivered
+// message, never create a second one.
+func TestReservedClientIDAfterDeliveryAndRetention(t *testing.T) {
+	ctx := context.Background()
+	w := newWorld(t)
+	item := w.create(t, w.groupID, w.input("reserved"))
+	clientID := MessageClientID(item.ID)
+	if _, _, err := w.messages.Create(ctx, w.other.User, w.groupID, message.CreateInput{ClientMsgID: clientID, Body: "other", BodyFormat: "plain"}); err != nil {
+		t.Fatalf("another author with the same uuid: %v", err)
+	}
+	w.makeDue(t, item.ID)
+	w.deliver(t, item)
+	if _, _, err := w.messages.Create(ctx, w.author.User, w.groupID, message.CreateInput{ClientMsgID: clientID, Body: "reserved", BodyFormat: "plain"}); !errors.Is(err, message.ErrIdempotencyConflict) {
+		t.Fatalf("reserved id after delivery: %v", err)
+	}
+	w.exec(t, `DELETE FROM scheduled_messages WHERE id=$1`, item.ID)
+	if _, created, err := w.messages.Create(ctx, w.author.User, w.groupID, message.CreateInput{ClientMsgID: clientID, Body: "reserved", BodyFormat: "plain"}); created {
+		t.Fatalf("after retention: a second message (err=%v)", err)
+	}
+	if got := w.count(t, `SELECT count(*) FROM messages WHERE actor_id=$1 AND client_msg_id=$2`, w.author.User.ActorID, clientID); got != 1 {
+		t.Fatalf("author's messages with the id = %d, want 1", got)
+	}
+}
+
+// Item 4: stale revoked family marks go; a mark a pending message still
+// refers to stays, even past the horizon.
+func TestRevokedFamilyMarksAreCleanedUp(t *testing.T) {
+	ctx := context.Background()
+	w := newWorld(t)
+	phone := w.secondSession(t)
+	if _, _, err := w.service.Create(ctx, phone, w.groupID, w.input("waits")); err != nil {
+		t.Fatal(err)
+	}
+	oldUnused, recent := uuid.NewString(), uuid.NewString()
+	w.exec(t, `INSERT INTO revoked_session_families (family_id, org_id, actor_id, reason, revoked_at) VALUES
+		($1, $4, $5, 'device_revoked', now() - interval '400 days'),
+		($2, $4, $5, 'device_revoked', now() - interval '400 days'),
+		($3, $4, $5, 'device_revoked', now())`, oldUnused, phone.SessionID, recent, w.orgID, w.author.User.ActorID)
+	// Keep the phone's message pending, as if the sweep had not reached it.
+	reconcileStopped = func(context.Context, *pgxpool.Pool, string, string) (int64, error) { return 0, nil }
+	defer func() { reconcileStopped = scheduledreset.Reconcile }()
+	if _, err := w.service.Cleanup(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for family, want := range map[string]int{oldUnused: 0, recent: 1, phone.SessionID: 1} {
+		if got := w.count(t, `SELECT count(*) FROM revoked_session_families WHERE family_id=$1`, family); got != want {
+			t.Fatalf("mark %s: count %d, want %d", family, got, want)
+		}
+	}
+	// Once the message is failed, the mark goes on the next pass.
+	reconcileStopped = scheduledreset.Reconcile
+	if _, err := w.service.Cleanup(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.service.Cleanup(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := w.count(t, `SELECT count(*) FROM revoked_session_families WHERE family_id=$1`, phone.SessionID); got != 0 {
+		t.Fatal("mark kept after its message failed")
+	}
+}
+
+// Item 5: one person's failing reconcile does not stop the pass, and the
+// step after a security event wakes realtime.
+func TestCleanupSurvivesReconcileErrorsAndWakesRealtime(t *testing.T) {
+	ctx := context.Background()
+	w := newWorld(t)
+	stopped := w.create(t, w.groupID, w.input("stopped"))
+	old := w.create(t, w.groupID, w.input("old"))
+	if err := w.service.MarkDeliveryFailed(ctx, old.ID, 0); err != nil {
+		t.Fatal(err)
+	}
+	w.exec(t, `UPDATE scheduled_messages SET updated_at = now() - interval '31 days' WHERE id=$1`, old.ID)
+	w.exec(t, `UPDATE users SET security_epoch = security_epoch + 1 WHERE actor_id=$1`, w.author.User.ActorID)
+	broken := errors.New("reconcile broke")
+	reconcileStopped = func(context.Context, *pgxpool.Pool, string, string) (int64, error) { return 0, broken }
+	defer func() { reconcileStopped = scheduledreset.Reconcile }()
+	removed, err := w.service.Cleanup(ctx)
+	if !errors.Is(err, broken) || removed != 1 {
+		t.Fatalf("Cleanup() = %d, %v; want the old record removed and the error reported", removed, err)
+	}
+	if w.load(t, stopped.ID).Status != StatusPending {
+		t.Fatal("test setup: the broken reconcile changed the record")
+	}
+
+	var woke []int64
+	scheduledreset.SetAfterCommit(func(orgID string, seq int64) {
+		if orgID == w.orgID {
+			woke = append(woke, seq)
+		}
+	})
+	defer scheduledreset.SetAfterCommit(nil)
+	if _, err := w.identityRepo().ChangePassword(ctx, w.orgID, w.author.User.ActorID, w.author.SessionID, "hash", uuid.NewString(), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if len(woke) != 1 || woke[0] == 0 {
+		t.Fatalf("realtime wake-ups = %v", woke)
+	}
+	if w.load(t, stopped.ID).Status != StatusFailed {
+		t.Fatal("record not failed right after the event")
 	}
 }

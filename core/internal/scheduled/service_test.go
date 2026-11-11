@@ -786,6 +786,7 @@ func TestDeletionCascades(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	w.exec(t, `INSERT INTO revoked_session_families (family_id, org_id, actor_id, reason) VALUES ($1, $2, $3, 'device_revoked')`, w.other.SessionID, w.orgID, w.other.User.ActorID)
 	w.exec(t, `DELETE FROM chat_members WHERE actor_id=$1`, w.other.User.ActorID)
 	w.exec(t, `DELETE FROM events WHERE actor_id=$1 OR audience_actor_id=$1`, w.other.User.ActorID)
 	w.exec(t, `DELETE FROM users WHERE actor_id=$1`, w.other.User.ActorID)
@@ -796,6 +797,9 @@ func TestDeletionCascades(t *testing.T) {
 	}
 	if got := w.count(t, `SELECT count(*) FROM scheduled_message_files WHERE scheduled_message_id=$1`, byOther.ID); got != 0 {
 		t.Fatal("file links outlived the record")
+	}
+	if got := w.count(t, `SELECT count(*) FROM revoked_session_families WHERE actor_id=$1`, w.other.User.ActorID); got != 0 {
+		t.Fatal("revoked family marks outlived the person")
 	}
 }
 

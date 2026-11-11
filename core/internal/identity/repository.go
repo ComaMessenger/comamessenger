@@ -662,15 +662,21 @@ func (r *Repository) RotateSession(ctx context.Context, refreshHash []byte, repl
 		if _, err := tx.Exec(ctx, `UPDATE sessions SET revoked_at = COALESCE(revoked_at, $2) WHERE family_id = $1`, familyID, now); err != nil {
 			return User{}, fmt.Errorf("revoke reused session family: %w", err)
 		}
-		// A reused refresh token may be stolen: what this device scheduled
-		// stops. An expired family below is not a security event.
-		if err := scheduledreset.RevokeFamilyTx(ctx, tx, user.OrgID, user.ActorID, familyID, scheduledreset.FamilyRefreshReuse); err != nil {
-			return User{}, err
+		// Only a token that was already replaced by a rotation and comes
+		// back may be stolen: what this device scheduled stops. A token of a
+		// session signed out on the device or expired (revoked_at without
+		// replaced_by) is a stale retry, not a security event.
+		if replacedBy != nil {
+			if err := scheduledreset.RevokeFamilyTx(ctx, tx, user.OrgID, user.ActorID, familyID, scheduledreset.FamilyRefreshReuse); err != nil {
+				return User{}, err
+			}
 		}
 		if err := tx.Commit(ctx); err != nil {
 			return User{}, fmt.Errorf("commit refresh reuse revocation: %w", err)
 		}
-		scheduledreset.ReconcileAfter(ctx, r.pool, user.OrgID, user.ActorID)
+		if replacedBy != nil {
+			scheduledreset.ReconcileAfter(ctx, r.pool, user.OrgID, user.ActorID)
+		}
 		return User{}, ErrRefreshReuse
 	}
 	if !expiresAt.After(now) || user.Status != "active" {
@@ -783,6 +789,10 @@ func (r *Repository) UpdateStatus(ctx context.Context, user User, status CustomS
 		return CustomStatus{}, 0, fmt.Errorf("begin status update: %w", err)
 	}
 	defer tx.Rollback(ctx)
+	// Organization first, then the actor: the lock order of sends.
+	if err := lockOrganizationTx(ctx, tx, user.OrgID); err != nil {
+		return CustomStatus{}, 0, err
+	}
 	command, err := tx.Exec(ctx, `
 		UPDATE actors SET status_emoji=$3,status_text=$4,status_expires_at=$5
 		WHERE org_id=$1 AND id=$2 AND status='active' AND deleted_at IS NULL`,
@@ -819,10 +829,34 @@ func (r *Repository) ExpireStatuses(ctx context.Context, now time.Time, limit in
 		return nil, fmt.Errorf("begin status expiry: %w", err)
 	}
 	defer tx.Rollback(ctx)
+	// Organizations first, in a stable order, then their actors: the lock
+	// order of sends. Actors busy elsewhere wait for the next pass.
+	orgRows, err := tx.Query(ctx, `SELECT DISTINCT org_id FROM actors WHERE status_expires_at IS NOT NULL AND status_expires_at<=$1 ORDER BY org_id`, now)
+	if err != nil {
+		return nil, fmt.Errorf("select organizations with expired statuses: %w", err)
+	}
+	var orgIDs []string
+	for orgRows.Next() {
+		var orgID string
+		if err := orgRows.Scan(&orgID); err != nil {
+			orgRows.Close()
+			return nil, err
+		}
+		orgIDs = append(orgIDs, orgID)
+	}
+	orgRows.Close()
+	if err := orgRows.Err(); err != nil {
+		return nil, err
+	}
+	for _, orgID := range orgIDs {
+		if err := lockOrganizationTx(ctx, tx, orgID); err != nil {
+			return nil, err
+		}
+	}
 	rows, err := tx.Query(ctx, `
 		SELECT org_id,id FROM actors
-		WHERE status_expires_at IS NOT NULL AND status_expires_at<=$1
-		ORDER BY status_expires_at,id FOR UPDATE SKIP LOCKED LIMIT $2`, now, limit)
+		WHERE org_id = ANY($3::uuid[]) AND status_expires_at IS NOT NULL AND status_expires_at<=$1
+		ORDER BY status_expires_at,id FOR UPDATE SKIP LOCKED LIMIT $2`, now, limit, orgIDs)
 	if err != nil {
 		return nil, fmt.Errorf("select expired statuses: %w", err)
 	}
@@ -1195,4 +1229,17 @@ func (r *Repository) RevokeOtherSessions(ctx context.Context, actorID, currentSe
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
+// lockOrganizationTx takes the organization row lock that serializes its
+// event sequence, before any actor, user or session row: see
+// message.lockOrganization for the shared order.
+func lockOrganizationTx(ctx context.Context, tx pgx.Tx, orgID string) error {
+	var seq int64
+	if err := tx.QueryRow(ctx, `SELECT event_seq FROM organizations WHERE id=$1 FOR NO KEY UPDATE`, orgID).Scan(&seq); errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	} else if err != nil {
+		return fmt.Errorf("lock organization: %w", err)
+	}
+	return nil
 }

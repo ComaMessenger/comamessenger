@@ -36,6 +36,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/push"
 	"github.com/comamessenger/comamessenger/core/internal/realtime"
 	"github.com/comamessenger/comamessenger/core/internal/scheduled"
+	"github.com/comamessenger/comamessenger/core/internal/scheduledreset"
 	"github.com/comamessenger/comamessenger/core/internal/search"
 	"github.com/comamessenger/comamessenger/core/internal/storage"
 	"github.com/comamessenger/comamessenger/core/internal/userstate"
@@ -215,6 +216,7 @@ func main() {
 		}
 	}
 	identityService.SetAfterCommit(afterCommit)
+	scheduledreset.SetAfterCommit(afterCommit)
 	fileService.SetAfterCommit(afterCommit)
 	go identityService.RunStatusExpiry(realtimeCtx, time.Minute)
 	messageService := message.NewService(

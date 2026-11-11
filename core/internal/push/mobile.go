@@ -13,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/comamessenger/comamessenger/core/internal/id"
@@ -113,16 +114,43 @@ type RelayClient interface {
 	Send(ctx context.Context, message RelayMessage) error
 }
 
+// legacyRelayProbe is how long the core trusts that its relay predates
+// quiet notifications before trying the field again.
+const legacyRelayProbe = time.Hour
+
 type httpRelay struct {
 	baseURL string
 	client  *http.Client
+	now     func() time.Time
+
+	mu sync.Mutex
+	// quietUnsupportedUntil: the relay refused "silent" recently; until then
+	// quiet notifications go without it, one request each, and the app
+	// alone silences them. The relay limits requests per instance IP before
+	// reading the body, so a refused probe costs a request of the budget.
+	quietUnsupportedUntil time.Time
 }
 
 func NewHTTPRelay(baseURL string, client *http.Client) RelayClient {
-	return &httpRelay{baseURL: strings.TrimRight(baseURL, "/"), client: client}
+	return &httpRelay{baseURL: strings.TrimRight(baseURL, "/"), client: client, now: time.Now}
+}
+
+func (r *httpRelay) quietUnsupported() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.now().Before(r.quietUnsupportedUntil)
+}
+
+func (r *httpRelay) markQuietUnsupported() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.quietUnsupportedUntil = r.now().Add(legacyRelayProbe)
 }
 
 func (r *httpRelay) Send(ctx context.Context, message RelayMessage) error {
+	if message.Silent && r.quietUnsupported() {
+		message.Silent = false
+	}
 	encoded, err := json.Marshal(message)
 	if err != nil {
 		return err
@@ -145,8 +173,9 @@ func (r *httpRelay) Send(ctx context.Context, message RelayMessage) error {
 		return ErrUnknownHandle
 	case response.StatusCode == http.StatusBadRequest && message.Silent:
 		// A relay from before quiet notifications refuses the field. The
-		// app still removes the sound after decrypting the payload, so send
-		// once more without it.
+		// app still removes the sound after decrypting the payload: send
+		// once more without it and skip the field for a while.
+		r.markQuietUnsupported()
 		message.Silent = false
 		return r.Send(ctx, message)
 	default:
