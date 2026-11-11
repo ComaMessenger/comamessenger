@@ -53,7 +53,8 @@ type Message struct {
 	Blocks            *Blocks             `json:"blocks,omitempty"`
 	// AgentProvenance says why an agent wrote the message; absent otherwise.
 	AgentProvenance *Provenance `json:"agent_provenance,omitempty"`
-	// Silent is set in create responses and realtime events only.
+	// Silent: notifications for this message play no sound. Set in create
+	// responses and realtime events only.
 	Silent bool `json:"silent,omitempty"`
 }
 
@@ -73,10 +74,13 @@ type CreateInput struct {
 	FileIDs           []string `json:"file_ids"`
 	RunID             *string  `json:"run_id,omitempty"`
 	Blocks            *Blocks  `json:"blocks,omitempty"`
-	// Silent delivers the message without push or sound notifications.
+	// Silent notifies recipients without sound or vibration. People only.
 	Silent bool `json:"silent,omitempty"`
 	// systemBlocks allows server-managed action bindings; set only by Core.
 	systemBlocks bool
+	// scheduledDelivery marks the send of a scheduled message, the only
+	// path allowed to use a client_msg_id from the scheduled namespace.
+	scheduledDelivery bool
 }
 
 type AgentProvenance struct {
@@ -217,6 +221,21 @@ func (s *Service) createTx(ctx context.Context, tx pgx.Tx, user identity.User, c
 		}
 	}
 
+	// Quiet notifications are a person's choice; agents notify as usual.
+	if input.Silent && (isAgent || provenance != nil) {
+		return Message{}, false, 0, ErrForbidden
+	}
+	// The client_msg_id of a scheduled message's send belongs to it alone:
+	// an ordinary send that takes it could hijack or break the delivery.
+	if !input.scheduledDelivery {
+		var reserved bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM scheduled_messages WHERE author_id=$1 AND message_client_msg_id=$2)`, user.ActorID, input.ClientMsgID).Scan(&reserved); err != nil {
+			return Message{}, false, 0, fmt.Errorf("check reserved client message id: %w", err)
+		}
+		if reserved {
+			return Message{}, false, 0, ErrIdempotencyConflict
+		}
+	}
 	fingerprint := commandFingerprint(chatID, input)
 	existing, existingFingerprint, err := findByClientID(ctx, tx, user.ActorID, input.ClientMsgID)
 	if err == nil {
@@ -295,7 +314,7 @@ func (s *Service) createTx(ctx context.Context, tx pgx.Tx, user identity.User, c
 		}
 		result = created[0]
 	}
-	if err := insertMessageCreatedEvent(ctx, tx, user, chatID, result.ID, seq, input.Silent); err != nil {
+	if err := insertEvent(ctx, tx, user, chatID, result.ID, seq, "message.created"); err != nil {
 		return Message{}, false, 0, err
 	}
 	highWatermark := seq
@@ -746,9 +765,14 @@ func (s *Service) validateBody(body, format *string, allowBlank bool) error {
 	return nil
 }
 
+// lockOrganization serializes the organization's event sequence. NO KEY
+// UPDATE is enough for that and, unlike FOR UPDATE, lets other transactions
+// insert rows that reference the organization (audit records, sessions)
+// meanwhile, so a security event that holds a person's row and writes an
+// audit record cannot deadlock with a send waiting for that row.
 func lockOrganization(ctx context.Context, tx pgx.Tx, orgID string) error {
 	var seq int64
-	if err := tx.QueryRow(ctx, `SELECT event_seq FROM organizations WHERE id = $1 FOR UPDATE`, orgID).Scan(&seq); errors.Is(err, pgx.ErrNoRows) {
+	if err := tx.QueryRow(ctx, `SELECT event_seq FROM organizations WHERE id = $1 FOR NO KEY UPDATE`, orgID).Scan(&seq); errors.Is(err, pgx.ErrNoRows) {
 		return ErrForbidden
 	} else if err != nil {
 		return fmt.Errorf("lock organization: %w", err)
@@ -888,20 +912,6 @@ func nextSequence(ctx context.Context, tx pgx.Tx, orgID string) (int64, error) {
 
 func insertEvent(ctx context.Context, tx pgx.Tx, user identity.User, chatID, subjectID string, seq int64, eventType string) error {
 	return insertEventData(ctx, tx, user, chatID, subjectID, seq, eventType, nil, nil)
-}
-
-// insertMessageCreatedEvent records message.created; a silent message skips
-// the notification job, so no push, e-mail digest or sound follows it.
-func insertMessageCreatedEvent(ctx context.Context, tx pgx.Tx, user identity.User, chatID, subjectID string, seq int64, silent bool) error {
-	if !silent {
-		return insertEvent(ctx, tx, user, chatID, subjectID, seq, "message.created")
-	}
-	if _, err := tx.Exec(ctx, `
-		INSERT INTO events (org_id, seq, type, actor_id, chat_id, subject_id, data)
-		VALUES ($1, $2, 'message.created', $3, $4, $5, '{}'::jsonb)`, user.OrgID, seq, user.ActorID, chatID, subjectID); err != nil {
-		return fmt.Errorf("insert durable event: %w", err)
-	}
-	return nil
 }
 
 func insertEventData(ctx context.Context, tx pgx.Tx, user identity.User, chatID, subjectID string, seq int64, eventType string, audienceActorID *string, data any) error {

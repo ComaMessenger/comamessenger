@@ -284,14 +284,14 @@ func TestCreateIsIdempotentAndPrivate(t *testing.T) {
 	if _, _, err := w.service.Create(ctx, w.author, w.groupID, changed); !errors.Is(err, ErrIdempotencyConflict) {
 		t.Fatalf("conflicting Create() error = %v", err)
 	}
-	sent, _, err := w.messages.Create(ctx, w.author.User, w.groupID, message.CreateInput{ClientMsgID: uuid.NewString(), Body: "now"})
-	if err != nil {
-		t.Fatal(err)
+	// The sent message's client_msg_id is reserved: an ordinary send cannot
+	// take it to hijack or break the delivery, and clients never see it.
+	if _, _, err := w.messages.Create(ctx, w.author.User, w.groupID, message.CreateInput{ClientMsgID: MessageClientID(first.ID), Body: "hijack"}); !errors.Is(err, message.ErrIdempotencyConflict) {
+		t.Fatalf("ordinary send with the reserved id error = %v", err)
 	}
-	reused := w.input("reuse")
-	reused.ClientMsgID = sent.ClientMsgID
-	if _, _, err := w.service.Create(ctx, w.author, w.groupID, reused); !errors.Is(err, ErrIdempotencyConflict) {
-		t.Fatalf("Create() with a used client_msg_id error = %v", err)
+	encoded, _ := json.Marshal(first)
+	if strings.Contains(string(encoded), MessageClientID(first.ID)) {
+		t.Fatal("the reserved client_msg_id leaks to the client")
 	}
 
 	// Only the author sees and changes it; everyone else gets "not found".
@@ -335,7 +335,8 @@ func TestCreateIsIdempotentAndPrivate(t *testing.T) {
 	if len(events) != 1 || events[0].Type != "scheduled_message.created" || events[0].Audience == nil || *events[0].Audience != w.author.User.ActorID || events[0].ChatID != nil {
 		t.Fatalf("events = %#v", events)
 	}
-	if got := w.count(t, `SELECT count(*) FROM notification_jobs`); got != 1 { // the ordinary message above only
+	assertEventShape(t, events[0].Data)
+	if got := w.count(t, `SELECT count(*) FROM notification_jobs`); got != 0 {
 		t.Fatalf("notification jobs = %d", got)
 	}
 }
@@ -435,7 +436,7 @@ func TestDeliverSendsOnceThroughTheOrdinaryPath(t *testing.T) {
 	}
 	w.deliver(t, item) // a retried job is harmless
 
-	if got := w.count(t, `SELECT count(*) FROM messages WHERE client_msg_id=$1`, item.ClientMsgID); got != 1 {
+	if got := w.count(t, `SELECT count(*) FROM messages WHERE client_msg_id=$1`, MessageClientID(item.ID)); got != 1 {
 		t.Fatalf("messages sent = %d, want 1", got)
 	}
 	sent := w.load(t, item.ID)
@@ -469,8 +470,16 @@ func TestDeliverSendsOnceThroughTheOrdinaryPath(t *testing.T) {
 	}
 	events := w.events(t, item.ID)
 	last := events[len(events)-1]
-	if last.Type != "scheduled_message.sent" || *last.Audience != w.author.User.ActorID || last.Data["message_id"] != *sent.MessageID || last.Data["body"] != "" {
+	if last.Type != "scheduled_message.sent" || *last.Audience != w.author.User.ActorID || last.Data["status"] != StatusSent {
 		t.Fatalf("sent event = %#v", last)
+	}
+	assertEventShape(t, last.Data)
+	// The text survives neither in the record nor anywhere in the event log.
+	if got := w.count(t, `SELECT count(*) FROM scheduled_messages WHERE body LIKE '%reply in thread%'`); got != 0 {
+		t.Fatal("text kept in the sent record")
+	}
+	if got := w.count(t, `SELECT count(*) FROM events WHERE data::text LIKE '%reply in thread%'`); got != 0 {
+		t.Fatal("text kept in the event log")
 	}
 	if got := w.count(t, `SELECT count(*) FROM events WHERE subject_id=$1 AND type='scheduled_message.sent'`, item.ID); got != 1 {
 		t.Fatalf("sent events = %d", got)
@@ -488,7 +497,8 @@ func TestDeliverSendsOnceThroughTheOrdinaryPath(t *testing.T) {
 	}
 }
 
-func TestSilentSkipsNotifications(t *testing.T) {
+// "Without sound" notifies as usual; the push worker makes it quiet.
+func TestSilentStillNotifies(t *testing.T) {
 	w := newWorld(t)
 	ctx := context.Background()
 	input := w.input("quiet")
@@ -501,23 +511,30 @@ func TestSilentSkipsNotifications(t *testing.T) {
 	if err := w.pool.QueryRow(ctx, `SELECT silent FROM messages WHERE id=$1`, *sent.MessageID).Scan(&silent); err != nil || !silent {
 		t.Fatalf("silent=%v error=%v", silent, err)
 	}
-	if got := w.count(t, `SELECT count(*) FROM notification_jobs`); got != 0 {
-		t.Fatalf("silent message queued %d notification jobs", got)
+	if got := w.count(t, `SELECT count(*) FROM notification_jobs nj JOIN events e ON e.org_id=nj.org_id AND e.seq=nj.event_seq WHERE e.subject_id=$1`, *sent.MessageID); got != 1 {
+		t.Fatalf("notification jobs = %d, want 1", got)
 	}
-	// The ordinary send path honors the flag too.
 	direct, _, err := w.messages.Create(ctx, w.author.User, w.groupID, message.CreateInput{ClientMsgID: uuid.NewString(), Body: "shh", Silent: true})
 	if err != nil || !direct.Silent {
 		t.Fatalf("Create(silent) = %#v error=%v", direct, err)
 	}
-	if got := w.count(t, `SELECT count(*) FROM notification_jobs`); got != 0 {
-		t.Fatalf("silent message queued %d notification jobs", got)
-	}
-	if got := w.count(t, `SELECT count(*) FROM events WHERE subject_id=$1 AND type='message.created'`, direct.ID); got != 1 {
-		t.Fatal("silent message must still be delivered")
-	}
 	// Repeating the command with another silence is a different command.
 	if _, _, err := w.messages.Create(ctx, w.author.User, w.groupID, message.CreateInput{ClientMsgID: direct.ClientMsgID, Body: "shh"}); !errors.Is(err, message.ErrIdempotencyConflict) {
 		t.Fatalf("Create() with changed silence error = %v", err)
+	}
+}
+
+// assertEventShape: scheduled_message.* events carry no content.
+func assertEventShape(t *testing.T, data map[string]any) {
+	t.Helper()
+	allowed := map[string]bool{"id": true, "chat_id": true, "status": true, "version": true, "send_at": true, "failure_reason": true}
+	for key := range data {
+		if !allowed[key] {
+			t.Fatalf("event carries %q: %v", key, data)
+		}
+	}
+	if len(data) != len(allowed) {
+		t.Fatalf("event fields = %v", data)
 	}
 }
 
@@ -542,6 +559,9 @@ func TestRescheduleEditAndCancel(t *testing.T) {
 	}
 	if _, err := w.service.Update(ctx, w.author, item.ID, UpdateInput{ExpectedVersion: 1, Body: &body}); !errors.Is(err, ErrVersionConflict) {
 		t.Fatalf("stale Update() error = %v", err)
+	}
+	if got := w.count(t, `SELECT count(*) FROM events WHERE data::text LIKE '%final text%' OR data::text LIKE '%draft%'`); got != 0 {
+		t.Fatal("text in the event log")
 	}
 	past := time.Now().Add(-time.Minute)
 	if _, err := w.service.Update(ctx, w.author, item.ID, UpdateInput{ExpectedVersion: 2, SendAt: &past}); !errors.Is(err, ErrInvalid) {
@@ -583,12 +603,16 @@ func TestRescheduleEditAndCancel(t *testing.T) {
 	if err := w.service.Deliver(ctx, item.ID, newJob); err != nil {
 		t.Fatal(err)
 	}
-	if got := w.count(t, `SELECT count(*) FROM messages WHERE client_msg_id=$1`, item.ClientMsgID); got != 0 {
+	if got := w.count(t, `SELECT count(*) FROM messages WHERE client_msg_id=$1`, MessageClientID(item.ID)); got != 0 {
 		t.Fatal("a deleted scheduled message was sent")
 	}
 	events := w.events(t, item.ID)
-	if events[len(events)-1].Type != "scheduled_message.deleted" {
+	if events[len(events)-1].Type != "scheduled_message.deleted" || events[len(events)-1].Data["status"] != "deleted" {
 		t.Fatalf("events = %#v", events)
+	}
+	assertEventShape(t, events[len(events)-1].Data)
+	if got := w.count(t, `SELECT count(*) FROM events WHERE data::text LIKE '%final text%'`); got != 0 {
+		t.Fatal("deleted text kept in the event log")
 	}
 	if err := w.service.Delete(ctx, w.author, item.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("second Delete() error = %v", err)
@@ -631,6 +655,12 @@ func TestSendTimeChecks(t *testing.T) {
 	}{
 		{name: "author deactivated", reason: ReasonAuthorInactive, setup: func(t *testing.T, w *world, _ ScheduledMessage) {
 			w.exec(t, `UPDATE actors SET status='deactivated' WHERE id=$1`, w.author.User.ActorID)
+		}},
+		{name: "password change required", reason: ReasonSecurityReset, setup: func(t *testing.T, w *world, _ ScheduledMessage) {
+			w.exec(t, `UPDATE users SET must_change_password_at=now() WHERE actor_id=$1`, w.author.User.ActorID)
+		}},
+		{name: "security epoch moved on", reason: ReasonSecurityReset, setup: func(t *testing.T, w *world, _ ScheduledMessage) {
+			w.exec(t, `UPDATE users SET security_epoch=security_epoch+1 WHERE actor_id=$1`, w.author.User.ActorID)
 		}},
 		{name: "chat archived", reason: ReasonChatUnavailable, setup: func(t *testing.T, w *world, _ ScheduledMessage) {
 			w.exec(t, `UPDATE chats SET archived_at=now() WHERE id=$1`, w.groupID)
@@ -683,7 +713,7 @@ func TestSendTimeChecks(t *testing.T) {
 			tc.setup(t, w, item)
 			w.makeDue(t, item.ID)
 			w.deliver(t, item)
-			if got := w.count(t, `SELECT count(*) FROM messages WHERE client_msg_id=$1`, item.ClientMsgID); got != 0 {
+			if got := w.count(t, `SELECT count(*) FROM messages WHERE client_msg_id=$1`, MessageClientID(item.ID)); got != 0 {
 				t.Fatal("message was sent despite the refusal")
 			}
 			failed := w.load(t, item.ID)
@@ -695,6 +725,7 @@ func TestSendTimeChecks(t *testing.T) {
 			if last.Type != "scheduled_message.failed" || last.Audience == nil || *last.Audience != w.author.User.ActorID || last.ChatID != nil || last.Data["failure_reason"] != tc.reason {
 				t.Fatalf("failure event = %#v", last)
 			}
+			assertEventShape(t, last.Data)
 			// Repeating the job does not resend or re-fail.
 			w.deliver(t, item)
 			if got := w.count(t, `SELECT count(*) FROM events WHERE subject_id=$1 AND type='scheduled_message.failed'`, item.ID); got != 1 {

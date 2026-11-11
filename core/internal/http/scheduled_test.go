@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -24,6 +25,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/password"
 	"github.com/comamessenger/comamessenger/core/internal/realtime"
 	"github.com/comamessenger/comamessenger/core/internal/scheduled"
+	"github.com/comamessenger/comamessenger/core/internal/scheduledreset"
 	"github.com/comamessenger/comamessenger/core/internal/testdb"
 	"github.com/google/uuid"
 )
@@ -174,16 +176,73 @@ func TestScheduledMessagesE2E(t *testing.T) {
 	if delivered.Body != "Good morning!" || delivered.ActorID != member.User.ActorID || !delivered.Silent {
 		t.Fatalf("delivered = %#v", delivered)
 	}
-	var sent scheduled.ScheduledMessage
-	if err := json.Unmarshal(scheduledEvent(t, authorSocket, "scheduled_message.sent").Data, &sent); err != nil {
-		t.Fatal(err)
+	// The event names what changed; the record tells the rest.
+	sentEvent := scheduledEvent(t, authorSocket, "scheduled_message.sent")
+	var event scheduledreset.Event
+	decoder := json.NewDecoder(bytes.NewReader(sentEvent.Data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&event); err != nil || event.ID != created.ID || event.Status != "sent" {
+		t.Fatalf("sent event %s: %v", sentEvent.Data, err)
 	}
+	if bytes.Contains(sentEvent.Data, []byte("Good morning")) {
+		t.Fatal("event carries the text")
+	}
+	var sent scheduled.ScheduledMessage
+	e2eRequest(t, client, standardhttp.MethodGet, item, member.AccessToken, nil, standardhttp.StatusOK, &sent)
 	if sent.MessageID == nil || *sent.MessageID != delivered.ID || sent.Status != "sent" {
 		t.Fatalf("sent = %#v", sent)
 	}
 	e2eRequest(t, client, standardhttp.MethodPost, item+"/send", member.AccessToken, nil, standardhttp.StatusConflict, nil)
 	e2eRequest(t, client, standardhttp.MethodDelete, item, member.AccessToken, nil, standardhttp.StatusNoContent, nil)
 	e2eRequest(t, client, standardhttp.MethodGet, item, member.AccessToken, nil, standardhttp.StatusNotFound, nil)
+
+	// Removing a device from the session list stops what it scheduled;
+	// signing out on a device itself does not.
+	var phone identity.Tokens
+	e2eRequest(t, client, standardhttp.MethodPost, baseURL+"/api/v1/auth/login", "", map[string]any{
+		"email": "member@example.test", "password": "another correct password",
+	}, standardhttp.StatusOK, &phone)
+	var tablet identity.Tokens
+	e2eRequest(t, client, standardhttp.MethodPost, baseURL+"/api/v1/auth/login", "", map[string]any{
+		"email": "member@example.test", "password": "another correct password",
+	}, standardhttp.StatusOK, &tablet)
+	later := func(token, body string) scheduled.ScheduledMessage {
+		var result scheduled.ScheduledMessage
+		e2eRequest(t, client, standardhttp.MethodPost, endpoint, token, map[string]any{
+			"client_msg_id": uuid.NewString(), "body": body, "send_at": time.Now().Add(time.Hour),
+		}, standardhttp.StatusCreated, &result)
+		return result
+	}
+	fromPhone, fromTablet, fromLaptop := later(phone.AccessToken, "phone"), later(tablet.AccessToken, "tablet"), later(member.AccessToken, "laptop")
+	var phoneSessions struct {
+		Sessions []identity.Session `json:"sessions"`
+	}
+	e2eRequest(t, client, standardhttp.MethodGet, baseURL+"/api/v1/sessions", phone.AccessToken, nil, standardhttp.StatusOK, &phoneSessions)
+	phoneSessionID := ""
+	for _, session := range phoneSessions.Sessions {
+		if session.Current {
+			phoneSessionID = session.ID
+		}
+	}
+	e2eRequest(t, client, standardhttp.MethodDelete, baseURL+"/api/v1/sessions/"+phoneSessionID, member.AccessToken, nil, standardhttp.StatusNoContent, nil)
+	e2eRequest(t, client, standardhttp.MethodPost, baseURL+"/api/v1/auth/logout", tablet.AccessToken, nil, standardhttp.StatusNoContent, nil)
+	status := func(item scheduled.ScheduledMessage) (string, string) {
+		var got scheduled.ScheduledMessage
+		e2eRequest(t, client, standardhttp.MethodGet, baseURL+"/api/v1/scheduled-messages/"+item.ID, member.AccessToken, nil, standardhttp.StatusOK, &got)
+		reason := ""
+		if got.FailureReason != nil {
+			reason = *got.FailureReason
+		}
+		return got.Status, reason
+	}
+	if got, reason := status(fromPhone); got != "failed" || reason != "session_revoked" {
+		t.Fatalf("phone message = %s %s", got, reason)
+	}
+	for _, item := range []scheduled.ScheduledMessage{fromTablet, fromLaptop} {
+		if got, reason := status(item); got != "pending" {
+			t.Fatalf("%s = %s %s", item.Body, got, reason)
+		}
+	}
 }
 
 // framesUntil reads event frames until one of the wanted type arrives.

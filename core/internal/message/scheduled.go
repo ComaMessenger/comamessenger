@@ -64,6 +64,7 @@ func (s *Service) authorizeWrite(ctx context.Context, tx pgx.Tx, user identity.U
 // The caller commits and, when created is true, calls NotifyCommitted with
 // the returned high watermark. input must be validated by ValidateCreate.
 func (s *Service) CreateTx(ctx context.Context, tx pgx.Tx, user identity.User, chatID string, input CreateInput) (Message, bool, int64, error) {
+	input.scheduledDelivery = true
 	return s.createTx(ctx, tx, user, chatID, input, nil, false)
 }
 

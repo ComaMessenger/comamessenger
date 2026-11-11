@@ -3194,6 +3194,30 @@ func (e ScheduledMessageStatus) Valid() bool {
 	}
 }
 
+// Defines values for ScheduledMessageEventStatus.
+const (
+	ScheduledMessageEventStatusDeleted ScheduledMessageEventStatus = "deleted"
+	ScheduledMessageEventStatusFailed  ScheduledMessageEventStatus = "failed"
+	ScheduledMessageEventStatusPending ScheduledMessageEventStatus = "pending"
+	ScheduledMessageEventStatusSent    ScheduledMessageEventStatus = "sent"
+)
+
+// Valid indicates whether the value is a known member of the ScheduledMessageEventStatus enum.
+func (e ScheduledMessageEventStatus) Valid() bool {
+	switch e {
+	case ScheduledMessageEventStatusDeleted:
+		return true
+	case ScheduledMessageEventStatusFailed:
+		return true
+	case ScheduledMessageEventStatusPending:
+		return true
+	case ScheduledMessageEventStatusSent:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ScheduledMessageFailureReason.
 const (
 	ScheduledMessageFailureReasonAttachmentUnavailable ScheduledMessageFailureReason = "attachment_unavailable"
@@ -3202,9 +3226,11 @@ const (
 	ScheduledMessageFailureReasonDeliveryError         ScheduledMessageFailureReason = "delivery_error"
 	ScheduledMessageFailureReasonForbidden             ScheduledMessageFailureReason = "forbidden"
 	ScheduledMessageFailureReasonInvalidContent        ScheduledMessageFailureReason = "invalid_content"
+	ScheduledMessageFailureReasonMissedSendTime        ScheduledMessageFailureReason = "missed_send_time"
 	ScheduledMessageFailureReasonNotMember             ScheduledMessageFailureReason = "not_member"
 	ScheduledMessageFailureReasonReferenceUnavailable  ScheduledMessageFailureReason = "reference_unavailable"
 	ScheduledMessageFailureReasonSecurityReset         ScheduledMessageFailureReason = "security_reset"
+	ScheduledMessageFailureReasonSessionRevoked        ScheduledMessageFailureReason = "session_revoked"
 )
 
 // Valid indicates whether the value is a known member of the ScheduledMessageFailureReason enum.
@@ -3222,11 +3248,15 @@ func (e ScheduledMessageFailureReason) Valid() bool {
 		return true
 	case ScheduledMessageFailureReasonInvalidContent:
 		return true
+	case ScheduledMessageFailureReasonMissedSendTime:
+		return true
 	case ScheduledMessageFailureReasonNotMember:
 		return true
 	case ScheduledMessageFailureReasonReferenceUnavailable:
 		return true
 	case ScheduledMessageFailureReasonSecurityReset:
+		return true
+	case ScheduledMessageFailureReasonSessionRevoked:
 		return true
 	default:
 		return false
@@ -5244,7 +5274,7 @@ type CreateMessageRequest struct {
 	// RunId Required when authenticating with an agent API key.
 	RunId *openapi_types.UUID `json:"run_id,omitempty"`
 
-	// Silent Deliver as usual but without push or sound notifications for recipients; unread counters change as always. Absent means false.
+	// Silent Notify recipients without sound or vibration. The message and its notifications are delivered as usual and recipients' settings apply. People only: a request with an agent API key or from an agent gets 403. Absent means false.
 	Silent       *bool               `json:"silent,omitempty"`
 	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
 }
@@ -5266,7 +5296,7 @@ type CreateScheduledMessageRequest struct {
 	// SendAt Must be in the future and at most 365 days ahead.
 	SendAt time.Time `json:"send_at"`
 
-	// Silent Deliver without push or sound notifications. Absent means false.
+	// Silent Notify recipients without sound or vibration, as for an ordinary message. Absent means false.
 	Silent       *bool               `json:"silent,omitempty"`
 	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
 }
@@ -5833,7 +5863,7 @@ type Message struct {
 	MentionedActorIds []openapi_types.UUID `json:"mentioned_actor_ids"`
 	ReplyToId         *openapi_types.UUID  `json:"reply_to_id,omitempty"`
 
-	// Silent Present and true when the author sent the message without notifications: clients play no sound for it. Carried by the create response and realtime events; history pages omit it.
+	// Silent Present and true when the author asked for quiet notifications: recipients are notified as usual (push, e-mail digest, their own notification settings apply) but clients play no sound or vibration for it. Carried by the create response and realtime events; history pages omit it.
 	Silent *bool `json:"silent,omitempty"`
 
 	// ThreadReplyCount Number of non-deleted replies when this message is a thread root.
@@ -6501,13 +6531,13 @@ type SMTPConfigurationUpdate struct {
 // SMTPConfigurationUpdateSecurity defines model for SMTPConfigurationUpdate.Security.
 type SMTPConfigurationUpdateSecurity string
 
-// ScheduledMessage A message the current user scheduled. Visible only to its author. After sending, the text, mentions and files are cleared from the record (the message itself carries them) and message_id points to the message.
+// ScheduledMessage A message the current user scheduled. Visible only to its author. After sending, the text, mentions and files are cleared from the record (the message itself carries them) and message_id points to the message. Realtime events about it carry only ScheduledMessageEvent; read the record for its content.
 type ScheduledMessage struct {
 	Body       string                     `json:"body"`
 	BodyFormat ScheduledMessageBodyFormat `json:"body_format"`
 	ChatId     openapi_types.UUID         `json:"chat_id"`
 
-	// ClientMsgId Becomes the client_msg_id of the sent message.
+	// ClientMsgId The idempotency key of the scheduling request. The sent message gets its own client_msg_id, derived by the server and reserved for it.
 	ClientMsgId       openapi_types.UUID             `json:"client_msg_id"`
 	CreatedAt         time.Time                      `json:"created_at"`
 	FailedAt          *time.Time                     `json:"failed_at,omitempty"`
@@ -6532,7 +6562,20 @@ type ScheduledMessageBodyFormat string
 // ScheduledMessageStatus defines model for ScheduledMessage.Status.
 type ScheduledMessageStatus string
 
-// ScheduledMessageFailureReason Why the message was not sent. author_inactive: the account was deactivated. security_reset: the password was changed or reset, the e-mail changed, or every device was signed out by the person or an administrator; the text stays so it can be scheduled again. Signing out one device or a session expiring never stops a scheduled message. chat_unavailable: the chat was archived or deleted. not_member: the author left or was removed. forbidden: the author may no longer write here. reference_unavailable: the reply target, thread or a mentioned member is gone. attachment_unavailable: a file was deleted. invalid_content: the message no longer passes validation. delivery_error: repeated internal errors.
+// ScheduledMessageEvent data of the realtime events scheduled_message.created, .updated, .deleted, .sent and .failed, sent only to the author's devices. It never carries the text, mentions or files: the event log is kept long and replayed to new devices. Fetch the record when needed.
+type ScheduledMessageEvent struct {
+	ChatId        openapi_types.UUID             `json:"chat_id"`
+	FailureReason *ScheduledMessageFailureReason `json:"failure_reason"`
+	Id            openapi_types.UUID             `json:"id"`
+	SendAt        time.Time                      `json:"send_at"`
+	Status        ScheduledMessageEventStatus    `json:"status"`
+	Version       int                            `json:"version"`
+}
+
+// ScheduledMessageEventStatus defines model for ScheduledMessageEvent.Status.
+type ScheduledMessageEventStatus string
+
+// ScheduledMessageFailureReason Why the message was not sent; the text stays so it can be scheduled again. author_inactive: the account was deactivated (reactivation does not revive it). security_reset: the password was changed or reset, an administrator required a new password, the e-mail changed, or every other device was signed out. session_revoked: the device that scheduled or last changed it was removed from the session list, or its refresh token was reused. Signing out on that device itself or a session expiring never stops a scheduled message. missed_send_time: it could not be sent within 15 minutes of its time. chat_unavailable: the chat was archived or deleted. not_member: the author left or was removed. forbidden: the author may no longer write here. reference_unavailable: the reply target, thread or a mentioned member is gone. attachment_unavailable: a file was deleted. invalid_content: the message no longer passes validation. delivery_error: repeated internal errors.
 type ScheduledMessageFailureReason string
 
 // ScheduledMessageList defines model for ScheduledMessageList.

@@ -156,9 +156,6 @@ func (r *Repository) ChangePassword(ctx context.Context, orgID, actorID, current
 		return nil, fmt.Errorf("begin password change: %w", err)
 	}
 	defer tx.Rollback(ctx)
-	if err := scheduledreset.LockOrganization(ctx, tx, orgID); err != nil {
-		return nil, err
-	}
 	command, err := tx.Exec(ctx, `
 		UPDATE users SET password_hash=$3,must_change_password_at=NULL
 		WHERE org_id=$1 AND actor_id=$2`, orgID, actorID, passwordHash)
@@ -167,6 +164,10 @@ func (r *Repository) ChangePassword(ctx context.Context, orgID, actorID, current
 	}
 	if command.RowsAffected() != 1 {
 		return nil, ErrNotFound
+	}
+	// A security event: scheduled messages authorized before it never go out.
+	if err := scheduledreset.BumpEpochTx(ctx, tx, orgID, actorID); err != nil {
+		return nil, err
 	}
 	rows, err := tx.Query(ctx, `
 		UPDATE sessions SET revoked_at=COALESCE(revoked_at,$4)
@@ -189,9 +190,6 @@ func (r *Repository) ChangePassword(ctx context.Context, orgID, actorID, current
 		return nil, fmt.Errorf("iterate revoked sessions: %w", err)
 	}
 	rows.Close()
-	if _, err := scheduledreset.FailPendingTx(ctx, tx, orgID, actorID, scheduledreset.ReasonSecurityReset); err != nil {
-		return nil, err
-	}
 	_, err = tx.Exec(ctx, `
 		INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata)
 		VALUES($1,$2,$3,'member.password.change','actor',$3,
@@ -202,6 +200,7 @@ func (r *Repository) ChangePassword(ctx context.Context, orgID, actorID, current
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit password change: %w", err)
 	}
+	scheduledreset.ReconcileAfter(ctx, r.pool, orgID, actorID)
 	return revoked, nil
 }
 
@@ -211,9 +210,6 @@ func (r *Repository) ChangeEmailImmediate(ctx context.Context, orgID, actorID, c
 		return User{}, nil, fmt.Errorf("begin email change: %w", err)
 	}
 	defer tx.Rollback(ctx)
-	if err := scheduledreset.LockOrganization(ctx, tx, orgID); err != nil {
-		return User{}, nil, err
-	}
 	command, err := tx.Exec(ctx, `
 		UPDATE users SET email=$3,email_verified_at=NULL
 		WHERE org_id=$1 AND actor_id=$2`, orgID, actorID, newEmail)
@@ -226,11 +222,11 @@ func (r *Repository) ChangeEmailImmediate(ctx context.Context, orgID, actorID, c
 	if command.RowsAffected() != 1 {
 		return User{}, nil, ErrNotFound
 	}
-	revoked, err := revokeOtherSessionsTx(ctx, tx, orgID, actorID, currentSessionID, now)
-	if err != nil {
+	if err := scheduledreset.BumpEpochTx(ctx, tx, orgID, actorID); err != nil {
 		return User{}, nil, err
 	}
-	if _, err := scheduledreset.FailPendingTx(ctx, tx, orgID, actorID, scheduledreset.ReasonSecurityReset); err != nil {
+	revoked, err := revokeOtherSessionsTx(ctx, tx, orgID, actorID, currentSessionID, now)
+	if err != nil {
 		return User{}, nil, err
 	}
 	_, err = tx.Exec(ctx, `
@@ -244,6 +240,7 @@ func (r *Repository) ChangeEmailImmediate(ctx context.Context, orgID, actorID, c
 	if err := tx.Commit(ctx); err != nil {
 		return User{}, nil, fmt.Errorf("commit email change: %w", err)
 	}
+	scheduledreset.ReconcileAfter(ctx, r.pool, orgID, actorID)
 	user, err := r.ResolveSession(ctx, currentSessionID, actorID, now)
 	return user, revoked, err
 }
@@ -291,9 +288,6 @@ func (r *Repository) ConfirmEmailChange(ctx context.Context, orgID, actorID, cur
 		return User{}, nil, fmt.Errorf("begin email confirmation: %w", err)
 	}
 	defer tx.Rollback(ctx)
-	if err := scheduledreset.LockOrganization(ctx, tx, orgID); err != nil {
-		return User{}, nil, err
-	}
 	var tokenID, newEmail string
 	err = tx.QueryRow(ctx, `
 		SELECT id,new_email::text FROM email_change_tokens
@@ -314,11 +308,11 @@ func (r *Repository) ConfirmEmailChange(ctx context.Context, orgID, actorID, cur
 	if _, err := tx.Exec(ctx, `UPDATE email_change_tokens SET used_at=$2 WHERE id=$1`, tokenID, now); err != nil {
 		return User{}, nil, fmt.Errorf("consume email change token: %w", err)
 	}
-	revoked, err := revokeOtherSessionsTx(ctx, tx, orgID, actorID, currentSessionID, now)
-	if err != nil {
+	if err := scheduledreset.BumpEpochTx(ctx, tx, orgID, actorID); err != nil {
 		return User{}, nil, err
 	}
-	if _, err := scheduledreset.FailPendingTx(ctx, tx, orgID, actorID, scheduledreset.ReasonSecurityReset); err != nil {
+	revoked, err := revokeOtherSessionsTx(ctx, tx, orgID, actorID, currentSessionID, now)
+	if err != nil {
 		return User{}, nil, err
 	}
 	_, err = tx.Exec(ctx, `
@@ -331,6 +325,7 @@ func (r *Repository) ConfirmEmailChange(ctx context.Context, orgID, actorID, cur
 	if err := tx.Commit(ctx); err != nil {
 		return User{}, nil, fmt.Errorf("commit email confirmation: %w", err)
 	}
+	scheduledreset.ReconcileAfter(ctx, r.pool, orgID, actorID)
 	user, err := r.ResolveSession(ctx, currentSessionID, actorID, now)
 	return user, revoked, err
 }
@@ -425,14 +420,14 @@ func (r *Repository) ResetPassword(ctx context.Context, tokenHash []byte, passwo
 	if err != nil {
 		return nil, fmt.Errorf("load password reset token: %w", err)
 	}
-	if err := scheduledreset.LockOrganization(ctx, tx, orgID); err != nil {
-		return nil, err
-	}
 	if _, err := tx.Exec(ctx, `UPDATE users SET password_hash=$3,must_change_password_at=NULL WHERE org_id=$1 AND actor_id=$2`, orgID, actorID, passwordHash); err != nil {
 		return nil, fmt.Errorf("reset password: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `UPDATE password_reset_tokens SET used_at=$2 WHERE id=$1`, tokenID, now); err != nil {
 		return nil, fmt.Errorf("consume password reset token: %w", err)
+	}
+	if err := scheduledreset.BumpEpochTx(ctx, tx, orgID, actorID); err != nil {
+		return nil, err
 	}
 	rows, err := tx.Query(ctx, `UPDATE sessions SET revoked_at=COALESCE(revoked_at,$3) WHERE org_id=$1 AND actor_id=$2 AND revoked_at IS NULL RETURNING id`, orgID, actorID, now)
 	if err != nil {
@@ -452,9 +447,6 @@ func (r *Repository) ResetPassword(ctx context.Context, tokenHash []byte, passwo
 		return nil, fmt.Errorf("iterate revoked reset sessions: %w", err)
 	}
 	rows.Close()
-	if _, err := scheduledreset.FailPendingTx(ctx, tx, orgID, actorID, scheduledreset.ReasonSecurityReset); err != nil {
-		return nil, err
-	}
 	_, err = tx.Exec(ctx, `
 		INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata)
 		VALUES($1,$2,$3,'member.password_reset.complete','actor',$3,
@@ -465,6 +457,7 @@ func (r *Repository) ResetPassword(ctx context.Context, tokenHash []byte, passwo
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit password reset: %w", err)
 	}
+	scheduledreset.ReconcileAfter(ctx, r.pool, orgID, actorID)
 	return revoked, nil
 }
 
@@ -669,9 +662,15 @@ func (r *Repository) RotateSession(ctx context.Context, refreshHash []byte, repl
 		if _, err := tx.Exec(ctx, `UPDATE sessions SET revoked_at = COALESCE(revoked_at, $2) WHERE family_id = $1`, familyID, now); err != nil {
 			return User{}, fmt.Errorf("revoke reused session family: %w", err)
 		}
+		// A reused refresh token may be stolen: what this device scheduled
+		// stops. An expired family below is not a security event.
+		if err := scheduledreset.RevokeFamilyTx(ctx, tx, user.OrgID, user.ActorID, familyID, scheduledreset.FamilyRefreshReuse); err != nil {
+			return User{}, err
+		}
 		if err := tx.Commit(ctx); err != nil {
 			return User{}, fmt.Errorf("commit refresh reuse revocation: %w", err)
 		}
+		scheduledreset.ReconcileAfter(ctx, r.pool, user.OrgID, user.ActorID)
 		return User{}, ErrRefreshReuse
 	}
 	if !expiresAt.After(now) || user.Status != "active" {
@@ -1082,6 +1081,37 @@ func loadPermissions(ctx context.Context, db permissionQueryRower, user *User) e
 	return nil
 }
 
+// RevokeDevice removes one of the person's devices from the session list.
+// Unlike signing out on the device itself, it is a security event for that
+// device: the messages it scheduled or last changed stop.
+func (r *Repository) RevokeDevice(ctx context.Context, actorID, sessionID string, now time.Time) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin device revocation: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	var orgID, familyID string
+	err = tx.QueryRow(ctx, `
+		UPDATE sessions SET revoked_at = COALESCE(revoked_at, $3)
+		WHERE id = $1 AND actor_id = $2 RETURNING org_id, family_id`, sessionID, actorID, now).Scan(&orgID, &familyID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("revoke device: %w", err)
+	}
+	if err := scheduledreset.RevokeFamilyTx(ctx, tx, orgID, actorID, familyID, scheduledreset.FamilyDeviceRevoked); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit device revocation: %w", err)
+	}
+	scheduledreset.ReconcileAfter(ctx, r.pool, orgID, actorID)
+	return nil
+}
+
+// RevokeSession signs out one session, as logout on the device does. It
+// leaves the device's scheduled messages alone.
 func (r *Repository) RevokeSession(ctx context.Context, actorID, sessionID string, now time.Time) error {
 	command, err := r.pool.Exec(ctx, `
 		UPDATE sessions SET revoked_at = COALESCE(revoked_at, $3)
@@ -1134,9 +1164,8 @@ func (r *Repository) ListSessions(ctx context.Context, actorID, currentSessionID
 	return sessions, nil
 }
 
-// RevokeOtherSessions signs out every other device of the person. It is a
-// security event: their pending scheduled messages stop in the same
-// transaction.
+// RevokeOtherSessions signs out every other device of the person: a
+// security event that stops all their scheduled messages.
 func (r *Repository) RevokeOtherSessions(ctx context.Context, actorID, currentSessionID string, now time.Time) ([]string, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -1144,24 +1173,22 @@ func (r *Repository) RevokeOtherSessions(ctx context.Context, actorID, currentSe
 	}
 	defer tx.Rollback(ctx)
 	var orgID string
-	if err := tx.QueryRow(ctx, `SELECT org_id FROM actors WHERE id=$1`, actorID).Scan(&orgID); errors.Is(err, pgx.ErrNoRows) {
+	if err := tx.QueryRow(ctx, `SELECT org_id FROM users WHERE actor_id=$1`, actorID).Scan(&orgID); errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	} else if err != nil {
 		return nil, fmt.Errorf("load session owner: %w", err)
 	}
-	if err := scheduledreset.LockOrganization(ctx, tx, orgID); err != nil {
+	if err := scheduledreset.BumpEpochTx(ctx, tx, orgID, actorID); err != nil {
 		return nil, err
 	}
 	result, err := revokeOtherSessionsTx(ctx, tx, orgID, actorID, currentSessionID, now)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := scheduledreset.FailPendingTx(ctx, tx, orgID, actorID, scheduledreset.ReasonSecurityReset); err != nil {
-		return nil, err
-	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit revoke other sessions: %w", err)
 	}
+	scheduledreset.ReconcileAfter(ctx, r.pool, orgID, actorID)
 	return result, nil
 }
 

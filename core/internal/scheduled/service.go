@@ -8,13 +8,17 @@
 //   - Rights are checked twice: when the message is created or changed, and
 //     again inside the send transaction. A refusal at send time marks the
 //     record failed with a reason and tells the author's devices.
-//   - Only people signed in with a live session may schedule, change or send
-//     now. Signing out one device or a session expiring does not touch the
-//     messages already scheduled. Security events stop them explicitly: the
-//     identity and workspace services fail the author's pending messages
-//     through package scheduledreset in the same transaction as a password
-//     change or reset, an e-mail change, signing out every device, or right
-//     after a deactivation.
+//   - Only people with a live session may schedule, change or send now. The
+//     record keeps who authorized it: the session family of that device and
+//     the author's security epoch. Signing out on the device itself or a
+//     session expiring changes neither, so the message still goes out. Every
+//     account-wide security event bumps the epoch and revoking one device
+//     records its family (see package scheduledreset), in the event's own
+//     transaction; delivery refuses both.
+//   - Realtime events carry no text: the event log is long-lived and is
+//     replayed to new devices. Clients read the record itself.
+//   - The sent message's client_msg_id is derived from the record id in a
+//     private namespace and reserved: ordinary sends cannot take it.
 //   - Files stay linked only to the scheduled record, so nobody but the
 //     uploader can read them until the message is actually sent.
 package scheduled
@@ -24,7 +28,6 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -58,6 +61,8 @@ const (
 
 	ReasonAuthorInactive        = scheduledreset.ReasonAuthorInactive
 	ReasonSecurityReset         = scheduledreset.ReasonSecurityReset
+	ReasonSessionRevoked        = scheduledreset.ReasonSessionRevoked
+	ReasonMissedSendTime        = "missed_send_time"
 	ReasonChatUnavailable       = "chat_unavailable"
 	ReasonNotMember             = "not_member"
 	ReasonForbidden             = "forbidden"
@@ -68,11 +73,23 @@ const (
 
 	// MaxHorizon is how far ahead a message may be scheduled.
 	MaxHorizon = 365 * 24 * time.Hour
+	// MaxLateness: a message that could not go out within this time after
+	// its send time (the service was down, retries ran long) fails instead
+	// of arriving out of context.
+	MaxLateness = 15 * time.Minute
 	// Sent records keep only their link to the message, failed ones keep
 	// the text for the author to copy; both are removed after these delays.
 	sentRetention   = 7 * 24 * time.Hour
 	failedRetention = 30 * 24 * time.Hour
 )
+
+// messageNamespace derives the client_msg_id of a scheduled message's send.
+var messageNamespace = uuid.MustParse("6f1c2b9e-3d4a-5e7f-8a1b-2c3d4e5f6a7b")
+
+// MessageClientID is the client_msg_id the sent message will carry.
+func MessageClientID(scheduledID string) string {
+	return uuid.NewSHA1(messageNamespace, []byte("coma/scheduled-message/"+scheduledID)).String()
+}
 
 // Limits bound pending scheduled messages of one author.
 type Limits struct {
@@ -90,10 +107,11 @@ type Scheduler interface {
 }
 
 type ScheduledMessage struct {
-	ID                string       `json:"id"`
-	ChatID            string       `json:"chat_id"`
-	ThreadRootID      *string      `json:"thread_root_id"`
-	ReplyToID         *string      `json:"reply_to_id"`
+	ID           string  `json:"id"`
+	ChatID       string  `json:"chat_id"`
+	ThreadRootID *string `json:"thread_root_id"`
+	ReplyToID    *string `json:"reply_to_id"`
+	// ClientMsgID is the client's idempotency key for the scheduling request.
 	ClientMsgID       string       `json:"client_msg_id"`
 	Body              string       `json:"body"`
 	BodyFormat        string       `json:"body_format"`
@@ -110,9 +128,12 @@ type ScheduledMessage struct {
 	SentAt            *time.Time   `json:"sent_at"`
 	FailedAt          *time.Time   `json:"failed_at"`
 
-	orgID, authorID string
-	riverJobID      *int64
-	fileIDs         []string
+	orgID, authorID    string
+	messageClientMsgID string
+	sessionFamilyID    string
+	securityEpoch      int64
+	riverJobID         *int64
+	fileIDs            []string
 }
 
 type CreateInput struct {
@@ -164,13 +185,67 @@ func (s *Service) SetScheduler(scheduler Scheduler) { s.scheduler = scheduler }
 func (s *Service) SetLimits(limits Limits)          { s.limits = limits }
 
 const selectColumns = `sm.id, sm.org_id, sm.author_id, sm.chat_id, sm.thread_root_id, sm.reply_to_id, sm.client_msg_id,
+	sm.message_client_msg_id, sm.session_family_id, sm.security_epoch,
 	sm.body, sm.body_format, sm.mentioned_actor_ids, sm.silent, sm.send_at, sm.status,
 	sm.failure_reason, sm.message_id, sm.river_job_id, sm.version, sm.created_at, sm.updated_at, sm.sent_at, sm.failed_at`
 
-func scan(row pgx.Row, item *ScheduledMessage) error {
-	return row.Scan(&item.ID, &item.orgID, &item.authorID, &item.ChatID, &item.ThreadRootID, &item.ReplyToID, &item.ClientMsgID,
+func scan(row pgx.Row, item *ScheduledMessage, extra ...any) error {
+	return row.Scan(append([]any{&item.ID, &item.orgID, &item.authorID, &item.ChatID, &item.ThreadRootID, &item.ReplyToID, &item.ClientMsgID,
+		&item.messageClientMsgID, &item.sessionFamilyID, &item.securityEpoch,
 		&item.Body, &item.BodyFormat, &item.MentionedActorIDs, &item.Silent, &item.SendAt, &item.Status,
-		&item.FailureReason, &item.MessageID, &item.riverJobID, &item.Version, &item.CreatedAt, &item.UpdatedAt, &item.SentAt, &item.FailedAt)
+		&item.FailureReason, &item.MessageID, &item.riverJobID, &item.Version, &item.CreatedAt, &item.UpdatedAt, &item.SentAt, &item.FailedAt}, extra...)...)
+}
+
+// grant is what an authorized request stamps on the record.
+type grant struct {
+	user     identity.User
+	familyID string
+	epoch    int64
+}
+
+// authorize checks, inside tx, that the caller is an active person whose
+// password is in order and whose own session is live and not revoked for
+// security reasons, and reads the security epoch. The rows are share-locked
+// in the global order (actors, users, sessions): a security event that
+// commits first is seen here, and one that commits later waits for this
+// transaction and then moves the epoch past the value stored.
+func authorize(ctx context.Context, tx pgx.Tx, author Author) (grant, error) {
+	if author.SessionID == "" {
+		return grant{}, ErrForbidden
+	}
+	if _, err := uuid.Parse(author.SessionID); err != nil {
+		return grant{}, ErrForbidden
+	}
+	result := grant{user: author.User}
+	err := tx.QueryRow(ctx, `SELECT org_role, status FROM actors
+		WHERE org_id=$1 AND id=$2 AND type='user' AND status='active' AND deleted_at IS NULL FOR SHARE`,
+		author.User.OrgID, author.User.ActorID).Scan(&result.user.OrgRole, &result.user.Status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return grant{}, ErrForbidden
+	}
+	if err != nil {
+		return grant{}, fmt.Errorf("load scheduled message author: %w", err)
+	}
+	err = tx.QueryRow(ctx, `SELECT security_epoch FROM users
+		WHERE org_id=$1 AND actor_id=$2 AND must_change_password_at IS NULL FOR SHARE`,
+		author.User.OrgID, author.User.ActorID).Scan(&result.epoch)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return grant{}, ErrForbidden
+	}
+	if err != nil {
+		return grant{}, fmt.Errorf("load security epoch: %w", err)
+	}
+	err = tx.QueryRow(ctx, `SELECT s.family_id FROM sessions s
+		WHERE s.org_id=$1 AND s.actor_id=$2 AND s.id=$3 AND s.revoked_at IS NULL
+		  AND NOT EXISTS (SELECT 1 FROM revoked_session_families r WHERE r.family_id=s.family_id)
+		FOR SHARE OF s`, author.User.OrgID, author.User.ActorID, author.SessionID).Scan(&result.familyID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return grant{}, ErrForbidden
+	}
+	if err != nil {
+		return grant{}, fmt.Errorf("check session: %w", err)
+	}
+	return result, nil
 }
 
 // Create schedules a message after checking everything the ordinary send
@@ -208,22 +283,16 @@ func (s *Service) Create(ctx context.Context, author Author, chatID string, inpu
 	if err := lockOrganization(ctx, tx, author.User.OrgID); err != nil {
 		return ScheduledMessage{}, false, err
 	}
-	user, err := activeAuthor(ctx, tx, author.User)
+	granted, err := authorize(ctx, tx, author)
 	if err != nil {
 		return ScheduledMessage{}, false, err
 	}
-	if err := requireLiveSession(ctx, tx, user, author.SessionID); err != nil {
-		return ScheduledMessage{}, false, err
-	}
+	user := granted.user
 
 	var existing ScheduledMessage
 	var existingFingerprint []byte
-	err = tx.QueryRow(ctx, `SELECT `+selectColumns+`, sm.create_fingerprint FROM scheduled_messages sm
-		WHERE sm.org_id=$1 AND sm.author_id=$2 AND sm.client_msg_id=$3`, user.OrgID, user.ActorID, draft.ClientMsgID).
-		Scan(&existing.ID, &existing.orgID, &existing.authorID, &existing.ChatID, &existing.ThreadRootID, &existing.ReplyToID, &existing.ClientMsgID,
-			&existing.Body, &existing.BodyFormat, &existing.MentionedActorIDs, &existing.Silent, &existing.SendAt, &existing.Status,
-			&existing.FailureReason, &existing.MessageID, &existing.riverJobID, &existing.Version, &existing.CreatedAt, &existing.UpdatedAt, &existing.SentAt, &existing.FailedAt,
-			&existingFingerprint)
+	err = scan(tx.QueryRow(ctx, `SELECT `+selectColumns+`, sm.create_fingerprint FROM scheduled_messages sm
+		WHERE sm.org_id=$1 AND sm.author_id=$2 AND sm.client_msg_id=$3`, user.OrgID, user.ActorID, draft.ClientMsgID), &existing, &existingFingerprint)
 	if err == nil {
 		if string(existingFingerprint) != string(fingerprint[:]) {
 			return ScheduledMessage{}, false, ErrIdempotencyConflict
@@ -237,15 +306,6 @@ func (s *Service) Create(ctx context.Context, author Author, chatID string, inpu
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return ScheduledMessage{}, false, fmt.Errorf("find idempotent scheduled message: %w", err)
 	}
-	// The id becomes the message's client_msg_id; one already used by an
-	// ordinary message would make the send collide with it.
-	var used bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM messages WHERE actor_id=$1 AND client_msg_id=$2)`, user.ActorID, draft.ClientMsgID).Scan(&used); err != nil {
-		return ScheduledMessage{}, false, fmt.Errorf("check client message id: %w", err)
-	}
-	if used {
-		return ScheduledMessage{}, false, ErrIdempotencyConflict
-	}
 	if err := s.messages.AuthorizeCreateTx(ctx, tx, user, chatID, draft); err != nil {
 		return ScheduledMessage{}, false, fromMessageError(err)
 	}
@@ -255,11 +315,13 @@ func (s *Service) Create(ctx context.Context, author Author, chatID string, inpu
 
 	var result ScheduledMessage
 	err = scan(tx.QueryRow(ctx, `
-		INSERT INTO scheduled_messages AS sm (id, org_id, author_id, chat_id, thread_root_id, reply_to_id, client_msg_id, create_fingerprint,
+		INSERT INTO scheduled_messages AS sm (id, org_id, author_id, chat_id, thread_root_id, reply_to_id, client_msg_id,
+			message_client_msg_id, create_fingerprint, session_family_id, security_epoch,
 			body, body_format, mentioned_actor_ids, silent, send_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
 		RETURNING `+selectColumns, scheduledID, user.OrgID, user.ActorID, chatID, draft.ThreadRootID, draft.ReplyToID, draft.ClientMsgID,
-		fingerprint[:], draft.Body, draft.BodyFormat, draft.MentionedActorIDs, draft.Silent, sendAt), &result)
+		MessageClientID(scheduledID), fingerprint[:], granted.familyID, granted.epoch,
+		draft.Body, draft.BodyFormat, draft.MentionedActorIDs, draft.Silent, sendAt), &result)
 	if err != nil {
 		return ScheduledMessage{}, false, fmt.Errorf("insert scheduled message: %w", err)
 	}
@@ -279,7 +341,7 @@ func (s *Service) Create(ctx context.Context, author Author, chatID string, inpu
 		return ScheduledMessage{}, false, err
 	}
 	result = items[0]
-	seq, err := insertEvent(ctx, tx, user.OrgID, user.ActorID, result.ID, "scheduled_message.created", result)
+	seq, err := insertEvent(ctx, tx, result, "scheduled_message.created")
 	if err != nil {
 		return ScheduledMessage{}, false, err
 	}
@@ -360,7 +422,8 @@ func (s *Service) Get(ctx context.Context, author Author, scheduledID string) (S
 }
 
 // Update changes the text, mentions, silence or send time of a pending
-// message, rechecking the author's rights as of now.
+// message, rechecking the author's rights as of now and re-stamping who
+// authorized it.
 func (s *Service) Update(ctx context.Context, author Author, scheduledID string, input UpdateInput) (ScheduledMessage, error) {
 	if author.SessionID == "" {
 		return ScheduledMessage{}, ErrForbidden
@@ -386,19 +449,19 @@ func (s *Service) Update(ctx context.Context, author Author, scheduledID string,
 	if err != nil {
 		return ScheduledMessage{}, err
 	}
-	if current.Status != StatusPending {
-		return ScheduledMessage{}, ErrClosed
-	}
+	// Every change of status bumps the version, so an edit based on an
+	// older read reports the conflict, whatever happened in between.
 	if current.Version != input.ExpectedVersion {
 		return ScheduledMessage{}, ErrVersionConflict
 	}
-	user, err := activeAuthor(ctx, tx, author.User)
+	if current.Status != StatusPending {
+		return ScheduledMessage{}, ErrClosed
+	}
+	granted, err := authorize(ctx, tx, author)
 	if err != nil {
 		return ScheduledMessage{}, err
 	}
-	if err := requireLiveSession(ctx, tx, user, author.SessionID); err != nil {
-		return ScheduledMessage{}, err
-	}
+	user := granted.user
 	if err := loadFileIDs(ctx, tx, []*ScheduledMessage{&current}); err != nil {
 		return ScheduledMessage{}, err
 	}
@@ -431,10 +494,10 @@ func (s *Service) Update(ctx context.Context, author Author, scheduledID string,
 	var result ScheduledMessage
 	err = scan(tx.QueryRow(ctx, `
 		UPDATE scheduled_messages sm SET body=$4, body_format=$5, mentioned_actor_ids=$6, silent=$7, send_at=$8,
-			version=version+1, updated_at=now()
+			session_family_id=$9, security_epoch=$10, version=version+1, updated_at=now()
 		WHERE sm.org_id=$1 AND sm.author_id=$2 AND sm.id=$3
 		RETURNING `+selectColumns, user.OrgID, user.ActorID, scheduledID, draft.Body, draft.BodyFormat,
-		draft.MentionedActorIDs, draft.Silent, sendAt), &result)
+		draft.MentionedActorIDs, draft.Silent, sendAt, granted.familyID, granted.epoch), &result)
 	if err != nil {
 		return ScheduledMessage{}, fmt.Errorf("update scheduled message: %w", err)
 	}
@@ -451,7 +514,7 @@ func (s *Service) Update(ctx context.Context, author Author, scheduledID string,
 		return ScheduledMessage{}, err
 	}
 	result = items[0]
-	seq, err := insertEvent(ctx, tx, user.OrgID, user.ActorID, result.ID, "scheduled_message.updated", result)
+	seq, err := insertEvent(ctx, tx, result, "scheduled_message.updated")
 	if err != nil {
 		return ScheduledMessage{}, err
 	}
@@ -491,8 +554,8 @@ func (s *Service) Delete(ctx context.Context, author Author, scheduledID string)
 			return err
 		}
 	}
-	seq, err := insertEvent(ctx, tx, author.User.OrgID, author.User.ActorID, scheduledID, "scheduled_message.deleted",
-		map[string]any{"id": scheduledID, "chat_id": current.ChatID})
+	current.Status = "deleted"
+	seq, err := insertEvent(ctx, tx, current, "scheduled_message.deleted")
 	if err != nil {
 		return err
 	}
@@ -504,7 +567,7 @@ func (s *Service) Delete(ctx context.Context, author Author, scheduledID string)
 }
 
 // SendNow sends a pending message right away through the same delivery
-// path as the scheduled job.
+// path as the scheduled job, re-stamping who authorized it.
 func (s *Service) SendNow(ctx context.Context, author Author, scheduledID string) (ScheduledMessage, error) {
 	if author.SessionID == "" {
 		return ScheduledMessage{}, ErrForbidden
@@ -527,11 +590,12 @@ func (s *Service) SendNow(ctx context.Context, author Author, scheduledID string
 	if current.Status != StatusPending {
 		return ScheduledMessage{}, ErrClosed
 	}
-	if err := requireLiveSession(ctx, tx, author.User, author.SessionID); err != nil {
+	granted, err := authorize(ctx, tx, author)
+	if err != nil {
 		return ScheduledMessage{}, err
 	}
-	if err := tx.QueryRow(ctx, `UPDATE scheduled_messages SET send_at=least(send_at, now()) WHERE id=$1 RETURNING send_at`,
-		scheduledID).Scan(&current.SendAt); err != nil {
+	if err := tx.QueryRow(ctx, `UPDATE scheduled_messages SET send_at=now(), session_family_id=$2, security_epoch=$3 WHERE id=$1 RETURNING send_at`,
+		scheduledID, granted.familyID, granted.epoch).Scan(&current.SendAt); err != nil {
 		return ScheduledMessage{}, fmt.Errorf("move scheduled message to now: %w", err)
 	}
 	// If the immediate attempt below hits a transient error, the job retries
@@ -558,9 +622,10 @@ type Snooze struct{ Delay time.Duration }
 func (s Snooze) Error() string { return fmt.Sprintf("scheduled message not due for %s", s.Delay) }
 
 // Deliver sends a due pending message. jobID is the delivery job running it,
-// or 0 for an immediate send. It is idempotent: the record is locked, and
-// only a pending, due record is sent, at most once. A refusal marks the
-// record failed and returns nil; other errors are transient and retried.
+// or 0 for an immediate send. It is idempotent: the organization and the
+// record are locked, and only a pending, due record is sent, at most once.
+// A refusal marks the record failed and returns nil; other errors are
+// transient and retried.
 func (s *Service) Deliver(ctx context.Context, scheduledID string, jobID int64) error {
 	var orgID string
 	if err := s.pool.QueryRow(ctx, `SELECT org_id FROM scheduled_messages WHERE id=$1`, scheduledID).Scan(&orgID); errors.Is(err, pgx.ErrNoRows) {
@@ -580,10 +645,7 @@ func (s *Service) Deliver(ctx context.Context, scheduledID string, jobID int64) 
 	}
 	var current ScheduledMessage
 	var now time.Time
-	err = tx.QueryRow(ctx, `SELECT `+selectColumns+`, now() FROM scheduled_messages sm WHERE sm.id=$1 FOR UPDATE`, scheduledID).Scan(
-		&current.ID, &current.orgID, &current.authorID, &current.ChatID, &current.ThreadRootID, &current.ReplyToID, &current.ClientMsgID,
-		&current.Body, &current.BodyFormat, &current.MentionedActorIDs, &current.Silent, &current.SendAt, &current.Status,
-		&current.FailureReason, &current.MessageID, &current.riverJobID, &current.Version, &current.CreatedAt, &current.UpdatedAt, &current.SentAt, &current.FailedAt, &now)
+	err = scan(tx.QueryRow(ctx, `SELECT `+selectColumns+`, clock_timestamp() FROM scheduled_messages sm WHERE sm.id=$1 FOR UPDATE`, scheduledID), &current, &now)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
@@ -607,6 +669,9 @@ func (s *Service) Deliver(ctx context.Context, scheduledID string, jobID int64) 
 	user, reason, err := checkAtSend(ctx, tx, current)
 	if err != nil {
 		return err
+	}
+	if reason == "" && now.Sub(current.SendAt) > MaxLateness {
+		reason = ReasonMissedSendTime
 	}
 	draft := current.messageInput()
 	if reason == "" {
@@ -653,8 +718,7 @@ func (s *Service) Deliver(ctx context.Context, scheduledID string, jobID int64) 
 			return err
 		}
 	}
-	result.Files = []files.File{}
-	seq, err := insertEvent(ctx, tx, result.orgID, result.authorID, result.ID, "scheduled_message.sent", result)
+	seq, err := insertEvent(ctx, tx, result, "scheduled_message.sent")
 	if err != nil {
 		return err
 	}
@@ -715,11 +779,7 @@ func (s *Service) failLocked(ctx context.Context, tx pgx.Tx, current ScheduledMe
 			return err
 		}
 	}
-	items := []ScheduledMessage{result}
-	if err := hydrateFiles(ctx, tx, result.orgID, items); err != nil {
-		return err
-	}
-	seq, err := insertEvent(ctx, tx, result.orgID, result.authorID, result.ID, "scheduled_message.failed", items[0])
+	seq, err := insertEvent(ctx, tx, result, "scheduled_message.failed")
 	if err != nil {
 		return err
 	}
@@ -731,8 +791,21 @@ func (s *Service) failLocked(ctx context.Context, tx pgx.Tx, current ScheduledMe
 	return nil
 }
 
-// Cleanup removes sent records after a week and failed ones after a month.
+// Cleanup marks messages stopped by security events failed, in case the
+// step right after the event did not run, and removes sent records after a
+// week and failed ones after a month.
 func (s *Service) Cleanup(ctx context.Context) (int64, error) {
+	stopped, err := scheduledreset.Stopped(ctx, s.pool, 100)
+	if err != nil {
+		return 0, err
+	}
+	for _, author := range stopped {
+		seq, err := scheduledreset.Reconcile(ctx, s.pool, author.OrgID, author.ActorID)
+		if err != nil {
+			return 0, err
+		}
+		s.notify(author.OrgID, seq)
+	}
 	command, err := s.pool.Exec(ctx, `
 		DELETE FROM scheduled_messages WHERE id IN (
 			SELECT id FROM scheduled_messages
@@ -744,7 +817,7 @@ func (s *Service) Cleanup(ctx context.Context) (int64, error) {
 	return command.RowsAffected(), nil
 }
 
-// RunCleanup removes expired records until ctx ends.
+// RunCleanup repeats Cleanup until ctx ends.
 func (s *Service) RunCleanup(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -764,7 +837,10 @@ func (s *Service) RunCleanup(ctx context.Context, interval time.Duration) {
 
 // checkAtSend repeats, as of the send transaction, the checks that decide
 // whether the author may still send. It returns the author's current user
-// or the reason the message must not go.
+// or the reason the message must not go. Rows are share-locked in the
+// global order after the organization and the record, so a concurrent
+// security event either committed before (and is seen) or waits for this
+// transaction to finish.
 func checkAtSend(ctx context.Context, tx pgx.Tx, current ScheduledMessage) (identity.User, string, error) {
 	user := identity.User{ActorID: current.authorID, OrgID: current.orgID}
 	var actorType string
@@ -776,6 +852,26 @@ func checkAtSend(ctx context.Context, tx pgx.Tx, current ScheduledMessage) (iden
 	}
 	if err != nil {
 		return user, "", fmt.Errorf("load scheduled message author: %w", err)
+	}
+	var epoch int64
+	var passwordOK bool
+	err = tx.QueryRow(ctx, `SELECT security_epoch, must_change_password_at IS NULL FROM users WHERE org_id=$1 AND actor_id=$2 FOR SHARE`,
+		current.orgID, current.authorID).Scan(&epoch, &passwordOK)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return user, ReasonAuthorInactive, nil
+	}
+	if err != nil {
+		return user, "", fmt.Errorf("load security epoch: %w", err)
+	}
+	if !passwordOK || epoch != current.securityEpoch {
+		return user, ReasonSecurityReset, nil
+	}
+	var revoked bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM revoked_session_families WHERE family_id=$1)`, current.sessionFamilyID).Scan(&revoked); err != nil {
+		return user, "", fmt.Errorf("check revoked session family: %w", err)
+	}
+	if revoked {
+		return user, ReasonSessionRevoked, nil
 	}
 	var archived bool
 	err = tx.QueryRow(ctx, `SELECT archived_at IS NOT NULL FROM chats WHERE org_id=$1 AND id=$2`, current.orgID, current.ChatID).Scan(&archived)
@@ -897,7 +993,7 @@ func (item ScheduledMessage) messageInput() message.CreateInput {
 	mentions := append([]string{}, item.MentionedActorIDs...)
 	fileIDs := append([]string{}, item.fileIDs...)
 	return message.CreateInput{
-		ClientMsgID: item.ClientMsgID, Body: item.Body, BodyFormat: item.BodyFormat,
+		ClientMsgID: item.messageClientMsgID, Body: item.Body, BodyFormat: item.BodyFormat,
 		ReplyToID: item.ReplyToID, ThreadRootID: item.ThreadRootID,
 		MentionedActorIDs: mentions, FileIDs: fileIDs, Silent: item.Silent,
 	}
@@ -905,7 +1001,7 @@ func (item ScheduledMessage) messageInput() message.CreateInput {
 
 func lockOrganization(ctx context.Context, tx pgx.Tx, orgID string) error {
 	var seq int64
-	if err := tx.QueryRow(ctx, `SELECT event_seq FROM organizations WHERE id=$1 FOR UPDATE`, orgID).Scan(&seq); errors.Is(err, pgx.ErrNoRows) {
+	if err := tx.QueryRow(ctx, `SELECT event_seq FROM organizations WHERE id=$1 FOR NO KEY UPDATE`, orgID).Scan(&seq); errors.Is(err, pgx.ErrNoRows) {
 		return ErrForbidden
 	} else if err != nil {
 		return fmt.Errorf("lock organization: %w", err)
@@ -926,38 +1022,6 @@ func lockOwn(ctx context.Context, tx pgx.Tx, user identity.User, scheduledID str
 		return ScheduledMessage{}, fmt.Errorf("lock scheduled message: %w", err)
 	}
 	return item, nil
-}
-
-// activeAuthor reloads the caller from the database instead of trusting
-// the role carried by the access token.
-func activeAuthor(ctx context.Context, tx pgx.Tx, user identity.User) (identity.User, error) {
-	result := user
-	err := tx.QueryRow(ctx, `SELECT org_role, status FROM actors WHERE org_id=$1 AND id=$2 AND type='user' AND status='active' AND deleted_at IS NULL FOR SHARE`,
-		user.OrgID, user.ActorID).Scan(&result.OrgRole, &result.Status)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return identity.User{}, ErrForbidden
-	}
-	if err != nil {
-		return identity.User{}, fmt.Errorf("load scheduled message author: %w", err)
-	}
-	return result, nil
-}
-
-// requireLiveSession checks that the caller's own session is still signed
-// in. Nothing about the session is stored with the message.
-func requireLiveSession(ctx context.Context, tx pgx.Tx, user identity.User, sessionID string) error {
-	if _, err := uuid.Parse(sessionID); err != nil {
-		return ErrForbidden
-	}
-	var live bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM sessions WHERE org_id=$1 AND actor_id=$2 AND id=$3 AND revoked_at IS NULL)`,
-		user.OrgID, user.ActorID, sessionID).Scan(&live); err != nil {
-		return fmt.Errorf("check session: %w", err)
-	}
-	if !live {
-		return ErrForbidden
-	}
-	return nil
 }
 
 func loadFileIDs(ctx context.Context, tx pgx.Tx, items []*ScheduledMessage) error {
@@ -1011,24 +1075,12 @@ func hydrateFiles(ctx context.Context, tx pgx.Tx, orgID string, items []Schedule
 	return rows.Err()
 }
 
-// insertEvent records an event for the author's devices only. chat_id stays
-// empty on purpose: delivery must not depend on chat membership, so an
-// author who left still learns that the message failed.
-func insertEvent(ctx context.Context, tx pgx.Tx, orgID, authorID, subjectID, eventType string, data any) (int64, error) {
-	payload, err := json.Marshal(data)
-	if err != nil {
-		return 0, fmt.Errorf("marshal scheduled message event: %w", err)
-	}
-	var seq int64
-	if err := tx.QueryRow(ctx, `UPDATE organizations SET event_seq = event_seq + 1 WHERE id = $1 RETURNING event_seq`, orgID).Scan(&seq); err != nil {
-		return 0, fmt.Errorf("allocate event sequence: %w", err)
-	}
-	if _, err := tx.Exec(ctx, `
-		INSERT INTO events (org_id, seq, type, actor_id, chat_id, subject_id, audience_actor_id, data)
-		VALUES ($1, $2, $3, $4, NULL, $5, $4, $6::jsonb)`, orgID, seq, eventType, authorID, subjectID, string(payload)); err != nil {
-		return 0, fmt.Errorf("insert scheduled message event: %w", err)
-	}
-	return seq, nil
+// insertEvent tells the author's devices that the record changed; they read
+// the record itself for its content.
+func insertEvent(ctx context.Context, tx pgx.Tx, item ScheduledMessage, eventType string) (int64, error) {
+	return scheduledreset.InsertEventTx(ctx, tx, item.orgID, item.authorID, eventType, scheduledreset.Event{
+		ID: item.ID, ChatID: item.ChatID, Status: item.Status, Version: item.Version, SendAt: item.SendAt, FailureReason: item.FailureReason,
+	})
 }
 
 func createFingerprint(chatID string, input message.CreateInput, sendAt time.Time) [32]byte {

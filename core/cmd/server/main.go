@@ -231,7 +231,7 @@ func main() {
 		logger.Error("scheduled message startup failed", "error", err)
 		os.Exit(1)
 	}
-	go scheduledService.RunCleanup(realtimeCtx, time.Hour)
+	go scheduledService.RunCleanup(realtimeCtx, time.Minute)
 	searchService := search.NewService(pool)
 	knowledgeService := knowledge.NewService(pool, fileService, agentConfigService, knowledge.NewHTTPEmbedder())
 	knowledgeClient, err := knowledge.NewIndexingClient(pool, knowledgeService, logger)

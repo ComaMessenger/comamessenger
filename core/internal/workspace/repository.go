@@ -266,6 +266,14 @@ func (r *Repository) UpdateMember(ctx context.Context, orgID, currentActorID, ta
 	if err != nil {
 		return Member{}, fmt.Errorf("update organization member: %w", err)
 	}
+	// Leaving the active state is a security event: scheduled messages
+	// authorized before it never go out, even after a reactivation.
+	deactivated := targetStatus == "active" && status != "active"
+	if deactivated {
+		if err := scheduledreset.BumpEpochTx(ctx, tx, orgID, targetActorID); err != nil {
+			return Member{}, err
+		}
+	}
 	if status != "active" || input.Permissions != nil {
 		if _, err := tx.Exec(ctx, `DELETE FROM actor_permissions WHERE org_id=$1 AND actor_id=$2`, orgID, targetActorID); err != nil {
 			return Member{}, fmt.Errorf("clear actor permissions: %w", err)
@@ -308,10 +316,8 @@ func (r *Repository) UpdateMember(ctx context.Context, orgID, currentActorID, ta
 		}
 		return Member{}, fmt.Errorf("commit member update: %w", err)
 	}
-	if status != "active" {
-		if err := r.stopScheduledMessages(ctx, orgID, targetActorID); err != nil {
-			return Member{}, err
-		}
+	if deactivated {
+		scheduledreset.ReconcileAfter(ctx, r.pool, orgID, targetActorID)
 	}
 	var result Member
 	var stored []string
@@ -339,10 +345,6 @@ func (r *Repository) RequirePasswordChange(ctx context.Context, orgID, currentAc
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
-	// Lock order shared with scheduled message delivery: organization first.
-	if err := scheduledreset.LockOrganization(ctx, tx, orgID); err != nil {
-		return nil, err
-	}
 	var targetRole, targetStatus string
 	err = tx.QueryRow(ctx, `SELECT org_role,status FROM actors WHERE org_id=$1 AND id=$2 AND deleted_at IS NULL FOR UPDATE`, orgID, targetActorID).Scan(&targetRole, &targetStatus)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -357,6 +359,9 @@ func (r *Repository) RequirePasswordChange(ctx context.Context, orgID, currentAc
 	command, err := tx.Exec(ctx, `UPDATE users SET must_change_password_at=$3 WHERE org_id=$1 AND actor_id=$2`, orgID, targetActorID, now)
 	if err != nil || command.RowsAffected() != 1 {
 		return nil, ErrNotFound
+	}
+	if err := scheduledreset.BumpEpochTx(ctx, tx, orgID, targetActorID); err != nil {
+		return nil, err
 	}
 	rows, err := tx.Query(ctx, `UPDATE sessions SET revoked_at=COALESCE(revoked_at,$3) WHERE org_id=$1 AND actor_id=$2 AND revoked_at IS NULL RETURNING id`, orgID, targetActorID, now)
 	if err != nil {
@@ -376,15 +381,13 @@ func (r *Repository) RequirePasswordChange(ctx context.Context, orgID, currentAc
 		return nil, err
 	}
 	rows.Close()
-	if _, err := scheduledreset.FailPendingTx(ctx, tx, orgID, targetActorID, scheduledreset.ReasonSecurityReset); err != nil {
-		return nil, err
-	}
 	if err := insertAudit(ctx, tx, orgID, currentActorID, "member.password_change.require", "actor", &targetActorID, map[string]any{"revoked_sessions": len(revoked)}); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
+	scheduledreset.ReconcileAfter(ctx, r.pool, orgID, targetActorID)
 	return revoked, nil
 }
 
@@ -505,24 +508,4 @@ func insertAudit(ctx context.Context, db auditExecer, orgID, actorID, action, ta
 func uniqueViolation(err error) bool {
 	var value *pgconn.PgError
 	return errors.As(err, &value) && value.Code == "23505"
-}
-
-// stopScheduledMessages fails the pending scheduled messages of a
-// deactivated member. It runs after the serializable member update so that
-// update never conflicts with message sends on the organization row; until
-// it commits, delivery itself refuses an inactive author. Repeating the
-// deactivation repeats this step.
-func (r *Repository) stopScheduledMessages(ctx context.Context, orgID, actorID string) error {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin stopping scheduled messages: %w", err)
-	}
-	defer tx.Rollback(ctx)
-	if _, err := scheduledreset.StopPendingTx(ctx, tx, orgID, actorID, scheduledreset.ReasonAuthorInactive); err != nil {
-		return err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit stopping scheduled messages: %w", err)
-	}
-	return nil
 }

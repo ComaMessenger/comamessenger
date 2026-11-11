@@ -104,6 +104,9 @@ type RelayMessage struct {
 	FallbackTitle string `json:"fallback_title"`
 	FallbackBody  string `json:"fallback_body"`
 	CollapseID    string `json:"collapse_id,omitempty"`
+	// Silent asks the relay to deliver without sound. Older relays reject
+	// unknown fields, so it is sent only when true and dropped on retry.
+	Silent bool `json:"silent,omitempty"`
 }
 
 type RelayClient interface {
@@ -140,6 +143,12 @@ func (r *httpRelay) Send(ctx context.Context, message RelayMessage) error {
 		return nil
 	case response.StatusCode == http.StatusGone || response.StatusCode == http.StatusNotFound:
 		return ErrUnknownHandle
+	case response.StatusCode == http.StatusBadRequest && message.Silent:
+		// A relay from before quiet notifications refuses the field. The
+		// app still removes the sound after decrypting the payload, so send
+		// once more without it.
+		message.Silent = false
+		return r.Send(ctx, message)
 	default:
 		return fmt.Errorf("push relay responded %d", response.StatusCode)
 	}
@@ -152,6 +161,9 @@ type mobilePayload struct {
 	EventSeq int64 `json:"event_seq"`
 	// Badge is the recipient's unread chat messages, as the app counts them.
 	Badge int64 `json:"badge"`
+	// Silent: show without sound or vibration. The iOS notification service
+	// extension and the Android app apply it after decrypting.
+	Silent bool `json:"silent,omitempty"`
 }
 
 // unreadTotal matches the app icon badge: unread top-level messages from
@@ -209,7 +221,8 @@ func (w *Worker) deliverMobile(ctx context.Context) error {
 	}
 	rows, err := w.pool.Query(ctx, `SELECT p.org_id,p.event_seq,p.device_id,d.actor_id,d.relay_handle,d.notification_key,
 		e.type,e.data,e.chat_id,m.thread_root_id,m.body,c.name,a.display_name,
-		COALESCE((u.preferences->>'push_preview')::boolean,false),COALESCE(NULLIF(d.locale,''),u.preferences->>'locale','ru')
+		COALESCE((u.preferences->>'push_preview')::boolean,false),COALESCE(NULLIF(d.locale,''),u.preferences->>'locale','ru'),
+		`+quietNotification+`
 		FROM mobile_push_deliveries p JOIN mobile_push_devices d ON d.id=p.device_id
 		JOIN events e ON e.org_id=p.org_id AND e.seq=p.event_seq
 		LEFT JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id
@@ -225,14 +238,14 @@ func (w *Worker) deliverMobile(ctx context.Context) error {
 		seq                                                   int64
 		key, eventData                                        []byte
 		chatID, threadID, body, chatName                      *string
-		preview                                               bool
+		preview, silent                                       bool
 	}
 	deliveries := []delivery{}
 	for rows.Next() {
 		var item delivery
 		if err := rows.Scan(&item.org, &item.seq, &item.device, &item.actor, &item.handle, &item.key,
 			&item.eventType, &item.eventData, &item.chatID, &item.threadID, &item.body, &item.chatName, &item.author,
-			&item.preview, &item.locale); err != nil {
+			&item.preview, &item.locale, &item.silent); err != nil {
 			rows.Close()
 			return err
 		}
@@ -255,7 +268,7 @@ func (w *Worker) deliverMobile(ctx context.Context) error {
 		if err := w.pool.QueryRow(ctx, unreadTotal, item.org, item.actor).Scan(&badge); err != nil {
 			return err
 		}
-		plaintext, _ := json.Marshal(mobilePayload{Version: 1, notificationContent: content, EventSeq: item.seq, Badge: badge})
+		plaintext, _ := json.Marshal(mobilePayload{Version: 1, notificationContent: content, EventSeq: item.seq, Badge: badge, Silent: item.silent})
 		ciphertext, err := sealPayload(item.key, plaintext)
 		if err != nil {
 			return err
@@ -266,7 +279,7 @@ func (w *Worker) deliverMobile(ctx context.Context) error {
 		}
 		sendErr := w.relay.Send(ctx, RelayMessage{
 			Handle: item.handle, Ciphertext: ciphertext,
-			FallbackTitle: fallbackTitle, FallbackBody: fallbackBody, CollapseID: content.ChatID,
+			FallbackTitle: fallbackTitle, FallbackBody: fallbackBody, CollapseID: content.ChatID, Silent: item.silent,
 		})
 		switch {
 		case sendErr == nil:

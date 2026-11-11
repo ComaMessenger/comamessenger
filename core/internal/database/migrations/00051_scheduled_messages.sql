@@ -1,16 +1,33 @@
 -- +goose Up
 -- Phase 6.1 package C: scheduled messages of people and silent delivery.
 
--- A silent message is delivered as usual but raises no push, e-mail or
--- sound notification; unread counters are untouched by this flag.
+-- A silent message is delivered and notified as usual; recipients' devices
+-- show the notification without sound or vibration.
 ALTER TABLE messages ADD COLUMN silent boolean NOT NULL DEFAULT false;
 
--- Sending is not tied to the device that scheduled: signing it out or a
--- session expiring leaves the message alone. Security events (password
--- change or reset, e-mail change, signing out every device, deactivation)
--- fail the author's pending messages explicitly; see package scheduledreset.
+-- Bumped in the same transaction as every security event of the person:
+-- password change or reset, e-mail change, signing out every other device,
+-- an administrator requiring a password change, deactivation. A scheduled
+-- message carries the value it was authorized under and is never sent once
+-- the counter has moved on.
+ALTER TABLE users ADD COLUMN security_epoch bigint NOT NULL DEFAULT 0;
+
+-- Session families revoked for security reasons: a device removed from the
+-- session list or a reused refresh token. Signing out on the device itself
+-- and expiry are not recorded here. Insert-only, so recording never
+-- conflicts with delivery.
+CREATE TABLE revoked_session_families (
+    family_id uuid PRIMARY KEY,
+    org_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    actor_id uuid NOT NULL,
+    reason text NOT NULL CHECK (reason IN ('device_revoked', 'refresh_reuse')),
+    revoked_at timestamptz NOT NULL DEFAULT now(),
+    FOREIGN KEY (org_id, actor_id) REFERENCES actors(org_id, id) ON DELETE CASCADE
+);
+
 -- Private to the author until sent. Nothing here is visible to search,
 -- export, agents or other people: those read only the messages table.
+-- Realtime events about these rows carry no text.
 CREATE TABLE scheduled_messages (
     id uuid PRIMARY KEY,
     org_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -18,10 +35,17 @@ CREATE TABLE scheduled_messages (
     chat_id uuid NOT NULL,
     thread_root_id uuid,
     reply_to_id uuid,
-    -- Becomes the client_msg_id of the sent message: the ordinary
-    -- idempotency of message creation guards against a double send.
+    -- The client's idempotency key for the scheduling request.
     client_msg_id uuid NOT NULL,
+    -- client_msg_id of the message once sent: a UUIDv5 of id in the
+    -- scheduled message namespace. Never shown to clients; ordinary sends
+    -- that try to use it are refused.
+    message_client_msg_id uuid NOT NULL UNIQUE,
     create_fingerprint bytea NOT NULL CHECK (octet_length(create_fingerprint) = 32),
+    -- Who scheduled or last changed it: the session family of that device
+    -- and the author's security_epoch at that moment.
+    session_family_id uuid NOT NULL,
+    security_epoch bigint NOT NULL,
     body text NOT NULL,
     body_format text NOT NULL CHECK (body_format IN ('plain', 'markdown')),
     mentioned_actor_ids uuid[] NOT NULL DEFAULT '{}',
@@ -29,8 +53,9 @@ CREATE TABLE scheduled_messages (
     send_at timestamptz NOT NULL,
     status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'failed')),
     failure_reason text CHECK (failure_reason IN (
-        'author_inactive', 'security_reset', 'chat_unavailable', 'not_member', 'forbidden',
-        'reference_unavailable', 'attachment_unavailable', 'invalid_content', 'delivery_error')),
+        'author_inactive', 'security_reset', 'session_revoked', 'missed_send_time', 'chat_unavailable',
+        'not_member', 'forbidden', 'reference_unavailable', 'attachment_unavailable', 'invalid_content',
+        'delivery_error')),
     message_id uuid,
     river_job_id bigint,
     version integer NOT NULL DEFAULT 1 CHECK (version > 0),
@@ -50,6 +75,9 @@ CREATE TABLE scheduled_messages (
 
 CREATE INDEX scheduled_messages_author_idx ON scheduled_messages(org_id, author_id, send_at) WHERE status <> 'sent';
 CREATE INDEX scheduled_messages_author_chat_idx ON scheduled_messages(org_id, author_id, chat_id) WHERE status = 'pending';
+CREATE INDEX scheduled_messages_chat_idx ON scheduled_messages(org_id, chat_id);
+CREATE INDEX scheduled_messages_message_idx ON scheduled_messages(org_id, message_id) WHERE message_id IS NOT NULL;
+CREATE INDEX scheduled_messages_family_idx ON scheduled_messages(session_family_id) WHERE status = 'pending';
 CREATE INDEX scheduled_messages_retention_idx ON scheduled_messages(updated_at) WHERE status <> 'pending';
 
 -- Files waiting for a scheduled message. While a row exists the unattached
@@ -71,4 +99,6 @@ CREATE INDEX scheduled_message_files_file_idx ON scheduled_message_files(file_id
 -- +goose Down
 DROP TABLE scheduled_message_files;
 DROP TABLE scheduled_messages;
+DROP TABLE revoked_session_families;
+ALTER TABLE users DROP COLUMN security_epoch;
 ALTER TABLE messages DROP COLUMN silent;
