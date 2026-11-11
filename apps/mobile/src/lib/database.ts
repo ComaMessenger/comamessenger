@@ -159,6 +159,15 @@ export const draftStorage = {
         [chatID, threadRootID ?? "", draft.body, draft.version],
       );
   },
+  /** Unsent text of every chat's main composer (threads excluded), by chat. */
+  async chatDrafts(): Promise<Record<string, string>> {
+    const rows = await (
+      await database
+    ).getAllAsync<{ chat_id: string; body: string }>(
+      "SELECT chat_id, body FROM drafts WHERE thread_root_id = ''",
+    );
+    return Object.fromEntries(rows.map((row) => [row.chat_id, row.body]));
+  },
 };
 
 // Bounded so the cache of a busy account stays small: the chat list plus the

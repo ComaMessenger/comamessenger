@@ -1,0 +1,83 @@
+# Chat list of phase 6.1: folder tabs shared with the web, the long-press
+# menu of a chat and the «Important» tab.
+# Run after sign-in.yaml (reuses its session): maestro test e2e/chats.yaml
+appId: com.comamessenger.app
+---
+- runFlow: open-app.yaml
+- assertVisible:
+    id: chat-tabs
+- assertVisible:
+    id: chat-tab-all
+- assertVisible:
+    id: chat-tab-unread
+- takeScreenshot: chat-list
+
+# A new folder with the first chat; it opens as the selected tab.
+- evalScript: ${output.folder = 'Папка ' + String(Date.now()).slice(-5)}
+- tapOn:
+    id: new-folder
+- extendedWaitUntil:
+    visible:
+      id: folder-sheet
+    timeout: 5000
+- tapOn:
+    id: folder-name
+- inputText: ${output.folder}
+- tapOn:
+    id: folder-chat-0
+- takeScreenshot: folder-sheet
+- tapOn:
+    id: folder-sheet-action
+- extendedWaitUntil:
+    visible:
+      id: chat-tab-folder-${output.folder}
+    timeout: 10000
+- assertVisible:
+    id: chat-row-0
+- takeScreenshot: folder-tab
+
+# Long press on the tab: move and delete.
+- longPressOn:
+    id: chat-tab-folder-${output.folder}
+- assertVisible: Изменить
+- assertVisible: Удалить папку
+- tapOn: Удалить папку
+- tapOn: Удалить
+- extendedWaitUntil:
+    notVisible:
+      id: chat-tab-folder-${output.folder}
+    timeout: 10000
+
+# Long press on a chat: the web context menu actions.
+- tapOn:
+    id: chat-tab-all
+- longPressOn:
+    id: chat-row-0
+- extendedWaitUntil:
+    visible:
+      id: chat-actions
+    timeout: 5000
+- assertVisible:
+    id: chat-action-pin
+- assertVisible:
+    id: chat-action-mute
+- assertVisible: Папки
+- takeScreenshot: chat-actions
+- tapOn:
+    point: 50%,8%
+
+# «Important»: pinned messages from every chat, or the empty state.
+- tapOn:
+    id: tab-important
+- extendedWaitUntil:
+    visible:
+      id: important-list
+    timeout: 15000
+- takeScreenshot: important
+- tapOn:
+    id: tab-threads
+- extendedWaitUntil:
+    visible:
+      id: thread-list
+    timeout: 10000
+- takeScreenshot: threads

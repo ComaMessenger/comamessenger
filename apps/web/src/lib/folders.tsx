@@ -116,18 +116,7 @@ export const folderIconOptions: FolderIconOption[] = [
 /** The first row of the picker; the rest is revealed on demand. */
 export const featuredFolderIconCount = 10;
 
-export const folderColors: ChatFolder["color"][] = [
-  "blue",
-  "green",
-  "amber",
-  "red",
-  "violet",
-  "teal",
-  "orange",
-  "pink",
-  "cyan",
-  "slate",
-];
+export { folderColors } from "@comamessenger/core";
 
 export function FolderGlyph({
   icon,

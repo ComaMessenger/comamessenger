@@ -6,6 +6,7 @@ import {
   createMessengerStore,
   expandUUID,
   messagePlainText,
+  pinnedChatLimit,
   type Chat,
   type ChatFolder,
   type DurableEvent,
@@ -34,7 +35,7 @@ export type InAppNotification = {
   mention: boolean;
 };
 
-export const pinnedChatLimit = 10;
+export { pinnedChatLimit };
 
 async function loadMessages(
   api: MessengerAPI,

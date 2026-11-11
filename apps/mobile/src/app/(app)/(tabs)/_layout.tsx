@@ -1,51 +1,46 @@
 import { Tabs } from "expo-router";
-import { StyleSheet, View, type ColorValue } from "react-native";
+import type { ColorValue } from "react-native";
 import {
   Ellipsis,
-  MessageSquare,
+  MessageCircle,
   MessagesSquare,
+  Star,
   type LucideIcon,
 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
-import { radius } from "@comamessenger/tokens";
+import { useStore } from "zustand";
+import { totalUnread } from "@comamessenger/core";
 import { useTheme } from "@/lib/theme";
+import { useMessenger } from "@/messenger/MessengerProvider";
+import { countLabel } from "@/ui/CountBadge";
 import { fonts } from "@/ui/Text";
 
 function tabIcon(Icon: LucideIcon) {
-  return function TabIcon({
-    focused,
-    color,
-  }: {
-    focused: boolean;
-    color: ColorValue;
-  }) {
-    const theme = useTheme();
-    return (
-      <View
-        style={[
-          styles.indicator,
-          {
-            borderColor: focused ? theme.border : "transparent",
-            backgroundColor: focused ? theme.surfaceSelected : "transparent",
-          },
-        ]}
-      >
-        <Icon size={22} color={String(color)} />
-      </View>
-    );
+  return function TabIcon({ color }: { color: ColorValue }) {
+    return <Icon size={22} strokeWidth={1.8} color={String(color)} />;
   };
 }
 
 export default function TabsLayout() {
   const { t } = useTranslation();
   const theme = useTheme();
+  const { store } = useMessenger();
+  const unread = useStore(store, (state) =>
+    totalUnread(state.unread, state.chats),
+  );
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: theme.primary,
         tabBarInactiveTintColor: theme.muted,
-        tabBarLabelStyle: { fontFamily: fonts.medium, fontSize: 12 },
+        tabBarLabelStyle: { fontFamily: fonts.medium, fontSize: 11 },
+        tabBarBadgeStyle: {
+          backgroundColor: theme.danger,
+          color: "#ffffff",
+          fontFamily: fonts.bold,
+          fontSize: 10,
+        },
         tabBarStyle: {
           backgroundColor: theme.surface,
           borderTopColor: theme.border,
@@ -53,14 +48,19 @@ export default function TabsLayout() {
           elevation: 0,
           shadowOpacity: 0,
         },
-        sceneStyle: { backgroundColor: theme.canvas },
+        sceneStyle: { backgroundColor: theme.surface },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: t("tabChats"),
-          tabBarIcon: tabIcon(MessageSquare),
+          tabBarIcon: tabIcon(MessageCircle),
+          tabBarBadge: unread > 0 ? countLabel(unread) : undefined,
+          tabBarAccessibilityLabel:
+            unread > 0
+              ? `${t("tabChats")}, ${t("unreadCount", { count: unread })}`
+              : t("tabChats"),
           tabBarButtonTestID: "tab-chats",
         }}
       />
@@ -70,6 +70,14 @@ export default function TabsLayout() {
           title: t("tabThreads"),
           tabBarIcon: tabIcon(MessagesSquare),
           tabBarButtonTestID: "tab-threads",
+        }}
+      />
+      <Tabs.Screen
+        name="important"
+        options={{
+          title: t("tabImportant"),
+          tabBarIcon: tabIcon(Star),
+          tabBarButtonTestID: "tab-important",
         }}
       />
       <Tabs.Screen
@@ -83,14 +91,3 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
-
-const styles = StyleSheet.create({
-  indicator: {
-    width: 48,
-    height: 32,
-    borderWidth: 1,
-    borderRadius: radius.md,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});

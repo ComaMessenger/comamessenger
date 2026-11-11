@@ -3,6 +3,7 @@ export * from "./blocks";
 export * from "./chats";
 export * from "./commands";
 export * from "./feed";
+export * from "./folders";
 export * from "./markdown";
 export * from "./mentions";
 export * from "./links";
