@@ -143,6 +143,7 @@ func (s *Service) cleanupUnattached(ctx context.Context, limit int) (int, error)
 		LEFT JOIN files preview ON preview.id = f.preview_file_id AND preview.org_id = f.org_id AND preview.status = 'ready'
 		WHERE f.status = 'ready' AND f.ready_at <= $1
 		  AND NOT EXISTS (SELECT 1 FROM message_files mf WHERE mf.file_id = f.id)
+		  AND NOT EXISTS (SELECT 1 FROM scheduled_message_files smf WHERE smf.file_id = f.id)
 		  AND NOT EXISTS (SELECT 1 FROM actors a WHERE a.org_id = f.org_id AND a.avatar_file_id = f.id)
 		  AND NOT EXISTS (SELECT 1 FROM chats c WHERE c.org_id = f.org_id AND c.avatar_file_id = f.id)
 		  AND NOT EXISTS (SELECT 1 FROM knowledge_documents kd WHERE kd.org_id = f.org_id AND kd.file_id = f.id)
@@ -172,6 +173,7 @@ func (s *Service) cleanupUnattached(ctx context.Context, limit int) (int, error)
 			UPDATE files f SET status = 'deleted', deleted_at = now()
 			WHERE f.id = $1 AND f.status = 'ready'
 			  AND NOT EXISTS (SELECT 1 FROM message_files mf WHERE mf.file_id = f.id)
+			  AND NOT EXISTS (SELECT 1 FROM scheduled_message_files smf WHERE smf.file_id = f.id)
 			  AND NOT EXISTS (SELECT 1 FROM actors a WHERE a.org_id = f.org_id AND a.avatar_file_id = f.id)
 			  AND NOT EXISTS (SELECT 1 FROM chats c WHERE c.org_id = f.org_id AND c.avatar_file_id = f.id)
 			  AND NOT EXISTS (SELECT 1 FROM knowledge_documents kd WHERE kd.org_id = f.org_id AND kd.file_id = f.id)`, item.ID)

@@ -53,6 +53,9 @@ type Message struct {
 	Blocks            *Blocks             `json:"blocks,omitempty"`
 	// AgentProvenance says why an agent wrote the message; absent otherwise.
 	AgentProvenance *Provenance `json:"agent_provenance,omitempty"`
+	// Silent: notifications for this message play no sound. Set in create
+	// responses and realtime events only.
+	Silent bool `json:"silent,omitempty"`
 }
 
 type ForwardAttribution struct {
@@ -71,8 +74,13 @@ type CreateInput struct {
 	FileIDs           []string `json:"file_ids"`
 	RunID             *string  `json:"run_id,omitempty"`
 	Blocks            *Blocks  `json:"blocks,omitempty"`
+	// Silent notifies recipients without sound or vibration. People only.
+	Silent bool `json:"silent,omitempty"`
 	// systemBlocks allows server-managed action bindings; set only by Core.
 	systemBlocks bool
+	// scheduledDelivery marks the send of a scheduled message, the only
+	// path allowed to use a client_msg_id reserved by a scheduled message.
+	scheduledDelivery bool
 }
 
 type AgentProvenance struct {
@@ -146,153 +154,182 @@ func (s *Service) create(ctx context.Context, user identity.User, chatID string,
 	if err := s.validateCreate(chatID, &input); err != nil {
 		return Message{}, false, err
 	}
-	messageID, err := id.New()
-	if err != nil {
-		return Message{}, false, fmt.Errorf("generate message id: %w", err)
-	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return Message{}, false, fmt.Errorf("begin create message: %w", err)
 	}
 	defer tx.Rollback(ctx)
-
-	if err := lockOrganization(ctx, tx, user.OrgID); err != nil {
+	result, created, highWatermark, err := s.createTx(ctx, tx, user, chatID, input, provenance, final)
+	if err != nil {
 		return Message{}, false, err
+	}
+	if !created && provenance == nil {
+		return result, false, nil
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Message{}, false, fmt.Errorf("commit create message: %w", err)
+	}
+	if created {
+		s.notifyAfterCommit(user.OrgID, highWatermark)
+	}
+	return result, created, nil
+}
+
+// createTx runs the whole ordinary send path inside tx: authorization,
+// idempotency, validation of references, mentions and files, the insert and
+// its durable event. The caller commits and then notifies with the returned
+// high watermark when created is true. input must already be validated.
+func (s *Service) createTx(ctx context.Context, tx pgx.Tx, user identity.User, chatID string, input CreateInput, provenance *AgentProvenance, final bool) (Message, bool, int64, error) {
+	messageID, err := id.New()
+	if err != nil {
+		return Message{}, false, 0, fmt.Errorf("generate message id: %w", err)
+	}
+	if err := lockOrganization(ctx, tx, user.OrgID); err != nil {
+		return Message{}, false, 0, err
 	}
 	kind, role, err := requireMembership(ctx, tx, user, chatID)
 	if err != nil {
-		return Message{}, false, err
+		return Message{}, false, 0, err
 	}
 	action := authz.MessagePublish
 	if input.ThreadRootID != nil {
 		action = authz.ThreadReply
 	}
 	if !can(user, kind, role, action) {
-		return Message{}, false, ErrForbidden
+		return Message{}, false, 0, ErrForbidden
 	}
 	// An agent posts only to chats its published version writes to; chats
 	// it only reads are sources, never destinations.
 	var isAgent, readOnly bool
 	if err := tx.QueryRow(ctx, `SELECT true, $3::uuid=ANY(read_only_chat_ids) FROM agents WHERE org_id=$1 AND actor_id=$2`, user.OrgID, user.ActorID, chatID).Scan(&isAgent, &readOnly); err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return Message{}, false, fmt.Errorf("check agent chat role: %w", err)
+		return Message{}, false, 0, fmt.Errorf("check agent chat role: %w", err)
 	}
 	if readOnly {
-		return Message{}, false, ErrForbidden
+		return Message{}, false, 0, ErrForbidden
 	}
 	// Second line behind the tool executor: an agent writing to a person
 	// in a direct chat follows the «writes to people directly» policy, the
 	// per-person limits and quiet hours, whatever path the write took.
 	if isAgent && kind == "direct" {
 		if s.directGuard == nil {
-			return Message{}, false, ErrForbidden
+			return Message{}, false, 0, ErrForbidden
 		}
 		write := DirectWrite{OrgID: user.OrgID, AgentID: user.ActorID, ChatID: chatID, Final: final}
 		if provenance != nil {
 			write.RunID = provenance.RunID
 		}
 		if err := s.directGuard(ctx, tx, write); err != nil {
-			return Message{}, false, err
+			return Message{}, false, 0, err
 		}
 	}
 
+	// Quiet notifications are a person's choice; agents notify as usual.
+	if input.Silent && (isAgent || provenance != nil) {
+		return Message{}, false, 0, ErrForbidden
+	}
+	// The client_msg_id of a scheduled message's send belongs to it alone:
+	// an ordinary send that takes it could hijack or break the delivery.
+	if !input.scheduledDelivery {
+		var reserved bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM scheduled_messages WHERE author_id=$1 AND message_client_msg_id=$2)`, user.ActorID, input.ClientMsgID).Scan(&reserved); err != nil {
+			return Message{}, false, 0, fmt.Errorf("check reserved client message id: %w", err)
+		}
+		if reserved {
+			return Message{}, false, 0, ErrIdempotencyConflict
+		}
+	}
 	fingerprint := commandFingerprint(chatID, input)
 	existing, existingFingerprint, err := findByClientID(ctx, tx, user.ActorID, input.ClientMsgID)
 	if err == nil {
 		if existingFingerprint == fingerprint {
 			if provenance != nil {
 				if err := insertAgentProvenance(ctx, tx, user, existing.ID, *provenance); err != nil {
-					return Message{}, false, err
+					return Message{}, false, 0, err
 				}
 				if final {
 					if err := markFinalAgentMessage(ctx, tx, user, existing.ID, provenance.RunID); err != nil {
-						return Message{}, false, err
+						return Message{}, false, 0, err
 					}
 				}
-				if err := tx.Commit(ctx); err != nil {
-					return Message{}, false, fmt.Errorf("commit agent message provenance: %w", err)
-				}
 			}
-			return existing, false, nil
+			return existing, false, 0, nil
 		}
-		return Message{}, false, ErrIdempotencyConflict
+		return Message{}, false, 0, ErrIdempotencyConflict
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
-		return Message{}, false, fmt.Errorf("find idempotent message: %w", err)
+		return Message{}, false, 0, fmt.Errorf("find idempotent message: %w", err)
 	}
 	if err := validateReferences(ctx, tx, user.OrgID, chatID, input.ReplyToID, input.ThreadRootID); err != nil {
-		return Message{}, false, err
+		return Message{}, false, 0, err
 	}
 	if err := validateMentions(ctx, tx, user.OrgID, chatID, input.MentionedActorIDs); err != nil {
-		return Message{}, false, err
+		return Message{}, false, 0, err
 	}
 	if err := validateFiles(ctx, tx, user, input.FileIDs); err != nil {
-		return Message{}, false, err
+		return Message{}, false, 0, err
 	}
 	if input.Blocks != nil {
 		if provenance == nil {
-			return Message{}, false, invalid("blocks are available only to agent messages")
+			return Message{}, false, 0, invalid("blocks are available only to agent messages")
 		}
 		if err := validateBlockReferences(ctx, tx, user, chatID, input.Blocks); err != nil {
-			return Message{}, false, err
+			return Message{}, false, 0, err
 		}
 	}
 
 	seq, err := nextSequence(ctx, tx, user.OrgID)
 	if err != nil {
-		return Message{}, false, err
+		return Message{}, false, 0, err
 	}
 	var result Message
 	err = scanMessage(tx.QueryRow(ctx, `
 		INSERT INTO messages
-			(id, org_id, chat_id, actor_id, client_msg_id, create_fingerprint, body, body_format, reply_to_id, thread_root_id, created_seq, mentioned_actor_ids, blocks)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+			(id, org_id, chat_id, actor_id, client_msg_id, create_fingerprint, body, body_format, reply_to_id, thread_root_id, created_seq, mentioned_actor_ids, blocks, silent)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		RETURNING id, chat_id, actor_id, client_msg_id, type, body, body_format, reply_to_id,
 			thread_root_id, version, created_seq, created_at, edited_at, deleted_at, forwarded_from, mentioned_actor_ids, blocks`,
 		messageID, user.OrgID, chatID, user.ActorID, input.ClientMsgID, fingerprint[:], input.Body, input.BodyFormat,
-		input.ReplyToID, input.ThreadRootID, seq, input.MentionedActorIDs, blocksParam(input.Blocks)), &result)
+		input.ReplyToID, input.ThreadRootID, seq, input.MentionedActorIDs, blocksParam(input.Blocks), input.Silent), &result)
 	if err != nil {
-		return Message{}, false, fmt.Errorf("insert message: %w", err)
+		return Message{}, false, 0, fmt.Errorf("insert message: %w", err)
 	}
+	result.Silent = input.Silent
 	if err := attachFiles(ctx, tx, user.OrgID, result.ID, input.FileIDs); err != nil {
-		return Message{}, false, err
+		return Message{}, false, 0, err
 	}
 	created := []Message{result}
 	if err := hydrateFiles(ctx, tx, user.OrgID, created); err != nil {
-		return Message{}, false, err
+		return Message{}, false, 0, err
 	}
 	result = created[0]
 	if provenance != nil {
 		if err := insertAgentProvenance(ctx, tx, user, result.ID, *provenance); err != nil {
-			return Message{}, false, err
+			return Message{}, false, 0, err
 		}
 		if final {
 			if err := markFinalAgentMessage(ctx, tx, user, result.ID, provenance.RunID); err != nil {
-				return Message{}, false, err
+				return Message{}, false, 0, err
 			}
 		}
 		if err := hydrateAgentProvenance(ctx, tx, user.OrgID, created); err != nil {
-			return Message{}, false, err
+			return Message{}, false, 0, err
 		}
 		result = created[0]
 	}
 	if err := insertEvent(ctx, tx, user, chatID, result.ID, seq, "message.created"); err != nil {
-		return Message{}, false, err
+		return Message{}, false, 0, err
 	}
 	highWatermark := seq
 	if input.ThreadRootID != nil {
 		highWatermark, err = autoFollowThread(ctx, tx, user, *input.ThreadRootID, input.MentionedActorIDs, highWatermark)
 		if err != nil {
-			return Message{}, false, err
+			return Message{}, false, 0, err
 		}
 	}
 	if _, err := tx.Exec(ctx, `UPDATE chats SET last_message_at = $3 WHERE org_id = $1 AND id = $2`, user.OrgID, chatID, result.CreatedAt); err != nil {
-		return Message{}, false, fmt.Errorf("update chat activity: %w", err)
+		return Message{}, false, 0, fmt.Errorf("update chat activity: %w", err)
 	}
-	if err := tx.Commit(ctx); err != nil {
-		return Message{}, false, fmt.Errorf("commit create message: %w", err)
-	}
-	s.notifyAfterCommit(user.OrgID, highWatermark)
-	return result, true, nil
+	return result, true, highWatermark, nil
 }
 
 func markFinalAgentMessage(ctx context.Context, tx pgx.Tx, user identity.User, messageID, runID string) error {
@@ -743,9 +780,28 @@ func (s *Service) validateBody(body, format *string, allowBlank bool) error {
 	return nil
 }
 
+// lockOrganization serializes the organization's event sequence.
+//
+// Lock order, shared by every transaction that writes events:
+//
+//	organizations → scheduled_messages → actors → users → sessions
+//
+// A transaction that allocates an event takes the organization row first,
+// before any other row; the same holds in chat, userstate, files
+// (avatars), identity (custom statuses) and scheduled. Chats and chat
+// members are locked exclusively only under the organization lock, so their
+// place among the rest does not matter. Security events (identity,
+// workspace) take only actors, users and sessions, in that order, and never
+// the organization row while holding them.
+//
+// NO KEY UPDATE is enough to serialize the sequence and, unlike FOR UPDATE,
+// does not block the FOR KEY SHARE locks of foreign key checks: a security
+// event that holds a person's row and inserts an audit record never waits
+// for the organization, so it cannot deadlock with a send waiting for that
+// person's row.
 func lockOrganization(ctx context.Context, tx pgx.Tx, orgID string) error {
 	var seq int64
-	if err := tx.QueryRow(ctx, `SELECT event_seq FROM organizations WHERE id = $1 FOR UPDATE`, orgID).Scan(&seq); errors.Is(err, pgx.ErrNoRows) {
+	if err := tx.QueryRow(ctx, `SELECT event_seq FROM organizations WHERE id = $1 FOR NO KEY UPDATE`, orgID).Scan(&seq); errors.Is(err, pgx.ErrNoRows) {
 		return ErrForbidden
 	} else if err != nil {
 		return fmt.Errorf("lock organization: %w", err)
@@ -924,7 +980,11 @@ func commandFingerprint(chatID string, input CreateInput) [32]byte {
 	if input.ThreadRootID != nil {
 		threadRoot = "+" + *input.ThreadRootID
 	}
-	return sha256.Sum256([]byte(chatID + "\x00" + input.Body + "\x00" + input.BodyFormat + "\x00" + replyTo + "\x00" + threadRoot + "\x00" + strings.Join(input.MentionedActorIDs, ",") + "\x00" + strings.Join(input.FileIDs, ",") + blocksFingerprint(input.Blocks)))
+	silent := ""
+	if input.Silent {
+		silent = "\x00silent"
+	}
+	return sha256.Sum256([]byte(chatID + "\x00" + input.Body + "\x00" + input.BodyFormat + "\x00" + replyTo + "\x00" + threadRoot + "\x00" + strings.Join(input.MentionedActorIDs, ",") + "\x00" + strings.Join(input.FileIDs, ",") + blocksFingerprint(input.Blocks) + silent))
 }
 
 type rowScanner interface {

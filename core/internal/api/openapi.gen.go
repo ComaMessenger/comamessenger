@@ -1568,6 +1568,24 @@ func (e CreateMessageRequestBodyFormat) Valid() bool {
 	}
 }
 
+// Defines values for CreateScheduledMessageRequestBodyFormat.
+const (
+	CreateScheduledMessageRequestBodyFormatMarkdown CreateScheduledMessageRequestBodyFormat = "markdown"
+	CreateScheduledMessageRequestBodyFormatPlain    CreateScheduledMessageRequestBodyFormat = "plain"
+)
+
+// Valid indicates whether the value is a known member of the CreateScheduledMessageRequestBodyFormat enum.
+func (e CreateScheduledMessageRequestBodyFormat) Valid() bool {
+	switch e {
+	case CreateScheduledMessageRequestBodyFormatMarkdown:
+		return true
+	case CreateScheduledMessageRequestBodyFormatPlain:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DirectoryChatKind.
 const (
 	DirectoryChatKindChannel DirectoryChatKind = "channel"
@@ -1606,28 +1624,33 @@ func (e DraftBodyFormat) Valid() bool {
 
 // Defines values for DurableEventTypeV1.
 const (
-	ActorAvatarUpdated DurableEventTypeV1 = "actor.avatar.updated"
-	ActorStatusUpdated DurableEventTypeV1 = "actor.status.updated"
-	ChatArchived       DurableEventTypeV1 = "chat.archived"
-	ChatCreated        DurableEventTypeV1 = "chat.created"
-	ChatUpdated        DurableEventTypeV1 = "chat.updated"
-	DraftDeleted       DurableEventTypeV1 = "draft.deleted"
-	DraftUpdated       DurableEventTypeV1 = "draft.updated"
-	MemberJoined       DurableEventTypeV1 = "member.joined"
-	MemberRemoved      DurableEventTypeV1 = "member.removed"
-	MemberUpdated      DurableEventTypeV1 = "member.updated"
-	MessageCreated     DurableEventTypeV1 = "message.created"
-	MessageDeleted     DurableEventTypeV1 = "message.deleted"
-	MessagePinned      DurableEventTypeV1 = "message.pinned"
-	MessageSaved       DurableEventTypeV1 = "message.saved"
-	MessageUnpinned    DurableEventTypeV1 = "message.unpinned"
-	MessageUnsaved     DurableEventTypeV1 = "message.unsaved"
-	MessageUpdated     DurableEventTypeV1 = "message.updated"
-	ReactionAdded      DurableEventTypeV1 = "reaction.added"
-	ReactionRemoved    DurableEventTypeV1 = "reaction.removed"
-	ReadMarked         DurableEventTypeV1 = "read.marked"
-	ThreadFollowed     DurableEventTypeV1 = "thread.followed"
-	ThreadUnfollowed   DurableEventTypeV1 = "thread.unfollowed"
+	ActorAvatarUpdated      DurableEventTypeV1 = "actor.avatar.updated"
+	ActorStatusUpdated      DurableEventTypeV1 = "actor.status.updated"
+	ChatArchived            DurableEventTypeV1 = "chat.archived"
+	ChatCreated             DurableEventTypeV1 = "chat.created"
+	ChatUpdated             DurableEventTypeV1 = "chat.updated"
+	DraftDeleted            DurableEventTypeV1 = "draft.deleted"
+	DraftUpdated            DurableEventTypeV1 = "draft.updated"
+	MemberJoined            DurableEventTypeV1 = "member.joined"
+	MemberRemoved           DurableEventTypeV1 = "member.removed"
+	MemberUpdated           DurableEventTypeV1 = "member.updated"
+	MessageCreated          DurableEventTypeV1 = "message.created"
+	MessageDeleted          DurableEventTypeV1 = "message.deleted"
+	MessagePinned           DurableEventTypeV1 = "message.pinned"
+	MessageSaved            DurableEventTypeV1 = "message.saved"
+	MessageUnpinned         DurableEventTypeV1 = "message.unpinned"
+	MessageUnsaved          DurableEventTypeV1 = "message.unsaved"
+	MessageUpdated          DurableEventTypeV1 = "message.updated"
+	ReactionAdded           DurableEventTypeV1 = "reaction.added"
+	ReactionRemoved         DurableEventTypeV1 = "reaction.removed"
+	ReadMarked              DurableEventTypeV1 = "read.marked"
+	ScheduledMessageCreated DurableEventTypeV1 = "scheduled_message.created"
+	ScheduledMessageDeleted DurableEventTypeV1 = "scheduled_message.deleted"
+	ScheduledMessageFailed  DurableEventTypeV1 = "scheduled_message.failed"
+	ScheduledMessageSent    DurableEventTypeV1 = "scheduled_message.sent"
+	ScheduledMessageUpdated DurableEventTypeV1 = "scheduled_message.updated"
+	ThreadFollowed          DurableEventTypeV1 = "thread.followed"
+	ThreadUnfollowed        DurableEventTypeV1 = "thread.unfollowed"
 )
 
 // Valid indicates whether the value is a known member of the DurableEventTypeV1 enum.
@@ -1672,6 +1695,16 @@ func (e DurableEventTypeV1) Valid() bool {
 	case ReactionRemoved:
 		return true
 	case ReadMarked:
+		return true
+	case ScheduledMessageCreated:
+		return true
+	case ScheduledMessageDeleted:
+		return true
+	case ScheduledMessageFailed:
+		return true
+	case ScheduledMessageSent:
+		return true
+	case ScheduledMessageUpdated:
 		return true
 	case ThreadFollowed:
 		return true
@@ -1726,6 +1759,8 @@ const (
 	ErrorCodeRateLimited                 ErrorCode = "rate_limited"
 	ErrorCodeReauthenticationFailed      ErrorCode = "reauthentication_failed"
 	ErrorCodeSavedLimitReached           ErrorCode = "saved_limit_reached"
+	ErrorCodeScheduledMessageClosed      ErrorCode = "scheduled_message_closed"
+	ErrorCodeScheduledMessageNotFound    ErrorCode = "scheduled_message_not_found"
 	ErrorCodeServiceNotReady             ErrorCode = "service_not_ready"
 	ErrorCodeSessionNotFound             ErrorCode = "session_not_found"
 	ErrorCodeSmtpNotConfigured           ErrorCode = "smtp_not_configured"
@@ -1826,6 +1861,10 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeReauthenticationFailed:
 		return true
 	case ErrorCodeSavedLimitReached:
+		return true
+	case ErrorCodeScheduledMessageClosed:
+		return true
+	case ErrorCodeScheduledMessageNotFound:
 		return true
 	case ErrorCodeServiceNotReady:
 		return true
@@ -3164,6 +3203,114 @@ func (e SavedMessageChatKind) Valid() bool {
 	}
 }
 
+// Defines values for ScheduledMessageBodyFormat.
+const (
+	ScheduledMessageBodyFormatMarkdown ScheduledMessageBodyFormat = "markdown"
+	ScheduledMessageBodyFormatPlain    ScheduledMessageBodyFormat = "plain"
+)
+
+// Valid indicates whether the value is a known member of the ScheduledMessageBodyFormat enum.
+func (e ScheduledMessageBodyFormat) Valid() bool {
+	switch e {
+	case ScheduledMessageBodyFormatMarkdown:
+		return true
+	case ScheduledMessageBodyFormatPlain:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduledMessageStatus.
+const (
+	ScheduledMessageStatusFailed  ScheduledMessageStatus = "failed"
+	ScheduledMessageStatusPending ScheduledMessageStatus = "pending"
+	ScheduledMessageStatusSent    ScheduledMessageStatus = "sent"
+)
+
+// Valid indicates whether the value is a known member of the ScheduledMessageStatus enum.
+func (e ScheduledMessageStatus) Valid() bool {
+	switch e {
+	case ScheduledMessageStatusFailed:
+		return true
+	case ScheduledMessageStatusPending:
+		return true
+	case ScheduledMessageStatusSent:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduledMessageEventStatus.
+const (
+	ScheduledMessageEventStatusDeleted ScheduledMessageEventStatus = "deleted"
+	ScheduledMessageEventStatusFailed  ScheduledMessageEventStatus = "failed"
+	ScheduledMessageEventStatusPending ScheduledMessageEventStatus = "pending"
+	ScheduledMessageEventStatusSent    ScheduledMessageEventStatus = "sent"
+)
+
+// Valid indicates whether the value is a known member of the ScheduledMessageEventStatus enum.
+func (e ScheduledMessageEventStatus) Valid() bool {
+	switch e {
+	case ScheduledMessageEventStatusDeleted:
+		return true
+	case ScheduledMessageEventStatusFailed:
+		return true
+	case ScheduledMessageEventStatusPending:
+		return true
+	case ScheduledMessageEventStatusSent:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScheduledMessageFailureReason.
+const (
+	ScheduledMessageFailureReasonAttachmentUnavailable ScheduledMessageFailureReason = "attachment_unavailable"
+	ScheduledMessageFailureReasonAuthorInactive        ScheduledMessageFailureReason = "author_inactive"
+	ScheduledMessageFailureReasonChatUnavailable       ScheduledMessageFailureReason = "chat_unavailable"
+	ScheduledMessageFailureReasonDeliveryError         ScheduledMessageFailureReason = "delivery_error"
+	ScheduledMessageFailureReasonForbidden             ScheduledMessageFailureReason = "forbidden"
+	ScheduledMessageFailureReasonInvalidContent        ScheduledMessageFailureReason = "invalid_content"
+	ScheduledMessageFailureReasonMissedSendTime        ScheduledMessageFailureReason = "missed_send_time"
+	ScheduledMessageFailureReasonNotMember             ScheduledMessageFailureReason = "not_member"
+	ScheduledMessageFailureReasonReferenceUnavailable  ScheduledMessageFailureReason = "reference_unavailable"
+	ScheduledMessageFailureReasonSecurityReset         ScheduledMessageFailureReason = "security_reset"
+	ScheduledMessageFailureReasonSessionRevoked        ScheduledMessageFailureReason = "session_revoked"
+)
+
+// Valid indicates whether the value is a known member of the ScheduledMessageFailureReason enum.
+func (e ScheduledMessageFailureReason) Valid() bool {
+	switch e {
+	case ScheduledMessageFailureReasonAttachmentUnavailable:
+		return true
+	case ScheduledMessageFailureReasonAuthorInactive:
+		return true
+	case ScheduledMessageFailureReasonChatUnavailable:
+		return true
+	case ScheduledMessageFailureReasonDeliveryError:
+		return true
+	case ScheduledMessageFailureReasonForbidden:
+		return true
+	case ScheduledMessageFailureReasonInvalidContent:
+		return true
+	case ScheduledMessageFailureReasonMissedSendTime:
+		return true
+	case ScheduledMessageFailureReasonNotMember:
+		return true
+	case ScheduledMessageFailureReasonReferenceUnavailable:
+		return true
+	case ScheduledMessageFailureReasonSecurityReset:
+		return true
+	case ScheduledMessageFailureReasonSessionRevoked:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SearchResultKind.
 const (
 	SearchResultKindFile    SearchResultKind = "file"
@@ -3482,6 +3629,24 @@ func (e UpdatePreferencesRequestTheme) Valid() bool {
 	case UpdatePreferencesRequestThemeLight:
 		return true
 	case UpdatePreferencesRequestThemeSystem:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UpdateScheduledMessageRequestBodyFormat.
+const (
+	UpdateScheduledMessageRequestBodyFormatMarkdown UpdateScheduledMessageRequestBodyFormat = "markdown"
+	UpdateScheduledMessageRequestBodyFormatPlain    UpdateScheduledMessageRequestBodyFormat = "plain"
+)
+
+// Valid indicates whether the value is a known member of the UpdateScheduledMessageRequestBodyFormat enum.
+func (e UpdateScheduledMessageRequestBodyFormat) Valid() bool {
+	switch e {
+	case UpdateScheduledMessageRequestBodyFormatMarkdown:
+		return true
+	case UpdateScheduledMessageRequestBodyFormatPlain:
 		return true
 	default:
 		return false
@@ -5155,12 +5320,37 @@ type CreateMessageRequest struct {
 	ReplyToId         *openapi_types.UUID             `json:"reply_to_id,omitempty"`
 
 	// RunId Required when authenticating with an agent API key.
-	RunId        *openapi_types.UUID `json:"run_id,omitempty"`
+	RunId *openapi_types.UUID `json:"run_id,omitempty"`
+
+	// Silent Notify recipients without sound or vibration. The message and its notifications are delivered as usual and recipients' settings apply. People only: a request with an agent API key or from an agent gets 403. Absent means false.
+	Silent       *bool               `json:"silent,omitempty"`
 	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
 }
 
 // CreateMessageRequestBodyFormat defines model for CreateMessageRequest.BodyFormat.
 type CreateMessageRequestBodyFormat string
+
+// CreateScheduledMessageRequest defines model for CreateScheduledMessageRequest.
+type CreateScheduledMessageRequest struct {
+	Body        string                                   `json:"body"`
+	BodyFormat  *CreateScheduledMessageRequestBodyFormat `json:"body_format,omitempty"`
+	ClientMsgId openapi_types.UUID                       `json:"client_msg_id"`
+
+	// FileIds Ready files uploaded by the current user.
+	FileIds           *[]openapi_types.UUID `json:"file_ids,omitempty"`
+	MentionedActorIds *[]openapi_types.UUID `json:"mentioned_actor_ids,omitempty"`
+	ReplyToId         *openapi_types.UUID   `json:"reply_to_id,omitempty"`
+
+	// SendAt Must be in the future and at most 365 days ahead.
+	SendAt time.Time `json:"send_at"`
+
+	// Silent Notify recipients without sound or vibration, as for an ordinary message. Absent means false.
+	Silent       *bool               `json:"silent,omitempty"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id,omitempty"`
+}
+
+// CreateScheduledMessageRequestBodyFormat defines model for CreateScheduledMessageRequest.BodyFormat.
+type CreateScheduledMessageRequestBodyFormat string
 
 // CreatedAgentApiKey defines model for CreatedAgentApiKey.
 type CreatedAgentApiKey struct {
@@ -5720,6 +5910,9 @@ type Message struct {
 	Id                openapi_types.UUID   `json:"id"`
 	MentionedActorIds []openapi_types.UUID `json:"mentioned_actor_ids"`
 	ReplyToId         *openapi_types.UUID  `json:"reply_to_id,omitempty"`
+
+	// Silent Present and true when the author asked for quiet notifications: recipients are notified as usual (push, e-mail digest, their own notification settings apply) but clients play no sound or vibration for it. Carried by the create response and realtime events; history pages omit it.
+	Silent *bool `json:"silent,omitempty"`
 
 	// ThreadReplyCount Number of non-deleted replies when this message is a thread root.
 	ThreadReplyCount int64               `json:"thread_reply_count"`
@@ -6446,6 +6639,58 @@ type SavedMessageState struct {
 	SavedAt   time.Time          `json:"saved_at"`
 }
 
+// ScheduledMessage A message the current user scheduled. Visible only to its author. After sending, the text, mentions and files are cleared from the record (the message itself carries them) and message_id points to the message. Realtime events about it carry only ScheduledMessageEvent; read the record for its content.
+type ScheduledMessage struct {
+	Body       string                     `json:"body"`
+	BodyFormat ScheduledMessageBodyFormat `json:"body_format"`
+	ChatId     openapi_types.UUID         `json:"chat_id"`
+
+	// ClientMsgId The idempotency key of the scheduling request. The sent message gets its own client_msg_id, derived by the server and reserved for it.
+	ClientMsgId       openapi_types.UUID             `json:"client_msg_id"`
+	CreatedAt         time.Time                      `json:"created_at"`
+	FailedAt          *time.Time                     `json:"failed_at,omitempty"`
+	FailureReason     *ScheduledMessageFailureReason `json:"failure_reason"`
+	Files             []File                         `json:"files"`
+	Id                openapi_types.UUID             `json:"id"`
+	MentionedActorIds []openapi_types.UUID           `json:"mentioned_actor_ids"`
+	MessageId         *openapi_types.UUID            `json:"message_id"`
+	ReplyToId         *openapi_types.UUID            `json:"reply_to_id"`
+	SendAt            time.Time                      `json:"send_at"`
+	SentAt            *time.Time                     `json:"sent_at,omitempty"`
+	Silent            bool                           `json:"silent"`
+	Status            ScheduledMessageStatus         `json:"status"`
+	ThreadRootId      *openapi_types.UUID            `json:"thread_root_id"`
+	UpdatedAt         time.Time                      `json:"updated_at"`
+	Version           int                            `json:"version"`
+}
+
+// ScheduledMessageBodyFormat defines model for ScheduledMessage.BodyFormat.
+type ScheduledMessageBodyFormat string
+
+// ScheduledMessageStatus defines model for ScheduledMessage.Status.
+type ScheduledMessageStatus string
+
+// ScheduledMessageEvent data of the realtime events scheduled_message.created, .updated, .deleted, .sent and .failed, sent only to the author's devices. It never carries the text, mentions or files: the event log is kept long and replayed to new devices. Fetch the record when needed.
+type ScheduledMessageEvent struct {
+	ChatId        openapi_types.UUID             `json:"chat_id"`
+	FailureReason *ScheduledMessageFailureReason `json:"failure_reason"`
+	Id            openapi_types.UUID             `json:"id"`
+	SendAt        time.Time                      `json:"send_at"`
+	Status        ScheduledMessageEventStatus    `json:"status"`
+	Version       int                            `json:"version"`
+}
+
+// ScheduledMessageEventStatus defines model for ScheduledMessageEvent.Status.
+type ScheduledMessageEventStatus string
+
+// ScheduledMessageFailureReason Why the message was not sent; the text stays so it can be scheduled again. author_inactive: the account was deactivated (reactivation does not revive it). security_reset: the password was changed or reset, an administrator required a new password, the e-mail changed, or every other device was signed out. session_revoked: the device that scheduled or last changed it was removed from the session list, or its refresh token was reused. Signing out on that device itself or a session expiring never stops a scheduled message. missed_send_time: it could not be sent within 15 minutes of its time. chat_unavailable: the chat was archived or deleted. not_member: the author left or was removed. forbidden: the author may no longer write here. reference_unavailable: the reply target, thread or a mentioned member is gone. attachment_unavailable: a file was deleted. invalid_content: the message no longer passes validation. delivery_error: repeated internal errors.
+type ScheduledMessageFailureReason string
+
+// ScheduledMessageList defines model for ScheduledMessageList.
+type ScheduledMessageList struct {
+	ScheduledMessages []ScheduledMessage `json:"scheduled_messages"`
+}
+
 // SearchPage defines model for SearchPage.
 type SearchPage struct {
 	NextCursor *string        `json:"next_cursor"`
@@ -6847,6 +7092,19 @@ type UpdateProfileRequest struct {
 	Title       *string `json:"title,omitempty"`
 }
 
+// UpdateScheduledMessageRequest defines model for UpdateScheduledMessageRequest.
+type UpdateScheduledMessageRequest struct {
+	Body              *string                                  `json:"body,omitempty"`
+	BodyFormat        *UpdateScheduledMessageRequestBodyFormat `json:"body_format,omitempty"`
+	ExpectedVersion   int                                      `json:"expected_version"`
+	MentionedActorIds *[]openapi_types.UUID                    `json:"mentioned_actor_ids,omitempty"`
+	SendAt            *time.Time                               `json:"send_at,omitempty"`
+	Silent            *bool                                    `json:"silent,omitempty"`
+}
+
+// UpdateScheduledMessageRequestBodyFormat defines model for UpdateScheduledMessageRequest.BodyFormat.
+type UpdateScheduledMessageRequestBodyFormat string
+
 // User defines model for User.
 type User struct {
 	About                string              `json:"about"`
@@ -6960,6 +7218,9 @@ type MessageId = openapi_types.UUID
 
 // ObjectDelivery defines model for ObjectDelivery.
 type ObjectDelivery string
+
+// ScheduledMessageId defines model for ScheduledMessageId.
+type ScheduledMessageId = openapi_types.UUID
 
 // UploadId defines model for UploadId.
 type UploadId = openapi_types.UUID
@@ -7164,6 +7425,11 @@ type ListSavedMessageIdsParams struct {
 	ChatId openapi_types.UUID `form:"chat_id" json:"chat_id"`
 }
 
+// ListScheduledMessagesParams defines parameters for ListScheduledMessages.
+type ListScheduledMessagesParams struct {
+	ChatId *openapi_types.UUID `form:"chat_id,omitempty" json:"chat_id,omitempty"`
+}
+
 // SearchMessagesAndFilesParams defines parameters for SearchMessagesAndFiles.
 type SearchMessagesAndFilesParams struct {
 	Q        string                            `form:"q" json:"q"`
@@ -7309,6 +7575,9 @@ type UpdateChatNotificationPreferencesJSONRequestBody = ChatNotificationPreferen
 // MarkChatReadJSONRequestBody defines body for MarkChatRead for application/json ContentType.
 type MarkChatReadJSONRequestBody = MarkReadRequest
 
+// CreateScheduledMessageJSONRequestBody defines body for CreateScheduledMessage for application/json ContentType.
+type CreateScheduledMessageJSONRequestBody = CreateScheduledMessageRequest
+
 // PutDraftJSONRequestBody defines body for PutDraft for application/json ContentType.
 type PutDraftJSONRequestBody = PutDraftRequest
 
@@ -7413,6 +7682,9 @@ type PutMobilePushDeviceJSONRequestBody = MobilePushDeviceRequest
 
 // PutPushSubscriptionJSONRequestBody defines body for PutPushSubscription for application/json ContentType.
 type PutPushSubscriptionJSONRequestBody = PushSubscriptionRequest
+
+// UpdateScheduledMessageJSONRequestBody defines body for UpdateScheduledMessage for application/json ContentType.
+type UpdateScheduledMessageJSONRequestBody = UpdateScheduledMessageRequest
 
 // AsNotificationScheduleDays0 returns the union data inside the NotificationSchedule_Days as a NotificationScheduleDays0
 func (t NotificationSchedule_Days) AsNotificationScheduleDays0() (NotificationScheduleDays0, error) {

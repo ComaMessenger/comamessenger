@@ -117,6 +117,9 @@ func (s *Service) PutChatAvatar(ctx context.Context, current identity.User, chat
 		return ChatAvatarUpdate{}, err
 	}
 	defer tx.Rollback(ctx)
+	if err := lockOrganization(ctx, tx, current.OrgID); err != nil {
+		return ChatAvatarUpdate{}, err
+	}
 	state, err := lockChatAvatar(ctx, tx, current, chatID)
 	if err != nil {
 		return ChatAvatarUpdate{}, err
@@ -174,6 +177,9 @@ func (s *Service) DeleteChatAvatar(ctx context.Context, current identity.User, c
 		return ChatAvatarUpdate{}, err
 	}
 	defer tx.Rollback(ctx)
+	if err := lockOrganization(ctx, tx, current.OrgID); err != nil {
+		return ChatAvatarUpdate{}, err
+	}
 	state, err := lockChatAvatar(ctx, tx, current, chatID)
 	if err != nil {
 		return ChatAvatarUpdate{}, err

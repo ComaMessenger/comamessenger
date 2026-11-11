@@ -184,8 +184,10 @@ func (s *Service) Logout(ctx context.Context, actorID, sessionID string) error {
 	return s.repository.RevokeSession(ctx, actorID, sessionID, s.now().UTC())
 }
 
+// RevokeSession removes a device from the session list: a security event
+// for that device, unlike Logout on the device itself.
 func (s *Service) RevokeSession(ctx context.Context, actorID, sessionID string) error {
-	return s.repository.RevokeSession(ctx, actorID, sessionID, s.now().UTC())
+	return s.repository.RevokeDevice(ctx, actorID, sessionID, s.now().UTC())
 }
 
 func (s *Service) ListSessions(ctx context.Context, actorID, currentSessionID string) ([]Session, error) {
