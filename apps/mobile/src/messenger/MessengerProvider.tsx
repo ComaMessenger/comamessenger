@@ -14,6 +14,7 @@ import {
   Outbox,
   RealtimeCoordinator,
   applySavedChange,
+  chatEventEffect,
   savedChange,
   createMessengerStore,
   pinnedChatLimit,
@@ -24,6 +25,7 @@ import { setLocale } from "@/i18n";
 import { checkpointStorage, outboxStorage } from "@/lib/database";
 import { hydrateDrafts } from "@/lib/drafts";
 import { reactionsKey } from "@/conversation/reactions";
+import { invalidateChatDetails } from "@/chatinfo/queries";
 import { usePushNotifications } from "@/push/usePushNotifications";
 import { isNetworkError, messageOf } from "@/lib/errors";
 import { cacheShell, cachedShell, persistMessages } from "./cache";
@@ -144,6 +146,9 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
             const privateSave =
               event.type === "message.saved" ||
               event.type === "message.unsaved";
+            // Members and pins of an open chat info or conversation.
+            const chatEffect = applied ? chatEventEffect(event) : null;
+            if (chatEffect) invalidateChatDetails(queryClient, chatEffect);
             if (event.type.startsWith("reaction."))
               void queryClient.invalidateQueries({
                 queryKey: reactionsKey(event.subject_id),

@@ -496,6 +496,13 @@ export function ConversationView({
       <ScreenHeader
         backTestID="conversation-back"
         title={inThread ? t("threadTitle") : title}
+        onTitlePress={
+          chat && !inThread
+            ? () => router.push(`/chat/${chatID}/info`)
+            : undefined
+        }
+        titleHint={t("chatInfoHint")}
+        titleTestID="conversation-title"
         leading={
           chat && !inThread ? (
             <Avatar

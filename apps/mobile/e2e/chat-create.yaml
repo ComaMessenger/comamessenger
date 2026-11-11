@@ -1,0 +1,85 @@
+# Package I of phase 6.1: «Новое сообщение» from the chat list — a group with
+# one person, then a direct chat from the people picker.
+# Needs at least one other person in the workspace.
+# Run after sign-in.yaml (reuses its session): maestro test e2e/chat-create.yaml
+appId: com.comamessenger.app
+---
+- runFlow: open-app.yaml
+- evalScript: ${output.group = 'Группа ' + String(Date.now()).slice(-5)}
+- tapOn:
+    id: new-message
+- extendedWaitUntil:
+    visible:
+      id: new-message
+    timeout: 5000
+- assertVisible:
+    id: new-group
+- assertVisible:
+    id: new-channel
+- extendedWaitUntil:
+    visible:
+      id: new-message-person-0
+    timeout: 15000
+- takeScreenshot: new-message
+
+# Group: pick the first person, name it, create, land in the new chat.
+- tapOn:
+    id: new-group
+- extendedWaitUntil:
+    visible:
+      id: new-group-picker-row-0
+    timeout: 15000
+- tapOn:
+    id: new-group-picker-row-0
+- takeScreenshot: new-group-members
+- tapOn:
+    id: new-group-next
+- extendedWaitUntil:
+    visible:
+      id: new-group-details
+    timeout: 5000
+- assertVisible:
+    id: kind-group
+- tapOn:
+    id: new-group-name
+- inputText: ${output.group}
+- hideKeyboard
+- takeScreenshot: new-group-details
+- tapOn:
+    id: new-group-create
+- extendedWaitUntil:
+    visible:
+      id: conversation
+    timeout: 15000
+- assertVisible: ${output.group}
+- takeScreenshot: new-group-created
+
+# «Back» returns to the chat list, where the group now is.
+- tapOn:
+    id: conversation-back
+- extendedWaitUntil:
+    visible:
+      id: chat-list
+    timeout: 5000
+- assertVisible: ${output.group}
+
+# Direct chat: the first person of the picker; existing chats are reused.
+- tapOn:
+    id: new-message
+- extendedWaitUntil:
+    visible:
+      id: new-message-person-0
+    timeout: 15000
+- tapOn:
+    id: new-message-person-0
+- extendedWaitUntil:
+    visible:
+      id: conversation
+    timeout: 15000
+- takeScreenshot: direct-chat
+- tapOn:
+    id: conversation-back
+- extendedWaitUntil:
+    visible:
+      id: chat-list
+    timeout: 5000

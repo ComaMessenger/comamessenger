@@ -8,7 +8,7 @@ import {
   View,
 } from "react-native";
 import { router } from "expo-router";
-import { Search } from "lucide-react-native";
+import { Search, SquarePen } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import {
@@ -31,6 +31,7 @@ import { FolderTabs } from "@/chats/FolderTabs";
 import { useChatDrafts } from "@/chats/useChatDrafts";
 import { ConnectionBanner } from "@/messenger/ConnectionBanner";
 import { Notice } from "@/ui/Notice";
+import { IconButton } from "@/ui/IconButton";
 import { TabHeader } from "@/ui/TabHeader";
 import { Text } from "@/ui/Text";
 import { WorkspaceMark } from "@/ui/WorkspaceMark";
@@ -123,6 +124,16 @@ export default function ChatsScreen() {
       <TabHeader
         title={t("tabChats")}
         leading={<WorkspaceMark name={user.organization_name} size={34} />}
+        trailing={
+          <IconButton
+            testID="new-message"
+            variant="soft"
+            label={t("newMessage")}
+            hint={t("newMessageHint")}
+            onPress={() => router.push("/new-chat")}
+            icon={(color) => <SquarePen size={20} color={color} />}
+          />
+        }
       >
         <Pressable
           testID="open-search"

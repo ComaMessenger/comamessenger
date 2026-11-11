@@ -17,3 +17,6 @@ export * from "./threads";
 export * from "./types";
 export * from "./voice";
 export * from "./uploads";
+export * from "./chatCreation";
+export * from "./chatRights";
+export * from "./people";
