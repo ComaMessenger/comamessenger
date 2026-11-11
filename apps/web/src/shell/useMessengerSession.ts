@@ -5,6 +5,7 @@ import {
   Outbox,
   RealtimeCoordinator,
   createMessengerStore,
+  restMessageLoader,
   expandUUID,
   isScheduledEvent,
   messagePlainText,
@@ -73,7 +74,12 @@ export function useMessengerSession({
   onLogout(): void;
   onUserUpdated(user: User): void;
 }) {
-  const store = useMemo(() => createMessengerStore(), []);
+  const store = useMemo(() => {
+    const created = createMessengerStore();
+    // A realtime frame too large to send whole arrives as a stub.
+    created.getState().setMessageLoader(restMessageLoader(api));
+    return created;
+  }, [api]);
   const queryClient = useQueryClient();
   // The list of scheduled messages belongs to this person only: lists left
   // by someone who used this tab before are dropped on sign-in, this
