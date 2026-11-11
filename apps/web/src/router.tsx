@@ -63,6 +63,11 @@ const routes = [
   }),
   createRoute({
     getParentRoute: () => root,
+    path: "/scheduled",
+    component: marker,
+  }),
+  createRoute({
+    getParentRoute: () => root,
     path: "/members",
     component: marker,
   }),

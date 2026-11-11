@@ -433,7 +433,6 @@ export const en: Record<keyof typeof ru, string> = {
   shiftEnterSends: "Shift + Enter sends the message",
   enterNewLine: "Enter inserts a new line",
   scheduleMessage: "Schedule message",
-  comingLater: "Coming in the next phase",
   composerHint: "Enter to send, Shift+Enter for a new line",
   composerHintReverse: "Shift+Enter to send, Enter for a new line",
   installHint: "Coma works like an app — add it to your home screen.",

@@ -27,6 +27,7 @@ import { MembersDirectory } from "../directories/MembersDirectory";
 import { MemberProfilePage } from "../directories/MemberProfilePage";
 import { directoryFromPath } from "../directories/routes";
 import { MorePage } from "../directories/MorePage";
+import { ScheduledPage } from "../scheduled/ScheduledPage";
 import { CreateChatDialog } from "../dialogs/CreateChatDialog";
 import { ChatFolderDialog } from "../dialogs/ChatFolderDialog";
 import { NotificationDialog } from "../dialogs/NotificationDialog";
@@ -95,17 +96,20 @@ export function Messenger({
     !user.must_change_password && (Boolean(selectedID) || path === "/chats");
   const directory = directoryFromPath(path);
   const knowledge = knowledgeFromPath(path);
+  const scheduledPage = path === "/scheduled";
   const section: PrimarySection = showChatList
     ? "chats"
     : directory
       ? directory.kind
-      : knowledge
-        ? "knowledge"
-        : showAgents
-          ? "agents"
-          : path === "/more" || activeSettings
-            ? "more"
-            : "none";
+      : scheduledPage
+        ? "scheduled"
+        : knowledge
+          ? "knowledge"
+          : showAgents
+            ? "agents"
+            : path === "/more" || activeSettings
+              ? "more"
+              : "none";
 
   const logout = useCallback(async () => {
     await api.logout();
@@ -191,6 +195,8 @@ export function Messenger({
     ) : (
       <MembersDirectory selectedID={directory.id} />
     )
+  ) : scheduledPage ? (
+    <ScheduledPage />
   ) : knowledge ? (
     <KnowledgePage route={knowledge} />
   ) : path === "/more" ? (
@@ -301,7 +307,9 @@ export function Messenger({
               active={
                 section === "none"
                   ? "chats"
-                  : section === "agents" || section === "knowledge"
+                  : section === "agents" ||
+                      section === "knowledge" ||
+                      section === "scheduled"
                     ? "more"
                     : section
               }
