@@ -5,9 +5,16 @@ appId: com.comamessenger.app
 - runFlow: open-app.yaml
 - tapOn:
     id: chat-row-0
+# "+" opens the sheet of attachments and actions.
 - tapOn:
     id: composer-attach
-- tapOn: Фото и видео
+- extendedWaitUntil:
+    visible:
+      id: composer-sheet
+    timeout: 5000
+- takeScreenshot: composer-sheet
+- tapOn:
+    id: composer-action-photos
 - extendedWaitUntil:
     visible: .*(Photos|Фото|Recents|Недавние).*
     timeout: 15000

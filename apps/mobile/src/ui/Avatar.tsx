@@ -7,8 +7,15 @@ import { useAvatarSource } from "@/files/sources";
 import { Text } from "./Text";
 
 export type Presence = "online" | "away" | "offline";
+/** Groups and channels are rounded squares; people and agents are circles. */
+export type AvatarShape = "circle" | "square";
 
-function paletteColors(theme: ThemeTokens, seed: string) {
+export function avatarRadius(size: number, shape: AvatarShape) {
+  return shape === "square" ? Math.round(size / 3) : size / 2;
+}
+
+/** Background and initials colour of an avatar; names in a group chat reuse the foreground. */
+export function avatarColors(theme: ThemeTokens, seed: string) {
   const index = stableAvatarIndex(seed) + 1;
   return {
     surface: theme[`avatarSurface${index}` as keyof ThemeTokens],
@@ -26,6 +33,7 @@ export function Avatar({
   actorID,
   chatID,
   avatarVersion,
+  shape = "circle",
 }: {
   name: string;
   seed: string;
@@ -38,11 +46,13 @@ export function Avatar({
   /** A group chat or channel image; takes the place of `actorID`. */
   chatID?: string;
   avatarVersion?: number;
+  shape?: AvatarShape;
 }) {
   const theme = useTheme();
   const photo = useAvatarSource(actorID, avatarVersion, chatID);
-  const colors = paletteColors(theme, seed);
+  const colors = avatarColors(theme, seed);
   const dot = Math.round(size * 0.28);
+  const corner = avatarRadius(size, shape);
   return (
     <View
       accessibilityElementsHidden
@@ -55,10 +65,8 @@ export function Avatar({
           {
             width: size,
             height: size,
-            borderRadius: size / 2,
-            backgroundColor: agent ? theme.sidebar : colors.surface,
-            borderWidth: agent ? 1 : 0,
-            borderColor: theme.border,
+            borderRadius: corner,
+            backgroundColor: agent ? theme.primarySoft : colors.surface,
           },
         ]}
       >
@@ -66,7 +74,7 @@ export function Avatar({
           allowFontScaling={false}
           weight="semibold"
           size={Math.round(size * 0.36)}
-          style={{ color: agent ? theme.muted : colors.foreground }}
+          style={{ color: agent ? theme.primary : colors.foreground }}
         >
           {glyph ?? (initialsOf(name) || "?")}
         </Text>
@@ -75,7 +83,7 @@ export function Avatar({
             source={photo}
             cachePolicy="disk"
             transition={120}
-            style={[StyleSheet.absoluteFill, { borderRadius: size / 2 }]}
+            style={[StyleSheet.absoluteFill, { borderRadius: corner }]}
           />
         )}
       </View>

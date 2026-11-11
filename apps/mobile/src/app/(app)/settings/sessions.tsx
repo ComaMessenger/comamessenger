@@ -123,7 +123,7 @@ export default function SessionsScreen() {
 
   return (
     <SafeAreaView
-      edges={["top", "bottom"]}
+      edges={["bottom"]}
       style={[styles.screen, { backgroundColor: theme.canvas }]}
     >
       <ScreenHeader title={t("sessions")} />

@@ -51,7 +51,7 @@ export default function NotificationSettingsScreen() {
 
   return (
     <SafeAreaView
-      edges={["top", "bottom"]}
+      edges={["bottom"]}
       style={[styles.screen, { backgroundColor: theme.canvas }]}
     >
       <ScreenHeader title={t("settingsNotifications")} />

@@ -6,8 +6,9 @@ import { useTheme } from "@/lib/theme";
 import { Avatar } from "@/ui/Avatar";
 import { Text } from "@/ui/Text";
 import { Markdown } from "./Markdown";
+import { bubbleCorners } from "./bubbles";
 
-/** Live agent output while a run streams into the feed. */
+/** Live agent output while a run streams into the feed, as an incoming bubble. */
 export function AgentStreamRow({
   body,
   author,
@@ -25,28 +26,30 @@ export function AgentStreamRow({
       <Avatar
         name={name}
         seed={author?.actor_id ?? "agent"}
-        size={34}
+        size={30}
         agent
         actorID={author?.actor_id}
         avatarVersion={author?.avatar_version}
       />
       <View
         style={[
-          styles.content,
-          { borderColor: theme.border, backgroundColor: theme.sidebar },
+          styles.bubble,
+          bubbleCorners({ own: false, first: true }, radius.bubble, radius.sm),
+          { borderColor: theme.border, backgroundColor: theme.surface },
         ]}
       >
         <View style={styles.meta}>
           <Text
             weight="semibold"
-            size={15}
+            size={12.5}
             numberOfLines={1}
+            tone="primary"
             style={styles.shrink}
           >
             {name}
           </Text>
           <View style={[styles.dot, { backgroundColor: theme.online }]} />
-          <Text tone="muted" size={13}>
+          <Text tone="muted" size={12}>
             {t(`agentState_${state}`)}
           </Text>
         </View>
@@ -59,23 +62,26 @@ export function AgentStreamRow({
 const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
-    gap: spacing[3],
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[2],
+    alignItems: "flex-end",
+    gap: 7,
+    paddingHorizontal: 10,
+    marginTop: 6,
+    maxWidth: "86%",
   },
-  content: {
-    flex: 1,
-    gap: spacing[2],
+  bubble: {
+    flexShrink: 1,
+    gap: spacing[1],
     borderWidth: 1,
-    borderRadius: radius.md,
-    padding: spacing[3],
+    paddingHorizontal: 11,
+    paddingTop: 7,
+    paddingBottom: 8,
   },
   meta: {
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "center",
-    gap: spacing[2],
+    gap: spacing[1],
   },
   shrink: { flexShrink: 1 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
+  dot: { width: 6, height: 6, borderRadius: 3 },
 });

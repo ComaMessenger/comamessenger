@@ -8,13 +8,43 @@ import { Text, fonts } from "@/ui/Text";
 const monospace = Platform.select({ ios: "Menlo", default: "monospace" });
 const blockTypes = new Set(["codeblock", "heading", "list"]);
 
+/** Colours of Markdown on its background: the feed or the reader's own bubble. */
+export type MarkdownPalette = {
+  text: string;
+  muted: string;
+  accent: string;
+  code: string;
+  codeBorder: string;
+};
+
+export function markdownPalette(
+  theme: ThemeTokens,
+  own = false,
+): MarkdownPalette {
+  return own
+    ? {
+        text: theme.onOwn,
+        muted: theme.ownMuted,
+        accent: theme.onOwn,
+        code: theme.ownTrack,
+        codeBorder: "transparent",
+      }
+    : {
+        text: theme.foreground,
+        muted: theme.muted,
+        accent: theme.primary,
+        code: theme.sidebar,
+        codeBorder: theme.border,
+      };
+}
+
 function inline(
   node: MarkdownNode,
   key: number,
-  theme: ThemeTokens,
+  palette: MarkdownPalette,
 ): ReactNode {
   const children = (nodes: MarkdownNode[]) =>
-    nodes.map((child, index) => inline(child, index, theme));
+    nodes.map((child, index) => inline(child, index, palette));
   switch (node.type) {
     case "text":
       return node.value;
@@ -22,25 +52,25 @@ function inline(
       return "\n";
     case "strong":
       return (
-        <Text key={key} weight="semibold">
+        <Text key={key} weight="semibold" style={{ color: palette.text }}>
           {children(node.children)}
         </Text>
       );
     case "emphasis":
       return (
-        <Text key={key} style={styles.italic}>
+        <Text key={key} style={[styles.italic, { color: palette.text }]}>
           {children(node.children)}
         </Text>
       );
     case "underline":
       return (
-        <Text key={key} style={styles.underline}>
+        <Text key={key} style={[styles.underline, { color: palette.text }]}>
           {children(node.children)}
         </Text>
       );
     case "strike":
       return (
-        <Text key={key} style={styles.strike}>
+        <Text key={key} style={[styles.strike, { color: palette.text }]}>
           {children(node.children)}
         </Text>
       );
@@ -48,7 +78,10 @@ function inline(
       return (
         <Text
           key={key}
-          style={[styles.inlineCode, { backgroundColor: theme.sidebar }]}
+          style={[
+            styles.inlineCode,
+            { backgroundColor: palette.code, color: palette.text },
+          ]}
         >
           {children(node.children)}
         </Text>
@@ -58,8 +91,7 @@ function inline(
         <Text
           key={key}
           accessibilityRole="link"
-          tone="primary"
-          style={styles.underline}
+          style={[styles.underline, { color: palette.accent }]}
           onPress={() => void Linking.openURL(node.href)}
         >
           {children(node.children)}
@@ -67,13 +99,13 @@ function inline(
       );
     case "mention":
       return (
-        <Text key={key} tone="primary" weight="medium">
+        <Text key={key} weight="semibold" style={{ color: palette.accent }}>
           @{node.label}
         </Text>
       );
     case "contextMention":
       return (
-        <Text key={key} tone="primary" weight="medium">
+        <Text key={key} weight="semibold" style={{ color: palette.accent }}>
           @{node.value}
         </Text>
       );
@@ -83,8 +115,19 @@ function inline(
 }
 
 /** Renders the shared Markdown AST with native text; never through HTML. */
-export function Markdown({ source }: { source: string }) {
+export function Markdown({
+  source,
+  own = false,
+  size = 16,
+}: {
+  source: string;
+  /** Drawn on the reader's own bubble. */
+  own?: boolean;
+  size?: number;
+}) {
   const theme = useTheme();
+  const palette = markdownPalette(theme, own);
+  const color = { color: palette.text };
   const nodes = useMemo(() => parseMarkdown(source), [source]);
 
   // Consecutive inline nodes share one Text so they wrap as a paragraph.
@@ -93,7 +136,7 @@ export function Markdown({ source }: { source: string }) {
   const flush = () => {
     if (!paragraph.length) return;
     blocks.push(
-      <Text key={`p${blocks.length}`} size={16}>
+      <Text key={`p${blocks.length}`} size={size} style={color}>
         {paragraph}
       </Text>,
     );
@@ -102,7 +145,7 @@ export function Markdown({ source }: { source: string }) {
   nodes.forEach((node, index) => {
     if (!blockTypes.has(node.type)) {
       paragraph.push(
-        <Fragment key={index}>{inline(node, index, theme)}</Fragment>,
+        <Fragment key={index}>{inline(node, index, palette)}</Fragment>,
       );
       return;
     }
@@ -113,10 +156,10 @@ export function Markdown({ source }: { source: string }) {
           key={index}
           style={[
             styles.codeblock,
-            { backgroundColor: theme.sidebar, borderColor: theme.border },
+            { backgroundColor: palette.code, borderColor: palette.codeBorder },
           ]}
         >
-          <Text size={14} style={{ fontFamily: monospace }}>
+          <Text size={14} style={[color, { fontFamily: monospace }]}>
             {node.value}
           </Text>
         </View>,
@@ -128,9 +171,10 @@ export function Markdown({ source }: { source: string }) {
           accessibilityRole="header"
           weight="bold"
           size={node.level === 1 ? 20 : node.level === 2 ? 18 : 17}
+          style={color}
         >
           {node.children.map((child, childIndex) =>
-            inline(child, childIndex, theme),
+            inline(child, childIndex, palette),
           )}
         </Text>,
       );
@@ -139,12 +183,15 @@ export function Markdown({ source }: { source: string }) {
         <View key={index} style={styles.list}>
           {node.items.map((item, itemIndex) => (
             <View key={itemIndex} style={styles.listItem}>
-              <Text size={16} tone="muted" style={styles.marker}>
+              <Text
+                size={size}
+                style={[styles.marker, { color: palette.muted }]}
+              >
                 {node.ordered ? `${itemIndex + 1}.` : "•"}
               </Text>
-              <Text size={16} style={styles.grow}>
+              <Text size={size} style={[styles.grow, color]}>
                 {item.map((child, childIndex) =>
-                  inline(child, childIndex, theme),
+                  inline(child, childIndex, palette),
                 )}
               </Text>
             </View>

@@ -14,7 +14,23 @@ export const spacing = {
   10: 40,
   12: 48,
 } as const;
-export const radius = { sm: 6, md: 8, lg: 12, xl: 16, full: 999 } as const;
+export const radius = {
+  sm: 6,
+  md: 8,
+  /** Tile, small avatar of a group. */
+  tile: 10,
+  lg: 12,
+  /** Primary button. */
+  button: 14,
+  xl: 16,
+  /** Message bubble and context menu; its tail corner uses `sm`. */
+  bubble: 18,
+  /** Pill input and round controls. */
+  field: 20,
+  /** Top corners of a bottom sheet. */
+  sheet: 24,
+  full: 999,
+} as const;
 export const motion = {
   fast: 120,
   normal: 140,
@@ -49,6 +65,11 @@ export const themes = {
     primarySoft: "#edf3fb",
     primaryDisabled: "#9daeca",
     onPrimary: "#ffffff",
+    // The reader's own message bubble and what sits on it.
+    own: "#174586",
+    onOwn: "#ffffff",
+    ownMuted: "rgba(255, 255, 255, 0.72)",
+    ownTrack: "rgba(255, 255, 255, 0.34)",
     action: "#252528",
     actionHover: "#3a3a40",
     onAction: "#ffffff",
@@ -138,6 +159,10 @@ export const themes = {
     primarySoft: "#243349",
     primaryDisabled: "#4b5b72",
     onPrimary: "#172132",
+    own: "#2c4a78",
+    onOwn: "#f3f6fb",
+    ownMuted: "rgba(243, 246, 251, 0.7)",
+    ownTrack: "rgba(243, 246, 251, 0.3)",
     action: "#eeeeef",
     actionHover: "#ffffff",
     onAction: "#222225",
