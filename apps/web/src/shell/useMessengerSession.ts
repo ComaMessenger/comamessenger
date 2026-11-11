@@ -4,6 +4,7 @@ import {
   Outbox,
   RealtimeCoordinator,
   createMessengerStore,
+  restMessageLoader,
   expandUUID,
   messagePlainText,
   type Chat,
@@ -65,7 +66,12 @@ export function useMessengerSession({
   onLogout(): void;
   onUserUpdated(user: User): void;
 }) {
-  const store = useMemo(() => createMessengerStore(), []);
+  const store = useMemo(() => {
+    const created = createMessengerStore();
+    // A realtime frame too large to send whole arrives as a stub.
+    created.getState().setMessageLoader(restMessageLoader(api));
+    return created;
+  }, [api]);
   const [folders, setFolders] = useState<ChatFolder[]>([]);
   const [pinnedChatIDs, setPinnedChatIDs] = useState<string[]>([]);
   const [snoozedUntil, setSnoozedUntil] = useState<string | null>(null);

@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/permission"
@@ -72,7 +73,7 @@ func (s *Service) UpdateSettings(ctx context.Context, current identity.User, inp
 	input.InvitationDefaultRole = strings.ToLower(strings.TrimSpace(input.InvitationDefaultRole))
 	input.DefaultTimezone = strings.TrimSpace(input.DefaultTimezone)
 	input.AccentColor = strings.ToUpper(strings.TrimSpace(input.AccentColor))
-	if len(input.Name) < 1 || len(input.Name) > 120 {
+	if count := utf8.RuneCountInString(input.Name); count < 1 || count > 120 {
 		return Settings{}, fmt.Errorf("%w: name must contain 1 to 120 characters", ErrInvalid)
 	}
 	if !slugPattern.MatchString(input.Slug) {
