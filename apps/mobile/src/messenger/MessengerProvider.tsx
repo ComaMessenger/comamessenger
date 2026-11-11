@@ -16,6 +16,7 @@ import {
   applySavedChange,
   savedChange,
   createMessengerStore,
+  restMessageLoader,
   pinnedChatLimit,
   type AgentStatusState,
   type ChatFolder,
@@ -68,7 +69,12 @@ export function useMessenger(): MessengerValue {
 export function MessengerProvider({ children }: { children: ReactNode }) {
   const { api, user } = useSignedIn();
   const { sessionExpired, updateUser } = useSession();
-  const store = useMemo(() => createMessengerStore(), []);
+  const store = useMemo(() => {
+    const created = createMessengerStore();
+    // A realtime frame too large to send whole arrives as a stub.
+    created.getState().setMessageLoader(restMessageLoader(api));
+    return created;
+  }, [api]);
   // Request-lived data (members, reactions, thread pages); event-lived state
   // stays in the domain store, as on the web (ADR-0009).
   const queryClient = useMemo(

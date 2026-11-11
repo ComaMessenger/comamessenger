@@ -2,12 +2,12 @@ package realtime
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"sync/atomic"
 	"time"
 
 	"github.com/comamessenger/comamessenger/core/internal/eventlog"
+	"github.com/comamessenger/comamessenger/core/internal/wirejson"
 )
 
 type wakeSource uint32
@@ -167,7 +167,7 @@ func (d *Dispatcher) poll(ctx context.Context, trigger string) {
 			}
 			prepared := make([]PreparedFrame, 0, len(items))
 			for _, item := range items {
-				payload, err := json.Marshal(item.Frame)
+				payload, err := wirejson.Marshal(item.Frame)
 				if err != nil {
 					d.logger.Error("serialize live event", "org_id", organization.OrgID, "seq", item.Frame.Seq, "error", err)
 					continue

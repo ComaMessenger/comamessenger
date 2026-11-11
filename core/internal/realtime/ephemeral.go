@@ -252,7 +252,7 @@ func (e *Ephemeral) Typing(ctx context.Context, user identity.User, subscription
 		return err
 	}
 	frame := typingEventFrame{Op: "typing", ActorID: user.ActorID, ChatID: chatID, ThreadRootID: threadRootID, Active: active, ExpiresAt: expiresAt}
-	return e.broadcast(ctx, user, subscription.ConnectionID, chatID, frame)
+	return e.broadcast(ctx, user, subscription.ConnectionID, chatID, false, frame)
 }
 
 func (e *Ephemeral) Presence(ctx context.Context, user identity.User, subscription *Subscription, state string) error {
@@ -267,7 +267,7 @@ func (e *Ephemeral) Presence(ctx context.Context, user identity.User, subscripti
 		return err
 	}
 	frame := presenceEventFrame{Op: "presence", ActorID: user.ActorID, State: map[string]string{"active": "online", "away": "away"}[state], ExpiresAt: expiresAt}
-	return e.broadcast(ctx, user, subscription.ConnectionID, "", frame)
+	return e.broadcast(ctx, user, subscription.ConnectionID, "", false, frame)
 }
 
 func (e *Ephemeral) AgentStatus(ctx context.Context, user identity.User, authentication access.Identity, subscription *Subscription, input agentStatusFrame) error {
@@ -289,7 +289,7 @@ func (e *Ephemeral) AgentStatus(ctx context.Context, user identity.User, authent
 		expiresAt = time.Now().UTC().Add(8 * time.Second)
 	}
 	frame := agentStatusEventFrame{Op: input.Op, ActorID: agentID, RunID: input.RunID, ChatID: input.ChatID, ThreadRootID: input.ThreadRootID, State: input.State, ExpiresAt: expiresAt}
-	return e.broadcast(ctx, agentUser, subscription.ConnectionID, input.ChatID, frame)
+	return e.broadcast(ctx, agentUser, subscription.ConnectionID, input.ChatID, true, frame)
 }
 
 func (e *Ephemeral) MessageStreaming(ctx context.Context, user identity.User, authentication access.Identity, subscription *Subscription, input messageStreamingFrame) error {
@@ -313,7 +313,7 @@ func (e *Ephemeral) MessageStreaming(ctx context.Context, user identity.User, au
 		expiresAt = time.Now().UTC()
 	}
 	frame := messageStreamingEventFrame{Op: input.Op, ActorID: agentID, RunID: input.RunID, ChatID: input.ChatID, ThreadRootID: input.ThreadRootID, StreamID: input.StreamID, Index: input.Index, Delta: input.Delta, Reset: input.Reset, Done: input.Done, ExpiresAt: expiresAt}
-	return e.broadcast(ctx, agentUser, subscription.ConnectionID, input.ChatID, frame)
+	return e.broadcast(ctx, agentUser, subscription.ConnectionID, input.ChatID, true, frame)
 }
 
 func (e *Ephemeral) authorizeAgentRun(ctx context.Context, user identity.User, authentication access.Identity, runID, leaseToken, chatID string, threadRootID *string) (string, error) {
@@ -364,12 +364,21 @@ func (e *Ephemeral) authorizeScope(ctx context.Context, user identity.User, chat
 	return nil
 }
 
-func (e *Ephemeral) recipients(ctx context.Context, user identity.User, chatID string) ([]string, error) {
+// recipients lists who gets an ephemeral frame. With readersOnly, agents
+// that only write to the chat are left out, except the sender: as with
+// message events (message.Get), such an agent sees only its own work there —
+// another agent's streamed reply is message text, its run status tells what
+// happens in a chat the agent cannot read.
+func (e *Ephemeral) recipients(ctx context.Context, user identity.User, chatID string, readersOnly bool) ([]string, error) {
 	query := `SELECT id FROM actors WHERE org_id=$1 AND status='active' AND deleted_at IS NULL`
 	args := []any{user.OrgID}
 	if chatID != "" {
 		query = `SELECT a.id FROM chat_members cm JOIN actors a ON a.org_id=cm.org_id AND a.id=cm.actor_id WHERE cm.org_id=$1 AND cm.chat_id=$2 AND a.status='active' AND a.deleted_at IS NULL`
 		args = append(args, chatID)
+		if readersOnly {
+			query += ` AND (a.id=$3 OR NOT EXISTS (SELECT 1 FROM agents writer WHERE writer.org_id=cm.org_id AND writer.actor_id=a.id AND cm.chat_id=ANY(writer.write_only_chat_ids)))`
+			args = append(args, user.ActorID)
+		}
 	}
 	rows, err := e.pool.Query(ctx, query, args...)
 	if err != nil {
@@ -387,12 +396,12 @@ func (e *Ephemeral) recipients(ctx context.Context, user identity.User, chatID s
 	return result, rows.Err()
 }
 
-func (e *Ephemeral) broadcast(ctx context.Context, user identity.User, excludeConnectionID, chatID string, frame any) error {
+func (e *Ephemeral) broadcast(ctx context.Context, user identity.User, excludeConnectionID, chatID string, readersOnly bool, frame any) error {
 	data, err := json.Marshal(frame)
 	if err != nil {
 		return err
 	}
-	actorIDs, err := e.recipients(ctx, user, chatID)
+	actorIDs, err := e.recipients(ctx, user, chatID, readersOnly)
 	if err != nil {
 		return err
 	}

@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/comamessenger/comamessenger/core/internal/access"
 	"github.com/comamessenger/comamessenger/core/internal/id"
@@ -206,7 +207,7 @@ func (s *Service) UpdateProfile(ctx context.Context, current User, input UpdateP
 	timezone := current.Timezone
 	if input.DisplayName != nil {
 		displayName = strings.TrimSpace(*input.DisplayName)
-		if len(displayName) < 1 || len(displayName) > 120 {
+		if count := utf8.RuneCountInString(displayName); count < 1 || count > 120 {
 			return User{}, validationErrorf("display_name must contain 1 to 120 characters")
 		}
 	}
@@ -647,7 +648,7 @@ func (s *Service) AcceptInvitation(ctx context.Context, token string, input Acce
 	if len(token) < 32 || len(token) > 1024 {
 		return Tokens{}, ErrInvitationInvalid
 	}
-	if len(input.DisplayName) < 1 || len(input.DisplayName) > 120 {
+	if count := utf8.RuneCountInString(input.DisplayName); count < 1 || count > 120 {
 		return Tokens{}, validationErrorf("display_name must contain 1 to 120 characters")
 	}
 	if !handlePattern.MatchString(input.Handle) {
@@ -708,13 +709,13 @@ func (s *Service) issue(user User, sessionID, refreshToken string) (Tokens, erro
 }
 
 func validateBootstrap(input BootstrapInput) error {
-	if len(input.OrganizationName) < 1 || len(input.OrganizationName) > 120 {
+	if count := utf8.RuneCountInString(input.OrganizationName); count < 1 || count > 120 {
 		return validationErrorf("organization_name must contain 1 to 120 characters")
 	}
 	if !slugPattern.MatchString(input.OrganizationSlug) {
 		return validationErrorf("organization_slug has invalid format")
 	}
-	if len(input.DisplayName) < 1 || len(input.DisplayName) > 120 {
+	if count := utf8.RuneCountInString(input.DisplayName); count < 1 || count > 120 {
 		return validationErrorf("display_name must contain 1 to 120 characters")
 	}
 	if !handlePattern.MatchString(input.Handle) {
