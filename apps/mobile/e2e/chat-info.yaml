@@ -1,0 +1,111 @@
+# Package I of phase 6.1: chat info from the conversation header — members,
+# pinned messages, files, notifications and the chat's search.
+# Run after chat-create.yaml: the first chat is then a group the account owns.
+# maestro test e2e/chat-info.yaml
+appId: com.comamessenger.app
+---
+- runFlow: open-app.yaml
+- tapOn:
+    id: chat-row-0
+- extendedWaitUntil:
+    visible:
+      id: conversation
+    timeout: 10000
+- tapOn:
+    id: conversation-title
+- extendedWaitUntil:
+    visible:
+      id: chat-info
+    timeout: 5000
+- assertVisible:
+    id: chat-info-title
+- assertVisible:
+    id: chat-info-mute
+- assertVisible:
+    id: chat-info-pin
+- assertVisible:
+    id: chat-info-search
+- assertVisible:
+    id: chat-info-folder
+- takeScreenshot: chat-info
+
+# Notification level sheet.
+- tapOn:
+    id: chat-info-notify
+- extendedWaitUntil:
+    visible:
+      id: notify-levels
+    timeout: 5000
+- takeScreenshot: chat-info-notify
+- tapOn:
+    point: 50%,8%
+
+# Pinned messages and files open as their own screens.
+- tapOn:
+    id: chat-info-pinned
+- extendedWaitUntil:
+    visible:
+      id: pinned-messages
+    timeout: 10000
+- takeScreenshot: chat-pinned
+- tapOn:
+    id: pinned-back
+- tapOn:
+    id: chat-info-files
+- extendedWaitUntil:
+    visible:
+      id: chat-files
+    timeout: 10000
+- takeScreenshot: chat-files
+- tapOn:
+    id: files-back
+
+# A group owner sees members with actions and the add button.
+- scrollUntilVisible:
+    element:
+      id: chat-member-0
+    direction: DOWN
+- assertVisible:
+    id: chat-info-add-members
+- tapOn:
+    id: chat-member-0
+- extendedWaitUntil:
+    visible:
+      id: member-actions
+    timeout: 5000
+- takeScreenshot: member-actions
+- tapOn:
+    point: 50%,8%
+- tapOn:
+    id: chat-info-add-members
+- extendedWaitUntil:
+    visible:
+      id: add-members
+    timeout: 5000
+- takeScreenshot: add-members
+- tapOn:
+    id: add-members-back
+
+# Edit screen of an owner.
+- scrollUntilVisible:
+    element:
+      id: chat-info-edit
+    direction: UP
+- tapOn:
+    id: chat-info-edit
+- extendedWaitUntil:
+    visible:
+      id: edit-chat
+    timeout: 5000
+- takeScreenshot: edit-chat
+- tapOn:
+    id: edit-chat-back
+
+# Search inside the chat.
+- tapOn:
+    id: chat-info-search
+- extendedWaitUntil:
+    visible:
+      id: search-input
+    timeout: 5000
+- takeScreenshot: chat-search

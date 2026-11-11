@@ -1,0 +1,36 @@
+# Package I of phase 6.1: the people directory from «Ещё», a person's card
+# and «Написать».
+# Run after sign-in.yaml (reuses its session): maestro test e2e/people.yaml
+appId: com.comamessenger.app
+---
+- runFlow: open-app.yaml
+- tapOn:
+    id: tab-more
+- tapOn:
+    id: open-people
+- extendedWaitUntil:
+    visible:
+      id: person-row-0
+    timeout: 15000
+- assertVisible:
+    id: people-filter-online
+- takeScreenshot: people
+- tapOn:
+    id: people-filter-agents
+- takeScreenshot: people-agents
+- tapOn:
+    id: people-filter-all
+- tapOn:
+    id: person-row-0
+- extendedWaitUntil:
+    visible:
+      id: person
+    timeout: 10000
+- takeScreenshot: person
+- tapOn:
+    id: person-write
+- extendedWaitUntil:
+    visible:
+      id: conversation
+    timeout: 15000
+- takeScreenshot: person-direct-chat

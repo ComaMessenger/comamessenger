@@ -8,7 +8,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { ChevronLeft, FileText, Search } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
@@ -45,6 +45,9 @@ export default function SearchScreen() {
   const { api } = useSignedIn();
   const { store } = useMessenger();
   const chats = useStore(store, (state) => state.chats);
+  // Opened from a chat's info: results of that chat only.
+  const { chat: chatFilter } = useLocalSearchParams<{ chat?: string }>();
+  const scope = chatFilter ? chats[chatFilter] : undefined;
   const [input, setInput] = useState("");
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<Kind>("all");
@@ -55,9 +58,15 @@ export default function SearchScreen() {
   }, [input]);
 
   const search = useInfiniteQuery({
-    queryKey: ["search", query, kind],
+    queryKey: ["search", query, kind, chatFilter ?? null],
     queryFn: ({ pageParam }) =>
-      api.search({ q: query, type: kind, cursor: pageParam, limit: 30 }),
+      api.search({
+        q: query,
+        type: kind,
+        chat_id: chatFilter || undefined,
+        cursor: pageParam,
+        limit: 30,
+      }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.next_cursor ?? undefined,
     enabled: query.length >= 2,
@@ -111,7 +120,11 @@ export default function SearchScreen() {
             value={input}
             onChangeText={setInput}
             autoFocus
-            placeholder={t("searchPlaceholder")}
+            placeholder={
+              scope
+                ? t("searchInChat", { name: chatTitle(scope, t("directChat")) })
+                : t("searchPlaceholder")
+            }
             placeholderTextColor={theme.subtle}
             accessibilityLabel={t("search")}
             selectionColor={theme.primary}

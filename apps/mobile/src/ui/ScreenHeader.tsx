@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
@@ -20,6 +20,9 @@ export function ScreenHeader({
   trailing,
   onBack = () => router.back(),
   backTestID,
+  onTitlePress,
+  titleHint,
+  titleTestID,
 }: {
   title: string;
   subtitle?: ReactNode;
@@ -28,27 +31,16 @@ export function ScreenHeader({
   trailing?: ReactNode;
   onBack?(): void;
   backTestID?: string;
+  /** Makes the avatar and title one button, e.g. to open the chat info. */
+  onTitlePress?(): void;
+  titleHint?: string;
+  titleTestID?: string;
 }) {
   const { t } = useTranslation();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  return (
-    <View
-      style={[
-        styles.header,
-        {
-          borderBottomColor: theme.border,
-          backgroundColor: theme.surface,
-          paddingTop: insets.top + spacing[1],
-        },
-      ]}
-    >
-      <IconButton
-        testID={backTestID}
-        label={t("back")}
-        onPress={onBack}
-        icon={(color) => <ChevronLeft size={26} color={color} />}
-      />
+  const identity = (
+    <>
       {leading}
       <View style={styles.title}>
         <Text
@@ -67,6 +59,38 @@ export function ScreenHeader({
           subtitle
         )}
       </View>
+    </>
+  );
+  return (
+    <View
+      style={[
+        styles.header,
+        {
+          borderBottomColor: theme.border,
+          backgroundColor: theme.surface,
+          paddingTop: insets.top + spacing[1],
+        },
+      ]}
+    >
+      <IconButton
+        testID={backTestID}
+        label={t("back")}
+        onPress={onBack}
+        icon={(color) => <ChevronLeft size={26} color={color} />}
+      />
+      {onTitlePress ? (
+        <Pressable
+          testID={titleTestID}
+          accessibilityRole="button"
+          accessibilityHint={titleHint}
+          onPress={onTitlePress}
+          style={({ pressed }) => [styles.pressable, pressed && styles.pressed]}
+        >
+          {identity}
+        </Pressable>
+      ) : (
+        identity
+      )}
       {trailing}
     </View>
   );
@@ -82,4 +106,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   title: { flex: 1, minWidth: 0 },
+  pressable: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
+    minHeight: 44,
+  },
+  pressed: { opacity: 0.6 },
 });

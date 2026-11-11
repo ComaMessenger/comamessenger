@@ -11,6 +11,7 @@ import Constants from "expo-constants";
 import {
   Bell,
   ChevronRight,
+  Contact,
   ExternalLink,
   LogOut,
   MonitorSmartphone,
@@ -135,6 +136,7 @@ export default function MoreScreen() {
         >
           {(
             [
+              ["/people", t("people"), Contact, "open-people"],
               [
                 "/settings/profile",
                 t("profile"),
