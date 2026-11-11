@@ -14,3 +14,6 @@ export * from "./saved";
 export * from "./store";
 export * from "./threads";
 export * from "./types";
+export * from "./chatCreation";
+export * from "./chatRights";
+export * from "./people";
