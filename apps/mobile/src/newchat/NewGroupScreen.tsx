@@ -1,5 +1,11 @@
-import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { useEffect, useState } from "react";
+import {
+  BackHandler,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { router } from "expo-router";
@@ -118,6 +124,19 @@ export function NewGroupScreen({ initialKind }: { initialKind: NewChatKind }) {
     memberIDs: members.map((actor) => actor.actor_id),
   };
   const problem = newChatProblem(draft);
+
+  // Android «back» on the details step returns to the people, as the header does.
+  useEffect(() => {
+    if (step !== "details") return;
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => {
+        setStep("members");
+        return true;
+      },
+    );
+    return () => subscription.remove();
+  }, [step]);
   const channel = kind === "channel";
 
   async function create() {
