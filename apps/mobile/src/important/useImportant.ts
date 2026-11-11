@@ -1,7 +1,7 @@
 import { useMemo } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useStore } from "zustand";
-import { savedChatFilters, savedKeys } from "@comamessenger/core";
+import { savedKeys } from "@comamessenger/core";
 import { useMessenger } from "@/messenger/MessengerProvider";
 import { useSignedIn } from "@/session/SessionProvider";
 import { fetchSavedPage, importantItems, nextSavedPage } from "./saved";
@@ -9,11 +9,11 @@ import { fetchSavedPage, importantItems, nextSavedPage } from "./saved";
 export type { ImportantItem } from "./saved";
 
 function useSavedPages(chatID: string | null, enabled = true) {
-  const { api } = useSignedIn();
+  const { api, user } = useSignedIn();
   return useInfiniteQuery({
-    queryKey: savedKeys.list(chatID),
+    queryKey: savedKeys.list(user.id, chatID),
     enabled,
-    initialPageParam: undefined as number | undefined,
+    initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) => fetchSavedPage(api, chatID, pageParam),
     getNextPageParam: nextSavedPage,
   });
@@ -22,22 +22,25 @@ function useSavedPages(chatID: string | null, enabled = true) {
 /**
  * The person's own saved messages («Важные»), newest save first — the same
  * source as the web. Nobody else sees them. A chat filter asks the server
- * for that chat only, so older saves of the chat are not missed.
+ * for that chat only, and the chat chips come with counts over every save,
+ * not just the loaded pages.
  */
 export function useImportant(chatFilter: string | null) {
+  const { api, user } = useSignedIn();
   const { store } = useMessenger();
   const chatMap = useStore(store, (state) => state.chats);
-  const all = useSavedPages(null);
+  const all = useSavedPages(null, chatFilter === null);
   const filtered = useSavedPages(chatFilter, chatFilter !== null);
   const query = chatFilter ? filtered : all;
-  const allItems = useMemo(
-    () => importantItems(all.data?.pages, {}),
-    [all.data],
-  );
+  const chats = useQuery({
+    queryKey: savedKeys.chats(user.id),
+    queryFn: () => api.savedChats(),
+  });
   const items = useMemo(
     () => importantItems(query.data?.pages, chatMap),
     [query.data, chatMap],
   );
-  const groups = useMemo(() => savedChatFilters(allItems), [allItems]);
-  return { query, all, items, groups, total: allItems.length };
+  const groups = chats.data ?? [];
+  const total = groups.reduce((sum, entry) => sum + entry.count, 0);
+  return { query, chats, items, groups, total };
 }

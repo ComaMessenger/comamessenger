@@ -6,11 +6,16 @@ import type { DurableEvent, SavedMessage } from "./types";
  * the same for every reader and the star comes from a separate list of ids.
  */
 export const savedKeys = {
-  all: ["saved"] as const,
+  /** Everything saved of one person: keys always carry the reader's id. */
+  all: (userID: string) => ["saved", userID] as const,
   /** Pages of the «Important» screen; `null` is every chat. */
-  list: (chatID: string | null = null) => ["saved", "list", chatID] as const,
+  list: (userID: string, chatID: string | null = null) =>
+    ["saved", userID, "list", chatID] as const,
+  /** Chats with saves and how many: the filter chips. */
+  chats: (userID: string) => ["saved", userID, "chats"] as const,
   /** Ids of saved messages in one chat: the star in the feed. */
-  ids: (chatID: string) => ["saved", "ids", chatID] as const,
+  ids: (userID: string, chatID: string) =>
+    ["saved", userID, "ids", chatID] as const,
 };
 
 export type SavedChange = {
@@ -50,22 +55,6 @@ export function withSaved(
   return saved ? [messageID, ...rest] : rest;
 }
 
-/** Chats that have saves, most saves first: the filter chips of the screen. */
-export function savedChatFilters(
-  items: readonly SavedMessage[],
-): { chat: SavedMessage["chat"]; count: number }[] {
-  const counts = new Map<
-    string,
-    { chat: SavedMessage["chat"]; count: number }
-  >();
-  for (const item of items) {
-    const entry = counts.get(item.chat.id) ?? { chat: item.chat, count: 0 };
-    entry.count += 1;
-    counts.set(item.chat.id, entry);
-  }
-  return [...counts.values()].sort((a, b) => b.count - a.count);
-}
-
 /** Where opening a saved message leads: its thread or the chat at it. */
 export function savedMessageHref(item: SavedMessage): string {
   const root = item.message.thread_root_id;
@@ -89,11 +78,24 @@ export interface SavedQueryCache {
  */
 export function applySavedChange(
   cache: SavedQueryCache,
+  userID: string,
   change: SavedChange,
 ): void {
   if (change.chatID)
-    cache.setQueryData(savedKeys.ids(change.chatID), (ids) =>
+    cache.setQueryData(savedKeys.ids(userID, change.chatID), (ids) =>
       ids ? withSaved(ids, change.messageID, change.saved) : ids,
     );
-  void cache.invalidateQueries({ queryKey: ["saved", "list"] });
+  void cache.invalidateQueries({ queryKey: ["saved", userID, "list"] });
+  void cache.invalidateQueries({ queryKey: savedKeys.chats(userID) });
+}
+
+/** What a client shows when the server refuses a save over the limit. */
+export const savedLimitCode = "saved_limit_reached";
+
+export function isSavedLimitError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { code?: unknown }).code === savedLimitCode
+  );
 }

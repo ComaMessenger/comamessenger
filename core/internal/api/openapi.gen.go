@@ -1725,6 +1725,7 @@ const (
 	ErrorCodePushUnavailable             ErrorCode = "push_unavailable"
 	ErrorCodeRateLimited                 ErrorCode = "rate_limited"
 	ErrorCodeReauthenticationFailed      ErrorCode = "reauthentication_failed"
+	ErrorCodeSavedLimitReached           ErrorCode = "saved_limit_reached"
 	ErrorCodeServiceNotReady             ErrorCode = "service_not_ready"
 	ErrorCodeSessionNotFound             ErrorCode = "session_not_found"
 	ErrorCodeSmtpNotConfigured           ErrorCode = "smtp_not_configured"
@@ -1823,6 +1824,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeRateLimited:
 		return true
 	case ErrorCodeReauthenticationFailed:
+		return true
+	case ErrorCodeSavedLimitReached:
 		return true
 	case ErrorCodeServiceNotReady:
 		return true
@@ -6385,13 +6388,10 @@ type SMTPConfigurationUpdateSecurity string
 
 // SavedMessage defines model for SavedMessage.
 type SavedMessage struct {
-	Author SavedMessageAuthor `json:"author"`
-	Chat   SavedMessageChat   `json:"chat"`
-
-	// Cursor Position of the save; pass as before to read older saves.
-	Cursor  int64     `json:"cursor"`
-	Message Message   `json:"message"`
-	SavedAt time.Time `json:"saved_at"`
+	Author  SavedMessageAuthor `json:"author"`
+	Chat    SavedMessageChat   `json:"chat"`
+	Message Message            `json:"message"`
+	SavedAt time.Time          `json:"saved_at"`
 }
 
 // SavedMessageAuthor defines model for SavedMessageAuthor.
@@ -6415,6 +6415,17 @@ type SavedMessageChat struct {
 // SavedMessageChatKind defines model for SavedMessageChat.Kind.
 type SavedMessageChatKind string
 
+// SavedMessageChatCount defines model for SavedMessageChatCount.
+type SavedMessageChatCount struct {
+	Chat  SavedMessageChat `json:"chat"`
+	Count int              `json:"count"`
+}
+
+// SavedMessageChatCounts defines model for SavedMessageChatCounts.
+type SavedMessageChatCounts struct {
+	Chats []SavedMessageChatCount `json:"chats"`
+}
+
 // SavedMessageIds defines model for SavedMessageIds.
 type SavedMessageIds struct {
 	MessageIds []openapi_types.UUID `json:"message_ids"`
@@ -6422,8 +6433,10 @@ type SavedMessageIds struct {
 
 // SavedMessagePage defines model for SavedMessagePage.
 type SavedMessagePage struct {
-	Items      []SavedMessage `json:"items"`
-	NextBefore *int64         `json:"next_before"`
+	Items []SavedMessage `json:"items"`
+
+	// NextCursor Opaque; pass as cursor to read older saves.
+	NextCursor *string `json:"next_cursor"`
 }
 
 // SavedMessageState defines model for SavedMessageState.
@@ -7140,8 +7153,10 @@ type PutBrandingAssetParamsKind string
 // ListSavedMessagesParams defines parameters for ListSavedMessages.
 type ListSavedMessagesParams struct {
 	ChatId *openapi_types.UUID `form:"chat_id,omitempty" json:"chat_id,omitempty"`
-	Before *int64              `form:"before,omitempty" json:"before,omitempty"`
-	Limit  *int                `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque next_cursor of the previous page.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListSavedMessageIdsParams defines parameters for ListSavedMessageIds.

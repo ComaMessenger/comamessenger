@@ -2990,7 +2990,7 @@
     "/api/v1/messages/{message_id}/saved": {
       "put": {
         "operationId": "saveMessage",
-        "description": "Saves a message for the current person only. Any member who can read the message may save it; nobody else learns about it. Realtime message.saved goes to the person's own sessions only.",
+        "description": "Saves a message for the current person only. Any member who can read the message may save it; nobody else learns about it. Realtime message.saved goes to the person's own sessions only. At most 5000 readable saves per person: over it the reply is 409 saved_limit_reached and nothing is removed; saves hidden by lost access do not count.",
         "security": [
           {
             "bearerAuth": []
@@ -3084,12 +3084,12 @@
             }
           },
           {
-            "name": "before",
+            "name": "cursor",
             "in": "query",
+            "description": "Opaque next_cursor of the previous page.",
             "schema": {
-              "type": "integer",
-              "format": "int64",
-              "minimum": 1
+              "type": "string",
+              "maxLength": 200
             }
           },
           {
@@ -3105,7 +3105,7 @@
         ],
         "responses": {
           "200": {
-            "description": "One page of saved messages; next_before continues it.",
+            "description": "One page of saved messages; next_cursor continues it.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3116,6 +3116,29 @@
           },
           "422": {
             "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/saved-messages/chats": {
+      "get": {
+        "operationId": "listSavedMessageChats",
+        "description": "Chats that hold the person's readable saves, with how many each, most first: the chat filters of «Important» regardless of loaded pages.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chats with readable saves.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedMessageChatCounts"
+                }
+              }
+            }
           }
         }
       }
@@ -8307,6 +8330,7 @@
           "password_change_required",
           "push_unavailable",
           "rate_limited",
+          "saved_limit_reached",
           "service_not_ready",
           "session_not_found",
           "smtp_not_configured",
@@ -16811,19 +16835,12 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "cursor",
           "saved_at",
           "message",
           "author",
           "chat"
         ],
         "properties": {
-          "cursor": {
-            "type": "integer",
-            "format": "int64",
-            "minimum": 1,
-            "description": "Position of the save; pass as before to read older saves."
-          },
           "saved_at": {
             "type": "string",
             "format": "date-time"
@@ -16844,7 +16861,7 @@
         "additionalProperties": false,
         "required": [
           "items",
-          "next_before"
+          "next_cursor"
         ],
         "properties": {
           "items": {
@@ -16853,13 +16870,44 @@
               "$ref": "#/components/schemas/SavedMessage"
             }
           },
-          "next_before": {
+          "next_cursor": {
             "type": [
-              "integer",
+              "string",
               "null"
             ],
-            "format": "int64",
+            "description": "Opaque; pass as cursor to read older saves."
+          }
+        }
+      },
+      "SavedMessageChatCount": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "chat",
+          "count"
+        ],
+        "properties": {
+          "chat": {
+            "$ref": "#/components/schemas/SavedMessageChat"
+          },
+          "count": {
+            "type": "integer",
             "minimum": 1
+          }
+        }
+      },
+      "SavedMessageChatCounts": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "chats"
+        ],
+        "properties": {
+          "chats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SavedMessageChatCount"
+            }
           }
         }
       },

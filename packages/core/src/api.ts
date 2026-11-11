@@ -20,6 +20,7 @@ import type {
   MessageActionResult,
   ChatAgent,
   MessagePin,
+  SavedMessageChatCount,
   SavedMessagePage,
   SavedMessageState,
   MessageReceipt,
@@ -1352,16 +1353,24 @@ export class MessengerAPI {
   }
   /** The reader's own saved messages («Важные»), newest save first. */
   savedMessages(
-    options: { chatID?: string; before?: number; limit?: number } = {},
+    options: { chatID?: string; cursor?: string; limit?: number } = {},
   ): Promise<SavedMessagePage> {
     // Built by hand: React Native's URLSearchParams cannot set values.
     const query = [
       options.chatID && `chat_id=${encodeURIComponent(options.chatID)}`,
-      options.before && `before=${options.before}`,
+      options.cursor && `cursor=${encodeURIComponent(options.cursor)}`,
       options.limit && `limit=${options.limit}`,
     ].filter(Boolean);
     const suffix = query.length ? `?${query.join("&")}` : "";
     return this.request(`/api/v1/saved-messages${suffix}`);
+  }
+  /** Chats with readable saves and how many each, most first. */
+  async savedChats(): Promise<SavedMessageChatCount[]> {
+    return (
+      await this.request<{ chats: SavedMessageChatCount[] }>(
+        "/api/v1/saved-messages/chats",
+      )
+    ).chats;
   }
   /** Which messages of a chat the reader saved: the star in the feed. */
   async savedMessageIDs(chatID: string): Promise<string[]> {

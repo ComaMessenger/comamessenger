@@ -436,6 +436,14 @@ func (s *Service) Context(ctx context.Context, user identity.User, messageID str
 	if _, _, err = requireMembership(ctx, tx, user, chatID); err != nil {
 		return Window{}, err
 	}
+	// As in List: an agent does not read the history of a chat it only
+	// writes to. A window shows neighbours too, so its own message is no
+	// exception here (unlike Get).
+	if _, writeOnly, err := agentChatRole(ctx, tx, user.OrgID, user.ActorID, chatID); err != nil {
+		return Window{}, err
+	} else if writeOnly {
+		return Window{}, ErrForbidden
+	}
 	rows, err := tx.Query(ctx, `SELECT id,chat_id,actor_id,client_msg_id,type,body,body_format,reply_to_id,thread_root_id,version,created_seq,created_at,edited_at,deleted_at,forwarded_from,mentioned_actor_ids,blocks FROM messages WHERE org_id=$1 AND chat_id=$2 AND ((thread_root_id IS NULL AND $3::uuid IS NULL) OR thread_root_id=$3 OR id=$4) ORDER BY abs(created_seq-$5) LIMIT $6`, user.OrgID, chatID, threadRootID, messageID, targetSeq, limit)
 	if err != nil {
 		return Window{}, fmt.Errorf("load message context: %w", err)

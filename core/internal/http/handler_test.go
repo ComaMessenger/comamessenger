@@ -95,6 +95,7 @@ func TestRequiredAgentScopeUsesClosedAllowlist(t *testing.T) {
 		{standardhttp.MethodDelete, "/api/v1/messages/00000000-0000-7000-8000-000000000001/saved", "", false},
 		{standardhttp.MethodGet, "/api/v1/saved-messages", "", false},
 		{standardhttp.MethodGet, "/api/v1/saved-messages/ids", "", false},
+		{standardhttp.MethodGet, "/api/v1/saved-messages/chats", "", false},
 	}
 	for _, test := range tests {
 		t.Run(test.method+" "+test.path, func(t *testing.T) {

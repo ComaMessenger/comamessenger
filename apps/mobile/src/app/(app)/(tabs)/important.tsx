@@ -34,23 +34,27 @@ import { Text } from "@/ui/Text";
 export default function ImportantScreen() {
   const { t } = useTranslation();
   const theme = useTheme();
-  const { api } = useSignedIn();
+  const { api, user } = useSignedIn();
   const { store } = useMessenger();
   const chatMap = useStore(store, (state) => state.chats);
   const queryClient = useQueryClient();
   const [chatFilter, setChatFilter] = useState<string | null>(null);
   const [menuFor, setMenuFor] = useState<ImportantItem | null>(null);
-  const { query, all, items, groups, total } = useImportant(chatFilter);
+  const { query, chats, items, groups, total } = useImportant(chatFilter);
 
   // Saves made on another device arrive by realtime; refresh on every return
   // to the tab as well (the first visit already loads).
-  const { refetch } = all;
+  const { refetch } = query;
+  const { refetch: refetchChats } = chats;
   const visited = useRef(false);
   useFocusEffect(
     useCallback(() => {
-      if (visited.current) void refetch();
+      if (visited.current) {
+        void refetch();
+        void refetchChats();
+      }
       visited.current = true;
-    }, [refetch]),
+    }, [refetch, refetchChats]),
   );
 
   // A chat chip asks the server for that chat, so older saves are found too.
@@ -65,9 +69,9 @@ export default function ImportantScreen() {
   async function remove(item: ImportantItem) {
     const previous = queryClient.getQueriesData<{
       pages: SavedMessagePage[];
-    }>({ queryKey: savedKeys.all });
+    }>({ queryKey: savedKeys.all(user.id) });
     queryClient.setQueriesData<{ pages: SavedMessagePage[] }>(
-      { queryKey: ["saved", "list"] },
+      { queryKey: [...savedKeys.all(user.id), "list"] },
       (data) =>
         data && {
           ...data,
@@ -81,7 +85,7 @@ export default function ImportantScreen() {
     );
     try {
       await api.unsaveMessage(item.message.id);
-      applySavedChange(queryClient, {
+      applySavedChange(queryClient, user.id, {
         messageID: item.message.id,
         chatID: item.chat.id,
         saved: false,

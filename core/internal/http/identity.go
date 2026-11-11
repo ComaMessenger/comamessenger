@@ -316,6 +316,7 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.With(h.actorRateLimit("saved-messages", h.savedRate)).Delete("/messages/{messageID}/saved", h.unsaveMessage)
 			protected.Get("/saved-messages", h.listSavedMessages)
 			protected.Get("/saved-messages/ids", h.listSavedMessageIDs)
+			protected.Get("/saved-messages/chats", h.listSavedMessageChats)
 			protected.Post("/messages/{messageID}/forward", h.forwardMessage)
 			protected.Post("/messages/{messageID}/actions/{actionID}", h.pressMessageAction)
 			protected.Get("/messages/{messageID}/thread", h.listThread)

@@ -432,4 +432,7 @@ export const en: Record<keyof typeof ru, string> = {
   unpinMessage: "Unpin",
   messagePinned: "Message pinned",
   messageUnpinned: "Message unpinned",
+  pinnedMark: "Pinned in this chat",
+  savedLimitReached:
+    "You have reached the limit of saved messages — remove the ones you no longer need",
 };

@@ -1,8 +1,9 @@
-import type {
-  Chat,
-  MessengerAPI,
-  SavedMessage,
-  SavedMessagePage,
+import {
+  isSavedLimitError,
+  type Chat,
+  type MessengerAPI,
+  type SavedMessage,
+  type SavedMessagePage,
 } from "@comamessenger/core";
 
 /** A saved message as the screen shows it, with the chat from the list if known. */
@@ -17,13 +18,13 @@ export type ImportantItem = SavedMessage & { localChat?: Chat };
 export function fetchSavedPage(
   api: Pick<MessengerAPI, "savedMessages">,
   chatID: string | null,
-  before?: number,
+  cursor?: string,
 ): Promise<SavedMessagePage> {
-  return api.savedMessages({ chatID: chatID ?? undefined, before });
+  return api.savedMessages({ chatID: chatID ?? undefined, cursor });
 }
 
-export function nextSavedPage(page: SavedMessagePage): number | undefined {
-  return page.next_before ?? undefined;
+export function nextSavedPage(page: SavedMessagePage): string | undefined {
+  return page.next_cursor ?? undefined;
 }
 
 /** Cards in order, each with the chat from the chat list when it is there. */
@@ -34,4 +35,9 @@ export function importantItems(
   return (pages ?? []).flatMap((page) =>
     page.items.map((item) => ({ ...item, localChat: chats[item.chat.id] })),
   );
+}
+
+/** The message shown when a save fails: the limit explains what to do. */
+export function saveFailureKey(error: unknown): string {
+  return isSavedLimitError(error) ? "savedLimitReached" : "actionFailed";
 }

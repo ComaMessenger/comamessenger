@@ -213,13 +213,8 @@ func (h *identityHandlers) listSavedMessages(w standardhttp.ResponseWriter, r *s
 	if value := query.Get("chat_id"); value != "" {
 		options.ChatID = &value
 	}
-	if value := query.Get("before"); value != "" {
-		before, err := strconv.ParseInt(value, 10, 64)
-		if err != nil {
-			h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "validation_failed", "before must be an integer")
-			return
-		}
-		options.Before = &before
+	if value := query.Get("cursor"); value != "" {
+		options.Cursor = &value
 	}
 	if value := query.Get("limit"); value != "" {
 		limit, err := strconv.Atoi(value)
@@ -235,6 +230,15 @@ func (h *identityHandlers) listSavedMessages(w standardhttp.ResponseWriter, r *s
 		return
 	}
 	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) listSavedMessageChats(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.messages.SavedChats(r.Context(), authFromContext(r.Context()).User)
+	if err != nil {
+		h.messageError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, map[string]any{"chats": result})
 }
 
 func (h *identityHandlers) listSavedMessageIDs(w standardhttp.ResponseWriter, r *standardhttp.Request) {
@@ -368,7 +372,7 @@ func (h *identityHandlers) messageError(w standardhttp.ResponseWriter, r *standa
 	case errors.Is(err, message.ErrTooLarge):
 		h.writeError(w, r, standardhttp.StatusRequestEntityTooLarge, "payload_too_large", "The message body is too large.")
 	case errors.Is(err, message.ErrSavedLimit):
-		h.writeError(w, r, standardhttp.StatusConflict, "saved_limit_reached", "The saved messages limit was reached; remove some saved messages first.")
+		h.writeError(w, r, standardhttp.StatusConflict, "saved_limit_reached", "The saved messages limit was reached. Remove saved messages you no longer need, then try again.")
 	case errors.Is(err, message.ErrRateLimited):
 		h.writeError(w, r, standardhttp.StatusTooManyRequests, "rate_limited", "The message action limit was reached.")
 	case errors.Is(err, message.ErrInvalid):

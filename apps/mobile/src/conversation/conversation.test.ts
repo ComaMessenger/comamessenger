@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { feedRows, type ClientMessage } from "@comamessenger/core";
-import { bubbleCorners, bubblePlacement } from "./bubbles";
+import { bubbleCorners, bubblePlacement, messageMarks } from "./bubbles";
 import { canPinIn, messageMenu, type MessageMenuFacts } from "./menuItems";
 
 function message(id: string, actor: string, minute: number): ClientMessage {
@@ -161,5 +161,22 @@ describe("messageMenu", () => {
     expect(messageMenu({ ...base, own: true, persisted: false })).toEqual([
       ["copyText"],
     ]);
+  });
+});
+
+describe("messageMarks", () => {
+  it("shows the chat's pin and the reader's star side by side", () => {
+    expect(messageMarks({ pinned: true, saved: true, deleted: false })).toEqual(
+      ["pin", "star"],
+    );
+    expect(
+      messageMarks({ pinned: true, saved: false, deleted: false }),
+    ).toEqual(["pin"]);
+    expect(
+      messageMarks({ pinned: false, saved: true, deleted: false }),
+    ).toEqual(["star"]);
+    expect(messageMarks({ pinned: true, saved: true, deleted: true })).toEqual(
+      [],
+    );
   });
 });

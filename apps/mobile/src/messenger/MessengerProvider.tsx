@@ -140,7 +140,7 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
             const applied = store.getState().apply(event);
             // Saves are private: these events reach only the saver's devices.
             const saved = savedChange(event);
-            if (applied && saved) applySavedChange(queryClient, saved);
+            if (applied && saved) applySavedChange(queryClient, user.id, saved);
             const privateSave =
               event.type === "message.saved" ||
               event.type === "message.unsaved";

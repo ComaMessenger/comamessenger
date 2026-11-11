@@ -449,4 +449,6 @@ export const ru = {
   unpinMessage: "Открепить",
   messagePinned: "Сообщение закреплено",
   messageUnpinned: "Сообщение откреплено",
+  pinnedMark: "Закреплено в чате",
+  savedLimitReached: "Достигнут лимит сохранённых — уберите ненужные",
 } as const;

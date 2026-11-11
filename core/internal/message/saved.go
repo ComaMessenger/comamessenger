@@ -2,9 +2,12 @@ package message
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/comamessenger/comamessenger/core/internal/identity"
@@ -19,8 +22,8 @@ import (
 // Access is checked on every read, not stored: a save in a chat the person
 // left, was removed from or that was archived is kept but hidden, so it comes
 // back if access does (re-invite, restore). A deleted message is gone for
-// good, so Delete drops its saves. Hidden saves are purged when the person
-// hits the limit, so they never block new saves.
+// good, so Delete drops its saves. Nothing else is ever removed silently: the
+// limit counts readable saves only, so hidden ones never block a new save.
 
 // DefaultSavedLimit bounds how many messages one person can keep saved.
 const DefaultSavedLimit = 5000
@@ -47,7 +50,6 @@ type SavedChat struct {
 }
 
 type SavedMessage struct {
-	Cursor  int64       `json:"cursor"`
 	SavedAt time.Time   `json:"saved_at"`
 	Message Message     `json:"message"`
 	Author  SavedAuthor `json:"author"`
@@ -56,13 +58,44 @@ type SavedMessage struct {
 
 type SavedPage struct {
 	Items      []SavedMessage `json:"items"`
-	NextBefore *int64         `json:"next_before"`
+	NextCursor *string        `json:"next_cursor"`
 }
 
 type SavedListOptions struct {
 	ChatID *string
-	Before *int64
+	// Cursor is an opaque position from a previous page's next_cursor.
+	Cursor *string
 	Limit  int
+}
+
+type SavedChatCount struct {
+	Chat  SavedChat `json:"chat"`
+	Count int       `json:"count"`
+}
+
+// savedCursor is a position in one person's saves, newest first. It holds
+// only that person's own save time and message id — never a shared counter.
+type savedCursor struct {
+	savedAt   time.Time
+	messageID string
+}
+
+func encodeSavedCursor(savedAt time.Time, messageID string) string {
+	raw := strconv.FormatInt(savedAt.UnixMicro(), 10) + "." + messageID
+	return base64.RawURLEncoding.EncodeToString([]byte(raw))
+}
+
+func decodeSavedCursor(value string) (savedCursor, error) {
+	raw, err := base64.RawURLEncoding.DecodeString(value)
+	if err != nil {
+		return savedCursor{}, fmt.Errorf("%w: cursor is malformed", ErrInvalid)
+	}
+	micros, messageID, ok := strings.Cut(string(raw), ".")
+	value64, parseErr := strconv.ParseInt(micros, 10, 64)
+	if !ok || parseErr != nil || validateUUID("cursor", messageID) != nil {
+		return savedCursor{}, fmt.Errorf("%w: cursor is malformed", ErrInvalid)
+	}
+	return savedCursor{savedAt: time.UnixMicro(value64).UTC(), messageID: messageID}, nil
 }
 
 // visibleSave is the access rule of a save row `sm`: the saver is still an
@@ -120,26 +153,14 @@ func (s *Service) SaveMessage(ctx context.Context, user identity.User, messageID
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return SavedState{}, false, fmt.Errorf("find saved message: %w", err)
 	}
-	limit := s.savedLimitValue()
-	count, err := countSaved(ctx, tx, user)
+	// Only saves the person can still read count; hidden ones are kept (they
+	// come back with access) and never deleted to make room.
+	count, err := countVisibleSaved(ctx, tx, user)
 	if err != nil {
 		return SavedState{}, false, err
 	}
-	if count >= limit {
-		// Saves the person can no longer read do not count against the limit.
-		if _, err := tx.Exec(ctx, `
-			DELETE FROM saved_messages target
-			WHERE target.org_id = $1 AND target.actor_id = $2
-			  AND NOT EXISTS (SELECT 1 FROM saved_messages sm `+visibleSave+`
-				WHERE sm.id = target.id)`, user.OrgID, user.ActorID); err != nil {
-			return SavedState{}, false, fmt.Errorf("purge hidden saved messages: %w", err)
-		}
-		if count, err = countSaved(ctx, tx, user); err != nil {
-			return SavedState{}, false, err
-		}
-		if count >= limit {
-			return SavedState{}, false, ErrSavedLimit
-		}
+	if count >= s.savedLimitValue() {
+		return SavedState{}, false, ErrSavedLimit
 	}
 	err = tx.QueryRow(ctx, `
 		INSERT INTO saved_messages (org_id, actor_id, message_id, chat_id)
@@ -174,9 +195,8 @@ func (s *Service) UnsaveMessage(ctx context.Context, user identity.User, message
 		return false, fmt.Errorf("begin unsave message: %w", err)
 	}
 	defer tx.Rollback(ctx)
-	if err := lockOrganization(ctx, tx, user.OrgID); err != nil {
-		return false, err
-	}
+	// Delete first: a repeat or an unknown id touches nothing shared — no
+	// organization lock, no event number.
 	var chatID string
 	err = tx.QueryRow(ctx, `
 		DELETE FROM saved_messages WHERE org_id = $1 AND actor_id = $2 AND message_id = $3
@@ -186,6 +206,9 @@ func (s *Service) UnsaveMessage(ctx context.Context, user identity.User, message
 	}
 	if err != nil {
 		return false, fmt.Errorf("delete saved message: %w", err)
+	}
+	if err := lockOrganization(ctx, tx, user.OrgID); err != nil {
+		return false, err
 	}
 	seq, err := nextSequence(ctx, tx, user.OrgID)
 	if err != nil {
@@ -209,8 +232,13 @@ func (s *Service) ListSaved(ctx context.Context, user identity.User, options Sav
 			return SavedPage{}, err
 		}
 	}
-	if options.Before != nil && *options.Before < 1 {
-		return SavedPage{}, fmt.Errorf("%w: before must be positive", ErrInvalid)
+	var cursor *savedCursor
+	if options.Cursor != nil {
+		decoded, err := decodeSavedCursor(*options.Cursor)
+		if err != nil {
+			return SavedPage{}, err
+		}
+		cursor = &decoded
 	}
 	limit := options.Limit
 	if limit == 0 {
@@ -225,7 +253,7 @@ func (s *Service) ListSaved(ctx context.Context, user identity.User, options Sav
 	}
 	defer tx.Rollback(ctx)
 	rows, err := tx.Query(ctx, `
-		SELECT sm.id, sm.saved_at,
+		SELECT sm.saved_at,
 			m.id, m.chat_id, m.actor_id, m.client_msg_id, m.type, m.body, m.body_format, m.reply_to_id,
 			m.thread_root_id, m.version, m.created_seq, m.created_at, m.edited_at, m.deleted_at, m.forwarded_from,
 			m.mentioned_actor_ids, m.blocks,
@@ -241,12 +269,12 @@ func (s *Service) ListSaved(ctx context.Context, user identity.User, options Sav
 		) peer ON c.kind = 'direct'
 		WHERE sm.org_id = $1 AND sm.actor_id = $2
 		  AND ($3::uuid IS NULL OR sm.chat_id = $3)
-		  AND ($4::bigint IS NULL OR sm.id < $4)
+		  AND ($4::timestamptz IS NULL OR (sm.saved_at, sm.message_id) < ($4, $5::uuid))
 		  AND NOT EXISTS (
 			SELECT 1 FROM agents agent WHERE agent.org_id = sm.org_id AND agent.actor_id = sm.actor_id
 			  AND sm.chat_id = ANY(agent.write_only_chat_ids))
-		ORDER BY sm.id DESC
-		LIMIT $5`, user.OrgID, user.ActorID, options.ChatID, options.Before, limit+1)
+		ORDER BY sm.saved_at DESC, sm.message_id DESC
+		LIMIT $6`, user.OrgID, user.ActorID, options.ChatID, cursorTime(cursor), cursorMessage(cursor), limit+1)
 	if err != nil {
 		return SavedPage{}, fmt.Errorf("list saved messages: %w", err)
 	}
@@ -255,7 +283,7 @@ func (s *Service) ListSaved(ctx context.Context, user identity.User, options Sav
 	for rows.Next() {
 		var item SavedMessage
 		m := &item.Message
-		if err := rows.Scan(&item.Cursor, &item.SavedAt,
+		if err := rows.Scan(&item.SavedAt,
 			&m.ID, &m.ChatID, &m.ActorID, &m.ClientMsgID, &m.Type, &m.Body, &m.BodyFormat, &m.ReplyToID,
 			&m.ThreadRootID, &m.Version, &m.CreatedSeq, &m.CreatedAt, &m.EditedAt, &m.DeletedAt,
 			newJSONScanner(&m.ForwardedFrom), &m.MentionedActorIDs, newJSONScanner(&m.Blocks),
@@ -269,11 +297,12 @@ func (s *Service) ListSaved(ctx context.Context, user identity.User, options Sav
 		return SavedPage{}, fmt.Errorf("iterate saved messages: %w", err)
 	}
 	rows.Close()
-	var next *int64
+	var next *string
 	if len(items) > limit {
 		items = items[:limit]
-		cursor := items[len(items)-1].Cursor
-		next = &cursor
+		last := items[len(items)-1]
+		value := encodeSavedCursor(last.SavedAt, last.Message.ID)
+		next = &value
 	}
 	messages := make([]Message, len(items))
 	for index := range items {
@@ -291,7 +320,7 @@ func (s *Service) ListSaved(ctx context.Context, user identity.User, options Sav
 	if err := tx.Commit(ctx); err != nil {
 		return SavedPage{}, fmt.Errorf("commit list saved messages: %w", err)
 	}
-	return SavedPage{Items: items, NextBefore: next}, nil
+	return SavedPage{Items: items, NextCursor: next}, nil
 }
 
 // SavedIDs returns which messages of one chat the person saved: the star in
@@ -317,7 +346,7 @@ func (s *Service) SavedIDs(ctx context.Context, user identity.User, chatID strin
 		SELECT sm.message_id FROM saved_messages sm
 		JOIN messages m ON m.org_id = sm.org_id AND m.id = sm.message_id AND m.deleted_at IS NULL
 		WHERE sm.org_id = $1 AND sm.actor_id = $2 AND sm.chat_id = $3
-		ORDER BY sm.id DESC`, user.OrgID, user.ActorID, chatID)
+		ORDER BY sm.saved_at DESC, sm.message_id DESC`, user.OrgID, user.ActorID, chatID)
 	if err != nil {
 		return nil, fmt.Errorf("list saved message ids: %w", err)
 	}
@@ -339,13 +368,63 @@ func (s *Service) SavedIDs(ctx context.Context, user identity.User, chatID strin
 	return result, nil
 }
 
-func countSaved(ctx context.Context, tx pgx.Tx, user identity.User) (int, error) {
+func countVisibleSaved(ctx context.Context, tx pgx.Tx, user identity.User) (int, error) {
 	var count int
-	if err := tx.QueryRow(ctx, `SELECT count(*) FROM saved_messages WHERE org_id = $1 AND actor_id = $2`,
-		user.OrgID, user.ActorID).Scan(&count); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM saved_messages sm `+visibleSave+`
+		WHERE sm.org_id = $1 AND sm.actor_id = $2`, user.OrgID, user.ActorID).Scan(&count); err != nil {
 		return 0, fmt.Errorf("count saved messages: %w", err)
 	}
 	return count, nil
+}
+
+func cursorTime(cursor *savedCursor) any {
+	if cursor == nil {
+		return nil
+	}
+	return cursor.savedAt
+}
+
+func cursorMessage(cursor *savedCursor) any {
+	if cursor == nil {
+		return nil
+	}
+	return cursor.messageID
+}
+
+// SavedChats counts the person's readable saves per chat, most first: the
+// chat filters of «Important», whatever pages the client has loaded.
+func (s *Service) SavedChats(ctx context.Context, user identity.User) ([]SavedChatCount, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT c.id, c.kind, COALESCE(c.name, peer.display_name, 'Direct chat'), count(*)
+		FROM saved_messages sm `+visibleSave+`
+		LEFT JOIN LATERAL (
+			SELECT a.display_name FROM chat_members other
+			JOIN actors a ON a.org_id = other.org_id AND a.id = other.actor_id
+			WHERE other.org_id = c.org_id AND other.chat_id = c.id AND other.actor_id <> sm.actor_id
+			LIMIT 1
+		) peer ON c.kind = 'direct'
+		WHERE sm.org_id = $1 AND sm.actor_id = $2
+		  AND NOT EXISTS (
+			SELECT 1 FROM agents agent WHERE agent.org_id = sm.org_id AND agent.actor_id = sm.actor_id
+			  AND sm.chat_id = ANY(agent.write_only_chat_ids))
+		GROUP BY c.id, c.kind, c.name, peer.display_name
+		ORDER BY count(*) DESC, c.id`, user.OrgID, user.ActorID)
+	if err != nil {
+		return nil, fmt.Errorf("count saved messages by chat: %w", err)
+	}
+	defer rows.Close()
+	result := make([]SavedChatCount, 0)
+	for rows.Next() {
+		var item SavedChatCount
+		if err := rows.Scan(&item.Chat.ID, &item.Chat.Kind, &item.Chat.DisplayName, &item.Count); err != nil {
+			return nil, fmt.Errorf("scan saved chat count: %w", err)
+		}
+		result = append(result, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate saved chat counts: %w", err)
+	}
+	return result, nil
 }
 
 // insertSavedEvent writes an event only the saver receives. It carries no

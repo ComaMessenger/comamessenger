@@ -53,7 +53,7 @@ import { ForwardMessageDialog } from "../dialogs/ForwardMessageDialog";
 import { MessageDetailsDialog } from "../dialogs/MessageDetailsDialog";
 import { MessageFile } from "./MessageFile";
 import { useThreadPreview } from "./useThreadPreview";
-import { useSaveMessage, useSavedIDs } from "./useSaved";
+import { saveFailureKey, useSaveMessage, useSavedIDs } from "./useSaved";
 import { MessageBlocksView } from "../agentchat/MessageBlocksView";
 import { AgentWhy } from "../agentchat/AgentWhy";
 
@@ -209,8 +209,8 @@ export function MessageRow({
           onClick: () => void setSaved(message, !next).catch(() => undefined),
         },
       });
-    } catch {
-      toast({ message: t("actionFailed"), tone: "danger" });
+    } catch (error) {
+      toast({ message: t(saveFailureKey(error)), tone: "danger" });
     } finally {
       setBusy(false);
     }
@@ -271,6 +271,21 @@ export function MessageRow({
 
   const delivery = message.delivery;
   const failed = delivery === "failed";
+  // Two separate marks: a pin for the chat's pins (everyone sees it), a star
+  // for the reader's own saves (only they see it).
+  const shownPin = pinned && !message.deleted_at;
+  const shownStar = saved && !message.deleted_at;
+  const marks =
+    shownPin || shownStar ? (
+      <>
+        {shownPin && (
+          <Pin className="message__pinned" role="img" aria-label={t("pinnedMark")} />
+        )}
+        {shownStar && (
+          <Star className="message__saved" role="img" aria-label={t("savedMark")} />
+        )}
+      </>
+    ) : null;
 
   return (
     <article
@@ -296,26 +311,20 @@ export function MessageRow({
             size={compact ? "sm" : "md"}
           />
         )}
-        {grouped && saved && (
-          <Star
-            className="message__saved message__saved--gutter"
-            aria-label={t("savedMark")}
-          />
-        )}
-        {grouped && !saved && (
+        {grouped && marks ? (
+          <span className="message__marks message__marks--gutter">{marks}</span>
+        ) : grouped ? (
           <time className="message__hover-time" dateTime={message.created_at}>
             {formatTime(message.created_at)}
           </time>
-        )}
+        ) : null}
       </div>
       <div className="message__content">
         {!grouped && (
           <header className="message__meta">
             <strong>{name}</strong>
             {isAgent && <Tag tone="agent">{t("agentTag")}</Tag>}
-            {saved && (
-              <Star className="message__saved" aria-label={t("savedMark")} />
-            )}
+            {marks && <span className="message__marks">{marks}</span>}
             <time dateTime={message.created_at}>
               {formatTime(message.created_at)}
             </time>

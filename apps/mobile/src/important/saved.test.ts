@@ -1,10 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MessengerAPI, type SavedMessage } from "@comamessenger/core";
-import { fetchSavedPage, importantItems, nextSavedPage } from "./saved";
+import {
+  fetchSavedPage,
+  importantItems,
+  nextSavedPage,
+  saveFailureKey,
+} from "./saved";
 
 function saved(id: string, chatID: string): SavedMessage {
   return {
-    cursor: 10,
     saved_at: "2026-11-11T10:00:00Z",
     chat: { id: chatID, kind: "channel", display_name: "Новости" },
     author: {
@@ -49,26 +53,27 @@ describe("loading «Important»", () => {
     return requests;
   }
 
-  it("reads a page in one request and continues from next_before", async () => {
+  it("reads a page in one request and continues from next_cursor", async () => {
     const requests = serve(200, {
       items: [saved("m1", "c1")],
-      next_before: 10,
+      next_cursor: "opaque+/=",
     });
     const api = new MessengerAPI("https://coma.test");
     const page = await fetchSavedPage(api, null);
     expect(requests).toEqual(["https://coma.test/api/v1/saved-messages"]);
-    expect(nextSavedPage(page)).toBe(10);
-    await fetchSavedPage(api, "c1", 10);
+    expect(nextSavedPage(page)).toBe("opaque+/=");
+    await fetchSavedPage(api, "c1", "opaque+/=");
+    // The cursor is opaque and goes back escaped, untouched.
     expect(requests[1]).toBe(
-      "https://coma.test/api/v1/saved-messages?chat_id=c1&before=10",
+      "https://coma.test/api/v1/saved-messages?chat_id=c1&cursor=opaque%2B%2F%3D",
     );
-    expect(nextSavedPage({ items: [], next_before: null })).toBeUndefined();
+    expect(nextSavedPage({ items: [], next_cursor: null })).toBeUndefined();
   });
 
   it("builds cards without asking for each message again", async () => {
     const requests = serve(200, {
       items: [saved("m1", "c1"), saved("m2", "gone")],
-      next_before: null,
+      next_cursor: null,
     });
     const page = await fetchSavedPage(
       new MessengerAPI("https://coma.test"),
@@ -89,5 +94,17 @@ describe("loading «Important»", () => {
     await expect(
       fetchSavedPage(new MessengerAPI("https://coma.test"), null),
     ).rejects.toMatchObject({ status: 500 });
+  });
+});
+
+describe("saving over the limit", () => {
+  it("explains the limit and keeps the generic text for other failures", () => {
+    expect(saveFailureKey({ status: 409, code: "saved_limit_reached" })).toBe(
+      "savedLimitReached",
+    );
+    expect(saveFailureKey({ status: 429, code: "rate_limited" })).toBe(
+      "actionFailed",
+    );
+    expect(saveFailureKey(new Error("offline"))).toBe("actionFailed");
   });
 });

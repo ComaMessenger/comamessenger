@@ -64,3 +64,20 @@ export function bubbleCorners(
         borderBottomLeftRadius: tucked,
       };
 }
+
+/**
+ * Marks by the time of a bubble: a pin for the chat's pinned message (every
+ * member sees it) and a star for the reader's own save (only they see it).
+ * Both can be there at once; a deleted message has none.
+ */
+export function messageMarks(facts: {
+  pinned: boolean;
+  saved: boolean;
+  deleted: boolean;
+}): ("pin" | "star")[] {
+  if (facts.deleted) return [];
+  return [
+    ...(facts.pinned ? (["pin"] as const) : []),
+    ...(facts.saved ? (["star"] as const) : []),
+  ];
+}

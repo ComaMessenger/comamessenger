@@ -4,7 +4,7 @@ import {
   canPinIn,
   messageMenu,
   savedChange,
-  savedChatFilters,
+  isSavedLimitError,
   savedKeys,
   savedMessageHref,
   withSaved,
@@ -28,7 +28,6 @@ function event(type: string, data: Record<string, unknown> = {}): DurableEvent {
 
 function item(id: string, chatID: string, root?: string): SavedMessage {
   return {
-    cursor: 1,
     saved_at: "2026-11-11T10:00:00Z",
     chat: { id: chatID, kind: "group", display_name: chatID },
     author: {
@@ -91,31 +90,53 @@ describe("saved messages", () => {
           key: readonly unknown[],
           updater: (value: string[] | undefined) => string[] | undefined,
         ) => {
-          expect(key).toEqual(savedKeys.ids("c1"));
+          expect(key).toEqual(savedKeys.ids("u1", "c1"));
           ids = updater(ids);
         },
       ),
       invalidateQueries: vi.fn(),
     };
-    applySavedChange(cache, { messageID: "m1", chatID: "c1", saved: true });
+    applySavedChange(cache, "u1", {
+      messageID: "m1",
+      chatID: "c1",
+      saved: true,
+    });
     expect(ids).toEqual(["m1", "x"]);
     expect(cache.invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ["saved", "list"],
+      queryKey: ["saved", "u1", "list"],
+    });
+    expect(cache.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: savedKeys.chats("u1"),
     });
     // An uncached chat stays uncached.
     ids = undefined;
-    applySavedChange(cache, { messageID: "m1", chatID: "c1", saved: true });
+    applySavedChange(cache, "u1", {
+      messageID: "m1",
+      chatID: "c1",
+      saved: true,
+    });
     expect(ids).toBeUndefined();
   });
 
-  it("orders chat filters by count and links into threads", () => {
+  it("keeps every person's saves under their own keys", () => {
+    // Two people in one browser tab never share a cache entry.
+    for (const key of [
+      [savedKeys.list("a"), savedKeys.list("b")],
+      [savedKeys.ids("a", "c"), savedKeys.ids("b", "c")],
+      [savedKeys.chats("a"), savedKeys.chats("b")],
+    ])
+      expect(key[0]).not.toEqual(key[1]);
+    expect(savedKeys.list("a", "c").slice(0, 2)).toEqual(savedKeys.all("a"));
+  });
+
+  it("recognizes the limit error", () => {
+    expect(isSavedLimitError({ code: "saved_limit_reached" })).toBe(true);
+    expect(isSavedLimitError({ code: "rate_limited" })).toBe(false);
+    expect(isSavedLimitError(null)).toBe(false);
+  });
+
+  it("links into threads", () => {
     const items = [item("1", "a"), item("2", "b"), item("3", "b", "root")];
-    expect(
-      savedChatFilters(items).map((entry) => [entry.chat.id, entry.count]),
-    ).toEqual([
-      ["b", 2],
-      ["a", 1],
-    ]);
     expect(savedMessageHref(items[0]!)).toBe("/chat/a?message=1");
     expect(savedMessageHref(items[2]!)).toBe("/chat/b/thread/root");
   });

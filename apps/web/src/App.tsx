@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   MessengerAPI,
   type PublicBranding,
@@ -9,6 +10,7 @@ import {
 import { AvatarProvider } from "./ui";
 import { BrowserSessionCoordinator } from "./session";
 import { messageOf } from "./errors";
+import { claimSessionCache } from "./sessionCache";
 import { setTheme } from "./theme";
 import { apiURL, applyPublicBranding } from "./lib/branding";
 import {
@@ -47,7 +49,21 @@ export function App() {
     [sessions],
   );
   const [screen, setScreen] = useState<Screen>("loading");
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUserState] = useState<User | null>(null);
+  const queryClient = useQueryClient();
+  const cacheOwner = useRef<string | null>(null);
+  // Every change of the signed-in person empties the request cache first.
+  const setUser = useCallback(
+    (next: User | null) => {
+      cacheOwner.current = claimSessionCache(
+        queryClient,
+        cacheOwner.current,
+        next?.id ?? null,
+      );
+      setUserState(next);
+    },
+    [queryClient],
+  );
   const [error, setError] = useState("");
   const [branding, setBranding] = useState<PublicBranding | null>(null);
 
@@ -78,7 +94,7 @@ export function App() {
   const signedOut = useCallback(() => {
     setUser(null);
     setScreen("login");
-  }, []);
+  }, [setUser]);
   const navigateTo = useCallback(
     (to: string) => void navigate({ to }),
     [navigate],
@@ -98,7 +114,7 @@ export function App() {
       }
     });
     return unsubscribe;
-  }, [api, sessions, signedOut]);
+  }, [api, sessions, setUser, signedOut]);
 
   useEffect(() => {
     if (initialized.current) return;
@@ -131,7 +147,7 @@ export function App() {
         setError(messageOf(cause));
         setScreen("login");
       });
-  }, [api, initialPath, navigate]);
+  }, [api, initialPath, navigate, setUser]);
 
   const authenticated = async (session: TokenResponse) => {
     sessions.publishTokens(session);

@@ -996,7 +996,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** @description Saves a message for the current person only. Any member who can read the message may save it; nobody else learns about it. Realtime message.saved goes to the person's own sessions only. */
+        /** @description Saves a message for the current person only. Any member who can read the message may save it; nobody else learns about it. Realtime message.saved goes to the person's own sessions only. At most 5000 readable saves per person: over it the reply is 409 saved_limit_reached and nothing is removed; saves hidden by lost access do not count. */
         put: operations["saveMessage"];
         post?: never;
         /** @description Removes the message from the person's saved messages, even after access to its chat is lost. */
@@ -1015,6 +1015,23 @@ export interface paths {
         };
         /** @description The person's saved messages across chats, newest save first. Only messages the person can still read are returned: saves in chats they left, chats that were deleted and deleted messages are skipped. */
         get: operations["listSavedMessages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/saved-messages/chats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Chats that hold the person's readable saves, with how many each, most first: the chat filters of «Important» regardless of loaded pages. */
+        get: operations["listSavedMessageChats"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2636,7 +2653,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_confirmation_loosened" | "agent_conflict" | "agent_not_ready" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "architect_budget_exceeded" | "architect_busy" | "architect_connection_required" | "architect_model_error" | "architect_session_expired" | "architect_session_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "integration_in_use" | "integration_usage_changed" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "limit_reached" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "webhook_not_found" | "webhook_rejected" | "workspace_not_found";
+        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_confirmation_loosened" | "agent_conflict" | "agent_not_ready" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "architect_budget_exceeded" | "architect_busy" | "architect_connection_required" | "architect_model_error" | "architect_session_expired" | "architect_session_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "integration_in_use" | "integration_usage_changed" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "limit_reached" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "saved_limit_reached" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "webhook_not_found" | "webhook_rejected" | "workspace_not_found";
         File: {
             /** Format: uuid */
             id: string;
@@ -4986,11 +5003,6 @@ export interface components {
             display_name: string;
         };
         SavedMessage: {
-            /**
-             * Format: int64
-             * @description Position of the save; pass as before to read older saves.
-             */
-            cursor: number;
             /** Format: date-time */
             saved_at: string;
             message: components["schemas"]["Message"];
@@ -4999,8 +5011,15 @@ export interface components {
         };
         SavedMessagePage: {
             items: components["schemas"]["SavedMessage"][];
-            /** Format: int64 */
-            next_before: number | null;
+            /** @description Opaque; pass as cursor to read older saves. */
+            next_cursor: string | null;
+        };
+        SavedMessageChatCount: {
+            chat: components["schemas"]["SavedMessageChat"];
+            count: number;
+        };
+        SavedMessageChatCounts: {
+            chats: components["schemas"]["SavedMessageChatCount"][];
         };
         SavedMessageIds: {
             message_ids: string[];
@@ -7348,7 +7367,8 @@ export interface operations {
         parameters: {
             query?: {
                 chat_id?: string;
-                before?: number;
+                /** @description Opaque next_cursor of the previous page. */
+                cursor?: string;
                 limit?: number;
             };
             header?: never;
@@ -7357,7 +7377,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description One page of saved messages; next_before continues it. */
+            /** @description One page of saved messages; next_cursor continues it. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -7367,6 +7387,26 @@ export interface operations {
                 };
             };
             422: components["responses"]["Error"];
+        };
+    };
+    listSavedMessageChats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Chats with readable saves. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedMessageChatCounts"];
+                };
+            };
         };
     };
     listSavedMessageIds: {

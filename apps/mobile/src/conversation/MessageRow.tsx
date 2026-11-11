@@ -12,6 +12,7 @@ import {
   CornerUpLeft,
   Forward,
   MessagesSquare,
+  Pin,
   RefreshCw,
   Star,
 } from "lucide-react-native";
@@ -35,7 +36,7 @@ import { MessageFiles } from "./MessageFiles";
 import { MessageBlocks } from "./MessageBlocks";
 import { AgentWhy } from "./AgentWhy";
 import { useReactions } from "./reactions";
-import { bubbleCorners, type BubblePlacement } from "./bubbles";
+import { bubbleCorners, messageMarks, type BubblePlacement } from "./bubbles";
 import { useThreadPreview } from "./useThreadPreview";
 
 const avatarSize = 30;
@@ -49,6 +50,8 @@ export type MessageBubbleProps = {
   quoted?: ClientMessage;
   quotedAuthor?: string;
   showThread: boolean;
+  /** Pinned in the chat: a pin by the time, seen by every member. */
+  pinned?: boolean;
   /** The reader saved it to their own «Important»: a star by the time. */
   saved?: boolean;
   highlighted?: boolean;
@@ -121,6 +124,7 @@ export function MessageBubble({
   quoted,
   quotedAuthor,
   showThread,
+  pinned = false,
   saved = false,
   highlighted = false,
   onThread,
@@ -187,11 +191,13 @@ export function MessageBubble({
                 icon: <Check size={14} color={muted} />,
               }
             : null;
+  const marks = messageMarks({ pinned, saved, deleted: Boolean(deleted) });
   const meta = (
     <View
       accessible
       accessibilityLabel={[
-        saved && !deleted ? t("savedMark") : null,
+        marks.includes("pin") ? t("pinnedMark") : null,
+        marks.includes("star") ? t("savedMark") : null,
         message.edited_at && !deleted ? t("edited") : null,
         time,
         status?.label,
@@ -200,7 +206,8 @@ export function MessageBubble({
         .join(", ")}
       style={styles.meta}
     >
-      {saved && !deleted && (
+      {marks.includes("pin") && <Pin size={12} color={muted} />}
+      {marks.includes("star") && (
         <Star size={12} color={theme.warning} fill={theme.warning} />
       )}
       {message.edited_at && !deleted ? (

@@ -143,6 +143,10 @@ async function mockMessenger(
     reactions?: Array<Record<string, unknown>>;
     /** Messages the reader saved to «Important» (private, not pins). */
     saved?: string[];
+    /** Messages pinned in the chat (seen by every member). */
+    pinned?: string[];
+    /** Who signs in through the login form (defaults to the same person). */
+    loginUser?: Partial<typeof user>;
     threads?: Array<Record<string, unknown>>;
     userPatch?: Partial<typeof user>;
     organizationPatch?: Record<string, unknown>;
@@ -166,6 +170,8 @@ async function mockMessenger(
     signedOut = false,
     reactions: suppliedReactions = [],
     saved: suppliedSaved = [],
+    loginUser = {},
+    pinned = [],
     threads = [],
     userPatch = {},
     organizationPatch = {},
@@ -359,6 +365,16 @@ async function mockMessenger(
           access_expires_at: "2026-08-20T00:00:00Z",
           user: runtimeUser,
         };
+    } else if (path.endsWith("/auth/logout")) {
+      status = 204;
+      body = undefined;
+    } else if (path.endsWith("/auth/login")) {
+      runtimeUser = { ...runtimeUser, ...loginUser };
+      body = {
+        access_token: "next",
+        access_expires_at: "2026-08-20T00:00:00Z",
+        user: runtimeUser,
+      };
     } else if (path.endsWith("/auth/password/forgot")) {
       status = 202;
       body = undefined;
@@ -367,7 +383,7 @@ async function mockMessenger(
       body = undefined;
     } else if (path.endsWith("/agents/recipes")) body = agentRecipes;
     else if (path.endsWith("/agents")) body = [];
-    else if (path.endsWith("/chats")) {
+    else if (path.endsWith("/chats") && !path.includes("/saved-messages/")) {
       chatRequests += 1;
       body = { chats: [runtimeChat] };
     } else if (path.endsWith("/me/email/change")) {
@@ -646,7 +662,14 @@ async function mockMessenger(
       };
     else if (path.endsWith("/threads"))
       body = { threads, next_before_seq: null };
-    else if (path.endsWith(`/chats/${chat.id}/pins`)) body = { pins: [] };
+    else if (path.endsWith(`/chats/${chat.id}/pins`))
+      body = {
+        pins: pinned.map((id) => ({
+          message_id: id,
+          pinned_by: lev.actor_id,
+          pinned_at: "2026-08-19T06:31:00Z",
+        })),
+      };
     else if (path.endsWith("/unread"))
       body = {
         chats: [
@@ -809,8 +832,7 @@ async function mockMessenger(
       body = { message_ids: runtimeSaved };
     else if (path.endsWith("/saved-messages"))
       body = {
-        items: runtimeSaved.map((id, index) => ({
-          cursor: runtimeSaved.length - index,
+        items: runtimeSaved.map((id) => ({
           saved_at: "2026-08-19T07:00:00Z",
           message: { ...message, id },
           author: {
@@ -825,7 +847,22 @@ async function mockMessenger(
             display_name: runtimeChat.name,
           },
         })),
-        next_before: null,
+        next_cursor: null,
+      };
+    else if (path.endsWith("/saved-messages/chats"))
+      body = {
+        chats: runtimeSaved.length
+          ? [
+              {
+                chat: {
+                  id: chat.id,
+                  kind: runtimeChat.kind,
+                  display_name: runtimeChat.name,
+                },
+                count: runtimeSaved.length,
+              },
+            ]
+          : [],
       };
     else if (/\/messages\/[^/]+\/reactions\/.+/.test(path)) {
       const emoji = decodeURIComponent(path.split("/").at(-1) ?? "");
@@ -1766,10 +1803,14 @@ test("any member saves a message to Important; pinning stays with admins", async
   const runtime = await mockMessenger(page, {
     chatPatch: { kind: "group", role: "member" },
     unread: { last_read_seq: 3, unread_count: 0, mention_count: 0 },
+    pinned: [message.id],
   });
   await page.goto(`/chat/${chat.id}`);
   const messageRow = page.locator("article.message").first();
   await expect(messageRow).toBeVisible();
+  // The chat's pin is marked for everyone; the star waits for the reader.
+  const pinMark = messageRow.getByRole("img", { name: "Закреплено в чате" });
+  await expect(pinMark).toBeVisible();
   await expect(messageRow.locator(".message__saved")).toHaveCount(0);
   await messageRow.hover();
   await page.getByRole("button", { name: "Действия с сообщением" }).click();
@@ -1781,6 +1822,9 @@ test("any member saves a message to Important; pinning stays with admins", async
     .poll(() => runtime.savedMutations.at(-1))
     .toBe(`PUT ${message.id}`);
   await expect(messageRow.locator(".message__saved")).toBeVisible();
+  // Both marks side by side: pinned in the chat and saved by me.
+  await expect(pinMark).toBeVisible();
+  await expect(messageRow.getByRole("img", { name: "В важных" })).toBeVisible();
   await expect(
     page.getByText("Добавлено в «Важные» — видно только вам"),
   ).toBeVisible();
@@ -1809,6 +1853,81 @@ test("any member saves a message to Important; pinning stays with admins", async
       new RegExp(`/chat/${chat.id}\\?message=${message.id}`),
     );
   }
+});
+
+test("over the limit a save explains what to do", async ({ page }) => {
+  const runtime = await mockMessenger(page, {
+    chatPatch: { kind: "group", role: "member" },
+    unread: { last_read_seq: 3, unread_count: 0, mention_count: 0 },
+  });
+  await page.route("**/api/v1/messages/*/saved", (route) =>
+    route.fulfill({
+      status: 409,
+      contentType: "application/json",
+      body: JSON.stringify({
+        code: "saved_limit_reached",
+        message: "The saved messages limit was reached.",
+      }),
+    }),
+  );
+  await page.goto(`/chat/${chat.id}`);
+  const messageRow = page.locator("article.message").first();
+  await messageRow.hover();
+  await page.getByRole("button", { name: "Действия с сообщением" }).click();
+  await page.getByRole("menuitem", { name: "В важные" }).click();
+  await expect(
+    page.getByText("Достигнут лимит сохранённых — уберите ненужные"),
+  ).toBeVisible();
+  await expect(messageRow.locator(".message__saved")).toHaveCount(0);
+  expect(runtime.savedMutations).toEqual([]);
+});
+
+test("the next person in the same tab never sees the previous one's Important", async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === "phone", "the workspace menu is desktop-only");
+  await mockMessenger(page, {
+    saved: [message.id],
+    loginUser: {
+      id: "00000000-0000-4000-8000-000000000002",
+      email: "boris@example.com",
+      display_name: "Борис",
+    },
+  });
+  await page.goto("/important");
+  const card = page.locator(".directory-row--important");
+  await expect(card).toContainText("Добро пожаловать в Coma");
+
+  // Boris's saves are held on the server until the end of the test.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  const savedRequests: string[] = [];
+  await page.route("**/api/v1/saved-messages**", async (route) => {
+    savedRequests.push(route.request().url());
+    await held;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(
+        route.request().url().includes("/chats")
+          ? { chats: [] }
+          : { items: [], next_cursor: null },
+      ),
+    });
+  });
+  await page.getByRole("button", { name: "Test space" }).click();
+  await page.getByRole("menuitem", { name: "Выйти" }).click();
+  await page.getByLabel("Почта").fill("boris@example.com");
+  await page.getByLabel("Пароль", { exact: true }).fill("secret password");
+  await page.getByRole("button", { name: "Войти" }).click();
+  await page.getByRole("button", { name: "Важные", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Важные" })).toBeVisible();
+  await expect.poll(() => savedRequests.length).toBeGreaterThan(0);
+  // Before the server answers for Boris, nothing of Anna's is on screen.
+  await expect(card).toHaveCount(0);
+  await expect(page.getByText("Добро пожаловать в Coma")).toHaveCount(0);
+  release();
+  await expect(page.getByText("Нет важных сообщений")).toBeVisible();
 });
 
 test("a thread opens beside an unchanged main feed", async ({ page }) => {

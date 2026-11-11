@@ -53,6 +53,7 @@ import { Text } from "@/ui/Text";
 import { ConnectionBanner } from "@/messenger/ConnectionBanner";
 import { attachmentLimit, useAttachments } from "@/files/useAttachments";
 import { pickFiles, type PickSource } from "@/files/pick";
+import { saveFailureKey } from "@/important/saved";
 import { AgentPicker } from "./AgentPicker";
 import { AgentStreamRow } from "./AgentStreamRow";
 import { bubblePlacement, type BubblePlacement } from "./bubbles";
@@ -164,7 +165,7 @@ export function ConversationView({
   // The reader's own saves («Важные»): the star in the bubble. Kept apart from
   // messages so the feed is the same for everyone.
   const savedQuery = useQuery({
-    queryKey: savedKeys.ids(chatID),
+    queryKey: savedKeys.ids(user.id, chatID),
     queryFn: () => api.savedMessageIDs(chatID),
     staleTime: 5 * 60_000,
   });
@@ -340,7 +341,7 @@ export function ConversationView({
     try {
       if (saved) await api.saveMessage(message.id);
       else await api.unsaveMessage(message.id);
-      applySavedChange(queryClient, {
+      applySavedChange(queryClient, user.id, {
         messageID: message.id,
         chatID: message.chat_id,
         saved,
@@ -348,8 +349,8 @@ export function ConversationView({
       setNotice(
         saved ? t("addedToImportantPrivate") : t("removedFromImportant"),
       );
-    } catch {
-      Alert.alert(t("actionFailed"));
+    } catch (error) {
+      Alert.alert(t(saveFailureKey(error)));
     }
   }
 
@@ -649,6 +650,7 @@ export function ConversationView({
                         quoted ? authorName(quoted.actor_id) : undefined
                       }
                       showThread={!inThread}
+                      pinned={pinnedIDs.has(message.id)}
                       saved={savedIDs.has(message.id)}
                       highlighted={message.id === highlighted}
                       onReply={reply}
@@ -745,6 +747,7 @@ export function ConversationView({
                 return quoted ? authorName(quoted.actor_id) : undefined;
               })()}
               showThread={!inThread}
+              pinned={pinnedIDs.has(menuFor.id)}
               saved={savedIDs.has(menuFor.id)}
               members={members}
               viewer={viewer}

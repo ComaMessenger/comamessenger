@@ -11,7 +11,6 @@ import {
   applySavedChange,
   chatAvatarSource,
   messagePlainText,
-  savedChatFilters,
   savedKeys,
   type Chat,
   type SavedMessage,
@@ -44,13 +43,22 @@ const visibleChatChips = 3;
 
 /** The reader's saved messages, newest save first, page by page. */
 function useSavedPages(chatID: string | null) {
-  const { api } = useMessenger();
+  const { api, user } = useMessenger();
   return useInfiniteQuery({
-    queryKey: savedKeys.list(chatID),
-    initialPageParam: undefined as number | undefined,
+    queryKey: savedKeys.list(user.id, chatID),
+    initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) =>
-      api.savedMessages({ chatID: chatID ?? undefined, before: pageParam }),
-    getNextPageParam: (page) => page.next_before ?? undefined,
+      api.savedMessages({ chatID: chatID ?? undefined, cursor: pageParam }),
+    getNextPageParam: (page) => page.next_cursor ?? undefined,
+  });
+}
+
+/** Chats with saves and how many, counted by the server over every save. */
+function useSavedChats() {
+  const { api, user } = useMessenger();
+  return useQuery({
+    queryKey: savedKeys.chats(user.id),
+    queryFn: () => api.savedChats(),
   });
 }
 
@@ -77,7 +85,8 @@ export function ImportantDirectory({ selectedID }: { selectedID?: string }) {
     () => query.data?.pages.flatMap((page) => page.items) ?? [],
     [query.data],
   );
-  const chatFilters = useMemo(() => savedChatFilters(allItems), [allItems]);
+  const savedChats = useSavedChats();
+  const chatFilters = savedChats.data ?? [];
   const activeID =
     selectedID ?? (!isMobile && !narrow ? visible[0]?.message.id : undefined);
   const active =
@@ -194,7 +203,8 @@ export function ImportantDirectory({ selectedID }: { selectedID?: string }) {
             item={active}
             chat={chatMap[active.chat.id]}
             savedInChat={
-              allItems.filter((item) => item.chat.id === active.chat.id).length
+              chatFilters.find((entry) => entry.chat.id === active.chat.id)
+                ?.count ?? 1
             }
             onBack={() => navigate("/important")}
             onRemoved={() => navigate("/important")}
@@ -314,7 +324,7 @@ function ImportantDetail({
     (chat ? canManageChat(chat) : false);
   const messages = context.data?.messages ?? [item.message];
   const change = (saved: boolean) =>
-    applySavedChange(queryClient, {
+    applySavedChange(queryClient, user.id, {
       messageID: item.message.id,
       chatID: item.chat.id,
       saved,
