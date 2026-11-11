@@ -222,6 +222,13 @@ export type CreateMessageRequest =
   components["schemas"]["CreateMessageRequest"];
 export type UpdateMessageRequest =
   components["schemas"]["UpdateMessageRequest"];
+export type ScheduledMessage = components["schemas"]["ScheduledMessage"];
+export type ScheduledMessageFailureReason =
+  components["schemas"]["ScheduledMessageFailureReason"];
+export type CreateScheduledMessageRequest =
+  components["schemas"]["CreateScheduledMessageRequest"];
+export type UpdateScheduledMessageRequest =
+  components["schemas"]["UpdateScheduledMessageRequest"];
 export type AcceptInvitationRequest =
   components["schemas"]["AcceptInvitationRequest"];
 export type CreateInvitationRequest =

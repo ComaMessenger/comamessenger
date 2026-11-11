@@ -705,7 +705,7 @@ func (w *Worker) materialize(ctx context.Context) error {
 			  FROM event e JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id
 			  JOIN chats c ON c.org_id=m.org_id AND c.id=m.chat_id
 			  JOIN chat_members cm ON cm.org_id=e.org_id AND cm.chat_id=e.chat_id
-			  WHERE e.type='message.created' AND cm.actor_id<>e.actor_id
+			  WHERE e.type='message.created' AND cm.actor_id<>e.actor_id AND NOT m.silent
 			  UNION ALL
 			  SELECT m.actor_id,'default',NULL,c.kind,'{}'::uuid[],NULL::uuid,'reaction'
 			  FROM event e JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id
