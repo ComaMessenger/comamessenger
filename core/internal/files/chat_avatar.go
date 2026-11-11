@@ -158,10 +158,13 @@ func (s *Service) PutChatAvatar(ctx context.Context, current identity.User, chat
 	if err != nil {
 		return ChatAvatarUpdate{}, err
 	}
+	// A failed COMMIT may still have been applied (its answer lost), so the
+	// new object is kept from here on; reconciliation removes it if no row
+	// points at it.
+	stored = true
 	if err := tx.Commit(ctx); err != nil {
 		return ChatAvatarUpdate{}, err
 	}
-	stored = true
 	if state.old.Key != "" {
 		_ = s.store.Delete(context.Background(), state.old.Key)
 	}

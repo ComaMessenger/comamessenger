@@ -1758,6 +1758,7 @@ const (
 	ErrorCodeSessionNotFound             ErrorCode = "session_not_found"
 	ErrorCodeSmtpNotConfigured           ErrorCode = "smtp_not_configured"
 	ErrorCodeStorageFull                 ErrorCode = "storage_full"
+	ErrorCodeStorageUnavailable          ErrorCode = "storage_unavailable"
 	ErrorCodeTokenInvalid                ErrorCode = "token_invalid"
 	ErrorCodeUnauthorized                ErrorCode = "unauthorized"
 	ErrorCodeUnsupportedFormat           ErrorCode = "unsupported_format"
@@ -1864,6 +1865,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeSmtpNotConfigured:
 		return true
 	case ErrorCodeStorageFull:
+		return true
+	case ErrorCodeStorageUnavailable:
 		return true
 	case ErrorCodeTokenInvalid:
 		return true

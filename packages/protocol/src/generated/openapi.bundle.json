@@ -4319,6 +4319,9 @@
           "415": {
             "$ref": "#/components/responses/Error"
           },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          },
           "507": {
             "$ref": "#/components/responses/Error"
           }
@@ -4404,7 +4407,7 @@
         },
         "responses": {
           "200": {
-            "description": "Completed presigned or multipart upload.",
+            "description": "Completed presigned or multipart upload. Repeating the call for a completed upload returns the same file.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4421,6 +4424,16 @@
           },
           "422": {
             "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "description": "Storage is temporarily unavailable or the upload is being completed by another request; retry after `Retry-After`. The upload stays open.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -4507,6 +4520,17 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ObjectLink"
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "A byte range of a local blob for a `Range` request; object-store URLs answer ranges themselves.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
                 }
               }
             }
@@ -8400,6 +8424,7 @@
           "session_not_found",
           "smtp_not_configured",
           "storage_full",
+          "storage_unavailable",
           "email_taken",
           "reauthentication_failed",
           "token_invalid",
