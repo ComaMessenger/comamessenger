@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/comamessenger/comamessenger/core/internal/eventlog"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/testdb"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -18,7 +17,6 @@ func TestSavedMessages(t *testing.T) {
 	fixture := seedFixture(t, pool)
 	service := NewService(pool, 64*1024, 100, nil)
 	ctx := context.Background()
-	events := eventlog.NewStore(pool)
 
 	post := func(t *testing.T, chatID, body string) Message {
 		t.Helper()
@@ -59,24 +57,8 @@ func TestSavedMessages(t *testing.T) {
 		assertCount(t, pool, `SELECT count(*) FROM saved_messages WHERE actor_id = $1 AND message_id = $2`, 1, fixture.member.ActorID, target.ID)
 		assertCount(t, pool, `SELECT count(*) FROM events WHERE seq = $1 AND type = 'message.saved' AND audience_actor_id = $2 AND chat_id IS NULL`, 1, after, fixture.member.ActorID)
 
-		// Only the saver's sessions get the event, live or on replay.
-		live, err := events.Live(ctx, fixture.owner.OrgID, before, after, 10)
-		if err != nil || len(live) != 1 {
-			t.Fatalf("Live() = %+v, %v", live, err)
-		}
-		if got := live[0].RecipientActorIDs; len(got) != 1 || got[0] != fixture.member.ActorID {
-			t.Fatalf("recipients = %v, want only the saver", got)
-		}
-		for _, other := range []identity.User{fixture.owner, fixture.moderator} {
-			frames, err := events.Replay(ctx, other, "", before, after, 10)
-			if err != nil || len(frames) != 0 {
-				t.Fatalf("Replay() for another person = %+v, %v; want nothing", frames, err)
-			}
-		}
-		frames, err := events.Replay(ctx, fixture.member, "", before, after, 10)
-		if err != nil || len(frames) != 1 || frames[0].Type != "message.saved" {
-			t.Fatalf("Replay() for the saver = %+v, %v", frames, err)
-		}
+		// Delivery of the event only to the saver, live and on replay, is
+		// checked in eventlog (TestSavedEventsReachOnlyTheSaver).
 
 		if ids := listIDs(t, fixture.member, nil); len(ids) == 0 || ids[0] != target.ID {
 			t.Fatalf("saver list = %v, want %s first", ids, target.ID)
