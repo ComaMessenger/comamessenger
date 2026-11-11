@@ -488,3 +488,54 @@ func TestDeleteNeedsALiveSession(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// A file belongs to one message or one scheduled message: an ordinary send
+// cannot take a file waiting on a pending or failed scheduled message.
+func TestOrdinarySendRefusesScheduledFiles(t *testing.T) {
+	ctx := context.Background()
+	w := newWorld(t)
+	send := func(fileID string) error {
+		_, _, err := w.messages.Create(ctx, w.author.User, w.groupID, message.CreateInput{ClientMsgID: uuid.NewString(), FileIDs: []string{fileID}})
+		return err
+	}
+	waiting := w.file(t, w.author)
+	input := w.input("with a file")
+	input.FileIDs = []string{waiting}
+	item := w.create(t, w.groupID, input)
+	if err := send(waiting); !errors.Is(err, message.ErrInvalid) {
+		t.Fatalf("pending: %v", err)
+	}
+	failed := w.failNow(t, item)
+	if err := send(waiting); !errors.Is(err, message.ErrInvalid) {
+		t.Fatalf("failed: %v", err)
+	}
+	// The failed message can still be sent again with its file, once.
+	if _, err := w.service.SendNow(ctx, w.author, failed.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := w.count(t, `SELECT count(*) FROM message_files WHERE file_id=$1`, waiting); got != 1 {
+		t.Fatalf("file is in %d messages", got)
+	}
+	// A file of no scheduled message, or of a deleted one, sends as usual.
+	if err := send(w.file(t, w.author)); err != nil {
+		t.Fatal(err)
+	}
+	other := w.file(t, w.author)
+	input = w.input("deleted")
+	input.FileIDs = []string{other}
+	deleted := w.create(t, w.groupID, input)
+	if err := w.service.Delete(ctx, w.author, deleted.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := send(other); err != nil {
+		t.Fatalf("after deletion: %v", err)
+	}
+	// Forwarding carries no files and is not affected.
+	sent, _, err := w.messages.Create(ctx, w.other.User, w.groupID, message.CreateInput{ClientMsgID: uuid.NewString(), Body: "forward me"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := w.messages.Forward(ctx, w.author.User, sent.ID, message.ForwardInput{ChatID: w.groupID, ClientMsgID: uuid.NewString()}); err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+}
