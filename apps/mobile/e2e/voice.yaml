@@ -29,16 +29,21 @@ appId: com.comamessenger.app
 - tapOn:
     id: voice-speed
 - assertVisible: .*2×.*
-# 1.4 s at 2×: the first ends and the next one starts on its own.
-- waitForAnimationToEnd:
-    timeout: 3000
+# At 2× the first (13.8 s) ends in a few seconds and the next one starts on
+# its own: the play button of the last voice message turns into «Pause».
+- extendedWaitUntil:
+    visible:
+      id: voice-play
+      text: (Пауза|Pause)
+      below:
+        id: voice-play
+        index: -2
+    timeout: 20000
 - takeScreenshot: voice-autoplay
 # Pause what plays (the speed chip stays while paused).
-- runFlow:
-    when:
-      visible: (Пауза|Pause)
-    commands:
-      - tapOn: (Пауза|Pause)
+- tapOn: (Пауза|Pause)
+- assertVisible:
+    id: voice-speed
 # Empty composer: the microphone instead of the send button.
 - assertVisible:
     id: composer-mic
@@ -46,19 +51,25 @@ appId: com.comamessenger.app
     id: composer-send
 # A tap is too short to record: the hint asks to hold. On a fresh install the
 # system asks for the microphone first; allow it and tap again.
+# One tap only: a second one counts as a double tap, which starts
+# hands-free recording (Maestro repeats a tap it thinks changed nothing).
+# The hint lasts 2.2 s, so it is awaited at once; on a fresh install the
+# system asks for the microphone first (allowing it shows the hint too).
 - tapOn:
     id: composer-mic
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible: (Удерживайте для записи|Hold to record|Allow|Разрешить|OK)
+    timeout: 5000
+- takeScreenshot: voice-hold-hint
 - runFlow:
     when:
       visible: (Allow|Разрешить|OK)
     commands:
       - tapOn: (Allow|Разрешить|OK)
-      - tapOn:
-          id: composer-mic
-- extendedWaitUntil:
-    visible: (Удерживайте для записи|Hold to record)
-    timeout: 5000
-- takeScreenshot: voice-hold-hint
+      - extendedWaitUntil:
+          visible: (Удерживайте для записи|Hold to record)
+          timeout: 5000
 # Typing brings the send button back.
 - tapOn:
     id: composer-input

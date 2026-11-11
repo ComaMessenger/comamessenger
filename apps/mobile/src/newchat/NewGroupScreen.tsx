@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   BackHandler,
   Pressable,
   ScrollView,
   StyleSheet,
   View,
+  type TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
@@ -110,6 +111,7 @@ export function NewGroupScreen({ initialKind }: { initialKind: NewChatKind }) {
   const [kind, setKind] = useState<NewChatKind>(initialKind);
   const [members, setMembers] = useState<ActorSummary[]>([]);
   const [name, setName] = useState("");
+  const topicInput = useRef<TextInput>(null);
   const [topic, setTopic] = useState("");
   const [open, setOpen] = useState(false);
   const [touched, setTouched] = useState(false);
@@ -233,6 +235,8 @@ export function NewGroupScreen({ initialKind }: { initialKind: NewChatKind }) {
       <KeyboardAvoidingView behavior="padding" style={styles.grow}>
         <ScrollView
           keyboardShouldPersistTaps="handled"
+          // Any drag of the form puts the keyboard away and uncovers «Create».
+          keyboardDismissMode="on-drag"
           contentContainerStyle={styles.form}
         >
           <View
@@ -265,9 +269,12 @@ export function NewGroupScreen({ initialKind }: { initialKind: NewChatKind }) {
             autoFocus
             maxLength={chatNameMaxBytes}
             returnKeyType="next"
+            submitBehavior="submit"
+            onSubmitEditing={() => topicInput.current?.focus()}
             error={nameError ? t(problemKeys[problem]) : undefined}
           />
           <TextField
+            ref={topicInput}
             testID="new-group-topic"
             label={t("chatTopic")}
             hint={t("optional")}

@@ -5,7 +5,8 @@ import { Clock } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import {
   resolvedMentionActorIDs,
-  scheduledMobile,
+  scheduleRequestSignature,
+  scheduledErrorKind,
   type ChatMember,
   type CreateScheduledMessageRequest,
 } from "@comamessenger/core";
@@ -104,7 +105,7 @@ export function useScheduleComposer({
   );
 
   const schedule = useCallback(
-    async (at: Date) => {
+    async (at: Date, silent: boolean) => {
       if (pendingRef.current) return;
       const current = draft();
       const body = current.body.trim();
@@ -122,8 +123,9 @@ export function useScheduleComposer({
         ...(current.fileIDs.length ? { file_ids: current.fileIDs } : {}),
         // @here means who is online when it is sent; that is unknown now.
         mentioned_actor_ids: resolvedMentionActorIDs(body, members, {}),
+        ...(silent ? { silent: true } : {}),
       };
-      const signature = scheduledMobile.requestSignature(request);
+      const signature = scheduleRequestSignature(request);
       const clientMsgID =
         attempt.current?.signature === signature
           ? attempt.current.id
@@ -139,7 +141,7 @@ export function useScheduleComposer({
       } catch (cause) {
         Alert.alert(
           t(
-            scheduledErrorKey(scheduledMobile.errorKind(cause), {
+            scheduledErrorKey(scheduledErrorKind(cause), {
               composing: true,
             }),
           ),
@@ -183,7 +185,7 @@ export function useScheduleComposer({
         visible={sheetOpen}
         title={t("scheduledSendLater")}
         pending={pending}
-        onConfirm={(at) => void schedule(at)}
+        onConfirm={(at, silent) => void schedule(at, silent)}
         onClose={() => setSheetOpen(false)}
       />
     </>

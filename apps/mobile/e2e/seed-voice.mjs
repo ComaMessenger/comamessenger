@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 // Posts two voice messages in a row to a chat, so voice.yaml can check
 // playback, speed and autoplay of the next one: a simulator cannot record.
-// Uses the reference recording of the server tests (1.4 s of AAC in m4a).
+// Uses e2e/fixtures/voice-long.m4a (13.8 s of AAC in m4a, made with `say` and
+// `afconvert`, pauses between phrases): long enough for Maestro to see and
+// change the speed while it plays — the 1.4 s recording of the server tests
+// ends before the next step. voice-long.json holds its length and the
+// waveform measured from the sound the way the phone does (50 ms levels in
+// dB from −50, the peak of each of 64 parts), so the bubble looks real.
 //
 //   COMA_API=http://localhost:8080 COMA_EMAIL=… COMA_PASSWORD=… \
 //     [COMA_CHAT_ID=…] node apps/mobile/e2e/seed-voice.mjs
@@ -14,7 +19,7 @@ import { fileURLToPath } from "node:url";
 const api = (process.env.COMA_API ?? "http://localhost:8080").replace(/\/$/, "");
 const recording = await readFile(
   fileURLToPath(
-    new URL("../../../core/internal/files/testdata/voice.m4a", import.meta.url),
+    new URL("./fixtures/voice-long.m4a", import.meta.url),
   ),
 );
 
@@ -53,8 +58,11 @@ if (!chatID) {
   if (!chatID) throw new Error("No chat to post into.");
 }
 
-const waveform = Array.from({ length: 64 }, (_, index) =>
-  Math.round(40 + 180 * Math.abs(Math.sin(index / 5))),
+const { duration_ms: durationMs, waveform } = JSON.parse(
+  await readFile(
+    fileURLToPath(new URL("./fixtures/voice-long.json", import.meta.url)),
+    "utf8",
+  ),
 );
 
 async function postVoice() {
@@ -66,7 +74,7 @@ async function postVoice() {
         name: "voice.m4a",
         mime: "audio/mp4",
         size: recording.length,
-        voice: { duration_ms: 1400, waveform },
+        voice: { duration_ms: durationMs, waveform },
       }),
     },
     token,

@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, View } from "react-native";
 import { ChevronRight, Clock } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
-import { scheduledMobile, type ScheduledMessage } from "@comamessenger/core";
+import { pendingSummary, type ScheduledMessage } from "@comamessenger/core";
 import { useTheme } from "@/lib/theme";
 import { Text } from "@/ui/Text";
 import { useNow, useWhen } from "./clock";
@@ -12,23 +12,43 @@ import { ScheduledBoundary } from "./ScheduledBoundary";
  * author has scheduled messages to see, and the strip is absent at zero.
  */
 export function ScheduledStrip({
+  chatID,
   items,
   onPress,
 }: {
+  chatID: string;
   items: readonly ScheduledMessage[];
   onPress(): void;
 }) {
   return (
     <ScheduledBoundary quiet>
-      <StripContent items={items} onPress={onPress} />
+      <StripContent chatID={chatID} items={items} onPress={onPress} />
     </ScheduledBoundary>
   );
 }
 
+/** Waiting and unsent records of the chat: everything the strip counts. */
+export function stripSummary(
+  items: readonly ScheduledMessage[],
+  chatID: string,
+) {
+  const pending = pendingSummary(items, chatID);
+  const failed = items.filter(
+    (item) => item.chat_id === chatID && item.status === "failed",
+  ).length;
+  return {
+    count: pending.count + failed,
+    failed,
+    nearest: pending.next ? new Date(pending.next.send_at) : null,
+  };
+}
+
 function StripContent({
+  chatID,
   items,
   onPress,
 }: {
+  chatID: string;
   items: readonly ScheduledMessage[];
   onPress(): void;
 }) {
@@ -36,7 +56,7 @@ function StripContent({
   const theme = useTheme();
   const when = useWhen();
   const now = useNow(60_000);
-  const summary = scheduledMobile.summary(items);
+  const summary = stripSummary(items, chatID);
   if (summary.count === 0) return null;
   const details = [
     summary.nearest

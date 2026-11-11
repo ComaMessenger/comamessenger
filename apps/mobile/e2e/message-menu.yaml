@@ -1,6 +1,7 @@
 # Opens the long-press menu of a message found by TEXT (a regex over the
-# accessible label of the bubble). The bubble is brought to the middle of
-# the feed first: near the composer a long press lands in the text field.
+# accessible label of the bubble). Scrolling up brings the bubble in from
+# the top, away from the composer, where a long press lands in the text
+# field. (centerElement keeps scrolling past a bubble already in view.)
 appId: com.comamessenger.app
 ---
 - runFlow:
@@ -21,8 +22,15 @@ appId: com.comamessenger.app
 - scrollUntilVisible:
     element: ${TEXT}
     direction: UP
-    centerElement: true
-    timeout: 15000
+    timeout: 30000
+# It comes in at the top edge: bring it nearer the middle and let the
+# feed stop, or the long press only stops the scroll.
+- swipe:
+    start: 50%, 45%
+    end: 50%, 60%
+    duration: 600
+- waitForAnimationToEnd:
+    timeout: 2000
 - longPressOn: ${TEXT}
 - extendedWaitUntil:
     visible:

@@ -55,6 +55,7 @@ import { attachmentLimit, useAttachments } from "@/files/useAttachments";
 import { pickFiles, type PickSource } from "@/files/pick";
 import { saveFailureKey } from "@/important/saved";
 import { RowBoundary } from "@/ui/RowBoundary";
+import { ScheduledBubbles } from "@/scheduled/ScheduledBubbles";
 import { ScheduledStrip } from "@/scheduled/ScheduledStrip";
 import { useScheduleComposer } from "@/scheduled/useScheduleComposer";
 import { useChatScheduled } from "@/scheduled/useScheduled";
@@ -275,8 +276,9 @@ export function ConversationView({
   }
 
   // Sending later and without sound (package E). Only the author sees their
-  // scheduled messages; the strip lives under the chat header, not in threads.
-  const chatScheduled = useChatScheduled(inThread ? null : chatID);
+  // scheduled messages; the strip lives under the chat header, not in threads,
+  // and each feed ends with its own scheduled messages as dashed bubbles.
+  const chatScheduled = useChatScheduled(chatID);
   const scheduling = useScheduleComposer({
     chatID,
     threadRootID,
@@ -562,6 +564,7 @@ export function ConversationView({
       <ConnectionBanner />
       {!inThread && (
         <ScheduledStrip
+          chatID={chatID}
           items={chatScheduled.items}
           onPress={() => router.push(`/chat/${chatID}/scheduled`)}
         />
@@ -640,6 +643,22 @@ export function ConversationView({
               }
               ListFooterComponent={
                 <>
+                  {/* A recorded voice message is a bubble at once: it
+                      uploads here, then sends as an ordinary message. */}
+                  <VoiceOutboxStrip
+                    chatID={chatID}
+                    threadRootID={threadRootID}
+                  />
+                  <ScheduledBubbles
+                    items={chatScheduled.items}
+                    chatID={chatID}
+                    threadRootID={threadRootID}
+                    onOpen={(item) =>
+                      router.push(
+                        `/chat/${chatID}/scheduled?focus=${encodeURIComponent(item.id)}`,
+                      )
+                    }
+                  />
                   {conversation.streams.map((stream) => (
                     <AgentStreamRow
                       key={stream.streamID}
@@ -753,7 +772,6 @@ export function ConversationView({
             </View>
           )}
         </View>
-        <VoiceOutboxStrip chatID={chatID} threadRootID={threadRootID} />
         <Composer
           body={context?.kind === "edit" ? editBody : conversation.body}
           onChangeBody={
@@ -776,7 +794,10 @@ export function ConversationView({
             chatID,
             threadRootID,
             replyToID: context?.kind === "reply" ? context.message.id : null,
-            onQueued: () => setContext(null),
+            onQueued: () => {
+              setContext(null);
+              list.current?.scrollToEnd({ animated: true });
+            },
           }}
         />
       </KeyboardAvoidingView>

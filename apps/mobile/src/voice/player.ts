@@ -7,7 +7,7 @@ import {
   type AudioStatus,
 } from "expo-audio";
 import { nextVoicePlaybackRate } from "@comamessenger/core";
-import { enterPlaybackMode } from "./audioSession";
+import { enterPlaybackMode, leavePlaybackMode } from "./audioSession";
 
 /** Something the shared player can play: a voice file or a take in review. */
 export type VoiceTrack = {
@@ -57,6 +57,7 @@ function withoutFailure(key: string) {
 
 function fail(key: string) {
   player?.pause();
+  leavePlaybackMode();
   current = null;
   usePlayerStore.setState((state) => ({
     key: null,
@@ -72,6 +73,7 @@ function finished() {
   usePlayerStore.setState({ key: null, status: "idle", position: 0 });
   const next = ended?.next?.();
   if (next) void playVoice(next);
+  else leavePlaybackMode();
 }
 
 function onStatus(status: AudioStatus) {
@@ -102,7 +104,10 @@ function onStatus(status: AudioStatus) {
 
 function ensurePlayer(): AudioPlayer {
   if (player) return player;
-  player = createAudioPlayer(null, { updateInterval: 100 });
+  player = createAudioPlayer(null, {
+    updateInterval: 100,
+    keepAudioSessionActive: true,
+  });
   player.addListener("playbackStatusUpdate", onStatus);
   AppState.addEventListener("change", (next) => {
     if (next !== "active") pauseVoice();
@@ -142,15 +147,20 @@ export function currentVoiceKey() {
 export function pauseVoice() {
   if (!current) return;
   player?.pause();
+  leavePlaybackMode();
   if (usePlayerStore.getState().status !== "idle")
     usePlayerStore.setState({ status: "paused" });
 }
 
-/** Stops whatever plays, e.g. before recording or when a chat closes. */
-export function stopVoice(key?: string) {
+/**
+ * Stops whatever plays, e.g. before recording or when a chat closes.
+ * `release: false` keeps the audio session for the recorder taking over.
+ */
+export function stopVoice(key?: string, release = true) {
   if (key && usePlayerStore.getState().key !== key) return;
   ticket += 1;
   player?.pause();
+  if (current && release) leavePlaybackMode();
   current = null;
   usePlayerStore.setState({ key: null, status: "idle", position: 0 });
 }

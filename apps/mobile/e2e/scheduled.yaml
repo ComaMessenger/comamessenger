@@ -2,9 +2,11 @@
 # long press on send, the time sheet, the strip under the chat header, the
 # list with edit / time / delete, the «Schedule» tile and the list in «More».
 # Run after sign-in.yaml (reuses its session): maestro test e2e/scheduled.yaml
-# Written without a simulator run; acceptance on a device checks it.
+# Starts by deleting the account's scheduled messages through the API.
 appId: com.comamessenger.app
 ---
+- runScript: scripts/login.js
+- runScript: scripts/clear-scheduled.js
 - runFlow: open-app.yaml
 - tapOn:
     id: chat-row-0
@@ -27,7 +29,7 @@ appId: com.comamessenger.app
       id: schedule-sheet
     timeout: 5000
 - tapOn:
-    id: schedule-choice-tomorrow
+    id: schedule-choice-tomorrowMorning
 - assertVisible: "Запланировать: завтра.*"
 - takeScreenshot: scheduled-sheet
 - tapOn:
@@ -37,12 +39,21 @@ appId: com.comamessenger.app
     visible:
       id: scheduled-strip
     timeout: 10000
-- assertVisible: "Отложено: .*"
-- assertNotVisible: .*Отложенное ${output.tag}.*
+# The strip is one accessible element: its label, not its inner text, counts.
+- assertVisible: "Отложенные сообщения в этом чате: .*"
+# The feed ends with it as a dashed bubble, only the author sees it.
+- extendedWaitUntil:
+    visible:
+      id: scheduled-bubble
+      text: .*Отложенное ${output.tag}.*
+    timeout: 10000
+- takeScreenshot: scheduled-bubble
 
-# 2. The list of this chat: edit the text, move it, delete it.
+# 2. The bubble opens it in the list of this chat: edit the text, move it,
+# delete it.
 - tapOn:
-    id: scheduled-strip
+    id: scheduled-bubble
+    text: .*Отложенное ${output.tag}.*
 - extendedWaitUntil:
     visible:
       id: scheduled-screen
@@ -82,8 +93,10 @@ appId: com.comamessenger.app
 - tapOn:
     id: scheduled-delete
     index: 0
-# The confirmation is a system alert.
-- tapOn: Удалить
+# The confirmation is a system alert; the trash button is «Удалить» too.
+- tapOn:
+    text: Удалить
+    below: Оно не будет отправлено.
 - extendedWaitUntil:
     notVisible: .*Отложенное ${output.tag}.*
     timeout: 10000
@@ -124,8 +137,12 @@ appId: com.comamessenger.app
       id: schedule-sheet
     timeout: 5000
 - tapOn:
-    id: schedule-choice-monday
+    id: schedule-choice-nextMonday
     optional: true
+# «Without sound» together with «later», as on the web.
+- tapOn:
+    id: schedule-silent
+- takeScreenshot: scheduled-sheet-silent
 - tapOn:
     id: schedule-confirm
 - extendedWaitUntil:
@@ -137,7 +154,10 @@ appId: com.comamessenger.app
 - tapOn:
     id: conversation-back
     retryTapIfNoChange: true
-- tapOn: Ещё
+- runFlow:
+    file: tabs.yaml
+    env:
+      TAB: more
 - tapOn:
     id: more-scheduled
 - extendedWaitUntil:
@@ -145,8 +165,14 @@ appId: com.comamessenger.app
       id: scheduled-screen
     timeout: 10000
 - assertVisible: .*Плитка ${output.tag}.*
+- assertVisible: без звука
 - takeScreenshot: scheduled-all
 - tapOn:
     id: scheduled-delete
     index: 0
-- tapOn: Удалить
+- tapOn:
+    text: Удалить
+    below: Оно не будет отправлено.
+- extendedWaitUntil:
+    notVisible: .*Плитка ${output.tag}.*
+    timeout: 10000

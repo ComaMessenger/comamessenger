@@ -67,12 +67,20 @@ export async function leaveRecordingMode() {
 }
 
 export async function enterPlaybackMode() {
-  // iOS activates the session on play() and deactivates it, resuming other
-  // apps' music, on pause and at the end (expo-audio player defaults).
+  // iOS activates the session on play(). The player keeps it active
+  // (keepAudioSessionActive): expo-audio would otherwise deactivate it 100 ms
+  // after the end, which stops the next voice message starting meanwhile.
+  // leavePlaybackMode hands the audio back when nothing more plays.
   await setAudioModeAsync({
     allowsRecording: false,
     playsInSilentMode: true,
     interruptionMode: "doNotMix",
     shouldPlayInBackground: false,
   });
+}
+
+/** Nothing plays any more: on iOS other apps' music resumes. */
+export function leavePlaybackMode() {
+  if (Platform.OS === "ios")
+    void setIsAudioActiveAsync(false).catch(() => undefined);
 }

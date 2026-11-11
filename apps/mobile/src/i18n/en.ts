@@ -616,34 +616,46 @@ export const en: Record<keyof typeof ru, string> = {
   scheduledMoved: "Moved to {when}",
   scheduledEditTitle: "Edit message",
   scheduledEditLabel: "Message text",
-  scheduledFilesReadonly:
-    "Attachments of a scheduled message cannot be changed yet. To replace them, delete the message and schedule it again.",
   scheduledReply: "Reply to a message",
   scheduledInThread: "In a thread",
   scheduledFiles: "{count, plural, one {# attachment} other {# attachments}}",
   scheduledFailedLabel: "Not sent",
-  scheduledFailure_author_inactive: "Your account was deactivated",
-  scheduledFailure_security_reset:
-    "Your password or e-mail changed, or other devices were signed out",
-  scheduledFailure_session_revoked:
-    "The device it was scheduled from was removed from your sessions",
-  scheduledFailure_missed_send_time:
-    "Could not be sent on time: the server was unavailable",
-  scheduledFailure_chat_unavailable: "The chat was archived or deleted",
-  scheduledFailure_not_member: "You are no longer a member of this chat",
-  scheduledFailure_forbidden: "You may no longer write in this chat",
-  scheduledFailure_reference_unavailable:
-    "The message you replied to, the thread or a mentioned member is gone",
-  scheduledFailure_attachment_unavailable: "An attachment was deleted",
-  scheduledFailure_invalid_content: "The message no longer passes validation",
-  scheduledFailure_delivery_error: "A server error while sending",
-  scheduledFailure_unknown: "Unknown reason",
+  scheduledReasonAuthorInactive: "Your account was deactivated",
+  scheduledReasonSecurityReset:
+    "Your password or email changed, or other devices were signed out",
+  scheduledReasonSessionRevoked: "The device that scheduled it was signed out",
+  scheduledReasonMissedSendTime: "Couldn’t be sent on time",
+  scheduledReasonChatUnavailable: "The chat was archived or deleted",
+  scheduledReasonNotMember: "You’re no longer a member of the chat",
+  scheduledReasonForbidden: "You can no longer post in this chat",
+  scheduledReasonReferenceUnavailable:
+    "The original message, thread or a mentioned person is unavailable",
+  scheduledReasonAttachmentUnavailable: "An attachment was deleted",
+  scheduledReasonInvalidContent: "The message didn’t pass validation",
+  scheduledReasonDeliveryError: "Server error",
+  scheduledReasonUnknown: "Unknown reason",
+  scheduledNotRetryable: "Can’t send it: {reason}",
+  scheduledVerifyTitle: "Check the message",
+  scheduledVerifyText:
+    "The message was stopped after a password change or a device sign-out. You may not have scheduled it — check the text.",
+  scheduledVerifyHint: "You may not have scheduled it — check the text",
+  scheduledVerifyMove: "Pick a time",
+  scheduledSilentLabel: "Without sound",
+  scheduledSilentHint:
+    "Recipients get a notification without sound or vibration",
+  scheduledFilesAdd: "Add a file",
+  scheduledFileRemove: "Remove {name}",
+  scheduledFileFailed: "Didn’t upload — tap to retry",
+  scheduledFeedWhen: "Scheduled · {when}",
+  scheduledFeedFailed: "Not sent · tap to fix",
+  scheduledFeedLabel:
+    "Your scheduled message, only you see it. {state}. Open in scheduled messages",
+  scheduledEmptyBody: "No text",
+  scheduledSendShort: "Send",
   scheduledErrorConflict:
     "The message was changed on another device. The latest version is shown — try again.",
   scheduledErrorClosed:
-    "The message was already sent or failed — it can no longer be changed.",
-  scheduledErrorRetryClosed:
-    "The server cannot retry unsent messages yet. Copy the text and send it again, or delete the record.",
+    "The message was already sent — it can no longer be changed.",
   scheduledErrorGone: "The message was already deleted on another device.",
   scheduledErrorLimit:
     "Too many scheduled messages. Send or delete some of them.",
@@ -659,7 +671,6 @@ export const en: Record<keyof typeof ru, string> = {
   scheduledErrorOther: "That did not work. Try again.",
   scheduledOffline: "No connection — the list may be out of date",
   scheduledEmptyDraft: "Write a message or add an attachment first",
-  scheduledCopyText: "Copy text",
   scheduledLoadError: "Could not load scheduled messages",
   scheduledRenderError: "Could not show scheduled messages",
   scheduledRevokeWarning:

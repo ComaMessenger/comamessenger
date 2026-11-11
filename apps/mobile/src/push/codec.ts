@@ -50,7 +50,7 @@ export function utf8Decode(bytes: Uint8Array): string {
 export type NotificationContent = {
   title: string;
   body: string;
-  /** In-app route; only chat and thread routes are accepted. */
+  /** In-app route: a chat, a thread or the scheduled list ("message not sent"). */
   url?: string;
   chatID?: string;
   eventSeq: number;
@@ -60,7 +60,8 @@ export type NotificationContent = {
   silent: boolean;
 };
 
-const routePattern = /^\/chat\/[0-9a-f-]{36}(\/thread\/[0-9a-f-]{36})?$/;
+const routePattern =
+  /^(\/chat\/[0-9a-f-]{36}(\/thread\/[0-9a-f-]{36})?|\/scheduled)$/;
 
 export function parseNotification(json: string): NotificationContent | null {
   let value: Record<string, unknown>;

@@ -1,7 +1,9 @@
-import type { ReactNode } from "react";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import {
+  Animated,
   KeyboardAvoidingView,
   Modal,
+  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -13,9 +15,16 @@ import { useTranslation } from "react-i18next";
 import { useTheme } from "@/lib/theme";
 import { Text } from "./Text";
 
+/** A pull further than this, or a quick flick down, closes the sheet. */
+const closeDistance = 90;
+const closeVelocity = 0.8;
+
 /**
  * Sheet that rises from the bottom over a dimmed screen: grab handle, title
- * with an optional action on the right, scrolling content.
+ * with an optional action on the right, scrolling content. Pulling it down
+ * closes it, like the dimmed area above it and the system back gesture.
+ * Built on the plain responder system: a modal is a new native root, where
+ * gesture-handler would need a root of its own.
  */
 export function BottomSheet({
   visible,
@@ -38,6 +47,38 @@ export function BottomSheet({
   const { t } = useTranslation();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const drag = useRef(new Animated.Value(0)).current;
+  const close = useRef(onClose);
+  close.current = onClose;
+  useEffect(() => {
+    if (visible) drag.setValue(0);
+  }, [drag, visible]);
+  const pull = useMemo(
+    () =>
+      PanResponder.create({
+        // Only a mostly vertical pull down; content that scrolls keeps its
+        // own drags, and the grab handle and title always pull the sheet.
+        onMoveShouldSetPanResponder: (_, move) =>
+          move.dy > 6 && Math.abs(move.dy) > Math.abs(move.dx) * 1.5,
+        onPanResponderMove: (_, move) => drag.setValue(Math.max(0, move.dy)),
+        onPanResponderRelease: (_, move) => {
+          if (move.dy > closeDistance || move.vy > closeVelocity)
+            Animated.timing(drag, {
+              toValue: 800,
+              duration: 160,
+              useNativeDriver: true,
+            }).start(() => close.current());
+          else
+            Animated.spring(drag, {
+              toValue: 0,
+              useNativeDriver: true,
+            }).start();
+        },
+        onPanResponderTerminate: () =>
+          Animated.spring(drag, { toValue: 0, useNativeDriver: true }).start(),
+      }),
+    [drag],
+  );
   return (
     <Modal
       visible={visible}
@@ -56,7 +97,8 @@ export function BottomSheet({
           style={[StyleSheet.absoluteFill, { backgroundColor: theme.overlay }]}
           onPress={onClose}
         />
-        <View
+        <Animated.View
+          {...pull.panHandlers}
           testID={testID}
           accessibilityViewIsModal
           accessibilityLabel={accessibilityLabel ?? title}
@@ -66,6 +108,7 @@ export function BottomSheet({
               backgroundColor: theme.surface,
               maxHeight: "88%",
               paddingBottom: Math.max(insets.bottom, 22),
+              transform: [{ translateY: drag }],
             },
           ]}
         >
@@ -113,7 +156,7 @@ export function BottomSheet({
           >
             {children}
           </ScrollView>
-        </View>
+        </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
   );

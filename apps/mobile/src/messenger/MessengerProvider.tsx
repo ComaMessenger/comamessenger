@@ -16,13 +16,12 @@ import {
   applySavedChange,
   chatEventEffect,
   savedChange,
-  createMessengerStore,
   pinnedChatLimit,
-  restMessageLoader,
   type AgentStatusState,
   type ChatFolder,
 } from "@comamessenger/core";
 import { setLocale } from "@/i18n";
+import { createAppStore } from "./appStore";
 import { checkpointStorage, outboxStorage } from "@/lib/database";
 import { hydrateDrafts } from "@/lib/drafts";
 import { reactionsKey } from "@/conversation/reactions";
@@ -33,7 +32,7 @@ import { isNetworkError, messageOf } from "@/lib/errors";
 import { cacheShell, cachedShell, persistMessages } from "./cache";
 import { useSession, useSignedIn } from "@/session/SessionProvider";
 
-export type MessengerStore = ReturnType<typeof createMessengerStore>;
+export type MessengerStore = ReturnType<typeof createAppStore>;
 
 type MessengerValue = {
   store: MessengerStore;
@@ -72,12 +71,7 @@ export function useMessenger(): MessengerValue {
 export function MessengerProvider({ children }: { children: ReactNode }) {
   const { api, user } = useSignedIn();
   const { sessionExpired, updateUser } = useSession();
-  const store = useMemo(() => {
-    const created = createMessengerStore();
-    // A realtime frame too large to send whole arrives as a stub.
-    created.getState().setMessageLoader(restMessageLoader(api));
-    return created;
-  }, [api]);
+  const store = useMemo(() => createAppStore(api), [api]);
   // Request-lived data (members, reactions, thread pages); event-lived state
   // stays in the domain store, as on the web (ADR-0009).
   const queryClient = useMemo(

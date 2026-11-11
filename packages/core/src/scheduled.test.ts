@@ -4,6 +4,10 @@ import {
   failureReasonKey,
   needsAuthorCheck,
   notRetryableReason,
+  parseScheduledEvent,
+  scheduledErrorKind,
+  scheduleProblem,
+  scheduleRequestSignature,
   fromLocalInputValue,
   groupScheduled,
   isSchedulable,
@@ -346,5 +350,102 @@ describe("needsAuthorCheck", () => {
     expect(
       needsAuthorCheck({ status: "pending", failure_reason: "security_reset" }),
     ).toBe(false);
+  });
+});
+
+describe("scheduleProblem", () => {
+  it("tells the past from too far ahead", () => {
+    const now = local("2026-11-11T09:00");
+    expect(scheduleProblem(local("2026-11-11T08:59"), now)).toBe("past");
+    expect(scheduleProblem(new Date(now.getTime() + 30_000), now)).toBe("past");
+    expect(scheduleProblem(local("2026-11-11T09:01"), now)).toBeNull();
+    expect(scheduleProblem(local("2027-11-11T09:00"), now)).toBeNull();
+    expect(scheduleProblem(local("2027-11-11T09:01"), now)).toBe("tooFar");
+    expect(scheduleProblem(new Date(Number.NaN), now)).toBe("past");
+  });
+
+  it("crosses the year: late on 31 December tomorrow is 1 January", () => {
+    const at = presets("2026-12-31T23:30");
+    expect(at.inHour).toBe("2027-01-01T00:30");
+    expect(at.tomorrowMorning).toBe("2027-01-01T09:00");
+    // 31 December 2026 is a Thursday.
+    expect(at.nextMonday).toBe("2027-01-04T09:00");
+  });
+});
+
+describe("parseScheduledEvent", () => {
+  const data = {
+    id: "a",
+    chat_id: "chat-1",
+    status: "pending",
+    version: 2,
+    send_at: "2026-11-12T08:00:00Z",
+    failure_reason: null,
+  };
+
+  it("accepts the contract shape", () => {
+    expect(parseScheduledEvent(data)).toEqual(data);
+  });
+
+  it("rejects events of an unexpected shape", () => {
+    expect(parseScheduledEvent(null)).toBeNull();
+    expect(parseScheduledEvent({ id: "a" })).toBeNull();
+    expect(parseScheduledEvent({ ...data, status: "exploded" })).toBeNull();
+    expect(parseScheduledEvent({ ...data, version: "2" })).toBeNull();
+  });
+
+  it("keeps a reason it does not know, worded as unknown", () => {
+    const event = parseScheduledEvent({
+      ...data,
+      status: "failed",
+      failure_reason: "brand_new",
+    })!;
+    expect(event.failure_reason).toBe("brand_new");
+    expect(failureReasonKey(event.failure_reason)).toBe(
+      "scheduledReasonUnknown",
+    );
+  });
+});
+
+describe("scheduledErrorKind", () => {
+  it("tells conflicts, closed, deleted and not retryable apart", () => {
+    const api = (status: number, code: string) =>
+      new APIError(status, code as never, "");
+    expect(scheduledErrorKind(api(409, "version_conflict"))).toBe("conflict");
+    expect(scheduledErrorKind(api(409, "scheduled_message_closed"))).toBe(
+      "closed",
+    );
+    expect(scheduledErrorKind(api(404, "scheduled_message_not_found"))).toBe(
+      "gone",
+    );
+    expect(
+      scheduledErrorKind(api(409, "scheduled_message_not_retryable")),
+    ).toBe("notRetryable");
+    expect(scheduledErrorKind(api(422, "limit_reached"))).toBe("limit");
+    expect(scheduledErrorKind(api(413, "payload_too_large"))).toBe("tooLarge");
+    expect(scheduledErrorKind(api(403, "forbidden"))).toBe("forbidden");
+    expect(scheduledErrorKind(api(500, "internal"))).toBe("other");
+    expect(scheduledErrorKind(new TypeError("Network request failed"))).toBe(
+      "network",
+    );
+  });
+});
+
+describe("scheduleRequestSignature", () => {
+  it("reuses an idempotency key only for the same request", () => {
+    const base = {
+      body: "hi",
+      send_at: "2026-11-12T08:00:00Z",
+      file_ids: ["f2", "f1"],
+    };
+    expect(scheduleRequestSignature(base)).toBe(
+      scheduleRequestSignature({ ...base, file_ids: ["f1", "f2"] }),
+    );
+    expect(scheduleRequestSignature(base)).not.toBe(
+      scheduleRequestSignature({ ...base, send_at: "2026-11-12T09:00:00Z" }),
+    );
+    expect(scheduleRequestSignature(base)).not.toBe(
+      scheduleRequestSignature({ ...base, silent: true }),
+    );
   });
 });

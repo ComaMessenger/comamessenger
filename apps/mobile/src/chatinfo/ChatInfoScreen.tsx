@@ -504,7 +504,6 @@ export function ChatInfoScreen({ chatID }: { chatID: string }) {
             size={88}
             shape={chat.kind === "direct" ? "circle" : "square"}
             agent={agentPeer}
-            glyph={channel && !chat.avatar_version ? "#" : undefined}
             online={
               Boolean(peer) &&
               !agentPeer &&

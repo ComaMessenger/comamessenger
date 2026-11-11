@@ -45,6 +45,12 @@ describe("notification codec", () => {
     expect(parseNotification("{")).toBeNull();
     expect(notificationRoute({ url: `/chat/${chat}` })).toBe(`/chat/${chat}`);
     expect(notificationRoute({ url: "/settings" })).toBeNull();
+    // «Message not sent» opens the list of scheduled messages.
+    expect(notificationRoute({ url: "/scheduled" })).toBe("/scheduled");
+    expect(
+      parseNotification(JSON.stringify({ ...payload, url: "/scheduled" }))?.url,
+    ).toBe("/scheduled");
+    expect(notificationRoute({ url: "/scheduledx" })).toBeNull();
   });
 
   it("reads the quiet flag of «Send without sound» only when it is true", () => {

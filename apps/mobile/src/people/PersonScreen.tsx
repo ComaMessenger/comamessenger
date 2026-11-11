@@ -231,7 +231,6 @@ export function PersonScreen({ actorID }: { actorID: string }) {
                         seed={chat.avatar_seed || chat.id}
                         size={30}
                         shape="square"
-                        glyph={chat.kind === "channel" ? "#" : undefined}
                         {...chatAvatarSource(chat)}
                       />
                       <Text size={15} numberOfLines={1} style={styles.grow}>

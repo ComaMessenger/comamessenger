@@ -1,6 +1,11 @@
 import type { QueryClient } from "@tanstack/react-query";
 import {
-  scheduledMobile,
+  isScheduledEvent,
+  parseScheduledEvent,
+  reduceScheduled,
+  removeScheduled,
+  scheduledErrorKind,
+  upsertScheduled,
   type DurableEvent,
   type MessengerAPI,
   type ScheduledMessage,
@@ -31,14 +36,10 @@ export async function refreshRecord(
 ) {
   try {
     const record = await api.scheduledMessage(id);
-    setItems(queryClient, userID, (items) =>
-      scheduledMobile.merge(items, record),
-    );
+    setItems(queryClient, userID, (items) => upsertScheduled(items, record));
   } catch (cause) {
-    if (scheduledMobile.errorKind(cause) === "gone")
-      setItems(queryClient, userID, (items) =>
-        scheduledMobile.remove(items, id),
-      );
+    if (scheduledErrorKind(cause) === "gone")
+      setItems(queryClient, userID, (items) => removeScheduled(items, id));
   }
 }
 
@@ -53,18 +54,18 @@ export function applyScheduledEvent(
   userID: string,
   event: DurableEvent,
 ): boolean {
-  if (!event.type.startsWith("scheduled_message.")) return false;
-  const parsed = scheduledMobile.parseEvent(event.data);
+  if (!isScheduledEvent(event.type)) return false;
+  const parsed = parseScheduledEvent(event.data);
   if (!parsed) return true;
   const items = queryClient.getQueryData<ScheduledMessage[]>(
     scheduledKey(userID),
   );
   // Nothing loaded yet: the first screen that needs the list reads it fresh.
   if (!items) return true;
-  const change = scheduledMobile.applyEvent(items, parsed);
+  const change = reduceScheduled(items, event.type, parsed);
   if (change.changed)
     queryClient.setQueryData(scheduledKey(userID), change.items);
-  for (const id of change.fetch)
-    void refreshRecord(queryClient, api, userID, id);
+  if (change.refetch)
+    void refreshRecord(queryClient, api, userID, change.refetch);
   return true;
 }

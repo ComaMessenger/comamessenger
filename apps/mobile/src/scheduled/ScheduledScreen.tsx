@@ -13,7 +13,12 @@ import { router, useFocusEffect } from "expo-router";
 import { Clock } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
-import { scheduledMobile, type ScheduledMessage } from "@comamessenger/core";
+import {
+  groupScheduled,
+  needsAuthorCheck,
+  scheduledErrorKind,
+  type ScheduledMessage,
+} from "@comamessenger/core";
 import { spacing } from "@comamessenger/tokens";
 import { useTheme } from "@/lib/theme";
 import { chatTitle } from "@/chats/ChatRow";
@@ -29,6 +34,10 @@ import { ScheduledEditSheet } from "./ScheduledEditSheet";
 import { ScheduledItem, type ScheduledItemAction } from "./ScheduledItem";
 import { ScheduleSheet } from "./ScheduleSheet";
 import {
+  ScheduledVerifySheet,
+  type VerifyAction,
+} from "./ScheduledVerifySheet";
+import {
   useChatScheduled,
   useScheduledActions,
   scheduledErrorKey,
@@ -36,16 +45,31 @@ import {
 
 const noticeMs = 2200;
 
-/** Scheduled messages of one chat (`chatID`) or of every chat (null). */
-export function ScheduledScreen({ chatID }: { chatID: string | null }) {
+/**
+ * Scheduled messages of one chat (`chatID`) or of every chat (null).
+ * `focusID` brings one record up and marks it, e.g. from the feed.
+ */
+export function ScheduledScreen({
+  chatID,
+  focusID = null,
+}: {
+  chatID: string | null;
+  focusID?: string | null;
+}) {
   return (
     <ScheduledBoundary>
-      <ScheduledContent chatID={chatID} />
+      <ScheduledContent chatID={chatID} focusID={focusID} />
     </ScheduledBoundary>
   );
 }
 
-function ScheduledContent({ chatID }: { chatID: string | null }) {
+function ScheduledContent({
+  chatID,
+  focusID,
+}: {
+  chatID: string | null;
+  focusID: string | null;
+}) {
   const { t } = useTranslation();
   const theme = useTheme();
   const clock = useClock();
@@ -58,6 +82,17 @@ function ScheduledContent({ chatID }: { chatID: string | null }) {
   const actions = useScheduledActions(setNotice);
   const [editing, setEditing] = useState<ScheduledMessage | null>(null);
   const [moving, setMoving] = useState<ScheduledMessage | null>(null);
+  const [verifying, setVerifying] = useState<{
+    item: ScheduledMessage;
+    action: VerifyAction;
+  } | null>(null);
+  const list =
+    useRef<
+      SectionList<
+        ScheduledMessage,
+        { key: string; title: string; failed: boolean }
+      >
+    >(null);
 
   // Records changed on another device arrive by realtime; a return to the
   // screen reads the list again in case the socket was asleep.
@@ -87,22 +122,54 @@ function ScheduledContent({ chatID }: { chatID: string | null }) {
     setNotice(t("scheduledErrorClosed"));
   }, [editing, ids, moving, query.isFetching, t]);
 
-  const sections = useMemo(
-    () =>
-      scheduledMobile.sections(items, now).map((section) => ({
-        key: section.key,
-        title:
-          section.kind === "failed"
-            ? t("scheduledFailedSection")
-            : formatSectionDay(section.day, now, clock, {
-                today: t("scheduledToday"),
-                tomorrow: t("scheduledTomorrow"),
-              }),
-        failed: section.kind === "failed",
-        data: section.items,
+  const sections = useMemo(() => {
+    const groups = groupScheduled(items, now);
+    const words = {
+      today: t("scheduledToday"),
+      tomorrow: t("scheduledTomorrow"),
+    };
+    return [
+      ...(groups.failed.length
+        ? [
+            {
+              key: "failed",
+              title: t("scheduledFailedSection"),
+              failed: true,
+              data: groups.failed,
+            },
+          ]
+        : []),
+      ...groups.days.map((day) => ({
+        key: day.key,
+        title: formatSectionDay(day.day, now, clock, words),
+        failed: false,
+        data: day.items,
       })),
-    [clock, items, now, t],
-  );
+    ];
+  }, [clock, items, now, t]);
+
+  // Opened from a scheduled bubble: bring that record up once it is listed.
+  const focused = useRef(false);
+  useEffect(() => {
+    if (!focusID || focused.current) return;
+    const sectionIndex = sections.findIndex((section) =>
+      section.data.some((item) => item.id === focusID),
+    );
+    if (sectionIndex < 0) return;
+    focused.current = true;
+    const itemIndex = sections[sectionIndex]!.data.findIndex(
+      (item) => item.id === focusID,
+    );
+    setTimeout(
+      () =>
+        list.current?.scrollToLocation({
+          sectionIndex,
+          itemIndex,
+          viewPosition: 0.3,
+        }),
+      250,
+    );
+  }, [focusID, sections]);
 
   const chatName = useCallback(
     (item: ScheduledMessage) => {
@@ -121,10 +188,12 @@ function ScheduledContent({ chatID }: { chatID: string | null }) {
           setEditing(item);
           return;
         case "time":
-          setMoving(item);
+          if (needsAuthorCheck(item)) setVerifying({ item, action: "time" });
+          else setMoving(item);
           return;
         case "sendNow":
-          void actions.sendNow(item);
+          if (needsAuthorCheck(item)) setVerifying({ item, action: "sendNow" });
+          else void actions.sendNow(item);
           return;
         case "delete":
           Alert.alert(
@@ -188,14 +257,16 @@ function ScheduledContent({ chatID }: { chatID: string | null }) {
         <View style={styles.state}>
           <Notice
             title={t("scheduledLoadError")}
-            hint={t(scheduledErrorKey(scheduledMobile.errorKind(query.error)))}
+            hint={t(scheduledErrorKey(scheduledErrorKind(query.error)))}
             actionLabel={t("retry")}
             onAction={() => void refetch()}
           />
         </View>
       ) : (
         <SectionList
+          ref={list}
           testID="scheduled-list"
+          onScrollToIndexFailed={() => undefined}
           sections={sections}
           keyExtractor={(item) => item.id}
           stickySectionHeadersEnabled={false}
@@ -232,6 +303,7 @@ function ScheduledContent({ chatID }: { chatID: string | null }) {
                 }
                 chatName={chatID === null ? chatName(item) : null}
                 busy={actions.busy.has(item.id)}
+                focused={item.id === focusID}
                 onAction={onAction}
                 onOpenChat={openChat}
               />
@@ -265,9 +337,9 @@ function ScheduledContent({ chatID }: { chatID: string | null }) {
         item={editing}
         pending={editing ? actions.busy.has(editing.id) : false}
         onClose={() => setEditing(null)}
-        onSave={(item, body) =>
+        onSave={(item, change) =>
           void actions
-            .update(item, { body }, t("scheduledSaved"))
+            .update(item, change, t("scheduledSaved"))
             .then((record) =>
               // After a conflict the sheet continues from the fresh version.
               setEditing(record ? null : actions.latest(item.id)),
@@ -279,20 +351,31 @@ function ScheduledContent({ chatID }: { chatID: string | null }) {
         title={t("scheduledRescheduleTitle")}
         confirmKey="scheduledMoveConfirm"
         initial={moving ? new Date(moving.send_at) : null}
+        initialSilent={moving?.silent ?? false}
         pending={moving ? actions.busy.has(moving.id) : false}
         onClose={() => setMoving(null)}
-        onConfirm={(at) => {
+        onConfirm={(at, silent) => {
           const item = moving;
           if (!item) return;
           void actions
             .update(
               item,
-              { send_at: at.toISOString() },
+              { send_at: at.toISOString(), silent },
               t("scheduledMoved", { when: when(at, new Date()) }),
             )
             .then((record) =>
               setMoving(record ? null : actions.latest(item.id)),
             );
+        }}
+      />
+      <ScheduledVerifySheet
+        target={verifying}
+        onClose={() => setVerifying(null)}
+        onConfirm={(item, action) => {
+          setVerifying(null);
+          if (action === "sendNow") void actions.sendNow(item);
+          // iOS cannot present the next sheet while this one fades out.
+          else setTimeout(() => setMoving(item), 350);
         }}
       />
     </SafeAreaView>

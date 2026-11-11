@@ -16,12 +16,17 @@ env:
     visible:
       id: conversation
     timeout: 10000
-# The thread caption: avatars of those who replied, «N ответ», time.
-- extendedWaitUntil:
-    visible:
+# The thread caption: avatars of those who replied, «N ответ», time. Other
+# flows post to this chat, so it may be further up.
+- scrollUntilVisible:
+    element:
       id: thread-caption
-    timeout: 10000
-- assertVisible: .*👍.*
+    direction: UP
+    timeout: 30000
+- scrollUntilVisible:
+    element: .*👍.*
+    direction: UP
+    timeout: 20000
 - takeScreenshot: ${THEME}-01-backend-threads-reactions
 - runFlow:
     file: message-menu.yaml
@@ -71,7 +76,7 @@ env:
 - scrollUntilVisible:
     element: .*${PHOTO}.*
     direction: UP
-    timeout: 20000
+    timeout: 60000
 - tapOn: .*${PHOTO}.*
 - extendedWaitUntil:
     visible:
@@ -83,12 +88,13 @@ env:
       id: photo-viewer-loaded
     timeout: 20000
 - takeScreenshot: ${THEME}-06-photo
-- tapOn: Закрыть
+- tapOn:
+    id: photo-viewer-close
 # A reply quotes the message it answers.
 - scrollUntilVisible:
     element: .*, Тест, .*
     direction: UP
-    timeout: 20000
+    timeout: 60000
 - takeScreenshot: ${THEME}-07-reply-quote
 - tapOn:
     id: conversation-back
@@ -126,7 +132,10 @@ env:
     notVisible:
       id: folder-sheet
     timeout: 5000
-# «Important»: the reader's saves with chat filters from the server.
+# «Important»: the reader's saves with chat filters from the server. The
+# filters show with saves from two chats; the script makes sure there are.
+- runScript: scripts/login.js
+- runScript: scripts/seed-saved.js
 - runFlow:
     file: tabs.yaml
     env:

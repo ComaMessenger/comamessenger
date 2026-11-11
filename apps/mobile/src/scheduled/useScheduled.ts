@@ -1,13 +1,16 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Alert } from "react-native";
-import * as Clipboard from "expo-clipboard";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
-  messagePlainText,
+  failureReasonKey,
   mentionedActorIDs,
-  scheduledMobile,
+  notRetryableReason,
+  removeScheduled,
+  scheduledErrorKind,
+  upsertScheduled,
   type CreateScheduledMessageRequest,
+  type ScheduledErrorKind,
   type ScheduledMessage,
 } from "@comamessenger/core";
 import { withCache } from "@/messenger/cache";
@@ -30,7 +33,7 @@ export function useScheduledList() {
   });
 }
 
-/** Scheduled messages of one chat, soonest first. */
+/** Scheduled messages of one chat (the list keeps the server's order). */
 export function useChatScheduled(chatID: string | null) {
   const query = useScheduledList();
   const items = query.data ?? noItems;
@@ -44,7 +47,7 @@ export function useChatScheduled(chatID: string | null) {
 
 /** Human text of an error of a scheduled-message request. */
 export function scheduledErrorKey(
-  kind: scheduledMobile.ErrorKind,
+  kind: ScheduledErrorKind,
   options: { composing?: boolean } = {},
 ): string {
   switch (kind) {
@@ -73,12 +76,21 @@ export function scheduledErrorKey(
   }
 }
 
+/** The reason a message was not sent, in the words of the server's push. */
 export function failureText(
   t: (key: string) => string,
-  reason: unknown,
+  reason: string | null | undefined,
 ): string {
-  return t(`scheduledFailure_${scheduledMobile.failureReason(reason)}`);
+  return t(failureReasonKey(reason));
 }
+
+/** What a record may change: text, files, time and the quiet flag. */
+export type ScheduledChange = {
+  send_at?: string;
+  body?: string;
+  file_ids?: string[];
+  silent?: boolean;
+};
 
 export type ScheduledActions = ReturnType<typeof useScheduledActions>;
 
@@ -110,25 +122,27 @@ export function useScheduledActions(notify: (text: string) => void) {
   );
 
   const fail = useCallback(
-    async (item: ScheduledMessage, cause: unknown, retrying = false) => {
-      const kind = scheduledMobile.errorKind(cause);
+    async (item: ScheduledMessage, cause: unknown) => {
+      const kind = scheduledErrorKind(cause);
       if (kind === "gone")
         setItems(queryClient, user.id, (items) =>
-          scheduledMobile.remove(items, item.id),
+          removeScheduled(items, item.id),
         );
-      else if (kind === "conflict" || kind === "closed")
+      else if (
+        kind === "conflict" ||
+        kind === "closed" ||
+        kind === "notRetryable"
+      )
         await refreshRecord(queryClient, api, user.id, item.id);
-      // Retrying an unsent message needs the server of package H; until it
-      // is there the record is closed and the text can still be taken.
-      if (kind === "closed" && retrying) {
-        Alert.alert(t("scheduledFailedLabel"), t("scheduledErrorRetryClosed"), [
-          { text: t("cancel"), style: "cancel" },
-          {
-            text: t("scheduledCopyText"),
-            onPress: () =>
-              void Clipboard.setStringAsync(messagePlainText(item.body)),
-          },
-        ]);
+      // An unsent message whose cause still holds (not a member any more,
+      // the attachment is gone): say which, the record stays to be fixed.
+      if (kind === "notRetryable") {
+        Alert.alert(
+          t("scheduledFailedLabel"),
+          t("scheduledNotRetryable", {
+            reason: failureText(t, notRetryableReason(cause)),
+          }),
+        );
         return;
       }
       Alert.alert(t(scheduledErrorKey(kind)));
@@ -139,25 +153,23 @@ export function useScheduledActions(notify: (text: string) => void) {
   const create = useCallback(
     async (chatID: string, request: CreateScheduledMessageRequest) => {
       const record = await api.createScheduledMessage(chatID, request);
-      setItems(queryClient, user.id, (items) =>
-        scheduledMobile.merge(items, record),
-      );
+      setItems(queryClient, user.id, (items) => upsertScheduled(items, record));
       return record;
     },
     [api, queryClient, user.id],
   );
 
   const update = useCallback(
-    (
-      item: ScheduledMessage,
-      change: { send_at?: string; body?: string },
-      done: string,
-    ) =>
+    (item: ScheduledMessage, change: ScheduledChange, done: string) =>
       run(item.id, async () => {
         try {
           const record = await api.updateScheduledMessage(item.id, {
             expected_version: item.version,
             ...(change.send_at ? { send_at: change.send_at } : {}),
+            ...(change.file_ids ? { file_ids: change.file_ids } : {}),
+            ...(change.silent !== undefined && change.silent !== item.silent
+              ? { silent: change.silent }
+              : {}),
             ...(change.body !== undefined
               ? {
                   body: change.body,
@@ -167,12 +179,12 @@ export function useScheduledActions(notify: (text: string) => void) {
               : {}),
           });
           setItems(queryClient, user.id, (items) =>
-            scheduledMobile.merge(items, record),
+            upsertScheduled(items, record),
           );
           notify(done);
           return record;
         } catch (cause) {
-          await fail(item, cause, item.status === "failed");
+          await fail(item, cause);
           return null;
         }
       }),
@@ -186,13 +198,13 @@ export function useScheduledActions(notify: (text: string) => void) {
           await api.deleteScheduledMessage(item.id);
         } catch (cause) {
           // Deleted on another device: the wish is fulfilled all the same.
-          if (scheduledMobile.errorKind(cause) !== "gone") {
+          if (scheduledErrorKind(cause) !== "gone") {
             await fail(item, cause);
             return;
           }
         }
         setItems(queryClient, user.id, (items) =>
-          scheduledMobile.remove(items, item.id),
+          removeScheduled(items, item.id),
         );
         notify(t("scheduledDeleted"));
       }),
@@ -205,7 +217,7 @@ export function useScheduledActions(notify: (text: string) => void) {
         try {
           const record = await api.sendScheduledMessageNow(item.id);
           setItems(queryClient, user.id, (items) =>
-            scheduledMobile.merge(items, record),
+            upsertScheduled(items, record),
           );
           if (record.status === "failed")
             Alert.alert(
@@ -214,7 +226,7 @@ export function useScheduledActions(notify: (text: string) => void) {
             );
           else notify(t("scheduledSentNow"));
         } catch (cause) {
-          await fail(item, cause, item.status === "failed");
+          await fail(item, cause);
         }
       }),
     [api, fail, notify, queryClient, run, t, user.id],

@@ -10,7 +10,11 @@ import {
   Trash2,
 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
-import { messagePlainText, type ScheduledMessage } from "@comamessenger/core";
+import {
+  messagePlainText,
+  needsAuthorCheck,
+  type ScheduledMessage,
+} from "@comamessenger/core";
 import { spacing } from "@comamessenger/tokens";
 import { useTheme } from "@/lib/theme";
 import { IconButton } from "@/ui/IconButton";
@@ -21,12 +25,14 @@ export type ScheduledItemAction = "edit" | "time" | "sendNow" | "delete";
 
 function SmallButton({
   label,
+  accessibilityLabel,
   primary = false,
   disabled,
   onPress,
   testID,
 }: {
   label: string;
+  accessibilityLabel?: string;
   primary?: boolean;
   disabled: boolean;
   onPress(): void;
@@ -37,6 +43,7 @@ function SmallButton({
     <Pressable
       testID={testID}
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ disabled }}
       disabled={disabled}
       hitSlop={6}
@@ -67,6 +74,7 @@ export const ScheduledItem = memo(function ScheduledItem({
   time,
   chatName,
   busy,
+  focused = false,
   onAction,
   onOpenChat,
 }: {
@@ -76,12 +84,15 @@ export const ScheduledItem = memo(function ScheduledItem({
   /** Shown in the list of every chat; null inside one chat. */
   chatName: string | null;
   busy: boolean;
+  /** Opened from its bubble in the feed. */
+  focused?: boolean;
   onAction(item: ScheduledMessage, action: ScheduledItemAction): void;
   onOpenChat?(item: ScheduledMessage): void;
 }) {
   const { t } = useTranslation();
   const theme = useTheme();
   const failed = item.status === "failed";
+  const suspect = needsAuthorCheck(item);
   const text = messagePlainText(typeof item.body === "string" ? item.body : "");
   const files = Array.isArray(item.files) ? item.files : [];
   return (
@@ -91,7 +102,12 @@ export const ScheduledItem = memo(function ScheduledItem({
         styles.card,
         {
           backgroundColor: theme.surface,
-          borderColor: failed ? theme.dangerBorder : theme.border,
+          borderColor: failed
+            ? theme.dangerBorder
+            : focused
+              ? theme.primary
+              : theme.border,
+          borderWidth: focused ? 1.5 : 1,
         },
       ]}
     >
@@ -182,18 +198,25 @@ export const ScheduledItem = memo(function ScheduledItem({
             <Text size={13} style={{ color: theme.dangerText }}>
               {failureText(t, item.failure_reason)}
             </Text>
+            {suspect ? (
+              <Text
+                size={13}
+                weight="semibold"
+                style={[styles.suspect, { color: theme.dangerText }]}
+              >
+                {t("scheduledVerifyHint")}
+              </Text>
+            ) : null}
           </View>
         </View>
       ) : null}
       <View style={styles.actions}>
-        {failed ? null : (
-          <SmallButton
-            testID="scheduled-edit"
-            label={t("scheduledEdit")}
-            disabled={busy}
-            onPress={() => onAction(item, "edit")}
-          />
-        )}
+        <SmallButton
+          testID="scheduled-edit"
+          label={t("scheduledEdit")}
+          disabled={busy}
+          onPress={() => onAction(item, "edit")}
+        />
         <SmallButton
           testID="scheduled-time"
           label={t("scheduledTime")}
@@ -202,8 +225,10 @@ export const ScheduledItem = memo(function ScheduledItem({
         />
         <SmallButton
           testID="scheduled-send-now"
-          label={t("scheduledSendNow")}
-          primary
+          label={t("scheduledSendShort")}
+          accessibilityLabel={t("scheduledSendNow")}
+          // A message stopped by a security event is read before it goes.
+          primary={!suspect}
           disabled={busy}
           onPress={() => onAction(item, "sendNow")}
         />
@@ -249,17 +274,19 @@ const styles = StyleSheet.create({
     padding: spacing[2],
     marginTop: 2,
   },
+  // Prototype `.acts`: one row, the bin pushed to the end.
   actions: {
     flexDirection: "row",
     alignItems: "center",
-    flexWrap: "wrap",
     gap: 6,
     marginTop: 5,
   },
+  suspect: { marginTop: 2 },
   button: {
     height: 34,
+    flexShrink: 1,
     borderRadius: 10,
-    paddingHorizontal: 13,
+    paddingHorizontal: 12,
     alignItems: "center",
     justifyContent: "center",
   },

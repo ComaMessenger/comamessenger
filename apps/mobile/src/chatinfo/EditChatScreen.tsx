@@ -128,7 +128,6 @@ export function EditChatScreen({ chatID }: { chatID: string }) {
               seed={chat.avatar_seed || chat.id}
               size={80}
               shape="square"
-              glyph={channel && !chat.avatar_version ? "#" : undefined}
               {...chatAvatarSource(chat)}
             />
             <Text tone="primary" weight="medium" size={15}>

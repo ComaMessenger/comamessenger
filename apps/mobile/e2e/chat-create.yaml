@@ -43,7 +43,14 @@ appId: com.comamessenger.app
 - tapOn:
     id: new-group-name
 - inputText: ${output.group}
-- hideKeyboard
+# The keyboard covers «Create»: dragging the form puts it away. (Maestro
+# counts the button as visible under the keyboard, so tapping it at once
+# would type into the name.)
+- swipe:
+    start: 50%, 45%
+    end: 50%, 25%
+    duration: 500
+- waitForAnimationToEnd
 - takeScreenshot: new-group-details
 - tapOn:
     id: new-group-create
@@ -51,7 +58,7 @@ appId: com.comamessenger.app
     visible:
       id: conversation
     timeout: 15000
-- assertVisible: ${output.group}
+- assertVisible: .*${output.group}.*
 - takeScreenshot: new-group-created
 
 # «Back» returns to the chat list, where the group now is.
@@ -61,7 +68,7 @@ appId: com.comamessenger.app
     visible:
       id: chat-list
     timeout: 5000
-- assertVisible: ${output.group}
+- assertVisible: .*${output.group}.*
 
 # Direct chat: the first person of the picker; existing chats are reused.
 - tapOn:

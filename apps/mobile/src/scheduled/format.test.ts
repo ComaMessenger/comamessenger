@@ -1,5 +1,12 @@
 import { afterAll, describe, expect, it } from "vitest";
-import { formatDate, formatDay, formatSectionDay, formatTime } from "./format";
+import {
+  combine,
+  dayDistance,
+  formatDate,
+  formatDay,
+  formatSectionDay,
+  formatTime,
+} from "./format";
 
 const previousTZ = process.env.TZ;
 process.env.TZ = "Europe/Moscow";
@@ -41,5 +48,25 @@ describe("scheduled time formatting", () => {
     expect(formatSectionDay(new Date(2026, 10, 16), now, ru, words)).toBe(
       "Понедельник, 16 ноября",
     );
+  });
+});
+
+describe("calendar days", () => {
+  it("counts calendar days, not 24-hour spans", () => {
+    expect(
+      dayDistance(new Date(2026, 10, 12, 0, 30), new Date(2026, 10, 11, 23, 0)),
+    ).toBe(1);
+    expect(
+      dayDistance(new Date(2026, 10, 11, 23, 59), new Date(2026, 10, 11, 0, 0)),
+    ).toBe(0);
+    expect(
+      dayDistance(new Date(2026, 10, 10, 23, 59), new Date(2026, 10, 11, 0, 0)),
+    ).toBe(-1);
+  });
+
+  it("combines the picked day with the picked time on the device clock", () => {
+    expect(
+      combine(new Date(2026, 2, 29, 15, 0), new Date(2000, 0, 1, 9, 45, 12)),
+    ).toEqual(new Date(2026, 2, 29, 9, 45));
   });
 });

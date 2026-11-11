@@ -32,6 +32,7 @@ import { Avatar, avatarColors } from "@/ui/Avatar";
 import { AvatarStack } from "@/ui/AvatarStack";
 import { Text } from "@/ui/Text";
 import { Markdown } from "./Markdown";
+import { playableVoice } from "@/voice/model";
 import { MessageFiles } from "./MessageFiles";
 import { MessageBlocks } from "./MessageBlocks";
 import { AgentWhy } from "./AgentWhy";
@@ -149,7 +150,24 @@ export function MessageBubble({
   // Unknown block versions fall back to the body; a card replaces its fallback text.
   const blocks = viewer && !deleted ? renderableBlocks(message) : null;
   const files = deleted ? [] : message.files;
-  const wide = Boolean(blocks) || files.length > 0;
+  // A lone voice message is as wide as its player (prototype `.voice`),
+  // its time in the player's row; other attachments widen the bubble.
+  const voiceOnly =
+    files.length === 1 &&
+    playableVoice(files[0]!) !== null &&
+    !blocks &&
+    !message.body.trim();
+  const wide = Boolean(blocks) || (files.length > 0 && !voiceOnly);
+  // Photos run edge to edge of the bubble, without a coloured frame; a
+  // message of photos only carries its time on the last one.
+  const images = files.filter(
+    (file) => file.mime.startsWith("image/") && file.status === "ready",
+  );
+  const photosOnly =
+    images.length > 0 &&
+    images.length === files.length &&
+    !blocks &&
+    !message.body.trim();
   const thread = useThreadPreview(message, showThread);
   const hasThread = showThread && message.thread_reply_count > 0 && !deleted;
   const muted = own ? theme.ownMuted : theme.muted;
@@ -221,7 +239,37 @@ export function MessageBubble({
       {status?.icon}
     </View>
   );
-  const inlineMeta = !wide && !message.agent_provenance;
+  const inlineMeta = !wide && !message.agent_provenance && !voiceOnly;
+  const photoTop =
+    photosOnly &&
+    !placement.showName &&
+    !message.forwarded_from &&
+    !message.reply_to_id;
+  const photoBottom =
+    photosOnly &&
+    !message.agent_provenance &&
+    reactions.groups.length === 0 &&
+    !hasThread;
+  const photoMeta = photosOnly ? (
+    <View
+      accessible
+      accessibilityLabel={[time, status?.label].filter(Boolean).join(", ")}
+      style={styles.photoMeta}
+    >
+      {marks.includes("pin") && <Pin size={12} color="#ffffff" />}
+      {marks.includes("star") && (
+        <Star size={12} color={theme.warning} fill={theme.warning} />
+      )}
+      <Text size={11} style={[styles.tabular, styles.photoMetaText]}>
+        {time}
+      </Text>
+      {own && message.delivery !== "failed" ? (
+        <Check size={13} color="#ffffff" />
+      ) : (
+        status?.icon
+      )}
+    </View>
+  ) : null;
 
   let body: ReactNode = null;
   if (deleted)
@@ -239,6 +287,7 @@ export function MessageBubble({
         styles.bubble,
         wide && styles.wideBubble,
         bubbleCorners(placement, radius.bubble, radius.sm),
+        images.length > 0 && styles.clip,
         {
           backgroundColor: background,
           borderColor: highlighted
@@ -319,9 +368,24 @@ export function MessageBubble({
           onUpdated={(updated) => onUpdated?.(updated)}
         />
       )}
-      {files.length > 0 && <MessageFiles api={api} files={files} own={own} />}
+      {files.length > 0 && (
+        <MessageFiles
+          api={api}
+          files={files}
+          own={own}
+          bleed={
+            images.length > 0
+              ? { top: photoTop, bottom: photoBottom }
+              : undefined
+          }
+          overlay={photoMeta}
+          voiceMeta={voiceOnly ? meta : undefined}
+        />
+      )}
       {!deleted && <AgentWhy provenance={message.agent_provenance} />}
-      {!inlineMeta && <View style={styles.metaEnd}>{meta}</View>}
+      {!inlineMeta && !photosOnly && !voiceOnly && (
+        <View style={styles.metaEnd}>{meta}</View>
+      )}
       {reactions.groups.length > 0 && !deleted && (
         <View style={styles.reactions}>
           {reactions.groups.map((group) => (
@@ -540,6 +604,18 @@ const styles = StyleSheet.create({
     gap: spacing[1],
   },
   wideBubble: { alignSelf: "stretch" },
+  clip: { overflow: "hidden" },
+  photoMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    // A scrim over any photo, in both themes.
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
+  },
+  photoMetaText: { color: "#ffffff" },
   name: { flexDirection: "row", alignItems: "center", gap: 5 },
   shrink: { flexShrink: 1 },
   tag: { borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1 },

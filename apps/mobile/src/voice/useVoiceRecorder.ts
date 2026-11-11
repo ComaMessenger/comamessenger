@@ -192,7 +192,7 @@ export function useVoiceRecorder(target: VoiceTarget | undefined) {
     lastDuration.current = 0;
     seenRecording.current = false;
     useRecordingMeter.setState({ durationMs: 0, levels: [] });
-    stopVoice();
+    stopVoice(undefined, false);
     try {
       await enterRecordingMode();
       await recorder.prepareToRecordAsync(voiceRecording);

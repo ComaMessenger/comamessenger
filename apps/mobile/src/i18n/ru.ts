@@ -637,35 +637,46 @@ export const ru = {
   scheduledMoved: "Перенесено: {when}",
   scheduledEditTitle: "Изменить сообщение",
   scheduledEditLabel: "Текст сообщения",
-  scheduledFilesReadonly:
-    "Вложения отложенного сообщения пока нельзя изменить. Чтобы заменить их, удалите сообщение и запланируйте заново.",
   scheduledReply: "Ответ на сообщение",
   scheduledInThread: "В треде",
   scheduledFiles:
     "{count, plural, one {# вложение} few {# вложения} many {# вложений} other {# вложения}}",
   scheduledFailedLabel: "Не отправлено",
-  scheduledFailure_author_inactive: "Ваш аккаунт отключён",
-  scheduledFailure_security_reset:
-    "Изменён пароль или почта, либо выполнен выход на других устройствах",
-  scheduledFailure_session_revoked:
-    "Устройство, с которого его запланировали, удалено из сеансов",
-  scheduledFailure_missed_send_time:
-    "Не получилось отправить вовремя: сервер был недоступен",
-  scheduledFailure_chat_unavailable: "Чат архивирован или удалён",
-  scheduledFailure_not_member: "Вы больше не участник этого чата",
-  scheduledFailure_forbidden: "Вам больше нельзя писать в этот чат",
-  scheduledFailure_reference_unavailable:
-    "Сообщение, на которое вы отвечали, тред или упомянутый участник больше недоступны",
-  scheduledFailure_attachment_unavailable: "Вложение удалено",
-  scheduledFailure_invalid_content: "Сообщение больше не проходит проверку",
-  scheduledFailure_delivery_error: "Ошибка сервера при отправке",
-  scheduledFailure_unknown: "Причина неизвестна",
+  scheduledReasonAuthorInactive: "Ваша учётная запись отключена",
+  scheduledReasonSecurityReset:
+    "Изменились пароль или почта либо выполнен выход на других устройствах",
+  scheduledReasonSessionRevoked:
+    "Устройство, с которого запланировано сообщение, отключено",
+  scheduledReasonMissedSendTime: "Не удалось отправить вовремя",
+  scheduledReasonChatUnavailable: "Чат удалён или в архиве",
+  scheduledReasonNotMember: "Вы больше не участник чата",
+  scheduledReasonForbidden: "Вам больше нельзя писать в этот чат",
+  scheduledReasonReferenceUnavailable:
+    "Исходное сообщение, тред или упомянутый человек недоступны",
+  scheduledReasonAttachmentUnavailable: "Вложение удалено",
+  scheduledReasonInvalidContent: "Сообщение не прошло проверку",
+  scheduledReasonDeliveryError: "Ошибка на сервере",
+  scheduledReasonUnknown: "Причина неизвестна",
+  scheduledNotRetryable: "Отправить не получится: {reason}",
+  scheduledVerifyTitle: "Проверьте сообщение",
+  scheduledVerifyText:
+    "Сообщение остановлено после смены пароля или отключения устройства. Возможно, его запланировали не вы — проверьте текст.",
+  scheduledVerifyHint: "Возможно, запланировали не вы — проверьте текст",
+  scheduledVerifyMove: "Выбрать время",
+  scheduledSilentLabel: "Без звука",
+  scheduledSilentHint: "Получатели увидят уведомление, но без звука и вибрации",
+  scheduledFilesAdd: "Добавить файл",
+  scheduledFileRemove: "Убрать {name}",
+  scheduledFileFailed: "Не загрузилось — нажмите, чтобы повторить",
+  scheduledFeedWhen: "Отложено · {when}",
+  scheduledFeedFailed: "Не отправлено · нажмите, чтобы исправить",
+  scheduledFeedLabel:
+    "Ваше отложенное сообщение, видите только вы. {state}. Открыть в списке отложенных",
+  scheduledEmptyBody: "Без текста",
+  scheduledSendShort: "Отправить",
   scheduledErrorConflict:
     "Сообщение изменили на другом устройстве. Показана свежая версия — повторите действие.",
-  scheduledErrorClosed:
-    "Сообщение уже отправлено или не отправилось — изменить его нельзя.",
-  scheduledErrorRetryClosed:
-    "Сервер пока не умеет повторять неотправленные сообщения. Скопируйте текст и отправьте заново или удалите запись.",
+  scheduledErrorClosed: "Сообщение уже отправлено — изменить его нельзя.",
   scheduledErrorGone: "Сообщение уже удалено на другом устройстве.",
   scheduledErrorLimit:
     "Слишком много отложенных сообщений. Отправьте или удалите часть из них.",
@@ -680,7 +691,6 @@ export const ru = {
   scheduledErrorOther: "Не получилось. Попробуйте ещё раз.",
   scheduledOffline: "Нет связи — список может быть неактуальным",
   scheduledEmptyDraft: "Сначала напишите сообщение или добавьте вложение",
-  scheduledCopyText: "Копировать текст",
   scheduledLoadError: "Не удалось загрузить отложенные",
   scheduledRenderError: "Не получилось показать отложенные сообщения",
   scheduledRevokeWarning:

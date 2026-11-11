@@ -3,6 +3,7 @@ import {
   Platform,
   Pressable,
   StyleSheet,
+  Switch,
   View,
   useColorScheme,
 } from "react-native";
@@ -11,7 +12,14 @@ import DateTimePicker, {
   type DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
 import { useTranslation } from "react-i18next";
-import { scheduledMobile } from "@comamessenger/core";
+import { BellOff } from "lucide-react-native";
+import {
+  scheduleHorizonMs,
+  schedulePresets,
+  scheduleProblem,
+  type SchedulePreset,
+  type SchedulePresetID,
+} from "@comamessenger/core";
 import { radius, spacing } from "@comamessenger/tokens";
 import { useTheme } from "@/lib/theme";
 import { BottomSheet } from "@/ui/BottomSheet";
@@ -19,6 +27,8 @@ import { Button } from "@/ui/Button";
 import { Text } from "@/ui/Text";
 import { useClock, useNow, useWhen } from "./clock";
 import {
+  combine,
+  dayDistance,
   formatDate,
   formatTime,
   formatWeekdayShort,
@@ -26,33 +36,34 @@ import {
 } from "./format";
 
 type Selection =
-  | { kind: "choice"; key: scheduledMobile.ChoiceKey }
+  | { kind: "choice"; key: SchedulePresetID }
   | { kind: "custom"; at: Date };
 
-const choiceLabel: Record<scheduledMobile.ChoiceKey, string> = {
+const choiceLabel: Record<SchedulePresetID, string> = {
   inHour: "scheduledChoiceInHour",
-  tonight: "scheduledChoiceTonight",
-  tomorrow: "scheduledChoiceTomorrow",
-  monday: "scheduledChoiceMonday",
+  thisEvening: "scheduledChoiceTonight",
+  tomorrowMorning: "scheduledChoiceTomorrow",
+  nextMonday: "scheduledChoiceMonday",
 };
 
 function defaultCustom(now: Date): Date {
-  const tomorrow = scheduledMobile
-    .choices(now)
-    .find((choice) => choice.key === "tomorrow");
+  const tomorrow = schedulePresets(now).find(
+    (preset) => preset.id === "tomorrowMorning",
+  );
   return tomorrow?.at ?? new Date(now.getTime() + 60 * 60_000);
 }
 
 /**
  * «Send later»: four ready-made times and a custom date and time from the
- * native pickers. The button repeats the chosen moment. Times are on the
- * device clock and in its time zone.
+ * native pickers, and «Without sound» as on the web. The button repeats the
+ * chosen moment. Times are on the device clock and in its time zone.
  */
 export function ScheduleSheet({
   visible,
   title,
   confirmKey = "scheduledConfirm",
   initial = null,
+  initialSilent = false,
   pending = false,
   onConfirm,
   onClose,
@@ -63,8 +74,10 @@ export function ScheduleSheet({
   confirmKey?: "scheduledConfirm" | "scheduledMoveConfirm";
   /** The current time of a record being moved. */
   initial?: Date | null;
+  /** The quiet flag of a record being moved. */
+  initialSilent?: boolean;
   pending?: boolean;
-  onConfirm(at: Date): void;
+  onConfirm(at: Date, silent: boolean): void;
   onClose(): void;
 }) {
   const { t } = useTranslation();
@@ -73,11 +86,12 @@ export function ScheduleSheet({
   const clock = useClock();
   const when = useWhen();
   const now = useNow(30_000, visible);
-  const choices = useMemo(() => scheduledMobile.choices(now), [now]);
+  const choices = useMemo(() => schedulePresets(now), [now]);
   const [selection, setSelection] = useState<Selection>({
     kind: "choice",
-    key: "tomorrow",
+    key: "tomorrowMorning",
   });
+  const [silent, setSilent] = useState(initialSilent);
   const [custom, setCustom] = useState(() => defaultCustom(new Date()));
 
   // Each opening starts from the record's time or from «tomorrow morning».
@@ -87,21 +101,22 @@ export function ScheduleSheet({
     if (!visible) return;
     const opened = new Date();
     const start = initialTime === null ? null : new Date(initialTime);
-    if (start && !scheduledMobile.sendAtProblem(start, opened)) {
+    setSilent(initialSilent);
+    if (start && !scheduleProblem(start, opened)) {
       setCustom(start);
       setSelection({ kind: "custom", at: start });
     } else {
       setCustom(defaultCustom(opened));
-      setSelection({ kind: "choice", key: "tomorrow" });
+      setSelection({ kind: "choice", key: "tomorrowMorning" });
     }
-  }, [initialTime, visible]);
+  }, [initialSilent, initialTime, visible]);
 
   const chosen =
     selection.kind === "custom"
       ? selection.at
-      : (choices.find((choice) => choice.key === selection.key)?.at ?? null);
-  const problem = chosen ? scheduledMobile.sendAtProblem(chosen, now) : "past";
-  const maximum = new Date(now.getTime() + scheduledMobile.maxAheadMs);
+      : (choices.find((choice) => choice.id === selection.key)?.at ?? null);
+  const problem = chosen ? scheduleProblem(chosen, now) : "past";
+  const maximum = new Date(now.getTime() + scheduleHorizonMs);
 
   function pickCustom(at: Date) {
     setCustom(at);
@@ -112,9 +127,7 @@ export function ScheduleSheet({
     return (event: DateTimePickerEvent, picked?: Date) => {
       if (event.type !== "set" || !picked) return;
       pickCustom(
-        part === "date"
-          ? scheduledMobile.combine(picked, custom)
-          : scheduledMobile.combine(custom, picked),
+        part === "date" ? combine(picked, custom) : combine(custom, picked),
       );
     };
   }
@@ -140,15 +153,15 @@ export function ScheduleSheet({
       <View style={styles.grid} accessibilityRole="radiogroup">
         {choices.map((choice) => {
           const selected =
-            selection.kind === "choice" && selection.key === choice.key;
+            selection.kind === "choice" && selection.key === choice.id;
           return (
             <Pressable
-              key={choice.key}
-              testID={`schedule-choice-${choice.key}`}
+              key={choice.id}
+              testID={`schedule-choice-${choice.id}`}
               accessibilityRole="radio"
               accessibilityState={{ selected, checked: selected }}
-              accessibilityLabel={`${t(choiceLabel[choice.key])}, ${when(choice.at, now)}`}
-              onPress={() => setSelection({ kind: "choice", key: choice.key })}
+              accessibilityLabel={`${t(choiceLabel[choice.id])}, ${when(choice.at, now)}`}
+              onPress={() => setSelection({ kind: "choice", key: choice.id })}
               style={[
                 styles.choice,
                 {
@@ -158,7 +171,7 @@ export function ScheduleSheet({
               ]}
             >
               <Text weight="semibold" size={15} numberOfLines={1}>
-                {t(choiceLabel[choice.key])}
+                {t(choiceLabel[choice.id])}
               </Text>
               <Text tone="muted" size={13} numberOfLines={1}>
                 {choiceHint(choice, now, clock, t)}
@@ -250,6 +263,35 @@ export function ScheduleSheet({
           {t(problem === "past" ? "scheduledPast" : "scheduledTooFar")}
         </Text>
       ) : null}
+      <Pressable
+        testID="schedule-silent"
+        accessibilityRole="switch"
+        accessibilityLabel={t("scheduledSilentLabel")}
+        accessibilityHint={t("scheduledSilentHint")}
+        accessibilityState={{ checked: silent }}
+        onPress={() => setSilent((value) => !value)}
+        style={[
+          styles.silent,
+          { borderColor: theme.border, backgroundColor: theme.surface },
+        ]}
+      >
+        <BellOff size={18} color={theme.muted} />
+        <View style={styles.grow}>
+          <Text size={15} weight="medium">
+            {t("scheduledSilentLabel")}
+          </Text>
+          <Text size={12.5} tone="muted">
+            {t("scheduledSilentHint")}
+          </Text>
+        </View>
+        <Switch
+          importantForAccessibility="no-hide-descendants"
+          accessibilityElementsHidden
+          value={silent}
+          onValueChange={setSilent}
+          trackColor={{ true: theme.primary, false: theme.borderStrong }}
+        />
+      </Pressable>
       <View style={styles.confirm}>
         <Button
           testID="schedule-confirm"
@@ -260,7 +302,7 @@ export function ScheduleSheet({
           }
           pending={pending}
           disabled={Boolean(problem) || !chosen}
-          onPress={() => chosen && !problem && onConfirm(chosen)}
+          onPress={() => chosen && !problem && onConfirm(chosen, silent)}
         />
       </View>
     </BottomSheet>
@@ -268,16 +310,16 @@ export function ScheduleSheet({
 }
 
 function choiceHint(
-  choice: scheduledMobile.Choice,
+  choice: SchedulePreset,
   now: Date,
   clock: Clock,
   t: (key: string, options?: Record<string, unknown>) => string,
 ): string {
   const time = formatTime(choice.at, clock);
-  const distance = scheduledMobile.dayDistance(choice.at, now);
-  if (choice.key === "monday")
+  const distance = dayDistance(choice.at, now);
+  if (choice.id === "nextMonday")
     return `${formatDate(choice.at, now, clock)}, ${time}`;
-  if (choice.key === "tomorrow" || distance > 0)
+  if (choice.id === "tomorrowMorning" || distance > 0)
     return `${formatWeekdayShort(choice.at, clock)}, ${t("scheduledAtTime", { time })}`;
   return t("scheduledAtTime", { time });
 }
@@ -316,5 +358,16 @@ const styles = StyleSheet.create({
     gap: spacing[2],
   },
   problem: { marginTop: spacing[2] },
+  silent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[3],
+    marginTop: 14,
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  grow: { flex: 1 },
   confirm: { marginTop: 14 },
 });

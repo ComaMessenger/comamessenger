@@ -18,9 +18,10 @@ import {
 import { Waveform } from "./Waveform";
 
 /**
- * Voice messages of this chat (or thread) still uploading or stuck, right
- * above the composer in the reader's own bubble colour: progress while
- * sending; why it failed, «Retry» and «Delete» otherwise.
+ * Voice messages of this chat (or thread) still uploading or stuck, as own
+ * bubbles at the end of the feed: progress while sending; why it failed,
+ * «Retry» and «Delete» otherwise. Once uploaded, the message joins the
+ * ordinary outbox and the feed shows it as any other sending message.
  */
 export function VoiceOutboxStrip({
   chatID,

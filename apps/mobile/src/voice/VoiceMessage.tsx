@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, type ReactNode } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -52,10 +52,14 @@ export function VoiceMessage({
   api,
   file,
   own,
+  trailing,
 }: {
   api: MessengerAPI;
   file: VoiceFile;
   own: boolean;
+  /** The message's time and status, at the end of the length row
+   * (prototype `.vmeta .tm`): a voice message is no wider than its player. */
+  trailing?: ReactNode;
 }) {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
@@ -147,7 +151,9 @@ export function VoiceMessage({
         </View>
         <View style={styles.meta}>
           <Text size={11.5} style={[styles.tabular, { color: muted }]}>
-            {listening ? `${elapsedLabel} / ${totalLabel}` : totalLabel}
+            {/* The position while listening, as in the prototype; the length
+                is read out with it in the seek bar's value. */}
+            {listening ? elapsedLabel : totalLabel}
           </Text>
           {listening && (
             <Pressable
@@ -182,6 +188,7 @@ export function VoiceMessage({
               {t("voiceLoadFailed")}
             </Text>
           )}
+          {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
         </View>
       </View>
     </View>
@@ -213,5 +220,7 @@ const styles = StyleSheet.create({
     minHeight: 18,
   },
   tabular: { fontVariant: ["tabular-nums"] },
+  // Prototype `.spd`: 11 px bold, padding 1px 6px, radius 8.
   speed: { borderRadius: 8, paddingHorizontal: 6, paddingVertical: 1 },
+  trailing: { marginLeft: "auto" },
 });
