@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/comamessenger/comamessenger/core/internal/authz"
 	"github.com/comamessenger/comamessenger/core/internal/id"
@@ -298,8 +299,11 @@ func (s *Service) Create(ctx context.Context, user identity.User, input CreateIn
 	} else if input.Kind == "channel" && !authz.Can(authz.Context{Active: true, OrgRole: authz.Role(user.OrgRole)}, authz.ChannelCreate) {
 		return Chat{}, ErrForbidden
 	}
-	if len(input.Name) < 1 || len(input.Name) > 120 || len(input.Topic) > 500 {
-		return Chat{}, fmt.Errorf("%w: invalid name or topic", ErrInvalid)
+	if err := validateName(input.Name); err != nil {
+		return Chat{}, err
+	}
+	if err := validateTopic(input.Topic); err != nil {
+		return Chat{}, err
 	}
 	chatID, auditID, err := twoIDs()
 	if err != nil {
@@ -382,8 +386,16 @@ func (s *Service) Update(ctx context.Context, user identity.User, chatID string,
 	visibility := strings.ToLower(valueOr(input.Visibility, current.Visibility))
 	name = strings.TrimSpace(name)
 	topic = strings.TrimSpace(topic)
-	if len(name) < 1 || len(name) > 120 || len(topic) > 500 {
-		return Chat{}, fmt.Errorf("%w: invalid name or topic", ErrInvalid)
+	// A name set before the limit was lowered stays valid until renamed.
+	if input.Name != nil {
+		if err := validateName(name); err != nil {
+			return Chat{}, err
+		}
+	} else if name == "" {
+		return Chat{}, fmt.Errorf("%w: name must contain 1 to %d characters", ErrInvalid, MaxNameLength)
+	}
+	if err := validateTopic(topic); err != nil {
+		return Chat{}, err
 	}
 	if visibility != "private" && visibility != "public" {
 		return Chat{}, fmt.Errorf("%w: visibility must be private or public", ErrInvalid)
@@ -966,6 +978,31 @@ func normalizedRole(role string) string {
 
 func validRole(role string) bool {
 	return role == "owner" || role == "admin" || role == "member"
+}
+
+// Chat name and topic limits, in Unicode code points: what a person counts
+// as letters for Cyrillic and Latin alike, and what PostgreSQL length() and
+// JSON Schema maxLength count. An emoji is one code point; a flag or a ZWJ
+// sequence is several — never fewer than what a person sees, so the limit
+// cannot be bypassed. Clients that count UTF-16 units (HTML maxLength) count
+// at least as many, so what they allow the server accepts.
+const (
+	MaxNameLength  = 80
+	MaxTopicLength = 500
+)
+
+func validateName(name string) error {
+	if count := utf8.RuneCountInString(name); count < 1 || count > MaxNameLength {
+		return fmt.Errorf("%w: name must contain 1 to %d characters", ErrInvalid, MaxNameLength)
+	}
+	return nil
+}
+
+func validateTopic(topic string) error {
+	if utf8.RuneCountInString(topic) > MaxTopicLength {
+		return fmt.Errorf("%w: topic must contain at most %d characters", ErrInvalid, MaxTopicLength)
+	}
+	return nil
 }
 
 func valueOr(value *string, fallback string) string {
