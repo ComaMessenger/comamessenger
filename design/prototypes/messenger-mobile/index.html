@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Coma — мобильный мессенджер, прототип</title></head><body>
+<style>
+  .lab { font-family: var(--font-sans, -apple-system, "Segoe UI", Roboto, sans-serif); color: var(--foreground, #202023); }
+  .lab * { box-sizing: border-box; }
+  .bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+  .seg { display: flex; gap: 2px; flex-wrap: wrap; padding: 3px; border-radius: 10px; background: var(--secondary, #f0f0f3); }
+  .seg button, .tgl { font: inherit; font-size: 13px; border: 0; background: transparent; color: var(--muted-foreground, #686873); padding: 6px 11px; border-radius: 8px; cursor: pointer; }
+  .seg button[aria-selected="true"] { background: var(--card, #fff); color: var(--foreground, #202023); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  .tgl { margin-left: auto; border: 1px solid var(--border, #e5e5e9); }
+  .view { display: none; }
+  .view.on { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 22px 18px; justify-items: center; }
+  .slot { width: 100%; max-width: 340px; }
+  .cap { font-size: 12.5px; line-height: 1.45; color: var(--muted-foreground, #686873); margin-top: 10px; }
+  .cap b { color: var(--foreground, #202023); font-weight: 600; }
+
+  /* ---------- Coma tokens ---------- */
+  .coma {
+    --canvas:#f6f6f7; --surface:#fff; --raised:#fff; --selected:#f0f0f3; --fg:#202023; --muted:#686873; --border:#e5e5e9; --border-strong:#d2d2d9;
+    --primary:#174586; --primary-soft:#edf3fb; --on-primary:#fff; --action:#252528; --on-action:#fff;
+    --danger:#c43245; --danger-soft:#fff0f1; --success:#18794e; --success-soft:#edf8f1; --warning:#9c650b; --warning-soft:#fff8e7;
+    --own:#174586; --own-fg:#fff; --own-muted:rgba(255,255,255,.72); --own-track:rgba(255,255,255,.34);
+    --overlay:rgba(20,20,26,.36); --shadow:0 8px 24px rgba(20,20,30,.10); --mascot-body:#174586; --mascot-feet:#242831; --mascot-plate:#fff;
+    --f-blue:#2f6fca; --f-violet:#7456c9; --f-green:#2b7754; --f-orange:#ac5a25; --f-pink:#ae457b; --f-teal:#227770;
+    --a1:#e5eee6; --a1f:#4d6b54; --a2:#e8edf4; --a2f:#4c6280; --a3:#ece7f5; --a3f:#6f598e; --a4:#f3e8e9; --a4f:#8e505b; --a5:#f4ebde; --a5f:#806039;
+    color: var(--fg); font-size: 15px; line-height: 1.35;
+  }
+  .coma[data-theme="dark"] {
+    --canvas:#151517; --surface:#1d1d20; --raised:#27272c; --selected:#2b2b30; --fg:#f0f0f2; --muted:#a0a0aa; --border:#323237; --border-strong:#46464f;
+    --primary:#86aff0; --primary-soft:#243349; --on-primary:#172132; --action:#eeeeef; --on-action:#222225;
+    --danger:#f0717f; --danger-soft:#3a2126; --success:#5fc594; --success-soft:#1c3327; --warning:#e0a94a; --warning-soft:#3a2f1a;
+    --own:#2c4a78; --own-fg:#f3f6fb; --own-muted:rgba(243,246,251,.7); --own-track:rgba(243,246,251,.3);
+    --overlay:rgba(0,0,0,.55); --shadow:0 8px 24px rgba(0,0,0,.4); --mascot-body:#86aff0; --mascot-feet:#fff; --mascot-plate:#151517;
+    --f-blue:#7fb0f2; --f-violet:#ab97ee; --f-green:#6fc59c; --f-orange:#e59a68; --f-pink:#e58bb7; --f-teal:#63c4bb;
+    --a1:#26332a; --a1f:#a6c8ae; --a2:#262e3a; --a2f:#a9bedb; --a3:#2f2a3b; --a3f:#c3b3e2; --a4:#3a282b; --a4f:#e2adb5; --a5:#3a3023; --a5f:#dcbf94;
+  }
+  .phone { position: relative; width: 100%; height: 690px; border-radius: 38px; border: 1px solid var(--border-strong); background: var(--canvas); overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow); }
+  .status { display: flex; justify-content: space-between; padding: 12px 26px 4px; font-size: 13px; font-weight: 600; flex: none; }
+  .status i { display: inline-block; width: 22px; height: 11px; border: 1.5px solid var(--fg); border-radius: 4px; position: relative; opacity: .8; }
+  .status i::after { content: ""; position: absolute; inset: 1.5px 5px 1.5px 1.5px; background: var(--fg); border-radius: 1.5px; }
+  .ic { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  .ib { width: 40px; height: 40px; border-radius: 20px; border: 0; background: transparent; color: var(--fg); display: grid; place-items: center; cursor: pointer; flex: none; padding: 0; }
+  .ib.soft { background: var(--selected); }
+  .ib.pri { background: var(--primary); color: var(--on-primary); }
+  .ib.dng { color: var(--danger); }
+  .av { width: 48px; height: 48px; border-radius: 16px; display: grid; place-items: center; font-weight: 600; font-size: 16px; flex: none; position: relative; }
+  .av.round { border-radius: 50%; } .av.s { width: 30px; height: 30px; border-radius: 10px; font-size: 11.5px; } .av.s.round { border-radius: 50%; }
+  .av.m { width: 36px; height: 36px; border-radius: 12px; font-size: 13px; }
+  .av .on { position: absolute; right: -2px; bottom: -2px; width: 13px; height: 13px; border-radius: 50%; background: var(--success); border: 2.5px solid var(--canvas); }
+  .c1{background:var(--a1);color:var(--a1f)}.c2{background:var(--a2);color:var(--a2f)}.c3{background:var(--a3);color:var(--a3f)}.c4{background:var(--a4);color:var(--a4f)}.c5{background:var(--a5);color:var(--a5f)}
+  .cag{background:var(--primary-soft);color:var(--primary)}
+
+  /* chat list */
+  .top { display: flex; align-items: center; gap: 8px; padding: 6px 14px 8px; flex: none; }
+  .top h1 { font-size: 22px; font-weight: 700; margin: 0; flex: 1; letter-spacing: -.01em; }
+  .plate { width: 34px; height: 34px; border-radius: 11px; background: var(--mascot-plate); border: 1px solid var(--border); display: grid; place-items: center; }
+  .search { margin: 0 14px 10px; height: 38px; border-radius: 12px; background: var(--selected); display: flex; align-items: center; gap: 8px; padding: 0 12px; color: var(--muted); font-size: 15px; flex: none; }
+  .search .ic { width: 18px; height: 18px; }
+  .folders { display: flex; gap: 6px; padding: 0 14px 10px; overflow-x: auto; flex: none; scrollbar-width: none; border-bottom: 1px solid var(--border); }
+  .folders::-webkit-scrollbar { display: none; }
+  .fd { font: inherit; font-size: 14px; font-weight: 500; white-space: nowrap; height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); display: flex; align-items: center; gap: 6px; cursor: pointer; flex: none; }
+  .fd[aria-selected="true"] { background: var(--action); color: var(--on-action); border-color: var(--action); }
+  .fd .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .fd .n { font-size: 12px; font-weight: 600; opacity: .8; }
+  .fd.add { width: 34px; padding: 0; justify-content: center; border-style: dashed; }
+  .fd.add .ic { width: 16px; height: 16px; }
+  .list { flex: 1; overflow-y: auto; scrollbar-width: none; }
+  .list::-webkit-scrollbar, .feed::-webkit-scrollbar, .sheet::-webkit-scrollbar { display: none; }
+  .row { display: flex; gap: 12px; padding: 9px 14px; align-items: center; }
+  .row .bd { flex: 1; min-width: 0; }
+  .row .l1 { display: flex; align-items: baseline; gap: 6px; }
+  .row .nm { font-weight: 600; font-size: 15.5px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .tm { font-size: 12px; color: var(--muted); flex: none; }
+  .row .l2 { display: flex; gap: 6px; align-items: center; margin-top: 2px; }
+  .row .pv { color: var(--muted); font-size: 14px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .pv em { font-style: normal; color: var(--fg); } .row .pv .dr { color: var(--danger); }
+  .row .pv .ic, .row .mk .ic { width: 14px; height: 14px; vertical-align: -2px; }
+  .bdg { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--primary); color: var(--on-primary); font-size: 12px; font-weight: 700; display: grid; place-items: center; flex: none; }
+  .bdg.mute { background: var(--border-strong); color: var(--fg); } .bdg.at { padding: 0 4px; }
+  .mk { color: var(--muted); flex: none; }
+  .tag { font-size: 10.5px; font-weight: 600; letter-spacing: .02em; padding: 1px 5px; border-radius: 5px; background: var(--primary-soft); color: var(--primary); flex: none; }
+  .tabs { display: flex; border-top: 1px solid var(--border); background: var(--surface); padding: 6px 6px 18px; flex: none; }
+  .tabs div { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; font-weight: 500; color: var(--muted); position: relative; }
+  .tabs div.on { color: var(--primary); }
+  .tabs .pip { position: absolute; top: -2px; left: calc(50% + 6px); min-width: 16px; height: 16px; border-radius: 8px; background: var(--danger); color: #fff; font-size: 10px; font-weight: 700; display: grid; place-items: center; padding: 0 4px; }
+  .fab { position: absolute; right: 16px; bottom: 86px; width: 52px; height: 52px; border-radius: 18px; background: var(--primary); color: var(--on-primary); display: grid; place-items: center; box-shadow: var(--shadow); }
+
+  /* sheets */
+  .dim { position: absolute; inset: 0; background: var(--overlay); z-index: 5; }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--surface); border-radius: 24px 24px 0 0; padding: 8px 16px 22px; max-height: 88%; overflow-y: auto; scrollbar-width: none; }
+  .grab { width: 36px; height: 4px; border-radius: 2px; background: var(--border-strong); margin: 0 auto 12px; }
+  .sheet h2 { font-size: 17px; font-weight: 700; margin: 0 0 12px; display: flex; align-items: center; }
+  .sheet h2 span { flex: 1; } .sheet h2 a { font-size: 15px; font-weight: 600; color: var(--primary); cursor: pointer; }
+  .lbl { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 14px 0 7px; }
+  .field { height: 44px; border-radius: 12px; border: 1px solid var(--border-strong); background: var(--surface); display: flex; align-items: center; padding: 0 13px; font-size: 16px; }
+  .field.focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+  .sw { display: flex; gap: 10px; } .sw i { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: #fff; }
+  .sw i.sel { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px currentColor; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 14px; height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid var(--border); display: flex; align-items: center; gap: 6px; color: var(--fg); background: var(--surface); }
+  .chip.on { background: var(--primary-soft); border-color: transparent; color: var(--primary); font-weight: 600; }
+  .chip .ic { width: 15px; height: 15px; }
+  .opt { display: flex; align-items: center; gap: 12px; padding: 7px 0; font-size: 15px; }
+  .opt .g { flex: 1; min-width: 0; } .opt small { display: block; color: var(--muted); font-size: 13px; }
+  .cb { width: 22px; height: 22px; border-radius: 7px; border: 1.5px solid var(--border-strong); display: grid; place-items: center; flex: none; color: var(--on-primary); }
+  .cb.on { background: var(--primary); border-color: var(--primary); } .cb .ic { width: 14px; height: 14px; stroke-width: 2.6; }
+  .btn { height: 46px; border-radius: 14px; border: 0; font: inherit; font-size: 16px; font-weight: 600; background: var(--action); color: var(--on-action); width: 100%; margin-top: 14px; cursor: pointer; }
+  .btn { white-space: nowrap; } .btn.sec { background: var(--selected); color: var(--fg); } .btn.sm { height: 34px; font-size: 14px; border-radius: 10px; width: auto; padding: 0 13px; margin: 0; }
+  .btn.pri { background: var(--primary); color: var(--on-primary); }
+  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .tile { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); text-align: center; }
+  .tile i { width: 54px; height: 54px; border-radius: 18px; background: var(--selected); color: var(--fg); display: grid; place-items: center; }
+  .tile i.ac { background: var(--primary-soft); color: var(--primary); }
+  .ph { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 14px; }
+  .ph b { aspect-ratio: 1; border-radius: 10px; display: block; }
+
+  /* conversation */
+  .chead { display: flex; align-items: center; gap: 8px; padding: 2px 8px 8px; border-bottom: 1px solid var(--border); background: var(--surface); flex: none; }
+  .chead .t { flex: 1; min-width: 0; } .chead .t b { display: block; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .chead .t small { color: var(--muted); font-size: 12.5px; }
+  .strip { display: flex; align-items: center; gap: 8px; padding: 7px 14px; font-size: 13px; background: var(--surface); border-bottom: 1px solid var(--border); color: var(--muted); flex: none; cursor: pointer; }
+  .strip .ic { width: 16px; height: 16px; color: var(--primary); } .strip b { color: var(--fg); font-weight: 600; } .strip span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .feed { flex: 1; overflow-y: auto; padding: 10px 10px 6px; display: flex; flex-direction: column; gap: 3px; scrollbar-width: none; }
+  .day { align-self: center; font-size: 12px; font-weight: 600; color: var(--muted); background: var(--selected); border-radius: 10px; padding: 3px 10px; margin: 4px 0 8px; }
+  .msg { display: flex; gap: 7px; align-items: flex-end; max-width: 86%; margin-top: 5px; }
+  .msg.me { align-self: flex-end; }
+  .bub { background: var(--surface); border: 1px solid var(--border); border-radius: 18px 18px 18px 6px; padding: 7px 11px 6px; min-width: 0; }
+  .me .bub { background: var(--own); border-color: transparent; color: var(--own-fg); border-radius: 18px 18px 6px 18px; }
+  .who { font-size: 12.5px; font-weight: 600; margin-bottom: 1px; display: flex; gap: 5px; align-items: center; }
+  .meta { font-size: 11px; color: var(--muted); float: right; margin: 5px 0 -1px 10px; display: flex; gap: 3px; align-items: center; }
+  .me .meta { color: var(--own-muted); } .meta .ic { width: 14px; height: 14px; }
+  .rx { display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; clear: both; }
+  .rx span { font-size: 12.5px; padding: 2px 8px; border-radius: 11px; background: var(--selected); font-weight: 600; } .rx span.my { background: var(--primary-soft); color: var(--primary); }
+  .quote { border-left: 3px solid var(--primary); padding: 1px 0 1px 8px; margin-bottom: 4px; font-size: 13px; color: var(--muted); } .quote b { display: block; color: var(--primary); font-size: 12.5px; }
+  .me .quote { border-color: var(--own-fg); color: var(--own-muted); } .me .quote b { color: var(--own-fg); }
+  .voice { display: flex; align-items: center; gap: 10px; width: 214px; max-width: 100%; }
+  .vb { flex: 1; min-width: 0; }
+  .vt { width: 28px; height: 28px; border-radius: 50%; border: 0; padding: 0; background: var(--selected); color: var(--muted); display: grid; place-items: center; flex: none; align-self: flex-start; margin-top: 2px; } .vt .ic { width: 15px; height: 15px; }
+  .vt.on { background: var(--primary-soft); color: var(--primary); } .me .vt { background: var(--own-track); color: var(--own-fg); }
+  .nd { width: 6px; height: 6px; border-radius: 50%; background: var(--primary); } .me .nd { background: var(--own-fg); }
+  .voice .pl { width: 42px; height: 42px; border-radius: 50%; background: var(--primary); color: var(--on-primary); display: grid; place-items: center; flex: none; cursor: pointer; }
+  .me .voice .pl { background: var(--own-fg); color: var(--own); }
+  .voice .pl .ic { width: 18px; height: 18px; fill: currentColor; stroke: none; }
+  .wave { display: flex; align-items: center; gap: 2px; height: 24px; flex: 1; overflow: hidden; }
+  .wave i { width: 2.500px; border-radius: 2px; background: var(--muted); opacity: .4; flex: none; } .wave i.p { background: var(--primary); opacity: 1; }
+  .me .wave i { background: var(--own-fg); } .me .wave i.p { background: var(--own-fg); }
+  .vmeta { display: flex; gap: 6px; align-items: center; font-size: 11.500px; color: var(--muted); margin-top: 2px; font-variant-numeric: tabular-nums; } .vmeta .tm { margin-left: auto; display: flex; gap: 3px; align-items: center; } .vmeta .tm .ic { width: 14px; height: 14px; } .me .vmeta { color: var(--own-muted); }
+  .spd { font-weight: 700; padding: 1px 6px; border-radius: 8px; background: var(--selected); color: var(--fg); font-size: 11px; } .me .spd { background: var(--own-track); color: var(--own-fg); }
+  .tr { font-size: 13.5px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); color: var(--fg); clear: both; } .tr small { display: block; font-size: 11px; color: var(--muted); font-weight: 600; margin-bottom: 1px; }
+  .card { border: 1px solid var(--border); border-radius: 12px; padding: 10px; margin-top: 6px; background: var(--canvas); clear: both; }
+  .card b { font-size: 14px; } .card p { margin: 2px 0 8px; font-size: 13px; color: var(--muted); }
+  .prog { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; margin-bottom: 9px; } .prog i { display: block; height: 100%; width: 78%; background: var(--success); border-radius: 3px; }
+  .card .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+  .sched { align-self: flex-end; max-width: 86%; margin-top: 5px; }
+  .sched .bub { background: transparent; border: 1.5px dashed var(--border-strong); border-radius: 18px 18px 6px 18px; color: var(--fg); }
+  .sched .when { font-size: 11.5px; color: var(--primary); font-weight: 600; display: flex; gap: 4px; align-items: center; margin-top: 3px; } .sched .when .ic { width: 13px; height: 13px; }
+
+  .phone.white { background: var(--surface); } .phone.white .av .on { border-color: var(--surface); }
+  .phone:has(.chead) .status, .phone.white .status, .phone.white .top { background: var(--surface); }
+  .thr { display: flex; align-items: center; gap: 7px; margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--border); clear: both; font-size: 12px; color: var(--muted); cursor: pointer; }
+  .thr b { color: var(--primary); font-size: 13px; font-weight: 600; white-space: nowrap; } .thr > span:not(.stack) { white-space: nowrap; } .thr > .ic { width: 15px; height: 15px; margin-left: auto; }
+  .stack { display: flex; } .stack .av { width: 22px; height: 22px; border-radius: 50%; font-size: 9px; box-shadow: 0 0 0 2px var(--surface); margin-left: -5px; } .stack .av:first-child { margin-left: 0; }
+  .meta .star { color: var(--warning); fill: currentColor; width: 12px; height: 12px; }
+  .ctx { position: absolute; inset: 0; z-index: 6; background: var(--overlay); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-end; gap: 8px; padding: 0 10px 20px; }
+  .ctx .msg { margin: 0; }
+  .menu { width: 272px; background: var(--raised); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow); padding: 5px; }
+  .menu .qr { display: flex; justify-content: space-between; padding: 3px 3px 8px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
+  .menu .qr span { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 22px; } .menu .qr span.my { background: var(--primary-soft); }
+  .menu .qr span.mo { border: 1px dashed var(--border-strong); color: var(--muted); } .menu .qr .ic { width: 17px; height: 17px; }
+  .mi { display: flex; align-items: center; gap: 12px; height: 39px; padding: 0 10px; border-radius: 10px; font-size: 15px; } .mi .ic { width: 19px; height: 19px; color: var(--muted); }
+  .mi.d, .mi.d .ic { color: var(--danger); } .mi small { margin-left: auto; color: var(--muted); font-size: 12.500px; }
+  .md { height: 1px; background: var(--border); margin: 4px 0; }
+  .troot { background: var(--surface); padding: 12px 14px; border-bottom: 1px solid var(--border); flex: none; }
+  .troot .h { display: flex; gap: 9px; align-items: center; margin-bottom: 6px; } .troot .h b { font-size: 14.500px; } .troot .h small { color: var(--muted); font-size: 12px; display: block; }
+  .tdiv { display: flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 600; color: var(--muted); margin: 4px 4px 2px; } .tdiv::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  .also { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); padding: 0 6px 7px; } .also .cb { width: 18px; height: 18px; border-radius: 6px; }
+  .imp { display: flex; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .imp .bd { flex: 1; min-width: 0; } .imp .l1 { display: flex; gap: 6px; align-items: baseline; } .imp .l1 b { font-size: 14.500px; } .imp .l1 span { margin-left: auto; font-size: 12px; color: var(--muted); flex: none; }
+  .imp .ch { font-size: 12.500px; color: var(--primary); font-weight: 500; margin-bottom: 3px; } .imp p { margin: 0; font-size: 14.500px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .imp .fl { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; padding: 5px 9px; border-radius: 10px; background: var(--selected); font-size: 13px; } .imp .fl .ic { width: 15px; height: 15px; color: var(--muted); }
+  .tabs.five div { font-size: 10.500px; }
+
+  /* composer */
+  .cmp { flex: none; padding: 6px 8px 20px; background: var(--canvas); position: relative; }
+  .rep { display: flex; align-items: center; gap: 8px; margin: 0 4px 6px 48px; padding: 6px 6px 6px 10px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); font-size: 13px; }
+  .rep .q { flex: 1; min-width: 0; border-left: 3px solid var(--primary); padding-left: 8px; } .rep .q b { display: block; color: var(--primary); font-size: 12.5px; } .rep .q span { color: var(--muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rep .ib { width: 28px; height: 28px; } .rep .ic { width: 16px; height: 16px; }
+  .cl { display: flex; align-items: flex-end; gap: 6px; }
+  .inp { flex: 1; min-width: 0; min-height: 40px; border-radius: 20px; background: var(--surface); border: 1px solid var(--border); display: flex; align-items: flex-end; padding: 0 4px 0 14px; box-shadow: 0 1px 2px rgba(20,20,30,.04); }
+  .inp:focus-within { border-color: var(--border-strong); }
+  .inp textarea { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--fg); font: inherit; font-size: 16px; line-height: 20px; padding: 9px 0; resize: none; height: 38px; max-height: 98px; }
+  .inp textarea::placeholder, .inp .phd { color: var(--muted); }
+  .inp .txt { flex: 1; font-size: 16px; line-height: 20px; padding: 9px 0; }
+  .inp .ib { width: 36px; height: 38px; color: var(--muted); }
+  .cmp .ib.pri, .cmp .ib.soft { transition: transform .12s; } .cmp .ib:active { transform: scale(.92); }
+  .rec { flex: 1; height: 40px; border-radius: 20px; background: var(--surface); border: 1px solid var(--border); display: flex; align-items: center; gap: 8px; padding: 0 12px; min-width: 0; }
+  .rec .d { width: 9px; height: 9px; border-radius: 50%; background: var(--danger); animation: pulse 1.1s infinite; flex: none; }
+  .rec .tm { font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 600; flex: none; }
+  .rec .hint { color: var(--muted); font-size: 13.5px; white-space: nowrap; display: flex; align-items: center; gap: 2px; margin-left: auto; } .rec .hint .ic { width: 15px; height: 15px; }
+  @keyframes pulse { 50% { opacity: .25; } }
+  .micbig { width: 62px; height: 62px; border-radius: 50%; background: var(--primary); color: var(--on-primary); display: grid; place-items: center; margin: -11px -9px -11px -5px; box-shadow: 0 0 0 9px var(--primary-soft); flex: none; }
+  .micbig .ic { width: 26px; height: 26px; }
+  .lockp { position: absolute; right: 13px; bottom: 98px; width: 40px; padding: 9px 0 7px; border-radius: 20px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--muted); }
+  .lockp .ic { width: 18px; height: 18px; }
+  .pop { position: absolute; right: 10px; bottom: 70px; z-index: 7; background: var(--raised); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); padding: 5px; min-width: 216px; }
+  .pop div { display: flex; align-items: center; gap: 10px; padding: 10px 11px; border-radius: 11px; font-size: 15px; cursor: pointer; } .pop div:hover { background: var(--selected); }
+  .pop .ic { width: 19px; height: 19px; color: var(--muted); }
+  .q2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .qo { border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; cursor: pointer; background: var(--surface); } .qo b { display: block; font-size: 15px; } .qo small { color: var(--muted); font-size: 13px; }
+  .qo.sel { border-color: var(--primary); background: var(--primary-soft); }
+  .sitem { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 11px 12px; margin: 0 12px 10px; }
+  .sitem .w { font-size: 12.5px; font-weight: 600; color: var(--primary); display: flex; align-items: center; gap: 5px; margin-bottom: 4px; } .sitem .w .ic { width: 14px; height: 14px; } .sitem .w span { margin-left: auto; color: var(--muted); font-weight: 500; }
+  .sitem p { margin: 0 0 9px; font-size: 14.5px; } .sitem .acts { display: flex; gap: 6px; }
+  .sect { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; padding: 14px 16px 8px; }
+
+  /* design system */
+  .ds { display: none; } .ds.on { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 14px; }
+  .pn { background: var(--canvas); border: 1px solid var(--border); border-radius: 18px; padding: 16px; }
+  .pn h3 { margin: 0 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; }
+  .cols { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; } .cols div { font-size: 11px; color: var(--muted); } .cols i { display: block; height: 38px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 4px; }
+  .ty div { display: flex; align-items: baseline; gap: 10px; padding: 4px 0; } .ty small { width: 74px; flex: none; color: var(--muted); font-size: 11.5px; }
+  .rw { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  .rd { display: flex; gap: 10px; align-items: flex-end; } .rd div { font-size: 11px; color: var(--muted); text-align: center; } .rd i { display: block; width: 46px; height: 46px; background: var(--surface); border: 1.5px solid var(--border-strong); margin-bottom: 4px; }
+  @media (prefers-reduced-motion: reduce) { .rec .d { animation: none; } }
+</style>
+
+<svg width="0" height="0" style="position:absolute"><symbol id="mascot" viewBox="0 0 320 368"><g transform="translate(-192 -176)" shape-rendering="crispEdges">
+  <path fill="var(--mascot-body)" d="M298 193H410V218H462V244H487V376H462V418H438V442H417V462H397V482H374V504H284V482H308V462H330V442H348V418H264V401H239V376H213V269H239V244H264V218H298Z"/>
+  <g fill="#fff"><rect x="286" y="273" width="36" height="36"/><rect x="381" y="294" width="36" height="36"/></g>
+  <g fill="var(--mascot-feet)"><rect x="256" y="504" width="56" height="30"/><rect x="345" y="504" width="56" height="30"/></g></g></symbol></svg>
+
+<div class="lab">
+  <div class="bar">
+    <div class="seg" role="tablist" id="nav"></div>
+    <button class="tgl" id="theme">Тёмная тема</button>
+  </div>
+  <div class="coma" id="root" data-theme="light"></div>
+</div>
+
+<script>
+(() => {
+  const P = {
+    plus:'<path d="M12 5v14M5 12h14"/>', mic:'<rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5 10.5v.5a7 7 0 0 0 14 0v-.5M12 18v3.5"/>',
+    up:'<path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/>', clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', search:'<circle cx="11" cy="11" r="7"/><path d="m20.5 20.5-4.5-4.5"/>',
+    back:'<path d="m15 18-6-6 6-6"/>', smile:'<circle cx="12" cy="12" r="9"/><path d="M8.5 14s1.3 2 3.5 2 3.5-2 3.5-2M9 9.5h.01M15 9.5h.01"/>',
+    play:'<path d="M8 5.5v13l11-6.5z"/>', pause:'<path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/>', lock:'<rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/>',
+    trash:'<path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l.8 12.5h9.4L17.500 7"/>', check:'<path d="m5 12.5 4.5 4.5L19 7"/>', dcheck:'<path d="m2.5 12.5 4 4L15 8M11 15.500l1.500 1 8.5-8.5"/>',
+    chat:'<path d="M20.500 12a8 8 0 0 1-11.800 7L4 20l1.200-4.300A8 8 0 1 1 20.500 12z"/>', threads:'<path d="M4 5h11v8H9l-3.500 3v-3H4zM18 9h2v8h-1.500v2.500L16 17h-5"/>',
+    more:'<circle cx="5.500" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18.500" cy="12" r="1.2"/>', image:'<rect x="3.500" y="4.500" width="17" height="15" rx="2.500"/><circle cx="9" cy="10" r="1.500"/><path d="m20 15.500-4.500-4.500-8 8"/>',
+    file:'<path d="M14 3.500H7.500a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V8zM14 3.500V8h4.500"/>', camera:'<path d="M4 8h3l1.800-2.500h6.400L17 8h3v11H4z"/><circle cx="12" cy="13.200" r="3.300"/>',
+    spark:'<path d="m12 3.500 1.900 5.100L19 10.500l-5.100 1.900L12 17.500l-1.900-5.100L5 10.500l5.100-1.900zM18.500 16.500v4M16.500 18.500h4"/>', edit:'<path d="M4 20h4L19 9l-4-4L4 16zM13.500 6.500l4 4"/>',
+    users:'<circle cx="9" cy="8" r="3.500"/><path d="M2.500 20a6.500 6.500 0 0 1 13 0M16.500 4.700a3.500 3.500 0 0 1 0 6.600M21.500 20a6 6 0 0 0-3.500-5.400"/>', x:'<path d="M6 6l12 12M18 6 6 18"/>',
+    checks:'<path d="m4 7 1.800 1.800L9 5.500M4 16.500l1.800 1.800 3.200-3.300M13 7.500h7M13 17h7"/>', pin:'<path d="M9 4h6l-1 6 3 3H7l3-3zM12 13v7"/>', mute:'<path d="M5 9v6h3l5 4V5L8 9zM17 9.500l4 5M21 9.500l-4 5"/>',
+    belloff:'<path d="M6 16.500V11a6 6 0 0 1 9.500-4.900M18 11v5.500l1.500 1.500H8M10 21h4M4 4l16 16"/>', left:'<path d="m14 17-5-5 5-5"/>', at:'<circle cx="12" cy="12" r="3.500"/><path d="M15.500 8.500v5a2.500 2.500 0 0 0 5 0V12a8.500 8.500 0 1 0-3.500 6.900"/>',
+    reply:'<path d="m9 7-5 5 5 5M4 12h10a6 6 0 0 1 6 6v1"/>', bot:'<rect x="4.500" y="8" width="15" height="11" rx="3"/><path d="M12 8V4.500M9 13v1.500M15 13v1.500"/>', pos:'<path d="M12 21s7-6 7-11.500a7 7 0 0 0-14 0C5 15 12 21 12 21z"/><circle cx="12" cy="9.500" r="2.500"/>', drag:'<path d="M5 9h14M5 15h14"/>', txt:'<path d="M5 6h14M5 11h14M5 16h9"/>',
+    star:'<path d="m12 3.500 2.600 5.400 5.900.800-4.300 4.100 1 5.800-5.200-2.700-5.200 2.700 1-5.800-4.300-4.100 5.900-.800z"/>', fwd:'<path d="m15 7 5 5-5 5M20 12H10a6 6 0 0 0-6 6v1"/>',
+    eye:'<path d="M2.500 12S6 5.500 12 5.500s9.500 6.500 9.500 6.500-3.500 6.500-9.500 6.500S2.500 12 2.500 12z"/><circle cx="12" cy="12" r="2.800"/>',
+    link:'<path d="M10 14a4.500 4.500 0 0 0 6.400 0l3-3A4.500 4.500 0 0 0 13 4.600l-1 1M14 10a4.500 4.500 0 0 0-6.400 0l-3 3a4.500 4.500 0 0 0 6.400 6.400l1-1"/>',
+    copy:'<rect x="8.500" y="8.500" width="11.500" height="11.500" rx="2.500"/><path d="M15.500 8.500V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7.500a2 2 0 0 0 2 2h2.500"/>'
+  };
+  const I = (n, s = '') => `<svg class="ic" viewBox="0 0 24 24" style="${s}">${P[n]}</svg>`;
+  const st = '<div class="status"><span>9:41</span><i></i></div>';
+  let seed = 7; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+  const wave = (n, played = 0) => { let h = '', ph = rnd() * 6; for (let k = 0; k < n; k++) { const env = .35 + .65 * Math.abs(Math.sin(k * .42 + ph)); h += `<i class="${k < played ? 'p' : ''}" style="height:${Math.max(3, Math.round(22 * env * (.45 + .55 * rnd())))}px"></i>`; } return `<div class="wave">${h}</div>`; };
+  const voice = o => `<div class="voice"><span class="pl">${I(o.playing ? 'pause' : 'play')}</span><div class="vb">${wave(o.n || 26, o.played || 0)}<div class="vmeta"><span>${o.t}</span>${o.fresh ? '<span class="nd"></span>' : ''}${o.playing ? '<span class="spd">1,5×</span>' : ''}<span class="tm">${o.time || ''}</span></div></div><span class="vt ${o.tr ? 'on' : ''}" title="Расшифровка">${I('txt')}</span></div>`;
+  const av = (t, c, x = '') => `<div class="av ${c} ${x}">${t}</div>`;
+
+  /* ---------- chat list ---------- */
+  const CH = [
+    {n:'Инструкторы · зал', i:'ИЗ', c:'c1', t:'9:24', p:'<em>Контроль:</em> отметились 7 из 9', b:3, f:['work'], pin:1},
+    {n:'Марина Соколова', i:'МС', c:'c4', r:1, on:1, t:'9:12', p:'Завтра с 9:00 нужен инструктор в большой зал', b:1, f:['dm']},
+    {n:'Слоты на неделю', i:'СН', c:'c2', t:'8:50', p:`${I('mic')} Голосовое · 0:14`, at:1, f:['work','slots']},
+    {n:'Справка', i:I('bot','width:22px;height:22px'), c:'cag', r:1, ag:1, t:'Вчера', p:'Регламент уборки зала — пункт 4.2, страница 3', f:['agents']},
+    {n:'Игорь Лаптев', i:'ИЛ', c:'c3', r:1, t:'Вчера', p:'<span class="dr">Черновик:</span> Смогу подменить в четверг, если', f:['dm']},
+    {n:'Врачи', i:'ВР', c:'c5', t:'Вчера', p:'<em>Дина:</em> обновила график осмотров', b:12, mute:1, f:['work']},
+    {n:'Передача слота', i:'ПС', c:'c2', t:'Пн', p:`${I('clock')} Отправится завтра в 9:00`, f:['slots']},
+    {n:'Общий', i:'ОБ', c:'c1', t:'Пн', p:'<em>Олег:</em> ключи от раздевалки на стойке', f:['work']},
+  ];
+  const FD = [['all','Все',16,''],['unread','Непрочитанные',16,''],['dm','Личные',1,'--f-blue'],['slots','Слоты',1,'--f-green'],['agents','Агенты',0,'--f-violet']];
+  const rows = f => CH.filter(c => f === 'all' || (f === 'unread' ? c.b || c.at : c.f.includes(f))).map(c => `
+    <div class="row"><div class="av ${c.c} ${c.r ? 'round' : ''}">${c.i}${c.on ? '<span class="on"></span>' : ''}</div><div class="bd">
+      <div class="l1"><span class="nm">${c.n}</span>${c.ag ? '<span class="tag">АГЕНТ</span>' : ''}<span class="tm">${c.t}</span></div>
+      <div class="l2"><span class="pv">${c.p}</span>${c.pin ? `<span class="mk">${I('pin')}</span>` : ''}${c.mute ? `<span class="mk">${I('belloff')}</span>` : ''}${c.at ? `<span class="bdg at">@</span>` : ''}${c.b ? `<span class="bdg ${c.mute ? 'mute' : ''}">${c.b}</span>` : ''}</div>
+    </div></div>`).join('');
+  const folders = sel => FD.map(([k, n, cnt, col]) => `<button class="fd" data-f="${k}" aria-selected="${k === sel}">${col ? `<span class="dot" style="background:var(${col})"></span>` : ''}${n}${cnt ? `<span class="n">${cnt}</span>` : ''}</button>`).join('') + `<button class="fd add" data-go="1" title="Новая папка">${I('plus')}</button>`;
+  const tabbar = a => `<div class="tabs five">${[['chat','Чаты'],['threads','Треды'],['star','Важные'],['spark','Агенты'],['more','Ещё']].map(([i, n], k) => `<div class="${k === a ? 'on' : ''}">${I(i)}${n}${k ? '' : '<span class="pip">16</span>'}</div>`).join('')}</div>`;
+  const listScreen = (sel, extra = '') => `<div class="phone white">${st}
+    <div class="top"><div class="plate"><svg width="19" height="22"><use href="#mascot" width="19" height="22"/></svg></div><h1>Чаты</h1><button class="ib soft">${I('edit')}</button></div>
+    <div class="search">${I('search')}Поиск по чатам и сообщениям</div>
+    <div class="folders" data-folders>${folders(sel)}</div><div class="list" data-list>${rows(sel)}</div>${tabbar(0)}${extra}</div>`;
+  const folderSheet = `<div class="dim"></div><div class="sheet"><div class="grab"></div><h2><span>Новая папка</span><a>Готово</a></h2>
+    <div class="field focus">Слоты</div>
+    <div class="lbl">Цвет</div><div class="sw">${['blue','violet','green','orange','pink','teal'].map((c, k) => `<i class="${k === 2 ? 'sel' : ''}" style="background:var(--f-${c});color:var(--f-${c})">${k === 2 ? I('check','width:16px;height:16px;color:#fff;stroke-width:2.600') : ''}</i>`).join('')}</div>
+    <div class="lbl">Собирать автоматически</div><div class="chips"><span class="chip">Личные</span><span class="chip">Группы</span><span class="chip">${I('spark')}Агенты</span><span class="chip">Непрочитанные</span><span class="chip on">${I('at')}Где меня упомянули</span></div>
+    <div class="lbl">Чаты в папке · 2</div>
+    <div class="opt">${av('СН','c2','m')}<div class="g">Слоты на неделю<small>14 участников</small></div><span class="cb on">${I('check')}</span></div>
+    <div class="opt">${av('ПС','c2','m')}<div class="g">Передача слота<small>6 участников</small></div><span class="cb on">${I('check')}</span></div>
+    <div class="opt">${av('ИЗ','c1','m')}<div class="g">Инструкторы · зал<small>9 участников</small></div><span class="cb"></span></div>
+    <div class="opt" style="color:var(--muted)">${I('drag')}<div class="g" style="color:var(--fg)">Порядок вкладок<small>Перетащите, чтобы поменять местами</small></div></div></div>`;
+
+  /* ---------- conversation ---------- */
+  const head = (extra = '') => `<div class="chead"><button class="ib">${I('back')}</button>${av('ИЗ','c1','m')}<div class="t"><b>Инструкторы · зал</b><small>9 участников · 4 в сети</small></div><button class="ib">${I('more')}</button></div>${extra}`;
+  const m1 = `<div class="msg">${av('МС','c4','s round')}<div class="bub"><div class="who" style="color:var(--a4f)">Марина Соколова</div>Коллеги, завтра с 9:00 до 13:00 нужен инструктор в большой зал. Кто возьмёт слот? Отметьтесь, кто прочитал.<span class="meta">${I('star','" class="ic star')}9:12</span><div class="rx"><span class="my">✅ 7</span><span>👍 2</span></div><div class="thr"><span class="stack">${av('ИЛ','c3')}${av('ДР','c5')}${av('ОЧ','c1')}</span><b>3 ответа</b><span>в 9:31</span>${I('back','transform:rotate(180deg)')}</div></div></div>`;
+  const m2 = (tr = false) => `<div class="msg">${av('ИЛ','c3','s round')}<div class="bub"><div class="who" style="color:var(--a3f)">Игорь Лаптев</div>${voice(tr ? {t:'0:06 / 0:14', playing:1, played:11, tr:1, time:'9:16'} : {t:'0:14', fresh:1, time:'9:16'})}${tr ? '<div class="tr"><small>Расшифровка</small>Я в среду до обеда на выезде, смогу только с двух. Если никто не возьмёт — наберите, подвинусь.</div>' : ''}</div></div>`;
+  const m3 = `<div class="msg me"><div class="bub"><div class="quote"><b>Марина Соколова</b>Завтра с 9:00 до 13:00 нужен инструктор…</div>Могу с 9 до 13, после обеда занят<span class="meta">9:20 ${I('dcheck')}</span></div></div>`;
+  const m4 = `<div class="msg">${av(I('bot','width:17px;height:17px'),'cag','s round')}<div class="bub"><div class="who" style="color:var(--primary)">Контроль <span class="tag">АГЕНТ</span></div>Слежу за отметками под сообщением Марины.<div class="card"><b>Отметились 7 из 9</b><p>Не отметились: Олег Ч., Дина Р.</p><div class="prog"><i></i></div><div class="acts"><button class="btn sm pri">Напомнить</button><button class="btn sm sec">Список</button></div></div><span class="meta">9:24</span></div></div>`;
+  const feed = (more = '', tr = false) => `<div class="feed" data-feed><span class="day">Сегодня</span>${m1}${m2(tr)}${m3}${m4}${more}</div>`;
+  const idle = `<div class="cl"><button class="ib soft" data-act="plus">${I('plus')}</button><div class="inp"><textarea rows="1" placeholder="Сообщение" data-in></textarea><button class="ib">${I('smile')}</button></div><button class="ib soft" data-act="mic" data-send>${I('mic')}</button></div>`;
+  const typed = (t, rep) => `${rep ? `<div class="rep"><div class="q"><b>Марина Соколова</b><span>Завтра с 9:00 до 13:00 нужен инструктор в большой зал</span></div><button class="ib">${I('x')}</button></div>` : ''}<div class="cl"><button class="ib soft">${I('plus')}</button><div class="inp"><div class="txt">${t}</div><button class="ib">${I('smile')}</button></div><button class="ib pri">${I('up')}</button></div>`;
+  const locked = `<div class="cl"><button class="ib dng" data-act="cancel">${I('trash')}</button><div class="rec"><span class="d"></span><span class="tm" data-timer>0:08</span>${wave(20, 20)}</div><button class="ib pri" data-act="sendvoice">${I('up')}</button></div>`;
+  const holding = `<div class="lockp">${I('lock')}${I('up','width:14px;height:14px')}</div><div class="cl"><div class="rec"><span class="d"></span><span class="tm">0:08</span><span class="hint">${I('left')}Влево — отмена</span></div><div class="micbig">${I('mic')}</div></div>`;
+  const review = `<div class="cl"><button class="ib dng">${I('trash')}</button><div class="rec" style="padding-left:6px"><span class="pl" style="width:28px;height:28px;border-radius:50%;background:var(--primary);color:var(--on-primary);display:grid;place-items:center;flex:none">${I('play','width:14px;height:14px;fill:currentColor;stroke:none')}</span>${wave(19, 0)}<span class="tm" style="font-weight:500;color:var(--muted);font-size:13px">0:21</span></div><button class="ib pri">${I('up')}</button></div>`;
+  const pop = `<div class="pop"><div data-act="later">${I('clock')}Отправить позже</div><div>${I('belloff')}Отправить без звука</div></div>`;
+  const schedSheet = `<div class="dim" data-act="close"></div><div class="sheet"><div class="grab"></div><h2><span>Отправить позже</span></h2>
+    <div class="q2"><div class="qo" data-when="Сегодня в 18:00"><b>Сегодня вечером</b><small>в 18:00</small></div><div class="qo sel" data-when="Завтра в 9:00"><b>Завтра утром</b><small>ср, в 9:00</small></div><div class="qo" data-when="Сегодня в 10:41"><b>Через час</b><small>в 10:41</small></div><div class="qo" data-when="В понедельник в 9:00"><b>В понедельник</b><small>16 ноября, 9:00</small></div></div>
+    <div class="lbl">Своё время</div><div style="display:flex;gap:8px"><div class="field" style="flex:1.400">Ср, 11 ноября</div><div class="field" style="flex:1">9:00</div></div>
+    <div class="opt" style="margin-top:8px"><div class="g">Когда собеседник будет в сети<small>Только в личных чатах</small></div><span class="cb"></span></div>
+    <button class="btn pri" data-act="plan">Запланировать на завтра, 9:00</button></div>`;
+  const attach = `<div class="dim"></div><div class="sheet"><div class="grab"></div>
+    <div class="ph"><b style="background:var(--a1)"></b><b style="background:var(--a2)"></b><b style="background:var(--a5)"></b><b style="background:var(--a3)"></b></div>
+    <div class="grid4"><div class="tile"><i>${I('image')}</i>Фото</div><div class="tile"><i>${I('camera')}</i>Камера</div><div class="tile"><i>${I('file')}</i>Файл</div><div class="tile"><i>${I('pos')}</i>Место</div>
+      <div class="tile"><i class="ac">${I('checks')}</i>Сбор отметок</div><div class="tile"><i class="ac">${I('spark')}</i>Позвать агента</div><div class="tile"><i class="ac">${I('clock')}</i>Отложить</div><div class="tile"><i class="ac">${I('users')}</i>Опрос</div></div></div>`;
+  const strip = n => `<div class="strip" data-strip>${I('clock')}<span><b>Отложено: ${n}</b> · ближайшее завтра в 9:00</span>${I('back','transform:rotate(180deg);color:var(--muted)')}</div>`;
+  const schedMsg = (t, w) => `<div class="sched"><div class="bub">${t}<div class="when">${I('clock')}${w}</div></div></div>`;
+  const schedList = `<div class="phone">${st}<div class="chead"><button class="ib">${I('back')}</button><div class="t"><b>Отложенные</b><small>Инструкторы · зал</small></div></div>
+    <div class="list"><div class="sect">Завтра</div>
+      <div class="sitem"><div class="w">${I('clock')}9:00<span>только вы видите</span></div><p>Напоминаю: сегодня слот в большом зале мой, с 9 до 13. Ключи возьму на стойке.</p><div class="acts"><button class="btn sm sec">Изменить</button><button class="btn sm sec">Время</button><button class="btn sm pri">Отправить</button></div></div>
+      <div class="sect">Понедельник, 16 ноября</div>
+      <div class="sitem"><div class="w">${I('clock')}9:00<span>повтор: каждый пн</span></div><p>Коллеги, отметьтесь, кто на этой неделе берёт утренние слоты.</p><div class="acts"><button class="btn sm sec">Изменить</button><button class="btn sm sec">Время</button><button class="ib dng" style="width:34px;height:34px;margin-left:auto">${I('trash','width:18px;height:18px')}</button></div></div>
+      <div class="sitem" style="border-style:dashed"><div class="w" style="color:var(--muted)">${I('mic')}Голосовое · 0:21<span>пт, 18:00</span></div>${wave(34, 0)}</div>
+    </div></div>`;
+
+  const mi = (i, t, x = '', c = '') => `<div class="mi ${c}">${I(i)}${t}${x ? `<small>${x}</small>` : ''}</div>`;
+  const ctx = `<div class="ctx">${m3}<div class="menu"><div class="qr"><span>👍</span><span class="my">✅</span><span>🔥</span><span>👀</span><span>🙏</span><span class="mo">${I('plus')}</span></div>
+    ${mi('reply','Ответить')}${mi('threads','Ответить в треде')}<div class="md"></div>${mi('star','В важные')}${mi('fwd','Переслать')}${mi('eye','Просмотры и реакции','7')}<div class="md"></div>${mi('link','Копировать ссылку')}${mi('copy','Копировать текст')}<div class="md"></div>${mi('edit','Изменить')}${mi('trash','Удалить','','d')}</div></div>`;
+  const threadScreen = `<div class="phone">${st}<div class="chead"><button class="ib">${I('back')}</button><div class="t"><b>Тред</b><small>Инструкторы · зал</small></div><button class="ib">${I('belloff')}</button><button class="ib">${I('more')}</button></div>
+    <div class="troot"><div class="h">${av('МС','c4','m round')}<div><b>Марина Соколова</b><small>сегодня в 9:12</small></div></div>Коллеги, завтра с 9:00 до 13:00 нужен инструктор в большой зал. Кто возьмёт слот? Отметьтесь, кто прочитал.<div class="rx"><span class="my">✅ 7</span><span>👍 2</span></div></div>
+    <div class="feed"><div class="tdiv">3 ответа</div>
+      <div class="msg">${av('ИЛ','c3','s round')}<div class="bub"><div class="who" style="color:var(--a3f)">Игорь Лаптев</div>А малый зал завтра тоже свободен?<span class="meta">9:18</span></div></div>
+      <div class="msg">${av('ДР','c5','s round')}<div class="bub"><div class="who" style="color:var(--a5f)">Дина Рябова</div>Малый занят до 11, потом свободен.<span class="meta">9:25</span></div></div>
+      <div class="msg">${av('ОЧ','c1','s round')}<div class="bub"><div class="who" style="color:var(--a1f)">Олег Чернов</div>Тогда я возьму малый с 11.<span class="meta">9:31</span></div></div></div>
+    <div class="cmp"><div class="also"><span class="cb"></span>Также отправить в чат</div><div class="cl"><button class="ib soft">${I('plus')}</button><div class="inp"><div class="txt phd">Ответить в треде</div><button class="ib">${I('smile')}</button></div><button class="ib soft">${I('mic')}</button></div></div></div>`;
+  const imp = (a, c, r, n, ch, t, p, x = '') => `<div class="imp"><div class="av ${c} m ${r}">${a}</div><div class="bd"><div class="l1"><b>${n}</b><span>${t}</span></div><div class="ch">${ch}</div><p>${p}</p>${x}</div></div>`;
+  const importantScreen = `<div class="phone white">${st}<div class="top"><h1>Важные</h1><button class="ib soft">${I('search')}</button></div>
+    <div class="folders" style="background:var(--surface)"><span class="fd" aria-selected="true">Все<span class="n">4</span></span><span class="fd">Инструкторы · зал</span><span class="fd">Личные</span><span class="fd">Файлы</span></div>
+    <div class="list">${imp('МС','c4','round','Марина Соколова','Инструкторы · зал','9:12','Коллеги, завтра с 9:00 до 13:00 нужен инструктор в большой зал. Кто возьмёт слот?')}
+      ${imp(I('bot','width:19px;height:19px'),'cag','round','Справка','Личный чат с агентом','Вчера','Уборка зала после слота: инвентарь на стойки, маты протереть, свет и вентиляцию выключить. Регламент, пункт 4.2.', `<span class="fl">${I('file')}Регламент зала.pdf · стр. 3</span>`)}
+      ${imp('ИЛ','c3','round','Игорь Лаптев','Слоты на неделю','Пн','', `<div style="margin-top:2px">${voice({t:'0:14', n:30})}</div>`)}
+      ${imp('ДР','c5','round','Дина Рябова','Врачи','6 нояб.','График осмотров на ноябрь: по вторникам и пятницам с 14:00, кабинет 2.', `<span class="fl">${I('file')}График ноябрь.xlsx</span>`)}</div>${tabbar(2)}</div>`;
+  const cap = t => `<div class="cap">${t}</div>`, slot = (h, c) => `<div class="slot">${h}${cap(c)}</div>`;
+  const V = {
+    'Чаты и папки': () => slot(listScreen('all'), '<b>Папки — вкладки над списком.</b> Нажмите на вкладку: список фильтруется. Счётчик непрочитанных у каждой, «+» в конце добавляет папку. Внизу появились вкладки «Важные» и «Агенты».')
+      + slot(listScreen('slots', folderSheet), '<b>Новая папка.</b> Название, цвет, правило автосбора и чаты вручную. Долгое нажатие на вкладку — изменить, удалить, переставить.'),
+    'Переписка': () => slot(`<div class="phone" data-live>${st}${head('<div data-stripbox></div>')}${feed()}<div class="cmp" data-cmp>${idle}</div></div>`, '<b>Живой прототип.</b> Наберите текст — микрофон сменится на отправку. Удерживайте кнопку отправки — «Отправить позже». Микрофон — запись, «+» — вложения и действия.')
+      + slot(`<div class="phone">${st}${head()}${feed()}<div class="cmp">${idle}</div>${ctx}</div>`, '<b>Меню сообщения.</b> Долгое нажатие: сообщение остаётся на виду, фон размыт. Сверху быстрые реакции, ниже те же действия и в том же порядке, что в вебе.'),
+    'Треды и важное': () => slot(threadScreen, '<b>Тред.</b> Исходное сообщение закреплено сверху, ответы ниже. В общей ленте под сообщением — аватары ответивших, число ответов и время последнего ответа, как в вебе.')
+      + slot(importantScreen, '<b>Важные.</b> Сохранённые сообщения со всех чатов, отдельная вкладка внизу. Фильтр по чату и типу, нажатие открывает сообщение в переписке. У сохранённого сообщения в ленте — звёздочка.'),
+    'Отложенные': () => slot(`<div class="phone">${st}${head()}${feed()}<div class="cmp">${typed('Напоминаю: сегодня слот в большом зале мой', true)}</div>${schedSheet.replace('data-act="close"', '')}</div>`, '<b>Выбор времени.</b> Четыре готовых варианта покрывают большинство случаев, своё время — ниже. Кнопка повторяет выбранное время.')
+      + slot(schedList, '<b>Список отложенных.</b> Открывается из полоски под шапкой чата. Можно изменить текст, перенести, отправить сразу. Голосовые тоже откладываются.'),
+    'Голосовые': () => slot(`<div class="phone">${st}${head()}${feed()}<div class="cmp">${holding}</div></div>`, '<b>Запись удержанием.</b> Палец на микрофоне — пишем. Влево — отмена, вверх на замок — запись без рук.')
+      + slot(`<div class="phone">${st}${head()}${feed('', true)}<div class="cmp">${review}</div></div>`, '<b>Прослушивание и проверка.</b> Скорость 1× / 1,5× / 2×, расшифровка — по кнопке справа от записи. Перед отправкой запись можно прослушать или удалить.'),
+  };
+
+  const ds = () => `<div class="ds on">
+    <div class="pn"><h3>Цвет</h3><div class="cols">${[['canvas','Фон'],['surface','Поверхность'],['selected','Выбранное'],['border-strong','Граница'],['fg','Текст'],['muted','Вторичный'],['primary','Акцент'],['primary-soft','Акцент, фон'],['own','Своё сообщение'],['success','Успех'],['warning','Внимание'],['danger','Опасность']].map(([k, n]) => `<div><i style="background:var(--${k})"></i>${n}</div>`).join('')}</div>
+      <h3 style="margin-top:16px">Цвета папок и аватаров</h3><div class="rw">${['blue','violet','green','orange','pink','teal'].map(c => `<i style="width:26px;height:26px;border-radius:50%;background:var(--f-${c})"></i>`).join('')}</div>
+      <div class="rw" style="margin:0">${av('ИЗ','c1','m')}${av('СН','c2','m')}${av('ИЛ','c3','m round')}${av('МС','c4','m round')}${av('ВР','c5','m')}${av(I('bot','width:19px;height:19px'),'cag','m round')}</div>
+      <div class="cap">Группы — скруглённый квадрат, люди и агенты — круг.</div></div>
+    <div class="pn"><h3>Типографика</h3><div class="ty">
+      <div><small>Заголовок 22/700</small><span style="font-size:22px;font-weight:700">Чаты</span></div><div><small>Шапка 17/700</small><span style="font-size:17px;font-weight:700">Отправить позже</span></div>
+      <div><small>Имя 15,5/600</small><span style="font-size:15.500px;font-weight:600">Инструкторы · зал</span></div><div><small>Сообщение 15</small><span>Могу с 9 до 13</span></div>
+      <div><small>Ввод 16</small><span style="font-size:16px">Сообщение</span></div><div><small>Подпись 12,5</small><span style="font-size:12.500px;color:var(--muted)">9 участников · 4 в сети</span></div><div><small>Метка 12/600</small><span style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">Чаты в папке</span></div></div>
+      <h3 style="margin-top:16px">Скругления</h3><div class="rd"><div><i style="border-radius:10px"></i>10<br>плитка</div><div><i style="border-radius:14px"></i>14<br>кнопка</div><div><i style="border-radius:18px"></i>18<br>сообщение</div><div><i style="border-radius:20px"></i>20<br>поле</div><div><i style="border-radius:24px 24px 0 0"></i>24<br>шторка</div></div></div>
+    <div class="pn"><h3>Кнопки и метки</h3><div class="rw"><button class="btn sm">Главная</button><button class="btn sm pri">Акцент</button><button class="btn sm sec">Вторичная</button></div>
+      <div class="rw"><button class="ib pri">${I('up')}</button><button class="ib soft">${I('mic')}</button><button class="ib soft">${I('plus')}</button><button class="ib dng">${I('trash')}</button><span class="bdg">3</span><span class="bdg mute">12</span><span class="bdg at">@</span><span class="tag">АГЕНТ</span></div>
+      <div class="rw"><span class="fd" aria-selected="true">Все<span class="n">16</span></span><span class="fd"><span class="dot" style="background:var(--f-green)"></span>Слоты</span><span class="chip on">${I('at')}Упоминания</span></div>
+      <div class="cap">Зона нажатия не меньше 40 pt. Тёмная кнопка — главное действие экрана, синяя — действие в переписке.</div></div>
+    <div class="pn"><h3>Сообщения и ввод</h3><div style="display:flex;flex-direction:column;gap:3px">
+      <div class="msg" style="margin:0"><div class="bub">Входящее<span class="meta">9:12</span></div></div><div class="msg me"><div class="bub">Своё<span class="meta">9:20 ${I('dcheck')}</span></div></div>${schedMsg('Отложенное', 'Завтра в 9:00')}
+      <div class="msg"><div class="bub">${voice({t:'0:14', played:9, time:'9:16'})}</div></div></div>
+      <div class="cmp" style="padding:12px 0 0;background:transparent">${typed('<span class="phd">Сообщение</span>').replace('ib pri', 'ib soft').replace(P.up, P.mic)}</div></div>
+  </div>`;
+
+  const root = document.getElementById('root'), nav = document.getElementById('nav');
+  const names = [...Object.keys(V), 'Дизайн-система']; let cur = names[0];
+  const show = n => { cur = n; seed = 7; nav.innerHTML = names.map(x => `<button role="tab" aria-selected="${x === n}">${x}</button>`).join(''); root.innerHTML = V[n] ? `<div class="view on">${V[n]()}</div>` : ds(); const f = root.querySelector('[data-feed]'); root.querySelectorAll('[data-feed]').forEach(e => e.scrollTop = 1e4); };
+  nav.onclick = e => { const b = e.target.closest('button'); if (b) show(b.textContent); };
+  document.getElementById('theme').onclick = e => { const d = root.dataset.theme === 'dark'; root.dataset.theme = d ? 'light' : 'dark'; e.target.textContent = d ? 'Тёмная тема' : 'Светлая тема'; };
+
+  /* ---------- interactions ---------- */
+  let nSched = 0, hold, held = false, timer;
+  const live = () => root.querySelector('[data-live]'), cmp = () => live().querySelector('[data-cmp]');
+  const setCmp = h => { cmp().innerHTML = h; clearInterval(timer); };
+  const push = h => { const f = live().querySelector('[data-feed]'); f.insertAdjacentHTML('beforeend', h); f.scrollTop = 1e4; };
+  const closeOver = () => live().querySelectorAll('.pop,.dim,.sheet').forEach(e => e.remove());
+  const now = () => '9:41';
+  root.addEventListener('input', e => { if (!e.target.matches('[data-in]')) return; const b = cmp().querySelector('[data-send]'), has = e.target.value.trim(); b.className = 'ib ' + (has ? 'pri' : 'soft'); b.dataset.act = has ? 'send' : 'mic'; b.innerHTML = I(has ? 'up' : 'mic'); e.target.style.height = '38px'; e.target.style.height = Math.min(e.target.scrollHeight, 98) + 'px'; });
+  root.addEventListener('pointerdown', e => { const b = e.target.closest('[data-act="send"]'); if (!b) return; held = false; hold = setTimeout(() => { held = true; closeOver(); cmp().insertAdjacentHTML('beforeend', pop); }, 420); });
+  root.addEventListener('pointerup', () => clearTimeout(hold));
+  root.addEventListener('contextmenu', e => { if (e.target.closest('[data-act="send"]')) e.preventDefault(); });
+  root.addEventListener('click', e => {
+    const fd = e.target.closest('.fd[data-f]');
+    if (fd) { const ph = fd.closest('.phone'); if (ph.querySelector('.sheet')) return; ph.querySelector('[data-folders]').innerHTML = folders(fd.dataset.f); ph.querySelector('[data-list]').innerHTML = rows(fd.dataset.f) || '<div class="cap" style="text-align:center;padding:40px 30px">В этой папке пока нет чатов</div>'; return; }
+    const qo = e.target.closest('.qo'); if (qo) { qo.parentNode.querySelectorAll('.qo').forEach(x => x.classList.remove('sel')); qo.classList.add('sel'); const b = qo.closest('.sheet').querySelector('[data-act="plan"]'); if (b) { b.textContent = 'Запланировать: ' + qo.dataset.when.toLowerCase(); b.dataset.when = qo.dataset.when; } return; }
+    const a = e.target.closest('[data-act]'); if (!a || !a.closest('[data-live]')) return;
+    const act = a.dataset.act, text = () => (cmp().querySelector('[data-in]') || {}).value || '';
+    if (act === 'send') { if (held) { held = false; return; } const t = text().trim(); if (!t) return; closeOver(); push(`<div class="msg me"><div class="bub">${t.replace(/</g, '&lt;')}<span class="meta">${now()} ${I('check')}</span></div></div>`); setCmp(idle); }
+    else if (act === 'mic') { setCmp(locked); let s = 8; timer = setInterval(() => { const el = cmp().querySelector('[data-timer]'); if (el) el.textContent = '0:' + String(++s).padStart(2, '0'); }, 1000); }
+    else if (act === 'cancel') setCmp(idle);
+    else if (act === 'sendvoice') { const d = cmp().querySelector('[data-timer]').textContent; push(`<div class="msg me"><div class="bub">${voice({t: d, time: now() + ' ' + I('check')})}</div></div>`); setCmp(idle); }
+    else if (act === 'later') { live().querySelector('.pop').remove(); live().insertAdjacentHTML('beforeend', schedSheet); }
+    else if (act === 'close') closeOver();
+    else if (act === 'plan') { const t = text().trim(), w = a.dataset.when || 'Завтра в 9:00'; closeOver(); push(schedMsg(t.replace(/</g, '&lt;'), w)); live().querySelector('[data-stripbox]').innerHTML = strip(++nSched); setCmp(idle); }
+    else if (act === 'plus') { live().insertAdjacentHTML('beforeend', attach.replace('class="dim"', 'class="dim" data-act="close"')); }
+  });
+  show(new URLSearchParams(location.search).get('v') || window.__V || cur);
+})();
+</script>
+</body></html>
