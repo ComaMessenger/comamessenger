@@ -54,6 +54,7 @@ import { ConnectionBanner } from "@/messenger/ConnectionBanner";
 import { attachmentLimit, useAttachments } from "@/files/useAttachments";
 import { pickFiles, type PickSource } from "@/files/pick";
 import { saveFailureKey } from "@/important/saved";
+import { RowBoundary } from "@/ui/RowBoundary";
 import { AgentPicker } from "./AgentPicker";
 import { AgentStreamRow } from "./AgentStreamRow";
 import { bubblePlacement, type BubblePlacement } from "./bubbles";
@@ -522,16 +523,18 @@ export function ConversationView({
       />
       <ConnectionBanner />
       {inThread && root && (
-        <ThreadRoot
-          api={api}
-          ownID={user.id}
-          message={root}
-          author={memberOf(root.actor_id)}
-          members={members}
-          viewer={viewer}
-          onActions={setMenuFor}
-          onUpdated={conversation.applyMessage}
-        />
+        <RowBoundary kind="message" resetKey={root}>
+          <ThreadRoot
+            api={api}
+            ownID={user.id}
+            message={root}
+            author={memberOf(root.actor_id)}
+            members={members}
+            viewer={viewer}
+            onActions={setMenuFor}
+            onUpdated={conversation.applyMessage}
+          />
+        </RowBoundary>
       )}
       <KeyboardAvoidingView behavior="padding" style={styles.grow}>
         <View style={styles.grow}>
@@ -563,6 +566,15 @@ export function ConversationView({
                   openedAt.current !== null && openedAt.current >= 0
                 ),
                 autoscrollToBottomThreshold: 0.2,
+              }}
+              // Thread captions and reactions load after the first layout and
+              // make the last bubbles taller; a reader at the bottom stays
+              // there instead of seeing the last message under the composer.
+              onContentSizeChange={() => {
+                const focused =
+                  openedAt.current !== null && openedAt.current >= 0;
+                if (atBottom.current && !focused)
+                  list.current?.scrollToEnd({ animated: false });
               }}
               onStartReached={() => void conversation.loadOlder()}
               onScroll={onScroll}
@@ -633,34 +645,40 @@ export function ConversationView({
                         />
                       </View>
                     )}
-                    <MessageRow
-                      api={api}
-                      ownID={user.id}
-                      message={message}
-                      author={memberOf(message.actor_id)}
-                      placement={bubblePlacement(
-                        feed,
-                        index,
-                        user.id,
-                        groupChat,
-                        inThread && index === 0,
-                      )}
-                      quoted={quoted}
-                      quotedAuthor={
-                        quoted ? authorName(quoted.actor_id) : undefined
-                      }
-                      showThread={!inThread}
-                      pinned={pinnedIDs.has(message.id)}
-                      saved={savedIDs.has(message.id)}
-                      highlighted={message.id === highlighted}
-                      onReply={reply}
-                      onThread={openThread}
-                      onActions={setMenuFor}
-                      onRetry={conversation.retryOutbox}
-                      members={members}
-                      viewer={viewer}
-                      onUpdated={conversation.applyMessage}
-                    />
+                    <RowBoundary
+                      kind="message"
+                      resetKey={message}
+                      testID={`message-render-failed-${index}`}
+                    >
+                      <MessageRow
+                        api={api}
+                        ownID={user.id}
+                        message={message}
+                        author={memberOf(message.actor_id)}
+                        placement={bubblePlacement(
+                          feed,
+                          index,
+                          user.id,
+                          groupChat,
+                          inThread && index === 0,
+                        )}
+                        quoted={quoted}
+                        quotedAuthor={
+                          quoted ? authorName(quoted.actor_id) : undefined
+                        }
+                        showThread={!inThread}
+                        pinned={pinnedIDs.has(message.id)}
+                        saved={savedIDs.has(message.id)}
+                        highlighted={message.id === highlighted}
+                        onReply={reply}
+                        onThread={openThread}
+                        onActions={setMenuFor}
+                        onRetry={conversation.retryOutbox}
+                        members={members}
+                        viewer={viewer}
+                        onUpdated={conversation.applyMessage}
+                      />
+                    </RowBoundary>
                   </View>
                 );
               }}

@@ -451,4 +451,9 @@ export const ru = {
   messageUnpinned: "Сообщение откреплено",
   pinnedMark: "Закреплено в чате",
   savedLimitReached: "Достигнут лимит сохранённых — уберите ненужные",
+  messageRenderFailed: "Не удалось показать сообщение",
+  chatRenderFailed: "Не удалось показать чат",
+  screenErrorTitle: "Не удалось открыть экран",
+  screenErrorHint: "Что-то пошло не так при показе. Попробуйте ещё раз.",
+  photoLoadFailed: "Не удалось загрузить фото",
 } as const;

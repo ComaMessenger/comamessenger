@@ -1,0 +1,30 @@
+# Opens the long-press menu of a message found by TEXT (a regex over the
+# accessible label of the bubble). The bubble is brought to the middle of
+# the feed first: near the composer a long press lands in the text field.
+appId: com.comamessenger.app
+---
+- runFlow:
+    when:
+      visible: Continue
+    commands:
+      - tapOn: Continue
+- hideKeyboard:
+    optional: true
+# A bubble that grew (a reaction, a thread caption) can sit under the
+# composer until the feed is brought to the end (see docs/backlog.md).
+- runFlow:
+    when:
+      visible: К последнему сообщению
+    commands:
+      - tapOn: К последнему сообщению
+      - waitForAnimationToEnd
+- scrollUntilVisible:
+    element: ${TEXT}
+    direction: UP
+    centerElement: true
+    timeout: 15000
+- longPressOn: ${TEXT}
+- extendedWaitUntil:
+    visible:
+      id: message-menu
+    timeout: 5000

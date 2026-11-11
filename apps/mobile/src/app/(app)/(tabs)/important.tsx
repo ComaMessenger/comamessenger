@@ -24,6 +24,11 @@ import { useMessenger } from "@/messenger/MessengerProvider";
 import { useTheme } from "@/lib/theme";
 import { chatTitle } from "@/chats/ChatRow";
 import { ImportantRow } from "@/important/ImportantRow";
+import { RowBoundary } from "@/ui/RowBoundary";
+import { ScreenError } from "@/ui/ScreenError";
+
+/** A render error shows a retry screen instead of closing the app. */
+export { ScreenError as ErrorBoundary };
 import { useImportant, type ImportantItem } from "@/important/useImportant";
 import { MenuSheet } from "@/ui/MenuSheet";
 import { Notice } from "@/ui/Notice";
@@ -136,12 +141,14 @@ export default function ImportantScreen() {
         data={visible}
         keyExtractor={(item) => item.message.id}
         renderItem={({ item, index }) => (
-          <ImportantRow
-            testID={`important-row-${index}`}
-            item={item}
-            onOpen={open}
-            onActions={setMenuFor}
-          />
+          <RowBoundary kind="message" resetKey={item}>
+            <ImportantRow
+              testID={`important-row-${index}`}
+              item={item}
+              onOpen={open}
+              onActions={setMenuFor}
+            />
+          </RowBoundary>
         )}
         onEndReached={() => {
           if (query.hasNextPage && !query.isFetchingNextPage)

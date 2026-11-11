@@ -435,4 +435,9 @@ export const en: Record<keyof typeof ru, string> = {
   pinnedMark: "Pinned in this chat",
   savedLimitReached:
     "You have reached the limit of saved messages — remove the ones you no longer need",
+  messageRenderFailed: "Could not show this message",
+  chatRenderFailed: "Could not show this chat",
+  screenErrorTitle: "Could not open this screen",
+  screenErrorHint: "Something went wrong while showing it. Please try again.",
+  photoLoadFailed: "Could not load the photo",
 };

@@ -1,11 +1,23 @@
 # Shared start for flows that reuse the signed-in state of sign-in.yaml.
+# Release builds start by themselves; a development build is pointed at
+# Metro first: maestro test -e DEV_CLIENT=true e2e/<flow>.yaml
 appId: com.comamessenger.app
 env:
   METRO: http%3A%2F%2Flocalhost%3A8081
+  DEV_CLIENT: "false"
 ---
 - launchApp:
     stopApp: true
-- openLink: exp+coma://expo-development-client/?url=${METRO}
+- runFlow:
+    when:
+      true: ${DEV_CLIENT == 'true'}
+    commands:
+      - openLink: exp+coma://expo-development-client/?url=${METRO}
+- runFlow:
+    when:
+      visible: Continue
+    commands:
+      - tapOn: Continue
 - runFlow:
     when:
       visible: Reload

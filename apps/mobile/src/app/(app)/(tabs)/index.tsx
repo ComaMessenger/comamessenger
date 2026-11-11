@@ -34,6 +34,11 @@ import { Notice } from "@/ui/Notice";
 import { TabHeader } from "@/ui/TabHeader";
 import { Text } from "@/ui/Text";
 import { WorkspaceMark } from "@/ui/WorkspaceMark";
+import { RowBoundary } from "@/ui/RowBoundary";
+import { ScreenError } from "@/ui/ScreenError";
+
+/** A render error shows a retry screen instead of closing the app. */
+export { ScreenError as ErrorBoundary };
 
 type FolderEditor = { folder?: ChatFolder; chatIDs?: string[] } | null;
 
@@ -154,22 +159,24 @@ export default function ChatsScreen() {
         renderItem={({ item, index }) => {
           const count = counts.get(item.id);
           return (
-            <ChatRow
-              testID={`chat-row-${index}`}
-              chat={item}
-              ownID={user.id}
-              unreadCount={count?.unread_count ?? 0}
-              mentionCount={count?.mention_count ?? 0}
-              pinned={pinned.has(item.id)}
-              draft={drafts[item.id]}
-              presence={
-                item.direct_peer
-                  ? presence[item.direct_peer.actor_id]
-                  : undefined
-              }
-              onOpen={open}
-              onActions={setActionsFor}
-            />
+            <RowBoundary kind="chat" resetKey={item}>
+              <ChatRow
+                testID={`chat-row-${index}`}
+                chat={item}
+                ownID={user.id}
+                unreadCount={count?.unread_count ?? 0}
+                mentionCount={count?.mention_count ?? 0}
+                pinned={pinned.has(item.id)}
+                draft={drafts[item.id]}
+                presence={
+                  item.direct_peer
+                    ? presence[item.direct_peer.actor_id]
+                    : undefined
+                }
+                onOpen={open}
+                onActions={setActionsFor}
+              />
+            </RowBoundary>
           );
         }}
         ListEmptyComponent={empty}

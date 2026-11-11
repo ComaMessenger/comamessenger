@@ -7,6 +7,7 @@ export * from "./folders";
 export * from "./markdown";
 export * from "./mentions";
 export * from "./messageMenu";
+export * from "./messageShape";
 export * from "./links";
 export * from "./outbox";
 export * from "./realtime";

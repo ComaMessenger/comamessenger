@@ -1,5 +1,12 @@
 import { useState } from "react";
-import { Alert, Modal, Pressable, StyleSheet, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Pressable,
+  StyleSheet,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { FileText, Share2, X } from "lucide-react-native";
@@ -110,6 +117,12 @@ export function MessageFiles({
   const { t } = useTranslation();
   const [viewing, setViewing] = useState<FileMetadata | null>(null);
   const viewerSource = useFileSource(viewing?.id);
+  // The full-size file can take seconds: the preview stands in meanwhile,
+  // so the viewer is never a black screen.
+  const previewSource = useFileSource(viewing?.preview_file_id ?? undefined);
+  const [viewerState, setViewerState] = useState<
+    "loading" | "loaded" | "failed"
+  >("loading");
   const images = files.filter(
     (file) => file.mime.startsWith("image/") && file.status === "ready",
   );
@@ -123,7 +136,10 @@ export function MessageFiles({
               key={file.id}
               api={api}
               file={file}
-              onOpen={() => setViewing(file)}
+              onOpen={() => {
+                setViewerState("loading");
+                setViewing(file);
+              }}
             />
           ))}
         </View>
@@ -136,7 +152,7 @@ export function MessageFiles({
         animationType="fade"
         onRequestClose={() => setViewing(null)}
       >
-        <SafeAreaView style={styles.viewer}>
+        <SafeAreaView testID="photo-viewer" style={styles.viewer}>
           <View style={styles.viewerBar}>
             <Pressable
               accessibilityRole="button"
@@ -161,15 +177,40 @@ export function MessageFiles({
               </Pressable>
             )}
           </View>
-          {viewerSource && (
-            <Image
-              source={viewerSource}
-              contentFit="contain"
-              cachePolicy="disk"
-              style={styles.grow}
-              accessibilityLabel={viewing?.name}
-            />
-          )}
+          <View
+            testID={
+              viewerState === "loaded" ? "photo-viewer-loaded" : undefined
+            }
+            style={styles.grow}
+          >
+            {viewerSource && (
+              <Image
+                source={viewerSource}
+                placeholder={previewSource ?? undefined}
+                placeholderContentFit="contain"
+                contentFit="contain"
+                cachePolicy="disk"
+                style={styles.grow}
+                accessibilityLabel={viewing?.name}
+                onLoad={() => setViewerState("loaded")}
+                onError={() => setViewerState("failed")}
+              />
+            )}
+            {viewerState === "loading" && (
+              <ActivityIndicator
+                testID="photo-viewer-loading"
+                color="#ffffff"
+                style={styles.viewerOverlay}
+              />
+            )}
+            {viewerState === "failed" && (
+              <View style={styles.viewerOverlay}>
+                <Text size={15} style={styles.viewerText}>
+                  {t("photoLoadFailed")}
+                </Text>
+              </View>
+            )}
+          </View>
         </SafeAreaView>
       </Modal>
     </View>
@@ -177,6 +218,12 @@ export function MessageFiles({
 }
 
 const styles = StyleSheet.create({
+  viewerOverlay: {
+    ...StyleSheet.absoluteFill,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  viewerText: { color: "#ffffff", textAlign: "center" },
   files: { gap: spacing[2] },
   gallery: { flexDirection: "row", flexWrap: "wrap", gap: spacing[1] },
   image: {

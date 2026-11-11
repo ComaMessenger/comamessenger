@@ -14,6 +14,17 @@ appId: com.comamessenger.app
 
 # A new folder with the first chat; it opens as the selected tab.
 - evalScript: ${output.folder = 'Папка ' + String(Date.now()).slice(-5)}
+# «+» closes the row of folder tabs, often past the screen edge.
+- repeat:
+    while:
+      notVisible:
+        id: new-folder
+    times: 4
+    commands:
+      - swipe:
+          from:
+            id: chat-tabs
+          direction: LEFT
 - tapOn:
     id: new-folder
 - extendedWaitUntil:
@@ -23,6 +34,14 @@ appId: com.comamessenger.app
 - tapOn:
     id: folder-name
 - inputText: ${output.folder}
+# The keyboard covers the chat list of the sheet; iOS may also show its
+# one-time «Quickly Change Keyboards» tip.
+- runFlow:
+    when:
+      visible: Continue
+    commands:
+      - tapOn: Continue
+- hideKeyboard
 - tapOn:
     id: folder-chat-0
 - takeScreenshot: folder-sheet
@@ -49,6 +68,16 @@ appId: com.comamessenger.app
     timeout: 10000
 
 # Long press on a chat: the web context menu actions.
+- repeat:
+    while:
+      notVisible:
+        id: chat-tab-all
+    times: 4
+    commands:
+      - swipe:
+          from:
+            id: chat-tabs
+          direction: RIGHT
 - tapOn:
     id: chat-tab-all
 - longPressOn:
@@ -67,15 +96,19 @@ appId: com.comamessenger.app
     point: 50%,8%
 
 # «Important»: the reader's own saved messages, or the empty state.
-- tapOn:
-    id: tab-important
+- runFlow:
+    file: tabs.yaml
+    env:
+      TAB: important
 - extendedWaitUntil:
     visible:
       id: important-list
     timeout: 15000
 - takeScreenshot: important
-- tapOn:
-    id: tab-threads
+- runFlow:
+    file: tabs.yaml
+    env:
+      TAB: threads
 - extendedWaitUntil:
     visible:
       id: thread-list

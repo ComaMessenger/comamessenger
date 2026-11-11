@@ -1,0 +1,17 @@
+# Types TEXT into the composer and sends it. iOS shows one-time keyboard
+# tips («Continue») over the field on first focus; they eat the typing.
+appId: com.comamessenger.app
+---
+- tapOn:
+    id: composer-input
+- runFlow:
+    when:
+      visible: Continue
+    commands:
+      - tapOn: Continue
+      - tapOn:
+          id: composer-input
+- inputText: ${TEXT}
+- assertVisible: .*${TEXT}.*
+- tapOn:
+    id: composer-send

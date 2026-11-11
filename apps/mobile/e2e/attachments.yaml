@@ -21,7 +21,19 @@ appId: com.comamessenger.app
 # Second photo of the simulator's sample library.
 - tapOn:
     point: 50%,28%
-- tapOn: (Add|Добавить)
+# Older iOS confirms with «Добавить»; iOS 26 with a check mark top right.
+- runFlow:
+    when:
+      visible: (Add|Добавить)
+    commands:
+      - tapOn: (Add|Добавить)
+- runFlow:
+    when:
+      notVisible:
+        id: composer-send
+    commands:
+      - tapOn:
+          point: 89%,16%
 # The send button becomes enabled once the upload finishes.
 - extendedWaitUntil:
     visible:
