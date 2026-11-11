@@ -1,0 +1,290 @@
+package message
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"github.com/comamessenger/comamessenger/core/internal/eventlog"
+	"github.com/comamessenger/comamessenger/core/internal/identity"
+	"github.com/comamessenger/comamessenger/core/internal/testdb"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+func TestSavedMessages(t *testing.T) {
+	pool := testdb.New(t)
+	fixture := seedFixture(t, pool)
+	service := NewService(pool, 64*1024, 100, nil)
+	ctx := context.Background()
+	events := eventlog.NewStore(pool)
+
+	post := func(t *testing.T, chatID, body string) Message {
+		t.Helper()
+		result, _, err := service.Create(ctx, fixture.owner, chatID, CreateInput{ClientMsgID: mustID(t), Body: body, BodyFormat: "plain"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return result
+	}
+	listIDs := func(t *testing.T, user identity.User, chatID *string) []string {
+		t.Helper()
+		page, err := service.ListSaved(ctx, user, SavedListOptions{ChatID: chatID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids := make([]string, 0, len(page.Items))
+		for _, item := range page.Items {
+			ids = append(ids, item.Message.ID)
+		}
+		return ids
+	}
+
+	t.Run("any member saves once, idempotently, with a private event", func(t *testing.T) {
+		target := post(t, fixture.groupID, "remember me")
+		before := organizationSequence(t, pool, fixture.owner.OrgID)
+		first, created, err := service.SaveMessage(ctx, fixture.member, target.ID)
+		if err != nil || !created {
+			t.Fatalf("SaveMessage() = %+v, %v, %v; want created", first, created, err)
+		}
+		again, created, err := service.SaveMessage(ctx, fixture.member, target.ID)
+		if err != nil || created || !again.SavedAt.Equal(first.SavedAt) || again.ChatID != fixture.groupID {
+			t.Fatalf("repeat SaveMessage() = %+v, %v, %v; want the existing save", again, created, err)
+		}
+		after := organizationSequence(t, pool, fixture.owner.OrgID)
+		if after != before+1 {
+			t.Fatalf("event sequence moved %d, want 1", after-before)
+		}
+		assertCount(t, pool, `SELECT count(*) FROM saved_messages WHERE actor_id = $1 AND message_id = $2`, 1, fixture.member.ActorID, target.ID)
+		assertCount(t, pool, `SELECT count(*) FROM events WHERE seq = $1 AND type = 'message.saved' AND audience_actor_id = $2 AND chat_id IS NULL`, 1, after, fixture.member.ActorID)
+
+		// Only the saver's sessions get the event, live or on replay.
+		live, err := events.Live(ctx, fixture.owner.OrgID, before, after, 10)
+		if err != nil || len(live) != 1 {
+			t.Fatalf("Live() = %+v, %v", live, err)
+		}
+		if got := live[0].RecipientActorIDs; len(got) != 1 || got[0] != fixture.member.ActorID {
+			t.Fatalf("recipients = %v, want only the saver", got)
+		}
+		for _, other := range []identity.User{fixture.owner, fixture.moderator} {
+			frames, err := events.Replay(ctx, other, "", before, after, 10)
+			if err != nil || len(frames) != 0 {
+				t.Fatalf("Replay() for another person = %+v, %v; want nothing", frames, err)
+			}
+		}
+		frames, err := events.Replay(ctx, fixture.member, "", before, after, 10)
+		if err != nil || len(frames) != 1 || frames[0].Type != "message.saved" {
+			t.Fatalf("Replay() for the saver = %+v, %v", frames, err)
+		}
+
+		if ids := listIDs(t, fixture.member, nil); len(ids) == 0 || ids[0] != target.ID {
+			t.Fatalf("saver list = %v, want %s first", ids, target.ID)
+		}
+		ids, err := service.SavedIDs(ctx, fixture.member, fixture.groupID)
+		if err != nil || len(ids) == 0 || ids[0] != target.ID {
+			t.Fatalf("SavedIDs() = %v, %v", ids, err)
+		}
+	})
+
+	t.Run("nobody else sees or can make another person's saves", func(t *testing.T) {
+		target := post(t, fixture.groupID, "private")
+		if _, _, err := service.SaveMessage(ctx, fixture.member, target.ID); err != nil {
+			t.Fatal(err)
+		}
+		// The chat owner and a workspace moderator see none of it.
+		for _, other := range []identity.User{fixture.owner, fixture.moderator} {
+			for _, id := range listIDs(t, other, nil) {
+				if id == target.ID {
+					t.Fatalf("%s sees another person's save", other.OrgRole)
+				}
+			}
+		}
+		ownerIDs, err := service.SavedIDs(ctx, fixture.owner, fixture.groupID)
+		if err != nil || len(ownerIDs) != 0 {
+			t.Fatalf("owner SavedIDs() = %v, %v; want empty", ownerIDs, err)
+		}
+		// A moderator outside the chat can neither read the stars nor save.
+		if _, err := service.SavedIDs(ctx, fixture.moderator, fixture.groupID); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("outsider SavedIDs() error = %v, want ErrNotFound", err)
+		}
+		if _, _, err := service.SaveMessage(ctx, fixture.moderator, target.ID); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("outsider SaveMessage() error = %v, want ErrNotFound", err)
+		}
+		// Unsaving someone else's save is impossible: it only touches one's own.
+		if removed, err := service.UnsaveMessage(ctx, fixture.owner, target.ID); err != nil || removed {
+			t.Fatalf("owner UnsaveMessage() = %v, %v; want nothing removed", removed, err)
+		}
+		assertCount(t, pool, `SELECT count(*) FROM saved_messages WHERE actor_id = $1 AND message_id = $2`, 1, fixture.member.ActorID, target.ID)
+		// Unknown and deleted messages are not found.
+		if _, _, err := service.SaveMessage(ctx, fixture.member, mustID(t)); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("unknown SaveMessage() error = %v", err)
+		}
+		if _, _, err := service.SaveMessage(ctx, fixture.member, "nope"); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("invalid SaveMessage() error = %v", err)
+		}
+	})
+
+	t.Run("access loss hides saves, regaining it shows them, unsave still works", func(t *testing.T) {
+		target := post(t, fixture.channelID, "channel news")
+		if _, _, err := service.SaveMessage(ctx, fixture.member, target.ID); err != nil {
+			t.Fatal(err)
+		}
+		channel := fixture.channelID
+		if ids := listIDs(t, fixture.member, &channel); len(ids) != 1 {
+			t.Fatalf("channel saves = %v", ids)
+		}
+		if _, err := pool.Exec(ctx, `DELETE FROM chat_members WHERE chat_id = $1 AND actor_id = $2`, channel, fixture.member.ActorID); err != nil {
+			t.Fatal(err)
+		}
+		if ids := listIDs(t, fixture.member, nil); contains(ids, target.ID) {
+			t.Fatal("a save from a chat the person left is still listed")
+		}
+		if _, err := service.SavedIDs(ctx, fixture.member, channel); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("SavedIDs() after leaving error = %v", err)
+		}
+		if _, _, err := service.SaveMessage(ctx, fixture.member, target.ID); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("SaveMessage() after leaving error = %v", err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO chat_members (chat_id, actor_id, org_id, role) VALUES ($1, $2, $3, 'member')`, channel, fixture.member.ActorID, fixture.member.OrgID); err != nil {
+			t.Fatal(err)
+		}
+		if ids := listIDs(t, fixture.member, &channel); !contains(ids, target.ID) {
+			t.Fatal("the save did not come back with access")
+		}
+		// An archived chat hides its saves too.
+		if _, err := pool.Exec(ctx, `UPDATE chats SET archived_at = now() WHERE id = $1`, channel); err != nil {
+			t.Fatal(err)
+		}
+		if ids := listIDs(t, fixture.member, nil); contains(ids, target.ID) {
+			t.Fatal("a save from an archived chat is still listed")
+		}
+		if removed, err := service.UnsaveMessage(ctx, fixture.member, target.ID); err != nil || !removed {
+			t.Fatalf("UnsaveMessage() without access = %v, %v; want removed", removed, err)
+		}
+		if removed, err := service.UnsaveMessage(ctx, fixture.member, target.ID); err != nil || removed {
+			t.Fatalf("repeat UnsaveMessage() = %v, %v; want idempotent", removed, err)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE chats SET archived_at = NULL WHERE id = $1`, channel); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("deleting a message drops every save of it", func(t *testing.T) {
+		target := post(t, fixture.groupID, "soon gone")
+		for _, user := range []identity.User{fixture.member, fixture.owner} {
+			if _, _, err := service.SaveMessage(ctx, user, target.ID); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, err := service.Delete(ctx, fixture.owner, target.ID); err != nil {
+			t.Fatal(err)
+		}
+		assertCount(t, pool, `SELECT count(*) FROM saved_messages WHERE message_id = $1`, 0, target.ID)
+		if _, _, err := service.SaveMessage(ctx, fixture.member, target.ID); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("SaveMessage() of a deleted message error = %v", err)
+		}
+	})
+
+	t.Run("pagination is newest save first", func(t *testing.T) {
+		person := addMember(t, pool, fixture, fixture.groupID)
+		var saved []string
+		for range 3 {
+			target := post(t, fixture.groupID, "page")
+			if _, _, err := service.SaveMessage(ctx, person, target.ID); err != nil {
+				t.Fatal(err)
+			}
+			saved = append(saved, target.ID)
+		}
+		first, err := service.ListSaved(ctx, person, SavedListOptions{Limit: 2})
+		if err != nil || len(first.Items) != 2 || first.NextBefore == nil {
+			t.Fatalf("first page = %+v, %v", first, err)
+		}
+		if first.Items[0].Message.ID != saved[2] || first.Items[1].Message.ID != saved[1] {
+			t.Fatal("first page is not newest first")
+		}
+		if first.Items[0].Author.ActorID != fixture.owner.ActorID || first.Items[0].Chat.ID != fixture.groupID || first.Items[0].Chat.DisplayName != "group" {
+			t.Fatalf("card data = %+v / %+v", first.Items[0].Author, first.Items[0].Chat)
+		}
+		second, err := service.ListSaved(ctx, person, SavedListOptions{Limit: 2, Before: first.NextBefore})
+		if err != nil || len(second.Items) != 1 || second.Items[0].Message.ID != saved[0] || second.NextBefore != nil {
+			t.Fatalf("second page = %+v, %v", second, err)
+		}
+		if _, err := service.ListSaved(ctx, person, SavedListOptions{Limit: 101}); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("oversized limit error = %v", err)
+		}
+	})
+
+	t.Run("limit counts readable saves only", func(t *testing.T) {
+		limited := NewService(pool, 64*1024, 100, nil)
+		limited.savedLimit = 2
+		person := addMember(t, pool, fixture, fixture.groupID)
+		if _, err := pool.Exec(ctx, `INSERT INTO chat_members (chat_id, actor_id, org_id, role) VALUES ($1, $2, $3, 'member')`, fixture.channelID, person.ActorID, person.OrgID); err != nil {
+			t.Fatal(err)
+		}
+		hidden := post(t, fixture.channelID, "hidden later")
+		first := post(t, fixture.groupID, "one")
+		second := post(t, fixture.groupID, "two")
+		for _, target := range []Message{hidden, first} {
+			if _, _, err := limited.SaveMessage(ctx, person, target.ID); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, _, err := limited.SaveMessage(ctx, person, second.ID); !errors.Is(err, ErrSavedLimit) {
+			t.Fatalf("SaveMessage() over the limit error = %v", err)
+		}
+		// A repeat of an existing save is not blocked by the limit.
+		if _, created, err := limited.SaveMessage(ctx, person, first.ID); err != nil || created {
+			t.Fatalf("repeat at the limit = %v, %v", created, err)
+		}
+		if _, err := pool.Exec(ctx, `DELETE FROM chat_members WHERE chat_id = $1 AND actor_id = $2`, fixture.channelID, person.ActorID); err != nil {
+			t.Fatal(err)
+		}
+		if _, created, err := limited.SaveMessage(ctx, person, second.ID); err != nil || !created {
+			t.Fatalf("SaveMessage() after access loss = %v, %v; want the hidden save purged", created, err)
+		}
+		assertCount(t, pool, `SELECT count(*) FROM saved_messages WHERE actor_id = $1`, 2, person.ActorID)
+	})
+
+	t.Run("rows go with the chat, the message and the person", func(t *testing.T) {
+		person := addMember(t, pool, fixture, fixture.groupID)
+		target := post(t, fixture.groupID, "cascade")
+		if _, _, err := service.SaveMessage(ctx, person, target.ID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `DELETE FROM messages WHERE id = $1`, target.ID); err != nil {
+			t.Fatal(err)
+		}
+		assertCount(t, pool, `SELECT count(*) FROM saved_messages WHERE actor_id = $1`, 0, person.ActorID)
+		// Every foreign key of the table cascades: person, message and chat.
+		assertCount(t, pool, `
+			SELECT count(*) FROM pg_constraint
+			WHERE conrelid = 'saved_messages'::regclass AND contype = 'f' AND confdeltype = 'c'`, 3)
+		// Messages and events keep chats and people from hard deletion, so
+		// in practice rows leave through the message (above) or the
+		// organization; the constraint check covers the rest.
+	})
+}
+
+func addMember(t *testing.T, pool *pgxpool.Pool, fixture fixture, chatID string) identity.User {
+	t.Helper()
+	user := identity.User{ActorID: mustID(t), OrgID: fixture.owner.OrgID, OrgRole: "member", Status: "active"}
+	handle := "p" + user.ActorID[len(user.ActorID)-12:]
+	if _, err := pool.Exec(context.Background(), `
+		INSERT INTO actors (id, org_id, type, org_role, display_name, handle) VALUES ($1, $2, 'user', 'member', $3, $4)`,
+		user.ActorID, user.OrgID, handle, handle); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(context.Background(), `INSERT INTO chat_members (chat_id, actor_id, org_id, role) VALUES ($1, $2, $3, 'member')`,
+		chatID, user.ActorID, user.OrgID); err != nil {
+		t.Fatal(err)
+	}
+	return user
+}
+
+func contains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}

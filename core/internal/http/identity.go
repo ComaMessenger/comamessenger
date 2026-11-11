@@ -104,6 +104,7 @@ type identityHandlers struct {
 	websocketRate         *ipRateLimiter
 	actorRate             *ipRateLimiter
 	ownershipRate         *ipRateLimiter
+	savedRate             *ipRateLimiter
 	bootstrapToken        string
 	requireBootstrapToken bool
 	trustedProxyCIDRs     []netip.Prefix
@@ -123,7 +124,9 @@ func newIdentityHandlers(logger *slog.Logger, allowedOrigin string, dependencies
 		cookieSecure: dependencies.CookieSecure, refreshTTL: dependencies.RefreshTokenTTL,
 		bootstrapRate: newIPRateLimiter(5, 5), loginRate: newIPRateLimiter(10, 10),
 		refreshRate: newIPRateLimiter(30, 20), invitationRate: newIPRateLimiter(10, 10), websocketRate: newIPRateLimiter(60, 20), actorRate: newIPRateLimiter(1200, 200),
-		ownershipRate:  newIPRateLimiter(5, 5),
+		ownershipRate: newIPRateLimiter(5, 5),
+		// Saving is a cheap private toggle; a person taps it, a script does not.
+		savedRate:      newIPRateLimiter(120, 30),
 		bootstrapToken: dependencies.BootstrapToken, requireBootstrapToken: dependencies.RequireBootstrapToken,
 		trustedProxyCIDRs: dependencies.TrustedProxyCIDRs, revokeRealtimeSession: dependencies.RevokeRealtimeSession,
 	}
@@ -309,6 +312,10 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Delete("/messages/{messageID}/reactions/{emoji}", h.deleteReaction)
 			protected.Put("/messages/{messageID}/pin", h.putMessagePin)
 			protected.Delete("/messages/{messageID}/pin", h.deleteMessagePin)
+			protected.With(h.actorRateLimit("saved-messages", h.savedRate)).Put("/messages/{messageID}/saved", h.saveMessage)
+			protected.With(h.actorRateLimit("saved-messages", h.savedRate)).Delete("/messages/{messageID}/saved", h.unsaveMessage)
+			protected.Get("/saved-messages", h.listSavedMessages)
+			protected.Get("/saved-messages/ids", h.listSavedMessageIDs)
 			protected.Post("/messages/{messageID}/forward", h.forwardMessage)
 			protected.Post("/messages/{messageID}/actions/{actionID}", h.pressMessageAction)
 			protected.Get("/messages/{messageID}/thread", h.listThread)

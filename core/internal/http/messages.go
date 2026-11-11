@@ -186,6 +186,66 @@ func (h *identityHandlers) listMessagePins(w standardhttp.ResponseWriter, r *sta
 	writeJSON(h.logger, w, standardhttp.StatusOK, map[string]any{"pins": result})
 }
 
+func (h *identityHandlers) saveMessage(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, created, err := h.messages.SaveMessage(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "messageID"))
+	if err != nil {
+		h.messageError(w, r, err)
+		return
+	}
+	status := standardhttp.StatusOK
+	if created {
+		status = standardhttp.StatusCreated
+	}
+	writeJSON(h.logger, w, status, result)
+}
+
+func (h *identityHandlers) unsaveMessage(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	if _, err := h.messages.UnsaveMessage(r.Context(), authFromContext(r.Context()).User, chi.URLParam(r, "messageID")); err != nil {
+		h.messageError(w, r, err)
+		return
+	}
+	w.WriteHeader(standardhttp.StatusNoContent)
+}
+
+func (h *identityHandlers) listSavedMessages(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	query := r.URL.Query()
+	options := message.SavedListOptions{}
+	if value := query.Get("chat_id"); value != "" {
+		options.ChatID = &value
+	}
+	if value := query.Get("before"); value != "" {
+		before, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "validation_failed", "before must be an integer")
+			return
+		}
+		options.Before = &before
+	}
+	if value := query.Get("limit"); value != "" {
+		limit, err := strconv.Atoi(value)
+		if err != nil {
+			h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "validation_failed", "limit must be an integer")
+			return
+		}
+		options.Limit = limit
+	}
+	result, err := h.messages.ListSaved(r.Context(), authFromContext(r.Context()).User, options)
+	if err != nil {
+		h.messageError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, result)
+}
+
+func (h *identityHandlers) listSavedMessageIDs(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	result, err := h.messages.SavedIDs(r.Context(), authFromContext(r.Context()).User, r.URL.Query().Get("chat_id"))
+	if err != nil {
+		h.messageError(w, r, err)
+		return
+	}
+	writeJSON(h.logger, w, standardhttp.StatusOK, map[string]any{"message_ids": result})
+}
+
 func (h *identityHandlers) forwardMessage(w standardhttp.ResponseWriter, r *standardhttp.Request) {
 	var input message.ForwardInput
 	if err := decodeJSON(w, r, &input); err != nil {
@@ -307,6 +367,8 @@ func (h *identityHandlers) messageError(w standardhttp.ResponseWriter, r *standa
 		h.writeError(w, r, standardhttp.StatusConflict, "version_conflict", "The message was changed by another request.")
 	case errors.Is(err, message.ErrTooLarge):
 		h.writeError(w, r, standardhttp.StatusRequestEntityTooLarge, "payload_too_large", "The message body is too large.")
+	case errors.Is(err, message.ErrSavedLimit):
+		h.writeError(w, r, standardhttp.StatusConflict, "saved_limit_reached", "The saved messages limit was reached; remove some saved messages first.")
 	case errors.Is(err, message.ErrRateLimited):
 		h.writeError(w, r, standardhttp.StatusTooManyRequests, "rate_limited", "The message action limit was reached.")
 	case errors.Is(err, message.ErrInvalid):

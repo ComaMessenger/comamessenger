@@ -90,6 +90,11 @@ func TestRequiredAgentScopeUsesClosedAllowlist(t *testing.T) {
 		{standardhttp.MethodGet, "/api/v1/agents", "", false},
 		// Buttons are pressed by people; agent API keys cannot press them.
 		{standardhttp.MethodPost, "/api/v1/messages/00000000-0000-7000-8000-000000000001/actions/accept", "", false},
+		// Saved messages are a person's private bookmarks; agent keys see none.
+		{standardhttp.MethodPut, "/api/v1/messages/00000000-0000-7000-8000-000000000001/saved", "", false},
+		{standardhttp.MethodDelete, "/api/v1/messages/00000000-0000-7000-8000-000000000001/saved", "", false},
+		{standardhttp.MethodGet, "/api/v1/saved-messages", "", false},
+		{standardhttp.MethodGet, "/api/v1/saved-messages/ids", "", false},
 	}
 	for _, test := range tests {
 		t.Run(test.method+" "+test.path, func(t *testing.T) {

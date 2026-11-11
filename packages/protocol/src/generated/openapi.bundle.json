@@ -2987,6 +2987,179 @@
         }
       }
     },
+    "/api/v1/messages/{message_id}/saved": {
+      "put": {
+        "operationId": "saveMessage",
+        "description": "Saves a message for the current person only. Any member who can read the message may save it; nobody else learns about it. Realtime message.saved goes to the person's own sessions only.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MessageId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The message was already saved (idempotent replay).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedMessageState"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Message saved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedMessageState"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "unsaveMessage",
+        "description": "Removes the message from the person's saved messages, even after access to its chat is lost.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MessageId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The message is not saved."
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/saved-messages": {
+      "get": {
+        "operationId": "listSavedMessages",
+        "description": "The person's saved messages across chats, newest save first. Only messages the person can still read are returned: saves in chats they left, chats that were deleted and deleted messages are skipped.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of saved messages; next_before continues it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedMessagePage"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/saved-messages/ids": {
+      "get": {
+        "operationId": "listSavedMessageIds",
+        "description": "Identifiers of the person's saved messages in one chat, for the star in the feed. Kept apart from Message so the feed stays the same for every reader.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Saved message identifiers in the chat.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedMessageIds"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/v1/messages/{message_id}/forward": {
       "post": {
         "operationId": "forwardMessage",
@@ -9075,6 +9248,8 @@
           "message.deleted",
           "message.pinned",
           "message.unpinned",
+          "message.saved",
+          "message.unsaved",
           "reaction.added",
           "reaction.removed",
           "thread.followed",
@@ -16548,6 +16723,158 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/MessagePin"
+            }
+          }
+        }
+      },
+      "SavedMessageState": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "message_id",
+          "chat_id",
+          "saved_at"
+        ],
+        "properties": {
+          "message_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "chat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "saved_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SavedMessageAuthor": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "actor_id",
+          "display_name",
+          "type",
+          "avatar_version"
+        ],
+        "properties": {
+          "actor_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "user",
+              "agent"
+            ]
+          },
+          "avatar_version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "SavedMessageChat": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "display_name"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "group",
+              "channel"
+            ]
+          },
+          "display_name": {
+            "type": "string"
+          }
+        }
+      },
+      "SavedMessage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "cursor",
+          "saved_at",
+          "message",
+          "author",
+          "chat"
+        ],
+        "properties": {
+          "cursor": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "description": "Position of the save; pass as before to read older saves."
+          },
+          "saved_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "message": {
+            "$ref": "#/components/schemas/Message"
+          },
+          "author": {
+            "$ref": "#/components/schemas/SavedMessageAuthor"
+          },
+          "chat": {
+            "$ref": "#/components/schemas/SavedMessageChat"
+          }
+        }
+      },
+      "SavedMessagePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "next_before"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SavedMessage"
+            }
+          },
+          "next_before": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 1
+          }
+        }
+      },
+      "SavedMessageIds": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "message_ids"
+        ],
+        "properties": {
+          "message_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
             }
           }
         }

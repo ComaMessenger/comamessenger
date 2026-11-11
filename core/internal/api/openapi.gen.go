@@ -1619,7 +1619,9 @@ const (
 	MessageCreated     DurableEventTypeV1 = "message.created"
 	MessageDeleted     DurableEventTypeV1 = "message.deleted"
 	MessagePinned      DurableEventTypeV1 = "message.pinned"
+	MessageSaved       DurableEventTypeV1 = "message.saved"
 	MessageUnpinned    DurableEventTypeV1 = "message.unpinned"
+	MessageUnsaved     DurableEventTypeV1 = "message.unsaved"
 	MessageUpdated     DurableEventTypeV1 = "message.updated"
 	ReactionAdded      DurableEventTypeV1 = "reaction.added"
 	ReactionRemoved    DurableEventTypeV1 = "reaction.removed"
@@ -1657,7 +1659,11 @@ func (e DurableEventTypeV1) Valid() bool {
 		return true
 	case MessagePinned:
 		return true
+	case MessageSaved:
+		return true
 	case MessageUnpinned:
+		return true
+	case MessageUnsaved:
 		return true
 	case MessageUpdated:
 		return true
@@ -3110,6 +3116,45 @@ func (e SMTPConfigurationUpdateSecurity) Valid() bool {
 	case SMTPConfigurationUpdateSecurityStarttls:
 		return true
 	case SMTPConfigurationUpdateSecurityTls:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SavedMessageAuthorType.
+const (
+	SavedMessageAuthorTypeAgent SavedMessageAuthorType = "agent"
+	SavedMessageAuthorTypeUser  SavedMessageAuthorType = "user"
+)
+
+// Valid indicates whether the value is a known member of the SavedMessageAuthorType enum.
+func (e SavedMessageAuthorType) Valid() bool {
+	switch e {
+	case SavedMessageAuthorTypeAgent:
+		return true
+	case SavedMessageAuthorTypeUser:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SavedMessageChatKind.
+const (
+	SavedMessageChatKindChannel SavedMessageChatKind = "channel"
+	SavedMessageChatKindDirect  SavedMessageChatKind = "direct"
+	SavedMessageChatKindGroup   SavedMessageChatKind = "group"
+)
+
+// Valid indicates whether the value is a known member of the SavedMessageChatKind enum.
+func (e SavedMessageChatKind) Valid() bool {
+	switch e {
+	case SavedMessageChatKindChannel:
+		return true
+	case SavedMessageChatKindDirect:
+		return true
+	case SavedMessageChatKindGroup:
 		return true
 	default:
 		return false
@@ -6338,6 +6383,56 @@ type SMTPConfigurationUpdate struct {
 // SMTPConfigurationUpdateSecurity defines model for SMTPConfigurationUpdate.Security.
 type SMTPConfigurationUpdateSecurity string
 
+// SavedMessage defines model for SavedMessage.
+type SavedMessage struct {
+	Author SavedMessageAuthor `json:"author"`
+	Chat   SavedMessageChat   `json:"chat"`
+
+	// Cursor Position of the save; pass as before to read older saves.
+	Cursor  int64     `json:"cursor"`
+	Message Message   `json:"message"`
+	SavedAt time.Time `json:"saved_at"`
+}
+
+// SavedMessageAuthor defines model for SavedMessageAuthor.
+type SavedMessageAuthor struct {
+	ActorId       openapi_types.UUID     `json:"actor_id"`
+	AvatarVersion int64                  `json:"avatar_version"`
+	DisplayName   string                 `json:"display_name"`
+	Type          SavedMessageAuthorType `json:"type"`
+}
+
+// SavedMessageAuthorType defines model for SavedMessageAuthor.Type.
+type SavedMessageAuthorType string
+
+// SavedMessageChat defines model for SavedMessageChat.
+type SavedMessageChat struct {
+	DisplayName string               `json:"display_name"`
+	Id          openapi_types.UUID   `json:"id"`
+	Kind        SavedMessageChatKind `json:"kind"`
+}
+
+// SavedMessageChatKind defines model for SavedMessageChat.Kind.
+type SavedMessageChatKind string
+
+// SavedMessageIds defines model for SavedMessageIds.
+type SavedMessageIds struct {
+	MessageIds []openapi_types.UUID `json:"message_ids"`
+}
+
+// SavedMessagePage defines model for SavedMessagePage.
+type SavedMessagePage struct {
+	Items      []SavedMessage `json:"items"`
+	NextBefore *int64         `json:"next_before"`
+}
+
+// SavedMessageState defines model for SavedMessageState.
+type SavedMessageState struct {
+	ChatId    openapi_types.UUID `json:"chat_id"`
+	MessageId openapi_types.UUID `json:"message_id"`
+	SavedAt   time.Time          `json:"saved_at"`
+}
+
 // SearchPage defines model for SearchPage.
 type SearchPage struct {
 	NextCursor *string        `json:"next_cursor"`
@@ -7041,6 +7136,18 @@ type DeleteBrandingAssetParamsKind string
 
 // PutBrandingAssetParamsKind defines parameters for PutBrandingAsset.
 type PutBrandingAssetParamsKind string
+
+// ListSavedMessagesParams defines parameters for ListSavedMessages.
+type ListSavedMessagesParams struct {
+	ChatId *openapi_types.UUID `form:"chat_id,omitempty" json:"chat_id,omitempty"`
+	Before *int64              `form:"before,omitempty" json:"before,omitempty"`
+	Limit  *int                `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListSavedMessageIdsParams defines parameters for ListSavedMessageIds.
+type ListSavedMessageIdsParams struct {
+	ChatId openapi_types.UUID `form:"chat_id" json:"chat_id"`
+}
 
 // SearchMessagesAndFilesParams defines parameters for SearchMessagesAndFiles.
 type SearchMessagesAndFilesParams struct {

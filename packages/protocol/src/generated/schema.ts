@@ -988,6 +988,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/messages/{message_id}/saved": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Saves a message for the current person only. Any member who can read the message may save it; nobody else learns about it. Realtime message.saved goes to the person's own sessions only. */
+        put: operations["saveMessage"];
+        post?: never;
+        /** @description Removes the message from the person's saved messages, even after access to its chat is lost. */
+        delete: operations["unsaveMessage"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/saved-messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The person's saved messages across chats, newest save first. Only messages the person can still read are returned: saves in chats they left, chats that were deleted and deleted messages are skipped. */
+        get: operations["listSavedMessages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/saved-messages/ids": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Identifiers of the person's saved messages in one chat, for the star in the feed. Kept apart from Message so the feed stays the same for every reader. */
+        get: operations["listSavedMessageIds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/messages/{message_id}/forward": {
         parameters: {
             query?: never;
@@ -2845,7 +2897,7 @@ export interface components {
             parts?: components["schemas"]["CompletedFilePart"][];
         };
         /** @enum {string} */
-        DurableEventTypeV1: "message.created" | "message.updated" | "message.deleted" | "message.pinned" | "message.unpinned" | "reaction.added" | "reaction.removed" | "thread.followed" | "thread.unfollowed" | "read.marked" | "draft.updated" | "draft.deleted" | "chat.created" | "chat.updated" | "chat.archived" | "member.joined" | "member.updated" | "member.removed" | "actor.status.updated" | "actor.avatar.updated";
+        DurableEventTypeV1: "message.created" | "message.updated" | "message.deleted" | "message.pinned" | "message.unpinned" | "message.saved" | "message.unsaved" | "reaction.added" | "reaction.removed" | "thread.followed" | "thread.unfollowed" | "read.marked" | "draft.updated" | "draft.deleted" | "chat.created" | "chat.updated" | "chat.archived" | "member.joined" | "member.updated" | "member.removed" | "actor.status.updated" | "actor.avatar.updated";
         /**
          * Format: int32
          * @enum {integer}
@@ -4908,6 +4960,50 @@ export interface components {
         };
         MessagePinList: {
             pins: components["schemas"]["MessagePin"][];
+        };
+        SavedMessageState: {
+            /** Format: uuid */
+            message_id: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: date-time */
+            saved_at: string;
+        };
+        SavedMessageAuthor: {
+            /** Format: uuid */
+            actor_id: string;
+            display_name: string;
+            /** @enum {string} */
+            type: "user" | "agent";
+            /** Format: int64 */
+            avatar_version: number;
+        };
+        SavedMessageChat: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            kind: "direct" | "group" | "channel";
+            display_name: string;
+        };
+        SavedMessage: {
+            /**
+             * Format: int64
+             * @description Position of the save; pass as before to read older saves.
+             */
+            cursor: number;
+            /** Format: date-time */
+            saved_at: string;
+            message: components["schemas"]["Message"];
+            author: components["schemas"]["SavedMessageAuthor"];
+            chat: components["schemas"]["SavedMessageChat"];
+        };
+        SavedMessagePage: {
+            items: components["schemas"]["SavedMessage"][];
+            /** Format: int64 */
+            next_before: number | null;
+        };
+        SavedMessageIds: {
+            message_ids: string[];
         };
         ThreadFollow: {
             /** Format: uuid */
@@ -7188,6 +7284,113 @@ export interface operations {
             };
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
+        };
+    };
+    saveMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The message was already saved (idempotent replay). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedMessageState"];
+                };
+            };
+            /** @description Message saved. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedMessageState"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+        };
+    };
+    unsaveMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The message is not saved. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+        };
+    };
+    listSavedMessages: {
+        parameters: {
+            query?: {
+                chat_id?: string;
+                before?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of saved messages; next_before continues it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedMessagePage"];
+                };
+            };
+            422: components["responses"]["Error"];
+        };
+    };
+    listSavedMessageIds: {
+        parameters: {
+            query: {
+                chat_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Saved message identifiers in the chat. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedMessageIds"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
         };
     };
     forwardMessage: {

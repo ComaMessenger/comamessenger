@@ -112,6 +112,8 @@ type Service struct {
 	actionHook   ActionHook
 	decider      ConfirmationDecider
 	directGuard  DirectGuard
+	// savedLimit overrides DefaultSavedLimit; tests set it.
+	savedLimit int
 }
 
 func NewService(pool *pgxpool.Pool, maxBodyBytes, maxPageSize int, afterCommit func(orgID string, highWatermark int64)) *Service {
@@ -600,6 +602,11 @@ func (s *Service) Delete(ctx context.Context, user identity.User, messageID stri
 	}
 	if err := insertEvent(ctx, tx, user, result.ChatID, result.ID, seq, "message.deleted"); err != nil {
 		return Message{}, err
+	}
+	// A deleted message has nothing left to keep: drop everyone's saves of it.
+	// Savers learn about it from message.deleted, which every member gets.
+	if _, err := tx.Exec(ctx, `DELETE FROM saved_messages WHERE org_id = $1 AND message_id = $2`, user.OrgID, result.ID); err != nil {
+		return Message{}, fmt.Errorf("drop saves of deleted message: %w", err)
 	}
 	deleted := []Message{result}
 	if err := hydrateFiles(ctx, tx, user.OrgID, deleted); err != nil {
