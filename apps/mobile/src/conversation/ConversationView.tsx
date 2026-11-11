@@ -71,6 +71,8 @@ import { canPinIn, messageMenu, type MessageMenuAction } from "./menuItems";
 import { reactionsKey, toggleReaction } from "./reactions";
 import { ThreadRoot } from "./ThreadRoot";
 import { useConversation } from "./useConversation";
+import { useVoiceFeed } from "@/voice/VoiceFeed";
+import { VoiceOutboxStrip } from "@/voice/VoiceOutbox";
 
 type Context =
   | { kind: "reply"; message: ClientMessage }
@@ -105,6 +107,7 @@ export function ConversationView({
   const conversation = useConversation(chatID, threadRootID, focusMessageID);
   const [highlighted, setHighlighted] = useState(focusMessageID);
   const { chat, members, rows, markRead } = conversation;
+  useVoiceFeed(conversation.messages);
   const [context, setContext] = useState<Context | null>(null);
   const [editBody, setEditBody] = useState("");
   const [menuFor, setMenuFor] = useState<ClientMessage | null>(null);
@@ -750,6 +753,7 @@ export function ConversationView({
             </View>
           )}
         </View>
+        <VoiceOutboxStrip chatID={chatID} threadRootID={threadRootID} />
         <Composer
           body={context?.kind === "edit" ? editBody : conversation.body}
           onChangeBody={
@@ -768,6 +772,12 @@ export function ConversationView({
           commands={inThread || context?.kind === "edit" ? [] : commands}
           focusRequest={focusRequest}
           onSendOptions={scheduling.openOptions}
+          voice={{
+            chatID,
+            threadRootID,
+            replyToID: context?.kind === "reply" ? context.message.id : null,
+            onQueued: () => setContext(null),
+          }}
         />
       </KeyboardAvoidingView>
       <ComposerSheet
