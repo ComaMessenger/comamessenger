@@ -139,8 +139,9 @@ func (s *Service) PutAvatar(ctx context.Context, current identity.User, targetAc
 		_ = s.store.Delete(context.Background(), key)
 		return AvatarUpdate{}, err
 	}
+	// A failed COMMIT may still have been applied (its answer lost), so the
+	// new object is kept; reconciliation removes it if no row points at it.
 	if err := tx.Commit(ctx); err != nil {
-		_ = s.store.Delete(context.Background(), key)
 		return AvatarUpdate{}, err
 	}
 	if old.Key != "" {

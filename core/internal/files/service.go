@@ -276,6 +276,11 @@ func (s *Service) PutContent(ctx context.Context, user identity.User, uploadID s
 	if err != nil {
 		return File{}, err
 	}
+	// The body may take longer than the lease to arrive; keep the lease while
+	// it is read so another PUT cannot take the upload over and write the
+	// same key.
+	stopHolding := s.holdClaim(claim.ID)
+	defer stopHolding()
 	buffered := bufio.NewReader(body)
 	peekSize := int64(512)
 	if claim.File.Size < peekSize {
@@ -393,9 +398,9 @@ func (s *Service) finishUpload(ctx context.Context, claim uploadClaim, blob stor
 		s.failUpload(context.Background(), claim.ID)
 		return File{}, err
 	}
-	if uploadKey != "" {
-		_ = s.store.Delete(context.Background(), claim.File.storageKey)
-	}
+	// Any other error may come from a COMMIT whose answer was lost: the row
+	// may already point at the sealed copy, so it is kept. If the commit did
+	// not happen, reconciliation removes the copy as an orphan.
 	s.releaseClaim(claim.ID)
 	return File{}, err
 }
@@ -447,6 +452,36 @@ func (s *Service) MaxCompletionTimeout() time.Duration { return completionTimeou
 
 // CompletionTimeout is the completion time limit for an object of size bytes.
 func CompletionTimeout(size int64) time.Duration { return completionTimeout(size) }
+
+// claimHeartbeat is how often a held claim's lease is renewed; it is well
+// below the shortest lease (completionBase + claimLeaseMargin).
+var claimHeartbeat = 15 * time.Second
+
+// holdClaim renews the lease of a claimed upload until stop is called.
+func (s *Service) holdClaim(uploadID string) (stop func()) {
+	done := make(chan struct{})
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		ticker := time.NewTicker(claimHeartbeat)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				_, _ = s.pool.Exec(context.Background(), `
+					UPDATE file_uploads u SET claim_expires_at = now() + make_interval(secs => $2 + f.size / $3)
+					FROM files f WHERE u.id = $1 AND u.file_id = f.id AND u.status = 'uploading'`,
+					uploadID, (completionBase + claimLeaseMargin).Seconds(), completionBytesPerSec)
+			}
+		}
+	}()
+	return func() {
+		close(done)
+		<-finished
+	}
+}
 
 // detached runs completion work without the request's cancellation.
 func (s *Service) detached(ctx context.Context, size int64) (context.Context, context.CancelFunc) {

@@ -32,19 +32,30 @@ copy_script='
 gateway_key="$AWS_ACCESS_KEY_ID"; gateway_secret="$AWS_SECRET_ACCESS_KEY"
 from() { AWS_ACCESS_KEY_ID="$MINIO_ROOT_USER" AWS_SECRET_ACCESS_KEY="$MINIO_ROOT_PASSWORD" aws --endpoint-url http://minio:9000 "$@"; }
 to() { AWS_ACCESS_KEY_ID="$gateway_key" AWS_SECRET_ACCESS_KEY="$gateway_secret" aws --endpoint-url http://s3gw:9000 "$@"; }
-digest() { (cd "$1" && find . -type f | sort | xargs -r sha256sum); }
-mkdir -p /copy/source /copy/check
-from s3 sync "s3://$S3_BUCKET" /copy/source --only-show-errors
-to s3 sync /copy/source "s3://$S3_BUCKET" --only-show-errors
+mkdir -p /copy
+# Object by object, so each keeps its Content-Type (a sync through a local
+# directory guesses it from the file name, and Core keys have no extension).
+from s3api list-objects-v2 --bucket "$S3_BUCKET" --query "Contents[].Key" --output json \
+  | sed -n "s/^ *\"\(.*\)\",\{0,1\}$/\1/p" > /copy/keys
+count=0
+while IFS= read -r key; do
+  type="$(from s3api head-object --bucket "$S3_BUCKET" --key "$key" --query ContentType --output text)"
+  from s3api get-object --bucket "$S3_BUCKET" --key "$key" /copy/object >/dev/null
+  to s3api put-object --bucket "$S3_BUCKET" --key "$key" --body /copy/object --content-type "$type" >/dev/null
+  source_sum="$(sha256sum < /copy/object)"
+  to s3api get-object --bucket "$S3_BUCKET" --key "$key" /copy/check >/dev/null
+  copied_type="$(to s3api head-object --bucket "$S3_BUCKET" --key "$key" --query ContentType --output text)"
+  [ "$source_sum" = "$(sha256sum < /copy/check)" ] || { echo "bytes differ for $key" >&2; exit 1; }
+  [ "$type" = "$copied_type" ] || { echo "Content-Type differs for $key: $type / $copied_type" >&2; exit 1; }
+  count=$((count + 1))
+done < /copy/keys
 source_list="$(from s3api list-objects-v2 --bucket "$S3_BUCKET" --query "Contents[].[Key,Size]" --output text | sort)"
 target_list="$(to s3api list-objects-v2 --bucket "$S3_BUCKET" --query "Contents[].[Key,Size]" --output text | sort)"
 [ "$source_list" = "$target_list" ] || { echo "object lists differ between MinIO and the gateway" >&2; exit 1; }
-to s3 sync "s3://$S3_BUCKET" /copy/check --only-show-errors
-[ "$(digest /copy/source)" = "$(digest /copy/check)" ] || { echo "object bytes differ" >&2; exit 1; }
-echo "copied $(printf "%s\n" "$source_list" | grep -c . || true) objects; keys, sizes and SHA-256 match"
+echo "copied $count objects; keys, sizes, Content-Type and SHA-256 match"
 '
-# The copy lives in a temporary directory of the one-shot container; make
-# sure the Docker host has room for the whole bucket.
+# Each object passes through a temporary file of the one-shot container; the
+# Docker host needs room for the largest object.
 "${compose[@]}" --profile s3gw run --rm --no-deps \
   -e MINIO_ROOT_USER="$(value MINIO_ROOT_USER)" -e MINIO_ROOT_PASSWORD="$(value MINIO_ROOT_PASSWORD)" \
   s3gw-init "$copy_script"

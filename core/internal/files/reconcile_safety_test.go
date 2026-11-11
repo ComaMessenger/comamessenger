@@ -6,7 +6,9 @@ import (
 	"errors"
 	"io"
 	"os"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -160,7 +162,7 @@ func runWrongStorageTest(t *testing.T, harness sealHarness) {
 	}
 	assertFilesIntact(t, pool, harness.store, stored)
 
-	// The object of a once-ready file is never an orphan, whatever its status.
+	// The object of a once-ready file is an orphan only once it is deleted.
 	if _, err := pool.Exec(t.Context(), `UPDATE files SET status = 'failed', failed_at = now() - interval '30 days', missing_since = NULL WHERE id = $1`, stored[1].ID); err != nil {
 		t.Fatal(err)
 	}
@@ -170,20 +172,24 @@ func runWrongStorageTest(t *testing.T, harness sealHarness) {
 	if _, err := right.Reconcile(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	for _, file := range stored[1:3] {
-		if _, err := harness.store.Stat(t.Context(), file.Key); err != nil {
-			t.Fatalf("object of once-ready file %s was collected: %v", file.ID, err)
-		}
+	// A failed file that was ready keeps its object; a deleted file's object
+	// is an orphan even if its direct delete failed.
+	if _, err := harness.store.Stat(t.Context(), stored[1].Key); err != nil {
+		t.Fatalf("object of the failed once-ready file was collected: %v", err)
+	}
+	if _, err := harness.store.Stat(t.Context(), stored[2].Key); err == nil {
+		t.Fatal("object of a deleted file survived reconciliation")
 	}
 	// A store error during the check stops the pass instead of failing files.
 	flaky := &faultyStore{BlobStore: harness.store, failStats: true}
-	if _, err := pool.Exec(t.Context(), `UPDATE files SET reconciled_at = NULL, status = 'ready', failed_at = NULL`); err != nil {
+	kept := append(append([]storedFile{}, stored[:2]...), stored[3:]...)
+	if _, err := pool.Exec(t.Context(), `UPDATE files SET reconciled_at = NULL, status = 'ready', failed_at = NULL WHERE id <> $1`, stored[2].ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := newService(flaky).Reconcile(t.Context()); err == nil || errors.Is(err, ErrStorageSuspect) {
 		t.Fatalf("Reconcile with failing Stat = %v, want the store error", err)
 	}
-	assertFilesIntact(t, pool, harness.store, stored)
+	assertFilesIntact(t, pool, harness.store, kept)
 }
 
 // A completion holds a lease: a second complete meanwhile gets ErrUnavailable
@@ -228,5 +234,149 @@ func TestCompletionLeaseIsTakenOverAfterItLapses(t *testing.T) {
 	}
 	if got := completionTimeout(100 << 20); got != 35*time.Second {
 		t.Fatalf("completion timeout for 100 MiB = %v", got)
+	}
+}
+
+// Three lost objects on an installation of any size: reconciliation keeps
+// running, the three files fail after the recheck delay, the rest are left
+// alone. (A wrong storage still stops: TestReconcileAgainstWrongStorage….)
+func TestThreeLostObjectsDoNotStopReconciliation(t *testing.T) {
+	for _, total := range []int{5, 40, 120} {
+		t.Run(strconv.Itoa(total), func(t *testing.T) {
+			pool := testdb.New(t)
+			seedFileActors(t, pool)
+			harness := fakeSealHarness(t)
+			service, err := NewService(pool, harness.store, "", 1<<30, 32<<20, 1<<20, time.Hour, 15*time.Minute)
+			if err != nil {
+				t.Fatal(err)
+			}
+			stored := uploadFiles(t, service, harness, total)
+			// Steady state: a full pass has checked every file.
+			for range (total + 99) / 100 {
+				if _, err := service.Reconcile(t.Context()); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, file := range stored[:3] {
+				if err := harness.store.Delete(t.Context(), file.Key); err != nil {
+					t.Fatal(err)
+				}
+			}
+			// A day later every file is due again.
+			if _, err := pool.Exec(t.Context(), `UPDATE files SET reconciled_at = now() - interval '2 days'`); err != nil {
+				t.Fatal(err)
+			}
+			for pass := 1; pass <= 6; pass++ {
+				if _, err := service.Reconcile(t.Context()); err != nil {
+					t.Fatalf("pass %d stopped: %v", pass, err)
+				}
+				if pass == 3 { // an hour passes
+					if _, err := pool.Exec(t.Context(), `UPDATE files SET missing_since = missing_since - interval '2 hours' WHERE missing_since IS NOT NULL`); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			for index, file := range stored {
+				var status string
+				if err := pool.QueryRow(t.Context(), `SELECT status FROM files WHERE id = $1`, file.ID).Scan(&status); err != nil {
+					t.Fatal(err)
+				}
+				want := "ready"
+				if index < 3 {
+					want = "failed"
+				}
+				if status != want {
+					t.Fatalf("file %d status = %q, want %q", index, status, want)
+				}
+				if index >= 3 {
+					if _, err := harness.store.Stat(t.Context(), file.Key); err != nil {
+						t.Fatalf("object of untouched file %d: %v", index, err)
+					}
+				}
+			}
+		})
+	}
+}
+
+// slowBody delivers its bytes only once released, like a slow client.
+type slowBody struct {
+	data    *bytes.Reader
+	release chan struct{}
+	started chan struct{}
+	once    sync.Once
+}
+
+func (b *slowBody) Read(p []byte) (int, error) {
+	b.once.Do(func() { close(b.started) })
+	<-b.release
+	return b.data.Read(p)
+}
+
+// A streaming body that arrives slower than the lease keeps it renewed, so a
+// second PUT cannot take the upload over and write the same key.
+func TestStreamingUploadKeepsItsLeaseWhileTheBodyArrives(t *testing.T) {
+	pool := testdb.New(t)
+	seedFileActors(t, pool)
+	store, err := storage.NewLocalBlobStore(t.TempDir(), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := NewService(pool, store, "", 64<<20, 32<<20, 16<<20, time.Hour, 15*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := claimHeartbeat
+	claimHeartbeat = 20 * time.Millisecond
+	t.Cleanup(func() { claimHeartbeat = previous })
+	owner := identity.User{ActorID: testOwnerID, OrgID: testOrgID, OrgRole: "owner"}
+	content := []byte("streamed slowly")
+	upload, err := service.CreateUpload(t.Context(), owner, CreateUploadInput{Name: "slow.txt", MIME: "text/plain", Size: int64(len(content))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := &slowBody{data: bytes.NewReader(content), release: make(chan struct{}), started: make(chan struct{})}
+	result := make(chan error, 1)
+	go func() {
+		_, err := service.PutContent(context.Background(), owner, upload.ID, first)
+		result <- err
+	}()
+	<-first.started
+	// The body has taken longer than the lease: it would have lapsed.
+	if _, err := pool.Exec(t.Context(), `UPDATE file_uploads SET claim_expires_at = now() - interval '1 second' WHERE id = $1`, upload.ID); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		var renewed bool
+		if err := pool.QueryRow(t.Context(), `SELECT claim_expires_at > now() FROM file_uploads WHERE id = $1`, upload.ID).Scan(&renewed); err != nil {
+			t.Fatal(err)
+		}
+		if renewed {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the lease was not renewed while the body was read")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if _, err := service.PutContent(t.Context(), owner, upload.ID, bytes.NewReader([]byte("second writer!!"))); err == nil {
+		t.Fatal("a second PUT took over a streaming upload whose body was still arriving")
+	}
+	close(first.release)
+	if err := <-result; err != nil {
+		t.Fatalf("slow streaming upload: %v", err)
+	}
+	var key string
+	if err := pool.QueryRow(t.Context(), `SELECT storage_key FROM files WHERE id = $1 AND status = 'ready'`, upload.File.ID).Scan(&key); err != nil {
+		t.Fatal(err)
+	}
+	reader, _, err := store.Open(t.Context(), key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored, _ := io.ReadAll(reader)
+	reader.Close()
+	if !bytes.Equal(stored, content) {
+		t.Fatalf("stored %q, want the first writer's %q", stored, content)
 	}
 }

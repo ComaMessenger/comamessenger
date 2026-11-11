@@ -49,16 +49,16 @@ const (
 	// missingRecheck is how long an object must stay missing, across
 	// passes, before its file is failed.
 	missingRecheck = time.Hour
-	// A pass stops when at least suspectMinMissing of the checked files are
-	// missing and they are at least suspectMissingPercent of them.
-	suspectMinMissing     = 3
-	suspectMissingPercent = 10
+	// A pass stops when at least suspectMinMissing newly checked objects
+	// are missing and none of the newly checked ones is present.
+	suspectMinMissing = 3
 )
 
 // Reconcile keeps the file table and the store consistent. It never deletes
-// the object of a file that was ever ready (ready_at set): such a file can
-// only lose its object through an explicit deletion path. A pass checks the
-// bucket first and stops without changes when the storage looks wrong.
+// the object of a file that was ever ready (ready_at set) unless the file was
+// deleted: a failed file can only lose its object through an explicit
+// deletion path. A pass checks the bucket first and stops without changes
+// when the storage looks wrong.
 func (s *Service) Reconcile(ctx context.Context) (ReconcileStats, error) {
 	stats := ReconcileStats{}
 	if checker, ok := s.store.(storage.BucketChecker); ok {
@@ -116,7 +116,7 @@ func (s *Service) Reconcile(ctx context.Context) (ReconcileStats, error) {
 // after missingRecheck. Many missing objects at once stop the pass.
 func (s *Service) reconcileReadyFiles(ctx context.Context, stats *ReconcileStats) error {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, org_id, storage_key, size, status
+		SELECT id, org_id, storage_key, size, status, missing_since IS NOT NULL
 		FROM files
 		WHERE storage_driver = $1 AND (
 		  (status = 'ready' AND (reconciled_at IS NULL OR reconciled_at < now() - interval '1 day' OR missing_since IS NOT NULL))
@@ -129,11 +129,13 @@ func (s *Service) reconcileReadyFiles(ctx context.Context, stats *ReconcileStats
 	type candidate struct {
 		ID, OrgID, Key, Status string
 		Size                   int64
+		// Noted: already seen missing by an earlier pass.
+		Noted bool
 	}
 	candidates := make([]candidate, 0, 100)
 	for rows.Next() {
 		var item candidate
-		if err := rows.Scan(&item.ID, &item.OrgID, &item.Key, &item.Size, &item.Status); err != nil {
+		if err := rows.Scan(&item.ID, &item.OrgID, &item.Key, &item.Size, &item.Status, &item.Noted); err != nil {
 			rows.Close()
 			return fmt.Errorf("scan reconciliation file: %w", err)
 		}
@@ -157,9 +159,6 @@ func (s *Service) reconcileReadyFiles(ctx context.Context, stats *ReconcileStats
 			return fmt.Errorf("check file object: %w", statErr)
 		}
 	}
-	if len(missing) >= suspectMinMissing && len(missing)*100 >= len(candidates)*suspectMissingPercent {
-		return fmt.Errorf("%w: %d of %d checked file objects are missing", ErrStorageSuspect, len(missing), len(candidates))
-	}
 	for _, item := range present {
 		result, err := s.pool.Exec(ctx, `
 			UPDATE files SET reconciled_at = now(), missing_since = NULL,
@@ -172,6 +171,27 @@ func (s *Service) reconcileReadyFiles(ctx context.Context, stats *ReconcileStats
 		if item.Status == "failed" && result.RowsAffected() == 1 {
 			stats.RestoredFiles++
 		}
+	}
+	// Objects found are marked checked before the guard, so a pass that
+	// stops still moves on. The guard looks only at files not noted missing
+	// before (noted ones come first in the selection and must not stop every
+	// later pass by themselves). A wrong or empty storage has none of them:
+	// the pass stops when at least suspectMinMissing are newly missing and
+	// not one of them is there. A few lost objects among present ones are
+	// noted and fail their files after missingRecheck.
+	freshPresent, freshMissing := 0, 0
+	for _, item := range present {
+		if !item.Noted {
+			freshPresent++
+		}
+	}
+	for _, item := range missing {
+		if !item.Noted {
+			freshMissing++
+		}
+	}
+	if freshMissing >= suspectMinMissing && freshPresent == 0 {
+		return fmt.Errorf("%w: none of %d newly checked file objects is in the storage", ErrStorageSuspect, freshMissing)
 	}
 	for _, item := range missing {
 		if item.Status != "ready" {
@@ -197,7 +217,9 @@ func (s *Service) reconcileReadyFiles(ctx context.Context, stats *ReconcileStats
 }
 
 // deleteOrphans removes objects with a Core key that no file owns. A file
-// owns its object while pending or ready, and forever once it was ready.
+// owns its object while pending or ready, and once it was ready for as long
+// as it is not deleted: a deleted file's object goes even if the direct
+// delete failed.
 func (s *Service) deleteOrphans(ctx context.Context, stats *ReconcileStats) error {
 	lister, ok := s.store.(storage.BlobLister)
 	if !ok {
@@ -230,11 +252,12 @@ func (s *Service) deleteOrphans(ctx context.Context, stats *ReconcileStats) erro
 		var exists bool
 		// A failed file that was never ready does not own its key: it may be
 		// rewritten through a still-valid upload URL, and an upload key is
-		// abandoned once its copy is sealed. Previews and avatars are files
-		// rows of their own and follow the same rule.
+		// abandoned once its copy is sealed. A deleted file owns nothing.
+		// Previews and avatars are files rows of their own and follow the
+		// same rule.
 		if err := s.pool.QueryRow(ctx, `
 			SELECT EXISTS(SELECT 1 FROM files WHERE storage_driver = $1 AND storage_key = $2
-			  AND (status IN ('pending', 'ready') OR ready_at IS NOT NULL))`, s.store.Driver(), blob.Key).Scan(&exists); err != nil {
+			  AND (status IN ('pending', 'ready') OR (ready_at IS NOT NULL AND status <> 'deleted')))`, s.store.Driver(), blob.Key).Scan(&exists); err != nil {
 			return fmt.Errorf("check orphan blob: %w", err)
 		}
 		if !exists {

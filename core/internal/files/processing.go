@@ -337,8 +337,9 @@ func (s *Service) savePreview(ctx context.Context, parent processRecord, data []
 		}
 		return nil
 	}
+	// A failed COMMIT may still have been applied (its answer lost), so the
+	// preview object is kept; reconciliation removes it if no row points at it.
 	if err := tx.Commit(ctx); err != nil {
-		_ = s.store.Delete(context.Background(), key)
 		return err
 	}
 	return nil

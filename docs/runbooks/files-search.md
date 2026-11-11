@@ -69,18 +69,29 @@ shared bucket are left alone, but a shared bucket without a prefix still
 mixes listings and quotas.
 
 Reconciliation never deletes the object of a file that was ever ready
-(`ready_at` set). It stops without changing anything, logging
+(`ready_at` set) and is not deleted; a deleted file's object goes even if
+its direct delete failed. It stops without changing anything, logging
 `file storage looks misconfigured`, when the bucket is missing, when the
-bucket holds no Core objects while files exist, or when at least 3 and at
-least 10 % of the checked files lack their objects in one pass. A single
-missing object is noted (`missing_since`) and fails its file only if still
-missing an hour later; when the object comes back the file is ready again.
-Only files that failed before they were ever ready are retired (status
-`deleted`, their key becomes an orphan) once every upload URL expired,
-counted from the failure. Multipart uploads nobody completed (client uploads
-past their TTL, interrupted server-side copies) are aborted, again only for
-Core keys. On AWS or another managed provider you may add a lifecycle rule as
-a second line of defence:
+bucket holds no Core objects while files exist, or when at least 3 objects
+checked for the first time in a pass are missing and none of them is there
+(a wrong or empty storage). Objects found are marked checked first, and files
+already noted missing do not count, so a few lost objects never stop later
+passes. A missing object is noted (`missing_since`) and fails its file only
+if still missing an hour later; when the object comes back the file is ready
+again. Only files that failed before they were ever ready are retired
+(status `deleted`, their key becomes an orphan) once every upload URL
+expired, counted from the failure. A failed COMMIT never deletes the new
+object (sealed upload, avatar, preview): the commit may have been applied
+with its answer lost, and an object no row points at is removed later as an
+orphan.
+
+Multipart uploads nobody completed (client uploads past their TTL,
+interrupted server-side copies) are aborted, only for Core keys. With an
+empty `S3_PREFIX` this sweep lists the whole bucket but still touches Core
+keys only. On MinIO with a non-empty `S3_PREFIX` the sweep finds nothing
+(its multipart listing does not return uploads by such a prefix), so
+incomplete uploads there stay until a lifecycle rule removes them. On AWS or another
+managed provider you may add a lifecycle rule as a second line of defence:
 
 ```json
 {"Rules": [{"ID": "abort-incomplete-multipart", "Status": "Enabled",
