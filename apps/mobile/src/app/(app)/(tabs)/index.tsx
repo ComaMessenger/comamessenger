@@ -5,61 +5,72 @@ import {
   Pressable,
   RefreshControl,
   StyleSheet,
-  TextInput,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Search } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
-import { matchesFilter, type SystemChatFilter } from "@comamessenger/core";
-import { radius, spacing } from "@comamessenger/tokens";
+import {
+  folderOfTab,
+  matchesTab,
+  resolveTab,
+  sortChats,
+  upsertFolder,
+  unreadByChat,
+  type ChatFolder,
+  type ChatListTab,
+} from "@comamessenger/core";
 import { useMessenger } from "@/messenger/MessengerProvider";
 import { useSignedIn } from "@/session/SessionProvider";
 import { useTheme } from "@/lib/theme";
-import { ChatFilters } from "@/chats/ChatFilters";
-import { ChatRow, chatTitle } from "@/chats/ChatRow";
+import { ChatActionsSheet } from "@/chats/ChatActionsSheet";
+import { ChatRow } from "@/chats/ChatRow";
+import { FolderSheet } from "@/chats/FolderSheet";
+import { FolderTabs } from "@/chats/FolderTabs";
+import { useChatDrafts } from "@/chats/useChatDrafts";
 import { ConnectionBanner } from "@/messenger/ConnectionBanner";
 import { Notice } from "@/ui/Notice";
-import { Text, fonts, maxTextScale } from "@/ui/Text";
+import { TabHeader } from "@/ui/TabHeader";
+import { Text } from "@/ui/Text";
 import { WorkspaceMark } from "@/ui/WorkspaceMark";
+
+type FolderEditor = { folder?: ChatFolder; chatIDs?: string[] } | null;
 
 export default function ChatsScreen() {
   const { t } = useTranslation();
   const theme = useTheme();
   const { user } = useSignedIn();
-  const { store, reload, chatLoading, chatError, pinnedChatIDs } =
-    useMessenger();
+  const {
+    store,
+    reload,
+    chatLoading,
+    chatError,
+    pinnedChatIDs,
+    folders,
+    saveFolders,
+  } = useMessenger();
   const chatMap = useStore(store, (state) => state.chats);
   const unread = useStore(store, (state) => state.unread);
   const presence = useStore(store, (state) => state.presence);
-  const [filter, setFilter] = useState<SystemChatFilter>("all");
-  const [query, setQuery] = useState("");
+  const drafts = useChatDrafts();
+  const [selectedTab, setTab] = useState<ChatListTab>("all");
   const [refreshing, setRefreshing] = useState(false);
+  const [actionsFor, setActionsFor] = useState<string | null>(null);
+  const [editor, setEditor] = useState<FolderEditor>(null);
 
-  const counts = useMemo(
-    () => new Map(unread.chats.map((item) => [item.chat_id, item])),
-    [unread],
+  const tab = resolveTab(selectedTab, folders);
+  const counts = useMemo(() => unreadByChat(unread), [unread]);
+  const allChats = useMemo(() => Object.values(chatMap), [chatMap]);
+  const chats = useMemo(
+    () =>
+      sortChats(
+        allChats.filter((chat) => matchesTab(chat, tab, folders, counts)),
+        pinnedChatIDs,
+      ),
+    [allChats, counts, folders, pinnedChatIDs, tab],
   );
-  const chats = useMemo(() => {
-    const needle = query.trim().toLocaleLowerCase();
-    const pinned = new Map(pinnedChatIDs.map((id, index) => [id, index]));
-    return Object.values(chatMap)
-      .filter(
-        (chat) =>
-          matchesFilter(chat, filter, undefined) &&
-          (!needle || chatTitle(chat, "").toLocaleLowerCase().includes(needle)),
-      )
-      .sort((left, right) => {
-        const leftPin = pinned.get(left.id) ?? Infinity;
-        const rightPin = pinned.get(right.id) ?? Infinity;
-        if (leftPin !== rightPin) return leftPin - rightPin;
-        return (right.last_message_at ?? right.created_at).localeCompare(
-          left.last_message_at ?? left.created_at,
-        );
-      });
-  }, [chatMap, filter, pinnedChatIDs, query]);
+  const pinned = useMemo(() => new Set(pinnedChatIDs), [pinnedChatIDs]);
 
   const open = useCallback(
     (chatID: string) => router.push(`/chat/${chatID}`),
@@ -71,6 +82,7 @@ export default function ChatsScreen() {
     setRefreshing(false);
   }, [reload]);
 
+  const activeFolder = folderOfTab(tab, folders);
   const empty = chatLoading ? (
     <ActivityIndicator style={styles.loader} color={theme.muted} />
   ) : chatError ? (
@@ -84,73 +96,56 @@ export default function ChatsScreen() {
     </View>
   ) : (
     <View style={styles.state}>
-      <Text weight="semibold" size={17}>
-        {query || filter !== "all" ? t("noChatsFound") : t("noChats")}
+      <Text weight="semibold" size={17} style={styles.center}>
+        {tab === "all"
+          ? t("noChats")
+          : tab === "unread"
+            ? t("unreadEmpty")
+            : activeFolder
+              ? t("folderEmpty")
+              : t("noChatsFound")}
       </Text>
-      {!query && filter === "all" && (
-        <Text tone="muted" size={15}>
-          {t("noChatsHint")}
+      {(tab === "all" || activeFolder) && (
+        <Text tone="muted" size={15} style={styles.center}>
+          {tab === "all" ? t("noChatsHint") : t("folderEmptyHint")}
         </Text>
       )}
     </View>
   );
 
   return (
-    <SafeAreaView
-      edges={["top"]}
-      style={[styles.screen, { backgroundColor: theme.surface }]}
-    >
-      <View style={styles.header}>
-        <WorkspaceMark name={user.organization_name} size={32} />
-        <Text
-          accessibilityRole="header"
-          weight="semibold"
-          size={20}
-          numberOfLines={1}
-          style={styles.grow}
-        >
-          {user.organization_name}
-        </Text>
+    <View style={[styles.screen, { backgroundColor: theme.surface }]}>
+      <TabHeader
+        title={t("tabChats")}
+        leading={<WorkspaceMark name={user.organization_name} size={34} />}
+      >
         <Pressable
           testID="open-search"
-          accessibilityRole="button"
-          accessibilityLabel={t("search")}
-          hitSlop={8}
+          accessibilityRole="search"
+          accessibilityLabel={t("searchMessagesAndFiles")}
           onPress={() => router.push("/search")}
           style={({ pressed }) => [
-            styles.headerButton,
+            styles.search,
             {
-              backgroundColor: pressed ? theme.surfaceSelected : theme.surface,
-              borderColor: theme.border,
+              backgroundColor: theme.surfaceSelected,
+              opacity: pressed ? 0.7 : 1,
             },
           ]}
         >
-          <Search size={22} color={theme.foreground} />
+          <Search size={18} color={theme.muted} />
+          <Text tone="muted" size={15} numberOfLines={1}>
+            {t("searchMessagesAndFiles")}
+          </Text>
         </Pressable>
-      </View>
-      <View
-        style={[
-          styles.search,
-          { backgroundColor: theme.sidebar, borderColor: theme.border },
-        ]}
-      >
-        <Search size={20} color={theme.subtle} />
-        <TextInput
-          maxFontSizeMultiplier={maxTextScale}
-          value={query}
-          onChangeText={setQuery}
-          placeholder={t("searchChats")}
-          placeholderTextColor={theme.subtle}
-          accessibilityLabel={t("searchChats")}
-          selectionColor={theme.primary}
-          clearButtonMode="while-editing"
-          returnKeyType="search"
-          style={[styles.searchInput, { color: theme.foreground }]}
+        <FolderTabs
+          value={tab}
+          chats={allChats}
+          counts={counts}
+          onChange={setTab}
+          onNewFolder={() => setEditor({})}
+          onEditFolder={(folder) => setEditor({ folder })}
         />
-      </View>
-      <View style={styles.filters}>
-        <ChatFilters value={filter} onChange={setFilter} />
-      </View>
+      </TabHeader>
       <ConnectionBanner />
       <FlatList
         testID="chat-list"
@@ -165,17 +160,19 @@ export default function ChatsScreen() {
               ownID={user.id}
               unreadCount={count?.unread_count ?? 0}
               mentionCount={count?.mention_count ?? 0}
+              pinned={pinned.has(item.id)}
+              draft={drafts[item.id]}
               presence={
                 item.direct_peer
                   ? presence[item.direct_peer.actor_id]
                   : undefined
               }
               onOpen={open}
+              onActions={setActionsFor}
             />
           );
         }}
         ListEmptyComponent={empty}
-        keyboardDismissMode="on-drag"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -184,47 +181,39 @@ export default function ChatsScreen() {
           />
         }
       />
-    </SafeAreaView>
+      <ChatActionsSheet
+        chatID={actionsFor}
+        onClose={() => setActionsFor(null)}
+        onNewFolder={(chatID) => setEditor({ chatIDs: [chatID] })}
+      />
+      <FolderSheet
+        visible={editor !== null}
+        folder={editor?.folder}
+        initialChatIDs={editor?.chatIDs}
+        onClose={() => setEditor(null)}
+        onSave={async (folder) => {
+          await saveFolders(upsertFolder(folders, folder));
+          if (!editor?.folder) setTab(`folder:${folder.id}`);
+        }}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing[3],
-    paddingHorizontal: spacing[4],
-    paddingTop: spacing[2],
-    paddingBottom: spacing[3],
-  },
-  grow: { flex: 1 },
-  headerButton: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  // Prototype: `.search { margin: 0 14px 10px; height: 38px; border-radius: 12px }`.
   search: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing[2],
-    marginHorizontal: spacing[4],
-    paddingHorizontal: spacing[4],
-    minHeight: 44,
-    borderRadius: radius.md,
-    borderWidth: 1,
+    gap: 8,
+    minHeight: 38,
+    marginHorizontal: 14,
+    marginBottom: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
   },
-  searchInput: {
-    flex: 1,
-    fontFamily: fonts.regular,
-    fontSize: 16,
-    minHeight: 44,
-    paddingVertical: spacing[2],
-  },
-  filters: { paddingVertical: spacing[2] },
-  loader: { marginTop: spacing[10] },
-  state: { padding: spacing[5], gap: spacing[2], alignItems: "stretch" },
+  loader: { marginTop: 40 },
+  state: { padding: 20, gap: 8, alignItems: "stretch" },
+  center: { textAlign: "center" },
 });

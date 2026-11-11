@@ -14,7 +14,9 @@ import {
   Outbox,
   RealtimeCoordinator,
   createMessengerStore,
+  pinnedChatLimit,
   type AgentStatusState,
+  type ChatFolder,
 } from "@comamessenger/core";
 import { setLocale } from "@/i18n";
 import { checkpointStorage, outboxStorage } from "@/lib/database";
@@ -40,6 +42,12 @@ type MessengerValue = {
   stale: boolean;
   /** Chats the user pinned on any device, in their order. */
   pinnedChatIDs: string[];
+  /** Pins or unpins a chat everywhere; false when the pin limit is reached. */
+  togglePinnedChat(chatID: string): Promise<boolean>;
+  /** Chat folders shared with the web client, in tab order. */
+  folders: ChatFolder[];
+  /** Shows the new folders at once and stores them; reverts on failure. */
+  saveFolders(next: ChatFolder[]): Promise<void>;
 };
 
 const MessengerContext = createContext<MessengerValue | null>(null);
@@ -71,6 +79,9 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
   const [chatLoading, setChatLoading] = useState(true);
   const [chatError, setChatError] = useState("");
   const [pinnedChatIDs, setPinnedChatIDs] = useState<string[]>([]);
+  const [folders, setFolders] = useState<ChatFolder[]>([]);
+  const foldersRef = useRef<ChatFolder[]>([]);
+  foldersRef.current = folders;
   const [stale, setStale] = useState(false);
   const hydrated = useRef(false);
   const hydration = useRef<Promise<void>>(Promise.resolve());
@@ -79,19 +90,25 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
   const reload = useCallback(async () => {
     await hydration.current;
     try {
-      const [chats, unread, pinned] = await Promise.all([
+      const [chats, unread, pinned, chatFolders] = await Promise.all([
         api.chats(),
         api.unread(),
         api.pinnedChats(),
+        // Folders are an extra; the chat list still loads without them.
+        api.chatFolders().catch(() => null),
       ]);
       store.getState().replaceChats(chats);
       store.getState().setUnread(unread);
       setPinnedChatIDs(pinned);
+      if (chatFolders) setFolders(chatFolders);
       setChatError("");
       setStale(false);
-      void cacheShell({ chats, unread, pinnedChatIDs: pinned }).catch(
-        () => undefined,
-      );
+      void cacheShell({
+        chats,
+        unread,
+        pinnedChatIDs: pinned,
+        folders: chatFolders ?? foldersRef.current,
+      }).catch(() => undefined);
     } catch (cause) {
       // Saved data stays on screen when the network is the only problem.
       if (hydrated.current && isNetworkError(cause)) setStale(true);
@@ -228,6 +245,7 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
         store.getState().replaceChats(shell.chats);
         store.getState().setUnread(shell.unread);
         setPinnedChatIDs(shell.pinnedChatIDs);
+        setFolders(shell.folders ?? []);
         setChatLoading(false);
       })
       .catch(() => undefined);
@@ -288,6 +306,36 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
     return () => subscription.remove();
   }, [coordinator, outbox, reload]);
 
+  const togglePinnedChat = useCallback(
+    async (chatID: string) => {
+      const pinned = pinnedChatIDs.includes(chatID);
+      if (!pinned && pinnedChatIDs.length >= pinnedChatLimit) return false;
+      setPinnedChatIDs(
+        await api.putPinnedChats(
+          pinned
+            ? pinnedChatIDs.filter((id) => id !== chatID)
+            : [...pinnedChatIDs, chatID],
+        ),
+      );
+      return true;
+    },
+    [api, pinnedChatIDs],
+  );
+
+  const saveFolders = useCallback(
+    async (next: ChatFolder[]) => {
+      const previous = foldersRef.current;
+      setFolders(next);
+      try {
+        setFolders(await api.putChatFolders(next));
+      } catch (cause) {
+        setFolders(previous);
+        throw cause;
+      }
+    },
+    [api],
+  );
+
   const value = useMemo<MessengerValue>(
     () => ({
       store,
@@ -299,6 +347,9 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
       chatError,
       stale,
       pinnedChatIDs,
+      togglePinnedChat,
+      folders,
+      saveFolders,
     }),
     [
       store,
@@ -310,6 +361,9 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
       chatError,
       stale,
       pinnedChatIDs,
+      togglePinnedChat,
+      folders,
+      saveFolders,
     ],
   );
   return (
