@@ -9,20 +9,22 @@ import {
   View,
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
-import { ArrowUpRight, PinOff, Star } from "lucide-react-native";
+import { ArrowUpRight, Star, StarOff } from "lucide-react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { useStore } from "zustand";
+import {
+  applySavedChange,
+  savedKeys,
+  savedMessageHref,
+  type SavedMessagePage,
+} from "@comamessenger/core";
 import { useSignedIn } from "@/session/SessionProvider";
+import { useMessenger } from "@/messenger/MessengerProvider";
 import { useTheme } from "@/lib/theme";
 import { chatTitle } from "@/chats/ChatRow";
 import { ImportantRow } from "@/important/ImportantRow";
-import {
-  canUnpin,
-  chatsWithPins,
-  importantHref,
-  type ImportantItem,
-} from "@/important/pins";
-import { importantKey, useImportant } from "@/important/useImportant";
+import { useImportant, type ImportantItem } from "@/important/useImportant";
 import { MenuSheet } from "@/ui/MenuSheet";
 import { Notice } from "@/ui/Notice";
 import { TabChip } from "@/ui/TabChip";
@@ -32,15 +34,17 @@ import { Text } from "@/ui/Text";
 export default function ImportantScreen() {
   const { t } = useTranslation();
   const theme = useTheme();
-  const { api, user } = useSignedIn();
+  const { api } = useSignedIn();
+  const { store } = useMessenger();
+  const chatMap = useStore(store, (state) => state.chats);
   const queryClient = useQueryClient();
-  const query = useImportant();
   const [chatFilter, setChatFilter] = useState<string | null>(null);
   const [menuFor, setMenuFor] = useState<ImportantItem | null>(null);
+  const { query, all, items, groups, total } = useImportant(chatFilter);
 
-  // Pins change in other chats and on other devices; refresh on every return
-  // to the tab (the first visit already loads).
-  const { refetch } = query;
+  // Saves made on another device arrive by realtime; refresh on every return
+  // to the tab as well (the first visit already loads).
+  const { refetch } = all;
   const visited = useRef(false);
   useFocusEffect(
     useCallback(() => {
@@ -49,31 +53,39 @@ export default function ImportantScreen() {
     }, [refetch]),
   );
 
-  const items = useMemo(() => query.data ?? [], [query.data]);
-  const groups = useMemo(() => chatsWithPins(items), [items]);
-  const filter =
-    chatFilter && groups.some((group) => group.chat.id === chatFilter)
-      ? chatFilter
-      : null;
-  const visible = filter
-    ? items.filter((item) => item.chat.id === filter)
-    : items;
+  // A chat chip asks the server for that chat, so older saves are found too.
+  const filter = chatFilter;
+  const visible = items;
 
   const open = useCallback(
-    (item: ImportantItem) => router.push(importantHref(item) as never),
+    (item: ImportantItem) => router.push(savedMessageHref(item) as never),
     [],
   );
 
   async function remove(item: ImportantItem) {
-    const previous = queryClient.getQueriesData<ImportantItem[]>({
-      queryKey: importantKey,
-    });
-    queryClient.setQueriesData<ImportantItem[]>(
-      { queryKey: importantKey },
-      (data) => data?.filter((entry) => entry.message.id !== item.message.id),
+    const previous = queryClient.getQueriesData<{
+      pages: SavedMessagePage[];
+    }>({ queryKey: savedKeys.all });
+    queryClient.setQueriesData<{ pages: SavedMessagePage[] }>(
+      { queryKey: ["saved", "list"] },
+      (data) =>
+        data && {
+          ...data,
+          pages: data.pages.map((page) => ({
+            ...page,
+            items: page.items.filter(
+              (entry) => entry.message.id !== item.message.id,
+            ),
+          })),
+        },
     );
     try {
-      await api.unpin(item.message.id);
+      await api.unsaveMessage(item.message.id);
+      applySavedChange(queryClient, {
+        messageID: item.message.id,
+        chatID: item.chat.id,
+        saved: false,
+      });
     } catch {
       for (const [key, data] of previous) queryClient.setQueryData(key, data);
       Alert.alert(t("actionFailed"));
@@ -95,14 +107,18 @@ export default function ImportantScreen() {
             <TabChip
               testID="important-tab-all"
               label={t("importantAllChats")}
-              count={items.length}
+              count={total}
               selected={filter === null}
               onPress={() => setChatFilter(null)}
             />
             {groups.map(({ chat, count }) => (
               <TabChip
                 key={chat.id}
-                label={chatTitle(chat, t("directChat"))}
+                label={
+                  chatMap[chat.id]
+                    ? chatTitle(chatMap[chat.id]!, t("directChat"))
+                    : chat.display_name || t("directChat")
+                }
                 count={count}
                 selected={filter === chat.id}
                 onPress={() => setChatFilter(chat.id)}
@@ -123,6 +139,16 @@ export default function ImportantScreen() {
             onActions={setMenuFor}
           />
         )}
+        onEndReached={() => {
+          if (query.hasNextPage && !query.isFetchingNextPage)
+            void query.fetchNextPage();
+        }}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          query.isFetchingNextPage ? (
+            <ActivityIndicator style={styles.more} color={theme.muted} />
+          ) : null
+        }
         refreshControl={
           <RefreshControl
             refreshing={query.isRefetching}
@@ -155,7 +181,7 @@ export default function ImportantScreen() {
                 {t("importantEmpty")}
               </Text>
               <Text tone="muted" size={15} style={styles.center}>
-                {t("importantEmptyHint")}
+                {t("importantSavedHint")}
               </Text>
             </View>
           )
@@ -174,18 +200,14 @@ export default function ImportantScreen() {
                   icon: <ArrowUpRight size={20} color={theme.muted} />,
                   onPress: () => open(menuFor),
                 },
-                ...(canUnpin(menuFor, user.id, user.permissions)
-                  ? [
-                      {
-                        key: "remove",
-                        testID: "important-remove",
-                        label: t("importantRemove"),
-                        icon: <PinOff size={20} color={theme.danger} />,
-                        danger: true,
-                        onPress: () => void remove(menuFor),
-                      },
-                    ]
-                  : []),
+                {
+                  key: "remove",
+                  testID: "important-remove",
+                  label: t("importantRemove"),
+                  icon: <StarOff size={20} color={theme.danger} />,
+                  danger: true,
+                  onPress: () => void remove(menuFor),
+                },
               ]
             : []
         }
@@ -199,6 +221,7 @@ const styles = StyleSheet.create({
   strip: { flexGrow: 0 },
   chips: { gap: 6, paddingHorizontal: 14, paddingBottom: 10 },
   loader: { marginTop: 40 },
+  more: { marginVertical: 16 },
   state: { padding: 20 },
   empty: {
     paddingHorizontal: 32,

@@ -103,6 +103,7 @@ describe("messageMenu", () => {
     canModerate: false,
     canPin: false,
     pinned: false,
+    saved: false,
     inThread: false,
     hasText: true,
     persisted: true,
@@ -111,7 +112,7 @@ describe("messageMenu", () => {
   it("keeps the web order and hides edit and delete on someone else's message", () => {
     expect(messageMenu(base)).toEqual([
       ["reply", "thread"],
-      ["forward", "details"],
+      ["save", "forward", "details"],
       ["copyLink", "copyText"],
     ]);
   });
@@ -126,13 +127,15 @@ describe("messageMenu", () => {
     expect(moderated.flat()).not.toContain("edit");
   });
 
-  it("offers Important to chat admins and flips it when pinned", () => {
+  it("offers Important to everyone and pinning to chat admins", () => {
+    expect(messageMenu({ ...base, saved: true })[1]![0]).toBe("unsave");
     expect(messageMenu({ ...base, canPin: true })[1]).toEqual([
+      "save",
       "pin",
       "forward",
       "details",
     ]);
-    expect(messageMenu({ ...base, canPin: true, pinned: true })[1]![0]).toBe(
+    expect(messageMenu({ ...base, canPin: true, pinned: true })[1]![1]).toBe(
       "unpin",
     );
     expect(canPinIn("owner")).toBe(true);

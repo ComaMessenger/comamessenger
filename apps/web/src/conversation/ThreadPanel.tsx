@@ -262,6 +262,7 @@ export function ThreadPanel({
                   )}
                   own={root.actor_id === user.id}
                   canModerate={canModerate}
+                  canPin={canManageChat(chat)}
                   grouped={false}
                   chatName={chatName}
                   onReply={() => setReply(root)}
@@ -315,6 +316,7 @@ export function ThreadPanel({
                   )}
                   own={message.actor_id === user.id}
                   canModerate={canModerate}
+                  canPin={canManageChat(chat)}
                   grouped={
                     previous?.actor_id === message.actor_id &&
                     minuteGap(previous.created_at, message.created_at) < 5

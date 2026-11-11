@@ -15,6 +15,8 @@ import {
   Plus,
   RefreshCw,
   SmilePlus,
+  Star,
+  StarOff,
   Trash2,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -51,6 +53,7 @@ import { ForwardMessageDialog } from "../dialogs/ForwardMessageDialog";
 import { MessageDetailsDialog } from "../dialogs/MessageDetailsDialog";
 import { MessageFile } from "./MessageFile";
 import { useThreadPreview } from "./useThreadPreview";
+import { useSaveMessage, useSavedIDs } from "./useSaved";
 import { MessageBlocksView } from "../agentchat/MessageBlocksView";
 import { AgentWhy } from "../agentchat/AgentWhy";
 
@@ -64,6 +67,8 @@ export type MessageRowProps = {
   grouped: boolean;
   chatName: string;
   pinned?: boolean;
+  /** Owner or admin of the chat: may pin and unpin (`chat.manage`). */
+  canPin?: boolean;
   onReply(): void;
   onJump(id: string): void;
   onRetry(): void;
@@ -85,6 +90,7 @@ export function MessageRow({
   grouped,
   chatName,
   pinned = false,
+  canPin = false,
   onReply,
   onJump,
   onRetry,
@@ -120,6 +126,10 @@ export function MessageRow({
     staleTime: 5 * 60_000,
   });
   const threadPreview = useThreadPreview(message, showThreadIndicator);
+  const persisted = !message.delivery || message.delivery === "sent";
+  const savedIDs = useSavedIDs(persisted ? message.chat_id : undefined);
+  const saved = persisted && savedIDs.has(message.id);
+  const setSaved = useSaveMessage();
   const resolvedReply =
     replyMessage ?? replyQuery.data?.messages.find((item) => item.id === message.reply_to_id);
   const replyAuthor = members.find((item) => item.actor_id === resolvedReply?.actor_id);
@@ -180,6 +190,25 @@ export function MessageRow({
         });
       }
       onPinnedChanged?.();
+    } catch {
+      toast({ message: t("actionFailed"), tone: "danger" });
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function toggleSaved() {
+    closeOverlays();
+    setBusy(true);
+    const next = !saved;
+    try {
+      await setSaved(message, next);
+      toast({
+        message: next ? t("messageSaved") : t("messageUnsaved"),
+        action: {
+          label: t("undo"),
+          onClick: () => void setSaved(message, !next).catch(() => undefined),
+        },
+      });
     } catch {
       toast({ message: t("actionFailed"), tone: "danger" });
     } finally {
@@ -267,7 +296,13 @@ export function MessageRow({
             size={compact ? "sm" : "md"}
           />
         )}
-        {grouped && (
+        {grouped && saved && (
+          <Star
+            className="message__saved message__saved--gutter"
+            aria-label={t("savedMark")}
+          />
+        )}
+        {grouped && !saved && (
           <time className="message__hover-time" dateTime={message.created_at}>
             {formatTime(message.created_at)}
           </time>
@@ -278,7 +313,12 @@ export function MessageRow({
           <header className="message__meta">
             <strong>{name}</strong>
             {isAgent && <Tag tone="agent">{t("agentTag")}</Tag>}
-            <time dateTime={message.created_at}>{formatTime(message.created_at)}</time>
+            {saved && (
+              <Star className="message__saved" aria-label={t("savedMark")} />
+            )}
+            <time dateTime={message.created_at}>
+              {formatTime(message.created_at)}
+            </time>
             {message.edited_at && !message.deleted_at && (
               <span className="message__edited">{t("edited")}</span>
             )}
@@ -518,9 +558,24 @@ export function MessageRow({
               </MenuItem>
             )}
             <MenuDivider />
-            <MenuItem icon={<Pin />} disabled={busy} onClick={() => void togglePin()}>
-              {pinned ? t("unpinMessage") : t("pinMessage")}
-            </MenuItem>
+            {persisted && (
+              <MenuItem
+                icon={saved ? <StarOff /> : <Star />}
+                disabled={busy}
+                onClick={() => void toggleSaved()}
+              >
+                {saved ? t("unsaveMessage") : t("saveMessage")}
+              </MenuItem>
+            )}
+            {canPin && (
+              <MenuItem
+                icon={<Pin />}
+                disabled={busy}
+                onClick={() => void togglePin()}
+              >
+                {pinned ? t("unpinMessage") : t("pinMessage")}
+              </MenuItem>
+            )}
             <MenuItem icon={<Forward />} onClick={() => { closeOverlays(); setForwarding(true); }}>
               {t("forwardMessage")}
             </MenuItem>

@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   MessengerAPI,
+  applySavedChange,
+  savedChange,
   Outbox,
   RealtimeCoordinator,
   createMessengerStore,
@@ -67,6 +70,7 @@ export function useMessengerSession({
   onUserUpdated(user: User): void;
 }) {
   const store = useMemo(() => createMessengerStore(), []);
+  const queryClient = useQueryClient();
   const [folders, setFolders] = useState<ChatFolder[]>([]);
   const [pinnedChatIDs, setPinnedChatIDs] = useState<string[]>([]);
   const [snoozedUntil, setSnoozedUntil] = useState<string | null>(null);
@@ -180,6 +184,12 @@ export function useMessengerSession({
           state: store.getState().setRealtime,
           event: (event) => {
             const applied = store.getState().apply(event);
+            // Saves are private: these events reach only the saver's devices.
+            const saved = savedChange(event);
+            if (applied && saved) applySavedChange(queryClient, saved);
+            const privateSave =
+              event.type === "message.saved" ||
+              event.type === "message.unsaved";
             const chat = event.chat_id
               ? store.getState().chats[String(event.chat_id)]
               : undefined;
@@ -211,6 +221,7 @@ export function useMessengerSession({
               void api.me().then(onUserUpdated);
             if (
               applied &&
+              !privateSave &&
               (event.type.startsWith("chat.") ||
                 event.type.startsWith("member.") ||
                 event.type.startsWith("message."))
@@ -283,6 +294,7 @@ export function useMessengerSession({
       api,
       onLogout,
       onUserUpdated,
+      queryClient,
       reload,
       scheduleReload,
       showInAppNotification,

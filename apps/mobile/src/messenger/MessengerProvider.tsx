@@ -13,6 +13,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outbox,
   RealtimeCoordinator,
+  applySavedChange,
+  savedChange,
   createMessengerStore,
   pinnedChatLimit,
   type AgentStatusState,
@@ -136,6 +138,12 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
           state: store.getState().setRealtime,
           event: (event) => {
             const applied = store.getState().apply(event);
+            // Saves are private: these events reach only the saver's devices.
+            const saved = savedChange(event);
+            if (applied && saved) applySavedChange(queryClient, saved);
+            const privateSave =
+              event.type === "message.saved" ||
+              event.type === "message.unsaved";
             if (event.type.startsWith("reaction."))
               void queryClient.invalidateQueries({
                 queryKey: reactionsKey(event.subject_id),
@@ -147,6 +155,7 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
               void api.me().then(updateUser);
             if (
               (applied &&
+                !privateSave &&
                 (event.type.startsWith("chat.") ||
                   event.type.startsWith("member.") ||
                   event.type.startsWith("message."))) ||

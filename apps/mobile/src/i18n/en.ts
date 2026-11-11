@@ -423,4 +423,13 @@ export const en: Record<keyof typeof ru, string> = {
   acFieldThisChat: "this chat",
   acFieldOtherChat: "another chat",
   acCommandsLabel: "Agent commands",
+  // Saved messages and pins (phase 6.1, package G)
+  importantSavedHint:
+    "Choose “Add to Important” in a message menu and it appears here. Only you can see it; nobody else is told.",
+  savedMark: "In Important",
+  addedToImportantPrivate: "Added to Important — only you can see it",
+  pinMessage: "Pin",
+  unpinMessage: "Unpin",
+  messagePinned: "Message pinned",
+  messageUnpinned: "Message unpinned",
 };

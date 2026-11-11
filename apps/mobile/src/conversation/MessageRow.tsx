@@ -49,7 +49,8 @@ export type MessageBubbleProps = {
   quoted?: ClientMessage;
   quotedAuthor?: string;
   showThread: boolean;
-  pinned?: boolean;
+  /** The reader saved it to their own «Important»: a star by the time. */
+  saved?: boolean;
   highlighted?: boolean;
   onThread(message: ClientMessage): void;
   onActions(message: ClientMessage): void;
@@ -120,7 +121,7 @@ export function MessageBubble({
   quoted,
   quotedAuthor,
   showThread,
-  pinned = false,
+  saved = false,
   highlighted = false,
   onThread,
   onActions,
@@ -190,6 +191,7 @@ export function MessageBubble({
     <View
       accessible
       accessibilityLabel={[
+        saved && !deleted ? t("savedMark") : null,
         message.edited_at && !deleted ? t("edited") : null,
         time,
         status?.label,
@@ -198,7 +200,7 @@ export function MessageBubble({
         .join(", ")}
       style={styles.meta}
     >
-      {pinned && !deleted && (
+      {saved && !deleted && (
         <Star size={12} color={theme.warning} fill={theme.warning} />
       )}
       {message.edited_at && !deleted ? (

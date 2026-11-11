@@ -1,19 +1,17 @@
 import { memo } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import { FileText } from "lucide-react-native";
-import { useQuery } from "@tanstack/react-query";
+import { FileText, Star } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { formatListTime, messagePlainText } from "@comamessenger/core";
 import { useTheme } from "@/lib/theme";
 import { useSignedIn } from "@/session/SessionProvider";
-import { withCache } from "@/messenger/cache";
 import { ChatAvatar } from "@/chats/ChatAvatar";
 import { chatTitle } from "@/chats/ChatRow";
 import { Text } from "@/ui/Text";
-import type { ImportantItem } from "./pins";
+import type { ImportantItem } from "./useImportant";
 
 /**
- * Card of a pinned message: author, chat, date, up to three lines of text and
+ * Card of a saved message: author, chat, date, up to three lines of text and
  * the first attachment (prototype `.imp`).
  */
 export const ImportantRow = memo(function ImportantRow({
@@ -29,38 +27,17 @@ export const ImportantRow = memo(function ImportantRow({
 }) {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
-  const { api, user } = useSignedIn();
-  // Same key and source as the conversation, so the list is usually cached.
-  const members = useQuery({
-    queryKey: ["members", item.chat.id],
-    queryFn: () =>
-      withCache(`members:${item.chat.id}`, () => api.members(item.chat.id)),
-    staleTime: 60_000,
-  });
-  const { message, chat } = item;
-  const author = members.data?.find(
-    (member) => member.actor_id === message.actor_id,
-  );
-  const authorName =
-    message.actor_id === user.id
-      ? user.display_name
-      : (author?.display_name ??
-        (chat.direct_peer?.actor_id === message.actor_id
-          ? chat.direct_peer.display_name
-          : t("participant")));
-  const agent =
-    author?.type === "agent" ||
-    (chat.direct_peer?.actor_id === message.actor_id &&
-      chat.direct_peer.type === "agent");
-  const avatarVersion =
-    message.actor_id === user.id
-      ? user.avatar_version
-      : (author?.avatar_version ?? 0);
-  const chatName = chatTitle(chat, t("directChat"));
-  const text = message.deleted_at
-    ? t("messageDeleted")
-    : messagePlainText(message.body).trim();
-  const files = message.deleted_at ? [] : (message.files ?? []);
+  const { user } = useSignedIn();
+  const { message, author } = item;
+  const own = message.actor_id === user.id;
+  const authorName = own ? user.display_name : author.display_name;
+  const agent = author.type === "agent";
+  const avatarVersion = own ? user.avatar_version : author.avatar_version;
+  const chatName = item.localChat
+    ? chatTitle(item.localChat, t("directChat"))
+    : item.chat.display_name || t("directChat");
+  const text = messagePlainText(message.body).trim();
+  const files = message.files ?? [];
   const time = formatListTime(
     message.created_at,
     i18n.language,
@@ -114,6 +91,7 @@ export const ImportantRow = memo(function ImportantRow({
           >
             {authorName}
           </Text>
+          <Star size={12} color={theme.warning} fill={theme.warning} />
           <Text tone="muted" size={12}>
             {time}
           </Text>
@@ -128,11 +106,7 @@ export const ImportantRow = memo(function ImportantRow({
           {chatName}
         </Text>
         {text ? (
-          <Text
-            size={14.5}
-            numberOfLines={3}
-            style={message.deleted_at ? { color: theme.muted } : undefined}
-          >
+          <Text size={14.5} numberOfLines={3}>
             {text}
           </Text>
         ) : null}

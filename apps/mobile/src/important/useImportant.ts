@@ -1,58 +1,53 @@
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { useStore } from "zustand";
+import {
+  savedChatFilters,
+  savedKeys,
+  type Chat,
+  type SavedMessage,
+} from "@comamessenger/core";
 import { useMessenger } from "@/messenger/MessengerProvider";
 import { useSignedIn } from "@/session/SessionProvider";
-import type { ImportantItem } from "./pins";
 
-export type { ImportantItem };
+/** A saved message as the screen shows it, with the chat from the list if known. */
+export type ImportantItem = SavedMessage & { localChat?: Chat };
 
-export const importantKey = ["important"] as const;
+function useSavedPages(chatID: string | null, enabled = true) {
+  const { api } = useSignedIn();
+  return useInfiniteQuery({
+    queryKey: savedKeys.list(chatID),
+    enabled,
+    initialPageParam: undefined as number | undefined,
+    queryFn: ({ pageParam }) =>
+      api.savedMessages({ chatID: chatID ?? undefined, before: pageParam }),
+    getNextPageParam: (page) => page.next_before ?? undefined,
+  });
+}
 
 /**
- * Messages pinned in every chat the person is in, newest pin first — the
- * same source as «Important» on the web.
+ * The person's own saved messages («Важные»), newest save first — the same
+ * source as the web. Nobody else sees them. A chat filter asks the server
+ * for that chat only, so older saves of the chat are not missed.
  */
-export function useImportant() {
-  const { api } = useSignedIn();
+export function useImportant(chatFilter: string | null) {
   const { store } = useMessenger();
   const chatMap = useStore(store, (state) => state.chats);
-  const chats = useMemo(() => Object.values(chatMap), [chatMap]);
-  const chatKey = chats
-    .map((chat) => chat.id)
-    .sort()
-    .join(":");
-  return useQuery({
-    queryKey: [...importantKey, chatKey],
-    enabled: chats.length > 0,
-    queryFn: async (): Promise<ImportantItem[]> => {
-      const pinned = (
-        await Promise.all(
-          chats.map(async (chat) =>
-            (await api.pins(chat.id)).map((pin) => ({ chat, pin })),
-          ),
-        )
-      ).flat();
-      const resolved = await Promise.all(
-        pinned.map(async ({ chat, pin }) => {
-          const context = await api.messageContext(pin.message_id, 1);
-          const message = context.messages.find(
-            (item) => item.id === pin.message_id,
-          );
-          return message ? { chat, message, pin } : null;
-        }),
-      );
-      const seen = new Set<string>();
-      return resolved
-        .filter((item): item is ImportantItem => Boolean(item))
-        .filter((item) => {
-          if (seen.has(item.message.id)) return false;
-          seen.add(item.message.id);
-          return true;
-        })
-        .sort((left, right) =>
-          right.pin.pinned_at.localeCompare(left.pin.pinned_at),
-        );
-    },
-  });
+  const all = useSavedPages(null);
+  const filtered = useSavedPages(chatFilter, chatFilter !== null);
+  const query = chatFilter ? filtered : all;
+  const allItems = useMemo(
+    () => all.data?.pages.flatMap((page) => page.items) ?? [],
+    [all.data],
+  );
+  const items = useMemo<ImportantItem[]>(
+    () =>
+      (query.data?.pages.flatMap((page) => page.items) ?? []).map((item) => ({
+        ...item,
+        localChat: chatMap[item.chat.id],
+      })),
+    [query.data, chatMap],
+  );
+  const groups = useMemo(() => savedChatFilters(allItems), [allItems]);
+  return { query, all, items, groups, total: allItems.length };
 }

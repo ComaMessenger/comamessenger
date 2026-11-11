@@ -1,106 +1,134 @@
 import { useMemo, useState } from "react";
-import { ArrowUpRight, Pin, PinOff, Star } from "lucide-react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowUpRight, Star, StarOff } from "lucide-react";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
-import { chatAvatarSource, messagePlainText, type Chat, type Message, type MessagePin } from "@comamessenger/core";
+import {
+  applySavedChange,
+  chatAvatarSource,
+  messagePlainText,
+  savedChatFilters,
+  savedKeys,
+  type Chat,
+  type SavedMessage,
+} from "@comamessenger/core";
 import { hasPermission } from "../settings";
-import { Avatar, Chip, EmptyState, InlineError, SkeletonRow, cx } from "../ui";
+import {
+  Avatar,
+  Button,
+  Chip,
+  EmptyState,
+  InlineError,
+  SkeletonRow,
+  cx,
+} from "../ui";
 import { formatDay, formatListTime, minuteGap } from "../lib/format";
 import { canManageChat, titleOf } from "../lib/chats";
 import { useIsMobile, useIsNarrowDesktop } from "../lib/useMediaQuery";
 import { useMessenger } from "../shell/MessengerContext";
 import { useToast } from "../shell/ToastProvider";
 import { MessageRow } from "../conversation/MessageRow";
-import { DirectoryDetailHead, DirectoryList, DirectoryRow, DirectorySplit } from "./DirectoryPage";
+import {
+  DirectoryDetailHead,
+  DirectoryList,
+  DirectoryRow,
+  DirectorySplit,
+} from "./DirectoryPage";
 import { useChatMembers } from "./useChatMembers";
-
-type ImportantItem = { chat: Chat; message: Message; pin: MessagePin };
 
 const visibleChatChips = 3;
 
+/** The reader's saved messages, newest save first, page by page. */
+function useSavedPages(chatID: string | null) {
+  const { api } = useMessenger();
+  return useInfiniteQuery({
+    queryKey: savedKeys.list(chatID),
+    initialPageParam: undefined as number | undefined,
+    queryFn: ({ pageParam }) =>
+      api.savedMessages({ chatID: chatID ?? undefined, before: pageParam }),
+    getNextPageParam: (page) => page.next_before ?? undefined,
+  });
+}
+
+/**
+ * «Important»: messages the reader saved for themselves. Nobody else sees
+ * them; chat pins live in the chat's info instead.
+ */
 export function ImportantDirectory({ selectedID }: { selectedID?: string }) {
   const { t } = useTranslation();
-  const { api, user, store, navigate } = useMessenger();
+  const { user, store, navigate } = useMessenger();
   const isMobile = useIsMobile();
   const narrow = useIsNarrowDesktop();
   const chatMap = useStore(store, (state) => state.chats);
-  const chats = useMemo(() => Object.values(chatMap), [chatMap]);
-  const chatKey = chats.map((chat) => chat.id).sort().join(":");
   const [chatFilter, setChatFilter] = useState<string | null>(null);
   const [moreChips, setMoreChips] = useState(false);
-  const query = useQuery({
-    queryKey: ["important", chatKey],
-    enabled: chats.length > 0,
-    queryFn: async (): Promise<ImportantItem[]> => {
-      const pinned = (
-        await Promise.all(
-          chats.map(async (chat) => (await api.pins(chat.id)).map((pin) => ({ chat, pin }))),
-        )
-      ).flat();
-      const resolved = await Promise.all(
-        pinned.map(async ({ chat, pin }) => {
-          const context = await api.messageContext(pin.message_id, 1);
-          const message = context.messages.find((item) => item.id === pin.message_id);
-          return message ? { chat, message, pin } : null;
-        }),
-      );
-      const seen = new Set<string>();
-      return resolved
-        .filter((item): item is ImportantItem => Boolean(item))
-        .filter((item) => {
-          if (seen.has(item.message.id)) return false;
-          seen.add(item.message.id);
-          return true;
-        })
-        .sort((left, right) => right.pin.pinned_at.localeCompare(left.pin.pinned_at));
-    },
-  });
-  const items = useMemo(() => query.data ?? [], [query.data]);
-  const loading = query.isLoading || (chats.length === 0 && !query.data);
-  const chatsWithPins = useMemo(() => {
-    const counts = new Map<string, { chat: Chat; count: number }>();
-    for (const item of items) {
-      const entry = counts.get(item.chat.id) ?? { chat: item.chat, count: 0 };
-      entry.count += 1;
-      counts.set(item.chat.id, entry);
-    }
-    return [...counts.values()].sort((a, b) => b.count - a.count);
-  }, [items]);
-  const visible = chatFilter ? items.filter((item) => item.chat.id === chatFilter) : items;
-  const activeID = selectedID ?? (!isMobile && !narrow ? visible[0]?.message.id : undefined);
-  const active = items.find((item) => item.message.id === activeID);
-  const shownChips = moreChips ? chatsWithPins : chatsWithPins.slice(0, visibleChatChips);
+  const all = useSavedPages(null);
+  const filtered = useSavedPages(chatFilter);
+  const query = chatFilter ? filtered : all;
+  const allItems = useMemo(
+    () => all.data?.pages.flatMap((page) => page.items) ?? [],
+    [all.data],
+  );
+  const visible = useMemo(
+    () => query.data?.pages.flatMap((page) => page.items) ?? [],
+    [query.data],
+  );
+  const chatFilters = useMemo(() => savedChatFilters(allItems), [allItems]);
+  const activeID =
+    selectedID ?? (!isMobile && !narrow ? visible[0]?.message.id : undefined);
+  const active =
+    visible.find((item) => item.message.id === activeID) ??
+    allItems.find((item) => item.message.id === activeID);
+  const shownChips = moreChips
+    ? chatFilters
+    : chatFilters.slice(0, visibleChatChips);
+  const chatName = (item: SavedMessage) => {
+    const chat = chatMap[item.chat.id];
+    return chat ? titleOf(chat, [], user.id) : item.chat.display_name;
+  };
 
   const list = (
     <DirectoryList
       title={t("important")}
       lead={t("importantLead")}
       chips={
-        chatsWithPins.length > 1 && (
+        chatFilters.length > 1 && (
           <>
-            <Chip active={chatFilter === null} onClick={() => setChatFilter(null)}>
+            <Chip
+              active={chatFilter === null}
+              onClick={() => setChatFilter(null)}
+            >
               {t("importantAllChats")}
             </Chip>
             {shownChips.map(({ chat }) => (
               <Chip
                 key={chat.id}
                 active={chatFilter === chat.id}
-                onClick={() => setChatFilter(chatFilter === chat.id ? null : chat.id)}
+                onClick={() =>
+                  setChatFilter(chatFilter === chat.id ? null : chat.id)
+                }
               >
-                {titleOf(chat, [], user.id)}
+                {chatMap[chat.id]
+                  ? titleOf(chatMap[chat.id]!, [], user.id)
+                  : chat.display_name}
               </Chip>
             ))}
-            {!moreChips && chatsWithPins.length > visibleChatChips && (
+            {!moreChips && chatFilters.length > visibleChatChips && (
               <Chip onClick={() => setMoreChips(true)}>
-                {t("importantMoreChats", { count: chatsWithPins.length - visibleChatChips })}
+                {t("importantMoreChats", {
+                  count: chatFilters.length - visibleChatChips,
+                })}
               </Chip>
             )}
           </>
         )
       }
     >
-      {loading && chats.length > 0 ? (
+      {query.isLoading ? (
         <>
           <SkeletonRow lines={["85%", "40%"]} />
           <SkeletonRow lines={["65%", "50%"]} />
@@ -114,22 +142,42 @@ export function ImportantDirectory({ selectedID }: { selectedID?: string }) {
           retryLabel={t("retry")}
         />
       ) : visible.length === 0 ? (
-        <EmptyState icon={<Star />} title={t("importantEmpty")} hint={t("importantEmptyHint")} />
+        <EmptyState
+          icon={<Star />}
+          title={t("importantEmpty")}
+          hint={t("importantEmptyHint")}
+        />
       ) : (
-        visible.map((item) => (
-          <ImportantRow
-            key={item.message.id}
-            item={item}
-            selected={!isMobile && item.message.id === activeID}
-            onOpen={() =>
-              navigate(
-                isMobile
-                  ? `/chat/${item.chat.id}?message=${item.message.id}`
-                  : `/important/${item.message.id}`,
-              )
-            }
-          />
-        ))
+        <>
+          {visible.map((item) => (
+            <ImportantRow
+              key={item.message.id}
+              item={item}
+              chat={chatMap[item.chat.id]}
+              chatName={chatName(item)}
+              selected={!isMobile && item.message.id === activeID}
+              onOpen={() =>
+                navigate(
+                  isMobile
+                    ? `/chat/${item.chat.id}?message=${item.message.id}`
+                    : `/important/${item.message.id}`,
+                )
+              }
+            />
+          ))}
+          {query.hasNextPage && (
+            <div className="directory-list__more">
+              <Button
+                variant="ghost"
+                size="sm"
+                pending={query.isFetchingNextPage}
+                onClick={() => void query.fetchNextPage()}
+              >
+                {t("importantLoadMore")}
+              </Button>
+            </div>
+          )}
+        </>
       )}
     </DirectoryList>
   );
@@ -144,12 +192,12 @@ export function ImportantDirectory({ selectedID }: { selectedID?: string }) {
           <ImportantDetail
             key={active.message.id}
             item={active}
-            pinnedInChat={items.filter((item) => item.chat.id === active.chat.id).length}
+            chat={chatMap[active.chat.id]}
+            savedInChat={
+              allItems.filter((item) => item.chat.id === active.chat.id).length
+            }
             onBack={() => navigate("/important")}
-            onUnpinned={() => {
-              void query.refetch();
-              navigate("/important");
-            }}
+            onRemoved={() => navigate("/important")}
           />
         ) : (
           <EmptyState
@@ -164,54 +212,68 @@ export function ImportantDirectory({ selectedID }: { selectedID?: string }) {
   );
 }
 
+function ChatAvatar({
+  item,
+  chat,
+  name,
+}: {
+  item: SavedMessage;
+  chat?: Chat;
+  name: string;
+}) {
+  return chat ? (
+    <Avatar
+      name={name}
+      seed={chat.avatar_seed}
+      {...chatAvatarSource(chat)}
+      size="md"
+    />
+  ) : (
+    <Avatar name={name} seed={item.chat.id} size="md" />
+  );
+}
+
 function ImportantRow({
   item,
+  chat,
+  chatName,
   selected,
   onOpen,
 }: {
-  item: ImportantItem;
+  item: SavedMessage;
+  chat?: Chat;
+  chatName: string;
   selected: boolean;
   onOpen(): void;
 }) {
   const { t } = useTranslation();
-  const { user } = useMessenger();
-  const { members } = useChatMembers(item.chat.id);
-  const chatName = titleOf(item.chat, [], user.id);
-  const pinnedByName = members.find((member) => member.actor_id === item.pin.pinned_by)?.display_name;
-  const pinnedBy =
-    item.pin.pinned_by === user.id
-      ? t("importantPinnedByYou")
-      : pinnedByName && t("importantPinnedBy", { name: pinnedByName });
+  const files = item.message.files.length;
+  const text = messagePlainText(item.message.body).trim();
   return (
     <DirectoryRow
       className="directory-row--important"
       selected={selected}
-      leading={
-        <Avatar
-          name={chatName}
-          seed={item.chat.avatar_seed}
-          {...chatAvatarSource(item.chat)}
-          size="md"
-        />
-      }
+      leading={<ChatAvatar item={item} chat={chat} name={chatName} />}
       top={
         <>
           <span className="truncate">{chatName}</span>
-          <Pin className="directory-row__pin" aria-hidden="true" />
+          <Star className="directory-row__star" aria-hidden="true" />
         </>
       }
       text={
-        item.message.deleted_at ? (
-          <em className="directory-row__deleted">{t("threadRootDeleted")}</em>
-        ) : (
-          messagePlainText(item.message.body)
-        )
+        <>
+          <strong className="directory-row__author">
+            {item.author.display_name}:{" "}
+          </strong>
+          {text || (files > 0 ? t("importantFiles", { count: files }) : "")}
+        </>
       }
       meta={
         <span className="truncate">
-          {[pinnedBy, formatListTime(item.pin.pinned_at)]
-            .filter(Boolean)
-            .join(" · ")}
+          {[
+            formatListTime(item.message.created_at),
+            t("importantSavedAt", { date: formatDay(item.saved_at) }),
+          ].join(" · ")}
         </span>
       }
       onClick={onOpen}
@@ -219,17 +281,19 @@ function ImportantRow({
   );
 }
 
-/** The pinned message in its chat context: two messages before and after. */
+/** The saved message in its chat context: two messages before and after. */
 function ImportantDetail({
   item,
-  pinnedInChat,
+  chat,
+  savedInChat,
   onBack,
-  onUnpinned,
+  onRemoved,
 }: {
-  item: ImportantItem;
-  pinnedInChat: number;
+  item: SavedMessage;
+  chat?: Chat;
+  savedInChat: number;
   onBack(): void;
-  onUnpinned(): void;
+  onRemoved(): void;
 }) {
   const { t } = useTranslation();
   const { api, user, navigate } = useMessenger();
@@ -242,64 +306,62 @@ function ImportantDetail({
     queryFn: () => api.messageContext(item.message.id, 5),
     staleTime: 60_000,
   });
-  const chatName = titleOf(item.chat, members, user.id);
-  const canModerate = hasPermission(user, "chats.moderate") || canManageChat(item.chat);
-  const pinnedByName = members.find((member) => member.actor_id === item.pin.pinned_by)?.display_name;
-  const pinnedBy =
-    item.pin.pinned_by === user.id
-      ? t("importantPinnedByYou")
-      : pinnedByName && t("importantPinnedBy", { name: pinnedByName });
+  const chatName = chat
+    ? titleOf(chat, members, user.id)
+    : item.chat.display_name;
+  const canModerate =
+    hasPermission(user, "chats.moderate") ||
+    (chat ? canManageChat(chat) : false);
   const messages = context.data?.messages ?? [item.message];
+  const change = (saved: boolean) =>
+    applySavedChange(queryClient, {
+      messageID: item.message.id,
+      chatID: item.chat.id,
+      saved,
+    });
 
-  async function unpin() {
+  async function remove() {
     setBusy(true);
     try {
-      await api.unpin(item.message.id);
+      await api.unsaveMessage(item.message.id);
+      change(false);
       toast({
-        message: t("messageUnpinned"),
-        action: { label: t("undo"), onClick: () => void api.pin(item.message.id).then(onUnpinned) },
+        message: t("importantRemoved"),
+        action: {
+          label: t("undo"),
+          onClick: () =>
+            void api.saveMessage(item.message.id).then(() => change(true)),
+        },
       });
-      void queryClient.invalidateQueries({ queryKey: ["pins", item.chat.id] });
-      onUnpinned();
+      onRemoved();
     } catch {
       toast({ message: t("actionFailed"), tone: "danger" });
     } finally {
       setBusy(false);
     }
   }
-  const jump = () => navigate(`/chat/${item.chat.id}?message=${item.message.id}`);
+  const jump = () =>
+    navigate(`/chat/${item.chat.id}?message=${item.message.id}`);
 
   return (
     <div className="important-detail">
       <DirectoryDetailHead
         onBack={onBack}
-        leading={
-          <Avatar
-            name={chatName}
-            seed={item.chat.avatar_seed}
-            {...chatAvatarSource(item.chat)}
-            size="md"
-          />
-        }
+        leading={<ChatAvatar item={item} chat={chat} name={chatName} />}
         title={chatName}
         meta={[
-          pinnedBy,
-          formatDay(item.pin.pinned_at),
-          t("importantPinnedInChat", { count: pinnedInChat }),
-        ]
-          .filter(Boolean)
-          .join(" · ")}
+          t("importantSavedAt", { date: formatDay(item.saved_at) }),
+          t("importantInChat", { count: savedInChat }),
+        ].join(" · ")}
         actions={
           <>
             <Chip size="lg" onClick={jump}>
               {t("threadJumpToMessage")}
             </Chip>
-            {(canModerate || item.pin.pinned_by === user.id) && (
-              <Chip size="lg" disabled={busy} onClick={() => void unpin()}>
-                <PinOff aria-hidden="true" />
-                {t("unpinMessage")}
-              </Chip>
-            )}
+            <Chip size="lg" disabled={busy} onClick={() => void remove()}>
+              <StarOff aria-hidden="true" />
+              {t("importantRemove")}
+            </Chip>
           </>
         }
       />
@@ -313,7 +375,9 @@ function ImportantDetail({
           ) : (
             <>
               {messages.length > 1 && (
-                <div className="important-detail__hint">{t("importantContextHint")}</div>
+                <div className="important-detail__hint">
+                  {t("importantContextHint")}
+                </div>
               )}
               {messages.map((message, index) => {
                 const previous = messages[index - 1];
@@ -323,19 +387,23 @@ function ImportantDetail({
                     key={message.id}
                     className={cx(
                       "important-detail__message",
-                      isTarget ? "important-detail__message--pinned" : "important-detail__message--context",
+                      isTarget
+                        ? "important-detail__message--pinned"
+                        : "important-detail__message--context",
                     )}
                   >
                     {isTarget && (
                       <span className="important-detail__label">
-                        <Pin aria-hidden="true" />
-                        {t("pinnedLabel")}
+                        <Star aria-hidden="true" />
+                        {t("savedLabel")}
                       </span>
                     )}
                     <MessageRow
                       message={message}
                       members={members}
-                      author={members.find((member) => member.actor_id === message.actor_id)}
+                      author={members.find(
+                        (member) => member.actor_id === message.actor_id,
+                      )}
                       own={message.actor_id === user.id}
                       canModerate={canModerate}
                       grouped={
@@ -345,21 +413,28 @@ function ImportantDetail({
                         minuteGap(previous.created_at, message.created_at) < 5
                       }
                       chatName={chatName}
-                      pinned={isTarget}
+                      canPin={chat ? canManageChat(chat) : false}
                       compact
                       onReply={jump}
                       onJump={jump}
                       onRetry={() => undefined}
-                      onThread={() => navigate(`/chat/${item.chat.id}/thread/${message.thread_root_id ?? message.id}`)}
+                      onThread={() =>
+                        navigate(
+                          `/chat/${item.chat.id}/thread/${message.thread_root_id ?? message.id}`,
+                        )
+                      }
                       onChanged={() => void context.refetch()}
-                      onPinnedChanged={onUnpinned}
                       domIDPrefix="important-message"
                     />
                   </div>
                 );
               })}
               <div className="important-detail__footer">
-                <button type="button" className="important-detail__open" onClick={() => navigate(`/chat/${item.chat.id}`)}>
+                <button
+                  type="button"
+                  className="important-detail__open"
+                  onClick={() => navigate(`/chat/${item.chat.id}`)}
+                >
                   {t("importantOpenChat", { chat: chatName })}
                   <ArrowUpRight aria-hidden="true" />
                 </button>

@@ -26,6 +26,7 @@ import {
 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import {
+  applySavedChange,
   chatAvatarSource,
   chatCommands,
   compactUUID,
@@ -35,6 +36,7 @@ import {
   grantsPermission,
   insertMention,
   messagePlainText,
+  savedKeys,
   type ActionViewer,
   type ChatMember,
   type ClientMessage,
@@ -158,6 +160,17 @@ export function ConversationView({
   const pinnedIDs = useMemo(
     () => new Set((pins.data ?? []).map((pin) => pin.message_id)),
     [pins.data],
+  );
+  // The reader's own saves («Важные»): the star in the bubble. Kept apart from
+  // messages so the feed is the same for everyone.
+  const savedQuery = useQuery({
+    queryKey: savedKeys.ids(chatID),
+    queryFn: () => api.savedMessageIDs(chatID),
+    staleTime: 5 * 60_000,
+  });
+  const savedIDs = useMemo(
+    () => new Set(savedQuery.data ?? []),
+    [savedQuery.data],
   );
   const myRole =
     chat?.role ?? members.find((member) => member.actor_id === user.id)?.role;
@@ -316,9 +329,25 @@ export function ConversationView({
     try {
       if (pin) await api.pin(message.id);
       else await api.unpin(message.id);
-      setNotice(pin ? t("addedToImportant") : t("removedFromImportant"));
+      setNotice(pin ? t("messagePinned") : t("messageUnpinned"));
       void queryClient.invalidateQueries({ queryKey: ["pins", chatID] });
-      void queryClient.invalidateQueries({ queryKey: ["important"] });
+    } catch {
+      Alert.alert(t("actionFailed"));
+    }
+  }
+
+  async function setSaved(message: ClientMessage, saved: boolean) {
+    try {
+      if (saved) await api.saveMessage(message.id);
+      else await api.unsaveMessage(message.id);
+      applySavedChange(queryClient, {
+        messageID: message.id,
+        chatID: message.chat_id,
+        saved,
+      });
+      setNotice(
+        saved ? t("addedToImportantPrivate") : t("removedFromImportant"),
+      );
     } catch {
       Alert.alert(t("actionFailed"));
     }
@@ -335,6 +364,10 @@ export function ConversationView({
         return;
       case "thread":
         openThread(message);
+        return;
+      case "save":
+      case "unsave":
+        void setSaved(message, action === "save");
         return;
       case "pin":
       case "unpin":
@@ -392,6 +425,7 @@ export function ConversationView({
         canModerate: conversation.canModerate,
         canPin: canPinIn(myRole),
         pinned: pinnedIDs.has(menuFor.id),
+        saved: savedIDs.has(menuFor.id),
         inThread,
         hasText: Boolean(messagePlainText(menuFor.body).trim()),
         persisted: menuPersisted,
@@ -616,7 +650,7 @@ export function ConversationView({
                         quoted ? authorName(quoted.actor_id) : undefined
                       }
                       showThread={!inThread}
-                      pinned={pinnedIDs.has(message.id)}
+                      saved={savedIDs.has(message.id)}
                       highlighted={message.id === highlighted}
                       onReply={reply}
                       onThread={openThread}
@@ -712,7 +746,7 @@ export function ConversationView({
                 return quoted ? authorName(quoted.actor_id) : undefined;
               })()}
               showThread={!inThread}
-              pinned={pinnedIDs.has(menuFor.id)}
+              saved={savedIDs.has(menuFor.id)}
               members={members}
               viewer={viewer}
               onThread={openThread}

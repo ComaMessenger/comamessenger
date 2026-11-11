@@ -80,6 +80,14 @@ appId: com.comamessenger.app
     timeout: 10000
 - takeScreenshot: forward
 - tapOn: Закрыть
+# «В важные» saves the message for the reader only: a star in the bubble.
+- longPressOn: .*Тред ${output.tag}.*
+- tapOn:
+    id: message-action-save
+- extendedWaitUntil:
+    visible: .*В важных.*
+    timeout: 10000
+- takeScreenshot: saved-star
 - tapOn:
     id: conversation-back
 - tapOn:

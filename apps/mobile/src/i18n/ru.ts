@@ -440,4 +440,13 @@ export const ru = {
   acFieldThisChat: "этот чат",
   acFieldOtherChat: "другой чат",
   acCommandsLabel: "Команды агентов",
+  // Saved messages and pins (phase 6.1, package G)
+  importantSavedHint:
+    "Нажмите «В важные» в меню сообщения — оно появится здесь. Видно только вам, другие участники не узнают.",
+  savedMark: "В важных",
+  addedToImportantPrivate: "Добавлено в важные — видно только вам",
+  pinMessage: "Закрепить",
+  unpinMessage: "Открепить",
+  messagePinned: "Сообщение закреплено",
+  messageUnpinned: "Сообщение откреплено",
 } as const;

@@ -869,3 +869,18 @@
     padding-inline: 16px;
   }
 }
+.directory-row__star {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  color: var(--coma-warning);
+  fill: currentColor;
+}
+.directory-row__author {
+  font-weight: 600;
+}
+.directory-list__more {
+  display: flex;
+  justify-content: center;
+  padding: 12px;
+}

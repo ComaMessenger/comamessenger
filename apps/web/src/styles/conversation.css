@@ -1034,3 +1034,16 @@
     border: 0;
   }
 }
+/* The reader's own saved message («Важные»): a star by the time. */
+.message__saved {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  align-self: center;
+  color: var(--coma-warning);
+  fill: currentColor;
+}
+.message__saved--gutter {
+  align-self: start;
+  margin-top: 4px;
+}

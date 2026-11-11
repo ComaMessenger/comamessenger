@@ -20,6 +20,8 @@ import type {
   MessageActionResult,
   ChatAgent,
   MessagePin,
+  SavedMessagePage,
+  SavedMessageState,
   MessageReceipt,
   MessageWindow,
   FileMetadata,
@@ -1339,6 +1341,33 @@ export class MessengerAPI {
   }
   unpin(id: string): Promise<void> {
     return this.request(`/api/v1/messages/${id}/pin`, { method: "DELETE" });
+  }
+  /** The reader's own saved messages («Важные»), newest save first. */
+  savedMessages(
+    options: { chatID?: string; before?: number; limit?: number } = {},
+  ): Promise<SavedMessagePage> {
+    // Built by hand: React Native's URLSearchParams cannot set values.
+    const query = [
+      options.chatID && `chat_id=${encodeURIComponent(options.chatID)}`,
+      options.before && `before=${options.before}`,
+      options.limit && `limit=${options.limit}`,
+    ].filter(Boolean);
+    const suffix = query.length ? `?${query.join("&")}` : "";
+    return this.request(`/api/v1/saved-messages${suffix}`);
+  }
+  /** Which messages of a chat the reader saved: the star in the feed. */
+  async savedMessageIDs(chatID: string): Promise<string[]> {
+    return (
+      await this.request<{ message_ids: string[] }>(
+        `/api/v1/saved-messages/ids?chat_id=${encodeURIComponent(chatID)}`,
+      )
+    ).message_ids;
+  }
+  saveMessage(id: string): Promise<SavedMessageState> {
+    return this.request(`/api/v1/messages/${id}/saved`, { method: "PUT" });
+  }
+  unsaveMessage(id: string): Promise<void> {
+    return this.request(`/api/v1/messages/${id}/saved`, { method: "DELETE" });
   }
   forward(id: string, chatID: string, clientMsgID: string): Promise<Message> {
     return this.request(`/api/v1/messages/${id}/forward`, {
