@@ -32,8 +32,13 @@ integration_key=$(openssl rand -hex 32)
 bootstrap_token=$(openssl rand -hex 32)
 redis_signing_key=$(openssl rand -hex 32)
 runtime_key="coma_agent_$(openssl rand -hex 32)"
+# Root key pair of the bundled S3 gateway (--profile s3gw); it has no default.
+gateway_access_key="coma$(openssl rand -hex 8)"
+gateway_secret_key=$(openssl rand -hex 32)
 
 awk \
+  -v gateway_access_key="$gateway_access_key" \
+  -v gateway_secret_key="$gateway_secret_key" \
   -v mode="$mode" \
   -v postgres_password="$postgres_password" \
   -v redis_password="$redis_password" \
@@ -53,6 +58,8 @@ awk \
   /^BOOTSTRAP_TOKEN=/ { print "BOOTSTRAP_TOKEN=" bootstrap_token; next }
   /^REDIS_EPHEMERAL_SIGNING_KEY=/ { print "REDIS_EPHEMERAL_SIGNING_KEY=" redis_signing_key; next }
   /^AGENT_RUNTIME_API_KEY=/ { print "AGENT_RUNTIME_API_KEY=" runtime_key; next }
+  /^S3_GATEWAY_ACCESS_KEY=/ { print "S3_GATEWAY_ACCESS_KEY=" gateway_access_key; next }
+  /^S3_GATEWAY_SECRET_KEY=/ { print "S3_GATEWAY_SECRET_KEY=" gateway_secret_key; next }
   { print }
 ' "$source_file" > "$temporary"
 

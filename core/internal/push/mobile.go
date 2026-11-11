@@ -251,6 +251,7 @@ func (w *Worker) deliverMobile(ctx context.Context) error {
 	rows, err := w.pool.Query(ctx, `SELECT p.org_id,p.event_seq,p.device_id,d.actor_id,d.relay_handle,d.notification_key,
 		e.type,e.data,e.chat_id,m.thread_root_id,m.body,c.name,a.display_name,
 		COALESCE((u.preferences->>'push_preview')::boolean,false),COALESCE(NULLIF(d.locale,''),u.preferences->>'locale','ru'),
+		(SELECT f.voice_duration_ms FROM message_files mf JOIN files f ON f.org_id=mf.org_id AND f.id=mf.file_id WHERE mf.message_id=m.id AND f.voice_duration_ms IS NOT NULL LIMIT 1),
 		`+quietNotification+`,`+scheduledStillFailed+`
 		FROM mobile_push_deliveries p JOIN mobile_push_devices d ON d.id=p.device_id
 		JOIN events e ON e.org_id=p.org_id AND e.seq=p.event_seq
@@ -267,6 +268,7 @@ func (w *Worker) deliverMobile(ctx context.Context) error {
 		seq                                                   int64
 		key, eventData                                        []byte
 		chatID, threadID, body, chatName                      *string
+		voiceMs                                               *int32
 		preview, silent, current                              bool
 	}
 	deliveries := []delivery{}
@@ -274,7 +276,7 @@ func (w *Worker) deliverMobile(ctx context.Context) error {
 		var item delivery
 		if err := rows.Scan(&item.org, &item.seq, &item.device, &item.actor, &item.handle, &item.key,
 			&item.eventType, &item.eventData, &item.chatID, &item.threadID, &item.body, &item.chatName, &item.author,
-			&item.preview, &item.locale, &item.silent, &item.current); err != nil {
+			&item.preview, &item.locale, &item.voiceMs, &item.silent, &item.current); err != nil {
 			rows.Close()
 			return err
 		}
@@ -296,7 +298,7 @@ func (w *Worker) deliverMobile(ctx context.Context) error {
 			finish(item, `UPDATE mobile_push_deliveries SET sent_at=now(),last_error='suppressed_active',lease_token=NULL,lease_until=NULL WHERE org_id=$1 AND event_seq=$2 AND device_id=$3 AND lease_token=$4`)
 			continue
 		}
-		content := buildNotification(item.eventType, item.eventData, item.author, item.locale, item.preview, item.chatID, item.threadID, item.body, item.chatName)
+		content := buildNotification(item.eventType, item.eventData, item.author, item.locale, item.preview, item.chatID, item.threadID, messageText(item.body, item.voiceMs, item.locale), item.chatName)
 		var badge int64
 		if err := w.pool.QueryRow(ctx, unreadTotal, item.org, item.actor).Scan(&badge); err != nil {
 			return err

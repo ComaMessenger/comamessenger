@@ -1031,22 +1031,34 @@ func validateFiles(ctx context.Context, tx pgx.Tx, user identity.User, fileIDs [
 		return nil
 	}
 	rows, err := tx.Query(ctx, `
-		SELECT id FROM files
+		SELECT voice_duration_ms IS NOT NULL FROM files
 		WHERE org_id = $1 AND uploader_id = $2 AND id = ANY($3::uuid[]) AND status = 'ready'
 		FOR UPDATE`, user.OrgID, user.ActorID, fileIDs)
 	if err != nil {
 		return fmt.Errorf("validate message files: %w", err)
 	}
 	defer rows.Close()
-	count := 0
+	count, voices := 0, 0
 	for rows.Next() {
+		var voice bool
+		if err := rows.Scan(&voice); err != nil {
+			return fmt.Errorf("validate message files: %w", err)
+		}
 		count++
+		if voice {
+			voices++
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("validate message files: %w", err)
 	}
 	if count != len(fileIDs) {
 		return fmt.Errorf("%w: every file must be ready and owned by the sender", ErrInvalid)
+	}
+	// A voice message is the recording alone, so every client can render
+	// it as one player and list previews can name it.
+	if voices > 0 && count > 1 {
+		return fmt.Errorf("%w: a voice recording must be the only file of its message", ErrInvalid)
 	}
 	return nil
 }
@@ -1099,7 +1111,7 @@ func hydrateFiles(ctx context.Context, tx pgx.Tx, orgID string, messages []Messa
 	}
 	rows, err := tx.Query(ctx, `
 		SELECT mf.message_id, f.id, f.name, f.mime, f.size, f.sha256, f.status, f.processing_status,
-		       f.preview_file_id, f.created_at, f.ready_at, f.uploader_id
+		       f.preview_file_id, f.created_at, f.ready_at, f.uploader_id, f.voice_duration_ms, f.voice_waveform
 		FROM message_files mf JOIN files f ON f.org_id = mf.org_id AND f.id = mf.file_id
 		WHERE mf.org_id = $1 AND mf.message_id = ANY($2::uuid[]) AND f.status <> 'deleted'
 		ORDER BY mf.message_id, mf.ordinal`, orgID, messageIDs)
@@ -1110,10 +1122,12 @@ func hydrateFiles(ctx context.Context, tx pgx.Tx, orgID string, messages []Messa
 	for rows.Next() {
 		var messageID string
 		var item filemodel.File
-		var checksum []byte
-		if err := rows.Scan(&messageID, &item.ID, &item.Name, &item.MIME, &item.Size, &checksum, &item.Status, &item.ProcessingStatus, &item.PreviewFileID, &item.CreatedAt, &item.ReadyAt, &item.UploaderID); err != nil {
+		var checksum, waveform []byte
+		var voiceDuration *int32
+		if err := rows.Scan(&messageID, &item.ID, &item.Name, &item.MIME, &item.Size, &checksum, &item.Status, &item.ProcessingStatus, &item.PreviewFileID, &item.CreatedAt, &item.ReadyAt, &item.UploaderID, &voiceDuration, &waveform); err != nil {
 			return fmt.Errorf("scan message file: %w", err)
 		}
+		item.Voice = filemodel.VoiceFromColumns(voiceDuration, waveform)
 		if len(checksum) == sha256.Size {
 			value := hex.EncodeToString(checksum)
 			item.SHA256 = &value

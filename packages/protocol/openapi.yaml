@@ -2105,6 +2105,8 @@ paths:
         "413": { $ref: "#/components/responses/Error" }
         "415": { $ref: "#/components/responses/Error" }
         "507": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
   /api/v1/files/uploads/{upload_id}/parts:
     post:
       operationId: signFileUploadParts
@@ -2141,13 +2143,25 @@ paths:
             schema: { $ref: "#/components/schemas/CompleteFileUploadRequest" }
       responses:
         "200":
-          description: Completed presigned or multipart upload.
+          description: >-
+            Completed presigned or multipart upload. Repeating the call for a
+            completed upload returns the same file.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/File" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
+        "429":
+          description: A voice message of the same sender is being checked; retry after `Retry-After`. The upload stays open.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503":
+          description: Storage or voice checking is temporarily unavailable; retry after `Retry-After`. The upload stays open.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /api/v1/files/uploads/{upload_id}:
     delete:
       operationId: abortFileUpload
@@ -2183,6 +2197,11 @@ paths:
               { schema: { type: string, format: binary } }
             application/json:
               { schema: { $ref: "#/components/schemas/ObjectLink" } }
+        "206":
+          description: A byte range of a local blob for a `Range` request; object-store URLs answer ranges themselves.
+          content:
+            application/octet-stream:
+              { schema: { type: string, format: binary } }
         "307": { description: Short-lived authorized object-store URL. }
         "404": { $ref: "#/components/responses/Error" }
   /api/v1/search:
@@ -3959,6 +3978,7 @@ components:
         - session_not_found
         - smtp_not_configured
         - storage_full
+        - storage_unavailable
         - email_taken
         - reauthentication_failed
         - token_invalid
@@ -3966,6 +3986,8 @@ components:
         - unsupported_format
         - validation_failed
         - version_conflict
+        - voice_check_busy
+        - voice_check_in_progress
         - webhook_not_found
         - webhook_rejected
         - workspace_not_found
@@ -3996,6 +4018,37 @@ components:
         created_at: { type: string, format: date-time }
         ready_at: { type: string, format: date-time }
         uploader_id: { type: string, format: uuid }
+        voice: { $ref: "#/components/schemas/VoiceInfo" }
+    # --- Voice messages (phase 6.1, package D) ---
+    VoiceInfo:
+      type: object
+      additionalProperties: false
+      description: >-
+        Present on an audio file recorded as a voice message. Such a file is
+        an ordinary audio/mp4 (AAC in MP4, m4a) attachment, so clients that
+        ignore this field show a downloadable audio file. Uploading with
+        `voice` accepts audio/mp4, audio/m4a, audio/x-m4a or audio/aac with an
+        .m4a, .mp4 or .aac name, at most 15 MiB, always as one upload (never
+        multipart); the stored MIME becomes audio/mp4, and a presigned PUT
+        must send that Content-Type. Completion
+        rejects content that is not an audio-only MP4 and replaces
+        `duration_ms` with the duration read from the container (the claim
+        may differ by at most max(1.5 s, 10 %)). A voice file must be the
+        only file of its message.
+      required: [duration_ms, waveform]
+      properties:
+        duration_ms: { type: integer, minimum: 300, maximum: 600000 }
+        waveform:
+          type: array
+          description: >-
+            64 peak levels, 0 silent to 255 loudest, each the loudest sample
+            of an equal slice of the recording. Fixed length keeps the payload
+            small (well under 300 bytes of JSON) and lets every client draw
+            the same bars at any width by grouping or stretching.
+          minItems: 64
+          maxItems: 64
+          items: { type: integer, minimum: 0, maximum: 255 }
+    # --- end voice messages ---
     SearchResult:
       type: object
       additionalProperties: false
@@ -4310,6 +4363,7 @@ components:
         mime: { type: string, minLength: 1, maxLength: 255 }
         size: { type: integer, format: int64, minimum: 1 }
         sha256: { type: string, pattern: "^[a-fA-F0-9]{64}$" }
+        voice: { $ref: "#/components/schemas/VoiceInfo" }
     FileUpload:
       type: object
       additionalProperties: false
@@ -6782,6 +6836,11 @@ components:
         created_seq: { type: integer, format: int64, minimum: 1 }
         created_at: { type: string, format: date-time }
         deleted: { type: boolean }
+        voice_duration_ms:
+          type: integer
+          minimum: 1
+          maximum: 600000
+          description: Set when the message is a voice recording; lists show "Voice message · 0:14".
     UpdateChatRequest:
       type: object
       additionalProperties: false

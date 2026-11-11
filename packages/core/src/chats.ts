@@ -1,4 +1,5 @@
 import { messagePlainText } from "./mentions";
+import { formatVoiceDuration } from "./voice";
 import type { Chat } from "./types";
 
 export type SystemChatFilter = "all" | "direct" | "grouped" | "channel";
@@ -68,6 +69,8 @@ export type ChatPreviewLabels = {
   you: string;
   deleted: string;
   attachment: string;
+  /** "Voice message"; followed by the duration. Falls back to `attachment`. */
+  voice?: string;
 };
 
 /** Last-message line of a chat row, split so the sender can be styled apart. */
@@ -79,7 +82,10 @@ export function chatPreview(
   const last = chat.last_message;
   if (!last) return { sender: "", text: chat.topic };
   if (last.deleted) return { sender: "", text: labels.deleted };
-  const text = messagePlainText(last.body).trim() || labels.attachment;
+  const text =
+    last.voice_duration_ms != null
+      ? `${labels.voice ?? labels.attachment} · ${formatVoiceDuration(last.voice_duration_ms)}`
+      : messagePlainText(last.body).trim() || labels.attachment;
   if (chat.kind === "direct")
     return { sender: last.actor_id === ownID ? `${labels.you}: ` : "", text };
   const name = last.actor_id === ownID ? labels.you : last.actor_display_name;

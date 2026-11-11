@@ -223,10 +223,33 @@ func (h *identityHandlers) writeDownload(w standardhttp.ResponseWriter, r *stand
 	if result.Reader != nil {
 		defer result.Reader.Close()
 		w.Header().Set("Content-Type", result.File.MIME)
-		w.Header().Set("Content-Length", fmt.Sprintf("%d", result.File.Size))
 		w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''"+strings.ReplaceAll(url.PathEscape(result.File.Name), "+", "%20"))
 		w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
+		// Files are private and access can be revoked (leaving a chat,
+		// deletion), so no cache, shared or on disk, keeps a copy.
+		w.Header().Set("Cache-Control", "private, no-store")
+		// A seekable local blob answers one Range, so players can seek a
+		// voice recording without loading it whole. ServeContent keeps the
+		// Content-Type set above and never sniffs. The S3 redirect gets
+		// Range support from the object store.
+		if seeker, ok := result.Reader.(io.ReadSeeker); ok {
+			// Several ranges would come back as a multipart body that can be
+			// many times larger than the file. RFC 9110 lets a server ignore
+			// Range, so such a request gets the whole file with 200: the
+			// answer is never larger than the file and players that asked
+			// for several ranges still work.
+			if strings.Contains(r.Header.Get("Range"), ",") {
+				r.Header.Del("Range")
+			}
+			modified := result.File.CreatedAt
+			if result.File.ReadyAt != nil {
+				modified = *result.File.ReadyAt
+			}
+			standardhttp.ServeContent(w, r, "", modified, seeker)
+			return
+		}
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", result.File.Size))
 		_ = standardhttp.NewResponseController(w).Flush()
 		_, _ = io.Copy(w, result.Reader)
 		return
@@ -244,6 +267,15 @@ func (h *identityHandlers) fileError(w standardhttp.ResponseWriter, r *standardh
 		h.writeError(w, r, standardhttp.StatusForbidden, "forbidden", "File access is forbidden.")
 	case errors.Is(err, files.ErrConflict):
 		h.writeError(w, r, standardhttp.StatusConflict, "file_conflict", "File upload is not in the required state.")
+	case errors.Is(err, files.ErrTooManyChecks):
+		w.Header().Set("Retry-After", "5")
+		h.writeError(w, r, standardhttp.StatusTooManyRequests, "voice_check_in_progress", "Another voice message of yours is being checked. Retry in a few seconds.")
+	case errors.Is(err, files.ErrBusy):
+		w.Header().Set("Retry-After", "5")
+		h.writeError(w, r, standardhttp.StatusServiceUnavailable, "voice_check_busy", "Voice messages are being checked for other users. Retry in a few seconds.")
+	case errors.Is(err, files.ErrUnavailable):
+		w.Header().Set("Retry-After", "5")
+		h.writeError(w, r, standardhttp.StatusServiceUnavailable, "storage_unavailable", "File storage is temporarily unavailable. The upload is kept; complete it again.")
 	case errors.Is(err, files.ErrStorageFull), errors.Is(err, storage.ErrStorageFull):
 		h.writeError(w, r, standardhttp.StatusInsufficientStorage, "storage_full", "File storage quota or free-space guard was reached.")
 	default:

@@ -11,3 +11,5 @@ export * from "./realtime";
 export * from "./scheduled";
 export * from "./store";
 export * from "./types";
+export * from "./voice";
+export * from "./uploads";

@@ -2,7 +2,11 @@ import { Bot, MessagesSquare, Plus, Search } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
-import { chatAvatarSource, messagePlainText } from "@comamessenger/core";
+import {
+  chatAvatarSource,
+  formatVoiceDuration,
+  messagePlainText,
+} from "@comamessenger/core";
 import { hasPermission } from "../settings";
 import { Avatar, Badge, Button, countLabel } from "../ui";
 import { firstName, greetingKey } from "../lib/format";
@@ -132,7 +136,7 @@ export function Welcome() {
                     </span>
                     <small className="clamp-2">
                       {chat.last_message && !chat.last_message.deleted
-                        ? `${chat.kind === "direct" ? "" : `${chat.last_message.actor_display_name}: `}${messagePlainText(chat.last_message.body)}`
+                        ? `${chat.kind === "direct" ? "" : `${chat.last_message.actor_display_name}: `}${chat.last_message.voice_duration_ms != null ? `${t("previewVoice")} · ${formatVoiceDuration(chat.last_message.voice_duration_ms)}` : messagePlainText(chat.last_message.body)}`
                         : chat.topic}
                     </small>
                   </span>

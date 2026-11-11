@@ -827,7 +827,7 @@ func (w *Worker) deliver(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	rows, err := w.pool.Query(ctx, `SELECT d.org_id,d.event_seq,d.subscription_id,s.actor_id,s.endpoint,s.p256dh,s.auth,e.type,e.data,e.chat_id,m.thread_root_id,m.body,c.name,a.display_name,COALESCE((u.preferences->>'push_preview')::boolean,false),COALESCE(u.preferences->>'locale','ru'),`+quietNotification+`,`+scheduledStillFailed+` FROM notification_deliveries d JOIN web_push_subscriptions s ON s.id=d.subscription_id JOIN events e ON e.org_id=d.org_id AND e.seq=d.event_seq LEFT JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id LEFT JOIN chats c ON c.org_id=e.org_id AND c.id=e.chat_id JOIN actors a ON a.org_id=e.org_id AND a.id=e.actor_id JOIN users u ON u.org_id=s.org_id AND u.actor_id=s.actor_id WHERE d.lease_token=$1 ORDER BY d.event_seq`, leaseToken)
+	rows, err := w.pool.Query(ctx, `SELECT d.org_id,d.event_seq,d.subscription_id,s.actor_id,s.endpoint,s.p256dh,s.auth,e.type,e.data,e.chat_id,m.thread_root_id,m.body,c.name,a.display_name,COALESCE((u.preferences->>'push_preview')::boolean,false),COALESCE(u.preferences->>'locale','ru'),(SELECT f.voice_duration_ms FROM message_files mf JOIN files f ON f.org_id=mf.org_id AND f.id=mf.file_id WHERE mf.message_id=m.id AND f.voice_duration_ms IS NOT NULL LIMIT 1),`+quietNotification+`,`+scheduledStillFailed+` FROM notification_deliveries d JOIN web_push_subscriptions s ON s.id=d.subscription_id JOIN events e ON e.org_id=d.org_id AND e.seq=d.event_seq LEFT JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id LEFT JOIN chats c ON c.org_id=e.org_id AND c.id=e.chat_id JOIN actors a ON a.org_id=e.org_id AND a.id=e.actor_id JOIN users u ON u.org_id=s.org_id AND u.actor_id=s.actor_id WHERE d.lease_token=$1 ORDER BY d.event_seq`, leaseToken)
 	if err != nil {
 		return err
 	}
@@ -836,9 +836,10 @@ func (w *Worker) deliver(ctx context.Context) error {
 		var org, subID, actor, endpoint, p256dh, auth, eventType, author, locale string
 		var seq int64
 		var chatID, threadID, body, name *string
+		var voiceMs *int32
 		var eventData []byte
 		var preview, silent, current bool
-		if err := rows.Scan(&org, &seq, &subID, &actor, &endpoint, &p256dh, &auth, &eventType, &eventData, &chatID, &threadID, &body, &name, &author, &preview, &locale, &silent, &current); err != nil {
+		if err := rows.Scan(&org, &seq, &subID, &actor, &endpoint, &p256dh, &auth, &eventType, &eventData, &chatID, &threadID, &body, &name, &author, &preview, &locale, &voiceMs, &silent, &current); err != nil {
 			return err
 		}
 		if !current {
@@ -849,7 +850,7 @@ func (w *Worker) deliver(ctx context.Context) error {
 			_, _ = w.pool.Exec(ctx, `UPDATE notification_deliveries SET sent_at=now(),last_error='suppressed_active',lease_token=NULL,lease_until=NULL WHERE org_id=$1 AND event_seq=$2 AND subscription_id=$3 AND lease_token=$4`, org, seq, subID, leaseToken)
 			continue
 		}
-		content := buildNotification(eventType, eventData, author, locale, preview, chatID, threadID, body, name)
+		content := buildNotification(eventType, eventData, author, locale, preview, chatID, threadID, messageText(body, voiceMs, locale), name)
 		encoded := webPushPayload(content, silent)
 		response, sendErr := webpush.SendNotificationWithContext(ctx, encoded, &webpush.Subscription{Endpoint: endpoint, Keys: webpush.Keys{P256dh: p256dh, Auth: auth}}, &webpush.Options{Subscriber: w.config.VAPIDSubject, VAPIDPublicKey: w.config.VAPIDPublicKey, VAPIDPrivateKey: w.config.VAPIDPrivateKey, TTL: 120})
 		if response != nil {
@@ -878,6 +879,7 @@ type digestItem struct {
 	seq                                              int64
 	eventData                                        []byte
 	chatID, body, chatName                           *string
+	voiceMs                                          *int32
 	preview                                          bool
 }
 
@@ -898,7 +900,8 @@ func (w *Worker) deliverDigests(ctx context.Context) error {
 	rows, err := w.pool.Query(ctx, `
 		SELECT i.org_id,i.event_seq,i.actor_id,u.email,COALESCE(u.preferences->>'locale','ru'),
 		       e.type,e.data,e.chat_id,m.body,c.name,a.display_name,
-		       COALESCE((u.preferences->>'push_preview')::boolean,false)
+		       COALESCE((u.preferences->>'push_preview')::boolean,false),
+		       (SELECT f.voice_duration_ms FROM message_files mf JOIN files f ON f.org_id=mf.org_id AND f.id=mf.file_id WHERE mf.message_id=m.id AND f.voice_duration_ms IS NOT NULL LIMIT 1)
 		FROM email_digest_items i
 		JOIN users u ON u.org_id=i.org_id AND u.actor_id=i.actor_id
 		JOIN events e ON e.org_id=i.org_id AND e.seq=i.event_seq
@@ -912,10 +915,11 @@ func (w *Worker) deliverDigests(ctx context.Context) error {
 	items := []digestItem{}
 	for rows.Next() {
 		var item digestItem
-		if err := rows.Scan(&item.orgID, &item.seq, &item.actorID, &item.email, &item.locale, &item.eventType, &item.eventData, &item.chatID, &item.body, &item.chatName, &item.author, &item.preview); err != nil {
+		if err := rows.Scan(&item.orgID, &item.seq, &item.actorID, &item.email, &item.locale, &item.eventType, &item.eventData, &item.chatID, &item.body, &item.chatName, &item.author, &item.preview, &item.voiceMs); err != nil {
 			rows.Close()
 			return err
 		}
+		item.body = messageText(item.body, item.voiceMs, item.locale)
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
@@ -1056,6 +1060,27 @@ func categoryBody(eventType string, raw []byte, author, locale string) string {
 		return fmt.Sprintf("%s удалил(а) вас из чата", author)
 	}
 }
+
+// messageText is what a notification may quote of a message: its body, or
+// for a voice recording only "Voice message · 0:14". Callers still show it
+// only when the recipient enabled push_preview.
+func messageText(body *string, voiceMs *int32, locale string) *string {
+	if voiceMs == nil {
+		return body
+	}
+	label := "Голосовое сообщение"
+	if locale == "en" {
+		label = "Voice message"
+	}
+	label += " · " + formatVoiceDuration(int(*voiceMs))
+	return &label
+}
+
+func formatVoiceDuration(milliseconds int) string {
+	seconds := (milliseconds + 500) / 1000
+	return fmt.Sprintf("%d:%02d", seconds/60, seconds%60)
+}
+
 func truncate(value string, max int) string {
 	runes := []rune(value)
 	if len(runes) <= max {
