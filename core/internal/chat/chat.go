@@ -386,8 +386,9 @@ func (s *Service) Update(ctx context.Context, user identity.User, chatID string,
 	visibility := strings.ToLower(valueOr(input.Visibility, current.Visibility))
 	name = strings.TrimSpace(name)
 	topic = strings.TrimSpace(topic)
-	// A name set before the limit was lowered stays valid until renamed.
-	if input.Name != nil {
+	// A name set before the limit was lowered stays valid until renamed;
+	// clients send the unchanged name along with any other edit.
+	if name != strings.TrimSpace(dereference(current.Name)) {
 		if err := validateName(name); err != nil {
 			return Chat{}, err
 		}

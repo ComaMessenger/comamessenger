@@ -108,4 +108,14 @@ func TestLongCyrillicChatNameIsAccepted(t *testing.T) {
 	if updated, err := service.Update(ctx, owner, legacyID, UpdateInput{Topic: &topic}); err != nil || updated.Topic != topic {
 		t.Fatalf("legacy Update(topic) = %+v, %v", updated, err)
 	}
+	// The web sends the name it shows along with the new topic.
+	unchanged, other := legacyName, "ещё описание"
+	if updated, err := service.Update(ctx, owner, legacyID, UpdateInput{Name: &unchanged, Topic: &other}); err != nil || updated.Topic != other || *updated.Name != legacyName {
+		t.Fatalf("legacy Update(same name, topic) = %+v, %v", updated, err)
+	}
+	// Renaming it still has to fit the limit.
+	longer := legacyName + "n"
+	if _, err := service.Update(ctx, owner, legacyID, UpdateInput{Name: &longer}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("legacy rename to 121 characters error = %v, want ErrInvalid", err)
+	}
 }
