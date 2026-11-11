@@ -4,6 +4,7 @@ import {
   BookOpen,
   Bot,
   ChevronDown,
+  Clock3,
   MessageCircle,
   MessagesSquare,
   PanelLeftClose,
@@ -22,11 +23,13 @@ import { useMessenger } from "./MessengerContext";
 import { Logo } from "./Logo";
 import { WorkspaceMenu } from "./WorkspaceMenu";
 import { ProfileMenu } from "./ProfileMenu";
+import { useScheduledMessages } from "../scheduled/useScheduled";
 
 export type PrimarySection =
   | "chats"
   | "threads"
   | "important"
+  | "scheduled"
   | "members"
   | "agents"
   | "knowledge"
@@ -43,7 +46,11 @@ export function GlobalSidebar({
   onToggleCollapsed(): void;
 }) {
   const { t } = useTranslation();
-  const { user, store, navigate, openDialog } = useMessenger();
+  const { api, user, store, navigate, openDialog } = useMessenger();
+  const scheduled = useScheduledMessages(api);
+  const failedScheduled = (scheduled.data ?? []).filter(
+    (item) => item.status === "failed",
+  ).length;
   const unread = useStore(store, (state) => state.unread);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -63,6 +70,7 @@ export function GlobalSidebar({
     label: string;
     icon: typeof MessageCircle;
     count?: number;
+    danger?: boolean;
   }> = [
     {
       id: "chats",
@@ -79,6 +87,15 @@ export function GlobalSidebar({
       count: unreadThreads,
     },
     { id: "important", path: "/important", label: t("important"), icon: Star },
+    // Only messages that failed need attention; waiting ones do not.
+    {
+      id: "scheduled",
+      path: "/scheduled",
+      label: t("scheduledTitle"),
+      icon: Clock3,
+      count: failedScheduled,
+      danger: true,
+    },
     { id: "members", path: "/members", label: t("members"), icon: Users },
     // Every member may read the collections opened to them.
     {
@@ -163,7 +180,11 @@ export function GlobalSidebar({
               <Icon aria-hidden="true" />
               <span className="truncate">{item.label}</span>
               {item.count ? (
-                <Badge tone={isActive ? "primary" : "neutral"}>
+                <Badge
+                  tone={
+                    item.danger ? "danger" : isActive ? "primary" : "neutral"
+                  }
+                >
                   {countLabel(item.count)}
                 </Badge>
               ) : null}

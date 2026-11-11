@@ -1,0 +1,493 @@
+/* Scheduled messages: the composer's send menu, the time picker, the strip
+   under the chat header, the Scheduled page and its editor. */
+
+.composer__shortcut {
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--coma-faint);
+  letter-spacing: 0.02em;
+}
+
+/* Strip under the chat header ------------------------------------------- */
+.scheduled-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px 20px;
+  border: 0;
+  border-block-end: 1px solid var(--coma-border);
+  background: var(--coma-primary-soft);
+  color: var(--coma-primary);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: start;
+  cursor: pointer;
+  transition: background var(--coma-motion-fast) var(--coma-ease);
+}
+.scheduled-bar:hover {
+  background: var(--coma-surface-hover);
+}
+.scheduled-bar:focus-visible {
+  outline: 2px solid var(--coma-primary);
+  outline-offset: -2px;
+}
+.scheduled-bar > svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+.scheduled-bar > span {
+  flex: 1;
+  min-width: 0;
+}
+.scheduled-bar__chevron {
+  opacity: 0.7;
+}
+
+/* Time picker ------------------------------------------------------------- */
+.schedule-dialog__form,
+.scheduled-editor__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.schedule-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.schedule-fields .ui-radio {
+  padding: 8px 10px;
+  border-radius: var(--coma-radius-md, 8px);
+}
+.schedule-fields .ui-radio:hover {
+  background: var(--coma-surface-hover);
+}
+.schedule-fields__custom {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-inline: 10px;
+  color: var(--coma-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+.schedule-fields__custom input {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--coma-border-strong);
+  border-radius: var(--coma-radius-md, 8px);
+  background: var(--coma-surface);
+  color: var(--coma-foreground);
+  font: inherit;
+  font-size: 14px;
+  color-scheme: light dark;
+}
+.schedule-fields__custom input:focus-visible {
+  outline: 2px solid var(--coma-primary);
+  outline-offset: 1px;
+}
+.schedule-fields__custom input[aria-invalid="true"] {
+  border-color: var(--coma-danger);
+}
+.schedule-silent {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: var(--coma-radius-md, 8px);
+  background: var(--coma-surface-tint, var(--coma-surface-hover));
+}
+.schedule-silent > svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--coma-muted);
+}
+.schedule-silent > span {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+}
+.schedule-silent strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+.schedule-silent small {
+  color: var(--coma-muted);
+  font-size: 12px;
+}
+
+/* Scheduled page --------------------------------------------------------- */
+.scheduled-page {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  background: var(--coma-canvas);
+}
+.scheduled-page__column {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 28px 24px 40px;
+}
+.scheduled-page__head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.scheduled-page__head h1 {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 28px;
+}
+.scheduled-page__head p {
+  color: var(--coma-muted);
+  font-size: 13px;
+}
+.scheduled-page__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-block-start: 8px;
+}
+.scheduled-page__loading {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.scheduled-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.scheduled-group > h2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--coma-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.scheduled-group--failed > h2 {
+  color: var(--coma-danger-text, var(--coma-danger));
+}
+.scheduled-group > h2 svg {
+  width: 14px;
+  height: 14px;
+}
+.scheduled-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px 10px;
+  border: 1px solid var(--coma-border);
+  border-radius: var(--coma-radius-lg, 12px);
+  background: var(--coma-surface);
+}
+.scheduled-card--failed {
+  border-color: var(--coma-danger-border, var(--coma-danger));
+  background:
+    linear-gradient(var(--coma-danger-soft), var(--coma-danger-soft)),
+    var(--coma-surface);
+}
+.scheduled-card[aria-busy="true"] {
+  opacity: 0.75;
+}
+.scheduled-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  min-width: 0;
+}
+.scheduled-card__time {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--coma-foreground);
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.scheduled-card__time svg {
+  width: 15px;
+  height: 15px;
+  color: var(--coma-primary);
+}
+.scheduled-card--failed .scheduled-card__time,
+.scheduled-card--failed .scheduled-card__time svg {
+  color: var(--coma-danger-text, var(--coma-danger));
+}
+.scheduled-card__chat {
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--coma-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.scheduled-card__chat:hover {
+  color: var(--coma-primary);
+  text-decoration: underline;
+}
+.scheduled-card__chat:focus-visible {
+  outline: 2px solid var(--coma-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.scheduled-card__chat--gone {
+  cursor: default;
+  font-style: italic;
+}
+.scheduled-card__chat--gone:hover {
+  color: var(--coma-muted);
+  text-decoration: none;
+}
+.scheduled-card__tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-inline-start: auto;
+}
+.scheduled-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--coma-surface-hover);
+  color: var(--coma-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.scheduled-tag svg {
+  width: 12px;
+  height: 12px;
+}
+.scheduled-card__reason {
+  color: var(--coma-danger-text, var(--coma-danger));
+  font-size: 13px;
+  font-weight: 600;
+}
+.scheduled-card__was {
+  color: var(--coma-muted);
+  font-weight: 500;
+}
+.scheduled-card__body {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--coma-foreground);
+  font-size: 14px;
+  line-height: 20px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+.scheduled-card__body--empty {
+  color: var(--coma-faint);
+  font-style: italic;
+}
+.scheduled-card__files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.scheduled-card__files li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 240px;
+  padding: 3px 8px;
+  border: 1px solid var(--coma-border);
+  border-radius: 6px;
+  color: var(--coma-muted);
+  font-size: 12px;
+}
+.scheduled-card__files svg {
+  flex: none;
+  width: 12px;
+  height: 12px;
+}
+.scheduled-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-inline: -6px;
+  padding-block-start: 4px;
+  border-block-start: 1px solid var(--coma-border);
+}
+.scheduled-card__actions .ui-button svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* Editor ----------------------------------------------------------------- */
+.scheduled-editor__failed,
+.scheduled-editor__conflict {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--coma-radius-md, 8px);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.scheduled-editor__failed {
+  background: var(--coma-danger-soft);
+  color: var(--coma-danger-text, var(--coma-danger));
+}
+.scheduled-editor__failed svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-block-start: 1px;
+}
+.scheduled-editor__conflict {
+  background: var(--coma-warning-soft);
+  color: var(--coma-foreground);
+}
+.scheduled-editor__text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--coma-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+.scheduled-editor__text textarea {
+  min-height: 112px;
+  padding: 10px 12px;
+  border: 1px solid var(--coma-border-strong);
+  border-radius: var(--coma-radius-md, 8px);
+  background: var(--coma-surface);
+  color: var(--coma-foreground);
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  resize: vertical;
+}
+.scheduled-editor__text textarea:focus-visible {
+  outline: 2px solid var(--coma-primary);
+  outline-offset: 1px;
+}
+.scheduled-editor__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.scheduled-editor__section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+}
+.scheduled-editor__section-head strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.scheduled-editor__section-head small {
+  color: var(--coma-muted);
+  font-size: 12px;
+}
+.scheduled-editor__section-head > .ui-button {
+  margin-inline-start: auto;
+}
+.scheduled-editor__when {
+  color: var(--coma-foreground);
+  font-size: 13px;
+}
+.scheduled-editor__files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.scheduled-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 4px 4px 10px;
+  border: 1px solid var(--coma-border);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.scheduled-file > svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--coma-muted);
+}
+.scheduled-file small {
+  flex: none;
+  color: var(--coma-muted);
+  font-size: 11px;
+}
+
+/* Security settings warning --------------------------------------------- */
+.scheduled-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--coma-warning, var(--coma-danger));
+  font-size: 12px;
+  font-weight: 500;
+}
+.scheduled-warning svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+.more-page__hint--danger {
+  color: var(--coma-danger-text, var(--coma-danger));
+}
+
+@media (max-width: 640px) {
+  .scheduled-bar {
+    padding-inline: 12px;
+  }
+  .scheduled-page {
+    background: var(--coma-surface);
+  }
+  .scheduled-page__column {
+    gap: 16px;
+    padding: max(12px, env(safe-area-inset-top)) 16px
+      calc(var(--coma-mobile-tabbar-height) + 16px);
+  }
+  .scheduled-page__head h1 {
+    font-size: 20px;
+  }
+  .scheduled-card__tags {
+    margin-inline-start: 0;
+  }
+  .scheduled-card__actions .ui-button {
+    flex: 1 1 auto;
+  }
+}
+
+/* The active chip sits on the canvas here, not on the sidebar: the accent
+   text on the soft accent is just under 4.5:1 in the dark theme. */
+[data-theme="dark"] .scheduled-page .ui-chip--active {
+  color: var(--coma-foreground);
+}

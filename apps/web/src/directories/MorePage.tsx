@@ -4,6 +4,7 @@ import {
   BookOpen,
   ChevronDown,
   ChevronRight,
+  Clock3,
   LogOut,
   Moon,
   Settings2,
@@ -18,6 +19,7 @@ import { useMessenger } from "../shell/MessengerContext";
 import { Logo } from "../shell/Logo";
 import { SnoozeControls } from "../shell/SnoozeControls";
 import { workspaceRoleKey } from "../shell/WorkspaceMenu";
+import { useScheduledMessages } from "../scheduled/useScheduled";
 
 function MoreRow({
   icon,
@@ -33,7 +35,7 @@ function MoreRow({
   icon: ReactNode;
   title: ReactNode;
   hint?: ReactNode;
-  hintTone?: "muted" | "primary" | "foreground";
+  hintTone?: "muted" | "primary" | "foreground" | "danger";
   trailing?: ReactNode;
   onClick?(): void;
   danger?: boolean;
@@ -76,6 +78,10 @@ export function MorePage() {
     staleTime: 60_000,
   });
   const isAdmin = user.role !== "member";
+  const scheduled = useScheduledMessages(api);
+  const failedScheduled = (scheduled.data ?? []).filter(
+    (item) => item.status === "failed",
+  ).length;
   const statusText = user.status_text
     ? `${user.status_emoji} ${user.status_text}`.trim()
     : "";
@@ -171,6 +177,18 @@ export function MorePage() {
             title={t("moreProfile")}
             hint={t("moreProfileHint")}
             onClick={() => navigate("/settings/profile")}
+          />
+          <div className="more-page__divider" />
+          <MoreRow
+            icon={<Clock3 aria-hidden="true" />}
+            title={t("scheduledTitle")}
+            hint={
+              failedScheduled
+                ? t("scheduledPendingFailedHint", { count: failedScheduled })
+                : t("scheduledLead")
+            }
+            hintTone={failedScheduled ? "danger" : "muted"}
+            onClick={() => navigate("/scheduled")}
           />
           <div className="more-page__divider" />
           <MoreRow

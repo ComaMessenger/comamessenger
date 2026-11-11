@@ -40,6 +40,19 @@ const event = {
 } as DurableEvent;
 
 describe("notification sound policy", () => {
+  it("shows a silent message without sound", () => {
+    const quiet = {
+      ...event,
+      data: { mentioned_actor_ids: [user.id], silent: true },
+    };
+    expect(shouldShowInAppNotification(quiet, user, preferences, chat)).toBe(
+      true,
+    );
+    expect(shouldPlayNotificationSound(quiet, user, preferences, chat)).toBe(
+      false,
+    );
+  });
+
   it("follows mentions, chat overrides and snooze", () => {
     expect(shouldPlayNotificationSound(event, user, preferences, chat)).toBe(
       false,

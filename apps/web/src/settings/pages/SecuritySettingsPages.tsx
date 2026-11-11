@@ -1,7 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { MessengerAPI, Session, User } from "@comamessenger/core";
-import { History, KeyRound, MonitorSmartphone } from "lucide-react";
+import {
+  pendingCount,
+  type MessengerAPI,
+  type Session,
+  type User,
+} from "@comamessenger/core";
+import {
+  AlertTriangle,
+  History,
+  KeyRound,
+  MonitorSmartphone,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { messageOf } from "../../errors";
 import { Badge, Button, Field, SelectField } from "../../ui";
@@ -16,6 +26,22 @@ import {
 import { canAccessSettingsPage } from "../registry";
 import { sessionLabel } from "../sessionLabel";
 import { describeAudit } from "../auditDescriptions";
+import { ConfirmDialog } from "../../dialogs/ConfirmDialog";
+import { useScheduledMessages } from "../../scheduled/useScheduled";
+
+type GuardedAction = "password" | "email" | "sessions";
+
+/** "2 scheduled messages won't be sent" next to an action that stops them. */
+function ScheduledWarning({ count }: { count: number }) {
+  const { t } = useTranslation();
+  if (!count) return null;
+  return (
+    <small className="settings-warning scheduled-warning" role="note">
+      <AlertTriangle aria-hidden="true" />
+      {t("scheduledPendingWarning", { count })}
+    </small>
+  );
+}
 
 export function SecuritySettingsPage({
   api,
@@ -45,6 +71,15 @@ export function SecuritySettingsPage({
   const [emailPassword, setEmailPassword] = useState("");
   const [emailPending, setEmailPending] = useState(false);
   const confirmationStarted = useRef(false);
+  // Every account-wide security event stops the pending scheduled messages:
+  // say so before it happens. The count comes from the author's own list.
+  const scheduled = useScheduledMessages(api, !user.must_change_password);
+  const stopped = pendingCount(scheduled.data ?? []);
+  const [confirming, setConfirming] = useState<GuardedAction | null>(null);
+  function guarded(action: GuardedAction, run: () => Promise<void>) {
+    if (stopped > 0) setConfirming(action);
+    else void run();
+  }
   useEffect(() => {
     const token = new URLSearchParams(window.location.search).get(
       "email_token",
@@ -176,10 +211,11 @@ export function SecuritySettingsPage({
             <Button
               variant="primary"
               disabled={emailPending || !newEmail || !emailPassword}
-              onClick={() => void changeEmail()}
+              onClick={() => guarded("email", changeEmail)}
             >
               {emailPending ? t("saving") : t("changeEmail")}
             </Button>
+            <ScheduledWarning count={stopped} />
           </SettingsSection>
         )}
         <SettingsSection
@@ -230,11 +266,12 @@ export function SecuritySettingsPage({
               newPassword.length < 10 ||
               newPassword !== confirmPassword
             }
-            onClick={() => void changePassword()}
+            onClick={() => guarded("password", changePassword)}
           >
             <KeyRound />
             {passwordPending ? t("saving") : t("changePassword")}
           </Button>
+          <ScheduledWarning count={stopped} />
         </SettingsSection>
         {!user.must_change_password && (
           <SettingsSection
@@ -276,15 +313,45 @@ export function SecuritySettingsPage({
                 pendingSession !== null ||
                 activeSessions.every((session) => session.current)
               }
-              onClick={() => void revokeOthers()}
+              onClick={() => guarded("sessions", revokeOthers)}
             >
               <KeyRound />
               {t("logoutOtherDevices")}
             </Button>
+            <ScheduledWarning count={stopped} />
           </SettingsSection>
         )}
         <span className="settings-success">{message}</span>
       </div>
+      {confirming && (
+        <ConfirmDialog
+          danger
+          icon={<AlertTriangle />}
+          title={t(
+            confirming === "password"
+              ? "scheduledWarningPasswordTitle"
+              : confirming === "email"
+                ? "scheduledWarningEmailTitle"
+                : "scheduledWarningSessionsTitle",
+          )}
+          description={t("scheduledWarningText", {
+            warning: t("scheduledPendingWarning", { count: stopped }),
+          })}
+          confirmLabel={t("scheduledWarningContinue")}
+          onConfirm={() => {
+            const action = confirming;
+            setConfirming(null);
+            void (
+              action === "password"
+                ? changePassword()
+                : action === "email"
+                  ? changeEmail()
+                  : revokeOthers()
+            ).finally(() => void scheduled.refetch());
+          }}
+          onClose={() => setConfirming(null)}
+        />
+      )}
     </SettingsShell>
   );
 }

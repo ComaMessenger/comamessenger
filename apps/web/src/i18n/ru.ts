@@ -434,7 +434,6 @@ export const ru = {
   shiftEnterSends: "Shift + Enter — отправка сообщения",
   enterNewLine: "Enter — перенос строки",
   scheduleMessage: "Отложить отправку",
-  comingLater: "Появится в следующей фазе",
   composerHint: "Enter — отправить, Shift+Enter — новая строка",
   composerHintReverse: "Shift+Enter — отправить, Enter — новая строка",
   installHint: "Coma работает как приложение — добавьте сайт на главный экран.",

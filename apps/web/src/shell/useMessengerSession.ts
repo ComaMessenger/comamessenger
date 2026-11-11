@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   MessengerAPI,
   Outbox,
   RealtimeCoordinator,
   createMessengerStore,
   expandUUID,
+  isScheduledEvent,
   messagePlainText,
   type Chat,
   type ChatFolder,
   type DurableEvent,
+  type ScheduledMessageEvent,
   type User,
   type UserPreferences,
 } from "@comamessenger/core";
@@ -23,6 +26,10 @@ import {
   shouldShowInAppNotification,
   unlockNotificationSound,
 } from "../notificationSound";
+import {
+  applyScheduledEvent,
+  scheduledQueryKey,
+} from "../scheduled/useScheduled";
 
 export type InAppNotification = {
   id: string;
@@ -66,6 +73,7 @@ export function useMessengerSession({
   onUserUpdated(user: User): void;
 }) {
   const store = useMemo(() => createMessengerStore(), []);
+  const queryClient = useQueryClient();
   const [folders, setFolders] = useState<ChatFolder[]>([]);
   const [pinnedChatIDs, setPinnedChatIDs] = useState<string[]>([]);
   const [snoozedUntil, setSnoozedUntil] = useState<string | null>(null);
@@ -179,6 +187,17 @@ export function useMessengerSession({
           state: store.getState().setRealtime,
           event: (event) => {
             const applied = store.getState().apply(event);
+            if (isScheduledEvent(event.type)) {
+              // Only the author's devices receive these; they carry no
+              // text, so the record is read again when it changed.
+              applyScheduledEvent(
+                queryClient,
+                api,
+                event.type,
+                event.data as unknown as ScheduledMessageEvent,
+              );
+              return applied;
+            }
             const chat = event.chat_id
               ? store.getState().chats[String(event.chat_id)]
               : undefined;
@@ -221,6 +240,8 @@ export function useMessengerSession({
           resync: async (watermark) => {
             const active = store.getState().activeChatID;
             store.getState().resetDurable(watermark);
+            // Events missed while away are not replayed: read the list anew.
+            void queryClient.invalidateQueries({ queryKey: scheduledQueryKey });
             await reload();
             if (active) await loadMessages(api, store, active);
           },
@@ -282,6 +303,7 @@ export function useMessengerSession({
       api,
       onLogout,
       onUserUpdated,
+      queryClient,
       reload,
       scheduleReload,
       showInAppNotification,

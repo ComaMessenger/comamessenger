@@ -3,7 +3,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ChevronLeft, Info, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
-import { chatAvatarSource, feedRows, type Chat, type Message } from "@comamessenger/core";
+import {
+  chatAvatarSource,
+  feedRows,
+  type Chat,
+  type Message,
+} from "@comamessenger/core";
 import { hasPermission } from "../settings";
 import {
   Avatar,
@@ -28,6 +33,11 @@ import { AgentStreamRow } from "./AgentStreamRow";
 import { ChatIntro } from "./ChatIntro";
 import { ThreadPanel } from "./ThreadPanel";
 import { useChatAgents } from "../agentchat/useChatAgents";
+import { ScheduledBar } from "../scheduled/ScheduledBar";
+import {
+  ComposerScheduleDialog,
+  type ScheduleDraft,
+} from "../scheduled/ComposerScheduleDialog";
 
 const emptyActorIDs: string[] = [];
 
@@ -91,6 +101,7 @@ export function Conversation({
   const [reply, setReply] = useState<Message | null>(null);
   const [body, setBody] = useState(() => getLocalDraft(chatID, null));
   const [info, setInfo] = useState(false);
+  const [scheduling, setScheduling] = useState<ScheduleDraft | null>(null);
 
   const title = titleOf(chat, members, user.id);
   const directPeer =
@@ -122,7 +133,8 @@ export function Conversation({
     return () => clearTimeout(timer);
   }, [api, body, chatID]);
 
-  async function send() {
+  /** What the composer holds now, or null when there is nothing to send. */
+  function composed(): ScheduleDraft | null {
     const content = body.trim();
     const uploaded = attachments.ready;
     if (
@@ -130,20 +142,32 @@ export function Conversation({
       attachments.uploading ||
       readonly
     )
-      return;
-    setBody("");
-    setReply(null);
-    setLocalDraft(chatID, null, "");
-    coordinator.typing(chatID, false, null);
-    const fileIDs = uploaded.map((item) => item.file!.id);
-    attachments.reset();
-    await outbox.enqueue(chatID, {
-      client_msg_id: crypto.randomUUID(),
+      return null;
+    return {
       body: content,
       body_format: "markdown",
       reply_to_id: reply?.id,
       mentioned_actor_ids: resolvedMentionActorIDs(content, members, presence),
-      file_ids: fileIDs,
+      file_ids: uploaded.map((item) => item.file!.id),
+    };
+  }
+
+  function clearComposer() {
+    setBody("");
+    setReply(null);
+    setLocalDraft(chatID, null, "");
+    coordinator.typing(chatID, false, null);
+    attachments.reset();
+  }
+
+  async function send(silent = false) {
+    const draft = composed();
+    if (!draft) return;
+    clearComposer();
+    await outbox.enqueue(chatID, {
+      client_msg_id: crypto.randomUUID(),
+      ...draft,
+      ...(silent ? { silent: true } : {}),
     });
   }
 
@@ -241,6 +265,7 @@ export function Conversation({
             </IconButton>
           </div>
         </header>
+        <ScheduledBar chatID={chatID} />
 
         <div className="conversation__stream">
           <div
@@ -391,6 +416,8 @@ export function Conversation({
           }}
           onBlur={() => void syncDraft(api, chatID, null, body)}
           onSend={() => void send()}
+          onSendSilent={() => void send(true)}
+          onSchedule={() => setScheduling(composed())}
           reply={reply}
           replyAuthor={
             members.find((item) => item.actor_id === reply?.actor_id)
@@ -414,6 +441,14 @@ export function Conversation({
           members={members}
           rootID={threadID}
           onClose={onCloseThread}
+        />
+      )}
+      {scheduling && (
+        <ComposerScheduleDialog
+          chatID={chatID}
+          draft={scheduling}
+          onScheduled={clearComposer}
+          onClose={() => setScheduling(null)}
         />
       )}
       {info && chat && (
