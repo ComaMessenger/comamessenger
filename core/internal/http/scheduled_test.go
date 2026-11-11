@@ -243,6 +243,40 @@ func TestScheduledMessagesE2E(t *testing.T) {
 			t.Fatalf("%s = %s %s", item.Body, got, reason)
 		}
 	}
+
+	// The author sends the stopped message again from a device still
+	// signed in: it is re-authorized by this request and goes out.
+	var stopped scheduled.ScheduledMessage
+	e2eRequest(t, client, standardhttp.MethodGet, baseURL+"/api/v1/scheduled-messages/"+fromPhone.ID, member.AccessToken, nil, standardhttp.StatusOK, &stopped)
+	var rescheduled scheduled.ScheduledMessage
+	e2eRequest(t, client, standardhttp.MethodPatch, baseURL+"/api/v1/scheduled-messages/"+fromPhone.ID, member.AccessToken, map[string]any{
+		"expected_version": stopped.Version, "body": "phone, again", "send_at": time.Now().Add(time.Hour),
+	}, standardhttp.StatusOK, &rescheduled)
+	if rescheduled.Status != "pending" || rescheduled.FailureReason != nil || rescheduled.Body != "phone, again" {
+		t.Fatalf("rescheduled = %#v", rescheduled)
+	}
+	// Someone else's file is refused when replacing the attachments.
+	e2eRequest(t, client, standardhttp.MethodPatch, baseURL+"/api/v1/scheduled-messages/"+fromPhone.ID, member.AccessToken, map[string]any{
+		"expected_version": rescheduled.Version, "file_ids": []string{uuid.NewString()},
+	}, standardhttp.StatusUnprocessableEntity, nil)
+	// A cause that still holds is named with the reason; the record stays.
+	if _, err := pool.Exec(context.Background(), `DELETE FROM chat_members WHERE chat_id=$1 AND actor_id=$2`, group.ID, member.User.ActorID); err != nil {
+		t.Fatal(err)
+	}
+	if err := scheduledService.MarkDeliveryFailed(context.Background(), fromLaptop.ID, 0); err != nil {
+		t.Fatal(err)
+	}
+	var refusal struct {
+		Code    string         `json:"code"`
+		Details map[string]any `json:"details"`
+	}
+	e2eRequest(t, client, standardhttp.MethodPost, baseURL+"/api/v1/scheduled-messages/"+fromLaptop.ID+"/send", member.AccessToken, nil, standardhttp.StatusConflict, &refusal)
+	if refusal.Code != "scheduled_message_not_retryable" || refusal.Details["reason"] != "not_member" {
+		t.Fatalf("refusal = %#v", refusal)
+	}
+	if got, reason := status(fromLaptop); got != "failed" || reason != "delivery_error" {
+		t.Fatalf("refused retry changed the record: %s %s", got, reason)
+	}
 }
 
 // framesUntil reads event frames until one of the wanted type arrives.

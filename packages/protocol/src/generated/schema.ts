@@ -1271,7 +1271,7 @@ export interface paths {
         delete: operations["deleteScheduledMessage"];
         options?: never;
         head?: never;
-        /** @description Changes the text or the send time of a pending scheduled message and re-authorizes it with the caller's session. A stale expected_version gets 409 version_conflict, also when the message was sent or failed in the meantime. */
+        /** @description Changes the text, files or send time of a pending scheduled message and re-authorizes it with the caller's session. A stale expected_version gets 409 version_conflict, also when the message was sent or failed in the meantime. A failed message may be changed too, to send it again: every check of creation runs anew, and a cause that still holds gets 409 scheduled_message_not_retryable with details.reason (a ScheduledMessageFailureReason) and leaves the record unchanged. With send_at the record becomes pending again; without it, it stays failed with the new content. */
         patch: operations["updateScheduledMessage"];
         trace?: never;
     };
@@ -1286,7 +1286,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Sends a pending scheduled message right away through the ordinary send path. A refusal at send time is not an HTTP error: the record comes back with status failed and a failure_reason. */
+        /** @description Sends a pending scheduled message right away through the ordinary send path. A failed message is sent again the same way once every check of creation passes anew; a cause that still holds gets 409 scheduled_message_not_retryable with details.reason and leaves it failed. The sent message's client_msg_id is derived from the record, so it is never sent twice. A refusal at send time is not an HTTP error: the record comes back with status failed and a failure_reason. */
         post: operations["sendScheduledMessageNow"];
         delete?: never;
         options?: never;
@@ -2726,7 +2726,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_confirmation_loosened" | "agent_conflict" | "agent_not_ready" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "architect_budget_exceeded" | "architect_busy" | "architect_connection_required" | "architect_model_error" | "architect_session_expired" | "architect_session_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "integration_in_use" | "integration_usage_changed" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "limit_reached" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "saved_limit_reached" | "saved_storage_full" | "scheduled_message_closed" | "scheduled_message_not_found" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "storage_unavailable" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "voice_check_busy" | "voice_check_in_progress" | "webhook_not_found" | "webhook_rejected" | "workspace_not_found";
+        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_confirmation_loosened" | "agent_conflict" | "agent_not_ready" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "architect_budget_exceeded" | "architect_busy" | "architect_connection_required" | "architect_model_error" | "architect_session_expired" | "architect_session_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "integration_in_use" | "integration_usage_changed" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "limit_reached" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "saved_limit_reached" | "saved_storage_full" | "scheduled_message_closed" | "scheduled_message_not_found" | "scheduled_message_not_retryable" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "storage_unavailable" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "voice_check_busy" | "voice_check_in_progress" | "webhook_not_found" | "webhook_rejected" | "workspace_not_found";
         File: {
             /** Format: uuid */
             id: string;
@@ -5256,6 +5256,8 @@ export interface components {
             /** @enum {string} */
             body_format?: "plain" | "markdown";
             mentioned_actor_ids?: string[];
+            /** @description Replaces the attachments: ready files uploaded by the current user and not attached to any other message. Files left out become unattached again and are cleaned up as usual. */
+            file_ids?: string[];
             /** Format: date-time */
             send_at?: string;
             silent?: boolean;
@@ -5272,6 +5274,8 @@ export interface components {
             /** Format: date-time */
             send_at: string;
             failure_reason: components["schemas"]["ScheduledMessageFailureReason"] | null;
+            /** @description Present on the last failure event of a security stop that failed several messages at once: how many. The author gets one push for the whole stop. */
+            stopped_count?: number;
         };
         ScheduledMessageList: {
             scheduled_messages: components["schemas"]["ScheduledMessage"][];

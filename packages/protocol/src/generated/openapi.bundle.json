@@ -3825,7 +3825,7 @@
       },
       "patch": {
         "operationId": "updateScheduledMessage",
-        "description": "Changes the text or the send time of a pending scheduled message and re-authorizes it with the caller's session. A stale expected_version gets 409 version_conflict, also when the message was sent or failed in the meantime.",
+        "description": "Changes the text, files or send time of a pending scheduled message and re-authorizes it with the caller's session. A stale expected_version gets 409 version_conflict, also when the message was sent or failed in the meantime. A failed message may be changed too, to send it again: every check of creation runs anew, and a cause that still holds gets 409 scheduled_message_not_retryable with details.reason (a ScheduledMessageFailureReason) and leaves the record unchanged. With send_at the record becomes pending again; without it, it stays failed with the new content.",
         "security": [
           {
             "bearerAuth": []
@@ -3904,7 +3904,7 @@
       ],
       "post": {
         "operationId": "sendScheduledMessageNow",
-        "description": "Sends a pending scheduled message right away through the ordinary send path. A refusal at send time is not an HTTP error: the record comes back with status failed and a failure_reason.",
+        "description": "Sends a pending scheduled message right away through the ordinary send path. A failed message is sent again the same way once every check of creation passes anew; a cause that still holds gets 409 scheduled_message_not_retryable with details.reason and leaves it failed. The sent message's client_msg_id is derived from the record, so it is never sent twice. A refusal at send time is not an HTTP error: the record comes back with status failed and a failure_reason.",
         "security": [
           {
             "bearerAuth": []
@@ -8631,6 +8631,7 @@
           "saved_storage_full",
           "scheduled_message_closed",
           "scheduled_message_not_found",
+          "scheduled_message_not_retryable",
           "service_not_ready",
           "session_not_found",
           "smtp_not_configured",
@@ -17753,6 +17754,16 @@
             },
             "uniqueItems": true
           },
+          "file_ids": {
+            "type": "array",
+            "maxItems": 10,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Replaces the attachments: ready files uploaded by the current user and not attached to any other message. Files left out become unattached again and are cleaned up as usual."
+          },
           "send_at": {
             "type": "string",
             "format": "date-time"
@@ -17809,6 +17820,11 @@
                 "type": "null"
               }
             ]
+          },
+          "stopped_count": {
+            "type": "integer",
+            "minimum": 2,
+            "description": "Present on the last failure event of a security stop that failed several messages at once: how many. The author gets one push for the whole stop."
           }
         }
       },
