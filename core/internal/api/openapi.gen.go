@@ -5183,8 +5183,10 @@ type CreateAgentTriggerRequestType string
 
 // CreateChatRequest defines model for CreateChatRequest.
 type CreateChatRequest struct {
-	Kind       CreateChatRequestKind        `json:"kind"`
-	MemberIds  *[]openapi_types.UUID        `json:"member_ids,omitempty"`
+	Kind      CreateChatRequestKind `json:"kind"`
+	MemberIds *[]openapi_types.UUID `json:"member_ids,omitempty"`
+
+	// Name Required for groups and channels, 1 to 80 characters (Unicode code points) after trimming.
 	Name       *string                      `json:"name,omitempty"`
 	Topic      *string                      `json:"topic,omitempty"`
 	Visibility *CreateChatRequestVisibility `json:"visibility,omitempty"`
@@ -5872,8 +5874,11 @@ type Message struct {
 	// ThreadReplyCount Number of non-deleted replies when this message is a thread root.
 	ThreadReplyCount int64               `json:"thread_reply_count"`
 	ThreadRootId     *openapi_types.UUID `json:"thread_root_id,omitempty"`
-	Type             MessageType         `json:"type"`
-	Version          int                 `json:"version"`
+
+	// ThreadRootReplyCount Realtime message.* events of a thread reply only: the current thread_reply_count of its root (zero once the root is deleted). Clients set the root's count to it instead of adding or subtracting one. History pages and other responses omit it.
+	ThreadRootReplyCount *int64      `json:"thread_root_reply_count,omitempty"`
+	Type                 MessageType `json:"type"`
+	Version              int         `json:"version"`
 }
 
 // MessageBodyFormat defines model for Message.BodyFormat.
@@ -6319,8 +6324,10 @@ type RealtimeCloseCodeV1 int32
 
 // RealtimeDurableEventFrameV1 defines model for RealtimeDurableEventFrameV1.
 type RealtimeDurableEventFrameV1 struct {
-	ActorId    openapi_types.UUID            `json:"actor_id"`
-	ChatId     *openapi_types.UUID           `json:"chat_id,omitempty"`
+	ActorId openapi_types.UUID  `json:"actor_id"`
+	ChatId  *openapi_types.UUID `json:"chat_id,omitempty"`
+
+	// Data Event payload. For message.created, message.updated and message.deleted it is the message in the shape of the REST feed (components/schemas/Message: files with metadata and no links, thread_reply_count, mentioned_actor_ids, blocks and agent_provenance when present), read when the event is delivered, plus silent on message.created and thread_root_reply_count on thread replies.
 	Data       map[string]interface{}        `json:"data"`
 	OccurredAt time.Time                     `json:"occurred_at"`
 	Op         RealtimeDurableEventFrameV1Op `json:"op"`
@@ -6840,6 +6847,7 @@ type UpdateChatMemberRequestRole string
 
 // UpdateChatRequest defines model for UpdateChatRequest.
 type UpdateChatRequest struct {
+	// Name 1 to 80 characters (Unicode code points) after trimming. A name longer than that, set before the limit, stays until renamed.
 	Name       *string                      `json:"name,omitempty"`
 	Topic      *string                      `json:"topic,omitempty"`
 	Visibility *UpdateChatRequestVisibility `json:"visibility,omitempty"`

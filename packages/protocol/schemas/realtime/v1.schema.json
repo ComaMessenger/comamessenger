@@ -208,7 +208,11 @@
         "actor_id": { "$ref": "#/$defs/UUID" },
         "chat_id": { "$ref": "#/$defs/NullableUUID" },
         "subject_id": { "$ref": "#/$defs/UUID" },
-        "data": { "type": "object", "additionalProperties": true }
+        "data": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Event payload. For message.created, message.updated and message.deleted it is the message in the shape of the REST feed (components/schemas/Message: files with metadata and no links, thread_reply_count, mentioned_actor_ids, blocks and agent_provenance when present), read when the event is delivered, plus silent on message.created and thread_root_reply_count on thread replies."
+        }
       }
     },
     "ResyncRequiredFrame": {

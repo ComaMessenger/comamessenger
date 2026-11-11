@@ -145,16 +145,23 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
                   )
                 : [...current, delivered];
             let withThreadCount = next;
-            if (incoming.thread_root_id && event.type !== "message.updated") {
+            // A reply's frame carries its root's current count; servers
+            // before it did not, and the client guessed ±1.
+            const rootCount = incoming.thread_root_reply_count;
+            const exact =
+              typeof rootCount === "number" && Number.isFinite(rootCount);
+            if (
+              incoming.thread_root_id &&
+              (exact || event.type !== "message.updated")
+            ) {
               const delta = event.type === "message.created" ? 1 : -1;
               withThreadCount = next.map((item) =>
                 item.id === incoming.thread_root_id
                   ? {
                       ...item,
-                      thread_reply_count: Math.max(
-                        0,
-                        item.thread_reply_count + delta,
-                      ),
+                      thread_reply_count: exact
+                        ? rootCount
+                        : Math.max(0, (item.thread_reply_count ?? 0) + delta),
                     }
                   : item,
               );

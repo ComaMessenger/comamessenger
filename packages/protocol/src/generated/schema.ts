@@ -3025,6 +3025,7 @@ export interface components {
             chat_id?: string | null;
             /** Format: uuid */
             subject_id: string;
+            /** @description Event payload. For message.created, message.updated and message.deleted it is the message in the shape of the REST feed (components/schemas/Message: files with metadata and no links, thread_reply_count, mentioned_actor_ids, blocks and agent_provenance when present), read when the event is delivered, plus silent on message.created and thread_root_reply_count on thread replies. */
             data: {
                 [key: string]: unknown;
             };
@@ -4605,6 +4606,7 @@ export interface components {
              * @enum {string}
              */
             visibility: "private" | "public";
+            /** @description Required for groups and channels, 1 to 80 characters (Unicode code points) after trimming. */
             name?: string;
             topic?: string;
             member_ids?: string[];
@@ -4677,6 +4679,7 @@ export interface components {
             deleted: boolean;
         };
         UpdateChatRequest: {
+            /** @description 1 to 80 characters (Unicode code points) after trimming. A name longer than that, set before the limit, stays until renamed. */
             name?: string;
             topic?: string;
             /** @enum {string} */
@@ -4797,6 +4800,11 @@ export interface components {
             agent_provenance?: components["schemas"]["MessageAgentProvenance"];
             /** @description Present and true when the author asked for quiet notifications: recipients are notified as usual (push, e-mail digest, their own notification settings apply) but clients play no sound or vibration for it. Carried by the create response and realtime events; history pages omit it. */
             silent?: boolean;
+            /**
+             * Format: int64
+             * @description Realtime message.* events of a thread reply only: the current thread_reply_count of its root (zero once the root is deleted). Clients set the root's count to it instead of adding or subtracting one. History pages and other responses omit it.
+             */
+            thread_root_reply_count?: number;
         };
         /** @description Why an agent wrote the message. Visible to every reader of the message: it never carries a webhook payload, a follow-up note or text from another chat. */
         MessageAgentProvenance: {

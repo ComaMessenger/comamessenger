@@ -181,6 +181,56 @@ describe("domain store", () => {
     });
     expect(store.getState().messages.chat).toHaveLength(before ?? 0);
   });
+  it("takes the thread root's count and the files from full message frames", () => {
+    const store = createMessengerStore();
+    store.getState().replaceMessages("chat", [message]);
+    const file = {
+      id: "file",
+      name: "photo.jpg",
+      mime: "image/jpeg",
+      size: 2048,
+      status: "ready",
+      processing_status: "pending",
+      created_at: message.created_at,
+      uploader_id: "other",
+    };
+    // The root, replayed after the reply was written, already counts it.
+    store.getState().apply({
+      op: "event",
+      seq: 4,
+      type: "message.updated",
+      occurred_at: message.created_at,
+      actor_id: message.actor_id,
+      chat_id: message.chat_id,
+      subject_id: message.id,
+      data: { ...message, version: 2, thread_reply_count: 1, files: [file] },
+    });
+    expect(store.getState().messages.chat?.[0]?.thread_reply_count).toBe(1);
+    expect(store.getState().messages.chat?.[0]?.files).toEqual([file]);
+    const reply = {
+      ...message,
+      id: "reply",
+      client_msg_id: "reply-client",
+      thread_root_id: message.id,
+      created_seq: 5,
+      thread_root_reply_count: 1,
+    };
+    // Its reply then sets the count rather than adding one more.
+    store.getState().apply({
+      op: "event",
+      seq: 5,
+      type: "message.created",
+      occurred_at: message.created_at,
+      actor_id: message.actor_id,
+      chat_id: message.chat_id,
+      subject_id: reply.id,
+      data: reply,
+    });
+    expect(
+      store.getState().messages.chat?.find((item) => item.id === message.id)
+        ?.thread_reply_count,
+    ).toBe(1);
+  });
   it("orders, resets, and clears ephemeral agent streams", () => {
     const store = createMessengerStore();
     const base = {
