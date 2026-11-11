@@ -26,6 +26,13 @@ type Frame struct {
 	Data       json.RawMessage `json:"data"`
 }
 
+// messageContentTypes are the chat events about one message (subject_id):
+// the message itself, its reactions and pins. An agent that only writes to
+// the chat receives them for its own messages only — the rule of message.Get
+// and message.ListReactions. Chat, member, thread-follow, read-mark and draft
+// events carry no message content and stay as they are.
+const messageContentTypes = `('message.created', 'message.updated', 'message.deleted', 'reaction.added', 'reaction.removed', 'message.pinned', 'message.unpinned')`
+
 type Bounds struct {
 	CurrentSeq     int64
 	MinRetainedSeq int64
@@ -131,6 +138,16 @@ func (s *Store) Replay(ctx context.Context, user identity.User, sessionID string
 				  AND (c.archived_at IS NULL OR e.type = 'chat.archived')
 			)
 		  )
+		  -- As in message.Get: in a chat it only writes to, an agent sees its
+		  -- own messages and what happens to them, nothing else.
+		  AND NOT (
+			e.type IN `+messageContentTypes+`
+			AND (m.actor_id IS NULL OR m.actor_id <> $4)
+			AND EXISTS (
+				SELECT 1 FROM agents writer
+				WHERE writer.actor_id = $4 AND writer.org_id = e.org_id AND e.chat_id = ANY(COALESCE(writer.write_only_chat_ids, '{}'::uuid[]))
+			)
+		  )
 		ORDER BY e.seq
 		LIMIT $6`, user.OrgID, afterSeq, throughSeq, user.ActorID, sessionID, limit)
 	if err != nil {
@@ -212,8 +229,16 @@ func (s *Store) Live(ctx context.Context, orgID string, afterSeq, throughSeq int
 		LEFT JOIN LATERAL (
 			SELECT array_agg(recipient.id ORDER BY recipient.id) AS actor_ids
 			FROM actors recipient
+			LEFT JOIN agents writer ON writer.actor_id = recipient.id AND writer.org_id = recipient.org_id
 			WHERE recipient.org_id = e.org_id
 			  AND recipient.status = 'active' AND recipient.deleted_at IS NULL
+			  -- As in message.Get: in a chat it only writes to, an agent gets
+			  -- its own messages and what happens to them, nothing else.
+			  AND NOT (
+				e.type IN `+messageContentTypes+`
+				AND e.chat_id = ANY(COALESCE(writer.write_only_chat_ids, '{}'::uuid[]))
+				AND (m.actor_id IS NULL OR m.actor_id <> recipient.id)
+			  )
 			  AND (e.audience_actor_id IS NULL OR recipient.id = e.audience_actor_id)
 			  AND (
 				e.chat_id IS NULL OR EXISTS (
