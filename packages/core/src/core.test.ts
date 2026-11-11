@@ -231,6 +231,73 @@ describe("domain store", () => {
         ?.thread_reply_count,
     ).toBe(1);
   });
+  it("keeps a truncated frame as a stub and loads the message once by REST", async () => {
+    const store = createMessengerStore();
+    const full: ClientMessage = {
+      ...message,
+      id: "big",
+      client_msg_id: "big-client",
+      body: "x".repeat(70_000),
+      created_seq: 4,
+      files: [],
+    };
+    const loader = vi.fn(async (id: string) => (id === "big" ? full : null));
+    store.getState().setMessageLoader(loader);
+    const { body: _body, ...rest } = full;
+    void _body;
+    const stub = { ...rest, body: "", files: [], truncated: true };
+    const frame = {
+      op: "event" as const,
+      seq: 4,
+      type: "message.created",
+      occurred_at: message.created_at,
+      actor_id: message.actor_id,
+      chat_id: message.chat_id,
+      subject_id: "big",
+      data: stub,
+    };
+    expect(store.getState().apply(frame)).toBe(true);
+    const shown = store
+      .getState()
+      .messages.chat?.find((item) => item.id === "big");
+    expect(shown?.body).toBe("");
+    expect(shown?.files).toEqual([]);
+    expect(shown && "truncated" in shown).toBe(false);
+    // A replay of the same frame after a reconnect asks for nothing more.
+    store.getState().resetDurable(0);
+    store.getState().apply(frame);
+    await vi.waitFor(() =>
+      expect(
+        store.getState().messages.chat?.find((item) => item.id === "big")?.body,
+      ).toHaveLength(70_000),
+    );
+    expect(loader).toHaveBeenCalledTimes(1);
+  });
+  it("shows a stub without a loader instead of failing", () => {
+    const store = createMessengerStore();
+    store.getState().apply({
+      op: "event",
+      seq: 9,
+      type: "message.created",
+      occurred_at: message.created_at,
+      actor_id: message.actor_id,
+      chat_id: message.chat_id,
+      subject_id: "stub",
+      data: {
+        id: "stub",
+        chat_id: "chat",
+        client_msg_id: "stub-client",
+        version: 1,
+        created_seq: 9,
+        created_at: message.created_at,
+        truncated: true,
+      },
+    });
+    const shown = store.getState().messages.chat?.[0];
+    expect(shown?.body).toBe("");
+    expect(shown?.files).toEqual([]);
+    expect(shown?.mentioned_actor_ids).toEqual([]);
+  });
   it("orders, resets, and clears ephemeral agent streams", () => {
     const store = createMessengerStore();
     const base = {

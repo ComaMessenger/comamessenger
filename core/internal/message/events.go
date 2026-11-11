@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	filemodel "github.com/comamessenger/comamessenger/core/internal/files"
+	"github.com/comamessenger/comamessenger/core/internal/wirejson"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -59,7 +61,7 @@ func CompleteEventMessages(ctx context.Context, tx pgx.Tx, orgID string, items [
 			count := rootCounts[*message.ThreadRootID]
 			message.ThreadRootReplyCount = &count
 		}
-		encoded, err := json.Marshal(message)
+		encoded, err := wirejson.Marshal(message)
 		if err != nil {
 			return fmt.Errorf("encode message event: %w", err)
 		}
@@ -111,4 +113,24 @@ func threadRootReplyCounts(ctx context.Context, tx pgx.Tx, orgID string, message
 		return nil, fmt.Errorf("iterate thread root reply counts: %w", err)
 	}
 	return counts, nil
+}
+
+// TruncatedEventMessage replaces a message event payload too large for one
+// realtime frame. It keeps the shape of Message, so a client unaware of
+// truncated still finds every field it reads (an empty body, no files),
+// and everything needed to order the message and update counters: ids,
+// version, sequence, times, thread, mentions, silent.
+func TruncatedEventMessage(data json.RawMessage) (json.RawMessage, error) {
+	var message Message
+	if err := json.Unmarshal(data, &message); err != nil {
+		return nil, fmt.Errorf("decode message event: %w", err)
+	}
+	message.Body = ""
+	message.Files = []filemodel.File{}
+	message.Blocks = nil
+	if message.MentionedActorIDs == nil {
+		message.MentionedActorIDs = []string{}
+	}
+	message.Truncated = true
+	return wirejson.Marshal(message)
 }

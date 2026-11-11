@@ -26,6 +26,11 @@ export type MessengerState = {
   retrying(clientMsgID: string): void;
   failed(clientMsgID: string, code: string): void;
   apply(event: DurableEvent): boolean;
+  /**
+   * Loads a whole message by REST when a realtime frame was too large and
+   * came as a stub (`truncated: true`). Without a loader the stub is kept.
+   */
+  setMessageLoader(loader: MessageLoader | null): void;
   setUnread(value: UnreadSnapshot): void;
   setRealtime(value: RealtimeState): void;
   setActive(chatID: string | null): void;
@@ -65,8 +70,28 @@ export type MessageStreamFrame = Omit<MessageStreamState, "body"> & {
   reset: boolean;
   done: boolean;
 };
+export type MessageLoader = (
+  messageID: string,
+) => Promise<ClientMessage | null>;
+
+/** The loader every client uses: the message's context window by REST. */
+export function restMessageLoader(api: {
+  messageContext(
+    messageID: string,
+    limit?: number,
+  ): Promise<{ messages: ClientMessage[] }>;
+}): MessageLoader {
+  return async (messageID) =>
+    (await api.messageContext(messageID, 3)).messages.find(
+      (item) => item.id === messageID,
+    ) ?? null;
+}
 const emptyUnread: UnreadSnapshot = { chats: [], threads: [] };
 export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
+  let loader: MessageLoader | null = null;
+  // Highest version requested per message: one request per stub, however
+  // often the frame is replayed.
+  const requested = new Map<string, number>();
   return createStore<MessengerState>((set, get) => ({
     chats: {},
     messages: {},
@@ -119,8 +144,18 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
             : item,
         ),
       })),
+    setMessageLoader: (value) => {
+      loader = value;
+    },
     apply: (event) => {
       if (event.seq <= get().checkpoint) return false;
+      const stub =
+        (event.type === "message.created" ||
+          event.type === "message.updated" ||
+          event.type === "message.deleted") &&
+        (event.data as { truncated?: unknown }).truncated === true
+          ? (event.data as unknown as ClientMessage)
+          : null;
       set((state) => {
         let messages = state.messages;
         if (
@@ -137,11 +172,17 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
                 item.id === incoming.id ||
                 item.client_msg_id === incoming.client_msg_id,
             );
-            const delivered: ClientMessage = { ...incoming, delivery: "sent" };
+            const delivered: ClientMessage = stub
+              ? truncatedMessage(stub, byID >= 0 ? current[byID] : undefined)
+              : { ...incoming, delivery: "sent" };
             const next: ClientMessage[] =
               byID >= 0
                 ? current.map((item, index) =>
-                    index === byID ? mergeMessage(item, delivered) : item,
+                    index === byID
+                      ? stub
+                        ? delivered
+                        : mergeMessage(item, delivered)
+                      : item,
                   )
                 : [...current, delivered];
             let withThreadCount = next;
@@ -174,6 +215,23 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
         }
         return { messages, checkpoint: event.seq };
       });
+      if (stub && loader && (requested.get(stub.id) ?? 0) < stub.version) {
+        requested.set(stub.id, stub.version);
+        const load = loader;
+        void load(stub.id)
+          .then((full) => {
+            if (!full) return;
+            const known = (get().messages[full.chat_id] ?? []).find(
+              (item) => item.id === full.id,
+            );
+            // A newer frame may have arrived while loading.
+            if (known && known.version > full.version) return;
+            get().reconcile(full);
+          })
+          .catch(() => {
+            // The stub stays; the feed shows the message on its next load.
+          });
+      }
       return true;
     },
     setUnread: (unread) => set({ unread }),
@@ -318,4 +376,34 @@ export function mergeMessage(
   const merged: ClientMessage = { ...current, ...incoming };
   if (incoming.blocks === undefined) delete merged.blocks;
   return merged;
+}
+
+/**
+ * A message from a truncated realtime frame: the stub's ids, version and
+ * counters over what the client already knew (text, files, card), or empty
+ * values, until the whole message is loaded by REST.
+ */
+function truncatedMessage(
+  stub: ClientMessage,
+  known: ClientMessage | undefined,
+): ClientMessage {
+  const partial: Partial<ClientMessage> = stub;
+  const result: ClientMessage & { truncated?: boolean } = {
+    ...known,
+    ...stub,
+    body: known?.body ?? "",
+    files: known?.files ?? [],
+    mentioned_actor_ids:
+      partial.mentioned_actor_ids ?? known?.mentioned_actor_ids ?? [],
+    thread_reply_count:
+      partial.thread_reply_count ?? known?.thread_reply_count ?? 0,
+    delivery: "sent",
+  };
+  if (known?.blocks !== undefined) result.blocks = known.blocks;
+  if (stub.deleted_at) {
+    result.body = "";
+    delete result.blocks;
+  }
+  delete result.truncated;
+  return result;
 }

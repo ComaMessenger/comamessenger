@@ -59,6 +59,9 @@ type Message struct {
 	// ThreadRootReplyCount: on a thread reply in a realtime event only, the
 	// root's current thread_reply_count.
 	ThreadRootReplyCount *int64 `json:"thread_root_reply_count,omitempty"`
+	// Truncated: in a realtime event only, the message was too large for one
+	// frame; body, files and blocks are left out and clients load it by REST.
+	Truncated bool `json:"truncated,omitempty"`
 }
 
 type ForwardAttribution struct {

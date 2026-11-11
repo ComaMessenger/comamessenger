@@ -9,6 +9,7 @@ import (
 
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/message"
+	"github.com/comamessenger/comamessenger/core/internal/wirejson"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -45,10 +46,24 @@ type LiveEvent struct {
 }
 
 type Store struct {
-	pool *pgxpool.Pool
+	pool          *pgxpool.Pool
+	maxFrameBytes int
 }
 
-func NewStore(pool *pgxpool.Pool) *Store { return &Store{pool: pool} }
+// DefaultMaxFrameBytes matches the default WS_MAX_FRAME_BYTES.
+const DefaultMaxFrameBytes = 256 * 1024
+
+func NewStore(pool *pgxpool.Pool) *Store {
+	return &Store{pool: pool, maxFrameBytes: DefaultMaxFrameBytes}
+}
+
+// SetMaxFrameBytes sets the largest serialized frame Live and Replay return;
+// call it before the store is used, with the realtime WS_MAX_FRAME_BYTES.
+func (s *Store) SetMaxFrameBytes(limit uint64) {
+	if limit > 0 {
+		s.maxFrameBytes = int(limit)
+	}
+}
 
 // snapshot opens a read-only transaction in which an event batch and the
 // fields completing its messages are read from one consistent view.
@@ -178,6 +193,11 @@ func (s *Store) Replay(ctx context.Context, user identity.User, sessionID string
 	if err := message.CompleteEventMessages(ctx, tx, user.OrgID, items); err != nil {
 		return nil, fmt.Errorf("complete replayed message events: %w", err)
 	}
+	for index := range result {
+		if err := s.fit(&result[index]); err != nil {
+			return nil, err
+		}
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("finish event snapshot: %w", err)
 	}
@@ -284,8 +304,71 @@ func (s *Store) Live(ctx context.Context, orgID string, afterSeq, throughSeq int
 	if err := message.CompleteEventMessages(ctx, tx, orgID, items); err != nil {
 		return nil, fmt.Errorf("complete live message events: %w", err)
 	}
+	for index := range result {
+		if err := s.fit(&result[index].Frame); err != nil {
+			return nil, err
+		}
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("finish event snapshot: %w", err)
 	}
 	return result, nil
+}
+
+// fit keeps a frame within the realtime frame limit. A session closes on a
+// frame larger than WS_MAX_FRAME_BYTES, and the client, reconnecting with the
+// same cursor, would get the same frame again forever. An oversized event
+// keeps its envelope (seq, type, ids) and gets a stub instead of data:
+// truncated: true, so clients load the record by REST. A message keeps the
+// Message shape without body, files and blocks; any other event keeps only
+// its short scalar fields.
+func (s *Store) fit(frame *Frame) error {
+	payload, err := wirejson.Marshal(frame)
+	if err != nil {
+		return fmt.Errorf("encode event frame: %w", err)
+	}
+	if len(payload) <= s.maxFrameBytes {
+		return nil
+	}
+	var stub json.RawMessage
+	switch frame.Type {
+	case "message.created", "message.updated", "message.deleted":
+		stub, err = message.TruncatedEventMessage(frame.Data)
+	default:
+		stub, err = truncatedEventData(frame.Data)
+	}
+	if err != nil {
+		stub = nil
+	}
+	frame.Data = stub
+	if payload, err := wirejson.Marshal(frame); err != nil || len(payload) > s.maxFrameBytes || stub == nil {
+		frame.Data = json.RawMessage(`{"truncated":true}`)
+	}
+	return nil
+}
+
+// truncatedEventData keeps the top-level numbers, booleans, nulls and
+// strings of up to 256 bytes (ids, versions, times) and drops text bodies,
+// lists and objects.
+func truncatedEventData(data json.RawMessage) (json.RawMessage, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return nil, err
+	}
+	kept := map[string]json.RawMessage{"truncated": json.RawMessage("true")}
+	for key, value := range fields {
+		if key == "body" || len(value) == 0 {
+			continue
+		}
+		switch value[0] {
+		case '{', '[':
+			continue
+		case '"':
+			if len(value) > 258 {
+				continue
+			}
+		}
+		kept[key] = value
+	}
+	return wirejson.Marshal(kept)
 }

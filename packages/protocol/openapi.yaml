@@ -6988,6 +6988,16 @@ components:
             thread_reply_count of its root (zero once the root is deleted).
             Clients set the root's count to it instead of adding or
             subtracting one. History pages and other responses omit it.
+        truncated:
+          type: boolean
+          description: >-
+            Realtime message.* events only: the event was larger than the
+            connection's frame limit (WS_MAX_FRAME_BYTES). The payload keeps
+            the Message shape with ids, version, sequence, times, thread and
+            counters but an empty body, no files and no blocks; clients load
+            the message by REST (GET /api/v1/messages/{message_id}/context).
+            Other event types may carry truncated: true with only their short
+            scalar fields.
     MessageAgentProvenance:
       type: object
       additionalProperties: false
