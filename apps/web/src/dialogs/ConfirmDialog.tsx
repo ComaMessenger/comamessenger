@@ -59,7 +59,7 @@ export function ConfirmDialog({
         </span>
       )}
       {description && <p className="confirm-dialog__text">{description}</p>}
-      {children}
+      {children && <div className="confirm-dialog__extra">{children}</div>}
     </Dialog>
   );
 }
