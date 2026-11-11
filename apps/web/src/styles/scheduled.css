@@ -491,3 +491,26 @@
 [data-theme="dark"] .scheduled-page .ui-chip--active {
   color: var(--coma-foreground);
 }
+
+/* A message stopped by a security event: read before sending again. */
+.scheduled-card__suspect {
+  font-weight: 500;
+}
+.scheduled-verify__text {
+  max-height: 240px;
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  overflow-y: auto;
+  border-inline-start: 3px solid var(--coma-border-strong);
+  border-radius: var(--coma-radius-sm, 6px);
+  background: var(--coma-surface-hover);
+  color: var(--coma-foreground);
+  font-size: 14px;
+  line-height: 20px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-align: start;
+}
+.confirm-dialog .scheduled-card__files {
+  margin-block-start: 8px;
+}

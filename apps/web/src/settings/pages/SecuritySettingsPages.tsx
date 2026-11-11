@@ -73,7 +73,11 @@ export function SecuritySettingsPage({
   const confirmationStarted = useRef(false);
   // Every account-wide security event stops the pending scheduled messages:
   // say so before it happens. The count comes from the author's own list.
-  const scheduled = useScheduledMessages(api, !user.must_change_password);
+  const scheduled = useScheduledMessages(
+    api,
+    user.id,
+    !user.must_change_password,
+  );
   const stopped = pendingCount(scheduled.data ?? []);
   const [confirming, setConfirming] = useState<GuardedAction | null>(null);
   function guarded(action: GuardedAction, run: () => Promise<void>) {

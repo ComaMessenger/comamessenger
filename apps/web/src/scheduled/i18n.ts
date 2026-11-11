@@ -67,6 +67,11 @@ export const scheduledCatalog = defineCatalog(
     scheduledNotSent: "Не отправлено",
     scheduledNotRetryable: "Отправить не получится: {reason}",
     scheduledClosed: "Сообщение уже отправлено или удалено",
+    scheduledVerifyTitle: "Проверьте сообщение",
+    scheduledVerifyText:
+      "Сообщение остановлено после смены пароля или отключения устройства. Возможно, его запланировали не вы — проверьте текст.",
+    scheduledVerifyHint: "возможно, запланировали не вы — проверьте текст",
+    scheduledVerifyMove: "Выбрать время",
     scheduledLimitReached:
       "Слишком много отложенных сообщений: не больше 100, в одном чате — 30",
     scheduledActions: "Действия с отложенным сообщением",
@@ -171,6 +176,11 @@ export const scheduledCatalog = defineCatalog(
     scheduledNotSent: "Not sent",
     scheduledNotRetryable: "Can’t send it: {reason}",
     scheduledClosed: "The message was already sent or deleted",
+    scheduledVerifyTitle: "Check the message",
+    scheduledVerifyText:
+      "The message was stopped after a password change or a device was signed out. You may not be the one who scheduled it — check the text.",
+    scheduledVerifyHint: "you may not have scheduled it — check the text",
+    scheduledVerifyMove: "Pick a time",
     scheduledLimitReached:
       "Too many scheduled messages: up to 100, and 30 in one chat",
     scheduledActions: "Scheduled message actions",

@@ -12,38 +12,68 @@ import {
 /**
  * The author's scheduled messages, one list for the whole app: the strip
  * under the chat header, the Scheduled page and the security warnings read
- * it. The server returns all of them at once (up to 1000).
+ * it. The server returns all of them at once (up to 1000). The list is
+ * keyed by its owner and dropped when that person signs out, so the next
+ * person in the same tab never sees it.
  */
-export const scheduledQueryKey = ["scheduled"] as const;
+const scheduledRootKey = ["scheduled"] as const;
 
-export function useScheduledMessages(api: MessengerAPI, enabled = true) {
+export const scheduledQueryKey = (userID: string) =>
+  [...scheduledRootKey, userID] as const;
+
+export function useScheduledMessages(
+  api: MessengerAPI,
+  userID: string,
+  enabled = true,
+) {
   return useQuery({
-    queryKey: scheduledQueryKey,
+    queryKey: scheduledQueryKey(userID),
     queryFn: () => api.scheduledMessages(),
     staleTime: 60_000,
     enabled,
   });
 }
 
+/**
+ * Keeps only the lists of `ownerID` (none when null): called when a person
+ * signs in and when they sign out.
+ */
+export function releaseScheduledCache(
+  queryClient: QueryClient,
+  ownerID: string | null,
+) {
+  queryClient.removeQueries({
+    queryKey: scheduledRootKey,
+    predicate: (query) => query.queryKey[1] !== ownerID,
+  });
+}
+
 function update(
   queryClient: QueryClient,
+  userID: string,
   change: (items: ScheduledMessage[]) => ScheduledMessage[],
 ) {
-  queryClient.setQueryData<ScheduledMessage[]>(scheduledQueryKey, (items) =>
-    items ? change(items) : items,
+  queryClient.setQueryData<ScheduledMessage[]>(
+    scheduledQueryKey(userID),
+    (items) => (items ? change(items) : items),
   );
 }
 
 /** Puts a record the server just returned into the list. */
 export function storeScheduled(
   queryClient: QueryClient,
+  userID: string,
   record: ScheduledMessage,
 ) {
-  update(queryClient, (items) => upsertScheduled(items, record));
+  update(queryClient, userID, (items) => upsertScheduled(items, record));
 }
 
-export function forgetScheduled(queryClient: QueryClient, id: string) {
-  update(queryClient, (items) => removeScheduled(items, id));
+export function forgetScheduled(
+  queryClient: QueryClient,
+  userID: string,
+  id: string,
+) {
+  update(queryClient, userID, (items) => removeScheduled(items, id));
 }
 
 /**
@@ -53,20 +83,22 @@ export function forgetScheduled(queryClient: QueryClient, id: string) {
 export function applyScheduledEvent(
   queryClient: QueryClient,
   api: MessengerAPI,
+  userID: string,
   type: string,
   data: ScheduledMessageEvent,
 ) {
-  const items = queryClient.getQueryData<ScheduledMessage[]>(scheduledQueryKey);
+  const key = scheduledQueryKey(userID);
+  const items = queryClient.getQueryData<ScheduledMessage[]>(key);
   if (!items) return;
   const result = reduceScheduled(items, type, data);
-  if (result.changed) queryClient.setQueryData(scheduledQueryKey, result.items);
+  if (result.changed) queryClient.setQueryData(key, result.items);
   if (!result.refetch) return;
   const id = result.refetch;
   void api
     .scheduledMessage(id)
-    .then((record) => storeScheduled(queryClient, record))
+    .then((record) => storeScheduled(queryClient, userID, record))
     .catch((cause) => {
       if (cause instanceof APIError && cause.status === 404)
-        forgetScheduled(queryClient, id);
+        forgetScheduled(queryClient, userID, id);
     });
 }

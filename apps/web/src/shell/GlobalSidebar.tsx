@@ -47,7 +47,7 @@ export function GlobalSidebar({
 }) {
   const { t } = useTranslation();
   const { api, user, store, navigate, openDialog } = useMessenger();
-  const scheduled = useScheduledMessages(api);
+  const scheduled = useScheduledMessages(api, user.id);
   const failedScheduled = (scheduled.data ?? []).filter(
     (item) => item.status === "failed",
   ).length;

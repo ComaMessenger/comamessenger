@@ -208,6 +208,30 @@ export function failureReasonKey(reason: string | null | undefined): string {
   );
 }
 
+/**
+ * Reasons that mean the message was stopped by a security event: the
+ * password or e-mail changed, other devices were signed out, or the device
+ * that scheduled it was removed. Whoever scheduled it may not have been the
+ * owner, so sending it again or moving it needs the owner to read the text
+ * first.
+ */
+export const securityStopReasons: readonly ScheduledMessageFailureReason[] = [
+  "security_reset",
+  "session_revoked",
+];
+
+/** True when the owner must confirm the text before sending it again. */
+export function needsAuthorCheck(
+  item: Pick<ScheduledMessage, "status" | "failure_reason">,
+): boolean {
+  return (
+    item.status === "failed" &&
+    securityStopReasons.includes(
+      item.failure_reason as ScheduledMessageFailureReason,
+    )
+  );
+}
+
 export const scheduledFailureReasons = Object.keys(
   failureReasons,
 ) as ScheduledMessageFailureReason[];

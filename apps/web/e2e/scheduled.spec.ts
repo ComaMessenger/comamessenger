@@ -25,6 +25,13 @@ const user = {
   status_expires_at: null,
   created_at: "2026-08-19T00:00:00Z",
 };
+const otherUser = {
+  ...user,
+  id: "00000000-0000-4000-8000-000000000002",
+  email: "boris@example.com",
+  display_name: "Борис",
+  handle: "boris",
+};
 const lev = {
   actor_id: "01a01612-85e4-7145-bda3-82db7b4a3075",
   display_name: "Лев",
@@ -173,9 +180,13 @@ async function mockScheduled(
     theme?: "light" | "dark";
     scheduled?: Record[];
     conflictOnce?: boolean;
+    /** Signing out lets `otherUser` sign in; their list never arrives. */
+    switchUser?: boolean;
   } = {},
 ) {
-  const { theme = "light", conflictOnce = false } = options;
+  const { theme = "light", conflictOnce = false, switchUser = false } = options;
+  let session: "first" | "out" | "second" = "first";
+  const current = () => (session === "second" ? otherUser : user);
   let scheduled = options.scheduled ?? fixtures();
   let conflict = conflictOnce;
   const requests: Array<{ method: string; path: string; body: unknown }> = [];
@@ -256,13 +267,28 @@ async function mockScheduled(
         password_recovery_available: false,
         email_delivery_available: false,
       };
-    else if (path === "/auth/refresh")
+    else if (path === "/auth/refresh") {
+      if (session === "out") {
+        status = 401;
+        body = { code: "unauthorized", message: "signed out" };
+      } else
+        body = {
+          access_token: "test",
+          access_expires_at: "2026-11-12T00:00:00Z",
+          user: current(),
+        };
+    } else if (path === "/auth/logout" && switchUser) {
+      session = "out";
+      status = 204;
+      body = undefined;
+    } else if (path === "/auth/login" && switchUser) {
+      session = "second";
       body = {
-        access_token: "test",
+        access_token: "test-2",
         access_expires_at: "2026-11-12T00:00:00Z",
-        user,
+        user: otherUser,
       };
-    else if (path === "/me") body = user;
+    } else if (path === "/me") body = current();
     else if (path === "/me/password" || path === "/sessions/revoke-others") {
       status = 204;
       body = undefined;
@@ -354,6 +380,11 @@ async function mockScheduled(
       scheduled = [...scheduled, created];
       status = 201;
       body = created;
+    } else if (path === "/scheduled-messages" && session === "second") {
+      // The second person's list never arrives: whatever the page shows
+      // can only come from what the tab kept.
+      requests.push({ method, path: "second:" + path, body: null });
+      return;
     } else if (path === "/scheduled-messages") {
       const filter = url.searchParams.get("chat_id");
       body = {
@@ -486,6 +517,14 @@ async function openChat(page: Page) {
   await expect(
     page.locator(".message-feed").getByText("Макеты готовы"),
   ).toBeVisible();
+}
+
+/** Moves inside the single-page app without reloading it. */
+async function spaNavigate(page: Page, to: string) {
+  await page.evaluate((path) => {
+    window.history.pushState({}, "", path);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }, to);
 }
 
 /** The arrow next to send on desktop, a long press on send on phones. */
@@ -889,4 +928,114 @@ test("security actions warn that pending messages will stop", async ({
       api.requests.some((item) => item.path === "/sessions/revoke-others"),
     )
     .toBe(true);
+});
+
+test("a message stopped by a security event is read before it goes again", async ({
+  page,
+}) => {
+  const stopped = record(6, {
+    body: "Переведите 300 000 ₽ по новым реквизитам до вечера",
+    status: "failed",
+    failure_reason: "security_reset",
+    send_at: "2026-11-11T05:00:00Z",
+    failed_at: "2026-11-11T05:00:02Z",
+    version: 2,
+  });
+  const api = await mockScheduled(page, {
+    scheduled: [...fixtures(), stopped],
+  });
+  await page.goto("/scheduled");
+  const card = page.locator(".scheduled-card--failed", {
+    hasText: "Переведите 300 000",
+  });
+  await expect(card).toContainText("возможно, запланировали не вы");
+  const sendNow = card.getByRole("button", { name: "Отправить сейчас" });
+  // Not the main action here: an ordinary failure keeps the primary button.
+  await expect(sendNow).not.toHaveClass(/ui-button--primary/);
+  await expect(
+    page
+      .locator(".scheduled-card--failed", { hasText: "Отчёт за неделю" })
+      .getByRole("button", { name: "Отправить сейчас" }),
+  ).toHaveClass(/ui-button--primary/);
+
+  await sendNow.click();
+  const check = page.getByRole("dialog", { name: "Проверьте сообщение" });
+  await expect(check).toContainText(
+    "Сообщение остановлено после смены пароля или отключения устройства. Возможно, его запланировали не вы — проверьте текст.",
+  );
+  await expect(check.locator("blockquote")).toHaveText(
+    "Переведите 300 000 ₽ по новым реквизитам до вечера",
+  );
+  await expect(page).toHaveScreenshot("scheduled-verify.png", shot);
+  await check.getByRole("button", { name: "Отмена" }).click();
+  expect(api.requests.some((item) => item.path.endsWith("/send"))).toBe(false);
+
+  // Moving it asks first too, then opens the time picker.
+  await card.getByRole("button", { name: "Время" }).click();
+  await check.getByRole("button", { name: "Выбрать время" }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Перенести отправку" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  expect(api.requests.some((item) => item.method === "PATCH")).toBe(false);
+
+  await sendNow.click();
+  await check.getByRole("button", { name: "Отправить сейчас" }).click();
+  await expect(page.getByText("Сообщение отправлено")).toBeVisible();
+  expect(
+    api.requests.filter((item) => item.path.endsWith("/send")),
+  ).toHaveLength(1);
+});
+
+test("the next person in the tab never sees the previous one's scheduled messages", async ({
+  page,
+}) => {
+  test.skip(isPhone(), "sign-out lives in the More page on phones");
+  const api = await mockScheduled(page, { switchUser: true });
+  await openChat(page);
+  // Anna has a message waiting here, failures in the sidebar and warnings.
+  await expect(page.locator(".scheduled-bar")).toBeVisible();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Основная навигация" })
+      .getByRole("button", { name: "Отложенные" }),
+  ).toContainText("2");
+
+  await page.getByRole("button", { name: /Меню пространства/ }).click();
+  await page.getByRole("menuitem", { name: "Выйти" }).click();
+  await page.getByLabel("Почта").fill("boris@example.com");
+  await page.getByLabel("Пароль", { exact: true }).fill("correct horse battery");
+  await page.getByRole("button", { name: "Войти" }).click();
+
+  // Everything below navigates inside the app: a reload would empty the
+  // cache by itself and prove nothing.
+  await expect(page.getByRole("button", { name: "Борис" })).toBeVisible();
+  await spaNavigate(page, `/chat/${chatID}`);
+  await expect(
+    page.locator(".message-feed").getByText("Макеты готовы"),
+  ).toBeVisible();
+  await expect
+    .poll(() =>
+      api.requests.some((item) => item.path === "second:/scheduled-messages"),
+    )
+    .toBe(true);
+  await expect(page.locator(".scheduled-bar")).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("navigation", { name: "Основная навигация" })
+      .getByRole("button", { name: "Отложенные" }),
+  ).not.toContainText("2");
+  await spaNavigate(page, "/scheduled");
+  await expect(
+    page.getByRole("heading", { name: "Отложенные", level: 1 }),
+  ).toBeVisible();
+  await expect(page.locator(".scheduled-card")).toHaveCount(0);
+  await expect(page.getByText("Отчёт за неделю")).toHaveCount(0);
+  await spaNavigate(page, "/settings/security");
+  await expect(
+    page.getByRole("button", { name: "Выйти на остальных устройствах" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/отложенн\S* сообщени\S* не будут отправлены/),
+  ).toHaveCount(0);
 });

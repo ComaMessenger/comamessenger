@@ -78,7 +78,7 @@ export function MorePage() {
     staleTime: 60_000,
   });
   const isAdmin = user.role !== "member";
-  const scheduled = useScheduledMessages(api);
+  const scheduled = useScheduledMessages(api, user.id);
   const failedScheduled = (scheduled.data ?? []).filter(
     (item) => item.status === "failed",
   ).length;

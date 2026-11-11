@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { APIError } from "./api";
 import {
   failureReasonKey,
+  needsAuthorCheck,
   notRetryableReason,
   fromLocalInputValue,
   groupScheduled,
@@ -326,5 +327,24 @@ describe("notRetryableReason", () => {
       notRetryableReason(new APIError(409, "version_conflict", "no")),
     ).toBeNull();
     expect(notRetryableReason(new Error("offline"))).toBeNull();
+  });
+});
+
+describe("needsAuthorCheck", () => {
+  it("asks to check messages stopped by a security event only", () => {
+    const failed = (failure_reason: string) =>
+      ({ status: "failed", failure_reason }) as Pick<
+        ScheduledMessage,
+        "status" | "failure_reason"
+      >;
+    expect(needsAuthorCheck(failed("security_reset"))).toBe(true);
+    expect(needsAuthorCheck(failed("session_revoked"))).toBe(true);
+    for (const reason of scheduledFailureReasons.filter(
+      (item) => item !== "security_reset" && item !== "session_revoked",
+    ))
+      expect(needsAuthorCheck(failed(reason)), reason).toBe(false);
+    expect(
+      needsAuthorCheck({ status: "pending", failure_reason: "security_reset" }),
+    ).toBe(false);
   });
 });

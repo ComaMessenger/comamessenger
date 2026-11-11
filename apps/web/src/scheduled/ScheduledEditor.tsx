@@ -47,7 +47,7 @@ export function ScheduledEditor({
   onClose(): void;
 }) {
   const { t } = useTranslation();
-  const { api, store } = useMessenger();
+  const { api, user, store } = useMessenger();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const presence = useStore(store, (state) => state.presence);
@@ -114,7 +114,7 @@ export function ScheduledEditor({
     setError("");
     try {
       const record = await api.updateScheduledMessage(base.id, input);
-      storeScheduled(queryClient, record);
+      storeScheduled(queryClient, user.id, record);
       uploads.reset();
       onClose();
     } catch (cause) {
@@ -122,7 +122,7 @@ export function ScheduledEditor({
         // Read the newer version and keep the edits on top of it.
         try {
           const fresh = await api.scheduledMessage(base.id);
-          storeScheduled(queryClient, fresh);
+          storeScheduled(queryClient, user.id, fresh);
           setBase(fresh);
           setConflict(true);
         } catch (reload) {
@@ -141,8 +141,11 @@ export function ScheduledEditor({
 
   function closeAsGone(cause: unknown) {
     if (cause instanceof APIError && cause.status === 404)
-      forgetScheduled(queryClient, base.id);
-    else void queryClient.invalidateQueries({ queryKey: scheduledQueryKey });
+      forgetScheduled(queryClient, user.id, base.id);
+    else
+      void queryClient.invalidateQueries({
+        queryKey: scheduledQueryKey(user.id),
+      });
     toast({ message: t("scheduledClosed"), tone: "danger" });
     onClose();
   }

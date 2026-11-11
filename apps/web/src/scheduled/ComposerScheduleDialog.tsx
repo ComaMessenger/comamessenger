@@ -29,7 +29,7 @@ export function ComposerScheduleDialog({
   onClose(): void;
 }) {
   const { t } = useTranslation();
-  const { api } = useMessenger();
+  const { api, user } = useMessenger();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [pending, setPending] = useState(false);
@@ -51,7 +51,7 @@ export function ComposerScheduleDialog({
         send_at: at.toISOString(),
         silent,
       });
-      storeScheduled(queryClient, record);
+      storeScheduled(queryClient, user.id, record);
       onScheduled();
       toast({
         message: t("scheduleCreated", {

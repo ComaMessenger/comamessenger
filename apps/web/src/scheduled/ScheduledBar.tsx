@@ -12,8 +12,8 @@ import { useScheduledMessages } from "./useScheduled";
  */
 export function ScheduledBar({ chatID }: { chatID: string }) {
   const { t } = useTranslation();
-  const { api, navigate } = useMessenger();
-  const query = useScheduledMessages(api);
+  const { api, user, navigate } = useMessenger();
+  const query = useScheduledMessages(api, user.id);
   const { count, next } = pendingSummary(query.data ?? [], chatID);
   if (!count || !next) return null;
   return (

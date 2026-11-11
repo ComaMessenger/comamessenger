@@ -10,6 +10,7 @@ import {
   Paperclip,
   Pencil,
   Send,
+  ShieldAlert,
   Trash2,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -17,6 +18,7 @@ import {
   APIError,
   groupScheduled,
   messagePlainText,
+  needsAuthorCheck,
   type ScheduledMessage,
 } from "@comamessenger/core";
 import { Button, Chip, EmptyState, InlineError, SkeletonRow, cx } from "../ui";
@@ -50,7 +52,7 @@ export function ScheduledPage() {
   const { api, user, store, navigate } = useMessenger();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const query = useScheduledMessages(api);
+  const query = useScheduledMessages(api, user.id);
   const chats = useStore(store, (state) => state.chats);
   const [chatFilter, setChatFilter] = useState<string | null>(chatFromURL);
   const [now, setNow] = useState(() => new Date());
@@ -58,6 +60,12 @@ export function ScheduledPage() {
   const [moving, setMoving] = useState<ScheduledMessage | null>(null);
   const [moveError, setMoveError] = useState("");
   const [deleting, setDeleting] = useState<ScheduledMessage | null>(null);
+  // A message stopped by a security event may have been scheduled by
+  // someone else: the owner reads it before sending it or moving it.
+  const [verifying, setVerifying] = useState<{
+    item: ScheduledMessage;
+    action: "send" | "move";
+  } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
   // "Today" and "tomorrow" move with the clock.
@@ -93,8 +101,11 @@ export function ScheduledPage() {
 
   function gone(cause: unknown, id: string) {
     if (cause instanceof APIError && cause.status === 404)
-      forgetScheduled(queryClient, id);
-    else void queryClient.invalidateQueries({ queryKey: scheduledQueryKey });
+      forgetScheduled(queryClient, user.id, id);
+    else
+      void queryClient.invalidateQueries({
+        queryKey: scheduledQueryKey(user.id),
+      });
   }
 
   async function sendNow(item: ScheduledMessage) {
@@ -102,10 +113,10 @@ export function ScheduledPage() {
     try {
       const record = await api.sendScheduledMessageNow(item.id);
       if (record.status === "sent") {
-        forgetScheduled(queryClient, item.id);
+        forgetScheduled(queryClient, user.id, item.id);
         toast({ message: t("scheduledSent") });
       } else {
-        storeScheduled(queryClient, record);
+        storeScheduled(queryClient, user.id, record);
         toast({
           tone: "danger",
           message: t("scheduledSendFailed", {
@@ -130,7 +141,7 @@ export function ScheduledPage() {
         send_at: at.toISOString(),
         ...(silent !== item.silent ? { silent } : {}),
       });
-      storeScheduled(queryClient, record);
+      storeScheduled(queryClient, user.id, record);
       setMoving(null);
       toast({
         message: t("scheduleCreated", {
@@ -143,7 +154,7 @@ export function ScheduledPage() {
         // person confirm again.
         const fresh = await api.scheduledMessage(item.id).catch(() => null);
         if (fresh) {
-          storeScheduled(queryClient, fresh);
+          storeScheduled(queryClient, user.id, fresh);
           setMoving(fresh);
           setMoveError(t("scheduledEditorConflict"));
         } else {
@@ -161,7 +172,7 @@ export function ScheduledPage() {
     setBusy(item.id);
     try {
       await api.deleteScheduledMessage(item.id);
-      forgetScheduled(queryClient, item.id);
+      forgetScheduled(queryClient, user.id, item.id);
       toast({ message: t("scheduledDeleted") });
     } catch (cause) {
       gone(cause, item.id);
@@ -190,9 +201,13 @@ export function ScheduledPage() {
       onEdit={() => setEditing(item)}
       onMove={() => {
         setMoveError("");
-        setMoving(item);
+        if (needsAuthorCheck(item)) setVerifying({ item, action: "move" });
+        else setMoving(item);
       }}
-      onSendNow={() => void sendNow(item)}
+      onSendNow={() => {
+        if (needsAuthorCheck(item)) setVerifying({ item, action: "send" });
+        else void sendNow(item);
+      }}
       onDelete={() => setDeleting(item)}
     />
   );
@@ -306,6 +321,40 @@ export function ScheduledPage() {
           onClose={() => setMoving(null)}
         />
       )}
+      {verifying && (
+        <ConfirmDialog
+          title={t("scheduledVerifyTitle")}
+          description={t("scheduledVerifyText")}
+          confirmLabel={
+            verifying.action === "send"
+              ? t("scheduledSendNow")
+              : t("scheduledVerifyMove")
+          }
+          icon={<ShieldAlert />}
+          onConfirm={() => {
+            const { item, action } = verifying;
+            setVerifying(null);
+            if (action === "send") void sendNow(item);
+            else setMoving(item);
+          }}
+          onClose={() => setVerifying(null)}
+        >
+          <blockquote className="scheduled-verify__text">
+            {messagePlainText(verifying.item.body).trim() ||
+              t("scheduledEmptyBody")}
+          </blockquote>
+          {verifying.item.files.length > 0 && (
+            <ul className="scheduled-card__files">
+              {verifying.item.files.map((file) => (
+                <li key={file.id}>
+                  <Paperclip aria-hidden="true" />
+                  <span className="truncate">{file.name}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </ConfirmDialog>
+      )}
       {deleting && (
         <ConfirmDialog
           danger
@@ -349,6 +398,7 @@ function ScheduledCard({
 }) {
   const { t } = useTranslation();
   const failed = item.status === "failed";
+  const suspect = needsAuthorCheck(item);
   const text = messagePlainText(item.body).trim();
   const titleID = `scheduled-${item.id}`;
   return (
@@ -408,6 +458,12 @@ function ScheduledCard({
       {failed && (
         <p className="scheduled-card__reason">
           {reasonText(item.failure_reason)}
+          {suspect && (
+            <span className="scheduled-card__suspect">
+              {" · "}
+              {t("scheduledVerifyHint")}
+            </span>
+          )}
           <span className="scheduled-card__was">
             {" · "}
             {formatScheduledWhen(item.send_at)}
@@ -447,7 +503,7 @@ function ScheduledCard({
         </Button>
         <Button
           size="sm"
-          variant={failed ? "primary" : "ghost"}
+          variant={failed && !suspect ? "primary" : "ghost"}
           pending={busy}
           onClick={onSendNow}
         >
