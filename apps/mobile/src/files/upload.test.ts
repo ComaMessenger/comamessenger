@@ -71,7 +71,7 @@ const local = {
   mime: "audio/mp4",
   size: 120,
 };
-const busy = () => new APIError(503, "storage_unavailable", "busy", {}, 5);
+const busy = () => new APIError(503, "voice_check_busy", "busy", {}, 5);
 const sleep = vi.fn().mockResolvedValue(undefined);
 
 describe("uploadFile", () => {
@@ -85,7 +85,9 @@ describe("uploadFile", () => {
     const complete = vi
       .fn()
       .mockRejectedValueOnce(busy())
-      .mockRejectedValueOnce(new APIError(429, "rate_limited", "", {}, 2))
+      .mockRejectedValueOnce(
+        new APIError(429, "voice_check_in_progress", "", {}, 2),
+      )
       .mockResolvedValue({ id: "voice" });
     const api = fakeAPI("presigned", complete);
     await expect(

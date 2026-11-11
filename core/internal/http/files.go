@@ -267,6 +267,12 @@ func (h *identityHandlers) fileError(w standardhttp.ResponseWriter, r *standardh
 		h.writeError(w, r, standardhttp.StatusForbidden, "forbidden", "File access is forbidden.")
 	case errors.Is(err, files.ErrConflict):
 		h.writeError(w, r, standardhttp.StatusConflict, "file_conflict", "File upload is not in the required state.")
+	case errors.Is(err, files.ErrTooManyChecks):
+		w.Header().Set("Retry-After", "5")
+		h.writeError(w, r, standardhttp.StatusTooManyRequests, "voice_check_in_progress", "Another voice message of yours is being checked. Retry in a few seconds.")
+	case errors.Is(err, files.ErrBusy):
+		w.Header().Set("Retry-After", "5")
+		h.writeError(w, r, standardhttp.StatusServiceUnavailable, "voice_check_busy", "Voice messages are being checked for other users. Retry in a few seconds.")
 	case errors.Is(err, files.ErrUnavailable):
 		w.Header().Set("Retry-After", "5")
 		h.writeError(w, r, standardhttp.StatusServiceUnavailable, "storage_unavailable", "File storage is temporarily unavailable. The upload is kept; complete it again.")

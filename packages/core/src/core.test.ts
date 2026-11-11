@@ -795,6 +795,26 @@ describe("chat list helpers", () => {
     });
   });
 
+  it("names a voice message with its duration", () => {
+    const last = {
+      actor_id: "other",
+      actor_display_name: "Anna",
+      body: "",
+      deleted: false,
+      voice_duration_ms: 14_200,
+    } as Chat["last_message"];
+    expect(
+      chatPreview(chat({ kind: "direct", last_message: last }), "me", {
+        ...labels,
+        voice: "Voice message",
+      }),
+    ).toEqual({ sender: "", text: "Voice message · 0:14" });
+    expect(
+      chatPreview(chat({ kind: "direct", last_message: last }), "me", labels)
+        .text,
+    ).toBe("Attachment · 0:14");
+  });
+
   it("picks the chat image for groups and the peer avatar for direct chats", () => {
     expect(chatAvatarSource(chat({ avatar_version: 3 }))).toEqual({
       chatID: "c",

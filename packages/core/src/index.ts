@@ -10,4 +10,5 @@ export * from "./outbox";
 export * from "./realtime";
 export * from "./store";
 export * from "./types";
+export * from "./voice";
 export * from "./uploads";

@@ -12,7 +12,7 @@ import {
 import type { FileMetadata } from "./types";
 
 const busy = (seconds?: number) =>
-  new APIError(503, "storage_unavailable", "busy", {}, seconds);
+  new APIError(503, "voice_check_busy", "busy", {}, seconds);
 const file = { id: "f" } as FileMetadata;
 
 describe("upload retries", () => {
@@ -26,9 +26,9 @@ describe("upload retries", () => {
 
   it("classifies temporary failures", () => {
     expect(isRetryableUploadError(busy())).toBe(true);
-    expect(isRetryableUploadError(new APIError(429, "rate_limited", ""))).toBe(
-      true,
-    );
+    expect(
+      isRetryableUploadError(new APIError(429, "voice_check_in_progress", "")),
+    ).toBe(true);
     expect(isRetryableUploadError(new TypeError("Failed to fetch"))).toBe(true);
     expect(isRetryableUploadError(new UploadHTTPError(503))).toBe(true);
     expect(
@@ -43,7 +43,9 @@ describe("upload retries", () => {
     const complete = vi
       .fn()
       .mockRejectedValueOnce(busy(5))
-      .mockRejectedValueOnce(new APIError(429, "rate_limited", "", {}, 2))
+      .mockRejectedValueOnce(
+        new APIError(429, "voice_check_in_progress", "", {}, 2),
+      )
       .mockResolvedValue(file);
     const sleep = vi.fn().mockResolvedValue(undefined);
     await expect(
@@ -125,7 +127,7 @@ describe("APIError Retry-After", () => {
   it("carries the header of a failed request", async () => {
     const fetch = vi.fn().mockResolvedValue(
       new Response(
-        JSON.stringify({ code: "storage_unavailable", message: "busy" }),
+        JSON.stringify({ code: "voice_check_busy", message: "busy" }),
         {
           status: 503,
           headers: { "Retry-After": "5", "Content-Type": "application/json" },
