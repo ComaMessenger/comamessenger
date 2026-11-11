@@ -4,8 +4,10 @@ import (
 	"errors"
 	standardhttp "net/http"
 
+	"github.com/comamessenger/comamessenger/core/internal/api"
 	"github.com/comamessenger/comamessenger/core/internal/scheduled"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 // scheduledRoutes serve a person's own scheduled messages. Every route is
@@ -104,6 +106,17 @@ func (h *identityHandlers) sendScheduledMessageNow(w standardhttp.ResponseWriter
 
 func (h *identityHandlers) scheduledError(w standardhttp.ResponseWriter, r *standardhttp.Request, err error) {
 	switch {
+	case errors.Is(err, scheduled.ErrNotRetryable):
+		var refusal *scheduled.NotRetryableError
+		reason := ""
+		if errors.As(err, &refusal) {
+			reason = refusal.Reason
+		}
+		details := map[string]any{"reason": reason}
+		writeJSON(h.logger, w, standardhttp.StatusConflict, api.Error{
+			Code: "scheduled_message_not_retryable", Message: "The message cannot be sent again: the reason it failed still holds.",
+			RequestId: middleware.GetReqID(r.Context()), Details: &details,
+		})
 	case errors.Is(err, scheduled.ErrForbidden):
 		h.writeError(w, r, standardhttp.StatusForbidden, "forbidden", "Only a signed-in person with the right to write here may schedule messages.")
 	case errors.Is(err, scheduled.ErrNotFound):

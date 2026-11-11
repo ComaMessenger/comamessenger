@@ -35,6 +35,10 @@ import { useMessenger } from "../shell/MessengerContext";
 import { Composer } from "../composer/Composer";
 import { MessageRow } from "./MessageRow";
 import { AgentStreamRow } from "./AgentStreamRow";
+import {
+  ComposerScheduleDialog,
+  type ScheduleDraft,
+} from "../scheduled/ComposerScheduleDialog";
 
 const emptyMessages: ClientMessage[] = [];
 
@@ -79,6 +83,7 @@ export function ThreadPanel({
   });
   const [followOverride, setFollowOverride] = useState<boolean | null>(null);
   const [body, setBody] = useState(() => getLocalDraft(chat.id, rootID));
+  const [scheduling, setScheduling] = useState<ScheduleDraft | null>(null);
   const [reply, setReply] = useState<Message | null>(null);
 
   const following =
@@ -131,20 +136,32 @@ export function ThreadPanel({
       setFollowOverride(!next);
     }
   }
-  async function send() {
+  // The thread composer takes no files, so a scheduled reply is text only.
+  function composed(): ScheduleDraft | null {
     const content = body.trim();
-    if (!content) return;
-    setBody("");
-    setReply(null);
-    setLocalDraft(chat.id, rootID, "");
-    coordinator.typing(chat.id, false, rootID);
-    await outbox.enqueue(chat.id, {
-      client_msg_id: crypto.randomUUID(),
+    if (!content) return null;
+    return {
       body: content,
       body_format: "markdown",
       reply_to_id: reply?.id,
       thread_root_id: rootID,
       mentioned_actor_ids: resolvedMentionActorIDs(content, members, presence),
+    };
+  }
+  function clearComposer() {
+    setBody("");
+    setReply(null);
+    setLocalDraft(chat.id, rootID, "");
+    coordinator.typing(chat.id, false, rootID);
+  }
+  async function send(silent = false) {
+    const draft = composed();
+    if (!draft) return;
+    clearComposer();
+    await outbox.enqueue(chat.id, {
+      client_msg_id: crypto.randomUUID(),
+      ...draft,
+      ...(silent ? { silent: true } : {}),
     });
   }
   const refresh = () => void query.refetch();
@@ -374,6 +391,8 @@ export function ThreadPanel({
         }}
         onBlur={() => void syncDraft(api, chat.id, rootID, body)}
         onSend={() => void send()}
+        onSendSilent={() => void send(true)}
+        onSchedule={() => setScheduling(composed())}
         reply={reply}
         replyAuthor={
           members.find((item) => item.actor_id === reply?.actor_id)
@@ -383,6 +402,14 @@ export function ThreadPanel({
         readonly={isReadOnly(chat)}
         placeholder={t("threadReplyPlaceholder")}
       />
+      {scheduling && (
+        <ComposerScheduleDialog
+          chatID={chat.id}
+          draft={scheduling}
+          onScheduled={clearComposer}
+          onClose={() => setScheduling(null)}
+        />
+      )}
     </aside>
   );
 }

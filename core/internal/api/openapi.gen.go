@@ -1711,64 +1711,65 @@ func (e DurableEventTypeV1) Valid() bool {
 
 // Defines values for ErrorCode.
 const (
-	ErrorCodeActionClosed                ErrorCode = "action_closed"
-	ErrorCodeActionConflict              ErrorCode = "action_conflict"
-	ErrorCodeAgentBudgetExceeded         ErrorCode = "agent_budget_exceeded"
-	ErrorCodeAgentConfigurationNotFound  ErrorCode = "agent_configuration_not_found"
-	ErrorCodeAgentConfirmationLoosened   ErrorCode = "agent_confirmation_loosened"
-	ErrorCodeAgentConflict               ErrorCode = "agent_conflict"
-	ErrorCodeAgentNotFound               ErrorCode = "agent_not_found"
-	ErrorCodeAgentNotReady               ErrorCode = "agent_not_ready"
-	ErrorCodeAgentTriggerConflict        ErrorCode = "agent_trigger_conflict"
-	ErrorCodeAgentTriggerNotFound        ErrorCode = "agent_trigger_not_found"
-	ErrorCodeAlreadyBootstrapped         ErrorCode = "already_bootstrapped"
-	ErrorCodeArchitectBudgetExceeded     ErrorCode = "architect_budget_exceeded"
-	ErrorCodeArchitectBusy               ErrorCode = "architect_busy"
-	ErrorCodeArchitectConnectionRequired ErrorCode = "architect_connection_required"
-	ErrorCodeArchitectModelError         ErrorCode = "architect_model_error"
-	ErrorCodeArchitectSessionExpired     ErrorCode = "architect_session_expired"
-	ErrorCodeArchitectSessionNotFound    ErrorCode = "architect_session_not_found"
-	ErrorCodeChatConflict                ErrorCode = "chat_conflict"
-	ErrorCodeChatNotFound                ErrorCode = "chat_not_found"
-	ErrorCodeEmailTaken                  ErrorCode = "email_taken"
-	ErrorCodeFileConflict                ErrorCode = "file_conflict"
-	ErrorCodeFileNotFound                ErrorCode = "file_not_found"
-	ErrorCodeForbidden                   ErrorCode = "forbidden"
-	ErrorCodeIdempotencyConflict         ErrorCode = "idempotency_conflict"
-	ErrorCodeIntegrationInUse            ErrorCode = "integration_in_use"
-	ErrorCodeIntegrationUsageChanged     ErrorCode = "integration_usage_changed"
-	ErrorCodeInternalError               ErrorCode = "internal_error"
-	ErrorCodeInvalidCredentials          ErrorCode = "invalid_credentials"
-	ErrorCodeInvalidRefreshToken         ErrorCode = "invalid_refresh_token"
-	ErrorCodeInvalidRequest              ErrorCode = "invalid_request"
-	ErrorCodeInvitationInvalid           ErrorCode = "invitation_invalid"
-	ErrorCodeKnowledgeConflict           ErrorCode = "knowledge_conflict"
-	ErrorCodeKnowledgeNotFound           ErrorCode = "knowledge_not_found"
-	ErrorCodeLimitReached                ErrorCode = "limit_reached"
-	ErrorCodeMessageNotFound             ErrorCode = "message_not_found"
-	ErrorCodeOriginNotAllowed            ErrorCode = "origin_not_allowed"
-	ErrorCodePasswordChangeRequired      ErrorCode = "password_change_required"
-	ErrorCodePayloadTooLarge             ErrorCode = "payload_too_large"
-	ErrorCodePushUnavailable             ErrorCode = "push_unavailable"
-	ErrorCodeRateLimited                 ErrorCode = "rate_limited"
-	ErrorCodeReauthenticationFailed      ErrorCode = "reauthentication_failed"
-	ErrorCodeScheduledMessageClosed      ErrorCode = "scheduled_message_closed"
-	ErrorCodeScheduledMessageNotFound    ErrorCode = "scheduled_message_not_found"
-	ErrorCodeServiceNotReady             ErrorCode = "service_not_ready"
-	ErrorCodeSessionNotFound             ErrorCode = "session_not_found"
-	ErrorCodeSmtpNotConfigured           ErrorCode = "smtp_not_configured"
-	ErrorCodeStorageFull                 ErrorCode = "storage_full"
-	ErrorCodeStorageUnavailable          ErrorCode = "storage_unavailable"
-	ErrorCodeTokenInvalid                ErrorCode = "token_invalid"
-	ErrorCodeUnauthorized                ErrorCode = "unauthorized"
-	ErrorCodeUnsupportedFormat           ErrorCode = "unsupported_format"
-	ErrorCodeValidationFailed            ErrorCode = "validation_failed"
-	ErrorCodeVersionConflict             ErrorCode = "version_conflict"
-	ErrorCodeVoiceCheckBusy              ErrorCode = "voice_check_busy"
-	ErrorCodeVoiceCheckInProgress        ErrorCode = "voice_check_in_progress"
-	ErrorCodeWebhookNotFound             ErrorCode = "webhook_not_found"
-	ErrorCodeWebhookRejected             ErrorCode = "webhook_rejected"
-	ErrorCodeWorkspaceNotFound           ErrorCode = "workspace_not_found"
+	ErrorCodeActionClosed                 ErrorCode = "action_closed"
+	ErrorCodeActionConflict               ErrorCode = "action_conflict"
+	ErrorCodeAgentBudgetExceeded          ErrorCode = "agent_budget_exceeded"
+	ErrorCodeAgentConfigurationNotFound   ErrorCode = "agent_configuration_not_found"
+	ErrorCodeAgentConfirmationLoosened    ErrorCode = "agent_confirmation_loosened"
+	ErrorCodeAgentConflict                ErrorCode = "agent_conflict"
+	ErrorCodeAgentNotFound                ErrorCode = "agent_not_found"
+	ErrorCodeAgentNotReady                ErrorCode = "agent_not_ready"
+	ErrorCodeAgentTriggerConflict         ErrorCode = "agent_trigger_conflict"
+	ErrorCodeAgentTriggerNotFound         ErrorCode = "agent_trigger_not_found"
+	ErrorCodeAlreadyBootstrapped          ErrorCode = "already_bootstrapped"
+	ErrorCodeArchitectBudgetExceeded      ErrorCode = "architect_budget_exceeded"
+	ErrorCodeArchitectBusy                ErrorCode = "architect_busy"
+	ErrorCodeArchitectConnectionRequired  ErrorCode = "architect_connection_required"
+	ErrorCodeArchitectModelError          ErrorCode = "architect_model_error"
+	ErrorCodeArchitectSessionExpired      ErrorCode = "architect_session_expired"
+	ErrorCodeArchitectSessionNotFound     ErrorCode = "architect_session_not_found"
+	ErrorCodeChatConflict                 ErrorCode = "chat_conflict"
+	ErrorCodeChatNotFound                 ErrorCode = "chat_not_found"
+	ErrorCodeEmailTaken                   ErrorCode = "email_taken"
+	ErrorCodeFileConflict                 ErrorCode = "file_conflict"
+	ErrorCodeFileNotFound                 ErrorCode = "file_not_found"
+	ErrorCodeForbidden                    ErrorCode = "forbidden"
+	ErrorCodeIdempotencyConflict          ErrorCode = "idempotency_conflict"
+	ErrorCodeIntegrationInUse             ErrorCode = "integration_in_use"
+	ErrorCodeIntegrationUsageChanged      ErrorCode = "integration_usage_changed"
+	ErrorCodeInternalError                ErrorCode = "internal_error"
+	ErrorCodeInvalidCredentials           ErrorCode = "invalid_credentials"
+	ErrorCodeInvalidRefreshToken          ErrorCode = "invalid_refresh_token"
+	ErrorCodeInvalidRequest               ErrorCode = "invalid_request"
+	ErrorCodeInvitationInvalid            ErrorCode = "invitation_invalid"
+	ErrorCodeKnowledgeConflict            ErrorCode = "knowledge_conflict"
+	ErrorCodeKnowledgeNotFound            ErrorCode = "knowledge_not_found"
+	ErrorCodeLimitReached                 ErrorCode = "limit_reached"
+	ErrorCodeMessageNotFound              ErrorCode = "message_not_found"
+	ErrorCodeOriginNotAllowed             ErrorCode = "origin_not_allowed"
+	ErrorCodePasswordChangeRequired       ErrorCode = "password_change_required"
+	ErrorCodePayloadTooLarge              ErrorCode = "payload_too_large"
+	ErrorCodePushUnavailable              ErrorCode = "push_unavailable"
+	ErrorCodeRateLimited                  ErrorCode = "rate_limited"
+	ErrorCodeReauthenticationFailed       ErrorCode = "reauthentication_failed"
+	ErrorCodeScheduledMessageClosed       ErrorCode = "scheduled_message_closed"
+	ErrorCodeScheduledMessageNotFound     ErrorCode = "scheduled_message_not_found"
+	ErrorCodeScheduledMessageNotRetryable ErrorCode = "scheduled_message_not_retryable"
+	ErrorCodeServiceNotReady              ErrorCode = "service_not_ready"
+	ErrorCodeSessionNotFound              ErrorCode = "session_not_found"
+	ErrorCodeSmtpNotConfigured            ErrorCode = "smtp_not_configured"
+	ErrorCodeStorageFull                  ErrorCode = "storage_full"
+	ErrorCodeStorageUnavailable           ErrorCode = "storage_unavailable"
+	ErrorCodeTokenInvalid                 ErrorCode = "token_invalid"
+	ErrorCodeUnauthorized                 ErrorCode = "unauthorized"
+	ErrorCodeUnsupportedFormat            ErrorCode = "unsupported_format"
+	ErrorCodeValidationFailed             ErrorCode = "validation_failed"
+	ErrorCodeVersionConflict              ErrorCode = "version_conflict"
+	ErrorCodeVoiceCheckBusy               ErrorCode = "voice_check_busy"
+	ErrorCodeVoiceCheckInProgress         ErrorCode = "voice_check_in_progress"
+	ErrorCodeWebhookNotFound              ErrorCode = "webhook_not_found"
+	ErrorCodeWebhookRejected              ErrorCode = "webhook_rejected"
+	ErrorCodeWorkspaceNotFound            ErrorCode = "workspace_not_found"
 )
 
 // Valid indicates whether the value is a known member of the ErrorCode enum.
@@ -1859,6 +1860,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeScheduledMessageClosed:
 		return true
 	case ErrorCodeScheduledMessageNotFound:
+		return true
+	case ErrorCodeScheduledMessageNotRetryable:
 		return true
 	case ErrorCodeServiceNotReady:
 		return true
@@ -6597,7 +6600,10 @@ type ScheduledMessageEvent struct {
 	Id            openapi_types.UUID             `json:"id"`
 	SendAt        time.Time                      `json:"send_at"`
 	Status        ScheduledMessageEventStatus    `json:"status"`
-	Version       int                            `json:"version"`
+
+	// StoppedCount Present on the last failure event of a security stop that failed several messages at once: how many. The author gets one push for the whole stop.
+	StoppedCount *int `json:"stopped_count,omitempty"`
+	Version      int  `json:"version"`
 }
 
 // ScheduledMessageEventStatus defines model for ScheduledMessageEvent.Status.
@@ -7015,12 +7021,15 @@ type UpdateProfileRequest struct {
 
 // UpdateScheduledMessageRequest defines model for UpdateScheduledMessageRequest.
 type UpdateScheduledMessageRequest struct {
-	Body              *string                                  `json:"body,omitempty"`
-	BodyFormat        *UpdateScheduledMessageRequestBodyFormat `json:"body_format,omitempty"`
-	ExpectedVersion   int                                      `json:"expected_version"`
-	MentionedActorIds *[]openapi_types.UUID                    `json:"mentioned_actor_ids,omitempty"`
-	SendAt            *time.Time                               `json:"send_at,omitempty"`
-	Silent            *bool                                    `json:"silent,omitempty"`
+	Body            *string                                  `json:"body,omitempty"`
+	BodyFormat      *UpdateScheduledMessageRequestBodyFormat `json:"body_format,omitempty"`
+	ExpectedVersion int                                      `json:"expected_version"`
+
+	// FileIds Replaces the attachments: ready files uploaded by the current user and not attached to any other message. Files left out become unattached again and are cleaned up as usual.
+	FileIds           *[]openapi_types.UUID `json:"file_ids,omitempty"`
+	MentionedActorIds *[]openapi_types.UUID `json:"mentioned_actor_ids,omitempty"`
+	SendAt            *time.Time            `json:"send_at,omitempty"`
+	Silent            *bool                 `json:"silent,omitempty"`
 }
 
 // UpdateScheduledMessageRequestBodyFormat defines model for UpdateScheduledMessageRequest.BodyFormat.

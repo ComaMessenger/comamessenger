@@ -5,7 +5,12 @@ self.addEventListener("push", (event) => {
       body: payload.body || "New message",
       icon: "/notification-icon.png",
       badge: "/notification-badge.png",
-      tag: payload.chat_id ? `chat:${payload.chat_id}` : "coma",
+      // The server names a tag for notifications that replace each other
+      // (scheduled messages that failed); otherwise one per chat.
+      tag:
+        payload.tag || (payload.chat_id ? `chat:${payload.chat_id}` : "coma"),
+      // "Without sound": shown as usual, no sound or vibration.
+      silent: payload.silent === true,
       data: {
         url:
           payload.url ||

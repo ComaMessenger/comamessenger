@@ -10,6 +10,7 @@ import {
 } from "react";
 import {
   AtSign,
+  BellOff,
   ChevronDown,
   Clock3,
   Code2,
@@ -72,6 +73,8 @@ export function Composer({
   autoFocus = false,
   banner,
   commands = [],
+  onSchedule,
+  onSendSilent,
 }: {
   members: ChatMember[];
   presence?: PresenceMap;
@@ -94,6 +97,10 @@ export function Composer({
   banner?: ReactNode;
   /** Agent commands offered after typing "/" at the start of a message. */
   commands?: ChatCommand[];
+  /** "Send later…": opens the time picker for the current content. */
+  onSchedule?(): void;
+  /** "Send without sound". */
+  onSendSilent?(): void;
 }) {
   const { t } = useTranslation();
   const input = useRef<HTMLTextAreaElement>(null);
@@ -108,6 +115,8 @@ export function Composer({
   const [formatOpen, setFormatOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [sendMenuOpen, setSendMenuOpen] = useState(false);
+  // Phones have no arrow next to send: a long press opens the same menu.
+  const longPress = useRef<{ timer: number; fired: boolean } | null>(null);
   const [focused, setFocused] = useState(false);
   const [sendOnEnter, setSendOnEnter] = useState(
     () => localStorage.getItem(sendModeKey) !== "false",
@@ -198,15 +207,25 @@ export function Composer({
           );
           return;
         }
-        if (
-          (event.key === "Enter" && !event.shiftKey) ||
-          event.key === "Tab"
-        ) {
+        if ((event.key === "Enter" && !event.shiftKey) || event.key === "Tab") {
           event.preventDefault();
           insertCommand(commandMatches[activeCommand]!);
           return;
         }
       }
+    }
+    if (
+      event.key === "Enter" &&
+      (event.metaKey || event.ctrlKey) &&
+      (event.shiftKey || event.altKey) &&
+      !event.nativeEvent.isComposing
+    ) {
+      // ⌘/Ctrl+Shift+Enter: send later; ⌘/Ctrl+Alt+Enter: without sound.
+      event.preventDefault();
+      if (!canSend) return;
+      if (event.shiftKey) onSchedule?.();
+      else onSendSilent?.();
+      return;
     }
     const shouldSend = sendOnEnter ? !event.shiftKey : event.shiftKey;
     if (event.key === "Enter" && shouldSend && !event.nativeEvent.isComposing) {
@@ -448,9 +467,7 @@ export function Composer({
           aria-autocomplete={commands.length ? "list" : undefined}
           aria-expanded={commands.length ? showCommandMenu : undefined}
           aria-controls={
-            showCommandMenu && commandMatches.length
-              ? commandMenuID
-              : undefined
+            showCommandMenu && commandMatches.length ? commandMenuID : undefined
           }
           aria-activedescendant={
             showCommandMenu && commandMatches.length
@@ -555,13 +572,43 @@ export function Composer({
                 "composer__send",
                 canSend && "composer__send--active",
               )}
+              onContextMenu={(event) => {
+                // Right click on send offers the same menu as the arrow.
+                event.preventDefault();
+                setSendMenuOpen(true);
+                setEmojiOpen(false);
+                setAttachOpen(false);
+              }}
             >
               <button
                 type="button"
                 className="composer__send-main"
                 aria-label={t("send")}
+                aria-haspopup={onSchedule || onSendSilent ? "menu" : undefined}
                 disabled={!canSend}
-                onClick={onSend}
+                onPointerDown={(event) => {
+                  if (event.pointerType === "mouse") return;
+                  const state = { timer: 0, fired: false };
+                  state.timer = window.setTimeout(() => {
+                    state.fired = true;
+                    setSendMenuOpen(true);
+                  }, 450);
+                  longPress.current = state;
+                }}
+                onPointerUp={() => {
+                  if (longPress.current)
+                    window.clearTimeout(longPress.current.timer);
+                }}
+                onPointerCancel={() => {
+                  if (longPress.current)
+                    window.clearTimeout(longPress.current.timer);
+                }}
+                onClick={() => {
+                  const pressed = longPress.current;
+                  longPress.current = null;
+                  if (pressed?.fired) return;
+                  onSend();
+                }}
               >
                 <SendHorizontal aria-hidden="true" />
               </button>
@@ -629,7 +676,7 @@ export function Composer({
         <FloatingPopover
           anchorRef={sendMenuAnchor}
           placement="top-start"
-          width={220}
+          width={280}
           onDismiss={() => setSendMenuOpen(false)}
         >
           <Menu label={t("sendSettings")}>
@@ -645,10 +692,35 @@ export function Composer({
             >
               {t("composerShiftEnterHint")}
             </MenuItem>
-            <MenuDivider />
-            <MenuItem icon={<Clock3 />} disabled meta={t("comingLater")}>
-              {t("sendLater")}
-            </MenuItem>
+            {(onSchedule || onSendSilent) && <MenuDivider />}
+            {onSchedule && (
+              <MenuItem
+                icon={<Clock3 />}
+                disabled={!canSend}
+                meta={<ShortcutHint shift />}
+                aria-keyshortcuts="Control+Shift+Enter Meta+Shift+Enter"
+                onClick={() => {
+                  setSendMenuOpen(false);
+                  onSchedule();
+                }}
+              >
+                {t("scheduleSendLater")}
+              </MenuItem>
+            )}
+            {onSendSilent && (
+              <MenuItem
+                icon={<BellOff />}
+                disabled={!canSend}
+                meta={<ShortcutHint />}
+                aria-keyshortcuts="Control+Alt+Enter Meta+Alt+Enter"
+                onClick={() => {
+                  setSendMenuOpen(false);
+                  onSendSilent();
+                }}
+              >
+                {t("scheduleSendSilent")}
+              </MenuItem>
+            )}
           </Menu>
         </FloatingPopover>
       )}
@@ -733,5 +805,21 @@ export function Composer({
         </FloatingPopover>
       )}
     </div>
+  );
+}
+
+const isApple =
+  typeof navigator !== "undefined" &&
+  /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+
+/** ⌘⇧↵ / ⌘⌥↵ on Apple keyboards, Ctrl+Shift+Enter / Ctrl+Alt+Enter elsewhere. */
+function ShortcutHint({ shift = false }: { shift?: boolean }) {
+  const keys = isApple
+    ? ["⌘", shift ? "⇧" : "⌥", "↵"]
+    : ["Ctrl", shift ? "Shift" : "Alt", "Enter"];
+  return (
+    <kbd className="composer__shortcut" aria-hidden="true">
+      {keys.join(isApple ? "" : "+")}
+    </kbd>
   );
 }

@@ -272,6 +272,13 @@ func (s *Service) createTx(ctx context.Context, tx pgx.Tx, user identity.User, c
 	if err := validateFiles(ctx, tx, user, input.FileIDs); err != nil {
 		return Message{}, false, 0, err
 	}
+	// A file belongs to one message or one scheduled message. The delivery
+	// of a scheduled message attaches its own files and skips this.
+	if !input.scheduledDelivery {
+		if err := rejectScheduledFiles(ctx, tx, user.OrgID, input.FileIDs); err != nil {
+			return Message{}, false, 0, err
+		}
+	}
 	if input.Blocks != nil {
 		if provenance == nil {
 			return Message{}, false, 0, invalid("blocks are available only to agent messages")
@@ -1058,6 +1065,28 @@ func validateFiles(ctx context.Context, tx pgx.Tx, user identity.User, fileIDs [
 	// it as one player and list previews can name it.
 	if voices > 0 && count > 1 {
 		return fmt.Errorf("%w: a voice recording must be the only file of its message", ErrInvalid)
+	}
+	return nil
+}
+
+// rejectScheduledFiles refuses files waiting on a pending or failed
+// scheduled message: sending them now would put them in two messages once
+// the scheduled one goes. The caller holds the organization lock, which
+// scheduling takes too.
+func rejectScheduledFiles(ctx context.Context, tx pgx.Tx, orgID string, fileIDs []string) error {
+	if len(fileIDs) == 0 {
+		return nil
+	}
+	var taken bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (
+		SELECT 1 FROM scheduled_message_files smf
+		JOIN scheduled_messages sm ON sm.org_id=smf.org_id AND sm.id=smf.scheduled_message_id
+		WHERE smf.org_id=$1 AND smf.file_id=ANY($2::uuid[]) AND sm.status IN ('pending','failed'))`,
+		orgID, fileIDs).Scan(&taken); err != nil {
+		return fmt.Errorf("check scheduled message files: %w", err)
+	}
+	if taken {
+		return fmt.Errorf("%w: a file is already attached to another message", ErrInvalid)
 	}
 	return nil
 }

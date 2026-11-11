@@ -37,6 +37,8 @@ export function shouldPlayNotificationSound(
   preferences: UserPreferences | null,
   chat?: Chat,
 ): boolean {
+  // "Without sound" is the sender's wish: the notification still shows.
+  if (event.data.silent === true) return false;
   return Boolean(
     preferences?.sound_enabled &&
       shouldShowInAppNotification(event, user, preferences, chat),

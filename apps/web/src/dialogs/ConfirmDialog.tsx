@@ -12,6 +12,7 @@ export function ConfirmDialog({
   icon,
   onConfirm,
   onClose,
+  children,
 }: {
   title: string;
   description?: string;
@@ -22,6 +23,8 @@ export function ConfirmDialog({
   icon?: ReactNode;
   onConfirm(): void;
   onClose(): void;
+  /** Extra content under the description. */
+  children?: ReactNode;
 }) {
   const { t } = useTranslation();
   return (
@@ -56,6 +59,7 @@ export function ConfirmDialog({
         </span>
       )}
       {description && <p className="confirm-dialog__text">{description}</p>}
+      {children && <div className="confirm-dialog__extra">{children}</div>}
     </Dialog>
   );
 }

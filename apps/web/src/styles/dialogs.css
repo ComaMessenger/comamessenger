@@ -1326,6 +1326,11 @@
   font-weight: 400;
   line-height: 1.6;
 }
+.confirm-dialog__extra {
+  order: 2;
+  min-width: 0;
+  padding: 0 20px;
+}
 .confirm-dialog .ui-dialog__foot {
   order: 3;
   margin-top: 24px;
