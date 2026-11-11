@@ -27,6 +27,7 @@ import { hydrateDrafts } from "@/lib/drafts";
 import { reactionsKey } from "@/conversation/reactions";
 import { invalidateChatDetails } from "@/chatinfo/queries";
 import { usePushNotifications } from "@/push/usePushNotifications";
+import { applyScheduledEvent, scheduledKey } from "@/scheduled/scheduledCache";
 import { isNetworkError, messageOf } from "@/lib/errors";
 import { cacheShell, cachedShell, persistMessages } from "./cache";
 import { useSession, useSignedIn } from "@/session/SessionProvider";
@@ -140,6 +141,13 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
           state: store.getState().setRealtime,
           event: (event) => {
             const applied = store.getState().apply(event);
+            // Scheduled messages reach only the author's devices and carry
+            // no text; the cached list fetches what changed.
+            if (
+              applied &&
+              applyScheduledEvent(queryClient, api, user.id, event)
+            )
+              return true;
             // Saves are private: these events reach only the saver's devices.
             const saved = savedChange(event);
             if (applied && saved) applySavedChange(queryClient, user.id, saved);
@@ -172,6 +180,9 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
           resync: async (watermark) => {
             const active = store.getState().activeChatID;
             store.getState().resetDurable(watermark);
+            void queryClient.invalidateQueries({
+              queryKey: scheduledKey(user.id),
+            });
             await reload();
             if (active) {
               const page = await api.messages(active, { limit: 50 });

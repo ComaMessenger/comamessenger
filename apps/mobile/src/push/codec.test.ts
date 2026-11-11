@@ -34,6 +34,7 @@ describe("notification codec", () => {
       chatID: chat,
       eventSeq: 42,
       badge: 3,
+      silent: false,
     });
     expect(
       parseNotification(
@@ -44,5 +45,16 @@ describe("notification codec", () => {
     expect(parseNotification("{")).toBeNull();
     expect(notificationRoute({ url: `/chat/${chat}` })).toBe(`/chat/${chat}`);
     expect(notificationRoute({ url: "/settings" })).toBeNull();
+  });
+
+  it("reads the quiet flag of «Send without sound» only when it is true", () => {
+    const base = { v: 1, title: "Anna", body: "Hi", event_seq: 1 };
+    expect(
+      parseNotification(JSON.stringify({ ...base, silent: true }))?.silent,
+    ).toBe(true);
+    expect(parseNotification(JSON.stringify(base))?.silent).toBe(false);
+    expect(
+      parseNotification(JSON.stringify({ ...base, silent: "true" }))?.silent,
+    ).toBe(false);
   });
 });

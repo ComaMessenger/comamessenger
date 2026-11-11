@@ -2,6 +2,11 @@ import { Platform } from "react-native";
 import * as Notifications from "expo-notifications";
 import * as TaskManager from "expo-task-manager";
 import { openNotification } from "./keys";
+import {
+  ensureMessageChannels,
+  messagesChannel,
+  quietMessagesChannel,
+} from "./channels";
 
 const task = "coma-push";
 
@@ -33,13 +38,20 @@ if (Platform.OS === "android")
       await Notifications.setBadgeCountAsync(content.badge).catch(
         () => undefined,
       );
+    // A quiet message («Send without sound») goes to the channel without
+    // sound and vibration; an app updated in the background may not have
+    // created that channel yet.
+    const quiet =
+      content?.silent === true || field(data.data, "silent") === "1";
+    if (quiet) await ensureMessageChannels().catch(() => undefined);
     await Notifications.scheduleNotificationAsync({
       content: {
         title: content?.title ?? field(data.data, "title") ?? "Coma",
         body: content?.body ?? field(data.data, "body") ?? "",
         data: content?.url ? { url: content.url } : {},
+        ...(quiet ? { sound: false } : {}),
       },
-      trigger: { channelId: "messages" },
+      trigger: { channelId: quiet ? quietMessagesChannel : messagesChannel },
     });
   });
 

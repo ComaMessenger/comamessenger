@@ -67,6 +67,7 @@ const config: ExpoConfig = {
       },
     ],
     "@bacons/apple-targets",
+    "@react-native-community/datetimepicker",
     "./plugins/withAndroidReleaseSigning",
     "./plugins/withAndroidGradleMemory",
     [

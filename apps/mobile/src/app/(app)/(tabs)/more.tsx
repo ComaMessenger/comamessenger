@@ -12,6 +12,7 @@ import {
   Bell,
   ChevronRight,
   Contact,
+  Clock,
   ExternalLink,
   LogOut,
   MonitorSmartphone,
@@ -137,6 +138,7 @@ export default function MoreScreen() {
           {(
             [
               ["/people", t("people"), Contact, "open-people"],
+              ["/scheduled", t("scheduledMoreItem"), Clock, "more-scheduled"],
               [
                 "/settings/profile",
                 t("profile"),

@@ -20,3 +20,4 @@ export * from "./uploads";
 export * from "./chatCreation";
 export * from "./chatRights";
 export * from "./people";
+export * as scheduledMobile from "./scheduledMobile";
