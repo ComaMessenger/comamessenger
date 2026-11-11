@@ -6,6 +6,7 @@ import {
   TextInput,
   View,
   useWindowDimensions,
+  type GestureResponderEvent,
 } from "react-native";
 import {
   ArrowUp,
@@ -61,6 +62,7 @@ export function Composer({
   onRetryAttachment,
   commands = [],
   focusRequest = 0,
+  onSendOptions,
 }: {
   body: string;
   onChangeBody(body: string): void;
@@ -79,6 +81,8 @@ export function Composer({
   commands?: ChatCommand[];
   /** Raised by the screen to put the cursor in the field, e.g. after a mention was inserted. */
   focusRequest?: number;
+  /** Long press on send: «Send later» and «Send without sound» (package E). */
+  onSendOptions?(event?: GestureResponderEvent): void;
 }) {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -99,6 +103,8 @@ export function Composer({
     (Boolean(draft.text.trim()) ||
       attachments.some((item) => item.status === "ready")) &&
     !uploading;
+  const sendOptions =
+    canSend && context?.kind !== "edit" && Boolean(onSendOptions);
 
   const mention = /@([\p{L}\p{N}_.-]*)$/u.exec(draft.text);
   const query = mention?.[1]?.toLowerCase() ?? "";
@@ -395,6 +401,8 @@ export function Composer({
           label={context?.kind === "edit" ? t("save") : t("send")}
           disabled={!canSend}
           onPress={onSend}
+          onLongPress={sendOptions ? onSendOptions : undefined}
+          hint={sendOptions ? t("scheduledSendHint") : undefined}
           icon={(color) =>
             context?.kind === "edit" ? (
               <Check size={20} color={color} strokeWidth={2.4} />

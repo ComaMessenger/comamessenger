@@ -27,6 +27,10 @@ class NotificationService: UNNotificationServiceExtension {
       }
       if let chatID = payload["chat_id"] as? String { content.threadIdentifier = chatID }
       if let badge = payload["badge"] as? Int, badge >= 0 { content.badge = NSNumber(value: badge) }
+      // «Send without sound»: shown as usual, without sound (and so without
+      // vibration). The relay may have dropped the sound already; an older
+      // relay did not, so the decrypted flag decides here.
+      if payload["silent"] as? Bool == true { content.sound = nil }
     }
     content.userInfo.removeValue(forKey: "c")
     contentHandler(content)

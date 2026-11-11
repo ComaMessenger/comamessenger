@@ -11,6 +11,7 @@ import Constants from "expo-constants";
 import {
   Bell,
   ChevronRight,
+  Clock,
   ExternalLink,
   LogOut,
   MonitorSmartphone,
@@ -135,6 +136,7 @@ export default function MoreScreen() {
         >
           {(
             [
+              ["/scheduled", t("scheduledMoreItem"), Clock, "more-scheduled"],
               [
                 "/settings/profile",
                 t("profile"),

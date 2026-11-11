@@ -54,6 +54,9 @@ import { ConnectionBanner } from "@/messenger/ConnectionBanner";
 import { attachmentLimit, useAttachments } from "@/files/useAttachments";
 import { pickFiles, type PickSource } from "@/files/pick";
 import { saveFailureKey } from "@/important/saved";
+import { ScheduledStrip } from "@/scheduled/ScheduledStrip";
+import { useScheduleComposer } from "@/scheduled/useScheduleComposer";
+import { useChatScheduled } from "@/scheduled/useScheduled";
 import { AgentPicker } from "./AgentPicker";
 import { AgentStreamRow } from "./AgentStreamRow";
 import { bubblePlacement, type BubblePlacement } from "./bubbles";
@@ -249,7 +252,7 @@ export function ConversationView({
     if (bottom) markRead();
   }
 
-  async function sendOrSave() {
+  async function sendOrSave(options: { silent?: boolean } = {}) {
     if (context?.kind === "edit") {
       const message = context.message;
       setContext(null);
@@ -262,9 +265,33 @@ export function ConversationView({
     const fileIDs = attachments.ready.map((file) => file.id);
     setContext(null);
     attachments.reset();
-    await conversation.send(replyTo, fileIDs);
+    await conversation.send(replyTo, fileIDs, options);
+    if (options.silent) setNotice(t("scheduledSilentSent"));
     list.current?.scrollToEnd({ animated: true });
   }
+
+  // Sending later and without sound (package E). Only the author sees their
+  // scheduled messages; the strip lives under the chat header, not in threads.
+  const chatScheduled = useChatScheduled(inThread ? null : chatID);
+  const scheduling = useScheduleComposer({
+    chatID,
+    threadRootID,
+    members,
+    draft: () => ({
+      body: conversation.body,
+      replyToID: context?.kind === "reply" ? context.message.id : undefined,
+      fileIDs: attachments.ready.map((file) => file.id),
+      uploading: attachments.items.some((item) => item.status === "uploading"),
+    }),
+    onScheduled: (text) => {
+      conversation.changeBody("");
+      setContext(null);
+      attachments.reset();
+      setNotice(text);
+    },
+    onSilent: () => void sendOrSave({ silent: true }),
+    onNotice: setNotice,
+  });
 
   function pick(source: PickSource) {
     void pickFiles(source, attachmentLimit - attachments.items.length)
@@ -324,6 +351,7 @@ export function ConversationView({
           },
         ]
       : []),
+    ...(conversation.readonly ? [] : [scheduling.action]),
   ];
 
   async function setPinned(message: ClientMessage, pin: boolean) {
@@ -521,6 +549,12 @@ export function ConversationView({
         }
       />
       <ConnectionBanner />
+      {!inThread && (
+        <ScheduledStrip
+          items={chatScheduled.items}
+          onPress={() => router.push(`/chat/${chatID}/scheduled`)}
+        />
+      )}
       {inThread && root && (
         <ThreadRoot
           api={api}
@@ -708,6 +742,7 @@ export function ConversationView({
           onRetryAttachment={attachments.retry}
           commands={inThread || context?.kind === "edit" ? [] : commands}
           focusRequest={focusRequest}
+          onSendOptions={scheduling.openOptions}
         />
       </KeyboardAvoidingView>
       <ComposerSheet
@@ -715,6 +750,7 @@ export function ConversationView({
         actions={composerActions}
         onClose={() => setMoreOpen(false)}
       />
+      {scheduling.layer}
       <AgentPicker
         visible={agentsOpen}
         agents={agentMembers}
