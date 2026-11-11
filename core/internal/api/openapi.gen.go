@@ -6572,7 +6572,10 @@ type ScheduledMessageEvent struct {
 	Id            openapi_types.UUID             `json:"id"`
 	SendAt        time.Time                      `json:"send_at"`
 	Status        ScheduledMessageEventStatus    `json:"status"`
-	Version       int                            `json:"version"`
+
+	// StoppedCount Present on the last failure event of a security stop that failed several messages at once: how many. The author gets one push for the whole stop.
+	StoppedCount *int `json:"stopped_count,omitempty"`
+	Version      int  `json:"version"`
 }
 
 // ScheduledMessageEventStatus defines model for ScheduledMessageEvent.Status.

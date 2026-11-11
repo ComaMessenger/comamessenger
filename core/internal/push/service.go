@@ -724,8 +724,8 @@ func (w *Worker) materialize(ctx context.Context) error {
 			  -- notification settings do not apply: the message is the
 			  -- author's own.
 			  SELECT e.audience_actor_id,'default',NULL,NULL,'{}'::uuid[],NULL::uuid,'scheduled'
-			  FROM event e JOIN scheduled_messages sm ON sm.org_id=e.org_id AND sm.id=e.subject_id AND sm.author_id=e.audience_actor_id
-			  WHERE e.type='scheduled_message.failed' AND sm.status='failed' AND sm.version=(e.data->>'version')::int
+			  FROM event e
+			  WHERE e.type='scheduled_message.failed' AND `+scheduledFailureCurrent+`
 			), eligible AS (
 			SELECT e.org_id,e.seq,e.occurred_at,r.*,u.preferences
 			FROM event e JOIN recipients r ON true

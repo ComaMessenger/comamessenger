@@ -2,16 +2,23 @@ package push
 
 import (
 	"encoding/json"
+	"fmt"
 )
 
 // scheduledStillFailed is false for a scheduled-message failure push whose
 // record is gone (the author deleted it, retention removed it) or no longer
 // this failure (the author sent or rescheduled it again): such a push is
 // skipped. Every other event is current.
-const scheduledStillFailed = `(e.type<>'scheduled_message.failed' OR EXISTS (
+const scheduledStillFailed = `(e.type<>'scheduled_message.failed' OR ` + scheduledFailureCurrent + `)`
+
+// scheduledFailureCurrent: the failure is still there. For one message, its
+// record is this very failure; for a stop of several, at least one of them
+// is still failed (they all failed in the event's transaction, at its time).
+const scheduledFailureCurrent = `EXISTS (
 	SELECT 1 FROM scheduled_messages sm
-	WHERE sm.org_id=e.org_id AND sm.id=e.subject_id AND sm.author_id=e.audience_actor_id
-	  AND sm.status='failed' AND sm.version=(e.data->>'version')::int))`
+	WHERE sm.org_id=e.org_id AND sm.author_id=e.audience_actor_id AND sm.status='failed'
+	  AND CASE WHEN COALESCE((e.data->>'stopped_count')::int,1)>1 THEN sm.failed_at=e.occurred_at
+	      ELSE sm.id=e.subject_id AND sm.version=(e.data->>'version')::int END)`
 
 // scheduledFailedTag groups failure pushes on the device.
 const scheduledFailedTag = "scheduled-failed"
@@ -23,6 +30,7 @@ const scheduledFailedTag = "scheduled-failed"
 func scheduledFailureNotification(eventData []byte, locale string) notificationContent {
 	var data struct {
 		FailureReason *string `json:"failure_reason"`
+		StoppedCount  int     `json:"stopped_count"`
 	}
 	_ = json.Unmarshal(eventData, &data)
 	reason := ""
@@ -33,7 +41,26 @@ func scheduledFailureNotification(eventData []byte, locale string) notificationC
 	if locale == "en" {
 		title = "Message not sent"
 	}
-	return notificationContent{Tag: scheduledFailedTag, Title: title, Body: ScheduledFailureText(reason, locale), URL: "/scheduled"}
+	body := ScheduledFailureText(reason, locale)
+	if data.StoppedCount > 1 {
+		title = stoppedTitle(data.StoppedCount, locale)
+	}
+	return notificationContent{Tag: scheduledFailedTag, Title: title, Body: body, URL: "/scheduled"}
+}
+
+// stoppedTitle is "3 messages not sent" for a stop of several messages.
+func stoppedTitle(count int, locale string) string {
+	if locale == "en" {
+		return fmt.Sprintf("%d messages not sent", count)
+	}
+	switch mod10, mod100 := count%10, count%100; {
+	case mod10 == 1 && mod100 != 11:
+		return fmt.Sprintf("%d сообщение не отправлено", count)
+	case mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14):
+		return fmt.Sprintf("%d сообщения не отправлены", count)
+	default:
+		return fmt.Sprintf("%d сообщений не отправлено", count)
+	}
 }
 
 // ScheduledFailureText is the reason a scheduled message failed, in words.

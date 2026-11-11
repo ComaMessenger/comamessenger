@@ -5139,6 +5139,8 @@ export interface components {
             /** Format: date-time */
             send_at: string;
             failure_reason: components["schemas"]["ScheduledMessageFailureReason"] | null;
+            /** @description Present on the last failure event of a security stop that failed several messages at once: how many. The author gets one push for the whole stop. */
+            stopped_count?: number;
         };
         ScheduledMessageList: {
             scheduled_messages: components["schemas"]["ScheduledMessage"][];

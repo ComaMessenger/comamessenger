@@ -17351,6 +17351,11 @@
                 "type": "null"
               }
             ]
+          },
+          "stopped_count": {
+            "type": "integer",
+            "minimum": 2,
+            "description": "Present on the last failure event of a security stop that failed several messages at once: how many. The author gets one push for the whole stop."
           }
         }
       },

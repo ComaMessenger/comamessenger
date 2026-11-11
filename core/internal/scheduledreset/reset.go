@@ -82,6 +82,9 @@ type Event struct {
 	Version       int       `json:"version"`
 	SendAt        time.Time `json:"send_at"`
 	FailureReason *string   `json:"failure_reason"`
+	// StoppedCount is set on the last failure event of a stop that failed
+	// several messages at once: the author gets one push for all of them.
+	StoppedCount int `json:"stopped_count,omitempty"`
 }
 
 // InsertEventTx records an event for the author's devices only. chat_id
@@ -90,6 +93,10 @@ type Event struct {
 // the organization row lock. A failure event also queues a push to the
 // author.
 func InsertEventTx(ctx context.Context, tx pgx.Tx, orgID, authorID, eventType string, event Event) (int64, error) {
+	return insertEventTx(ctx, tx, orgID, authorID, eventType, event, true)
+}
+
+func insertEventTx(ctx context.Context, tx pgx.Tx, orgID, authorID, eventType string, event Event, push bool) (int64, error) {
 	payload, err := json.Marshal(event)
 	if err != nil {
 		return 0, fmt.Errorf("marshal scheduled message event: %w", err)
@@ -108,7 +115,7 @@ func InsertEventTx(ctx context.Context, tx pgx.Tx, orgID, authorID, eventType st
 	// for a failure that rolled back. The push worker sends it only to the
 	// author and only while the record is still this failure (see package
 	// push); it carries the reason, never the text or the chat.
-	if eventType == EventFailed {
+	if eventType == EventFailed && push {
 		if _, err := tx.Exec(ctx, `INSERT INTO notification_jobs (org_id, event_seq) VALUES ($1, $2) ON CONFLICT DO NOTHING`, orgID, seq); err != nil {
 			return 0, fmt.Errorf("queue scheduled message failure push: %w", err)
 		}
@@ -169,8 +176,14 @@ func Reconcile(ctx context.Context, pool *pgxpool.Pool, orgID, actorID string) (
 		return 0, fmt.Errorf("iterate stopped scheduled messages: %w", err)
 	}
 	seq = 0
-	for _, event := range events {
-		if seq, err = InsertEventTx(ctx, tx, orgID, actorID, EventFailed, event); err != nil {
+	// One push for the whole stop, not one per message: it rides on the
+	// last event, which carries how many failed.
+	for i, event := range events {
+		last := i == len(events)-1
+		if last && len(events) > 1 {
+			event.StoppedCount = len(events)
+		}
+		if seq, err = insertEventTx(ctx, tx, orgID, actorID, EventFailed, event, last); err != nil {
 			return 0, err
 		}
 	}

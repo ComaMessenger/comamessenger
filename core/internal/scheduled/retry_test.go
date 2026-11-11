@@ -458,3 +458,33 @@ func TestRetryRacesSecurityEvent(t *testing.T) {
 		device = w.secondSession(t)
 	}
 }
+
+// Delete checks the session in the service too, not only at the HTTP layer.
+func TestDeleteNeedsALiveSession(t *testing.T) {
+	ctx := context.Background()
+	w := newWorld(t)
+	item := w.create(t, w.groupID, w.input("keep me"))
+	if err := w.service.Delete(ctx, Author{User: w.author.User}, item.ID); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("delete without a session: %v", err)
+	}
+	device := w.secondSession(t)
+	w.exec(t, `UPDATE sessions SET revoked_at=now() WHERE id=$1`, device.SessionID)
+	if err := w.service.Delete(ctx, device, item.ID); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("delete from a revoked session: %v", err)
+	}
+	w.exec(t, `INSERT INTO revoked_session_families (family_id, org_id, actor_id, reason) VALUES ($1, $2, $3, 'device_revoked')`,
+		w.author.SessionID, w.orgID, w.author.User.ActorID)
+	if err := w.service.Delete(ctx, w.author, item.ID); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("delete from a revoked family: %v", err)
+	}
+	if got := w.count(t, `SELECT count(*) FROM scheduled_messages WHERE id=$1`, item.ID); got != 1 {
+		t.Fatal("a refused delete removed the record")
+	}
+	if got := w.count(t, `SELECT count(*) FROM events WHERE subject_id=$1 AND type='scheduled_message.deleted'`, item.ID); got != 0 {
+		t.Fatal("a refused delete told the devices")
+	}
+	// A live session of the author still can.
+	if err := w.service.Delete(ctx, w.secondSession(t), item.ID); err != nil {
+		t.Fatal(err)
+	}
+}

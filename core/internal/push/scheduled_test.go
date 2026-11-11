@@ -313,48 +313,107 @@ func TestScheduledFailurePushFollowsTheRecord(t *testing.T) {
 	}
 }
 
-// A security event stops many messages at once; each failure is pushed to
-// the author once, in the same transaction as the failure.
+// A security event stops many messages at once: each one fails with its
+// own event, and the author gets one push for the whole stop, in the same
+// transaction as the failures.
 func TestScheduledFailurePushOnMassStop(t *testing.T) {
 	w := newFailurePushWorld(t)
 	ctx := context.Background()
-	first, second := w.schedule(t), w.schedule(t)
-	tx, err := w.pool.Begin(ctx)
-	if err != nil {
-		t.Fatal(err)
+	stop := func(count int) []scheduled.ScheduledMessage {
+		t.Helper()
+		var items []scheduled.ScheduledMessage
+		for range count {
+			items = append(items, w.schedule(t))
+		}
+		tx, err := w.pool.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := scheduledreset.BumpEpochTx(ctx, tx, w.orgID, w.author.User.ActorID); err != nil {
+			t.Fatal(err)
+		}
+		if err := tx.Commit(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := scheduledreset.Reconcile(ctx, w.pool, w.orgID, w.author.User.ActorID); err != nil {
+			t.Fatal(err)
+		}
+		// A second pass finds nothing left to stop.
+		if seq, err := scheduledreset.Reconcile(ctx, w.pool, w.orgID, w.author.User.ActorID); err != nil || seq != 0 {
+			t.Fatalf("second reconcile = %d, %v", seq, err)
+		}
+		return items
 	}
-	if err := scheduledreset.BumpEpochTx(ctx, tx, w.orgID, w.author.User.ActorID); err != nil {
-		t.Fatal(err)
+
+	items := stop(3)
+	if got := w.count(t, `SELECT count(*) FROM events WHERE type='scheduled_message.failed'`); got != 3 {
+		t.Fatalf("failure events = %d", got)
 	}
-	if err := tx.Commit(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := scheduledreset.Reconcile(ctx, w.pool, w.orgID, w.author.User.ActorID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := scheduledreset.Reconcile(ctx, w.pool, w.orgID, w.author.User.ActorID); err != nil {
-		t.Fatal(err)
+	if got := w.count(t, `SELECT count(*) FROM notification_jobs`); got != 1 {
+		t.Fatalf("push jobs = %d, want one for the stop", got)
 	}
 	w.materialize(t)
-	for _, item := range []scheduled.ScheduledMessage{first, second} {
-		web, mobile := w.deliveries(t, w.failureSeq(t, item))
-		if len(web) != 1 || web[0] != w.authorSub || len(mobile) != 1 || mobile[0] != w.authorDev {
-			t.Fatalf("deliveries web=%v mobile=%v", web, mobile)
-		}
+	if got := w.count(t, `SELECT count(*) FROM notification_deliveries WHERE subscription_id=$1`, w.authorSub); got != 1 {
+		t.Fatalf("web deliveries = %d", got)
 	}
-	if got := w.count(t, `SELECT count(*) FROM events WHERE type='scheduled_message.failed'`); got != 2 {
-		t.Fatalf("failure events = %d", got)
+	if got := w.count(t, `SELECT count(*) FROM notification_deliveries WHERE subscription_id=$1`, w.otherSub); got != 0 {
+		t.Fatalf("someone else was told: %d", got)
+	}
+	// The author deleted one of them meanwhile: the others still failed.
+	if err := w.service.Delete(ctx, w.author, items[2].ID); err != nil {
+		t.Fatal(err)
 	}
 	if err := w.worker.deliverMobile(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if len(w.relay.messages) != 2 {
-		t.Fatalf("relay messages = %d", len(w.relay.messages))
+	if len(w.relay.messages) != 1 {
+		t.Fatalf("relay messages = %d, want 1", len(w.relay.messages))
 	}
-	for _, sent := range w.relay.messages {
-		payload := openPayload(t, w.authorKey, sent.Ciphertext)
-		if payload.Body != ScheduledFailureText(scheduled.ReasonSecurityReset, "ru") {
-			t.Fatalf("payload = %+v", payload)
+	sent := w.relay.messages[0]
+	payload := openPayload(t, w.authorKey, sent.Ciphertext)
+	if payload.Title != "3 сообщения не отправлены" || payload.Body != ScheduledFailureText(scheduled.ReasonSecurityReset, "ru") ||
+		payload.URL != "/scheduled" || sent.CollapseID != scheduledFailedTag {
+		t.Fatalf("payload = %+v", payload)
+	}
+	plain, _ := json.Marshal(payload)
+	w.assertNoSecrets(t, string(plain))
+
+	// Every stopped message deleted before the push went out: nothing goes.
+	w.relay.messages = nil
+	for _, item := range stop(2) {
+		if err := w.service.Delete(ctx, w.author, item.ID); err != nil {
+			t.Fatal(err)
 		}
+	}
+	w.materialize(t)
+	if err := w.worker.deliverMobile(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(w.relay.messages) != 0 {
+		t.Fatalf("pushed a stop whose messages are all gone: %d", len(w.relay.messages))
+	}
+
+	// One message stopped alone is told as a single failure.
+	stop(1)
+	w.materialize(t)
+	if err := w.worker.deliverMobile(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(w.relay.messages) != 1 || openPayload(t, w.authorKey, w.relay.messages[0].Ciphertext).Title != "Сообщение не отправлено" {
+		t.Fatalf("single stop = %+v", w.relay.messages)
+	}
+}
+
+func TestStoppedTitlePlural(t *testing.T) {
+	for count, want := range map[int]string{
+		2: "2 сообщения не отправлены", 5: "5 сообщений не отправлено", 11: "11 сообщений не отправлено",
+		21: "21 сообщение не отправлено", 22: "22 сообщения не отправлены", 112: "112 сообщений не отправлено",
+	} {
+		if got := stoppedTitle(count, "ru"); got != want {
+			t.Errorf("%d: %q, want %q", count, got, want)
+		}
+	}
+	if got := stoppedTitle(3, "en"); got != "3 messages not sent" {
+		t.Errorf("en: %q", got)
 	}
 }

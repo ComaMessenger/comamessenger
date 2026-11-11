@@ -612,7 +612,8 @@ func (s *Service) recheckFailed(ctx context.Context, tx pgx.Tx, current Schedule
 }
 
 // Delete cancels a pending message or removes a finished record. It needs
-// no rights in the chat: an author who left can still clean up.
+// a live session of the author but no rights in the chat: an author who
+// left can still clean up.
 func (s *Service) Delete(ctx context.Context, author Author, scheduledID string) error {
 	if author.SessionID == "" {
 		return ErrForbidden
@@ -630,6 +631,11 @@ func (s *Service) Delete(ctx context.Context, author Author, scheduledID string)
 	}
 	current, err := lockOwn(ctx, tx, author.User, scheduledID)
 	if err != nil {
+		return err
+	}
+	// The HTTP layer already refuses a revoked session; the service checks
+	// it too, like every other change of a record.
+	if _, err := authorize(ctx, tx, author); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM scheduled_messages WHERE org_id=$1 AND author_id=$2 AND id=$3`, author.User.OrgID, author.User.ActorID, scheduledID); err != nil {
