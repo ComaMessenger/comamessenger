@@ -233,16 +233,22 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
 
   const outbox = useMemo(
     () =>
-      new Outbox(api, outboxStorage, {
-        optimistic: store.getState().optimistic,
-        delivered: (message) => {
-          store.getState().reconcile(message);
-          scheduleReload();
+      new Outbox(
+        api,
+        outboxStorage,
+        {
+          optimistic: store.getState().optimistic,
+          delivered: (message) => {
+            store.getState().reconcile(message);
+            scheduleReload();
+          },
+          retrying: store.getState().retrying,
+          failed: store.getState().failed,
         },
-        retrying: store.getState().retrying,
-        failed: store.getState().failed,
-      }),
-    [api, scheduleReload, store],
+        // Sends only with this person's token (see claimUserData too).
+        user.id,
+      ),
+    [api, scheduleReload, store, user.id],
   );
 
   // Saved chats appear before the network answers; unsubscribed on sign-out.

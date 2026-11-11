@@ -1726,6 +1726,7 @@ const (
 	ErrorCodeRateLimited                 ErrorCode = "rate_limited"
 	ErrorCodeReauthenticationFailed      ErrorCode = "reauthentication_failed"
 	ErrorCodeSavedLimitReached           ErrorCode = "saved_limit_reached"
+	ErrorCodeSavedStorageFull            ErrorCode = "saved_storage_full"
 	ErrorCodeServiceNotReady             ErrorCode = "service_not_ready"
 	ErrorCodeSessionNotFound             ErrorCode = "session_not_found"
 	ErrorCodeSmtpNotConfigured           ErrorCode = "smtp_not_configured"
@@ -1826,6 +1827,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeReauthenticationFailed:
 		return true
 	case ErrorCodeSavedLimitReached:
+		return true
+	case ErrorCodeSavedStorageFull:
 		return true
 	case ErrorCodeServiceNotReady:
 		return true

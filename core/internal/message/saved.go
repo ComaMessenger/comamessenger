@@ -28,7 +28,16 @@ import (
 // DefaultSavedLimit bounds how many messages one person can keep saved.
 const DefaultSavedLimit = 5000
 
-var ErrSavedLimit = errors.New("saved messages limit reached")
+var (
+	ErrSavedLimit = errors.New("saved messages limit reached")
+	// ErrSavedStorageFull: all rows of a person, saves hidden by lost access
+	// included, reached savedRowsCapFactor times the limit.
+	ErrSavedStorageFull = errors.New("saved messages storage full")
+)
+
+// savedRowsCapFactor caps every save row of a person, hidden ones included,
+// at this many times the limit of readable saves.
+const savedRowsCapFactor = 3
 
 type SavedState struct {
 	MessageID string    `json:"message_id"`
@@ -115,6 +124,17 @@ func (s *Service) savedLimitValue() int {
 	return DefaultSavedLimit
 }
 
+// Lock order. Message deletion takes the organization row, then the message,
+// then the save rows of that message. Every saved-message path keeps that
+// order: shared locks only after the organization row, and nothing locked
+// before it except a transaction advisory lock of the saver (no other path
+// waits for it while holding the organization).
+//
+// A person's saves are serialized by that advisory lock rather than by their
+// `actors` row: writing a message takes the organization and then FOR SHARE
+// of the actors row, so locking the row first deadlocks with the person's own
+// messages (checked by TestSavedLockOrder).
+
 // SaveMessage saves a message the person can read. The reply says whether the
 // save is new; a repeated call returns the existing save and emits nothing.
 func (s *Service) SaveMessage(ctx context.Context, user identity.User, messageID string) (SavedState, bool, error) {
@@ -126,25 +146,16 @@ func (s *Service) SaveMessage(ctx context.Context, user identity.User, messageID
 		return SavedState{}, false, fmt.Errorf("begin save message: %w", err)
 	}
 	defer tx.Rollback(ctx)
-	if err := lockOrganization(ctx, tx, user.OrgID); err != nil {
-		return SavedState{}, false, err
+	// One save of a person at a time: the limit check below cannot race.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('saved_messages:' || $1::text, 0))`, user.ActorID); err != nil {
+		return SavedState{}, false, fmt.Errorf("serialize saves: %w", err)
 	}
-	// lockMessage checks active membership in a live chat; a stranger, a
-	// former member and an admin outside the chat all get not found.
-	message, _, _, err := lockMessage(ctx, tx, user, messageID)
+	// Checks without row locks; they are repeated under locks before writing.
+	target, err := findSaveTarget(ctx, tx, user, messageID)
 	if err != nil {
 		return SavedState{}, false, err
 	}
-	if message.DeletedAt != nil {
-		return SavedState{}, false, ErrNotFound
-	}
-	// Like the feed: an agent does not read a chat it only writes to.
-	if _, writeOnly, err := agentChatRole(ctx, tx, user.OrgID, user.ActorID, message.ChatID); err != nil {
-		return SavedState{}, false, err
-	} else if writeOnly {
-		return SavedState{}, false, ErrForbidden
-	}
-	result := SavedState{MessageID: messageID, ChatID: message.ChatID}
+	result := SavedState{MessageID: messageID, ChatID: target}
 	err = tx.QueryRow(ctx, `SELECT saved_at FROM saved_messages WHERE actor_id = $1 AND message_id = $2`,
 		user.ActorID, messageID).Scan(&result.SavedAt)
 	if err == nil {
@@ -154,13 +165,29 @@ func (s *Service) SaveMessage(ctx context.Context, user identity.User, messageID
 		return SavedState{}, false, fmt.Errorf("find saved message: %w", err)
 	}
 	// Only saves the person can still read count; hidden ones are kept (they
-	// come back with access) and never deleted to make room.
-	count, err := countVisibleSaved(ctx, tx, user)
+	// come back with access) and never deleted to make room. All rows,
+	// hidden included, are capped so they cannot grow without bound.
+	visible, all, err := countSaved(ctx, tx, user)
 	if err != nil {
 		return SavedState{}, false, err
 	}
-	if count >= s.savedLimitValue() {
+	if visible >= s.savedLimitValue() {
 		return SavedState{}, false, ErrSavedLimit
+	}
+	if all >= savedRowsCapFactor*s.savedLimitValue() {
+		return SavedState{}, false, ErrSavedStorageFull
+	}
+	// Now the delete order: organization, then the message (re-checked: it
+	// may have been deleted or access lost since the unlocked read).
+	if err := lockOrganization(ctx, tx, user.OrgID); err != nil {
+		return SavedState{}, false, err
+	}
+	message, _, _, err := lockMessage(ctx, tx, user, messageID)
+	if err != nil {
+		return SavedState{}, false, err
+	}
+	if message.DeletedAt != nil {
+		return SavedState{}, false, ErrNotFound
 	}
 	err = tx.QueryRow(ctx, `
 		INSERT INTO saved_messages (org_id, actor_id, message_id, chat_id)
@@ -183,6 +210,36 @@ func (s *Service) SaveMessage(ctx context.Context, user identity.User, messageID
 	return result, true, nil
 }
 
+// findSaveTarget returns the chat of a message the person may save, without
+// locking anything: the message exists and is not deleted, the person is an
+// active member of the live chat, and an agent is not write-only there.
+// A stranger, a former member and an admin outside the chat get not found.
+func findSaveTarget(ctx context.Context, tx pgx.Tx, user identity.User, messageID string) (string, error) {
+	var chatID string
+	var deleted bool
+	err := tx.QueryRow(ctx, `
+		SELECT m.chat_id, m.deleted_at IS NOT NULL
+		FROM messages m
+		JOIN chats c ON c.org_id = m.org_id AND c.id = m.chat_id AND c.archived_at IS NULL
+		JOIN chat_members cm ON cm.org_id = c.org_id AND cm.chat_id = c.id AND cm.actor_id = $3
+		JOIN actors a ON a.org_id = cm.org_id AND a.id = cm.actor_id
+		WHERE m.org_id = $1 AND m.id = $2 AND a.status = 'active' AND a.deleted_at IS NULL`,
+		user.OrgID, messageID, user.ActorID).Scan(&chatID, &deleted)
+	if errors.Is(err, pgx.ErrNoRows) || deleted {
+		return "", ErrNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("find message to save: %w", err)
+	}
+	// Like the feed: an agent does not read a chat it only writes to.
+	if _, writeOnly, err := agentChatRole(ctx, tx, user.OrgID, user.ActorID, chatID); err != nil {
+		return "", err
+	} else if writeOnly {
+		return "", ErrForbidden
+	}
+	return chatID, nil
+}
+
 // UnsaveMessage removes the person's own save. It needs no access to the chat:
 // a person may clean up saves from a chat they left. Nothing is revealed — the
 // reply is the same whether the message exists or not.
@@ -195,20 +252,31 @@ func (s *Service) UnsaveMessage(ctx context.Context, user identity.User, message
 		return false, fmt.Errorf("begin unsave message: %w", err)
 	}
 	defer tx.Rollback(ctx)
-	// Delete first: a repeat or an unknown id touches nothing shared — no
-	// organization lock, no event number.
+	// Look first without locking: a repeat or an unknown id touches nothing
+	// shared — no organization lock, no event number.
+	var exists bool
+	if err := tx.QueryRow(ctx, `
+		SELECT EXISTS (SELECT 1 FROM saved_messages WHERE org_id = $1 AND actor_id = $2 AND message_id = $3)`,
+		user.OrgID, user.ActorID, messageID).Scan(&exists); err != nil {
+		return false, fmt.Errorf("find saved message: %w", err)
+	}
+	if !exists {
+		return false, nil
+	}
+	// The delete order: organization first, then the save row.
+	if err := lockOrganization(ctx, tx, user.OrgID); err != nil {
+		return false, err
+	}
 	var chatID string
 	err = tx.QueryRow(ctx, `
 		DELETE FROM saved_messages WHERE org_id = $1 AND actor_id = $2 AND message_id = $3
 		RETURNING chat_id`, user.OrgID, user.ActorID, messageID).Scan(&chatID)
 	if errors.Is(err, pgx.ErrNoRows) {
+		// Gone meanwhile (a repeat, or the message was deleted): no event.
 		return false, nil
 	}
 	if err != nil {
 		return false, fmt.Errorf("delete saved message: %w", err)
-	}
-	if err := lockOrganization(ctx, tx, user.OrgID); err != nil {
-		return false, err
 	}
 	seq, err := nextSequence(ctx, tx, user.OrgID)
 	if err != nil {
@@ -368,13 +436,17 @@ func (s *Service) SavedIDs(ctx context.Context, user identity.User, chatID strin
 	return result, nil
 }
 
-func countVisibleSaved(ctx context.Context, tx pgx.Tx, user identity.User) (int, error) {
-	var count int
-	if err := tx.QueryRow(ctx, `SELECT count(*) FROM saved_messages sm `+visibleSave+`
-		WHERE sm.org_id = $1 AND sm.actor_id = $2`, user.OrgID, user.ActorID).Scan(&count); err != nil {
-		return 0, fmt.Errorf("count saved messages: %w", err)
+// countSaved counts the person's readable saves and all their save rows.
+func countSaved(ctx context.Context, tx pgx.Tx, user identity.User) (visible, all int, err error) {
+	if err := tx.QueryRow(ctx, `
+		SELECT
+			(SELECT count(*) FROM saved_messages sm `+visibleSave+`
+			 WHERE sm.org_id = $1 AND sm.actor_id = $2),
+			(SELECT count(*) FROM saved_messages WHERE org_id = $1 AND actor_id = $2)`,
+		user.OrgID, user.ActorID).Scan(&visible, &all); err != nil {
+		return 0, 0, fmt.Errorf("count saved messages: %w", err)
 	}
-	return count, nil
+	return visible, all, nil
 }
 
 func cursorTime(cursor *savedCursor) any {

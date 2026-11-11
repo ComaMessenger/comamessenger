@@ -1384,7 +1384,8 @@ paths:
         message.saved goes to the person's own sessions only. At most 5000
         readable saves per person: over it the reply is 409
         saved_limit_reached and nothing is removed; saves hidden by lost
-        access do not count.
+        access do not count. All rows of a person, hidden ones included, are
+        capped at three times the limit (409 saved_storage_full).
       security: [{ bearerAuth: [] }]
       parameters:
         - { $ref: "#/components/parameters/MessageId" }
@@ -3923,6 +3924,7 @@ components:
         - push_unavailable
         - rate_limited
         - saved_limit_reached
+        - saved_storage_full
         - service_not_ready
         - session_not_found
         - smtp_not_configured

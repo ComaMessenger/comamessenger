@@ -131,6 +131,8 @@ describe("saved messages", () => {
 
   it("recognizes the limit error", () => {
     expect(isSavedLimitError({ code: "saved_limit_reached" })).toBe(true);
+    // The cap on all rows, hidden saves included, reads the same to a person.
+    expect(isSavedLimitError({ code: "saved_storage_full" })).toBe(true);
     expect(isSavedLimitError({ code: "rate_limited" })).toBe(false);
     expect(isSavedLimitError(null)).toBe(false);
   });

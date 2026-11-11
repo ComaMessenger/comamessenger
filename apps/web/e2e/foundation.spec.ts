@@ -1882,6 +1882,45 @@ test("over the limit a save explains what to do", async ({ page }) => {
   expect(runtime.savedMutations).toEqual([]);
 });
 
+test("another person signing in from a second tab replaces the first one's messenger", async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === "phone", "the profile button is desktop-only");
+  await mockMessenger(page, { saved: [message.id] });
+  await page.goto(`/chat/${chat.id}`);
+  await expect(page.getByText("Добро пожаловать в Coma", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: user.display_name })).toBeVisible();
+
+  // Boris's data is held on the server for the rest of the test.
+  const held = new Promise<void>(() => undefined);
+  await page.route("**/api/v1/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (/\/(chats|messages|unread|saved-messages|threads|drafts)/.test(path)) await held;
+    await route.fallback();
+  });
+  // A second tab of the same browser signs Boris in and tells every tab.
+  const other = await page.context().newPage();
+  await other.route("**/coma-blank", (route) =>
+    route.fulfill({ status: 200, contentType: "text/html", body: "<!doctype html><title>blank</title>" }),
+  );
+  await other.goto("/coma-blank");
+  await other.evaluate((boris) => {
+    const channel = new BroadcastChannel("coma-session");
+    channel.postMessage({
+      type: "tokens",
+      tokens: { access_token: "boris-token", access_expires_at: "2026-08-20T00:00:00Z", user: boris },
+    });
+    channel.close();
+  }, { ...user, id: "00000000-0000-4000-8000-000000000002", display_name: "Борис", handle: "boris" });
+
+  await expect(page.getByRole("button", { name: "Борис" })).toBeVisible();
+  // Nothing of Anna's survives in the new messenger while Boris's data loads.
+  await expect(page.getByText("Добро пожаловать в Coma", { exact: true })).toHaveCount(0);
+  await expect(page.locator("article.message")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: user.display_name })).toHaveCount(0);
+  await other.close();
+});
+
 test("the next person in the same tab never sees the previous one's Important", async ({
   page,
 }) => {

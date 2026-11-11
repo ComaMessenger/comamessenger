@@ -11,6 +11,7 @@ import { AvatarProvider } from "./ui";
 import { BrowserSessionCoordinator } from "./session";
 import { messageOf } from "./errors";
 import { claimSessionCache } from "./sessionCache";
+import { claimClientStorage } from "./persistence";
 import { setTheme } from "./theme";
 import { apiURL, applyPublicBranding } from "./lib/branding";
 import {
@@ -55,10 +56,12 @@ export function App() {
   // Every change of the signed-in person empties the request cache first.
   const setUser = useCallback(
     (next: User | null) => {
+      const owner = next?.id ?? null;
+      if (owner !== cacheOwner.current) void claimClientStorage(owner);
       cacheOwner.current = claimSessionCache(
         queryClient,
         cacheOwner.current,
-        next?.id ?? null,
+        owner,
       );
       setUserState(next);
     },
@@ -203,8 +206,11 @@ export function App() {
       />
     );
   return (
-    <AvatarProvider api={api}>
+    // A new person gets a new messenger: store, outbox and realtime state
+    // are created per person, never carried over from the previous one.
+    <AvatarProvider key={user.id} api={api}>
       <Messenger
+        key={user.id}
         api={api}
         user={user}
         path={path}

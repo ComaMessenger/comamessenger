@@ -8,6 +8,10 @@ import (
 	standardhttp "net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/comamessenger/comamessenger/core/internal/identity"
+	"github.com/comamessenger/comamessenger/core/internal/message"
+	"github.com/go-chi/chi/v5"
 )
 
 func TestHealth(t *testing.T) {
@@ -104,5 +108,48 @@ func TestRequiredAgentScopeUsesClosedAllowlist(t *testing.T) {
 				t.Fatalf("scope=%q allowed=%v, want %q/%v", scope, allowed, test.scope, test.allowed)
 			}
 		})
+	}
+}
+
+// Saved-message routes have their own per-person limits on top of the
+// general authenticated one: writes and reads alike.
+func TestSavedMessageRoutesAreRateLimited(t *testing.T) {
+	h := newIdentityHandlers(slog.New(slog.NewTextHandler(io.Discard, nil)), "", Dependencies{Messages: &message.Service{}})
+	router := chi.NewRouter()
+	h.routes(router)
+	middlewares := map[string]int{}
+	if err := chi.Walk(router, func(method, route string, _ standardhttp.Handler, chain ...func(standardhttp.Handler) standardhttp.Handler) error {
+		middlewares[method+" "+route] = len(chain)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	base, ok := middlewares["GET /threads"]
+	if !ok {
+		t.Fatalf("routes = %v", middlewares)
+	}
+	for _, route := range []string{
+		"GET /saved-messages", "GET /saved-messages/ids", "GET /saved-messages/chats",
+		"PUT /messages/{messageID}/saved", "DELETE /messages/{messageID}/saved",
+	} {
+		if middlewares[route] != base+1 {
+			t.Errorf("%s has %d middlewares, want %d (one own limiter)", route, middlewares[route], base+1)
+		}
+	}
+	// The read limiter itself: a person over the burst gets 429 until refill.
+	h.savedReadRate = newIPRateLimiter(60, 2)
+	limited := h.actorRateLimit("saved-messages-read", h.savedReadRate)(standardhttp.HandlerFunc(func(w standardhttp.ResponseWriter, _ *standardhttp.Request) {
+		w.WriteHeader(standardhttp.StatusOK)
+	}))
+	statuses := []int{}
+	for range 3 {
+		request := httptest.NewRequest(standardhttp.MethodGet, "/api/v1/saved-messages", nil)
+		request = request.WithContext(context.WithValue(request.Context(), authContextKey{}, authenticated{User: identity.User{ActorID: "anna"}}))
+		response := httptest.NewRecorder()
+		limited.ServeHTTP(response, request)
+		statuses = append(statuses, response.Code)
+	}
+	if statuses[0] != 200 || statuses[1] != 200 || statuses[2] != standardhttp.StatusTooManyRequests {
+		t.Fatalf("statuses = %v, want 200 200 429", statuses)
 	}
 }

@@ -3,6 +3,7 @@ package message
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -389,4 +390,175 @@ func contains(values []string, target string) bool {
 		}
 	}
 	return false
+}
+
+// Lock order of saves against message deletion: every path takes the
+// organization row before the message and the save rows, as Delete does.
+// The reversed order of UnsaveMessage deadlocked (40P01) under load.
+func TestSavedLockOrder(t *testing.T) {
+	pool := testdb.New(t)
+	fixture := seedFixture(t, pool)
+	service := NewService(pool, 64*1024, 100, nil)
+	ctx := context.Background()
+	post := func(t *testing.T) Message {
+		t.Helper()
+		result, _, err := service.Create(ctx, fixture.owner, fixture.groupID, CreateInput{ClientMsgID: mustID(t), Body: "x", BodyFormat: "plain"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return result
+	}
+	const rounds = 40
+
+	t.Run("unsave races delete without deadlock", func(t *testing.T) {
+		for round := range rounds {
+			target := post(t)
+			if _, _, err := service.SaveMessage(ctx, fixture.member, target.ID); err != nil {
+				t.Fatal(err)
+			}
+			var wait sync.WaitGroup
+			var unsaveErr, deleteErr error
+			wait.Add(2)
+			go func() { defer wait.Done(); _, unsaveErr = service.UnsaveMessage(ctx, fixture.member, target.ID) }()
+			go func() { defer wait.Done(); _, deleteErr = service.Delete(ctx, fixture.owner, target.ID) }()
+			wait.Wait()
+			if unsaveErr != nil || deleteErr != nil {
+				t.Fatalf("round %d: unsave=%v delete=%v", round, unsaveErr, deleteErr)
+			}
+			assertCount(t, pool, `SELECT count(*) FROM saved_messages WHERE message_id = $1`, 0, target.ID)
+		}
+	})
+
+	t.Run("save races delete without deadlock", func(t *testing.T) {
+		for round := range rounds {
+			target := post(t)
+			var wait sync.WaitGroup
+			var saveErr, deleteErr error
+			wait.Add(2)
+			go func() { defer wait.Done(); _, _, saveErr = service.SaveMessage(ctx, fixture.member, target.ID) }()
+			go func() { defer wait.Done(); _, deleteErr = service.Delete(ctx, fixture.owner, target.ID) }()
+			wait.Wait()
+			// Saving a message deleted first is «not found», never an error.
+			if (saveErr != nil && !errors.Is(saveErr, ErrNotFound)) || deleteErr != nil {
+				t.Fatalf("round %d: save=%v delete=%v", round, saveErr, deleteErr)
+			}
+			// Whichever won, a deleted message keeps no save.
+			assertCount(t, pool, `SELECT count(*) FROM saved_messages WHERE message_id = $1`, 0, target.ID)
+		}
+	})
+
+	t.Run("saving while writing in the same chat does not deadlock", func(t *testing.T) {
+		for round := range rounds {
+			target := post(t)
+			var wait sync.WaitGroup
+			var saveErr, createErr error
+			wait.Add(2)
+			go func() { defer wait.Done(); _, _, saveErr = service.SaveMessage(ctx, fixture.member, target.ID) }()
+			go func() {
+				defer wait.Done()
+				_, _, createErr = service.Create(ctx, fixture.member, fixture.groupID, CreateInput{ClientMsgID: mustID(t), Body: "y", BodyFormat: "plain"})
+			}()
+			wait.Wait()
+			if saveErr != nil || createErr != nil {
+				t.Fatalf("round %d: save=%v create=%v", round, saveErr, createErr)
+			}
+		}
+	})
+
+	t.Run("parallel saves of one person respect the limit exactly", func(t *testing.T) {
+		limited := NewService(pool, 64*1024, 100, nil)
+		limited.savedLimit = 5
+		person := addMember(t, pool, fixture, fixture.groupID)
+		var wait sync.WaitGroup
+		var mutex sync.Mutex
+		saved, refused := 0, 0
+		for range 20 {
+			target := post(t)
+			wait.Add(1)
+			go func() {
+				defer wait.Done()
+				_, _, err := limited.SaveMessage(ctx, person, target.ID)
+				mutex.Lock()
+				defer mutex.Unlock()
+				switch {
+				case err == nil:
+					saved++
+				case errors.Is(err, ErrSavedLimit):
+					refused++
+				default:
+					t.Errorf("SaveMessage() error = %v", err)
+				}
+			}()
+		}
+		wait.Wait()
+		if saved != 5 || refused != 15 {
+			t.Fatalf("saved=%d refused=%d, want 5 and 15", saved, refused)
+		}
+	})
+}
+
+func TestSavedRowsCap(t *testing.T) {
+	pool := testdb.New(t)
+	fixture := seedFixture(t, pool)
+	service := NewService(pool, 64*1024, 100, nil)
+	service.savedLimit = 2
+	ctx := context.Background()
+	person := addMember(t, pool, fixture, fixture.groupID)
+	// A fresh group with the owner and the person in it.
+	newChat := func() string {
+		t.Helper()
+		chatID := mustID(t)
+		if _, err := pool.Exec(ctx, `
+			WITH chat AS (
+				INSERT INTO chats (id, org_id, kind, visibility, name, created_by) VALUES ($1, $2, 'group', 'private', 'cap', $3)
+				RETURNING id, org_id
+			)
+			INSERT INTO chat_members (chat_id, actor_id, org_id, role)
+			SELECT chat.id, $3, chat.org_id, 'owner' FROM chat UNION ALL SELECT chat.id, $4, chat.org_id, 'member' FROM chat`,
+			chatID, fixture.owner.OrgID, fixture.owner.ActorID, person.ActorID); err != nil {
+			t.Fatal(err)
+		}
+		return chatID
+	}
+	saveIn := func(chatID string) error {
+		t.Helper()
+		target, _, err := service.Create(ctx, fixture.owner, chatID, CreateInput{ClientMsgID: mustID(t), Body: "x", BodyFormat: "plain"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _, err = service.SaveMessage(ctx, person, target.ID)
+		return err
+	}
+	// Three times: fill the limit in a chat, then lose access to it. The
+	// saves stay (hidden) and stop counting against the limit of 2.
+	var hidden []string
+	for range 3 {
+		chatID := newChat()
+		for range 2 {
+			if err := saveIn(chatID); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, err := pool.Exec(ctx, `DELETE FROM chat_members WHERE chat_id = $1 AND actor_id = $2`, chatID, person.ActorID); err != nil {
+			t.Fatal(err)
+		}
+		hidden = append(hidden, chatID)
+	}
+	assertCount(t, pool, `SELECT count(*) FROM saved_messages WHERE actor_id = $1`, 6, person.ActorID)
+	// Six rows = 3 × limit: even with no readable saves, no more rows.
+	last := newChat()
+	if err := saveIn(last); !errors.Is(err, ErrSavedStorageFull) {
+		t.Fatalf("SaveMessage() over the row cap error = %v, want ErrSavedStorageFull", err)
+	}
+	// Removing one hidden save (allowed without access) makes room again.
+	var hiddenMessage string
+	if err := pool.QueryRow(ctx, `SELECT message_id FROM saved_messages WHERE actor_id = $1 AND chat_id = $2 LIMIT 1`, person.ActorID, hidden[0]).Scan(&hiddenMessage); err != nil {
+		t.Fatal(err)
+	}
+	if removed, err := service.UnsaveMessage(ctx, person, hiddenMessage); err != nil || !removed {
+		t.Fatalf("UnsaveMessage() of a hidden save = %v, %v", removed, err)
+	}
+	if err := saveIn(last); err != nil {
+		t.Fatalf("SaveMessage() after making room = %v", err)
+	}
 }

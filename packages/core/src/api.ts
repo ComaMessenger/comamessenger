@@ -182,6 +182,8 @@ export const minMessageContext = 3;
 
 export class MessengerAPI {
   private accessToken: string | null = null;
+  /** Whose access token this is; null for a token set without its user. */
+  private accessTokenOwner: string | null = null;
   private refreshRequest: Promise<TokenResponse> | null = null;
   constructor(
     readonly apiURL: string,
@@ -191,12 +193,21 @@ export class MessengerAPI {
   token(): string | null {
     return this.accessToken;
   }
+  /**
+   * The person the current access token belongs to. Queues of one person
+   * (outbox) send only while this is still them.
+   */
+  tokenOwnerID(): string | null {
+    return this.accessToken ? this.accessTokenOwner : null;
+  }
   useAccessToken(token: string): void {
     this.accessToken = token;
+    this.accessTokenOwner = null;
   }
   clearToken(expected?: string | null): boolean {
     if (expected !== undefined && this.accessToken !== expected) return false;
     this.accessToken = null;
+    this.accessTokenOwner = null;
     return true;
   }
   adoptTokens(tokens: TokenResponse): TokenResponse {
@@ -261,6 +272,7 @@ export class MessengerAPI {
       await this.request<void>("/api/v1/auth/logout", { method: "POST" });
     } finally {
       this.accessToken = null;
+      this.accessTokenOwner = null;
       await this.refreshTokens?.save(null);
     }
   }
@@ -1299,11 +1311,21 @@ export class MessengerAPI {
       `/api/v1/threads${beforeSeq ? `?before_seq=${beforeSeq}` : ""}`,
     );
   }
-  createMessage(chatID: string, input: CreateMessageRequest): Promise<Message> {
-    return this.request(`/api/v1/chats/${chatID}/messages`, {
-      method: "POST",
-      body: JSON.stringify(input),
-    });
+  /**
+   * With `ownerID` the message is sent only with that person's token, also
+   * after a refresh on 401 (the refreshed session may be someone else's).
+   */
+  createMessage(
+    chatID: string,
+    input: CreateMessageRequest,
+    ownerID?: string,
+  ): Promise<Message> {
+    return this.request(
+      `/api/v1/chats/${chatID}/messages`,
+      { method: "POST", body: JSON.stringify(input) },
+      true,
+      ownerID,
+    );
   }
   updateMessage(id: string, input: UpdateMessageRequest): Promise<Message> {
     return this.request(`/api/v1/messages/${id}`, {
@@ -1545,6 +1567,7 @@ export class MessengerAPI {
   }
   private acceptTokens(tokens: TokenResponse): TokenResponse {
     this.accessToken = tokens.access_token;
+    this.accessTokenOwner = tokens.user.id;
     return tokens;
   }
   // The refresh token goes straight to secure storage and never reaches UI state.
@@ -1598,7 +1621,10 @@ export class MessengerAPI {
     path: string,
     init: RequestInit = {},
     retry = true,
+    ownerID?: string,
   ): Promise<T> {
+    if (ownerID !== undefined && this.tokenOwnerID() !== ownerID)
+      throw new APIError(401, "unauthorized", "Signed in as another person.");
     const headers = new Headers(init.headers);
     if (init.body && !headers.has("Content-Type"))
       headers.set("Content-Type", "application/json");
@@ -1613,9 +1639,10 @@ export class MessengerAPI {
     if (response.status === 401 && retry && path !== "/api/v1/auth/refresh") {
       try {
         await this.refresh();
-        return this.request<T>(path, init, false);
+        return this.request<T>(path, init, false, ownerID);
       } catch {
         this.accessToken = null;
+        this.accessTokenOwner = null;
       }
     }
     if (!response.ok) {

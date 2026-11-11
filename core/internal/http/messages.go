@@ -371,6 +371,8 @@ func (h *identityHandlers) messageError(w standardhttp.ResponseWriter, r *standa
 		h.writeError(w, r, standardhttp.StatusConflict, "version_conflict", "The message was changed by another request.")
 	case errors.Is(err, message.ErrTooLarge):
 		h.writeError(w, r, standardhttp.StatusRequestEntityTooLarge, "payload_too_large", "The message body is too large.")
+	case errors.Is(err, message.ErrSavedStorageFull):
+		h.writeError(w, r, standardhttp.StatusConflict, "saved_storage_full", "Too many saved messages are kept, counting those from chats you can no longer open. Remove saved messages you no longer need, then try again.")
 	case errors.Is(err, message.ErrSavedLimit):
 		h.writeError(w, r, standardhttp.StatusConflict, "saved_limit_reached", "The saved messages limit was reached. Remove saved messages you no longer need, then try again.")
 	case errors.Is(err, message.ErrRateLimited):

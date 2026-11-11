@@ -92,10 +92,11 @@ export function applySavedChange(
 /** What a client shows when the server refuses a save over the limit. */
 export const savedLimitCode = "saved_limit_reached";
 
+/** Both limits read the same to a person: remove saves you do not need. */
 export function isSavedLimitError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    (error as { code?: unknown }).code === savedLimitCode
-  );
+  const code =
+    typeof error === "object" && error !== null
+      ? (error as { code?: unknown }).code
+      : undefined;
+  return code === savedLimitCode || code === "saved_storage_full";
 }
