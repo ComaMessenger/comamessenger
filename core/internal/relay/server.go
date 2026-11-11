@@ -233,6 +233,7 @@ func (s *Server) send(w http.ResponseWriter, r *http.Request) {
 		FallbackTitle string `json:"fallback_title"`
 		FallbackBody  string `json:"fallback_body"`
 		CollapseID    string `json:"collapse_id"`
+		Silent        bool   `json:"silent"`
 	}
 	if !s.sendIP.allow(s.clientIP(r)) {
 		w.WriteHeader(http.StatusTooManyRequests)
@@ -269,7 +270,7 @@ func (s *Server) send(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	err = sender.Send(ctx, device.Token, Notification{
 		Ciphertext: input.Ciphertext, FallbackTitle: input.FallbackTitle,
-		FallbackBody: input.FallbackBody, CollapseID: input.CollapseID,
+		FallbackBody: input.FallbackBody, CollapseID: input.CollapseID, Silent: input.Silent,
 	})
 	switch {
 	case err == nil:

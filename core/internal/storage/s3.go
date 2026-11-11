@@ -123,6 +123,146 @@ func (s *S3BlobStore) Open(ctx context.Context, key string) (io.ReadCloser, Blob
 	return result.Body, Blob{Key: key, Size: aws.ToInt64(result.ContentLength), ContentType: aws.ToString(result.ContentType), ModifiedAt: aws.ToTime(result.LastModified)}, nil
 }
 
+// maxSingleCopyBytes is the largest object one CopyObject call may copy;
+// copyPartBytes is the part size of a larger, multipart copy. Variables so
+// tests can exercise the multipart path with small objects.
+var (
+	maxSingleCopyBytes int64 = 5 << 30
+	copyPartBytes      int64 = 512 << 20
+)
+
+// Copy duplicates an object inside the bucket. The copy is pinned to the
+// ETag read first, so a concurrent overwrite of the source makes it fail
+// instead of mixing versions.
+func (s *S3BlobStore) Copy(ctx context.Context, sourceKey, destinationKey string) (Blob, error) {
+	source, err := s.objectKey(sourceKey)
+	if err != nil {
+		return Blob{}, err
+	}
+	destination, err := s.objectKey(destinationKey)
+	if err != nil {
+		return Blob{}, err
+	}
+	head, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(source)})
+	if isS3NotFound(err) {
+		return Blob{}, ErrNotFound
+	}
+	if err != nil {
+		return Blob{}, fmt.Errorf("stat S3 copy source: %w", err)
+	}
+	copySource := s.bucket + "/" + source
+	size := aws.ToInt64(head.ContentLength)
+	if size <= maxSingleCopyBytes {
+		if _, err := s.client.CopyObject(ctx, &s3.CopyObjectInput{
+			Bucket: aws.String(s.bucket), Key: aws.String(destination),
+			CopySource: aws.String(copySource), CopySourceIfMatch: head.ETag,
+			ContentType: head.ContentType, MetadataDirective: types.MetadataDirectiveReplace,
+		}); err != nil {
+			return Blob{}, fmt.Errorf("copy S3 blob: %w", err)
+		}
+		return s.Stat(ctx, destinationKey)
+	}
+	upload, err := s.client.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{Bucket: aws.String(s.bucket), Key: aws.String(destination), ContentType: head.ContentType})
+	if err != nil {
+		return Blob{}, fmt.Errorf("begin S3 multipart copy: %w", err)
+	}
+	abort := func() {
+		_, _ = s.client.AbortMultipartUpload(context.Background(), &s3.AbortMultipartUploadInput{Bucket: aws.String(s.bucket), Key: aws.String(destination), UploadId: upload.UploadId})
+	}
+	parts := []types.CompletedPart{}
+	for number, offset := int32(1), int64(0); offset < size; number, offset = number+1, offset+copyPartBytes {
+		end := min(offset+copyPartBytes, size) - 1
+		part, err := s.client.UploadPartCopy(ctx, &s3.UploadPartCopyInput{
+			Bucket: aws.String(s.bucket), Key: aws.String(destination), UploadId: upload.UploadId, PartNumber: aws.Int32(number),
+			CopySource: aws.String(copySource), CopySourceIfMatch: head.ETag, CopySourceRange: aws.String(fmt.Sprintf("bytes=%d-%d", offset, end)),
+		})
+		if err != nil {
+			abort()
+			return Blob{}, fmt.Errorf("copy S3 blob part: %w", err)
+		}
+		parts = append(parts, types.CompletedPart{PartNumber: aws.Int32(number), ETag: part.CopyPartResult.ETag})
+	}
+	if _, err := s.client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{Bucket: aws.String(s.bucket), Key: aws.String(destination), UploadId: upload.UploadId, MultipartUpload: &types.CompletedMultipartUpload{Parts: parts}}); err != nil {
+		abort()
+		return Blob{}, fmt.Errorf("complete S3 multipart copy: %w", err)
+	}
+	return s.Stat(ctx, destinationKey)
+}
+
+// AbortStaleMultipart aborts multipart uploads under the store prefix that
+// were started before the cutoff: client uploads past their TTL and
+// server-side copies interrupted midway. Their parts take space but are no
+// object, so nothing else would ever remove them.
+func (s *S3BlobStore) AbortStaleMultipart(ctx context.Context, before time.Time, owned func(key string) bool) (int, error) {
+	prefix := s.prefix
+	if prefix != "" {
+		prefix += "/"
+	}
+	aborted := 0
+	input := &s3.ListMultipartUploadsInput{Bucket: aws.String(s.bucket), Prefix: aws.String(prefix)}
+	for {
+		page, err := s.client.ListMultipartUploads(ctx, input)
+		if err != nil {
+			return aborted, fmt.Errorf("list S3 multipart uploads: %w", err)
+		}
+		for _, upload := range page.Uploads {
+			if upload.Initiated == nil || !upload.Initiated.Before(before) {
+				continue
+			}
+			key := strings.TrimPrefix(aws.ToString(upload.Key), prefix)
+			if !validKey(key) || owned == nil || !owned(key) {
+				continue
+			}
+			if _, err := s.client.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{Bucket: aws.String(s.bucket), Key: upload.Key, UploadId: upload.UploadId}); err != nil && !isS3NotFound(err) {
+				return aborted, fmt.Errorf("abort stale S3 multipart upload: %w", err)
+			}
+			aborted++
+		}
+		if !aws.ToBool(page.IsTruncated) {
+			return aborted, nil
+		}
+		input.KeyMarker, input.UploadIdMarker = page.NextKeyMarker, page.NextUploadIdMarker
+	}
+}
+
+// CheckBucket asks the server whether the bucket exists (HeadBucket).
+func (s *S3BlobStore) CheckBucket(ctx context.Context) error {
+	_, err := s.client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String(s.bucket)})
+	if err == nil {
+		return nil
+	}
+	var notFound *types.NotFound
+	var noBucket *types.NoSuchBucket
+	var apiError smithy.APIError
+	if errors.As(err, &notFound) || errors.As(err, &noBucket) || (errors.As(err, &apiError) && (apiError.ErrorCode() == "NotFound" || apiError.ErrorCode() == "NoSuchBucket")) {
+		return fmt.Errorf("%w: %s", ErrBucketMissing, s.bucket)
+	}
+	return fmt.Errorf("check S3 bucket %s: %w", s.bucket, err)
+}
+
+func (s *S3BlobStore) ReadRange(ctx context.Context, key string, offset, length int64) ([]byte, error) {
+	if offset < 0 || length < 1 {
+		return nil, fmt.Errorf("read S3 range: invalid range")
+	}
+	objectKey, err := s.objectKey(key)
+	if err != nil {
+		return nil, err
+	}
+	result, err := s.client.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(objectKey), Range: aws.String(fmt.Sprintf("bytes=%d-%d", offset, offset+length-1))})
+	if isS3NotFound(err) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read S3 range: %w", err)
+	}
+	defer result.Body.Close()
+	buffer := make([]byte, length)
+	if _, err := io.ReadFull(result.Body, buffer); err != nil {
+		return nil, fmt.Errorf("read S3 range: %w", err)
+	}
+	return buffer, nil
+}
+
 func (s *S3BlobStore) Stat(ctx context.Context, key string) (Blob, error) {
 	objectKey, err := s.objectKey(key)
 	if err != nil {

@@ -13,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/comamessenger/comamessenger/core/internal/id"
@@ -104,22 +105,52 @@ type RelayMessage struct {
 	FallbackTitle string `json:"fallback_title"`
 	FallbackBody  string `json:"fallback_body"`
 	CollapseID    string `json:"collapse_id,omitempty"`
+	// Silent asks the relay to deliver without sound. Older relays reject
+	// unknown fields, so it is sent only when true and dropped on retry.
+	Silent bool `json:"silent,omitempty"`
 }
 
 type RelayClient interface {
 	Send(ctx context.Context, message RelayMessage) error
 }
 
+// legacyRelayProbe is how long the core trusts that its relay predates
+// quiet notifications before trying the field again.
+const legacyRelayProbe = time.Hour
+
 type httpRelay struct {
 	baseURL string
 	client  *http.Client
+	now     func() time.Time
+
+	mu sync.Mutex
+	// quietUnsupportedUntil: the relay refused "silent" recently; until then
+	// quiet notifications go without it, one request each, and the app
+	// alone silences them. The relay limits requests per instance IP before
+	// reading the body, so a refused probe costs a request of the budget.
+	quietUnsupportedUntil time.Time
 }
 
 func NewHTTPRelay(baseURL string, client *http.Client) RelayClient {
-	return &httpRelay{baseURL: strings.TrimRight(baseURL, "/"), client: client}
+	return &httpRelay{baseURL: strings.TrimRight(baseURL, "/"), client: client, now: time.Now}
+}
+
+func (r *httpRelay) quietUnsupported() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.now().Before(r.quietUnsupportedUntil)
+}
+
+func (r *httpRelay) markQuietUnsupported() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.quietUnsupportedUntil = r.now().Add(legacyRelayProbe)
 }
 
 func (r *httpRelay) Send(ctx context.Context, message RelayMessage) error {
+	if message.Silent && r.quietUnsupported() {
+		message.Silent = false
+	}
 	encoded, err := json.Marshal(message)
 	if err != nil {
 		return err
@@ -140,6 +171,13 @@ func (r *httpRelay) Send(ctx context.Context, message RelayMessage) error {
 		return nil
 	case response.StatusCode == http.StatusGone || response.StatusCode == http.StatusNotFound:
 		return ErrUnknownHandle
+	case response.StatusCode == http.StatusBadRequest && message.Silent:
+		// A relay from before quiet notifications refuses the field. The
+		// app still removes the sound after decrypting the payload: send
+		// once more without it and skip the field for a while.
+		r.markQuietUnsupported()
+		message.Silent = false
+		return r.Send(ctx, message)
 	default:
 		return fmt.Errorf("push relay responded %d", response.StatusCode)
 	}
@@ -152,6 +190,9 @@ type mobilePayload struct {
 	EventSeq int64 `json:"event_seq"`
 	// Badge is the recipient's unread chat messages, as the app counts them.
 	Badge int64 `json:"badge"`
+	// Silent: show without sound or vibration. The iOS notification service
+	// extension and the Android app apply it after decrypting.
+	Silent bool `json:"silent,omitempty"`
 }
 
 // unreadTotal matches the app icon badge: unread top-level messages from
@@ -209,7 +250,9 @@ func (w *Worker) deliverMobile(ctx context.Context) error {
 	}
 	rows, err := w.pool.Query(ctx, `SELECT p.org_id,p.event_seq,p.device_id,d.actor_id,d.relay_handle,d.notification_key,
 		e.type,e.data,e.chat_id,m.thread_root_id,m.body,c.name,a.display_name,
-		COALESCE((u.preferences->>'push_preview')::boolean,false),COALESCE(NULLIF(d.locale,''),u.preferences->>'locale','ru')
+		COALESCE((u.preferences->>'push_preview')::boolean,false),COALESCE(NULLIF(d.locale,''),u.preferences->>'locale','ru'),
+		(SELECT f.voice_duration_ms FROM message_files mf JOIN files f ON f.org_id=mf.org_id AND f.id=mf.file_id WHERE mf.message_id=m.id AND f.voice_duration_ms IS NOT NULL LIMIT 1),
+		`+quietNotification+`
 		FROM mobile_push_deliveries p JOIN mobile_push_devices d ON d.id=p.device_id
 		JOIN events e ON e.org_id=p.org_id AND e.seq=p.event_seq
 		LEFT JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id
@@ -225,14 +268,15 @@ func (w *Worker) deliverMobile(ctx context.Context) error {
 		seq                                                   int64
 		key, eventData                                        []byte
 		chatID, threadID, body, chatName                      *string
-		preview                                               bool
+		voiceMs                                               *int32
+		preview, silent                                       bool
 	}
 	deliveries := []delivery{}
 	for rows.Next() {
 		var item delivery
 		if err := rows.Scan(&item.org, &item.seq, &item.device, &item.actor, &item.handle, &item.key,
 			&item.eventType, &item.eventData, &item.chatID, &item.threadID, &item.body, &item.chatName, &item.author,
-			&item.preview, &item.locale); err != nil {
+			&item.preview, &item.locale, &item.voiceMs, &item.silent); err != nil {
 			rows.Close()
 			return err
 		}
@@ -250,12 +294,12 @@ func (w *Worker) deliverMobile(ctx context.Context) error {
 			finish(item, `UPDATE mobile_push_deliveries SET sent_at=now(),last_error='suppressed_active',lease_token=NULL,lease_until=NULL WHERE org_id=$1 AND event_seq=$2 AND device_id=$3 AND lease_token=$4`)
 			continue
 		}
-		content := buildNotification(item.eventType, item.eventData, item.author, item.locale, item.preview, item.chatID, item.threadID, item.body, item.chatName)
+		content := buildNotification(item.eventType, item.eventData, item.author, item.locale, item.preview, item.chatID, item.threadID, messageText(item.body, item.voiceMs, item.locale), item.chatName)
 		var badge int64
 		if err := w.pool.QueryRow(ctx, unreadTotal, item.org, item.actor).Scan(&badge); err != nil {
 			return err
 		}
-		plaintext, _ := json.Marshal(mobilePayload{Version: 1, notificationContent: content, EventSeq: item.seq, Badge: badge})
+		plaintext, _ := json.Marshal(mobilePayload{Version: 1, notificationContent: content, EventSeq: item.seq, Badge: badge, Silent: item.silent})
 		ciphertext, err := sealPayload(item.key, plaintext)
 		if err != nil {
 			return err
@@ -266,7 +310,7 @@ func (w *Worker) deliverMobile(ctx context.Context) error {
 		}
 		sendErr := w.relay.Send(ctx, RelayMessage{
 			Handle: item.handle, Ciphertext: ciphertext,
-			FallbackTitle: fallbackTitle, FallbackBody: fallbackBody, CollapseID: content.ChatID,
+			FallbackTitle: fallbackTitle, FallbackBody: fallbackBody, CollapseID: content.ChatID, Silent: item.silent,
 		})
 		switch {
 		case sendErr == nil:

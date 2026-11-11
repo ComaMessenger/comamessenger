@@ -1059,3 +1059,105 @@
 .message__pinned {
   color: var(--coma-muted);
 }
+/* Voice message: round play button, waveform with progress, length and,
+   while listening, the speed switch (design/prototypes/messenger-mobile). */
+.voice-message {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(300px, 100%);
+  min-width: 0;
+  padding: 8px 12px 8px 8px;
+  border: 1px solid var(--coma-border);
+  border-radius: 22px;
+  background: var(--coma-sidebar);
+  color: var(--coma-foreground);
+}
+.voice-message__play {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: none;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--coma-primary);
+  color: var(--coma-on-primary);
+  cursor: pointer;
+}
+.voice-message__play:hover {
+  background: var(--coma-primary-hover);
+}
+.voice-message__play > svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+  stroke-width: 0;
+}
+.voice-message__play > .voice-message__spinner {
+  fill: none;
+  stroke-width: 2;
+  animation: voice-spin 0.9s linear infinite;
+}
+@keyframes voice-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.voice-message__body {
+  flex: 1;
+  min-width: 0;
+}
+.voice-message__wave {
+  display: flex;
+  height: 24px;
+  align-items: center;
+  gap: 2px;
+  overflow: hidden;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.voice-message__wave:focus-visible {
+  outline: 2px solid var(--coma-primary);
+  outline-offset: 2px;
+}
+.voice-message__wave > i {
+  width: 2.5px;
+  flex: none;
+  border-radius: 2px;
+  background: var(--coma-muted);
+  opacity: 0.4;
+}
+.voice-message__wave > i.is-played {
+  background: var(--coma-primary);
+  opacity: 1;
+}
+.voice-message__meta {
+  display: flex;
+  min-height: 18px;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  color: var(--coma-muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+.voice-message__rate {
+  padding: 1px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--coma-surface-selected);
+  color: var(--coma-foreground);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.voice-message__error {
+  color: var(--coma-danger);
+}
+@media (prefers-reduced-motion: reduce) {
+  .voice-message__play > .voice-message__spinner {
+    animation: none;
+  }
+}

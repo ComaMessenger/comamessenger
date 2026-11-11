@@ -1,4 +1,5 @@
 import type { components } from "@comamessenger/protocol";
+import { parseRetryAfter } from "./retryAfter";
 import type {
   AcceptInvitationRequest,
   ActorPage,
@@ -12,6 +13,9 @@ import type {
   CreateChatRequest,
   CreateInvitationRequest,
   CreateMessageRequest,
+  CreateScheduledMessageRequest,
+  ScheduledMessage,
+  UpdateScheduledMessageRequest,
   DirectoryChat,
   Draft,
   LoginRequest,
@@ -26,6 +30,7 @@ import type {
   MessageReceipt,
   MessageWindow,
   FileMetadata,
+  CreateFileUploadRequest,
   FileUpload,
   CompletedFilePart,
   SearchPage,
@@ -155,6 +160,8 @@ export class APIError extends Error {
     message: string,
     /** Structured details some errors carry (e.g. `loosened` actions). */
     readonly details: Record<string, unknown> = {},
+    /** Seconds from Retry-After on 429/503: the request may be repeated. */
+    readonly retryAfterSeconds?: number,
   ) {
     super(message);
     this.name = "APIError";
@@ -407,7 +414,9 @@ export class MessengerAPI {
   agentRun(runID: string): Promise<AgentRun> {
     return this.request(`/api/v1/agent-runs/${encodeURIComponent(runID)}`);
   }
-  agentRunToolCalls(runID: string): Promise<{ tool_calls: AgentRunToolCall[] }> {
+  agentRunToolCalls(
+    runID: string,
+  ): Promise<{ tool_calls: AgentRunToolCall[] }> {
     return this.request(
       `/api/v1/agent-runs/${encodeURIComponent(runID)}/tool-calls`,
     );
@@ -421,7 +430,12 @@ export class MessengerAPI {
     return this.request(`/api/v1/agents/response-collections?${query}`);
   }
   agentFollowups(
-    status: "pending" | "dispatched" | "canceled" | "skipped" | "all" = "pending",
+    status:
+      | "pending"
+      | "dispatched"
+      | "canceled"
+      | "skipped"
+      | "all" = "pending",
     agentID?: string,
   ): Promise<AgentFollowup[]> {
     const query = new URLSearchParams({ status });
@@ -1104,12 +1118,8 @@ export class MessengerAPI {
       `/api/v1/chats/${encodeURIComponent(chatID)}/avatar`,
     );
   }
-  createFileUpload(input: {
-    name: string;
-    mime: string;
-    size: number;
-    sha256?: string;
-  }): Promise<FileUpload> {
+  /** Reserves an upload; pass `voice` (and VOICE_MIME) for a voice recording. */
+  createFileUpload(input: CreateFileUploadRequest): Promise<FileUpload> {
     return this.request("/api/v1/files/uploads", {
       method: "POST",
       body: JSON.stringify(input),
@@ -1313,6 +1323,49 @@ export class MessengerAPI {
   }
   deleteMessage(id: string): Promise<Message> {
     return this.request(`/api/v1/messages/${id}`, { method: "DELETE" });
+  }
+  /** Schedules a message; only its author can ever see it before it is sent. */
+  createScheduledMessage(
+    chatID: string,
+    input: CreateScheduledMessageRequest,
+  ): Promise<ScheduledMessage> {
+    return this.request(
+      `/api/v1/chats/${encodeURIComponent(chatID)}/scheduled-messages`,
+      { method: "POST", body: JSON.stringify(input) },
+    );
+  }
+  /** Pending and failed scheduled messages of the current user, soonest first. */
+  async scheduledMessages(chatID?: string): Promise<ScheduledMessage[]> {
+    return (
+      await this.request<{ scheduled_messages: ScheduledMessage[] }>(
+        `/api/v1/scheduled-messages${chatID ? `?chat_id=${encodeURIComponent(chatID)}` : ""}`,
+      )
+    ).scheduled_messages;
+  }
+  scheduledMessage(id: string): Promise<ScheduledMessage> {
+    return this.request(`/api/v1/scheduled-messages/${encodeURIComponent(id)}`);
+  }
+  updateScheduledMessage(
+    id: string,
+    input: UpdateScheduledMessageRequest,
+  ): Promise<ScheduledMessage> {
+    return this.request(
+      `/api/v1/scheduled-messages/${encodeURIComponent(id)}`,
+      { method: "PATCH", body: JSON.stringify(input) },
+    );
+  }
+  deleteScheduledMessage(id: string): Promise<void> {
+    return this.request(
+      `/api/v1/scheduled-messages/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    );
+  }
+  /** Sends now; a refusal comes back as status "failed" with a reason. */
+  sendScheduledMessageNow(id: string): Promise<ScheduledMessage> {
+    return this.request(
+      `/api/v1/scheduled-messages/${encodeURIComponent(id)}/send`,
+      { method: "POST" },
+    );
   }
   async reactions(id: string): Promise<Reaction[]> {
     return (
@@ -1630,6 +1683,7 @@ export class MessengerAPI {
         payload.code ?? "request_failed",
         payload.message ?? "Request failed.",
         payload.details ?? {},
+        parseRetryAfter(response.headers.get("Retry-After")),
       );
     }
     if (response.status === 204) return undefined as T;

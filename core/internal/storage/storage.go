@@ -16,6 +16,9 @@ var (
 	ErrSizeMismatch     = errors.New("blob size does not match reservation")
 	ErrChecksumMismatch = errors.New("blob checksum does not match")
 	ErrUnsupported      = errors.New("storage capability is unsupported")
+	// ErrBucketMissing means the configured bucket (or local root) does not
+	// exist: the store is pointed at the wrong place, not merely empty.
+	ErrBucketMissing = errors.New("storage bucket does not exist")
 )
 
 type Capabilities struct {
@@ -66,6 +69,32 @@ type BlobStore interface {
 	Delete(context.Context, string) error
 	PresignUpload(context.Context, string, string, int64, time.Duration) (*url.URL, error)
 	PresignDownload(context.Context, string, time.Duration) (*url.URL, error)
+}
+
+// ServerCopier copies a stored object to a new key without the bytes
+// leaving the store. Every store that hands out presigned upload URLs must
+// implement it: a completed upload is copied to a key no client has seen, so
+// a still-valid upload URL can no longer replace what readers download.
+type ServerCopier interface {
+	Copy(ctx context.Context, sourceKey, destinationKey string) (Blob, error)
+}
+
+// RangeReader reads length bytes at offset, so a parser can inspect headers
+// without loading a whole object.
+type RangeReader interface {
+	ReadRange(ctx context.Context, key string, offset, length int64) ([]byte, error)
+}
+
+// MultipartSweeper removes multipart uploads started before a cutoff whose
+// key (relative to the store prefix) the owned callback accepts, so uploads
+// of other applications sharing the bucket are left alone.
+type MultipartSweeper interface {
+	AbortStaleMultipart(ctx context.Context, before time.Time, owned func(key string) bool) (int, error)
+}
+
+// BucketChecker reports whether the store's bucket exists and is reachable.
+type BucketChecker interface {
+	CheckBucket(ctx context.Context) error
 }
 
 // MultipartBlobStore is implemented only by providers that can safely expose

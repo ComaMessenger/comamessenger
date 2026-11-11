@@ -421,9 +421,14 @@ func validateID(name, value string) error {
 	}
 	return nil
 }
+
+// lockOrganization serializes the event sequence, first in the transaction.
+// NO KEY UPDATE, as in message.lockOrganization: audit inserts of security
+// events (FOR KEY SHARE) do not wait for it, so a draft or a read marker
+// cannot deadlock with a member's deactivation.
 func lockOrganization(ctx context.Context, tx pgx.Tx, orgID string) error {
 	var seq int64
-	err := tx.QueryRow(ctx, `SELECT event_seq FROM organizations WHERE id=$1 FOR UPDATE`, orgID).Scan(&seq)
+	err := tx.QueryRow(ctx, `SELECT event_seq FROM organizations WHERE id=$1 FOR NO KEY UPDATE`, orgID).Scan(&seq)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrForbidden
 	}
