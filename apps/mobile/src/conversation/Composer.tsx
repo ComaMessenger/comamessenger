@@ -33,6 +33,8 @@ import { Avatar } from "@/ui/Avatar";
 import { IconButton } from "@/ui/IconButton";
 import { Text, fonts, maxTextScale } from "@/ui/Text";
 import type { Attachment } from "@/files/useAttachments";
+import { VoiceActionButton, VoiceRecordingBar } from "@/voice/VoiceComposer";
+import { useVoiceRecorder, type VoiceTarget } from "@/voice/useVoiceRecorder";
 
 const lineHeight = 21;
 const inputPadding = 9;
@@ -61,6 +63,7 @@ export function Composer({
   onRetryAttachment,
   commands = [],
   focusRequest = 0,
+  voice,
 }: {
   body: string;
   onChangeBody(body: string): void;
@@ -79,6 +82,8 @@ export function Composer({
   commands?: ChatCommand[];
   /** Raised by the screen to put the cursor in the field, e.g. after a mention was inserted. */
   focusRequest?: number;
+  /** Enables voice recording on the microphone while the field is empty. */
+  voice?: VoiceTarget;
 }) {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -99,6 +104,19 @@ export function Composer({
     (Boolean(draft.text.trim()) ||
       attachments.some((item) => item.status === "ready")) &&
     !uploading;
+  // Voice (package F): the microphone takes the send button's place while
+  // there is nothing to send; recording replaces the field.
+  const recorder = useVoiceRecorder(readonly ? undefined : voice);
+  const recording = recorder.phase.kind !== "idle";
+  const micMode =
+    recorder.enabled &&
+    (recording ||
+      (!draft.text.trim() &&
+        attachments.length === 0 &&
+        context?.kind !== "edit"));
+  useEffect(() => {
+    if (recording) input.current?.blur();
+  }, [recording]);
 
   const mention = /@([\p{L}\p{N}_.-]*)$/u.exec(draft.text);
   const query = mention?.[1]?.toLowerCase() ?? "";
@@ -347,7 +365,8 @@ export function Composer({
         </ScrollView>
       )}
       <View style={styles.line}>
-        {showMore && (
+        {recording && <VoiceRecordingBar voice={recorder} />}
+        {showMore && !recording && (
           <IconButton
             testID="composer-attach"
             variant="soft"
@@ -359,6 +378,7 @@ export function Composer({
         <View
           style={[
             styles.pill,
+            recording && styles.hidden,
             {
               backgroundColor: theme.surface,
               borderColor: focused ? theme.borderStrong : theme.border,
@@ -395,6 +415,7 @@ export function Composer({
           label={context?.kind === "edit" ? t("save") : t("send")}
           disabled={!canSend}
           onPress={onSend}
+          style={micMode ? styles.hidden : undefined}
           icon={(color) =>
             context?.kind === "edit" ? (
               <Check size={20} color={color} strokeWidth={2.4} />
@@ -403,6 +424,7 @@ export function Composer({
             )
           }
         />
+        {micMode && <VoiceActionButton voice={recorder} />}
       </View>
     </View>
   );
@@ -493,4 +515,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   center: { textAlign: "center" },
+  hidden: { display: "none" },
 });

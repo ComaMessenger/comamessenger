@@ -14,6 +14,9 @@ import { openAttachment } from "@/files/open";
 import { useFileSource } from "@/files/sources";
 import { useTheme } from "@/lib/theme";
 import { Text } from "@/ui/Text";
+import { playableVoice } from "@/voice/model";
+import { VoiceBoundary } from "@/voice/VoiceFeed";
+import { VoiceMessage } from "@/voice/VoiceMessage";
 
 function ImageAttachment({
   api,
@@ -99,13 +102,16 @@ function FileCard({ api, file }: { api: MessengerAPI; file: FileMetadata }) {
   );
 }
 
-/** Attachments of one message: image previews and file cards. */
+/** Attachments of one message: voice player, image previews and file cards. */
 export function MessageFiles({
   api,
   files,
+  own = false,
 }: {
   api: MessengerAPI;
   files: FileMetadata[];
+  /** The reader's own bubble: the voice player takes its colours. */
+  own?: boolean;
 }) {
   const { t } = useTranslation();
   const [viewing, setViewing] = useState<FileMetadata | null>(null);
@@ -116,6 +122,18 @@ export function MessageFiles({
   const others = files.filter((file) => !images.includes(file));
   return (
     <View style={styles.files}>
+      {others.map((file) => {
+        // A voice file without valid `voice` data stays a plain attachment.
+        const voice = playableVoice(file);
+        return voice ? (
+          <VoiceBoundary
+            key={file.id}
+            fallback={<FileCard api={api} file={file} />}
+          >
+            <VoiceMessage api={api} file={voice} own={own} />
+          </VoiceBoundary>
+        ) : null;
+      })}
       {images.length > 0 && (
         <View style={styles.gallery}>
           {images.map((file) => (
@@ -128,9 +146,11 @@ export function MessageFiles({
           ))}
         </View>
       )}
-      {others.map((file) => (
-        <FileCard key={file.id} api={api} file={file} />
-      ))}
+      {others
+        .filter((file) => !playableVoice(file))
+        .map((file) => (
+          <FileCard key={file.id} api={api} file={file} />
+        ))}
       <Modal
         visible={viewing !== null}
         animationType="fade"

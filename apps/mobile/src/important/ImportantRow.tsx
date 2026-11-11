@@ -1,13 +1,18 @@
 import { memo } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import { FileText, Star } from "lucide-react-native";
+import { FileText, Mic, Star } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
-import { formatListTime, messagePlainText } from "@comamessenger/core";
+import {
+  formatListTime,
+  formatVoiceDuration,
+  messagePlainText,
+} from "@comamessenger/core";
 import { useTheme } from "@/lib/theme";
 import { useSignedIn } from "@/session/SessionProvider";
 import { ChatAvatar } from "@/chats/ChatAvatar";
 import { chatTitle } from "@/chats/ChatRow";
 import { Text } from "@/ui/Text";
+import { playableVoice } from "@/voice/model";
 import type { ImportantItem } from "./saved";
 
 /**
@@ -43,7 +48,10 @@ export const ImportantRow = memo(function ImportantRow({
     i18n.language,
     t("yesterday"),
   );
-  const fileLabel = files.length
+  const voice = files[0] ? playableVoice(files[0]) : null;
+  const fileLabel = voice
+    ? `${t("voiceMessage")} · ${formatVoiceDuration(voice.voice.duration_ms)}`
+    : files.length
     ? `${files[0]!.name}${files.length > 1 ? ` ${t("moreFiles", { count: files.length - 1 })}` : ""}`
     : "";
 
@@ -114,7 +122,11 @@ export const ImportantRow = memo(function ImportantRow({
           <View
             style={[styles.file, { backgroundColor: theme.surfaceSelected }]}
           >
-            <FileText size={15} color={theme.muted} />
+            {voice ? (
+              <Mic size={15} color={theme.muted} />
+            ) : (
+              <FileText size={15} color={theme.muted} />
+            )}
             <Text size={13} numberOfLines={1} style={styles.fileName}>
               {fileLabel}
             </Text>

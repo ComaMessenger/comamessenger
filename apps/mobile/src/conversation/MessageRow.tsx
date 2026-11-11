@@ -319,7 +319,7 @@ export function MessageBubble({
           onUpdated={(updated) => onUpdated?.(updated)}
         />
       )}
-      {files.length > 0 && <MessageFiles api={api} files={files} />}
+      {files.length > 0 && <MessageFiles api={api} files={files} own={own} />}
       {!deleted && <AgentWhy provenance={message.agent_provenance} />}
       {!inlineMeta && <View style={styles.metaEnd}>{meta}</View>}
       {reactions.groups.length > 0 && !deleted && (

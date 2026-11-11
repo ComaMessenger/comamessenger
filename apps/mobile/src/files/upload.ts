@@ -10,6 +10,7 @@ import {
   type FileMetadata,
   type MessengerAPI,
   type UploadRetryOptions,
+  type VoiceInfo,
 } from "@comamessenger/core";
 import { absoluteURL, withAuthorization } from "./auth";
 
@@ -72,6 +73,8 @@ export async function uploadFile(
   signal: AbortSignal,
   onProgress: Progress,
   retry: Omit<UploadRetryOptions, "signal"> = {},
+  /** Marks the upload as a voice message (send `local.mime` = VOICE_MIME). */
+  voice?: VoiceInfo,
 ): Promise<FileMetadata> {
   let uploadID = "";
   let completing = false;
@@ -81,6 +84,7 @@ export async function uploadFile(
       name: local.name,
       mime: local.mime,
       size: local.size,
+      ...(voice ? { voice } : {}),
     });
     uploadID = upload.id;
     const source = new File(local.uri);
