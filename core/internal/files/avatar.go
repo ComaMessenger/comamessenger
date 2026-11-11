@@ -70,6 +70,9 @@ func (s *Service) PutAvatar(ctx context.Context, current identity.User, targetAc
 		return AvatarUpdate{}, err
 	}
 	defer tx.Rollback(ctx)
+	if err := lockOrganization(ctx, tx, current.OrgID); err != nil {
+		return AvatarUpdate{}, err
+	}
 	var old avatarFile
 	var oldID, oldKey, oldMIME, oldName *string
 	var oldSize *int64
@@ -158,6 +161,9 @@ func (s *Service) DeleteAvatar(ctx context.Context, current identity.User, targe
 		return AvatarUpdate{}, err
 	}
 	defer tx.Rollback(ctx)
+	if err := lockOrganization(ctx, tx, current.OrgID); err != nil {
+		return AvatarUpdate{}, err
+	}
 	var old avatarFile
 	var version int64
 	err = tx.QueryRow(ctx, `
@@ -247,4 +253,18 @@ func appendAvatarEvent(ctx context.Context, tx pgx.Tx, current identity.User, ta
 		return 0, fmt.Errorf("append avatar event: %w", err)
 	}
 	return seq, nil
+}
+
+// lockOrganization takes the organization row before the actor or chat row
+// an avatar change updates, the order sends use (see
+// message.lockOrganization); the event sequence is allocated later in the
+// same transaction.
+func lockOrganization(ctx context.Context, tx pgx.Tx, orgID string) error {
+	var seq int64
+	if err := tx.QueryRow(ctx, `SELECT event_seq FROM organizations WHERE id=$1 FOR NO KEY UPDATE`, orgID).Scan(&seq); errors.Is(err, pgx.ErrNoRows) {
+		return ErrForbidden
+	} else if err != nil {
+		return fmt.Errorf("lock organization: %w", err)
+	}
+	return nil
 }

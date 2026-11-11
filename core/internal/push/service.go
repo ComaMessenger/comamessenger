@@ -817,7 +817,7 @@ func (w *Worker) deliver(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	rows, err := w.pool.Query(ctx, `SELECT d.org_id,d.event_seq,d.subscription_id,s.actor_id,s.endpoint,s.p256dh,s.auth,e.type,e.data,e.chat_id,m.thread_root_id,m.body,c.name,a.display_name,COALESCE((u.preferences->>'push_preview')::boolean,false),COALESCE(u.preferences->>'locale','ru') FROM notification_deliveries d JOIN web_push_subscriptions s ON s.id=d.subscription_id JOIN events e ON e.org_id=d.org_id AND e.seq=d.event_seq LEFT JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id LEFT JOIN chats c ON c.org_id=e.org_id AND c.id=e.chat_id JOIN actors a ON a.org_id=e.org_id AND a.id=e.actor_id JOIN users u ON u.org_id=s.org_id AND u.actor_id=s.actor_id WHERE d.lease_token=$1 ORDER BY d.event_seq`, leaseToken)
+	rows, err := w.pool.Query(ctx, `SELECT d.org_id,d.event_seq,d.subscription_id,s.actor_id,s.endpoint,s.p256dh,s.auth,e.type,e.data,e.chat_id,m.thread_root_id,m.body,c.name,a.display_name,COALESCE((u.preferences->>'push_preview')::boolean,false),COALESCE(u.preferences->>'locale','ru'),`+quietNotification+` FROM notification_deliveries d JOIN web_push_subscriptions s ON s.id=d.subscription_id JOIN events e ON e.org_id=d.org_id AND e.seq=d.event_seq LEFT JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id LEFT JOIN chats c ON c.org_id=e.org_id AND c.id=e.chat_id JOIN actors a ON a.org_id=e.org_id AND a.id=e.actor_id JOIN users u ON u.org_id=s.org_id AND u.actor_id=s.actor_id WHERE d.lease_token=$1 ORDER BY d.event_seq`, leaseToken)
 	if err != nil {
 		return err
 	}
@@ -827,8 +827,8 @@ func (w *Worker) deliver(ctx context.Context) error {
 		var seq int64
 		var chatID, threadID, body, name *string
 		var eventData []byte
-		var preview bool
-		if err := rows.Scan(&org, &seq, &subID, &actor, &endpoint, &p256dh, &auth, &eventType, &eventData, &chatID, &threadID, &body, &name, &author, &preview, &locale); err != nil {
+		var preview, silent bool
+		if err := rows.Scan(&org, &seq, &subID, &actor, &endpoint, &p256dh, &auth, &eventType, &eventData, &chatID, &threadID, &body, &name, &author, &preview, &locale, &silent); err != nil {
 			return err
 		}
 		if chatID != nil && w.active != nil && w.active(org, actor, *chatID) {
@@ -836,14 +836,7 @@ func (w *Worker) deliver(ctx context.Context) error {
 			continue
 		}
 		content := buildNotification(eventType, eventData, author, locale, preview, chatID, threadID, body, name)
-		payload := map[string]any{"title": content.Title, "body": content.Body}
-		if content.ChatID != "" {
-			payload["chat_id"] = content.ChatID
-		}
-		if content.URL != "" {
-			payload["url"] = content.URL
-		}
-		encoded, _ := json.Marshal(payload)
+		encoded := webPushPayload(content, silent)
 		response, sendErr := webpush.SendNotificationWithContext(ctx, encoded, &webpush.Subscription{Endpoint: endpoint, Keys: webpush.Keys{P256dh: p256dh, Auth: auth}}, &webpush.Options{Subscriber: w.config.VAPIDSubject, VAPIDPublicKey: w.config.VAPIDPublicKey, VAPIDPrivateKey: w.config.VAPIDPrivateKey, TTL: 120})
 		if response != nil {
 			response.Body.Close()
@@ -1054,4 +1047,26 @@ func truncate(value string, max int) string {
 func GenerateVAPIDKeys() (string, string, error) {
 	privateKey, publicKey, err := webpush.GenerateVAPIDKeys()
 	return publicKey, privateKey, err
+}
+
+// quietNotification is true when the event is a message its author sent
+// without sound; reactions and other events always use the default sound.
+const quietNotification = `COALESCE(e.type='message.created' AND m.silent,false)`
+
+// webPushPayload is what the service worker receives. "silent" maps to the
+// Notifications API option of the same name: shown without sound or
+// vibration.
+func webPushPayload(content notificationContent, silent bool) []byte {
+	payload := map[string]any{"title": content.Title, "body": content.Body}
+	if content.ChatID != "" {
+		payload["chat_id"] = content.ChatID
+	}
+	if content.URL != "" {
+		payload["url"] = content.URL
+	}
+	if silent {
+		payload["silent"] = true
+	}
+	encoded, _ := json.Marshal(payload)
+	return encoded
 }

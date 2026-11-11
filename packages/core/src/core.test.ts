@@ -727,6 +727,49 @@ describe("native session transport", () => {
   });
 });
 
+describe("scheduled messages API", () => {
+  it("calls the author's scheduled message routes", async () => {
+    const calls: { url: string; method: string; body?: unknown }[] = [];
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      calls.push({
+        url,
+        method: init.method ?? "GET",
+        body: init.body ? JSON.parse(init.body as string) : undefined,
+      });
+      if (init.method === "DELETE") return new Response(null, { status: 204 });
+      const body = url.endsWith("/scheduled-messages")
+        ? { scheduled_messages: [] }
+        : { id: "s1", status: "pending" };
+      return new Response(JSON.stringify(body), { status: 200 });
+    });
+    const api = new MessengerAPI("https://coma.test");
+    const sendAt = "2026-11-12T09:00:00Z";
+    await api.createScheduledMessage("c1", {
+      client_msg_id: "m1",
+      body: "hi",
+      send_at: sendAt,
+      silent: true,
+    });
+    expect(await api.scheduledMessages()).toEqual([]);
+    await api.scheduledMessages("c1");
+    await api.updateScheduledMessage("s1", {
+      expected_version: 1,
+      send_at: sendAt,
+    });
+    await api.sendScheduledMessageNow("s1");
+    await api.deleteScheduledMessage("s1");
+    expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual([
+      "POST https://coma.test/api/v1/chats/c1/scheduled-messages",
+      "GET https://coma.test/api/v1/scheduled-messages",
+      "GET https://coma.test/api/v1/scheduled-messages?chat_id=c1",
+      "PATCH https://coma.test/api/v1/scheduled-messages/s1",
+      "POST https://coma.test/api/v1/scheduled-messages/s1/send",
+      "DELETE https://coma.test/api/v1/scheduled-messages/s1",
+    ]);
+    expect(calls[0]!.body).toMatchObject({ silent: true, send_at: sendAt });
+  });
+});
+
 describe("chat list helpers", () => {
   const labels = { you: "You", deleted: "Deleted", attachment: "Attachment" };
   const chat = (patch: Partial<Chat>) =>
@@ -765,7 +808,10 @@ describe("chat list helpers", () => {
         chat({
           kind: "direct",
           avatar_version: 7,
-          direct_peer: { actor_id: "peer", avatar_version: 2 } as Chat["direct_peer"],
+          direct_peer: {
+            actor_id: "peer",
+            avatar_version: 2,
+          } as Chat["direct_peer"],
         }),
       ),
     ).toEqual({ actorID: "peer", avatarVersion: 2 });

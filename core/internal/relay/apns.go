@@ -24,6 +24,8 @@ type Notification struct {
 	FallbackTitle string
 	FallbackBody  string
 	CollapseID    string
+	// Silent: deliver without sound. Absent from older cores; then false.
+	Silent bool
 }
 
 type Sender interface {
@@ -90,12 +92,15 @@ func (a *APNs) providerToken() (string, error) {
 }
 
 func (a *APNs) Send(ctx context.Context, deviceToken string, notification Notification) error {
+	aps := map[string]any{
+		"alert":           map[string]string{"title": notification.FallbackTitle, "body": notification.FallbackBody},
+		"mutable-content": 1,
+	}
+	if !notification.Silent {
+		aps["sound"] = "default"
+	}
 	body, err := json.Marshal(map[string]any{
-		"aps": map[string]any{
-			"alert":           map[string]string{"title": notification.FallbackTitle, "body": notification.FallbackBody},
-			"sound":           "default",
-			"mutable-content": 1,
-		},
+		"aps": aps,
 		// The Notification Service Extension replaces the alert with the decrypted content.
 		"c": notification.Ciphertext,
 	})

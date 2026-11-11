@@ -1643,6 +1643,128 @@ paths:
         "204": { description: Draft is absent. }
         "404": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
+  # --- Phase 6.1 package C: scheduled messages (keep this block together) ---
+  /api/v1/chats/{chat_id}/scheduled-messages:
+    post:
+      operationId: createScheduledMessage
+      description: >-
+        Schedules a message of the current user. Only a person with a live
+        session and no pending password change may schedule; agent API keys
+        get 403. Membership, the right
+        to write and every reference are checked now and again at send time.
+        Repeating the same client_msg_id with the same content returns the
+        existing record with 200.
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: "#/components/parameters/ChatId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateScheduledMessageRequest" }
+      responses:
+        "200":
+          description: Idempotent repeat of an earlier request.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduledMessage" }
+        "201":
+          description: Scheduled.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduledMessage" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  /api/v1/scheduled-messages:
+    get:
+      operationId: listScheduledMessages
+      description: >-
+        Pending and failed scheduled messages of the current user, soonest
+        first. Nobody else, an administrator included, can read them.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: chat_id
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The current user's scheduled messages.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduledMessageList" }
+        "403": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /api/v1/scheduled-messages/{scheduled_message_id}:
+    parameters: [{ $ref: "#/components/parameters/ScheduledMessageId" }]
+    get:
+      operationId: getScheduledMessage
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: One scheduled message of the current user.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduledMessage" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    patch:
+      operationId: updateScheduledMessage
+      description: >-
+        Changes the text or the send time of a pending scheduled message and
+        re-authorizes it with the caller's session. A stale expected_version
+        gets 409 version_conflict, also when the message was sent or failed
+        in the meantime.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateScheduledMessageRequest" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduledMessage" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteScheduledMessage
+      description: Cancels a pending scheduled message or removes a failed or sent record.
+      security: [{ bearerAuth: [] }]
+      responses:
+        "204": { description: Removed. }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  /api/v1/scheduled-messages/{scheduled_message_id}/send:
+    parameters: [{ $ref: "#/components/parameters/ScheduledMessageId" }]
+    post:
+      operationId: sendScheduledMessageNow
+      description: >-
+        Sends a pending scheduled message right away through the ordinary
+        send path. A refusal at send time is not an HTTP error: the record
+        comes back with status failed and a failure_reason.
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Sent, or failed with a reason.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduledMessage" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  # --- end of scheduled messages paths ---
   /api/v1/push/config:
     get:
       operationId: getPushConfig
@@ -3697,6 +3819,11 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    ScheduledMessageId:
+      name: scheduled_message_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     MessageId:
       name: message_id
       in: path
@@ -3816,6 +3943,8 @@ components:
         - password_change_required
         - push_unavailable
         - rate_limited
+        - scheduled_message_closed
+        - scheduled_message_not_found
         - service_not_ready
         - session_not_found
         - smtp_not_configured
@@ -6821,6 +6950,14 @@ components:
           items: { $ref: "#/components/schemas/File" }
         blocks: { $ref: "#/components/schemas/MessageBlocks" }
         agent_provenance: { $ref: "#/components/schemas/MessageAgentProvenance" }
+        silent:
+          type: boolean
+          description: >-
+            Present and true when the author asked for quiet notifications:
+            recipients are notified as usual (push, e-mail digest, their own
+            notification settings apply) but clients play no sound or
+            vibration for it. Carried by the create response and realtime
+            events; history pages omit it.
     MessageAgentProvenance:
       type: object
       additionalProperties: false
@@ -7036,6 +7173,13 @@ components:
         blocks:
           allOf: [{ $ref: "#/components/schemas/MessageBlocks" }]
           description: Agent API keys with messages:interactive only. A blank body is replaced by a generated text fallback.
+        silent:
+          type: boolean
+          description: >-
+            Notify recipients without sound or vibration. The message and its
+            notifications are delivered as usual and recipients' settings
+            apply. People only: a request with an agent API key or from an
+            agent gets 403. Absent means false.
     UpdateMessageRequest:
       type: object
       additionalProperties: false
@@ -7177,6 +7321,171 @@ components:
       required: [drafts]
       properties:
         drafts: { type: array, items: { $ref: "#/components/schemas/Draft" } }
+    # --- Phase 6.1 package C: scheduled messages (keep this block together) ---
+    ScheduledMessage:
+      type: object
+      additionalProperties: false
+      description: >-
+        A message the current user scheduled. Visible only to its author.
+        After sending, the text, mentions and files are cleared from the
+        record (the message itself carries them) and message_id points to
+        the message. Realtime events about it carry only
+        ScheduledMessageEvent; read the record for its content.
+      required:
+        [
+          id,
+          chat_id,
+          thread_root_id,
+          reply_to_id,
+          client_msg_id,
+          body,
+          body_format,
+          mentioned_actor_ids,
+          files,
+          silent,
+          send_at,
+          status,
+          failure_reason,
+          message_id,
+          version,
+          created_at,
+          updated_at,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        chat_id: { type: string, format: uuid }
+        thread_root_id: { type: [string, "null"], format: uuid }
+        reply_to_id: { type: [string, "null"], format: uuid }
+        client_msg_id:
+          type: string
+          format: uuid
+          description: >-
+            The idempotency key of the scheduling request. The sent message
+            gets its own client_msg_id, derived by the server and reserved
+            for it.
+        body: { type: string }
+        body_format: { type: string, enum: [plain, markdown] }
+        mentioned_actor_ids:
+          type: array
+          items: { type: string, format: uuid }
+          uniqueItems: true
+        files:
+          type: array
+          maxItems: 10
+          items: { $ref: "#/components/schemas/File" }
+        silent: { type: boolean }
+        send_at: { type: string, format: date-time }
+        status: { type: string, enum: [pending, sent, failed] }
+        failure_reason:
+          oneOf:
+            - { $ref: "#/components/schemas/ScheduledMessageFailureReason" }
+            - { type: "null" }
+        message_id: { type: [string, "null"], format: uuid }
+        version: { type: integer, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        sent_at: { type: [string, "null"], format: date-time }
+        failed_at: { type: [string, "null"], format: date-time }
+    ScheduledMessageFailureReason:
+      type: string
+      description: >-
+        Why the message was not sent; the text stays so it can be scheduled
+        again. author_inactive: the account was deactivated (reactivation
+        does not revive it). security_reset: the password was changed or
+        reset, an administrator required a new password, the e-mail changed,
+        or every other device was signed out. session_revoked: the device
+        that scheduled or last changed it was removed from the session list,
+        or its refresh token was reused. Signing out on that device itself
+        or a session expiring never stops a scheduled message.
+        missed_send_time: it could not be sent within 15 minutes of its
+        time. chat_unavailable: the chat was archived or deleted. not_member: the author left or was removed.
+        forbidden: the author may no longer write here. reference_unavailable:
+        the reply target, thread or a mentioned member is gone.
+        attachment_unavailable: a file was deleted. invalid_content: the
+        message no longer passes validation. delivery_error: repeated
+        internal errors.
+      enum:
+        - author_inactive
+        - security_reset
+        - session_revoked
+        - missed_send_time
+        - chat_unavailable
+        - not_member
+        - forbidden
+        - reference_unavailable
+        - attachment_unavailable
+        - invalid_content
+        - delivery_error
+    CreateScheduledMessageRequest:
+      type: object
+      additionalProperties: false
+      required: [client_msg_id, body, send_at]
+      properties:
+        client_msg_id: { type: string, format: uuid }
+        body: { type: string }
+        body_format: { type: string, enum: [plain, markdown], default: plain }
+        reply_to_id: { type: string, format: uuid }
+        thread_root_id: { type: string, format: uuid }
+        mentioned_actor_ids:
+          type: array
+          items: { type: string, format: uuid }
+          uniqueItems: true
+        file_ids:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          items: { type: string, format: uuid }
+          description: Ready files uploaded by the current user.
+        send_at:
+          type: string
+          format: date-time
+          description: Must be in the future and at most 365 days ahead.
+        silent:
+          type: boolean
+          description: Notify recipients without sound or vibration, as for an ordinary message. Absent means false.
+    UpdateScheduledMessageRequest:
+      type: object
+      additionalProperties: false
+      required: [expected_version]
+      minProperties: 2
+      properties:
+        expected_version: { type: integer, minimum: 1 }
+        body: { type: string }
+        body_format: { type: string, enum: [plain, markdown] }
+        mentioned_actor_ids:
+          type: array
+          items: { type: string, format: uuid }
+          uniqueItems: true
+        send_at: { type: string, format: date-time }
+        silent: { type: boolean }
+    ScheduledMessageEvent:
+      type: object
+      additionalProperties: false
+      description: >-
+        data of the realtime events scheduled_message.created, .updated,
+        .deleted, .sent and .failed, sent only to the author's devices. It
+        never carries the text, mentions or files: the event log is kept
+        long and replayed to new devices. Fetch the record when needed.
+      required: [id, chat_id, status, version, send_at, failure_reason]
+      properties:
+        id: { type: string, format: uuid }
+        chat_id: { type: string, format: uuid }
+        status: { type: string, enum: [pending, sent, failed, deleted] }
+        version: { type: integer, minimum: 1 }
+        send_at: { type: string, format: date-time }
+        failure_reason:
+          oneOf:
+            - { $ref: "#/components/schemas/ScheduledMessageFailureReason" }
+            - { type: "null" }
+    ScheduledMessageList:
+      type: object
+      additionalProperties: false
+      required: [scheduled_messages]
+      properties:
+        scheduled_messages:
+          type: array
+          items: { $ref: "#/components/schemas/ScheduledMessage" }
+    # --- end of scheduled messages schemas ---
     ChatUnread:
       type: object
       additionalProperties: false

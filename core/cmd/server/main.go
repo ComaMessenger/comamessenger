@@ -35,6 +35,8 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/password"
 	"github.com/comamessenger/comamessenger/core/internal/push"
 	"github.com/comamessenger/comamessenger/core/internal/realtime"
+	"github.com/comamessenger/comamessenger/core/internal/scheduled"
+	"github.com/comamessenger/comamessenger/core/internal/scheduledreset"
 	"github.com/comamessenger/comamessenger/core/internal/search"
 	"github.com/comamessenger/comamessenger/core/internal/storage"
 	"github.com/comamessenger/comamessenger/core/internal/userstate"
@@ -214,12 +216,24 @@ func main() {
 		}
 	}
 	identityService.SetAfterCommit(afterCommit)
+	scheduledreset.SetAfterCommit(afterCommit)
 	fileService.SetAfterCommit(afterCommit)
 	go identityService.RunStatusExpiry(realtimeCtx, time.Minute)
 	messageService := message.NewService(
 		pool, int(cfg.Messaging.MaxBodyBytes), int(cfg.Messaging.MaxPageSize), afterCommit,
 	)
 	chatService := chat.NewService(pool, afterCommit)
+	scheduledService := scheduled.NewService(pool, messageService, afterCommit, logger)
+	scheduledClient, err := scheduled.NewClient(pool, scheduledService, logger)
+	if err != nil {
+		logger.Error("scheduled message initialization failed", "error", err)
+		os.Exit(1)
+	}
+	if err := scheduledClient.Start(realtimeCtx); err != nil {
+		logger.Error("scheduled message startup failed", "error", err)
+		os.Exit(1)
+	}
+	go scheduledService.RunCleanup(realtimeCtx, time.Minute)
 	searchService := search.NewService(pool)
 	knowledgeService := knowledge.NewService(pool, fileService, agentConfigService, knowledge.NewHTTPEmbedder())
 	knowledgeClient, err := knowledge.NewIndexingClient(pool, knowledgeService, logger)
@@ -276,7 +290,7 @@ func main() {
 		Addr: cfg.HTTPAddr,
 		Handler: serverhttp.NewHandler(logger, cfg.PublicAppURL, pool.Ping, serverhttp.Dependencies{
 			Identity: identityService, Agents: agentService, AgentConfig: agentConfigService, AgentProvider: agentProviderService, AgentTools: agentToolExecutor, AgentRuns: agentRunService, AgentTriggers: agentTriggerService, Architect: architectService, Chats: chatService,
-			Messages: messageService, UserState: userStateService, Push: pushService, Workspace: workspaceService, Files: fileService, Search: searchService, Knowledge: knowledgeService, Interactive: interactiveService, Webhooks: webhookService, Realtime: realtimeServer,
+			Messages: messageService, Scheduled: scheduledService, UserState: userStateService, Push: pushService, Workspace: workspaceService, Files: fileService, Search: searchService, Knowledge: knowledgeService, Interactive: interactiveService, Webhooks: webhookService, Realtime: realtimeServer,
 			CookieSecure: cfg.Auth.CookieSecure, RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
 			BootstrapToken: cfg.BootstrapToken, RequireBootstrapToken: cfg.AppEnv != "development",
 			TrustedProxyCIDRs: cfg.TrustedProxyCIDRs, RevokeRealtimeSession: realtimeServer.RevokeSession,
@@ -313,6 +327,9 @@ func main() {
 	}
 	if err := knowledgeClient.Stop(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		logger.Error("knowledge indexing shutdown failed", "error", err)
+	}
+	if err := scheduledClient.Stop(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		logger.Error("scheduled message shutdown failed", "error", err)
 	}
 	if err := server.Shutdown(ctx); err != nil {
 		logger.Error("graceful shutdown failed", "error", err)

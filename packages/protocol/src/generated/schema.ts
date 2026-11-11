@@ -1152,6 +1152,79 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chats/{chat_id}/scheduled-messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Schedules a message of the current user. Only a person with a live session and no pending password change may schedule; agent API keys get 403. Membership, the right to write and every reference are checked now and again at send time. Repeating the same client_msg_id with the same content returns the existing record with 200. */
+        post: operations["createScheduledMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scheduled-messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Pending and failed scheduled messages of the current user, soonest first. Nobody else, an administrator included, can read them. */
+        get: operations["listScheduledMessages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scheduled-messages/{scheduled_message_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scheduled_message_id: components["parameters"]["ScheduledMessageId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getScheduledMessage"];
+        put?: never;
+        post?: never;
+        /** @description Cancels a pending scheduled message or removes a failed or sent record. */
+        delete: operations["deleteScheduledMessage"];
+        options?: never;
+        head?: never;
+        /** @description Changes the text or the send time of a pending scheduled message and re-authorizes it with the caller's session. A stale expected_version gets 409 version_conflict, also when the message was sent or failed in the meantime. */
+        patch: operations["updateScheduledMessage"];
+        trace?: never;
+    };
+    "/api/v1/scheduled-messages/{scheduled_message_id}/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scheduled_message_id: components["parameters"]["ScheduledMessageId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Sends a pending scheduled message right away through the ordinary send path. A refusal at send time is not an HTTP error: the record comes back with status failed and a failure_reason. */
+        post: operations["sendScheduledMessageNow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/push/config": {
         parameters: {
             query?: never;
@@ -2584,7 +2657,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_confirmation_loosened" | "agent_conflict" | "agent_not_ready" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "architect_budget_exceeded" | "architect_busy" | "architect_connection_required" | "architect_model_error" | "architect_session_expired" | "architect_session_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "integration_in_use" | "integration_usage_changed" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "limit_reached" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "webhook_not_found" | "webhook_rejected" | "workspace_not_found";
+        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_confirmation_loosened" | "agent_conflict" | "agent_not_ready" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "architect_budget_exceeded" | "architect_busy" | "architect_connection_required" | "architect_model_error" | "architect_session_expired" | "architect_session_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "integration_in_use" | "integration_usage_changed" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "limit_reached" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "scheduled_message_closed" | "scheduled_message_not_found" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "webhook_not_found" | "webhook_rejected" | "workspace_not_found";
         File: {
             /** Format: uuid */
             id: string;
@@ -2845,7 +2918,7 @@ export interface components {
             parts?: components["schemas"]["CompletedFilePart"][];
         };
         /** @enum {string} */
-        DurableEventTypeV1: "message.created" | "message.updated" | "message.deleted" | "message.pinned" | "message.unpinned" | "reaction.added" | "reaction.removed" | "thread.followed" | "thread.unfollowed" | "read.marked" | "draft.updated" | "draft.deleted" | "chat.created" | "chat.updated" | "chat.archived" | "member.joined" | "member.updated" | "member.removed" | "actor.status.updated" | "actor.avatar.updated";
+        DurableEventTypeV1: "message.created" | "message.updated" | "message.deleted" | "message.pinned" | "message.unpinned" | "reaction.added" | "reaction.removed" | "thread.followed" | "thread.unfollowed" | "read.marked" | "draft.updated" | "draft.deleted" | "chat.created" | "chat.updated" | "chat.archived" | "member.joined" | "member.updated" | "member.removed" | "actor.status.updated" | "actor.avatar.updated" | "scheduled_message.created" | "scheduled_message.updated" | "scheduled_message.deleted" | "scheduled_message.sent" | "scheduled_message.failed";
         /**
          * Format: int32
          * @enum {integer}
@@ -4722,6 +4795,8 @@ export interface components {
             files: components["schemas"]["File"][];
             blocks?: components["schemas"]["MessageBlocks"];
             agent_provenance?: components["schemas"]["MessageAgentProvenance"];
+            /** @description Present and true when the author asked for quiet notifications: recipients are notified as usual (push, e-mail digest, their own notification settings apply) but clients play no sound or vibration for it. Carried by the create response and realtime events; history pages omit it. */
+            silent?: boolean;
         };
         /** @description Why an agent wrote the message. Visible to every reader of the message: it never carries a webhook payload, a follow-up note or text from another chat. */
         MessageAgentProvenance: {
@@ -4854,6 +4929,8 @@ export interface components {
             file_ids?: string[];
             /** @description Agent API keys with messages:interactive only. A blank body is replaced by a generated text fallback. */
             blocks?: components["schemas"]["MessageBlocks"];
+            /** @description Notify recipients without sound or vibration. The message and its notifications are delivered as usual and recipients' settings apply. People only: a request with an agent API key or from an agent gets 403. Absent means false. */
+            silent?: boolean;
         };
         UpdateMessageRequest: {
             body: string;
@@ -4970,6 +5047,99 @@ export interface components {
         };
         DraftList: {
             drafts: components["schemas"]["Draft"][];
+        };
+        /** @description A message the current user scheduled. Visible only to its author. After sending, the text, mentions and files are cleared from the record (the message itself carries them) and message_id points to the message. Realtime events about it carry only ScheduledMessageEvent; read the record for its content. */
+        ScheduledMessage: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: uuid */
+            thread_root_id: string | null;
+            /** Format: uuid */
+            reply_to_id: string | null;
+            /**
+             * Format: uuid
+             * @description The idempotency key of the scheduling request. The sent message gets its own client_msg_id, derived by the server and reserved for it.
+             */
+            client_msg_id: string;
+            body: string;
+            /** @enum {string} */
+            body_format: "plain" | "markdown";
+            mentioned_actor_ids: string[];
+            files: components["schemas"]["File"][];
+            silent: boolean;
+            /** Format: date-time */
+            send_at: string;
+            /** @enum {string} */
+            status: "pending" | "sent" | "failed";
+            failure_reason: components["schemas"]["ScheduledMessageFailureReason"] | null;
+            /** Format: uuid */
+            message_id: string | null;
+            version: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: date-time */
+            sent_at?: string | null;
+            /** Format: date-time */
+            failed_at?: string | null;
+        };
+        /**
+         * @description Why the message was not sent; the text stays so it can be scheduled again. author_inactive: the account was deactivated (reactivation does not revive it). security_reset: the password was changed or reset, an administrator required a new password, the e-mail changed, or every other device was signed out. session_revoked: the device that scheduled or last changed it was removed from the session list, or its refresh token was reused. Signing out on that device itself or a session expiring never stops a scheduled message. missed_send_time: it could not be sent within 15 minutes of its time. chat_unavailable: the chat was archived or deleted. not_member: the author left or was removed. forbidden: the author may no longer write here. reference_unavailable: the reply target, thread or a mentioned member is gone. attachment_unavailable: a file was deleted. invalid_content: the message no longer passes validation. delivery_error: repeated internal errors.
+         * @enum {string}
+         */
+        ScheduledMessageFailureReason: "author_inactive" | "security_reset" | "session_revoked" | "missed_send_time" | "chat_unavailable" | "not_member" | "forbidden" | "reference_unavailable" | "attachment_unavailable" | "invalid_content" | "delivery_error";
+        CreateScheduledMessageRequest: {
+            /** Format: uuid */
+            client_msg_id: string;
+            body: string;
+            /**
+             * @default plain
+             * @enum {string}
+             */
+            body_format: "plain" | "markdown";
+            /** Format: uuid */
+            reply_to_id?: string;
+            /** Format: uuid */
+            thread_root_id?: string;
+            mentioned_actor_ids?: string[];
+            /** @description Ready files uploaded by the current user. */
+            file_ids?: string[];
+            /**
+             * Format: date-time
+             * @description Must be in the future and at most 365 days ahead.
+             */
+            send_at: string;
+            /** @description Notify recipients without sound or vibration, as for an ordinary message. Absent means false. */
+            silent?: boolean;
+        };
+        UpdateScheduledMessageRequest: {
+            expected_version: number;
+            body?: string;
+            /** @enum {string} */
+            body_format?: "plain" | "markdown";
+            mentioned_actor_ids?: string[];
+            /** Format: date-time */
+            send_at?: string;
+            silent?: boolean;
+        };
+        /** @description data of the realtime events scheduled_message.created, .updated, .deleted, .sent and .failed, sent only to the author's devices. It never carries the text, mentions or files: the event log is kept long and replayed to new devices. Fetch the record when needed. */
+        ScheduledMessageEvent: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** @enum {string} */
+            status: "pending" | "sent" | "failed" | "deleted";
+            version: number;
+            /** Format: date-time */
+            send_at: string;
+            failure_reason: components["schemas"]["ScheduledMessageFailureReason"] | null;
+        };
+        ScheduledMessageList: {
+            scheduled_messages: components["schemas"]["ScheduledMessage"][];
         };
         ChatUnread: {
             /** Format: uuid */
@@ -5166,6 +5336,7 @@ export interface components {
         ClientKind: "native";
         ChatId: string;
         ActorId: string;
+        ScheduledMessageId: string;
         MessageId: string;
         UploadId: string;
         FileId: string;
@@ -7527,6 +7698,176 @@ export interface operations {
             };
             404: components["responses"]["Error"];
             422: components["responses"]["Error"];
+        };
+    };
+    createScheduledMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateScheduledMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description Idempotent repeat of an earlier request. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledMessage"];
+                };
+            };
+            /** @description Scheduled. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledMessage"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+        };
+    };
+    listScheduledMessages: {
+        parameters: {
+            query?: {
+                chat_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current user's scheduled messages. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledMessageList"];
+                };
+            };
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    getScheduledMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scheduled_message_id: components["parameters"]["ScheduledMessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One scheduled message of the current user. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledMessage"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    deleteScheduledMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scheduled_message_id: components["parameters"]["ScheduledMessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+        };
+    };
+    updateScheduledMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scheduled_message_id: components["parameters"]["ScheduledMessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateScheduledMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledMessage"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+        };
+    };
+    sendScheduledMessageNow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scheduled_message_id: components["parameters"]["ScheduledMessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sent, or failed with a reason. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledMessage"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            429: components["responses"]["Error"];
         };
     };
     getPushConfig: {

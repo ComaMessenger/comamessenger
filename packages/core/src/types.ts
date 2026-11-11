@@ -222,6 +222,16 @@ export type CreateMessageRequest =
   components["schemas"]["CreateMessageRequest"];
 export type UpdateMessageRequest =
   components["schemas"]["UpdateMessageRequest"];
+export type ScheduledMessage = components["schemas"]["ScheduledMessage"];
+/** data of scheduled_message.* realtime events: no text, fetch the record. */
+export type ScheduledMessageEvent =
+  components["schemas"]["ScheduledMessageEvent"];
+export type ScheduledMessageFailureReason =
+  components["schemas"]["ScheduledMessageFailureReason"];
+export type CreateScheduledMessageRequest =
+  components["schemas"]["CreateScheduledMessageRequest"];
+export type UpdateScheduledMessageRequest =
+  components["schemas"]["UpdateScheduledMessageRequest"];
 export type AcceptInvitationRequest =
   components["schemas"]["AcceptInvitationRequest"];
 export type CreateInvitationRequest =
