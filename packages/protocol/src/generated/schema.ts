@@ -5087,10 +5087,10 @@ export interface components {
             failed_at?: string | null;
         };
         /**
-         * @description Why the message was not sent. author_inactive: the account was deactivated. session_revoked: the device session that scheduled or last changed it was signed out or revoked. chat_unavailable: the chat was archived or deleted. not_member: the author left or was removed. forbidden: the author may no longer write here. reference_unavailable: the reply target, thread or a mentioned member is gone. attachment_unavailable: a file was deleted. invalid_content: the message no longer passes validation. delivery_error: repeated internal errors.
+         * @description Why the message was not sent. author_inactive: the account was deactivated. security_reset: the password was changed or reset, the e-mail changed, or every device was signed out by the person or an administrator; the text stays so it can be scheduled again. Signing out one device or a session expiring never stops a scheduled message. chat_unavailable: the chat was archived or deleted. not_member: the author left or was removed. forbidden: the author may no longer write here. reference_unavailable: the reply target, thread or a mentioned member is gone. attachment_unavailable: a file was deleted. invalid_content: the message no longer passes validation. delivery_error: repeated internal errors.
          * @enum {string}
          */
-        ScheduledMessageFailureReason: "author_inactive" | "session_revoked" | "chat_unavailable" | "not_member" | "forbidden" | "reference_unavailable" | "attachment_unavailable" | "invalid_content" | "delivery_error";
+        ScheduledMessageFailureReason: "author_inactive" | "security_reset" | "chat_unavailable" | "not_member" | "forbidden" | "reference_unavailable" | "attachment_unavailable" | "invalid_content" | "delivery_error";
         CreateScheduledMessageRequest: {
             /** Format: uuid */
             client_msg_id: string;

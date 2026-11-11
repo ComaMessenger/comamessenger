@@ -632,9 +632,6 @@ func TestSendTimeChecks(t *testing.T) {
 		{name: "author deactivated", reason: ReasonAuthorInactive, setup: func(t *testing.T, w *world, _ ScheduledMessage) {
 			w.exec(t, `UPDATE actors SET status='deactivated' WHERE id=$1`, w.author.User.ActorID)
 		}},
-		{name: "author signed out of the device", reason: ReasonSessionRevoked, setup: func(t *testing.T, w *world, _ ScheduledMessage) {
-			w.exec(t, `UPDATE sessions SET revoked_at=now() WHERE id=$1`, w.author.SessionID)
-		}},
 		{name: "chat archived", reason: ReasonChatUnavailable, setup: func(t *testing.T, w *world, _ ScheduledMessage) {
 			w.exec(t, `UPDATE chats SET archived_at=now() WHERE id=$1`, w.groupID)
 		}},

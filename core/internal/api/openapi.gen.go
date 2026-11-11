@@ -3204,7 +3204,7 @@ const (
 	ScheduledMessageFailureReasonInvalidContent        ScheduledMessageFailureReason = "invalid_content"
 	ScheduledMessageFailureReasonNotMember             ScheduledMessageFailureReason = "not_member"
 	ScheduledMessageFailureReasonReferenceUnavailable  ScheduledMessageFailureReason = "reference_unavailable"
-	ScheduledMessageFailureReasonSessionRevoked        ScheduledMessageFailureReason = "session_revoked"
+	ScheduledMessageFailureReasonSecurityReset         ScheduledMessageFailureReason = "security_reset"
 )
 
 // Valid indicates whether the value is a known member of the ScheduledMessageFailureReason enum.
@@ -3226,7 +3226,7 @@ func (e ScheduledMessageFailureReason) Valid() bool {
 		return true
 	case ScheduledMessageFailureReasonReferenceUnavailable:
 		return true
-	case ScheduledMessageFailureReasonSessionRevoked:
+	case ScheduledMessageFailureReasonSecurityReset:
 		return true
 	default:
 		return false
@@ -6532,7 +6532,7 @@ type ScheduledMessageBodyFormat string
 // ScheduledMessageStatus defines model for ScheduledMessage.Status.
 type ScheduledMessageStatus string
 
-// ScheduledMessageFailureReason Why the message was not sent. author_inactive: the account was deactivated. session_revoked: the device session that scheduled or last changed it was signed out or revoked. chat_unavailable: the chat was archived or deleted. not_member: the author left or was removed. forbidden: the author may no longer write here. reference_unavailable: the reply target, thread or a mentioned member is gone. attachment_unavailable: a file was deleted. invalid_content: the message no longer passes validation. delivery_error: repeated internal errors.
+// ScheduledMessageFailureReason Why the message was not sent. author_inactive: the account was deactivated. security_reset: the password was changed or reset, the e-mail changed, or every device was signed out by the person or an administrator; the text stays so it can be scheduled again. Signing out one device or a session expiring never stops a scheduled message. chat_unavailable: the chat was archived or deleted. not_member: the author left or was removed. forbidden: the author may no longer write here. reference_unavailable: the reply target, thread or a mentioned member is gone. attachment_unavailable: a file was deleted. invalid_content: the message no longer passes validation. delivery_error: repeated internal errors.
 type ScheduledMessageFailureReason string
 
 // ScheduledMessageList defines model for ScheduledMessageList.

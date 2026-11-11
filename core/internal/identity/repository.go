@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/comamessenger/comamessenger/core/internal/permission"
+	"github.com/comamessenger/comamessenger/core/internal/scheduledreset"
 )
 
 type Repository struct {
@@ -155,6 +156,9 @@ func (r *Repository) ChangePassword(ctx context.Context, orgID, actorID, current
 		return nil, fmt.Errorf("begin password change: %w", err)
 	}
 	defer tx.Rollback(ctx)
+	if err := scheduledreset.LockOrganization(ctx, tx, orgID); err != nil {
+		return nil, err
+	}
 	command, err := tx.Exec(ctx, `
 		UPDATE users SET password_hash=$3,must_change_password_at=NULL
 		WHERE org_id=$1 AND actor_id=$2`, orgID, actorID, passwordHash)
@@ -185,6 +189,9 @@ func (r *Repository) ChangePassword(ctx context.Context, orgID, actorID, current
 		return nil, fmt.Errorf("iterate revoked sessions: %w", err)
 	}
 	rows.Close()
+	if _, err := scheduledreset.FailPendingTx(ctx, tx, orgID, actorID, scheduledreset.ReasonSecurityReset); err != nil {
+		return nil, err
+	}
 	_, err = tx.Exec(ctx, `
 		INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata)
 		VALUES($1,$2,$3,'member.password.change','actor',$3,
@@ -204,6 +211,9 @@ func (r *Repository) ChangeEmailImmediate(ctx context.Context, orgID, actorID, c
 		return User{}, nil, fmt.Errorf("begin email change: %w", err)
 	}
 	defer tx.Rollback(ctx)
+	if err := scheduledreset.LockOrganization(ctx, tx, orgID); err != nil {
+		return User{}, nil, err
+	}
 	command, err := tx.Exec(ctx, `
 		UPDATE users SET email=$3,email_verified_at=NULL
 		WHERE org_id=$1 AND actor_id=$2`, orgID, actorID, newEmail)
@@ -218,6 +228,9 @@ func (r *Repository) ChangeEmailImmediate(ctx context.Context, orgID, actorID, c
 	}
 	revoked, err := revokeOtherSessionsTx(ctx, tx, orgID, actorID, currentSessionID, now)
 	if err != nil {
+		return User{}, nil, err
+	}
+	if _, err := scheduledreset.FailPendingTx(ctx, tx, orgID, actorID, scheduledreset.ReasonSecurityReset); err != nil {
 		return User{}, nil, err
 	}
 	_, err = tx.Exec(ctx, `
@@ -278,6 +291,9 @@ func (r *Repository) ConfirmEmailChange(ctx context.Context, orgID, actorID, cur
 		return User{}, nil, fmt.Errorf("begin email confirmation: %w", err)
 	}
 	defer tx.Rollback(ctx)
+	if err := scheduledreset.LockOrganization(ctx, tx, orgID); err != nil {
+		return User{}, nil, err
+	}
 	var tokenID, newEmail string
 	err = tx.QueryRow(ctx, `
 		SELECT id,new_email::text FROM email_change_tokens
@@ -300,6 +316,9 @@ func (r *Repository) ConfirmEmailChange(ctx context.Context, orgID, actorID, cur
 	}
 	revoked, err := revokeOtherSessionsTx(ctx, tx, orgID, actorID, currentSessionID, now)
 	if err != nil {
+		return User{}, nil, err
+	}
+	if _, err := scheduledreset.FailPendingTx(ctx, tx, orgID, actorID, scheduledreset.ReasonSecurityReset); err != nil {
 		return User{}, nil, err
 	}
 	_, err = tx.Exec(ctx, `
@@ -406,6 +425,9 @@ func (r *Repository) ResetPassword(ctx context.Context, tokenHash []byte, passwo
 	if err != nil {
 		return nil, fmt.Errorf("load password reset token: %w", err)
 	}
+	if err := scheduledreset.LockOrganization(ctx, tx, orgID); err != nil {
+		return nil, err
+	}
 	if _, err := tx.Exec(ctx, `UPDATE users SET password_hash=$3,must_change_password_at=NULL WHERE org_id=$1 AND actor_id=$2`, orgID, actorID, passwordHash); err != nil {
 		return nil, fmt.Errorf("reset password: %w", err)
 	}
@@ -430,6 +452,9 @@ func (r *Repository) ResetPassword(ctx context.Context, tokenHash []byte, passwo
 		return nil, fmt.Errorf("iterate revoked reset sessions: %w", err)
 	}
 	rows.Close()
+	if _, err := scheduledreset.FailPendingTx(ctx, tx, orgID, actorID, scheduledreset.ReasonSecurityReset); err != nil {
+		return nil, err
+	}
 	_, err = tx.Exec(ctx, `
 		INSERT INTO audit_log(id,org_id,actor_id,action,target_type,target_id,metadata)
 		VALUES($1,$2,$3,'member.password_reset.complete','actor',$3,
@@ -1109,23 +1134,35 @@ func (r *Repository) ListSessions(ctx context.Context, actorID, currentSessionID
 	return sessions, nil
 }
 
+// RevokeOtherSessions signs out every other device of the person. It is a
+// security event: their pending scheduled messages stop in the same
+// transaction.
 func (r *Repository) RevokeOtherSessions(ctx context.Context, actorID, currentSessionID string, now time.Time) ([]string, error) {
-	rows, err := r.pool.Query(ctx, `
-		UPDATE sessions SET revoked_at=COALESCE(revoked_at,$3)
-		WHERE actor_id=$1 AND id<>$2 AND revoked_at IS NULL RETURNING id`, actorID, currentSessionID, now)
+	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("revoke other sessions: %w", err)
+		return nil, fmt.Errorf("begin revoke other sessions: %w", err)
 	}
-	defer rows.Close()
-	result := make([]string, 0)
-	for rows.Next() {
-		var sessionID string
-		if err := rows.Scan(&sessionID); err != nil {
-			return nil, err
-		}
-		result = append(result, sessionID)
+	defer tx.Rollback(ctx)
+	var orgID string
+	if err := tx.QueryRow(ctx, `SELECT org_id FROM actors WHERE id=$1`, actorID).Scan(&orgID); errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	} else if err != nil {
+		return nil, fmt.Errorf("load session owner: %w", err)
 	}
-	return result, rows.Err()
+	if err := scheduledreset.LockOrganization(ctx, tx, orgID); err != nil {
+		return nil, err
+	}
+	result, err := revokeOtherSessionsTx(ctx, tx, orgID, actorID, currentSessionID, now)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := scheduledreset.FailPendingTx(ctx, tx, orgID, actorID, scheduledreset.ReasonSecurityReset); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit revoke other sessions: %w", err)
+	}
+	return result, nil
 }
 
 func isUniqueViolation(err error) bool {

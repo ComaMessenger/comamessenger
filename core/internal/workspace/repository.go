@@ -9,6 +9,7 @@ import (
 
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/permission"
+	"github.com/comamessenger/comamessenger/core/internal/scheduledreset"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -307,6 +308,11 @@ func (r *Repository) UpdateMember(ctx context.Context, orgID, currentActorID, ta
 		}
 		return Member{}, fmt.Errorf("commit member update: %w", err)
 	}
+	if status != "active" {
+		if err := r.stopScheduledMessages(ctx, orgID, targetActorID); err != nil {
+			return Member{}, err
+		}
+	}
 	var result Member
 	var stored []string
 	err = r.pool.QueryRow(ctx, `
@@ -333,6 +339,10 @@ func (r *Repository) RequirePasswordChange(ctx context.Context, orgID, currentAc
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
+	// Lock order shared with scheduled message delivery: organization first.
+	if err := scheduledreset.LockOrganization(ctx, tx, orgID); err != nil {
+		return nil, err
+	}
 	var targetRole, targetStatus string
 	err = tx.QueryRow(ctx, `SELECT org_role,status FROM actors WHERE org_id=$1 AND id=$2 AND deleted_at IS NULL FOR UPDATE`, orgID, targetActorID).Scan(&targetRole, &targetStatus)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -366,6 +376,9 @@ func (r *Repository) RequirePasswordChange(ctx context.Context, orgID, currentAc
 		return nil, err
 	}
 	rows.Close()
+	if _, err := scheduledreset.FailPendingTx(ctx, tx, orgID, targetActorID, scheduledreset.ReasonSecurityReset); err != nil {
+		return nil, err
+	}
 	if err := insertAudit(ctx, tx, orgID, currentActorID, "member.password_change.require", "actor", &targetActorID, map[string]any{"revoked_sessions": len(revoked)}); err != nil {
 		return nil, err
 	}
@@ -492,4 +505,24 @@ func insertAudit(ctx context.Context, db auditExecer, orgID, actorID, action, ta
 func uniqueViolation(err error) bool {
 	var value *pgconn.PgError
 	return errors.As(err, &value) && value.Code == "23505"
+}
+
+// stopScheduledMessages fails the pending scheduled messages of a
+// deactivated member. It runs after the serializable member update so that
+// update never conflicts with message sends on the organization row; until
+// it commits, delivery itself refuses an inactive author. Repeating the
+// deactivation repeats this step.
+func (r *Repository) stopScheduledMessages(ctx context.Context, orgID, actorID string) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin stopping scheduled messages: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	if _, err := scheduledreset.StopPendingTx(ctx, tx, orgID, actorID, scheduledreset.ReasonAuthorInactive); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit stopping scheduled messages: %w", err)
+	}
+	return nil
 }

@@ -8,9 +8,13 @@
 //   - Rights are checked twice: when the message is created or changed, and
 //     again inside the send transaction. A refusal at send time marks the
 //     record failed with a reason and tells the author's devices.
-//   - Only people signed in with a session may schedule. The session family
-//     that scheduled or last changed the message must still be signed in at
-//     send time; expiry is fine, revocation is not.
+//   - Only people signed in with a live session may schedule, change or send
+//     now. Signing out one device or a session expiring does not touch the
+//     messages already scheduled. Security events stop them explicitly: the
+//     identity and workspace services fail the author's pending messages
+//     through package scheduledreset in the same transaction as a password
+//     change or reset, an e-mail change, signing out every device, or right
+//     after a deactivation.
 //   - Files stay linked only to the scheduled record, so nobody but the
 //     uploader can read them until the message is actually sent.
 package scheduled
@@ -30,6 +34,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/message"
+	"github.com/comamessenger/comamessenger/core/internal/scheduledreset"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -51,8 +56,8 @@ const (
 	StatusSent    = "sent"
 	StatusFailed  = "failed"
 
-	ReasonAuthorInactive        = "author_inactive"
-	ReasonSessionRevoked        = "session_revoked"
+	ReasonAuthorInactive        = scheduledreset.ReasonAuthorInactive
+	ReasonSecurityReset         = scheduledreset.ReasonSecurityReset
 	ReasonChatUnavailable       = "chat_unavailable"
 	ReasonNotMember             = "not_member"
 	ReasonForbidden             = "forbidden"
@@ -105,9 +110,9 @@ type ScheduledMessage struct {
 	SentAt            *time.Time   `json:"sent_at"`
 	FailedAt          *time.Time   `json:"failed_at"`
 
-	orgID, authorID, sessionFamilyID string
-	riverJobID                       *int64
-	fileIDs                          []string
+	orgID, authorID string
+	riverJobID      *int64
+	fileIDs         []string
 }
 
 type CreateInput struct {
@@ -159,12 +164,12 @@ func (s *Service) SetScheduler(scheduler Scheduler) { s.scheduler = scheduler }
 func (s *Service) SetLimits(limits Limits)          { s.limits = limits }
 
 const selectColumns = `sm.id, sm.org_id, sm.author_id, sm.chat_id, sm.thread_root_id, sm.reply_to_id, sm.client_msg_id,
-	sm.session_family_id, sm.body, sm.body_format, sm.mentioned_actor_ids, sm.silent, sm.send_at, sm.status,
+	sm.body, sm.body_format, sm.mentioned_actor_ids, sm.silent, sm.send_at, sm.status,
 	sm.failure_reason, sm.message_id, sm.river_job_id, sm.version, sm.created_at, sm.updated_at, sm.sent_at, sm.failed_at`
 
 func scan(row pgx.Row, item *ScheduledMessage) error {
 	return row.Scan(&item.ID, &item.orgID, &item.authorID, &item.ChatID, &item.ThreadRootID, &item.ReplyToID, &item.ClientMsgID,
-		&item.sessionFamilyID, &item.Body, &item.BodyFormat, &item.MentionedActorIDs, &item.Silent, &item.SendAt, &item.Status,
+		&item.Body, &item.BodyFormat, &item.MentionedActorIDs, &item.Silent, &item.SendAt, &item.Status,
 		&item.FailureReason, &item.MessageID, &item.riverJobID, &item.Version, &item.CreatedAt, &item.UpdatedAt, &item.SentAt, &item.FailedAt)
 }
 
@@ -207,8 +212,7 @@ func (s *Service) Create(ctx context.Context, author Author, chatID string, inpu
 	if err != nil {
 		return ScheduledMessage{}, false, err
 	}
-	familyID, err := liveSessionFamily(ctx, tx, user, author.SessionID)
-	if err != nil {
+	if err := requireLiveSession(ctx, tx, user, author.SessionID); err != nil {
 		return ScheduledMessage{}, false, err
 	}
 
@@ -217,7 +221,7 @@ func (s *Service) Create(ctx context.Context, author Author, chatID string, inpu
 	err = tx.QueryRow(ctx, `SELECT `+selectColumns+`, sm.create_fingerprint FROM scheduled_messages sm
 		WHERE sm.org_id=$1 AND sm.author_id=$2 AND sm.client_msg_id=$3`, user.OrgID, user.ActorID, draft.ClientMsgID).
 		Scan(&existing.ID, &existing.orgID, &existing.authorID, &existing.ChatID, &existing.ThreadRootID, &existing.ReplyToID, &existing.ClientMsgID,
-			&existing.sessionFamilyID, &existing.Body, &existing.BodyFormat, &existing.MentionedActorIDs, &existing.Silent, &existing.SendAt, &existing.Status,
+			&existing.Body, &existing.BodyFormat, &existing.MentionedActorIDs, &existing.Silent, &existing.SendAt, &existing.Status,
 			&existing.FailureReason, &existing.MessageID, &existing.riverJobID, &existing.Version, &existing.CreatedAt, &existing.UpdatedAt, &existing.SentAt, &existing.FailedAt,
 			&existingFingerprint)
 	if err == nil {
@@ -252,10 +256,10 @@ func (s *Service) Create(ctx context.Context, author Author, chatID string, inpu
 	var result ScheduledMessage
 	err = scan(tx.QueryRow(ctx, `
 		INSERT INTO scheduled_messages AS sm (id, org_id, author_id, chat_id, thread_root_id, reply_to_id, client_msg_id, create_fingerprint,
-			session_family_id, body, body_format, mentioned_actor_ids, silent, send_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+			body, body_format, mentioned_actor_ids, silent, send_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
 		RETURNING `+selectColumns, scheduledID, user.OrgID, user.ActorID, chatID, draft.ThreadRootID, draft.ReplyToID, draft.ClientMsgID,
-		fingerprint[:], familyID, draft.Body, draft.BodyFormat, draft.MentionedActorIDs, draft.Silent, sendAt), &result)
+		fingerprint[:], draft.Body, draft.BodyFormat, draft.MentionedActorIDs, draft.Silent, sendAt), &result)
 	if err != nil {
 		return ScheduledMessage{}, false, fmt.Errorf("insert scheduled message: %w", err)
 	}
@@ -392,8 +396,7 @@ func (s *Service) Update(ctx context.Context, author Author, scheduledID string,
 	if err != nil {
 		return ScheduledMessage{}, err
 	}
-	familyID, err := liveSessionFamily(ctx, tx, user, author.SessionID)
-	if err != nil {
+	if err := requireLiveSession(ctx, tx, user, author.SessionID); err != nil {
 		return ScheduledMessage{}, err
 	}
 	if err := loadFileIDs(ctx, tx, []*ScheduledMessage{&current}); err != nil {
@@ -428,10 +431,10 @@ func (s *Service) Update(ctx context.Context, author Author, scheduledID string,
 	var result ScheduledMessage
 	err = scan(tx.QueryRow(ctx, `
 		UPDATE scheduled_messages sm SET body=$4, body_format=$5, mentioned_actor_ids=$6, silent=$7, send_at=$8,
-			session_family_id=$9, version=version+1, updated_at=now()
+			version=version+1, updated_at=now()
 		WHERE sm.org_id=$1 AND sm.author_id=$2 AND sm.id=$3
 		RETURNING `+selectColumns, user.OrgID, user.ActorID, scheduledID, draft.Body, draft.BodyFormat,
-		draft.MentionedActorIDs, draft.Silent, sendAt, familyID), &result)
+		draft.MentionedActorIDs, draft.Silent, sendAt), &result)
 	if err != nil {
 		return ScheduledMessage{}, fmt.Errorf("update scheduled message: %w", err)
 	}
@@ -501,8 +504,7 @@ func (s *Service) Delete(ctx context.Context, author Author, scheduledID string)
 }
 
 // SendNow sends a pending message right away through the same delivery
-// path as the scheduled job. The request re-authorizes the message with the
-// caller's current session.
+// path as the scheduled job.
 func (s *Service) SendNow(ctx context.Context, author Author, scheduledID string) (ScheduledMessage, error) {
 	if author.SessionID == "" {
 		return ScheduledMessage{}, ErrForbidden
@@ -525,12 +527,11 @@ func (s *Service) SendNow(ctx context.Context, author Author, scheduledID string
 	if current.Status != StatusPending {
 		return ScheduledMessage{}, ErrClosed
 	}
-	familyID, err := liveSessionFamily(ctx, tx, author.User, author.SessionID)
-	if err != nil {
+	if err := requireLiveSession(ctx, tx, author.User, author.SessionID); err != nil {
 		return ScheduledMessage{}, err
 	}
-	if err := tx.QueryRow(ctx, `UPDATE scheduled_messages SET send_at=least(send_at, now()), session_family_id=$2 WHERE id=$1 RETURNING send_at`,
-		scheduledID, familyID).Scan(&current.SendAt); err != nil {
+	if err := tx.QueryRow(ctx, `UPDATE scheduled_messages SET send_at=least(send_at, now()) WHERE id=$1 RETURNING send_at`,
+		scheduledID).Scan(&current.SendAt); err != nil {
 		return ScheduledMessage{}, fmt.Errorf("move scheduled message to now: %w", err)
 	}
 	// If the immediate attempt below hits a transient error, the job retries
@@ -581,7 +582,7 @@ func (s *Service) Deliver(ctx context.Context, scheduledID string, jobID int64) 
 	var now time.Time
 	err = tx.QueryRow(ctx, `SELECT `+selectColumns+`, now() FROM scheduled_messages sm WHERE sm.id=$1 FOR UPDATE`, scheduledID).Scan(
 		&current.ID, &current.orgID, &current.authorID, &current.ChatID, &current.ThreadRootID, &current.ReplyToID, &current.ClientMsgID,
-		&current.sessionFamilyID, &current.Body, &current.BodyFormat, &current.MentionedActorIDs, &current.Silent, &current.SendAt, &current.Status,
+		&current.Body, &current.BodyFormat, &current.MentionedActorIDs, &current.Silent, &current.SendAt, &current.Status,
 		&current.FailureReason, &current.MessageID, &current.riverJobID, &current.Version, &current.CreatedAt, &current.UpdatedAt, &current.SentAt, &current.FailedAt, &now)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
@@ -776,14 +777,6 @@ func checkAtSend(ctx context.Context, tx pgx.Tx, current ScheduledMessage) (iden
 	if err != nil {
 		return user, "", fmt.Errorf("load scheduled message author: %w", err)
 	}
-	var live bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM sessions WHERE org_id=$1 AND actor_id=$2 AND family_id=$3 AND revoked_at IS NULL)`,
-		current.orgID, current.authorID, current.sessionFamilyID).Scan(&live); err != nil {
-		return user, "", fmt.Errorf("check scheduled message session: %w", err)
-	}
-	if !live {
-		return user, ReasonSessionRevoked, nil
-	}
 	var archived bool
 	err = tx.QueryRow(ctx, `SELECT archived_at IS NOT NULL FROM chats WHERE org_id=$1 AND id=$2`, current.orgID, current.ChatID).Scan(&archived)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && archived) {
@@ -950,25 +943,21 @@ func activeAuthor(ctx context.Context, tx pgx.Tx, user identity.User) (identity.
 	return result, nil
 }
 
-// liveSessionFamily returns the family of the caller's session when it is
-// still signed in.
-func liveSessionFamily(ctx context.Context, tx pgx.Tx, user identity.User, sessionID string) (string, error) {
+// requireLiveSession checks that the caller's own session is still signed
+// in. Nothing about the session is stored with the message.
+func requireLiveSession(ctx context.Context, tx pgx.Tx, user identity.User, sessionID string) error {
 	if _, err := uuid.Parse(sessionID); err != nil {
-		return "", ErrForbidden
+		return ErrForbidden
 	}
-	var familyID string
-	err := tx.QueryRow(ctx, `
-		SELECT s.family_id FROM sessions s
-		WHERE s.org_id=$1 AND s.actor_id=$2 AND s.id=$3
-		  AND EXISTS (SELECT 1 FROM sessions live WHERE live.family_id=s.family_id AND live.revoked_at IS NULL)`,
-		user.OrgID, user.ActorID, sessionID).Scan(&familyID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", ErrForbidden
+	var live bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM sessions WHERE org_id=$1 AND actor_id=$2 AND id=$3 AND revoked_at IS NULL)`,
+		user.OrgID, user.ActorID, sessionID).Scan(&live); err != nil {
+		return fmt.Errorf("check session: %w", err)
 	}
-	if err != nil {
-		return "", fmt.Errorf("check session: %w", err)
+	if !live {
+		return ErrForbidden
 	}
-	return familyID, nil
+	return nil
 }
 
 func loadFileIDs(ctx context.Context, tx pgx.Tx, items []*ScheduledMessage) error {

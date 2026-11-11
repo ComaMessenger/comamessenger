@@ -5,6 +5,10 @@
 -- sound notification; unread counters are untouched by this flag.
 ALTER TABLE messages ADD COLUMN silent boolean NOT NULL DEFAULT false;
 
+-- Sending is not tied to the device that scheduled: signing it out or a
+-- session expiring leaves the message alone. Security events (password
+-- change or reset, e-mail change, signing out every device, deactivation)
+-- fail the author's pending messages explicitly; see package scheduledreset.
 -- Private to the author until sent. Nothing here is visible to search,
 -- export, agents or other people: those read only the messages table.
 CREATE TABLE scheduled_messages (
@@ -18,9 +22,6 @@ CREATE TABLE scheduled_messages (
     -- idempotency of message creation guards against a double send.
     client_msg_id uuid NOT NULL,
     create_fingerprint bytea NOT NULL CHECK (octet_length(create_fingerprint) = 32),
-    -- The device session family that scheduled or last changed the message.
-    -- Signing that device out or revoking it cancels the send.
-    session_family_id uuid NOT NULL,
     body text NOT NULL,
     body_format text NOT NULL CHECK (body_format IN ('plain', 'markdown')),
     mentioned_actor_ids uuid[] NOT NULL DEFAULT '{}',
@@ -28,7 +29,7 @@ CREATE TABLE scheduled_messages (
     send_at timestamptz NOT NULL,
     status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'failed')),
     failure_reason text CHECK (failure_reason IN (
-        'author_inactive', 'session_revoked', 'chat_unavailable', 'not_member', 'forbidden',
+        'author_inactive', 'security_reset', 'chat_unavailable', 'not_member', 'forbidden',
         'reference_unavailable', 'attachment_unavailable', 'invalid_content', 'delivery_error')),
     message_id uuid,
     river_job_id bigint,
