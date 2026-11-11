@@ -3,28 +3,32 @@ import {
   Animated,
   KeyboardAvoidingView,
   Modal,
-  PanResponder,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   View,
 } from "react-native";
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "@/lib/theme";
 import { Text } from "./Text";
 
-/** A pull further than this, or a quick flick down, closes the sheet. */
+/** A pull further than this, or a quick flick down (pt/s), closes the sheet. */
 const closeDistance = 90;
-const closeVelocity = 0.8;
+const closeVelocity = 800;
 
 /**
  * Sheet that rises from the bottom over a dimmed screen: grab handle, title
  * with an optional action on the right, scrolling content. Pulling it down
  * closes it, like the dimmed area above it and the system back gesture.
- * Built on the plain responder system: a modal is a new native root, where
- * gesture-handler would need a root of its own.
+ * The pull is a gesture-handler pan on the grab handle and title: the plain
+ * responder system did not get the drag inside the modal.
  */
 export function BottomSheet({
   visible,
@@ -53,16 +57,20 @@ export function BottomSheet({
   useEffect(() => {
     if (visible) drag.setValue(0);
   }, [drag, visible]);
+  // The grab handle and the title pull the sheet; the content scrolls and
+  // keeps its own drags. A mostly vertical pull down only.
   const pull = useMemo(
     () =>
-      PanResponder.create({
-        // Only a mostly vertical pull down; content that scrolls keeps its
-        // own drags, and the grab handle and title always pull the sheet.
-        onMoveShouldSetPanResponder: (_, move) =>
-          move.dy > 6 && Math.abs(move.dy) > Math.abs(move.dx) * 1.5,
-        onPanResponderMove: (_, move) => drag.setValue(Math.max(0, move.dy)),
-        onPanResponderRelease: (_, move) => {
-          if (move.dy > closeDistance || move.vy > closeVelocity)
+      Gesture.Pan()
+        .runOnJS(true)
+        .activeOffsetY(8)
+        .failOffsetX([-24, 24])
+        .onUpdate((event) => drag.setValue(Math.max(0, event.translationY)))
+        .onEnd((event) => {
+          if (
+            event.translationY > closeDistance ||
+            event.velocityY > closeVelocity
+          )
             Animated.timing(drag, {
               toValue: 800,
               duration: 160,
@@ -73,10 +81,7 @@ export function BottomSheet({
               toValue: 0,
               useNativeDriver: true,
             }).start();
-        },
-        onPanResponderTerminate: () =>
-          Animated.spring(drag, { toValue: 0, useNativeDriver: true }).start(),
-      }),
+        }),
     [drag],
   );
   return (
@@ -87,83 +92,97 @@ export function BottomSheet({
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <KeyboardAvoidingView
-        style={styles.root}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t("close")}
-          style={[StyleSheet.absoluteFill, { backgroundColor: theme.overlay }]}
-          onPress={onClose}
-        />
-        <Animated.View
-          {...pull.panHandlers}
-          testID={testID}
-          accessibilityViewIsModal
-          accessibilityLabel={accessibilityLabel ?? title}
-          style={[
-            styles.sheet,
-            {
-              backgroundColor: theme.surface,
-              maxHeight: "88%",
-              paddingBottom: Math.max(insets.bottom, 22),
-              transform: [{ translateY: drag }],
-            },
-          ]}
+      {/* A modal is a new native root: gestures need a root of their own. */}
+      <GestureHandlerRootView style={styles.grow}>
+        <KeyboardAvoidingView
+          style={styles.root}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-          <View
-            style={[styles.grab, { backgroundColor: theme.borderStrong }]}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("close")}
+            style={[
+              StyleSheet.absoluteFill,
+              { backgroundColor: theme.overlay },
+            ]}
+            onPress={onClose}
           />
-          {title || action ? (
-            <View style={styles.head}>
-              <Text
-                accessibilityRole="header"
-                weight="bold"
-                size={17}
-                numberOfLines={1}
-                style={styles.title}
-              >
-                {title}
-              </Text>
-              {action ? (
-                <Pressable
-                  testID={testID ? `${testID}-action` : undefined}
-                  accessibilityRole="button"
-                  accessibilityState={{ disabled: Boolean(action.disabled) }}
-                  disabled={action.disabled}
-                  hitSlop={10}
-                  onPress={action.onPress}
-                  style={styles.action}
-                >
-                  <Text
-                    weight="semibold"
-                    size={15}
-                    style={{
-                      color: action.disabled ? theme.subtle : theme.primary,
-                    }}
-                  >
-                    {action.label}
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
-          ) : null}
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            bounces={false}
+          <Animated.View
+            testID={testID}
+            accessibilityViewIsModal
+            accessibilityLabel={accessibilityLabel ?? title}
+            style={[
+              styles.sheet,
+              {
+                backgroundColor: theme.surface,
+                maxHeight: "88%",
+                paddingBottom: Math.max(insets.bottom, 22),
+                transform: [{ translateY: drag }],
+              },
+            ]}
           >
-            {children}
-          </ScrollView>
-        </Animated.View>
-      </KeyboardAvoidingView>
+            <GestureDetector gesture={pull}>
+              <View testID={testID ? `${testID}-grab` : undefined}>
+                <View
+                  style={[styles.grab, { backgroundColor: theme.borderStrong }]}
+                />
+                {title || action ? (
+                  <View style={styles.head}>
+                    <Text
+                      accessibilityRole="header"
+                      weight="bold"
+                      size={17}
+                      numberOfLines={1}
+                      style={styles.title}
+                    >
+                      {title}
+                    </Text>
+                    {action ? (
+                      <Pressable
+                        testID={testID ? `${testID}-action` : undefined}
+                        accessibilityRole="button"
+                        accessibilityState={{
+                          disabled: Boolean(action.disabled),
+                        }}
+                        disabled={action.disabled}
+                        hitSlop={10}
+                        onPress={action.onPress}
+                        style={styles.action}
+                      >
+                        <Text
+                          weight="semibold"
+                          size={15}
+                          style={{
+                            color: action.disabled
+                              ? theme.subtle
+                              : theme.primary,
+                          }}
+                        >
+                          {action.label}
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ) : null}
+              </View>
+            </GestureDetector>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+            >
+              {children}
+            </ScrollView>
+          </Animated.View>
+        </KeyboardAvoidingView>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, justifyContent: "flex-end" },
+  grow: { flex: 1 },
   // Prototype: `.sheet { border-radius: 24px 24px 0 0; padding: 8px 16px 22px }`.
   sheet: {
     borderTopLeftRadius: 24,

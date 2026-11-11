@@ -1,7 +1,6 @@
 # Opens the long-press menu of a message found by TEXT (a regex over the
-# accessible label of the bubble). Scrolling up brings the bubble in from
-# the top, away from the composer, where a long press lands in the text
-# field. (centerElement keeps scrolling past a bubble already in view.)
+# accessible label of the bubble). The keyboard is put away first: with it
+# open the feed is short and a long press can land in the text field.
 appId: com.comamessenger.app
 ---
 - runFlow:
@@ -11,6 +10,13 @@ appId: com.comamessenger.app
       - tapOn: Continue
 - hideKeyboard:
     optional: true
+# The feed closes the keyboard interactively: a drag that runs into it.
+- swipe:
+    start: 50%, 35%
+    end: 50%, 92%
+    duration: 700
+- waitForAnimationToEnd:
+    timeout: 2000
 # A bubble that grew (a reaction, a thread caption) can sit under the
 # composer until the feed is brought to the end (see docs/backlog.md).
 - runFlow:
@@ -19,16 +25,13 @@ appId: com.comamessenger.app
     commands:
       - tapOn: К последнему сообщению
       - waitForAnimationToEnd
+# No centring: a bubble near the end of the feed cannot be centred and the
+# scroll would run until the timeout.
 - scrollUntilVisible:
     element: ${TEXT}
     direction: UP
     timeout: 30000
-# It comes in at the top edge: bring it nearer the middle and let the
-# feed stop, or the long press only stops the scroll.
-- swipe:
-    start: 50%, 45%
-    end: 50%, 60%
-    duration: 600
+# Let the feed stop, or the long press only stops the scroll.
 - waitForAnimationToEnd:
     timeout: 2000
 - longPressOn: ${TEXT}

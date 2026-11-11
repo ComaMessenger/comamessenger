@@ -70,12 +70,15 @@ appId: com.comamessenger.app
       - extendedWaitUntil:
           visible: (Удерживайте для записи|Hold to record)
           timeout: 5000
-# Typing brings the send button back.
+# Typing brings the send button back (once the keyboard is up).
 - tapOn:
     id: composer-input
+- waitForAnimationToEnd
 - inputText: x
-- assertVisible:
-    id: composer-send
+- extendedWaitUntil:
+    visible:
+      id: composer-send
+    timeout: 5000
 - assertNotVisible:
     id: composer-mic
 - eraseText: 1

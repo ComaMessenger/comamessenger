@@ -49,6 +49,14 @@ const usePlayerStore = create<PlayerState>(() => ({
 let player: AudioPlayer | null = null;
 let current: VoiceTrack | null = null;
 let ticket = 0;
+/**
+ * play() was called and the track has not started yet. When one recording
+ * ends and the next replaces it at once, AVPlayer's end-of-item pause can
+ * land after that play(): the next one then sits loaded and paused. While
+ * starting, a loaded and idle player is told to play again (a few times).
+ */
+let starting = 0;
+const startAttempts = 3;
 
 function withoutFailure(key: string) {
   const { [key]: _gone, ...rest } = usePlayerStore.getState().failed;
@@ -84,8 +92,19 @@ function onStatus(status: AudioStatus) {
     return;
   }
   if (status.didJustFinish) {
+    starting = 0;
     finished();
     return;
+  }
+  if (status.playing) starting = 0;
+  else if (
+    starting > 0 &&
+    status.isLoaded &&
+    !status.isBuffering &&
+    state.status === "loading"
+  ) {
+    starting -= 1;
+    player?.play();
   }
   usePlayerStore.setState({
     position: status.currentTime,
@@ -134,6 +153,7 @@ export async function playVoice(track: VoiceTrack, startAt = 0) {
     native.replace({ uri });
     native.setPlaybackRate(usePlayerStore.getState().rate);
     native.play();
+    starting = startAttempts;
     if (startAt > 0) await native.seekTo(startAt);
   } catch {
     if (mine === ticket) fail(track.key);
@@ -146,6 +166,7 @@ export function currentVoiceKey() {
 
 export function pauseVoice() {
   if (!current) return;
+  starting = 0;
   player?.pause();
   leavePlaybackMode();
   if (usePlayerStore.getState().status !== "idle")
@@ -159,6 +180,7 @@ export function pauseVoice() {
 export function stopVoice(key?: string, release = true) {
   if (key && usePlayerStore.getState().key !== key) return;
   ticket += 1;
+  starting = 0;
   player?.pause();
   if (current && release) leavePlaybackMode();
   current = null;

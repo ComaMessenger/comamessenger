@@ -1,0 +1,32 @@
+# An unsent scheduled message: the red «Not sent» card with its reason in
+# the list of every scheduled message («More»). The script schedules a
+# message in a new group, archives the group and sends it now, so the
+# server leaves it failed with «chat_unavailable».
+# Run after sign-in.yaml: maestro test e2e/scheduled-failed.yaml
+appId: com.comamessenger.app
+---
+- runScript: scripts/login.js
+- runScript: scripts/clear-scheduled.js
+- runScript: scripts/seed-failed-scheduled.js
+- runFlow: open-app.yaml
+- runFlow:
+    file: tabs.yaml
+    env:
+      TAB: more
+- tapOn:
+    id: more-scheduled
+- extendedWaitUntil:
+    visible: .*Неотправленное ${output.failedTag}.*
+    timeout: 10000
+- assertVisible: НЕ ОТПРАВЛЕНЫ
+- assertVisible: Чат удалён или в архиве
+- takeScreenshot: scheduled-failed
+- tapOn:
+    id: scheduled-delete
+    index: 0
+- tapOn:
+    text: Удалить
+    below: Текст неотправленного сообщения пропадёт.
+- extendedWaitUntil:
+    notVisible: .*Неотправленное ${output.failedTag}.*
+    timeout: 10000

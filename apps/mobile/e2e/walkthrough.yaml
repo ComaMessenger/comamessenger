@@ -124,10 +124,12 @@ env:
       visible: Continue
     commands:
       - tapOn: Continue
-# The sheet has no swipe-to-close; the dimmed area above it closes it.
-- hideKeyboard
-- tapOn:
-    point: 50%,12%
+# A pull down on its title closes the sheet (and the keyboard with it).
+- swipe:
+    from:
+      id: folder-sheet-grab
+    direction: DOWN
+    duration: 400
 - extendedWaitUntil:
     notVisible:
       id: folder-sheet
