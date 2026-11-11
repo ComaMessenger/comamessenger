@@ -174,6 +174,7 @@ func main() {
 		return
 	}
 	eventStore := eventlog.NewStore(pool)
+	eventStore.SetMaxFrameBytes(cfg.Realtime.MaxFrameBytes)
 	retentionWorker := eventlog.NewRetentionWorker(
 		logger, eventStore, cfg.EventLog.Retention, cfg.EventLog.RetentionInterval,
 		cfg.EventLog.RetentionMinCount, cfg.EventLog.RetentionBatch,

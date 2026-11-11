@@ -247,8 +247,20 @@ func TestWriteOnlyChatNeverStartsTheAgent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	mention, err := service.Create(t.Context(), owner, created.ID, agenttrigger.CreateInput{Type: "mention", Config: json.RawMessage(`{}`), Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, _, err := message.NewService(pool, 64*1024, 100, nil).Create(t.Context(), owner, triggerTestChatID, message.CreateInput{
 		ClientMsgID: mustTriggerID(t), Body: "пароль от сейфа 4711", BodyFormat: "plain",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Even a mention does not start it: the agent cannot read the message
+	// that would become its input. Triggers read events on their own path,
+	// not through the realtime event store.
+	if _, _, err := message.NewService(pool, 64*1024, 100, nil).Create(t.Context(), owner, triggerTestChatID, message.CreateInput{
+		ClientMsgID: mustTriggerID(t), Body: "@writer посмотри", BodyFormat: "plain", MentionedActorIDs: []string{created.ID},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -258,4 +270,5 @@ func TestWriteOnlyChatNeverStartsTheAgent(t *testing.T) {
 		}
 	}
 	assertTriggerRuns(t, pool, everyMessage.ID, 0)
+	assertTriggerRuns(t, pool, mention.ID, 0)
 }

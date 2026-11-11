@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/comamessenger/comamessenger/core/internal/agentauthz"
 	"github.com/comamessenger/comamessenger/core/internal/id"
@@ -354,7 +355,7 @@ func normalizeLLMConnection(name, provider, endpoint, model, apiKey string) (str
 }
 
 func validLLMConnection(name, provider, endpoint, model, apiKey string) bool {
-	if len(name) < 1 || len(name) > 120 || len(model) > 200 || len(apiKey) < 1 || len(apiKey) > 16384 {
+	if count := utf8.RuneCountInString(name); count < 1 || count > 120 || len(model) > 200 || len(apiKey) < 1 || len(apiKey) > 16384 {
 		return false
 	}
 	switch provider {

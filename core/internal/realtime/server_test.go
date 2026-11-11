@@ -295,6 +295,7 @@ func newRealtimeHarnessWithPoll(t *testing.T, cfg config.RealtimeConfig, pollInt
 	user, chatID := seedRealtimeFixture(t, pool)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	store := eventlog.NewStore(pool)
+	store.SetMaxFrameBytes(cfg.MaxFrameBytes)
 	hub := NewHub(int(cfg.MaxConnectionsPerActor), int(cfg.MaxQueuedEvents), int(cfg.MaxQueuedBytes))
 	dispatcher := NewDispatcher(logger, store, hub, pollInterval, time.Millisecond)
 	sessionID := realtimeID(t)

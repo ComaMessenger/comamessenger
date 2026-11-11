@@ -13,6 +13,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/config"
 	"github.com/comamessenger/comamessenger/core/internal/eventlog"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
+	"github.com/comamessenger/comamessenger/core/internal/wirejson"
 )
 
 type session struct {
@@ -236,7 +237,7 @@ func (s *session) writeLoop(ctx context.Context) error {
 			} else {
 				queuedBytes := 0
 				for _, frame := range frames {
-					payload, err := json.Marshal(frame)
+					payload, err := wirejson.Marshal(frame)
 					if err != nil {
 						return err
 					}
@@ -290,7 +291,13 @@ func (s *session) writeLoop(ctx context.Context) error {
 				return err
 			}
 		case frame := <-s.subscription.Ephemeral():
-			if err := s.write(ctx, frame); err != nil {
+			// Ephemeral frames are best effort: one too large for the
+			// connection is dropped, never a reason to close it.
+			if uint64(len(frame)) > s.config.MaxFrameBytes {
+				s.logger.Warn("dropped oversized ephemeral frame", "connection_id", s.connectionID, "bytes", len(frame))
+				continue
+			}
+			if err := s.writeRaw(ctx, frame); err != nil {
 				return err
 			}
 		case frame := <-live:
@@ -335,7 +342,7 @@ func (s *session) writeLoop(ctx context.Context) error {
 }
 
 func (s *session) write(ctx context.Context, frame any) error {
-	payload, err := json.Marshal(frame)
+	payload, err := wirejson.Marshal(frame)
 	if err != nil {
 		return err
 	}

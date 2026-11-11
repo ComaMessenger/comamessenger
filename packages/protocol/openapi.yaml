@@ -6828,7 +6828,10 @@ components:
       properties:
         kind: { type: string, enum: [direct, group, channel] }
         visibility: { type: string, enum: [private, public], default: private }
-        name: { type: string }
+        name:
+          type: string
+          maxLength: 80
+          description: Required for groups and channels, 1 to 80 characters (Unicode code points) after trimming.
         topic: { type: string, maxLength: 500 }
         member_ids:
           {
@@ -6945,7 +6948,11 @@ components:
       additionalProperties: false
       minProperties: 1
       properties:
-        name: { type: string, minLength: 1, maxLength: 120 }
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+          description: 1 to 80 characters (Unicode code points) after trimming. A name longer than that, set before the limit, stays until renamed.
         topic: { type: string, maxLength: 500 }
         visibility: { type: string, enum: [private, public] }
     DirectoryChat:
@@ -7126,6 +7133,25 @@ components:
             notification settings apply) but clients play no sound or
             vibration for it. Carried by the create response and realtime
             events; history pages omit it.
+        thread_root_reply_count:
+          type: integer
+          format: int64
+          minimum: 0
+          description: >-
+            Realtime message.* events of a thread reply only: the current
+            thread_reply_count of its root (zero once the root is deleted).
+            Clients set the root's count to it instead of adding or
+            subtracting one. History pages and other responses omit it.
+        truncated:
+          type: boolean
+          description: >-
+            Realtime message.* events only: the event was larger than the
+            connection's frame limit (WS_MAX_FRAME_BYTES). The payload keeps
+            the Message shape with ids, version, sequence, times, thread and
+            counters but an empty body, no files and no blocks; clients load
+            the message by REST (GET /api/v1/messages/{message_id}/context).
+            Other event types may carry truncated: true with only their short
+            scalar fields.
     MessageAgentProvenance:
       type: object
       additionalProperties: false
