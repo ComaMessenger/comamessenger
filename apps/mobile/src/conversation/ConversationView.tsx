@@ -501,7 +501,6 @@ export function ConversationView({
               seed={chat.avatar_seed || chat.id}
               size={36}
               shape={chat.kind === "direct" ? "circle" : "square"}
-              glyph={chat.kind === "channel" ? "#" : undefined}
               agent={chat.direct_peer?.type === "agent"}
               {...chatAvatarSource(chat)}
             />

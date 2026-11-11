@@ -8,7 +8,7 @@ import { useSignedIn } from "@/session/SessionProvider";
 import { ChatAvatar } from "@/chats/ChatAvatar";
 import { chatTitle } from "@/chats/ChatRow";
 import { Text } from "@/ui/Text";
-import type { ImportantItem } from "./useImportant";
+import type { ImportantItem } from "./saved";
 
 /**
  * Card of a saved message: author, chat, date, up to three lines of text and

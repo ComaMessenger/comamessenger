@@ -176,6 +176,9 @@ export interface RefreshTokenStore {
   load(): Promise<string | null>;
   save(token: string | null): Promise<void>;
 }
+/** Smallest window `GET /messages/{id}/context` accepts (OpenAPI minimum). */
+export const minMessageContext = 3;
+
 export class MessengerAPI {
   private accessToken: string | null = null;
   private refreshRequest: Promise<TokenResponse> | null = null;
@@ -1282,8 +1285,13 @@ export class MessengerAPI {
       `/api/v1/messages/${rootID}/thread${beforeSeq ? `?before_seq=${beforeSeq}` : ""}`,
     );
   }
+  /**
+   * A window around one message. The server accepts 3 or more messages and
+   * answers 422 to less, so smaller asks (one message) are raised to 3.
+   */
   messageContext(messageID: string, limit = 51): Promise<MessageWindow> {
-    return this.request(`/api/v1/messages/${messageID}/context?limit=${limit}`);
+    const size = Math.max(minMessageContext, limit);
+    return this.request(`/api/v1/messages/${messageID}/context?limit=${size}`);
   }
   threads(beforeSeq?: number): Promise<ThreadPage> {
     return this.request(

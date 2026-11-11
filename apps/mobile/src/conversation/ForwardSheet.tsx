@@ -236,7 +236,6 @@ export function ForwardSheet({
                 seed={chat.avatar_seed || chat.id}
                 size={40}
                 shape={chat.kind === "direct" ? "circle" : "square"}
-                glyph={chat.kind === "channel" ? "#" : undefined}
                 agent={chat.direct_peer?.type === "agent"}
                 {...chatAvatarSource(chat)}
               />

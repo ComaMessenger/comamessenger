@@ -1,17 +1,12 @@
 import { useMemo } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useStore } from "zustand";
-import {
-  savedChatFilters,
-  savedKeys,
-  type Chat,
-  type SavedMessage,
-} from "@comamessenger/core";
+import { savedChatFilters, savedKeys } from "@comamessenger/core";
 import { useMessenger } from "@/messenger/MessengerProvider";
 import { useSignedIn } from "@/session/SessionProvider";
+import { fetchSavedPage, importantItems, nextSavedPage } from "./saved";
 
-/** A saved message as the screen shows it, with the chat from the list if known. */
-export type ImportantItem = SavedMessage & { localChat?: Chat };
+export type { ImportantItem } from "./saved";
 
 function useSavedPages(chatID: string | null, enabled = true) {
   const { api } = useSignedIn();
@@ -19,9 +14,8 @@ function useSavedPages(chatID: string | null, enabled = true) {
     queryKey: savedKeys.list(chatID),
     enabled,
     initialPageParam: undefined as number | undefined,
-    queryFn: ({ pageParam }) =>
-      api.savedMessages({ chatID: chatID ?? undefined, before: pageParam }),
-    getNextPageParam: (page) => page.next_before ?? undefined,
+    queryFn: ({ pageParam }) => fetchSavedPage(api, chatID, pageParam),
+    getNextPageParam: nextSavedPage,
   });
 }
 
@@ -37,15 +31,11 @@ export function useImportant(chatFilter: string | null) {
   const filtered = useSavedPages(chatFilter, chatFilter !== null);
   const query = chatFilter ? filtered : all;
   const allItems = useMemo(
-    () => all.data?.pages.flatMap((page) => page.items) ?? [],
+    () => importantItems(all.data?.pages, {}),
     [all.data],
   );
-  const items = useMemo<ImportantItem[]>(
-    () =>
-      (query.data?.pages.flatMap((page) => page.items) ?? []).map((item) => ({
-        ...item,
-        localChat: chatMap[item.chat.id],
-      })),
+  const items = useMemo(
+    () => importantItems(query.data?.pages, chatMap),
     [query.data, chatMap],
   );
   const groups = useMemo(() => savedChatFilters(allItems), [allItems]);

@@ -152,3 +152,34 @@ describe("messageMenu", () => {
     expect(canPinIn("member")).toBe(false);
   });
 });
+
+describe("message context window", () => {
+  it("never asks the server for fewer than three messages", async () => {
+    const { MessengerAPI, minMessageContext } = await import("./api");
+    const requests: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        requests.push(String(input));
+        return new Response(
+          JSON.stringify({
+            messages: [],
+            target_id: "m",
+            has_earlier: false,
+            has_later: false,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }),
+    );
+    const api = new MessengerAPI("https://coma.test");
+    await api.messageContext("m", 1);
+    await api.messageContext("m", 5);
+    vi.unstubAllGlobals();
+    expect(minMessageContext).toBe(3);
+    expect(requests).toEqual([
+      "https://coma.test/api/v1/messages/m/context?limit=3",
+      "https://coma.test/api/v1/messages/m/context?limit=5",
+    ]);
+  });
+});

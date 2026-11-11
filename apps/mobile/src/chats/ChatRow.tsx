@@ -104,7 +104,6 @@ export const ChatRow = memo(function ChatRow({
         size={48}
         shape={chat.kind === "direct" ? "circle" : "square"}
         agent={agent && !(peer?.avatar_version ?? 0)}
-        glyph={chat.kind === "channel" ? "#" : undefined}
         online={online}
         {...chatAvatarSource(chat)}
       />

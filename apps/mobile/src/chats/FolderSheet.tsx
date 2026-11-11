@@ -297,7 +297,6 @@ function FolderSheetBody({
               size={36}
               shape={chat.kind === "direct" ? "circle" : "square"}
               agent={agent && !(chat.direct_peer?.avatar_version ?? 0)}
-              glyph={chat.kind === "channel" ? "#" : undefined}
               {...chatAvatarSource(chat)}
             />
             <View style={styles.grow}>
