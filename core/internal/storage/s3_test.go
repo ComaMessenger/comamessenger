@@ -40,6 +40,18 @@ func TestS3BlobStoreRejectsInvalidConfigurationAndKeys(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Players seek voice recordings with Range requests straight to the
+	// object store, so the download signature must cover only the host.
+	download, err := store.PresignDownload(context.Background(), "ab/cd/voice", time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if signed := download.Query().Get("X-Amz-SignedHeaders"); signed != "host" {
+		t.Fatalf("presigned download signs %q, want only host so Range requests pass", signed)
+	}
+	if download.Query().Get("response-content-disposition") != "attachment" {
+		t.Fatalf("presigned download does not force attachment: %s", download)
+	}
 	if _, err := store.PresignDownload(context.Background(), "../secret", time.Minute); !errors.Is(err, ErrInvalidKey) {
 		t.Fatalf("PresignDownload traversal error = %v, want ErrInvalidKey", err)
 	}

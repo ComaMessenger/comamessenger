@@ -21,6 +21,8 @@ export type ChatAgent = components["schemas"]["ChatAgent"];
 export type ChatAgentTrigger = components["schemas"]["ChatAgentTrigger"];
 export type FileMetadata = components["schemas"]["File"];
 export type FileUpload = components["schemas"]["FileUpload"];
+export type CreateFileUploadRequest =
+  components["schemas"]["CreateFileUploadRequest"];
 export type CompletedFilePart = components["schemas"]["CompletedFilePart"];
 export type SearchPage = components["schemas"]["SearchPage"];
 export type SearchResult = components["schemas"]["SearchResult"];

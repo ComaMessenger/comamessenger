@@ -130,6 +130,54 @@ func (s *LocalBlobStore) Open(_ context.Context, key string) (io.ReadCloser, Blo
 	return file, Blob{Key: key, Size: info.Size(), ModifiedAt: info.ModTime()}, nil
 }
 
+func (s *LocalBlobStore) Copy(ctx context.Context, sourceKey, destinationKey string) (Blob, error) {
+	reader, source, err := s.Open(ctx, sourceKey)
+	if err != nil {
+		return Blob{}, err
+	}
+	defer reader.Close()
+	return s.Put(ctx, PutRequest{Key: destinationKey, Size: source.Size, Body: reader})
+}
+
+// CheckBucket confirms the root directory still exists.
+func (s *LocalBlobStore) CheckBucket(context.Context) error {
+	info, err := os.Stat(s.root)
+	if errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("%w: %s", ErrBucketMissing, s.root)
+	}
+	if err != nil {
+		return fmt.Errorf("check local blob root: %w", err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("%w: %s is not a directory", ErrBucketMissing, s.root)
+	}
+	return nil
+}
+
+func (s *LocalBlobStore) ReadRange(_ context.Context, key string, offset, length int64) ([]byte, error) {
+	if offset < 0 || length < 0 {
+		return nil, fmt.Errorf("read blob range: invalid range")
+	}
+	path, err := s.path(key)
+	if err != nil {
+		return nil, err
+	}
+	file, err := os.Open(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("open blob: %w", err)
+	}
+	defer file.Close()
+	buffer := make([]byte, length)
+	read, err := file.ReadAt(buffer, offset)
+	if err != nil && !(errors.Is(err, io.EOF) && int64(read) == length) {
+		return nil, fmt.Errorf("read blob range: %w", err)
+	}
+	return buffer, nil
+}
+
 func (s *LocalBlobStore) Stat(_ context.Context, key string) (Blob, error) {
 	path, err := s.path(key)
 	if err != nil {

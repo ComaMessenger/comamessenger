@@ -394,7 +394,9 @@ func TestDeliverSendsOnceThroughTheOrdinaryPath(t *testing.T) {
 		t.Fatal("another member read a file of a pending scheduled message")
 	}
 	loose := w.file(t, w.author)
-	if _, err := fileService.Reconcile(ctx); err != nil {
+	// The test files have rows but no objects, so after the unattached
+	// cleanup the pass stops on its empty-bucket guard; that is expected.
+	if _, err := fileService.Reconcile(ctx); err != nil && !errors.Is(err, files.ErrStorageSuspect) {
 		t.Fatal(err)
 	}
 	if got := w.count(t, `SELECT count(*) FROM files WHERE id=$1 AND status='deleted'`, fileID); got != 0 {

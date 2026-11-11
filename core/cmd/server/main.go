@@ -132,6 +132,13 @@ func main() {
 		logger.Error("file service initialization failed", "error", err)
 		os.Exit(1)
 	}
+	storageCtx, storageCancel := context.WithTimeout(context.Background(), 45*time.Second)
+	storageErr := checkFileStorage(storageCtx, logger, fileService)
+	storageCancel()
+	if err := storageErr; err != nil {
+		logger.Error("file storage check failed: the bucket must exist before Core starts", "driver", cfg.Storage.Driver, "endpoint", cfg.S3.Endpoint, "bucket", cfg.S3.Bucket, "error", err)
+		os.Exit(1)
+	}
 	processingClient, err := files.NewProcessingClient(pool, fileService, logger)
 	if err != nil {
 		logger.Error("file processing initialization failed", "error", err)
@@ -318,7 +325,9 @@ func main() {
 	case <-shutdownSignals.Done():
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// In-flight upload completions finish detached from their request; wait
+	// for the longest one (Compose stop_grace_period must be longer still).
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout(fileService))
 	defer cancel()
 	realtimeServer.Shutdown()
 	stopRealtime()
@@ -361,4 +370,40 @@ func runAdminCommand(ctx context.Context, service *identity.Service, args []stri
 	}
 	_, err = fmt.Fprintln(os.Stdout, resetURL)
 	return err
+}
+
+// shutdownTimeout covers the longest upload completion plus ten seconds for
+// the other components.
+func shutdownTimeout(fileService *files.Service) time.Duration {
+	return shutdownTimeoutFor(fileService.MaxCompletionTimeout())
+}
+
+func shutdownTimeoutFor(completion time.Duration) time.Duration {
+	return max(10*time.Second, completion+10*time.Second)
+}
+
+// checkFileStorage refuses to start on a missing bucket and warns, without
+// stopping, when the bucket looks empty for the stored files; reconciliation
+// then stops by itself (files.ErrStorageSuspect). A store that cannot be
+// reached is retried for 30 seconds.
+func checkFileStorage(ctx context.Context, logger *slog.Logger, fileService *files.Service) error {
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		err := fileService.CheckStorage(ctx)
+		switch {
+		case err == nil:
+			return nil
+		case errors.Is(err, files.ErrStorageSuspect):
+			logger.Warn("file storage looks empty or wrong for the stored files; reconciliation will not change anything until it is fixed", "error", err)
+			return nil
+		case errors.Is(err, storage.ErrBucketMissing) || time.Now().After(deadline):
+			return err
+		}
+		logger.Warn("file storage is not reachable yet, retrying", "error", err)
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(2 * time.Second):
+		}
+	}
 }

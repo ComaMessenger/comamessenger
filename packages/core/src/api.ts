@@ -1,4 +1,5 @@
 import type { components } from "@comamessenger/protocol";
+import { parseRetryAfter } from "./retryAfter";
 import type {
   AcceptInvitationRequest,
   ActorPage,
@@ -26,6 +27,7 @@ import type {
   MessageReceipt,
   MessageWindow,
   FileMetadata,
+  CreateFileUploadRequest,
   FileUpload,
   CompletedFilePart,
   SearchPage,
@@ -155,6 +157,8 @@ export class APIError extends Error {
     message: string,
     /** Structured details some errors carry (e.g. `loosened` actions). */
     readonly details: Record<string, unknown> = {},
+    /** Seconds from Retry-After on 429/503: the request may be repeated. */
+    readonly retryAfterSeconds?: number,
   ) {
     super(message);
     this.name = "APIError";
@@ -1108,12 +1112,8 @@ export class MessengerAPI {
       `/api/v1/chats/${encodeURIComponent(chatID)}/avatar`,
     );
   }
-  createFileUpload(input: {
-    name: string;
-    mime: string;
-    size: number;
-    sha256?: string;
-  }): Promise<FileUpload> {
+  /** Reserves an upload; pass `voice` (and VOICE_MIME) for a voice recording. */
+  createFileUpload(input: CreateFileUploadRequest): Promise<FileUpload> {
     return this.request("/api/v1/files/uploads", {
       method: "POST",
       body: JSON.stringify(input),
@@ -1637,6 +1637,7 @@ export class MessengerAPI {
         payload.code ?? "request_failed",
         payload.message ?? "Request failed.",
         payload.details ?? {},
+        parseRetryAfter(response.headers.get("Retry-After")),
       );
     }
     if (response.status === 204) return undefined as T;

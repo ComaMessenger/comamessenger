@@ -2657,7 +2657,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_confirmation_loosened" | "agent_conflict" | "agent_not_ready" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "architect_budget_exceeded" | "architect_busy" | "architect_connection_required" | "architect_model_error" | "architect_session_expired" | "architect_session_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "integration_in_use" | "integration_usage_changed" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "limit_reached" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "scheduled_message_closed" | "scheduled_message_not_found" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "webhook_not_found" | "webhook_rejected" | "workspace_not_found";
+        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_confirmation_loosened" | "agent_conflict" | "agent_not_ready" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "architect_budget_exceeded" | "architect_busy" | "architect_connection_required" | "architect_model_error" | "architect_session_expired" | "architect_session_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "integration_in_use" | "integration_usage_changed" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "limit_reached" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "scheduled_message_closed" | "scheduled_message_not_found" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "storage_unavailable" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "webhook_not_found" | "webhook_rejected" | "workspace_not_found";
         File: {
             /** Format: uuid */
             id: string;
@@ -8308,6 +8308,7 @@ export interface operations {
             409: components["responses"]["Error"];
             413: components["responses"]["Error"];
             415: components["responses"]["Error"];
+            503: components["responses"]["Error"];
             507: components["responses"]["Error"];
         };
     };
@@ -8356,7 +8357,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Completed presigned or multipart upload. */
+            /** @description Completed presigned or multipart upload. Repeating the call for a completed upload returns the same file. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -8368,6 +8369,15 @@ export interface operations {
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
             422: components["responses"]["Error"];
+            /** @description Storage is temporarily unavailable or the upload is being completed by another request; retry after `Retry-After`. The upload stays open. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     abortFileUpload: {
@@ -8436,6 +8446,15 @@ export interface operations {
                 content: {
                     "application/octet-stream": string;
                     "application/json": components["schemas"]["ObjectLink"];
+                };
+            };
+            /** @description A byte range of a local blob for a `Range` request; object-store URLs answer ranges themselves. */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
                 };
             };
             /** @description Short-lived authorized object-store URL. */

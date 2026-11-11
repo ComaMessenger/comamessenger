@@ -8,8 +8,16 @@ upstream coma_core {
     keepalive 16;
 }
 
+# Bucket upstream: the bundled MinIO of existing installations (--profile s3)
+# listens on 9000. A new installation with versitygw (--profile s3gw) uses
+# coma_s3gw below instead; switch proxy_pass in the bucket location.
 upstream coma_s3 {
     server 127.0.0.1:9000;
+    keepalive 8;
+}
+
+upstream coma_s3gw {
+    server 127.0.0.1:9100;
     keepalive 8;
 }
 
