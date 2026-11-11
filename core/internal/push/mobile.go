@@ -251,7 +251,7 @@ func (w *Worker) deliverMobile(ctx context.Context) error {
 	rows, err := w.pool.Query(ctx, `SELECT p.org_id,p.event_seq,p.device_id,d.actor_id,d.relay_handle,d.notification_key,
 		e.type,e.data,e.chat_id,m.thread_root_id,m.body,c.name,a.display_name,
 		COALESCE((u.preferences->>'push_preview')::boolean,false),COALESCE(NULLIF(d.locale,''),u.preferences->>'locale','ru'),
-		`+quietNotification+`
+		`+quietNotification+`,`+scheduledStillFailed+`
 		FROM mobile_push_deliveries p JOIN mobile_push_devices d ON d.id=p.device_id
 		JOIN events e ON e.org_id=p.org_id AND e.seq=p.event_seq
 		LEFT JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id
@@ -267,14 +267,14 @@ func (w *Worker) deliverMobile(ctx context.Context) error {
 		seq                                                   int64
 		key, eventData                                        []byte
 		chatID, threadID, body, chatName                      *string
-		preview, silent                                       bool
+		preview, silent, current                              bool
 	}
 	deliveries := []delivery{}
 	for rows.Next() {
 		var item delivery
 		if err := rows.Scan(&item.org, &item.seq, &item.device, &item.actor, &item.handle, &item.key,
 			&item.eventType, &item.eventData, &item.chatID, &item.threadID, &item.body, &item.chatName, &item.author,
-			&item.preview, &item.locale, &item.silent); err != nil {
+			&item.preview, &item.locale, &item.silent, &item.current); err != nil {
 			rows.Close()
 			return err
 		}
@@ -288,6 +288,10 @@ func (w *Worker) deliverMobile(ctx context.Context) error {
 		_, _ = w.pool.Exec(ctx, query, append([]any{item.org, item.seq, item.device, leaseToken}, args...)...)
 	}
 	for _, item := range deliveries {
+		if !item.current {
+			finish(item, `UPDATE mobile_push_deliveries SET sent_at=now(),last_error='scheduled_closed',lease_token=NULL,lease_until=NULL WHERE org_id=$1 AND event_seq=$2 AND device_id=$3 AND lease_token=$4`)
+			continue
+		}
 		if item.chatID != nil && w.active != nil && w.active(item.org, item.actor, *item.chatID) {
 			finish(item, `UPDATE mobile_push_deliveries SET sent_at=now(),last_error='suppressed_active',lease_token=NULL,lease_until=NULL WHERE org_id=$1 AND event_seq=$2 AND device_id=$3 AND lease_token=$4`)
 			continue
@@ -306,9 +310,13 @@ func (w *Worker) deliverMobile(ctx context.Context) error {
 		if item.locale == "en" {
 			fallbackBody = "New message"
 		}
+		collapseID := content.ChatID
+		if content.Tag != "" {
+			collapseID = content.Tag
+		}
 		sendErr := w.relay.Send(ctx, RelayMessage{
 			Handle: item.handle, Ciphertext: ciphertext,
-			FallbackTitle: fallbackTitle, FallbackBody: fallbackBody, CollapseID: content.ChatID, Silent: item.silent,
+			FallbackTitle: fallbackTitle, FallbackBody: fallbackBody, CollapseID: collapseID, Silent: item.silent,
 		})
 		switch {
 		case sendErr == nil:

@@ -14,6 +14,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/config"
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
+	"github.com/comamessenger/comamessenger/core/internal/scheduledreset"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -717,6 +718,14 @@ func (w *Worker) materialize(ctx context.Context) error {
 			  FROM event e JOIN chats c ON c.org_id=e.org_id AND c.id=e.chat_id
 			  WHERE e.type IN ('member.joined','member.updated','member.removed')
 			    AND e.data ? 'actor_id' AND (e.data->>'actor_id')::uuid<>e.actor_id
+			  UNION ALL
+			  -- A scheduled message that was not sent: only its author, and
+			  -- only while the record is still this failure. The chat's own
+			  -- notification settings do not apply: the message is the
+			  -- author's own.
+			  SELECT e.audience_actor_id,'default',NULL,NULL,'{}'::uuid[],NULL::uuid,'scheduled'
+			  FROM event e JOIN scheduled_messages sm ON sm.org_id=e.org_id AND sm.id=e.subject_id AND sm.author_id=e.audience_actor_id
+			  WHERE e.type='scheduled_message.failed' AND sm.status='failed' AND sm.version=(e.data->>'version')::int
 			), eligible AS (
 			SELECT e.org_id,e.seq,e.occurred_at,r.*,u.preferences
 			FROM event e JOIN recipients r ON true
@@ -732,6 +741,7 @@ func (w *Worker) materialize(ctx context.Context) error {
 			    WHEN 'reaction' THEN COALESCE((u.preferences->>'notify_reactions')::boolean,true)
 			    WHEN 'invite' THEN COALESCE((u.preferences->>'notify_invites')::boolean,true)
 			    WHEN 'system' THEN COALESCE((u.preferences->>'notify_system')::boolean,true)
+			    WHEN 'scheduled' THEN true
 			    ELSE CASE r.notify_level
 			      WHEN 'all' THEN true
 			      WHEN 'mentions' THEN r.recipient_id=ANY(r.mentioned_actor_ids)
@@ -772,7 +782,7 @@ func (w *Worker) materialize(ctx context.Context) error {
 			  INSERT INTO email_digest_items(org_id,event_seq,actor_id,available_at)
 			  SELECT org_id,seq,recipient_id,occurred_at+interval '15 minutes'
 			  FROM eligible
-			  WHERE COALESCE((preferences->>'email_digest')::boolean,false)
+			  WHERE COALESCE((preferences->>'email_digest')::boolean,false) AND category<>'scheduled'
 			  ON CONFLICT DO NOTHING
 			  RETURNING 1
 			), mobile_items AS (
@@ -817,7 +827,7 @@ func (w *Worker) deliver(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	rows, err := w.pool.Query(ctx, `SELECT d.org_id,d.event_seq,d.subscription_id,s.actor_id,s.endpoint,s.p256dh,s.auth,e.type,e.data,e.chat_id,m.thread_root_id,m.body,c.name,a.display_name,COALESCE((u.preferences->>'push_preview')::boolean,false),COALESCE(u.preferences->>'locale','ru'),`+quietNotification+` FROM notification_deliveries d JOIN web_push_subscriptions s ON s.id=d.subscription_id JOIN events e ON e.org_id=d.org_id AND e.seq=d.event_seq LEFT JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id LEFT JOIN chats c ON c.org_id=e.org_id AND c.id=e.chat_id JOIN actors a ON a.org_id=e.org_id AND a.id=e.actor_id JOIN users u ON u.org_id=s.org_id AND u.actor_id=s.actor_id WHERE d.lease_token=$1 ORDER BY d.event_seq`, leaseToken)
+	rows, err := w.pool.Query(ctx, `SELECT d.org_id,d.event_seq,d.subscription_id,s.actor_id,s.endpoint,s.p256dh,s.auth,e.type,e.data,e.chat_id,m.thread_root_id,m.body,c.name,a.display_name,COALESCE((u.preferences->>'push_preview')::boolean,false),COALESCE(u.preferences->>'locale','ru'),`+quietNotification+`,`+scheduledStillFailed+` FROM notification_deliveries d JOIN web_push_subscriptions s ON s.id=d.subscription_id JOIN events e ON e.org_id=d.org_id AND e.seq=d.event_seq LEFT JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id LEFT JOIN chats c ON c.org_id=e.org_id AND c.id=e.chat_id JOIN actors a ON a.org_id=e.org_id AND a.id=e.actor_id JOIN users u ON u.org_id=s.org_id AND u.actor_id=s.actor_id WHERE d.lease_token=$1 ORDER BY d.event_seq`, leaseToken)
 	if err != nil {
 		return err
 	}
@@ -827,9 +837,13 @@ func (w *Worker) deliver(ctx context.Context) error {
 		var seq int64
 		var chatID, threadID, body, name *string
 		var eventData []byte
-		var preview, silent bool
-		if err := rows.Scan(&org, &seq, &subID, &actor, &endpoint, &p256dh, &auth, &eventType, &eventData, &chatID, &threadID, &body, &name, &author, &preview, &locale, &silent); err != nil {
+		var preview, silent, current bool
+		if err := rows.Scan(&org, &seq, &subID, &actor, &endpoint, &p256dh, &auth, &eventType, &eventData, &chatID, &threadID, &body, &name, &author, &preview, &locale, &silent, &current); err != nil {
 			return err
+		}
+		if !current {
+			_, _ = w.pool.Exec(ctx, `UPDATE notification_deliveries SET sent_at=now(),last_error='scheduled_closed',lease_token=NULL,lease_until=NULL WHERE org_id=$1 AND event_seq=$2 AND subscription_id=$3 AND lease_token=$4`, org, seq, subID, leaseToken)
+			continue
 		}
 		if chatID != nil && w.active != nil && w.active(org, actor, *chatID) {
 			_, _ = w.pool.Exec(ctx, `UPDATE notification_deliveries SET sent_at=now(),last_error='suppressed_active',lease_token=NULL,lease_until=NULL WHERE org_id=$1 AND event_seq=$2 AND subscription_id=$3 AND lease_token=$4`, org, seq, subID, leaseToken)
@@ -979,6 +993,9 @@ func digestMessage(items []digestItem) (string, string) {
 // notificationContent is what a push shows. Message text is included only
 // when the recipient enabled push_preview (ADR-0010).
 type notificationContent struct {
+	// Tag groups notifications of one kind on the device, so a new one
+	// replaces the previous instead of piling up.
+	Tag          string `json:"tag,omitempty"`
 	Title        string `json:"title"`
 	Body         string `json:"body"`
 	URL          string `json:"url,omitempty"`
@@ -987,6 +1004,9 @@ type notificationContent struct {
 }
 
 func buildNotification(eventType string, eventData []byte, author, locale string, preview bool, chatID, threadID, body, chatName *string) notificationContent {
+	if eventType == scheduledreset.EventFailed {
+		return scheduledFailureNotification(eventData, locale)
+	}
 	content := notificationContent{Title: author, Body: "Новое сообщение"}
 	if chatName != nil && *chatName != "" {
 		content.Title += " · " + *chatName
@@ -1058,6 +1078,9 @@ const quietNotification = `COALESCE(e.type='message.created' AND m.silent,false)
 // vibration.
 func webPushPayload(content notificationContent, silent bool) []byte {
 	payload := map[string]any{"title": content.Title, "body": content.Body}
+	if content.Tag != "" {
+		payload["tag"] = content.Tag
+	}
 	if content.ChatID != "" {
 		payload["chat_id"] = content.ChatID
 	}

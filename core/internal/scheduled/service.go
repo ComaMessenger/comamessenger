@@ -54,7 +54,19 @@ var (
 	ErrVersionConflict     = errors.New("scheduled message version conflict")
 	ErrLimitReached        = errors.New("scheduled message limit reached")
 	ErrIdempotencyConflict = errors.New("scheduled message idempotency conflict")
+	ErrNotRetryable        = errors.New("failed scheduled message cannot be sent again")
 )
+
+// NotRetryableError refuses to send a failed message again, or to change it
+// for that, because the cause still holds. Reason is a failure reason, so the
+// author reads the same words as on the record. The record stays failed.
+type NotRetryableError struct{ Reason string }
+
+func (e *NotRetryableError) Error() string {
+	return ErrNotRetryable.Error() + ": " + e.Reason
+}
+
+func (e *NotRetryableError) Is(target error) bool { return target == ErrNotRetryable }
 
 const (
 	StatusPending = "pending"
@@ -159,12 +171,15 @@ type CreateInput struct {
 }
 
 type UpdateInput struct {
-	ExpectedVersion   int        `json:"expected_version"`
-	Body              *string    `json:"body"`
-	BodyFormat        *string    `json:"body_format"`
-	MentionedActorIDs *[]string  `json:"mentioned_actor_ids"`
-	SendAt            *time.Time `json:"send_at"`
-	Silent            *bool      `json:"silent"`
+	ExpectedVersion   int       `json:"expected_version"`
+	Body              *string   `json:"body"`
+	BodyFormat        *string   `json:"body_format"`
+	MentionedActorIDs *[]string `json:"mentioned_actor_ids"`
+	// FileIDs replaces the attachments. Files no longer listed become
+	// unattached again and fall under the ordinary cleanup.
+	FileIDs *[]string  `json:"file_ids"`
+	SendAt  *time.Time `json:"send_at"`
+	Silent  *bool      `json:"silent"`
 }
 
 // Author is the signed-in person acting on their scheduled messages.
@@ -319,6 +334,9 @@ func (s *Service) Create(ctx context.Context, author Author, chatID string, inpu
 	if err := s.messages.AuthorizeCreateTx(ctx, tx, user, chatID, draft); err != nil {
 		return ScheduledMessage{}, false, fromMessageError(err)
 	}
+	if err := checkFilesFree(ctx, tx, user.OrgID, scheduledID, draft.FileIDs); err != nil {
+		return ScheduledMessage{}, false, err
+	}
 	if err := s.checkLimits(ctx, tx, user, chatID); err != nil {
 		return ScheduledMessage{}, false, err
 	}
@@ -431,9 +449,15 @@ func (s *Service) Get(ctx context.Context, author Author, scheduledID string) (S
 	return items[0], nil
 }
 
-// Update changes the text, mentions, silence or send time of a pending
-// message, rechecking the author's rights as of now and re-stamping who
-// authorized it.
+// Update changes the text, mentions, files, silence or send time of a
+// pending message, rechecking the author's rights as of now and re-stamping
+// who authorized it.
+//
+// A failed message may be changed too: it is how the author sends it again.
+// Every check of creation runs again and a cause that still holds is
+// refused with NotRetryableError, leaving the record as it was. With a new
+// send_at the record becomes pending again; without one it stays failed
+// with the new content, ready for SendNow.
 func (s *Service) Update(ctx context.Context, author Author, scheduledID string, input UpdateInput) (ScheduledMessage, error) {
 	if author.SessionID == "" {
 		return ScheduledMessage{}, ErrForbidden
@@ -444,7 +468,7 @@ func (s *Service) Update(ctx context.Context, author Author, scheduledID string,
 	if input.ExpectedVersion < 1 {
 		return ScheduledMessage{}, fmt.Errorf("%w: expected_version must be positive", ErrInvalid)
 	}
-	if input.Body == nil && input.BodyFormat == nil && input.MentionedActorIDs == nil && input.SendAt == nil && input.Silent == nil {
+	if input.Body == nil && input.BodyFormat == nil && input.MentionedActorIDs == nil && input.FileIDs == nil && input.SendAt == nil && input.Silent == nil {
 		return ScheduledMessage{}, fmt.Errorf("%w: nothing to change", ErrInvalid)
 	}
 	tx, err := s.pool.Begin(ctx)
@@ -464,7 +488,7 @@ func (s *Service) Update(ctx context.Context, author Author, scheduledID string,
 	if current.Version != input.ExpectedVersion {
 		return ScheduledMessage{}, ErrVersionConflict
 	}
-	if current.Status != StatusPending {
+	if current.Status != StatusPending && current.Status != StatusFailed {
 		return ScheduledMessage{}, ErrClosed
 	}
 	granted, err := authorize(ctx, tx, author)
@@ -485,6 +509,9 @@ func (s *Service) Update(ctx context.Context, author Author, scheduledID string,
 	if input.MentionedActorIDs != nil {
 		draft.MentionedActorIDs = *input.MentionedActorIDs
 	}
+	if input.FileIDs != nil {
+		draft.FileIDs = append([]string{}, (*input.FileIDs)...)
+	}
 	if input.Silent != nil {
 		draft.Silent = *input.Silent
 	}
@@ -498,20 +525,45 @@ func (s *Service) Update(ctx context.Context, author Author, scheduledID string,
 			return ScheduledMessage{}, err
 		}
 	}
-	if err := s.messages.AuthorizeCreateTx(ctx, tx, user, current.ChatID, draft); err != nil {
+	status := current.Status
+	if current.Status == StatusFailed {
+		if err := s.recheckFailed(ctx, tx, current, granted, draft); err != nil {
+			return ScheduledMessage{}, err
+		}
+		if input.SendAt != nil {
+			status = StatusPending
+		}
+	} else if err := s.messages.AuthorizeCreateTx(ctx, tx, user, current.ChatID, draft); err != nil {
 		return ScheduledMessage{}, fromMessageError(err)
+	}
+	if err := checkFilesFree(ctx, tx, user.OrgID, current.ID, draft.FileIDs); err != nil {
+		return ScheduledMessage{}, err
+	}
+	if status == StatusPending && current.Status == StatusFailed {
+		// The record is not pending yet, so it is not among those counted.
+		if err := s.checkLimits(ctx, tx, user, current.ChatID); err != nil {
+			return ScheduledMessage{}, err
+		}
 	}
 	var result ScheduledMessage
 	err = scan(tx.QueryRow(ctx, `
 		UPDATE scheduled_messages sm SET body=$4, body_format=$5, mentioned_actor_ids=$6, silent=$7, send_at=$8,
-			session_family_id=$9, security_epoch=$10, version=version+1, updated_at=now()
+			session_family_id=$9, security_epoch=$10, status=$11,
+			failure_reason=CASE WHEN $11='failed' THEN failure_reason END,
+			failed_at=CASE WHEN $11='failed' THEN failed_at END,
+			version=version+1, updated_at=now()
 		WHERE sm.org_id=$1 AND sm.author_id=$2 AND sm.id=$3
 		RETURNING `+selectColumns, user.OrgID, user.ActorID, scheduledID, draft.Body, draft.BodyFormat,
-		draft.MentionedActorIDs, draft.Silent, sendAt, granted.familyID, granted.epoch), &result)
+		draft.MentionedActorIDs, draft.Silent, sendAt, granted.familyID, granted.epoch, status), &result)
 	if err != nil {
 		return ScheduledMessage{}, fmt.Errorf("update scheduled message: %w", err)
 	}
-	if !result.SendAt.Equal(current.SendAt) {
+	if input.FileIDs != nil {
+		if err := replaceFiles(ctx, tx, user.OrgID, scheduledID, draft.FileIDs); err != nil {
+			return ScheduledMessage{}, err
+		}
+	}
+	if status == StatusPending && (current.Status != StatusPending || !result.SendAt.Equal(current.SendAt)) {
 		if err := s.cancel(ctx, tx, current.riverJobID); err != nil {
 			return ScheduledMessage{}, err
 		}
@@ -533,6 +585,30 @@ func (s *Service) Update(ctx context.Context, author Author, scheduledID string,
 	}
 	s.notify(user.OrgID, seq)
 	return result, nil
+}
+
+// recheckFailed repeats, for a failed message the author wants to send
+// again, everything creation and delivery check, as if it were stamped by
+// the current request. A cause that still holds is a NotRetryableError.
+func (s *Service) recheckFailed(ctx context.Context, tx pgx.Tx, current ScheduledMessage, granted grant, draft message.CreateInput) error {
+	current.securityEpoch = granted.epoch
+	current.sessionFamilyID = granted.familyID
+	current.fileIDs = draft.FileIDs
+	user, reason, err := checkAtSend(ctx, tx, current)
+	if err != nil {
+		return err
+	}
+	if reason == "" {
+		if err := s.messages.AuthorizeCreateTx(ctx, tx, user, current.ChatID, draft); err != nil {
+			if reason = reasonFor(err); reason == "" {
+				return err
+			}
+		}
+	}
+	if reason != "" {
+		return &NotRetryableError{Reason: reason}
+	}
+	return nil
 }
 
 // Delete cancels a pending message or removes a finished record. It needs
@@ -577,7 +653,8 @@ func (s *Service) Delete(ctx context.Context, author Author, scheduledID string)
 }
 
 // SendNow sends a pending message right away through the same delivery
-// path as the scheduled job, re-stamping who authorized it.
+// path as the scheduled job, re-stamping who authorized it. A failed
+// message is sent again the same way once every check passes anew.
 func (s *Service) SendNow(ctx context.Context, author Author, scheduledID string) (ScheduledMessage, error) {
 	if author.SessionID == "" {
 		return ScheduledMessage{}, ErrForbidden
@@ -612,15 +689,37 @@ func (s *Service) prepareSendNow(ctx context.Context, author Author, scheduledID
 	if err != nil {
 		return err
 	}
-	if current.Status != StatusPending {
+	if current.Status != StatusPending && current.Status != StatusFailed {
 		return ErrClosed
 	}
 	granted, err := authorize(ctx, tx, author)
 	if err != nil {
 		return err
 	}
+	if current.Status == StatusFailed {
+		// Sending a failed message again: everything is checked anew and a
+		// cause that still holds leaves the record failed. The message keeps
+		// its derived client_msg_id, so it can never be sent twice.
+		if err := loadFileIDs(ctx, tx, []*ScheduledMessage{&current}); err != nil {
+			return err
+		}
+		draft := current.messageInput()
+		if err := s.messages.ValidateCreate(current.ChatID, &draft); err != nil {
+			return &NotRetryableError{Reason: ReasonInvalidContent}
+		}
+		if err := s.recheckFailed(ctx, tx, current, granted, draft); err != nil {
+			return err
+		}
+		if err := checkFilesFree(ctx, tx, current.orgID, current.ID, draft.FileIDs); err != nil {
+			return &NotRetryableError{Reason: ReasonAttachmentUnavailable}
+		}
+		if err := s.checkLimits(ctx, tx, granted.user, current.ChatID); err != nil {
+			return err
+		}
+	}
 	if err := scan(tx.QueryRow(ctx, `
-		UPDATE scheduled_messages sm SET send_at=now(), session_family_id=$2, security_epoch=$3, version=version+1, updated_at=now()
+		UPDATE scheduled_messages sm SET send_at=now(), session_family_id=$2, security_epoch=$3,
+			status='pending', failure_reason=NULL, failed_at=NULL, version=version+1, updated_at=now()
 		WHERE sm.id=$1 RETURNING `+selectColumns, scheduledID, granted.familyID, granted.epoch), &current); err != nil {
 		return fmt.Errorf("move scheduled message to now: %w", err)
 	}
@@ -848,10 +947,13 @@ func (s *Service) Cleanup(ctx context.Context) (int64, error) {
 		problems = append(problems, fmt.Errorf("clean up revoked session families: %w", err))
 	}
 	command, err := s.pool.Exec(ctx, `
-		DELETE FROM scheduled_messages WHERE id IN (
+		DELETE FROM scheduled_messages sm WHERE sm.id IN (
 			SELECT id FROM scheduled_messages
 			WHERE (status='sent' AND updated_at < now() - $1::interval) OR (status='failed' AND updated_at < now() - $2::interval)
-			LIMIT 1000)`, sentRetention.String(), failedRetention.String())
+			LIMIT 1000)
+		  -- Repeated here: a row that a concurrent retry locked and made
+		  -- pending again is rechecked on its new version and kept.
+		  AND ((sm.status='sent' AND sm.updated_at < now() - $1::interval) OR (sm.status='failed' AND sm.updated_at < now() - $2::interval))`, sentRetention.String(), failedRetention.String())
 	if err != nil {
 		problems = append(problems, fmt.Errorf("clean up scheduled messages: %w", err))
 		return 0, errors.Join(problems...)
@@ -1064,6 +1166,43 @@ func lockOwn(ctx context.Context, tx pgx.Tx, user identity.User, scheduledID str
 		return ScheduledMessage{}, fmt.Errorf("lock scheduled message: %w", err)
 	}
 	return item, nil
+}
+
+// checkFilesFree refuses files already attached to a message or to another
+// scheduled message.
+func checkFilesFree(ctx context.Context, tx pgx.Tx, orgID, scheduledID string, fileIDs []string) error {
+	if len(fileIDs) == 0 {
+		return nil
+	}
+	var taken bool
+	if err := tx.QueryRow(ctx, `SELECT
+		EXISTS (SELECT 1 FROM message_files WHERE org_id=$1 AND file_id=ANY($3::uuid[]))
+		OR EXISTS (SELECT 1 FROM scheduled_message_files WHERE org_id=$1 AND file_id=ANY($3::uuid[]) AND scheduled_message_id<>$2)`,
+		orgID, scheduledID, fileIDs).Scan(&taken); err != nil {
+		return fmt.Errorf("check scheduled message files: %w", err)
+	}
+	if taken {
+		return fmt.Errorf("%w: a file is already attached to another message", ErrInvalid)
+	}
+	return nil
+}
+
+// replaceFiles sets the record's attachments. Files dropped from the list
+// lose their only link and become unattached again.
+func replaceFiles(ctx context.Context, tx pgx.Tx, orgID, scheduledID string, fileIDs []string) error {
+	if _, err := tx.Exec(ctx, `DELETE FROM scheduled_message_files WHERE scheduled_message_id=$1`, scheduledID); err != nil {
+		return fmt.Errorf("detach scheduled message files: %w", err)
+	}
+	if len(fileIDs) == 0 {
+		return nil
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO scheduled_message_files (scheduled_message_id, file_id, org_id, ordinal)
+		SELECT $1, value, $2, ordinal - 1 FROM unnest($3::uuid[]) WITH ORDINALITY AS selected(value, ordinal)`,
+		scheduledID, orgID, fileIDs); err != nil {
+		return fmt.Errorf("attach scheduled message files: %w", err)
+	}
+	return nil
 }
 
 func loadFileIDs(ctx context.Context, tx pgx.Tx, items []*ScheduledMessage) error {

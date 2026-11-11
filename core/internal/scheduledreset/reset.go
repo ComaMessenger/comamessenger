@@ -46,6 +46,9 @@ const (
 	// reused.
 	ReasonSessionRevoked = "session_revoked"
 
+	// EventFailed is the realtime event of a message that was not sent.
+	EventFailed = "scheduled_message.failed"
+
 	FamilyDeviceRevoked = "device_revoked"
 	FamilyRefreshReuse  = "refresh_reuse"
 )
@@ -84,7 +87,8 @@ type Event struct {
 // InsertEventTx records an event for the author's devices only. chat_id
 // stays empty on purpose: delivery must not depend on chat membership, so an
 // author who left still learns that the message failed. The caller holds
-// the organization row lock.
+// the organization row lock. A failure event also queues a push to the
+// author.
 func InsertEventTx(ctx context.Context, tx pgx.Tx, orgID, authorID, eventType string, event Event) (int64, error) {
 	payload, err := json.Marshal(event)
 	if err != nil {
@@ -98,6 +102,16 @@ func InsertEventTx(ctx context.Context, tx pgx.Tx, orgID, authorID, eventType st
 		INSERT INTO events (org_id, seq, type, actor_id, chat_id, subject_id, audience_actor_id, data)
 		VALUES ($1, $2, $3, $4, NULL, $5, $4, $6::jsonb)`, orgID, seq, eventType, authorID, event.ID, string(payload)); err != nil {
 		return 0, fmt.Errorf("insert scheduled message event: %w", err)
+	}
+	// A failure also notifies the author's devices by push, queued in the
+	// same transaction as the failure itself so it cannot be lost or sent
+	// for a failure that rolled back. The push worker sends it only to the
+	// author and only while the record is still this failure (see package
+	// push); it carries the reason, never the text or the chat.
+	if eventType == EventFailed {
+		if _, err := tx.Exec(ctx, `INSERT INTO notification_jobs (org_id, event_seq) VALUES ($1, $2) ON CONFLICT DO NOTHING`, orgID, seq); err != nil {
+			return 0, fmt.Errorf("queue scheduled message failure push: %w", err)
+		}
 	}
 	return seq, nil
 }
@@ -156,7 +170,7 @@ func Reconcile(ctx context.Context, pool *pgxpool.Pool, orgID, actorID string) (
 	}
 	seq = 0
 	for _, event := range events {
-		if seq, err = InsertEventTx(ctx, tx, orgID, actorID, "scheduled_message.failed", event); err != nil {
+		if seq, err = InsertEventTx(ctx, tx, orgID, actorID, EventFailed, event); err != nil {
 			return 0, err
 		}
 	}
