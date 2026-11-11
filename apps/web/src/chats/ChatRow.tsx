@@ -16,6 +16,7 @@ export function chatPreview(
     you: t("previewYou"),
     deleted: t("previewDeleted"),
     attachment: t("previewAttachment"),
+    voice: t("previewVoice"),
   });
 }
 

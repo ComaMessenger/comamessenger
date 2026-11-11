@@ -90,6 +90,8 @@ func TestFileErrorsAskForRetryOnTemporaryFailures(t *testing.T) {
 		status int
 		code   string
 	}{
+		{files.ErrTooManyChecks, standardhttp.StatusTooManyRequests, "voice_check_in_progress"},
+		{files.ErrBusy, standardhttp.StatusServiceUnavailable, "voice_check_busy"},
 		{fmt.Errorf("%w: copy failed", files.ErrUnavailable), standardhttp.StatusServiceUnavailable, "storage_unavailable"},
 	}
 	for _, item := range cases {

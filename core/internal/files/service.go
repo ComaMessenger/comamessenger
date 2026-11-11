@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -33,6 +34,10 @@ var (
 	// ErrUnavailable is a temporary failure; the upload stays open and the
 	// client may complete it again.
 	ErrUnavailable = errors.New("file storage is temporarily unavailable")
+	// ErrBusy means every voice check slot stayed taken; retry later.
+	ErrBusy = errors.New("voice checks are busy")
+	// ErrTooManyChecks means the actor already has a voice check running.
+	ErrTooManyChecks = errors.New("a voice check of this actor is already running")
 )
 
 type File struct {
@@ -47,6 +52,7 @@ type File struct {
 	CreatedAt        time.Time  `json:"created_at"`
 	ReadyAt          *time.Time `json:"ready_at,omitempty"`
 	UploaderID       string     `json:"uploader_id"`
+	Voice            *Voice     `json:"voice,omitempty"`
 	storageKey       string
 	storageDriver    string
 }
@@ -56,6 +62,7 @@ type CreateUploadInput struct {
 	MIME   string `json:"mime"`
 	Size   int64  `json:"size"`
 	SHA256 string `json:"sha256,omitempty"`
+	Voice  *Voice `json:"voice,omitempty"`
 }
 
 type Upload struct {
@@ -102,6 +109,12 @@ type Service struct {
 	processingEnqueue  func(context.Context, pgx.Tx, string) error
 	processorHooks     []ProcessorHook
 	afterCommit        func(string, int64)
+	// voiceChecks bounds how many voice uploads are parsed at once,
+	// voiceActors holds actors with a check running, voiceSlotWait bounds
+	// the wait for a slot.
+	voiceChecks   chan struct{}
+	voiceActors   sync.Map
+	voiceSlotWait time.Duration
 	// orphanGrace is how old an unreferenced object must be before
 	// reconciliation deletes it.
 	orphanGrace time.Duration
@@ -131,7 +144,10 @@ func NewService(pool *pgxpool.Pool, store storage.BlobStore, bucket string, quot
 			return nil, fmt.Errorf("invalid file service configuration: a presigned store must copy objects server-side")
 		}
 	}
-	return &Service{pool: pool, store: store, bucket: bucket, quotaBytes: int64(quotaBytes), maxFileBytes: int64(maxFileBytes), multipartThreshold: int64(multipartThreshold), uploadTTL: uploadTTL, presignTTL: presignTTL, orphanGrace: time.Hour}, nil
+	if _, ok := store.(storage.RangeReader); !ok {
+		return nil, fmt.Errorf("invalid file service configuration: the store must read byte ranges to check voice recordings")
+	}
+	return &Service{pool: pool, store: store, bucket: bucket, quotaBytes: int64(quotaBytes), maxFileBytes: int64(maxFileBytes), multipartThreshold: int64(multipartThreshold), uploadTTL: uploadTTL, presignTTL: presignTTL, voiceChecks: make(chan struct{}, maxConcurrentVoiceChecks), voiceSlotWait: voiceSlotWait, orphanGrace: time.Hour}, nil
 }
 
 // SetProcessingEnqueuer wires the durable job queue without coupling the file
@@ -166,7 +182,9 @@ func (s *Service) CreateUpload(ctx context.Context, user identity.User, input Cr
 	mode := "streaming"
 	if s.store.Capabilities().PresignedUpload {
 		mode = "presigned"
-		if input.Size >= s.multipartThreshold && s.store.Capabilities().MultipartUpload {
+		// A voice recording always goes up in one request, whatever the
+		// configured threshold, so it is checked as a single object.
+		if input.Voice == nil && input.Size >= s.multipartThreshold && s.store.Capabilities().MultipartUpload {
 			mode = "multipart"
 		}
 	}
@@ -193,9 +211,16 @@ func (s *Service) CreateUpload(ctx context.Context, user identity.User, input Cr
 	if expectedSHA != nil {
 		shaBytes = expectedSHA[:]
 	}
+	var voiceDuration *int32
+	var voiceWaveform []byte
+	if input.Voice != nil {
+		value := int32(input.Voice.DurationMs)
+		voiceDuration = &value
+		voiceWaveform = input.Voice.waveformBytes()
+	}
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO files (id, org_id, uploader_id, storage_driver, bucket, storage_key, name, mime, size, sha256)
-		VALUES ($1, $2, $3, $4, NULLIF($5, ''), $6, $7, $8, $9, $10)`, fileID, user.OrgID, user.ActorID, s.store.Driver(), s.bucket, key, name, declaredMIME, input.Size, shaBytes); err != nil {
+		INSERT INTO files (id, org_id, uploader_id, storage_driver, bucket, storage_key, name, mime, size, sha256, voice_duration_ms, voice_waveform)
+		VALUES ($1, $2, $3, $4, NULLIF($5, ''), $6, $7, $8, $9, $10, $11, $12)`, fileID, user.OrgID, user.ActorID, s.store.Driver(), s.bucket, key, name, declaredMIME, input.Size, shaBytes, voiceDuration, voiceWaveform); err != nil {
 		return Upload{}, fmt.Errorf("insert file metadata: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `
@@ -206,7 +231,7 @@ func (s *Service) CreateUpload(ctx context.Context, user identity.User, input Cr
 	if err := tx.Commit(ctx); err != nil {
 		return Upload{}, fmt.Errorf("commit upload reservation: %w", err)
 	}
-	file := File{ID: fileID, Name: name, MIME: declaredMIME, Size: input.Size, Status: "pending", ProcessingStatus: "pending", CreatedAt: time.Now().UTC(), UploaderID: user.ActorID, storageKey: key, storageDriver: s.store.Driver()}
+	file := File{ID: fileID, Name: name, MIME: declaredMIME, Size: input.Size, Status: "pending", ProcessingStatus: "pending", CreatedAt: time.Now().UTC(), UploaderID: user.ActorID, Voice: voiceFromColumns(voiceDuration, voiceWaveform), storageKey: key, storageDriver: s.store.Driver()}
 	upload := Upload{ID: uploadID, File: file, Mode: mode, ExpiresAt: expiresAt}
 	if mode == "streaming" {
 		value := "/api/v1/files/uploads/" + uploadID + "/content"
@@ -318,7 +343,7 @@ func (s *Service) PutContent(ctx context.Context, user identity.User, uploadID s
 
 // CompleteUpload finishes a presigned or multipart upload. It is safe to
 // repeat: a completed upload returns its file again, and a temporary failure
-// (ErrUnavailable) leaves the upload open with the
+// (ErrUnavailable, ErrBusy, ErrTooManyChecks) leaves the upload open with the
 // client's object in place. Only content that fails validation is discarded.
 func (s *Service) CompleteUpload(ctx context.Context, user identity.User, uploadID string, parts []CompletedPart) (File, error) {
 	claim, err := s.claimUpload(ctx, user, uploadID, "")
@@ -378,7 +403,7 @@ func (s *Service) uploadedObject(ctx context.Context, claim uploadClaim, parts [
 	return blob, nil
 }
 
-// finishUpload commits the file. Rejected
+// finishUpload checks a voice recording and commits the file. Rejected
 // content is deleted and the upload failed; any other error releases the
 // upload for another attempt and drops only the sealed copy. uploadKey is
 // the client-writable key of a sealed upload, removed once committed.
@@ -615,7 +640,8 @@ type uploadClaim struct {
 
 func (s *Service) claimUpload(ctx context.Context, user identity.User, uploadID, requiredMode string) (uploadClaim, error) {
 	var claim uploadClaim
-	var sha []byte
+	var sha, waveform []byte
+	var voiceDuration *int32
 	err := s.pool.QueryRow(ctx, `
 		UPDATE file_uploads u SET status = 'uploading',
 		  claim_expires_at = now() + make_interval(secs => $5 + f.size / $6)
@@ -624,16 +650,19 @@ func (s *Service) claimUpload(ctx context.Context, user identity.User, uploadID,
 		  AND (u.status = 'active' OR (u.status = 'uploading' AND (u.claim_expires_at IS NULL OR u.claim_expires_at < now())))
 		  AND u.expires_at > now() AND ($4 = '' OR u.mode = $4)
 		RETURNING u.id, u.mode, COALESCE(u.provider_upload_id, ''), u.reserved_bytes, u.org_id,
-		  f.id, f.name, f.mime, f.size, f.sha256, f.status, f.processing_status, f.created_at, f.uploader_id, f.storage_key, f.storage_driver`, uploadID, user.OrgID, user.ActorID, requiredMode,
+		  f.id, f.name, f.mime, f.size, f.sha256, f.status, f.processing_status, f.created_at, f.uploader_id, f.storage_key, f.storage_driver,
+		  f.voice_duration_ms, f.voice_waveform`, uploadID, user.OrgID, user.ActorID, requiredMode,
 		(completionBase+claimLeaseMargin).Seconds(), completionBytesPerSec).Scan(
 		&claim.ID, &claim.Mode, &claim.ProviderUploadID, &claim.ReservedBytes, &claim.OrgID,
-		&claim.File.ID, &claim.File.Name, &claim.File.MIME, &claim.File.Size, &sha, &claim.File.Status, &claim.File.ProcessingStatus, &claim.File.CreatedAt, &claim.File.UploaderID, &claim.File.storageKey, &claim.File.storageDriver)
+		&claim.File.ID, &claim.File.Name, &claim.File.MIME, &claim.File.Size, &sha, &claim.File.Status, &claim.File.ProcessingStatus, &claim.File.CreatedAt, &claim.File.UploaderID, &claim.File.storageKey, &claim.File.storageDriver,
+		&voiceDuration, &waveform)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return uploadClaim{}, ErrNotFound
 	}
 	if err != nil {
 		return uploadClaim{}, fmt.Errorf("claim upload: %w", err)
 	}
+	claim.File.Voice = voiceFromColumns(voiceDuration, waveform)
 	if len(sha) == sha256.Size {
 		value := hex.EncodeToString(sha)
 		claim.File.SHA256 = &value
@@ -644,6 +673,13 @@ func (s *Service) claimUpload(ctx context.Context, user identity.User, uploadID,
 func (s *Service) verifyAndCommit(ctx context.Context, claim uploadClaim, blob storage.Blob) (File, error) {
 	if blob.Size != claim.File.Size {
 		return File{}, storage.ErrSizeMismatch
+	}
+	if claim.File.Voice != nil {
+		duration, err := s.verifyVoice(ctx, claim)
+		if err != nil {
+			return File{}, err
+		}
+		claim.File.Voice.DurationMs = duration
 	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -657,8 +693,9 @@ func (s *Service) verifyAndCommit(ctx context.Context, claim uploadClaim, blob s
 	var readyAt time.Time
 	err = tx.QueryRow(ctx, `
 		UPDATE files SET status = 'ready', sha256 = COALESCE($2, sha256), ready_at = now(),
-		  storage_key = $3
-		WHERE id = $1 AND status = 'pending' RETURNING ready_at`, claim.File.ID, checksum, claim.File.storageKey).Scan(&readyAt)
+		  voice_duration_ms = CASE WHEN voice_duration_ms IS NULL THEN NULL ELSE $3::integer END,
+		  storage_key = $4
+		WHERE id = $1 AND status = 'pending' RETURNING ready_at`, claim.File.ID, checksum, voiceDurationArg(claim.File.Voice), claim.File.storageKey).Scan(&readyAt)
 	if err != nil {
 		return File{}, fmt.Errorf("complete file metadata: %w", err)
 	}
@@ -707,10 +744,11 @@ func (s *Service) failUpload(ctx context.Context, uploadID string) {
 // writes to.
 func (s *Service) getAccessible(ctx context.Context, user identity.User, fileID string) (File, error) {
 	var result File
-	var sha []byte
+	var sha, waveform []byte
+	var voiceDuration *int32
 	err := s.pool.QueryRow(ctx, `
 		SELECT f.id, f.name, f.mime, f.size, f.sha256, f.status, f.processing_status, f.preview_file_id,
-		       f.created_at, f.ready_at, f.uploader_id, f.storage_key, f.storage_driver
+		       f.created_at, f.ready_at, f.uploader_id, f.storage_key, f.storage_driver, f.voice_duration_ms, f.voice_waveform
 		FROM files f
 		WHERE f.id = $1 AND f.org_id = $2 AND f.status <> 'deleted'
 		  AND (f.uploader_id = $3 OR EXISTS (
@@ -726,13 +764,14 @@ func (s *Service) getAccessible(ctx context.Context, user identity.User, fileID 
 		    JOIN chat_members cm ON cm.chat_id = m.chat_id AND cm.actor_id = $3
 		    WHERE original.preview_file_id = f.id AND original.org_id = f.org_id AND NOT EXISTS (
 		      SELECT 1 FROM agents ag WHERE ag.actor_id = $3 AND m.chat_id = ANY(ag.write_only_chat_ids))
-		  ))`, fileID, user.OrgID, user.ActorID).Scan(&result.ID, &result.Name, &result.MIME, &result.Size, &sha, &result.Status, &result.ProcessingStatus, &result.PreviewFileID, &result.CreatedAt, &result.ReadyAt, &result.UploaderID, &result.storageKey, &result.storageDriver)
+		  ))`, fileID, user.OrgID, user.ActorID).Scan(&result.ID, &result.Name, &result.MIME, &result.Size, &sha, &result.Status, &result.ProcessingStatus, &result.PreviewFileID, &result.CreatedAt, &result.ReadyAt, &result.UploaderID, &result.storageKey, &result.storageDriver, &voiceDuration, &waveform)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return File{}, ErrNotFound
 	}
 	if err != nil {
 		return File{}, fmt.Errorf("load accessible file: %w", err)
 	}
+	result.Voice = voiceFromColumns(voiceDuration, waveform)
 	if len(sha) == sha256.Size {
 		value := hex.EncodeToString(sha)
 		result.SHA256 = &value
@@ -753,6 +792,12 @@ func (s *Service) validateCreate(input CreateUploadInput) (string, string, *[32]
 		return "", "", nil, fmt.Errorf("%w: invalid MIME type", ErrInvalid)
 	}
 	declaredMIME = strings.ToLower(declaredMIME)
+	if err := validateVoice(input.Voice, name, declaredMIME, input.Size); err != nil {
+		return "", "", nil, err
+	}
+	if input.Voice != nil {
+		declaredMIME = normalizeVoiceMIME(declaredMIME)
+	}
 	var expected *[32]byte
 	if input.SHA256 != "" {
 		decoded, err := hex.DecodeString(input.SHA256)
@@ -795,11 +840,24 @@ func mimeCompatible(declared, detected, name string) bool {
 	if declared == detected || detected == "application/octet-stream" {
 		return true
 	}
+	// Go sniffs an MP4 with an "mp4*" brand as video; an audio-only MP4 is
+	// the same container.
+	if declared == "audio/mp4" && detected == "video/mp4" {
+		return true
+	}
 	if strings.HasPrefix(declared, "text/") && detected == "text/plain" {
 		return true
 	}
 	extension := strings.ToLower(filepath.Ext(name))
 	return detected == "application/zip" && (extension == ".docx" || extension == ".xlsx" || extension == ".pptx")
+}
+
+func voiceDurationArg(voice *Voice) *int32 {
+	if voice == nil {
+		return nil
+	}
+	value := int32(voice.DurationMs)
+	return &value
 }
 
 // sealUpload copies a client-uploaded object (presigned PUT or multipart) to

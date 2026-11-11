@@ -1764,6 +1764,8 @@ const (
 	ErrorCodeUnsupportedFormat           ErrorCode = "unsupported_format"
 	ErrorCodeValidationFailed            ErrorCode = "validation_failed"
 	ErrorCodeVersionConflict             ErrorCode = "version_conflict"
+	ErrorCodeVoiceCheckBusy              ErrorCode = "voice_check_busy"
+	ErrorCodeVoiceCheckInProgress        ErrorCode = "voice_check_in_progress"
 	ErrorCodeWebhookNotFound             ErrorCode = "webhook_not_found"
 	ErrorCodeWebhookRejected             ErrorCode = "webhook_rejected"
 	ErrorCodeWorkspaceNotFound           ErrorCode = "workspace_not_found"
@@ -1877,6 +1879,10 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeValidationFailed:
 		return true
 	case ErrorCodeVersionConflict:
+		return true
+	case ErrorCodeVoiceCheckBusy:
+		return true
+	case ErrorCodeVoiceCheckInProgress:
 		return true
 	case ErrorCodeWebhookNotFound:
 		return true
@@ -5202,6 +5208,9 @@ type CreateFileUploadRequest struct {
 	Name   string  `json:"name"`
 	Sha256 *string `json:"sha256,omitempty"`
 	Size   int64   `json:"size"`
+
+	// Voice Present on an audio file recorded as a voice message. Such a file is an ordinary audio/mp4 (AAC in MP4, m4a) attachment, so clients that ignore this field show a downloadable audio file. Uploading with `voice` accepts audio/mp4, audio/m4a, audio/x-m4a or audio/aac with an .m4a, .mp4 or .aac name, at most 15 MiB, always as one upload (never multipart); the stored MIME becomes audio/mp4, and a presigned PUT must send that Content-Type. Completion rejects content that is not an audio-only MP4 and replaces `duration_ms` with the duration read from the container (the claim may differ by at most max(1.5 s, 10 %)). A voice file must be the only file of its message.
+	Voice *VoiceInfo `json:"voice,omitempty"`
 }
 
 // CreateIntegrationWebhookRequest defines model for CreateIntegrationWebhookRequest.
@@ -5410,6 +5419,9 @@ type File struct {
 	Size             int64                `json:"size"`
 	Status           FileStatus           `json:"status"`
 	UploaderId       openapi_types.UUID   `json:"uploader_id"`
+
+	// Voice Present on an audio file recorded as a voice message. Such a file is an ordinary audio/mp4 (AAC in MP4, m4a) attachment, so clients that ignore this field show a downloadable audio file. Uploading with `voice` accepts audio/mp4, audio/m4a, audio/x-m4a or audio/aac with an .m4a, .mp4 or .aac name, at most 15 MiB, always as one upload (never multipart); the stored MIME becomes audio/mp4, and a presigned PUT must send that Content-Type. Completion rejects content that is not an audio-only MP4 and replaces `duration_ms` with the duration read from the container (the claim may differ by at most max(1.5 s, 10 %)). A voice file must be the only file of its message.
+	Voice *VoiceInfo `json:"voice,omitempty"`
 }
 
 // FileProcessingStatus defines model for File.ProcessingStatus.
@@ -6018,6 +6030,9 @@ type MessagePreview struct {
 	CreatedSeq       int64              `json:"created_seq"`
 	Deleted          bool               `json:"deleted"`
 	Id               openapi_types.UUID `json:"id"`
+
+	// VoiceDurationMs Set when the message is a voice recording; lists show "Voice message · 0:14".
+	VoiceDurationMs *int `json:"voice_duration_ms,omitempty"`
 }
 
 // MessageReceipt defines model for MessageReceipt.
@@ -7062,6 +7077,14 @@ type UserPreferencesSoundId string
 
 // UserPreferencesTheme defines model for UserPreferences.Theme.
 type UserPreferencesTheme string
+
+// VoiceInfo Present on an audio file recorded as a voice message. Such a file is an ordinary audio/mp4 (AAC in MP4, m4a) attachment, so clients that ignore this field show a downloadable audio file. Uploading with `voice` accepts audio/mp4, audio/m4a, audio/x-m4a or audio/aac with an .m4a, .mp4 or .aac name, at most 15 MiB, always as one upload (never multipart); the stored MIME becomes audio/mp4, and a presigned PUT must send that Content-Type. Completion rejects content that is not an audio-only MP4 and replaces `duration_ms` with the duration read from the container (the claim may differ by at most max(1.5 s, 10 %)). A voice file must be the only file of its message.
+type VoiceInfo struct {
+	DurationMs int `json:"duration_ms"`
+
+	// Waveform 64 peak levels, 0 silent to 255 loudest, each the loudest sample of an equal slice of the recording. Fixed length keeps the payload small (well under 300 bytes of JSON) and lets every client draw the same bars at any width by grouping or stretching.
+	Waveform []int `json:"waveform"`
+}
 
 // WebhookReceipt defines model for WebhookReceipt.
 type WebhookReceipt struct {

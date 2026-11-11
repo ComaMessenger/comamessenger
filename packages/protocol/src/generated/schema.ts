@@ -2657,7 +2657,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_confirmation_loosened" | "agent_conflict" | "agent_not_ready" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "architect_budget_exceeded" | "architect_busy" | "architect_connection_required" | "architect_model_error" | "architect_session_expired" | "architect_session_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "integration_in_use" | "integration_usage_changed" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "limit_reached" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "scheduled_message_closed" | "scheduled_message_not_found" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "storage_unavailable" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "webhook_not_found" | "webhook_rejected" | "workspace_not_found";
+        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_confirmation_loosened" | "agent_conflict" | "agent_not_ready" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "architect_budget_exceeded" | "architect_busy" | "architect_connection_required" | "architect_model_error" | "architect_session_expired" | "architect_session_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "integration_in_use" | "integration_usage_changed" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "limit_reached" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "scheduled_message_closed" | "scheduled_message_not_found" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "storage_unavailable" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "voice_check_busy" | "voice_check_in_progress" | "webhook_not_found" | "webhook_rejected" | "workspace_not_found";
         File: {
             /** Format: uuid */
             id: string;
@@ -2678,6 +2678,13 @@ export interface components {
             ready_at?: string;
             /** Format: uuid */
             uploader_id: string;
+            voice?: components["schemas"]["VoiceInfo"];
+        };
+        /** @description Present on an audio file recorded as a voice message. Such a file is an ordinary audio/mp4 (AAC in MP4, m4a) attachment, so clients that ignore this field show a downloadable audio file. Uploading with `voice` accepts audio/mp4, audio/m4a, audio/x-m4a or audio/aac with an .m4a, .mp4 or .aac name, at most 15 MiB, always as one upload (never multipart); the stored MIME becomes audio/mp4, and a presigned PUT must send that Content-Type. Completion rejects content that is not an audio-only MP4 and replaces `duration_ms` with the duration read from the container (the claim may differ by at most max(1.5 s, 10 %)). A voice file must be the only file of its message. */
+        VoiceInfo: {
+            duration_ms: number;
+            /** @description 64 peak levels, 0 silent to 255 loudest, each the loudest sample of an equal slice of the recording. Fixed length keeps the payload small (well under 300 bytes of JSON) and lets every client draw the same bars at any width by grouping or stretching. */
+            waveform: number[];
         };
         SearchResult: {
             /** @enum {string} */
@@ -2887,6 +2894,7 @@ export interface components {
             /** Format: int64 */
             size: number;
             sha256?: string;
+            voice?: components["schemas"]["VoiceInfo"];
         };
         FileUpload: {
             /** Format: uuid */
@@ -4675,6 +4683,8 @@ export interface components {
             /** Format: date-time */
             created_at: string;
             deleted: boolean;
+            /** @description Set when the message is a voice recording; lists show "Voice message · 0:14". */
+            voice_duration_ms?: number;
         };
         UpdateChatRequest: {
             name?: string;
@@ -8308,6 +8318,7 @@ export interface operations {
             409: components["responses"]["Error"];
             413: components["responses"]["Error"];
             415: components["responses"]["Error"];
+            429: components["responses"]["Error"];
             503: components["responses"]["Error"];
             507: components["responses"]["Error"];
         };
@@ -8369,7 +8380,16 @@ export interface operations {
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
             422: components["responses"]["Error"];
-            /** @description Storage is temporarily unavailable or the upload is being completed by another request; retry after `Retry-After`. The upload stays open. */
+            /** @description A voice message of the same sender is being checked; retry after `Retry-After`. The upload stays open. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Storage or voice checking is temporarily unavailable; retry after `Retry-After`. The upload stays open. */
             503: {
                 headers: {
                     [name: string]: unknown;

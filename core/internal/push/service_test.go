@@ -42,6 +42,28 @@ func TestTruncateUsesRunes(t *testing.T) {
 	}
 }
 
+func TestMessageTextNamesVoiceWithDurationOnly(t *testing.T) {
+	body := ""
+	duration := int32(74_600)
+	if got := messageText(&body, &duration, "ru"); got == nil || *got != "Голосовое сообщение · 1:15" {
+		t.Fatalf("ru voice text = %v", got)
+	}
+	if got := messageText(&body, &duration, "en"); got == nil || *got != "Voice message · 1:15" {
+		t.Fatalf("en voice text = %v", got)
+	}
+	text := "hello"
+	if got := messageText(&text, nil, "ru"); got != &text {
+		t.Fatalf("plain text changed: %v", got)
+	}
+	voice := messageText(&body, &duration, "ru")
+	if content := buildNotification("message.created", nil, "Anna", "ru", false, nil, nil, voice, nil); content.Body != "Новое сообщение" {
+		t.Fatalf("voice push without preview = %q", content.Body)
+	}
+	if content := buildNotification("message.created", nil, "Anna", "ru", true, nil, nil, voice, nil); content.Body != "Голосовое сообщение · 1:15" {
+		t.Fatalf("voice push with preview = %q", content.Body)
+	}
+}
+
 func TestCategoryBodyIsLocalized(t *testing.T) {
 	data := []byte(`{"emoji":"🔥","role":"admin"}`)
 	if got := categoryBody("reaction.added", data, "Ada", "en"); got != "Ada reacted 🔥 to your message" {

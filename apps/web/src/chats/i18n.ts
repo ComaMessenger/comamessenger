@@ -23,6 +23,7 @@ export const chatsCatalog = defineCatalog(
     previewYou: "Вы",
     previewDeleted: "Сообщение удалено",
     previewAttachment: "Вложение",
+    previewVoice: "Голосовое сообщение",
     leaveGroupTitle: "Покинуть «{name}»?",
     leaveGroupHint:
       "Вы перестанете получать сообщения. Вернуться сможете только по приглашению участника.",
@@ -58,6 +59,7 @@ export const chatsCatalog = defineCatalog(
     previewYou: "You",
     previewDeleted: "Message deleted",
     previewAttachment: "Attachment",
+    previewVoice: "Voice message",
     leaveGroupTitle: "Leave “{name}”?",
     leaveGroupHint:
       "You will stop receiving messages. You can only come back with an invitation from a member.",
