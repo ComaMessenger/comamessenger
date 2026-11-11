@@ -710,8 +710,10 @@ func (s *Service) prepareSendNow(ctx context.Context, author Author, scheduledID
 		if err := s.recheckFailed(ctx, tx, current, granted, draft); err != nil {
 			return err
 		}
-		if err := checkFilesFree(ctx, tx, current.orgID, current.ID, draft.FileIDs); err != nil {
+		if err := checkFilesFree(ctx, tx, current.orgID, current.ID, draft.FileIDs); errors.Is(err, ErrInvalid) {
 			return &NotRetryableError{Reason: ReasonAttachmentUnavailable}
+		} else if err != nil {
+			return err
 		}
 		if err := s.checkLimits(ctx, tx, granted.user, current.ChatID); err != nil {
 			return err
