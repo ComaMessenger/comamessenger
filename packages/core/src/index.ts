@@ -9,6 +9,7 @@ export * from "./links";
 export * from "./outbox";
 export * from "./realtime";
 export * from "./scheduled";
+export * from "./shared";
 export * from "./store";
 export * from "./types";
 export * from "./voice";

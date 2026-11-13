@@ -9,6 +9,8 @@ import {
   expandUUID,
   isScheduledEvent,
   messagePlainText,
+  sharedChangedChat,
+  sharedKeys,
   type Chat,
   type ChatFolder,
   type DurableEvent,
@@ -250,6 +252,13 @@ export function useMessengerSession({
             )
               scheduleReload();
             if (profileEvent) scheduleReload();
+            // Chat info tabs (media, files, voice, links) follow new, edited
+            // and deleted messages; closed tabs just turn stale.
+            const sharedChat = sharedChangedChat(event);
+            if (applied && sharedChat)
+              void queryClient.invalidateQueries({
+                queryKey: sharedKeys.all(sharedChat),
+              });
             return applied || profileEvent;
           },
           resync: async (watermark) => {

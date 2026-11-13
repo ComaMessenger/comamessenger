@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Download, FileText, Image as ImageIcon, Link2, Pin } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Pin } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
@@ -8,7 +8,6 @@ import {
   type ActorSummary,
   type Chat,
   type ChatMember,
-  type SearchResult,
 } from "@comamessenger/core";
 import {
   Avatar,
@@ -18,11 +17,9 @@ import {
   Field,
   InlineError,
   Segmented,
-  Skeleton,
   SkeletonRow,
   Tabs,
   Tag,
-  cx,
 } from "../ui";
 import { messageOf } from "../errors";
 import { canManageChat, titleOf } from "../lib/chats";
@@ -30,11 +27,11 @@ import { formatListTime } from "../lib/format";
 import { useMessenger } from "../shell/MessengerContext";
 import { ActorPicker } from "./ActorPicker";
 import { usePinnedMessages } from "./PinnedMessagesDialog";
-import { downloadToDisk, useObjectURL } from "./useObjectURL";
+import { SharedFilesTab, SharedLinksTab, SharedMediaTab, SharedVoiceTab, useSharedCounts } from "./ChatSharedMedia";
 import { ChatAgentsSection } from "../agentchat/ChatAgentsSection";
 
 type NotifyLevel = "all" | "mentions" | "none";
-type AttachmentTab = "media" | "files" | "links" | "pinned";
+type AttachmentTab = "media" | "files" | "voice" | "links" | "pinned";
 
 const visibleMembers = 4;
 
@@ -78,21 +75,8 @@ export function ChatInfoDialog({
     const level = notifications.data.notify_level;
     setNotifyLevel(level === "default" ? "all" : level);
   }, [notifications.data]);
-  const attachments = useQuery({
-    queryKey: ["chat-attachments", chat.id],
-    queryFn: () => api.search({ q: "*", type: "file", chat_id: chat.id, limit: 60 }),
-    retry: false,
-  });
+  const counts = useSharedCounts(chat.id);
   const pinned = usePinnedMessages(chat.id);
-  const files = attachments.data?.results ?? [];
-  const media = useMemo(
-    () => files.filter((item) => item.file_mime?.startsWith("image/") || item.file_mime?.startsWith("video/")),
-    [files],
-  );
-  const documents = useMemo(
-    () => files.filter((item) => !media.includes(item)),
-    [files, media],
-  );
   const memberRows = allMembers ? members : members.slice(0, visibleMembers);
   const nameOf = (actorID: string) =>
     members.find((member) => member.actor_id === actorID)?.display_name ?? t("participant");
@@ -134,11 +118,13 @@ export function ChatInfoDialog({
     }
   }
 
+  const count = (value: number | undefined) => (value === undefined ? "" : ` · ${value}`);
   const tabs: Array<{ id: AttachmentTab; label: string }> = [
-    { id: "media", label: `${t("attachmentsMedia")} · ${media.length}` },
-    { id: "files", label: `${t("attachmentsFiles")} · ${documents.length}` },
-    { id: "links", label: `${t("attachmentsLinks")} · 0` },
-    { id: "pinned", label: `${t("attachmentsPinned")} · ${pinned.data?.length ?? 0}` },
+    { id: "media", label: `${t("attachmentsMedia")}${count(counts.data?.media)}` },
+    { id: "files", label: `${t("attachmentsFiles")}${count(counts.data?.files)}` },
+    { id: "voice", label: `${t("attachmentsVoice")}${count(counts.data?.voice)}` },
+    { id: "links", label: `${t("attachmentsLinks")}${count(counts.data?.links)}` },
+    { id: "pinned", label: `${t("attachmentsPinned")}${count(pinned.data?.length)}` },
   ];
 
   return (
@@ -242,73 +228,10 @@ export function ChatInfoDialog({
 
       <div className="chat-info__section">
         <Tabs<AttachmentTab> label={t("attachmentsFiles")} value={tab} onChange={setTab} items={tabs} className="chat-info__tabs" />
-        {tab === "media" && (
-          attachments.isLoading ? (
-            <div className="chat-info__media-grid" aria-hidden="true">
-              {Array.from({ length: 6 }, (_, index) => (
-                <Skeleton key={index} shape="rect" className="chat-info__media-skeleton" />
-              ))}
-            </div>
-          ) : attachments.isError ? (
-            <InlineError title={t("attachmentsError")} onRetry={() => void attachments.refetch()} retryLabel={t("retry")} center />
-          ) : media.length === 0 ? (
-            <EmptyState compact icon={<ImageIcon />} title={t("mediaEmpty")} hint={t("mediaEmptyHint")} />
-          ) : (
-            <div className="chat-info__media-grid">
-              {media.slice(0, 5).map((item) => (
-                <MediaTile key={item.file_id} result={item} onOpen={() => onOpenMessage(item.message_id)} />
-              ))}
-              {media.length > 5 && (
-                <button type="button" className="chat-info__media-more" onClick={() => onOpenMessage(media[5]!.message_id)}>
-                  +{media.length - 5}
-                </button>
-              )}
-            </div>
-          )
-        )}
-        {tab === "files" && (
-          attachments.isLoading ? (
-            <>
-              <SkeletonRow avatar={36} />
-              <SkeletonRow avatar={36} />
-            </>
-          ) : attachments.isError ? (
-            <InlineError title={t("attachmentsError")} onRetry={() => void attachments.refetch()} retryLabel={t("retry")} center />
-          ) : documents.length === 0 ? (
-            <EmptyState compact icon={<FileText />} title={t("filesEmpty")} hint={t("filesEmptyHint")} />
-          ) : (
-            <div className="chat-info__files">
-              {documents.map((item) => (
-                <div key={item.file_id} className="chat-info__file">
-                  <button type="button" className="chat-info__file-main" onClick={() => onOpenMessage(item.message_id)}>
-                    <span className="chat-info__file-icon" aria-hidden="true">
-                      <FileText />
-                    </span>
-                    <span className="chat-info__file-copy">
-                      <strong className="truncate">{item.file_name}</strong>
-                      <small className="truncate">
-                        {[item.file_mime?.split("/").pop()?.toUpperCase(), nameOf(item.actor_id), formatListTime(item.created_at)]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </small>
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="chat-info__download"
-                    aria-label={t("download")}
-                    onClick={() => void downloadToDisk(api, item.file_id!, item.file_name ?? "file")}
-                  >
-                    <Download aria-hidden="true" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )
-        )}
-        {tab === "links" && (
-          <EmptyState compact icon={<Link2 />} title={t("linksEmpty")} hint={t("linksEmptyHint")} />
-        )}
+        {tab === "media" && <SharedMediaTab chatID={chat.id} onOpenMessage={onOpenMessage} />}
+        {tab === "files" && <SharedFilesTab chatID={chat.id} onOpenMessage={onOpenMessage} />}
+        {tab === "voice" && <SharedVoiceTab chatID={chat.id} onOpenMessage={onOpenMessage} />}
+        {tab === "links" && <SharedLinksTab chatID={chat.id} onOpenMessage={onOpenMessage} />}
         {tab === "pinned" && (
           pinned.isLoading ? (
             <>
@@ -401,18 +324,5 @@ export function ChatInfoDialog({
       )}
       {error && <InlineError title={error} />}
     </Dialog>
-  );
-}
-
-function MediaTile({ result, onOpen }: { result: SearchResult; onOpen(): void }) {
-  const { api } = useMessenger();
-  const preview = useObjectURL(api, result.file_id);
-  const isVideo = result.file_mime?.startsWith("video/");
-  return (
-    <button type="button" className={cx("chat-info__media", isVideo && "chat-info__media--video")} onClick={onOpen} title={result.file_name}>
-      {preview && !isVideo ? <img src={preview} alt="" /> : <ImageIcon aria-hidden="true" />}
-      {isVideo && <span className="chat-info__play" aria-hidden="true" />}
-      <span className="visually-hidden">{result.file_name ?? ""}</span>
-    </button>
   );
 }
