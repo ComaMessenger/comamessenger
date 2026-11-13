@@ -1,5 +1,10 @@
 import { APIError, MessengerAPI } from "./api";
-import type { ClientMessage, CreateMessageRequest, Message } from "./types";
+import type {
+  ClientMessage,
+  CreateMessageRequest,
+  FileMetadata,
+  Message,
+} from "./types";
 export type OutboxItem = {
   chatID: string;
   input: CreateMessageRequest;
@@ -35,7 +40,15 @@ export class Outbox {
       (this.ownerID === undefined || this.api.tokenOwnerID() === this.ownerID)
     );
   }
-  async enqueue(chatID: string, input: CreateMessageRequest): Promise<void> {
+  /**
+   * `preview.files` are the uploaded files of `input.file_ids`: the queued
+   * message shows them at once instead of growing when the server answers.
+   */
+  async enqueue(
+    chatID: string,
+    input: CreateMessageRequest,
+    preview: { files?: FileMetadata[] } = {},
+  ): Promise<void> {
     const item = {
       chatID,
       input,
@@ -63,7 +76,7 @@ export class Outbox {
       edited_at: null,
       deleted_at: null,
       forwarded_from: null,
-      files: [],
+      files: preview.files ?? [],
       delivery: "sending",
     });
     await this.flush();

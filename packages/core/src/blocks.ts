@@ -248,9 +248,7 @@ export type ConfirmationField =
  * can read: identifiers become actor or chat references, technical keys and
  * unresolvable identifiers disappear.
  */
-export function confirmationFields(
-  blocks: MessageBlocks,
-): ConfirmationField[] {
+export function confirmationFields(blocks: MessageBlocks): ConfirmationField[] {
   const fields: ConfirmationField[] = [];
   for (const field of blocks.card?.fields ?? []) {
     if (technicalArguments.has(field.label)) continue;

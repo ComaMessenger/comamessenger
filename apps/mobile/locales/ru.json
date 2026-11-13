@@ -3,6 +3,7 @@
     "CFBundleDisplayName": "Coma",
     "NSCameraUsageDescription": "Coma использует камеру, чтобы вы могли отправлять фото и видео в чаты.",
     "NSPhotoLibraryUsageDescription": "Coma открывает галерею, чтобы вы могли прикреплять фото и видео к сообщениям и выбрать фото профиля.",
-    "NSMicrophoneUsageDescription": "Coma использует микрофон, чтобы записывать голосовые сообщения и видео для чатов."
+    "NSMicrophoneUsageDescription": "Coma использует микрофон, чтобы записывать голосовые сообщения и видео для чатов.",
+    "NSPhotoLibraryAddUsageDescription": "Coma сохраняет фото и видео из чатов в вашу медиатеку, когда вы об этом просите."
   }
 }

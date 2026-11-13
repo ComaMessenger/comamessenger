@@ -8,9 +8,12 @@ var chats = json(
 var saved = 0;
 for (var i = 0; i < chats.length && saved < 2; i++) {
   var page = json(
-    http.get(output.api + "/api/v1/chats/" + chats[i].id + "/messages?limit=5", {
-      headers: auth,
-    }).body,
+    http.get(
+      output.api + "/api/v1/chats/" + chats[i].id + "/messages?limit=5",
+      {
+        headers: auth,
+      },
+    ).body,
   );
   var messages = page.messages || [];
   for (var j = 0; j < messages.length; j++) {

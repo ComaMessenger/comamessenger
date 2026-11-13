@@ -80,16 +80,16 @@ env:
 - tapOn: .*${PHOTO}.*
 - extendedWaitUntil:
     visible:
-      id: photo-viewer
+      id: media-viewer
     timeout: 10000
 # Give the full-size image time to load before the screenshot.
 - extendedWaitUntil:
     visible:
-      id: photo-viewer-loaded
+      id: media-viewer-loaded
     timeout: 20000
 - takeScreenshot: ${THEME}-06-photo
 - tapOn:
-    id: photo-viewer-close
+    id: media-viewer-close
 # A reply quotes the message it answers.
 - scrollUntilVisible:
     element: .*, Тест, .*

@@ -52,6 +52,12 @@ import { ScreenHeader } from "@/ui/ScreenHeader";
 import { Text } from "@/ui/Text";
 import { ConnectionBanner } from "@/messenger/ConnectionBanner";
 import { attachmentLimit, useAttachments } from "@/files/useAttachments";
+import { chatMedia } from "@/media/items";
+import { MediaViewerHost } from "@/media/MediaViewer";
+import { MediaOutboxStrip } from "@/media/MediaOutbox";
+import { queueMediaSend } from "@/media/outbox";
+import { withinFileLimit } from "@/media/progress";
+import { forgetUploads } from "@/files/uploadJobs";
 import { pickFiles, type PickSource } from "@/files/pick";
 import { saveFailureKey } from "@/important/saved";
 import { RowBoundary } from "@/ui/RowBoundary";
@@ -61,11 +67,7 @@ import { useScheduleComposer } from "@/scheduled/useScheduleComposer";
 import { useChatScheduled } from "@/scheduled/useScheduled";
 import { AgentPicker } from "./AgentPicker";
 import { AgentStreamRow } from "./AgentStreamRow";
-import {
-  bubblePlacement,
-  messageKey,
-  type BubblePlacement,
-} from "./bubbles";
+import { bubblePlacement, messageKey, type BubblePlacement } from "./bubbles";
 import { Composer, type ComposerContext } from "./Composer";
 import { ComposerSheet, type ComposerAction } from "./ComposerSheet";
 import { ForwardSheet } from "./ForwardSheet";
@@ -236,6 +238,29 @@ export function ConversationView({
     return () => clearTimeout(timer);
   }, [highlighted]);
 
+  // Photos and videos of the loaded feed, for the full-screen viewer.
+  const media = useMemo(
+    () => chatMedia(conversation.messages),
+    [conversation.messages],
+  );
+  const goToMessage = useCallback(
+    (messageID: string) => {
+      const position = feed.findIndex((row) => row.message.id === messageID);
+      if (position < 0) return;
+      atBottom.current = false;
+      // The viewer's modal fades out first.
+      setTimeout(() => {
+        list.current?.scrollToIndex({
+          index: position,
+          animated: true,
+          viewPosition: 0.4,
+        });
+        setHighlighted(messageID);
+      }, 250);
+    },
+    [feed],
+  );
+
   function jumpToBottom() {
     if (conversation.hasLater) {
       // The search window ends before the latest messages: load them first.
@@ -271,10 +296,25 @@ export function ConversationView({
       return;
     }
     const replyTo = context?.kind === "reply" ? context.message : null;
-    const fileIDs = attachments.ready.map((file) => file.id);
     setContext(null);
-    attachments.reset();
-    await conversation.send(replyTo, fileIDs, options);
+    const taken = attachments.detach();
+    const draft = conversation.takeDraft(replyTo, options);
+    if (taken.some((item) => item.status !== "ready")) {
+      // Still uploading: the message waits in the feed as a bubble with
+      // the upload progress and goes out once every file is up.
+      queueMediaSend(
+        {
+          chatID,
+          threadRootID,
+          body: draft.content,
+          jobIDs: taken.map((item) => item.id),
+        },
+        draft.deliver,
+      );
+    } else {
+      await draft.deliver(taken.map((item) => item.file!));
+      forgetUploads(taken.map((item) => item.id));
+    }
     if (options.silent) setNotice(t("scheduledSilentSent"));
     list.current?.scrollToEnd({ animated: true });
   }
@@ -305,8 +345,11 @@ export function ConversationView({
 
   function pick(source: PickSource) {
     void pickFiles(source, attachmentLimit - attachments.items.length)
-      .then((files) => {
-        if (attachments.add(files) > 0)
+      .then((picked) => {
+        const { accepted, tooLarge } = withinFileLimit(picked);
+        if (tooLarge > 0)
+          Alert.alert(t("fileTooLarge", { count: tooLarge, limit: "100 MB" }));
+        if (attachments.add(accepted) > 0)
           Alert.alert(t("attachmentLimit", { limit: attachmentLimit }));
       })
       .catch(() => Alert.alert(t("actionFailed")));
@@ -525,367 +568,383 @@ export function ConversationView({
   );
 
   return (
-    <SafeAreaView
-      testID="conversation"
-      edges={["bottom"]}
-      style={[styles.screen, { backgroundColor: theme.canvas }]}
+    <MediaViewerHost
+      items={media}
+      hasOlder={conversation.hasOlder}
+      onLoadOlder={conversation.loadOlder}
+      authorName={authorName}
+      onGoToMessage={goToMessage}
     >
-      <ScreenHeader
-        backTestID="conversation-back"
-        title={inThread ? t("threadTitle") : title}
-        onTitlePress={
-          chat && !inThread
-            ? () => router.push(`/chat/${chatID}/info`)
-            : undefined
-        }
-        titleHint={t("chatInfoHint")}
-        titleTestID="conversation-title"
-        leading={
-          chat && !inThread ? (
-            <Avatar
-              name={title}
-              seed={chat.avatar_seed || chat.id}
-              size={36}
-              shape={chat.kind === "direct" ? "circle" : "square"}
-              agent={chat.direct_peer?.type === "agent"}
-              {...chatAvatarSource(chat)}
-            />
-          ) : undefined
-        }
-        subtitle={
-          subtitle ? (
-            <Text
-              tone={live ? "primary" : "muted"}
-              size={12.5}
-              numberOfLines={1}
-              accessibilityLiveRegion={live ? "polite" : "none"}
-            >
-              {subtitle}
-            </Text>
-          ) : undefined
-        }
-      />
-      <ConnectionBanner />
-      {!inThread && (
-        <ScheduledStrip
-          chatID={chatID}
-          items={chatScheduled.items}
-          onPress={() => router.push(`/chat/${chatID}/scheduled`)}
-        />
-      )}
-      {inThread && root && (
-        <RowBoundary kind="message" resetKey={root}>
-          <ThreadRoot
-            api={api}
-            ownID={user.id}
-            message={root}
-            author={memberOf(root.actor_id)}
-            members={members}
-            viewer={viewer}
-            onActions={setMenuFor}
-            onUpdated={conversation.applyMessage}
-          />
-        </RowBoundary>
-      )}
-      <KeyboardAvoidingView behavior="padding" style={styles.grow}>
-        <View style={styles.grow}>
-          {conversation.loading ? (
-            <ActivityIndicator style={styles.center} color={theme.muted} />
-          ) : conversation.loadError ? (
-            <View style={styles.state}>
-              <Notice
-                title={t("loadFailed")}
-                actionLabel={t("retry")}
-                onAction={() => void conversation.retry()}
-              />
-            </View>
-          ) : (
-            <FlashList
-              ref={list}
-              testID="message-list"
-              data={feed}
-              keyExtractor={(row) => messageKey(row.message)}
-              initialScrollIndex={
-                openedAt.current !== null && openedAt.current >= 0
-                  ? openedAt.current
-                  : undefined
-              }
-              maintainVisibleContentPosition={{
-                startRenderingFromBottom: !(
-                  openedAt.current !== null && openedAt.current >= 0
-                ),
-                autoscrollToBottomThreshold: 0.2,
-              }}
-              // Thread captions and reactions load after the first layout and
-              // make the last bubbles taller; a reader at the bottom stays
-              // there instead of seeing the last message under the composer.
-              onContentSizeChange={() => {
-                const focused =
-                  openedAt.current !== null && openedAt.current >= 0;
-                if (atBottom.current && !focused)
-                  list.current?.scrollToEnd({ animated: false });
-              }}
-              onStartReached={() => void conversation.loadOlder()}
-              onScroll={onScroll}
-              scrollEventThrottle={100}
-              keyboardDismissMode="interactive"
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={styles.feed}
-              ListHeaderComponent={
-                inThread && replyCount > 0 ? (
-                  <View style={styles.threadDivider}>
-                    <Text tone="muted" size={12} weight="semibold">
-                      {t("threadReplies", { count: replyCount })}
-                    </Text>
-                    <View
-                      style={[styles.line, { backgroundColor: theme.border }]}
-                    />
-                  </View>
-                ) : null
-              }
-              ListFooterComponent={
-                <>
-                  {/* A recorded voice message is a bubble at once: it
-                      uploads here, then sends as an ordinary message. */}
-                  <VoiceOutboxStrip
-                    chatID={chatID}
-                    threadRootID={threadRootID}
-                  />
-                  <ScheduledBubbles
-                    items={chatScheduled.items}
-                    chatID={chatID}
-                    threadRootID={threadRootID}
-                    onOpen={(item) =>
-                      router.push(
-                        `/chat/${chatID}/scheduled?focus=${encodeURIComponent(item.id)}`,
-                      )
-                    }
-                  />
-                  {conversation.streams.map((stream) => (
-                    <AgentStreamRow
-                      key={stream.streamID}
-                      body={stream.body}
-                      author={memberOf(stream.actorID)}
-                      state={
-                        agents.find((status) => status.runID === stream.runID)
-                          ?.state ?? "streaming"
-                      }
-                    />
-                  ))}
-                </>
-              }
-              ListEmptyComponent={
-                inThread ? null : (
-                  <Text tone="muted" size={15} style={styles.empty}>
-                    {t("noMessages")}
-                  </Text>
-                )
-              }
-              renderItem={({ item, index }) => {
-                const { message } = item;
-                const quoted = message.reply_to_id
-                  ? conversation.messages.find(
-                      (other) => other.id === message.reply_to_id,
-                    )
-                  : undefined;
-                return (
-                  <View>
-                    {item.newDay && daySeparator(message.created_at)}
-                    {item.firstUnread && (
-                      <View style={styles.unread}>
-                        <View
-                          style={[
-                            styles.line,
-                            { backgroundColor: theme.primary },
-                          ]}
-                        />
-                        <Text tone="primary" size={12} weight="semibold">
-                          {t("newMessages")}
-                        </Text>
-                        <View
-                          style={[
-                            styles.line,
-                            { backgroundColor: theme.primary },
-                          ]}
-                        />
-                      </View>
-                    )}
-                    <RowBoundary
-                      kind="message"
-                      resetKey={message}
-                      testID={`message-render-failed-${index}`}
-                    >
-                      <MessageRow
-                        api={api}
-                        ownID={user.id}
-                        message={message}
-                        author={memberOf(message.actor_id)}
-                        placement={bubblePlacement(
-                          feed,
-                          index,
-                          user.id,
-                          groupChat,
-                          inThread && index === 0,
-                        )}
-                        quoted={quoted}
-                        quotedAuthor={
-                          quoted ? authorName(quoted.actor_id) : undefined
-                        }
-                        showThread={!inThread}
-                        pinned={pinnedIDs.has(message.id)}
-                        saved={savedIDs.has(message.id)}
-                        highlighted={message.id === highlighted}
-                        onReply={reply}
-                        onThread={openThread}
-                        onActions={setMenuFor}
-                        onRetry={conversation.retryOutbox}
-                        members={members}
-                        viewer={viewer}
-                        onUpdated={conversation.applyMessage}
-                      />
-                    </RowBoundary>
-                  </View>
-                );
-              }}
-            />
-          )}
-          {showJump && (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t("scrollToBottom")}
-              onPress={jumpToBottom}
-              style={[
-                styles.jump,
-                { backgroundColor: theme.surface, borderColor: theme.border },
-              ]}
-            >
-              <ArrowDown size={20} color={theme.foreground} />
-            </Pressable>
-          )}
-          {notice && (
-            <View
-              pointerEvents="none"
-              accessibilityLiveRegion="polite"
-              style={[styles.notice, { backgroundColor: theme.action }]}
-            >
-              <Text size={14} weight="medium" style={{ color: theme.onAction }}>
-                {notice}
-              </Text>
-            </View>
-          )}
-        </View>
-        <Composer
-          body={context?.kind === "edit" ? editBody : conversation.body}
-          onChangeBody={
-            context?.kind === "edit" ? setEditBody : conversation.changeBody
+      <SafeAreaView
+        testID="conversation"
+        edges={["bottom"]}
+        style={[styles.screen, { backgroundColor: theme.canvas }]}
+      >
+        <ScreenHeader
+          backTestID="conversation-back"
+          title={inThread ? t("threadTitle") : title}
+          onTitlePress={
+            chat && !inThread
+              ? () => router.push(`/chat/${chatID}/info`)
+              : undefined
           }
-          onSend={() => void sendOrSave()}
-          members={members.filter((member) => member.actor_id !== user.id)}
-          context={composerContext}
-          onCancelContext={() => setContext(null)}
-          readonly={conversation.readonly}
-          placeholder={inThread ? t("threadPlaceholder") : undefined}
-          attachments={attachments.items}
-          onMore={() => setMoreOpen(true)}
-          onRemoveAttachment={attachments.remove}
-          onRetryAttachment={attachments.retry}
-          commands={inThread || context?.kind === "edit" ? [] : commands}
-          focusRequest={focusRequest}
-          onSendOptions={scheduling.openOptions}
-          sendRef={scheduling.sendRef}
-          voice={{
-            chatID,
-            threadRootID,
-            replyToID: context?.kind === "reply" ? context.message.id : null,
-            onQueued: () => {
-              setContext(null);
-              list.current?.scrollToEnd({ animated: true });
-            },
-          }}
+          titleHint={t("chatInfoHint")}
+          titleTestID="conversation-title"
+          leading={
+            chat && !inThread ? (
+              <Avatar
+                name={title}
+                seed={chat.avatar_seed || chat.id}
+                size={36}
+                shape={chat.kind === "direct" ? "circle" : "square"}
+                agent={chat.direct_peer?.type === "agent"}
+                {...chatAvatarSource(chat)}
+              />
+            ) : undefined
+          }
+          subtitle={
+            subtitle ? (
+              <Text
+                tone={live ? "primary" : "muted"}
+                size={12.5}
+                numberOfLines={1}
+                accessibilityLiveRegion={live ? "polite" : "none"}
+              >
+                {subtitle}
+              </Text>
+            ) : undefined
+          }
         />
-      </KeyboardAvoidingView>
-      <ComposerSheet
-        visible={moreOpen}
-        actions={composerActions}
-        onClose={() => setMoreOpen(false)}
-      />
-      {scheduling.layer}
-      <AgentPicker
-        visible={agentsOpen}
-        agents={agentMembers}
-        onPick={callAgent}
-        onClose={() => setAgentsOpen(false)}
-      />
-      <MessageMenu
-        visible={menuFor !== null}
-        own={menuFor?.actor_id === user.id}
-        preview={
-          menuFor ? (
-            <MessageBubble
-              preview
+        <ConnectionBanner />
+        {!inThread && (
+          <ScheduledStrip
+            chatID={chatID}
+            items={chatScheduled.items}
+            onPress={() => router.push(`/chat/${chatID}/scheduled`)}
+          />
+        )}
+        {inThread && root && (
+          <RowBoundary kind="message" resetKey={root}>
+            <ThreadRoot
               api={api}
               ownID={user.id}
-              message={menuFor}
-              author={memberOf(menuFor.actor_id)}
-              placement={placementOf(menuFor)}
-              quoted={
-                menuFor.reply_to_id
-                  ? conversation.messages.find(
-                      (other) => other.id === menuFor.reply_to_id,
-                    )
-                  : undefined
-              }
-              quotedAuthor={(() => {
-                const quoted = conversation.messages.find(
-                  (other) => other.id === menuFor.reply_to_id,
-                );
-                return quoted ? authorName(quoted.actor_id) : undefined;
-              })()}
-              showThread={!inThread}
-              pinned={pinnedIDs.has(menuFor.id)}
-              saved={savedIDs.has(menuFor.id)}
+              message={root}
+              author={memberOf(root.actor_id)}
               members={members}
               viewer={viewer}
-              onThread={openThread}
-              onActions={() => undefined}
-              onRetry={conversation.retryOutbox}
+              onActions={setMenuFor}
+              onUpdated={conversation.applyMessage}
             />
-          ) : null
-        }
-        sections={menuSections}
-        canReact={menuPersisted && !menuFor?.deleted_at}
-        ownReactions={(menuReactions.data ?? [])
-          .filter((reaction) => reaction.actor_id === user.id)
-          .map((reaction) => reaction.emoji)}
-        onReact={(emoji) => {
-          const message = menuFor;
-          setMenuFor(null);
-          if (!message) return;
-          void Haptics.selectionAsync();
-          void toggleReaction(
-            api,
-            queryClient,
-            message.id,
-            emoji,
-            user.id,
-          ).catch(() => Alert.alert(t("actionFailed")));
-        }}
-        onAction={act}
-        onClose={() => setMenuFor(null)}
-      />
-      <ForwardSheet
-        message={forwarding}
-        authorName={forwarding ? authorName(forwarding.actor_id) : ""}
-        chatName={title}
-        onClose={() => setForwarding(null)}
-        onDone={setNotice}
-      />
-      <MessageDetailsSheet
-        message={detailsFor}
-        members={members}
-        onClose={() => setDetailsFor(null)}
-      />
-    </SafeAreaView>
+          </RowBoundary>
+        )}
+        <KeyboardAvoidingView behavior="padding" style={styles.grow}>
+          <View style={styles.grow}>
+            {conversation.loading ? (
+              <ActivityIndicator style={styles.center} color={theme.muted} />
+            ) : conversation.loadError ? (
+              <View style={styles.state}>
+                <Notice
+                  title={t("loadFailed")}
+                  actionLabel={t("retry")}
+                  onAction={() => void conversation.retry()}
+                />
+              </View>
+            ) : (
+              <FlashList
+                ref={list}
+                testID="message-list"
+                data={feed}
+                keyExtractor={(row) => messageKey(row.message)}
+                initialScrollIndex={
+                  openedAt.current !== null && openedAt.current >= 0
+                    ? openedAt.current
+                    : undefined
+                }
+                maintainVisibleContentPosition={{
+                  startRenderingFromBottom: !(
+                    openedAt.current !== null && openedAt.current >= 0
+                  ),
+                  autoscrollToBottomThreshold: 0.2,
+                }}
+                // Thread captions and reactions load after the first layout and
+                // make the last bubbles taller; a reader at the bottom stays
+                // there instead of seeing the last message under the composer.
+                onContentSizeChange={() => {
+                  const focused =
+                    openedAt.current !== null && openedAt.current >= 0;
+                  if (atBottom.current && !focused)
+                    list.current?.scrollToEnd({ animated: false });
+                }}
+                onStartReached={() => void conversation.loadOlder()}
+                onScroll={onScroll}
+                scrollEventThrottle={100}
+                keyboardDismissMode="interactive"
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.feed}
+                ListHeaderComponent={
+                  inThread && replyCount > 0 ? (
+                    <View style={styles.threadDivider}>
+                      <Text tone="muted" size={12} weight="semibold">
+                        {t("threadReplies", { count: replyCount })}
+                      </Text>
+                      <View
+                        style={[styles.line, { backgroundColor: theme.border }]}
+                      />
+                    </View>
+                  ) : null
+                }
+                ListFooterComponent={
+                  <>
+                    {/* A recorded voice message is a bubble at once: it
+                      uploads here, then sends as an ordinary message. */}
+                    <VoiceOutboxStrip
+                      chatID={chatID}
+                      threadRootID={threadRootID}
+                    />
+                    <MediaOutboxStrip
+                      chatID={chatID}
+                      threadRootID={threadRootID}
+                    />
+                    <ScheduledBubbles
+                      items={chatScheduled.items}
+                      chatID={chatID}
+                      threadRootID={threadRootID}
+                      onOpen={(item) =>
+                        router.push(
+                          `/chat/${chatID}/scheduled?focus=${encodeURIComponent(item.id)}`,
+                        )
+                      }
+                    />
+                    {conversation.streams.map((stream) => (
+                      <AgentStreamRow
+                        key={stream.streamID}
+                        body={stream.body}
+                        author={memberOf(stream.actorID)}
+                        state={
+                          agents.find((status) => status.runID === stream.runID)
+                            ?.state ?? "streaming"
+                        }
+                      />
+                    ))}
+                  </>
+                }
+                ListEmptyComponent={
+                  inThread ? null : (
+                    <Text tone="muted" size={15} style={styles.empty}>
+                      {t("noMessages")}
+                    </Text>
+                  )
+                }
+                renderItem={({ item, index }) => {
+                  const { message } = item;
+                  const quoted = message.reply_to_id
+                    ? conversation.messages.find(
+                        (other) => other.id === message.reply_to_id,
+                      )
+                    : undefined;
+                  return (
+                    <View>
+                      {item.newDay && daySeparator(message.created_at)}
+                      {item.firstUnread && (
+                        <View style={styles.unread}>
+                          <View
+                            style={[
+                              styles.line,
+                              { backgroundColor: theme.primary },
+                            ]}
+                          />
+                          <Text tone="primary" size={12} weight="semibold">
+                            {t("newMessages")}
+                          </Text>
+                          <View
+                            style={[
+                              styles.line,
+                              { backgroundColor: theme.primary },
+                            ]}
+                          />
+                        </View>
+                      )}
+                      <RowBoundary
+                        kind="message"
+                        resetKey={message}
+                        testID={`message-render-failed-${index}`}
+                      >
+                        <MessageRow
+                          api={api}
+                          ownID={user.id}
+                          message={message}
+                          author={memberOf(message.actor_id)}
+                          placement={bubblePlacement(
+                            feed,
+                            index,
+                            user.id,
+                            groupChat,
+                            inThread && index === 0,
+                          )}
+                          quoted={quoted}
+                          quotedAuthor={
+                            quoted ? authorName(quoted.actor_id) : undefined
+                          }
+                          showThread={!inThread}
+                          pinned={pinnedIDs.has(message.id)}
+                          saved={savedIDs.has(message.id)}
+                          highlighted={message.id === highlighted}
+                          onReply={reply}
+                          onThread={openThread}
+                          onActions={setMenuFor}
+                          onRetry={conversation.retryOutbox}
+                          members={members}
+                          viewer={viewer}
+                          onUpdated={conversation.applyMessage}
+                        />
+                      </RowBoundary>
+                    </View>
+                  );
+                }}
+              />
+            )}
+            {showJump && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("scrollToBottom")}
+                onPress={jumpToBottom}
+                style={[
+                  styles.jump,
+                  { backgroundColor: theme.surface, borderColor: theme.border },
+                ]}
+              >
+                <ArrowDown size={20} color={theme.foreground} />
+              </Pressable>
+            )}
+            {notice && (
+              <View
+                pointerEvents="none"
+                accessibilityLiveRegion="polite"
+                style={[styles.notice, { backgroundColor: theme.action }]}
+              >
+                <Text
+                  size={14}
+                  weight="medium"
+                  style={{ color: theme.onAction }}
+                >
+                  {notice}
+                </Text>
+              </View>
+            )}
+          </View>
+          <Composer
+            body={context?.kind === "edit" ? editBody : conversation.body}
+            onChangeBody={
+              context?.kind === "edit" ? setEditBody : conversation.changeBody
+            }
+            onSend={() => void sendOrSave()}
+            members={members.filter((member) => member.actor_id !== user.id)}
+            context={composerContext}
+            onCancelContext={() => setContext(null)}
+            readonly={conversation.readonly}
+            placeholder={inThread ? t("threadPlaceholder") : undefined}
+            attachments={attachments.items}
+            onMore={() => setMoreOpen(true)}
+            onRemoveAttachment={attachments.remove}
+            onRetryAttachment={attachments.retry}
+            commands={inThread || context?.kind === "edit" ? [] : commands}
+            focusRequest={focusRequest}
+            onSendOptions={scheduling.openOptions}
+            sendRef={scheduling.sendRef}
+            voice={{
+              chatID,
+              threadRootID,
+              replyToID: context?.kind === "reply" ? context.message.id : null,
+              onQueued: () => {
+                setContext(null);
+                list.current?.scrollToEnd({ animated: true });
+              },
+            }}
+          />
+        </KeyboardAvoidingView>
+        <ComposerSheet
+          visible={moreOpen}
+          actions={composerActions}
+          onClose={() => setMoreOpen(false)}
+        />
+        {scheduling.layer}
+        <AgentPicker
+          visible={agentsOpen}
+          agents={agentMembers}
+          onPick={callAgent}
+          onClose={() => setAgentsOpen(false)}
+        />
+        <MessageMenu
+          visible={menuFor !== null}
+          own={menuFor?.actor_id === user.id}
+          preview={
+            menuFor ? (
+              <MessageBubble
+                preview
+                api={api}
+                ownID={user.id}
+                message={menuFor}
+                author={memberOf(menuFor.actor_id)}
+                placement={placementOf(menuFor)}
+                quoted={
+                  menuFor.reply_to_id
+                    ? conversation.messages.find(
+                        (other) => other.id === menuFor.reply_to_id,
+                      )
+                    : undefined
+                }
+                quotedAuthor={(() => {
+                  const quoted = conversation.messages.find(
+                    (other) => other.id === menuFor.reply_to_id,
+                  );
+                  return quoted ? authorName(quoted.actor_id) : undefined;
+                })()}
+                showThread={!inThread}
+                pinned={pinnedIDs.has(menuFor.id)}
+                saved={savedIDs.has(menuFor.id)}
+                members={members}
+                viewer={viewer}
+                onThread={openThread}
+                onActions={() => undefined}
+                onRetry={conversation.retryOutbox}
+              />
+            ) : null
+          }
+          sections={menuSections}
+          canReact={menuPersisted && !menuFor?.deleted_at}
+          ownReactions={(menuReactions.data ?? [])
+            .filter((reaction) => reaction.actor_id === user.id)
+            .map((reaction) => reaction.emoji)}
+          onReact={(emoji) => {
+            const message = menuFor;
+            setMenuFor(null);
+            if (!message) return;
+            void Haptics.selectionAsync();
+            void toggleReaction(
+              api,
+              queryClient,
+              message.id,
+              emoji,
+              user.id,
+            ).catch(() => Alert.alert(t("actionFailed")));
+          }}
+          onAction={act}
+          onClose={() => setMenuFor(null)}
+        />
+        <ForwardSheet
+          message={forwarding}
+          authorName={forwarding ? authorName(forwarding.actor_id) : ""}
+          chatName={title}
+          onClose={() => setForwarding(null)}
+          onDone={setNotice}
+        />
+        <MessageDetailsSheet
+          message={detailsFor}
+          members={members}
+          onClose={() => setDetailsFor(null)}
+        />
+      </SafeAreaView>
+    </MediaViewerHost>
   );
 }
 

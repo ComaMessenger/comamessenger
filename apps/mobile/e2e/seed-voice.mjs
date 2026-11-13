@@ -16,11 +16,12 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-const api = (process.env.COMA_API ?? "http://localhost:8080").replace(/\/$/, "");
+const api = (process.env.COMA_API ?? "http://localhost:8080").replace(
+  /\/$/,
+  "",
+);
 const recording = await readFile(
-  fileURLToPath(
-    new URL("./fixtures/voice-long.m4a", import.meta.url),
-  ),
+  fileURLToPath(new URL("./fixtures/voice-long.m4a", import.meta.url)),
 );
 
 async function call(path, init = {}, token) {
@@ -34,7 +35,9 @@ async function call(path, init = {}, token) {
   });
   const text = await response.text();
   if (!response.ok)
-    throw new Error(`${init.method ?? "GET"} ${path}: ${response.status} ${text}`);
+    throw new Error(
+      `${init.method ?? "GET"} ${path}: ${response.status} ${text}`,
+    );
   return text ? JSON.parse(text) : null;
 }
 
@@ -85,7 +88,10 @@ async function postVoice() {
       `${api}${upload.upload_url ?? `/api/v1/files/uploads/${upload.id}/content`}`,
       {
         method: "PUT",
-        headers: { "Content-Type": "audio/mp4", Authorization: `Bearer ${token}` },
+        headers: {
+          "Content-Type": "audio/mp4",
+          Authorization: `Bearer ${token}`,
+        },
         body: recording,
       },
     );

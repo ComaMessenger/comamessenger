@@ -7,7 +7,10 @@ function uuid() {
     return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
   });
 }
-var headers = { Authorization: output.auth, "Content-Type": "application/json" };
+var headers = {
+  Authorization: output.auth,
+  "Content-Type": "application/json",
+};
 var tag = String(Date.now()).slice(-6);
 var chat = json(
   http.post(output.api + "/api/v1/chats", {

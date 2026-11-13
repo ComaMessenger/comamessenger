@@ -52,8 +52,8 @@ export const ImportantRow = memo(function ImportantRow({
   const fileLabel = voice
     ? `${t("voiceMessage")} · ${formatVoiceDuration(voice.voice.duration_ms)}`
     : files.length
-    ? `${files[0]!.name}${files.length > 1 ? ` ${t("moreFiles", { count: files.length - 1 })}` : ""}`
-    : "";
+      ? `${files[0]!.name}${files.length > 1 ? ` ${t("moreFiles", { count: files.length - 1 })}` : ""}`
+      : "";
 
   return (
     <Pressable

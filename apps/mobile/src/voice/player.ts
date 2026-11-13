@@ -7,6 +7,7 @@ import {
   type AudioStatus,
 } from "expo-audio";
 import { nextVoicePlaybackRate } from "@comamessenger/core";
+import { claimPlayback, releasePlayback } from "@/media/playback";
 import { enterPlaybackMode, leavePlaybackMode } from "./audioSession";
 
 /** Something the shared player can play: a voice file or a take in review. */
@@ -134,8 +135,18 @@ function ensurePlayer(): AudioPlayer {
   return player;
 }
 
+/** A video took over: pause here, but leave the audio session to it. */
+function yieldToVideo() {
+  if (!current) return;
+  starting = 0;
+  player?.pause();
+  if (usePlayerStore.getState().status !== "idle")
+    usePlayerStore.setState({ status: "paused" });
+}
+
 export async function playVoice(track: VoiceTrack, startAt = 0) {
   const mine = ++ticket;
+  claimPlayback(yieldToVideo);
   current = track;
   usePlayerStore.setState({
     key: track.key,
@@ -165,6 +176,7 @@ export function currentVoiceKey() {
 }
 
 export function pauseVoice() {
+  releasePlayback(yieldToVideo);
   if (!current) return;
   starting = 0;
   player?.pause();
@@ -195,6 +207,7 @@ export function toggleVoice(track: VoiceTrack) {
   }
   if (state.status === "playing") pauseVoice();
   else if (state.status === "paused" && player) {
+    claimPlayback(yieldToVideo);
     void enterPlaybackMode()
       .catch(() => undefined)
       .then(() => {
