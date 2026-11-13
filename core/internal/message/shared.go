@@ -392,10 +392,37 @@ func linkSnippet(text string, cutBefore, cutAfter bool) string {
 	return result
 }
 
+// PreparedLinks are the links of one message text, extracted before any
+// transaction starts: the write path takes the organization lock, and nothing
+// slower than an insert belongs under it. A write checks that the text it
+// stores is the one prepared (a scheduled message or a forwarded source may
+// have changed meanwhile) and extracts again only if it is not.
+type PreparedLinks struct {
+	body     string
+	markdown bool
+	links    []ExtractedLink
+}
+
+// PrepareLinks extracts the links of a message text. Call it outside any
+// transaction.
+func PrepareLinks(body, format string) *PreparedLinks {
+	return &PreparedLinks{body: body, markdown: format == "markdown", links: ExtractLinks(body, format)}
+}
+
+// linksOf returns the prepared links when they belong to this text. Without
+// them (a text known only under the lock) it extracts in place: linear in
+// the text, so at worst a few milliseconds for the largest body.
+func linksOf(prepared *PreparedLinks, body, format string) []ExtractedLink {
+	if prepared != nil && prepared.body == body && prepared.markdown == (format == "markdown") {
+		return prepared.links
+	}
+	return ExtractLinks(body, format)
+}
+
 // syncMessageLinks writes the links of a message's current text. replace
 // drops the old ones first (an edit, a deletion, a new card text); a deleted
 // message keeps none.
-func syncMessageLinks(ctx context.Context, tx pgx.Tx, orgID string, message Message, replace bool) error {
+func syncMessageLinks(ctx context.Context, tx pgx.Tx, orgID string, message Message, replace bool, prepared *PreparedLinks) error {
 	if replace {
 		if _, err := tx.Exec(ctx, `DELETE FROM message_links WHERE message_id = $1`, message.ID); err != nil {
 			return fmt.Errorf("drop message links: %w", err)
@@ -404,21 +431,31 @@ func syncMessageLinks(ctx context.Context, tx pgx.Tx, orgID string, message Mess
 	if message.DeletedAt != nil {
 		return nil
 	}
-	return insertMessageLinks(ctx, tx, orgID, message.ID, message.ChatID, message.ActorID, message.CreatedSeq, message.Body, message.BodyFormat)
+	return insertMessageLinks(ctx, tx, orgID, message.ID, message.ChatID, message.ActorID, message.CreatedSeq,
+		linksOf(prepared, message.Body, message.BodyFormat))
 }
 
-func insertMessageLinks(ctx context.Context, tx pgx.Tx, orgID, messageID, chatID, actorID string, seq int64, body, format string) error {
-	links := ExtractLinks(body, format)
+// copyMessageLinks gives a forwarded message the links of its source: the
+// text is the same, so nothing is extracted under the lock. A source written
+// before the backfill reached it has none yet; the backfill fills the copy
+// as it fills every message without links.
+func copyMessageLinks(ctx context.Context, tx pgx.Tx, sourceID string, target Message) error {
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO message_links (org_id, chat_id, message_id, position, actor_id, created_seq, url, domain, label, text_offset)
+		SELECT org_id, $2, $3, position, $4, $5, url, domain, label, text_offset
+		FROM message_links WHERE message_id = $1
+		ON CONFLICT (message_id, position) DO NOTHING`,
+		sourceID, target.ChatID, target.ID, target.ActorID, target.CreatedSeq); err != nil {
+		return fmt.Errorf("copy forwarded message links: %w", err)
+	}
+	return nil
+}
+
+func insertMessageLinks(ctx context.Context, tx pgx.Tx, orgID, messageID, chatID, actorID string, seq int64, links []ExtractedLink) error {
 	if len(links) == 0 {
 		return nil
 	}
-	urls := make([]string, len(links))
-	domains := make([]string, len(links))
-	labels := make([]*string, len(links))
-	offsets := make([]int32, len(links))
-	for index, link := range links {
-		urls[index], domains[index], labels[index], offsets[index] = link.URL, link.Domain, link.Label, int32(link.Offset)
-	}
+	urls, domains, labels, offsets := linkColumns(links)
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO message_links (org_id, chat_id, message_id, position, actor_id, created_seq, url, domain, label, text_offset)
 		SELECT $1, $2, $3, ordinal - 1, $4, $5, url, domain, label, text_offset
@@ -428,6 +465,17 @@ func insertMessageLinks(ctx context.Context, tx pgx.Tx, orgID, messageID, chatID
 		return fmt.Errorf("insert message links: %w", err)
 	}
 	return nil
+}
+
+func linkColumns(links []ExtractedLink) ([]string, []string, []*string, []int32) {
+	urls := make([]string, len(links))
+	domains := make([]string, len(links))
+	labels := make([]*string, len(links))
+	offsets := make([]int32, len(links))
+	for index, link := range links {
+		urls[index], domains[index], labels[index], offsets[index] = link.URL, link.Domain, link.Label, int32(link.Offset)
+	}
+	return urls, domains, labels, offsets
 }
 
 // indexAttachments records the files of messages in chat_attachments. It
@@ -459,28 +507,92 @@ func dropShared(ctx context.Context, tx pgx.Tx, messageID string) error {
 }
 
 // Backfill of messages written before chat_attachments and message_links
-// existed. It walks messages in id order, sharedBackfillBatch at a time, each
-// batch in its own short transaction that gives up on a lock after 5 s; the
-// last id done is stored, so a restart continues where it stopped. Messages
-// of a batch are read FOR SHARE: an edit of one of them waits for the batch
-// and then rewrites the links itself, so no old link survives an edit.
-// Several servers may run it at once: a batch runs only under a transaction
-// advisory lock, the others skip their turn.
+// existed. It walks messages in id order, sharedBackfillBatch at a time, in
+// three steps so that no lock is held while Go works:
+//
+//  1. read the batch (ids, versions, texts) without locking anything;
+//  2. extract the links outside any transaction;
+//  3. in one short transaction (lock_timeout 5 s), lock the batch's rows
+//     FOR SHARE, write links only for messages still at the version read
+//     and still without links, index their files, and save the progress.
+//
+// An edit made between 1 and 3 changes the version, so the old text's links
+// are skipped; the edit wrote its own. An edit waiting on step 3 waits for a
+// few inserts, never for an extraction. Several servers may run it at once:
+// step 3 runs under a transaction advisory lock and only if the progress is
+// still the one step 1 started from.
 
 const sharedBackfillBatch = 500
 
-// ErrBackfillBusy: another server holds the backfill lock; try again later.
+// ErrBackfillBusy: another server holds the backfill lock or moved it on
+// meanwhile; try again later.
 var ErrBackfillBusy = errors.New("shared media backfill is running elsewhere")
 
-// BackfillSharedBatch handles one batch and reports whether the backfill is
-// complete.
-func (s *Service) BackfillSharedBatch(ctx context.Context) (bool, error) {
+type backfillMessage struct {
+	id, chat, actor, body, format string
+	seq                           int64
+	version                       int
+	deleted                       bool
+	links                         []ExtractedLink
+}
+
+type backfillBatch struct {
+	from     *string
+	done     bool
+	messages []backfillMessage
+}
+
+// readBackfillBatch is step 1: one plain read, no row locks.
+func (s *Service) readBackfillBatch(ctx context.Context) (backfillBatch, error) {
+	var batch backfillBatch
+	var done *time.Time
+	err := s.pool.QueryRow(ctx, `SELECT last_message_id, done_at FROM shared_backfill WHERE name = 'chat_shared'`).Scan(&batch.from, &done)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && done != nil) {
+		batch.done = true
+		return batch, nil
+	}
+	if err != nil {
+		return batch, fmt.Errorf("read shared backfill progress: %w", err)
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, chat_id, actor_id, created_seq, version, body, body_format, deleted_at IS NOT NULL
+		FROM messages
+		WHERE $1::uuid IS NULL OR id > $1
+		ORDER BY id
+		LIMIT $2`, batch.from, sharedBackfillBatch)
+	if err != nil {
+		return batch, fmt.Errorf("read messages to backfill: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var item backfillMessage
+		if err := rows.Scan(&item.id, &item.chat, &item.actor, &item.seq, &item.version, &item.body, &item.format, &item.deleted); err != nil {
+			return batch, fmt.Errorf("scan message to backfill: %w", err)
+		}
+		batch.messages = append(batch.messages, item)
+	}
+	return batch, rows.Err()
+}
+
+// extractBackfillLinks is step 2, outside any transaction.
+func extractBackfillLinks(batch *backfillBatch) {
+	for index := range batch.messages {
+		item := &batch.messages[index]
+		if !item.deleted {
+			item.links = ExtractLinks(item.body, item.format)
+		}
+		item.body = ""
+	}
+}
+
+// writeBackfillBatch is step 3 and reports whether the backfill is complete.
+func (s *Service) writeBackfillBatch(ctx context.Context, batch backfillBatch) (bool, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return false, fmt.Errorf("begin shared backfill: %w", err)
 	}
 	defer tx.Rollback(ctx)
-	if _, err := tx.Exec(ctx, `SET LOCAL lock_timeout = '5s'; SET LOCAL statement_timeout = '60s'`); err != nil {
+	if _, err := tx.Exec(ctx, `SET LOCAL lock_timeout = '5s'; SET LOCAL statement_timeout = '30s'`); err != nil {
 		return false, fmt.Errorf("limit shared backfill: %w", err)
 	}
 	var locked bool
@@ -490,84 +602,111 @@ func (s *Service) BackfillSharedBatch(ctx context.Context) (bool, error) {
 	if !locked {
 		return false, ErrBackfillBusy
 	}
-	var last *string
-	var done *time.Time
-	err = tx.QueryRow(ctx, `SELECT last_message_id, done_at FROM shared_backfill WHERE name = 'chat_shared'`).Scan(&last, &done)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return true, nil
-	}
-	if err != nil {
+	var current *string
+	if err := tx.QueryRow(ctx, `SELECT last_message_id FROM shared_backfill WHERE name = 'chat_shared'`).Scan(&current); err != nil {
 		return false, fmt.Errorf("read shared backfill progress: %w", err)
 	}
-	if done != nil {
-		return true, nil
+	if (current == nil) != (batch.from == nil) || (current != nil && *current != *batch.from) {
+		return false, ErrBackfillBusy
 	}
+	ids := make([]string, len(batch.messages))
+	for index, item := range batch.messages {
+		ids[index] = item.id
+	}
+	// Live versions, under a share lock until commit: an edit that wants a
+	// row waits for these inserts, and one that came first changed the
+	// version, so its message is skipped below.
+	// A message that already has links got them from a write after the
+	// migration (a new message, an edit): those are newer, keep them.
+	type liveMessage struct {
+		version  int
+		hasLinks bool
+	}
+	live := map[string]liveMessage{}
+	lockedIDs := make([]string, 0, len(ids))
 	rows, err := tx.Query(ctx, `
-		SELECT id, org_id, chat_id, actor_id, created_seq, body, body_format, deleted_at IS NOT NULL
-		FROM messages
-		WHERE $1::uuid IS NULL OR id > $1
-		ORDER BY id
-		LIMIT $2
-		FOR SHARE`, last, sharedBackfillBatch)
+		SELECT m.id, m.version, EXISTS (SELECT 1 FROM message_links l WHERE l.message_id = m.id)
+		FROM messages m
+		WHERE m.id = ANY($1::uuid[]) AND m.deleted_at IS NULL
+		FOR SHARE OF m`, ids)
 	if err != nil {
-		return false, fmt.Errorf("read messages to backfill: %w", err)
+		return false, fmt.Errorf("lock messages to backfill: %w", err)
 	}
-	type pending struct {
-		id, org, chat, actor, body, format string
-		seq                                int64
-		deleted                            bool
-	}
-	batch := make([]pending, 0, sharedBackfillBatch)
 	for rows.Next() {
-		var item pending
-		if err := rows.Scan(&item.id, &item.org, &item.chat, &item.actor, &item.seq, &item.body, &item.format, &item.deleted); err != nil {
+		var messageID string
+		var state liveMessage
+		if err := rows.Scan(&messageID, &state.version, &state.hasLinks); err != nil {
 			rows.Close()
 			return false, fmt.Errorf("scan message to backfill: %w", err)
 		}
-		batch = append(batch, item)
+		live[messageID] = state
+		lockedIDs = append(lockedIDs, messageID)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return false, fmt.Errorf("iterate messages to backfill: %w", err)
+		return false, fmt.Errorf("lock messages to backfill: %w", err)
 	}
-	live := make([]string, 0, len(batch))
-	for _, item := range batch {
-		if item.deleted {
+	var chats, messages, actors, urls, domains []string
+	var labels []*string
+	var seqs []int64
+	var positions, offsets []int32
+	for _, item := range batch.messages {
+		if state, ok := live[item.id]; !ok || state.version != item.version || state.hasLinks {
 			continue
 		}
-		live = append(live, item.id)
-		// Live writes replace links whole; the backfill only fills messages
-		// that have none yet, so it never undoes an edit made meanwhile.
-		var exists bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM message_links WHERE message_id = $1)`, item.id).Scan(&exists); err != nil {
-			return false, fmt.Errorf("check backfilled links: %w", err)
-		}
-		if !exists {
-			if err := insertMessageLinks(ctx, tx, item.org, item.id, item.chat, item.actor, item.seq, item.body, item.format); err != nil {
-				return false, err
-			}
+		for position, link := range item.links {
+			chats, messages, actors = append(chats, item.chat), append(messages, item.id), append(actors, item.actor)
+			seqs, positions = append(seqs, item.seq), append(positions, int32(position))
+			urls, domains, labels = append(urls, link.URL), append(domains, link.Domain), append(labels, link.Label)
+			offsets = append(offsets, int32(link.Offset))
 		}
 	}
-	if err := indexAttachments(ctx, tx, live); err != nil {
+	if len(messages) > 0 {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO message_links (org_id, chat_id, message_id, position, actor_id, created_seq, url, domain, label, text_offset)
+			SELECT m.org_id, l.chat_id, l.message_id, l.position, l.actor_id, l.created_seq, l.url, l.domain, l.label, l.text_offset
+			FROM unnest($1::uuid[], $2::uuid[], $3::smallint[], $4::uuid[], $5::bigint[], $6::text[], $7::text[], $8::text[], $9::int[])
+				AS l(chat_id, message_id, position, actor_id, created_seq, url, domain, label, text_offset)
+			JOIN messages m ON m.id = l.message_id
+			ON CONFLICT (message_id, position) DO NOTHING`,
+			chats, messages, positions, actors, seqs, urls, domains, labels, offsets); err != nil {
+			return false, fmt.Errorf("insert backfilled links: %w", err)
+		}
+	}
+	// Files never change; only live messages locked above are indexed, so
+	// a deletion racing with this batch cannot leave its files behind.
+	if err := indexAttachments(ctx, tx, lockedIDs); err != nil {
 		return false, err
 	}
-	finished := len(batch) < sharedBackfillBatch
-	var lastID any
-	if len(batch) > 0 {
-		lastID = batch[len(batch)-1].id
-	} else {
-		lastID = last
+	finished := len(batch.messages) < sharedBackfillBatch
+	var last any = batch.from
+	if len(batch.messages) > 0 {
+		last = batch.messages[len(batch.messages)-1].id
 	}
 	if _, err := tx.Exec(ctx, `
 		UPDATE shared_backfill SET last_message_id = $1, updated_at = now(),
 			done_at = CASE WHEN $2 THEN now() END
-		WHERE name = 'chat_shared'`, lastID, finished); err != nil {
+		WHERE name = 'chat_shared'`, last, finished); err != nil {
 		return false, fmt.Errorf("save shared backfill progress: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return false, fmt.Errorf("commit shared backfill: %w", err)
 	}
 	return finished, nil
+}
+
+// BackfillSharedBatch handles one batch and reports whether the backfill is
+// complete.
+func (s *Service) BackfillSharedBatch(ctx context.Context) (bool, error) {
+	batch, err := s.readBackfillBatch(ctx)
+	if err != nil || batch.done {
+		return batch.done, err
+	}
+	extractBackfillLinks(&batch)
+	if s.betweenBackfillSteps != nil {
+		s.betweenBackfillSteps()
+	}
+	return s.writeBackfillBatch(ctx, batch)
 }
 
 // BackfillShared runs batches until the backfill is complete or ctx ends,

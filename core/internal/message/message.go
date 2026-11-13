@@ -87,7 +87,13 @@ type CreateInput struct {
 	// scheduledDelivery marks the send of a scheduled message, the only
 	// path allowed to use a client_msg_id reserved by a scheduled message.
 	scheduledDelivery bool
+	// links are the body's links, extracted before the transaction.
+	links *PreparedLinks
 }
+
+// UseLinks attaches links prepared outside the transaction (PrepareLinks).
+// They are used only if they belong to the body that is finally sent.
+func (input *CreateInput) UseLinks(links *PreparedLinks) { input.links = links }
 
 type AgentProvenance struct {
 	RunID string
@@ -128,6 +134,9 @@ type Service struct {
 	directGuard  DirectGuard
 	// savedLimit overrides DefaultSavedLimit; tests set it.
 	savedLimit int
+	// betweenBackfillSteps runs after a backfill batch is read and its links
+	// extracted, before they are written; tests set it.
+	betweenBackfillSteps func()
 }
 
 func NewService(pool *pgxpool.Pool, maxBodyBytes, maxPageSize int, afterCommit func(orgID string, highWatermark int64)) *Service {
@@ -160,6 +169,8 @@ func (s *Service) create(ctx context.Context, user identity.User, chatID string,
 	if err := s.validateCreate(chatID, &input); err != nil {
 		return Message{}, false, err
 	}
+	// Before the organization lock: see PreparedLinks.
+	input.links = PrepareLinks(input.Body, input.BodyFormat)
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return Message{}, false, fmt.Errorf("begin create message: %w", err)
@@ -315,7 +326,7 @@ func (s *Service) createTx(ctx context.Context, tx pgx.Tx, user identity.User, c
 			return Message{}, false, 0, err
 		}
 	}
-	if err := syncMessageLinks(ctx, tx, user.OrgID, result, false); err != nil {
+	if err := syncMessageLinks(ctx, tx, user.OrgID, result, false, input.links); err != nil {
 		return Message{}, false, 0, err
 	}
 	created := []Message{result}
@@ -551,6 +562,8 @@ func (s *Service) Update(ctx context.Context, user identity.User, messageID stri
 	if input.ExpectedVersion < 1 {
 		return Message{}, fmt.Errorf("%w: expected_version must be positive", ErrInvalid)
 	}
+	// Before the organization lock: see PreparedLinks.
+	links := PrepareLinks(input.Body, input.BodyFormat)
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return Message{}, fmt.Errorf("begin update message: %w", err)
@@ -613,7 +626,7 @@ func (s *Service) Update(ctx context.Context, user identity.User, messageID stri
 	if err := insertEvent(ctx, tx, user, result.ChatID, result.ID, seq, "message.updated"); err != nil {
 		return Message{}, err
 	}
-	if err := syncMessageLinks(ctx, tx, user.OrgID, result, true); err != nil {
+	if err := syncMessageLinks(ctx, tx, user.OrgID, result, true, links); err != nil {
 		return Message{}, err
 	}
 	updated := []Message{result}

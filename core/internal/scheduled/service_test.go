@@ -372,7 +372,7 @@ func TestDeliverSendsOnceThroughTheOrdinaryPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	fileID := w.file(t, w.author)
-	input := w.input("reply in thread")
+	input := w.input("reply in thread https://plan.example.com")
 	input.ThreadRootID, input.ReplyToID = &root.ID, &root.ID
 	input.MentionedActorIDs = []string{w.other.User.ActorID}
 	input.FileIDs = []string{fileID}
@@ -452,8 +452,15 @@ func TestDeliverSendsOnceThroughTheOrdinaryPath(t *testing.T) {
 		Scan(&actorID, &body, &threadRootID, &replyToID, &mentioned); err != nil {
 		t.Fatal(err)
 	}
-	if actorID != w.author.User.ActorID || body != "reply in thread" || threadRootID == nil || *threadRootID != root.ID || replyToID == nil || len(mentioned) != 1 {
+	if actorID != w.author.User.ActorID || body != "reply in thread https://plan.example.com" || threadRootID == nil || *threadRootID != root.ID || replyToID == nil || len(mentioned) != 1 {
 		t.Fatalf("sent message actor=%s body=%q thread=%v reply=%v mentions=%v", actorID, body, threadRootID, replyToID, mentioned)
+	}
+	// Its links reach the chat's archive (prepared before the lock).
+	if got := w.count(t, `SELECT count(*) FROM message_links WHERE message_id=$1 AND url='https://plan.example.com'`, *sent.MessageID); got != 1 {
+		t.Fatal("the sent message's link is not in the chat's links")
+	}
+	if got := w.count(t, `SELECT count(*) FROM chat_attachments WHERE message_id=$1 AND file_id=$2`, *sent.MessageID, fileID); got != 1 {
+		t.Fatal("the sent message's file is not in the chat's files")
 	}
 	if got := w.count(t, `SELECT count(*) FROM message_files WHERE message_id=$1 AND file_id=$2`, *sent.MessageID, fileID); got != 1 {
 		t.Fatal("file was not attached to the sent message")

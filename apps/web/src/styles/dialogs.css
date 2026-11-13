@@ -1778,3 +1778,13 @@
     display: none;
   }
 }
+.media-viewer__error {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 14px;
+}
+.media-viewer__error p {
+  margin: 0;
+}

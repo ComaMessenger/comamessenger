@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/testdb"
@@ -437,3 +438,123 @@ func seqScanOfLargeTable(plan string) bool {
 }
 
 func ptr(value string) *string { return &value }
+
+// A message of junk costs its own send milliseconds and holds nobody else
+// up: links are extracted before the organization lock, in linear time. The
+// review measured a stranger's «hi» waiting 6 s behind such a body.
+func TestPathologicalBodiesDoNotStallTheOrganization(t *testing.T) {
+	pool := testdb.New(t)
+	fixture := seedFixture(t, pool)
+	service := NewService(pool, 64*1024, 100, nil)
+	ctx := context.Background()
+	hi := func() time.Duration {
+		started := time.Now()
+		if _, _, err := service.Create(ctx, fixture.member, fixture.groupID, CreateInput{ClientMsgID: mustID(t), Body: "hi", BodyFormat: "plain"}); err != nil {
+			t.Error(err)
+		}
+		return time.Since(started)
+	}
+	for name, body := range pathologicalBodies(4) {
+		if len(body) > 64*1024-1 {
+			body = body[:64*1024-1]
+		}
+		for _, format := range []string{"plain", "markdown"} {
+			started := time.Now()
+			done := make(chan time.Duration, 1)
+			go func() {
+				// Overlaps the junk send; it waits at most for the junk's
+				// inserts under the lock, never for its parsing.
+				time.Sleep(time.Millisecond)
+				done <- hi()
+			}()
+			created, _, err := service.Create(ctx, fixture.owner, fixture.groupID, CreateInput{ClientMsgID: mustID(t), Body: body, BodyFormat: format})
+			if err != nil {
+				t.Fatalf("%s: %v", name, err)
+			}
+			sent := time.Since(started)
+			waited := <-done
+			edited := time.Now()
+			if _, err := service.Update(ctx, fixture.owner, created.ID, UpdateInput{Body: body + " ", BodyFormat: format, ExpectedVersion: created.Version}); err != nil {
+				t.Fatalf("%s: edit: %v", name, err)
+			}
+			t.Logf("%s (%s): send %v, edit %v, a stranger's hi %v", name, format, sent, time.Since(edited), waited)
+			if sent > time.Second || waited > time.Second || time.Since(edited) > time.Second {
+				t.Errorf("%s (%s): send %v, edit %v, hi %v — junk holds the organization", name, format, sent, time.Since(edited), waited)
+			}
+		}
+	}
+}
+
+func TestPreparedLinksFollowTheText(t *testing.T) {
+	prepared := PrepareLinks("see https://a.example.com", "plain")
+	if got := linksOf(prepared, "see https://a.example.com", "plain"); len(got) != 1 || got[0].URL != "https://a.example.com" {
+		t.Fatalf("prepared links not used: %+v", got)
+	}
+	// Another text (a scheduled message edited meanwhile): extract anew.
+	if got := linksOf(prepared, "now https://b.example.com", "plain"); len(got) != 1 || got[0].URL != "https://b.example.com" {
+		t.Fatalf("stale prepared links used: %+v", got)
+	}
+	if got := linksOf(nil, "x https://c.example.com", "markdown"); len(got) != 1 {
+		t.Fatalf("no prepared links: %+v", got)
+	}
+}
+
+// The backfill holds no lock while it reads and parses a batch: an edit or a
+// deletion of a message in it goes through at once, and the batch then
+// writes nothing over it.
+func TestSharedBackfillHoldsNoLockWhileParsing(t *testing.T) {
+	pool := testdb.New(t)
+	fixture := seedFixture(t, pool)
+	service := NewService(pool, 64*1024, 100, nil)
+	ctx := context.Background()
+	post := func(body string, fileIDs ...string) Message {
+		t.Helper()
+		created, _, err := service.Create(ctx, fixture.owner, fixture.groupID, CreateInput{ClientMsgID: mustID(t), Body: body, BodyFormat: "plain", FileIDs: fileIDs})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return created
+	}
+	kept := post("kept https://kept.example.com")
+	edited := post("old https://old.example.com")
+	deleted := post("gone https://gone.example.com", insertReadyFile(t, pool, fixture.owner, "gone.jpg", "image/jpeg", 0))
+	photo := post("", insertReadyFile(t, pool, fixture.owner, "kept.jpg", "image/jpeg", 0))
+	// As before the migration.
+	if _, err := pool.Exec(ctx, `DELETE FROM message_links; DELETE FROM chat_attachments; UPDATE shared_backfill SET last_message_id = NULL, done_at = NULL`); err != nil {
+		t.Fatal(err)
+	}
+	service.betweenBackfillSteps = func() {
+		// The batch is read and parsed; nothing may be locked now.
+		quick, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+		if _, err := service.Update(quick, fixture.owner, edited.ID, UpdateInput{Body: "new https://new.example.com", BodyFormat: "plain", ExpectedVersion: edited.Version}); err != nil {
+			t.Errorf("edit during the backfill: %v", err)
+		}
+		if _, err := service.Delete(quick, fixture.owner, deleted.ID); err != nil {
+			t.Errorf("delete during the backfill: %v", err)
+		}
+		var locks int
+		if err := pool.QueryRow(quick, `SELECT count(*) FROM pg_locks l JOIN pg_class c ON c.oid = l.relation WHERE c.relname = 'messages' AND l.mode = 'RowShareLock' AND l.pid <> pg_backend_pid()`).Scan(&locks); err != nil {
+			t.Error(err)
+		} else if locks != 0 {
+			t.Errorf("%d row locks on messages while the batch is parsed", locks)
+		}
+	}
+	done, err := service.BackfillSharedBatch(ctx)
+	if err != nil || !done {
+		t.Fatalf("BackfillSharedBatch() = %v, %v", done, err)
+	}
+	links, err := service.SharedLinks(ctx, fixture.member, fixture.groupID, SharedListOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, item := range links.Items {
+		got[item.URL] = item.MessageID
+	}
+	if len(got) != 2 || got["https://kept.example.com"] != kept.ID || got["https://new.example.com"] != edited.ID {
+		t.Fatalf("links after the backfill = %v; want the kept one and the edit's, not the old text's or the deleted message's", got)
+	}
+	assertCount(t, pool, `SELECT count(*) FROM chat_attachments WHERE message_id = $1`, 0, deleted.ID)
+	assertCount(t, pool, `SELECT count(*) FROM chat_attachments WHERE message_id = $1`, 1, photo.ID)
+}
