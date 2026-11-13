@@ -247,7 +247,10 @@ export function MessageBubble({
       {status?.icon}
     </View>
   );
-  const inlineMeta = !wide && !message.agent_provenance && !voiceOnly;
+  // A bubble sized by its photos keeps the time on the last photo or
+  // under the caption, never in a line of its own above the media.
+  const inlineMeta =
+    !wide && !sizedByMedia && !message.agent_provenance && !voiceOnly;
   const photoTop =
     photosOnly &&
     !placement.showName &&
@@ -537,6 +540,9 @@ export function MessageBubble({
           </View>
         ) : (
           <Pressable
+            // With photos or videos each tile is its own element (opens the
+            // viewer, carries the message menu as an action).
+            accessible={images.length === 0}
             accessibilityHint={t("messageActions")}
             accessibilityActions={[
               { name: "longpress", label: t("messageActions") },

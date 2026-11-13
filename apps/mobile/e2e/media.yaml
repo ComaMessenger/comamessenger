@@ -86,14 +86,11 @@ appId: com.comamessenger.app
     timeout: 5000
 # «Go to message» from the first photo of the mosaic.
 - scrollUntilVisible:
-    element:
-      id: media-mosaic
-      index: 0
+    element: (Фото|Photo), photo-square.jpg
     direction: UP
+    centerElement: true
     timeout: 20000
-- tapOn:
-    id: media-tile-1
-    index: 0
+- tapOn: (Фото|Photo), photo-square.jpg
 - extendedWaitUntil:
     visible:
       id: media-viewer-goto

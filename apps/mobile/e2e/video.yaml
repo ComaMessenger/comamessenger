@@ -12,8 +12,19 @@ appId: com.comamessenger.app
     timeout: 20000
 - hideKeyboard:
     optional: true
+- runFlow:
+    when:
+      visible: К последнему сообщению
+    commands:
+      - tapOn: К последнему сообщению
+      - waitForAnimationToEnd
+- scrollUntilVisible:
+    element: (Видео|Video), 0:08
+    direction: DOWN
+    centerElement: true
+    timeout: 20000
 - takeScreenshot: video-feed
-- tapOn: (Видео|Video), 0:0\d
+- tapOn: (Видео|Video), 0:08
 - extendedWaitUntil:
     visible:
       id: media-video-controls

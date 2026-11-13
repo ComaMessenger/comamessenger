@@ -129,7 +129,17 @@ export function VideoStage({
 
   const total = duration || player.duration || 0;
   const position = Math.min(total, time.currentTime);
-  const failed = status === "error";
+  // A failed load is tried once more by itself (a dropped connection, a
+  // link that expired while the viewer was open); then «Retry» is shown.
+  const retried = useRef(false);
+  useEffect(() => {
+    if (status !== "error" || retried.current || !source) return;
+    retried.current = true;
+    started.current = false;
+    void player.replaceAsync(source).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [player, status]);
+  const failed = status === "error" && retried.current;
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">

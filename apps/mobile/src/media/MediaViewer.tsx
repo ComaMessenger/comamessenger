@@ -492,6 +492,7 @@ function MediaPage({
   const startX = useSharedValue(0);
   const startY = useSharedValue(0);
   const [zoomed, setZoomedState] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   const setZoomed = useCallback(
     (value: boolean) => {
@@ -593,11 +594,22 @@ function MediaPage({
   // Unzoomed, a horizontal move belongs to the pager.
   if (!zoomed) pan.activeOffsetY([-10, 10]).failOffsetX([-12, 12]);
 
+  // Taps are judged on the JS side: no worklet state, and a single tap
+  // waits for a possible second one (up to maxDelay) before toggling bars.
   const doubleTap = Gesture.Tap()
+    .runOnJS(true)
     .numberOfTaps(2)
-    .maxDuration(260)
-    .onEnd((event) => zoomAt(event.x, event.y));
-  const singleTap = Gesture.Tap().onEnd(() => runOnJS(onToggleChrome)());
+    .maxDelay(400)
+    .maxDuration(800)
+    .onEnd((event, success) => {
+      if (success) zoomAt(event.x, event.y);
+    });
+  const singleTap = Gesture.Tap()
+    .runOnJS(true)
+    .maxDuration(800)
+    .onEnd((_event, success) => {
+      if (success) onToggleChrome();
+    });
   const gesture = Gesture.Simultaneous(
     pinch,
     pan,
@@ -648,13 +660,21 @@ function MediaPage({
             ]}
           >
             {item.kind === "photo" ? (
-              <PhotoContent item={item} />
+              <PhotoContent item={item} onLoaded={setLoaded} />
             ) : (
               <VideoPosterContent item={item} />
             )}
           </Animated.View>
         </View>
       </GestureDetector>
+      {/* A marker for UI tests: the page itself is one accessible element. */}
+      {active && loaded ? (
+        <View
+          testID="media-viewer-loaded"
+          pointerEvents="none"
+          style={styles.marker}
+        />
+      ) : null}
       {item.kind === "video" && active ? (
         <VideoStage
           file={item.file}
@@ -670,7 +690,13 @@ function MediaPage({
   );
 }
 
-function PhotoContent({ item }: { item: MediaItem }) {
+function PhotoContent({
+  item,
+  onLoaded,
+}: {
+  item: MediaItem;
+  onLoaded(loaded: boolean): void;
+}) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const local = useLocalMedia(item.key);
@@ -682,10 +708,7 @@ function PhotoContent({ item }: { item: MediaItem }) {
   const [attempt, setAttempt] = useState(0);
   const source = local ? { uri: local } : full;
   return (
-    <View
-      testID={state === "loaded" ? "media-viewer-loaded" : undefined}
-      style={StyleSheet.absoluteFill}
-    >
+    <View style={StyleSheet.absoluteFill}>
       {source && (
         <Image
           key={attempt}
@@ -698,11 +721,15 @@ function PhotoContent({ item }: { item: MediaItem }) {
           accessibilityIgnoresInvertColors
           onLoad={(event) => {
             setState("loaded");
+            onLoaded(true);
             const { width, height } = event.source;
             if (width > 0 && height > 0)
               recordMediaFacts(item.key, { aspect: width / height });
           }}
-          onError={() => setState("failed")}
+          onError={() => {
+            setState("failed");
+            onLoaded(false);
+          }}
         />
       )}
       {state === "loading" && (
@@ -797,6 +824,7 @@ function ViewerFallback({ onClose }: { onClose(): void }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  marker: { position: "absolute", left: 0, top: 0, width: 1, height: 1 },
   black: { backgroundColor: "#000000" },
   page: { flex: 1, alignItems: "center", justifyContent: "center" },
   center: {

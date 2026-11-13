@@ -151,6 +151,14 @@ function MediaTile({
       }
       onLongPress={onLongPress}
       delayLongPress={350}
+      accessibilityActions={
+        onLongPress
+          ? [{ name: "longpress", label: t("messageActions") }]
+          : undefined
+      }
+      onAccessibilityAction={(event) => {
+        if (event.nativeEvent.actionName === "longpress") onLongPress?.();
+      }}
       style={[StyleSheet.absoluteFill, { backgroundColor: theme.sidebar }]}
     >
       {video ? (
@@ -241,7 +249,9 @@ function VideoPoster({
   useEffect(() => {
     if (poster || !uri) return;
     let active = true;
-    void probeVideo(file.id, { uri, headers, useCaching: true }).then((ok) => {
+    // No cache here: the full-screen player caches the same URL, and two
+    // players writing one cache entry made the second fail to load.
+    void probeVideo(file.id, { uri, headers }).then((ok) => {
       if (active && !ok) setFailed(true);
     });
     return () => {

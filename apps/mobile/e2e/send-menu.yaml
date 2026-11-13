@@ -16,11 +16,8 @@ appId: com.comamessenger.app
     visible:
       id: send-options
     timeout: 5000
-# The menu sits right above the composer, not in the middle of the screen.
-- assertVisible:
-    id: send-options-silent
-    above:
-      id: composer-input
+# The menu hangs from the send button, above the keyboard (the screen
+# under it is hidden from accessibility, so the place is in the screenshot).
 - assertVisible:
     id: send-options-later
     above:
@@ -49,9 +46,23 @@ appId: com.comamessenger.app
     notVisible:
       id: send-options
     timeout: 3000
-# Leave the chat with an empty composer.
+# Leave the chat with an empty composer (the draft is kept otherwise and
+# later flows expect the microphone).
 - tapOn:
     id: composer-input
-- eraseText: 40
+- eraseText: 200
+- runFlow:
+    when:
+      notVisible:
+        id: composer-mic
+    commands:
+      - eraseText: 200
+- extendedWaitUntil:
+    visible:
+      id: composer-mic
+    timeout: 5000
+# The draft reaches the server after a pause in typing.
+- waitForAnimationToEnd:
+    timeout: 2000
 - tapOn:
     id: conversation-back

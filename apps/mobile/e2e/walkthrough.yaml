@@ -74,10 +74,11 @@ env:
 - tapOn: Закрыть
 # The photo opens full screen once its bytes are loaded.
 - scrollUntilVisible:
-    element: .*${PHOTO}.*
+    element: (Фото|Photo), ${PHOTO}
     direction: UP
+    centerElement: true
     timeout: 60000
-- tapOn: .*${PHOTO}.*
+- tapOn: (Фото|Photo), ${PHOTO}
 - extendedWaitUntil:
     visible:
       id: media-viewer
