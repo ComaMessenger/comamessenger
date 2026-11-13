@@ -109,6 +109,8 @@ type identityHandlers struct {
 	actorRate             *ipRateLimiter
 	ownershipRate         *ipRateLimiter
 	sharedRate            *ipRateLimiter
+	savedRate             *ipRateLimiter
+	savedReadRate         *ipRateLimiter
 	bootstrapToken        string
 	requireBootstrapToken bool
 	trustedProxyCIDRs     []netip.Prefix
@@ -131,7 +133,12 @@ func newIdentityHandlers(logger *slog.Logger, allowedOrigin string, dependencies
 		ownershipRate: newIPRateLimiter(5, 5),
 		// Shared media of a chat: a chat info screen opens with the counts
 		// and one page; scrolling a tab adds one request per page.
-		sharedRate:     newIPRateLimiter(240, 60),
+		sharedRate: newIPRateLimiter(240, 60),
+		// Saving is a cheap private toggle; a person taps it, a script does not.
+		savedRate: newIPRateLimiter(120, 30),
+		// Reading saves joins messages, chats and members per row; a screen
+		// opens with a few requests, a page scroll adds one per page.
+		savedReadRate:  newIPRateLimiter(240, 60),
 		bootstrapToken: dependencies.BootstrapToken, requireBootstrapToken: dependencies.RequireBootstrapToken,
 		trustedProxyCIDRs: dependencies.TrustedProxyCIDRs, revokeRealtimeSession: dependencies.RevokeRealtimeSession,
 	}
@@ -320,6 +327,11 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Delete("/messages/{messageID}/reactions/{emoji}", h.deleteReaction)
 			protected.Put("/messages/{messageID}/pin", h.putMessagePin)
 			protected.Delete("/messages/{messageID}/pin", h.deleteMessagePin)
+			protected.With(h.actorRateLimit("saved-messages", h.savedRate)).Put("/messages/{messageID}/saved", h.saveMessage)
+			protected.With(h.actorRateLimit("saved-messages", h.savedRate)).Delete("/messages/{messageID}/saved", h.unsaveMessage)
+			protected.With(h.actorRateLimit("saved-messages-read", h.savedReadRate)).Get("/saved-messages", h.listSavedMessages)
+			protected.With(h.actorRateLimit("saved-messages-read", h.savedReadRate)).Get("/saved-messages/ids", h.listSavedMessageIDs)
+			protected.With(h.actorRateLimit("saved-messages-read", h.savedReadRate)).Get("/saved-messages/chats", h.listSavedMessageChats)
 			protected.Post("/messages/{messageID}/forward", h.forwardMessage)
 			protected.Post("/messages/{messageID}/actions/{actionID}", h.pressMessageAction)
 			protected.Get("/messages/{messageID}/thread", h.listThread)

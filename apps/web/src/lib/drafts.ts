@@ -1,11 +1,40 @@
 import { APIError, type Draft, type MessengerAPI } from "@comamessenger/core";
 
+// Drafts belong to the signed-in person: keys carry their id, so the next
+// person on this browser never reads them. Set by claimDrafts on sign-in.
+let draftOwner = "";
+
+const draftPrefix = "coma-draft:";
+const versionPrefix = "coma-draft-version:";
+
 function draftKey(chatID: string, threadID: string | null) {
-  return `coma-draft:${chatID}:${threadID ?? "main"}`;
+  return `${draftPrefix}${draftOwner}:${chatID}:${threadID ?? "main"}`;
 }
 
 function draftVersionKey(chatID: string, threadID: string | null) {
-  return `coma-draft-version:${chatID}:${threadID ?? "main"}`;
+  return `${versionPrefix}${draftOwner}:${chatID}:${threadID ?? "main"}`;
+}
+
+/**
+ * Makes `owner` the person whose drafts are read and written, and removes
+ * everyone else's drafts (all of them on sign-out, owner null), including
+ * drafts saved before keys carried an owner.
+ */
+export function claimDrafts(owner: string | null) {
+  draftOwner = owner ?? "";
+  const keep =
+    owner === null
+      ? null
+      : [`${draftPrefix}${owner}:`, `${versionPrefix}${owner}:`];
+  const keys: string[] = [];
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+    if (key && (key.startsWith(draftPrefix) || key.startsWith(versionPrefix)))
+      keys.push(key);
+  }
+  for (const key of keys)
+    if (!keep || !keep.some((prefix) => key.startsWith(prefix)))
+      localStorage.removeItem(key);
 }
 
 export function getLocalDraft(chatID: string, threadID: string | null) {

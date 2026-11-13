@@ -472,7 +472,7 @@ function Sources({
   function open(source: MessageSource) {
     if (source.kind === "message" && source.message_id)
       void api
-        .messageContext(source.message_id, 1)
+        .messageContext(source.message_id, 3)
         .then((context) => {
           const target = context.messages.find((item) => item.id === source.message_id);
           router.push(`/chat/${target?.chat_id ?? chatID}?message=${source.message_id}`);

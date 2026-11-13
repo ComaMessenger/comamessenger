@@ -340,6 +340,7 @@ export function Conversation({
                         )}
                         own={message.actor_id === user.id || !message.actor_id}
                         canModerate={canModerate}
+                        canPin={chat ? canManageChat(chat) : false}
                         grouped={grouped}
                         chatName={title}
                         pinned={pinnedIDs.has(message.id)}
@@ -352,9 +353,6 @@ export function Conversation({
                         onPinnedChanged={() => {
                           void queryClient.invalidateQueries({
                             queryKey: ["pins", chatID],
-                          });
-                          void queryClient.invalidateQueries({
-                            queryKey: ["important"],
                           });
                         }}
                         onChanged={(updated) => {

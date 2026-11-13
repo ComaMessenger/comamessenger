@@ -10,6 +10,7 @@ import {
   pushRelayURL,
   savePushState,
 } from "./keys";
+import { ensureMessageChannels } from "./channels";
 
 export type PushAvailability = "ready" | "denied" | "unsupported";
 
@@ -75,11 +76,7 @@ async function register(
     permission = await Notifications.requestPermissionsAsync();
   if (!permission.granted) return "denied";
 
-  if (Platform.OS === "android")
-    await Notifications.setNotificationChannelAsync("messages", {
-      name: i18n.t("notificationChannel"),
-      importance: Notifications.AndroidImportance.HIGH,
-    });
+  if (Platform.OS === "android") await ensureMessageChannels();
   const platform = Platform.OS === "ios" ? "ios" : "android";
   const token = (await Notifications.getDevicePushTokenAsync()).data as string;
   // The same token for the same session is already registered; only a rotated

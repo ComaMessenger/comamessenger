@@ -58,6 +58,11 @@ export type ChatSharedAttachmentPage =
   components["schemas"]["ChatSharedAttachmentPage"];
 export type ChatSharedLink = components["schemas"]["ChatSharedLink"];
 export type ChatSharedLinkPage = components["schemas"]["ChatSharedLinkPage"];
+export type SavedMessage = components["schemas"]["SavedMessage"];
+export type SavedMessagePage = components["schemas"]["SavedMessagePage"];
+export type SavedMessageState = components["schemas"]["SavedMessageState"];
+export type SavedMessageChatCount =
+  components["schemas"]["SavedMessageChatCount"];
 export type ThreadSummary = components["schemas"]["ThreadSummary"];
 export type ThreadPage = components["schemas"]["ThreadPage"];
 export type UnreadSnapshot = components["schemas"]["UnreadSnapshot"];

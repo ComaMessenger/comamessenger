@@ -17,7 +17,7 @@ export function usePinnedMessages(chatID: string) {
       return Promise.all(
         pins.map(async (pin) => {
           try {
-            const context = await api.messageContext(pin.message_id, 1);
+            const context = await api.messageContext(pin.message_id, 3);
             return {
               pin,
               message: context.messages.find((item) => item.id === pin.message_id),

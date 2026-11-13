@@ -283,7 +283,11 @@ export function useConversation(
   );
 
   const send = useCallback(
-    async (replyTo: ClientMessage | null, fileIDs: string[] = []) => {
+    async (
+      replyTo: ClientMessage | null,
+      fileIDs: string[] = [],
+      options: { silent?: boolean } = {},
+    ) => {
       const content = body.trim();
       if ((!content && !fileIDs.length) || (chat && isReadOnly(chat))) return;
       setBody("");
@@ -301,6 +305,8 @@ export function useConversation(
           presence,
         ),
         file_ids: fileIDs.length ? fileIDs : undefined,
+        // Recipients are notified as usual, without sound or vibration.
+        ...(options.silent ? { silent: true } : {}),
       });
     },
     [body, chat, chatID, coordinator, members, outbox, presence, threadRootID],

@@ -63,10 +63,24 @@ const config: ExpoConfig = {
         cameraPermission:
           "Coma uses the camera so you can send photos and videos to chats.",
         microphonePermission:
-          "Coma uses the microphone when you record video for chats.",
+          "Coma uses the microphone to record voice messages and video for chats.",
+      },
+    ],
+    [
+      // Voice messages (phase 6.1, package F): RECORD_AUDIO on Android, the
+      // same microphone text as above on iOS. Nothing records or plays in
+      // the background, so no background audio mode or foreground service.
+      "expo-audio",
+      {
+        microphonePermission:
+          "Coma uses the microphone to record voice messages and video for chats.",
+        recordAudioAndroid: true,
+        enableBackgroundRecording: false,
+        enableBackgroundPlayback: false,
       },
     ],
     "@bacons/apple-targets",
+    "@react-native-community/datetimepicker",
     "./plugins/withAndroidReleaseSigning",
     "./plugins/withAndroidGradleMemory",
     [

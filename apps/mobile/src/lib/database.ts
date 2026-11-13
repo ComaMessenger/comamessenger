@@ -5,6 +5,7 @@ import type {
   OutboxStorage,
 } from "@comamessenger/core";
 import { refreshTokenStore } from "./session";
+import { clearVoiceData } from "@/voice/outbox";
 
 // Append-only: each entry upgrades the schema by one `user_version`.
 const migrations = [
@@ -71,6 +72,7 @@ async function setMeta(key: string, value: string | null): Promise<void> {
 
 /** Drops everything tied to the signed-in account: realtime position and unsent messages. */
 export async function clearUserData(): Promise<void> {
+  clearVoiceData();
   const db = await database;
   await db.withExclusiveTransactionAsync(async (tx) => {
     await tx.runAsync("DELETE FROM outbox");
@@ -158,6 +160,15 @@ export const draftStorage = {
         "INSERT INTO drafts (chat_id, thread_root_id, body, version) VALUES (?, ?, ?, ?) ON CONFLICT (chat_id, thread_root_id) DO UPDATE SET body = excluded.body, version = excluded.version",
         [chatID, threadRootID ?? "", draft.body, draft.version],
       );
+  },
+  /** Unsent text of every chat's main composer (threads excluded), by chat. */
+  async chatDrafts(): Promise<Record<string, string>> {
+    const rows = await (
+      await database
+    ).getAllAsync<{ chat_id: string; body: string }>(
+      "SELECT chat_id, body FROM drafts WHERE thread_root_id = ''",
+    );
+    return Object.fromEntries(rows.map((row) => [row.chat_id, row.body]));
   },
 };
 

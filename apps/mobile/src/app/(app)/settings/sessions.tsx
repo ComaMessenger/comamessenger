@@ -18,6 +18,7 @@ import { Divider, SettingsGroup } from "@/ui/Settings";
 import { Text } from "@/ui/Text";
 import { Notice } from "@/ui/Notice";
 import { MonitorSmartphone } from "lucide-react-native";
+import { useScheduledList } from "@/scheduled/useScheduled";
 
 /** Short device name from a user agent: app or browser, and the platform. */
 function deviceName(userAgent: string): string {
@@ -75,8 +76,15 @@ export default function SessionsScreen() {
   const list = (sessions.data ?? []).filter((session) => !session.revoked_at);
   const others = list.filter((session) => !session.current);
 
-  const confirm = (message: string, action: () => void) =>
-    Alert.alert(message, undefined, [
+  // Signing out every other device stops the waiting scheduled messages
+  // (failure_reason security_reset); say so before it happens.
+  const scheduled = useScheduledList();
+  const waiting = (scheduled.data ?? []).filter(
+    (item) => item.status === "pending",
+  ).length;
+
+  const confirm = (message: string, action: () => void, hint?: string) =>
+    Alert.alert(message, hint, [
       { text: t("cancel"), style: "cancel" },
       { text: t("revokeSession"), style: "destructive", onPress: action },
     ]);
@@ -123,7 +131,7 @@ export default function SessionsScreen() {
 
   return (
     <SafeAreaView
-      edges={["top", "bottom"]}
+      edges={["bottom"]}
       style={[styles.screen, { backgroundColor: theme.canvas }]}
     >
       <ScreenHeader title={t("sessions")} />
@@ -149,8 +157,12 @@ export default function SessionsScreen() {
                 <Pressable
                   accessibilityRole="button"
                   onPress={() =>
-                    confirm(t("revokeOthersConfirm"), () =>
-                      revokeOthers.mutate(),
+                    confirm(
+                      t("revokeOthersConfirm"),
+                      () => revokeOthers.mutate(),
+                      waiting
+                        ? t("scheduledRevokeWarning", { count: waiting })
+                        : undefined,
                     )
                   }
                   style={styles.row}

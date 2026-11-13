@@ -7,25 +7,29 @@ appId: com.comamessenger.app
     id: chat-row-0
 # A unique text per run keeps the flow independent of earlier runs.
 - evalScript: ${output.tag = String(Date.now()).slice(-6)}
-- tapOn:
-    id: composer-input
-- inputText: Тред ${output.tag}
-- tapOn:
-    id: composer-send
+- runFlow:
+    file: send-message.yaml
+    env:
+      TEXT: "Тред ${output.tag}"
 # Message rows are single accessible elements, so match by substring.
 - extendedWaitUntil:
     visible: .*Тред ${output.tag}.*
     timeout: 15000
-- longPressOn: .*Тред ${output.tag}.*
-- tapOn: Ответить в треде
+- runFlow:
+    file: message-menu.yaml
+    env:
+      TEXT: ".*Тред ${output.tag}.*"
+- tapOn:
+    id: message-action-thread
+# The thread screen pins the root message above the replies.
 - extendedWaitUntil:
-    visible: Тред
+    visible:
+      id: thread-root
     timeout: 10000
-- tapOn:
-    id: composer-input
-- inputText: Ответ в треде
-- tapOn:
-    id: composer-send
+- runFlow:
+    file: send-message.yaml
+    env:
+      TEXT: "Ответ в треде"
 - extendedWaitUntil:
     visible: .*Ответ в треде.*
     timeout: 10000
@@ -34,17 +38,68 @@ appId: com.comamessenger.app
     id: conversation-back
     retryTapIfNoChange: true
 - extendedWaitUntil:
-    notVisible: Тред в.*
+    notVisible:
+      id: thread-root
     timeout: 10000
+# The caption under the bubble: who replied, how many replies, when.
 - extendedWaitUntil:
     visible: .*1 ответ.*
     timeout: 10000
-- longPressOn: .*Тред ${output.tag}.*
+- runFlow:
+    file: message-menu.yaml
+    env:
+      TEXT: ".*Тред ${output.tag}.*"
 - tapOn: 👍
 - extendedWaitUntil:
     visible: .*👍.*
     timeout: 10000
 - takeScreenshot: reactions
+# Copy, forward and «views and reactions» from the long-press menu.
+- runFlow:
+    file: message-menu.yaml
+    env:
+      TEXT: ".*Тред ${output.tag}.*"
+- takeScreenshot: message-menu
+- tapOn:
+    id: message-action-copyText
+- extendedWaitUntil:
+    visible: Текст скопирован
+    timeout: 5000
+- runFlow:
+    file: message-menu.yaml
+    env:
+      TEXT: ".*Тред ${output.tag}.*"
+- tapOn:
+    id: message-action-details
+- extendedWaitUntil:
+    visible:
+      id: message-details
+    timeout: 10000
+- takeScreenshot: message-details
+- tapOn: Закрыть
+- runFlow:
+    file: message-menu.yaml
+    env:
+      TEXT: ".*Тред ${output.tag}.*"
+- tapOn:
+    id: message-action-forward
+- extendedWaitUntil:
+    visible:
+      id: forward-sheet
+    timeout: 10000
+- takeScreenshot: forward
+- tapOn: Закрыть
+# «В важные» saves the message for the reader only: a star in the bubble.
+- runFlow:
+    file: message-menu.yaml
+    env:
+      TEXT: ".*Тред ${output.tag}.*"
+- tapOn:
+    id: message-action-save
+- extendedWaitUntil:
+    visible: .*В важных.*
+    timeout: 10000
+- takeScreenshot: saved-star
 - tapOn:
     id: conversation-back
 - tapOn:

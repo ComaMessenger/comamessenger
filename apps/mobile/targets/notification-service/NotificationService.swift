@@ -5,7 +5,8 @@ import UserNotifications
 
 /// Replaces the relay's neutral text with the content the instance encrypted
 /// for this device (docs/decisions/0012-mobile-push-relay.md). When the key
-/// is missing or decryption fails, the fallback text is shown unchanged.
+/// is missing or decryption fails, the fallback text is shown unchanged —
+/// except for «message not sent», which is not a new message.
 class NotificationService: UNNotificationServiceExtension {
   private var contentHandler: ((UNNotificationContent) -> Void)?
   private var bestAttempt: UNMutableNotificationContent?
@@ -22,15 +23,34 @@ class NotificationService: UNNotificationServiceExtension {
        let payload = Self.open(sealed) {
       if let title = payload["title"] as? String { content.title = title }
       if let body = payload["body"] as? String { content.body = body }
-      if let url = payload["url"] as? String, url.hasPrefix("/chat/") {
+      if let url = payload["url"] as? String,
+         url.hasPrefix("/chat/") || url == Self.scheduledRoute {
         content.userInfo["url"] = url
       }
       if let chatID = payload["chat_id"] as? String { content.threadIdentifier = chatID }
       if let badge = payload["badge"] as? Int, badge >= 0 { content.badge = NSNumber(value: badge) }
+      // «Send without sound»: shown as usual, without sound (and so without
+      // vibration). The relay may have dropped the sound already; an older
+      // relay did not, so the decrypted flag decides here.
+      if payload["silent"] as? Bool == true { content.sound = nil }
+    } else if request.identifier == Self.scheduledFailedTag {
+      // The relay's fallback says «New message». The instance collapses
+      // scheduled failures under this tag (apns-collapse-id becomes the
+      // request identifier), so say what it is and open the list.
+      let russian = Locale.preferredLanguages.first?.hasPrefix("ru") ?? false
+      content.title = russian ? "Сообщение не отправлено" : "Message not sent"
+      content.body = russian
+        ? "Откройте «Отложенные», чтобы узнать причину"
+        : "Open Scheduled to see why"
+      content.userInfo["url"] = Self.scheduledRoute
     }
     content.userInfo.removeValue(forKey: "c")
     contentHandler(content)
   }
+
+  /// core/internal/push/scheduled.go: scheduledFailedTag and its URL.
+  private static let scheduledFailedTag = "scheduled-failed"
+  private static let scheduledRoute = "/scheduled"
 
   override func serviceExtensionTimeWillExpire() {
     if let handler = contentHandler, let content = bestAttempt { handler(content) }

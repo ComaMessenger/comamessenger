@@ -3,8 +3,10 @@
 appId: com.comamessenger.app
 ---
 - runFlow: open-app.yaml
-- tapOn:
-    id: tab-more
+- runFlow:
+    file: tabs.yaml
+    env:
+      TAB: more
 - tapOn:
     id: settings-profile
 - extendedWaitUntil:

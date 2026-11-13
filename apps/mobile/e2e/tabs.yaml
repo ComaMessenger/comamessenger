@@ -1,0 +1,29 @@
+# Bottom tabs. Maestro does not find the tab bar by text or id on iOS 26,
+# so they are tapped by position: Чаты, Треды, Важные, Ещё.
+# Pass the tab: runFlow: { file: tabs.yaml, env: { TAB: important } }.
+appId: com.comamessenger.app
+---
+- runFlow:
+    when:
+      true: ${TAB == 'chats'}
+    commands:
+      - tapOn:
+          point: 12%,94%
+- runFlow:
+    when:
+      true: ${TAB == 'threads'}
+    commands:
+      - tapOn:
+          point: 37%,94%
+- runFlow:
+    when:
+      true: ${TAB == 'important'}
+    commands:
+      - tapOn:
+          point: 62%,94%
+- runFlow:
+    when:
+      true: ${TAB == 'more'}
+    commands:
+      - tapOn:
+          point: 87%,94%

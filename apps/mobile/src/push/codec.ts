@@ -50,15 +50,18 @@ export function utf8Decode(bytes: Uint8Array): string {
 export type NotificationContent = {
   title: string;
   body: string;
-  /** In-app route; only chat and thread routes are accepted. */
+  /** In-app route: a chat, a thread or the scheduled list ("message not sent"). */
   url?: string;
   chatID?: string;
   eventSeq: number;
   /** Unread chat messages of the recipient, for the app icon badge. */
   badge?: number;
+  /** The author sent it without sound: show it, but play no sound or vibration. */
+  silent: boolean;
 };
 
-const routePattern = /^\/chat\/[0-9a-f-]{36}(\/thread\/[0-9a-f-]{36})?$/;
+const routePattern =
+  /^(\/chat\/[0-9a-f-]{36}(\/thread\/[0-9a-f-]{36})?|\/scheduled)$/;
 
 export function parseNotification(json: string): NotificationContent | null {
   let value: Record<string, unknown>;
@@ -87,6 +90,7 @@ export function parseNotification(json: string): NotificationContent | null {
       typeof value.badge === "number" && value.badge >= 0
         ? value.badge
         : undefined,
+    silent: value.silent === true,
   };
 }
 
