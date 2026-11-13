@@ -1,11 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Download, MessageSquare, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { isSharedVideo, type ChatSharedAttachment } from "@comamessenger/core";
 import { formatListTime } from "../lib/format";
 import { useMessenger } from "../shell/MessengerContext";
-import { downloadToDisk, useObjectURL } from "./useObjectURL";
+import { downloadToDisk, useObjectURLState } from "./useObjectURL";
 
 /**
  * Full-screen viewer of a chat's photos and videos. Opens over chat info at
@@ -29,7 +29,10 @@ export function MediaViewer({
   const { api } = useMessenger();
   const item = items[index];
   const closeButton = useRef<HTMLButtonElement>(null);
-  const url = useObjectURL(api, item?.file.id);
+  const file = useObjectURLState(api, item?.file.id);
+  // The bytes came but do not decode (a broken or mislabelled file).
+  const [brokenID, setBrokenID] = useState<string | null>(null);
+  const failed = file.failed || (item !== undefined && brokenID === item.file.id);
   const hasPrevious = index > 0;
   const hasNext = index < items.length - 1;
 
@@ -90,12 +93,39 @@ export function MediaViewer({
         </button>
       </header>
       <div className="media-viewer__stage" onClick={(event) => event.target === event.currentTarget && onClose()}>
-        {!url ? (
+        {failed ? (
+          <div className="media-viewer__error" role="alert">
+            <p>{t("sharedMediaFailed")}</p>
+            <button
+              type="button"
+              className="media-viewer__action"
+              onClick={() => {
+                setBrokenID(null);
+                file.retry();
+              }}
+            >
+              {t("retry")}
+            </button>
+          </div>
+        ) : !file.url ? (
           <span className="media-viewer__loading" aria-label={t("sharedLoading")} />
         ) : video ? (
-          <video key={item.file.id} src={url} controls autoPlay className="media-viewer__media" />
+          <video
+            key={item.file.id}
+            src={file.url}
+            controls
+            autoPlay
+            className="media-viewer__media"
+            onError={() => setBrokenID(item.file.id)}
+          />
         ) : (
-          <img key={item.file.id} src={url} alt={item.file.name} className="media-viewer__media" />
+          <img
+            key={item.file.id}
+            src={file.url}
+            alt={item.file.name}
+            className="media-viewer__media"
+            onError={() => setBrokenID(item.file.id)}
+          />
         )}
       </div>
       {hasPrevious && (

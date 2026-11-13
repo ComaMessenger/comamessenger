@@ -3,6 +3,8 @@ package message
 import (
 	"strings"
 	"testing"
+	"time"
+	"unicode"
 )
 
 func TestExtractLinks(t *testing.T) {
@@ -111,5 +113,134 @@ func TestDecodePunycode(t *testing.T) {
 		if got, ok := decodePunycode(bad); ok {
 			t.Errorf("decodePunycode(%q) = %q, want failure", bad, got)
 		}
+	}
+}
+
+// pathologicalBodies are the review's worst cases: 64 KB of almost-links
+// that a quadratic parser took seconds on, under the organization lock.
+func pathologicalBodies(scale int) map[string]string {
+	return map[string]string{
+		"www.x!":            strings.Repeat("www.x!", 10900*scale/4),
+		"https://x(":        strings.Repeat("https://x(", 6500*scale/4),
+		"*http://-":         strings.Repeat("*http://-", 7300*scale/4),
+		"closing brackets":  "https://a.ru/" + strings.Repeat(")", 65000*scale/4),
+		"long link token":   "https://a.ru/" + strings.Repeat("a", 65000*scale/4),
+		"many short links":  strings.Repeat("https://a.ru/x ", 4300*scale/4),
+		"markdown brackets": strings.Repeat("]](https://a.ru)", 4000*scale/4),
+	}
+}
+
+func TestExtractLinksLinear(t *testing.T) {
+	for name, body := range pathologicalBodies(4) {
+		for _, format := range []string{"plain", "markdown"} {
+			started := time.Now()
+			ExtractLinks(body, format)
+			t.Logf("%s (%s, %d bytes): %v", name, format, len(body), time.Since(started))
+			// Milliseconds in fact; the bound leaves room for a slow CI.
+			if elapsed := time.Since(started); elapsed > 100*time.Millisecond {
+				t.Errorf("%s (%s, %d bytes) took %v", name, format, len(body), elapsed)
+			}
+		}
+	}
+	// The closing brackets do not belong to the link.
+	if got := ExtractLinks("https://a.ru/"+strings.Repeat(")", 65000), "plain"); len(got) != 1 || got[0].URL != "https://a.ru/" {
+		t.Fatalf("closing brackets: %+v", got)
+	}
+}
+
+// TestExtractLinksScalesLinearly fails if parsing turns quadratic again: four
+// times the body may cost about four times as long, never sixteen.
+func TestExtractLinksScalesLinearly(t *testing.T) {
+	if testing.Short() {
+		t.Skip("timing")
+	}
+	small, large := pathologicalBodies(1), pathologicalBodies(4)
+	for name := range small {
+		// The best of several runs: a pause of the collector or the CI
+		// machine only ever makes a run slower.
+		cost := func(body string) float64 {
+			best := time.Duration(0)
+			for attempt := 0; attempt < 7; attempt++ {
+				started := time.Now()
+				for range 4 {
+					ExtractLinks(body, "markdown")
+				}
+				if elapsed := time.Since(started); best == 0 || elapsed < best {
+					best = elapsed
+				}
+			}
+			return float64(best)
+		}
+		ratio := cost(large[name]) / cost(small[name])
+		t.Logf("%s: ×%.1f for ×4 input", name, ratio)
+		if ratio > 9 {
+			t.Errorf("%s: 4× the body costs %.1f× the time: parsing is no longer linear", name, ratio)
+		}
+	}
+}
+
+func BenchmarkExtractLinksPathological(b *testing.B) {
+	for name, body := range pathologicalBodies(4) {
+		b.Run(name, func(b *testing.B) {
+			b.SetBytes(int64(len(body)))
+			for range b.N {
+				ExtractLinks(body, "markdown")
+			}
+		})
+	}
+}
+
+func TestExtractLinksHomographs(t *testing.T) {
+	cases := []struct{ body, url, domain string }{
+		// Cyrillic «аррӏе» before a Latin TLD reads as apple.com: punycode.
+		{"https://xn--80ak6aa92e.com/login", "https://xn--80ak6aa92e.com/login", "xn--80ak6aa92e.com"},
+		{"https://аррӏе.com/login", "https://xn--80ak6aa92e.com/login", "xn--80ak6aa92e.com"},
+		// Latin and Cyrillic mixed inside one label.
+		{"https://pаypal.com", "https://xn--pypal-4ve.com", "xn--pypal-4ve.com"},
+		// One script throughout: Unicode, as written.
+		{"https://xn--e1afmkfd.xn--p1ai", "https://xn--e1afmkfd.xn--p1ai", "пример.рф"},
+		{"https://пример.рф", "https://пример.рф", "пример.рф"},
+		{"www.кто.рф", "https://www.кто.рф", "кто.рф"},
+		{"https://xn--mnchen-3ya.de", "https://xn--mnchen-3ya.de", "münchen.de"},
+		{"https://例え.テスト", "https://例え.テスト", "例え.テスト"},
+	}
+	for _, test := range cases {
+		got := ExtractLinks(test.body, "plain")
+		if len(got) != 1 || got[0].URL != test.url || got[0].Domain != test.domain {
+			t.Errorf("ExtractLinks(%q) = %+v, want %s shown as %s", test.body, got, test.url, test.domain)
+		}
+	}
+}
+
+func TestExtractLinksStopAtInvisibleCharacters(t *testing.T) {
+	for _, mark := range []rune{0x202E, 0x202D, 0x2066, 0x200B, 0x200E, 0x00AD, 0xFEFF, 0x2060} {
+		body := "https://good.example/" + string(mark) + "gpj.exe"
+		got := ExtractLinks(body, "plain")
+		if len(got) != 1 || got[0].URL != "https://good.example/" {
+			t.Errorf("U+%04X: %+v, want the link to end before it", mark, got)
+		}
+		for _, link := range got {
+			for _, value := range link.URL {
+				if unicode.Is(unicode.Cf, value) {
+					t.Errorf("U+%04X left in %q", mark, link.URL)
+				}
+			}
+		}
+	}
+}
+
+func TestPunycodeRoundTrip(t *testing.T) {
+	for _, label := range []string{"пример", "рф", "münchen", "аррӏе", "pаypal", "例え", "テスト", "домен-1"} {
+		encoded, ok := encodePunycode(label)
+		if !ok {
+			t.Fatalf("encodePunycode(%q) failed", label)
+		}
+		decoded, ok := decodePunycode(encoded)
+		if !ok || decoded != label {
+			t.Errorf("%q → %q → %q", label, encoded, decoded)
+		}
+	}
+	if encoded, _ := encodePunycode("аррӏе"); encoded != "80ak6aa92e" {
+		t.Errorf("encodePunycode(аррӏе) = %q", encoded)
 	}
 }

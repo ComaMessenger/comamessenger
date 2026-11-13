@@ -155,7 +155,7 @@ function svgFor(fileID: string) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="hsl(${hue},70%,70%)"/><stop offset="1" stop-color="hsl(${hue + 40},60%,45%)"/></linearGradient></defs><rect width="320" height="240" fill="url(#g)"/><circle cx="240" cy="70" r="28" fill="rgba(255,255,255,.55)"/><path d="M0 200 L90 120 L170 190 L230 140 L320 210 L320 240 L0 240Z" fill="rgba(0,0,0,.18)"/></svg>`;
 }
 
-async function mockChat(page: Page, theme: "light" | "dark" = "light") {
+async function mockChat(page: Page, theme: "light" | "dark" = "light", failing = new Set<string>()) {
   const requests: string[] = [];
   await page.clock.setFixedTime(now);
   await page.addInitScript((value) => {
@@ -201,6 +201,10 @@ async function mockChat(page: Page, theme: "light" | "dark" = "light") {
     const path = url.pathname.replace(/^\/api\/v1/, "");
     if (path.includes("/shared")) requests.push(path + url.search);
     const download = /^\/files\/([^/]+)\/download$/.exec(path);
+    if (download && failing.has(download[1]!)) {
+      await route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ code: "internal", message: "storage down" }) });
+      return;
+    }
     if (download) {
       await route.fulfill({ status: 200, contentType: "image/svg+xml", body: svgFor(download[1]!) });
       return;
@@ -323,7 +327,9 @@ test("медиа чата: вкладки со счётчиками, сетка 
   await expect(viewer.getByText("2 / 7")).toBeVisible();
   await expect(page).toHaveScreenshot("chat-shared-viewer.png", shot);
   await page.keyboard.press("ArrowRight");
-  await expect(page.getByRole("dialog", { name: "демо.mp4" }).locator("video")).toBeVisible();
+  // The mock serves a picture for the video: it opens, cannot play, and
+  // says so instead of spinning.
+  await expect(page.getByRole("dialog", { name: "демо.mp4" }).getByRole("alert")).toHaveText(/Не удалось открыть файл/);
   await page.keyboard.press("Escape");
   await expect(page.locator(".media-viewer")).toHaveCount(0);
   await expect(dialog).toBeVisible();
@@ -374,4 +380,22 @@ test("тёмная тема: медиа и ссылки", async ({ page }) => {
   await dialog.getByRole("tablist").getByRole("tab", { name: /Ссылки/ }).click();
   await expect(dialog.locator(".chat-shared__link")).toHaveCount(3);
   await expect(dialog.locator(".chat-shared__links")).toHaveScreenshot("chat-shared-links-dark.png", shot);
+});
+
+test("просмотрщик: недоступный файл — ошибка и «Повторить», а не вечная загрузка", async ({ page }) => {
+  const photo = media[1]!.file.id;
+  // The tile's preview and the viewer read the same file: both fail first.
+  const failing = new Set([photo]);
+  await mockChat(page, "light", failing);
+  const dialog = await openInfo(page);
+  await loadAllMedia(dialog);
+  await dialog.getByRole("button", { name: "схема.png" }).click();
+  const viewer = page.getByRole("dialog", { name: "схема.png" });
+  await expect(viewer.getByRole("alert")).toHaveText(/Не удалось открыть файл/);
+  await expect(viewer.locator(".media-viewer__loading")).toHaveCount(0);
+  await expect(page).toHaveScreenshot("chat-shared-viewer-failed.png", shot);
+  failing.delete(photo);
+  await viewer.getByRole("button", { name: "Повторить" }).click();
+  await expect(viewer.getByRole("img", { name: "схема.png" })).toBeVisible();
+  await expect(viewer.getByRole("alert")).toHaveCount(0);
 });
