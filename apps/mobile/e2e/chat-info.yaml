@@ -1,5 +1,5 @@
 # Package I of phase 6.1: chat info from the conversation header — members,
-# pinned messages, files, notifications and the chat's search.
+# pinned messages, media, files, voice, links, notifications and the chat's search.
 # Run after chat-create.yaml: the first chat is then a group the account owns.
 # maestro test e2e/chat-info.yaml
 appId: com.comamessenger.app
@@ -50,15 +50,33 @@ appId: com.comamessenger.app
 - takeScreenshot: chat-pinned
 - tapOn:
     id: pinned-back
+# Media, files, voice and links: one screen with tabs, opened at the row's tab.
 - tapOn:
-    id: chat-info-files
+    id: chat-info-media
 - extendedWaitUntil:
     visible:
-      id: chat-files
+      id: chat-shared
     timeout: 10000
-- takeScreenshot: chat-files
+- takeScreenshot: chat-shared-media
 - tapOn:
-    id: files-back
+    id: shared-tab-files
+- takeScreenshot: chat-shared-files
+- tapOn:
+    id: shared-tab-voice
+- takeScreenshot: chat-shared-voice
+- tapOn:
+    id: shared-tab-links
+- takeScreenshot: chat-shared-links
+- tapOn:
+    id: shared-back
+- tapOn:
+    id: chat-info-links
+- extendedWaitUntil:
+    visible:
+      id: shared-links
+    timeout: 10000
+- tapOn:
+    id: shared-back
 
 # A group owner sees members with actions and the add button.
 - scrollUntilVisible:

@@ -18,7 +18,6 @@ export const chatKeys = {
   members: (chatID: string) => ["members", chatID] as const,
   pins: (chatID: string) => ["pins", chatID] as const,
   pinnedMessages: (chatID: string) => ["pinned-messages", chatID] as const,
-  files: (chatID: string) => ["chat-files", chatID] as const,
 };
 
 /** Refreshes what a realtime event changed in a chat's details. */
@@ -101,19 +100,4 @@ export function usePinnedMessages(chatID: string) {
     failed: pins.isError,
     refetch: () => void pins.refetch(),
   };
-}
-
-/**
- * Files sent to a chat, newest first. The web chat info reads them from
- * search with a match-all query; there is no separate listing endpoint.
- */
-export function useChatFiles(chatID: string) {
-  const { api } = useSignedIn();
-  return useQuery({
-    queryKey: chatKeys.files(chatID),
-    queryFn: () =>
-      api.search({ q: "*", type: "file", chat_id: chatID, limit: 60 }),
-    retry: false,
-    staleTime: 60_000,
-  });
 }

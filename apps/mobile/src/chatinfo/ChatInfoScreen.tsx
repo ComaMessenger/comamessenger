@@ -18,7 +18,10 @@ import {
   ChevronRight,
   FileText,
   FolderPlus,
+  Image as ImageIcon,
+  Link2,
   LogOut,
+  Mic,
   Pencil,
   Pin,
   PinOff,
@@ -60,6 +63,7 @@ import {
 } from "@/ui/MenuSheet";
 import { Notice } from "@/ui/Notice";
 import { ScreenHeader } from "@/ui/ScreenHeader";
+import { useSharedCounts } from "./SharedScreen";
 import { Text } from "@/ui/Text";
 import {
   chatKeys,
@@ -216,6 +220,9 @@ export function ChatInfoScreen({ chatID }: { chatID: string }) {
   const presence = useStore(store, (state) => state.presence);
   const { members, query: membersQuery } = useChatMembers(chatID);
   const pinned = usePinnedMessages(chatID);
+  const shared = useSharedCounts(chatID);
+  const sharedMeta = (count: number | undefined) =>
+    count === undefined ? undefined : String(count);
   const [allMembers, setAllMembers] = useState(false);
   const [memberFor, setMemberFor] = useState<ChatMember | null>(null);
   const [menu, setMenu] = useState<"notify" | "folders" | null>(null);
@@ -591,10 +598,35 @@ export function ChatInfoScreen({ chatID }: { chatID: string }) {
           />
           <Divider />
           <InfoRow
+            testID="chat-info-media"
+            icon={ImageIcon}
+            label={t("sharedMedia")}
+            meta={sharedMeta(shared.data?.media)}
+            onPress={() => router.push(`/chat/${chat.id}/files?tab=media`)}
+          />
+          <Divider />
+          <InfoRow
             testID="chat-info-files"
             icon={FileText}
             label={t("chatFiles")}
-            onPress={() => router.push(`/chat/${chat.id}/files`)}
+            meta={sharedMeta(shared.data?.files)}
+            onPress={() => router.push(`/chat/${chat.id}/files?tab=files`)}
+          />
+          <Divider />
+          <InfoRow
+            testID="chat-info-voice"
+            icon={Mic}
+            label={t("sharedVoice")}
+            meta={sharedMeta(shared.data?.voice)}
+            onPress={() => router.push(`/chat/${chat.id}/files?tab=voice`)}
+          />
+          <Divider />
+          <InfoRow
+            testID="chat-info-links"
+            icon={Link2}
+            label={t("sharedLinks")}
+            meta={sharedMeta(shared.data?.links)}
+            onPress={() => router.push(`/chat/${chat.id}/files?tab=links`)}
           />
           {inFolders > 0 ? (
             <>

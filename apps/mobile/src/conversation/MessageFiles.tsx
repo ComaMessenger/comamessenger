@@ -1,15 +1,7 @@
 import { useState, type ReactNode } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  Modal,
-  Pressable,
-  StyleSheet,
-  View,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Alert, Pressable, StyleSheet, View } from "react-native";
 import { Image } from "expo-image";
-import { FileText, Share2, X } from "lucide-react-native";
+import { FileText } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import {
   formatBytes,
@@ -18,6 +10,7 @@ import {
 } from "@comamessenger/core";
 import { radius, spacing } from "@comamessenger/tokens";
 import { openAttachment } from "@/files/open";
+import { PhotoViewer } from "@/files/PhotoViewer";
 import { useFileSource } from "@/files/sources";
 import { useTheme } from "@/lib/theme";
 import { Text } from "@/ui/Text";
@@ -136,18 +129,7 @@ export function MessageFiles({
   /** The time of a voice message, in the player's length row. */
   voiceMeta?: ReactNode;
 }) {
-  const { t } = useTranslation();
-  // A modal is a new native window where SafeAreaView reads zero insets
-  // (the close button sat under the status bar): pad from the app's insets.
-  const insets = useSafeAreaInsets();
   const [viewing, setViewing] = useState<FileMetadata | null>(null);
-  const viewerSource = useFileSource(viewing?.id);
-  // The full-size file can take seconds: the preview stands in meanwhile,
-  // so the viewer is never a black screen.
-  const previewSource = useFileSource(viewing?.preview_file_id ?? undefined);
-  const [viewerState, setViewerState] = useState<
-    "loading" | "loaded" | "failed"
-  >("loading");
   const images = files.filter(
     (file) => file.mime.startsWith("image/") && file.status === "ready",
   );
@@ -186,10 +168,7 @@ export function MessageFiles({
               api={api}
               file={file}
               bleed={Boolean(bleed)}
-              onOpen={() => {
-                setViewerState("loading");
-                setViewing(file);
-              }}
+              onOpen={() => setViewing(file)}
             />
           ))}
           {overlay ? (
@@ -204,91 +183,14 @@ export function MessageFiles({
         .map((file) => (
           <FileCard key={file.id} api={api} file={file} />
         ))}
-      <Modal
-        visible={viewing !== null}
-        animationType="fade"
-        onRequestClose={() => setViewing(null)}
-      >
-        <View
-          testID="photo-viewer"
-          style={[
-            styles.viewer,
-            { paddingTop: insets.top, paddingBottom: insets.bottom },
-          ]}
-        >
-          <View style={styles.viewerBar}>
-            <Pressable
-              testID="photo-viewer-close"
-              accessibilityRole="button"
-              accessibilityLabel={t("close")}
-              style={styles.viewerButton}
-              onPress={() => setViewing(null)}
-            >
-              <X size={26} color="#ffffff" />
-            </Pressable>
-            {viewing && (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={t("share")}
-                style={styles.viewerButton}
-                onPress={() =>
-                  void openAttachment(api, viewing).catch(() =>
-                    Alert.alert(t("fileUnavailable")),
-                  )
-                }
-              >
-                <Share2 size={24} color="#ffffff" />
-              </Pressable>
-            )}
-          </View>
-          <View
-            testID={
-              viewerState === "loaded" ? "photo-viewer-loaded" : undefined
-            }
-            style={styles.grow}
-          >
-            {viewerSource && (
-              <Image
-                source={viewerSource}
-                placeholder={previewSource ?? undefined}
-                placeholderContentFit="contain"
-                contentFit="contain"
-                cachePolicy="disk"
-                style={styles.grow}
-                accessibilityLabel={viewing?.name}
-                onLoad={() => setViewerState("loaded")}
-                onError={() => setViewerState("failed")}
-              />
-            )}
-            {viewerState === "loading" && (
-              <ActivityIndicator
-                testID="photo-viewer-loading"
-                color="#ffffff"
-                style={styles.viewerOverlay}
-              />
-            )}
-            {viewerState === "failed" && (
-              <View style={styles.viewerOverlay}>
-                <Text size={15} style={styles.viewerText}>
-                  {t("photoLoadFailed")}
-                </Text>
-              </View>
-            )}
-          </View>
-        </View>
-      </Modal>
+      <PhotoViewer api={api} file={viewing} onClose={() => setViewing(null)} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  viewerOverlay: {
-    ...StyleSheet.absoluteFill,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  viewerText: { color: "#ffffff", textAlign: "center" },
   files: { gap: spacing[2] },
+  grow: { flex: 1 },
   gallery: { flexDirection: "row", flexWrap: "wrap", gap: spacing[1] },
   // Bubble padding 11 (sides), 7 (top), 6 (bottom), plus its 1 px border.
   // A column, so each photo stretches across the widened gallery (a
@@ -337,19 +239,5 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
-  },
-  grow: { flex: 1 },
-  viewerButton: {
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  viewer: { flex: 1, backgroundColor: "#000000" },
-  viewerBar: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
   },
 });
