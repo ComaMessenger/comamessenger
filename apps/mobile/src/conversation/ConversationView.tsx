@@ -792,6 +792,7 @@ export function ConversationView({
           commands={inThread || context?.kind === "edit" ? [] : commands}
           focusRequest={focusRequest}
           onSendOptions={scheduling.openOptions}
+          sendRef={scheduling.sendRef}
           voice={{
             chatID,
             threadRootID,

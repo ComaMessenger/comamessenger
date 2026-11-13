@@ -6,8 +6,8 @@ import {
   TextInput,
   View,
   useWindowDimensions,
-  type GestureResponderEvent,
 } from "react-native";
+import type { RefObject } from "react";
 import {
   ArrowUp,
   Check,
@@ -65,6 +65,7 @@ export function Composer({
   commands = [],
   focusRequest = 0,
   onSendOptions,
+  sendRef,
   voice,
 }: {
   body: string;
@@ -85,7 +86,9 @@ export function Composer({
   /** Raised by the screen to put the cursor in the field, e.g. after a mention was inserted. */
   focusRequest?: number;
   /** Long press on send: «Send later» and «Send without sound» (package E). */
-  onSendOptions?(event?: GestureResponderEvent): void;
+  onSendOptions?(): void;
+  /** The send button, for the menu that hangs from it. */
+  sendRef?: RefObject<View | null>;
   /** Enables voice recording on the microphone while the field is empty. */
   voice?: VoiceTarget;
 }) {
@@ -415,23 +418,28 @@ export function Composer({
             ]}
           />
         </View>
-        <IconButton
-          testID="composer-send"
-          variant={canSend ? "accent" : "soft"}
-          label={context?.kind === "edit" ? t("save") : t("send")}
-          disabled={!canSend}
-          onPress={onSend}
-          onLongPress={sendOptions ? onSendOptions : undefined}
-          hint={sendOptions ? t("scheduledSendHint") : undefined}
+        <View
+          ref={sendRef}
+          collapsable={false}
           style={micMode ? styles.hidden : undefined}
-          icon={(color) =>
-            context?.kind === "edit" ? (
-              <Check size={20} color={color} strokeWidth={2.4} />
-            ) : (
-              <ArrowUp size={20} color={color} strokeWidth={2.4} />
-            )
-          }
-        />
+        >
+          <IconButton
+            testID="composer-send"
+            variant={canSend ? "accent" : "soft"}
+            label={context?.kind === "edit" ? t("save") : t("send")}
+            disabled={!canSend}
+            onPress={onSend}
+            onLongPress={sendOptions ? onSendOptions : undefined}
+            hint={sendOptions ? t("scheduledSendHint") : undefined}
+            icon={(color) =>
+              context?.kind === "edit" ? (
+                <Check size={20} color={color} strokeWidth={2.4} />
+              ) : (
+                <ArrowUp size={20} color={color} strokeWidth={2.4} />
+              )
+            }
+          />
+        </View>
         {micMode && <VoiceActionButton voice={recorder} />}
       </View>
     </View>
