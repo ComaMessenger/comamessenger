@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   MessengerAPI,
+  createMessengerStore,
   Outbox,
   type OutboxItem,
   type OutboxStorage,
@@ -105,5 +106,73 @@ describe("outbox owner", () => {
     // One attempt with Alexey's expired token, none with Boris's.
     expect(authorizations).toEqual(["Bearer token-alexey"]);
     expect(storage.items).toHaveLength(1);
+  });
+});
+
+describe("outbox optimistic message", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("is authored by the owner from the first frame and keeps its key when delivered", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              id: "server-1",
+              chat_id: "chat",
+              actor_id: "alexey",
+              client_msg_id: "m2",
+              type: "text",
+              body: "привет",
+              body_format: "markdown",
+              version: 1,
+              created_seq: 42,
+              created_at: "2026-11-11T10:00:01Z",
+              mentioned_actor_ids: [],
+              thread_reply_count: 0,
+              files: [],
+            }),
+            { status: 201 },
+          ),
+      ),
+    );
+    const api = new MessengerAPI("https://coma.test");
+    api.adoptTokens(tokens("alexey", "token-alexey"));
+    const store = createMessengerStore();
+    const frames: { actor: string; key: string; count: number }[] = [];
+    store.subscribe((state) => {
+      const items = state.messages.chat ?? [];
+      const last = items[items.length - 1];
+      if (last)
+        frames.push({
+          actor: last.actor_id,
+          key: last.client_msg_id || last.id,
+          count: items.length,
+        });
+    });
+    const outbox = new Outbox(
+      api,
+      memoryStorage([]),
+      {
+        optimistic: store.getState().optimistic,
+        delivered: store.getState().reconcile,
+        retrying: store.getState().retrying,
+        failed: store.getState().failed,
+      },
+      "alexey",
+    );
+    await outbox.enqueue("chat", {
+      client_msg_id: "m2",
+      body: "привет",
+      body_format: "markdown",
+    });
+    // Queued, then confirmed: one message, always Alexey's, one list key.
+    expect(frames.length).toBeGreaterThanOrEqual(2);
+    expect(frames.every((frame) => frame.actor === "alexey")).toBe(true);
+    expect(frames.every((frame) => frame.key === "m2")).toBe(true);
+    expect(frames.every((frame) => frame.count === 1)).toBe(true);
+    const [delivered] = store.getState().messages.chat ?? [];
+    expect(delivered).toMatchObject({ id: "server-1", delivery: "sent" });
   });
 });

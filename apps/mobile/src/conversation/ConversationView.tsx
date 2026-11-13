@@ -61,7 +61,11 @@ import { useScheduleComposer } from "@/scheduled/useScheduleComposer";
 import { useChatScheduled } from "@/scheduled/useScheduled";
 import { AgentPicker } from "./AgentPicker";
 import { AgentStreamRow } from "./AgentStreamRow";
-import { bubblePlacement, type BubblePlacement } from "./bubbles";
+import {
+  bubblePlacement,
+  messageKey,
+  type BubblePlacement,
+} from "./bubbles";
 import { Composer, type ComposerContext } from "./Composer";
 import { ComposerSheet, type ComposerAction } from "./ComposerSheet";
 import { ForwardSheet } from "./ForwardSheet";
@@ -600,9 +604,7 @@ export function ConversationView({
               ref={list}
               testID="message-list"
               data={feed}
-              keyExtractor={(row) =>
-                row.message.client_msg_id || row.message.id
-              }
+              keyExtractor={(row) => messageKey(row.message)}
               initialScrollIndex={
                 openedAt.current !== null && openedAt.current >= 0
                   ? openedAt.current

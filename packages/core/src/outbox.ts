@@ -46,7 +46,9 @@ export class Outbox {
     this.callbacks.optimistic({
       id: input.client_msg_id,
       chat_id: chatID,
-      actor_id: "",
+      // The sender is known before the server answers: the bubble is drawn
+      // on the reader's own side from the first frame, not moved there later.
+      actor_id: this.ownerID ?? "",
       client_msg_id: input.client_msg_id,
       type: "text",
       body: input.body,
