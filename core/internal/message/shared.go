@@ -1,6 +1,7 @@
 package message
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -510,19 +511,25 @@ func dropShared(ctx context.Context, tx pgx.Tx, messageID string) error {
 // existed. It walks messages in id order, sharedBackfillBatch at a time, in
 // three steps so that no lock is held while Go works:
 //
-//  1. read the batch (ids, versions, texts) without locking anything;
+//  1. read the batch (ids, texts and their hashes) without locking anything;
 //  2. extract the links outside any transaction;
 //  3. in one short transaction (lock_timeout 5 s), lock the batch's rows
-//     FOR SHARE, write links only for messages still at the version read
+//     FOR SHARE, write links only for messages whose text is still the one read
 //     and still without links, index their files, and save the progress.
 //
-// An edit made between 1 and 3 changes the version, so the old text's links
-// are skipped; the edit wrote its own. An edit waiting on step 3 waits for a
+// The text is compared, not the version: an edit of the text between 1 and 3
+// is kept (the old text's links are skipped, the edit wrote its own), while a
+// change that leaves the text alone (a pressed button, a resolved card)
+// bumps the version but must not cost the message its links for good. An edit waiting on step 3 waits for a
 // few inserts, never for an extraction. Several servers may run it at once:
 // step 3 runs under a transaction advisory lock and only if the progress is
 // still the one step 1 started from.
 
 const sharedBackfillBatch = 500
+
+// sharedTextHashSQL fingerprints the text of message `m` or of the messages
+// row in scope: the format and the body (no ':' in a format, no NUL in text).
+const sharedTextHashSQL = `sha256(convert_to(body_format || ':' || body, 'UTF8'))`
 
 // ErrBackfillBusy: another server holds the backfill lock or moved it on
 // meanwhile; try again later.
@@ -531,7 +538,7 @@ var ErrBackfillBusy = errors.New("shared media backfill is running elsewhere")
 type backfillMessage struct {
 	id, chat, actor, body, format string
 	seq                           int64
-	version                       int
+	textHash                      []byte
 	deleted                       bool
 	links                         []ExtractedLink
 }
@@ -555,7 +562,7 @@ func (s *Service) readBackfillBatch(ctx context.Context) (backfillBatch, error) 
 		return batch, fmt.Errorf("read shared backfill progress: %w", err)
 	}
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, chat_id, actor_id, created_seq, version, body, body_format, deleted_at IS NOT NULL
+		SELECT id, chat_id, actor_id, created_seq, `+sharedTextHashSQL+`, body, body_format, deleted_at IS NOT NULL
 		FROM messages
 		WHERE $1::uuid IS NULL OR id > $1
 		ORDER BY id
@@ -566,7 +573,7 @@ func (s *Service) readBackfillBatch(ctx context.Context) (backfillBatch, error) 
 	defer rows.Close()
 	for rows.Next() {
 		var item backfillMessage
-		if err := rows.Scan(&item.id, &item.chat, &item.actor, &item.seq, &item.version, &item.body, &item.format, &item.deleted); err != nil {
+		if err := rows.Scan(&item.id, &item.chat, &item.actor, &item.seq, &item.textHash, &item.body, &item.format, &item.deleted); err != nil {
 			return batch, fmt.Errorf("scan message to backfill: %w", err)
 		}
 		batch.messages = append(batch.messages, item)
@@ -613,19 +620,19 @@ func (s *Service) writeBackfillBatch(ctx context.Context, batch backfillBatch) (
 	for index, item := range batch.messages {
 		ids[index] = item.id
 	}
-	// Live versions, under a share lock until commit: an edit that wants a
-	// row waits for these inserts, and one that came first changed the
-	// version, so its message is skipped below.
+	// Live texts, under a share lock until commit: an edit that wants a row
+	// waits for these inserts, and one that came first changed the text, so
+	// its message is skipped below.
 	// A message that already has links got them from a write after the
 	// migration (a new message, an edit): those are newer, keep them.
 	type liveMessage struct {
-		version  int
+		textHash []byte
 		hasLinks bool
 	}
 	live := map[string]liveMessage{}
 	lockedIDs := make([]string, 0, len(ids))
 	rows, err := tx.Query(ctx, `
-		SELECT m.id, m.version, EXISTS (SELECT 1 FROM message_links l WHERE l.message_id = m.id)
+		SELECT m.id, `+sharedTextHashSQL+`, EXISTS (SELECT 1 FROM message_links l WHERE l.message_id = m.id)
 		FROM messages m
 		WHERE m.id = ANY($1::uuid[]) AND m.deleted_at IS NULL
 		FOR SHARE OF m`, ids)
@@ -635,7 +642,7 @@ func (s *Service) writeBackfillBatch(ctx context.Context, batch backfillBatch) (
 	for rows.Next() {
 		var messageID string
 		var state liveMessage
-		if err := rows.Scan(&messageID, &state.version, &state.hasLinks); err != nil {
+		if err := rows.Scan(&messageID, &state.textHash, &state.hasLinks); err != nil {
 			rows.Close()
 			return false, fmt.Errorf("scan message to backfill: %w", err)
 		}
@@ -651,7 +658,7 @@ func (s *Service) writeBackfillBatch(ctx context.Context, batch backfillBatch) (
 	var seqs []int64
 	var positions, offsets []int32
 	for _, item := range batch.messages {
-		if state, ok := live[item.id]; !ok || state.version != item.version || state.hasLinks {
+		if state, ok := live[item.id]; !ok || !bytes.Equal(state.textHash, item.textHash) || state.hasLinks {
 			continue
 		}
 		for position, link := range item.links {

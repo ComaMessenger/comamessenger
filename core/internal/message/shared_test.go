@@ -558,3 +558,66 @@ func TestSharedBackfillHoldsNoLockWhileParsing(t *testing.T) {
 	assertCount(t, pool, `SELECT count(*) FROM chat_attachments WHERE message_id = $1`, 0, deleted.ID)
 	assertCount(t, pool, `SELECT count(*) FROM chat_attachments WHERE message_id = $1`, 1, photo.ID)
 }
+
+// A change that leaves the text alone — a pressed button — bumps the version
+// between the backfill's read and write; the batch must still write the
+// card's links (it compares texts, not versions), or the card would never
+// get them. An edit of the text in the same window is still not overwritten.
+func TestSharedBackfillComparesTextNotVersion(t *testing.T) {
+	pool := testdb.New(t)
+	fixture := seedFixture(t, pool)
+	service := NewService(pool, 64*1024, 100, nil)
+	ctx := context.Background()
+	agent := identity.User{ActorID: mustID(t), OrgID: fixture.owner.OrgID, OrgRole: "member", Status: "active"}
+	runID := mustID(t)
+	for _, statement := range []struct {
+		query string
+		args  []any
+	}{
+		{`INSERT INTO actors(id,org_id,type,org_role,display_name,handle) VALUES($1,$2,'agent','member','Agent','cards')`, []any{agent.ActorID, agent.OrgID}},
+		{`INSERT INTO agents(actor_id,org_id,owner_actor_id,kind,enabled,allowed_scopes) VALUES($1,$2,$3,'builtin',true,ARRAY['messages:read'])`, []any{agent.ActorID, agent.OrgID, fixture.owner.ActorID}},
+		{`INSERT INTO chat_members(chat_id,actor_id,org_id,role) VALUES($1,$2,$3,'member')`, []any{fixture.groupID, agent.ActorID, agent.OrgID}},
+		{`INSERT INTO agent_runs(id,org_id,agent_id,chat_id,correlation_id,status,lease_token,lease_expires_at,started_at) VALUES($1,$2,$3,$4,$5,'running',$6,now()+interval '5 minutes',now())`, []any{runID, agent.OrgID, agent.ActorID, fixture.groupID, mustID(t), mustID(t)}},
+	} {
+		if _, err := pool.Exec(ctx, statement.query, statement.args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	card, _, err := service.CreateForAgentRun(ctx, agent, fixture.groupID, CreateInput{
+		ClientMsgID: mustID(t),
+		Blocks: &Blocks{
+			Version: 1,
+			Card:    &Card{Title: "Брифинг", Fields: []CardField{{Label: "Документ", Value: "https://brief.example.com/v2"}}},
+			Actions: []Action{{ID: "ok", Label: "Прочитал", Style: "primary", Limit: "per_actor"}},
+		},
+	}, AgentProvenance{RunID: runID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	edited, _, err := service.Create(ctx, fixture.owner, fixture.groupID, CreateInput{ClientMsgID: mustID(t), Body: "old https://old.example.com", BodyFormat: "plain"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// As before the migration.
+	if _, err := pool.Exec(ctx, `DELETE FROM message_links; DELETE FROM chat_attachments; UPDATE shared_backfill SET last_message_id = NULL, done_at = NULL`); err != nil {
+		t.Fatal(err)
+	}
+	service.betweenBackfillSteps = func() {
+		if _, err := service.PressAction(ctx, fixture.member, card.ID, "ok"); err != nil {
+			t.Errorf("press during the backfill: %v", err)
+		}
+		if _, err := service.Update(ctx, fixture.owner, edited.ID, UpdateInput{Body: "new https://new.example.com", BodyFormat: "plain", ExpectedVersion: edited.Version}); err != nil {
+			t.Errorf("edit during the backfill: %v", err)
+		}
+	}
+	if done, err := service.BackfillSharedBatch(ctx); err != nil || !done {
+		t.Fatalf("BackfillSharedBatch() = %v, %v", done, err)
+	}
+	var version int
+	if err := pool.QueryRow(ctx, `SELECT version FROM messages WHERE id = $1`, card.ID).Scan(&version); err != nil || version <= card.Version {
+		t.Fatalf("the press did not bump the card's version: %d, %v", version, err)
+	}
+	assertCount(t, pool, `SELECT count(*) FROM message_links WHERE message_id = $1 AND url = 'https://brief.example.com/v2'`, 1, card.ID)
+	assertCount(t, pool, `SELECT count(*) FROM message_links WHERE message_id = $1`, 1, edited.ID)
+	assertCount(t, pool, `SELECT count(*) FROM message_links WHERE message_id = $1 AND url = 'https://new.example.com'`, 1, edited.ID)
+}
