@@ -1,0 +1,178 @@
+# Scheduled messages and «Send without sound» (phase 6.1, package E):
+# long press on send, the time sheet, the strip under the chat header, the
+# list with edit / time / delete, the «Schedule» tile and the list in «More».
+# Run after sign-in.yaml (reuses its session): maestro test e2e/scheduled.yaml
+# Starts by deleting the account's scheduled messages through the API.
+appId: com.comamessenger.app
+---
+- runScript: scripts/login.js
+- runScript: scripts/clear-scheduled.js
+- runFlow: open-app.yaml
+- tapOn:
+    id: chat-row-0
+- evalScript: ${output.tag = String(Date.now()).slice(-6)}
+
+# 1. Long press on send → «Send later» → tomorrow morning.
+- tapOn:
+    id: composer-input
+- inputText: Отложенное ${output.tag}
+- longPressOn:
+    id: composer-send
+- extendedWaitUntil:
+    visible:
+      id: send-options
+    timeout: 5000
+- tapOn:
+    id: send-options-later
+- extendedWaitUntil:
+    visible:
+      id: schedule-sheet
+    timeout: 5000
+- tapOn:
+    id: schedule-choice-tomorrowMorning
+- assertVisible: "Запланировать: завтра.*"
+- takeScreenshot: scheduled-sheet
+- tapOn:
+    id: schedule-confirm
+# The composer is cleared and the strip counts the message.
+- extendedWaitUntil:
+    visible:
+      id: scheduled-strip
+    timeout: 10000
+# The strip is one accessible element: its label, not its inner text, counts.
+- assertVisible: "Отложенные сообщения в этом чате: .*"
+# The feed ends with it as a dashed bubble, only the author sees it.
+- extendedWaitUntil:
+    visible:
+      id: scheduled-bubble
+      text: .*Отложенное ${output.tag}.*
+    timeout: 10000
+- takeScreenshot: scheduled-bubble
+
+# 2. The bubble opens it in the list of this chat: edit the text, move it,
+# delete it.
+- tapOn:
+    id: scheduled-bubble
+    text: .*Отложенное ${output.tag}.*
+- extendedWaitUntil:
+    visible:
+      id: scheduled-screen
+    timeout: 10000
+- assertVisible: .*Отложенное ${output.tag}.*
+- takeScreenshot: scheduled-list
+- tapOn:
+    id: scheduled-edit
+    index: 0
+- extendedWaitUntil:
+    visible:
+      id: scheduled-edit-sheet
+    timeout: 5000
+- tapOn:
+    id: scheduled-edit-input
+- inputText: " исправлено"
+- tapOn:
+    id: scheduled-edit-save
+- extendedWaitUntil:
+    visible: .*исправлено.*
+    timeout: 10000
+- tapOn:
+    id: scheduled-time
+    index: 0
+- extendedWaitUntil:
+    visible:
+      id: schedule-sheet
+    timeout: 5000
+- tapOn:
+    id: schedule-choice-inHour
+- assertVisible: "Перенести: .*"
+- tapOn:
+    id: schedule-confirm
+- extendedWaitUntil:
+    visible: "СЕГОДНЯ|ЗАВТРА"
+    timeout: 10000
+- tapOn:
+    id: scheduled-delete
+    index: 0
+# The confirmation is a system alert; the trash button is «Удалить» too.
+- tapOn:
+    text: Удалить
+    below: Оно не будет отправлено.
+- extendedWaitUntil:
+    notVisible: .*Отложенное ${output.tag}.*
+    timeout: 10000
+- tapOn:
+    id: scheduled-back
+    retryTapIfNoChange: true
+
+# 3. «Send without sound» goes at once, like an ordinary message.
+- tapOn:
+    id: composer-input
+- inputText: Тихо ${output.tag}
+- longPressOn:
+    id: composer-send
+- tapOn:
+    id: send-options-silent
+- extendedWaitUntil:
+    visible: .*Тихо ${output.tag}.*
+    timeout: 15000
+
+# 4. The «Schedule» tile of the "+" sheet: empty draft is refused politely,
+# a typed one opens the time sheet.
+- tapOn:
+    id: composer-attach
+- tapOn:
+    id: composer-action-schedule
+- extendedWaitUntil:
+    visible: "Сначала напишите сообщение.*"
+    timeout: 5000
+- tapOn:
+    id: composer-input
+- inputText: Плитка ${output.tag}
+- tapOn:
+    id: composer-attach
+- tapOn:
+    id: composer-action-schedule
+- extendedWaitUntil:
+    visible:
+      id: schedule-sheet
+    timeout: 5000
+- tapOn:
+    id: schedule-choice-nextMonday
+    optional: true
+# «Without sound» together with «later», as on the web.
+- tapOn:
+    id: schedule-silent
+- takeScreenshot: scheduled-sheet-silent
+- tapOn:
+    id: schedule-confirm
+- extendedWaitUntil:
+    visible:
+      id: scheduled-strip
+    timeout: 10000
+
+# 5. Every scheduled message, from «More»; clean up after the run.
+- tapOn:
+    id: conversation-back
+    retryTapIfNoChange: true
+- runFlow:
+    file: tabs.yaml
+    env:
+      TAB: more
+- tapOn:
+    id: more-scheduled
+- extendedWaitUntil:
+    visible:
+      id: scheduled-screen
+    timeout: 10000
+- assertVisible: .*Плитка ${output.tag}.*
+- assertVisible: без звука
+- takeScreenshot: scheduled-all
+- tapOn:
+    id: scheduled-delete
+    index: 0
+- tapOn:
+    text: Удалить
+    below: Оно не будет отправлено.
+- extendedWaitUntil:
+    notVisible: .*Плитка ${output.tag}.*
+    timeout: 10000

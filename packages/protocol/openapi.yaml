@@ -1374,6 +1374,113 @@ paths:
         "204": { description: Message pin is absent. }
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
+  # Saved messages («Важные»): private to the reader, unlike chat pins.
+  /api/v1/messages/{message_id}/saved:
+    put:
+      operationId: saveMessage
+      description: >-
+        Saves a message for the current person only. Any member who can read
+        the message may save it; nobody else learns about it. Realtime
+        message.saved goes to the person's own sessions only. At most 5000
+        readable saves per person: over it the reply is 409
+        saved_limit_reached and nothing is removed; saves hidden by lost
+        access do not count. All rows of a person, hidden ones included, are
+        capped at three times the limit (409 saved_storage_full).
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/MessageId" }
+      responses:
+        "200":
+          description: The message was already saved (idempotent replay).
+          content:
+            application/json:
+              { schema: { $ref: "#/components/schemas/SavedMessageState" } }
+        "201":
+          description: Message saved.
+          content:
+            application/json:
+              { schema: { $ref: "#/components/schemas/SavedMessageState" } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: unsaveMessage
+      description: Removes the message from the person's saved messages, even after access to its chat is lost.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/MessageId" }
+      responses:
+        "204": { description: The message is not saved. }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  /api/v1/saved-messages:
+    get:
+      operationId: listSavedMessages
+      description: >-
+        The person's saved messages across chats, newest save first. Only
+        messages the person can still read are returned: saves in chats they
+        left, chats that were deleted and deleted messages are skipped.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: chat_id, in: query, schema: { type: string, format: uuid } }
+        - {
+            name: cursor,
+            in: query,
+            description: Opaque next_cursor of the previous page.,
+            schema: { type: string, maxLength: 200 },
+          }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 100, default: 50 },
+          }
+      responses:
+        "200":
+          description: One page of saved messages; next_cursor continues it.
+          content:
+            application/json:
+              { schema: { $ref: "#/components/schemas/SavedMessagePage" } }
+        "422": { $ref: "#/components/responses/Error" }
+  /api/v1/saved-messages/chats:
+    get:
+      operationId: listSavedMessageChats
+      description: >-
+        Chats that hold the person's readable saves, with how many each, most
+        first: the chat filters of «Important» regardless of loaded pages.
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Chats with readable saves.
+          content:
+            application/json:
+              {
+                schema: { $ref: "#/components/schemas/SavedMessageChatCounts" },
+              }
+  /api/v1/saved-messages/ids:
+    get:
+      operationId: listSavedMessageIds
+      description: >-
+        Identifiers of the person's saved messages in one chat, for the star
+        in the feed. Kept apart from Message so the feed stays the same for
+        every reader.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - {
+            name: chat_id,
+            in: query,
+            required: true,
+            schema: { type: string, format: uuid },
+          }
+      responses:
+        "200":
+          description: Saved message identifiers in the chat.
+          content:
+            application/json:
+              { schema: { $ref: "#/components/schemas/SavedMessageIds" } }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
   /api/v1/messages/{message_id}/forward:
     post:
       operationId: forwardMessage
@@ -3971,6 +4078,8 @@ components:
         - password_change_required
         - push_unavailable
         - rate_limited
+        - saved_limit_reached
+        - saved_storage_full
         - scheduled_message_closed
         - scheduled_message_not_found
         - scheduled_message_not_retryable
@@ -7350,6 +7459,75 @@ components:
       properties:
         pins:
           { type: array, items: { $ref: "#/components/schemas/MessagePin" } }
+    # Saved messages («Важные»).
+    SavedMessageState:
+      type: object
+      additionalProperties: false
+      required: [message_id, chat_id, saved_at]
+      properties:
+        message_id: { type: string, format: uuid }
+        chat_id: { type: string, format: uuid }
+        saved_at: { type: string, format: date-time }
+    SavedMessageAuthor:
+      type: object
+      additionalProperties: false
+      required: [actor_id, display_name, type, avatar_version]
+      properties:
+        actor_id: { type: string, format: uuid }
+        display_name: { type: string }
+        type: { type: string, enum: [user, agent] }
+        avatar_version: { type: integer, format: int64, minimum: 0 }
+    SavedMessageChat:
+      type: object
+      additionalProperties: false
+      required: [id, kind, display_name]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [direct, group, channel] }
+        display_name: { type: string }
+    SavedMessage:
+      type: object
+      additionalProperties: false
+      required: [saved_at, message, author, chat]
+      properties:
+        saved_at: { type: string, format: date-time }
+        message: { $ref: "#/components/schemas/Message" }
+        author: { $ref: "#/components/schemas/SavedMessageAuthor" }
+        chat: { $ref: "#/components/schemas/SavedMessageChat" }
+    SavedMessagePage:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items:
+          { type: array, items: { $ref: "#/components/schemas/SavedMessage" } }
+        next_cursor:
+          type: [string, "null"]
+          description: Opaque; pass as cursor to read older saves.
+    SavedMessageChatCount:
+      type: object
+      additionalProperties: false
+      required: [chat, count]
+      properties:
+        chat: { $ref: "#/components/schemas/SavedMessageChat" }
+        count: { type: integer, minimum: 1 }
+    SavedMessageChatCounts:
+      type: object
+      additionalProperties: false
+      required: [chats]
+      properties:
+        chats:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/SavedMessageChatCount" },
+          }
+    SavedMessageIds:
+      type: object
+      additionalProperties: false
+      required: [message_ids]
+      properties:
+        message_ids:
+          { type: array, items: { type: string, format: uuid } }
     ThreadFollow:
       type: object
       additionalProperties: false

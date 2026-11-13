@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   MessengerAPI,
   type PublicBranding,
@@ -9,6 +10,8 @@ import {
 import { AvatarProvider } from "./ui";
 import { BrowserSessionCoordinator } from "./session";
 import { messageOf } from "./errors";
+import { claimSessionCache } from "./sessionCache";
+import { claimClientStorage } from "./persistence";
 import { setTheme } from "./theme";
 import { apiURL, applyPublicBranding } from "./lib/branding";
 import {
@@ -47,7 +50,23 @@ export function App() {
     [sessions],
   );
   const [screen, setScreen] = useState<Screen>("loading");
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUserState] = useState<User | null>(null);
+  const queryClient = useQueryClient();
+  const cacheOwner = useRef<string | null>(null);
+  // Every change of the signed-in person empties the request cache first.
+  const setUser = useCallback(
+    (next: User | null) => {
+      const owner = next?.id ?? null;
+      if (owner !== cacheOwner.current) void claimClientStorage(owner);
+      cacheOwner.current = claimSessionCache(
+        queryClient,
+        cacheOwner.current,
+        owner,
+      );
+      setUserState(next);
+    },
+    [queryClient],
+  );
   const [error, setError] = useState("");
   const [branding, setBranding] = useState<PublicBranding | null>(null);
 
@@ -78,7 +97,7 @@ export function App() {
   const signedOut = useCallback(() => {
     setUser(null);
     setScreen("login");
-  }, []);
+  }, [setUser]);
   const navigateTo = useCallback(
     (to: string) => void navigate({ to }),
     [navigate],
@@ -98,7 +117,7 @@ export function App() {
       }
     });
     return unsubscribe;
-  }, [api, sessions, signedOut]);
+  }, [api, sessions, setUser, signedOut]);
 
   useEffect(() => {
     if (initialized.current) return;
@@ -131,7 +150,7 @@ export function App() {
         setError(messageOf(cause));
         setScreen("login");
       });
-  }, [api, initialPath, navigate]);
+  }, [api, initialPath, navigate, setUser]);
 
   const authenticated = async (session: TokenResponse) => {
     sessions.publishTokens(session);
@@ -187,8 +206,11 @@ export function App() {
       />
     );
   return (
-    <AvatarProvider api={api}>
+    // A new person gets a new messenger: store, outbox and realtime state
+    // are created per person, never carried over from the previous one.
+    <AvatarProvider key={user.id} api={api}>
       <Messenger
+        key={user.id}
         api={api}
         user={user}
         path={path}

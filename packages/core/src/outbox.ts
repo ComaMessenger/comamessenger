@@ -22,7 +22,19 @@ export class Outbox {
       retrying(clientMsgID: string): void;
       failed(clientMsgID: string, code: string): void;
     },
+    /**
+     * The person whose messages these are. Sending stops as soon as the API
+     * holds someone else's token: a queued message is never sent on behalf
+     * of the next person signed in on the device.
+     */
+    private readonly ownerID?: string,
   ) {}
+  private ownerSignedIn(): boolean {
+    return (
+      Boolean(this.api.token()) &&
+      (this.ownerID === undefined || this.api.tokenOwnerID() === this.ownerID)
+    );
+  }
   async enqueue(chatID: string, input: CreateMessageRequest): Promise<void> {
     const item = {
       chatID,
@@ -55,14 +67,19 @@ export class Outbox {
     await this.flush();
   }
   async flush(): Promise<void> {
-    if (this.running || !this.api.token()) return;
+    if (this.running || !this.ownerSignedIn()) return;
     this.running = true;
     try {
       for (const item of await this.storage.list()) {
+        if (!this.ownerSignedIn()) return;
         try {
           if (item.attempts > 0)
             this.callbacks.retrying(item.input.client_msg_id);
-          const message = await this.api.createMessage(item.chatID, item.input);
+          const message = await this.api.createMessage(
+            item.chatID,
+            item.input,
+            this.ownerID,
+          );
           await this.storage.delete(item.input.client_msg_id);
           this.callbacks.delivered(message);
         } catch (cause) {

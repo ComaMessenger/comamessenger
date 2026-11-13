@@ -1,4 +1,5 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
+import { completeMessage } from "./messageShape";
 import type {
   Chat,
   ClientMessage,
@@ -107,13 +108,19 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
       set({ chats: Object.fromEntries(items.map((item) => [item.id, item])) }),
     replaceMessages: (chatID, items) =>
       set((state) => ({
-        messages: { ...state.messages, [chatID]: uniqueSorted(items) },
+        messages: {
+          ...state.messages,
+          [chatID]: uniqueSorted(items.map((item) => completeMessage(item))),
+        },
       })),
     prependMessages: (chatID, items) =>
       set((state) => ({
         messages: {
           ...state.messages,
-          [chatID]: uniqueSorted([...items, ...(state.messages[chatID] ?? [])]),
+          [chatID]: uniqueSorted([
+            ...items.map((item) => completeMessage(item)),
+            ...(state.messages[chatID] ?? []),
+          ]),
         },
       })),
     optimistic: (message) =>
@@ -172,9 +179,14 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
                 item.id === incoming.id ||
                 item.client_msg_id === incoming.client_msg_id,
             );
+            // A stub stands for a frame too large to send; any other frame
+            // may still be a partial message, so keep what is already known.
             const delivered: ClientMessage = stub
               ? truncatedMessage(stub, byID >= 0 ? current[byID] : undefined)
-              : { ...incoming, delivery: "sent" };
+              : completeMessage(
+                  { ...incoming, delivery: "sent" },
+                  byID >= 0 ? current[byID] : undefined,
+                );
             const next: ClientMessage[] =
               byID >= 0
                 ? current.map((item, index) =>

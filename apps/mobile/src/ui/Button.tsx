@@ -56,7 +56,7 @@ export function Button({
         <ActivityIndicator color={foreground} />
       ) : (
         <Text
-          weight="medium"
+          weight="semibold"
           size={16}
           style={{ color: foreground, textAlign: "center" }}
         >
@@ -69,8 +69,8 @@ export function Button({
 
 const styles = StyleSheet.create({
   button: {
-    minHeight: 48,
-    borderRadius: radius.md,
+    minHeight: 46,
+    borderRadius: radius.button,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",

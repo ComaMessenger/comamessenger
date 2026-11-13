@@ -60,7 +60,7 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView
-      edges={["top", "bottom"]}
+      edges={["bottom"]}
       style={[styles.screen, { backgroundColor: theme.canvas }]}
     >
       <ScreenHeader title={t("profile")} />

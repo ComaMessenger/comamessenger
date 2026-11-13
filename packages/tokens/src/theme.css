@@ -14,7 +14,12 @@
   --coma-radius-sm: 6px;
   --coma-radius-md: 8px;
   --coma-radius-lg: 12px;
+  --coma-radius-tile: 10px;
+  --coma-radius-button: 14px;
   --coma-radius-xl: 16px;
+  --coma-radius-bubble: 18px;
+  --coma-radius-field: 20px;
+  --coma-radius-sheet: 24px;
   --coma-control-sm: 28px;
   --coma-control-md: 36px;
   --coma-control-lg: 44px;
@@ -47,6 +52,10 @@
   --coma-primary-soft: #edf3fb;
   --coma-primary-disabled: #9daeca;
   --coma-on-primary: #ffffff;
+  --coma-own: #174586;
+  --coma-on-own: #ffffff;
+  --coma-own-muted: rgba(255, 255, 255, 0.72);
+  --coma-own-track: rgba(255, 255, 255, 0.34);
   --coma-action: #252528;
   --coma-action-hover: #3a3a40;
   --coma-on-action: #ffffff;
@@ -142,6 +151,10 @@
   --coma-primary-soft: #243349;
   --coma-primary-disabled: #4b5b72;
   --coma-on-primary: #172132;
+  --coma-own: #2c4a78;
+  --coma-on-own: #f3f6fb;
+  --coma-own-muted: rgba(243, 246, 251, 0.7);
+  --coma-own-track: rgba(243, 246, 251, 0.3);
   --coma-action: #eeeeef;
   --coma-action-hover: #ffffff;
   --coma-on-action: #222225;

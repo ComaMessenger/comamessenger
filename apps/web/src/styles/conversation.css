@@ -1034,6 +1034,31 @@
     border: 0;
   }
 }
+/* Marks by the time: a pin for the chat's pins, a star for the reader's own
+   saves («Важные»). */
+.message__marks {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  align-self: center;
+}
+.message__marks--gutter {
+  align-self: start;
+  margin-top: 4px;
+}
+.message__saved,
+.message__pinned {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+.message__saved {
+  color: var(--coma-warning);
+  fill: currentColor;
+}
+.message__pinned {
+  color: var(--coma-muted);
+}
 /* Voice message: round play button, waveform with progress, length and,
    while listening, the speed switch (design/prototypes/messenger-mobile). */
 .voice-message {

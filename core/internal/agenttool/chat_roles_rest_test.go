@@ -34,6 +34,13 @@ func TestChatRolesHoldOutsideTheExecutor(t *testing.T) {
 	if _, err := w.messages.Get(ctx, w.agentUser, w.groupMessage); !errors.Is(err, message.ErrForbidden) {
 		t.Fatalf("get of a person's message in a write-only chat error = %v", err)
 	}
+	// A context window shows the neighbours, so it is closed like the feed.
+	if _, err := w.messages.Context(ctx, w.agentUser, w.groupMessage, 3); !errors.Is(err, message.ErrForbidden) {
+		t.Fatalf("context in a write-only chat error = %v", err)
+	}
+	if _, err := w.messages.Context(ctx, owner, w.groupMessage, 3); err != nil {
+		t.Fatalf("context for a person: %v", err)
+	}
 	if _, err := w.messages.ListReactions(ctx, w.agentUser, w.groupMessage); !errors.Is(err, message.ErrForbidden) {
 		t.Fatalf("reactions of a person's message in a write-only chat error = %v", err)
 	}

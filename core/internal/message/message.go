@@ -126,6 +126,8 @@ type Service struct {
 	actionHook   ActionHook
 	decider      ConfirmationDecider
 	directGuard  DirectGuard
+	// savedLimit overrides DefaultSavedLimit; tests set it.
+	savedLimit int
 }
 
 func NewService(pool *pgxpool.Pool, maxBodyBytes, maxPageSize int, afterCommit func(orgID string, highWatermark int64)) *Service {
@@ -484,6 +486,14 @@ func (s *Service) Context(ctx context.Context, user identity.User, messageID str
 	if _, _, err = requireMembership(ctx, tx, user, chatID); err != nil {
 		return Window{}, err
 	}
+	// As in List: an agent does not read the history of a chat it only
+	// writes to. A window shows neighbours too, so its own message is no
+	// exception here (unlike Get).
+	if _, writeOnly, err := agentChatRole(ctx, tx, user.OrgID, user.ActorID, chatID); err != nil {
+		return Window{}, err
+	} else if writeOnly {
+		return Window{}, ErrForbidden
+	}
 	rows, err := tx.Query(ctx, `SELECT id,chat_id,actor_id,client_msg_id,type,body,body_format,reply_to_id,thread_root_id,version,created_seq,created_at,edited_at,deleted_at,forwarded_from,mentioned_actor_ids,blocks FROM messages WHERE org_id=$1 AND chat_id=$2 AND ((thread_root_id IS NULL AND $3::uuid IS NULL) OR thread_root_id=$3 OR id=$4) ORDER BY abs(created_seq-$5) LIMIT $6`, user.OrgID, chatID, threadRootID, messageID, targetSeq, limit)
 	if err != nil {
 		return Window{}, fmt.Errorf("load message context: %w", err)
@@ -650,6 +660,11 @@ func (s *Service) Delete(ctx context.Context, user identity.User, messageID stri
 	}
 	if err := insertEvent(ctx, tx, user, result.ChatID, result.ID, seq, "message.deleted"); err != nil {
 		return Message{}, err
+	}
+	// A deleted message has nothing left to keep: drop everyone's saves of it.
+	// Savers learn about it from message.deleted, which every member gets.
+	if _, err := tx.Exec(ctx, `DELETE FROM saved_messages WHERE org_id = $1 AND message_id = $2`, user.OrgID, result.ID); err != nil {
+		return Message{}, fmt.Errorf("drop saves of deleted message: %w", err)
 	}
 	deleted := []Message{result}
 	if err := hydrateFiles(ctx, tx, user.OrgID, deleted); err != nil {

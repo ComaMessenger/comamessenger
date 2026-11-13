@@ -60,14 +60,22 @@ export function schedulePresets(now: Date): SchedulePreset[] {
   return candidates.filter((preset) => isSchedulable(preset.at, now));
 }
 
+export type ScheduleProblem = "past" | "tooFar";
+
+/**
+ * Why the server would refuse this send_at: in the past or less than a
+ * minute away, or more than a year ahead. Null when it is fine.
+ */
+export function scheduleProblem(at: Date, now: Date): ScheduleProblem | null {
+  const lead = at.getTime() - now.getTime();
+  if (!Number.isFinite(lead) || lead < scheduleMinimumLeadMs) return "past";
+  if (lead > scheduleHorizonMs) return "tooFar";
+  return null;
+}
+
 /** True when the time may be sent to the server as send_at. */
 export function isSchedulable(at: Date, now: Date): boolean {
-  const lead = at.getTime() - now.getTime();
-  return (
-    Number.isFinite(lead) &&
-    lead >= scheduleMinimumLeadMs &&
-    lead <= scheduleHorizonMs
-  );
+  return scheduleProblem(at, now) === null;
 }
 
 /** "YYYY-MM-DDTHH:MM" in local time, the value of <input type=datetime-local>. */
@@ -247,6 +255,40 @@ export function isScheduledEvent(type: string): type is ScheduledEventType {
   return type.startsWith("scheduled_message.");
 }
 
+const eventStatuses = ["pending", "sent", "failed", "deleted"] as const;
+
+/**
+ * `data` of a scheduled_message.* event when it has the expected shape, null
+ * otherwise: the event log is replayed to new devices and may come from a
+ * newer server, so it is checked rather than trusted. A failure reason the
+ * client does not know stays as it is; failureReasonKey words it.
+ */
+export function parseScheduledEvent(
+  data: unknown,
+): ScheduledMessageEvent | null {
+  if (!data || typeof data !== "object") return null;
+  const value = data as Record<string, unknown>;
+  if (
+    typeof value.id !== "string" ||
+    typeof value.chat_id !== "string" ||
+    typeof value.version !== "number" ||
+    typeof value.send_at !== "string" ||
+    !eventStatuses.includes(value.status as (typeof eventStatuses)[number])
+  )
+    return null;
+  return {
+    id: value.id,
+    chat_id: value.chat_id,
+    status: value.status as ScheduledMessageEvent["status"],
+    version: value.version,
+    send_at: value.send_at,
+    failure_reason:
+      typeof value.failure_reason === "string"
+        ? (value.failure_reason as ScheduledMessageFailureReason)
+        : null,
+  };
+}
+
 export type ScheduledReduction = {
   items: ScheduledMessage[];
   /** Record to read again: the event carries no text. */
@@ -329,4 +371,74 @@ export function notRetryableReason(cause: unknown): string | null {
     return null;
   const reason = cause.details.reason;
   return typeof reason === "string" ? reason : "";
+}
+
+export type ScheduledErrorKind =
+  /** Changed elsewhere meanwhile: reload and look again. */
+  | "conflict"
+  /** Already sent: it can no longer be changed. */
+  | "closed"
+  /** Deleted on another device. */
+  | "gone"
+  /** A failed message whose cause still holds; see notRetryableReason. */
+  | "notRetryable"
+  | "limit"
+  | "tooLarge"
+  | "invalid"
+  | "forbidden"
+  | "rateLimited"
+  /** No answer from the server: the request may or may not have arrived. */
+  | "network"
+  | "other";
+
+/** What went wrong with a request about a scheduled message. */
+export function scheduledErrorKind(error: unknown): ScheduledErrorKind {
+  if (!(error instanceof APIError)) return "network";
+  switch (error.code) {
+    case "version_conflict":
+      return "conflict";
+    case "scheduled_message_closed":
+      return "closed";
+    case "scheduled_message_not_found":
+      return "gone";
+    case "scheduled_message_not_retryable":
+      return "notRetryable";
+    case "limit_reached":
+      return "limit";
+    case "payload_too_large":
+      return "tooLarge";
+    case "validation_failed":
+      return "invalid";
+    case "rate_limited":
+      return "rateLimited";
+  }
+  if (error.status === 404) return "gone";
+  if (error.status === 403) return "forbidden";
+  if (error.status === 413) return "tooLarge";
+  if (error.status === 422) return "invalid";
+  if (error.status === 429) return "rateLimited";
+  return "other";
+}
+
+/**
+ * Everything a request to schedule depends on. A retry with the same
+ * signature reuses its client_msg_id, so the server returns the record it
+ * already made instead of a second one.
+ */
+export function scheduleRequestSignature(request: {
+  body: string;
+  send_at: string;
+  file_ids?: readonly string[];
+  reply_to_id?: string;
+  thread_root_id?: string;
+  silent?: boolean;
+}): string {
+  return JSON.stringify([
+    request.body,
+    request.send_at,
+    [...(request.file_ids ?? [])].sort(),
+    request.reply_to_id ?? null,
+    request.thread_root_id ?? null,
+    Boolean(request.silent),
+  ]);
 }

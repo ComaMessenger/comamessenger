@@ -7,7 +7,6 @@ import {
   StyleSheet,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -19,6 +18,7 @@ import { useSignedIn } from "@/session/SessionProvider";
 import { useTheme } from "@/lib/theme";
 import { chatTitle } from "@/chats/ChatRow";
 import { Notice } from "@/ui/Notice";
+import { TabHeader } from "@/ui/TabHeader";
 import { Text } from "@/ui/Text";
 
 export default function ThreadsScreen() {
@@ -50,18 +50,8 @@ export default function ThreadsScreen() {
   );
 
   return (
-    <SafeAreaView
-      edges={["top"]}
-      style={[styles.screen, { backgroundColor: theme.surface }]}
-    >
-      <Text
-        accessibilityRole="header"
-        weight="semibold"
-        size={22}
-        style={[styles.title, { borderBottomColor: theme.border }]}
-      >
-        {t("tabThreads")}
-      </Text>
+    <View style={[styles.screen, { backgroundColor: theme.surface }]}>
+      <TabHeader title={t("tabThreads")} />
       <FlatList
         testID="thread-list"
         data={threads}
@@ -155,18 +145,12 @@ export default function ThreadsScreen() {
           )
         }
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  title: {
-    paddingHorizontal: spacing[4],
-    paddingTop: spacing[4],
-    paddingBottom: spacing[4],
-    borderBottomWidth: 1,
-  },
   row: {
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],

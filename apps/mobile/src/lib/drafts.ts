@@ -1,6 +1,18 @@
 import { APIError, type Draft, type MessengerAPI } from "@comamessenger/core";
 import { draftStorage } from "./database";
 
+const listeners = new Set<() => void>();
+
+/** Called after any local draft changes; returns the unsubscribe function. */
+export function subscribeDrafts(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+function draftsChanged() {
+  for (const listener of listeners) listener();
+}
+
 /** Server drafts from other devices replace local copies on sign-in. */
 export async function hydrateDrafts(drafts: Draft[]): Promise<void> {
   for (const draft of drafts)
@@ -8,6 +20,7 @@ export async function hydrateDrafts(drafts: Draft[]): Promise<void> {
       body: draft.body,
       version: draft.version,
     });
+  draftsChanged();
 }
 
 /**
@@ -25,6 +38,7 @@ export async function syncDraft(
     body,
     version: local.version,
   });
+  if (local.body !== body) draftsChanged();
   if (!body) {
     await api
       .deleteDraft(chatID, threadRootID ?? undefined)

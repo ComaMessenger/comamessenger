@@ -1,5 +1,6 @@
 import type {
   Chat,
+  ChatFolder,
   ChatMember,
   ClientMessage,
   UnreadSnapshot,
@@ -14,6 +15,8 @@ export type CachedShell = {
   chats: Chat[];
   unread: UnreadSnapshot;
   pinnedChatIDs: string[];
+  /** Missing in shells saved by earlier versions. */
+  folders?: ChatFolder[];
 };
 
 export function cachedUser() {

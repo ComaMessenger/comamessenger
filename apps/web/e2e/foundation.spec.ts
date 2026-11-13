@@ -141,6 +141,12 @@ async function mockMessenger(
     passwordRecoveryAvailable?: boolean;
     signedOut?: boolean;
     reactions?: Array<Record<string, unknown>>;
+    /** Messages the reader saved to «Important» (private, not pins). */
+    saved?: string[];
+    /** Messages pinned in the chat (seen by every member). */
+    pinned?: string[];
+    /** Who signs in through the login form (defaults to the same person). */
+    loginUser?: Partial<typeof user>;
     threads?: Array<Record<string, unknown>>;
     userPatch?: Partial<typeof user>;
     organizationPatch?: Record<string, unknown>;
@@ -163,6 +169,9 @@ async function mockMessenger(
     passwordRecoveryAvailable = false,
     signedOut = false,
     reactions: suppliedReactions = [],
+    saved: suppliedSaved = [],
+    loginUser = {},
+    pinned = [],
     threads = [],
     userPatch = {},
     organizationPatch = {},
@@ -177,6 +186,8 @@ async function mockMessenger(
   const runtimeChat = { ...chat, ...chatPatch };
   let runtimeReactions = [...suppliedReactions];
   const reactionMutations: string[] = [];
+  let runtimeSaved = [...suppliedSaved];
+  const savedMutations: string[] = [];
   const statusMutations: Array<Record<string, unknown>> = [];
   let chatRequests = 0;
   let remainingSendFailures = sendFailures;
@@ -354,6 +365,16 @@ async function mockMessenger(
           access_expires_at: "2026-08-20T00:00:00Z",
           user: runtimeUser,
         };
+    } else if (path.endsWith("/auth/logout")) {
+      status = 204;
+      body = undefined;
+    } else if (path.endsWith("/auth/login")) {
+      runtimeUser = { ...runtimeUser, ...loginUser };
+      body = {
+        access_token: "next",
+        access_expires_at: "2026-08-20T00:00:00Z",
+        user: runtimeUser,
+      };
     } else if (path.endsWith("/auth/password/forgot")) {
       status = 202;
       body = undefined;
@@ -362,7 +383,7 @@ async function mockMessenger(
       body = undefined;
     } else if (path.endsWith("/agents/recipes")) body = agentRecipes;
     else if (path.endsWith("/agents")) body = [];
-    else if (path.endsWith("/chats")) {
+    else if (path.endsWith("/chats") && !path.includes("/saved-messages/")) {
       chatRequests += 1;
       body = { chats: [runtimeChat] };
     } else if (path.endsWith("/me/email/change")) {
@@ -641,7 +662,14 @@ async function mockMessenger(
       };
     else if (path.endsWith("/threads"))
       body = { threads, next_before_seq: null };
-    else if (path.endsWith(`/chats/${chat.id}/pins`)) body = { pins: [] };
+    else if (path.endsWith(`/chats/${chat.id}/pins`))
+      body = {
+        pins: pinned.map((id) => ({
+          message_id: id,
+          pinned_by: lev.actor_id,
+          pinned_at: "2026-08-19T06:31:00Z",
+        })),
+      };
     else if (path.endsWith("/unread"))
       body = {
         chats: [
@@ -784,7 +812,59 @@ async function mockMessenger(
           created_at: message.created_at,
         },
       };
-    } else if (/\/messages\/[^/]+\/reactions\/.+/.test(path)) {
+    } else if (/\/messages\/[^/]+\/saved$/.test(path)) {
+      const id = path.split("/").at(-2) ?? "";
+      savedMutations.push(`${route.request().method()} ${id}`);
+      runtimeSaved = runtimeSaved.filter((item) => item !== id);
+      if (route.request().method() === "DELETE") {
+        status = 204;
+        body = undefined;
+      } else {
+        runtimeSaved.unshift(id);
+        status = 201;
+        body = {
+          message_id: id,
+          chat_id: chat.id,
+          saved_at: "2026-08-19T07:00:00Z",
+        };
+      }
+    } else if (path.endsWith("/saved-messages/ids"))
+      body = { message_ids: runtimeSaved };
+    else if (path.endsWith("/saved-messages"))
+      body = {
+        items: runtimeSaved.map((id) => ({
+          saved_at: "2026-08-19T07:00:00Z",
+          message: { ...message, id },
+          author: {
+            actor_id: lev.actor_id,
+            display_name: lev.display_name,
+            type: "user",
+            avatar_version: 0,
+          },
+          chat: {
+            id: chat.id,
+            kind: runtimeChat.kind,
+            display_name: runtimeChat.name,
+          },
+        })),
+        next_cursor: null,
+      };
+    else if (path.endsWith("/saved-messages/chats"))
+      body = {
+        chats: runtimeSaved.length
+          ? [
+              {
+                chat: {
+                  id: chat.id,
+                  kind: runtimeChat.kind,
+                  display_name: runtimeChat.name,
+                },
+                count: runtimeSaved.length,
+              },
+            ]
+          : [],
+      };
+    else if (/\/messages\/[^/]+\/reactions\/.+/.test(path)) {
       const emoji = decodeURIComponent(path.split("/").at(-1) ?? "");
       reactionMutations.push(`${route.request().method()} ${emoji}`);
       if (route.request().method() === "DELETE") {
@@ -817,6 +897,7 @@ async function mockMessenger(
     refreshRequests: () => refreshRequests,
     chatRequests: () => chatRequests,
     reactionMutations,
+    savedMutations,
     statusMutations,
     emitEvent: async (
       frame: Record<string, unknown>,
@@ -1646,6 +1727,9 @@ test("chat and message actions stay contextual", async ({ page }) => {
   await expect(
     page.getByRole("menuitem", { name: "Копировать ссылку" }),
   ).toBeVisible();
+  // Saving is for everyone, pinning for chat admins: both are offered here.
+  await expect(page.getByRole("menuitem", { name: "В важные" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Закрепить" })).toBeVisible();
   const [menuBox, actionsBox] = await Promise.all([
     messageMenu.boundingBox(),
     messageActions.boundingBox(),
@@ -1711,6 +1795,178 @@ test("chat and message actions stay contextual", async ({ page }) => {
     expect(box!.height).toBe(viewport!.height);
   }
   await forward.getByRole("button", { name: "Закрыть" }).click();
+});
+
+test("any member saves a message to Important; pinning stays with admins", async ({
+  page,
+}) => {
+  const runtime = await mockMessenger(page, {
+    chatPatch: { kind: "group", role: "member" },
+    unread: { last_read_seq: 3, unread_count: 0, mention_count: 0 },
+    pinned: [message.id],
+  });
+  await page.goto(`/chat/${chat.id}`);
+  const messageRow = page.locator("article.message").first();
+  await expect(messageRow).toBeVisible();
+  // The chat's pin is marked for everyone; the star waits for the reader.
+  const pinMark = messageRow.getByRole("img", { name: "Закреплено в чате" });
+  await expect(pinMark).toBeVisible();
+  await expect(messageRow.locator(".message__saved")).toHaveCount(0);
+  await messageRow.hover();
+  await page.getByRole("button", { name: "Действия с сообщением" }).click();
+  await expect(page.getByRole("menuitem", { name: "Закрепить" })).toHaveCount(
+    0,
+  );
+  await page.getByRole("menuitem", { name: "В важные" }).click();
+  await expect
+    .poll(() => runtime.savedMutations.at(-1))
+    .toBe(`PUT ${message.id}`);
+  await expect(messageRow.locator(".message__saved")).toBeVisible();
+  // Both marks side by side: pinned in the chat and saved by me.
+  await expect(pinMark).toBeVisible();
+  await expect(messageRow.getByRole("img", { name: "В важных" })).toBeVisible();
+  await expect(
+    page.getByText("Добавлено в «Важные» — видно только вам"),
+  ).toBeVisible();
+
+  await page.goto("/important");
+  await expect(page.getByRole("heading", { name: "Важные" })).toBeVisible();
+  const card = page.locator(".directory-row--important").first();
+  await expect(card).toContainText("Добро пожаловать в Coma");
+  await expect(card).toContainText(lev.display_name);
+  await expect(page.locator(".directory-list")).toHaveScreenshot(
+    "important-saved.png",
+    {
+      animations: "disabled",
+    },
+  );
+  if (test.info().project.name === "desktop") {
+    const detail = page.locator(".directory__detail");
+    await detail.getByRole("button", { name: "Убрать из важных" }).click();
+    await expect
+      .poll(() => runtime.savedMutations.at(-1))
+      .toBe(`DELETE ${message.id}`);
+    await expect(page.getByText("Нет важных сообщений")).toBeVisible();
+  } else {
+    await card.click();
+    await expect(page).toHaveURL(
+      new RegExp(`/chat/${chat.id}\\?message=${message.id}`),
+    );
+  }
+});
+
+test("over the limit a save explains what to do", async ({ page }) => {
+  const runtime = await mockMessenger(page, {
+    chatPatch: { kind: "group", role: "member" },
+    unread: { last_read_seq: 3, unread_count: 0, mention_count: 0 },
+  });
+  await page.route("**/api/v1/messages/*/saved", (route) =>
+    route.fulfill({
+      status: 409,
+      contentType: "application/json",
+      body: JSON.stringify({
+        code: "saved_limit_reached",
+        message: "The saved messages limit was reached.",
+      }),
+    }),
+  );
+  await page.goto(`/chat/${chat.id}`);
+  const messageRow = page.locator("article.message").first();
+  await messageRow.hover();
+  await page.getByRole("button", { name: "Действия с сообщением" }).click();
+  await page.getByRole("menuitem", { name: "В важные" }).click();
+  await expect(
+    page.getByText("Достигнут лимит сохранённых — уберите ненужные"),
+  ).toBeVisible();
+  await expect(messageRow.locator(".message__saved")).toHaveCount(0);
+  expect(runtime.savedMutations).toEqual([]);
+});
+
+test("another person signing in from a second tab replaces the first one's messenger", async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === "phone", "the profile button is desktop-only");
+  await mockMessenger(page, { saved: [message.id] });
+  await page.goto(`/chat/${chat.id}`);
+  await expect(page.getByText("Добро пожаловать в Coma", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: user.display_name })).toBeVisible();
+
+  // Boris's data is held on the server for the rest of the test.
+  const held = new Promise<void>(() => undefined);
+  await page.route("**/api/v1/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (/\/(chats|messages|unread|saved-messages|threads|drafts)/.test(path)) await held;
+    await route.fallback();
+  });
+  // A second tab of the same browser signs Boris in and tells every tab.
+  const other = await page.context().newPage();
+  await other.route("**/coma-blank", (route) =>
+    route.fulfill({ status: 200, contentType: "text/html", body: "<!doctype html><title>blank</title>" }),
+  );
+  await other.goto("/coma-blank");
+  await other.evaluate((boris) => {
+    const channel = new BroadcastChannel("coma-session");
+    channel.postMessage({
+      type: "tokens",
+      tokens: { access_token: "boris-token", access_expires_at: "2026-08-20T00:00:00Z", user: boris },
+    });
+    channel.close();
+  }, { ...user, id: "00000000-0000-4000-8000-000000000002", display_name: "Борис", handle: "boris" });
+
+  await expect(page.getByRole("button", { name: "Борис" })).toBeVisible();
+  // Nothing of Anna's survives in the new messenger while Boris's data loads.
+  await expect(page.getByText("Добро пожаловать в Coma", { exact: true })).toHaveCount(0);
+  await expect(page.locator("article.message")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: user.display_name })).toHaveCount(0);
+  await other.close();
+});
+
+test("the next person in the same tab never sees the previous one's Important", async ({
+  page,
+}) => {
+  test.skip(test.info().project.name === "phone", "the workspace menu is desktop-only");
+  await mockMessenger(page, {
+    saved: [message.id],
+    loginUser: {
+      id: "00000000-0000-4000-8000-000000000002",
+      email: "boris@example.com",
+      display_name: "Борис",
+    },
+  });
+  await page.goto("/important");
+  const card = page.locator(".directory-row--important");
+  await expect(card).toContainText("Добро пожаловать в Coma");
+
+  // Boris's saves are held on the server until the end of the test.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  const savedRequests: string[] = [];
+  await page.route("**/api/v1/saved-messages**", async (route) => {
+    savedRequests.push(route.request().url());
+    await held;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(
+        route.request().url().includes("/chats")
+          ? { chats: [] }
+          : { items: [], next_cursor: null },
+      ),
+    });
+  });
+  await page.getByRole("button", { name: "Test space" }).click();
+  await page.getByRole("menuitem", { name: "Выйти" }).click();
+  await page.getByLabel("Почта").fill("boris@example.com");
+  await page.getByLabel("Пароль", { exact: true }).fill("secret password");
+  await page.getByRole("button", { name: "Войти" }).click();
+  await page.getByRole("button", { name: "Важные", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Важные" })).toBeVisible();
+  await expect.poll(() => savedRequests.length).toBeGreaterThan(0);
+  // Before the server answers for Boris, nothing of Anna's is on screen.
+  await expect(card).toHaveCount(0);
+  await expect(page.getByText("Добро пожаловать в Coma")).toHaveCount(0);
+  release();
+  await expect(page.getByText("Нет важных сообщений")).toBeVisible();
 });
 
 test("a thread opens beside an unchanged main feed", async ({ page }) => {

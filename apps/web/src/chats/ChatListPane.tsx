@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FolderPlus, MessageCircle, Plus, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
-import type { Chat } from "@comamessenger/core";
+import { toggleChatInFolder, type Chat } from "@comamessenger/core";
 import {
   Button,
   Chip,
@@ -115,18 +115,7 @@ export function ChatListPane({
     writeChatFilterToURL(next);
   }
   async function toggleFolder(folderID: string, chatID: string) {
-    await saveFolders(
-      folders.map((folder) =>
-        folder.id !== folderID
-          ? folder
-          : {
-              ...folder,
-              chat_ids: folder.chat_ids.includes(chatID)
-                ? folder.chat_ids.filter((id) => id !== chatID)
-                : [...folder.chat_ids, chatID],
-            },
-      ),
-    );
+    await saveFolders(toggleChatInFolder(folders, folderID, chatID));
   }
   async function leave() {
     if (!leaving) return;

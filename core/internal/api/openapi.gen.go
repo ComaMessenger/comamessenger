@@ -1637,7 +1637,9 @@ const (
 	MessageCreated          DurableEventTypeV1 = "message.created"
 	MessageDeleted          DurableEventTypeV1 = "message.deleted"
 	MessagePinned           DurableEventTypeV1 = "message.pinned"
+	MessageSaved            DurableEventTypeV1 = "message.saved"
 	MessageUnpinned         DurableEventTypeV1 = "message.unpinned"
+	MessageUnsaved          DurableEventTypeV1 = "message.unsaved"
 	MessageUpdated          DurableEventTypeV1 = "message.updated"
 	ReactionAdded           DurableEventTypeV1 = "reaction.added"
 	ReactionRemoved         DurableEventTypeV1 = "reaction.removed"
@@ -1680,7 +1682,11 @@ func (e DurableEventTypeV1) Valid() bool {
 		return true
 	case MessagePinned:
 		return true
+	case MessageSaved:
+		return true
 	case MessageUnpinned:
+		return true
+	case MessageUnsaved:
 		return true
 	case MessageUpdated:
 		return true
@@ -1752,6 +1758,8 @@ const (
 	ErrorCodePushUnavailable              ErrorCode = "push_unavailable"
 	ErrorCodeRateLimited                  ErrorCode = "rate_limited"
 	ErrorCodeReauthenticationFailed       ErrorCode = "reauthentication_failed"
+	ErrorCodeSavedLimitReached            ErrorCode = "saved_limit_reached"
+	ErrorCodeSavedStorageFull             ErrorCode = "saved_storage_full"
 	ErrorCodeScheduledMessageClosed       ErrorCode = "scheduled_message_closed"
 	ErrorCodeScheduledMessageNotFound     ErrorCode = "scheduled_message_not_found"
 	ErrorCodeScheduledMessageNotRetryable ErrorCode = "scheduled_message_not_retryable"
@@ -1856,6 +1864,10 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeRateLimited:
 		return true
 	case ErrorCodeReauthenticationFailed:
+		return true
+	case ErrorCodeSavedLimitReached:
+		return true
+	case ErrorCodeSavedStorageFull:
 		return true
 	case ErrorCodeScheduledMessageClosed:
 		return true
@@ -3161,6 +3173,45 @@ func (e SMTPConfigurationUpdateSecurity) Valid() bool {
 	case SMTPConfigurationUpdateSecurityStarttls:
 		return true
 	case SMTPConfigurationUpdateSecurityTls:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SavedMessageAuthorType.
+const (
+	SavedMessageAuthorTypeAgent SavedMessageAuthorType = "agent"
+	SavedMessageAuthorTypeUser  SavedMessageAuthorType = "user"
+)
+
+// Valid indicates whether the value is a known member of the SavedMessageAuthorType enum.
+func (e SavedMessageAuthorType) Valid() bool {
+	switch e {
+	case SavedMessageAuthorTypeAgent:
+		return true
+	case SavedMessageAuthorTypeUser:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SavedMessageChatKind.
+const (
+	SavedMessageChatKindChannel SavedMessageChatKind = "channel"
+	SavedMessageChatKindDirect  SavedMessageChatKind = "direct"
+	SavedMessageChatKindGroup   SavedMessageChatKind = "group"
+)
+
+// Valid indicates whether the value is a known member of the SavedMessageChatKind enum.
+func (e SavedMessageChatKind) Valid() bool {
+	switch e {
+	case SavedMessageChatKindChannel:
+		return true
+	case SavedMessageChatKindDirect:
+		return true
+	case SavedMessageChatKindGroup:
 		return true
 	default:
 		return false
@@ -6562,6 +6613,66 @@ type SMTPConfigurationUpdate struct {
 // SMTPConfigurationUpdateSecurity defines model for SMTPConfigurationUpdate.Security.
 type SMTPConfigurationUpdateSecurity string
 
+// SavedMessage defines model for SavedMessage.
+type SavedMessage struct {
+	Author  SavedMessageAuthor `json:"author"`
+	Chat    SavedMessageChat   `json:"chat"`
+	Message Message            `json:"message"`
+	SavedAt time.Time          `json:"saved_at"`
+}
+
+// SavedMessageAuthor defines model for SavedMessageAuthor.
+type SavedMessageAuthor struct {
+	ActorId       openapi_types.UUID     `json:"actor_id"`
+	AvatarVersion int64                  `json:"avatar_version"`
+	DisplayName   string                 `json:"display_name"`
+	Type          SavedMessageAuthorType `json:"type"`
+}
+
+// SavedMessageAuthorType defines model for SavedMessageAuthor.Type.
+type SavedMessageAuthorType string
+
+// SavedMessageChat defines model for SavedMessageChat.
+type SavedMessageChat struct {
+	DisplayName string               `json:"display_name"`
+	Id          openapi_types.UUID   `json:"id"`
+	Kind        SavedMessageChatKind `json:"kind"`
+}
+
+// SavedMessageChatKind defines model for SavedMessageChat.Kind.
+type SavedMessageChatKind string
+
+// SavedMessageChatCount defines model for SavedMessageChatCount.
+type SavedMessageChatCount struct {
+	Chat  SavedMessageChat `json:"chat"`
+	Count int              `json:"count"`
+}
+
+// SavedMessageChatCounts defines model for SavedMessageChatCounts.
+type SavedMessageChatCounts struct {
+	Chats []SavedMessageChatCount `json:"chats"`
+}
+
+// SavedMessageIds defines model for SavedMessageIds.
+type SavedMessageIds struct {
+	MessageIds []openapi_types.UUID `json:"message_ids"`
+}
+
+// SavedMessagePage defines model for SavedMessagePage.
+type SavedMessagePage struct {
+	Items []SavedMessage `json:"items"`
+
+	// NextCursor Opaque; pass as cursor to read older saves.
+	NextCursor *string `json:"next_cursor"`
+}
+
+// SavedMessageState defines model for SavedMessageState.
+type SavedMessageState struct {
+	ChatId    openapi_types.UUID `json:"chat_id"`
+	MessageId openapi_types.UUID `json:"message_id"`
+	SavedAt   time.Time          `json:"saved_at"`
+}
+
 // ScheduledMessage A message the current user scheduled. Visible only to its author. After sending, the text, mentions and files are cleared from the record (the message itself carries them) and message_id points to the message. Realtime events about it carry only ScheduledMessageEvent; read the record for its content.
 type ScheduledMessage struct {
 	Body       string                     `json:"body"`
@@ -7348,6 +7459,20 @@ type DeleteBrandingAssetParamsKind string
 
 // PutBrandingAssetParamsKind defines parameters for PutBrandingAsset.
 type PutBrandingAssetParamsKind string
+
+// ListSavedMessagesParams defines parameters for ListSavedMessages.
+type ListSavedMessagesParams struct {
+	ChatId *openapi_types.UUID `form:"chat_id,omitempty" json:"chat_id,omitempty"`
+
+	// Cursor Opaque next_cursor of the previous page.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListSavedMessageIdsParams defines parameters for ListSavedMessageIds.
+type ListSavedMessageIdsParams struct {
+	ChatId openapi_types.UUID `form:"chat_id" json:"chat_id"`
+}
 
 // ListScheduledMessagesParams defines parameters for ListScheduledMessages.
 type ListScheduledMessagesParams struct {

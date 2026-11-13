@@ -1,6 +1,13 @@
-import { useState } from "react";
-import { Alert, Modal, Pressable, StyleSheet, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useState, type ReactNode } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Pressable,
+  StyleSheet,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { FileText, Share2, X } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
@@ -14,14 +21,20 @@ import { openAttachment } from "@/files/open";
 import { useFileSource } from "@/files/sources";
 import { useTheme } from "@/lib/theme";
 import { Text } from "@/ui/Text";
+import { playableVoice } from "@/voice/model";
+import { VoiceBoundary } from "@/voice/VoiceFeed";
+import { VoiceMessage } from "@/voice/VoiceMessage";
 
 function ImageAttachment({
   api,
   file,
+  bleed,
   onOpen,
 }: {
   api: MessengerAPI;
   file: FileMetadata;
+  /** Edge to edge of the bubble: no frame, no rounding of its own. */
+  bleed: boolean;
   onOpen(): void;
 }) {
   const theme = useTheme();
@@ -33,6 +46,7 @@ function ImageAttachment({
       onPress={onOpen}
       style={[
         styles.image,
+        bleed && styles.imageBleed,
         { backgroundColor: theme.sidebar, borderColor: theme.border },
       ]}
     >
@@ -99,46 +113,112 @@ function FileCard({ api, file }: { api: MessengerAPI; file: FileMetadata }) {
   );
 }
 
-/** Attachments of one message: image previews and file cards. */
+/** How the photos sit in the bubble: edge to edge, and up to which edges. */
+export type ImageBleed = { top: boolean; bottom: boolean };
+
+/** Attachments of one message: voice player, image previews and file cards. */
 export function MessageFiles({
   api,
   files,
+  own = false,
+  bleed,
+  overlay,
+  voiceMeta,
 }: {
   api: MessengerAPI;
   files: FileMetadata[];
+  /** The reader's own bubble: the voice player takes its colours. */
+  own?: boolean;
+  /** Photos edge to edge of the bubble (its padding is 11 + 1 border). */
+  bleed?: ImageBleed;
+  /** Laid over the last photo, bottom right: the time of a photo message. */
+  overlay?: ReactNode;
+  /** The time of a voice message, in the player's length row. */
+  voiceMeta?: ReactNode;
 }) {
   const { t } = useTranslation();
+  // A modal is a new native window where SafeAreaView reads zero insets
+  // (the close button sat under the status bar): pad from the app's insets.
+  const insets = useSafeAreaInsets();
   const [viewing, setViewing] = useState<FileMetadata | null>(null);
   const viewerSource = useFileSource(viewing?.id);
+  // The full-size file can take seconds: the preview stands in meanwhile,
+  // so the viewer is never a black screen.
+  const previewSource = useFileSource(viewing?.preview_file_id ?? undefined);
+  const [viewerState, setViewerState] = useState<
+    "loading" | "loaded" | "failed"
+  >("loading");
   const images = files.filter(
     (file) => file.mime.startsWith("image/") && file.status === "ready",
   );
   const others = files.filter((file) => !images.includes(file));
   return (
     <View style={styles.files}>
+      {others.map((file) => {
+        // A voice file without valid `voice` data stays a plain attachment.
+        const voice = playableVoice(file);
+        return voice ? (
+          <VoiceBoundary
+            key={file.id}
+            fallback={<FileCard api={api} file={file} />}
+          >
+            <VoiceMessage
+              api={api}
+              file={voice}
+              own={own}
+              trailing={voiceMeta}
+            />
+          </VoiceBoundary>
+        ) : null;
+      })}
       {images.length > 0 && (
-        <View style={styles.gallery}>
+        <View
+          style={[
+            styles.gallery,
+            bleed && styles.galleryBleed,
+            bleed?.top && styles.bleedTop,
+            bleed?.bottom && styles.bleedBottom,
+          ]}
+        >
           {images.map((file) => (
             <ImageAttachment
               key={file.id}
               api={api}
               file={file}
-              onOpen={() => setViewing(file)}
+              bleed={Boolean(bleed)}
+              onOpen={() => {
+                setViewerState("loading");
+                setViewing(file);
+              }}
             />
           ))}
+          {overlay ? (
+            <View pointerEvents="none" style={styles.overlay}>
+              {overlay}
+            </View>
+          ) : null}
         </View>
       )}
-      {others.map((file) => (
-        <FileCard key={file.id} api={api} file={file} />
-      ))}
+      {others
+        .filter((file) => !playableVoice(file))
+        .map((file) => (
+          <FileCard key={file.id} api={api} file={file} />
+        ))}
       <Modal
         visible={viewing !== null}
         animationType="fade"
         onRequestClose={() => setViewing(null)}
       >
-        <SafeAreaView style={styles.viewer}>
+        <View
+          testID="photo-viewer"
+          style={[
+            styles.viewer,
+            { paddingTop: insets.top, paddingBottom: insets.bottom },
+          ]}
+        >
           <View style={styles.viewerBar}>
             <Pressable
+              testID="photo-viewer-close"
               accessibilityRole="button"
               accessibilityLabel={t("close")}
               style={styles.viewerButton}
@@ -161,24 +241,77 @@ export function MessageFiles({
               </Pressable>
             )}
           </View>
-          {viewerSource && (
-            <Image
-              source={viewerSource}
-              contentFit="contain"
-              cachePolicy="disk"
-              style={styles.grow}
-              accessibilityLabel={viewing?.name}
-            />
-          )}
-        </SafeAreaView>
+          <View
+            testID={
+              viewerState === "loaded" ? "photo-viewer-loaded" : undefined
+            }
+            style={styles.grow}
+          >
+            {viewerSource && (
+              <Image
+                source={viewerSource}
+                placeholder={previewSource ?? undefined}
+                placeholderContentFit="contain"
+                contentFit="contain"
+                cachePolicy="disk"
+                style={styles.grow}
+                accessibilityLabel={viewing?.name}
+                onLoad={() => setViewerState("loaded")}
+                onError={() => setViewerState("failed")}
+              />
+            )}
+            {viewerState === "loading" && (
+              <ActivityIndicator
+                testID="photo-viewer-loading"
+                color="#ffffff"
+                style={styles.viewerOverlay}
+              />
+            )}
+            {viewerState === "failed" && (
+              <View style={styles.viewerOverlay}>
+                <Text size={15} style={styles.viewerText}>
+                  {t("photoLoadFailed")}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
       </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  viewerOverlay: {
+    ...StyleSheet.absoluteFill,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  viewerText: { color: "#ffffff", textAlign: "center" },
   files: { gap: spacing[2] },
   gallery: { flexDirection: "row", flexWrap: "wrap", gap: spacing[1] },
+  // Bubble padding 11 (sides), 7 (top), 6 (bottom), plus its 1 px border.
+  // A column, so each photo stretches across the widened gallery (a
+  // wrapping row only shifted it left and left a strip on the right).
+  galleryBleed: {
+    flexDirection: "column",
+    // A wrapping container does not stretch its children across.
+    flexWrap: "nowrap",
+    alignSelf: "stretch",
+    marginHorizontal: -12,
+    gap: 2,
+  },
+  bleedTop: { marginTop: -8 },
+  bleedBottom: { marginBottom: -7 },
+  imageBleed: {
+    width: undefined,
+    maxWidth: undefined,
+    alignSelf: "stretch",
+    height: 200,
+    borderRadius: 0,
+    borderWidth: 0,
+  },
+  overlay: { position: "absolute", right: 8, bottom: 8 },
   image: {
     width: "100%",
     maxWidth: 280,

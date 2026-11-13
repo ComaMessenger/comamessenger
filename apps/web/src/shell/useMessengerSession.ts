@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   MessengerAPI,
+  applySavedChange,
+  savedChange,
   Outbox,
   RealtimeCoordinator,
   createMessengerStore,
@@ -9,6 +11,7 @@ import {
   expandUUID,
   isScheduledEvent,
   messagePlainText,
+  pinnedChatLimit,
   type Chat,
   type ChatFolder,
   type DurableEvent,
@@ -17,7 +20,7 @@ import {
   type UserPreferences,
 } from "@comamessenger/core";
 import i18n, { setLocale } from "../i18n";
-import { checkpointStorage, outboxStorage } from "../persistence";
+import { checkpointStorageFor, outboxStorageFor } from "../persistence";
 import { setTheme } from "../theme";
 import { messageOf } from "../errors";
 import { hydrateDrafts } from "../lib/drafts";
@@ -43,7 +46,7 @@ export type InAppNotification = {
   mention: boolean;
 };
 
-export const pinnedChatLimit = 10;
+export { pinnedChatLimit };
 
 async function loadMessages(
   api: MessengerAPI,
@@ -195,12 +198,18 @@ export function useMessengerSession({
     () =>
       new RealtimeCoordinator(
         api,
-        checkpointStorage,
+        checkpointStorageFor(user.id),
         (url) => new WebSocket(url),
         {
           state: store.getState().setRealtime,
           event: (event) => {
             const applied = store.getState().apply(event);
+            // Saves are private: these events reach only the saver's devices.
+            const saved = savedChange(event);
+            if (applied && saved) applySavedChange(queryClient, user.id, saved);
+            const privateSave =
+              event.type === "message.saved" ||
+              event.type === "message.unsaved";
             if (isScheduledEvent(event.type)) {
               // Only the author's devices receive these; they carry no
               // text, so the record is read again when it changed.
@@ -244,6 +253,7 @@ export function useMessengerSession({
               void api.me().then(onUserUpdated);
             if (
               applied &&
+              !privateSave &&
               (event.type.startsWith("chat.") ||
                 event.type.startsWith("member.") ||
                 event.type.startsWith("message."))
@@ -331,16 +341,21 @@ export function useMessengerSession({
 
   const outbox = useMemo(
     () =>
-      new Outbox(api, outboxStorage, {
-        optimistic: store.getState().optimistic,
-        delivered: (message) => {
-          store.getState().reconcile(message);
-          scheduleReload();
+      new Outbox(
+        api,
+        outboxStorageFor(user.id),
+        {
+          optimistic: store.getState().optimistic,
+          delivered: (message) => {
+            store.getState().reconcile(message);
+            scheduleReload();
+          },
+          retrying: store.getState().retrying,
+          failed: store.getState().failed,
         },
-        retrying: store.getState().retrying,
-        failed: store.getState().failed,
-      }),
-    [api, scheduleReload, store],
+        user.id,
+      ),
+    [api, scheduleReload, store, user.id],
   );
 
   useEffect(() => {

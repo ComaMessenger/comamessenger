@@ -7,11 +7,12 @@ import {
   StyleSheet,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import Constants from "expo-constants";
 import {
   Bell,
   ChevronRight,
+  Contact,
+  Clock,
   ExternalLink,
   LogOut,
   MonitorSmartphone,
@@ -32,6 +33,7 @@ import { Text } from "@/ui/Text";
 import { registerForPush, type PushAvailability } from "@/push/registration";
 import { pickAndUploadAvatar } from "@/files/avatar";
 import { ActionSheet } from "@/ui/ActionSheet";
+import { TabHeader } from "@/ui/TabHeader";
 
 export default function MoreScreen() {
   const { t } = useTranslation();
@@ -92,18 +94,8 @@ export default function MoreScreen() {
   }
 
   return (
-    <SafeAreaView
-      edges={["top"]}
-      style={[styles.screen, { backgroundColor: theme.canvas }]}
-    >
-      <Text
-        accessibilityRole="header"
-        weight="semibold"
-        size={22}
-        style={styles.title}
-      >
-        {t("tabMore")}
-      </Text>
+    <View style={[styles.screen, { backgroundColor: theme.canvas }]}>
+      <TabHeader title={t("tabMore")} />
       <ScrollView contentContainerStyle={styles.content}>
         <View
           style={[
@@ -145,6 +137,8 @@ export default function MoreScreen() {
         >
           {(
             [
+              ["/people", t("people"), Contact, "open-people"],
+              ["/scheduled", t("scheduledMoreItem"), Clock, "more-scheduled"],
               [
                 "/settings/profile",
                 t("profile"),
@@ -285,18 +279,14 @@ export default function MoreScreen() {
         onSelect={(action) => void changePhoto(action)}
         onClose={() => setPhotoMenu(false)}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  title: {
-    paddingHorizontal: spacing[4],
-    paddingTop: spacing[4],
-    paddingBottom: spacing[3],
-  },
   content: {
+    paddingTop: spacing[4],
     paddingHorizontal: spacing[4],
     paddingBottom: spacing[6],
     gap: spacing[4],

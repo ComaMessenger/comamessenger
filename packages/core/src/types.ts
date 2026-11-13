@@ -52,6 +52,11 @@ export type MessagePage = components["schemas"]["MessagePage"];
 export type Reaction = components["schemas"]["Reaction"];
 export type MessageReceipt = components["schemas"]["MessageReceipt"];
 export type MessagePin = components["schemas"]["MessagePin"];
+export type SavedMessage = components["schemas"]["SavedMessage"];
+export type SavedMessagePage = components["schemas"]["SavedMessagePage"];
+export type SavedMessageState = components["schemas"]["SavedMessageState"];
+export type SavedMessageChatCount =
+  components["schemas"]["SavedMessageChatCount"];
 export type ThreadSummary = components["schemas"]["ThreadSummary"];
 export type ThreadPage = components["schemas"]["ThreadPage"];
 export type UnreadSnapshot = components["schemas"]["UnreadSnapshot"];

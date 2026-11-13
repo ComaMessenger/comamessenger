@@ -29,6 +29,8 @@
         "message.deleted",
         "message.pinned",
         "message.unpinned",
+        "message.saved",
+        "message.unsaved",
         "reaction.added",
         "reaction.removed",
         "thread.followed",

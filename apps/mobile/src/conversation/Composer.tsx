@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Pressable,
   ScrollView,
@@ -6,12 +6,13 @@ import {
   TextInput,
   View,
   useWindowDimensions,
+  type GestureResponderEvent,
 } from "react-native";
 import {
   ArrowUp,
   Check,
   FileText,
-  Paperclip,
+  Plus,
   RotateCw,
   X,
 } from "lucide-react-native";
@@ -30,11 +31,15 @@ import {
 import { radius, spacing } from "@comamessenger/tokens";
 import { useTheme } from "@/lib/theme";
 import { Avatar } from "@/ui/Avatar";
+import { IconButton } from "@/ui/IconButton";
 import { Text, fonts, maxTextScale } from "@/ui/Text";
 import type { Attachment } from "@/files/useAttachments";
+import { VoiceActionButton, VoiceRecordingBar } from "@/voice/VoiceComposer";
+import { useVoiceRecorder, type VoiceTarget } from "@/voice/useVoiceRecorder";
 
-const inputMinHeight = 52;
-const inputMaxHeight = 140;
+const lineHeight = 21;
+const inputPadding = 9;
+const maxLines = 5;
 
 export type ComposerContext =
   | { kind: "reply"; author: string; text: string }
@@ -54,10 +59,13 @@ export function Composer({
   readonly,
   placeholder,
   attachments = [],
-  onAttach,
+  onMore,
   onRemoveAttachment,
   onRetryAttachment,
   commands = [],
+  focusRequest = 0,
+  onSendOptions,
+  voice,
 }: {
   body: string;
   onChangeBody(body: string): void;
@@ -68,27 +76,53 @@ export function Composer({
   readonly: boolean;
   placeholder?: string;
   attachments?: Attachment[];
-  onAttach?(): void;
+  /** Opens the "+" sheet: attachments and other actions. */
+  onMore?(): void;
   onRemoveAttachment?(id: string): void;
   onRetryAttachment?(id: string): void;
   /** Agent commands offered after typing "/" at the start of a message. */
   commands?: ChatCommand[];
+  /** Raised by the screen to put the cursor in the field, e.g. after a mention was inserted. */
+  focusRequest?: number;
+  /** Long press on send: «Send later» and «Send without sound» (package E). */
+  onSendOptions?(event?: GestureResponderEvent): void;
+  /** Enables voice recording on the microphone while the field is empty. */
+  voice?: VoiceTarget;
 }) {
   const { t } = useTranslation();
   const theme = useTheme();
   const input = useRef<TextInput>(null);
   const [focused, setFocused] = useState(false);
+  useEffect(() => {
+    if (focusRequest) input.current?.focus();
+  }, [focusRequest]);
   const draft = useMemo(() => decodeMentions(body), [body]);
   const { fontScale } = useWindowDimensions();
-  const emptyHeight = Math.max(
-    inputMinHeight,
-    Math.ceil(22 * Math.min(fontScale, maxTextScale)) + spacing[6],
-  );
+  const scale = Math.min(fontScale, maxTextScale);
+  const emptyHeight = Math.ceil(lineHeight * scale) + inputPadding * 2;
+  // The field grows with the text up to about five lines, then scrolls.
+  const maxHeight = Math.ceil(lineHeight * maxLines * scale) + inputPadding * 2;
+  const showMore = Boolean(onMore) && context?.kind !== "edit";
   const uploading = attachments.some((item) => item.status === "uploading");
   const canSend =
     (Boolean(draft.text.trim()) ||
       attachments.some((item) => item.status === "ready")) &&
     !uploading;
+  const sendOptions =
+    canSend && context?.kind !== "edit" && Boolean(onSendOptions);
+  // Voice (package F): the microphone takes the send button's place while
+  // there is nothing to send; recording replaces the field.
+  const recorder = useVoiceRecorder(readonly ? undefined : voice);
+  const recording = recorder.phase.kind !== "idle";
+  const micMode =
+    recorder.enabled &&
+    (recording ||
+      (!draft.text.trim() &&
+        attachments.length === 0 &&
+        context?.kind !== "edit"));
+  useEffect(() => {
+    if (recording) input.current?.blur();
+  }, [recording]);
 
   const mention = /@([\p{L}\p{N}_.-]*)$/u.exec(draft.text);
   const query = mention?.[1]?.toLowerCase() ?? "";
@@ -104,7 +138,9 @@ export function Composer({
 
   const typedCommand = commands.length ? commandQuery(draft.text) : null;
   const commandMatches =
-    typedCommand === null ? [] : matchCommands(commands, typedCommand).slice(0, 6);
+    typedCommand === null
+      ? []
+      : matchCommands(commands, typedCommand).slice(0, 6);
 
   if (readonly)
     return (
@@ -167,7 +203,12 @@ export function Composer({
               <Text weight="semibold" size={15} numberOfLines={1}>
                 /{command.command}
               </Text>
-              <Text tone="subtle" size={14} numberOfLines={1} style={styles.grow}>
+              <Text
+                tone="subtle"
+                size={14}
+                numberOfLines={1}
+                style={styles.grow}
+              >
                 {command.description
                   ? `${command.agentName} · ${command.description}`
                   : command.agentName}
@@ -222,204 +263,176 @@ export function Composer({
           ))}
         </ScrollView>
       )}
-      <View
-        style={[
-          styles.card,
-          {
-            backgroundColor: theme.surface,
-            borderColor: focused ? theme.primary : theme.borderStrong,
-          },
-        ]}
-      >
-        {context && (
-          <View style={[styles.context, { borderLeftColor: theme.primary }]}>
-            <View style={styles.grow}>
-              <Text
-                weight="semibold"
-                size={13}
-                tone="primary"
-                numberOfLines={1}
-              >
-                {context.kind === "reply"
-                  ? t("replyingTo", { name: context.author })
-                  : t("editingMessage")}
-              </Text>
-              <Text tone="muted" size={13} numberOfLines={1}>
-                {context.text}
-              </Text>
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t("cancelReply")}
-              style={styles.cancel}
-              onPress={onCancelContext}
-            >
-              <X size={18} color={theme.subtle} />
-            </Pressable>
-          </View>
-        )}
-        {attachments.length > 0 && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.attachments}
-          >
-            {attachments.map((item) => {
-              const image = item.local.mime.startsWith("image/");
-              return (
-                <View
-                  key={item.id}
-                  style={[
-                    styles.attachment,
-                    {
-                      backgroundColor: theme.sidebar,
-                      borderColor:
-                        item.status === "failed" ? theme.danger : theme.border,
-                    },
-                  ]}
-                >
-                  {image ? (
-                    <Image
-                      source={{ uri: item.local.uri }}
-                      contentFit="cover"
-                      style={StyleSheet.absoluteFill}
-                    />
-                  ) : (
-                    <View style={styles.attachmentFile}>
-                      <FileText size={18} color={theme.muted} />
-                      <Text size={11} numberOfLines={2} style={styles.center}>
-                        {item.local.name}
-                      </Text>
-                    </View>
-                  )}
-                  {item.status === "uploading" && (
-                    <View
-                      style={[
-                        styles.progress,
-                        { backgroundColor: theme.overlay },
-                      ]}
-                    >
-                      <Text
-                        size={12}
-                        weight="semibold"
-                        style={{ color: "#ffffff" }}
-                      >
-                        {Math.round(item.progress * 100)}%
-                      </Text>
-                    </View>
-                  )}
-                  {item.status === "failed" && (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={t("retry")}
-                      onPress={() => onRetryAttachment?.(item.id)}
-                      style={[
-                        styles.progress,
-                        { backgroundColor: theme.overlay },
-                      ]}
-                    >
-                      <RotateCw size={18} color="#ffffff" />
-                    </Pressable>
-                  )}
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={t("removeAttachment")}
-                    onPress={() => onRemoveAttachment?.(item.id)}
-                    style={[
-                      styles.remove,
-                      { backgroundColor: theme.foreground },
-                    ]}
-                  >
-                    <X size={16} color={theme.canvas} />
-                  </Pressable>
-                </View>
-              );
-            })}
-          </ScrollView>
-        )}
-        <TextInput
-          ref={input}
-          testID="composer-input"
-          value={draft.text}
-          onChangeText={(text) =>
-            onChangeBody(encodeMentions(updateMentionText(draft, text)))
-          }
-          placeholder={placeholder ?? t("messagePlaceholder")}
-          placeholderTextColor={theme.subtle}
-          accessibilityLabel={placeholder ?? t("messagePlaceholder")}
-          selectionColor={theme.primary}
-          multiline
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          maxFontSizeMultiplier={maxTextScale}
-          style={[
-            styles.input,
-            { color: theme.foreground },
-            // iOS keeps a multiline input at its tallest size after the
-            // text is cleared; an empty field is pinned back to one line.
-            !draft.text && { height: emptyHeight },
-          ]}
-        />
+      {context && (
         <View
           style={[
-            styles.toolbar,
-            { backgroundColor: theme.sidebar, borderTopColor: theme.border },
+            styles.context,
+            showMore && styles.indented,
+            { backgroundColor: theme.surface, borderColor: theme.border },
           ]}
         >
-          <View style={styles.tools}>
-            {onAttach && context?.kind !== "edit" && (
-              <Pressable
-                testID="composer-attach"
-                accessibilityRole="button"
-                accessibilityLabel={t("attach")}
-                hitSlop={6}
-                onPress={onAttach}
-                style={styles.attach}
-              >
-                <Paperclip size={22} color={theme.muted} />
-              </Pressable>
-            )}
-          </View>
-          <Pressable
-            testID="composer-send"
-            accessibilityRole="button"
-            accessibilityLabel={
-              context?.kind === "edit" ? t("save") : t("send")
-            }
-            accessibilityState={{ disabled: !canSend }}
-            disabled={!canSend}
-            onPress={onSend}
-            style={({ pressed }) => [
-              styles.send,
-              {
-                backgroundColor: canSend
-                  ? pressed
-                    ? theme.actionHover
-                    : theme.action
-                  : theme.surfaceSelected,
-              },
-            ]}
-          >
+          <View style={[styles.quote, { borderLeftColor: theme.primary }]}>
             <Text
-              size={14}
-              weight="medium"
-              style={{ color: canSend ? theme.onAction : theme.subtle }}
+              weight="semibold"
+              size={12.5}
+              tone="primary"
+              numberOfLines={1}
             >
-              {context?.kind === "edit" ? t("save") : t("send")}
+              {context.kind === "reply" ? context.author : t("editingMessage")}
             </Text>
-            {context?.kind === "edit" ? (
-              <Check
-                size={20}
-                color={canSend ? theme.onAction : theme.subtle}
-              />
-            ) : (
-              <ArrowUp
-                size={20}
-                color={canSend ? theme.onAction : theme.subtle}
-              />
-            )}
-          </Pressable>
+            <Text tone="muted" size={13} numberOfLines={1}>
+              {context.text}
+            </Text>
+          </View>
+          <IconButton
+            label={context.kind === "reply" ? t("cancelReply") : t("cancel")}
+            size={32}
+            onPress={onCancelContext}
+            icon={(color) => <X size={16} color={color} />}
+          />
         </View>
+      )}
+      {attachments.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={showMore && styles.indented}
+          contentContainerStyle={styles.attachments}
+        >
+          {attachments.map((item) => {
+            const image = item.local.mime.startsWith("image/");
+            return (
+              <View
+                key={item.id}
+                style={[
+                  styles.attachment,
+                  {
+                    backgroundColor: theme.surface,
+                    borderColor:
+                      item.status === "failed" ? theme.danger : theme.border,
+                  },
+                ]}
+              >
+                {image ? (
+                  <Image
+                    source={{ uri: item.local.uri }}
+                    contentFit="cover"
+                    style={StyleSheet.absoluteFill}
+                  />
+                ) : (
+                  <View style={styles.attachmentFile}>
+                    <FileText size={18} color={theme.muted} />
+                    <Text size={11} numberOfLines={2} style={styles.center}>
+                      {item.local.name}
+                    </Text>
+                  </View>
+                )}
+                {item.status === "uploading" && (
+                  <View
+                    style={[
+                      styles.progress,
+                      { backgroundColor: theme.overlay },
+                    ]}
+                  >
+                    <Text
+                      size={12}
+                      weight="semibold"
+                      style={{ color: "#ffffff" }}
+                    >
+                      {Math.round(item.progress * 100)}%
+                    </Text>
+                  </View>
+                )}
+                {item.status === "failed" && (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t("retry")}
+                    onPress={() => onRetryAttachment?.(item.id)}
+                    style={[
+                      styles.progress,
+                      { backgroundColor: theme.overlay },
+                    ]}
+                  >
+                    <RotateCw size={18} color="#ffffff" />
+                  </Pressable>
+                )}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t("removeAttachment")}
+                  hitSlop={10}
+                  onPress={() => onRemoveAttachment?.(item.id)}
+                  style={[styles.remove, { backgroundColor: theme.foreground }]}
+                >
+                  <X size={14} color={theme.canvas} />
+                </Pressable>
+              </View>
+            );
+          })}
+        </ScrollView>
+      )}
+      <View style={styles.line}>
+        {recording && <VoiceRecordingBar voice={recorder} />}
+        {showMore && !recording && (
+          <IconButton
+            testID="composer-attach"
+            variant="soft"
+            label={t("composerMore")}
+            onPress={onMore}
+            icon={(color) => <Plus size={22} color={color} />}
+          />
+        )}
+        <View
+          style={[
+            styles.pill,
+            recording && styles.hidden,
+            {
+              backgroundColor: theme.surface,
+              borderColor: focused ? theme.borderStrong : theme.border,
+            },
+          ]}
+        >
+          <TextInput
+            ref={input}
+            testID="composer-input"
+            value={draft.text}
+            onChangeText={(text) =>
+              onChangeBody(encodeMentions(updateMentionText(draft, text)))
+            }
+            placeholder={placeholder ?? t("messagePlaceholder")}
+            placeholderTextColor={theme.muted}
+            accessibilityLabel={placeholder ?? t("messagePlaceholder")}
+            selectionColor={theme.primary}
+            multiline
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            maxFontSizeMultiplier={maxTextScale}
+            style={[
+              styles.input,
+              { color: theme.foreground, maxHeight },
+              // iOS keeps a multiline input at its tallest size after the
+              // text is cleared; an empty field is pinned back to one line.
+              !draft.text && { height: emptyHeight },
+            ]}
+          />
+        </View>
+        <IconButton
+          testID="composer-send"
+          variant={canSend ? "accent" : "soft"}
+          label={context?.kind === "edit" ? t("save") : t("send")}
+          disabled={!canSend}
+          onPress={onSend}
+          onLongPress={sendOptions ? onSendOptions : undefined}
+          hint={sendOptions ? t("scheduledSendHint") : undefined}
+          style={micMode ? styles.hidden : undefined}
+          icon={(color) =>
+            context?.kind === "edit" ? (
+              <Check size={20} color={color} strokeWidth={2.4} />
+            ) : (
+              <ArrowUp size={20} color={color} strokeWidth={2.4} />
+            )
+          }
+        />
+        {micMode && <VoiceActionButton voice={recorder} />}
       </View>
     </View>
   );
@@ -427,64 +440,48 @@ export function Composer({
 
 const styles = StyleSheet.create({
   wrap: {
-    paddingHorizontal: spacing[3],
+    paddingHorizontal: spacing[2],
+    paddingTop: 6,
     paddingBottom: spacing[2],
-    paddingTop: spacing[1],
+    gap: 6,
   },
-  card: {
-    borderWidth: 1,
-    borderRadius: radius.lg,
-    overflow: "hidden",
-  },
+  indented: { marginLeft: 48 },
   context: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing[2],
-    borderLeftWidth: 2,
-    paddingLeft: spacing[2],
-    marginTop: spacing[3],
-    marginHorizontal: spacing[3],
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    paddingLeft: 10,
+    paddingRight: 4,
+    paddingVertical: 4,
+    marginRight: 4,
   },
-  toolbar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderTopWidth: 1,
-    padding: spacing[1],
-    gap: spacing[2],
-  },
-  tools: { flexDirection: "row", alignItems: "center" },
-  handle: { maxWidth: "45%", flexShrink: 1 },
-  cancel: {
-    width: 44,
-    height: 44,
-    alignItems: "center",
+  quote: { flex: 1, borderLeftWidth: 3, paddingLeft: spacing[2] },
+  line: { flexDirection: "row", alignItems: "flex-end", gap: 6 },
+  pill: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 40,
+    borderRadius: radius.field,
+    borderWidth: 1,
+    paddingLeft: 14,
+    paddingRight: spacing[3],
     justifyContent: "center",
   },
   input: {
     fontFamily: fonts.regular,
     fontSize: 16,
-    minHeight: inputMinHeight,
-    maxHeight: inputMaxHeight,
-    paddingHorizontal: spacing[3],
-    paddingTop: spacing[3],
-    paddingBottom: spacing[3],
+    paddingTop: inputPadding,
+    paddingBottom: inputPadding,
+    paddingHorizontal: 0,
     textAlignVertical: "top",
   },
-  send: {
-    flexDirection: "row",
-    minHeight: 44,
-    paddingHorizontal: spacing[3],
-    gap: spacing[2],
-    borderRadius: radius.md,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  handle: { maxWidth: "45%", flexShrink: 1 },
   suggestions: {
     maxHeight: 220,
     borderWidth: 1,
-    borderRadius: radius.lg,
-    marginBottom: spacing[2],
+    borderRadius: radius.xl,
   },
   suggestion: {
     flexDirection: "row",
@@ -495,22 +492,11 @@ const styles = StyleSheet.create({
   },
   grow: { flex: 1 },
   readonly: { padding: spacing[4], borderTopWidth: StyleSheet.hairlineWidth },
-  attach: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  attachments: {
-    gap: spacing[2],
-    paddingTop: spacing[3],
-    paddingHorizontal: spacing[3],
-  },
+  attachments: { gap: spacing[2] },
   attachment: {
-    width: 88,
-    height: 88,
-    borderRadius: radius.md,
+    width: 72,
+    height: 72,
+    borderRadius: radius.lg,
     borderWidth: 1,
     overflow: "hidden",
   },
@@ -528,13 +514,14 @@ const styles = StyleSheet.create({
   },
   remove: {
     position: "absolute",
-    top: 0,
-    right: 0,
-    width: 44,
-    height: 44,
-    borderBottomLeftRadius: radius.md,
+    top: 4,
+    right: 4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
   center: { textAlign: "center" },
+  hidden: { display: "none" },
 });

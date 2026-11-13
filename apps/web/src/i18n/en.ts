@@ -65,7 +65,7 @@ export const en: Record<keyof typeof ru, string> = {
   chatNavigation: "Chat navigation",
   threads: "Threads",
   important: "Important",
-  importantHint: "Pinned messages from all of your chats",
+  importantHint: "Messages you saved",
   noImportant: "Messages you mark as important will appear here",
   saved: "Pinned",
   noPins: "No pinned messages",
