@@ -310,11 +310,10 @@ func (host linkHost) address(address string) string {
 }
 
 // linkDomain checks that address is an http(s) URL with a real host name and
-// returns the host for display: lower case, without «www.». A domain whose
-// letters are all of one script is shown in Unicode, punycode labels decoded
-// (xn--e1afmkfd.xn--p1ai → пример.рф); a domain mixing scripts is shown in
-// punycode, as browsers do, so «аррӏе.com» in Cyrillic never reads as
-// apple.com.
+// returns the host for display: lower case, without «www.», punycode labels
+// decoded (xn--e1afmkfd.xn--p1ai → пример.рф, пример.com, ελλάδα.gr). A host
+// that could pass for another is shown in punycode, as browsers do — see
+// deceptiveHost: «аррӏе.com» in Cyrillic never reads as apple.com.
 func linkDomain(address string) (linkHost, bool) {
 	parsed, err := url.Parse(address)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Opaque != "" {
@@ -369,12 +368,7 @@ func linkDomain(address string) (linkHost, bool) {
 	}
 	result := linkHost{}
 	shown := unicodeLabels
-	checked := unicodeLabels
-	if checked[0] == "www" {
-		// «www.» is not shown, so it does not make пример.рф mixed.
-		checked = checked[1:]
-	}
-	if !singleScript(strings.Join(checked, "")) {
+	if deceptiveHost(unicodeLabels) {
 		shown = asciiLabels
 		if !isASCII(written) {
 			result.written, result.ascii = written, strings.Join(asciiLabels, ".")
@@ -396,24 +390,42 @@ func isASCII(value string) bool {
 	return true
 }
 
-// singleScript says whether every letter belongs to one script. Digits and
-// hyphens belong to none; ASCII letters are Latin; Han, Hiragana and
-// Katakana together are one (Japanese writes them side by side).
-func singleScript(value string) bool {
-	seen := ""
-	for _, letter := range value {
-		if !unicode.IsLetter(letter) {
-			continue
+// deceptiveHost says whether a host (Unicode labels) must be shown in
+// punycode: a label mixing scripts (Latin «p» with Cyrillic «аypal»), or a
+// label made only of Cyrillic or Greek letters that all have a Latin twin
+// under a Latin top-level domain («аррӏе.com», «сохо.net»). Digits and
+// hyphens are neutral; Han, Hiragana and Katakana are one script, as
+// Japanese writes them side by side.
+func deceptiveHost(labels []string) bool {
+	latinZone := isASCII(labels[len(labels)-1])
+	for _, label := range labels {
+		script, lookalikes, letters := "", 0, 0
+		for _, letter := range label {
+			if !unicode.IsLetter(letter) {
+				continue
+			}
+			letters++
+			current := scriptOf(letter)
+			if script == "" {
+				script = current
+			} else if current != script {
+				return true
+			}
+			if strings.ContainsRune(latinLookalikes, letter) {
+				lookalikes++
+			}
 		}
-		script := scriptOf(letter)
-		if seen == "" {
-			seen = script
-		} else if script != seen {
-			return false
+		if latinZone && letters > 0 && lookalikes == letters && (script == "Cyrillic" || script == "Greek") {
+			return true
 		}
 	}
-	return true
+	return false
 }
+
+// latinLookalikes are Cyrillic and Greek lower-case letters that read as
+// Latin ones (after Chromium's list): a label of only these passes for a
+// Latin word.
+const latinLookalikes = "аысԁеԍһіюјӏорԗԛѕԝхуъьҽпгѵѡ" + "αικνορτυχ"
 
 var knownScripts = []struct {
 	name  string

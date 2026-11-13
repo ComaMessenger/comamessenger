@@ -203,6 +203,20 @@ func TestExtractLinksHomographs(t *testing.T) {
 		{"www.кто.рф", "https://www.кто.рф", "кто.рф"},
 		{"https://xn--mnchen-3ya.de", "https://xn--mnchen-3ya.de", "münchen.de"},
 		{"https://例え.テスト", "https://例え.テスト", "例え.テスト"},
+		// National domains under a Latin zone: one script per label, shown.
+		{"https://пример.com", "https://пример.com", "пример.com"},
+		{"https://xn--e1afmkfd.com", "https://xn--e1afmkfd.com", "пример.com"},
+		{"https://中文.com", "https://中文.com", "中文.com"},
+		{"https://例え.jp", "https://例え.jp", "例え.jp"},
+		{"https://ελλάδα.gr", "https://ελλάδα.gr", "ελλάδα.gr"},
+		{"https://a1-b2.рф", "https://a1-b2.рф", "a1-b2.рф"},
+		{"https://мой-сайт2.org/x", "https://мой-сайт2.org/x", "мой-сайт2.org"},
+		// Only Latin twins under a Latin zone: punycode.
+		{"https://сохо.net", "https://xn--n1aahr.net", "xn--n1aahr.net"},
+		{"https://οκτ.com", "https://xn--vxajq.com", "xn--vxajq.com"},
+		{"https://www.аррӏе.com", "https://www.xn--80ak6aa92e.com", "xn--80ak6aa92e.com"},
+		// Two scripts in one label, whatever the zone.
+		{"https://münchenпример.de", "https://xn--mnchen-3ya917d0a4b5amd.de", "xn--mnchen-3ya917d0a4b5amd.de"},
 	}
 	for _, test := range cases {
 		got := ExtractLinks(test.body, "plain")
