@@ -89,6 +89,24 @@ def prebuild(platform, build_number)
   end
 end
 
+# Identity without Node: the bundle id is fixed (app.config.ts, ADR-0011).
+def fixed_bundle_id
+  ENV.fetch('COMA_BUNDLE_ID', 'com.comamessenger.app')
+end
+
+def upload_keystore
+  properties = File.join(ENV.fetch('HOME'), '.gradle', 'gradle.properties')
+  UI.user_error!("Missing #{properties} with COMA_UPLOAD_*") unless File.file?(properties)
+  values = File.readlines(properties).each_with_object({}) do |line, acc|
+    key, value = line.strip.split('=', 2)
+    acc[key] = value if key&.start_with?('COMA_UPLOAD_') && value
+  end
+  %w[COMA_UPLOAD_STORE_FILE COMA_UPLOAD_STORE_PASSWORD COMA_UPLOAD_KEY_ALIAS COMA_UPLOAD_KEY_PASSWORD].each do |name|
+    UI.user_error!("Set #{name} in #{properties}") if values[name].to_s.empty?
+  end
+  values
+end
+
 desc 'Show identities, store access and the next build numbers without building'
 lane :verify do
   identity = app_identity
@@ -169,6 +187,69 @@ platform :ios do
     )
     UI.success("TestFlight: #{bundle_id} build #{build}")
   end
+  desc 'Next TestFlight build number, for a cloud build (scripts/store-release.sh)'
+  lane :next_build do
+    UI.message("NEXT_BUILD=#{next_ios_build(fixed_bundle_id, appstore_api_key)}")
+  end
+
+  desc 'Sign a cloud-built archive with this Mac\'s certificate and upload it to TestFlight'
+  lane :publish do |options|
+    archive = File.expand_path(options[:archive].to_s)
+    UI.user_error!("No archive at #{archive}") unless File.directory?(archive)
+    require_env('APPLE_TEAM_ID')
+    team_id = ENV.fetch('APPLE_TEAM_ID')
+    api_key = appstore_api_key
+    key_path = env_path('APPLE_PRIVATE_KEY_PATH')
+    plist = ->(key) { sh('/usr/libexec/PlistBuddy', '-c', "Print :ApplicationProperties:#{key}", File.join(archive, 'Info.plist'), log: false).strip }
+    bundle_id = plist.call('CFBundleIdentifier')
+    build = plist.call('CFBundleVersion')
+    UI.user_error!("Archive is #{bundle_id}, expected #{fixed_bundle_id}") unless bundle_id == fixed_bundle_id
+
+    output_dir = File.join(ARTIFACTS_DIR, 'ios', "ci-#{build}")
+    FileUtils.rm_rf(output_dir)
+    FileUtils.mkdir_p(output_dir)
+    options_plist = File.join(output_dir, 'ExportOptions.plist')
+    File.write(options_plist, <<~PLIST)
+      <?xml version="1.0" encoding="UTF-8"?>
+      <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+      <plist version="1.0"><dict>
+        <key>method</key><string>app-store-connect</string>
+        <key>signingStyle</key><string>automatic</string>
+        <key>teamID</key><string>#{team_id}</string>
+        <key>uploadSymbols</key><true/>
+        <key>destination</key><string>export</string>
+      </dict></plist>
+    PLIST
+    sh('xcodebuild', '-exportArchive', '-archivePath', archive, '-exportPath', output_dir,
+       '-exportOptionsPlist', options_plist, '-allowProvisioningUpdates',
+       '-authenticationKeyPath', key_path, '-authenticationKeyID', ENV.fetch('APPLE_KEY_ID'),
+       '-authenticationKeyIssuerID', ENV.fetch('APPLE_ISSUER_ID'))
+    ipa = Dir.glob(File.join(output_dir, '*.ipa')).first
+    UI.user_error!('Export produced no .ipa') unless ipa
+
+    # The cloud archive is signed ad hoc; make sure the store signature kept
+    # push and the App Group the notification extension needs.
+    unpacked = File.join(output_dir, 'unpacked')
+    sh('ditto', '-x', '-k', ipa, unpacked, log: false)
+    app = Dir.glob(File.join(unpacked, 'Payload', '*.app')).first
+    [app, *Dir.glob(File.join(app, 'PlugIns', '*.appex'))].each do |bundle|
+      entitlements = sh('codesign', '-d', '--entitlements', '-', '--xml', bundle, log: false)
+      UI.user_error!("#{File.basename(bundle)} lost its App Group") unless entitlements.include?("group.#{bundle_id}")
+      if bundle == app && !entitlements.include?('aps-environment')
+        UI.user_error!("#{File.basename(bundle)} lost push (aps-environment)")
+      end
+    end
+    UI.success("Signed #{File.basename(ipa)}: build #{build}, entitlements intact")
+
+    upload_to_testflight(
+      api_key: api_key,
+      app_identifier: bundle_id,
+      ipa: ipa,
+      skip_waiting_for_build_processing: true,
+      changelog: ENV.fetch('APPLE_TESTFLIGHT_CHANGELOG', "Build #{build}")
+    )
+    UI.success("TestFlight: #{bundle_id} build #{build}")
+  end
 end
 
 platform :android do
@@ -207,5 +288,48 @@ platform :android do
       skip_upload_changelogs: true
     )
     UI.success("Google Play internal: #{package} versionCode #{code}")
+  end
+
+  desc 'Next Google Play versionCode, for a cloud build (scripts/store-release.sh)'
+  lane :next_build do
+    require_env('GOOGLE_PLAY_SERVICE_ACCOUNT_PATH')
+    UI.message("NEXT_BUILD=#{next_android_code(fixed_bundle_id, env_path('GOOGLE_PLAY_SERVICE_ACCOUNT_PATH'))}")
+  end
+
+  desc 'Sign a cloud-built .aab with the upload keystore and send it to Play internal testing'
+  lane :publish do |options|
+    source = File.expand_path(options[:aab].to_s)
+    UI.user_error!("No bundle at #{source}") unless File.file?(source)
+    require_env('GOOGLE_PLAY_SERVICE_ACCOUNT_PATH')
+    json_key = env_path('GOOGLE_PLAY_SERVICE_ACCOUNT_PATH')
+    keystore = upload_keystore
+    output_dir = File.join(ARTIFACTS_DIR, 'android')
+    FileUtils.mkdir_p(output_dir)
+    aab = File.join(output_dir, File.basename(source).sub(/\.aab\z/, '-signed.aab'))
+    FileUtils.cp(source, aab)
+    # The cloud bundle carries the debug signature; replace it with the upload key.
+    sh('zip', '-q', '-d', aab, 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA', 'META-INF/*.EC', 'META-INF/MANIFEST.MF')
+    java_home = android_toolchain['JAVA_HOME'] || ENV['JAVA_HOME'].to_s
+    jarsigner = java_home.empty? ? 'jarsigner' : File.join(java_home, 'bin', 'jarsigner')
+    sh({ 'COMA_STORE_PASS' => keystore['COMA_UPLOAD_STORE_PASSWORD'], 'COMA_KEY_PASS' => keystore['COMA_UPLOAD_KEY_PASSWORD'] },
+       jarsigner, '-sigalg', 'SHA256withRSA', '-digestalg', 'SHA-256',
+       '-keystore', keystore['COMA_UPLOAD_STORE_FILE'],
+       '-storepass:env', 'COMA_STORE_PASS', '-keypass:env', 'COMA_KEY_PASS',
+       aab, keystore['COMA_UPLOAD_KEY_ALIAS'], log: false)
+    sh(jarsigner, '-verify', aab, log: false)
+
+    upload_to_play_store(
+      package_name: fixed_bundle_id,
+      track: ENV.fetch('GOOGLE_PLAY_TRACK', 'internal'),
+      aab: aab,
+      json_key: json_key,
+      release_status: ENV.fetch('GOOGLE_PLAY_RELEASE_STATUS', 'completed'),
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      skip_upload_changelogs: true
+    )
+    UI.success("Google Play internal: #{File.basename(aab)}")
   end
 end

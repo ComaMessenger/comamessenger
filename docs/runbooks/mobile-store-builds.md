@@ -1,36 +1,46 @@
 # Сборки мобильного приложения для TestFlight и Google Play
 
-Сборки идут в GitHub Actions (`.github/workflows/mobile-release.yml`), а не на
-ноутбуке: локальная сборка iOS загружает Mac так, что ломается звук macOS.
+Компиляция идёт в GitHub Actions (`.github/workflows/mobile-release.yml`), а
+подпись и загрузка — на Mac владельца. Ключей для сторов в GitHub нет.
 
-## Запуск
+Почему так: локальная компиляция iOS загружает ноутбук настолько, что ломается
+звук macOS, а держать ключ App Store Connect, сертификат Apple Distribution и
+upload-keystore Android в облаке владелец не хочет.
+
+## Одна команда
 
 ```sh
-gh workflow run mobile-release.yml --ref main -f platform=both
-gh workflow run mobile-release.yml --ref <ветка> -f platform=ios -f changelog="Что проверить"
+apps/mobile/scripts/store-release.sh ios            # из текущей ветки
+apps/mobile/scripts/store-release.sh android main   # из указанной ветки
 ```
 
-Номер сборки берётся из стора (следующий после последнего), `ios/` и `android/`
-создаются `expo prebuild` на машине сборки. iOS — раннер `macos-26`, Android —
-`ubuntu-latest`. Локальный запуск (`bundle exec fastlane ios beta`) по-прежнему
-работает с `apps/mobile/.env`.
+Что происходит:
 
-## Учётные данные — окружение `store` в настройках репозитория
+1. Скрипт спрашивает у стора следующий номер сборки (`fastlane <platform> next_build`) — ключом с этого Mac.
+2. Запускает в GitHub Actions сборку без ключей и ждёт её (iOS — `macos-26`, Android — `ubuntu-latest`, 15–30 минут; Mac в это время не нагружен).
+   - iOS: архив Xcode, подписанный ad hoc, чтобы в нём сохранились права (App Group, push).
+   - Android: `.aab` с отладочной подписью.
+3. Скачивает результат в `apps/mobile/build/ci/<run>/` и запускает
+   - `fastlane ios publish` — экспорт архива с сертификатом Apple Distribution из связки ключей и ключом App Store Connect, проверка прав расширения уведомлений, загрузка в TestFlight;
+   - `fastlane android publish` — замена отладочной подписи на upload-keystore из `~/.gradle/gradle.properties`, загрузка в Play internal testing.
 
-Переменные (не секретные): `APPLE_KEY_ID`, `APPLE_ISSUER_ID`, `APPLE_TEAM_ID`,
-`COMA_PUSH_RELAY_URL`.
+Подпись и загрузка занимают одну-две минуты.
 
-Секреты:
+## Что лежит в GitHub — окружение `store`
 
-| Секрет | Что это |
-|---|---|
-| `APPLE_API_KEY_P8` | ключ App Store Connect API (`.p8`, текстом) |
-| `IOS_DIST_P12_BASE64`, `IOS_DIST_P12_PASSWORD` | необязательно: сертификат Apple Distribution; без него Xcode подписывает облачным сертификатом через ключ API |
-| `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | сервисный аккаунт Google Play |
-| `GOOGLE_SERVICES_JSON` | `google-services.json` Firebase (push на Android) |
-| `ANDROID_UPLOAD_KEYSTORE_BASE64` | upload-keystore Android (`base64`) |
-| `COMA_UPLOAD_STORE_PASSWORD`, `COMA_UPLOAD_KEY_ALIAS`, `COMA_UPLOAD_KEY_PASSWORD` | пароли и псевдоним upload-keystore |
+| Имя | Вид | Зачем |
+|---|---|---|
+| `APPLE_TEAM_ID` | переменная | команда в проекте Xcode |
+| `COMA_PUSH_RELAY_URL` | переменная | адрес push-relay в сборке |
+| `GOOGLE_SERVICES_JSON` | секрет | клиентская конфигурация Firebase; она всё равно лежит внутри каждого APK, это не ключ подписи |
 
-Оригиналы ключей — у владельца (пути в локальном `apps/mobile/.env`), в
-репозиторий они не попадают. Запускать сборку могут только участники с правом
-записи; секреты окружения недоступны запускам из форков.
+## Что лежит только на Mac владельца
+
+Ключ App Store Connect (`.p8`), сертификат Apple Distribution в связке ключей,
+сервисный аккаунт Google Play, upload-keystore Android и его пароли. Пути — в
+`apps/mobile/.env` и `~/.gradle/gradle.properties`.
+
+## Полностью локальная сборка
+
+По-прежнему работает (`bundle exec fastlane ios beta` / `android beta`), но
+грузит Mac и ломает звук — только если GitHub недоступен.
