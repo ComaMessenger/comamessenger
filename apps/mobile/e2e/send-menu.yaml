@@ -1,0 +1,57 @@
+# Long press on send: «Send later» / «Send without sound» hang from the send
+# button (above it, its right edge on the button's), over a dimmed screen;
+# a tap outside or a swipe closes the menu. The keyboard stays up.
+# Run after sign-in.yaml: maestro test e2e/send-menu.yaml
+appId: com.comamessenger.app
+---
+- runFlow: open-app.yaml
+- tapOn:
+    id: chat-row-0
+- tapOn:
+    id: composer-input
+- inputText: Меню отправки
+- longPressOn:
+    id: composer-send
+- extendedWaitUntil:
+    visible:
+      id: send-options
+    timeout: 5000
+# The menu sits right above the composer, not in the middle of the screen.
+- assertVisible:
+    id: send-options-silent
+    above:
+      id: composer-input
+- assertVisible:
+    id: send-options-later
+    above:
+      id: send-options-silent
+- takeScreenshot: send-menu
+# A tap outside closes it; the draft stays.
+- tapOn:
+    point: 30%,30%
+- extendedWaitUntil:
+    notVisible:
+      id: send-options
+    timeout: 3000
+- assertVisible: .*Меню отправки.*
+# A swipe closes it too.
+- longPressOn:
+    id: composer-send
+- extendedWaitUntil:
+    visible:
+      id: send-options
+    timeout: 5000
+- swipe:
+    start: 50%, 40%
+    end: 50%, 60%
+    duration: 300
+- extendedWaitUntil:
+    notVisible:
+      id: send-options
+    timeout: 3000
+# Leave the chat with an empty composer.
+- tapOn:
+    id: composer-input
+- eraseText: 40
+- tapOn:
+    id: conversation-back

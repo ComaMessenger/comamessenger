@@ -94,6 +94,7 @@ export function MessageFiles({
   overlay,
   voiceMeta,
   mosaic,
+  onLongPress,
 }: {
   api: MessengerAPI;
   files: FileMetadata[];
@@ -107,6 +108,8 @@ export function MessageFiles({
   voiceMeta?: ReactNode;
   /** The bubble already sized itself to this mosaic. */
   mosaic?: Mosaic;
+  /** A long press on a photo or video opens the message menu. */
+  onLongPress?(): void;
 }) {
   const visual = useMemo(() => files.filter(isVisualMedia), [files]);
   const others = files.filter((file) => !visual.includes(file));
@@ -158,6 +161,7 @@ export function MessageFiles({
             rounded={!bleed}
             overlay={overlay}
             onOpen={(file, origin) => openMedia?.(file.id, origin)}
+            onLongPress={onLongPress}
           />
         </View>
       )}

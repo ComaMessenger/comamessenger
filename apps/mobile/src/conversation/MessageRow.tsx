@@ -390,6 +390,7 @@ export function MessageBubble({
           overlay={photoMeta}
           voiceMeta={voiceOnly ? meta : undefined}
           mosaic={images.length > 0 && !wide ? mosaic : undefined}
+          onLongPress={preview ? undefined : openActions}
         />
       )}
       {!deleted && <AgentWhy provenance={message.agent_provenance} />}

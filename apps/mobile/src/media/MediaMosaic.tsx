@@ -62,9 +62,12 @@ export function MediaMosaic({
   rounded = false,
   overlay,
   onOpen,
+  onLongPress,
 }: {
   files: readonly FileMetadata[];
   mosaic: Mosaic;
+  /** The message menu: a long press on a tile is a long press on the bubble. */
+  onLongPress?(): void;
   /** Corners of its own (outside a bubble that clips it). */
   rounded?: boolean;
   /** Laid over the last tile, bottom right: the time of a media message. */
@@ -95,7 +98,12 @@ export function MediaMosaic({
               },
             ]}
           >
-            <MediaTile file={file} index={index} onOpen={onOpen} />
+            <MediaTile
+              file={file}
+              index={index}
+              onOpen={onOpen}
+              onLongPress={onLongPress}
+            />
           </View>
         );
       })}
@@ -112,10 +120,12 @@ function MediaTile({
   file,
   index,
   onOpen,
+  onLongPress,
 }: {
   file: FileMetadata;
   index: number;
   onOpen(file: FileMetadata, origin: AnchorRect | null): void;
+  onLongPress?(): void;
 }) {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -139,6 +149,8 @@ function MediaTile({
       onPress={() =>
         void measureAnchor(ref).then((origin) => onOpen(file, origin))
       }
+      onLongPress={onLongPress}
+      delayLongPress={350}
       style={[StyleSheet.absoluteFill, { backgroundColor: theme.sidebar }]}
     >
       {video ? (

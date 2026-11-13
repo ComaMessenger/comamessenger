@@ -1,0 +1,51 @@
+# A video in the feed (poster frame, length, play button) and its player:
+# it starts with sound when opened, pause / play, mute, seeking.
+# Seed first: node e2e/seed-media.mjs (see media.yaml).
+# Run after sign-in.yaml: maestro test e2e/video.yaml
+appId: com.comamessenger.app
+---
+- runFlow: open-app.yaml
+- tapOn:
+    id: chat-row-0
+- extendedWaitUntil:
+    visible: (Видео|Video), 0:0\d
+    timeout: 20000
+- hideKeyboard:
+    optional: true
+- takeScreenshot: video-feed
+- tapOn: (Видео|Video), 0:0\d
+- extendedWaitUntil:
+    visible:
+      id: media-video-controls
+    timeout: 15000
+# Opened videos play at once.
+- extendedWaitUntil:
+    visible:
+      id: media-video-pause
+    timeout: 15000
+- takeScreenshot: video-player
+- tapOn:
+    id: media-video-pause
+- assertVisible:
+    id: media-video-play
+- tapOn:
+    id: media-video-mute
+- assertVisible: (Включить звук|Unmute)
+- tapOn:
+    id: media-video-mute
+- assertVisible: (Выключить звук|Mute)
+# A tap on the scrubber seeks; play goes on from there.
+- tapOn:
+    id: media-video-scrubber
+- tapOn:
+    id: media-video-play
+- assertVisible:
+    id: media-video-pause
+- tapOn:
+    id: media-viewer-close
+- extendedWaitUntil:
+    notVisible:
+      id: media-viewer
+    timeout: 5000
+- tapOn:
+    id: conversation-back
