@@ -892,6 +892,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chats/{chat_id}/shared": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description How many attachments of each kind and links the reader sees in the chat: the numbers on the media, files, voice and links tabs of chat info. Readable by an active member of a live chat, as the feed; an agent that only writes to the chat counts its own messages only. Deleted messages never count. */
+        get: operations["getChatSharedCounts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chats/{chat_id}/shared/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Files attached to the chat's live messages (thread replies included), newest first. `media` is images and videos, `voice` voice recordings, `files` everything else. Each item carries the file as in the feed (no signed links: download through /files/{id}/download), its message, author and time. Same access as the feed; an agent that only writes to the chat sees its own messages' files only. */
+        get: operations["listChatSharedAttachments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chats/{chat_id}/shared/links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description http(s) links found in the text of the chat's live messages (thread replies included), newest first, with the text around each. Links are taken from the text only: no page is fetched or previewed. Same access as the feed; an agent that only writes to the chat sees links from its own messages only. */
+        get: operations["listChatSharedLinks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/messages/{message_id}": {
         parameters: {
             query?: never;
@@ -5003,6 +5054,65 @@ export interface components {
             /** Format: date-time */
             pinned_at: string;
         };
+        ChatSharedCounts: {
+            /** Format: int64 */
+            media: number;
+            /** Format: int64 */
+            files: number;
+            /** Format: int64 */
+            voice: number;
+            /** Format: int64 */
+            links: number;
+        };
+        ChatSharedAuthor: {
+            /** Format: uuid */
+            actor_id: string;
+            display_name: string;
+            /** @enum {string} */
+            type: "user" | "agent";
+            /** Format: int64 */
+            avatar_version: number;
+        };
+        ChatSharedAttachment: {
+            file: components["schemas"]["File"];
+            /** Format: uuid */
+            message_id: string;
+            /** Format: uuid */
+            thread_root_id: string | null;
+            author: components["schemas"]["ChatSharedAuthor"];
+            /**
+             * Format: date-time
+             * @description When the message was sent.
+             */
+            created_at: string;
+        };
+        ChatSharedAttachmentPage: {
+            items: components["schemas"]["ChatSharedAttachment"][];
+            /** @description Opaque; pass as cursor to read older attachments. */
+            next_cursor: string | null;
+        };
+        ChatSharedLink: {
+            /** @description As written in the message; «www.» links get https://. Open it in a new tab or the system browser, never inline. */
+            url: string;
+            /** @description Host for display: lower case, without «www.», punycode shown in Unicode (пример.рф). */
+            domain: string;
+            /** @description Text of a markdown link «[label](url)», if any. */
+            label: string | null;
+            /** Format: uuid */
+            message_id: string;
+            /** Format: uuid */
+            thread_root_id: string | null;
+            author: components["schemas"]["ChatSharedAuthor"];
+            /** Format: date-time */
+            created_at: string;
+            /** @description Message text around the link, whitespace folded, «…» where cut; markdown is left as written. */
+            snippet: string;
+        };
+        ChatSharedLinkPage: {
+            items: components["schemas"]["ChatSharedLink"][];
+            /** @description Opaque; pass as cursor to read older links. */
+            next_cursor: string | null;
+        };
         MessagePinList: {
             pins: components["schemas"]["MessagePin"][];
         };
@@ -7143,6 +7253,90 @@ export interface operations {
                 };
             };
             404: components["responses"]["Error"];
+        };
+    };
+    getChatSharedCounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Counts per tab. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatSharedCounts"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+        };
+    };
+    listChatSharedAttachments: {
+        parameters: {
+            query: {
+                kind: "media" | "files" | "voice";
+                /** @description Opaque next_cursor of the previous page of the same kind. */
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of attachments; next_cursor continues it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatSharedAttachmentPage"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+        };
+    };
+    listChatSharedLinks: {
+        parameters: {
+            query?: {
+                /** @description Opaque next_cursor of the previous page. */
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of links; next_cursor continues it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatSharedLinkPage"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
         };
     };
     deleteMessage: {

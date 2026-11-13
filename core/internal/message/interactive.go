@@ -318,6 +318,9 @@ func (s *Service) writeBlocks(ctx context.Context, tx pgx.Tx, user identity.User
 	if err != nil {
 		return Message{}, 0, fmt.Errorf("update message blocks: %w", err)
 	}
+	if err := syncMessageLinks(ctx, tx, user.OrgID, updated, true); err != nil {
+		return Message{}, 0, err
+	}
 	if err := insertEvent(ctx, tx, user, updated.ChatID, updated.ID, seq, "message.updated"); err != nil {
 		return Message{}, 0, err
 	}

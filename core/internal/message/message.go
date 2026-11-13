@@ -308,6 +308,14 @@ func (s *Service) createTx(ctx context.Context, tx pgx.Tx, user identity.User, c
 	if err := attachFiles(ctx, tx, user.OrgID, result.ID, input.FileIDs); err != nil {
 		return Message{}, false, 0, err
 	}
+	if len(input.FileIDs) > 0 {
+		if err := indexAttachments(ctx, tx, []string{result.ID}); err != nil {
+			return Message{}, false, 0, err
+		}
+	}
+	if err := syncMessageLinks(ctx, tx, user.OrgID, result, false); err != nil {
+		return Message{}, false, 0, err
+	}
 	created := []Message{result}
 	if err := hydrateFiles(ctx, tx, user.OrgID, created); err != nil {
 		return Message{}, false, 0, err
@@ -595,6 +603,9 @@ func (s *Service) Update(ctx context.Context, user identity.User, messageID stri
 	if err := insertEvent(ctx, tx, user, result.ChatID, result.ID, seq, "message.updated"); err != nil {
 		return Message{}, err
 	}
+	if err := syncMessageLinks(ctx, tx, user.OrgID, result, true); err != nil {
+		return Message{}, err
+	}
 	updated := []Message{result}
 	if err := hydrateFiles(ctx, tx, user.OrgID, updated); err != nil {
 		return Message{}, err
@@ -649,6 +660,10 @@ func (s *Service) Delete(ctx context.Context, user identity.User, messageID stri
 		return Message{}, fmt.Errorf("delete message: %w", err)
 	}
 	if err := insertEvent(ctx, tx, user, result.ChatID, result.ID, seq, "message.deleted"); err != nil {
+		return Message{}, err
+	}
+	// Its files and links leave the chat's shared media.
+	if err := dropShared(ctx, tx, result.ID); err != nil {
 		return Message{}, err
 	}
 	deleted := []Message{result}

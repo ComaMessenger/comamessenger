@@ -628,6 +628,9 @@ func (s *Service) Forward(ctx context.Context, user identity.User, sourceMessage
 	if err != nil {
 		return Message{}, false, fmt.Errorf("insert forwarded message: %w", err)
 	}
+	if err := syncMessageLinks(ctx, tx, user.OrgID, result, false); err != nil {
+		return Message{}, false, err
+	}
 	if err := insertEvent(ctx, tx, user, input.ChatID, result.ID, seq, "message.created"); err != nil {
 		return Message{}, false, err
 	}

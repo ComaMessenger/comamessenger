@@ -1205,6 +1205,101 @@ paths:
                 { schema: { $ref: "#/components/schemas/MessagePinList" } },
             }
         "404": { $ref: "#/components/responses/Error" }
+  /api/v1/chats/{chat_id}/shared:
+    get:
+      operationId: getChatSharedCounts
+      description: >-
+        How many attachments of each kind and links the reader sees in the
+        chat: the numbers on the media, files, voice and links tabs of chat
+        info. Readable by an active member of a live chat, as the feed; an
+        agent that only writes to the chat counts its own messages only.
+        Deleted messages never count.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/ChatId" }
+      responses:
+        "200":
+          description: Counts per tab.
+          content:
+            application/json:
+              { schema: { $ref: "#/components/schemas/ChatSharedCounts" } }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  /api/v1/chats/{chat_id}/shared/attachments:
+    get:
+      operationId: listChatSharedAttachments
+      description: >-
+        Files attached to the chat's live messages (thread replies included),
+        newest first. `media` is images and videos, `voice` voice recordings,
+        `files` everything else. Each item carries the file as in the feed
+        (no signed links: download through /files/{id}/download), its message,
+        author and time. Same access as the feed; an agent that only writes to
+        the chat sees its own messages' files only.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/ChatId" }
+        - {
+            name: kind,
+            in: query,
+            required: true,
+            schema: { type: string, enum: [media, files, voice] },
+          }
+        - {
+            name: cursor,
+            in: query,
+            description: Opaque next_cursor of the previous page of the same kind.,
+            schema: { type: string, maxLength: 200 },
+          }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 100, default: 50 },
+          }
+      responses:
+        "200":
+          description: One page of attachments; next_cursor continues it.
+          content:
+            application/json:
+              {
+                schema:
+                  { $ref: "#/components/schemas/ChatSharedAttachmentPage" },
+              }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  /api/v1/chats/{chat_id}/shared/links:
+    get:
+      operationId: listChatSharedLinks
+      description: >-
+        http(s) links found in the text of the chat's live messages (thread
+        replies included), newest first, with the text around each. Links
+        are taken from the text only: no page is fetched or previewed. Same
+        access as the feed; an agent that only writes to the chat sees links
+        from its own messages only.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/ChatId" }
+        - {
+            name: cursor,
+            in: query,
+            description: Opaque next_cursor of the previous page.,
+            schema: { type: string, maxLength: 200 },
+          }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 100, default: 50 },
+          }
+      responses:
+        "200":
+          description: One page of links; next_cursor continues it.
+          content:
+            application/json:
+              { schema: { $ref: "#/components/schemas/ChatSharedLinkPage" } }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
   /api/v1/messages/{message_id}:
     patch:
       operationId: updateMessage
@@ -7343,6 +7438,96 @@ components:
         message_id: { type: string, format: uuid }
         pinned_by: { type: string, format: uuid }
         pinned_at: { type: string, format: date-time }
+    ChatSharedCounts:
+      type: object
+      additionalProperties: false
+      required: [media, files, voice, links]
+      properties:
+        media: { type: integer, format: int64, minimum: 0 }
+        files: { type: integer, format: int64, minimum: 0 }
+        voice: { type: integer, format: int64, minimum: 0 }
+        links: { type: integer, format: int64, minimum: 0 }
+    ChatSharedAuthor:
+      type: object
+      additionalProperties: false
+      required: [actor_id, display_name, type, avatar_version]
+      properties:
+        actor_id: { type: string, format: uuid }
+        display_name: { type: string }
+        type: { type: string, enum: [user, agent] }
+        avatar_version: { type: integer, format: int64, minimum: 0 }
+    ChatSharedAttachment:
+      type: object
+      additionalProperties: false
+      required: [file, message_id, thread_root_id, author, created_at]
+      properties:
+        file: { $ref: "#/components/schemas/File" }
+        message_id: { type: string, format: uuid }
+        thread_root_id: { type: [string, "null"], format: uuid }
+        author: { $ref: "#/components/schemas/ChatSharedAuthor" }
+        created_at:
+          { type: string, format: date-time, description: When the message was sent. }
+    ChatSharedAttachmentPage:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/ChatSharedAttachment" },
+          }
+        next_cursor:
+          type: [string, "null"]
+          description: Opaque; pass as cursor to read older attachments.
+    ChatSharedLink:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          url,
+          domain,
+          label,
+          message_id,
+          thread_root_id,
+          author,
+          created_at,
+          snippet,
+        ]
+      properties:
+        url:
+          type: string
+          maxLength: 2048
+          description: >-
+            As written in the message; «www.» links get https://. Open it in
+            a new tab or the system browser, never inline.
+        domain:
+          type: string
+          description: >-
+            Host for display: lower case, without «www.», punycode shown in
+            Unicode (пример.рф).
+        label:
+          type: [string, "null"]
+          description: Text of a markdown link «[label](url)», if any.
+        message_id: { type: string, format: uuid }
+        thread_root_id: { type: [string, "null"], format: uuid }
+        author: { $ref: "#/components/schemas/ChatSharedAuthor" }
+        created_at: { type: string, format: date-time }
+        snippet:
+          type: string
+          description: >-
+            Message text around the link, whitespace folded, «…» where cut;
+            markdown is left as written.
+    ChatSharedLinkPage:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items:
+          { type: array, items: { $ref: "#/components/schemas/ChatSharedLink" } }
+        next_cursor:
+          type: [string, "null"]
+          description: Opaque; pass as cursor to read older links.
     MessagePinList:
       type: object
       additionalProperties: false
