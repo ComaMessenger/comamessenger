@@ -164,7 +164,8 @@ export function endpointOrigin(raw: string): string {
   const parsed = parseEndpoint(raw);
   if (!parsed) return raw.trim();
   const port =
-    parsed.port || (parsed.scheme === "https" ? "443" : parsed.scheme === "http" ? "80" : "");
+    parsed.port ||
+    (parsed.scheme === "https" ? "443" : parsed.scheme === "http" ? "80" : "");
   return `${parsed.scheme}://${parsed.host}:${port}`;
 }
 
@@ -183,7 +184,11 @@ export function maskSecret(secret: string): string {
 
 /* ---------- Model connections ---------- */
 
-export const llmProviders = ["openai", "anthropic", "openai-compatible"] as const;
+export const llmProviders = [
+  "openai",
+  "anthropic",
+  "openai-compatible",
+] as const;
 export type LlmProvider = (typeof llmProviders)[number];
 
 export type LlmConnectionDraft = {
@@ -212,10 +217,9 @@ export function providerSupportsEmbeddings(provider: string): boolean {
 }
 
 /** Switching away from a compatible provider drops its address. */
-export function withProvider<T extends { provider: string; endpoint_url: string }>(
-  draft: T,
-  provider: LlmProvider,
-): T {
+export function withProvider<
+  T extends { provider: string; endpoint_url: string },
+>(draft: T, provider: LlmProvider): T {
   return {
     ...draft,
     provider,
@@ -398,7 +402,9 @@ export type McpConnectionEdit = {
 export const mcpTimeoutRange = { min: 100, max: 120000 } as const;
 export const mcpOutputRange = { min: 1024, max: 4194304 } as const;
 
-export function mcpConnectionEdit(connection: McpConnection): McpConnectionEdit {
+export function mcpConnectionEdit(
+  connection: McpConnection,
+): McpConnectionEdit {
   return {
     description: connection.description,
     endpoint_url: connection.endpoint_url,
@@ -439,7 +445,8 @@ export function mcpEditDropsSecret(
   return (
     connection.headers_configured &&
     !edit.replace_headers &&
-    endpointOrigin(edit.endpoint_url) !== endpointOrigin(connection.endpoint_url)
+    endpointOrigin(edit.endpoint_url) !==
+      endpointOrigin(connection.endpoint_url)
   );
 }
 

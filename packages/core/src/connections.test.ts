@@ -150,7 +150,9 @@ describe("addresses", () => {
   });
 
   it("hints at internal systems and refuses cloud metadata", () => {
-    expect(mcpEndpointProblem("https://mcp.example.test/mcp", false)).toBeNull();
+    expect(
+      mcpEndpointProblem("https://mcp.example.test/mcp", false),
+    ).toBeNull();
     expect(mcpEndpointProblem("http://mcp.example.test/mcp", false)).toBe(
       "internal",
     );
@@ -166,7 +168,14 @@ describe("addresses", () => {
   });
 
   it("knows internal hosts", () => {
-    for (const host of ["localhost", "192.168.1.2", "172.20.0.1", "::1", "fd12:3::1", "crm"])
+    for (const host of [
+      "localhost",
+      "192.168.1.2",
+      "172.20.0.1",
+      "::1",
+      "fd12:3::1",
+      "crm",
+    ])
       expect(isInternalHost(host)).toBe(true);
     for (const host of ["8.8.8.8", "api.example.test", "2001:db8::1"])
       expect(isInternalHost(host)).toBe(false);
@@ -284,7 +293,12 @@ describe("MCP connections", () => {
     expect(mcpConnectionEditReady(edit)).toBe(true);
     const moved = { ...edit, endpoint_url: "https://other.example.test/mcp" };
     expect(mcpEditDropsSecret(mcp, moved)).toBe(true);
-    expect(mcpEditDropsSecret(mcp, { ...edit, endpoint_url: "https://mcp.example.test/v2" })).toBe(false);
+    expect(
+      mcpEditDropsSecret(mcp, {
+        ...edit,
+        endpoint_url: "https://mcp.example.test/v2",
+      }),
+    ).toBe(false);
     expect(
       updateMcpConnectionRequest(mcp, {
         ...moved,
