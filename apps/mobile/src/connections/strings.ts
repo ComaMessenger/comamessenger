@@ -156,6 +156,7 @@ export const connectionsRu = {
   connTablesTitle: "Таблицы",
   connTablesHint:
     "Если расписание ведётся в таблице, загрузите её в базу знаний (XLSX или CSV) — агент прочитает её без подключения. Таблицу выбирают в конструкторе агента.",
+  connTablesOpenKnowledge: "Открыть базу знаний",
 
   // Webhooks
   connWebhooksTitle: "Входящие вебхуки",
@@ -395,6 +396,7 @@ export const connectionsEn: Record<keyof typeof connectionsRu, string> = {
   connTablesTitle: "Tables",
   connTablesHint:
     "If the schedule lives in a spreadsheet, upload it to the knowledge base (XLSX or CSV) — the agent reads it without a connection. The table is chosen in the agent builder.",
+  connTablesOpenKnowledge: "Open the knowledge base",
 
   connWebhooksTitle: "Incoming webhooks",
   connWebhooksHint:

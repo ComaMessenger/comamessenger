@@ -6,10 +6,12 @@ import {
   connectionErrorKey,
   connectionRequestErrorKey,
   connectionsAccess,
+  knowledgeCollectionsKey,
   type AgentLlmConnection,
   type IntegrationWebhook,
   type McpConnection,
 } from "@comamessenger/core";
+import { agentKeys } from "@/agents/data";
 import i18n from "@/i18n";
 import { useSignedIn } from "@/session/SessionProvider";
 import "./strings";
@@ -19,9 +21,9 @@ import "./strings";
  * lists carry only hints of secrets (`key_hint`, `secret_hint`); a webhook
  * secret from creation or rotation never enters the cache.
  */
-export const modelsKey = ["agent-llm-connections"] as const;
-export const mcpKey = ["mcp-connections"] as const;
-export const webhooksKey = ["integration-webhooks"] as const;
+export const modelsKey = agentKeys.connections;
+export const mcpKey = agentKeys.mcpConnections;
+export const webhooksKey = agentKeys.webhooks;
 
 export function useConnectionsAccess() {
   const { user } = useSignedIn();
@@ -80,12 +82,12 @@ export function useWebhooks() {
 export function useModelUsage(id: string) {
   const { api } = useSignedIn();
   const agents = useQuery({
-    queryKey: ["connections", "agents"],
+    queryKey: agentKeys.agents,
     queryFn: () => api.agents(),
     retry: false,
   });
   const collections = useQuery({
-    queryKey: ["connections", "collections"],
+    queryKey: knowledgeCollectionsKey,
     queryFn: () => api.knowledgeCollections(),
     retry: false,
   });

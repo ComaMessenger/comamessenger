@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, CheckCircle2, Clock, Wallet } from "lucide-react-native";
@@ -8,67 +7,19 @@ import {
   chatName,
   formatCost,
   formatDuration,
-  runAgentCheck,
   stepText,
   toolLabel,
-  type Agent,
   type AgentRun,
   type Chat,
 } from "@comamessenger/core";
 import { radius, spacing } from "@comamessenger/tokens";
-import { messageOf } from "@/lib/errors";
 import { useTheme } from "@/lib/theme";
 import { useSignedIn } from "@/session/SessionProvider";
 import { Text } from "@/ui/Text";
+import { agentKeys } from "../../data";
+import { RunDocumentRow, useRunDocuments } from "../../RunDocuments";
 
-/*
- * One dry run of the current draft (the same loop as the web, from
- * packages/core). Polling stops when the run finishes, another check starts
- * or the screen closes.
- */
-export function useAgentCheck(agent: Pick<Agent, "id">) {
-  const { api } = useSignedIn();
-  const [run, setRun] = useState<AgentRun | null>(null);
-  const [error, setError] = useState("");
-  const [pending, setPending] = useState(false);
-  const controller = useRef<AbortController | null>(null);
-  useEffect(() => () => controller.current?.abort(), []);
-
-  async function start(chatID: string, prompt: string) {
-    controller.current?.abort();
-    const current = new AbortController();
-    controller.current = current;
-    setPending(true);
-    setError("");
-    setRun(null);
-    try {
-      await runAgentCheck({
-        api,
-        agentID: agent.id,
-        chatID,
-        prompt,
-        runID: crypto.randomUUID(),
-        signal: current.signal,
-        onUpdate: setRun,
-      });
-    } catch (cause) {
-      if (!current.signal.aborted) setError(messageOf(cause));
-    } finally {
-      if (controller.current === current) {
-        controller.current = null;
-        setPending(false);
-      }
-    }
-  }
-
-  function stop() {
-    controller.current?.abort();
-    controller.current = null;
-    setPending(false);
-  }
-
-  return { run, error, pending, start, stop };
-}
+export { useAgentCheck } from "../../useAgentCheck";
 
 const terminal = (run: AgentRun) => !["queued", "running"].includes(run.status);
 
@@ -93,16 +44,11 @@ export function CheckResult({
   const { api } = useSignedIn();
   const done = terminal(run);
   const steps = useQuery({
-    queryKey: ["agent-run-steps", run.id],
+    queryKey: agentKeys.steps(run.id),
     queryFn: () => api.agentRunToolCalls(run.id),
     enabled: done,
   });
-  const fragments = useQuery({
-    queryKey: ["agent-run-fragments", run.id],
-    queryFn: () => api.knowledgeRunFragments(run.id),
-    enabled: done,
-    retry: false,
-  });
+  const { documents } = useRunDocuments(run.id, done);
   const preview =
     typeof run.result_summary.preview === "string"
       ? run.result_summary.preview
@@ -111,14 +57,6 @@ export function CheckResult({
   const label = (name: string) => toolLabel(t, name);
   const reads = calls.filter((call) => !call.dry_run && call.mode === "read");
   const wouldDo = calls.filter((call) => call.dry_run);
-  const documents = [
-    ...new Map(
-      (fragments.data?.fragments ?? []).map((fragment) => [
-        fragment.document_id,
-        fragment,
-      ]),
-    ).values(),
-  ];
   const where = chat ? chatName(chat) : "";
 
   if (!done)
@@ -158,16 +96,13 @@ export function CheckResult({
             • {stepText(t, call, label)}
           </Text>
         ))}
-        {documents.map((fragment) => (
-          <Text key={fragment.document_id} size={14} tone="muted">
-            •{" "}
-            {fragment.section
-              ? t("agentTraceDocumentSection", {
-                  title: fragment.document_title,
-                  section: fragment.section,
-                })
-              : t("agentTraceDocument", { title: fragment.document_title })}
-          </Text>
+        {documents.map((document, index) => (
+          <RunDocumentRow
+            key={document.document_id}
+            testID={`agent-check-document-${index}`}
+            document={document}
+            compact
+          />
         ))}
         {wouldDo.map((call) => (
           <Text key={call.id} size={14} style={{ color: theme.primary }}>

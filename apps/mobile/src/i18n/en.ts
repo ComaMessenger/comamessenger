@@ -402,8 +402,6 @@ export const en: Record<keyof typeof ru, string> = {
   acSourceMessage: "Message",
   acSourceFile: "File",
   acSourceDocument: "Document",
-  acSourceDocumentHint:
-    "A knowledge base document. Open Coma on the web to read it in full.",
   acConfirmTitle: "{agent} asks for permission",
   acConfirmLead: "Wants to {action}",
   acConfirmApprove: "Allow",
@@ -1348,6 +1346,7 @@ export const en: Record<keyof typeof ru, string> = {
   agentTraceCost: "about {cost}",
   agentTraceDocument: "Found in «{title}»",
   agentTraceDocumentSection: "Found in «{title}», section «{section}»",
+  agentTraceDocumentOpen: "Opens the fragment in the knowledge base",
   agentTraceNoSteps: "Answered right away without reading anything else",
   agentTraceTitle: "What the agent did",
   agentUnknown: "Deleted agent",
@@ -1376,7 +1375,7 @@ export const en: Record<keyof typeof ru, string> = {
   agentAllActivity: "All activity",
   agentCreate: "Create an agent",
   agentCreateFromRole: "Create from this role",
-  agentCreateOnWeb: "For now, agents are created in Coma on the web.",
+  agentCreateNoRights: "Members allowed to build agents can create them.",
   agentEdit: "Edit",
   agentWrite: "Write to the agent",
   agentManage: "Manage",
@@ -1472,12 +1471,15 @@ export const en: Record<keyof typeof ru, string> = {
   kbSourceNoPreview: "The phone cannot show this file",
   kbSourceNoPreviewHint: "Open it in another app with Share.",
   kbSourceOpenIn: "Open in another app",
-  kbSourceTruncated: "Showing the beginning of the file — it is too large to show in full.",
+  kbSourceTruncated:
+    "Showing the beginning of the file — it is too large to show in full.",
   kbConnectionPick: "Connection for semantic search",
-  kbChatsSelected: "{count, plural, =0 {none selected} one {# chat} other {# chats}}",
+  kbChatsSelected:
+    "{count, plural, =0 {none selected} one {# chat} other {# chats}}",
   kbNoName: "Untitled",
   kbOffline: "No connection to the server",
-  kbOfflineHint: "The knowledge base opens once the connection is back. Check the internet and retry.",
+  kbOfflineHint:
+    "The knowledge base opens once the connection is back. Check the internet and retry.",
   kbUploadsTitle: "Uploads",
   kbLead: "Policies, instructions and memos that agents rely on",
   kbLeadReadOnly: "Documents opened to you for reading",
@@ -1508,7 +1510,8 @@ export const en: Record<keyof typeof ru, string> = {
   kbUploadFiles: "Upload files",
   kbNewPage: "New page",
   kbFormats: "TXT, Markdown, CSV, XLSX, DOCX and PDF with a text layer",
-  kbFormatsHint: "Supported: {formats}. Scans without text are not recognized yet.",
+  kbFormatsHint:
+    "Supported: {formats}. Scans without text are not recognized yet.",
   kbDocumentsEmpty: "No documents in this collection yet",
   kbDocumentsEmptyManage:
     "Upload files or write a page. Coma extracts the text, cuts it into fragments and makes it searchable.",
@@ -1524,7 +1527,8 @@ export const en: Record<keyof typeof ru, string> = {
   kbEmbeddingFailed: "semantic index failed",
   kbErrorUnsupported:
     "This format is not supported. Use TXT, Markdown, CSV, XLSX, DOCX or PDF.",
-  kbErrorFileUnavailable: "The source file is unavailable. Upload the document again.",
+  kbErrorFileUnavailable:
+    "The source file is unavailable. Upload the document again.",
   kbErrorNoTextPdf:
     "The PDF has no text layer — it looks like a scan. Scans are not recognized yet: upload a PDF with text or a DOCX.",
   kbErrorNoText: "No text was found in the file.",
@@ -1539,7 +1543,8 @@ export const en: Record<keyof typeof ru, string> = {
   kbCancelUpload: "Cancel uploading {name}",
   kbDismissUpload: "Remove {name} from the list",
   kbDocumentNotFound: "Document not found",
-  kbDocumentNotFoundHint: "It was deleted or your access to the collection was removed.",
+  kbDocumentNotFoundHint:
+    "It was deleted or your access to the collection was removed.",
   kbOpenSource: "Open source file",
   kbEditPage: "Edit",
   kbDeleteDocument: "Delete",
@@ -1563,9 +1568,11 @@ export const en: Record<keyof typeof ru, string> = {
   kbCollectionName: "Name",
   kbCollectionNamePlaceholder: "Centre policies",
   kbCollectionDescription: "Description",
-  kbCollectionDescriptionHint: "Helps people and agents understand what is inside.",
+  kbCollectionDescriptionHint:
+    "Helps people and agents understand what is inside.",
   kbAccessTitle: "Who can see it",
-  kbAccessOrganizationHint: "Every workspace member and the agents it is connected to.",
+  kbAccessOrganizationHint:
+    "Every workspace member and the agents it is connected to.",
   kbAccessChatsOption: "Members of selected chats",
   kbAccessChatsHint:
     "Only members of these chats. An agent finds the documents only while working in one of them.",
@@ -1596,7 +1603,8 @@ export const en: Record<keyof typeof ru, string> = {
   kbPageTitle: "Title",
   kbPageTitlePlaceholder: "What to hand over between instructors",
   kbPageBody: "Markdown text",
-  kbPageBodyHint: "# and ## headings split the page into sections an agent can cite.",
+  kbPageBodyHint:
+    "# and ## headings split the page into sections an agent can cite.",
   kbPageWrite: "Write",
   kbPagePreview: "Preview",
   kbPagePreviewEmpty: "The page appears here.",

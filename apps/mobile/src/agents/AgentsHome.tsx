@@ -68,7 +68,7 @@ import {
   SectionTitle,
   TextLink,
 } from "./parts";
-import { agentHref, builderRoutes, canCreateAgent } from "./routes";
+import { agentHref, canCreateAgent } from "./routes";
 
 /** Icons of the role catalog; Core names them, the client draws them. */
 export const recipeIcons: Record<string, LucideIcon> = {
@@ -378,11 +378,6 @@ function Intro({ canBuild }: { canBuild: boolean }) {
               {`${index + 1}. ${t(key)}`}
             </Text>
           ))}
-          {!builderRoutes.create && (
-            <Text tone="muted" size={13.5}>
-              {t("agentCreateOnWeb")}
-            </Text>
-          )}
         </View>
       ) : (
         <Text tone="muted" size={14.5}>
@@ -612,7 +607,7 @@ function RecipeSheet({
             />
           ) : (
             <Text tone="subtle" size={13.5}>
-              {t("agentCreateOnWeb")}
+              {t("agentCreateNoRights")}
             </Text>
           )}
         </View>

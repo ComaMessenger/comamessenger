@@ -10,7 +10,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import {
   AlertCircle,
-  BookOpen,
   CheckCircle2,
   ChevronRight,
   Eye,
@@ -53,6 +52,7 @@ import { Text } from "@/ui/Text";
 import { agentKeys, useAgentAccess, useAgents, useKnownChats } from "./data";
 import { Pill } from "./parts";
 import { agentHref } from "./routes";
+import { RunDocumentRow, useRunDocuments } from "./RunDocuments";
 
 export function runTone(run: AgentRun) {
   if (runFailed(run)) return "danger" as const;
@@ -145,22 +145,9 @@ function RunDetails({
     queryFn: () => api.agentRunToolCalls(run.id),
     enabled: done,
   });
-  const fragments = useQuery({
-    queryKey: agentKeys.fragments(run.id),
-    queryFn: () => api.knowledgeRunFragments(run.id),
-    enabled: done,
-    retry: false,
-  });
+  const { documents, query: fragments } = useRunDocuments(run.id, done);
   const preview = runPreview(run);
   const calls = steps.data?.tool_calls ?? [];
-  const documents = [
-    ...new Map(
-      (fragments.data?.fragments ?? []).map((fragment) => [
-        fragment.document_id,
-        fragment,
-      ]),
-    ).values(),
-  ];
   const name = agent?.display_name ?? t("agentUnknown");
   const time = (value: string | null | undefined) =>
     value ? formatDateTime(value, i18n.language) : "—";
@@ -276,22 +263,13 @@ function RunDetails({
                 <StepRow testID={`run-step-${index}`} call={call} />
               </View>
             ))}
-            {documents.map((fragment) => (
-              <View key={fragment.document_id}>
+            {documents.map((document, index) => (
+              <View key={document.document_id}>
                 <Divider />
-                <View accessible style={styles.step}>
-                  <BookOpen size={18} color={theme.muted} />
-                  <Text size={14.5} style={styles.grow}>
-                    {fragment.section
-                      ? t("agentTraceDocumentSection", {
-                          title: fragment.document_title,
-                          section: fragment.section,
-                        })
-                      : t("agentTraceDocument", {
-                          title: fragment.document_title,
-                        })}
-                  </Text>
-                </View>
+                <RunDocumentRow
+                  testID={`run-document-${index}`}
+                  document={document}
+                />
               </View>
             ))}
           </>

@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useQueries } from "@tanstack/react-query";
+import { router } from "expo-router";
 import {
   BookOpen,
   Check,
   ChevronDown,
-  ExternalLink,
+  ChevronRight,
+  Library,
   FileText,
   Paperclip,
   Plus,
@@ -18,6 +20,7 @@ import {
 import { useTranslation } from "react-i18next";
 import {
   isSpreadsheet,
+  knowledgePath,
   knowledgeSources,
   scopesFor,
   type KnowledgeCollection,
@@ -25,7 +28,6 @@ import {
 } from "@comamessenger/core";
 import { spacing } from "@comamessenger/tokens";
 import { useTheme } from "@/lib/theme";
-import { openWebClient } from "@/lib/web";
 import { useSignedIn } from "@/session/SessionProvider";
 import { BottomSheet } from "@/ui/BottomSheet";
 import { IconButton } from "@/ui/IconButton";
@@ -76,7 +78,7 @@ export function KnowledgeStep() {
   const collections = useCollections();
   const documents = useQueries({
     queries: (collections.data ?? []).map((collection) => ({
-      queryKey: agentKeys.documents(collection.id),
+      queryKey: agentKeys.knowledgeDocuments(collection.id),
       queryFn: () => api.knowledgeDocuments(collection.id),
     })),
   });
@@ -94,8 +96,8 @@ export function KnowledgeStep() {
   const byID = new Map(
     (collections.data ?? []).map((collection) => [collection.id, collection]),
   );
-  const openBase = (path = "/knowledge") =>
-    void openWebClient(api.apiURL, path);
+  const openBase = (collectionID?: string) =>
+    router.push(knowledgePath(collectionID) as never);
 
   function setCollections(ids: string[], withTables?: boolean) {
     update((current) => ({
@@ -177,10 +179,8 @@ export function KnowledgeStep() {
                 {collection ? (
                   <IconButton
                     label={t("agentKnowledgeOpenCollection", { name })}
-                    onPress={() =>
-                      openBase(`/knowledge/${encodeURIComponent(id)}`)
-                    }
-                    icon={(color) => <ExternalLink size={18} color={color} />}
+                    onPress={() => openBase(id)}
+                    icon={(color) => <ChevronRight size={18} color={color} />}
                   />
                 ) : null}
                 {editable ? (
@@ -230,7 +230,7 @@ export function KnowledgeStep() {
           <>
             <Divider />
             <NavRow
-              icon={ExternalLink}
+              icon={Library}
               label={
                 collections.data.length === 0
                   ? t("agentKnowledgeCreateFirst")
@@ -361,7 +361,7 @@ function CollectionOption({
   const [documents] = useQueries({
     queries: [
       {
-        queryKey: agentKeys.documents(collection.id),
+        queryKey: agentKeys.knowledgeDocuments(collection.id),
         queryFn: () => api.knowledgeDocuments(collection.id),
         enabled: expanded,
       },

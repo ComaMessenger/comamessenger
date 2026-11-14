@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -12,7 +12,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import {
   AlertCircle,
-  BookOpen,
   CheckCircle2,
   ChevronRight,
   Clock,
@@ -27,7 +26,6 @@ import {
   formatCost,
   formatDuration,
   recipeOf,
-  runAgentCheck,
   runErrorText,
   runFinished,
   runPreview,
@@ -38,7 +36,6 @@ import {
   type Chat,
 } from "@comamessenger/core";
 import { radius, spacing } from "@comamessenger/tokens";
-import { messageOf } from "@/lib/errors";
 import { useTheme } from "@/lib/theme";
 import { useSignedIn } from "@/session/SessionProvider";
 import { Avatar } from "@/ui/Avatar";
@@ -57,7 +54,8 @@ import {
   useRecipes,
 } from "./data";
 import { agentHref, canEditAgent } from "./routes";
-
+import { RunDocumentRow, useRunDocuments } from "./RunDocuments";
+import { useAgentCheck } from "./useAgentCheck";
 
 /**
  * «Проверка»: ready examples of the role, the answer of the agent draft in a
@@ -108,7 +106,6 @@ export function CheckScreen({ agentID }: { agentID: string }) {
 function CheckPanel({ agent }: { agent: Agent }) {
   const { t } = useTranslation();
   const theme = useTheme();
-  const { api } = useSignedIn();
   const access = useAgentAccess();
   const chats = useKnownChats();
   const recipes = useRecipes();
@@ -117,11 +114,7 @@ function CheckPanel({ agent }: { agent: Agent }) {
   const [chatID, setChatID] = useState(agentChats[0]?.id ?? "");
   const [prompt, setPrompt] = useState("");
   const [picking, setPicking] = useState(false);
-  const [run, setRun] = useState<AgentRun | null>(null);
-  const [error, setError] = useState("");
-  const [pending, setPending] = useState(false);
-  const controller = useRef<AbortController | null>(null);
-  useEffect(() => () => controller.current?.abort(), []);
+  const { run, error, pending, start: startCheck, stop } = useAgentCheck(agent);
 
   const selected =
     agentChats.find((chat) => chat.id === chatID) ?? agentChats[0];
@@ -138,37 +131,9 @@ function CheckPanel({ agent }: { agent: Agent }) {
     (item) => item.prompt === prompt,
   )?.expectations;
 
-  async function start() {
+  function start() {
     if (!selected || !prompt.trim()) return;
-    controller.current?.abort();
-    const current = new AbortController();
-    controller.current = current;
-    setPending(true);
-    setError("");
-    setRun(null);
-    try {
-      await runAgentCheck({
-        api,
-        agentID: agent.id,
-        chatID: selected.id,
-        prompt: prompt.trim(),
-        signal: current.signal,
-        onUpdate: setRun,
-      });
-    } catch (cause) {
-      if (!current.signal.aborted) setError(messageOf(cause));
-    } finally {
-      if (controller.current === current) {
-        controller.current = null;
-        setPending(false);
-      }
-    }
-  }
-
-  function stop() {
-    controller.current?.abort();
-    controller.current = null;
-    setPending(false);
+    void startCheck(selected.id, prompt.trim());
   }
 
   return (
@@ -286,7 +251,7 @@ function CheckPanel({ agent }: { agent: Agent }) {
           testID="check-run"
           label={run ? t("agentCheckAgain") : t("agentCheckRun")}
           disabled={blocking.length > 0 || !prompt.trim() || !selected}
-          onPress={() => void start()}
+          onPress={start}
         />
       )}
 
@@ -335,24 +300,11 @@ function CheckResult({ run, chat }: { run: AgentRun; chat: Chat | undefined }) {
     queryFn: () => api.agentRunToolCalls(run.id),
     enabled: done,
   });
-  const fragments = useQuery({
-    queryKey: agentKeys.fragments(run.id),
-    queryFn: () => api.knowledgeRunFragments(run.id),
-    enabled: done,
-    retry: false,
-  });
+  const { documents } = useRunDocuments(run.id, done);
   const preview = runPreview(run);
   const calls = steps.data?.tool_calls ?? [];
   const reads = calls.filter((call) => !call.dry_run && call.mode === "read");
   const wouldDo = calls.filter((call) => call.dry_run);
-  const documents = [
-    ...new Map(
-      (fragments.data?.fragments ?? []).map((fragment) => [
-        fragment.document_id,
-        fragment,
-      ]),
-    ).values(),
-  ];
   const where = chat ? chatName(chat) : "";
   const bubble = [
     styles.bubble,
@@ -386,20 +338,13 @@ function CheckResult({ run, chat }: { run: AgentRun; chat: Chat | undefined }) {
             </Text>
           </View>
         ))}
-        {documents.map((fragment) => (
-          <View key={fragment.document_id}>
+        {documents.map((document, index) => (
+          <View key={document.document_id}>
             <Divider />
-            <View style={styles.traceRow}>
-              <BookOpen size={16} color={theme.muted} />
-              <Text size={14} style={styles.grow}>
-                {fragment.section
-                  ? t("agentTraceDocumentSection", {
-                      title: fragment.document_title,
-                      section: fragment.section,
-                    })
-                  : t("agentTraceDocument", { title: fragment.document_title })}
-              </Text>
-            </View>
+            <RunDocumentRow
+              testID={`check-document-${index}`}
+              document={document}
+            />
           </View>
         ))}
         {wouldDo.map((call) => (

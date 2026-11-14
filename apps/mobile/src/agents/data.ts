@@ -3,7 +3,13 @@ import { useFocusEffect } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
-import { agentAccess, type Chat, type Agent } from "@comamessenger/core";
+import {
+  agentAccess,
+  knowledgeCollectionsKey,
+  knowledgeDocumentsKey,
+  type Chat,
+  type Agent,
+} from "@comamessenger/core";
 import { useMessenger } from "@/messenger/MessengerProvider";
 import { useSignedIn } from "@/session/SessionProvider";
 
@@ -28,6 +34,15 @@ export const agentKeys = {
   collections: (agentID: string) =>
     ["agent-response-collections", agentID] as const,
   followups: (agentID: string) => ["agent-followups", agentID] as const,
+  /* The builder's lists; the same keys as the web and the phone's
+     Settings → Models / Integrations and Knowledge screens. */
+  connections: ["agent-llm-connections"] as const,
+  mcpConnections: ["mcp-connections"] as const,
+  webhooks: ["integration-webhooks"] as const,
+  versions: (agentID: string) => ["agent-versions", agentID] as const,
+  keys: (agentID: string) => ["agent-keys", agentID] as const,
+  knowledgeCollections: knowledgeCollectionsKey,
+  knowledgeDocuments: knowledgeDocumentsKey,
 };
 
 export function useAgentAccess() {

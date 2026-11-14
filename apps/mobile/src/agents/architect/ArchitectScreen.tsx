@@ -22,8 +22,7 @@ import {
 } from "@comamessenger/core";
 import { radius, spacing } from "@comamessenger/tokens";
 import { useTheme } from "@/lib/theme";
-import { openWebClient } from "@/lib/web";
-import { useSignedIn } from "@/session/SessionProvider";
+import { connectionsPaths } from "@/connections/paths";
 import { Button } from "@/ui/Button";
 import { IconButton } from "@/ui/IconButton";
 import { Notice } from "@/ui/Notice";
@@ -53,7 +52,6 @@ import { useArchitect } from "./useArchitect";
 export function ArchitectScreen({ agentID }: { agentID: string | null }) {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
-  const { api } = useSignedIn();
   const queryClient = useQueryClient();
   const access = useAgentAccess();
   const agents = useAgents();
@@ -160,7 +158,7 @@ export function ArchitectScreen({ agentID }: { agentID: string | null }) {
             }
             onAction={
               access.canIntegrate
-                ? () => void openWebClient(api.apiURL, "/agents/connections")
+                ? () => router.push(connectionsPaths.newModel)
                 : undefined
             }
           />

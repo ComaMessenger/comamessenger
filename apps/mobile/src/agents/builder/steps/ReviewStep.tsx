@@ -10,8 +10,7 @@ import {
 } from "@comamessenger/core";
 import { spacing } from "@comamessenger/tokens";
 import { useTheme } from "@/lib/theme";
-import { openWebClient } from "@/lib/web";
-import { useSignedIn } from "@/session/SessionProvider";
+import { connectionsPaths } from "@/connections/paths";
 import { Button } from "@/ui/Button";
 import { PickerSheet } from "@/ui/PickerSheet";
 import {
@@ -139,7 +138,6 @@ function healthTone(connection: AgentLlmConnection) {
 function ModelSection() {
   const { t } = useTranslation();
   const theme = useTheme();
-  const { api } = useSignedIn();
   const builder = useAgentBuilder();
   const { draft, connections, chats, capabilities, access, update } = builder;
   const [choosing, setChoosing] = useState(false);
@@ -200,9 +198,7 @@ function ModelSection() {
               <Divider />
               <ActionRow
                 label={t("agentModelConnect")}
-                onPress={() =>
-                  void openWebClient(api.apiURL, "/agents/connections")
-                }
+                onPress={() => router.push(connectionsPaths.newModel)}
               />
             </>
           ) : null}

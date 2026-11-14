@@ -1,6 +1,7 @@
 import { View } from "react-native";
 import { router } from "expo-router";
-import { Cable, Plus, Webhook } from "lucide-react-native";
+import { Cable, Library, Plus, Webhook } from "lucide-react-native";
+import { knowledgePath } from "@comamessenger/core";
 import { useTranslation } from "react-i18next";
 import { SettingsScreen } from "@/settings/SettingsScreen";
 import { Notice } from "@/ui/Notice";
@@ -47,11 +48,7 @@ export function IntegrationsScreen() {
       <SettingsGroup title={t("connMcpTitle")} hint={t("connMcpHint")}>
         {connections.length === 0 ? (
           <GroupBody>
-            <Notice
-              tone="neutral"
-              title={t("connMcpEmpty")}
-              hint={t("connTablesHint")}
-            />
+            <Notice tone="neutral" title={t("connMcpEmpty")} />
           </GroupBody>
         ) : (
           connections.map((item, index) => (
@@ -127,15 +124,20 @@ export function IntegrationsScreen() {
         </SettingsGroup>
       )}
 
-      {connections.length > 0 && (
-        <SettingsGroup title={t("connTablesTitle")}>
-          <GroupBody>
-            <Text tone="muted" size={14}>
-              {t("connTablesHint")}
-            </Text>
-          </GroupBody>
-        </SettingsGroup>
-      )}
+      <SettingsGroup title={t("connTablesTitle")}>
+        <GroupBody>
+          <Text tone="muted" size={14}>
+            {t("connTablesHint")}
+          </Text>
+        </GroupBody>
+        <Divider />
+        <NavRow
+          testID="connections-open-knowledge"
+          icon={Library}
+          label={t("connTablesOpenKnowledge")}
+          onPress={() => router.push(knowledgePath() as never)}
+        />
+      </SettingsGroup>
     </SettingsScreen>
   );
 }

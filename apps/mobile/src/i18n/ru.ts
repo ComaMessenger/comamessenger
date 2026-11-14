@@ -420,8 +420,6 @@ export const ru = {
   acSourceMessage: "Сообщение",
   acSourceFile: "Файл",
   acSourceDocument: "Документ",
-  acSourceDocumentHint:
-    "Документ из базы знаний. Полностью его можно открыть в веб-версии Coma.",
   acConfirmTitle: "{agent} просит разрешения",
   acConfirmLead: "Хочет {action}",
   acConfirmApprove: "Разрешить",
@@ -1381,6 +1379,7 @@ export const ru = {
   agentTraceCost: "около {cost}",
   agentTraceDocument: "Нашёл в «{title}»",
   agentTraceDocumentSection: "Нашёл в «{title}», раздел «{section}»",
+  agentTraceDocumentOpen: "Открыть фрагмент в базе знаний",
   agentTraceNoSteps: "Ответил сразу, ничего дополнительно не читал",
   agentTraceTitle: "Что сделал агент",
   agentUnknown: "Удалённый агент",
@@ -1409,7 +1408,8 @@ export const ru = {
   agentAllActivity: "Вся активность",
   agentCreate: "Создать агента",
   agentCreateFromRole: "Создать из шаблона",
-  agentCreateOnWeb: "Создать агента пока можно в веб-версии Coma.",
+  agentCreateNoRights:
+    "Создавать агентов могут участники с правом собирать агентов.",
   agentEdit: "Изменить",
   agentWrite: "Написать агенту",
   agentManage: "Управление",
@@ -1505,12 +1505,15 @@ export const ru = {
   kbSourceNoPreview: "Этот файл телефон показать не может",
   kbSourceNoPreviewHint: "Откройте его в другом приложении через «Поделиться».",
   kbSourceOpenIn: "Открыть в другом приложении",
-  kbSourceTruncated: "Показано начало файла — он слишком большой для просмотра целиком.",
+  kbSourceTruncated:
+    "Показано начало файла — он слишком большой для просмотра целиком.",
   kbConnectionPick: "Подключение для поиска по смыслу",
-  kbChatsSelected: "{count, plural, =0 {не выбраны} one {# чат} few {# чата} many {# чатов} other {# чата}}",
+  kbChatsSelected:
+    "{count, plural, =0 {не выбраны} one {# чат} few {# чата} many {# чатов} other {# чата}}",
   kbNoName: "Без названия",
   kbOffline: "Нет связи с сервером",
-  kbOfflineHint: "База знаний откроется, когда связь вернётся. Проверьте интернет и повторите.",
+  kbOfflineHint:
+    "База знаний откроется, когда связь вернётся. Проверьте интернет и повторите.",
   kbUploadsTitle: "Загрузки",
   kbLead: "Регламенты, инструкции и памятки, на которые опираются агенты",
   kbLeadReadOnly: "Документы, которые вам открыли для чтения",
@@ -1545,7 +1548,8 @@ export const ru = {
   kbDocumentsEmpty: "В коллекции пока нет документов",
   kbDocumentsEmptyManage:
     "Загрузите файлы или напишите страницу. Coma извлечёт текст, нарежет его на фрагменты и сделает доступным для поиска.",
-  kbDocumentsEmptyRead: "Когда сюда добавят документы, они появятся в этом списке.",
+  kbDocumentsEmptyRead:
+    "Когда сюда добавят документы, они появятся в этом списке.",
   kbDocumentsLoadFailed: "Не удалось загрузить документы",
   kbKindPage: "Страница",
   kbStatusPending: "В очереди",
@@ -1558,7 +1562,8 @@ export const ru = {
   kbEmbeddingFailed: "смысловой индекс не построен",
   kbErrorUnsupported:
     "Формат не поддерживается. Подойдут TXT, Markdown, CSV, XLSX, DOCX и PDF.",
-  kbErrorFileUnavailable: "Исходный файл недоступен. Загрузите документ заново.",
+  kbErrorFileUnavailable:
+    "Исходный файл недоступен. Загрузите документ заново.",
   kbErrorNoTextPdf:
     "В PDF нет текстового слоя — похоже, это скан. Распознавание сканов пока не поддерживается: загрузите PDF с текстом или DOCX.",
   kbErrorNoText: "В файле не нашлось текста.",
@@ -1599,7 +1604,8 @@ export const ru = {
   kbCollectionDescription: "Описание",
   kbCollectionDescriptionHint: "Помогает людям и агентам понять, что внутри.",
   kbAccessTitle: "Кто видит",
-  kbAccessOrganizationHint: "Все участники пространства и агенты, которым её подключат.",
+  kbAccessOrganizationHint:
+    "Все участники пространства и агенты, которым её подключат.",
   kbAccessChatsOption: "Участники выбранных чатов",
   kbAccessChatsHint:
     "Только участники этих чатов. Агент найдёт документы, только когда работает в одном из них.",
@@ -1630,7 +1636,8 @@ export const ru = {
   kbPageTitle: "Заголовок",
   kbPageTitlePlaceholder: "Что передавать при смене инструктора",
   kbPageBody: "Текст в Markdown",
-  kbPageBodyHint: "Заголовки # и ## делят страницу на разделы — агент сошлётся на нужный.",
+  kbPageBodyHint:
+    "Заголовки # и ## делят страницу на разделы — агент сошлётся на нужный.",
   kbPageWrite: "Текст",
   kbPagePreview: "Предпросмотр",
   kbPagePreviewEmpty: "Здесь появится страница.",

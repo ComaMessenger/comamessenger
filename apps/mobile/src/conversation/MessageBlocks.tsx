@@ -6,6 +6,7 @@ import {
   StyleSheet,
   View,
 } from "react-native";
+import { useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import {
   BookOpen,
@@ -36,6 +37,8 @@ import {
   type MessageBlocks as Blocks,
   type MessageSource,
   type MessengerAPI,
+  knowledgeDocumentKey,
+  knowledgePath,
 } from "@comamessenger/core";
 import { radius, spacing } from "@comamessenger/tokens";
 import { useTheme } from "@/lib/theme";
@@ -508,6 +511,7 @@ function Sources({
 }) {
   const { t } = useTranslation();
   const theme = useTheme();
+  const client = useQueryClient();
   function open(source: MessageSource) {
     if (source.kind === "message" && source.message_id)
       void api
@@ -526,14 +530,24 @@ function Sources({
         .file(source.file_id)
         .then((file) => openAttachment(api, file))
         .catch(() => Alert.alert(t("actionFailed")));
-    // The knowledge base is web-only in this phase: show what the agent cited.
-    else if (source.kind === "document")
-      Alert.alert(
-        source.title || t("acSourceDocument"),
-        [source.excerpt, t("acSourceDocumentHint")]
-          .filter(Boolean)
-          .join("\n\n"),
-      );
+    // A cited document opens on its knowledge base page with the quoted
+    // fragment in focus (as on the web); the server decides whether the
+    // reader may see it. The exact fragment first; its position and the
+    // quote are fallbacks for documents indexed again.
+    else if (source.kind === "document" && source.document_id)
+      void api
+        .knowledgeDocument(source.document_id)
+        .then((document) => {
+          client.setQueryData(knowledgeDocumentKey(document.id), document);
+          router.push(
+            knowledgePath(document.collection_id, document.id, {
+              fragment: source.chunk_id,
+              position: source.position,
+              quote: source.excerpt,
+            }) as never,
+          );
+        })
+        .catch(() => Alert.alert(t("acDocumentFailed")));
   }
   return (
     <View style={styles.sources} accessibilityLabel={t("acSources")}>

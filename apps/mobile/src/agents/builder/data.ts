@@ -1,14 +1,11 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import {
   chatName,
-  hasPermission,
   userTimezone,
   type AgentBuilderStep,
   type Chat,
-  type User,
 } from "@comamessenger/core";
 import { useMessenger } from "@/messenger/MessengerProvider";
 import { useSignedIn } from "@/session/SessionProvider";
@@ -19,19 +16,10 @@ import { useSignedIn } from "@/session/SessionProvider";
  * seen by the others.
  */
 
-export const agentKeys = {
-  agents: ["agents"] as const,
-  connections: ["agent-llm-connections"] as const,
-  recipes: (locale: string) => ["agent-recipes", locale] as const,
-  triggers: (agentID: string) => ["agent-triggers", agentID] as const,
-  collections: ["knowledge", "collections"] as const,
-  documents: (collectionID: string) =>
-    ["knowledge", "documents", collectionID] as const,
-  mcpConnections: ["mcp-connections"] as const,
-  webhooks: ["integration-webhooks"] as const,
-  versions: (agentID: string) => ["agent-versions", agentID] as const,
-  keys: (agentID: string) => ["agent-keys", agentID] as const,
-};
+import { agentKeys } from "../data";
+
+export { agentKeys, useAgentAccess, useAgents, useRecipes } from "../data";
+export type { AgentAccess } from "@comamessenger/core";
 
 /** Paths of the builder screens; the agents tab links here. */
 export const agentBuilderPaths = {
@@ -52,36 +40,9 @@ export const agentBuilderPaths = {
     `/agents/${encodeURIComponent(agentID)}/edit/architect` as const,
 };
 
-export type AgentAccess = {
-  canBuild: boolean;
-  canPublish: boolean;
-  canIntegrate: boolean;
-  canManageKnowledge: boolean;
-};
-
-/** The same permissions the web builder asks for. */
-export function agentAccess(user: User): AgentAccess {
-  return {
-    canBuild: hasPermission(user, "agents.build"),
-    canPublish: hasPermission(user, "agents.publish"),
-    canIntegrate: hasPermission(user, "integrations.manage"),
-    canManageKnowledge: hasPermission(user, "knowledge.manage"),
-  };
-}
-
-export function useAgentAccess(): AgentAccess {
-  const { user } = useSignedIn();
-  return useMemo(() => agentAccess(user), [user]);
-}
-
 export function useTimezone(): string {
   const { user } = useSignedIn();
   return userTimezone(user.timezone);
-}
-
-export function useAgents() {
-  const { api } = useSignedIn();
-  return useQuery({ queryKey: agentKeys.agents, queryFn: () => api.agents() });
 }
 
 export function useConnections() {
@@ -89,18 +50,6 @@ export function useConnections() {
   return useQuery({
     queryKey: agentKeys.connections,
     queryFn: () => api.agentLlmConnections(),
-  });
-}
-
-/** Built-in roles from Core in the interface language. */
-export function useRecipes() {
-  const { api } = useSignedIn();
-  const { i18n } = useTranslation();
-  const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
-  return useQuery({
-    queryKey: agentKeys.recipes(locale),
-    queryFn: () => api.agentRecipes(locale),
-    staleTime: Infinity,
   });
 }
 
@@ -116,7 +65,7 @@ export function useTriggers(agentID: string | undefined) {
 export function useCollections(enabled = true) {
   const { api } = useSignedIn();
   return useQuery({
-    queryKey: agentKeys.collections,
+    queryKey: agentKeys.knowledgeCollections,
     queryFn: () => api.knowledgeCollections(),
     enabled,
   });
