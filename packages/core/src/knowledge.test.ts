@@ -8,8 +8,22 @@ import {
   splitHighlight,
   splitQuote,
   statusKey,
-} from "./format";
-import { knowledgeFromPath, knowledgePath } from "./routes";
+  knowledgeFromPath,
+  knowledgePath,
+  knowledgeFocusFrom,
+  knowledgeCollectionForm,
+  knowledgeCollectionValid,
+  knowledgeCollectionErrorKey,
+  knowledgeCollectionPayload,
+  knowledgePageUpdate,
+  knowledgePageValid,
+  sourceView,
+  fileLabel,
+  bestFragmentPerDocument,
+  embeddingNoticeKey,
+} from "./knowledge";
+import { relativeAge } from "./chats";
+import type { KnowledgeEmbeddingConnection, KnowledgeFragment } from "./types";
 
 describe("knowledge formats", () => {
   it("mirrors the server document kinds", () => {
@@ -105,5 +119,78 @@ describe("focusedFragment", () => {
   it("keeps the quote search for old messages", () => {
     expect(focusedFragment(fragments, "", "Заболевший инструктор сообщает", null)).toBe("b");
     expect(focusedFragment(fragments, "", "", null)).toBe("");
+  });
+});
+
+describe("shared knowledge helpers", () => {
+  it("encodes focus like URLSearchParams and reads it back", () => {
+    const path = knowledgePath("c1", "d1", { query: "отпуск (летний) 2", position: 0, quote: "a'b" });
+    const search = new URLSearchParams({ position: "0", q: "отпуск (летний) 2", quote: "a'b" });
+    expect(path).toBe(`/knowledge/c1/d1?${search}`);
+    const parsed = new URLSearchParams(path.split("?")[1]);
+    expect(knowledgeFocusFrom((name) => parsed.get(name))).toEqual({
+      fragment: "",
+      query: "отпуск (летний) 2",
+      quote: "a'b",
+      position: 0,
+    });
+    expect(knowledgeFocusFrom(() => undefined).position).toBeNull();
+  });
+
+  it("builds the collection payload and validates chats", () => {
+    const form = knowledgeCollectionForm();
+    expect(knowledgeCollectionValid(form)).toBe(false);
+    const chats = { ...form, name: " Регламенты ", access: "chats" as const, connectionID: "" };
+    expect(knowledgeCollectionValid(chats)).toBe(false);
+    expect(knowledgeCollectionErrorKey(chats)).toBe("kbChatsRequired");
+    expect(knowledgeCollectionPayload({ ...chats, chatIDs: ["x"] })).toEqual({
+      name: "Регламенты",
+      description: "",
+      access: "chats",
+      chat_ids: ["x"],
+      embedding_connection_id: null,
+    });
+    expect(knowledgeCollectionPayload({ ...chats, access: "organization", chatIDs: ["x"] }).chat_ids).toEqual([]);
+  });
+
+  it("sends a page body only when it changed", () => {
+    expect(knowledgePageUpdate({ body: "a" }, " T ", "a")).toEqual({ title: "T" });
+    expect(knowledgePageUpdate({ body: "a" }, "T", "b")).toEqual({ title: "T", body: "b" });
+    expect(knowledgePageValid("T", "  ")).toBe(false);
+  });
+
+  it("picks the viewer and the file label", () => {
+    expect(sourceView({ file_name: "a.pdf", file_mime: null })).toBe("pdf");
+    expect(sourceView({ file_name: "a.csv", file_mime: null })).toBe("text");
+    expect(sourceView({ file_name: "a.docx", file_mime: null })).toBe("office");
+    expect(sourceView({ file_name: "a.bin", file_mime: null })).toBe("other");
+    expect(fileLabel({ title: "a.md", file_name: "a.md", file_mime: "" })).toBe("Markdown");
+    expect(fileLabel({ title: "Правила", file_name: "rules.pdf", file_mime: "" })).toBe("rules.pdf");
+  });
+
+  it("keeps the best fragment of each document", () => {
+    const fragment = (chunk_id: string, document_id: string) =>
+      ({ chunk_id, document_id }) as KnowledgeFragment;
+    expect(
+      bestFragmentPerDocument([fragment("1", "a"), fragment("2", "b"), fragment("3", "a")]).map(
+        (item) => item.chunk_id,
+      ),
+    ).toEqual(["1", "2"]);
+  });
+
+  it("explains the embedding choice", () => {
+    const connection = { enabled: true, data_sharing_approved: true } as KnowledgeEmbeddingConnection;
+    expect(embeddingNoticeKey()).toBe("kbEmbeddingNoneHint");
+    expect(embeddingNoticeKey({ ...connection, enabled: false })).toBe("kbEmbeddingDisabled");
+    expect(embeddingNoticeKey({ ...connection, data_sharing_approved: false })).toBe("kbEmbeddingNotApproved");
+    expect(embeddingNoticeKey(connection)).toBe("kbEmbeddingWarning");
+  });
+
+  it("buckets ages", () => {
+    const now = new Date("2026-11-14T12:00:00");
+    expect(relativeAge("2026-11-14T11:59:50", now)).toEqual({ unit: "now" });
+    expect(relativeAge("2026-11-14T11:30:00", now)).toEqual({ unit: "minutes", count: 30 });
+    expect(relativeAge("2026-11-14T09:00:00", now)).toEqual({ unit: "hours", count: 3 });
+    expect(relativeAge("2026-11-13T09:00:00", now)).toEqual({ unit: "date" });
   });
 });
