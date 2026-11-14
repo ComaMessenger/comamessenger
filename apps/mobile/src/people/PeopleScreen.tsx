@@ -13,7 +13,6 @@ import { useTranslation } from "react-i18next";
 import type { PeopleFilter } from "@comamessenger/core";
 import { spacing } from "@comamessenger/tokens";
 import { useTheme } from "@/lib/theme";
-import { openWebClient } from "@/lib/web";
 import { useSignedIn } from "@/session/SessionProvider";
 import { IconButton } from "@/ui/IconButton";
 import { Notice } from "@/ui/Notice";
@@ -27,7 +26,7 @@ import { usePeople } from "./usePeople";
 export function PeopleScreen() {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
-  const { api, user } = useSignedIn();
+  const { user } = useSignedIn();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<PeopleFilter>("all");
   const directory = usePeople({ query, filter, locale: i18n.language });
@@ -63,12 +62,7 @@ export function PeopleScreen() {
               label={t("peopleInvite")}
               hint={t("peopleInviteHint")}
               variant="soft"
-              onPress={() =>
-                void openWebClient(
-                  api.apiURL,
-                  "/settings/workspace/invitations",
-                )
-              }
+              onPress={() => router.push("/settings/workspace/invitations")}
               icon={(color) => <UserPlus size={20} color={color} />}
             />
           ) : undefined

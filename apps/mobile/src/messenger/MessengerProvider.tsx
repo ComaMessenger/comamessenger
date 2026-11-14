@@ -23,6 +23,7 @@ import {
   type ChatFolder,
 } from "@comamessenger/core";
 import { setLocale } from "@/i18n";
+import { applyThemePreference } from "@/lib/theme";
 import { createAppStore } from "./appStore";
 import { checkpointStorage, outboxStorage } from "@/lib/database";
 import { hydrateDrafts } from "@/lib/drafts";
@@ -315,11 +316,16 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
       .catch(() => undefined);
     void api
       .preferences()
-      .then((preferences) => setLocale(preferences.locale))
+      .then((preferences) => {
+        setLocale(preferences.locale);
+        applyThemePreference(preferences.theme);
+      })
       .catch(() => undefined);
     coordinator.start();
     void outbox.flush();
     return () => {
+      // Signed out: the next account brings its own theme.
+      applyThemePreference(null);
       coordinator.stop();
       if (reloadTimer.current !== null) clearTimeout(reloadTimer.current);
     };
