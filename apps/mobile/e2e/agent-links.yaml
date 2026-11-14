@@ -44,6 +44,7 @@ env:
 - scrollUntilVisible:
     element:
       id: agent-row-e2e-spravka
+    centerElement: true
     timeout: 20000
 - tapOn:
     id: agent-row-e2e-spravka
@@ -139,6 +140,7 @@ env:
 - scrollUntilVisible:
     element:
       id: agent-row-e2e-spravochnaya
+    centerElement: true
     timeout: 20000
 - tapOn:
     id: agent-row-e2e-spravochnaya

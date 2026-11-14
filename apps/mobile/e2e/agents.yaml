@@ -67,6 +67,7 @@ appId: com.comamessenger.app
 - scrollUntilVisible:
     element:
       id: agent-row-e2e-svodka
+    centerElement: true
     direction: DOWN
 - tapOn:
     id: agent-row-e2e-svodka
@@ -127,7 +128,14 @@ appId: com.comamessenger.app
 - tapOn:
     id: agent-back
 
-# Activity
+# Activity: back to the top of the overview first, or the row may count as
+# visible under the header (more agents push it there).
+- repeat:
+    times: 2
+    commands:
+      - swipe:
+          direction: DOWN
+          duration: 300
 - scrollUntilVisible:
     element:
       id: agents-activity
