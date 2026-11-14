@@ -7,9 +7,9 @@ import i18n from "@/i18n";
  */
 export const connectionsRu = {
   connModels: "Модели",
-  connModelsHint: "Подключения к языковым моделям для агентов",
+  connModelsHint: "Подключения к языковым моделям для агентов.",
   connIntegrations: "Интеграции",
-  connIntegrationsHint: "Внешние системы и вебхуки для агентов",
+  connIntegrationsHint: "Внешние системы и вебхуки для агентов.",
 
   // Model connections
   connModelsLead:
@@ -246,9 +246,9 @@ export const connectionsRu = {
 
 export const connectionsEn: Record<keyof typeof connectionsRu, string> = {
   connModels: "Models",
-  connModelsHint: "Language model connections for agents",
+  connModelsHint: "Language model connections for agents.",
   connIntegrations: "Integrations",
-  connIntegrationsHint: "External systems and webhooks for agents",
+  connIntegrationsHint: "External systems and webhooks for agents.",
 
   connModelsLead:
     "Agents reach a model through a workspace connection. The key is stored encrypted on the server and never comes back to the phone.",

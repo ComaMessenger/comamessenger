@@ -60,7 +60,8 @@ export function SecretField({
         autoCapitalize="none"
         autoCorrect={false}
         autoComplete="off"
-        textContentType="none"
+        // Not "password": iOS would offer to keep the key in the Keychain.
+        textContentType="oneTimeCode"
         importantForAutofill="no"
         spellCheck={false}
       />
