@@ -3083,6 +3083,11 @@ export interface components {
             /** Format: uuid */
             thread_root_id: string | null;
             active: boolean;
+            /**
+             * @description What the person is doing in the chat; absent means typing (clients before the field).
+             * @enum {string}
+             */
+            action?: "typing" | "recording_voice" | "uploading_photo" | "uploading_video" | "uploading_file";
         };
         RealtimeSetPresenceFrameV1: {
             /** @enum {string} */
@@ -3138,6 +3143,8 @@ export interface components {
             ack_interval_ms: number;
             ack_batch_size: number;
             max_unacked_events: number;
+            /** @description Optional protocol additions this server accepts. typing_actions: the action field on typing frames. */
+            features?: string[];
         };
         RealtimeDurableEventFrameV1: {
             /** @enum {string} */
@@ -3178,6 +3185,11 @@ export interface components {
             /** Format: uuid */
             thread_root_id: string | null;
             active: boolean;
+            /**
+             * @description What the person is doing in the chat; absent means typing (clients before the field).
+             * @enum {string}
+             */
+            action?: "typing" | "recording_voice" | "uploading_photo" | "uploading_video" | "uploading_file";
             /** Format: date-time */
             expires_at: string;
         };
@@ -3190,7 +3202,30 @@ export interface components {
             state: "online" | "away" | "offline";
             /** Format: date-time */
             expires_at: string;
+            /**
+             * Format: date-time
+             * @description With away or offline: when the person left, sent only to those who share a chat with them when neither side hides last seen.
+             */
+            last_seen_at?: string;
         };
+        /** @description Sent once after hello: everyone in the workspace who is online or away right now. */
+        RealtimePresenceSnapshotFrameV1: {
+            /** @enum {string} */
+            op: "presence.snapshot";
+            actors: {
+                /** Format: uuid */
+                actor_id: string;
+                /** @enum {string} */
+                state: "online" | "away";
+                /** Format: date-time */
+                expires_at: string;
+            }[];
+        };
+        /**
+         * @description What the person is doing in the chat; absent means typing (clients before the field).
+         * @enum {string}
+         */
+        RealtimeTypingActionV1: "typing" | "recording_voice" | "uploading_photo" | "uploading_video" | "uploading_file";
         RealtimeAgentStatusEventFrameV1: {
             /** @enum {string} */
             op: "agent.status";
@@ -4787,6 +4822,16 @@ export interface components {
             status_expires_at: string | null;
             /** Format: int64 */
             avatar_version: number;
+            /**
+             * Format: date-time
+             * @description Direct chat peer only — when the person was last online, when neither side hides last seen.
+             */
+            last_seen_at?: string;
+            /**
+             * @description Direct chat peer only — rough last seen used instead of last_seen_at when the person or the viewer hides the exact time.
+             * @enum {string}
+             */
+            last_seen_approx?: "recently" | "within_week" | "within_month" | "long_ago";
         };
         ActorPage: {
             actors: components["schemas"]["ActorSummary"][];
@@ -4843,6 +4888,16 @@ export interface components {
             status_expires_at: string | null;
             /** Format: int64 */
             avatar_version: number;
+            /**
+             * Format: date-time
+             * @description When the person was last online. Present only for people the viewer shares this chat with, when neither of them hides last seen.
+             */
+            last_seen_at?: string;
+            /**
+             * @description Rough last seen used instead of last_seen_at when the person or the viewer hides the exact time (recently means within three days).
+             * @enum {string}
+             */
+            last_seen_approx?: "recently" | "within_week" | "within_month" | "long_ago";
         };
         ChatAgentList: {
             agents: components["schemas"]["ChatAgent"][];
@@ -5499,6 +5554,11 @@ export interface components {
             /** Format: date-time */
             snoozed_until: string | null;
             email_digest: boolean;
+            /**
+             * @description Who sees when this person was last online. "nobody" also hides other people's exact time from them (symmetric, as in Telegram); online status itself stays visible in the workspace.
+             * @enum {string}
+             */
+            last_seen_visibility: "everyone" | "nobody";
         };
         UpdatePreferencesRequest: {
             /** @enum {string} */
@@ -5522,6 +5582,11 @@ export interface components {
             /** Format: date-time */
             snoozed_until?: string | null;
             email_digest?: boolean;
+            /**
+             * @description Who sees when this person was last online. "nobody" also hides other people's exact time from them (symmetric, as in Telegram); online status itself stays visible in the workspace.
+             * @enum {string}
+             */
+            last_seen_visibility?: "everyone" | "nobody";
         };
         NotificationSchedule: {
             days: ("all" | "weekdays") | number[];

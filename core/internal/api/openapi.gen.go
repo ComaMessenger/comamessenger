@@ -11,6 +11,30 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for ActorSummaryLastSeenApprox.
+const (
+	ActorSummaryLastSeenApproxLongAgo     ActorSummaryLastSeenApprox = "long_ago"
+	ActorSummaryLastSeenApproxRecently    ActorSummaryLastSeenApprox = "recently"
+	ActorSummaryLastSeenApproxWithinMonth ActorSummaryLastSeenApprox = "within_month"
+	ActorSummaryLastSeenApproxWithinWeek  ActorSummaryLastSeenApprox = "within_week"
+)
+
+// Valid indicates whether the value is a known member of the ActorSummaryLastSeenApprox enum.
+func (e ActorSummaryLastSeenApprox) Valid() bool {
+	switch e {
+	case ActorSummaryLastSeenApproxLongAgo:
+		return true
+	case ActorSummaryLastSeenApproxRecently:
+		return true
+	case ActorSummaryLastSeenApproxWithinMonth:
+		return true
+	case ActorSummaryLastSeenApproxWithinWeek:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ActorSummaryType.
 const (
 	ActorSummaryTypeAgent ActorSummaryType = "agent"
@@ -1181,6 +1205,30 @@ func (e ChatFolderIcon) Valid() bool {
 	case Waves:
 		return true
 	case Zap:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ChatMemberLastSeenApprox.
+const (
+	ChatMemberLastSeenApproxLongAgo     ChatMemberLastSeenApprox = "long_ago"
+	ChatMemberLastSeenApproxRecently    ChatMemberLastSeenApprox = "recently"
+	ChatMemberLastSeenApproxWithinMonth ChatMemberLastSeenApprox = "within_month"
+	ChatMemberLastSeenApproxWithinWeek  ChatMemberLastSeenApprox = "within_week"
+)
+
+// Valid indicates whether the value is a known member of the ChatMemberLastSeenApprox enum.
+func (e ChatMemberLastSeenApprox) Valid() bool {
+	switch e {
+	case ChatMemberLastSeenApproxLongAgo:
+		return true
+	case ChatMemberLastSeenApproxRecently:
+		return true
+	case ChatMemberLastSeenApproxWithinMonth:
+		return true
+	case ChatMemberLastSeenApproxWithinWeek:
 		return true
 	default:
 		return false
@@ -3005,6 +3053,39 @@ func (e RealtimePresenceEventFrameV1State) Valid() bool {
 	}
 }
 
+// Defines values for RealtimePresenceSnapshotFrameV1ActorsState.
+const (
+	RealtimePresenceSnapshotFrameV1ActorsStateAway   RealtimePresenceSnapshotFrameV1ActorsState = "away"
+	RealtimePresenceSnapshotFrameV1ActorsStateOnline RealtimePresenceSnapshotFrameV1ActorsState = "online"
+)
+
+// Valid indicates whether the value is a known member of the RealtimePresenceSnapshotFrameV1ActorsState enum.
+func (e RealtimePresenceSnapshotFrameV1ActorsState) Valid() bool {
+	switch e {
+	case RealtimePresenceSnapshotFrameV1ActorsStateAway:
+		return true
+	case RealtimePresenceSnapshotFrameV1ActorsStateOnline:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimePresenceSnapshotFrameV1Op.
+const (
+	PresenceSnapshot RealtimePresenceSnapshotFrameV1Op = "presence.snapshot"
+)
+
+// Valid indicates whether the value is a known member of the RealtimePresenceSnapshotFrameV1Op enum.
+func (e RealtimePresenceSnapshotFrameV1Op) Valid() bool {
+	switch e {
+	case PresenceSnapshot:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RealtimeProtocolErrorFrameV1Code.
 const (
 	RealtimeProtocolErrorFrameV1CodeForbidden          RealtimeProtocolErrorFrameV1Code = "forbidden"
@@ -3125,6 +3206,60 @@ func (e RealtimeSubscribeActiveFrameV1Op) Valid() bool {
 	}
 }
 
+// Defines values for RealtimeTypingActionV1.
+const (
+	RealtimeTypingActionV1RecordingVoice RealtimeTypingActionV1 = "recording_voice"
+	RealtimeTypingActionV1Typing         RealtimeTypingActionV1 = "typing"
+	RealtimeTypingActionV1UploadingFile  RealtimeTypingActionV1 = "uploading_file"
+	RealtimeTypingActionV1UploadingPhoto RealtimeTypingActionV1 = "uploading_photo"
+	RealtimeTypingActionV1UploadingVideo RealtimeTypingActionV1 = "uploading_video"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeTypingActionV1 enum.
+func (e RealtimeTypingActionV1) Valid() bool {
+	switch e {
+	case RealtimeTypingActionV1RecordingVoice:
+		return true
+	case RealtimeTypingActionV1Typing:
+		return true
+	case RealtimeTypingActionV1UploadingFile:
+		return true
+	case RealtimeTypingActionV1UploadingPhoto:
+		return true
+	case RealtimeTypingActionV1UploadingVideo:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimeTypingEventFrameV1Action.
+const (
+	RealtimeTypingEventFrameV1ActionRecordingVoice RealtimeTypingEventFrameV1Action = "recording_voice"
+	RealtimeTypingEventFrameV1ActionTyping         RealtimeTypingEventFrameV1Action = "typing"
+	RealtimeTypingEventFrameV1ActionUploadingFile  RealtimeTypingEventFrameV1Action = "uploading_file"
+	RealtimeTypingEventFrameV1ActionUploadingPhoto RealtimeTypingEventFrameV1Action = "uploading_photo"
+	RealtimeTypingEventFrameV1ActionUploadingVideo RealtimeTypingEventFrameV1Action = "uploading_video"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeTypingEventFrameV1Action enum.
+func (e RealtimeTypingEventFrameV1Action) Valid() bool {
+	switch e {
+	case RealtimeTypingEventFrameV1ActionRecordingVoice:
+		return true
+	case RealtimeTypingEventFrameV1ActionTyping:
+		return true
+	case RealtimeTypingEventFrameV1ActionUploadingFile:
+		return true
+	case RealtimeTypingEventFrameV1ActionUploadingPhoto:
+		return true
+	case RealtimeTypingEventFrameV1ActionUploadingVideo:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RealtimeTypingEventFrameV1Op.
 const (
 	RealtimeTypingEventFrameV1OpTyping RealtimeTypingEventFrameV1Op = "typing"
@@ -3134,6 +3269,33 @@ const (
 func (e RealtimeTypingEventFrameV1Op) Valid() bool {
 	switch e {
 	case RealtimeTypingEventFrameV1OpTyping:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimeTypingFrameV1Action.
+const (
+	RealtimeTypingFrameV1ActionRecordingVoice RealtimeTypingFrameV1Action = "recording_voice"
+	RealtimeTypingFrameV1ActionTyping         RealtimeTypingFrameV1Action = "typing"
+	RealtimeTypingFrameV1ActionUploadingFile  RealtimeTypingFrameV1Action = "uploading_file"
+	RealtimeTypingFrameV1ActionUploadingPhoto RealtimeTypingFrameV1Action = "uploading_photo"
+	RealtimeTypingFrameV1ActionUploadingVideo RealtimeTypingFrameV1Action = "uploading_video"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeTypingFrameV1Action enum.
+func (e RealtimeTypingFrameV1Action) Valid() bool {
+	switch e {
+	case RealtimeTypingFrameV1ActionRecordingVoice:
+		return true
+	case RealtimeTypingFrameV1ActionTyping:
+		return true
+	case RealtimeTypingFrameV1ActionUploadingFile:
+		return true
+	case RealtimeTypingFrameV1ActionUploadingPhoto:
+		return true
+	case RealtimeTypingFrameV1ActionUploadingVideo:
 		return true
 	default:
 		return false
@@ -3572,6 +3734,24 @@ func (e UpdateOrganizationSettingsRequestInvitationDefaultRole) Valid() bool {
 	}
 }
 
+// Defines values for UpdatePreferencesRequestLastSeenVisibility.
+const (
+	UpdatePreferencesRequestLastSeenVisibilityEveryone UpdatePreferencesRequestLastSeenVisibility = "everyone"
+	UpdatePreferencesRequestLastSeenVisibilityNobody   UpdatePreferencesRequestLastSeenVisibility = "nobody"
+)
+
+// Valid indicates whether the value is a known member of the UpdatePreferencesRequestLastSeenVisibility enum.
+func (e UpdatePreferencesRequestLastSeenVisibility) Valid() bool {
+	switch e {
+	case UpdatePreferencesRequestLastSeenVisibilityEveryone:
+		return true
+	case UpdatePreferencesRequestLastSeenVisibilityNobody:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UpdatePreferencesRequestLocale.
 const (
 	UpdatePreferencesRequestLocaleEn UpdatePreferencesRequestLocale = "en"
@@ -3719,6 +3899,24 @@ func (e UserStatus) Valid() bool {
 	case UserStatusActive:
 		return true
 	case UserStatusDeactivated:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UserPreferencesLastSeenVisibility.
+const (
+	UserPreferencesLastSeenVisibilityEveryone UserPreferencesLastSeenVisibility = "everyone"
+	UserPreferencesLastSeenVisibilityNobody   UserPreferencesLastSeenVisibility = "nobody"
+)
+
+// Valid indicates whether the value is a known member of the UserPreferencesLastSeenVisibility enum.
+func (e UserPreferencesLastSeenVisibility) Valid() bool {
+	switch e {
+	case UserPreferencesLastSeenVisibilityEveryone:
+		return true
+	case UserPreferencesLastSeenVisibilityNobody:
 		return true
 	default:
 		return false
@@ -4203,17 +4401,26 @@ type ActorPage struct {
 
 // ActorSummary defines model for ActorSummary.
 type ActorSummary struct {
-	About           string             `json:"about"`
-	ActorId         openapi_types.UUID `json:"actor_id"`
-	AvatarVersion   int64              `json:"avatar_version"`
-	DisplayName     string             `json:"display_name"`
-	Handle          string             `json:"handle"`
-	StatusEmoji     string             `json:"status_emoji"`
-	StatusExpiresAt *time.Time         `json:"status_expires_at"`
-	StatusText      string             `json:"status_text"`
-	Title           string             `json:"title"`
-	Type            ActorSummaryType   `json:"type"`
+	About         string             `json:"about"`
+	ActorId       openapi_types.UUID `json:"actor_id"`
+	AvatarVersion int64              `json:"avatar_version"`
+	DisplayName   string             `json:"display_name"`
+	Handle        string             `json:"handle"`
+
+	// LastSeenApprox Direct chat peer only — rough last seen used instead of last_seen_at when the person or the viewer hides the exact time.
+	LastSeenApprox *ActorSummaryLastSeenApprox `json:"last_seen_approx,omitempty"`
+
+	// LastSeenAt Direct chat peer only — when the person was last online, when neither side hides last seen.
+	LastSeenAt      *time.Time       `json:"last_seen_at,omitempty"`
+	StatusEmoji     string           `json:"status_emoji"`
+	StatusExpiresAt *time.Time       `json:"status_expires_at"`
+	StatusText      string           `json:"status_text"`
+	Title           string           `json:"title"`
+	Type            ActorSummaryType `json:"type"`
 }
+
+// ActorSummaryLastSeenApprox Direct chat peer only — rough last seen used instead of last_seen_at when the person or the viewer hides the exact time.
+type ActorSummaryLastSeenApprox string
 
 // ActorSummaryType defines model for ActorSummary.Type.
 type ActorSummaryType string
@@ -5032,18 +5239,27 @@ type ChatFolders = []ChatFolder
 
 // ChatMember defines model for ChatMember.
 type ChatMember struct {
-	ActorId         openapi_types.UUID `json:"actor_id"`
-	AvatarVersion   int64              `json:"avatar_version"`
-	DisplayName     string             `json:"display_name"`
-	Handle          string             `json:"handle"`
-	JoinedAt        time.Time          `json:"joined_at"`
-	Role            ChatMemberRole     `json:"role"`
-	StatusEmoji     string             `json:"status_emoji"`
-	StatusExpiresAt *time.Time         `json:"status_expires_at"`
-	StatusText      string             `json:"status_text"`
-	Title           string             `json:"title"`
-	Type            ChatMemberType     `json:"type"`
+	ActorId       openapi_types.UUID `json:"actor_id"`
+	AvatarVersion int64              `json:"avatar_version"`
+	DisplayName   string             `json:"display_name"`
+	Handle        string             `json:"handle"`
+	JoinedAt      time.Time          `json:"joined_at"`
+
+	// LastSeenApprox Rough last seen used instead of last_seen_at when the person or the viewer hides the exact time (recently means within three days).
+	LastSeenApprox *ChatMemberLastSeenApprox `json:"last_seen_approx,omitempty"`
+
+	// LastSeenAt When the person was last online. Present only for people the viewer shares this chat with, when neither of them hides last seen.
+	LastSeenAt      *time.Time     `json:"last_seen_at,omitempty"`
+	Role            ChatMemberRole `json:"role"`
+	StatusEmoji     string         `json:"status_emoji"`
+	StatusExpiresAt *time.Time     `json:"status_expires_at"`
+	StatusText      string         `json:"status_text"`
+	Title           string         `json:"title"`
+	Type            ChatMemberType `json:"type"`
 }
+
+// ChatMemberLastSeenApprox Rough last seen used instead of last_seen_at when the person or the viewer hides the exact time (recently means within three days).
+type ChatMemberLastSeenApprox string
 
 // ChatMemberRole defines model for ChatMember.Role.
 type ChatMemberRole string
@@ -6518,10 +6734,13 @@ type RealtimeDurableEventFrameV1Op string
 
 // RealtimeHelloFrameV1 defines model for RealtimeHelloFrameV1.
 type RealtimeHelloFrameV1 struct {
-	AckBatchSize        int                    `json:"ack_batch_size"`
-	AckIntervalMs       int                    `json:"ack_interval_ms"`
-	ConnectionId        openapi_types.UUID     `json:"connection_id"`
-	CurrentSeq          int64                  `json:"current_seq"`
+	AckBatchSize  int                `json:"ack_batch_size"`
+	AckIntervalMs int                `json:"ack_interval_ms"`
+	ConnectionId  openapi_types.UUID `json:"connection_id"`
+	CurrentSeq    int64              `json:"current_seq"`
+
+	// Features Optional protocol additions this server accepts. typing_actions: the action field on typing frames.
+	Features            *[]string              `json:"features,omitempty"`
 	HeartbeatIntervalMs int                    `json:"heartbeat_interval_ms"`
 	MaxUnackedEvents    int                    `json:"max_unacked_events"`
 	MinRetainedSeq      int64                  `json:"min_retained_seq"`
@@ -6569,10 +6788,13 @@ type RealtimeMessageStreamingFrameV1Op string
 
 // RealtimePresenceEventFrameV1 defines model for RealtimePresenceEventFrameV1.
 type RealtimePresenceEventFrameV1 struct {
-	ActorId   openapi_types.UUID                `json:"actor_id"`
-	ExpiresAt time.Time                         `json:"expires_at"`
-	Op        RealtimePresenceEventFrameV1Op    `json:"op"`
-	State     RealtimePresenceEventFrameV1State `json:"state"`
+	ActorId   openapi_types.UUID `json:"actor_id"`
+	ExpiresAt time.Time          `json:"expires_at"`
+
+	// LastSeenAt With away or offline: when the person left, sent only to those who share a chat with them when neither side hides last seen.
+	LastSeenAt *time.Time                        `json:"last_seen_at,omitempty"`
+	Op         RealtimePresenceEventFrameV1Op    `json:"op"`
+	State      RealtimePresenceEventFrameV1State `json:"state"`
 }
 
 // RealtimePresenceEventFrameV1Op defines model for RealtimePresenceEventFrameV1.Op.
@@ -6580,6 +6802,22 @@ type RealtimePresenceEventFrameV1Op string
 
 // RealtimePresenceEventFrameV1State defines model for RealtimePresenceEventFrameV1.State.
 type RealtimePresenceEventFrameV1State string
+
+// RealtimePresenceSnapshotFrameV1 Sent once after hello: everyone in the workspace who is online or away right now.
+type RealtimePresenceSnapshotFrameV1 struct {
+	Actors []struct {
+		ActorId   openapi_types.UUID                         `json:"actor_id"`
+		ExpiresAt time.Time                                  `json:"expires_at"`
+		State     RealtimePresenceSnapshotFrameV1ActorsState `json:"state"`
+	} `json:"actors"`
+	Op RealtimePresenceSnapshotFrameV1Op `json:"op"`
+}
+
+// RealtimePresenceSnapshotFrameV1ActorsState defines model for RealtimePresenceSnapshotFrameV1.Actors.State.
+type RealtimePresenceSnapshotFrameV1ActorsState string
+
+// RealtimePresenceSnapshotFrameV1Op defines model for RealtimePresenceSnapshotFrameV1.Op.
+type RealtimePresenceSnapshotFrameV1Op string
 
 // RealtimeProtocolErrorFrameV1 defines model for RealtimeProtocolErrorFrameV1.
 type RealtimeProtocolErrorFrameV1 struct {
@@ -6631,26 +6869,39 @@ type RealtimeSubscribeActiveFrameV1 struct {
 // RealtimeSubscribeActiveFrameV1Op defines model for RealtimeSubscribeActiveFrameV1.Op.
 type RealtimeSubscribeActiveFrameV1Op string
 
+// RealtimeTypingActionV1 What the person is doing in the chat; absent means typing (clients before the field).
+type RealtimeTypingActionV1 string
+
 // RealtimeTypingEventFrameV1 defines model for RealtimeTypingEventFrameV1.
 type RealtimeTypingEventFrameV1 struct {
-	Active       bool                         `json:"active"`
-	ActorId      openapi_types.UUID           `json:"actor_id"`
-	ChatId       openapi_types.UUID           `json:"chat_id"`
-	ExpiresAt    time.Time                    `json:"expires_at"`
-	Op           RealtimeTypingEventFrameV1Op `json:"op"`
-	ThreadRootId *openapi_types.UUID          `json:"thread_root_id"`
+	// Action What the person is doing in the chat; absent means typing (clients before the field).
+	Action       *RealtimeTypingEventFrameV1Action `json:"action,omitempty"`
+	Active       bool                              `json:"active"`
+	ActorId      openapi_types.UUID                `json:"actor_id"`
+	ChatId       openapi_types.UUID                `json:"chat_id"`
+	ExpiresAt    time.Time                         `json:"expires_at"`
+	Op           RealtimeTypingEventFrameV1Op      `json:"op"`
+	ThreadRootId *openapi_types.UUID               `json:"thread_root_id"`
 }
+
+// RealtimeTypingEventFrameV1Action What the person is doing in the chat; absent means typing (clients before the field).
+type RealtimeTypingEventFrameV1Action string
 
 // RealtimeTypingEventFrameV1Op defines model for RealtimeTypingEventFrameV1.Op.
 type RealtimeTypingEventFrameV1Op string
 
 // RealtimeTypingFrameV1 defines model for RealtimeTypingFrameV1.
 type RealtimeTypingFrameV1 struct {
-	Active       bool                    `json:"active"`
-	ChatId       openapi_types.UUID      `json:"chat_id"`
-	Op           RealtimeTypingFrameV1Op `json:"op"`
-	ThreadRootId *openapi_types.UUID     `json:"thread_root_id"`
+	// Action What the person is doing in the chat; absent means typing (clients before the field).
+	Action       *RealtimeTypingFrameV1Action `json:"action,omitempty"`
+	Active       bool                         `json:"active"`
+	ChatId       openapi_types.UUID           `json:"chat_id"`
+	Op           RealtimeTypingFrameV1Op      `json:"op"`
+	ThreadRootId *openapi_types.UUID          `json:"thread_root_id"`
 }
+
+// RealtimeTypingFrameV1Action What the person is doing in the chat; absent means typing (clients before the field).
+type RealtimeTypingFrameV1Action string
 
 // RealtimeTypingFrameV1Op defines model for RealtimeTypingFrameV1.Op.
 type RealtimeTypingFrameV1Op string
@@ -7194,22 +7445,28 @@ type UpdateOrganizationSettingsRequestInvitationDefaultRole string
 
 // UpdatePreferencesRequest defines model for UpdatePreferencesRequest.
 type UpdatePreferencesRequest struct {
-	EmailDigest     *bool                                   `json:"email_digest,omitempty"`
-	InAppEnabled    *bool                                   `json:"in_app_enabled,omitempty"`
-	Locale          *UpdatePreferencesRequestLocale         `json:"locale,omitempty"`
-	NotifyInvites   *bool                                   `json:"notify_invites,omitempty"`
-	NotifyMessages  *UpdatePreferencesRequestNotifyMessages `json:"notify_messages,omitempty"`
-	NotifyReactions *bool                                   `json:"notify_reactions,omitempty"`
-	NotifySystem    *bool                                   `json:"notify_system,omitempty"`
-	NotifyThreads   *UpdatePreferencesRequestNotifyThreads  `json:"notify_threads,omitempty"`
-	PushEnabled     *bool                                   `json:"push_enabled,omitempty"`
-	PushPreview     *bool                                   `json:"push_preview,omitempty"`
-	Schedule        *NotificationSchedule                   `json:"schedule,omitempty"`
-	SnoozedUntil    *time.Time                              `json:"snoozed_until,omitempty"`
-	SoundEnabled    *bool                                   `json:"sound_enabled,omitempty"`
-	SoundId         *UpdatePreferencesRequestSoundId        `json:"sound_id,omitempty"`
-	Theme           *UpdatePreferencesRequestTheme          `json:"theme,omitempty"`
+	EmailDigest  *bool `json:"email_digest,omitempty"`
+	InAppEnabled *bool `json:"in_app_enabled,omitempty"`
+
+	// LastSeenVisibility Who sees when this person was last online. "nobody" also hides other people's exact time from them (symmetric, as in Telegram); online status itself stays visible in the workspace.
+	LastSeenVisibility *UpdatePreferencesRequestLastSeenVisibility `json:"last_seen_visibility,omitempty"`
+	Locale             *UpdatePreferencesRequestLocale             `json:"locale,omitempty"`
+	NotifyInvites      *bool                                       `json:"notify_invites,omitempty"`
+	NotifyMessages     *UpdatePreferencesRequestNotifyMessages     `json:"notify_messages,omitempty"`
+	NotifyReactions    *bool                                       `json:"notify_reactions,omitempty"`
+	NotifySystem       *bool                                       `json:"notify_system,omitempty"`
+	NotifyThreads      *UpdatePreferencesRequestNotifyThreads      `json:"notify_threads,omitempty"`
+	PushEnabled        *bool                                       `json:"push_enabled,omitempty"`
+	PushPreview        *bool                                       `json:"push_preview,omitempty"`
+	Schedule           *NotificationSchedule                       `json:"schedule,omitempty"`
+	SnoozedUntil       *time.Time                                  `json:"snoozed_until,omitempty"`
+	SoundEnabled       *bool                                       `json:"sound_enabled,omitempty"`
+	SoundId            *UpdatePreferencesRequestSoundId            `json:"sound_id,omitempty"`
+	Theme              *UpdatePreferencesRequestTheme              `json:"theme,omitempty"`
 }
+
+// UpdatePreferencesRequestLastSeenVisibility Who sees when this person was last online. "nobody" also hides other people's exact time from them (symmetric, as in Telegram); online status itself stays visible in the workspace.
+type UpdatePreferencesRequestLastSeenVisibility string
 
 // UpdatePreferencesRequestLocale defines model for UpdatePreferencesRequest.Locale.
 type UpdatePreferencesRequestLocale string
@@ -7282,22 +7539,28 @@ type UserStatus string
 
 // UserPreferences defines model for UserPreferences.
 type UserPreferences struct {
-	EmailDigest     bool                          `json:"email_digest"`
-	InAppEnabled    bool                          `json:"in_app_enabled"`
-	Locale          UserPreferencesLocale         `json:"locale"`
-	NotifyInvites   bool                          `json:"notify_invites"`
-	NotifyMessages  UserPreferencesNotifyMessages `json:"notify_messages"`
-	NotifyReactions bool                          `json:"notify_reactions"`
-	NotifySystem    bool                          `json:"notify_system"`
-	NotifyThreads   UserPreferencesNotifyThreads  `json:"notify_threads"`
-	PushEnabled     bool                          `json:"push_enabled"`
-	PushPreview     bool                          `json:"push_preview"`
-	Schedule        *NotificationSchedule         `json:"schedule"`
-	SnoozedUntil    *time.Time                    `json:"snoozed_until"`
-	SoundEnabled    bool                          `json:"sound_enabled"`
-	SoundId         UserPreferencesSoundId        `json:"sound_id"`
-	Theme           UserPreferencesTheme          `json:"theme"`
+	EmailDigest  bool `json:"email_digest"`
+	InAppEnabled bool `json:"in_app_enabled"`
+
+	// LastSeenVisibility Who sees when this person was last online. "nobody" also hides other people's exact time from them (symmetric, as in Telegram); online status itself stays visible in the workspace.
+	LastSeenVisibility UserPreferencesLastSeenVisibility `json:"last_seen_visibility"`
+	Locale             UserPreferencesLocale             `json:"locale"`
+	NotifyInvites      bool                              `json:"notify_invites"`
+	NotifyMessages     UserPreferencesNotifyMessages     `json:"notify_messages"`
+	NotifyReactions    bool                              `json:"notify_reactions"`
+	NotifySystem       bool                              `json:"notify_system"`
+	NotifyThreads      UserPreferencesNotifyThreads      `json:"notify_threads"`
+	PushEnabled        bool                              `json:"push_enabled"`
+	PushPreview        bool                              `json:"push_preview"`
+	Schedule           *NotificationSchedule             `json:"schedule"`
+	SnoozedUntil       *time.Time                        `json:"snoozed_until"`
+	SoundEnabled       bool                              `json:"sound_enabled"`
+	SoundId            UserPreferencesSoundId            `json:"sound_id"`
+	Theme              UserPreferencesTheme              `json:"theme"`
 }
+
+// UserPreferencesLastSeenVisibility Who sees when this person was last online. "nobody" also hides other people's exact time from them (symmetric, as in Telegram); online status itself stays visible in the workspace.
+type UserPreferencesLastSeenVisibility string
 
 // UserPreferencesLocale defines model for UserPreferences.Locale.
 type UserPreferencesLocale string

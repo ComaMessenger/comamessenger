@@ -13,6 +13,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/authz"
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
+	"github.com/comamessenger/comamessenger/core/internal/lastseen"
 	"github.com/comamessenger/comamessenger/core/internal/permission"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -56,6 +57,10 @@ type Actor struct {
 	StatusText      string     `json:"status_text"`
 	StatusExpiresAt *time.Time `json:"status_expires_at"`
 	AvatarVersion   int64      `json:"avatar_version"`
+	// Set only for a person in a direct chat with the viewer: the exact
+	// time or, when either side hides it, an approximate bucket.
+	LastSeenAt     *time.Time `json:"last_seen_at,omitempty"`
+	LastSeenApprox *string    `json:"last_seen_approx,omitempty"`
 }
 type ActorPage struct {
 	Actors      []Actor `json:"actors"`
@@ -109,6 +114,9 @@ type Member struct {
 	StatusText      string     `json:"status_text"`
 	StatusExpiresAt *time.Time `json:"status_expires_at"`
 	AvatarVersion   int64      `json:"avatar_version"`
+	// Set only for people and only when the viewer is a member of the chat.
+	LastSeenAt     *time.Time `json:"last_seen_at,omitempty"`
+	LastSeenApprox *string    `json:"last_seen_approx,omitempty"`
 }
 
 type DirectoryChat struct {
@@ -162,7 +170,45 @@ func (s *Service) List(ctx context.Context, user identity.User) ([]Chat, error) 
 		}
 		chats = append(chats, chat)
 	}
-	return chats, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	peers := make([]*Actor, 0, len(chats))
+	for index := range chats {
+		if chats[index].DirectPeer != nil {
+			peers = append(peers, chats[index].DirectPeer)
+		}
+	}
+	if err := s.attachPeerLastSeen(ctx, user, peers); err != nil {
+		return nil, err
+	}
+	return chats, nil
+}
+
+// attachPeerLastSeen fills last seen for direct-chat peers: the viewer shares
+// that chat with each of them.
+func (s *Service) attachPeerLastSeen(ctx context.Context, user identity.User, peers []*Actor) error {
+	ids := make([]string, 0, len(peers))
+	for _, peer := range peers {
+		if peer.Type == "user" {
+			ids = append(ids, peer.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	records, viewerVisibility, err := lastseen.Load(ctx, s.pool, user.OrgID, user.ActorID, ids)
+	if err != nil {
+		return err
+	}
+	now := time.Now()
+	for _, peer := range peers {
+		if record, ok := records[peer.ID]; ok && peer.Type == "user" {
+			peer.LastSeenAt, peer.LastSeenApprox = lastseen.Resolve(record.At, record.Visibility, viewerVisibility, now)
+		}
+	}
+	return nil
 }
 
 func (s *Service) Get(ctx context.Context, user identity.User, chatID string) (Chat, error) {
@@ -188,6 +234,11 @@ func (s *Service) Get(ctx context.Context, user identity.User, chatID string) (C
 	}
 	if err != nil {
 		return Chat{}, fmt.Errorf("get chat: %w", err)
+	}
+	if result.DirectPeer != nil {
+		if err := s.attachPeerLastSeen(ctx, user, []*Actor{result.DirectPeer}); err != nil {
+			return Chat{}, err
+		}
 	}
 	return result, nil
 }
@@ -575,7 +626,33 @@ func (s *Service) ListMembers(ctx context.Context, user identity.User, chatID st
 		}
 		result = append(result, member)
 	}
-	return result, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	// Last seen is for people who share a chat: a moderator looking into a
+	// chat they are not in gets none.
+	if role != "" {
+		ids := make([]string, 0, len(result))
+		for _, member := range result {
+			if member.Type == "user" {
+				ids = append(ids, member.ActorID)
+			}
+		}
+		if len(ids) > 0 {
+			records, viewerVisibility, err := lastseen.Load(ctx, s.pool, user.OrgID, user.ActorID, ids)
+			if err != nil {
+				return nil, err
+			}
+			now := time.Now()
+			for index := range result {
+				if record, ok := records[result[index].ActorID]; ok && result[index].Type == "user" {
+					result[index].LastSeenAt, result[index].LastSeenApprox = lastseen.Resolve(record.At, record.Visibility, viewerVisibility, now)
+				}
+			}
+		}
+	}
+	return result, nil
 }
 
 func (s *Service) AddMember(ctx context.Context, user identity.User, chatID string, input MemberInput) (Member, error) {

@@ -9930,6 +9930,17 @@
           },
           "active": {
             "type": "boolean"
+          },
+          "action": {
+            "description": "What the person is doing in the chat; absent means typing (clients before the field).",
+            "type": "string",
+            "enum": [
+              "typing",
+              "recording_voice",
+              "uploading_photo",
+              "uploading_video",
+              "uploading_file"
+            ]
           }
         }
       },
@@ -10125,6 +10136,15 @@
           "max_unacked_events": {
             "type": "integer",
             "minimum": 1
+          },
+          "features": {
+            "description": "Optional protocol additions this server accepts. typing_actions: the action field on typing frames.",
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "string",
+              "maxLength": 64
+            }
           }
         }
       },
@@ -10255,6 +10275,17 @@
           "active": {
             "type": "boolean"
           },
+          "action": {
+            "description": "What the person is doing in the chat; absent means typing (clients before the field).",
+            "type": "string",
+            "enum": [
+              "typing",
+              "recording_voice",
+              "uploading_photo",
+              "uploading_video",
+              "uploading_file"
+            ]
+          },
           "expires_at": {
             "type": "string",
             "format": "date-time"
@@ -10292,8 +10323,71 @@
           "expires_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "last_seen_at": {
+            "description": "With away or offline: when the person left, sent only to those who share a chat with them when neither side hides last seen.",
+            "type": "string",
+            "format": "date-time"
           }
         }
+      },
+      "RealtimePresenceSnapshotFrameV1": {
+        "description": "Sent once after hello: everyone in the workspace who is online or away right now.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "op",
+          "actors"
+        ],
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "presence.snapshot"
+            ]
+          },
+          "actors": {
+            "type": "array",
+            "maxItems": 5000,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "actor_id",
+                "state",
+                "expires_at"
+              ],
+              "properties": {
+                "actor_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "state": {
+                  "type": "string",
+                  "enum": [
+                    "online",
+                    "away"
+                  ]
+                },
+                "expires_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          }
+        }
+      },
+      "RealtimeTypingActionV1": {
+        "description": "What the person is doing in the chat; absent means typing (clients before the field).",
+        "type": "string",
+        "enum": [
+          "typing",
+          "recording_voice",
+          "uploading_photo",
+          "uploading_video",
+          "uploading_file"
+        ]
       },
       "RealtimeAgentStatusEventFrameV1": {
         "type": "object",
@@ -16074,6 +16168,21 @@
             "type": "integer",
             "format": "int64",
             "minimum": 0
+          },
+          "last_seen_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Direct chat peer only — when the person was last online, when neither side hides last seen."
+          },
+          "last_seen_approx": {
+            "type": "string",
+            "enum": [
+              "recently",
+              "within_week",
+              "within_month",
+              "long_ago"
+            ],
+            "description": "Direct chat peer only — rough last seen used instead of last_seen_at when the person or the viewer hides the exact time."
           }
         }
       },
@@ -16272,6 +16381,21 @@
             "type": "integer",
             "format": "int64",
             "minimum": 0
+          },
+          "last_seen_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the person was last online. Present only for people the viewer shares this chat with, when neither of them hides last seen."
+          },
+          "last_seen_approx": {
+            "type": "string",
+            "enum": [
+              "recently",
+              "within_week",
+              "within_month",
+              "long_ago"
+            ],
+            "description": "Rough last seen used instead of last_seen_at when the person or the viewer hides the exact time (recently means within three days)."
           }
         }
       },
@@ -18517,7 +18641,8 @@
           "sound_id",
           "schedule",
           "snoozed_until",
-          "email_digest"
+          "email_digest",
+          "last_seen_visibility"
         ],
         "properties": {
           "theme": {
@@ -18597,6 +18722,14 @@
           },
           "email_digest": {
             "type": "boolean"
+          },
+          "last_seen_visibility": {
+            "type": "string",
+            "enum": [
+              "everyone",
+              "nobody"
+            ],
+            "description": "Who sees when this person was last online. \"nobody\" also hides other people's exact time from them (symmetric, as in Telegram); online status itself stays visible in the workspace."
           }
         }
       },
@@ -18682,6 +18815,14 @@
           },
           "email_digest": {
             "type": "boolean"
+          },
+          "last_seen_visibility": {
+            "type": "string",
+            "enum": [
+              "everyone",
+              "nobody"
+            ],
+            "description": "Who sees when this person was last online. \"nobody\" also hides other people's exact time from them (symmetric, as in Telegram); online status itself stays visible in the workspace."
           }
         }
       },

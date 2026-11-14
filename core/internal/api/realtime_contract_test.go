@@ -87,8 +87,12 @@ func generatedFixtureTarget(t *testing.T, name string) any {
 		return &RealtimeHelloFrameV1{}
 	case "resync-required.json":
 		return &RealtimeResyncRequiredFrameV1{}
-	case "typing.json":
+	case "typing.json", "typing-action.json":
 		return &RealtimeTypingEventFrameV1{}
+	case "presence.json":
+		return &RealtimePresenceEventFrameV1{}
+	case "presence-snapshot.json":
+		return &RealtimePresenceSnapshotFrameV1{}
 	default:
 		t.Fatalf("fixture %s has no generated Go type mapping", name)
 		return nil

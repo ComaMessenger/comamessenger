@@ -201,6 +201,13 @@ func (s *Server) ServeHTTP(w standardhttp.ResponseWriter, r *standardhttp.Reques
 		"session_id", accessIdentity.SessionID, "last_seq", auth.LastSeq, "current_seq", bounds.CurrentSeq,
 	)
 	closeCode, closeReason, closeCause := session.run(r.Context())
+	if s.ephemeral != nil {
+		// The request context is done once the client leaves; the offline
+		// broadcast still has to go out.
+		disconnectCtx, cancelDisconnect := context.WithTimeout(context.WithoutCancel(r.Context()), 5*time.Second)
+		s.ephemeral.Disconnected(disconnectCtx, user, connectionID)
+		cancelDisconnect()
+	}
 	s.statsMu.Lock()
 	s.disconnects[fmt.Sprintf("%d:%s", closeCode, closeReason)]++
 	if closeCode == websocket.StatusInternalError && closeCause != nil {
@@ -267,6 +274,9 @@ type helloFrame struct {
 	AckIntervalMS       int    `json:"ack_interval_ms"`
 	AckBatchSize        int    `json:"ack_batch_size"`
 	MaxUnackedEvents    int    `json:"max_unacked_events"`
+	// Features names optional protocol additions, so newer clients can use
+	// them without breaking older servers that reject unknown fields.
+	Features []string `json:"features,omitempty"`
 }
 
 type ackFrame struct {
@@ -284,6 +294,7 @@ type typingFrame struct {
 	ChatID       string  `json:"chat_id"`
 	ThreadRootID *string `json:"thread_root_id"`
 	Active       bool    `json:"active"`
+	Action       *string `json:"action,omitempty"`
 }
 type presenceFrame struct {
 	Op    string `json:"op"`
@@ -295,13 +306,15 @@ type typingEventFrame struct {
 	ChatID       string    `json:"chat_id"`
 	ThreadRootID *string   `json:"thread_root_id"`
 	Active       bool      `json:"active"`
+	Action       string    `json:"action,omitempty"`
 	ExpiresAt    time.Time `json:"expires_at"`
 }
 type presenceEventFrame struct {
-	Op        string    `json:"op"`
-	ActorID   string    `json:"actor_id"`
-	State     string    `json:"state"`
-	ExpiresAt time.Time `json:"expires_at"`
+	Op         string     `json:"op"`
+	ActorID    string     `json:"actor_id"`
+	State      string     `json:"state"`
+	ExpiresAt  time.Time  `json:"expires_at"`
+	LastSeenAt *time.Time `json:"last_seen_at,omitempty"`
 }
 type agentStatusFrame struct {
 	Op           string  `json:"op"`

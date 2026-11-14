@@ -1,5 +1,9 @@
 import { APIError, type MessengerAPI } from "./api";
 import type { DurableEvent, RealtimeState } from "./types";
+import type { TypingAction } from "./presenceText";
+
+/** How often a connected client confirms it is still here (TTL is 60s). */
+export const presenceRefreshMs = 25_000;
 export interface CheckpointStorage {
   get(): Promise<number>;
   set(value: number): Promise<void>;
@@ -27,6 +31,10 @@ export class RealtimeCoordinator {
     chatID: null as string | null,
     threadRootID: null as string | null,
   };
+  /** Optional protocol additions the server announced in hello. */
+  private features = new Set<string>();
+  private presenceState: "active" | "away" | null = null;
+  private presenceTimer: ReturnType<typeof setInterval> | null = null;
   constructor(
     private readonly api: MessengerAPI,
     private readonly storage: CheckpointStorage,
@@ -37,6 +45,7 @@ export class RealtimeCoordinator {
       resync(highWatermark: number): Promise<void>;
       typing?(value: Record<string, unknown>): void;
       presence?(value: Record<string, unknown>): void;
+      presenceSnapshot?(value: Record<string, unknown>): void;
       agentStatus?(value: Record<string, unknown>): void;
       messageStreaming?(value: Record<string, unknown>): void;
       ephemeralReset?(): void;
@@ -52,6 +61,8 @@ export class RealtimeCoordinator {
     this.stopped = true;
     this.socket?.close();
     if (this.ackTimer) clearTimeout(this.ackTimer);
+    if (this.presenceTimer) clearInterval(this.presenceTimer);
+    this.presenceTimer = null;
     this.callbacks.ephemeralReset?.();
     this.callbacks.state("idle");
   }
@@ -67,16 +78,33 @@ export class RealtimeCoordinator {
     chatID: string,
     active: boolean,
     threadRootID: string | null = null,
+    action: TypingAction = "typing",
   ): void {
     this.send({
       op: "typing",
       chat_id: chatID,
       thread_root_id: threadRootID,
       active,
+      // Servers before the field reject unknown keys and close the socket;
+      // without it the action reads as typing, which is the safe fallback.
+      ...(action !== "typing" && this.features.has("typing_actions")
+        ? { action }
+        : {}),
     });
   }
+  /**
+   * Foreground or background. The coordinator repeats the state after every
+   * (re)connect and every presenceRefreshMs, so the server knows the client
+   * is still there; leaving is noticed when the socket closes.
+   */
   presence(state: "active" | "away"): void {
+    this.presenceState = state;
     this.send({ op: "presence", state });
+    if (!this.presenceTimer)
+      this.presenceTimer = setInterval(() => {
+        if (this.presenceState)
+          this.send({ op: "presence", state: this.presenceState });
+      }, presenceRefreshMs);
   }
   private async connect(reconnect: boolean): Promise<void> {
     if (this.stopped) return;
@@ -148,6 +176,11 @@ export class RealtimeCoordinator {
       this.reconnectAttempt = 0;
       this.ackInterval = Number(frame.ack_interval_ms) || 1000;
       this.ackBatch = Number(frame.ack_batch_size) || 50;
+      this.features = new Set(
+        Array.isArray(frame.features) ? frame.features.map(String) : [],
+      );
+      if (this.presenceState)
+        this.send({ op: "presence", state: this.presenceState });
       this.callbacks.state(
         Number(frame.current_seq) > (await this.storage.get())
           ? "backlog"
@@ -179,6 +212,8 @@ export class RealtimeCoordinator {
     }
     if (frame.op === "typing") this.callbacks.typing?.(frame);
     if (frame.op === "presence") this.callbacks.presence?.(frame);
+    if (frame.op === "presence.snapshot")
+      this.callbacks.presenceSnapshot?.(frame);
     if (frame.op === "agent.status") this.callbacks.agentStatus?.(frame);
     if (frame.op === "message.streaming")
       this.callbacks.messageStreaming?.(frame);

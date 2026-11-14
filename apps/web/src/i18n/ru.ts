@@ -155,6 +155,12 @@ export const ru = {
   permissionKnowledgeManage: "Управление базой знаний",
   personalPreferences: "Личные настройки",
   appearance: "Внешний вид",
+  privacy: "Приватность",
+  privacyHint:
+    "Кто видит, когда вы были в сети. Если скрыть, у людей будет «был(а) недавно» — и вы тоже не увидите точное время у других. Сам статус «в сети» виден всему пространству.",
+  lastSeenVisibility: "Кто видит, когда я был(а) в сети",
+  lastSeenEveryone: "Все в пространстве, с кем есть общий чат",
+  lastSeenNobody: "Никто",
   appearanceHint: "Тема и язык интерфейса применяются сразу на всех экранах.",
   accountActions: "Аккаунт",
   notificationSettings: "Настройки уведомлений",

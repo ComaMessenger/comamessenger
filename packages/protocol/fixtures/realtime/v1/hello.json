@@ -7,5 +7,9 @@
   "heartbeat_interval_ms": 25000,
   "ack_interval_ms": 1000,
   "ack_batch_size": 50,
-  "max_unacked_events": 128
+  "max_unacked_events": 128,
+  "features": [
+    "typing_actions",
+    "presence_snapshot"
+  ]
 }

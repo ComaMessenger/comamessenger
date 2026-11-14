@@ -156,6 +156,12 @@ export const en: Record<keyof typeof ru, string> = {
   permissionKnowledgeManage: "Knowledge base management",
   personalPreferences: "Personal preferences",
   appearance: "Appearance",
+  privacy: "Privacy",
+  privacyHint:
+    "Who sees when you were last online. If hidden, people see “last seen recently”, and you won't see others' exact time either. Being online is still visible across the workspace.",
+  lastSeenVisibility: "Who sees my last seen time",
+  lastSeenEveryone: "Everyone I share a chat with",
+  lastSeenNobody: "Nobody",
   appearanceHint: "Theme and language apply immediately across the interface.",
   accountActions: "Account",
   notificationSettings: "Notification settings",

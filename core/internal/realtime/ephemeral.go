@@ -62,13 +62,16 @@ type Ephemeral struct {
 	opTimeout  time.Duration
 	signingKey []byte
 
-	mu          sync.Mutex
-	localRate   map[string]localRate
-	localLeases map[string]localLease
+	presence presenceTracker
+
+	mu             sync.Mutex
+	localRate      map[string]localRate
+	localLeases    map[string]localLease
+	lastSeenWrites map[string]time.Time
 }
 
 func NewEphemeral(logger *slog.Logger, pool *pgxpool.Pool, hub *Hub, realtimeConfig config.RealtimeConfig, redisConfig config.RedisConfig) (*Ephemeral, error) {
-	result := &Ephemeral{logger: logger, pool: pool, hub: hub, config: realtimeConfig, namespace: redisConfig.Namespace, opTimeout: redisConfig.OperationTimeout, localRate: make(map[string]localRate), localLeases: make(map[string]localLease)}
+	result := &Ephemeral{logger: logger, pool: pool, hub: hub, config: realtimeConfig, namespace: redisConfig.Namespace, opTimeout: redisConfig.OperationTimeout, localRate: make(map[string]localRate), localLeases: make(map[string]localLease), lastSeenWrites: make(map[string]time.Time), presence: newLocalPresence(realtimeConfig.PresenceTTL)}
 	if redisConfig.Mode == "required" {
 		if len(redisConfig.EphemeralSigningKey) < 32 {
 			return nil, fmt.Errorf("REDIS_EPHEMERAL_SIGNING_KEY must be at least 32 bytes")
@@ -81,6 +84,7 @@ func NewEphemeral(logger *slog.Logger, pool *pgxpool.Pool, hub *Hub, realtimeCon
 		options.DialTimeout, options.ReadTimeout, options.WriteTimeout = redisConfig.ConnectTimeout, redisConfig.OperationTimeout, redisConfig.OperationTimeout
 		result.redis = redis.NewClient(options)
 		result.channel = redisConfig.Namespace + ":ephemeral"
+		result.presence = &redisPresence{client: result.redis, namespace: redisConfig.Namespace, ttl: realtimeConfig.PresenceTTL, timeout: redisConfig.OperationTimeout}
 	}
 	return result, nil
 }
@@ -184,7 +188,7 @@ func (e *Ephemeral) decodeEphemeralEnvelope(payload []byte) (ephemeralEnvelope, 
 	switch operation.Op {
 	case "typing":
 		var frame typingEventFrame
-		if decodeStrict(envelope.Data, &frame) != nil || frame.Op != "typing" || frame.ExpiresAt.IsZero() {
+		if decodeStrict(envelope.Data, &frame) != nil || frame.Op != "typing" || frame.ExpiresAt.IsZero() || (frame.Action != "" && !validTypingAction(frame.Action)) {
 			return ephemeralEnvelope{}, ErrEphemeralInvalid
 		}
 		if _, err := uuid.Parse(frame.ActorID); err != nil {
@@ -200,7 +204,7 @@ func (e *Ephemeral) decodeEphemeralEnvelope(payload []byte) (ephemeralEnvelope, 
 		}
 	case "presence":
 		var frame presenceEventFrame
-		if decodeStrict(envelope.Data, &frame) != nil || frame.Op != "presence" || frame.ExpiresAt.IsZero() || (frame.State != "online" && frame.State != "away") {
+		if decodeStrict(envelope.Data, &frame) != nil || frame.Op != "presence" || frame.ExpiresAt.IsZero() || (frame.State != "online" && frame.State != "away" && frame.State != "offline") {
 			return ephemeralEnvelope{}, ErrEphemeralInvalid
 		}
 		if _, err := uuid.Parse(frame.ActorID); err != nil {
@@ -228,7 +232,24 @@ func (e *Ephemeral) decodeEphemeralEnvelope(payload []byte) (ephemeralEnvelope, 
 	return envelope, nil
 }
 
-func (e *Ephemeral) Typing(ctx context.Context, user identity.User, subscription *Subscription, chatID string, threadRootID *string, active bool) error {
+// validTypingAction lists what a person may be doing in a chat; a frame
+// without an action (clients before the field) means typing.
+func validTypingAction(action string) bool {
+	switch action {
+	case "typing", "recording_voice", "uploading_photo", "uploading_video", "uploading_file":
+		return true
+	}
+	return false
+}
+
+func (e *Ephemeral) Typing(ctx context.Context, user identity.User, subscription *Subscription, chatID string, threadRootID *string, active bool, action *string) error {
+	kind := "typing"
+	if action != nil {
+		if !validTypingAction(*action) {
+			return ErrEphemeralInvalid
+		}
+		kind = *action
+	}
 	if !e.hub.IsActive(subscription, chatID, threadRootID) {
 		return ErrEphemeralForbidden
 	}
@@ -251,7 +272,7 @@ func (e *Ephemeral) Typing(ctx context.Context, user identity.User, subscription
 	} else if err := e.deleteLease(ctx, "typing:"+leaseScope, user, subscription.ConnectionID); err != nil {
 		return err
 	}
-	frame := typingEventFrame{Op: "typing", ActorID: user.ActorID, ChatID: chatID, ThreadRootID: threadRootID, Active: active, ExpiresAt: expiresAt}
+	frame := typingEventFrame{Op: "typing", ActorID: user.ActorID, ChatID: chatID, ThreadRootID: threadRootID, Active: active, Action: kind, ExpiresAt: expiresAt}
 	return e.broadcast(ctx, user, subscription.ConnectionID, chatID, false, frame)
 }
 
@@ -262,12 +283,16 @@ func (e *Ephemeral) Presence(ctx context.Context, user identity.User, subscripti
 	if err := e.allow(ctx, user, "presence"); err != nil {
 		return err
 	}
-	expiresAt := time.Now().UTC().Add(e.config.PresenceTTL)
-	if err := e.setLease(ctx, "presence", user, subscription.ConnectionID, state, e.config.PresenceTTL); err != nil {
+	now := time.Now().UTC()
+	change, err := e.presence.update(ctx, user.OrgID, user.ActorID, subscription.ConnectionID, state, now)
+	if err != nil {
 		return err
 	}
-	frame := presenceEventFrame{Op: "presence", ActorID: user.ActorID, State: map[string]string{"active": "online", "away": "away"}[state], ExpiresAt: expiresAt}
-	return e.broadcast(ctx, user, subscription.ConnectionID, "", false, frame)
+	e.touchLastSeen(ctx, user, now)
+	if !change.Broadcast {
+		return nil
+	}
+	return e.broadcastPresence(ctx, user, subscription.ConnectionID, change, now)
 }
 
 func (e *Ephemeral) AgentStatus(ctx context.Context, user identity.User, authentication access.Identity, subscription *Subscription, input agentStatusFrame) error {
@@ -397,31 +422,44 @@ func (e *Ephemeral) recipients(ctx context.Context, user identity.User, chatID s
 }
 
 func (e *Ephemeral) broadcast(ctx context.Context, user identity.User, excludeConnectionID, chatID string, readersOnly bool, frame any) error {
-	data, err := json.Marshal(frame)
-	if err != nil {
-		return err
-	}
 	actorIDs, err := e.recipients(ctx, user, chatID, readersOnly)
 	if err != nil {
 		return err
 	}
-	envelope := ephemeralEnvelope{OrgID: user.OrgID, ActorIDs: actorIDs, ExcludeConnectionID: excludeConnectionID, Data: data}
-	if e.redis == nil {
-		e.hub.BroadcastEphemeral(envelope.OrgID, envelope.ActorIDs, envelope.ExcludeConnectionID, envelope.Data)
-		return nil
-	}
-	envelope.Signature = e.signEnvelope(envelope)
-	payload, err := json.Marshal(envelope)
+	return e.publish(ctx, user.OrgID, actorIDs, excludeConnectionID, frame)
+}
+
+// publish delivers frame to actorIDs, in envelopes of at most 1000 recipients
+// (the limit a receiving instance accepts).
+func (e *Ephemeral) publish(ctx context.Context, orgID string, actorIDs []string, excludeConnectionID string, frame any) error {
+	data, err := json.Marshal(frame)
 	if err != nil {
 		return err
 	}
-	if len(payload) > maxEphemeralEnvelopeBytes {
-		return ErrEphemeralInvalid
+	if len(actorIDs) == 0 {
+		return nil
 	}
-	opCtx, cancel := context.WithTimeout(ctx, e.opTimeout)
-	defer cancel()
-	if err := e.redis.Publish(opCtx, e.channel, payload).Err(); err != nil {
-		return ErrEphemeralUnavailable
+	if e.redis == nil {
+		e.hub.BroadcastEphemeral(orgID, actorIDs, excludeConnectionID, data)
+		return nil
+	}
+	for start := 0; start < len(actorIDs); start += 1000 {
+		chunk := actorIDs[start:min(start+1000, len(actorIDs))]
+		envelope := ephemeralEnvelope{OrgID: orgID, ActorIDs: chunk, ExcludeConnectionID: excludeConnectionID, Data: data}
+		envelope.Signature = e.signEnvelope(envelope)
+		payload, err := json.Marshal(envelope)
+		if err != nil {
+			return err
+		}
+		if len(payload) > maxEphemeralEnvelopeBytes {
+			return ErrEphemeralInvalid
+		}
+		opCtx, cancel := context.WithTimeout(ctx, e.opTimeout)
+		err = e.redis.Publish(opCtx, e.channel, payload).Err()
+		cancel()
+		if err != nil {
+			return ErrEphemeralUnavailable
+		}
 	}
 	return nil
 }

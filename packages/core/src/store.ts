@@ -1,5 +1,6 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
 import { completeMessage } from "./messageShape";
+import type { TypingAction } from "./presenceText";
 import type {
   Chat,
   ClientMessage,
@@ -13,7 +14,14 @@ export type MessengerState = {
   messages: Record<string, ClientMessage[]>;
   unread: UnreadSnapshot;
   typing: Record<string, string[]>;
+  /**
+   * What each person is doing, by scope: the chat ID for the chat itself,
+   * `${chatID}:${threadRootID}` inside a thread. Entries expire on their own.
+   */
+  typingActions: Record<string, Record<string, TypingActionState>>;
   presence: Record<string, "online" | "away" | "offline">;
+  /** Exact last seen learnt from realtime frames, newer than REST. */
+  lastSeen: Record<string, string>;
   agentStatuses: Record<string, AgentStatusState>;
   messageStreams: Record<string, MessageStreamState>;
   checkpoint: number;
@@ -35,13 +43,36 @@ export type MessengerState = {
   setUnread(value: UnreadSnapshot): void;
   setRealtime(value: RealtimeState): void;
   setActive(chatID: string | null): void;
-  setTyping(chatID: string, actorID: string, active: boolean): void;
-  setPresence(actorID: string, state: "online" | "away" | "offline"): void;
+  setTyping(
+    chatID: string,
+    actorID: string,
+    active: boolean,
+    options?: {
+      action?: TypingAction;
+      expiresAt?: string;
+      threadRootID?: string | null;
+    },
+  ): void;
+  setPresence(
+    actorID: string,
+    state: "online" | "away" | "offline",
+    options?: { expiresAt?: string; lastSeenAt?: string },
+  ): void;
+  /** Everyone online or away right now, sent once after connecting. */
+  applyPresenceSnapshot(
+    entries: { actorID: string; state: "online" | "away"; expiresAt: string }[],
+  ): void;
+  /** Typing is short-lived: drop it whenever the socket goes. */
+  clearTyping(): void;
   setAgentStatus(value: AgentStatusState): void;
   applyMessageStream(value: MessageStreamFrame): void;
   clearAgentEphemeral(): void;
   resetDurable(checkpoint: number): void;
 };
+export type TypingActionState = { action: TypingAction; expiresAt: number };
+export function typingScope(chatID: string, threadRootID?: string | null) {
+  return threadRootID ? `${chatID}:${threadRootID}` : chatID;
+}
 export type AgentStatusState = {
   runID: string;
   actorID: string;
@@ -93,12 +124,16 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
   // Highest version requested per message: one request per stub, however
   // often the frame is replayed.
   const requested = new Map<string, number>();
+  // Latest presence expiry per person: a newer frame cancels the old timer.
+  const presenceExpiry = new Map<string, string>();
   return createStore<MessengerState>((set, get) => ({
     chats: {},
     messages: {},
     unread: emptyUnread,
     typing: {},
+    typingActions: {},
     presence: {},
+    lastSeen: {},
     agentStatuses: {},
     messageStreams: {},
     checkpoint,
@@ -249,15 +284,73 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
     setUnread: (unread) => set({ unread }),
     setRealtime: (realtime) => set({ realtime }),
     setActive: (activeChatID) => set({ activeChatID }),
-    setTyping: (chatID, actorID, active) =>
+    setTyping: (chatID, actorID, active, options = {}) => {
+      const scope = typingScope(chatID, options.threadRootID);
+      const expiresAt = options.expiresAt
+        ? Date.parse(options.expiresAt)
+        : Date.now() + 6_000;
       set((state) => {
         const values = new Set(state.typing[chatID] ?? []);
         if (active) values.add(actorID);
         else values.delete(actorID);
-        return { typing: { ...state.typing, [chatID]: [...values] } };
-      }),
-    setPresence: (actorID, value) =>
-      set((state) => ({ presence: { ...state.presence, [actorID]: value } })),
+        const scoped = { ...state.typingActions[scope] };
+        if (active)
+          scoped[actorID] = { action: options.action ?? "typing", expiresAt };
+        else delete scoped[actorID];
+        return {
+          typing: { ...state.typing, [chatID]: [...values] },
+          typingActions: { ...state.typingActions, [scope]: scoped },
+        };
+      });
+      if (!active) return;
+      // A client that vanishes never says it stopped: expire on its own.
+      const delay = expiryDelay(new Date(expiresAt).toISOString());
+      setTimeout(() => {
+        const current = get().typingActions[scope]?.[actorID];
+        if (current?.expiresAt !== expiresAt) return;
+        get().setTyping(chatID, actorID, false, {
+          threadRootID: options.threadRootID ?? null,
+        });
+      }, delay);
+    },
+    setPresence: (actorID, value, options = {}) => {
+      set((state) => ({
+        presence: { ...state.presence, [actorID]: value },
+        ...(options.lastSeenAt
+          ? { lastSeen: { ...state.lastSeen, [actorID]: options.lastSeenAt } }
+          : {}),
+      }));
+      if (value === "offline" || !options.expiresAt) return;
+      const expiresAt = options.expiresAt;
+      presenceExpiry.set(actorID, expiresAt);
+      setTimeout(
+        () => {
+          if (presenceExpiry.get(actorID) !== expiresAt) return;
+          presenceExpiry.delete(actorID);
+          if (get().presence[actorID] === "offline") return;
+          set((state) => ({
+            presence: { ...state.presence, [actorID]: "offline" },
+          }));
+        },
+        expiryDelay(expiresAt, 5 * 60_000),
+      );
+    },
+    applyPresenceSnapshot: (entries) => {
+      const listed = new Set(entries.map((entry) => entry.actorID));
+      // The snapshot is complete: whoever it leaves out is gone.
+      set((state) => {
+        const next = { ...state.presence };
+        for (const [actorID, value] of Object.entries(next))
+          if (value !== "offline" && !listed.has(actorID))
+            next[actorID] = "offline";
+        return { presence: next };
+      });
+      for (const entry of entries)
+        get().setPresence(entry.actorID, entry.state, {
+          expiresAt: entry.expiresAt,
+        });
+    },
+    clearTyping: () => set({ typing: {}, typingActions: {} }),
     setAgentStatus: (value) => {
       set((state) => {
         const next = { ...state.agentStatuses };
@@ -336,8 +429,8 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
       }),
   }));
 }
-function expiryDelay(expiresAt: string): number {
-  return Math.max(0, Math.min(60_000, Date.parse(expiresAt) - Date.now() + 25));
+function expiryDelay(expiresAt: string, cap = 60_000): number {
+  return Math.max(0, Math.min(cap, Date.parse(expiresAt) - Date.now() + 25));
 }
 function uniqueSorted(items: ClientMessage[]): ClientMessage[] {
   const unique = new Map<string, ClientMessage>();
