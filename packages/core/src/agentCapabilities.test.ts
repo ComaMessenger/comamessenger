@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { capabilitiesOf, scopesFor } from "./capabilities";
+import { capabilitiesOf, scopesFor } from "./agentCapabilities";
 
 describe("scopes derived from builder blocks", () => {
   it("always keeps reading the agent chats and running", () => {

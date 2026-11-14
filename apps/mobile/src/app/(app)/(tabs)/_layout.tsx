@@ -4,6 +4,7 @@ import {
   Ellipsis,
   MessageCircle,
   MessagesSquare,
+  Sparkles,
   Star,
   type LucideIcon,
 } from "lucide-react-native";
@@ -12,6 +13,11 @@ import { useStore } from "zustand";
 import { totalUnread } from "@comamessenger/core";
 import { useTheme } from "@/lib/theme";
 import { useMessenger } from "@/messenger/MessengerProvider";
+import {
+  useAgentAccess,
+  useAgentLiveRefresh,
+  useApprovals,
+} from "@/agents/data";
 import { countLabel } from "@/ui/CountBadge";
 import { fonts } from "@/ui/Text";
 
@@ -28,6 +34,11 @@ export default function TabsLayout() {
   const unread = useStore(store, (state) =>
     totalUnread(state.unread, state.chats),
   );
+  // Actions waiting for the reader's decision count on the «Агенты» tab.
+  const { canApprove } = useAgentAccess();
+  const approvals = useApprovals();
+  const pending = canApprove ? (approvals.data?.length ?? 0) : 0;
+  useAgentLiveRefresh();
   return (
     <Tabs
       screenOptions={{
@@ -78,6 +89,19 @@ export default function TabsLayout() {
           title: t("tabImportant"),
           tabBarIcon: tabIcon(Star),
           tabBarButtonTestID: "tab-important",
+        }}
+      />
+      <Tabs.Screen
+        name="agents"
+        options={{
+          title: t("tabAgents"),
+          tabBarIcon: tabIcon(Sparkles),
+          tabBarBadge: pending > 0 ? countLabel(pending) : undefined,
+          tabBarAccessibilityLabel:
+            pending > 0
+              ? `${t("tabAgents")}, ${t("agentPendingCount", { count: pending })}`
+              : t("tabAgents"),
+          tabBarButtonTestID: "tab-agents",
         }}
       />
       <Tabs.Screen

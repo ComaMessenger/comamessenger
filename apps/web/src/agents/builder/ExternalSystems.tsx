@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { assignableTools } from "@comamessenger/core";
 import type {
   AgentMcpBinding,
   McpConnection,
@@ -10,25 +11,7 @@ import { IconButton, SelectField, Switch, Tag } from "../../ui";
 import { externalMode } from "../shared/confirmation";
 import { ModeChoice } from "./SkillsBlock";
 
-type Tool = { name: string; description: string; readOnly: boolean };
-
-/**
- * Tools of a connection an agent may be given: the assignable ones, and once
- * Core knows the catalog only those the server offers. A tool missing from
- * the catalog is treated as changing data, as the server does.
- */
-export function assignableTools(connection: McpConnection): Tool[] {
-  const catalog = connection.tools ?? [];
-  const known = new Map(catalog.map((tool) => [tool.name, tool]));
-  const names = connection.assignable_tools ?? catalog.map((tool) => tool.name);
-  return names
-    .filter((name) => !connection.tools_refreshed_at || known.has(name))
-    .map((name) => ({
-      name,
-      description: known.get(name)?.description ?? "",
-      readOnly: known.get(name)?.read_only === true,
-    }));
-}
+export { assignableTools };
 
 /**
  * External systems in block «Что умеет»: workspace connections released for
@@ -78,11 +61,16 @@ export function ExternalSystems({
         const tools = connection ? assignableTools(connection) : [];
         const name = connection?.name ?? t("agentExternalMissing");
         return (
-          <section key={binding.connection_id} className="agent-external__system">
+          <section
+            key={binding.connection_id}
+            className="agent-external__system"
+          >
             <header className="agent-line">
               <span className="agent-line__text">
                 <strong>{name}</strong>
-                {connection?.description && <small>{connection.description}</small>}
+                {connection?.description && (
+                  <small>{connection.description}</small>
+                )}
               </span>
               <span className="agent-line__control">
                 <IconButton
@@ -107,7 +95,9 @@ export function ExternalSystems({
                     <span>
                       {tool.name}{" "}
                       <Tag>
-                        {t(tool.readOnly ? "agentToolReads" : "agentToolWrites")}
+                        {t(
+                          tool.readOnly ? "agentToolReads" : "agentToolWrites",
+                        )}
                       </Tag>
                     </span>
                     {tool.description && <small>{tool.description}</small>}
@@ -134,7 +124,9 @@ export function ExternalSystems({
                       label={t("agentExternalTool", { tool: tool.name })}
                       checked={allowed}
                       onChange={(value) => {
-                        const policy = { ...(binding.confirmation_policy ?? {}) };
+                        const policy = {
+                          ...(binding.confirmation_policy ?? {}),
+                        };
                         if (!value) delete policy[tool.name];
                         update(index, {
                           ...binding,

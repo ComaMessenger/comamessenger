@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { KnowledgeDocument } from "@comamessenger/core";
+import {
+  knowledgePageUpdate,
+  knowledgePageValid,
+  type KnowledgeDocument,
+} from "@comamessenger/core";
 import { Button, Dialog, Field, FormError, Segmented, TextareaField } from "../ui";
 import { Markdown } from "../markdown";
 import { messageOf } from "../errors";
@@ -28,7 +32,7 @@ export function PageEditorDialog({
   const [mode, setMode] = useState<"write" | "preview">("write");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
-  const valid = title.trim().length > 0 && body.trim().length > 0;
+  const valid = knowledgePageValid(title, body);
 
   async function save() {
     if (!valid) {
@@ -39,10 +43,7 @@ export function PageEditorDialog({
     setError("");
     try {
       const saved = page
-        ? await api.updateKnowledgeDocument(page.id, {
-            title: title.trim(),
-            ...(body !== page.body ? { body } : {}),
-          })
+        ? await api.updateKnowledgeDocument(page.id, knowledgePageUpdate(page, title, body))
         : await api.createKnowledgeDocument(collectionID, {
             kind: "page",
             title: title.trim(),

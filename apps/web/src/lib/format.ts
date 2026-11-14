@@ -1,4 +1,5 @@
 import {
+  relativeAge,
   formatBytes as formatByteSize,
   formatDaySeparator as formatFeedDay,
   formatListTime as formatCompactTime,
@@ -77,20 +78,18 @@ export function firstName(displayName: string) {
 
 /** "12 min", "1 h", "yesterday", "Mon" — compact age for list rows. */
 export function formatAge(value: string, now = new Date()) {
-  const minutes = Math.max(0, Math.round((now.getTime() - new Date(value).getTime()) / 60_000));
-  if (minutes < 1) return i18n.t("justNow");
-  if (minutes < 60) return i18n.t("minutesShort", { count: minutes });
-  if (minutes < 24 * 60 && new Date(value).toDateString() === now.toDateString())
-    return i18n.t("hoursShort", { count: Math.round(minutes / 60) });
+  const age = relativeAge(value, now);
+  if (age.unit === "now") return i18n.t("justNow");
+  if (age.unit === "minutes") return i18n.t("minutesShort", { count: age.count });
+  if (age.unit === "hours") return i18n.t("hoursShort", { count: age.count });
   return formatListTime(value, now);
 }
 
 /** "12 min ago", "2 h ago", "yesterday", "Mon" — age as a phrase for sentences. */
 export function formatAgePhrase(value: string, now = new Date()) {
-  const minutes = Math.max(0, Math.round((now.getTime() - new Date(value).getTime()) / 60_000));
-  if (minutes < 1) return i18n.t("justNow");
-  if (minutes < 60) return i18n.t("minutesAgo", { count: minutes });
-  if (minutes < 24 * 60 && new Date(value).toDateString() === now.toDateString())
-    return i18n.t("hoursAgo", { count: Math.round(minutes / 60) });
+  const age = relativeAge(value, now);
+  if (age.unit === "now") return i18n.t("justNow");
+  if (age.unit === "minutes") return i18n.t("minutesAgo", { count: age.count });
+  if (age.unit === "hours") return i18n.t("hoursAgo", { count: age.count });
   return formatListTime(value, now).toLocaleLowerCase();
 }

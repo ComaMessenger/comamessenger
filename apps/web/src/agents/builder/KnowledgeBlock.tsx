@@ -1,9 +1,6 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
-import type {
-  Chat,
-  KnowledgeDocument,
-  MessengerAPI,
-} from "@comamessenger/core";
+import { isSpreadsheet } from "@comamessenger/core";
+import type { Chat, MessengerAPI } from "@comamessenger/core";
 import {
   BookOpen,
   MessagesSquare,
@@ -30,19 +27,7 @@ const sourceIcons: Record<KnowledgeSource, typeof Search> = {
   members: Users,
 };
 
-/** Spreadsheets `query_table` can read: CSV and XLSX files. */
-export function isSpreadsheet(document: KnowledgeDocument): boolean {
-  const name = (document.file_name ?? document.title).toLowerCase();
-  const mime = document.file_mime ?? "";
-  return (
-    document.kind === "file" &&
-    (name.endsWith(".csv") ||
-      name.endsWith(".xlsx") ||
-      mime === "text/csv" ||
-      mime ===
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-  );
-}
+export { isSpreadsheet };
 
 /**
  * Block 2: where the agent takes information from — the chats it reads, its

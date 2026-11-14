@@ -1,12 +1,11 @@
-import type { Agent } from "@comamessenger/core";
+import { maxAgentInstructionsLength, type Agent } from "@comamessenger/core";
 import { useTranslation } from "react-i18next";
 import type { AgentTone } from "@comamessenger/core";
 import { Avatar, Chip, Field, TextareaField } from "../../ui";
 import type { Draft } from "../shared/draft";
 import { BuilderBlock } from "./BuilderBlock";
 
-/** Agent instructions limit, as in Core and the API schema. */
-const maxInstructionsLength = 4000;
+const maxInstructionsLength = maxAgentInstructionsLength;
 
 const tones: AgentTone[] = ["concise", "friendly", "formal", ""];
 

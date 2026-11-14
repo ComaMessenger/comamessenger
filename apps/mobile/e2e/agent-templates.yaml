@@ -1,0 +1,73 @@
+# A draft from a pilot template: the list of roles, the preview of one, its
+# first chat, and the builder with what the role still needs.
+# Run after sign-in.yaml: maestro test -e THEME=light e2e/agent-templates.yaml
+appId: com.comamessenger.app
+env:
+  CHAT: Backend
+  RECIPE: qa
+---
+- runScript: scripts/login.js
+# Follow the simulator appearance (light or dark); restored at the end.
+- runScript: scripts/reset-preferences.js
+- runScript: scripts/delete-e2e-agents.js
+- runFlow: open-app.yaml
+- runFlow:
+    file: agent-link.yaml
+    env:
+      LINK: coma://agents/new
+- extendedWaitUntil:
+    visible:
+      id: agent-create-screen
+    timeout: 10000
+- tapOn:
+    id: agent-create-template
+- extendedWaitUntil:
+    visible:
+      id: agent-template-${RECIPE}
+    timeout: 15000
+- takeScreenshot: agent-templates-${THEME}
+- tapOn:
+    id: agent-template-${RECIPE}
+- extendedWaitUntil:
+    visible:
+      id: agent-new-screen
+    timeout: 10000
+- takeScreenshot: agent-template-preview-${THEME}
+- tapOn:
+    id: agent-create-name
+- eraseText: 40
+- inputText: E2E Справка
+- pressKey: Enter
+# A role needs its first chat.
+- tapOn:
+    id: agent-create-submit
+- assertVisible: Выберите чат.*
+- scrollUntilVisible:
+    element:
+      id: agent-create-chat
+    direction: DOWN
+- tapOn:
+    id: agent-create-chat
+- tapOn: Название чата
+- inputText: ${CHAT}
+- tapOn:
+    id: agent-chat-picker-${CHAT}
+- scrollUntilVisible:
+    element:
+      id: agent-create-submit
+    direction: DOWN
+- tapOn:
+    id: agent-create-submit
+- extendedWaitUntil:
+    visible:
+      id: agent-step-role
+    timeout: 15000
+- takeScreenshot: agent-template-role-${THEME}
+- tapOn:
+    id: agent-step-close
+- extendedWaitUntil:
+    visible:
+      id: agent-builder-hub
+    timeout: 5000
+- takeScreenshot: agent-template-hub-${THEME}
+- runScript: scripts/restore-preferences.js

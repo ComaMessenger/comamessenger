@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { Agent } from "@comamessenger/core";
+import type { Agent } from "./types";
 import {
   actionLocked,
   actionMode,
   externalMode,
   withActionMode,
-} from "./confirmation";
-import { draftChatIDs, draftOf, updateOf } from "./draft";
+} from "./agentConfirmation";
+import { draftChatIDs, draftOf, updateOf } from "./agentDraft";
 
 describe("confirmation per action", () => {
   it("uses safe defaults and treats a mixed group as confirm", () => {

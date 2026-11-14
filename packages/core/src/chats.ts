@@ -92,6 +92,25 @@ export function chatPreview(
   return { sender: name ? `${name}: ` : "", text };
 }
 
+/**
+ * How long ago something happened, for "just now", "12 min", "2 h"; older
+ * than today falls back to the list time.
+ */
+export function relativeAge(
+  value: string,
+  now = new Date(),
+):
+  | { unit: "now" }
+  | { unit: "minutes" | "hours"; count: number }
+  | { unit: "date" } {
+  const minutes = Math.max(0, Math.round((now.getTime() - new Date(value).getTime()) / 60_000));
+  if (minutes < 1) return { unit: "now" };
+  if (minutes < 60) return { unit: "minutes", count: minutes };
+  if (minutes < 24 * 60 && new Date(value).toDateString() === now.toDateString())
+    return { unit: "hours", count: Math.round(minutes / 60) };
+  return { unit: "date" };
+}
+
 /** Compact time for list rows: today → HH:MM, this week → weekday, else → D MMM. */
 export function formatListTime(
   value: string,

@@ -1,0 +1,16 @@
+# Opens a screen of the agent builder by its link (the agents tab of package A
+# links here too), confirming the system «Open in Coma?» prompt.
+# Use: runFlow: { file: agent-link.yaml, env: { LINK: coma://agents/new } }
+appId: com.comamessenger.app
+---
+- openLink: ${LINK}
+- runFlow:
+    when:
+      visible: Открыть
+    commands:
+      - tapOn: Открыть
+- runFlow:
+    when:
+      visible: Open
+    commands:
+      - tapOn: Open

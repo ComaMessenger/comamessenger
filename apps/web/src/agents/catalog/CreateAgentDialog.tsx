@@ -1,4 +1,10 @@
 import { useState } from "react";
+import {
+  createAgentProblem,
+  defaultConnection,
+  newAgentRequest,
+  triggersToLocalize,
+} from "@comamessenger/core";
 import type {
   Agent,
   AgentLlmConnection,
@@ -10,19 +16,9 @@ import { Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { messageOf } from "../../errors";
 import { Button, Dialog, Field, FormError, SelectField } from "../../ui";
-import { emptyDraft } from "../shared/draft";
 import { chatName } from "../shared/format";
 
-/** The connection a new agent starts with: one healthy workspace model. */
-export function defaultConnection(
-  connections: AgentLlmConnection[],
-): AgentLlmConnection | undefined {
-  const enabled = connections.filter((connection) => connection.enabled);
-  return (
-    enabled.find((connection) => connection.health_status === "healthy") ??
-    enabled[0]
-  );
-}
+export { defaultConnection };
 
 /**
  * A short start: name and first chat. Everything else is set in the builder,
@@ -56,45 +52,30 @@ export function CreateAgentDialog({
 
   async function create() {
     setError("");
-    if (!name.trim()) {
-      setError(t("agentCreateNameRequired"));
-      return;
-    }
-    if (chatRequired && !chatID) {
-      setError(t("agentCreateChatRequired"));
+    const problem = createAgentProblem({ name, chatID, recipe });
+    if (problem) {
+      setError(t(problem));
       return;
     }
     setPending(true);
     try {
-      const draft = emptyDraft(
-        recipe ?? undefined,
-        i18n.resolvedLanguage ?? i18n.language,
+      const created = await api.createAgent(
+        newAgentRequest({
+          recipe,
+          name,
+          chatID,
+          connections,
+          locale: i18n.resolvedLanguage ?? i18n.language,
+        }),
       );
-      const connection = defaultConnection(connections);
-      const created = await api.createAgent({
-        ...draft,
-        display_name: name.trim(),
-        chat_ids: chatID ? [chatID] : [],
-        enabled: false,
-        ...(connection
-          ? {
-              llm_connection_id: connection.id,
-              provider: connection.provider,
-              endpoint_url: "",
-              model: connection.default_model || draft.model,
-            }
-          : { llm_connection_id: undefined }),
-      });
       // Recipe rules are created by the server in UTC; they belong to the
       // creator's timezone so «every day at 09:00» means local 09:00.
       if (recipe && timezone !== "UTC") {
         const triggers = await api.agentTriggers(created.id);
         await Promise.all(
-          triggers
-            .filter((trigger) => trigger.timezone === "UTC")
-            .map((trigger) =>
-              api.updateAgentTrigger(created.id, trigger.id, { timezone }),
-            ),
+          triggersToLocalize(triggers, timezone).map((trigger) =>
+            api.updateAgentTrigger(created.id, trigger.id, { timezone }),
+          ),
         );
       }
       await onCreated(created);

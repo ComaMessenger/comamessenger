@@ -19,6 +19,10 @@ import { useMessenger } from "@/messenger/MessengerProvider";
 import { useSignedIn } from "@/session/SessionProvider";
 import { useTheme } from "@/lib/theme";
 import { chatTitle } from "@/chats/ChatRow";
+import {
+  KnowledgeSearchGroup,
+  useKnowledgeSearchGroup,
+} from "@/knowledge/KnowledgeSearchGroup";
 import { Notice } from "@/ui/Notice";
 import { Text, fonts, maxTextScale } from "@/ui/Text";
 
@@ -71,6 +75,11 @@ export default function SearchScreen() {
     getNextPageParam: (page) => page.next_cursor ?? undefined,
     enabled: query.length >= 2,
   });
+  // Knowledge documents join the unfiltered search, as on the web.
+  const knowledge = useKnowledgeSearchGroup(
+    query,
+    kind === "all" && !chatFilter,
+  );
   const results = useMemo(
     () => search.data?.pages.flatMap((page) => page.results) ?? [],
     [search.data],
@@ -169,6 +178,9 @@ export default function SearchScreen() {
         }
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={
+          <KnowledgeSearchGroup rows={knowledge} query={query} />
+        }
         onEndReached={() => {
           if (search.hasNextPage && !search.isFetchingNextPage)
             void search.fetchNextPage();
@@ -241,7 +253,7 @@ export default function SearchScreen() {
                 onAction={() => void search.refetch()}
               />
             </View>
-          ) : (
+          ) : knowledge.length ? null : (
             <Text tone="muted" size={15} style={styles.state}>
               {t("searchEmpty")}
             </Text>

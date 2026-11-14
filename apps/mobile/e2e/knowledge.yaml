@@ -1,0 +1,195 @@
+# Knowledge base from «Ещё → База знаний», as the owner (knowledge.manage).
+# Seed first, then run after sign-in.yaml:
+#   node e2e/seed-knowledge.mjs
+#   maestro test -e THEME=light e2e/knowledge.yaml
+# The account theme follows the device for the run and is restored after.
+# Pass the theme for screenshot names: -e THEME=light (or dark after
+# xcrun simctl ui <device> appearance dark).
+appId: com.comamessenger.app
+---
+- runScript: scripts/login.js
+- runScript: scripts/reset-preferences.js
+- runFlow: open-app.yaml
+- runFlow:
+    file: tabs.yaml
+    env:
+      TAB: more
+- tapOn:
+    id: more-knowledge
+- extendedWaitUntil:
+    visible:
+      id: kb-home
+    timeout: 10000
+- assertVisible:
+    id: kb-collection-Регламенты центра
+- assertVisible:
+    id: kb-collection-Инструкторам зала
+- takeScreenshot: knowledge-home-${THEME}
+
+# A collection: documents with their statuses, the failed scan explained.
+- tapOn:
+    id: kb-collection-Регламенты центра
+- extendedWaitUntil:
+    visible:
+      id: kb-document-Отпуск инструкторов
+    timeout: 10000
+- assertVisible: Все участники
+- assertVisible:
+    id: kb-status-failed
+- assertVisible: .*похоже, это скан.*
+- takeScreenshot: knowledge-collection-${THEME}
+
+# A page: its Markdown and fragments.
+- tapOn:
+    id: kb-document-Отпуск инструкторов
+- extendedWaitUntil:
+    visible: Содержимое страницы
+    timeout: 10000
+- assertVisible: Извлечённый текст
+- takeScreenshot: knowledge-page-${THEME}
+- tapOn:
+    id: kb-back
+
+# A text file and its original.
+- tapOn:
+    id: kb-document-Пропуска.txt
+- extendedWaitUntil:
+    visible:
+      id: kb-open-source
+    timeout: 10000
+- takeScreenshot: knowledge-document-${THEME}
+- tapOn:
+    id: kb-open-source
+- extendedWaitUntil:
+    visible: .*Временный пропуск действует один день.*
+    timeout: 15000
+- takeScreenshot: knowledge-source-text-${THEME}
+- tapOn:
+    id: kb-back
+- tapOn:
+    id: kb-back
+
+# A PDF in the built-in viewer.
+- tapOn:
+    id: kb-document-Политика отпусков \(EN\)
+- extendedWaitUntil:
+    visible:
+      id: kb-open-source
+    timeout: 10000
+- tapOn:
+    id: kb-open-source
+- extendedWaitUntil:
+    visible:
+      id: kb-source-viewer
+    timeout: 15000
+- extendedWaitUntil:
+    visible: .*Vacation policy.*
+    timeout: 20000
+- takeScreenshot: knowledge-source-pdf-${THEME}
+- tapOn:
+    id: kb-back
+- tapOn:
+    id: kb-back
+
+# Collection settings.
+- tapOn:
+    id: kb-collection-menu
+- tapOn:
+    id: kb-collection-edit
+- extendedWaitUntil:
+    visible:
+      id: kb-collection-sheet
+    timeout: 5000
+- assertVisible: Кто видит
+- takeScreenshot: knowledge-collection-settings-${THEME}
+- tapOn: Закрыть
+
+# A new page: write, preview, create, then delete it.
+- tapOn:
+    id: kb-new-page
+- extendedWaitUntil:
+    visible:
+      id: kb-page-sheet
+    timeout: 5000
+- tapOn:
+    id: kb-page-title
+- inputText: Памятка e2e
+- tapOn:
+    id: kb-page-body
+- inputText: "# Раздел\nПроверка редактора страниц"
+- tapOn:
+    id: kb-page-preview
+- takeScreenshot: knowledge-page-editor-${THEME}
+- tapOn:
+    id: kb-page-save
+- extendedWaitUntil:
+    visible:
+      id: kb-document-screen
+    timeout: 10000
+- extendedWaitUntil:
+    visible:
+      id: kb-status-ready
+    timeout: 20000
+- tapOn:
+    id: kb-document-menu
+- tapOn:
+    id: kb-document-delete
+- tapOn: Удалить
+- extendedWaitUntil:
+    visible:
+      id: kb-collection-screen
+    timeout: 10000
+- assertNotVisible:
+    id: kb-document-Памятка e2e
+- tapOn:
+    id: kb-back
+
+# Search across collections, then the found fragment in focus.
+- tapOn:
+    id: kb-search-input
+- inputText: больничный
+- extendedWaitUntil:
+    visible:
+      id: kb-result-Отпуск инструкторов
+    timeout: 10000
+- takeScreenshot: knowledge-search-${THEME}
+- tapOn:
+    id: kb-result-Отпуск инструкторов
+- extendedWaitUntil:
+    visible:
+      id: kb-fragment-focus
+    timeout: 10000
+- assertVisible: Найденный фрагмент
+- takeScreenshot: knowledge-search-fragment-${THEME}
+- tapOn:
+    id: kb-back
+
+# A new collection, created and deleted.
+- tapOn:
+    id: kb-create-collection
+- extendedWaitUntil:
+    visible:
+      id: kb-collection-sheet
+    timeout: 5000
+- tapOn:
+    id: kb-collection-name
+- inputText: Коллекция e2e
+- takeScreenshot: knowledge-collection-create-${THEME}
+- tapOn:
+    id: kb-collection-save
+- extendedWaitUntil:
+    visible: В коллекции пока нет документов
+    timeout: 10000
+- takeScreenshot: knowledge-collection-empty-${THEME}
+- tapOn:
+    id: kb-collection-menu
+- tapOn:
+    id: kb-collection-delete
+- tapOn: Удалить коллекцию
+- extendedWaitUntil:
+    visible:
+      id: kb-home
+    timeout: 10000
+- assertNotVisible:
+    id: kb-collection-Коллекция e2e
+- runScript: scripts/restore-preferences.js

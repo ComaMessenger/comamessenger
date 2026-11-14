@@ -1,3 +1,4 @@
+import { humanStatusLabel } from "@comamessenger/core";
 import { useTranslation } from "react-i18next";
 import { cx } from "../../ui";
 import { statusTone, type HumanStatus } from "./status";
@@ -11,12 +12,7 @@ export function AgentStatus({
   withReason?: boolean;
 }) {
   const { t } = useTranslation();
-  const label =
-    status.kind === "approval"
-      ? t("agentStatus_approval", { count: status.count })
-      : status.kind === "working" && status.changed
-        ? t("agentStatus_workingChanged")
-        : t(`agentStatus_${status.kind}`);
+  const label = humanStatusLabel(t, status);
   return (
     <span className="agent-status-line">
       <span

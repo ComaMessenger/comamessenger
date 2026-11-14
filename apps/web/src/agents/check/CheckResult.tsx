@@ -1,66 +1,26 @@
 import { useQuery } from "@tanstack/react-query";
 import type {
   AgentRun,
-  AgentRunToolCall,
   Chat,
   MessengerAPI,
 } from "@comamessenger/core";
 import { AlertCircle, CheckCircle2, Clock, Wallet } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
+  runFinished,
+  runPreview,
+  runSeconds,
+  stepText,
+} from "@comamessenger/core";
+import {
   agentRunErrorText,
   chatName,
   formatCost,
   formatDuration,
-  toolLabel,
-  type Translate,
 } from "../shared/format";
 
-const knownSteps = new Set([
-  "get_chat_messages",
-  "get_thread",
-  "search_messages",
-  "get_file_text",
-  "list_members",
-  "recall",
-  "search_knowledge",
-  "get_reactions",
-  "get_collection",
-  "post_message",
-  "reply_in_thread",
-  "add_reaction",
-  "remember",
-  "post_card",
-  "update_card",
-  "start_collection",
-  "schedule_followup",
-  "send_direct_message",
-]);
-
-/** «Read the chat», «Would send a card»: a tool step in plain words. */
-export function stepText(t: Translate, call: AgentRunToolCall): string {
-  const known = knownSteps.has(call.tool_name);
-  const text = known
-    ? t(
-        call.dry_run
-          ? `agentStepWould_${call.tool_name}`
-          : `agentStep_${call.tool_name}`,
-      )
-    : call.dry_run
-      ? t("agentStepWouldExternal", { name: toolLabel(t, call.tool_name) })
-      : t("agentStepExternal", { name: toolLabel(t, call.tool_name) });
-  return call.status === "failed" ? t("agentStepFailed", { step: text }) : text;
-}
-
-const terminal = (run: AgentRun) => !["queued", "running"].includes(run.status);
-
-function seconds(run: AgentRun) {
-  if (!run.started_at || !run.finished_at) return 0;
-  return (
-    (new Date(run.finished_at).getTime() - new Date(run.started_at).getTime()) /
-    1000
-  );
-}
+/** «Read the chat», «Would send a card»: lives in Core, shared with the phone. */
+export { stepText };
 
 /** Answer, trace (what it read, what it would do, time, cost) and verdict. */
 export function CheckResult({
@@ -73,7 +33,7 @@ export function CheckResult({
   chat: Chat | undefined;
 }) {
   const { t, i18n } = useTranslation();
-  const done = terminal(run);
+  const done = runFinished(run);
   const steps = useQuery({
     queryKey: ["agent-run-steps", run.id],
     queryFn: () => api.agentRunToolCalls(run.id),
@@ -85,10 +45,7 @@ export function CheckResult({
     enabled: done,
     retry: false,
   });
-  const preview =
-    typeof run.result_summary.preview === "string"
-      ? run.result_summary.preview
-      : "";
+  const preview = runPreview(run);
   const calls = steps.data?.tool_calls ?? [];
   const reads = calls.filter((call) => !call.dry_run && call.mode === "read");
   const wouldDo = calls.filter((call) => call.dry_run);
@@ -142,7 +99,7 @@ export function CheckResult({
         <span className="agent-trace__meta">
           <span>
             <Clock aria-hidden="true" />
-            {formatDuration(t, seconds(run))}
+            {formatDuration(t, runSeconds(run))}
           </span>
           <span>
             <Wallet aria-hidden="true" />

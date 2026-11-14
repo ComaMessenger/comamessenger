@@ -10,7 +10,14 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouterState } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import type { KnowledgeCollection, KnowledgeDocument } from "@comamessenger/core";
+import {
+  fileLabel,
+  focusedParts,
+  knowledgeFocusFrom,
+  sourceView,
+  type KnowledgeCollection,
+  type KnowledgeDocument,
+} from "@comamessenger/core";
 import { Button, EmptyState, IconButton, InlineError, SkeletonRow, cx } from "../ui";
 import { Markdown } from "../markdown";
 import { messageOf } from "../errors";
@@ -20,15 +27,8 @@ import { useMessenger } from "../shell/MessengerContext";
 import { ConfirmDialog } from "../dialogs/ConfirmDialog";
 import { DirectoryDetailHead } from "../directories/DirectoryPage";
 import { PageEditorDialog } from "./PageEditorDialog";
-import { StatusBadge, fileLabel } from "./CollectionView";
-import {
-  documentFormat,
-  failureKey,
-  focusedFragment,
-  isProcessing,
-  splitHighlight,
-  splitQuote,
-} from "./format";
+import { StatusBadge } from "./CollectionView";
+import { failureKey, focusedFragment, isProcessing } from "./format";
 import { knowledgePath } from "./routes";
 import {
   collectionKey,
@@ -50,12 +50,14 @@ export function DocumentView({
   const client = useQueryClient();
   const isMobile = useIsMobile();
   const search = useRouterState({ select: (state) => state.location.searchStr });
-  const focus = new URLSearchParams(search);
-  const focusFragment = focus.get("fragment") ?? "";
-  const focusQuery = focus.get("q") ?? "";
+  const params = new URLSearchParams(search);
   // An agent source carries the quoted excerpt instead of a fragment id.
-  const focusQuote = focus.get("quote") ?? "";
-  const focusPosition = focus.has("position") ? Number(focus.get("position")) : null;
+  const {
+    fragment: focusFragment,
+    query: focusQuery,
+    quote: focusQuote,
+    position: focusPosition,
+  } = knowledgeFocusFrom((name) => params.get(name));
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
@@ -110,11 +112,11 @@ export function DocumentView({
     setError("");
     // PDF and plain text open in a tab; everything else is saved. Text is
     // forced to text/plain so an uploaded HTML file never renders as a page.
-    const format = documentFormat(document.file_name ?? "", document.file_mime ?? "");
+    const view = sourceView(document);
     const viewType =
-      format === "pdf"
+      view === "pdf"
         ? "application/pdf"
-        : format === "text" || format === "markdown" || format === "csv"
+        : view === "text"
           ? "text/plain;charset=utf-8"
           : "";
     // The tab is opened synchronously so pop-up blockers allow it.
@@ -332,7 +334,7 @@ function FragmentList({
             </header>
             <p>
               {isFocus && (query || quote)
-                ? (query ? splitHighlight(fragment.content, query) : splitQuote(fragment.content, quote)).map(
+                ? focusedParts(fragment.content, { query, quote }).map(
                     (part, index) => (part.match ? <mark key={index}>{part.text}</mark> : part.text),
                   )
                 : fragment.content}

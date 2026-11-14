@@ -1,36 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  APIError,
+  architectProblemOf,
+  type ArchitectProblem,
   type ArchitectSession,
   type MessengerAPI,
 } from "@comamessenger/core";
 import { messageOf } from "../../errors";
 
-export type ArchitectProblem =
-  | { kind: "connection" }
-  | { kind: "model" }
-  | { kind: "budget" }
-  | { kind: "busy" }
-  | { kind: "expired" }
-  | { kind: "other"; message: string };
+export type { ArchitectProblem };
 
-function problemOf(cause: unknown): ArchitectProblem {
-  if (cause instanceof APIError) {
-    switch (cause.code) {
-      case "architect_connection_required":
-        return { kind: "connection" };
-      case "architect_model_error":
-        return { kind: "model" };
-      case "architect_budget_exceeded":
-        return { kind: "budget" };
-      case "architect_busy":
-        return { kind: "busy" };
-      case "architect_session_expired":
-        return { kind: "expired" };
-    }
-  }
-  return { kind: "other", message: messageOf(cause) };
-}
+const problemOf = (cause: unknown): ArchitectProblem =>
+  architectProblemOf(cause, messageOf);
 
 /*
  * The conversation lives on the server: the page asks for the person's active

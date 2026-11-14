@@ -3,9 +3,16 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import { AlertTriangle, Hash, Info } from "lucide-react";
-import type {
-  KnowledgeCollection,
-  KnowledgeEmbeddingConnection,
+import {
+  embeddingNoticeKey,
+  embeddingOptionKey,
+  knowledgeCollectionErrorKey,
+  knowledgeCollectionPayload,
+  knowledgeCollectionValid,
+  knowledgeConnectionChanged,
+  knowledgeEmbeddingConnectionsKey,
+  type KnowledgeCollection,
+  type KnowledgeEmbeddingConnection,
 } from "@comamessenger/core";
 import {
   Button,
@@ -48,7 +55,7 @@ export function CollectionDialog({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const connections = useQuery({
-    queryKey: ["knowledge", "embedding-connections"],
+    queryKey: knowledgeEmbeddingConnectionsKey,
     queryFn: () => api.knowledgeEmbeddingConnections(),
     staleTime: 30_000,
   });
@@ -68,27 +75,20 @@ export function CollectionDialog({
   const selectedConnection = connections.data?.find(
     (connection) => connection.id === connectionID,
   );
-  const connectionChanged =
-    Boolean(collection) &&
-    (collection?.embedding_connection_id ?? "") !== connectionID;
-  const valid =
-    name.trim().length > 0 && (access === "organization" || chatIDs.length > 0);
+  const form = { name, description, access, chatIDs, connectionID };
+  const connectionChanged = knowledgeConnectionChanged(collection, form);
+  const valid = knowledgeCollectionValid(form);
 
   async function save() {
     if (!valid) {
-      setError(access === "chats" && !chatIDs.length ? t("kbChatsRequired") : "");
+      const key = knowledgeCollectionErrorKey(form);
+      setError(key ? t(key) : "");
       return;
     }
     setPending(true);
     setError("");
     try {
-      const payload = {
-        name: name.trim(),
-        description: description.trim(),
-        access,
-        chat_ids: access === "chats" ? chatIDs : [],
-        embedding_connection_id: connectionID || null,
-      };
+      const payload = knowledgeCollectionPayload(form);
       const saved = collection
         ? await api.updateKnowledgeCollection(collection.id, payload)
         : await api.createKnowledgeCollection(payload);
@@ -213,12 +213,10 @@ export function CollectionDialog({
               <option value="">{t("kbEmbeddingNone")}</option>
               {(connections.data ?? []).map((connection) => (
                 <option key={connection.id} value={connection.id}>
-                  {t(
-                    connection.data_sharing_approved
-                      ? "kbEmbeddingOption"
-                      : "kbEmbeddingOptionBlocked",
-                    { name: connection.name, model: connection.embedding_model },
-                  )}
+                  {t(embeddingOptionKey(connection), {
+                    name: connection.name,
+                    model: connection.embedding_model,
+                  })}
                 </option>
               ))}
             </SelectField>
@@ -255,11 +253,7 @@ function EmbeddingNotice({
         </span>
       </p>
     );
-  const key = !connection.enabled
-    ? "kbEmbeddingDisabled"
-    : !connection.data_sharing_approved
-      ? "kbEmbeddingNotApproved"
-      : "kbEmbeddingWarning";
+  const key = embeddingNoticeKey(connection);
   return (
     <p className="knowledge-notice knowledge-notice--warning" role="note">
       <AlertTriangle aria-hidden="true" />

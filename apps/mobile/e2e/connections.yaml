@@ -1,0 +1,289 @@
+# «Настройки → Модели» and «→ Интеграции» as the owner: add a model
+# connection with the key pasted from the clipboard, test it, edit and delete
+# it; connect an MCP server, switch a tool, delete it; create an incoming
+# webhook, see its secret once, open the journal, delete it.
+# The provider key comes from the environment (never this file or a
+# screenshot) and is typed into the revealed field, hidden again before the
+# screenshot. «Вставить» is checked on the edit form only with
+# -e PASTE_CHECK=1, after a dummy key is put into the simulator's clipboard
+# (which the simulator syncs with the Mac's):
+#   printf sk-e2e-dummy-paste-0000 | xcrun simctl pbcopy <device>
+#   maestro test --device <device> -e THEME=light -e PROVOD_KEY=… \
+#     -e PASTE_CHECK=1 e2e/connections.yaml
+# Maestro keeps the commands with the key in its output: delete that after.
+# Needs internet on the server: api.provod.ai and mcp.deepwiki.com.
+appId: com.comamessenger.app
+---
+- runScript: scripts/login.js
+- runScript: scripts/clear-connections.js
+- runFlow: open-app.yaml
+- runFlow:
+    file: tabs.yaml
+    env:
+      TAB: more
+- tapOn:
+    id: open-settings
+- extendedWaitUntil:
+    visible:
+      id: settings-home
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      id: settings-connections-integrations
+    direction: DOWN
+- assertVisible:
+    id: settings-connections-models
+- takeScreenshot: connections-settings-${THEME}
+
+# Models
+- tapOn:
+    id: settings-connections-models
+- extendedWaitUntil:
+    visible:
+      id: model-add-row
+    timeout: 15000
+- takeScreenshot: connections-models-${THEME}
+- tapOn:
+    id: model-add
+- extendedWaitUntil:
+    visible:
+      id: model-name
+    timeout: 10000
+- tapOn:
+    id: model-name
+- inputText: Provod e2e
+- tapOn:
+    id: model-provider
+- tapOn:
+    id: model-provider-picker-openai-compatible
+- tapOn:
+    id: model-endpoint
+- inputText: https://api.provod.ai/v1
+- tapOn:
+    id: model-default
+- inputText: gpt-4o-mini
+- pressKey: Enter
+- tapOn:
+    id: model-key-reveal
+- tapOn:
+    id: model-key
+- inputText: ${PROVOD_KEY}
+- tapOn:
+    id: model-key-reveal
+- takeScreenshot: connections-model-new-${THEME}
+- tapOn:
+    id: model-save
+- runFlow:
+    when:
+      visible: (Не сейчас|Not Now)
+    commands:
+      - tapOn: (Не сейчас|Not Now)
+- extendedWaitUntil:
+    visible:
+      id: model-status
+    timeout: 30000
+- assertVisible: "Работает.*"
+- takeScreenshot: connections-model-${THEME}
+- tapOn:
+    id: model-test
+- extendedWaitUntil:
+    visible: Подключение работает
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: model-update
+    direction: DOWN
+- takeScreenshot: connections-model-edit-${THEME}
+# «Вставить» only on request (-e PASTE_CHECK=1, after the pbcopy above): the
+# simulator shares its clipboard with the Mac, so a plain run never pastes.
+- runFlow:
+    when:
+      true: ${typeof PASTE_CHECK !== 'undefined' && PASTE_CHECK == '1'}
+    commands:
+      - tapOn:
+          id: model-key-paste
+      - runFlow:
+          when:
+            visible: (Разрешить вставку|Allow Paste)
+          commands:
+            - tapOn: (Разрешить вставку|Allow Paste)
+      - extendedWaitUntil:
+          visible: "Вставлено: sk-…0000"
+          timeout: 5000
+      - takeScreenshot: connections-model-paste-${THEME}
+      - tapOn:
+          id: model-key
+      - eraseText: 40
+- tapOn:
+    id: model-default
+- eraseText: 20
+- inputText: gpt-4.1-mini
+- pressKey: Enter
+- scrollUntilVisible:
+    element:
+      id: model-update
+    direction: DOWN
+- tapOn:
+    id: model-update
+- extendedWaitUntil:
+    visible: Изменения сохранены
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      id: model-delete
+    direction: DOWN
+- tapOn:
+    id: model-delete
+- tapOn: ^Удалить$
+- extendedWaitUntil:
+    visible:
+      id: model-add-row
+    timeout: 10000
+- assertNotVisible: Provod e2e
+- tapOn: Назад
+
+# Integrations: MCP
+- tapOn:
+    id: settings-connections-integrations
+- extendedWaitUntil:
+    visible:
+      id: mcp-add
+    timeout: 15000
+- takeScreenshot: connections-integrations-${THEME}
+- tapOn:
+    id: mcp-add
+- extendedWaitUntil:
+    visible:
+      id: mcp-name
+    timeout: 10000
+- tapOn:
+    id: mcp-name
+- inputText: deepwiki-e2e
+- tapOn:
+    id: mcp-description
+- inputText: Документация репозиториев
+- tapOn:
+    id: mcp-endpoint
+- inputText: http://10.0.0.5/mcp
+- assertVisible: ".*INTEGRATIONS_ALLOWED_PRIVATE_TARGETS.*"
+- takeScreenshot: connections-mcp-new-netguard-${THEME}
+- eraseText: 30
+- inputText: https://mcp.deepwiki.com/mcp
+- pressKey: Enter
+- scrollUntilVisible:
+    element:
+      id: mcp-agent-use
+    direction: DOWN
+- tapOn:
+    id: mcp-agent-use
+- takeScreenshot: connections-mcp-new-${THEME}
+- tapOn:
+    id: mcp-save
+- extendedWaitUntil:
+    visible:
+      id: mcp-status
+    timeout: 30000
+- takeScreenshot: connections-mcp-${THEME}
+- scrollUntilVisible:
+    element: Действия
+    direction: DOWN
+- runFlow:
+    when:
+      visible:
+        id: mcp-tool-ask_question
+    commands:
+      - tapOn:
+          id: mcp-tool-ask_question
+      - extendedWaitUntil:
+          visible:
+            id: mcp-tool-ask_question
+          timeout: 10000
+- takeScreenshot: connections-mcp-tools-${THEME}
+- scrollUntilVisible:
+    element:
+      id: mcp-update
+    direction: DOWN
+- takeScreenshot: connections-mcp-edit-${THEME}
+- scrollUntilVisible:
+    element:
+      id: mcp-delete
+    direction: DOWN
+- tapOn:
+    id: mcp-delete
+- tapOn: ^Удалить$
+- extendedWaitUntil:
+    visible:
+      id: mcp-add
+    timeout: 10000
+
+# Integrations: incoming webhook
+- scrollUntilVisible:
+    element:
+      id: webhook-add
+    direction: DOWN
+- tapOn:
+    id: webhook-add
+- extendedWaitUntil:
+    visible:
+      id: webhook-name
+    timeout: 10000
+- tapOn:
+    id: webhook-description
+- inputText: Слот освободился
+- tapOn:
+    id: webhook-name
+- inputText: Склад e2e
+- pressKey: Enter
+- takeScreenshot: connections-webhook-new-${THEME}
+- tapOn:
+    id: webhook-save
+- extendedWaitUntil:
+    visible:
+      id: webhook-secret
+    timeout: 15000
+- assertVisible: "whsec_.*"
+- takeScreenshot: connections-webhook-secret-${THEME}
+- scrollUntilVisible:
+    element:
+      id: webhook-secret-copy
+    direction: DOWN
+- tapOn:
+    id: webhook-secret-copy
+- assertVisible: Скопировать секрет?
+- tapOn: Отмена
+- tapOn:
+    id: webhook-secret-saved
+- extendedWaitUntil:
+    visible:
+      id: webhook-url
+    timeout: 10000
+- assertVisible: ".*/api/v1/hooks/.*"
+- takeScreenshot: connections-webhook-${THEME}
+- scrollUntilVisible:
+    element:
+      id: webhook-journal
+    direction: DOWN
+- tapOn:
+    id: webhook-agent-use
+- takeScreenshot: connections-webhook-rules-${THEME}
+- tapOn:
+    id: webhook-journal
+- extendedWaitUntil:
+    visible: Событий ещё не было.
+    timeout: 10000
+- takeScreenshot: connections-webhook-journal-${THEME}
+- tapOn: Закрыть
+- scrollUntilVisible:
+    element:
+      id: webhook-delete
+    direction: DOWN
+- tapOn:
+    id: webhook-delete
+- tapOn: ^Удалить$
+- extendedWaitUntil:
+    visible:
+      id: webhook-add
+    timeout: 10000
+- assertNotVisible: Склад e2e
+- tapOn: Назад
+- tapOn: Назад

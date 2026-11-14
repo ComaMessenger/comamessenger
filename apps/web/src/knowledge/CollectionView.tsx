@@ -16,7 +16,12 @@ import {
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import type { KnowledgeCollection, KnowledgeDocument } from "@comamessenger/core";
+import {
+  fileLabel,
+  knowledgeUploadStatusKey,
+  type KnowledgeCollection,
+  type KnowledgeDocument,
+} from "@comamessenger/core";
 import { Button, EmptyState, IconButton, InlineError, SkeletonRow, Tag, cx } from "../ui";
 import { formatAgePhrase, formatBytes } from "../lib/format";
 import { useIsMobile, useIsNarrowDesktop } from "../lib/useMediaQuery";
@@ -26,7 +31,7 @@ import { DirectoryDetailHead } from "../directories/DirectoryPage";
 import { messageOf } from "../errors";
 import { CollectionDialog } from "./CollectionDialog";
 import { PageEditorDialog } from "./PageEditorDialog";
-import { acceptedDocuments, documentFormat, failureKey, isProcessing, statusKey } from "./format";
+import { acceptedDocuments, failureKey, isProcessing, statusKey } from "./format";
 import { accessLabel, collectionKey, collectionsKey, documentsKey } from "./shared";
 import { knowledgePath } from "./routes";
 import { useKnowledgeUploads, type KnowledgeUpload } from "./useKnowledgeUploads";
@@ -344,16 +349,10 @@ function UploadRow({
 }) {
   const { t } = useTranslation();
   const percent = Math.round(item.progress * 100);
-  const status =
-    item.state === "uploading"
-      ? t("kbUploading", { percent })
-      : item.state === "adding"
-        ? t("kbUploadAdding")
-        : item.state === "cancelled"
-          ? t("kbUploadCancelled")
-          : item.state === "rejected"
-            ? t("kbUploadRejected")
-            : (item.error ?? t("kbErrorUnknown"));
+  const statusKey = knowledgeUploadStatusKey(item.state);
+  const status = statusKey
+    ? t(statusKey, { percent })
+    : (item.error ?? t("kbErrorUnknown"));
   const problem = item.state === "failed" || item.state === "rejected";
   return (
     <li className={cx("knowledge-upload-item", problem && "knowledge-upload-item--failed")}>
@@ -391,12 +390,3 @@ function UploadRow({
   );
 }
 
-/** File name when the title differs from it, otherwise just its format. */
-export function fileLabel(document: Pick<KnowledgeDocument, "title" | "file_name" | "file_mime">) {
-  const name = document.file_name ?? "";
-  if (name && name !== document.title) return name;
-  const format = documentFormat(name, document.file_mime ?? "");
-  if (format === "markdown") return "Markdown";
-  if (format === "text") return "TXT";
-  return format ? format.toUpperCase() : name;
-}
