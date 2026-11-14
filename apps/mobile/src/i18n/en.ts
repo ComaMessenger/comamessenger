@@ -1,3 +1,4 @@
+import { agentBuilderEn } from "../agents/builder/i18n";
 import type { ru } from "./ru";
 
 export const en: Record<keyof typeof ru, string> = {
@@ -1103,4 +1104,7 @@ export const en: Record<keyof typeof ru, string> = {
     "The browser tab icon; the phone saves it as a 64×64 PNG.",
   workspaceLogo: "Logo",
   workspaceLogoHint: "A square image; the phone scales it down to 512×512.",
+
+  // Agent builder and Architect
+  ...agentBuilderEn,
 };

@@ -1,22 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { runAgentCheck } from "@comamessenger/core";
 import type { Agent, AgentRun, MessengerAPI } from "@comamessenger/core";
 import { messageOf } from "../../errors";
-
-const finished = (run: AgentRun) => !["queued", "running"].includes(run.status);
-
-function wait(ms: number, signal: AbortSignal) {
-  return new Promise<void>((resolve, reject) => {
-    const timer = window.setTimeout(resolve, ms);
-    signal.addEventListener(
-      "abort",
-      () => {
-        window.clearTimeout(timer);
-        reject(signal.reason);
-      },
-      { once: true },
-    );
-  });
-}
 
 /*
  * One dry run of the current draft. Polling stops when the run finishes, when
@@ -44,23 +29,15 @@ export function useAgentCheck(api: MessengerAPI, agent: Agent) {
     setError("");
     setRun(null);
     try {
-      let state = await api.invokeAgent(agent.id, {
-        chat_id: chatID,
-        client_run_id: crypto.randomUUID(),
-        chain_depth: 0,
-        timeout_seconds: 600,
-        max_attempts: 1,
-        dry_run: true,
-        input: { prompt, sandbox: true, publish: false },
+      await runAgentCheck({
+        api,
+        agentID: agent.id,
+        chatID,
+        prompt,
+        runID: crypto.randomUUID(),
+        signal: current.signal,
+        onUpdate: setRun,
       });
-      if (current.signal.aborted) return;
-      setRun(state);
-      for (let attempt = 0; attempt < 180 && !finished(state); attempt++) {
-        await wait(attempt < 10 ? 1_000 : 2_000, current.signal);
-        state = await api.agentRun(state.id);
-        if (current.signal.aborted) return;
-        setRun(state);
-      }
     } catch (cause) {
       if (!current.signal.aborted) setError(messageOf(cause));
     } finally {

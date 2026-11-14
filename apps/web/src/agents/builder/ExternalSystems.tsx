@@ -61,11 +61,16 @@ export function ExternalSystems({
         const tools = connection ? assignableTools(connection) : [];
         const name = connection?.name ?? t("agentExternalMissing");
         return (
-          <section key={binding.connection_id} className="agent-external__system">
+          <section
+            key={binding.connection_id}
+            className="agent-external__system"
+          >
             <header className="agent-line">
               <span className="agent-line__text">
                 <strong>{name}</strong>
-                {connection?.description && <small>{connection.description}</small>}
+                {connection?.description && (
+                  <small>{connection.description}</small>
+                )}
               </span>
               <span className="agent-line__control">
                 <IconButton
@@ -90,7 +95,9 @@ export function ExternalSystems({
                     <span>
                       {tool.name}{" "}
                       <Tag>
-                        {t(tool.readOnly ? "agentToolReads" : "agentToolWrites")}
+                        {t(
+                          tool.readOnly ? "agentToolReads" : "agentToolWrites",
+                        )}
                       </Tag>
                     </span>
                     {tool.description && <small>{tool.description}</small>}
@@ -117,7 +124,9 @@ export function ExternalSystems({
                       label={t("agentExternalTool", { tool: tool.name })}
                       checked={allowed}
                       onChange={(value) => {
-                        const policy = { ...(binding.confirmation_policy ?? {}) };
+                        const policy = {
+                          ...(binding.confirmation_policy ?? {}),
+                        };
                         if (!value) delete policy[tool.name];
                         update(index, {
                           ...binding,

@@ -6,10 +6,8 @@ import type { BuilderAnchor } from "../routes";
 import type { Draft } from "../shared/draft";
 import { blockID } from "./BuilderBlock";
 
-const needAnchor: Record<
-  AgentRecipe["needs"][number]["kind"],
-  BuilderAnchor
-> = recipeNeedPlace;
+const needAnchor: Record<AgentRecipe["needs"][number]["kind"], BuilderAnchor> =
+  recipeNeedPlace;
 
 export { needDone };
 

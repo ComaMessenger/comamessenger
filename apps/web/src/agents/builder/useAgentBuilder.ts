@@ -54,7 +54,12 @@ export function useAgentBuilder({
       return true;
     } catch (cause) {
       // Loosened confirmations are asked about in a dialog, not as an error.
-      if (!(cause instanceof APIError && cause.code === "agent_confirmation_loosened"))
+      if (
+        !(
+          cause instanceof APIError &&
+          cause.code === "agent_confirmation_loosened"
+        )
+      )
         setError(messageOf(cause));
       return false;
     } finally {
@@ -77,7 +82,10 @@ export function useAgentBuilder({
   async function publishWith(acknowledge: boolean) {
     if (dirty) await persist();
     try {
-      await api.publishAgent(agent.id, acknowledge ? { acknowledge_loosened: true } : {});
+      await api.publishAgent(
+        agent.id,
+        acknowledge ? { acknowledge_loosened: true } : {},
+      );
     } catch (cause) {
       const loosened = loosenedOf(cause);
       if (loosened) setLoosened(loosened);

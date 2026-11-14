@@ -1,13 +1,17 @@
-import { APIError } from "./api";
+import { APIError, type MessengerAPI } from "./api";
 import { actionTools, type ConfirmableAction } from "./agentConfirmation";
 import { draftChatIDs, emptyDraft, type AgentDraft } from "./agentDraft";
-import type { Translate } from "./agentText";
+import { agentTask, chatName, type Translate } from "./agentText";
+import { capabilitiesOf } from "./agentCapabilities";
+import { describeRule } from "./agentTriggers";
 import type {
   Agent,
   AgentLlmConnection,
   AgentRecipe,
+  AgentRun,
   AgentRunToolCall,
   AgentTrigger,
+  Chat,
   CreateAgentRequest,
   KnowledgeDocument,
   McpConnection,
@@ -281,9 +285,17 @@ export function draftProblems(draft: AgentDraft): DraftProblem[] {
       place: "identity",
     });
   if (!handlePattern.test(draft.handle))
-    result.push({ field: "handle", key: "agentHandleInvalid", place: "advanced" });
+    result.push({
+      field: "handle",
+      key: "agentHandleInvalid",
+      place: "advanced",
+    });
   if ((draft.model ?? "").length > 200)
-    result.push({ field: "model", key: "agentModelTooLong", place: "advanced" });
+    result.push({
+      field: "model",
+      key: "agentModelTooLong",
+      place: "advanced",
+    });
   for (const field of ["daily_cost_limit", "monthly_cost_limit"] as const)
     if (!costPattern.test(draft[field] ?? ""))
       result.push({ field, key: "agentBudgetInvalid", place: "advanced" });
@@ -301,7 +313,10 @@ export function draftProblems(draft: AgentDraft): DraftProblem[] {
 }
 
 /** Readable labels of actions a publish would let run without a person. */
-export function loosenedLabels(t: Translate, keys: readonly string[]): string[] {
+export function loosenedLabels(
+  t: Translate,
+  keys: readonly string[],
+): string[] {
   const labels = keys.map((key) => {
     if (key.startsWith("mcp:")) {
       const [connection, tool] = key.slice(4).split("/");
@@ -317,7 +332,10 @@ export function loosenedLabels(t: Translate, keys: readonly string[]): string[] 
 
 /** Actions listed by a refused publish (`agent_confirmation_loosened`). */
 export function loosenedOf(cause: unknown): string[] | null {
-  if (!(cause instanceof APIError) || cause.code !== "agent_confirmation_loosened")
+  if (
+    !(cause instanceof APIError) ||
+    cause.code !== "agent_confirmation_loosened"
+  )
     return null;
   const listed = cause.details.loosened;
   return Array.isArray(listed) ? listed.map(String) : [];
@@ -479,18 +497,272 @@ export function stepFilled(
         (draft.knowledge_collection_ids ?? []).length > 0
       );
     case "skills":
-      return draft.allowed_scopes.some((scope) =>
-        [
-          "messages:write",
-          "messages:interactive",
-          "reactions:write",
-          "followups:write",
-          "memory:write",
-        ].includes(scope),
-      ) || (draft.mcp_bindings ?? []).length > 0;
+      return (
+        draft.allowed_scopes.some((scope) =>
+          [
+            "messages:write",
+            "messages:interactive",
+            "reactions:write",
+            "followups:write",
+            "memory:write",
+          ].includes(scope),
+        ) || (draft.mcp_bindings ?? []).length > 0
+      );
     case "triggers":
       return (triggers ?? []).some((trigger) => trigger.enabled);
     case "review":
       return false;
   }
+}
+
+const runFinished = (run: AgentRun) =>
+  !["queued", "running"].includes(run.status);
+
+function pause(ms: number, signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(signal.reason);
+      },
+      { once: true },
+    );
+  });
+}
+
+/**
+ * One dry run of the current draft: nothing is sent to chats. Reports every
+ * state of the run until it finishes or `signal` aborts (another check
+ * started, the screen closed).
+ */
+export async function runAgentCheck({
+  api,
+  agentID,
+  chatID,
+  prompt,
+  runID,
+  signal,
+  onUpdate,
+}: {
+  api: Pick<MessengerAPI, "invokeAgent" | "agentRun">;
+  agentID: string;
+  chatID: string;
+  prompt: string;
+  /** Client run id (a UUID) that makes the request idempotent. */
+  runID: string;
+  signal: AbortSignal;
+  onUpdate(run: AgentRun): void;
+}): Promise<void> {
+  let state = await api.invokeAgent(agentID, {
+    chat_id: chatID,
+    client_run_id: runID,
+    chain_depth: 0,
+    timeout_seconds: 600,
+    max_attempts: 1,
+    dry_run: true,
+    input: { prompt, sandbox: true, publish: false },
+  });
+  if (signal.aborted) return;
+  onUpdate(state);
+  for (let attempt = 0; attempt < 180 && !runFinished(state); attempt++) {
+    await pause(attempt < 10 ? 1_000 : 2_000, signal);
+    state = await api.agentRun(state.id);
+    if (signal.aborted) return;
+    onUpdate(state);
+  }
+}
+
+/**
+ * The state line under the agent's name in the builder, as an i18n key with
+ * its values: unsaved edits, a draft that differs from the published
+ * version, the published version and its date, or never published.
+ */
+export function agentBuilderState(
+  agent: Pick<
+    Agent,
+    "published_version" | "published_at" | "has_unpublished_changes"
+  >,
+  dirty: boolean,
+  locale: string,
+): { key: string; values?: Record<string, unknown> } {
+  if (dirty) return { key: "agentStateUnsaved" };
+  if (!agent.published_version) return { key: "agentStateNeverPublished" };
+  if (agent.has_unpublished_changes)
+    return {
+      key: "agentStateDraftDiffers",
+      values: { version: agent.published_version },
+    };
+  return {
+    key: "agentStatePublished",
+    values: {
+      version: agent.published_version,
+      date: agent.published_at
+        ? new Date(agent.published_at).toLocaleDateString(locale, {
+            day: "numeric",
+            month: "long",
+          })
+        : "",
+    },
+  };
+}
+
+/** What the agent does in one chat of the draft: reads, writes or both. */
+export type AgentChatRole = "both" | "read" | "write";
+
+export function chatRole(draft: AgentDraft, chatID: string): AgentChatRole {
+  const read = (draft.read_chat_ids ?? draft.chat_ids).includes(chatID);
+  const write = (draft.write_chat_ids ?? draft.chat_ids).includes(chatID);
+  return read && write ? "both" : write ? "write" : "read";
+}
+
+/** The draft with one chat's role changed, added, or removed (`null`). */
+export function withChatRole(
+  draft: AgentDraft,
+  chatID: string,
+  role: AgentChatRole | null,
+): AgentDraft {
+  const read = new Set(draft.read_chat_ids ?? draft.chat_ids);
+  const write = new Set(draft.write_chat_ids ?? draft.chat_ids);
+  read.delete(chatID);
+  write.delete(chatID);
+  if (role === "both" || role === "read") read.add(chatID);
+  if (role === "both" || role === "write") write.add(chatID);
+  const read_chat_ids = [...read];
+  const write_chat_ids = [...write];
+  return {
+    ...draft,
+    read_chat_ids,
+    write_chat_ids,
+    chat_ids: [...new Set([...read_chat_ids, ...write_chat_ids])].sort(),
+  };
+}
+
+export type PassportItem = {
+  key: "who" | "knows" | "can" | "when" | "where" | "model";
+  /** i18n key of the item title. */
+  title: string;
+  /** What the saved draft has there; null while it has nothing. */
+  body: string | null;
+  /** «Кто он»: the name, shown apart from the task. */
+  name?: string;
+  /** «Когда включается»: one sentence per enabled rule. */
+  rules?: string[];
+  /** «Модель»: whether sending data to the model is approved. */
+  approved?: boolean;
+};
+
+/**
+ * The passport of the Architect: what the saved draft has (agent, launch
+ * rules, chats, collections), never what the model said it did.
+ */
+export function passportItems(
+  t: Translate,
+  {
+    agent,
+    chats,
+    connections,
+    collections,
+    triggers,
+    timezone,
+  }: {
+    agent: Agent | undefined;
+    chats: Chat[];
+    connections: AgentLlmConnection[];
+    /** Known collections; undefined while they load. */
+    collections: Array<{ id: string; name: string }> | undefined;
+    triggers: AgentTrigger[] | undefined;
+    timezone: string;
+  },
+): PassportItem[] {
+  const capabilities = agent ? capabilitiesOf(agent.allowed_scopes) : null;
+  const collectionIDs = agent?.knowledge_collection_ids ?? [];
+  const knownCollections = collectionIDs
+    .map((id) => collections?.find((item) => item.id === id)?.name)
+    .filter((name): name is string => Boolean(name));
+  const hiddenCollections = collections
+    ? collectionIDs.length - knownCollections.length
+    : 0;
+  const knownChats = (agent?.chat_ids ?? [])
+    .map((id) => chats.find((chat) => chat.id === id))
+    .filter((chat): chat is Chat => Boolean(chat));
+  const hiddenChats = (agent?.chat_ids.length ?? 0) - knownChats.length;
+  const connection = connections.find(
+    (item) => item.id === agent?.llm_connection_id,
+  );
+  const rules = (triggers ?? [])
+    .filter((rule) => rule.enabled)
+    .map((rule) => {
+      const sentence = describeRule(t, rule, chats, timezone);
+      return `${sentence.when}${sentence.then ? ` → ${sentence.then}` : ""}`;
+    });
+  const knows: string[] = [];
+  if (capabilities) {
+    for (const source of capabilities.sources)
+      knows.push(t(`agentSource_${source}`));
+    if (knownCollections.length > 0)
+      knows.push(
+        t("passportKnowledge", { names: knownCollections.join(", ") }),
+      );
+    if (hiddenCollections > 0)
+      knows.push(t("passportHiddenItems", { count: hiddenCollections }));
+  }
+  return [
+    {
+      key: "who",
+      title: "passportWho",
+      name: agent?.display_name,
+      body: agent ? agentTask(t, agent) : null,
+    },
+    {
+      key: "knows",
+      title: "passportKnows",
+      body: knows.length > 0 ? knows.join("; ") : null,
+    },
+    {
+      key: "can",
+      title: "passportCan",
+      body: capabilities
+        ? capabilities.skills.length > 0
+          ? capabilities.skills
+              .map((skill) => t(`agentSkill_${skill}`))
+              .join("; ")
+          : t("passportOnlyReads")
+        : null,
+    },
+    {
+      key: "when",
+      title: "passportWhen",
+      rules,
+      body: rules.length > 0 ? rules.join("\n") : null,
+    },
+    {
+      key: "where",
+      title: "passportWhere",
+      body:
+        knownChats.length > 0 || hiddenChats > 0
+          ? [
+              knownChats.map(chatName).join(", "),
+              hiddenChats > 0
+                ? t("passportHiddenItems", { count: hiddenChats })
+                : "",
+            ]
+              .filter(Boolean)
+              .join(" ")
+          : null,
+    },
+    {
+      key: "model",
+      title: "passportModel",
+      approved: agent?.external_data_sharing_approved,
+      body:
+        agent && connection
+          ? t("passportModelText", {
+              name: connection.name,
+              model: agent.model || connection.default_model,
+            })
+          : null,
+    },
+  ];
 }
