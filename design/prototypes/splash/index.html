@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coma — сплэш: 4 варианта анимации</title>
+<style>
+  :root {
+    --page: #f3f4f7; --card: #ffffff; --ink: #16181d; --muted: #646b78; --line: #e2e5eb;
+    --accent: #174586; --accent-ink: #ffffff; --chip: #eef1f6;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --page: #0d0d0f; --card: #18181b; --ink: #ececef; --muted: #9a9ca5; --line: #2a2a2f;
+      --accent: #86aff0; --accent-ink: #0d0d0f; --chip: #232327; color-scheme: dark; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink);
+    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 64px; }
+  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .lead { color: var(--muted); margin: 0 0 18px; max-width: 760px; }
+  .bar { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--page) 92%, transparent);
+    backdrop-filter: blur(8px); padding: 10px 0; margin-bottom: 14px; border-bottom: 1px solid var(--line);
+    display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; }
+  .ctl { display: flex; align-items: center; gap: 8px; }
+  .ctl > span { color: var(--muted); font-size: 12px; }
+  .seg { display: inline-flex; background: var(--chip); border-radius: 8px; padding: 2px; }
+  .seg button { border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 12.5px;
+    padding: 4px 10px; border-radius: 6px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--card); box-shadow: 0 1px 2px rgba(0,0,0,.12); font-weight: 600; }
+  .btn { border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; font-size: 13px;
+    padding: 5px 12px; border-radius: 8px; cursor: pointer; }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; margin-bottom: 18px;
+    display: grid; grid-template-columns: auto 1fr; gap: 18px 26px; }
+  .card.main { border: 2px solid var(--accent); }
+  @media (max-width: 860px) { .card { grid-template-columns: 1fr; } }
+  .phones { display: flex; gap: 14px; align-items: flex-start; }
+  .phone { border-radius: calc(46px * var(--s)); overflow: hidden; width: calc(390px * var(--s)); height: calc(844px * var(--s));
+    box-shadow: 0 0 0 1px rgba(0,0,0,.14), 0 6px 18px rgba(0,0,0,.10); flex: none; }
+  .phone svg { display: block; width: 100%; height: 100%; shape-rendering: crispEdges; }
+  .cap { font-size: 11px; color: var(--muted); text-align: center; margin-top: 6px; }
+  .info h2 { font-size: 17px; margin: 0 0 2px; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 700; color: var(--accent-ink); background: var(--accent);
+    padding: 2px 8px; border-radius: 99px; vertical-align: 2px; margin-left: 6px; }
+  .info dl { display: grid; grid-template-columns: 116px 1fr; gap: 6px 12px; margin: 12px 0; }
+  .info dt { color: var(--muted); }
+  .info dd { margin: 0; }
+  .play { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 8px; }
+  .play input[type=range] { flex: 1 1 200px; accent-color: var(--accent); }
+  .tc { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; min-width: 92px; }
+  .notes { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px 22px; }
+  .notes h2 { font-size: 17px; margin: 0 0 10px; }
+  .notes h3 { font-size: 14px; margin: 16px 0 4px; }
+  .notes ul { margin: 0; padding-left: 18px; }
+  .notes li { margin: 2px 0; }
+  code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--chip); padding: 1px 4px; border-radius: 4px; }
+  .rec { border-left: 3px solid var(--accent); padding: 4px 0 4px 12px; margin: 0 0 18px; }
+
+  /* Theme colours of the mascot (mascotColors from packages/tokens) */
+  .t-light { --plate:#FFFFFF; --body:#174586; --eyes:#FFFFFF; --feet:#242831; --ta:#C9D5E8; --tb:#A9BCDB; --app:#FFFFFF; --row:#EEF1F6; --row2:#E1E6EE; }
+  .t-dark  { --plate:#151517; --body:#86AFF0; --eyes:#FFFFFF; --feet:#FFFFFF; --ta:#2B3448; --tb:#3A4864; --app:#151517; --row:#232327; --row2:#2E2E33; }
+  .p { fill: var(--plate); } .b { fill: var(--body); } .e { fill: var(--eyes); } .f { fill: var(--feet); }
+  .ta { fill: var(--ta); } .tb { fill: var(--tb); } .ap { fill: var(--app); } .r1 { fill: var(--row); } .r2 { fill: var(--row2); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Сплэш Coma: четыре варианта анимации</h1>
+  <p class="lead">Каждый вариант показан в светлой и тёмной теме. Под оверлеем сплэша нарисован условный первый экран — на нём видно, как анимация передаёт управление приложению. Ползунок под вариантом перематывает кадры (удобно разбирать шаг ногами по кадрам), «Готовность приложения» имитирует, когда приложение загрузилось.</p>
+
+  <div class="bar" role="toolbar">
+    <div class="ctl"><span>Скорость</span><div class="seg" id="speed">
+      <button data-v="1" aria-pressed="true">×1</button><button data-v="0.5">×0.5</button><button data-v="0.25">×0.25</button></div></div>
+    <div class="ctl"><span>Готовность приложения</span><div class="seg" id="ready">
+      <button data-v="1200">1,2 с</button><button data-v="2600" aria-pressed="true">2,6 с</button><button data-v="4500">4,5 с</button><button data-v="Infinity">не готово</button></div></div>
+    <div class="ctl"><span>Движение</span><div class="seg" id="motion">
+      <button data-v="full" aria-pressed="true">обычное</button><button data-v="reduced">reduced motion</button></div></div>
+    <div class="ctl"><span>Масштаб</span><div class="seg" id="scale">
+      <button data-v="0.4" aria-pressed="true">0.4</button><button data-v="0.7">0.7</button></div></div>
+    <div class="ctl"><button class="btn" id="replayAll">Повторить все</button>
+      <label style="font-size:12px;color:var(--muted)"><input type="checkbox" id="autoloop" checked> автоповтор</label></div>
+  </div>
+
+  <div id="cards"></div>
+
+  <section class="notes" id="notes">
+    <h2>Как делать в React Native</h2>
+    <p class="rec"><b>Рекомендация:</b> вариант 1 «Идёт», подвариант «На месте». Он начинается ровно с кадра нативного сплэша (маскот в центре), поэтому нет скачка при подмене картинки оверлеем, и его можно прервать на любой постановке ноги, не дожидаясь, пока маскот «дойдёт». «Доставка» с входом от края эффектнее, но ей нужен другой статичный сплэш (пустой фон с дорожкой) и 2 с на проход: при быстром холодном старте маскот остановится не в центре.</p>
+
+    <h3>1. Идёт (кинезин)</h3>
+    <ul>
+      <li>Новые зависимости не нужны: <code>react-native-reanimated</code> 4.5 и <code>react-native-svg</code> уже стоят. Lottie не нужен: он сглаживает кадры, а пиксельный характер держится на ступенчатой смене кадров.</li>
+      <li>Один shared value — часы (<code>withRepeat(withTiming(400, linear))</code>). Номер кадра в worklet берётся из таблицы: 4 кадра шага (130/85/100/85 мс). Через <code>useAnimatedProps</code> анимируются x/y у <code>Rect</code> двух ступней, двух «ножек» и смещение тела и груза. Всего 12 узлов: тело, 2 глаза, 2 ступни, 2 ножки, пузырь из 2 прямоугольников, 3 точки (или галочки), трос из 6–8 прямоугольников.</li>
+      <li>Дорожка — 14 прямоугольников со сдвигом по модулю 89 единиц: на месте сдвигается вся группа, узлов не прибавляется.</li>
+      <li>Готовность: флаг <code>ready</code> пишется в shared value; worklet останавливает шаг на ближайшей постановке ноги (≤ 0,4 с), дальше финал 0,58 с: груз отцепляется, ✓✓, исчезновение. Минимальный показ — 0,9 с, как сейчас.</li>
+      <li>«На месте» стартует со статичного <code>splash-icon.png</code> без изменений. Для «Доставки» <code>generate.mjs</code> должен рисовать пустой фон с дорожкой.</li>
+    </ul>
+    <h3>2. Просыпается</h3>
+    <ul>
+      <li>Reanimated, без новых зависимостей. Анимируются высота и y двух глаз, смещение тела по y и высота двух ножек. Всего 8 ключевых кадров на <code>withSequence</code>, по кадрам с <code>Easing.steps</code>; вызов ведёт себя как <code>steps()</code> в CSS.</li>
+      <li>Нативный сплэш придётся перерисовать в спящем виде: глаза закрыты, тело осело на 12 единиц. Иначе маскот на первом кадре «засыпает» обратно.</li>
+      <li>Само пробуждение длится 1,3 с, дальше цикл 2,4 с: оглядывается, моргает. Финал — исчезновение за 0,22 с сразу после готовности.</li>
+    </ul>
+    <h3>3. Пишет</h3>
+    <ul>
+      <li>Reanimated: три точки и две ступни со сдвигом по фазе на одних часах (цикл 0,9 с), пузырь появляется в 2 кадра. Пузырь — 2 прямоугольника и хвостик из 2 клеток.</li>
+      <li>Совпадает с нативным сплэшем: маскот на месте, пузырь вырастает уже в оверлее. Финал — пузырь «отправляется» вверх за 3 кадра; через 0,16 с исчезает весь экран, полный финал 0,38 с.</li>
+    </ul>
+    <h3>4. Собирается из пикселей</h3>
+    <ul>
+      <li>Сетка 12×15 клеток по 24 единицы: это 180 прямоугольников в <code>ClipPath</code>, на Android дороже остальных вариантов. Дешевле сделать 15 строк-масок: каждая строка проявляется слева направо одним анимированным <code>width</code>, но «рассыпчатость» тогда пропадает. Lottie решил бы задачу, но ради одного экрана тащить зависимость не стоит.</li>
+      <li>Нативный сплэш — пустой фон. Сборка 0,7 с, дальше моргание по циклу. Финал — разборка сверху вниз вместе с исчезновением, 0,36 с.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+// ---------- Mascot geometry: packages/tokens/src/mascot.ts (units of the 320×368 source) ----------
+const BODY = "M298 193H410V218H462V244H487V376H462V418H438V442H417V462H397V482H374V504H284V482H308V462H330V442H348V418H264V401H239V376H213V269H239V244H264V218H298Z";
+const EYES = [[286, 273], [381, 294]];          // 36×36
+const FOOT_W = 48, FOOT_H = 26, GROUND = 504;   // feet rest at y 504..530
+const REST_FEET = [[260, GROUND], [349, GROUND]];
+const K = 120 / 337;                            // mascot is 120 pt tall, like AnimatedSplash
+const MIN_VISIBLE = 900;
+
+const R = (x, y, w, h, c) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" class="${c}"/>`;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const fadeOp = (t, from, dur) => t <= from ? 1 : Math.max(0, 1 - (t - from) / dur);
+
+/** Draws the mascot. Body offset (x, y); feet in absolute units; legs appear when the body is lifted. */
+function mascot({ x = 0, y = 0, feet, eyes = {} }) {
+  feet = feet || REST_FEET.map(([fx, fy]) => [fx + x, fy]);
+  const bottom = GROUND + y;
+  let s = "";
+  for (const [fx, fy] of feet) {
+    if (fy > bottom) s += R(clamp(fx + 18, 284 + x, 362 + x), bottom, 12, fy - bottom, "f");
+    s += R(fx, fy, FOOT_W, FOOT_H, "f");
+  }
+  s += `<path class="b" d="${BODY}" transform="translate(${x} ${y})"/>`;
+  const { dx = 0, dy = 0, l = 36, r = 36, anchor = "mid" } = eyes;
+  [l, r].forEach((h, i) => {
+    const [ex, ey] = EYES[i];
+    const yy = anchor === "bottom" ? ey + 36 - h : ey + (36 - h) / 2;
+    s += R(ex + x + dx, yy + y + dy, 36, h, "e");
+  });
+  return s;
+}
+const blinkH = (t, start, period) => (t >= start && (t - start) % period < 100 ? 6 : 36);
+
+// Pixel speech bubble with notched corners, its content and a stepped tether.
+function bubble(bx, by, w, h, content) {
+  return R(bx + 12, by, w - 24, h, "b") + R(bx, by + 12, w, h - 24, "b") + content;
+}
+const DOTS = (cx, cy, lifts = [0, 0, 0]) => [-36, 0, 36].map((o, i) => R(cx + o - 10, cy - 10 - lifts[i], 20, 20, "e")).join("");
+function checks(cx, cy) { // ✓✓ in 12-unit pixels
+  const cells = [[0, 2], [1, 3], [2, 2], [3, 1], [4, 0]];
+  let s = "";
+  for (const off of [0, 4]) for (const [c, r] of cells) s += R(cx - 54 + (c + off) * 12, cy - 24 + r * 12, 12, 12, "e");
+  return s;
+}
+function tether(ax, ay, bx, by, part = 1) {
+  const n = Math.max(3, Math.round(Math.hypot(bx - ax, by - ay) / 12));
+  let s = "";
+  for (let i = 0; i <= n; i++) {
+    if (i / n < 1 - part) continue;
+    const px = Math.round((ax + (bx - ax) * i / n) / 2) * 2, py = Math.round((ay + (by - ay) * i / n) / 2) * 2;
+    s += R(px - 5, py - 6, 10, 12, "b");
+  }
+  return s;
+}
+function track(cam, reveal = 1) {
+  const c = cam + 350, half = 600 * reveal;
+  let s = "";
+  for (let k = Math.floor((c - half) / 89) - 1; k * 89 < c + half; k++) {
+    const x0 = k * 89;
+    const seg = (a, w, cl) => { const l = Math.max(x0 + a, c - half), r = Math.min(x0 + a + w, c + half); if (r > l) s += R(l, 530, r - l, 12, cl); };
+    seg(0, 42, "ta"); seg(44, 43, "tb");
+  }
+  return s;
+}
+
+// ---------- 1. Идёт: kinesin walk ----------
+// One step = the rear foot lifts, swings over the planted one and lands 178 units ahead; the body advances 89.
+const STEP_FR = [
+  { d: 130, adv: 0,  by: -36, sx: 0,   sy: GROUND }, // both feet planted (a heavy, deliberate pause)
+  { d: 85,  adv: 22, by: -36, sx: 56,  sy: 480 },    // rear foot lifts
+  { d: 100, adv: 44, by: -42, sx: 89,  sy: 462 },    // right over the planted foot, body sways up a hair
+  { d: 85,  adv: 66, by: -36, sx: 140, sy: 482 },    // reaching down ahead
+];
+const STEP_MS = STEP_FR.reduce((a, f) => a + f.d, 0); // 400
+function walkAt(tt, B0) {
+  const k = Math.floor(tt / STEP_MS);
+  let w = tt - k * STEP_MS, i = 0;
+  while (i < 3 && w >= STEP_FR[i].d) { w -= STEP_FR[i].d; i++; }
+  const f = STEP_FR[i], B = B0 + 89 * k;
+  return { x: B + f.adv, y: f.by, B, feet: [[B + 260 + f.sx, f.sy], [B + 349, GROUND]] };
+}
+const BUB = { x: 150, y: 20, w: 180, h: 102 };
+function cargo(b, body, opts = {}) { // b: bubble offset, body: body offset
+  const { part = 1, lift = 0, delivered = false, show = 2, typing = [0, 0, 0] } = opts;
+  let s = "";
+  const ax = b.x + 300, ay = b.y + BUB.y + BUB.h + lift;
+  if (show >= 1 && part > 0) s += tether(ax, ay, body.x + 352, body.y + 199, show === 1 ? 0.5 : part);
+  if (show >= 2) {
+    const cx = b.x + BUB.x + BUB.w / 2, cy = b.y + BUB.y + BUB.h / 2 + lift;
+    s += bubble(b.x + BUB.x, b.y + BUB.y + lift, BUB.w, BUB.h, delivered ? checks(cx, cy) : DOTS(cx, cy, typing));
+  }
+  return s;
+}
+
+function sceneWalk(enter) {
+  return (t, c) => {
+    const tw = enter ? 0 : 160, B0 = enter ? -445 : 0, arrive = tw + (enter ? 5 * STEP_MS : 0);
+    if (c.reduced) {
+      const r = Math.max(c.ready, MIN_VISIBLE);
+      return { svg: track(0) + cargo({ x: 0, y: 0 }, { x: 0, y: 0 }, { delivered: t >= r }) + mascot({}),
+        op: fadeOp(t, r + 400, 220), end: r + 620 };
+    }
+    let stop = Infinity;
+    if (isFinite(c.ready)) { const r = Math.max(c.ready, MIN_VISIBLE); stop = tw + Math.ceil(Math.max(0, r - tw) / STEP_MS) * STEP_MS; }
+    const D = t - stop;
+    const blink = blinkH(t, 1300, 2200);
+    let cam = 0, body, scene;
+    if (t < tw) { // in place: the native splash frame comes alive — rises on its legs, track and cargo appear
+      body = { x: 0, y: t < 80 ? -18 : -36 };
+      scene = track(0, t < 80 ? 0.3 : 0.7) + cargo(body, body, { show: t < 80 ? 0 : 1 }) + mascot({ ...body, feet: REST_FEET });
+    } else if (D < 0) {
+      const p = walkAt(t - tw, B0), lag = walkAt(Math.max(0, t - tw - 90), B0);
+      if (t >= arrive) cam = p.x;
+      body = p;
+      scene = track(cam) + cargo(lag, p) + mascot({ x: p.x, y: p.y, feet: p.feet, eyes: { dx: 6, l: blink, r: blink } });
+    } else { // delivery: settles, unhooks the cargo, ✓✓, fades
+      const p = walkAt(stop - tw, B0);
+      if (stop >= arrive) cam = p.B;
+      body = { x: p.B, y: D < 80 ? -18 : 0 };
+      const part = D < 80 ? 1 : D < 160 ? 0.5 : 0;
+      const look = D >= 160 ? { dx: -6, dy: -6 } : { dx: 6 };
+      scene = track(cam) + cargo({ x: p.B, y: 0 }, body, { part, lift: D >= 160 ? -12 : 0, delivered: D >= 240 })
+        + mascot({ ...body, eyes: { ...look, l: D >= 300 && D < 390 ? 6 : 36, r: D >= 300 && D < 390 ? 6 : 36 } });
+    }
+    return { svg: `<g transform="translate(${-cam} 0)">${scene}</g>`, op: fadeOp(D, 360, 220), end: stop + 580 };
+  };
+}
+
+// ---------- 2. Просыпается ----------
+function sceneWake(t, c) {
+  const r = Math.max(c.ready, MIN_VISIBLE);
+  if (c.reduced) return { svg: mascot({}), op: fadeOp(t, r, 220), end: r + 220 };
+  let y = 0, l = 36, rr = 36, anchor = "bottom", dx = 0;
+  if (t < 700) {
+    y = 12;
+    l = t < 300 ? 6 : t < 400 ? 18 : 36;
+    rr = t < 520 ? 6 : t < 600 ? 18 : 36;
+  } else if (t < 1300) {
+    y = t < 780 ? 0 : t < 860 ? -12 : t < 1160 ? -24 : t < 1240 ? -12 : 0;  // stretches up on its legs
+    if (t >= 900 && t < 1120) { l = rr = 6; anchor = "mid"; }            // happy squint while stretching
+  } else {
+    anchor = "mid";
+    const u = (t - 1300) % 2400;
+    dx = u >= 500 && u < 1100 ? 12 : u >= 1300 && u < 1800 ? -12 : 0;   // looks around
+    if (u >= 2000 && u < 2100) l = rr = 6;
+    if (t >= 1400 && t < 1490) l = rr = 6;
+  }
+  return { svg: mascot({ y, eyes: { dx, l, r: rr, anchor } }), op: fadeOp(t, r, 220), end: r + 220 };
+}
+
+// ---------- 3. Пишет ----------
+function sceneType(t, c) {
+  const r = Math.max(c.ready, MIN_VISIBLE);
+  const BX = 404, BY = 70, BW = 180, BH = 96;
+  const tail = R(BX + 12, BY + BH, 24, 12, "b") + R(BX, BY + BH + 12, 12, 12, "b");
+  const wrap = s => `<g transform="translate(-48 0)">${s}</g>`;
+  if (c.reduced) {
+    return { svg: wrap(bubble(BX, BY, BW, BH, DOTS(BX + BW / 2, BY + BH / 2)) + tail + mascot({ eyes: { dx: 8, dy: -6 } })),
+      op: fadeOp(t, r, 220), end: r + 220 };
+  }
+  const E = t - r;
+  const q = Math.floor(t / 75) * 75; // 75 ms frames
+  const u = (q - 200) % 900;
+  const lifts = [0, 1, 2].map(i => (q >= 200 && u >= i * 150 && u < i * 150 + 150 ? 10 : 0));
+  const tap = i => (q >= 200 && ((i === 0 && u < 150) || (i === 1 && u >= 300 && u < 450)) ? GROUND - 10 : GROUND);
+  const feet = [[260, tap(0)], [349, tap(1)]];
+  let s = "";
+  if (E < 0) {
+    if (t >= 120 && t < 200) s += bubble(BX, BY + 24, 96, BH - 24, R(BX + 38, BY + 24 + 26, 20, 20, "e")) + tail;
+    else if (t >= 200) s += bubble(BX, BY, BW, BH, DOTS(BX + BW / 2, BY + BH / 2, lifts)) + tail;
+    const b = blinkH(t, 1100, 2000);
+    s += mascot({ feet, eyes: { dx: 8, dy: -6, l: b, r: b } });
+  } else { // sent: the bubble leaves upwards in three steps
+    const up = E < 80 ? -24 : E < 160 ? -64 : E < 240 ? -120 : null;
+    if (up !== null) s += bubble(BX, BY + up, BW, BH, checks(BX + BW / 2, BY + up + BH / 2));
+    s += mascot({ eyes: { dx: 8, dy: -12 } });
+  }
+  return { svg: wrap(s), op: fadeOp(E, 160, 220), end: r + 380 };
+}
+
+// ---------- 4. Собирается из пикселей ----------
+const CELL = 24, COLS = 12, ROWS = 15, GX = 212, GY = 192;
+const jit = (c, r) => (((c * 73856093) ^ (r * 19349663)) >>> 0) % 4;
+function sceneBuild(t, c) {
+  const r = Math.max(c.ready, MIN_VISIBLE);
+  const E = t - r;
+  let eyes = {};
+  if (t >= 700) {
+    const u = (t - 700) % 2000;
+    eyes = { dx: u >= 900 && u < 1400 ? 10 : 0 };
+    if (u >= 300 && u < 400) eyes.l = eyes.r = 6;
+  }
+  if (c.reduced) return { svg: mascot({}), op: fadeOp(t, r, 220), end: r + 220 };
+  let cells = "", all = true;
+  for (let row = 0; row < ROWS; row++) for (let col = 0; col < COLS; col++) {
+    const appear = 40 * (ROWS - 1 - row) + 40 * jit(col, row);
+    const vanish = 20 * row + 30 * jit(col + 3, row);
+    const on = t >= appear && !(E >= 0 && E >= vanish);
+    if (on) cells += `<rect x="${GX + col * CELL}" y="${GY + row * CELL}" width="${CELL}" height="${CELL}"/>`;
+    else all = false;
+  }
+  const id = "cp" + c.uid;
+  const svg = all ? mascot({ eyes }) : `<clipPath id="${id}">${cells}</clipPath><g clip-path="url(#${id})">${mascot({ eyes })}</g>`;
+  return { svg, op: fadeOp(E, 0, 360), end: r + 360 };
+}
+
+// ---------- Cards ----------
+const VARIANTS = [
+  { id: "walk", main: true, title: "1. Идёт", subs: [
+      { id: "inplace", label: "На месте", scene: sceneWalk(false),
+        idea: "Маскот шагает, как кинезин по микротрубочке: ступни по очереди отрываются и переносятся одна над другой, тело почти не прыгает, только чуть качается. Над ним на тросике едет пузырь сообщения с тремя точками: «доставляет». Дорожка бежит под ногами, сам маскот стоит в центре.",
+        dur: "Подъём на ножки 0,16 с, затем шаг 0,4 с: пауза 130 мс и три кадра переноса ноги (85/100/85 мс).",
+        loop: "Пока приложение грузится, шагает бесконечно, дорожка едет. Моргает каждые 2,2 с.",
+        end: "На ближайшей постановке ноги (≤ 0,4 с) садится в позу иконки, отцепляет трос, пузырь подпрыгивает, точки становятся ✓✓, затем экран гаснет. Финал занимает 0,58 с." },
+      { id: "enter", label: "Доставка (с края)", scene: sceneWalk(true),
+        idea: "Тот же шаг, но маскот входит слева по неподвижной дорожке, тянет пузырь и доходит до центра. Груз отстаёт на кадр и догоняет: видно, что его тащат.",
+        dur: "Проход 2,0 с (5 шагов), финал 0,58 с, всего около 2,6 с.",
+        loop: "Если приложение ещё не готово, в центре продолжает шагать на месте: дорожка начинает ехать.",
+        end: "Как у «На месте». Если приложение готово раньше, маскот остановится на ближайшем шаге, не дойдя до центра. Это видно при готовности 1,2 с." },
+    ] },
+  { id: "wake", title: "2. Просыпается", subs: [{ id: "wake", scene: sceneWake,
+      idea: "Маскот дремлет, осев на ступни. Открывает один глаз, потом второй, привстаёт на ножках и потягивается, жмурясь, затем оглядывается. Отсылка к имени Coma: приложение «приходит в себя».",
+      dur: "Пробуждение 1,3 с, кадры по 80–100 мс.",
+      loop: "Цикл 2,4 с: смотрит вправо, влево, моргает.",
+      end: "Исчезает за 0,22 с сразу после готовности (но не раньше 0,9 с). Если приложение готово посреди потягивания, гаснет посреди него." }] },
+  { id: "type", title: "3. Пишет", subs: [{ id: "type", scene: sceneType,
+      idea: "Рядом с маскотом в два кадра вырастает пузырь, в нём бегут три точки «печатает…», а маскот в такт перебирает ступнями, будто стучит по клавишам. Смотрит на пузырь.",
+      dur: "Появление пузыря 0,2 с, цикл точек 0,9 с, кадры по 75 мс.",
+      loop: "Точки и ступни бегут, пока идёт загрузка. Моргает каждые 2 с.",
+      end: "Точки становятся ✓✓, пузырь «отправляется» вверх за 3 кадра, маскот провожает его взглядом, экран гаснет. Всего 0,38 с." }] },
+  { id: "build", title: "4. Собирается", subs: [{ id: "build", scene: sceneBuild,
+      idea: "Маскот проявляется из пиксельных клеток снизу вверх, с небольшим разбросом, как картинка на старом экране. Подчёркивает пиксельную природу знака, без персонажных жестов.",
+      dur: "Сборка 0,7 с, клетки 24 единицы, шаг 40 мс.",
+      loop: "Собранный маскот моргает и поглядывает в сторону, цикл 2 с.",
+      end: "Рассыпается сверху вниз и одновременно гаснет, 0,36 с." }] },
+];
+
+const state = { speed: 1, ready: 2600, reduced: matchMedia("(prefers-reduced-motion: reduce)").matches, scale: 0.4, autoloop: true };
+const cards = [];
+
+function skeleton() {
+  let s = R(0, 0, 390, 844, "ap") + R(20, 70, 140, 22, "r2") + R(20, 112, 350, 36, "r1");
+  for (let i = 0; i < 9; i++) {
+    const y = 172 + i * 72;
+    s += `<circle cx="46" cy="${y + 26}" r="24" class="r2"/>` + R(84, y + 10, 150 - (i % 3) * 22, 14, "r2") + R(84, y + 32, 250 - (i % 4) * 30, 12, "r1");
+  }
+  return s;
+}
+
+function buildCard(v) {
+  const el = document.createElement("article");
+  el.className = "card" + (v.main ? " main" : "");
+  el.innerHTML = `
+    <div>
+      <div class="phones">
+        ${["light", "dark"].map(th => `<div><div class="phone"><svg viewBox="0 0 390 844" class="t-${th}" aria-label="${v.title}, ${th === "light" ? "светлая" : "тёмная"} тема">
+          ${skeleton()}<g class="ov"><rect width="390" height="844" class="p"/>
+          <g transform="translate(195 422) scale(${K}) translate(-350 -361.5)"><g class="scene"></g></g></g></svg></div>
+          <div class="cap">${th === "light" ? "Светлая" : "Тёмная"}</div></div>`).join("")}
+      </div>
+    </div>
+    <div class="info">
+      <h2>${v.title}${v.main ? '<span class="badge">основной</span>' : ""}</h2>
+      ${v.subs.length > 1 ? `<div class="seg sub" style="margin-top:8px">${v.subs.map((s, i) => `<button data-i="${i}" aria-pressed="${i === 0}">${s.label}</button>`).join("")}</div>` : ""}
+      <dl></dl>
+      <div class="play">
+        <button class="btn primary replay">Повторить</button>
+        <button class="btn pause">Пауза</button>
+        <input type="range" min="0" max="4000" step="5" value="0" aria-label="Время">
+        <span class="tc"></span>
+      </div>
+    </div>`;
+  const card = { v, el, sub: 0, t: 0, paused: false, holdUntil: null,
+    scenes: [...el.querySelectorAll(".scene")], ovs: [...el.querySelectorAll(".ov")], last: "",
+    range: el.querySelector("input[type=range]"), tc: el.querySelector(".tc"), dl: el.querySelector("dl"),
+    pauseBtn: el.querySelector(".pause") };
+  el.querySelector(".replay").onclick = () => restart(card);
+  card.pauseBtn.onclick = () => { card.paused = !card.paused; syncPause(card); };
+  card.range.oninput = () => { card.paused = true; card.t = +card.range.value; syncPause(card); draw(card); };
+  el.querySelectorAll(".sub button").forEach(b => b.onclick = () => {
+    card.sub = +b.dataset.i;
+    el.querySelectorAll(".sub button").forEach(x => x.setAttribute("aria-pressed", x === b));
+    fillInfo(card); restart(card);
+  });
+  fillInfo(card);
+  document.getElementById("cards").appendChild(el);
+  cards.push(card);
+}
+function fillInfo(card) {
+  const s = card.v.subs[card.sub];
+  card.dl.innerHTML = `<dt>Идея</dt><dd>${s.idea}</dd><dt>Длительность</dt><dd>${s.dur}</dd>
+    <dt>Пока грузится</dt><dd>${s.loop}</dd><dt>Переход в приложение</dt><dd>${s.end}</dd>
+    <dt>Reduced motion</dt><dd>${card.v.id === "walk" ? "Маскот неподвижно стоит на дорожке с пузырём. Когда приложение готово, точки сменяются на ✓✓ без движения, затем экран плавно гаснет." : "Статичный маскот в позе иконки, без кадров. Когда приложение готово, экран плавно гаснет за 0,22 с."}</dd>`;
+}
+function syncPause(card) { card.pauseBtn.textContent = card.paused ? "Пуск" : "Пауза"; }
+function restart(card) { card.t = 0; card.paused = false; card.holdUntil = null; syncPause(card); draw(card); }
+function ctx(uid) { return { ready: state.ready, reduced: state.reduced, uid }; }
+
+function draw(card) {
+  const sc = card.v.subs[card.sub].scene;
+  const res = card.scenes.map((g, i) => sc(card.t, ctx(card.v.id + i)));
+  const key = res[0].svg + res[0].op;
+  if (key !== card.last) {
+    card.last = key;
+    res.forEach((r, i) => { card.scenes[i].innerHTML = r.svg; card.ovs[i].setAttribute("opacity", r.op.toFixed(3)); });
+  }
+  const end = res[0].end;
+  const max = isFinite(end) ? Math.ceil(end + 300) : Math.max(6000, Math.ceil(card.t));
+  card.range.max = max; card.range.value = Math.min(card.t, max);
+  card.tc.textContent = `${(card.t / 1000).toFixed(2)} с` + (isFinite(end) ? ` / ${(end / 1000).toFixed(2)} с` : " · ∞");
+  return end;
+}
+
+let prev = performance.now();
+function tick(now) {
+  const dt = Math.min(64, now - prev); prev = now;
+  for (const card of cards) {
+    if (!card.paused) card.t += dt * state.speed;
+    const end = draw(card);
+    if (!card.paused && isFinite(end) && card.t > end + 300) {
+      card.t = end + 300; card.paused = !state.autoloop; syncPause(card);
+      if (state.autoloop) { card.holdUntil ??= now + 900; if (now > card.holdUntil) restart(card); }
+    }
+  }
+  requestAnimationFrame(tick);
+}
+
+function seg(id, key, parse) {
+  const root = document.getElementById(id);
+  root.querySelectorAll("button").forEach(b => b.onclick = () => {
+    root.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+    state[key] = parse(b.dataset.v); apply(); cards.forEach(restart);
+  });
+}
+function apply() {
+  document.documentElement.style.setProperty("--s", state.scale);
+  document.querySelectorAll("#motion button").forEach(b => b.setAttribute("aria-pressed", (b.dataset.v === "reduced") === state.reduced));
+}
+seg("speed", "speed", Number);
+seg("ready", "ready", Number);
+seg("motion", "reduced", v => v === "reduced");
+seg("scale", "scale", Number);
+document.getElementById("replayAll").onclick = () => cards.forEach(restart);
+document.getElementById("autoloop").onchange = e => { state.autoloop = e.target.checked; };
+
+VARIANTS.forEach(buildCard);
+apply();
+
+// ?t=1234 freezes every card at that moment (for review screenshots); ?sub=1 picks the second walk subvariant.
+const q = new URLSearchParams(location.search);
+if (q.has("sub")) cards[0].el.querySelectorAll(".sub button")[+q.get("sub")]?.click();
+if (q.has("ready")) state.ready = Number(q.get("ready"));
+if (q.has("reduced")) { state.reduced = true; apply(); }
+if (q.has("t")) cards.forEach(c => { c.t = +q.get("t"); c.paused = true; syncPause(c); draw(c); });
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>
