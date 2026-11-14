@@ -762,12 +762,15 @@ func (s Snooze) Error() string { return fmt.Sprintf("scheduled message not due f
 // A refusal marks the record failed and returns nil; other errors are
 // transient and retried.
 func (s *Service) Deliver(ctx context.Context, scheduledID string, jobID int64) error {
-	var orgID string
-	if err := s.pool.QueryRow(ctx, `SELECT org_id FROM scheduled_messages WHERE id=$1`, scheduledID).Scan(&orgID); errors.Is(err, pgx.ErrNoRows) {
+	var orgID, body, format string
+	if err := s.pool.QueryRow(ctx, `SELECT org_id, body, body_format FROM scheduled_messages WHERE id=$1`, scheduledID).Scan(&orgID, &body, &format); errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	} else if err != nil {
 		return fmt.Errorf("find scheduled message: %w", err)
 	}
+	// Links of the text are found before the organization lock; if the text
+	// changes meanwhile, the send extracts them again (message.PreparedLinks).
+	links := message.PrepareLinks(body, format)
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin deliver scheduled message: %w", err)
@@ -809,6 +812,7 @@ func (s *Service) Deliver(ctx context.Context, scheduledID string, jobID int64) 
 		reason = ReasonMissedSendTime
 	}
 	draft := current.messageInput()
+	draft.UseLinks(links)
 	if reason == "" {
 		if err := s.messages.ValidateCreate(current.ChatID, &draft); err != nil {
 			reason = ReasonInvalidContent

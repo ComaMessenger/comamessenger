@@ -1292,6 +1292,24 @@ func (e ChatNotificationPreferencesNotifyLevel) Valid() bool {
 	}
 }
 
+// Defines values for ChatSharedAuthorType.
+const (
+	ChatSharedAuthorTypeAgent ChatSharedAuthorType = "agent"
+	ChatSharedAuthorTypeUser  ChatSharedAuthorType = "user"
+)
+
+// Valid indicates whether the value is a known member of the ChatSharedAuthorType enum.
+func (e ChatSharedAuthorType) Valid() bool {
+	switch e {
+	case ChatSharedAuthorTypeAgent:
+		return true
+	case ChatSharedAuthorTypeUser:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ClaimedAgentRunStatus.
 const (
 	ClaimedAgentRunStatusCanceled  ClaimedAgentRunStatus = "canceled"
@@ -4013,6 +4031,27 @@ func (e GetChatAvatarParamsDelivery) Valid() bool {
 	}
 }
 
+// Defines values for ListChatSharedAttachmentsParamsKind.
+const (
+	Files ListChatSharedAttachmentsParamsKind = "files"
+	Media ListChatSharedAttachmentsParamsKind = "media"
+	Voice ListChatSharedAttachmentsParamsKind = "voice"
+)
+
+// Valid indicates whether the value is a known member of the ListChatSharedAttachmentsParamsKind enum.
+func (e ListChatSharedAttachmentsParamsKind) Valid() bool {
+	switch e {
+	case Files:
+		return true
+	case Media:
+		return true
+	case Voice:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DownloadFileParamsDelivery.
 const (
 	DownloadFileParamsDeliveryLink DownloadFileParamsDelivery = "link"
@@ -5035,6 +5074,72 @@ type ChatNotificationPreferences struct {
 
 // ChatNotificationPreferencesNotifyLevel defines model for ChatNotificationPreferences.NotifyLevel.
 type ChatNotificationPreferencesNotifyLevel string
+
+// ChatSharedAttachment defines model for ChatSharedAttachment.
+type ChatSharedAttachment struct {
+	Author ChatSharedAuthor `json:"author"`
+
+	// CreatedAt When the message was sent.
+	CreatedAt    time.Time           `json:"created_at"`
+	File         File                `json:"file"`
+	MessageId    openapi_types.UUID  `json:"message_id"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id"`
+}
+
+// ChatSharedAttachmentPage defines model for ChatSharedAttachmentPage.
+type ChatSharedAttachmentPage struct {
+	Items []ChatSharedAttachment `json:"items"`
+
+	// NextCursor Opaque; pass as cursor to read older attachments.
+	NextCursor *string `json:"next_cursor"`
+}
+
+// ChatSharedAuthor defines model for ChatSharedAuthor.
+type ChatSharedAuthor struct {
+	ActorId       openapi_types.UUID   `json:"actor_id"`
+	AvatarVersion int64                `json:"avatar_version"`
+	DisplayName   string               `json:"display_name"`
+	Type          ChatSharedAuthorType `json:"type"`
+}
+
+// ChatSharedAuthorType defines model for ChatSharedAuthor.Type.
+type ChatSharedAuthorType string
+
+// ChatSharedCounts defines model for ChatSharedCounts.
+type ChatSharedCounts struct {
+	Files int64 `json:"files"`
+	Links int64 `json:"links"`
+	Media int64 `json:"media"`
+	Voice int64 `json:"voice"`
+}
+
+// ChatSharedLink defines model for ChatSharedLink.
+type ChatSharedLink struct {
+	Author    ChatSharedAuthor `json:"author"`
+	CreatedAt time.Time        `json:"created_at"`
+
+	// Domain Host for display: lower case, without «www.», punycode shown in Unicode (пример.рф).
+	Domain string `json:"domain"`
+
+	// Label Text of a markdown link «[label](url)», if any.
+	Label     *string            `json:"label"`
+	MessageId openapi_types.UUID `json:"message_id"`
+
+	// Snippet Message text around the link, whitespace folded, «…» where cut; markdown is left as written.
+	Snippet      string              `json:"snippet"`
+	ThreadRootId *openapi_types.UUID `json:"thread_root_id"`
+
+	// Url As written in the message; «www.» links get https://. Open it in a new tab or the system browser, never inline.
+	Url string `json:"url"`
+}
+
+// ChatSharedLinkPage defines model for ChatSharedLinkPage.
+type ChatSharedLinkPage struct {
+	Items []ChatSharedLink `json:"items"`
+
+	// NextCursor Opaque; pass as cursor to read older links.
+	NextCursor *string `json:"next_cursor"`
+}
 
 // ChatUnread defines model for ChatUnread.
 type ChatUnread struct {
@@ -7385,6 +7490,25 @@ type ListMessagesParams struct {
 	BeforeSeq    *int64              `form:"before_seq,omitempty" json:"before_seq,omitempty"`
 	Limit        *int                `form:"limit,omitempty" json:"limit,omitempty"`
 	ThreadRootId *openapi_types.UUID `form:"thread_root_id,omitempty" json:"thread_root_id,omitempty"`
+}
+
+// ListChatSharedAttachmentsParams defines parameters for ListChatSharedAttachments.
+type ListChatSharedAttachmentsParams struct {
+	Kind ListChatSharedAttachmentsParamsKind `form:"kind" json:"kind"`
+
+	// Cursor Opaque next_cursor of the previous page of the same kind.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListChatSharedAttachmentsParamsKind defines parameters for ListChatSharedAttachments.
+type ListChatSharedAttachmentsParamsKind string
+
+// ListChatSharedLinksParams defines parameters for ListChatSharedLinks.
+type ListChatSharedLinksParams struct {
+	// Cursor Opaque next_cursor of the previous page.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // DeleteDraftParams defines parameters for DeleteDraft.

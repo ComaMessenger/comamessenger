@@ -24,6 +24,9 @@ import type {
   MessageActionResult,
   ChatAgent,
   MessagePin,
+  ChatSharedCounts,
+  ChatSharedAttachmentPage,
+  ChatSharedLinkPage,
   SavedMessageChatCount,
   SavedMessagePage,
   SavedMessageState,
@@ -1419,6 +1422,38 @@ export class MessengerAPI {
     return (
       await this.request<{ pins: MessagePin[] }>(`/api/v1/chats/${chatID}/pins`)
     ).pins;
+  }
+  /** Numbers on the media, files, voice and links tabs of chat info. */
+  sharedCounts(chatID: string): Promise<ChatSharedCounts> {
+    return this.request(
+      `/api/v1/chats/${encodeURIComponent(chatID)}/shared`,
+    );
+  }
+  /** One page of a chat's attachments of a kind, newest first. */
+  sharedAttachments(
+    chatID: string,
+    kind: "media" | "files" | "voice",
+    options: { cursor?: string | null; limit?: number } = {},
+  ): Promise<ChatSharedAttachmentPage> {
+    const query = new URLSearchParams({ kind });
+    if (options.cursor) query.set("cursor", options.cursor);
+    if (options.limit) query.set("limit", String(options.limit));
+    return this.request(
+      `/api/v1/chats/${encodeURIComponent(chatID)}/shared/attachments?${query}`,
+    );
+  }
+  /** One page of links from a chat's messages, newest first. */
+  sharedLinks(
+    chatID: string,
+    options: { cursor?: string | null; limit?: number } = {},
+  ): Promise<ChatSharedLinkPage> {
+    const query = new URLSearchParams();
+    if (options.cursor) query.set("cursor", options.cursor);
+    if (options.limit) query.set("limit", String(options.limit));
+    const suffix = query.size ? `?${query}` : "";
+    return this.request(
+      `/api/v1/chats/${encodeURIComponent(chatID)}/shared/links${suffix}`,
+    );
   }
   pin(id: string): Promise<MessagePin> {
     return this.request(`/api/v1/messages/${id}/pin`, { method: "PUT" });

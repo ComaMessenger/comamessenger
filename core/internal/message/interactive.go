@@ -267,7 +267,7 @@ func (s *Service) pressAction(ctx context.Context, user identity.User, messageID
 	if blocks.Actions[index].Limit == "single" {
 		blocks.Actions[index].Closed = true
 	}
-	updated, seq, err := s.writeBlocks(ctx, tx, user, current, blocks, nil)
+	updated, seq, err := s.writeBlocks(ctx, tx, user, current, blocks, nil, nil)
 	if err != nil {
 		return ActionResult{}, nil, err
 	}
@@ -299,7 +299,7 @@ func groupSiblings(blocks *Blocks, action *Action) []string {
 // writeBlocks persists a new card projection, bumps the message version and
 // appends message.updated, so every client converges through the existing
 // message reducer.
-func (s *Service) writeBlocks(ctx context.Context, tx pgx.Tx, user identity.User, current Message, blocks *Blocks, body *[2]string) (Message, int64, error) {
+func (s *Service) writeBlocks(ctx context.Context, tx pgx.Tx, user identity.User, current Message, blocks *Blocks, body *[2]string, links *PreparedLinks) (Message, int64, error) {
 	seq, err := nextSequence(ctx, tx, user.OrgID)
 	if err != nil {
 		return Message{}, 0, err
@@ -317,6 +317,12 @@ func (s *Service) writeBlocks(ctx context.Context, tx pgx.Tx, user identity.User
 		user.OrgID, current.ID, blocksParam(blocks), newBody, newFormat), &updated)
 	if err != nil {
 		return Message{}, 0, fmt.Errorf("update message blocks: %w", err)
+	}
+	// Links follow the text: unchanged text keeps them.
+	if updated.Body != current.Body || updated.BodyFormat != current.BodyFormat {
+		if err := syncMessageLinks(ctx, tx, user.OrgID, updated, true, links); err != nil {
+			return Message{}, 0, err
+		}
 	}
 	if err := insertEvent(ctx, tx, user, updated.ChatID, updated.ID, seq, "message.updated"); err != nil {
 		return Message{}, 0, err
@@ -357,6 +363,8 @@ func (s *Service) UpdateCardForAgentRun(ctx context.Context, user identity.User,
 			return Message{}, ErrTooLarge
 		}
 	}
+	// Before the organization lock: see PreparedLinks.
+	links := PrepareLinks(body[0], body[1])
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return Message{}, fmt.Errorf("begin update card: %w", err)
@@ -393,7 +401,7 @@ func (s *Service) UpdateCardForAgentRun(ctx context.Context, user identity.User,
 	if err := validateBlockReferences(ctx, tx, user, current.ChatID, input.Blocks); err != nil {
 		return Message{}, err
 	}
-	updated, seq, err := s.writeBlocks(ctx, tx, user, current, input.Blocks, body)
+	updated, seq, err := s.writeBlocks(ctx, tx, user, current, input.Blocks, body, links)
 	if err != nil {
 		return Message{}, err
 	}
@@ -535,7 +543,8 @@ func (s *Service) ResolveConfirmationCard(ctx context.Context, orgID, messageID,
 		eventActor = current.ActorID
 	}
 	body := [2]string{FallbackText(blocks), "plain"}
-	_, seq, err := s.writeBlocks(ctx, tx, identity.User{ActorID: eventActor, OrgID: orgID}, current, blocks, &body)
+	// The card's text is known only here; linksOf extracts it in place.
+	_, seq, err := s.writeBlocks(ctx, tx, identity.User{ActorID: eventActor, OrgID: orgID}, current, blocks, &body, nil)
 	if err != nil {
 		return err
 	}

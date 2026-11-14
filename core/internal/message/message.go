@@ -87,7 +87,13 @@ type CreateInput struct {
 	// scheduledDelivery marks the send of a scheduled message, the only
 	// path allowed to use a client_msg_id reserved by a scheduled message.
 	scheduledDelivery bool
+	// links are the body's links, extracted before the transaction.
+	links *PreparedLinks
 }
+
+// UseLinks attaches links prepared outside the transaction (PrepareLinks).
+// They are used only if they belong to the body that is finally sent.
+func (input *CreateInput) UseLinks(links *PreparedLinks) { input.links = links }
 
 type AgentProvenance struct {
 	RunID string
@@ -128,6 +134,9 @@ type Service struct {
 	directGuard  DirectGuard
 	// savedLimit overrides DefaultSavedLimit; tests set it.
 	savedLimit int
+	// betweenBackfillSteps runs after a backfill batch is read and its links
+	// extracted, before they are written; tests set it.
+	betweenBackfillSteps func()
 }
 
 func NewService(pool *pgxpool.Pool, maxBodyBytes, maxPageSize int, afterCommit func(orgID string, highWatermark int64)) *Service {
@@ -160,6 +169,8 @@ func (s *Service) create(ctx context.Context, user identity.User, chatID string,
 	if err := s.validateCreate(chatID, &input); err != nil {
 		return Message{}, false, err
 	}
+	// Before the organization lock: see PreparedLinks.
+	input.links = PrepareLinks(input.Body, input.BodyFormat)
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return Message{}, false, fmt.Errorf("begin create message: %w", err)
@@ -308,6 +319,14 @@ func (s *Service) createTx(ctx context.Context, tx pgx.Tx, user identity.User, c
 	}
 	result.Silent = input.Silent
 	if err := attachFiles(ctx, tx, user.OrgID, result.ID, input.FileIDs); err != nil {
+		return Message{}, false, 0, err
+	}
+	if len(input.FileIDs) > 0 {
+		if err := indexAttachments(ctx, tx, []string{result.ID}); err != nil {
+			return Message{}, false, 0, err
+		}
+	}
+	if err := syncMessageLinks(ctx, tx, user.OrgID, result, false, input.links); err != nil {
 		return Message{}, false, 0, err
 	}
 	created := []Message{result}
@@ -543,6 +562,8 @@ func (s *Service) Update(ctx context.Context, user identity.User, messageID stri
 	if input.ExpectedVersion < 1 {
 		return Message{}, fmt.Errorf("%w: expected_version must be positive", ErrInvalid)
 	}
+	// Before the organization lock: see PreparedLinks.
+	links := PrepareLinks(input.Body, input.BodyFormat)
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return Message{}, fmt.Errorf("begin update message: %w", err)
@@ -605,6 +626,9 @@ func (s *Service) Update(ctx context.Context, user identity.User, messageID stri
 	if err := insertEvent(ctx, tx, user, result.ChatID, result.ID, seq, "message.updated"); err != nil {
 		return Message{}, err
 	}
+	if err := syncMessageLinks(ctx, tx, user.OrgID, result, true, links); err != nil {
+		return Message{}, err
+	}
 	updated := []Message{result}
 	if err := hydrateFiles(ctx, tx, user.OrgID, updated); err != nil {
 		return Message{}, err
@@ -665,6 +689,10 @@ func (s *Service) Delete(ctx context.Context, user identity.User, messageID stri
 	// Savers learn about it from message.deleted, which every member gets.
 	if _, err := tx.Exec(ctx, `DELETE FROM saved_messages WHERE org_id = $1 AND message_id = $2`, user.OrgID, result.ID); err != nil {
 		return Message{}, fmt.Errorf("drop saves of deleted message: %w", err)
+	}
+	// Its files and links leave the chat's shared media.
+	if err := dropShared(ctx, tx, result.ID); err != nil {
+		return Message{}, err
 	}
 	deleted := []Message{result}
 	if err := hydrateFiles(ctx, tx, user.OrgID, deleted); err != nil {

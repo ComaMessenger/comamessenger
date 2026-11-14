@@ -230,6 +230,11 @@ func main() {
 	messageService := message.NewService(
 		pool, int(cfg.Messaging.MaxBodyBytes), int(cfg.Messaging.MaxPageSize), afterCommit,
 	)
+	// Shared media of messages written before migration 00055: small
+	// batches in the background, resumed after a restart.
+	go messageService.BackfillShared(realtimeCtx, 200*time.Millisecond, func(err error) {
+		logger.Warn("shared media backfill batch failed; retrying", "error", err)
+	})
 	chatService := chat.NewService(pool, afterCommit)
 	scheduledService := scheduled.NewService(pool, messageService, afterCommit, logger)
 	scheduledClient, err := scheduled.NewClient(pool, scheduledService, logger)

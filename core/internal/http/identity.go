@@ -108,6 +108,7 @@ type identityHandlers struct {
 	websocketRate         *ipRateLimiter
 	actorRate             *ipRateLimiter
 	ownershipRate         *ipRateLimiter
+	sharedRate            *ipRateLimiter
 	savedRate             *ipRateLimiter
 	savedReadRate         *ipRateLimiter
 	bootstrapToken        string
@@ -130,6 +131,9 @@ func newIdentityHandlers(logger *slog.Logger, allowedOrigin string, dependencies
 		bootstrapRate: newIPRateLimiter(5, 5), loginRate: newIPRateLimiter(10, 10),
 		refreshRate: newIPRateLimiter(30, 20), invitationRate: newIPRateLimiter(10, 10), websocketRate: newIPRateLimiter(60, 20), actorRate: newIPRateLimiter(1200, 200),
 		ownershipRate: newIPRateLimiter(5, 5),
+		// Shared media of a chat: a chat info screen opens with the counts
+		// and one page; scrolling a tab adds one request per page.
+		sharedRate: newIPRateLimiter(240, 60),
 		// Saving is a cheap private toggle; a person taps it, a script does not.
 		savedRate: newIPRateLimiter(120, 30),
 		// Reading saves joins messages, chats and members per row; a screen
@@ -310,6 +314,9 @@ func (h *identityHandlers) routes(router chi.Router) {
 			protected.Get("/threads", h.listFollowedThreads)
 			protected.Get("/chats/{chatID}/messages", h.listMessages)
 			protected.Get("/chats/{chatID}/pins", h.listMessagePins)
+			protected.With(h.actorRateLimit("chat-shared", h.sharedRate)).Get("/chats/{chatID}/shared", h.chatSharedCounts)
+			protected.With(h.actorRateLimit("chat-shared", h.sharedRate)).Get("/chats/{chatID}/shared/attachments", h.listChatSharedAttachments)
+			protected.With(h.actorRateLimit("chat-shared", h.sharedRate)).Get("/chats/{chatID}/shared/links", h.listChatSharedLinks)
 			protected.Post("/chats/{chatID}/messages", h.createMessage)
 			protected.Patch("/messages/{messageID}", h.updateMessage)
 			protected.Get("/messages/{messageID}/context", h.messageContext)
