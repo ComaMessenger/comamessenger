@@ -134,6 +134,7 @@ export function VoiceMessage({
       </Pressable>
       <View style={styles.body}>
         <View
+          testID="voice-seek"
           accessible
           accessibilityRole="adjustable"
           accessibilityLabel={t("voiceSeek")}

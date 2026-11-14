@@ -41,6 +41,7 @@ import { AgentWhy } from "./AgentWhy";
 import { useReactions } from "./reactions";
 import { bubbleCorners, messageMarks, type BubblePlacement } from "./bubbles";
 import { useThreadPreview } from "./useThreadPreview";
+import { replySwipeProps } from "./replySwipe";
 
 const avatarSize = 30;
 
@@ -94,6 +95,7 @@ export const MessageRow = memo(function MessageRow({
     <ReanimatedSwipeable
       ref={swipeable}
       enabled={actionable}
+      {...replySwipeProps}
       friction={2}
       rightThreshold={56}
       overshootRight={false}
