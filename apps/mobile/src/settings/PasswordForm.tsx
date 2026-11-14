@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { View } from "react-native";
+import { useRef, useState } from "react";
+import { View, type TextInput } from "react-native";
 import { useTranslation } from "react-i18next";
 import {
   fieldErrorKey,
@@ -34,6 +34,8 @@ export function PasswordForm({
     null,
   );
   const problem = passwordChangeError({ current, next, confirm });
+  const nextField = useRef<TextInput>(null);
+  const confirmField = useRef<TextInput>(null);
 
   async function submit() {
     setPending(true);
@@ -67,8 +69,12 @@ export function PasswordForm({
         autoComplete="current-password"
         textContentType="password"
         autoCapitalize="none"
+        returnKeyType="next"
+        submitBehavior="submit"
+        onSubmitEditing={() => nextField.current?.focus()}
       />
       <TextField
+        ref={nextField}
         testID="password-new"
         label={t("newPassword")}
         value={next}
@@ -77,6 +83,9 @@ export function PasswordForm({
         autoComplete="new-password"
         textContentType="newPassword"
         autoCapitalize="none"
+        returnKeyType="next"
+        submitBehavior="submit"
+        onSubmitEditing={() => confirmField.current?.focus()}
         hint={t("passwordMinHint", { count: passwordMinLength })}
         error={
           next && next.length < passwordMinLength
@@ -85,6 +94,7 @@ export function PasswordForm({
         }
       />
       <TextField
+        ref={confirmField}
         testID="password-confirm"
         label={t("confirmNewPassword")}
         value={confirm}
@@ -93,6 +103,10 @@ export function PasswordForm({
         autoComplete="new-password"
         textContentType="newPassword"
         autoCapitalize="none"
+        returnKeyType="done"
+        onSubmitEditing={() => {
+          if (problem === null && !pending) guard(() => void submit());
+        }}
         error={
           confirm && problem === "passwordsDoNotMatch"
             ? t("passwordsDoNotMatch")

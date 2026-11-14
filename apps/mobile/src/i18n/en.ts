@@ -1088,4 +1088,13 @@ export const en: Record<keyof typeof ru, string> = {
   workspaceSettings: "Workspace settings",
   workspaceSettingsHint: "Members, permissions, and team preferences",
   you: "you",
+  invitationStatusActive: "active",
+  invitationStatusExpired: "expired",
+  removeFaviconConfirm: "Remove the favicon?",
+  removeLogoConfirm: "Remove the logo?",
+  workspaceFavicon: "Favicon",
+  workspaceFaviconHint:
+    "The browser tab icon; the phone saves it as a 64×64 PNG.",
+  workspaceLogo: "Logo",
+  workspaceLogoHint: "A square image; the phone scales it down to 512×512.",
 };

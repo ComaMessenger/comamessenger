@@ -115,7 +115,7 @@ export function SessionsScreen() {
       </SettingsGroup>
       {others.length > 0 && (
         <>
-          <SettingsGroup>{others.map(row)}</SettingsGroup>
+          {/* Above the list: an account may have dozens of sessions. */}
           <SettingsGroup>
             <ActionRow
               testID="sessions-revoke-others"
@@ -132,6 +132,7 @@ export function SessionsScreen() {
             />
           </SettingsGroup>
           <ScheduledWarning count={scheduled.count} />
+          <SettingsGroup>{others.map(row)}</SettingsGroup>
         </>
       )}
     </SettingsScreen>

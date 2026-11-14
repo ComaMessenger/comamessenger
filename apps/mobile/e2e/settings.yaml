@@ -1,31 +1,348 @@
-# Profile, notification preferences and sessions screens.
-# Run after sign-in.yaml: maestro test e2e/settings.yaml
+# Every settings section reachable from «Ещё → Настройки», as the owner.
+# Run after sign-in.yaml: maestro test -e THEME=light e2e/settings.yaml
+# Pass the theme for screenshot names: -e THEME=light (or dark after
+# xcrun simctl ui <device> appearance dark).
+# Creates a fresh member through the API to change role and status on.
 appId: com.comamessenger.app
 ---
+- runScript: scripts/login.js
+- runScript: scripts/reset-preferences.js
+- runScript: scripts/create-member.js
+- runScript: scripts/seed-pending-scheduled.js
 - runFlow: open-app.yaml
 - runFlow:
     file: tabs.yaml
     env:
       TAB: more
 - tapOn:
+    id: open-settings
+- extendedWaitUntil:
+    visible:
+      id: settings-home
+    timeout: 10000
+- assertVisible: Личные
+- assertVisible: Безопасность
+- takeScreenshot: settings-home-${THEME}
+
+# Personal
+- tapOn:
     id: settings-profile
 - extendedWaitUntil:
     visible: Должность
     timeout: 10000
-- takeScreenshot: settings-profile
+- takeScreenshot: settings-profile-${THEME}
 - tapOn: Назад
 - tapOn:
     id: settings-notifications
 - extendedWaitUntil:
     visible: Показывать текст сообщения
     timeout: 10000
-- tapOn: Показывать текст сообщения
-- takeScreenshot: settings-notifications
-- tapOn: Показывать текст сообщения
+- tapOn:
+    id: notify-preview
+- tapOn:
+    id: notify-preview
+- takeScreenshot: settings-notifications-${THEME}
+- scrollUntilVisible:
+    element: Расписание уведомлений
+    direction: DOWN
+- tapOn:
+    id: notify-schedule
+- scrollUntilVisible:
+    element:
+      id: schedule-to
+    direction: DOWN
+- tapOn:
+    id: schedule-days-custom
+- extendedWaitUntil:
+    visible:
+      id: schedule-day-1
+    timeout: 5000
+- takeScreenshot: settings-notifications-schedule-${THEME}
+- scrollUntilVisible:
+    element:
+      id: notify-schedule
+    direction: UP
+- tapOn:
+    id: notify-schedule
+- scrollUntilVisible:
+    element: Исключения по чатам
+    direction: DOWN
+- takeScreenshot: settings-notifications-more-${THEME}
+- tapOn: Назад
+- tapOn:
+    id: settings-appearance
+- extendedWaitUntil:
+    visible:
+      id: theme-system
+    timeout: 10000
+- takeScreenshot: settings-appearance-${THEME}
+- tapOn: Назад
+
+# Security
+- tapOn:
+    id: settings-password
+- extendedWaitUntil:
+    visible:
+      id: password-current
+    timeout: 10000
+# One scheduled message waits (seeded): the screen warns it will stop.
+- extendedWaitUntil:
+    visible:
+      id: scheduled-warning
+    timeout: 10000
+- takeScreenshot: settings-password-${THEME}
+- tapOn: Назад
+- tapOn:
+    id: settings-email
+- extendedWaitUntil:
+    visible:
+      id: email-new
+    timeout: 10000
+- assertVisible: .*lev@example.test.*
+- takeScreenshot: settings-email-${THEME}
 - tapOn: Назад
 - tapOn:
     id: settings-sessions
 - extendedWaitUntil:
-    visible: Это устройство
+    visible: Это устройство.*
     timeout: 10000
-- takeScreenshot: settings-sessions
+- takeScreenshot: settings-sessions-${THEME}
+- scrollUntilVisible:
+    element:
+      id: sessions-revoke-others
+    direction: DOWN
+- assertVisible:
+    id: scheduled-warning
+- tapOn:
+    id: sessions-revoke-others
+- extendedWaitUntil:
+    visible: Выйти на других устройствах?
+    timeout: 5000
+- takeScreenshot: settings-sessions-warning-${THEME}
+- tapOn: Отмена
+- tapOn: Назад
+
+# Workspace
+- scrollUntilVisible:
+    element:
+      id: settings-workspace
+    direction: DOWN
+- takeScreenshot: settings-home-workspace-${THEME}
+- tapOn:
+    id: settings-workspace
+- extendedWaitUntil:
+    visible: Текущее пространство
+    timeout: 10000
+- takeScreenshot: settings-workspace-${THEME}
+- tapOn: Назад
+- scrollUntilVisible:
+    element:
+      id: settings-workspace-general
+    direction: DOWN
+- tapOn:
+    id: settings-workspace-general
+- extendedWaitUntil:
+    visible:
+      id: workspace-name
+    timeout: 10000
+- takeScreenshot: settings-workspace-general-${THEME}
+- tapOn: Назад
+
+# Members: search, filters, the fresh member's card, role and status.
+- scrollUntilVisible:
+    element:
+      id: settings-workspace-members
+    direction: DOWN
+- tapOn:
+    id: settings-workspace-members
+- extendedWaitUntil:
+    visible:
+      id: members-list
+    timeout: 10000
+- takeScreenshot: settings-members-${THEME}
+- tapOn:
+    id: members-filter-admins
+- assertVisible: .*Владелец.*
+- tapOn:
+    id: members-filter-all
+- tapOn:
+    id: members-search
+- inputText: ${output.memberName}
+- extendedWaitUntil:
+    visible: ${output.memberName}
+    timeout: 5000
+- tapOn:
+    id: member-row-0
+- extendedWaitUntil:
+    visible:
+      id: member-role-admin
+    timeout: 10000
+- takeScreenshot: settings-member-${THEME}
+- tapOn:
+    id: member-role-admin
+- tapOn: Сменить роль
+- extendedWaitUntil:
+    visible: Разрешения администратора
+    timeout: 10000
+- takeScreenshot: settings-member-admin-${THEME}
+- tapOn:
+    id: member-role-member
+- tapOn: Сменить роль
+- extendedWaitUntil:
+    visible: База знаний
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      id: member-status
+    direction: DOWN
+- tapOn:
+    id: member-status
+# The alert's «Отключить» (right button): Maestro finds the row with the
+# same word under the alert, so the button is tapped by position.
+- tapOn:
+    point: 68%,58%
+- extendedWaitUntil:
+    visible: Активировать
+    timeout: 10000
+- takeScreenshot: settings-member-deactivated-${THEME}
+- tapOn:
+    id: member-status
+- extendedWaitUntil:
+    visible: Отключить
+    timeout: 10000
+- tapOn: Назад
+- tapOn: Назад
+
+# Invitations: create, share sheet, revoke.
+- scrollUntilVisible:
+    element:
+      id: settings-workspace-invitations
+    direction: DOWN
+- tapOn:
+    id: settings-workspace-invitations
+- extendedWaitUntil:
+    visible:
+      id: invite-email
+    timeout: 10000
+- takeScreenshot: settings-invitations-${THEME}
+- tapOn:
+    id: invite-email
+- inputText: invite-${output.memberTag}@example.test
+- tapOn:
+    id: invite-submit
+- extendedWaitUntil:
+    visible:
+      id: invite-result
+    timeout: 10000
+- takeScreenshot: settings-invitations-created-${THEME}
+- scrollUntilVisible:
+    element:
+      id: invite-share
+    direction: DOWN
+- tapOn:
+    id: invite-share
+- extendedWaitUntil:
+    visible: (Скопировать|Copy)
+    timeout: 10000
+- takeScreenshot: settings-invitations-share-${THEME}
+# The share sheet has no close button on iOS 26: pull it down.
+- swipe:
+    start: 50%,60%
+    end: 50%,98%
+- extendedWaitUntil:
+    notVisible: (Скопировать|Copy)
+    timeout: 5000
+- scrollUntilVisible:
+    element:
+      id: invitation-row-0
+    direction: DOWN
+- tapOn:
+    id: invitation-row-0
+- tapOn: Отозвать
+- tapOn: Отозвать
+- scrollUntilVisible:
+    element: Активные приглашения
+    direction: DOWN
+- takeScreenshot: settings-invitations-list-${THEME}
+- tapOn: Назад
+
+- scrollUntilVisible:
+    element:
+      id: settings-workspace-policies
+    direction: DOWN
+- tapOn:
+    id: settings-workspace-policies
+- extendedWaitUntil:
+    visible:
+      id: policy-channels
+    timeout: 10000
+- tapOn:
+    id: policy-channels
+- extendedWaitUntil:
+    visible: Сохранено
+    timeout: 10000
+- tapOn:
+    id: policy-channels
+- extendedWaitUntil:
+    visible: Сохранено
+    timeout: 10000
+- takeScreenshot: settings-policies-${THEME}
+- tapOn: Назад
+
+- scrollUntilVisible:
+    element:
+      id: settings-customization
+    direction: DOWN
+- tapOn:
+    id: settings-customization
+- extendedWaitUntil:
+    visible:
+      id: branding-logo-upload
+    timeout: 10000
+- takeScreenshot: settings-branding-${THEME}
+- scrollUntilVisible:
+    element:
+      id: accent-hex
+    direction: DOWN
+- takeScreenshot: settings-branding-accent-${THEME}
+- tapOn: Назад
+
+- scrollUntilVisible:
+    element:
+      id: settings-infrastructure
+    direction: DOWN
+- tapOn:
+    id: settings-infrastructure
+- extendedWaitUntil:
+    visible:
+      id: s3-endpoint
+    timeout: 10000
+- takeScreenshot: settings-infrastructure-${THEME}
+- scrollUntilVisible:
+    element:
+      id: infrastructure-save
+    direction: DOWN
+- takeScreenshot: settings-infrastructure-smtp-${THEME}
+- tapOn: Назад
+
+- scrollUntilVisible:
+    element:
+      id: settings-audit
+    direction: DOWN
+- tapOn:
+    id: settings-audit
+- extendedWaitUntil:
+    visible:
+      id: audit-row-0
+    timeout: 10000
+- takeScreenshot: settings-audit-${THEME}
+- tapOn:
+    id: audit-category
+- tapOn: Участники
+- extendedWaitUntil:
+    visible: .*участника.*
+    timeout: 10000
+- takeScreenshot: settings-audit-filtered-${THEME}
+- runScript: scripts/deactivate-member.js
+- runScript: scripts/restore-preferences.js
+- runScript: scripts/remove-pending-scheduled.js

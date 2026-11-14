@@ -1,5 +1,12 @@
 import { useState } from "react";
-import { Alert, Pressable, Share, StyleSheet, View } from "react-native";
+import {
+  Alert,
+  Keyboard,
+  Pressable,
+  Share,
+  StyleSheet,
+  View,
+} from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -86,6 +93,8 @@ export function InvitationsScreen() {
         ...(canManage ? { role } : {}),
       });
       setEmail("");
+      // The link and its «Share» button appear below; let them be seen.
+      Keyboard.dismiss();
       setLink({
         url: invitation.accept_url ?? "",
         note: invitation.email_sent

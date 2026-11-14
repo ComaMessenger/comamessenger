@@ -1112,4 +1112,14 @@ export const ru = {
   workspaceSettings: "Настройки пространства",
   workspaceSettingsHint: "Участники, права и параметры команды",
   you: "вы",
+  invitationStatusActive: "действует",
+  invitationStatusExpired: "истекло",
+  removeFaviconConfirm: "Удалить фавикон?",
+  removeLogoConfirm: "Удалить логотип?",
+  workspaceFavicon: "Фавикон",
+  workspaceFaviconHint:
+    "Значок вкладки браузера; на телефоне сохраняется в PNG 64×64.",
+  workspaceLogo: "Логотип",
+  workspaceLogoHint:
+    "Квадратное изображение; на телефоне уменьшается до 512×512.",
 } as const;
