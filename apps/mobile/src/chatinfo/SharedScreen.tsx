@@ -1,4 +1,10 @@
-import { useMemo, useState, type ReactElement } from "react";
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -41,7 +47,10 @@ import { useMessenger } from "@/messenger/MessengerProvider";
 import { useSignedIn } from "@/session/SessionProvider";
 import { chatTitle } from "@/chats/ChatRow";
 import { openAttachment } from "@/files/open";
-import { PhotoViewer, viewerButtonStyle } from "@/files/PhotoViewer";
+import { mediaKind, type MediaItem } from "@/media/items";
+import { MediaViewerHost } from "@/media/MediaViewer";
+import { useOpenMedia } from "@/media/MediaViewerContext";
+import { measureAnchor } from "@/ui/AnchoredMenu";
 import { useFileSource } from "@/files/sources";
 import { Avatar } from "@/ui/Avatar";
 import { IconButton } from "@/ui/IconButton";
@@ -214,8 +223,8 @@ const gap = 2;
 
 function MediaTab({ chatID }: { chatID: string }) {
   const { t, i18n } = useTranslation();
-  const { api } = useSignedIn();
   const query = useAttachments(chatID, "media");
+  const counts = useSharedCounts(chatID);
   const items = useMemo(() => sharedItems(query.data?.pages), [query.data]);
   const sections = useMemo(
     () =>
@@ -226,22 +235,40 @@ function MediaTab({ chatID }: { chatID: string }) {
       })),
     [items, i18n.language],
   );
+  // The full-screen viewer of the feed pages through the chat's media from
+  // the server: oldest first, older pages loaded as the reader nears the
+  // start, the counter over the whole chat.
+  const viewerItems = useMemo(() => archiveMedia(items), [items]);
+  const byMessage = useMemo(
+    () => new Map(items.map((item) => [item.message_id, item])),
+    [items],
+  );
+  const authors = useMemo(
+    () =>
+      new Map(
+        items.map((item) => [item.author.actor_id, item.author.display_name]),
+      ),
+    [items],
+  );
   const { width } = useWindowDimensions();
   const size = Math.floor((width - gap * (columns - 1)) / columns);
-  const [viewing, setViewing] = useState<ChatSharedAttachment | null>(null);
-
-  function open(item: ChatSharedAttachment) {
-    // Videos play in the system player until the full-screen viewer of
-    // feat/mobile-6.1-media lands: then they open in PhotoViewer's place.
-    if (isSharedVideo(item))
-      void openAttachment(api, item.file).catch(() =>
-        Alert.alert(t("fileUnavailable")),
-      );
-    else setViewing(item);
-  }
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = query;
+  const loadOlder = useCallback(async () => {
+    if (hasNextPage && !isFetchingNextPage) await fetchNextPage();
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   return (
-    <>
+    <MediaViewerHost
+      items={viewerItems}
+      total={counts.data?.media}
+      hasOlder={hasNextPage}
+      onLoadOlder={loadOlder}
+      authorName={(actorID) => authors.get(actorID) ?? ""}
+      onGoToMessage={(messageID) => {
+        const item = byMessage.get(messageID);
+        if (item) openShared(chatID, item);
+      }}
+    >
       <SectionList
         testID="shared-media"
         sections={sections}
@@ -261,21 +288,13 @@ function MediaTab({ chatID }: { chatID: string }) {
         renderItem={({ item: row }) => (
           <View style={[styles.gridRow, { gap }]}>
             {row.map((item) => (
-              <MediaTile
-                key={sharedItemKey(item)}
-                item={item}
-                size={size}
-                onPress={() => open(item)}
-              />
+              <MediaTile key={sharedItemKey(item)} item={item} size={size} />
             ))}
           </View>
         )}
         onEndReachedThreshold={0.6}
-        onEndReached={() => {
-          if (query.hasNextPage && !query.isFetchingNextPage)
-            void query.fetchNextPage();
-        }}
-        ListFooterComponent={<Footer loading={query.isFetchingNextPage} />}
+        onEndReached={() => void loadOlder()}
+        ListFooterComponent={<Footer loading={isFetchingNextPage} />}
         ListEmptyComponent={
           <EmptyState
             query={query}
@@ -284,30 +303,27 @@ function MediaTab({ chatID }: { chatID: string }) {
           />
         }
       />
-      <PhotoViewer
-        api={api}
-        file={viewing?.file ?? null}
-        onClose={() => setViewing(null)}
-        actions={
-          viewing ? (
-            <Pressable
-              testID="photo-viewer-show-in-chat"
-              accessibilityRole="button"
-              accessibilityLabel={t("sharedShowInChat")}
-              style={viewerButtonStyle}
-              onPress={() => {
-                const item = viewing;
-                setViewing(null);
-                openShared(chatID, item);
-              }}
-            >
-              <MessageSquare size={24} color="#ffffff" />
-            </Pressable>
-          ) : null
-        }
-      />
-    </>
+    </MediaViewerHost>
   );
+}
+
+/** The archive's media (newest first) as the viewer's items (oldest first). */
+function archiveMedia(items: ChatSharedAttachment[]): MediaItem[] {
+  const result: MediaItem[] = [];
+  for (let index = items.length - 1; index >= 0; index--) {
+    const item = items[index]!;
+    const kind = mediaKind(item.file);
+    if (!kind) continue;
+    result.push({
+      key: item.file.id,
+      kind,
+      file: item.file,
+      messageID: item.message_id,
+      actorID: item.author.actor_id,
+      createdAt: item.created_at,
+    });
+  }
+  return result;
 }
 
 function chunk<T>(items: T[], size: number): T[][] {
@@ -320,14 +336,14 @@ function chunk<T>(items: T[], size: number): T[][] {
 function MediaTile({
   item,
   size,
-  onPress,
 }: {
   item: ChatSharedAttachment;
   size: number;
-  onPress(): void;
 }) {
   const { t } = useTranslation();
   const theme = useTheme();
+  const openMedia = useOpenMedia();
+  const tile = useRef<View>(null);
   const video = isSharedVideo(item);
   // A video shows its generated preview; without one, a plain tile.
   const source = useFileSource(
@@ -335,12 +351,17 @@ function MediaTile({
   );
   return (
     <Pressable
+      ref={tile}
       testID={`shared-media-${item.file.id}`}
       accessibilityRole="imagebutton"
       accessibilityLabel={
         video ? `${t("sharedVideo")}, ${item.file.name}` : item.file.name
       }
-      onPress={onPress}
+      onPress={() =>
+        void measureAnchor(tile).then((origin) =>
+          openMedia?.(item.file.id, origin),
+        )
+      }
       style={({ pressed }) => [
         { width: size, height: size, backgroundColor: theme.sidebar },
         pressed && styles.pressed,

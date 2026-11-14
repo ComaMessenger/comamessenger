@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { feedRows, type ClientMessage } from "@comamessenger/core";
-import { bubbleCorners, bubblePlacement, messageMarks } from "./bubbles";
+import {
+  bubbleCorners,
+  bubblePlacement,
+  isOwnMessage,
+  messageKey,
+  messageMarks,
+} from "./bubbles";
 import { canPinIn, messageMenu, type MessageMenuFacts } from "./menuItems";
 
 function message(id: string, actor: string, minute: number): ClientMessage {
@@ -178,5 +184,39 @@ describe("messageMarks", () => {
     expect(messageMarks({ pinned: true, saved: true, deleted: true })).toEqual(
       [],
     );
+  });
+});
+
+describe("own message on the first frame", () => {
+  it("draws a queued message on the reader's side before and after the server answers", () => {
+    const queued: ClientMessage = {
+      ...message("q1", "me", 5),
+      id: "q1",
+      client_msg_id: "q1",
+      created_seq: Number.MAX_SAFE_INTEGER,
+      delivery: "sending",
+    };
+    const before = feedRows([message("a", "anna", 1), queued], 0);
+    expect(bubblePlacement(before, 1, "me", true).own).toBe(true);
+    const confirmed: ClientMessage = {
+      ...queued,
+      id: "server-q1",
+      created_seq: 6,
+      delivery: "sent",
+    };
+    const after = feedRows([message("a", "anna", 1), confirmed], 0);
+    expect(bubblePlacement(after, 1, "me", true).own).toBe(true);
+    // The row keeps its list key, so it is updated in place, not remounted.
+    expect(messageKey(confirmed)).toBe(messageKey(queued));
+  });
+
+  it("keeps a queued message without an author (older build) on the reader's side", () => {
+    const legacy: ClientMessage = {
+      ...message("q2", "", 5),
+      delivery: "failed",
+    };
+    expect(isOwnMessage(legacy, "me")).toBe(true);
+    expect(isOwnMessage({ ...legacy, delivery: undefined }, "me")).toBe(false);
+    expect(isOwnMessage(message("x", "anna", 1), "me")).toBe(false);
   });
 });

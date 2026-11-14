@@ -1,5 +1,11 @@
 import { useRef, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  StyleSheet,
+  View,
+} from "react-native";
 import { router } from "expo-router";
 import {
   BookOpen,
@@ -143,7 +149,10 @@ function CardHead({
       </View>
       {status && (
         <View
-          style={[styles.state, { backgroundColor: colors(status.tone).background }]}
+          style={[
+            styles.state,
+            { backgroundColor: colors(status.tone).background },
+          ]}
         >
           <Text
             weight="medium"
@@ -177,7 +186,11 @@ function CardContent({ card }: { card: NonNullable<Blocks["card"]> }) {
       {((card.fields?.length ?? 0) > 0 || (card.items?.length ?? 0) > 0) && (
         <View style={styles.body}>
           {card.fields?.map((field, index) => (
-            <Field key={`${field.label}-${index}`} label={field.label} value={field.value} />
+            <Field
+              key={`${field.label}-${index}`}
+              label={field.label}
+              value={field.value}
+            />
           ))}
           {card.items?.map((item, index) => (
             <View key={`${item.text}-${index}`} style={styles.item}>
@@ -219,9 +232,12 @@ function ConfirmationContent({
   const tool = confirmationTool(blocks);
   const status = confirmationStatus(blocks);
   const fields = confirmationFields(blocks);
-  const phrase = toolPhrases[tool] ? t(toolPhrases[tool]) : t("acToolGeneric", { tool });
+  const phrase = toolPhrases[tool]
+    ? t(toolPhrases[tool])
+    : t("acToolGeneric", { tool });
   const nameOf = (actorID: string) =>
-    members.find((member) => member.actor_id === actorID)?.display_name ?? t("participant");
+    members.find((member) => member.actor_id === actorID)?.display_name ??
+    t("participant");
   return (
     <>
       <CardHead
@@ -229,7 +245,10 @@ function ConfirmationContent({
         title={t("acConfirmTitle", { agent: authorName })}
         status={
           status
-            ? { label: t(confirmationKey[status]), tone: confirmationTone[status] }
+            ? {
+                label: t(confirmationKey[status]),
+                tone: confirmationTone[status],
+              }
             : blocks.card?.status
         }
       />
@@ -241,7 +260,9 @@ function ConfirmationContent({
           fields.map((field) => (
             <Field
               key={field.key}
-              label={fieldLabels[field.key] ? t(fieldLabels[field.key]!) : field.key}
+              label={
+                fieldLabels[field.key] ? t(fieldLabels[field.key]!) : field.key
+              }
               value={
                 field.kind === "actor"
                   ? nameOf(field.actorID)
@@ -286,9 +307,12 @@ function Actions({
   const [error, setError] = useState<string | null>(null);
   const inflight = useRef(new Set<string>());
   const actions = blocks.actions ?? [];
-  const states = actions.map((action) => actionState(action, blocks, viewer, local[action.id]));
+  const states = actions.map((action) =>
+    actionState(action, blocks, viewer, local[action.id]),
+  );
   const decided = actions.find(
-    (action) => action.limit === "single" && action.closed && action.responses.length > 0,
+    (action) =>
+      action.limit === "single" && action.closed && action.responses.length > 0,
   );
   const taken = decided ? actionResponder(decided, blocks) : null;
   const hidden = (action: MessageAction) =>
@@ -296,12 +320,14 @@ function Actions({
       decided &&
         action !== decided &&
         action.responses.length === 0 &&
-        (action.closed || (decided.group !== undefined && action.group === decided.group)),
+        (action.closed ||
+          (decided.group !== undefined && action.group === decided.group)),
     );
   const time = (value: string) =>
-    new Intl.DateTimeFormat(i18n.language, { hour: "2-digit", minute: "2-digit" }).format(
-      new Date(value),
-    );
+    new Intl.DateTimeFormat(i18n.language, {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(value));
 
   async function press(action: MessageAction) {
     // One request per button at a time; the server replays repeats anyway.
@@ -314,7 +340,9 @@ function Actions({
       setLocal((current) => ({ ...current, [action.id]: {} }));
       onUpdated(result.message);
     } catch (cause) {
-      const failure = pressFailure(cause instanceof APIError ? cause.code : undefined);
+      const failure = pressFailure(
+        cause instanceof APIError ? cause.code : undefined,
+      );
       setLocal((current) => ({ ...current, [action.id]: failure.local }));
       setError(
         failure.kind === "conflict"
@@ -359,8 +387,8 @@ function Actions({
         <Note icon>
           {t("acActionTakenBy", {
             name:
-              members.find((member) => member.actor_id === taken.actorID)?.display_name ??
-              t("participant"),
+              members.find((member) => member.actor_id === taken.actorID)
+                ?.display_name ?? t("participant"),
             time: time(taken.respondedAt),
           })}
         </Note>
@@ -380,7 +408,13 @@ function Actions({
   );
 }
 
-function Note({ children, icon = false }: { children: string; icon?: boolean }) {
+function Note({
+  children,
+  icon = false,
+}: {
+  children: string;
+  icon?: boolean;
+}) {
   const theme = useTheme();
   return (
     <View style={styles.note}>
@@ -438,8 +472,13 @@ function ActionButton({
       style={({ pressed: touching }) => [
         styles.button,
         {
-          backgroundColor: touching && enabled ? theme.surfaceSelected : background,
-          borderColor: pressed ? theme.successBorder : primary ? theme.action : theme.border,
+          backgroundColor:
+            touching && enabled ? theme.surfaceSelected : background,
+          borderColor: pressed
+            ? theme.successBorder
+            : primary
+              ? theme.action
+              : theme.border,
           opacity: enabled || pressed || state === "pending" ? 1 : 0.5,
         },
       ]}
@@ -474,8 +513,12 @@ function Sources({
       void api
         .messageContext(source.message_id, 3)
         .then((context) => {
-          const target = context.messages.find((item) => item.id === source.message_id);
-          router.push(`/chat/${target?.chat_id ?? chatID}?message=${source.message_id}`);
+          const target = context.messages.find(
+            (item) => item.id === source.message_id,
+          );
+          router.push(
+            `/chat/${target?.chat_id ?? chatID}?message=${source.message_id}`,
+          );
         })
         .catch(() => Alert.alert(t("actionFailed")));
     else if (source.kind === "file" && source.file_id)
@@ -487,14 +530,20 @@ function Sources({
     else if (source.kind === "document")
       Alert.alert(
         source.title || t("acSourceDocument"),
-        [source.excerpt, t("acSourceDocumentHint")].filter(Boolean).join("\n\n"),
+        [source.excerpt, t("acSourceDocumentHint")]
+          .filter(Boolean)
+          .join("\n\n"),
       );
   }
   return (
     <View style={styles.sources} accessibilityLabel={t("acSources")}>
       {sources.map((source, index) => {
         const Icon =
-          source.kind === "message" ? MessageSquareText : source.kind === "file" ? FileText : BookOpen;
+          source.kind === "message"
+            ? MessageSquareText
+            : source.kind === "file"
+              ? FileText
+              : BookOpen;
         const label =
           source.title ||
           (source.kind === "message"
@@ -513,7 +562,9 @@ function Sources({
               styles.source,
               {
                 borderColor: theme.border,
-                backgroundColor: pressed ? theme.surfaceSelected : theme.surface,
+                backgroundColor: pressed
+                  ? theme.surfaceSelected
+                  : theme.surface,
               },
             ]}
           >

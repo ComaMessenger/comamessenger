@@ -1,6 +1,7 @@
 // Shared by the runScript helpers: signs the test account in through the API.
 // env SERVER, EMAIL, PASSWORD (defaults: sign-in.yaml).
-var api = "http://" + (typeof SERVER !== "undefined" ? SERVER : "localhost:8080");
+var api =
+  "http://" + (typeof SERVER !== "undefined" ? SERVER : "localhost:8080");
 var login = http.post(api + "/api/v1/auth/login", {
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({

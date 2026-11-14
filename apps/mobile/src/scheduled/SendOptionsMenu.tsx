@@ -1,109 +1,67 @@
-import {
-  Modal,
-  Pressable,
-  StyleSheet,
-  View,
-  useWindowDimensions,
-} from "react-native";
-import { BellOff, Clock } from "lucide-react-native";
+import type { RefObject } from "react";
+import { StyleSheet, View } from "react-native";
+import { ArrowUp, BellOff, Clock } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "@/lib/theme";
-import { Text } from "@/ui/Text";
+import { AnchoredMenu } from "@/ui/AnchoredMenu";
 
 export type SendMode = "later" | "silent";
 
 /**
  * The small menu over the send button after a long press: «Send later» and
- * «Send without sound». `anchorY` is where the finger was, so the menu sits
- * just above the composer whatever the keyboard does.
+ * «Send without sound». It hangs from the button itself (measured, not
+ * where the finger was), aligned to its right edge.
  */
 export function SendOptionsMenu({
   visible,
-  anchorY,
+  anchorRef,
   onPick,
   onClose,
 }: {
   visible: boolean;
-  anchorY: number | null;
+  anchorRef: RefObject<View | null>;
   onPick(mode: SendMode): void;
   onClose(): void;
 }) {
   const { t } = useTranslation();
   const theme = useTheme();
-  const { height } = useWindowDimensions();
-  // Prototype `.pop`: right 10px, 16px radius, 5px padding, min-width 216px.
-  const bottom =
-    anchorY !== null && anchorY > 0 ? Math.max(height - anchorY + 28, 80) : 96;
-  const items: { mode: SendMode; label: string; Icon: typeof Clock }[] = [
-    { mode: "later", label: t("scheduledSendLater"), Icon: Clock },
-    { mode: "silent", label: t("scheduledSendSilent"), Icon: BellOff },
-  ];
   return (
-    <Modal
+    <AnchoredMenu
       visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-      statusBarTranslucent
-    >
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={t("close")}
-        style={StyleSheet.absoluteFill}
-        onPress={onClose}
-      />
-      <View
-        testID="send-options"
-        accessibilityViewIsModal
-        accessibilityRole="menu"
-        accessibilityLabel={t("scheduledOptionsLabel")}
-        style={[
-          styles.pop,
-          {
-            bottom,
-            backgroundColor: theme.surface,
-            borderColor: theme.border,
-            boxShadow: theme.shadowFloat,
-          },
-        ]}
-      >
-        {items.map(({ mode, label, Icon }) => (
-          <Pressable
-            key={mode}
-            testID={`send-options-${mode}`}
-            accessibilityRole="menuitem"
-            accessibilityLabel={label}
-            onPress={() => onPick(mode)}
-            style={({ pressed }) => [
-              styles.item,
-              pressed && { backgroundColor: theme.surfaceSelected },
-            ]}
-          >
-            <Icon size={19} color={theme.muted} />
-            <Text size={15}>{label}</Text>
-          </Pressable>
-        ))}
-      </View>
-    </Modal>
+      anchorRef={anchorRef}
+      testID="send-options"
+      accessibilityLabel={t("scheduledOptionsLabel")}
+      onClose={onClose}
+      renderAnchor={() => (
+        <View style={[styles.send, { backgroundColor: theme.primary }]}>
+          <ArrowUp size={20} color={theme.onPrimary} strokeWidth={2.4} />
+        </View>
+      )}
+      items={[
+        {
+          key: "later",
+          label: t("scheduledSendLater"),
+          icon: <Clock size={19} color={theme.muted} />,
+          testID: "send-options-later",
+          onPress: () => onPick("later"),
+        },
+        {
+          key: "silent",
+          label: t("scheduledSendSilent"),
+          icon: <BellOff size={19} color={theme.muted} />,
+          testID: "send-options-silent",
+          onPress: () => onPick("silent"),
+        },
+      ]}
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  pop: {
-    position: "absolute",
-    right: 10,
-    minWidth: 216,
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 5,
-  },
-  item: {
-    flexDirection: "row",
+  send: {
+    flex: 1,
+    borderRadius: 999,
     alignItems: "center",
-    gap: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 11,
-    borderRadius: 11,
-    minHeight: 44,
+    justifyContent: "center",
   },
 });

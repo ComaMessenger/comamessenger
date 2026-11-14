@@ -40,6 +40,13 @@ export async function pickFiles(
     quality: 0.9,
     allowsMultipleSelection: source === "photos",
     selectionLimit: limit,
+    orderedSelection: true,
+    // iOS re-encodes picked videos to H.264 720p: plays everywhere and
+    // keeps a minute of video around 40 MB, under the server's file limit.
+    // Android hands the original over; the size limit is checked after.
+    videoExportPreset: ImagePicker.VideoExportPreset.H264_1280x720,
+    videoQuality: ImagePicker.UIImagePickerControllerQualityType.IFrame960x540,
+    videoMaxDuration: 600,
   };
   const result =
     source === "camera"
@@ -48,9 +55,17 @@ export async function pickFiles(
   if (result.canceled) return [];
   return result.assets.map((asset, index) => ({
     uri: asset.uri,
-    name: asset.fileName ?? `photo-${Date.now()}-${index}.jpg`,
+    name:
+      asset.fileName ??
+      (asset.type === "video"
+        ? `video-${Date.now()}-${index}.mp4`
+        : `photo-${Date.now()}-${index}.jpg`),
     mime:
       asset.mimeType ?? (asset.type === "video" ? "video/mp4" : "image/jpeg"),
     size: sizeOf(asset.uri, asset.fileSize),
+    ...(asset.width > 0 && asset.height > 0
+      ? { width: asset.width, height: asset.height }
+      : {}),
+    ...(asset.duration ? { durationMs: Math.round(asset.duration) } : {}),
   }));
 }

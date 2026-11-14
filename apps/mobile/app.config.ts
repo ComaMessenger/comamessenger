@@ -79,6 +79,26 @@ const config: ExpoConfig = {
         enableBackgroundPlayback: false,
       },
     ],
+    // Videos in chats (phase 6.1): played in the app only, no background
+    // audio and no picture in picture.
+    [
+      "expo-video",
+      { supportsBackgroundPlayback: false, supportsPictureInPicture: false },
+    ],
+    [
+      // «Save to Photos» in the media viewer: adding only, the library is
+      // never read through this module.
+      "expo-media-library",
+      {
+        // The library-reading text stays the image picker's (above).
+        photosPermission:
+          "Coma opens your library so you can attach photos and videos to messages and pick a profile photo.",
+        savePhotosPermission:
+          "Coma saves photos and videos from chats to your library when you ask it to.",
+        // Saving needs no READ_MEDIA_* on Android (Play policy on photo access).
+        granularPermissions: [],
+      },
+    ],
     "@bacons/apple-targets",
     "@react-native-community/datetimepicker",
     "./plugins/withAndroidReleaseSigning",

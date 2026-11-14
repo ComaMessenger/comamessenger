@@ -12,6 +12,18 @@ export async function openAttachment(
   api: MessengerAPI,
   file: FileMetadata,
 ): Promise<void> {
+  const target = await downloadAttachment(api, file);
+  await Sharing.shareAsync(target.uri, {
+    mimeType: file.mime,
+    dialogTitle: file.name,
+  });
+}
+
+/** The attachment in the app's private cache, downloaded once. */
+export async function downloadAttachment(
+  api: MessengerAPI,
+  file: FileMetadata,
+): Promise<File> {
   const directory = new Directory(Paths.cache, "attachments", file.id);
   if (!directory.exists) directory.create({ intermediates: true });
   const target = new File(directory, file.name.replace(/[/\\]/g, "_"));
@@ -24,8 +36,5 @@ export async function openAttachment(
       idempotent: true,
     });
   }
-  await Sharing.shareAsync(target.uri, {
-    mimeType: file.mime,
-    dialogTitle: file.name,
-  });
+  return target;
 }

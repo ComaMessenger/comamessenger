@@ -1,0 +1,68 @@
+# Long press on send: «Send later» / «Send without sound» hang from the send
+# button (above it, its right edge on the button's), over a dimmed screen;
+# a tap outside or a swipe closes the menu. The keyboard stays up.
+# Run after sign-in.yaml: maestro test e2e/send-menu.yaml
+appId: com.comamessenger.app
+---
+- runFlow: open-app.yaml
+- tapOn:
+    id: chat-row-0
+- tapOn:
+    id: composer-input
+- inputText: Меню отправки
+- longPressOn:
+    id: composer-send
+- extendedWaitUntil:
+    visible:
+      id: send-options
+    timeout: 5000
+# The menu hangs from the send button, above the keyboard (the screen
+# under it is hidden from accessibility, so the place is in the screenshot).
+- assertVisible:
+    id: send-options-later
+    above:
+      id: send-options-silent
+- takeScreenshot: send-menu
+# A tap outside closes it; the draft stays.
+- tapOn:
+    point: 30%,30%
+- extendedWaitUntil:
+    notVisible:
+      id: send-options
+    timeout: 3000
+- assertVisible: .*Меню отправки.*
+# A swipe closes it too.
+- longPressOn:
+    id: composer-send
+- extendedWaitUntil:
+    visible:
+      id: send-options
+    timeout: 5000
+- swipe:
+    start: 50%, 40%
+    end: 50%, 60%
+    duration: 300
+- extendedWaitUntil:
+    notVisible:
+      id: send-options
+    timeout: 3000
+# Leave the chat with an empty composer (the draft is kept otherwise and
+# later flows expect the microphone).
+- tapOn:
+    id: composer-input
+- eraseText: 200
+- runFlow:
+    when:
+      notVisible:
+        id: composer-mic
+    commands:
+      - eraseText: 200
+- extendedWaitUntil:
+    visible:
+      id: composer-mic
+    timeout: 5000
+# The draft reaches the server after a pause in typing.
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn:
+    id: conversation-back

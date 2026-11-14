@@ -1,6 +1,5 @@
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Alert, Pressable, StyleSheet, View } from "react-native";
-import { Image } from "expo-image";
 import { FileText } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import {
@@ -10,50 +9,24 @@ import {
 } from "@comamessenger/core";
 import { radius, spacing } from "@comamessenger/tokens";
 import { openAttachment } from "@/files/open";
-import { PhotoViewer } from "@/files/PhotoViewer";
-import { useFileSource } from "@/files/sources";
 import { useTheme } from "@/lib/theme";
 import { Text } from "@/ui/Text";
 import { playableVoice } from "@/voice/model";
 import { VoiceBoundary } from "@/voice/VoiceFeed";
 import { VoiceMessage } from "@/voice/VoiceMessage";
-
-function ImageAttachment({
-  api,
-  file,
-  bleed,
-  onOpen,
-}: {
-  api: MessengerAPI;
-  file: FileMetadata;
-  /** Edge to edge of the bubble: no frame, no rounding of its own. */
-  bleed: boolean;
-  onOpen(): void;
-}) {
-  const theme = useTheme();
-  const source = useFileSource(file.preview_file_id ?? file.id);
-  return (
-    <Pressable
-      accessibilityRole="imagebutton"
-      accessibilityLabel={file.name}
-      onPress={onOpen}
-      style={[
-        styles.image,
-        bleed && styles.imageBleed,
-        { backgroundColor: theme.sidebar, borderColor: theme.border },
-      ]}
-    >
-      {source && (
-        <Image
-          source={source}
-          contentFit="cover"
-          cachePolicy="disk"
-          style={StyleSheet.absoluteFill}
-        />
-      )}
-    </Pressable>
-  );
-}
+import { isVisualMedia, mediaKind, type MediaItem } from "@/media/items";
+import type { MediaMosaic as Mosaic } from "@/media/layout";
+import {
+  MediaMosaic,
+  useMediaMaxWidth,
+  useMediaMosaic,
+} from "@/media/MediaMosaic";
+import {
+  MediaViewerContext,
+  useOpenMedia,
+  type OpenMedia,
+} from "@/media/MediaViewerContext";
+import { MediaViewerHost } from "@/media/MediaViewer";
 
 function FileCard({ api, file }: { api: MessengerAPI; file: FileMetadata }) {
   const { t, i18n } = useTranslation();
@@ -109,7 +82,10 @@ function FileCard({ api, file }: { api: MessengerAPI; file: FileMetadata }) {
 /** How the photos sit in the bubble: edge to edge, and up to which edges. */
 export type ImageBleed = { top: boolean; bottom: boolean };
 
-/** Attachments of one message: voice player, image previews and file cards. */
+/**
+ * Attachments of one message: voice player, a mosaic of photos and videos
+ * (opening the chat's full-screen viewer) and file cards.
+ */
 export function MessageFiles({
   api,
   files,
@@ -117,6 +93,8 @@ export function MessageFiles({
   bleed,
   overlay,
   voiceMeta,
+  mosaic,
+  onLongPress,
 }: {
   api: MessengerAPI;
   files: FileMetadata[];
@@ -128,13 +106,29 @@ export function MessageFiles({
   overlay?: ReactNode;
   /** The time of a voice message, in the player's length row. */
   voiceMeta?: ReactNode;
+  /** The bubble already sized itself to this mosaic. */
+  mosaic?: Mosaic;
+  /** A long press on a photo or video opens the message menu. */
+  onLongPress?(): void;
 }) {
-  const [viewing, setViewing] = useState<FileMetadata | null>(null);
-  const images = files.filter(
-    (file) => file.mime.startsWith("image/") && file.status === "ready",
+  const visual = useMemo(() => files.filter(isVisualMedia), [files]);
+  const others = files.filter((file) => !visual.includes(file));
+  const maxWidth = useMediaMaxWidth();
+  const ownMosaic = useMediaMosaic(visual, maxWidth);
+  const open = useOpenMedia();
+  const fallbackItems = useMemo<MediaItem[]>(
+    () =>
+      visual.map((file) => ({
+        key: file.id,
+        kind: mediaKind(file)!,
+        file,
+        messageID: "",
+        actorID: file.uploader_id,
+        createdAt: file.created_at,
+      })),
+    [visual],
   );
-  const others = files.filter((file) => !images.includes(file));
-  return (
+  const content = (openMedia: OpenMedia | null) => (
     <View style={styles.files}>
       {others.map((file) => {
         // A voice file without valid `voice` data stays a plain attachment.
@@ -153,29 +147,22 @@ export function MessageFiles({
           </VoiceBoundary>
         ) : null;
       })}
-      {images.length > 0 && (
+      {visual.length > 0 && (
         <View
           style={[
-            styles.gallery,
             bleed && styles.galleryBleed,
             bleed?.top && styles.bleedTop,
             bleed?.bottom && styles.bleedBottom,
           ]}
         >
-          {images.map((file) => (
-            <ImageAttachment
-              key={file.id}
-              api={api}
-              file={file}
-              bleed={Boolean(bleed)}
-              onOpen={() => setViewing(file)}
-            />
-          ))}
-          {overlay ? (
-            <View pointerEvents="none" style={styles.overlay}>
-              {overlay}
-            </View>
-          ) : null}
+          <MediaMosaic
+            files={visual}
+            mosaic={mosaic ?? ownMosaic}
+            rounded={!bleed}
+            overlay={overlay}
+            onOpen={(file, origin) => openMedia?.(file.id, origin)}
+            onLongPress={onLongPress}
+          />
         </View>
       )}
       {others
@@ -183,45 +170,23 @@ export function MessageFiles({
         .map((file) => (
           <FileCard key={file.id} api={api} file={file} />
         ))}
-      <PhotoViewer api={api} file={viewing} onClose={() => setViewing(null)} />
     </View>
+  );
+  if (open || visual.length === 0) return content(open);
+  // Outside a chat screen: a viewer of this message's media only.
+  return (
+    <MediaViewerHost items={fallbackItems} authorName={() => ""}>
+      <MediaViewerContext.Consumer>{content}</MediaViewerContext.Consumer>
+    </MediaViewerHost>
   );
 }
 
 const styles = StyleSheet.create({
   files: { gap: spacing[2] },
-  grow: { flex: 1 },
-  gallery: { flexDirection: "row", flexWrap: "wrap", gap: spacing[1] },
   // Bubble padding 11 (sides), 7 (top), 6 (bottom), plus its 1 px border.
-  // A column, so each photo stretches across the widened gallery (a
-  // wrapping row only shifted it left and left a strip on the right).
-  galleryBleed: {
-    flexDirection: "column",
-    // A wrapping container does not stretch its children across.
-    flexWrap: "nowrap",
-    alignSelf: "stretch",
-    marginHorizontal: -12,
-    gap: 2,
-  },
+  galleryBleed: { alignSelf: "stretch", marginHorizontal: -12 },
   bleedTop: { marginTop: -8 },
   bleedBottom: { marginBottom: -7 },
-  imageBleed: {
-    width: undefined,
-    maxWidth: undefined,
-    alignSelf: "stretch",
-    height: 200,
-    borderRadius: 0,
-    borderWidth: 0,
-  },
-  overlay: { position: "absolute", right: 8, bottom: 8 },
-  image: {
-    width: "100%",
-    maxWidth: 280,
-    height: 160,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    overflow: "hidden",
-  },
   card: {
     flexDirection: "row",
     alignItems: "center",
@@ -240,4 +205,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  grow: { flex: 1 },
 });

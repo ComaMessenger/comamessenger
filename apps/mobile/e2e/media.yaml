@@ -1,0 +1,105 @@
+# Photos and videos: the mosaic in the feed and the full-screen viewer —
+# paging, double-tap zoom, the bars and closing with a swipe down.
+# The media come from the seed script (the simulator has no chat media):
+#   node e2e/seed-media.mjs   (COMA_API, COMA_EMAIL, COMA_PASSWORD)
+# Run after sign-in.yaml: maestro test e2e/media.yaml
+appId: com.comamessenger.app
+---
+- runFlow: open-app.yaml
+- tapOn:
+    id: chat-row-0
+- extendedWaitUntil:
+    visible:
+      id: media-mosaic
+    timeout: 15000
+- hideKeyboard:
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: media-feed
+# The last message is the lone wide photo: it opens full screen.
+- tapOn:
+    id: media-tile-0
+    index: -1
+- extendedWaitUntil:
+    visible:
+      id: media-viewer-loaded
+    timeout: 20000
+- assertVisible:
+    id: media-viewer-counter
+- copyTextFrom:
+    id: media-viewer-counter
+- evalScript: ${output.last = maestro.copiedText}
+- takeScreenshot: media-viewer
+# Paging back (a swipe to the right) shows the previous item: the video.
+- swipe:
+    start: 15%, 50%
+    end: 90%, 50%
+    duration: 300
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertNotVisible: ${output.last}
+- extendedWaitUntil:
+    visible:
+      id: media-video-controls
+    timeout: 15000
+- takeScreenshot: media-viewer-video
+# And forward again to the photo.
+- swipe:
+    start: 90%, 50%
+    end: 15%, 50%
+    duration: 300
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible: ${output.last}
+# A double tap zooms in: the bars step aside; another one zooms out.
+- doubleTapOn:
+    id: media-viewer-page
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertNotVisible:
+    id: media-viewer-counter
+- takeScreenshot: media-viewer-zoomed
+- doubleTapOn:
+    id: media-viewer-page
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible:
+    id: media-viewer-counter
+# A single tap hides the bars, the next one brings them back.
+- tapOn:
+    id: media-viewer-page
+- assertNotVisible:
+    id: media-viewer-counter
+- tapOn:
+    id: media-viewer-page
+- assertVisible:
+    id: media-viewer-counter
+# A swipe down closes the viewer.
+- swipe:
+    start: 50%, 45%
+    end: 50%, 85%
+    duration: 250
+- extendedWaitUntil:
+    notVisible:
+      id: media-viewer
+    timeout: 5000
+# «Go to message» from the first photo of the mosaic.
+- scrollUntilVisible:
+    element: (Фото|Photo), photo-square.jpg
+    direction: UP
+    centerElement: true
+    timeout: 20000
+- tapOn: (Фото|Photo), photo-square.jpg
+- extendedWaitUntil:
+    visible:
+      id: media-viewer-goto
+    timeout: 10000
+- tapOn:
+    id: media-viewer-goto
+- extendedWaitUntil:
+    notVisible:
+      id: media-viewer
+    timeout: 5000
+- tapOn:
+    id: conversation-back

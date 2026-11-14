@@ -36,4 +36,3 @@ export const confirmationKey = {
   denied: "acConfirmDenied",
   expired: "acConfirmExpired",
 } as const;
-

@@ -74,6 +74,17 @@ export function IconButton({
       hitSlop={slop}
       onPress={onPress}
       onLongPress={onLongPress}
+      // A long press is reachable from a screen reader's actions too.
+      accessibilityActions={
+        onLongPress ? [{ name: "longpress", label: hint }] : undefined
+      }
+      onAccessibilityAction={
+        onLongPress
+          ? (event) => {
+              if (event.nativeEvent.actionName === "longpress") onLongPress();
+            }
+          : undefined
+      }
       style={({ pressed }) => [
         styles.button,
         {

@@ -6,6 +6,9 @@ import type {
 } from "@comamessenger/core";
 import { refreshTokenStore } from "./session";
 import { clearVoiceData } from "@/voice/outbox";
+import { clearMediaFacts } from "@/media/facts";
+import { clearMediaSends } from "@/media/outbox";
+import { cancelAllUploads } from "@/files/uploadJobs";
 
 // Append-only: each entry upgrades the schema by one `user_version`.
 const migrations = [
@@ -73,6 +76,9 @@ async function setMeta(key: string, value: string | null): Promise<void> {
 /** Drops everything tied to the signed-in account: realtime position and unsent messages. */
 export async function clearUserData(): Promise<void> {
   clearVoiceData();
+  clearMediaFacts();
+  clearMediaSends();
+  cancelAllUploads();
   const db = await database;
   await db.withExclusiveTransactionAsync(async (tx) => {
     await tx.runAsync("DELETE FROM outbox");
