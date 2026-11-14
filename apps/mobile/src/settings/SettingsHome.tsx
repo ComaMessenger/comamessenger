@@ -21,11 +21,21 @@ import {
  * «Настройки»: personal pages, security and — by permissions — the workspace.
  * A section the user may not open is not listed at all.
  */
-export function SettingsHome() {
+export function SettingsHome({
+  workspaceExtra = [],
+}: {
+  /** Workspace rows owned by other modules, listed before the audit log. */
+  workspaceExtra?: SettingsLink[];
+}) {
   const { t } = useTranslation();
   const theme = useTheme();
   const { user } = useSignedIn();
-  const workspace = workspaceLinks(user);
+  const own = workspaceLinks(user);
+  const audit = own.findIndex((link) => link.id === "audit");
+  const workspace =
+    audit < 0
+      ? [...own, ...workspaceExtra]
+      : [...own.slice(0, audit), ...workspaceExtra, ...own.slice(audit)];
   const links = (items: SettingsLink[], hints = false) =>
     items.map((item, index) => (
       <View key={item.id}>
