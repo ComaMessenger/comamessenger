@@ -1,0 +1,1143 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Coma — рабочие функции, прототип</title></head><body>
+<!-- Прототип рабочих (не ИИ) функций мобильного Coma. Токены и шаблоны — из design/prototypes/messenger-mobile. ?v=<вкладка или номер>&theme=dark -->
+<style>
+  .lab { font-family: var(--font-sans, -apple-system, "Segoe UI", Roboto, sans-serif); color: var(--foreground, #202023); }
+  .lab * { box-sizing: border-box; }
+  .bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+  .seg { display: flex; gap: 2px; flex-wrap: wrap; padding: 3px; border-radius: 10px; background: var(--secondary, #f0f0f3); }
+  .seg button, .tgl { font: inherit; font-size: 13px; border: 0; background: transparent; color: var(--muted-foreground, #686873); padding: 6px 11px; border-radius: 8px; cursor: pointer; }
+  .seg button[aria-selected="true"] { background: var(--card, #fff); color: var(--foreground, #202023); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  .tgl { margin-left: auto; border: 1px solid var(--border, #e5e5e9); }
+  .view { display: none; }
+  .view.on { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 22px 18px; justify-items: center; }
+  .slot { width: 100%; max-width: 340px; }
+  .cap { font-size: 12.5px; line-height: 1.45; color: var(--muted-foreground, #686873); margin-top: 10px; }
+  .cap b { color: var(--foreground, #202023); font-weight: 600; }
+
+  /* ---------- Coma tokens ---------- */
+  .coma {
+    --canvas:#f6f6f7; --surface:#fff; --raised:#fff; --selected:#f0f0f3; --fg:#202023; --muted:#686873; --border:#e5e5e9; --border-strong:#d2d2d9;
+    --primary:#174586; --primary-soft:#edf3fb; --on-primary:#fff; --action:#252528; --on-action:#fff;
+    --danger:#c43245; --danger-soft:#fff0f1; --success:#18794e; --success-soft:#edf8f1; --warning:#9c650b; --warning-soft:#fff8e7;
+    --own:#174586; --own-fg:#fff; --own-muted:rgba(255,255,255,.72); --own-track:rgba(255,255,255,.34);
+    --overlay:rgba(20,20,26,.36); --shadow:0 8px 24px rgba(20,20,30,.10); --mascot-body:#174586; --mascot-feet:#242831; --mascot-plate:#fff;
+    --f-blue:#2f6fca; --f-violet:#7456c9; --f-green:#2b7754; --f-orange:#ac5a25; --f-pink:#ae457b; --f-teal:#227770;
+    --a1:#e5eee6; --a1f:#4d6b54; --a2:#e8edf4; --a2f:#4c6280; --a3:#ece7f5; --a3f:#6f598e; --a4:#f3e8e9; --a4f:#8e505b; --a5:#f4ebde; --a5f:#806039;
+    color: var(--fg); font-size: 15px; line-height: 1.35;
+  }
+  .coma[data-theme="dark"] {
+    --canvas:#151517; --surface:#1d1d20; --raised:#27272c; --selected:#2b2b30; --fg:#f0f0f2; --muted:#a0a0aa; --border:#323237; --border-strong:#46464f;
+    --primary:#86aff0; --primary-soft:#243349; --on-primary:#172132; --action:#eeeeef; --on-action:#222225;
+    --danger:#f0717f; --danger-soft:#3a2126; --success:#5fc594; --success-soft:#1c3327; --warning:#e0a94a; --warning-soft:#3a2f1a;
+    --own:#2c4a78; --own-fg:#f3f6fb; --own-muted:rgba(243,246,251,.7); --own-track:rgba(243,246,251,.3);
+    --overlay:rgba(0,0,0,.55); --shadow:0 8px 24px rgba(0,0,0,.4); --mascot-body:#86aff0; --mascot-feet:#fff; --mascot-plate:#151517;
+    --f-blue:#7fb0f2; --f-violet:#ab97ee; --f-green:#6fc59c; --f-orange:#e59a68; --f-pink:#e58bb7; --f-teal:#63c4bb;
+    --a1:#26332a; --a1f:#a6c8ae; --a2:#262e3a; --a2f:#a9bedb; --a3:#2f2a3b; --a3f:#c3b3e2; --a4:#3a282b; --a4f:#e2adb5; --a5:#3a3023; --a5f:#dcbf94;
+  }
+  .phone { position: relative; width: 100%; height: 690px; border-radius: 38px; border: 1px solid var(--border-strong); background: var(--canvas); overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow); }
+  .status { display: flex; justify-content: space-between; padding: 12px 26px 4px; font-size: 13px; font-weight: 600; flex: none; }
+  .status i { display: inline-block; width: 22px; height: 11px; border: 1.5px solid var(--fg); border-radius: 4px; position: relative; opacity: .8; }
+  .status i::after { content: ""; position: absolute; inset: 1.5px 5px 1.5px 1.5px; background: var(--fg); border-radius: 1.5px; }
+  .ic { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  .ib { width: 40px; height: 40px; border-radius: 20px; border: 0; background: transparent; color: var(--fg); display: grid; place-items: center; cursor: pointer; flex: none; padding: 0; }
+  .ib.soft { background: var(--selected); }
+  .ib.pri { background: var(--primary); color: var(--on-primary); }
+  .ib.dng { color: var(--danger); }
+  .av { width: 48px; height: 48px; border-radius: 16px; display: grid; place-items: center; font-weight: 600; font-size: 16px; flex: none; position: relative; }
+  .av.round { border-radius: 50%; } .av.s { width: 30px; height: 30px; border-radius: 10px; font-size: 11.5px; } .av.s.round { border-radius: 50%; }
+  .av.m { width: 36px; height: 36px; border-radius: 12px; font-size: 13px; }
+  .av .on { position: absolute; right: -2px; bottom: -2px; width: 13px; height: 13px; border-radius: 50%; background: var(--success); border: 2.5px solid var(--canvas); }
+  .c1{background:var(--a1);color:var(--a1f)}.c2{background:var(--a2);color:var(--a2f)}.c3{background:var(--a3);color:var(--a3f)}.c4{background:var(--a4);color:var(--a4f)}.c5{background:var(--a5);color:var(--a5f)}
+  .cag{background:var(--primary-soft);color:var(--primary)}
+
+  /* chat list */
+  .top { display: flex; align-items: center; gap: 8px; padding: 6px 14px 8px; flex: none; }
+  .top h1 { font-size: 22px; font-weight: 700; margin: 0; flex: 1; letter-spacing: -.01em; }
+  .plate { width: 34px; height: 34px; border-radius: 11px; background: var(--mascot-plate); border: 1px solid var(--border); display: grid; place-items: center; }
+  .search { margin: 0 14px 10px; height: 38px; border-radius: 12px; background: var(--selected); display: flex; align-items: center; gap: 8px; padding: 0 12px; color: var(--muted); font-size: 15px; flex: none; }
+  .search .ic { width: 18px; height: 18px; }
+  .folders { display: flex; gap: 6px; padding: 0 14px 10px; overflow-x: auto; flex: none; scrollbar-width: none; border-bottom: 1px solid var(--border); }
+  .folders::-webkit-scrollbar { display: none; }
+  .fd { font: inherit; font-size: 14px; font-weight: 500; white-space: nowrap; height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); display: flex; align-items: center; gap: 6px; cursor: pointer; flex: none; }
+  .fd[aria-selected="true"] { background: var(--action); color: var(--on-action); border-color: var(--action); }
+  .fd .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .fd .n { font-size: 12px; font-weight: 600; opacity: .8; }
+  .fd.add { width: 34px; padding: 0; justify-content: center; border-style: dashed; }
+  .fd.add .ic { width: 16px; height: 16px; }
+  .list { flex: 1; overflow-y: auto; scrollbar-width: none; }
+  .list::-webkit-scrollbar, .feed::-webkit-scrollbar, .sheet::-webkit-scrollbar { display: none; }
+  .row { display: flex; gap: 12px; padding: 9px 14px; align-items: center; }
+  .row .bd { flex: 1; min-width: 0; }
+  .row .l1 { display: flex; align-items: baseline; gap: 6px; }
+  .row .nm { font-weight: 600; font-size: 15.5px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .tm { font-size: 12px; color: var(--muted); flex: none; }
+  .row .l2 { display: flex; gap: 6px; align-items: center; margin-top: 2px; }
+  .row .pv { color: var(--muted); font-size: 14px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .pv em { font-style: normal; color: var(--fg); } .row .pv .dr { color: var(--danger); }
+  .row .pv .ic, .row .mk .ic { width: 14px; height: 14px; vertical-align: -2px; }
+  .bdg { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--primary); color: var(--on-primary); font-size: 12px; font-weight: 700; display: grid; place-items: center; flex: none; }
+  .bdg.mute { background: var(--border-strong); color: var(--fg); } .bdg.at { padding: 0 4px; }
+  .mk { color: var(--muted); flex: none; }
+  .tag { font-size: 10.5px; font-weight: 600; letter-spacing: .02em; padding: 1px 5px; border-radius: 5px; background: var(--primary-soft); color: var(--primary); flex: none; }
+  .tabs { display: flex; border-top: 1px solid var(--border); background: var(--surface); padding: 6px 6px 18px; flex: none; }
+  .tabs div { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; font-weight: 500; color: var(--muted); position: relative; }
+  .tabs div.on { color: var(--primary); }
+  .tabs .pip { position: absolute; top: -2px; left: calc(50% + 6px); min-width: 16px; height: 16px; border-radius: 8px; background: var(--danger); color: #fff; font-size: 10px; font-weight: 700; display: grid; place-items: center; padding: 0 4px; }
+  .fab { position: absolute; right: 16px; bottom: 86px; width: 52px; height: 52px; border-radius: 18px; background: var(--primary); color: var(--on-primary); display: grid; place-items: center; box-shadow: var(--shadow); }
+
+  /* sheets */
+  .dim { position: absolute; inset: 0; background: var(--overlay); z-index: 5; }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--surface); border-radius: 24px 24px 0 0; padding: 8px 16px 22px; max-height: 88%; overflow-y: auto; scrollbar-width: none; }
+  .grab { width: 36px; height: 4px; border-radius: 2px; background: var(--border-strong); margin: 0 auto 12px; }
+  .sheet h2 { font-size: 17px; font-weight: 700; margin: 0 0 12px; display: flex; align-items: center; }
+  .sheet h2 span { flex: 1; } .sheet h2 a { font-size: 15px; font-weight: 600; color: var(--primary); cursor: pointer; }
+  .lbl { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 14px 0 7px; }
+  .field { height: 44px; border-radius: 12px; border: 1px solid var(--border-strong); background: var(--surface); display: flex; align-items: center; padding: 0 13px; font-size: 16px; }
+  .field.focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+  .sw { display: flex; gap: 10px; } .sw i { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: #fff; }
+  .sw i.sel { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px currentColor; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 14px; height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid var(--border); display: flex; align-items: center; gap: 6px; color: var(--fg); background: var(--surface); }
+  .chip.on { background: var(--primary-soft); border-color: transparent; color: var(--primary); font-weight: 600; }
+  .chip .ic { width: 15px; height: 15px; }
+  .opt { display: flex; align-items: center; gap: 12px; padding: 7px 0; font-size: 15px; }
+  .opt .g { flex: 1; min-width: 0; } .opt small { display: block; color: var(--muted); font-size: 13px; }
+  .cb { width: 22px; height: 22px; border-radius: 7px; border: 1.5px solid var(--border-strong); display: grid; place-items: center; flex: none; color: var(--on-primary); }
+  .cb.on { background: var(--primary); border-color: var(--primary); } .cb .ic { width: 14px; height: 14px; stroke-width: 2.6; }
+  .btn { height: 46px; border-radius: 14px; border: 0; font: inherit; font-size: 16px; font-weight: 600; background: var(--action); color: var(--on-action); width: 100%; margin-top: 14px; cursor: pointer; }
+  .btn { white-space: nowrap; } .btn.sec { background: var(--selected); color: var(--fg); } .btn.sm { height: 34px; font-size: 14px; border-radius: 10px; width: auto; padding: 0 13px; margin: 0; }
+  .btn.pri { background: var(--primary); color: var(--on-primary); }
+  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .tile { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); text-align: center; }
+  .tile i { width: 54px; height: 54px; border-radius: 18px; background: var(--selected); color: var(--fg); display: grid; place-items: center; }
+  .tile i.ac { background: var(--primary-soft); color: var(--primary); }
+  .ph { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 14px; }
+  .ph b { aspect-ratio: 1; border-radius: 10px; display: block; }
+
+  /* conversation */
+  .chead { display: flex; align-items: center; gap: 8px; padding: 2px 8px 8px; border-bottom: 1px solid var(--border); background: var(--surface); flex: none; }
+  .chead .t { flex: 1; min-width: 0; } .chead .t b { display: block; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .chead .t small { color: var(--muted); font-size: 12.5px; }
+  .strip { display: flex; align-items: center; gap: 8px; padding: 7px 14px; font-size: 13px; background: var(--surface); border-bottom: 1px solid var(--border); color: var(--muted); flex: none; cursor: pointer; }
+  .strip .ic { width: 16px; height: 16px; color: var(--primary); } .strip b { color: var(--fg); font-weight: 600; } .strip span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .feed { flex: 1; overflow-y: auto; padding: 10px 10px 6px; display: flex; flex-direction: column; gap: 3px; scrollbar-width: none; }
+  .day { align-self: center; font-size: 12px; font-weight: 600; color: var(--muted); background: var(--selected); border-radius: 10px; padding: 3px 10px; margin: 4px 0 8px; }
+  .msg { display: flex; gap: 7px; align-items: flex-end; max-width: 86%; margin-top: 5px; }
+  .msg.me { align-self: flex-end; }
+  .bub { background: var(--surface); border: 1px solid var(--border); border-radius: 18px 18px 18px 6px; padding: 7px 11px 6px; min-width: 0; }
+  .me .bub { background: var(--own); border-color: transparent; color: var(--own-fg); border-radius: 18px 18px 6px 18px; }
+  .who { font-size: 12.5px; font-weight: 600; margin-bottom: 1px; display: flex; gap: 5px; align-items: center; }
+  .meta { font-size: 11px; color: var(--muted); float: right; margin: 5px 0 -1px 10px; display: flex; gap: 3px; align-items: center; }
+  .me .meta { color: var(--own-muted); } .meta .ic { width: 14px; height: 14px; }
+  .rx { display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; clear: both; }
+  .rx span { font-size: 12.5px; padding: 2px 8px; border-radius: 11px; background: var(--selected); font-weight: 600; } .rx span.my { background: var(--primary-soft); color: var(--primary); }
+  .quote { border-left: 3px solid var(--primary); padding: 1px 0 1px 8px; margin-bottom: 4px; font-size: 13px; color: var(--muted); } .quote b { display: block; color: var(--primary); font-size: 12.5px; }
+  .me .quote { border-color: var(--own-fg); color: var(--own-muted); } .me .quote b { color: var(--own-fg); }
+  .voice { display: flex; align-items: center; gap: 10px; width: 214px; max-width: 100%; }
+  .vb { flex: 1; min-width: 0; }
+  .vt { width: 28px; height: 28px; border-radius: 50%; border: 0; padding: 0; background: var(--selected); color: var(--muted); display: grid; place-items: center; flex: none; align-self: flex-start; margin-top: 2px; } .vt .ic { width: 15px; height: 15px; }
+  .vt.on { background: var(--primary-soft); color: var(--primary); } .me .vt { background: var(--own-track); color: var(--own-fg); }
+  .nd { width: 6px; height: 6px; border-radius: 50%; background: var(--primary); } .me .nd { background: var(--own-fg); }
+  .voice .pl { width: 42px; height: 42px; border-radius: 50%; background: var(--primary); color: var(--on-primary); display: grid; place-items: center; flex: none; cursor: pointer; }
+  .me .voice .pl { background: var(--own-fg); color: var(--own); }
+  .voice .pl .ic { width: 18px; height: 18px; fill: currentColor; stroke: none; }
+  .wave { display: flex; align-items: center; gap: 2px; height: 24px; flex: 1; overflow: hidden; }
+  .wave i { width: 2.500px; border-radius: 2px; background: var(--muted); opacity: .4; flex: none; } .wave i.p { background: var(--primary); opacity: 1; }
+  .me .wave i { background: var(--own-fg); } .me .wave i.p { background: var(--own-fg); }
+  .vmeta { display: flex; gap: 6px; align-items: center; font-size: 11.500px; color: var(--muted); margin-top: 2px; font-variant-numeric: tabular-nums; } .vmeta .tm { margin-left: auto; display: flex; gap: 3px; align-items: center; } .vmeta .tm .ic { width: 14px; height: 14px; } .me .vmeta { color: var(--own-muted); }
+  .spd { font-weight: 700; padding: 1px 6px; border-radius: 8px; background: var(--selected); color: var(--fg); font-size: 11px; } .me .spd { background: var(--own-track); color: var(--own-fg); }
+  .tr { font-size: 13.5px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); color: var(--fg); clear: both; } .tr small { display: block; font-size: 11px; color: var(--muted); font-weight: 600; margin-bottom: 1px; }
+  .card { border: 1px solid var(--border); border-radius: 12px; padding: 10px; margin-top: 6px; background: var(--canvas); clear: both; }
+  .card b { font-size: 14px; } .card p { margin: 2px 0 8px; font-size: 13px; color: var(--muted); }
+  .prog { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; margin-bottom: 9px; } .prog i { display: block; height: 100%; width: 78%; background: var(--success); border-radius: 3px; }
+  .card .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+  .sched { align-self: flex-end; max-width: 86%; margin-top: 5px; }
+  .sched .bub { background: transparent; border: 1.5px dashed var(--border-strong); border-radius: 18px 18px 6px 18px; color: var(--fg); }
+  .sched .when { font-size: 11.5px; color: var(--primary); font-weight: 600; display: flex; gap: 4px; align-items: center; margin-top: 3px; } .sched .when .ic { width: 13px; height: 13px; }
+
+  .phone.white { background: var(--surface); } .phone.white .av .on { border-color: var(--surface); }
+  .phone:has(.chead) .status, .phone.white .status, .phone.white .top { background: var(--surface); }
+  .thr { display: flex; align-items: center; gap: 7px; margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--border); clear: both; font-size: 12px; color: var(--muted); cursor: pointer; }
+  .thr b { color: var(--primary); font-size: 13px; font-weight: 600; white-space: nowrap; } .thr > span:not(.stack) { white-space: nowrap; } .thr > .ic { width: 15px; height: 15px; margin-left: auto; }
+  .stack { display: flex; } .stack .av { width: 22px; height: 22px; border-radius: 50%; font-size: 9px; box-shadow: 0 0 0 2px var(--surface); margin-left: -5px; } .stack .av:first-child { margin-left: 0; }
+  .meta .star { color: var(--warning); fill: currentColor; width: 12px; height: 12px; }
+  .ctx { position: absolute; inset: 0; z-index: 6; background: var(--overlay); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-end; gap: 8px; padding: 0 10px 20px; }
+  .ctx .msg { margin: 0; }
+  .menu { width: 272px; background: var(--raised); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow); padding: 5px; }
+  .menu .qr { display: flex; justify-content: space-between; padding: 3px 3px 8px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
+  .menu .qr span { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 22px; } .menu .qr span.my { background: var(--primary-soft); }
+  .menu .qr span.mo { border: 1px dashed var(--border-strong); color: var(--muted); } .menu .qr .ic { width: 17px; height: 17px; }
+  .mi { display: flex; align-items: center; gap: 12px; height: 39px; padding: 0 10px; border-radius: 10px; font-size: 15px; } .mi .ic { width: 19px; height: 19px; color: var(--muted); }
+  .mi.d, .mi.d .ic { color: var(--danger); } .mi small { margin-left: auto; color: var(--muted); font-size: 12.500px; }
+  .md { height: 1px; background: var(--border); margin: 4px 0; }
+  .troot { background: var(--surface); padding: 12px 14px; border-bottom: 1px solid var(--border); flex: none; }
+  .troot .h { display: flex; gap: 9px; align-items: center; margin-bottom: 6px; } .troot .h b { font-size: 14.500px; } .troot .h small { color: var(--muted); font-size: 12px; display: block; }
+  .tdiv { display: flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 600; color: var(--muted); margin: 4px 4px 2px; } .tdiv::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  .also { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); padding: 0 6px 7px; } .also .cb { width: 18px; height: 18px; border-radius: 6px; }
+  .imp { display: flex; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .imp .bd { flex: 1; min-width: 0; } .imp .l1 { display: flex; gap: 6px; align-items: baseline; } .imp .l1 b { font-size: 14.500px; } .imp .l1 span { margin-left: auto; font-size: 12px; color: var(--muted); flex: none; }
+  .imp .ch { font-size: 12.500px; color: var(--primary); font-weight: 500; margin-bottom: 3px; } .imp p { margin: 0; font-size: 14.500px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .imp .fl { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; padding: 5px 9px; border-radius: 10px; background: var(--selected); font-size: 13px; } .imp .fl .ic { width: 15px; height: 15px; color: var(--muted); }
+  .tabs.five div { font-size: 10.500px; }
+
+  /* composer */
+  .cmp { flex: none; padding: 6px 8px 20px; background: var(--canvas); position: relative; }
+  .rep { display: flex; align-items: center; gap: 8px; margin: 0 4px 6px 48px; padding: 6px 6px 6px 10px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); font-size: 13px; }
+  .rep .q { flex: 1; min-width: 0; border-left: 3px solid var(--primary); padding-left: 8px; } .rep .q b { display: block; color: var(--primary); font-size: 12.5px; } .rep .q span { color: var(--muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rep .ib { width: 28px; height: 28px; } .rep .ic { width: 16px; height: 16px; }
+  .cl { display: flex; align-items: flex-end; gap: 6px; }
+  .inp { flex: 1; min-width: 0; min-height: 40px; border-radius: 20px; background: var(--surface); border: 1px solid var(--border); display: flex; align-items: flex-end; padding: 0 4px 0 14px; box-shadow: 0 1px 2px rgba(20,20,30,.04); }
+  .inp:focus-within { border-color: var(--border-strong); }
+  .inp textarea { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--fg); font: inherit; font-size: 16px; line-height: 20px; padding: 9px 0; resize: none; height: 38px; max-height: 98px; }
+  .inp textarea::placeholder, .inp .phd { color: var(--muted); }
+  .inp .txt { flex: 1; font-size: 16px; line-height: 20px; padding: 9px 0; }
+  .inp .ib { width: 36px; height: 38px; color: var(--muted); }
+  .cmp .ib.pri, .cmp .ib.soft { transition: transform .12s; } .cmp .ib:active { transform: scale(.92); }
+  .rec { flex: 1; height: 40px; border-radius: 20px; background: var(--surface); border: 1px solid var(--border); display: flex; align-items: center; gap: 8px; padding: 0 12px; min-width: 0; }
+  .rec .d { width: 9px; height: 9px; border-radius: 50%; background: var(--danger); animation: pulse 1.1s infinite; flex: none; }
+  .rec .tm { font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 600; flex: none; }
+  .rec .hint { color: var(--muted); font-size: 13.5px; white-space: nowrap; display: flex; align-items: center; gap: 2px; margin-left: auto; } .rec .hint .ic { width: 15px; height: 15px; }
+  @keyframes pulse { 50% { opacity: .25; } }
+  .micbig { width: 62px; height: 62px; border-radius: 50%; background: var(--primary); color: var(--on-primary); display: grid; place-items: center; margin: -11px -9px -11px -5px; box-shadow: 0 0 0 9px var(--primary-soft); flex: none; }
+  .micbig .ic { width: 26px; height: 26px; }
+  .lockp { position: absolute; right: 13px; bottom: 98px; width: 40px; padding: 9px 0 7px; border-radius: 20px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--muted); }
+  .lockp .ic { width: 18px; height: 18px; }
+  .pop { position: absolute; right: 10px; bottom: 70px; z-index: 7; background: var(--raised); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); padding: 5px; min-width: 216px; }
+  .pop div { display: flex; align-items: center; gap: 10px; padding: 10px 11px; border-radius: 11px; font-size: 15px; cursor: pointer; } .pop div:hover { background: var(--selected); }
+  .pop .ic { width: 19px; height: 19px; color: var(--muted); }
+  .q2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .qo { border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; cursor: pointer; background: var(--surface); } .qo b { display: block; font-size: 15px; } .qo small { color: var(--muted); font-size: 13px; }
+  .qo.sel { border-color: var(--primary); background: var(--primary-soft); }
+  .sitem { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 11px 12px; margin: 0 12px 10px; }
+  .sitem .w { font-size: 12.5px; font-weight: 600; color: var(--primary); display: flex; align-items: center; gap: 5px; margin-bottom: 4px; } .sitem .w .ic { width: 14px; height: 14px; } .sitem .w span { margin-left: auto; color: var(--muted); font-weight: 500; }
+  .sitem p { margin: 0 0 9px; font-size: 14.5px; } .sitem .acts { display: flex; gap: 6px; }
+  .sect { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; padding: 14px 16px 8px; }
+
+  /* design system */
+  .ds { display: none; } .ds.on { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 14px; }
+  .pn { background: var(--canvas); border: 1px solid var(--border); border-radius: 18px; padding: 16px; }
+  .pn h3 { margin: 0 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; }
+  .cols { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; } .cols div { font-size: 11px; color: var(--muted); } .cols i { display: block; height: 38px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 4px; }
+  .ty div { display: flex; align-items: baseline; gap: 10px; padding: 4px 0; } .ty small { width: 74px; flex: none; color: var(--muted); font-size: 11.5px; }
+  .rw { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  .rd { display: flex; gap: 10px; align-items: flex-end; } .rd div { font-size: 11px; color: var(--muted); text-align: center; } .rd i { display: block; width: 46px; height: 46px; background: var(--surface); border: 1.5px solid var(--border-strong); margin-bottom: 4px; }
+  @media (prefers-reduced-motion: reduce) { .rec .d { animation: none; } }
+
+  /* ================= workplace additions ================= */
+  body { margin: 0; padding: 16px; background: var(--background, #fafafa); }
+  .lab .bar { position: sticky; top: 0; z-index: 20; background: var(--background, #fafafa); padding: 6px 0; }
+  .notes { grid-column: 1 / -1; justify-self: stretch; max-width: 1180px; width: 100%; margin: 6px auto 0; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 14px 18px; font-size: 13.5px; line-height: 1.5; color: var(--fg); }
+  .notes h4 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; }
+  .notes p { margin: 3px 0; } .notes b { font-weight: 600; }
+  .vlabel { font-size: 12px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: .05em; margin: 0 0 8px 6px; }
+  .coma .view.on { padding-bottom: 10px; }
+
+  .sysl { align-self: center; text-align: center; font-size: 12.5px; color: var(--muted); padding: 4px 24px; margin: 4px 0; line-height: 1.35; }
+  .sysl b { color: var(--fg); font-weight: 600; }
+  .doc { display: flex; gap: 9px; align-items: center; padding: 8px 10px; border-radius: 12px; background: var(--selected); margin: 6px 0 2px; font-size: 13px; }
+  .doc b { display: block; font-size: 13.5px; } .doc small { color: var(--muted); font-size: 12px; }
+  .me .doc { background: var(--own-track); } .me .doc small { color: var(--own-muted); }
+  .me .bub.obj { background: var(--surface); border: 1px solid var(--border); color: var(--fg); }
+  .me .bub.obj .meta { color: var(--muted); }
+  .bub.obj { min-width: 250px; }
+  .warnc { color: var(--warning); } .dngc { color: var(--danger); } .okc { color: var(--success); }
+
+  /* acknowledgement */
+  .ack { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); clear: both; }
+  .me .ack { border-color: var(--own-track); }
+  .ackh { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--warning); }
+  .ackh .ic { width: 15px; height: 15px; }
+  .ackbtn { margin-top: 8px; width: 100%; height: 40px; border-radius: 12px; border: 0; background: var(--primary); color: var(--on-primary); font: inherit; font-weight: 600; font-size: 15px; display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; }
+  .ackbtn .ic { width: 18px; height: 18px; stroke-width: 2.3; }
+  .ackdone { margin-top: 8px; display: flex; gap: 6px; align-items: center; font-size: 13.5px; font-weight: 600; color: var(--success); background: var(--success-soft); border-radius: 10px; padding: 8px 10px; }
+  .ackdone .ic { width: 16px; height: 16px; stroke-width: 2.4; }
+  .acs { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .acount { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+  .acount .g { flex: 1; } .acount .ic { width: 16px; height: 16px; }
+  .trk { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; margin-top: 7px; }
+  .trk i { display: block; height: 100%; background: var(--success); border-radius: 3px; transition: width .35s; }
+  .me .trk { background: var(--own-track); } .me .trk i { background: var(--own-fg); }
+  .trk.big { height: 8px; border-radius: 4px; margin: 8px 16px 4px; }
+  .flag { display: flex; align-items: center; gap: 8px; margin: 0 4px 6px; white-space: nowrap; padding: 5px 5px 5px 10px; border-radius: 12px; background: var(--warning-soft); color: var(--warning); font-size: 13px; font-weight: 600; }
+  .flag > .ic { width: 16px; height: 16px; } .flag > span { flex: 1; }
+  .flag .ib { width: 28px; height: 28px; color: var(--warning); } .flag .ib .ic { width: 15px; height: 15px; }
+  .chip2 { font: inherit; font-size: 12.5px; font-weight: 600; border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 9px; padding: 3px 8px; cursor: pointer; white-space: nowrap; }
+  .strip.warn .ic { color: var(--warning); } .strip.warn { background: var(--warning-soft); color: var(--warning); } .strip.warn b { color: var(--warning); }
+  .need { display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; font-weight: 700; color: var(--warning); background: var(--warning-soft); border-radius: 8px; padding: 2px 7px; flex: none; }
+  .need .ic { width: 13px; height: 13px; stroke-width: 2.3; }
+  .ackq { margin: 12px 14px 4px; padding: 10px 12px; border-radius: 14px; background: var(--canvas); border: 1px solid var(--border); font-size: 14px; }
+  .ackq small { display: block; color: var(--muted); font-size: 12px; margin-bottom: 2px; }
+  .bigc { padding: 10px 16px 0; font-size: 15px; color: var(--muted); } .bigc b { font-size: 28px; color: var(--fg); font-weight: 700; letter-spacing: -.02em; margin-right: 4px; }
+  .pseg { display: flex; margin: 10px 14px 4px; padding: 3px; border-radius: 11px; background: var(--selected); gap: 2px; flex: none; }
+  .pseg button { flex: 1; font: inherit; font-size: 13.5px; border: 0; background: transparent; color: var(--muted); padding: 7px 6px; border-radius: 9px; cursor: pointer; }
+  .pseg button[aria-selected="true"] { background: var(--surface); color: var(--fg); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  .foot { padding: 0 14px 22px; background: var(--surface); border-top: 1px solid var(--border); flex: none; }
+  .btn:disabled { opacity: .7; cursor: default; font-size: 14px; }
+  .btn .ic { width: 18px; height: 18px; vertical-align: -3px; margin-right: 5px; }
+  .row .rt { font-size: 12px; color: var(--muted); flex: none; }
+  .row.dimr .nm { color: var(--muted); }
+
+  /* polls */
+  .pk { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--muted); margin: 2px 0 3px; }
+  .pk .ic { width: 15px; height: 15px; } .pk .pill { margin-left: auto; }
+  .pq { font-weight: 600; font-size: 15.5px; margin-bottom: 4px; line-height: 1.3; }
+  .po { position: relative; border: 1px solid var(--border); border-radius: 12px; padding: 0 10px; height: 42px; margin-top: 6px; display: flex; align-items: center; gap: 9px; cursor: pointer; overflow: hidden; font-size: 14.5px; background: var(--surface); }
+  .po > * { position: relative; z-index: 1; }
+  .po .fb { position: absolute; inset: 0 auto 0 0; background: var(--selected); z-index: 0; transition: width .4s; border-radius: 0; }
+  .po.sel .fb { background: var(--primary-soft); }
+  .po .rd { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--border-strong); flex: none; display: grid; place-items: center; color: var(--on-primary); }
+  .po.multi .rd { border-radius: 6px; }
+  .po.sel .rd { background: var(--primary); border-color: var(--primary); } .po .rd .ic { width: 13px; height: 13px; stroke-width: 2.8; }
+  .po.res .rd { display: none; }
+  .po .ot { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .po.sel .ot { font-weight: 600; }
+  .po .pct { font-weight: 700; font-size: 13.5px; font-variant-numeric: tabular-nums; min-width: 34px; text-align: right; }
+  .po .mine { width: 16px; height: 16px; color: var(--primary); stroke-width: 2.6; }
+  .po.win { border-color: var(--primary); }
+  .po .stack .av { width: 20px; height: 20px; font-size: 8.5px; }
+  .pfoot { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin-top: 8px; clear: both; }
+  .pfoot a, a.lnk { color: var(--primary); font-weight: 600; cursor: pointer; }
+  .pfoot .sp { flex: 1; }
+  .pres { display: flex; gap: 7px; align-items: center; margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: var(--primary-soft); color: var(--primary); font-size: 13.5px; font-weight: 600; }
+  .pres .ic { width: 16px; height: 16px; }
+  .pill { font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 9px; background: var(--selected); color: var(--muted); white-space: nowrap; flex: none; }
+  .pill.ok { background: var(--success-soft); color: var(--success); } .pill.wr { background: var(--warning-soft); color: var(--warning); }
+  .pill.pr { background: var(--primary-soft); color: var(--primary); } .pill.dg { background: var(--danger-soft); color: var(--danger); }
+  .pf { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .pf > .ic { color: var(--muted); width: 18px; height: 18px; }
+  .fi { flex: 1; min-width: 0; height: 42px; border-radius: 12px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--fg); font: inherit; font-size: 15.5px; padding: 0 12px; outline: 0; }
+  .fi:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+  textarea.fi { height: 64px; padding: 10px 12px; resize: none; line-height: 1.35; display: block; width: 100%; }
+  .addo { display: flex; align-items: center; gap: 8px; color: var(--primary); font-weight: 600; font-size: 15px; padding: 6px 0 2px 24px; cursor: pointer; }
+  .addo .ic { width: 18px; height: 18px; }
+  .tg { width: 46px; height: 28px; border-radius: 14px; background: var(--border-strong); position: relative; flex: none; cursor: pointer; transition: background .15s; border: 0; padding: 0; }
+  .tg::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: left .15s; }
+  .tg.on { background: var(--primary); } .tg.on::after { left: 21px; }
+  .chip { cursor: pointer; }
+  .opt.click { cursor: pointer; }
+  .sheet .btn { flex: none; }
+  .sheet h2 .ib { width: 32px; height: 32px; margin-right: 6px; }
+
+  /* tasks */
+  .tk-h { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
+  .tk-h .ic { width: 15px; height: 15px; } .tk-h .pill { margin-left: auto; }
+  .tk-t { font-weight: 600; font-size: 15.5px; margin: 5px 0 6px; line-height: 1.3; }
+  .tk-t.done { text-decoration: line-through; color: var(--muted); }
+  .tk-m { display: flex; gap: 6px 10px; font-size: 13px; color: var(--muted); align-items: center; flex-wrap: wrap; }
+  .tk-m span { display: inline-flex; align-items: center; gap: 5px; } .tk-m .ic { width: 14px; height: 14px; }
+  .tk-m .av { width: 20px; height: 20px; font-size: 8.5px; }
+  .tk-src { font-size: 12.5px; color: var(--muted); border-left: 2px solid var(--border-strong); padding-left: 7px; margin-top: 7px; }
+  .tk-a { display: flex; gap: 6px; margin-top: 9px; flex-wrap: wrap; }
+  .cli { display: flex; gap: 10px; align-items: center; padding: 6px 0; cursor: pointer; font-size: 15px; }
+  .cli .cb { width: 21px; height: 21px; border-radius: 7px; }
+  .cli.done > span { text-decoration: line-through; color: var(--muted); }
+  .cli .by { margin-left: auto; font-size: 11.5px; color: var(--muted); display: flex; align-items: center; gap: 4px; }
+  .cli .by .av { width: 18px; height: 18px; font-size: 8px; }
+  .cl-h { font-weight: 600; margin-bottom: 2px; }
+  .trow { display: flex; gap: 11px; align-items: flex-start; padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .trow .cb { margin-top: 1px; cursor: pointer; border-radius: 50%; }
+  .trow .bd { flex: 1; min-width: 0; } .trow .bd b { display: block; font-size: 15px; font-weight: 500; }
+  .trow .bd b.done { text-decoration: line-through; color: var(--muted); }
+  .trow .bd small { color: var(--muted); font-size: 12.5px; display: flex; gap: 8px; align-items: center; margin-top: 2px; flex-wrap: wrap; }
+  .trow .bd small .od { color: var(--danger); font-weight: 600; }
+  .ihead { display: flex; flex-direction: column; align-items: center; padding: 14px 14px 12px; background: var(--surface); }
+  .ihead .av { width: 72px; height: 72px; border-radius: 24px; font-size: 24px; margin-bottom: 8px; }
+  .ihead b { font-size: 19px; } .ihead small { color: var(--muted); font-size: 13px; }
+  .iacts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 4px 14px 14px; background: var(--surface); border-bottom: 1px solid var(--border); }
+  .iacts div { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 12px; color: var(--primary); background: var(--selected); border-radius: 14px; padding: 9px 0 8px; cursor: pointer; }
+  .iacts .ic { width: 20px; height: 20px; }
+  .igrp { background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); margin-top: 10px; }
+  .igrp .gh { display: flex; align-items: center; padding: 11px 14px 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .igrp .gh a { margin-left: auto; color: var(--primary); cursor: pointer; display: flex; align-items: center; }
+  .igrp .gh a .ic { width: 16px; height: 16px; }
+  .igrp .trow { border-bottom: 0; padding: 8px 14px; }
+  .ili { display: flex; align-items: center; gap: 12px; padding: 12px 14px; font-size: 15px; border-top: 1px solid var(--border); }
+  .ili:first-child { border-top: 0; } .ili .ic { color: var(--muted); width: 20px; height: 20px; } .ili span { flex: 1; } .ili small { color: var(--muted); }
+  .ibanner { position: absolute; left: 8px; right: 8px; top: 34px; z-index: 9; background: var(--raised); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow); padding: 10px 12px; display: flex; gap: 10px; align-items: center; animation: drop .3s ease-out; cursor: pointer; }
+  .ibanner .bd { flex: 1; min-width: 0; font-size: 13.5px; } .ibanner .bd b { display: block; font-size: 13px; } .ibanner .bd small { color: var(--muted); font-size: 12px; }
+  @keyframes drop { from { transform: translateY(-30px); opacity: 0; } }
+
+  /* slots */
+  .wk { display: flex; align-items: center; gap: 6px; padding: 8px 10px 4px; background: var(--surface); flex: none; }
+  .wk b { flex: 1; text-align: center; font-size: 15px; } .wk .ib { width: 34px; height: 34px; }
+  .legend { display: flex; gap: 12px; padding: 2px 14px 10px; font-size: 11.5px; color: var(--muted); background: var(--surface); border-bottom: 1px solid var(--border); flex: none; flex-wrap: wrap; }
+  .legend span { display: flex; align-items: center; gap: 5px; } .legend i { width: 12px; height: 12px; border-radius: 4px; display: inline-block; }
+  .sg { display: grid; grid-template-columns: 58px repeat(5, 1fr); gap: 5px 4px; padding: 10px 8px 6px; }
+  .sg .dh { text-align: center; font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; }
+  .sg .dh b { display: block; font-size: 15px; color: var(--fg); text-transform: none; }
+  .sg .hl { font-size: 12px; font-weight: 600; align-self: center; line-height: 1.2; }
+  .sg .hl small { display: block; color: var(--muted); font-weight: 500; font-size: 10.5px; margin-top: 2px; }
+  .sg .sep { grid-column: 1 / -1; height: 1px; background: var(--border); margin: 1px 0; }
+  .sc { display: flex; flex-direction: column; gap: 3px; }
+  .sh { height: 30px; border-radius: 9px; display: grid; place-items: center; cursor: pointer; font-size: 10.5px; font-weight: 700; border: 1.5px solid transparent; }
+  .sh.free { border: 1.5px dashed var(--border-strong); color: var(--muted); background: var(--surface); }
+  .sh.free .ic { width: 14px; height: 14px; }
+  .sh.mine { background: var(--primary); color: var(--on-primary); }
+  .sh.off { background: var(--warning-soft); color: var(--warning); border: 1.5px dashed var(--warning); }
+  .sh.pend { box-shadow: inset 0 0 0 1.5px var(--warning); }
+  .sgnote { font-size: 11.5px; color: var(--muted); padding: 0 12px 10px; }
+  .dys { display: flex; gap: 6px; padding: 10px 12px; background: var(--surface); border-bottom: 1px solid var(--border); flex: none; }
+  .dy { flex: 1; height: 58px; border-radius: 14px; border: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11.5px; color: var(--muted); cursor: pointer; background: var(--surface); position: relative; text-transform: uppercase; font-weight: 600; }
+  .dy b { font-size: 17px; color: var(--fg); text-transform: none; }
+  .dy.on { background: var(--action); color: var(--on-action); border-color: var(--action); } .dy.on b { color: var(--on-action); }
+  .dy i { position: absolute; top: -5px; right: -4px; min-width: 15px; height: 15px; border-radius: 8px; background: var(--warning); color: #fff; font-size: 9.5px; font-style: normal; display: grid; place-items: center; padding: 0 3px; }
+  .tsec { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; padding: 12px 16px 7px; }
+  .sc2 { display: flex; align-items: center; gap: 11px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 10px 10px 10px 12px; margin: 0 12px 8px; cursor: pointer; }
+  .sc2 .g { flex: 1; min-width: 0; } .sc2 .g b { display: block; font-size: 15px; } .sc2 .g small { color: var(--muted); font-size: 12.5px; display: flex; gap: 5px; align-items: center; }
+  .sc2.free { border: 1.5px dashed var(--border-strong); background: transparent; }
+  .sc2.mine { border-color: var(--primary); background: var(--primary-soft); }
+  .sc2.mine .g small { color: var(--primary); }
+  .sc2.wrap { flex-wrap: wrap; row-gap: 8px; } .sc2 .sc2a { flex-basis: 100%; display: flex; gap: 6px; padding-left: 51px; }
+  .sc2 .hx { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; flex: none; background: var(--selected); color: var(--muted); }
+  .slotbox { display: flex; gap: 10px; align-items: center; padding: 9px 10px; border-radius: 12px; background: var(--selected); margin: 6px 0 2px; }
+  .slotbox .ic { width: 20px; height: 20px; color: var(--primary); } .slotbox b { display: block; font-size: 14.5px; } .slotbox small { color: var(--muted); font-size: 12.5px; }
+  .stat3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 12px; }
+  .stat3 div { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 10px; font-size: 12px; color: var(--muted); }
+  .stat3 b { display: block; font-size: 22px; color: var(--fg); letter-spacing: -.02em; }
+  .stat3 .w b { color: var(--warning); }
+  .tpl { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14.5px; cursor: pointer; }
+  .tpl .g { flex: 1; } .tpl small { display: block; color: var(--muted); font-size: 12.5px; }
+  .gbtn { font: inherit; font-size: 14px; }
+
+  /* lock screen & push */
+  .lock { position: absolute; inset: 0; background: radial-gradient(120% 80% at 20% 0%, #4b6fa8 0%, #174586 45%, #0d1f3a 100%); color: #fff; display: flex; flex-direction: column; align-items: center; z-index: 1; }
+  .coma[data-theme="dark"] .lock { background: radial-gradient(120% 80% at 20% 0%, #2a3a57 0%, #121c2e 50%, #06090f 100%); }
+  .lock .status { width: 100%; color: #fff; } .lock .status i { border-color: #fff; } .lock .status i::after { background: #fff; }
+  .lock .lk { margin-top: 18px; opacity: .85; } .lock .lk .ic { width: 18px; height: 18px; }
+  .lock .dt { font-size: 16px; font-weight: 500; opacity: .9; margin-top: 6px; }
+  .lock .clk { font-size: 76px; font-weight: 250; letter-spacing: -3px; line-height: 1; margin-bottom: 26px; font-variant-numeric: tabular-nums; }
+  .push { width: calc(100% - 20px); background: rgba(246,246,248,.82); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); color: #1d1d20; border-radius: 22px; padding: 11px 13px 12px; font-size: 14.5px; line-height: 1.3; cursor: pointer; text-align: left; }
+  .coma[data-theme="dark"] .push { background: rgba(48,48,54,.82); color: #f0f0f2; }
+  .push .p1 { display: flex; align-items: center; gap: 7px; font-size: 12.5px; opacity: .6; margin-bottom: 4px; } .push .p1 span { margin-left: auto; }
+  .push b { display: block; font-size: 14.5px; }
+  .appi { width: 22px; height: 22px; border-radius: 6px; background: #fff; border: 1px solid rgba(0,0,0,.08); display: grid; place-items: center; flex: none; opacity: 1; }
+  .pacts { width: calc(100% - 20px); margin-top: 8px; border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; gap: 1px; }
+  .pacts div { background: rgba(246,246,248,.82); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); color: #1d1d20; padding: 12px 14px; font-size: 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+  .pacts div .ic { width: 18px; height: 18px; opacity: .6; }
+  .coma[data-theme="dark"] .pacts div { background: rgba(48,48,54,.82); color: #f0f0f2; }
+  .lnote { margin-top: 10px; font-size: 13px; background: rgba(255,255,255,.18); padding: 7px 12px; border-radius: 12px; }
+  .lock .bottom { margin-top: auto; margin-bottom: 14px; width: 120px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.8); }
+
+  .toast { position: absolute; left: 12px; right: 12px; bottom: 92px; z-index: 12; background: var(--action); color: var(--on-action); border-radius: 14px; padding: 11px 14px; font-size: 14px; display: flex; gap: 9px; align-items: center; box-shadow: var(--shadow); animation: tin .2s ease-out; line-height: 1.3; }
+  .toast .ic { width: 18px; height: 18px; flex: none; stroke-width: 2.3; }
+  @keyframes tin { from { transform: translateY(10px); opacity: 0; } }
+
+  /* away */
+  .stx { position: absolute; right: -5px; bottom: -5px; width: 20px; height: 20px; border-radius: 50%; background: var(--surface); display: grid; place-items: center; font-size: 11.5px; box-shadow: 0 0 0 1.5px var(--border); line-height: 1; }
+  .av.s .stx, .av.m .stx { width: 16px; height: 16px; font-size: 9.5px; right: -4px; bottom: -4px; }
+  .stl { display: inline-flex; align-items: center; gap: 4px; }
+  .sug { position: absolute; left: 8px; right: 8px; bottom: 66px; z-index: 7; background: var(--raised); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); padding: 5px; }
+  .su { display: flex; gap: 10px; align-items: center; padding: 7px 8px; border-radius: 11px; cursor: pointer; } .su:hover { background: var(--selected); }
+  .su .g { flex: 1; min-width: 0; font-size: 15px; } .su small { display: block; color: var(--muted); font-size: 12.5px; }
+  .su small.aw { color: var(--warning); }
+  .hint2 { display: flex; align-items: flex-start; gap: 8px; margin: 0 4px 6px 48px; padding: 8px 10px; border-radius: 12px; background: var(--warning-soft); color: var(--fg); font-size: 13px; line-height: 1.35; }
+  .hint2 .e { font-size: 15px; line-height: 1.1; } .hint2 a { color: var(--primary); font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .ment { color: var(--primary); font-weight: 600; } .me .ment { color: var(--own-fg); text-decoration: underline; text-underline-offset: 2px; }
+  .auto .bub { background: var(--canvas); border-style: dashed; border-color: var(--border-strong); }
+  .autot { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; color: var(--muted); background: var(--selected); border-radius: 5px; padding: 1px 5px; }
+  .prof { margin: 4px 14px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 12px; display: flex; gap: 12px; align-items: center; }
+  .prof .g { flex: 1; min-width: 0; } .prof b { display: block; font-size: 16px; } .prof small { color: var(--muted); font-size: 13px; }
+  .stbtn { display: flex; align-items: center; gap: 10px; margin: 0 14px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 11px 12px; cursor: pointer; font-size: 15px; }
+  .stbtn .e { width: 34px; height: 34px; border-radius: 11px; background: var(--warning-soft); display: grid; place-items: center; font-size: 17px; flex: none; }
+  .stbtn .e.none { background: var(--selected); color: var(--muted); }
+  .stbtn .g { flex: 1; } .stbtn small { display: block; color: var(--muted); font-size: 12.5px; }
+  .mlist { margin: 0 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+  .chats-strip { display: flex; gap: 8px; align-items: center; }
+  .qo .e { font-size: 18px; display: block; margin-bottom: 2px; }
+  .q3 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+  /* recommendation */
+  .rec2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .rec2 .pn { background: var(--surface); }
+  .rec2 .pn h3 { color: var(--fg); font-size: 15px; text-transform: none; letter-spacing: 0; display: flex; gap: 8px; align-items: center; }
+  .rec2 .pn h3 .pill { font-size: 11px; }
+  .rec2 .pn p, .rec2 .pn li { font-size: 13.5px; line-height: 1.5; margin: 4px 0; }
+  .rec2 .pn ul { padding-left: 18px; margin: 6px 0; }
+  .rec2 .wide { grid-column: 1 / -1; }
+  .mtx { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .mtx th, .mtx td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .mtx th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  .dots { letter-spacing: 2px; color: var(--primary); white-space: nowrap; } .dots s { color: var(--border-strong); text-decoration: none; }
+  .tw { overflow-x: auto; }
+  .coma .ds.on .pn { background: var(--canvas); }
+
+  .notes code { font-size: 12px; background: var(--selected); padding: 1px 4px; border-radius: 4px; }
+</style>
+
+<svg width="0" height="0" style="position:absolute"><symbol id="mascot" viewBox="0 0 320 368"><g transform="translate(-192 -176)" shape-rendering="crispEdges">
+  <path fill="var(--mascot-body)" d="M298 193H410V218H462V244H487V376H462V418H438V442H417V462H397V482H374V504H284V482H308V462H330V442H348V418H264V401H239V376H213V269H239V244H264V218H298Z"/>
+  <g fill="#fff"><rect x="286" y="273" width="36" height="36"/><rect x="381" y="294" width="36" height="36"/></g>
+  <g fill="var(--mascot-feet)"><rect x="256" y="504" width="56" height="30"/><rect x="345" y="504" width="56" height="30"/></g></g></symbol></svg>
+
+<div class="lab">
+  <div class="bar">
+    <div class="seg" role="tablist" id="nav"></div>
+    <button class="tgl" id="theme">Тёмная тема</button>
+  </div>
+  <div class="coma" id="root" data-theme="light"></div>
+</div>
+
+<script>
+(() => {
+  /* ================= icons ================= */
+  const P = {
+    plus:'<path d="M12 5v14M5 12h14"/>', mic:'<rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5 10.5v.5a7 7 0 0 0 14 0v-.5M12 18v3.5"/>',
+    up:'<path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/>', clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', search:'<circle cx="11" cy="11" r="7"/><path d="m20.5 20.5-4.5-4.5"/>',
+    back:'<path d="m15 18-6-6 6-6"/>', right:'<path d="m9 6 6 6-6 6"/>', smile:'<circle cx="12" cy="12" r="9"/><path d="M8.5 14s1.3 2 3.5 2 3.5-2 3.5-2M9 9.5h.01M15 9.5h.01"/>',
+    lock:'<rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/>',
+    trash:'<path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l.8 12.5h9.4L17.5 7"/>', check:'<path d="m5 12.5 4.5 4.5L19 7"/>', dcheck:'<path d="m2.5 12.5 4 4L15 8M11 15.5l1.5 1 8.5-8.5"/>',
+    chat:'<path d="M20.5 12a8 8 0 0 1-11.8 7L4 20l1.2-4.3A8 8 0 1 1 20.5 12z"/>', threads:'<path d="M4 5h11v8H9l-3.5 3v-3H4zM18 9h2v8h-1.5v2.5L16 17h-5"/>',
+    more:'<circle cx="5.5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18.5" cy="12" r="1.2"/>', image:'<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.5"/><path d="m20 15.5-4.5-4.5-8 8"/>',
+    file:'<path d="M14 3.5H7.5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V8zM14 3.5V8h4.5"/>', camera:'<path d="M4 8h3l1.8-2.5h6.4L17 8h3v11H4z"/><circle cx="12" cy="13.2" r="3.3"/>',
+    spark:'<path d="m12 3.5 1.9 5.1L19 10.5l-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9zM18.5 16.5v4M16.5 18.5h4"/>', edit:'<path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/>',
+    users:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16.5 4.7a3.5 3.5 0 0 1 0 6.6M21.5 20a6 6 0 0 0-3.5-5.4"/>', x:'<path d="M6 6l12 12M18 6 6 18"/>',
+    checks:'<path d="m4 7 1.8 1.8L9 5.5M4 16.5l1.8 1.8 3.2-3.3M13 7.5h7M13 17h7"/>', pin:'<path d="M9 4h6l-1 6 3 3H7l3-3zM12 13v7"/>',
+    belloff:'<path d="M6 16.5V11a6 6 0 0 1 9.5-4.9M18 11v5.5l1.5 1.5H8M10 21h4M4 4l16 16"/>', at:'<circle cx="12" cy="12" r="3.5"/><path d="M15.5 8.5v5a2.5 2.5 0 0 0 5 0V12a8.5 8.5 0 1 0-3.5 6.9"/>',
+    reply:'<path d="m9 7-5 5 5 5M4 12h10a6 6 0 0 1 6 6v1"/>', bot:'<rect x="4.5" y="8" width="15" height="11" rx="3"/><path d="M12 8V4.5M9 13v1.5M15 13v1.5"/>', drag:'<path d="M5 9h14M5 15h14"/>',
+    star:'<path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.8z"/>', fwd:'<path d="m15 7 5 5-5 5M20 12H10a6 6 0 0 0-6 6v1"/>',
+    eye:'<path d="M2.5 12S6 5.5 12 5.5s9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>',
+    link:'<path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3A4.5 4.5 0 0 0 13 4.6l-1 1M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/>',
+    copy:'<rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2.5"/><path d="M15.5 8.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7.5a2 2 0 0 0 2 2h2.5"/>',
+    bell:'<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 1.5h-15zM10 21h4"/>', sq:'<rect x="4" y="4" width="16" height="16" rx="4.5"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
+    cal:'<rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>', poll:'<path d="M5 20v-8M12 20V5M19 20v-5"/>',
+    swap:'<path d="M7 7.5h12l-3.5-3.5M17 16.5H5l3.5 3.5"/>', grid:'<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
+    listi:'<path d="M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01"/>', gear:'<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
+    door:'<path d="M5 20.5h14M7 20.5V4.5h10v16M14 12.5h.01"/>', contact:'<rect x="4" y="3.5" width="16" height="17" rx="3"/><circle cx="12" cy="10" r="2.8"/><path d="M7.5 17a4.5 4.5 0 0 1 9 0"/>',
+    send:'<path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/>', moon:'<path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z"/>'
+  };
+  const I = (n, s = '', c = '') => `<svg class="ic ${c}" viewBox="0 0 24 24" style="${s}">${P[n]}</svg>`;
+  const st = '<div class="status"><span>9:41</span><i></i></div>';
+  const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  const av = (t, c, x = '') => `<div class="av ${c} ${x}">${t}</div>`;
+
+  /* ================= people ================= */
+  const PP = {
+    'МС':['Марина Соколова','c4','администратор'], 'ИЛ':['Игорь Лаптев','c3','инструктор ЛФК'], 'ОЧ':['Олег Чернов','c1','инструктор'],
+    'ДР':['Дина Рябова','c5','врач'], 'АИ':['Анна Иванова','c2','инструктор'], 'СК':['Сергей Ким','c1','инструктор'], 'ОБ':['Ольга Белова','c3','инструктор'],
+    'ПМ':['Павел Миронов','c5','инструктор'], 'ЕГ':['Елена Гусева','c4','врач'], 'ТВ':['Татьяна Волкова','c2','инструктор'], 'НК':['Никита Карпов','c3','инструктор'],
+    'ЮС':['Юлия Смирнова','c5','медсестра'], 'АП':['Артём Попов','c1','инструктор'], 'ВЛ':['Вера Лебедева','c4','администратор'], 'КЗ':['Кирилл Зайцев','c2','инструктор'], 'ГР':['Глеб Родионов','c5','инструктор']
+  };
+  const nm = k => PP[k][0], first = k => PP[k][0].split(' ')[0];
+  const dat = { 'Олег':'Олегу', 'Сергей':'Сергею', 'Анна':'Анне', 'Игорь':'Игорю', 'Ольга':'Ольге', 'Павел':'Павлу', 'Дина':'Дине', 'Марина':'Марине' };
+  const firstDat = k => dat[first(k)] || first(k);
+  const colf = k => `var(--a${PP[k][1].slice(1)}f)`;
+  const pa = (k, x = 's round', extra = '') => `<div class="av ${PP[k][1]} ${x}">${k}${extra}</div>`;
+  const stack = ks => `<span class="stack">${ks.map(k => av(k, PP[k][1])).join('')}</span>`;
+  const mascot = (w = 19, h = 22) => `<svg width="${w}" height="${h}"><use href="#mascot" width="${w}" height="${h}"/></svg>`;
+
+  /* ================= shared building blocks ================= */
+  const chead = (title, sub, avh = '', right = '', back = '') => `<div class="chead"><button class="ib" ${back}>${I('back')}</button>${avh}<div class="t"><b>${title}</b><small>${sub}</small></div>${right}</div>`;
+  const inMsg = (k, body, time, o = {}) => `<div class="msg ${o.cls || ''}">${o.avh || pa(k)}<div class="bub ${o.obj ? 'obj' : ''}" ${o.attr || ''}><div class="who" style="color:${o.color || colf(k)}">${o.name || nm(k)}${o.tag || ''}</div>${body}${o.nometa ? '' : `<span class="meta">${o.meta || ''}${time}</span>`}${o.after || ''}</div></div>`;
+  const meMsg = (body, time, o = {}) => `<div class="msg me"><div class="bub ${o.obj ? 'obj' : ''}" ${o.attr || ''}>${body}<span class="meta">${o.meta || ''}${time} ${I('dcheck')}</span>${o.after || ''}</div></div>`;
+  const sysl = t => `<div class="sysl">${t}</div>`;
+  const day = t => `<span class="day">${t}</span>`;
+  const sheet = (inner, close) => `<div class="dim" data-a="${close}"></div><div class="sheet" data-scroll="sh">${inner.startsWith('<div class="grab"') ? '' : '<div class="grab"></div>'}${inner}</div>`;
+  const tabbar = (a, act = '', pip = {}) => `<div class="tabs five">${[['chat','Чаты'],['threads','Треды'],['star','Важные'],['spark','Агенты'],['more','Ещё']].map(([i, n], k) => `<div class="${k === a ? 'on' : ''}" ${act ? `data-a="${act}" data-t="${k}" style="cursor:pointer"` : ''}>${I(i)}${n}${pip[k] ? `<span class="pip">${pip[k]}</span>` : ''}</div>`).join('')}</div>`;
+  const composer = (o = {}) => `<div class="cmp">${o.top || ''}<div class="cl"><button class="ib soft" ${o.plus ? `data-a="${o.plus}"` : ''}>${I('plus')}</button><div class="inp">${o.bind ? `<textarea rows="1" placeholder="Сообщение" data-bind="${o.bind}">${esc(o.value || '')}</textarea>` : `<div class="txt ${o.text ? '' : 'phd'}">${o.text || 'Сообщение'}</div>`}<button class="ib">${I('smile')}</button></div>${o.send ? `<button class="ib ${o.value ? 'pri' : 'soft'}" data-sendbtn data-a="${o.send}" ${o.hold ? `data-hold="${o.hold}"` : ''}>${I(o.value ? 'up' : 'mic')}</button>` : `<button class="ib soft">${I('mic')}</button>`}</div>${o.pop || ''}</div>`;
+  const plusSheet = (act, close, hi) => sheet(`<div class="ph"><b style="background:var(--a1)"></b><b style="background:var(--a2)"></b><b style="background:var(--a5)"></b><b style="background:var(--a3)"></b></div>
+    <div class="grid4">${[['image','Фото','photo'],['camera','Камера','cam'],['file','Файл','file'],['spark','Позвать агента','agent'],['dcheck','Подтвердить','ack',1],['poll','Опрос','poll',1],['sq','Задача','task',1],['checks','Чек-лист','list',1]].map(([i, n, k, ac]) => `<div class="tile" data-a="${act}" data-t="${k}" style="cursor:pointer"><i class="${ac ? 'ac' : ''}" ${k === hi ? 'style="box-shadow:0 0 0 2px var(--primary)"' : ''}>${I(i)}</i>${n}</div>`).join('')}</div>
+    <div class="cap" style="text-align:center;margin-top:14px">Новое — во втором ряду. Обычные вложения остаются первыми.</div>`, close);
+  const mi = (i, t, act = '', x = '', c = '') => `<div class="mi ${c}" ${act ? `data-a="${act}" style="cursor:pointer${c.includes('hi') ? ';background:var(--primary-soft);color:var(--primary)' : ''}"` : ''}>${I(i, c.includes('hi') ? 'color:var(--primary)' : '')}${t}${x ? `<small>${x}</small>` : ''}</div>`;
+  const ctxMenu = (msgHtml, mid, close) => `<div class="ctx" data-a="${close}">${msgHtml}<div class="menu" data-stop><div class="qr"><span>👍</span><span>✅</span><span>🔥</span><span>👀</span><span>🙏</span><span class="mo">${I('plus')}</span></div>${mid}</div></div>`;
+  const imp = (avh, n, ch, t, p, x = '') => `<div class="imp">${avh}<div class="bd"><div class="l1"><b>${n}</b><span>${t}</span></div><div class="ch">${ch}</div><p>${p}</p>${x}</div></div>`;
+  const toastH = (s, id) => s.toast && s.toast.ph === id ? `<div class="toast">${I(s.toast.i || 'check')}<span>${s.toast.t}</span></div>` : '';
+  let tt;
+  const toast = (s, ph, t, i) => { s.toast = { ph, t, i }; clearTimeout(tt); tt = setTimeout(() => { if (S === s) { s.toast = null; rerender(); } }, 2800); };
+  const later = (s, ms, fn) => setTimeout(() => { if (S === s) { fn(); rerender(); } }, ms);
+  const tg = (on, act, k = '') => `<button class="tg ${on ? 'on' : ''}" data-a="${act}" data-k="${k}" aria-pressed="${!!on}"></button>`;
+  const chip = (on, label, act, v) => `<span class="chip ${on ? 'on' : ''}" data-a="${act}" data-v="${esc(v ?? label)}">${label}</span>`;
+  const cb = (on, act = '', k = '') => `<span class="cb ${on ? 'on' : ''}" ${act ? `data-a="${act}" data-k="${k}" style="cursor:pointer"` : ''}>${on ? I('check') : ''}</span>`;
+  const notes = (sc, srv, q) => `<div class="notes"><h4>Сценарий</h4><p>${sc}</p><h4 style="margin-top:10px">Что понадобится на сервере (грубо)</h4><p>${srv}</p><h4 style="margin-top:10px">Вопросы к владельцу</h4><p>${q}</p></div>`;
+
+  /* ======================================================================
+     1. ПОДТВЕРЖДЕНИЕ ОЗНАКОМЛЕНИЯ
+     ====================================================================== */
+  const ACKP = ['ИЛ','АИ','ДР','СК','ОБ','ПМ','ЕГ','ТВ','НК','ЮС','АП','ВЛ','ОЧ','КЗ','ГР'];
+  const ackT = ['9:14','9:15','9:15','9:18','9:22','9:30','9:41','9:52','10:05','10:11','10:30','11:02'];
+  const REG = 'С понедельника — новый регламент уборки залов. Прочитайте, пожалуйста, до пятницы.';
+  const DOC = `<div class="doc">${I('file')}<div><b>Регламент уборки залов.pdf</b><small>2 стр. · 180 КБ</small></div></div>`;
+  const whoScr = (n, tab, rem, o, s, ph) => {
+    const yes = ACKP.slice(0, n), no = ACKP.slice(n);
+    const row = (k, sub, rt = '') => `<div class="row">${pa(k, 'm round')}<div class="bd"><div class="l1"><span class="nm">${nm(k)}</span></div><div class="l2"><span class="pv">${sub}</span></div></div>${rt}</div>`;
+    const list = tab === 'no'
+      ? (no.length ? no.map((k, i) => row(k, n >= 12 && i === 0 ? '<span class="warnc">прочитал, не подтвердил</span>' : n >= 12 ? 'не открывал чат' : 'доставлено', n >= 12 && i === 0 ? '<span class="rt">10:47</span>' : '')).join('') : `<div class="cap" style="text-align:center;padding:30px">Все подтвердили 🎉</div>`)
+      : (yes.length ? yes.map((k, i) => row(k, PP[k][2], `<span class="rt">${ackT[i] || '9:41'}</span>`)).join('') : `<div class="cap" style="text-align:center;padding:30px">Пока никто</div>`);
+    return `<div class="phone white">${st}${chead('Подтверждения', 'Общий · срок ' + (o.due || 'до пт, 18:00'), '', `<button class="ib">${I('more')}</button>`, o.back ? `data-a="${o.back}"` : '')}
+      <div class="list" data-scroll="w"><div class="ackq"><small>Марина Соколова · сегодня в 9:10</small>${REG}</div>
+      <div class="bigc"><b>${n}</b>из 15 подтвердили</div><div class="trk big"><i style="width:${n / 15 * 100}%"></i></div>
+      <div class="pseg"><button aria-selected="${tab === 'no'}" data-a="${o.tab}" data-t="no">Не подтвердили · ${15 - n}</button><button aria-selected="${tab === 'yes'}" data-a="${o.tab}" data-t="yes">Подтвердили · ${n}</button></div>${list}</div>
+      <div class="foot">${n >= 15 ? '<button class="btn sec" disabled>Все подтвердили</button>' : rem ? `<button class="btn sec" disabled>Напомнили в 9:41 · повторно — через 2 ч</button>` : `<button class="btn pri" data-a="${o.rem}">${I('bell')}Напомнить неподтвердившим · ${15 - n}</button>`}</div>${toastH(s, ph)}</div>`;
+  };
+  const t1 = {
+    init: () => ({ a: { screen: 'chat', flag: false, due: 'до пт, 18:00', sheet: null, text: 'Новый регламент уборки залов — прочитайте до пятницы.', msgs: [], n: 0, tab: 'no', rem: false, pop: false }, rDone: false, c: { tab: 'no', rem: false }, d: { tab: 2 } }),
+    phones: [
+      { id: 'A', label: 'Автор · администратор', cap: '<b>Живой.</b> «+» → «Подтвердить» (или удержите кнопку отправки) — над полем появится плашка со сроком, срок меняется по нажатию. Отправьте: счётчик под сообщением растёт, нажмите на него — откроется «Кто подтвердил».', r: s => {
+        const a = s.a;
+        if (a.screen === 'who') return whoScr(a.n, a.tab, a.rem, { back: 'a-back', tab: 'a-tab', rem: 'a-rem', due: a.due }, s, 'A');
+        const msgs = a.msgs.map(m => meMsg(esc(m.t) + DOC, '9:41', { after: m.ack ? `<div class="ack"><div class="acount" data-a="a-who">${I('dcheck')}<span class="g">Подтвердили <b>${a.n} из 15</b> · ${a.due}</span>${I('right')}</div><div class="trk"><i style="width:${a.n / 15 * 100}%"></i></div></div>` : '' })).join('');
+        const top = a.flag ? `<div class="flag">${I('dcheck')}<span>Нужно подтвердить</span><button class="chip2" data-a="a-due">${a.due} ▾</button><button class="ib" data-a="a-unflag">${I('x')}</button></div>` : '';
+        const pop = a.pop ? `<div class="pop"><div data-a="a-flagpop">${I('dcheck')}С подтверждением</div><div>${I('clock')}Отправить позже</div><div>${I('belloff')}Отправить без звука</div></div>` : '';
+        let sh = '';
+        if (a.sheet === 'plus') sh = plusSheet('a-tile', 'a-close', 'ack');
+        if (a.sheet === 'due') sh = sheet(`<h2><span>Подтвердить до</span></h2><div class="q2">${[['Без срока','просто отметка'],['Сегодня','до 18:00'],['Завтра','до 12:00'],['До пятницы','20 ноября, 18:00']].map(([b, sm], k) => { const v = ['без срока','сегодня до 18:00','завтра до 12:00','до пт, 18:00'][k]; return `<div class="qo ${a.due === v ? 'sel' : ''}" data-a="a-duepick" data-v="${v}" style="cursor:pointer"><b>${b}</b><small>${sm}</small></div>`; }).join('')}</div>
+          <div class="opt" style="margin-top:10px"><div class="g">Напомнить неподтвердившим за 2 часа до срока<small>Им придёт пуш, вам — итог</small></div>${tg(true, 'noop')}</div>
+          <div class="opt"><div class="g">Показывать получателям, сколько уже подтвердили<small>«Подтвердили 12 из 15» под кнопкой</small></div>${tg(true, 'noop')}</div><button class="btn pri" data-a="a-close">Готово</button>`, 'a-close');
+        return `<div class="phone">${st}${chead('Общий', '15 участников · 6 в сети', av('ОБ', 'c1', 'm'))}<div class="feed" data-scroll="feed">${day('Сегодня')}
+          ${inMsg('ДР', 'Кабинет 2 свободен после 15:00, если кому нужен.', '8:40')}${inMsg('ОЧ', 'Ключи от раздевалки на стойке.', '8:52')}${msgs}</div>
+          ${composer({ top, plus: 'a-plus', bind: 'a.text', value: a.text, send: 'a-send', hold: 'a-hold', pop })}${sh}${toastH(s, 'A')}</div>`;
+      } },
+      { id: 'B', label: 'Получатель · инструктор', cap: '<b>У получателя</b> — плашка под шапкой чата и кнопка прямо в сообщении. Одно нажатие, без перехода. После — зелёная отметка с временем; плашка исчезает. Состояние общее с телефоном «Списки и Важные».', r: s => `<div class="phone">${st}${chead('Общий', '15 участников · 6 в сети', av('ОБ', 'c1', 'm'))}
+        ${s.rDone ? '' : `<div class="strip warn" data-a="noop">${I('dcheck')}<span><b>Нужно подтвердить</b> · до пт, 18:00</span></div>`}
+        <div class="feed" data-scroll="feed">${day('Сегодня')}${inMsg('ДР', 'Кабинет 2 свободен после 15:00, если кому нужен.', '8:40')}
+        ${inMsg('МС', REG + DOC, '9:10', { after: `<div class="ack"><div class="ackh">${I('clock')}Нужно подтвердить до пт, 18:00</div>${s.rDone ? `<div class="ackdone">${I('check')}Вы подтвердили в 9:41</div>` : `<button class="ackbtn" data-a="r-ack">${I('check')}Ознакомлен(а)</button>`}<div class="acs">Подтвердили ${s.rDone ? 13 : 12} из 15</div></div>` })}
+        ${inMsg('ОЧ', 'Ключи от раздевалки на стойке.', '9:20')}</div>${composer()}${toastH(s, 'B')}</div>` },
+      { id: 'C', label: 'Кто подтвердил', cap: '<b>Экран автора.</b> Две вкладки: кто ещё нет (сверху — «прочитал, но не подтвердил») и кто да, со временем. «Напомнить» шлёт личный пуш только неподтвердившим; повторно — не чаще раза в 2 часа.', r: s => whoScr(12, s.c.tab, s.c.rem, { tab: 'c-tab', rem: 'c-rem' }, s, 'C') },
+      { id: 'D', label: 'Список чатов и «Важные»', cap: '<b>Переключайте вкладки внизу.</b> В списке чатов — жёлтая метка «подтвердить» вместо обычного счётчика. В «Важных» сверху блок «Ждут вас»: подтверждения, опросы, задачи — с кнопкой прямо в карточке.', r: s => {
+        const need = !s.rDone;
+        if (s.d.tab === 0) return `<div class="phone white">${st}<div class="top"><div class="plate">${mascot()}</div><h1>Чаты</h1><button class="ib soft">${I('edit')}</button></div><div class="search">${I('search')}Поиск по чатам и сообщениям</div>
+          <div class="list" style="border-top:1px solid var(--border)">
+          <div class="row">${av('ОБ', 'c1')}<div class="bd"><div class="l1"><span class="nm">Общий</span><span class="tm">9:20</span></div><div class="l2"><span class="pv"><em>Марина:</em> С понедельника — новый регламент уборки…</span>${need ? `<span class="need">${I('dcheck')}до пт</span>` : ''}<span class="bdg">2</span></div></div></div>
+          <div class="row">${av('ИЗ', 'c1')}<div class="bd"><div class="l1"><span class="nm">Инструкторы · зал</span><span class="tm">9:24</span></div><div class="l2"><span class="pv"><em>Марина:</em> ${I('poll')} Во сколько удобнее планёрка?</span><span class="need" style="color:var(--primary);background:var(--primary-soft)">опрос</span></div></div></div>
+          <div class="row">${pa('МС', '', '<span class="on"></span>').replace('av c4 ', 'av c4 round ')}<div class="bd"><div class="l1"><span class="nm">Марина Соколова</span><span class="tm">9:12</span></div><div class="l2"><span class="pv">Завтра с 9:00 нужен инструктор в большой зал</span><span class="bdg">1</span></div></div></div>
+          <div class="row">${av('СН', 'c2')}<div class="bd"><div class="l1"><span class="nm">Слоты на неделю</span><span class="tm">8:50</span></div><div class="l2"><span class="pv">Доска на 16–20 ноября · свободно 5</span><span class="bdg at">@</span></div></div></div>
+          <div class="row">${av('ВР', 'c5')}<div class="bd"><div class="l1"><span class="nm">Врачи</span><span class="tm">Вчера</span></div><div class="l2"><span class="pv"><em>Дина:</em> обновила график осмотров</span><span class="mk">${I('belloff')}</span><span class="bdg mute">12</span></div></div></div>
+          </div>${tabbar(0, 'd-tab', { 2: need ? 3 : 2 })}</div>`;
+        return `<div class="phone white">${st}<div class="top"><h1>Важные</h1><button class="ib soft">${I('search')}</button></div>
+          <div class="folders" style="background:var(--surface)"><span class="fd" aria-selected="true">Ждут вас<span class="n">${need ? 3 : 2}</span></span><span class="fd">Сохранённые</span><span class="fd">Напоминания</span><span class="fd">Задачи</span></div>
+          <div class="list">
+          ${need ? imp(pa('МС', 'm round'), 'Марина Соколова', 'Общий · подтвердить до пт, 18:00', '9:10', REG, `<div style="display:flex;gap:6px;margin-top:8px"><button class="btn sm pri" data-a="r-ack">${I('check', 'width:16px;height:16px;vertical-align:-3px')} Ознакомлен(а)</button><button class="btn sm sec">Открыть</button></div>`) : ''}
+          ${imp(pa('МС', 'm round'), 'Марина Соколова', 'Инструкторы · зал · опрос до пт', '9:24', 'Во сколько удобнее планёрка по понедельникам?', `<div style="margin-top:8px"><button class="btn sm sec">${I('poll', 'width:16px;height:16px;vertical-align:-3px')} Ответить</button></div>`)}
+          ${imp(pa('ДР', 'm round'), 'Задача от Дины Рябовой', 'Инструкторы · зал · срок завтра, 12:00', 'Вчера', 'Проверить аптечку в большом зале, докупить бинты', `<div style="margin-top:8px"><button class="btn sm sec">Готово</button></div>`)}
+          <div class="sect">Сохранённые</div>${imp(pa('МС', 'm round'), 'Марина Соколова', 'Инструкторы · зал', '9:12', 'Коллеги, завтра с 9:00 до 13:00 нужен инструктор в большой зал. Кто возьмёт слот?')}
+          </div>${tabbar(2, 'd-tab', { 2: need ? 3 : 2 })}${toastH(s, 'D')}</div>`;
+      } },
+    ],
+    on: {
+      'a-plus': s => s.a.sheet = 'plus', 'a-close': s => s.a.sheet = null,
+      'a-tile': (s, d) => { s.a.sheet = null; if (d.t === 'ack') s.a.flag = true; else toast(s, 'A', 'Эта функция — на своей вкладке прототипа', 'spark'); },
+      'a-hold': s => s.a.pop = true, 'a-flagpop': s => { s.a.pop = false; s.a.flag = true; },
+      'a-due': s => s.a.sheet = 'due', 'a-duepick': (s, d) => s.a.due = d.v, 'a-unflag': s => s.a.flag = false,
+      'a-send': s => { const a = s.a; a.pop = false; const t = (a.text || '').trim(); if (!t) return; a.msgs.push({ t, ack: a.flag }); a.text = ''; s.bottom = 'A';
+        if (a.flag) { a.n = 0; a.flag = false; const step = () => later(s, 450, () => { if (a.n < 12) { a.n++; step(); } }); step(); } },
+      'a-who': s => { s.a.screen = 'who'; s.a.tab = 'no'; }, 'a-back': s => s.a.screen = 'chat', 'a-tab': (s, d) => s.a.tab = d.t,
+      'a-rem': s => { s.a.rem = true; toast(s, 'A', `Напомнили ${15 - s.a.n} людям — личным пушем`, 'bell'); },
+      'r-ack': s => { s.rDone = true; toast(s, 'B', 'Марина увидит, что вы ознакомились'); },
+      'c-tab': (s, d) => s.c.tab = d.t, 'c-rem': s => { s.c.rem = true; toast(s, 'C', 'Напомнили трём людям — личным пушем', 'bell'); },
+      'd-tab': (s, d) => { if (d.t === '0' || d.t === '2') s.d.tab = +d.t; },
+    },
+    notes: notes(
+      'Администратор отправляет важное (регламент, изменение расписания) с отметкой «Нужно подтвердить» и сроком. Каждый получатель видит кнопку в сообщении, плашку в чате, метку в списке чатов и карточку в «Важных → Ждут вас». Автор видит счётчик, список и может одним нажатием напомнить тем, кто не подтвердил. За 2 часа до срока — автоматическое напоминание.',
+      'Поле у сообщения <code>ack: {due_at, recipients_snapshot}</code> (список получателей фиксируется в момент отправки — новые участники чата не портят счёт); таблица <code>message_acks(message_id, user_id, at)</code>; ручки «подтвердить», «список», «напомнить» (ограничение частоты); счётчик «ждут меня» в данных списка чатов; событие по сокету для живого счётчика; задача планировщика для напоминания до срока (планировщик уже есть у отложенных). Механизм близок к «Сбору отметок» агента — можно переиспользовать карточку и прогресс.',
+      '1) Кто может включать — все или только админы/владельцы чата? 2) Показывать ли получателям «Подтвердили 12 из 15» (давит, но мотивирует)? 3) Текст кнопки: «Ознакомлен(а)» или нейтральное «Подтверждаю»? 4) Нужен ли экспорт списка (для проверок) — это уже «юридическая» функция. 5) Можно ли редактировать сообщение после подтверждений — сбрасывать ли отметки?'),
+  };
+
+  /* ======================================================================
+     2. ОПРОСЫ
+     ====================================================================== */
+  const mkPoll = (q, opts, o = {}) => ({ q, opts: opts.map(([t, v]) => ({ t, v: v || [] })), multi: !!o.multi, anon: !!o.anon, due: o.due || '', closed: !!o.closed, me: o.me || 'ИЛ', author: o.author || 'МС', members: o.members || 14 });
+  const voters = p => new Set(p.opts.flatMap(o => o.v)).size;
+  const pollH = (p, id, ph) => {
+    const total = voters(p), mine = p.opts.map((o, i) => o.v.includes(p.me) ? i : -1).filter(i => i >= 0);
+    const show = mine.length > 0 || p.closed || p.author === p.me;
+    const max = Math.max(...p.opts.map(o => o.v.length));
+    const opts = p.opts.map((o, i) => { const pct = total ? Math.round(o.v.length / total * 100) : 0, sel = mine.includes(i), win = p.closed && o.v.length === max && max > 0;
+      return `<div class="po ${p.multi ? 'multi' : ''} ${sel ? 'sel' : ''} ${show ? 'res' : ''} ${win ? 'win' : ''}" ${p.closed ? '' : `data-a="vote" data-p="${id}" data-i="${i}"`}><i class="fb" style="width:${show ? pct : 0}%"></i><span class="rd">${sel ? I('check') : ''}</span><span class="ot">${esc(o.t)}</span>${show ? `${sel ? I('check', '', 'mine') : ''}${!p.anon && o.v.length ? stack(o.v.slice(0, 3)) : ''}<b class="pct">${pct}%</b>` : ''}</div>`; }).join('');
+    const w = p.opts.reduce((b, o) => o.v.length > b.v.length ? o : b, p.opts[0]);
+    return `<div class="pk">${I('poll')}${p.anon ? 'Анонимный опрос' : 'Опрос'}${p.multi ? ' · несколько ответов' : ''}${p.closed ? '<span class="pill">Закрыт</span>' : p.due ? `<span class="pill wr">${p.due}</span>` : ''}</div><div class="pq">${esc(p.q)}</div>${opts}
+      ${p.closed ? `<div class="pres">${I('check')}Итог: «${esc(w.t)}» — ${w.v.length} из ${total}</div>` : ''}
+      <div class="pfoot"><span>${total} из ${p.members} ответили</span><span class="sp"></span>${mine.length && !p.closed && p.author !== p.me ? `<a data-a="unvote" data-p="${id}">Отменить голос</a>` : ''}${p.author === p.me && !p.anon ? `<a data-a="pwho" data-p="${id}" data-w="${ph}">Кто голосовал</a>` : ''}${p.author === p.me && !p.closed ? `<a data-a="pclose" data-p="${id}">Закрыть</a>` : ''}</div>`;
+  };
+  const whoVoted = (p, close) => sheet(`<h2><span>Кто голосовал</span><a data-a="${close}">Готово</a></h2><div class="cap" style="margin:-6px 0 6px">${esc(p.q)}</div>${p.opts.map(o => `<div class="lbl">${esc(o.t)} · ${o.v.length}</div>${o.v.length ? o.v.map(k => `<div class="opt">${pa(k, 'm round')}<div class="g">${nm(k)}<small>${PP[k][2]}</small></div></div>`).join('') : '<div class="cap" style="margin:0">Никто</div>'}`).join('')}
+    <div class="lbl">Не ответили · ${p.members - voters(p)}</div><div class="opt" style="color:var(--muted)">${stack(['КЗ','ГР','ТВ','НК'])}<div class="g">Кирилл, Глеб, Татьяна и ещё ${Math.max(0, p.members - voters(p) - 3)}</div><button class="btn sm sec">Напомнить</button></div>`, close);
+  const t2 = {
+    init: () => ({
+      cr: { screen: 'create', q: 'Во сколько удобнее планёрка по понедельникам?', opts: ['8:30 — до слотов', '13:00 — между слотами', '17:00 — после слотов'], multi: false, anon: false, due: 'до пт, 18:00' },
+      polls: {
+        new: null,
+        b: mkPoll('Какой день удобнее для выездного занятия в декабре?', [['Вторник', ['ОЧ', 'АИ', 'СК']], ['Среда', ['ОБ', 'ПМ', 'ТВ', 'НК', 'ЮС']], ['Четверг', ['АП']]], { due: 'до пт, 18:00', me: 'ИЛ' }),
+        old: mkPoll('Удобно ли новое расписание бассейна?', [['Да, всё устраивает', ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']], ['Неудобно утро', ['i', 'j', 'k']], ['Неудобен вечер', ['l']]], { anon: true, closed: true, me: 'ИЛ', members: 15 }),
+        c: mkPoll('Какой инвентарь заказать в первую очередь?', [['Утяжелители 1–2 кг', ['ИЛ', 'ОЧ', 'АИ', 'СК', 'ПМ']], ['Фитболы', ['ОБ', 'АИ', 'ТВ']], ['Балансировочные подушки', ['ИЛ', 'НК', 'ЮС', 'АП']], ['Степ-платформы', ['ОЧ']]], { multi: true, me: 'МС', author: 'МС', due: 'до пн, 12:00' }),
+      }, cSheet: null, sheetB: null,
+    }),
+    phones: [
+      { id: 'A', label: 'Создание из «+»', cap: '<b>Живой.</b> Отредактируйте вопрос и варианты, добавьте вариант, переключите «несколько ответов» и «анонимно», выберите срок — «Отправить». В ленте ответы приходят по одному (имитация); «Закрыть» подводит итог.', r: s => {
+        const c = s.cr;
+        if (c.screen === 'create') return `<div class="phone">${st}${chead('Инструкторы · зал', '9 участников · 4 в сети', av('ИЗ', 'c1', 'm'))}<div class="feed" data-scroll="feed">${day('Сегодня')}${inMsg('ОЧ', 'Давайте обсудим планёрку — сейчас неудобно всем.', '9:20')}</div>${composer()}
+          <div class="dim"></div><div class="sheet" data-scroll="sh"><div class="grab"></div><h2><button class="ib" data-a="noop">${I('x')}</button><span>Новый опрос</span></h2>
+          <div class="lbl" style="margin-top:0">Вопрос</div><input class="fi" style="width:100%" data-bind="cr.q" value="${esc(c.q)}" placeholder="Спросите коллег">
+          <div class="lbl">Варианты</div>${c.opts.map((o, i) => `<div class="pf">${I('drag')}<input class="fi" data-bind="cr.opts.${i}" value="${esc(o)}" placeholder="Вариант ${i + 1}">${c.opts.length > 2 ? `<button class="ib" style="width:32px;height:32px;color:var(--muted)" data-a="cr-del" data-i="${i}">${I('x', 'width:17px;height:17px')}</button>` : ''}</div>`).join('')}
+          ${c.opts.length < 10 ? `<div class="addo" data-a="cr-add">${I('plus')}Добавить вариант</div>` : ''}
+          <div class="lbl">Настройки</div>
+          <div class="opt"><div class="g">Несколько ответов<small>Можно выбрать больше одного</small></div>${tg(c.multi, 'cr-tg', 'multi')}</div>
+          <div class="opt"><div class="g">Анонимно<small>Никто не увидит, кто как ответил, — даже вы</small></div>${tg(c.anon, 'cr-tg', 'anon')}</div>
+          <div class="lbl">Принимать ответы</div><div class="chips">${['без срока', 'до 18:00', 'до завтра, 12:00', 'до пт, 18:00'].map(v => chip(c.due === v, v, 'cr-due')).join('')}</div>
+          <button class="btn pri" data-a="cr-send">Отправить опрос</button></div></div>`;
+        const p = s.polls.new;
+        return `<div class="phone">${st}${chead('Инструкторы · зал', '9 участников · 4 в сети', av('ИЗ', 'c1', 'm'))}<div class="feed" data-scroll="feed">${day('Сегодня')}${inMsg('ОЧ', 'Давайте обсудим планёрку — сейчас неудобно всем.', '9:20')}
+          ${meMsg(pollH(p, 'new', 'A'), '9:41', { obj: 1 })}${p.closed ? sysl('Вы закрыли опрос — итог закреплён в сообщении') : ''}</div>${composer({ plus: 'cr-again' })}${s.cSheet === 'A' ? whoVoted(p, 'p-close') : ''}${toastH(s, 'A')}</div>`;
+      } },
+      { id: 'B', label: 'В ленте: до и после голоса', cap: '<b>Живой.</b> Нажмите на вариант — голос учтён сразу, появятся полоски, проценты и кто как ответил (если опрос не анонимный). «Отменить голос» — передумать до закрытия. Выше — закрытый анонимный опрос с итогом.', r: s => `<div class="phone">${st}${chead('Инструкторы · зал', '9 участников · 4 в сети', av('ИЗ', 'c1', 'm'))}<div class="feed" data-scroll="feed">${day('Вчера')}
+        ${inMsg('МС', pollH(s.polls.old, 'old', 'B'), '18:02', { obj: 1 })}${sysl('Марина закрыла опрос')}${day('Сегодня')}
+        ${inMsg('МС', pollH(s.polls.b, 'b', 'B'), '9:24', { obj: 1 })}${inMsg('ОЧ', 'Среда отлично, утром свободен.', '9:31')}</div>${composer()}${toastH(s, 'B')}</div>` },
+      { id: 'C', label: 'Автор: кто голосовал и закрытие', cap: '<b>Вид автора.</b> Автор видит результаты сразу. «Кто голосовал» — шторка по вариантам и список не ответивших с «Напомнить». «Закрыть» — опрос замораживается, победитель подсвечен, в ленте — строка об итоге.', r: s => `<div class="phone">${st}${chead('Инструкторы · зал', '9 участников · 4 в сети', av('ИЗ', 'c1', 'm'))}<div class="feed" data-scroll="feed">${day('Сегодня')}
+        ${inMsg('ДР', 'Старые фитболы в малом зале уже не держат форму.', '9:02')}${meMsg(pollH(s.polls.c, 'c', 'C'), '9:05', { obj: 1 })}${s.polls.c.closed ? sysl('Вы закрыли опрос. Итог: <b>утяжелители 1–2 кг</b>') : inMsg('ПМ', 'Утяжелители точно, остальное — как решите.', '9:12')}</div>${composer()}${s.cSheet === 'C' ? whoVoted(s.polls.c, 'p-close') : ''}${toastH(s, 'C')}</div>` },
+    ],
+    on: {
+      'cr-add': s => s.cr.opts.push(''), 'cr-del': (s, d) => s.cr.opts.splice(+d.i, 1), 'cr-tg': (s, d) => s.cr[d.k] = !s.cr[d.k], 'cr-due': (s, d) => s.cr.due = d.v,
+      'cr-send': s => { const c = s.cr, opts = c.opts.map(t => t.trim()).filter(Boolean); if (!c.q.trim() || opts.length < 2) { toast(s, 'A', 'Нужны вопрос и хотя бы два варианта', 'x'); return; }
+        s.polls.new = mkPoll(c.q.trim(), opts.map(t => [t, []]), { multi: c.multi, anon: c.anon, due: c.due === 'без срока' ? '' : c.due, me: 'МС', author: 'МС', members: 8 }); c.screen = 'chat'; s.bottom = 'A';
+        const seq = [['ОЧ', 0], ['ИЛ', 0], ['АИ', 1], ['СК', 0], ['ОБ', 2], ['ПМ', 0]]; let k = 0;
+        const step = () => later(s, 700, () => { const p = s.polls.new; if (!p || p.closed || k >= seq.length) return; const [who, i] = seq[k++]; p.opts[Math.min(i, p.opts.length - 1)].v.push(who); step(); }); step(); },
+      'cr-again': s => { s.cr.screen = 'create'; s.polls.new = null; },
+      vote: (s, d) => { const p = s.polls[d.p]; if (p.closed || p.author === p.me) return; const o = p.opts[+d.i], has = o.v.includes(p.me);
+        if (!p.multi) p.opts.forEach(x => x.v = x.v.filter(v => v !== p.me)); if (has && p.multi) o.v = o.v.filter(v => v !== p.me); else if (!has) o.v.push(p.me); },
+      unvote: (s, d) => { const p = s.polls[d.p]; p.opts.forEach(x => x.v = x.v.filter(v => v !== p.me)); },
+      pwho: (s, d) => s.cSheet = d.w, 'p-close': s => s.cSheet = null,
+      pclose: (s, d) => { s.polls[d.p].closed = true; toast(s, d.p === 'c' ? 'C' : 'A', 'Опрос закрыт, итог отправлен в чат'); },
+    },
+    notes: notes(
+      'Любой участник (или только админ — вопрос ниже) создаёт опрос из «+»: вопрос, 2–10 вариантов, один или несколько ответов, анонимно или нет, срок. В ленте — карточка с вариантами; после голоса — проценты и аватары. Автор видит, кто не ответил, может напомнить, закрыть досрочно; по сроку опрос закрывается сам, итог фиксируется в карточке. Открытые опросы попадают в «Важные → Ждут вас».',
+      'Новый тип сообщения <code>poll</code> (вопрос, варианты, флаги, срок); таблица <code>poll_votes(poll_id, option, user_id)</code>; для анонимных голос хранится без связи с человеком (или связь видна только серверу, чтобы не голосовать дважды — нужно решить); ручки «проголосовать / отменить / закрыть»; событие по сокету при каждом голосе; задача планировщика на закрытие по сроку; поиск по тексту опроса.',
+      '1) Нужна ли «честная» анонимность (сервер не знает, кто как голосовал) или достаточно скрыть в интерфейсе? 2) Можно ли менять голос после голосования — да до закрытия? 3) Кто может создавать опросы в больших чатах? 4) Нужен ли вариант «свой ответ» (текстом) — усложняет, предлагаю нет. 5) Показывать ли результаты до голоса (сейчас — нет, чтобы не влиять).'),
+  };
+
+  /* ======================================================================
+     3. НАПОМНИТЬ МНЕ
+     ====================================================================== */
+  const M1 = 'Коллеги, завтра с 9:00 до 13:00 нужен инструктор в большой зал. Кто возьмёт слот?';
+  const remSheet = (sel, act, go, close, title = 'Напомнить мне') => sheet(`<h2><span>${title}</span></h2>
+    <div class="q2">${[['Через час', 'в 10:41'], ['Сегодня вечером', 'в 18:00'], ['Завтра утром', 'сб, в 9:00'], ['В понедельник', '16 ноября, 9:00']].map(([b, sm]) => { const v = b === 'Через час' ? 'Сегодня в 10:41' : b === 'Сегодня вечером' ? 'Сегодня в 18:00' : b === 'Завтра утром' ? 'Завтра в 9:00' : 'Пн, 16 ноября, 9:00'; return `<div class="qo ${sel === v ? 'sel' : ''}" data-a="${act}" data-v="${v}" style="cursor:pointer"><b>${b}</b><small>${sm}</small></div>`; }).join('')}</div>
+    <div class="lbl">Своё время</div><div style="display:flex;gap:8px"><div class="field" style="flex:1.4">Сб, 15 ноября</div><div class="field" style="flex:1">9:00</div></div>
+    <div class="opt" style="margin-top:8px"><div class="g">Не напоминать, если в треде ответили<small>Удобно для «кто возьмёт слот?»</small></div>${cb(false)}</div>
+    <button class="btn pri" data-a="${go}">Напомнить: ${sel.toLowerCase()}</button>`, close);
+  const t3 = {
+    init: () => ({ a: { menu: true, sheet: false, when: 'Завтра в 9:00', set: '' }, b: { st: 'idle' }, list: [
+      { id: 1, w: 'Сегодня в 18:00', grp: 'Сегодня', k: 'ДР', ch: 'Врачи', t: 'График осмотров на ноябрь: по вторникам и пятницам с 14:00, кабинет 2.' },
+      { id: 2, w: 'Пн, 16 ноября, 9:00', grp: 'Понедельник', k: 'ОЧ', ch: 'Общий', t: 'Ключи от раздевалки теперь на стойке, не у охраны.' } ], c: { sheet: null, sel: 'Сегодня в 18:00' } }),
+    phones: [
+      { id: 'A', label: 'Меню сообщения → шторка', cap: '<b>Живой.</b> Долгое нажатие на сообщение открывает меню: новые пункты «Напомнить мне» и «Сделать задачей» стоят рядом с «В важные». Выберите время — у сообщения появится колокольчик; напоминание видно только вам.', r: s => {
+        const a = s.a, bell = a.set ? `${I('bell', 'width:12px;height:12px;color:var(--primary)')}` : '';
+        const m1 = inMsg('МС', M1, '9:12', { meta: bell, attr: 'data-a="ra-menu" style="cursor:pointer"' });
+        const mid = `${mi('reply', 'Ответить')}${mi('threads', 'Ответить в треде')}<div class="md"></div>${mi('star', 'В важные')}${mi('bell', a.set ? 'Изменить напоминание' : 'Напомнить мне', 'ra-open', a.set ? a.set.replace('Завтра в ', 'завтра ') : '', 'hi')}${mi('sq', 'Сделать задачей')}${mi('fwd', 'Переслать')}<div class="md"></div>${mi('link', 'Копировать ссылку')}${mi('copy', 'Копировать текст')}`;
+        return `<div class="phone">${st}${chead('Инструкторы · зал', '9 участников · 4 в сети', av('ИЗ', 'c1', 'm'))}<div class="feed" data-scroll="feed">${day('Сегодня')}${m1}
+          ${meMsg('<div class="quote"><b>Марина Соколова</b>Завтра с 9:00 до 13:00 нужен инструктор…</div>Посмотрю расписание и отвечу до вечера', '9:20')}${inMsg('ОЧ', 'Я в отпуске со вторника, не смогу.', '9:31')}</div>${composer()}
+          ${a.menu ? ctxMenu(inMsg('МС', M1, '9:12'), mid, 'ra-close') : ''}${a.sheet ? remSheet(a.when, 'ra-pick', 'ra-go', 'ra-sclose') : ''}${toastH(s, 'A')}</div>`;
+      } },
+      { id: 'B', label: 'Пуш на экране блокировки', cap: '<b>Живой.</b> Нажмите на уведомление — раскроются действия: открыть, отложить на час / до завтра, «Готово». Текст уведомления — само сообщение и чат; заголовок «Напоминание», чтобы отличать от новых сообщений.', r: s => {
+        const b = s.b;
+        const card = `<div class="push" data-a="rb-tap"><div class="p1"><span class="appi">${mascot(12, 14)}</span>COMA · НАПОМИНАНИЕ<span>сейчас</span></div><b>Марина Соколова · Инструкторы · зал</b>${M1}</div>`;
+        let body = '';
+        if (b.st === 'idle') body = card;
+        if (b.st === 'menu') body = card + `<div class="pacts"><div data-a="rb-open">Открыть сообщение${I('chat')}</div><div data-a="rb-snooze" data-v="10:00">Напомнить через час${I('clock')}</div><div data-a="rb-snooze" data-v="завтра в 9:00">Напомнить завтра${I('cal')}</div><div data-a="rb-done">Готово${I('check')}</div></div>`;
+        if (b.st === 'snoozed') body = `<div class="lnote">${I('clock', 'width:14px;height:14px;vertical-align:-2px')} Напомню ${b.v}</div>`;
+        if (b.st === 'done') body = `<div class="lnote">${I('check', 'width:14px;height:14px;vertical-align:-2px')} Напоминание закрыто</div>`;
+        if (b.st === 'open') return `<div class="phone">${st}${chead('Инструкторы · зал', '9 участников · 4 в сети', av('ИЗ', 'c1', 'm'))}<div class="feed" data-scroll="feed">${day('Вчера')}${inMsg('МС', M1, '9:12', { attr: 'style="box-shadow:0 0 0 2px var(--primary)"', meta: I('bell', 'width:12px;height:12px;color:var(--primary)') })}${inMsg('ОЧ', 'Я в отпуске со вторника, не смогу.', '9:31')}${day('Сегодня')}${inMsg('ИЛ', 'Беру, если ещё актуально', '9:01')}</div>
+          <div class="strip" data-a="rb-reset">${I('bell')}<span><b>Напоминание</b> · сообщение подсвечено</span><a class="lnk" style="font-weight:600">Готово</a></div>${composer()}</div>`;
+        return `<div class="phone"><div class="lock">${st}<div class="lk">${I('lock')}</div><div class="dt">суббота, 15 ноября</div><div class="clk">9:00</div>${body}<div class="bottom"></div></div>${b.st === 'snoozed' || b.st === 'done' ? `<div style="position:absolute;bottom:40px;left:0;right:0;text-align:center;z-index:2"><button class="btn sm sec" data-a="rb-reset">Показать снова</button></div>` : ''}</div>`;
+      } },
+      { id: 'C', label: 'Мои напоминания — в «Важных»', cap: '<b>Где видны.</b> В «Важных» фильтр «Напоминания», сгруппировано по времени. Напоминание, поставленное в первом телефоне, появится здесь. «Перенести» — та же шторка, «Готово» — убрать.', r: s => {
+        const L = [...s.list]; if (s.a.set) L.splice(0, 0, { id: 0, w: s.a.set, grp: s.a.set.startsWith('Сегодня') ? 'Сегодня' : s.a.set.startsWith('Завтра') ? 'Завтра' : 'Понедельник', k: 'МС', ch: 'Инструкторы · зал', t: M1 });
+        const order = ['Сегодня', 'Завтра', 'Понедельник'];
+        const groups = order.map(g => { const it = L.filter(x => x.grp === g); return it.length ? `<div class="sect">${g}</div>` + it.map(x => `<div class="sitem"><div class="w">${I('bell')}${x.w.replace(/^(Сегодня|Завтра) в /, '').replace('Пн, 16 ноября, ', '')}<span>${x.ch}</span></div><p><b style="font-weight:600">${first(x.k)}:</b> ${x.t}</p><div class="acts"><button class="btn sm sec" data-a="rc-move" data-id="${x.id}">Перенести</button><button class="btn sm sec">Открыть</button><button class="btn sm pri" data-a="rc-done" data-id="${x.id}" style="margin-left:auto">Готово</button></div></div>`).join('') : ''; }).join('');
+        return `<div class="phone white">${st}<div class="top"><h1>Важные</h1><button class="ib soft">${I('search')}</button></div>
+          <div class="folders" style="background:var(--surface)"><span class="fd">Ждут вас<span class="n">3</span></span><span class="fd">Сохранённые</span><span class="fd" aria-selected="true">Напоминания<span class="n">${L.length}</span></span><span class="fd">Задачи</span></div>
+          <div class="list" data-scroll="l" style="background:var(--canvas)">${groups || '<div class="cap" style="text-align:center;padding:40px">Напоминаний нет</div>'}</div>${tabbar(2)}${s.c.sheet != null ? remSheet(s.c.sel, 'rc-pick', 'rc-go', 'rc-close', 'Перенести напоминание') : ''}${toastH(s, 'C')}</div>`;
+      } },
+    ],
+    on: {
+      'ra-menu': s => s.a.menu = true, 'ra-close': (s, d, e, ev) => { if (ev && ev.target.closest('[data-stop]')) return; s.a.menu = false; },
+      'ra-open': s => { s.a.menu = false; s.a.sheet = true; }, 'ra-pick': (s, d) => s.a.when = d.v, 'ra-sclose': s => s.a.sheet = false,
+      'ra-go': s => { s.a.sheet = false; s.a.set = s.a.when; toast(s, 'A', `Напомню ${s.a.when.toLowerCase()}. Список — в «Важных»`, 'bell'); },
+      'rb-tap': s => { if (s.b.st === 'idle') s.b.st = 'menu'; else if (s.b.st === 'menu') s.b.st = 'idle'; }, 'rb-open': s => s.b.st = 'open',
+      'rb-snooze': (s, d) => { s.b.st = 'snoozed'; s.b.v = d.v; }, 'rb-done': s => s.b.st = 'done', 'rb-reset': s => s.b.st = 'idle',
+      'rc-move': (s, d) => s.c.sheet = +d.id, 'rc-pick': (s, d) => s.c.sel = d.v, 'rc-close': s => s.c.sheet = null,
+      'rc-go': s => { const id = s.c.sheet, v = s.c.sel, grp = v.startsWith('Сегодня') ? 'Сегодня' : v.startsWith('Завтра') ? 'Завтра' : 'Понедельник';
+        if (id === 0) s.a.set = v; else { const x = s.list.find(x => x.id === id); x.w = v; x.grp = grp; } s.c.sheet = null; toast(s, 'C', 'Перенесено: ' + v.toLowerCase(), 'clock'); },
+      'rc-done': (s, d) => { const id = +d.id; if (id === 0) s.a.set = ''; else s.list = s.list.filter(x => x.id !== id); toast(s, 'C', 'Готово — напоминание убрано'); },
+    },
+    notes: notes(
+      'В меню любого сообщения — «Напомнить мне». Шторка — как у «Отправить позже»: четыре готовых времени и своё. В нужное время приходит пуш «Напоминание» с текстом сообщения; из пуша — открыть (сообщение подсвечено), отложить или закрыть. Все напоминания — в «Важных → Напоминания». Видно только мне, в чате никто ничего не замечает.',
+      'Таблица <code>reminders(user_id, message_id, at, state, skip_if_replied)</code>; ручки «создать / перенести / закрыть / список»; тот же планировщик, что у отложенных сообщений, отправляет пуш через push-relay; категория уведомления с действиями (iOS UNNotificationCategory, Android actions) — правка в мобильном клиенте; доступ проверяется при срабатывании (если меня удалили из чата — напоминание без текста).',
+      '1) Нужна ли опция «не напоминать, если ответили в треде» — полезно для слотов, но усложняет. 2) Повторяющиеся напоминания («каждый понедельник») — предлагаю нет, для этого есть отложенные с повтором. 3) Напоминание без сообщения («напомни мне в 17:00 позвонить») — это уже задача себе; предлагаю не делать.'),
+  };
+
+  /* ======================================================================
+     4. ЗАДАЧИ В ЧАТЕ
+     ====================================================================== */
+  const ST = { open: ['Открыта', ''], prog: ['В работе', 'pr'], done: ['Готово', 'ok'] };
+  const taskCard = (t, viewer) => {
+    const [sl, sc] = ST[t.st], mine = t.who === viewer, od = t.overdue && t.st !== 'done';
+    const acts = mine ? (t.st === 'open' ? `<button class="btn sm sec" data-a="tk-st" data-id="${t.id}" data-v="prog">Взять в работу</button><button class="btn sm pri" data-a="tk-st" data-id="${t.id}" data-v="done">${I('check', 'width:15px;height:15px;vertical-align:-3px')} Готово</button>` : t.st === 'prog' ? `<button class="btn sm pri" data-a="tk-st" data-id="${t.id}" data-v="done">${I('check', 'width:15px;height:15px;vertical-align:-3px')} Готово</button>` : `<button class="btn sm sec" data-a="tk-st" data-id="${t.id}" data-v="open">Вернуть в работу</button>`) : t.st !== 'done' ? `<button class="btn sm sec" data-a="tk-nudge" data-id="${t.id}">${I('bell', 'width:15px;height:15px;vertical-align:-3px')} Напомнить ${firstDat(t.who)}</button>` : '';
+    return `<div class="tk-h">${I('sq')}Задача${od ? '<span class="pill dg">Просрочена</span>' : `<span class="pill ${sc}">${sl}</span>`}</div><div class="tk-t ${t.st === 'done' ? 'done' : ''}">${esc(t.title)}</div>
+      <div class="tk-m"><span>${pa(t.who, 'round')}${mine ? 'Вы' : first(t.who)}</span>${t.due ? `<span class="${od ? 'dngc' : ''}">${I('clock')}${t.due}</span>` : ''}</div>${t.src ? `<div class="tk-src">из сообщения ${t.src}</div>` : ''}${acts ? `<div class="tk-a">${acts}</div>` : ''}`;
+  };
+  const trow = (t, act = 'tk-toggle', showChat = false) => `<div class="trow"><span class="cb ${t.st === 'done' ? 'on' : ''}" data-a="${act}" data-id="${t.id}">${t.st === 'done' ? I('check') : ''}</span><div class="bd"><b class="${t.st === 'done' ? 'done' : ''}">${esc(t.title)}</b><small>${pa(t.who, 'round', '').replace('class="av', 'style="width:18px;height:18px;font-size:8px" class="av')}${first(t.who)}${t.due ? ` · <span class="${t.overdue && t.st !== 'done' ? 'od' : ''}">${t.due}</span>` : ''}${showChat ? ` · ${t.chat}` : ''}${t.st === 'prog' ? ' · <span class="pill pr" style="font-size:10.5px">в работе</span>' : ''}</small></div></div>`;
+  const D4 = 'Нужно до среды проверить аптечку в большом зале и докупить бинты.';
+  const t4 = {
+    init: () => ({ tasks: [
+      { id: 1, title: 'Подготовить большой зал к слоту в ср, 9:00', who: 'ИЛ', due: 'ср, 8:45', st: 'open', chat: 'Инструкторы · зал', grp: 'Позже', src: 'Марины Соколовой' },
+      { id: 2, title: 'Забрать ключи от малого зала у охраны', who: 'ОЧ', due: 'сегодня, 17:00', st: 'prog', chat: 'Инструкторы · зал', grp: 'Сегодня' },
+      { id: 3, title: 'Сдать журнал инструктажа по технике безопасности', who: 'ИЛ', due: 'вчера', st: 'open', overdue: 1, chat: 'Общий', grp: 'Просрочено' },
+      { id: 4, title: 'Повесить новое расписание бассейна', who: 'ИЛ', due: 'сегодня, 12:00', st: 'open', chat: 'Слоты на неделю', grp: 'Сегодня' },
+      { id: 5, title: 'Передать график на декабрь', who: 'ДР', due: '', st: 'done', chat: 'Инструкторы · зал', grp: 'Без срока' },
+    ], made: false, a: { menu: true, sheet: false, title: 'Проверить аптечку в большом зале, докупить бинты', who: 'ИЛ', due: 'ср, 9:00', desc: '', remind: true },
+      cl: [{ t: 'Разложить маты', by: 'ОЧ' }, { t: 'Достать инвентарь из кладовой', by: '' }, { t: 'Проветрить зал', by: '' }, { t: 'Включить свет и вентиляцию', by: '' }],
+      c: { screen: 'info', tab: 'open' }, d: { banner: true } }),
+    phones: [
+      { id: 'A', label: 'Сделать задачей из сообщения', cap: '<b>Живой.</b> Меню сообщения Дины → «Сделать задачей». В шторке — что сделать (подставлено из сообщения), кому, срок, пояснение. «Создать» — в ленте карточка задачи со ссылкой на исходное сообщение; исполнителю придёт пуш.', r: s => {
+        const a = s.a;
+        const mid = `${mi('reply', 'Ответить')}${mi('threads', 'Ответить в треде')}<div class="md"></div>${mi('star', 'В важные')}${mi('bell', 'Напомнить мне')}${mi('sq', 'Сделать задачей', 'ta-open', '', 'hi')}${mi('fwd', 'Переслать')}<div class="md"></div>${mi('copy', 'Копировать текст')}`;
+        const nt = s.tasks.find(t => t.id === 9);
+        const sh = a.sheet ? sheet(`<h2><span>Новая задача</span></h2><div class="tk-src" style="margin:-4px 0 8px">из сообщения Дины Рябовой: «${D4}»</div>
+          <div class="lbl" style="margin-top:0">Что сделать</div><input class="fi" style="width:100%" data-bind="a.title" value="${esc(a.title)}">
+          <div class="lbl">Кому</div><div class="chips">${['ИЛ', 'ОЧ', 'АИ', 'МС'].map(k => `<span class="chip ${a.who === k ? 'on' : ''}" data-a="ta-who" data-v="${k}">${pa(k, 'round').replace('class="av', 'style="width:22px;height:22px;font-size:9px;margin-left:-6px" class="av')}${k === 'МС' ? 'Себе' : first(k)}</span>`).join('')}</div>
+          <div class="lbl">Срок</div><div class="chips">${['сегодня, 18:00', 'завтра, 12:00', 'ср, 9:00', 'без срока'].map(v => chip(a.due === v, v, 'ta-due')).join('')}</div>
+          <div class="lbl">Пояснение</div><textarea class="fi" data-bind="a.desc" placeholder="Необязательно">${esc(a.desc)}</textarea>
+          <div class="opt" style="margin-top:6px"><div class="g">Напомнить исполнителю за час до срока</div>${tg(a.remind, 'ta-rem')}</div>
+          <button class="btn pri" data-a="ta-go">Создать задачу</button>`, 'ta-sclose') : '';
+        return `<div class="phone">${st}${chead('Инструкторы · зал', '9 участников · 4 в сети', av('ИЗ', 'c1', 'm'))}${s.made ? `<div class="strip">${I('sq')}<span><b>Задачи: ${s.tasks.filter(t => t.chat === 'Инструкторы · зал' && t.st !== 'done').length} открыто</b> · ближайшая сегодня, 17:00</span>${I('right', 'color:var(--muted)')}</div>` : ''}
+          <div class="feed" data-scroll="feed">${day('Сегодня')}${inMsg('ОЧ', 'Маты в малом зале разложил.', '9:02')}${inMsg('ДР', D4, '9:15', { attr: 'data-a="ta-menu" style="cursor:pointer"', meta: nt ? I('sq', 'width:12px;height:12px;color:var(--primary)') : '' })}
+          ${nt ? meMsg(taskCard(nt, 'МС'), '9:41', { obj: 1 }) : ''}</div>${composer()}${a.menu ? ctxMenu(inMsg('ДР', D4, '9:15'), mid, 'ta-close') : ''}${sh}${toastH(s, 'A')}</div>`;
+      } },
+      { id: 'B', label: 'Исполнитель: карточка и чек-лист', cap: '<b>Живой.</b> Исполнитель берёт задачу в работу и закрывает её прямо в ленте — автор видит статус. Ниже — чек-лист в обычном сообщении: отметить пункт может любой участник, рядом аватар отметившего.', r: s => {
+        const done = s.cl.filter(x => x.by).length;
+        const cl = `<div class="cl-h">Подготовить большой зал к 9:00</div>${s.cl.map((x, i) => `<div class="cli ${x.by ? 'done' : ''}" data-a="cl-t" data-i="${i}">${cb(!!x.by)}<span>${x.t}</span>${x.by ? `<span class="by">${pa(x.by, 'round')}</span>` : ''}</div>`).join('')}<div class="pfoot"><span>${done} из ${s.cl.length}</span><span class="sp"></span>${done === s.cl.length ? '<span class="okc" style="font-weight:600">Всё готово</span>' : ''}</div>`;
+        return `<div class="phone">${st}${chead('Инструкторы · зал', '9 участников · 4 в сети', av('ИЗ', 'c1', 'm'))}<div class="feed" data-scroll="feed">${day('Сегодня')}
+          ${inMsg('МС', taskCard(s.tasks[0], 'ИЛ'), '8:50', { obj: 1 })}${inMsg('МС', cl, '8:52', { obj: 1 })}${inMsg('ОЧ', 'Маты разложил, инвентарь на тебе 🙂', '9:02')}</div>${composer()}${toastH(s, 'B')}</div>`;
+      } },
+      { id: 'C', label: 'Задачи чата — из информации о чате', cap: '<b>Живой.</b> В информации о чате — новая кнопка «Задачи» и блок с ближайшими. «Все» открывает список чата: открытые и готовые, кружок — закрыть задачу.', r: s => {
+        const T = s.tasks.filter(t => t.chat === 'Инструкторы · зал'), open = T.filter(t => t.st !== 'done');
+        if (s.c.screen === 'list') { const L = s.c.tab === 'open' ? open : T.filter(t => t.st === 'done');
+          return `<div class="phone white">${st}${chead('Задачи', 'Инструкторы · зал', '', `<button class="ib">${I('plus')}</button>`, 'data-a="tc-back"')}<div class="pseg"><button aria-selected="${s.c.tab === 'open'}" data-a="tc-tab" data-t="open">Открытые · ${open.length}</button><button aria-selected="${s.c.tab === 'done'}" data-a="tc-tab" data-t="done">Готово · ${T.length - open.length}</button></div>
+            <div class="list" data-scroll="l" style="border-top:1px solid var(--border);margin-top:6px">${L.map(t => trow(t)).join('') || '<div class="cap" style="text-align:center;padding:40px">Пусто</div>'}</div>${toastH(s, 'C')}</div>`; }
+        return `<div class="phone">${st}${chead('', '', '', `<button class="ib">${I('edit')}</button>`)}<div class="list" data-scroll="l"><div class="ihead">${av('ИЗ', 'c1')}<b>Инструкторы · зал</b><small>9 участников</small></div>
+          <div class="iacts"><div>${I('search')}Поиск</div><div>${I('belloff')}Звук</div><div data-a="tc-open">${I('sq')}Задачи</div><div>${I('cal')}Слоты</div></div>
+          <div class="igrp"><div class="gh">Задачи · ${open.length} открыто<a data-a="tc-open">Все${I('right')}</a></div>${open.slice(0, 3).map(t => trow(t)).join('')}</div>
+          <div class="igrp"><div class="ili">${I('image')}<span>Медиа и файлы</span><small>48</small></div><div class="ili">${I('pin')}<span>Закреплённые</span><small>2</small></div><div class="ili">${I('users')}<span>Участники</span><small>9</small></div></div></div>${toastH(s, 'C')}</div>`;
+      } },
+      { id: 'D', label: '«Мои задачи» — фильтр в «Важных»', cap: '<b>Все мои задачи из всех чатов</b>, по срокам. Сверху — пуш о приближающемся сроке (нажмите, чтобы скрыть). Кружок закрывает задачу — меняется и в ленте второго телефона.', r: s => {
+        const mine = s.tasks.filter(t => t.who === 'ИЛ');
+        const G = ['Просрочено', 'Сегодня', 'Позже', 'Готово'].map(g => { const L = g === 'Готово' ? mine.filter(t => t.st === 'done') : mine.filter(t => t.grp === g && t.st !== 'done'); return L.length ? `<div class="sect" ${g === 'Просрочено' ? 'style="color:var(--danger)"' : ''}>${g} · ${L.length}</div>${L.map(t => trow(t, 'tk-toggle', true)).join('')}` : ''; }).join('');
+        return `<div class="phone white">${st}<div class="top"><h1>Важные</h1><button class="ib soft">${I('search')}</button></div>
+          <div class="folders" style="background:var(--surface)"><span class="fd">Ждут вас<span class="n">3</span></span><span class="fd">Сохранённые</span><span class="fd">Напоминания</span><span class="fd" aria-selected="true">Задачи<span class="n">${mine.filter(t => t.st !== 'done').length}</span></span></div>
+          <div class="list" data-scroll="l">${G}</div>${tabbar(2)}
+          ${s.d.banner && s.tasks[3].st !== 'done' ? `<div class="ibanner" data-a="td-hide"><span class="appi">${mascot(12, 14)}</span><div class="bd"><b>Через час срок задачи</b>Повесить новое расписание бассейна<small> · Слоты на неделю</small></div></div>` : ''}${toastH(s, 'D')}</div>`;
+      } },
+    ],
+    on: {
+      'ta-menu': s => s.a.menu = true, 'ta-close': (s, d, e, ev) => { if (ev && ev.target.closest('[data-stop]')) return; s.a.menu = false; },
+      'ta-open': s => { s.a.menu = false; s.a.sheet = true; }, 'ta-sclose': s => s.a.sheet = false,
+      'ta-who': (s, d) => s.a.who = d.v, 'ta-due': (s, d) => s.a.due = d.v, 'ta-rem': s => s.a.remind = !s.a.remind,
+      'ta-go': s => { const a = s.a; s.tasks = s.tasks.filter(t => t.id !== 9); s.tasks.push({ id: 9, title: a.title.trim() || 'Без названия', who: a.who, due: a.due === 'без срока' ? '' : a.due, st: 'open', chat: 'Инструкторы · зал', grp: a.due.startsWith('сегодня') ? 'Сегодня' : 'Позже', src: 'Дины Рябовой' }); a.sheet = false; s.made = true; s.bottom = 'A';
+        toast(s, 'A', a.who === 'МС' ? 'Задача создана — она в «Важных → Задачи»' : `${first(a.who)} получит уведомление о задаче`, 'sq'); },
+      'tk-st': (s, d, el) => { const t = s.tasks.find(t => t.id === +d.id); t.st = d.v; const ph = el.closest('[data-ph]').dataset.ph; if (d.v === 'done') toast(s, ph, 'Задача закрыта — автор увидит'); },
+      'tk-nudge': (s, d, el) => toast(s, el.closest('[data-ph]').dataset.ph, 'Отправили напоминание исполнителю', 'bell'),
+      'tk-toggle': (s, d) => { const t = s.tasks.find(t => t.id === +d.id); t.st = t.st === 'done' ? 'open' : 'done'; },
+      'cl-t': (s, d) => { const x = s.cl[+d.i]; x.by = x.by ? '' : 'ИЛ'; },
+      'tc-open': s => s.c.screen = 'list', 'tc-back': s => s.c.screen = 'info', 'tc-tab': (s, d) => s.c.tab = d.t, 'td-hide': s => s.d.banner = false,
+    },
+    notes: notes(
+      'Задача рождается из переписки: «Сделать задачей» в меню сообщения или «+ → Задача». У неё один исполнитель, срок и статус «открыта / в работе / готово»; карточка живёт в ленте, ссылается на исходное сообщение. Чек-лист — отдельный тип сообщения, отметить пункт может любой. Мои задачи из всех чатов — в «Важных → Задачи»; за час до срока — пуш. <b>Почему «Важные», а не вкладка:</b> внизу уже пять вкладок (это предел), а «Ещё» прячет то, что требует действия. «Важные» и так личный ящик (сохранённое, напоминания, «ждут вас») — задачи туда естественно ложатся, и вкладка получает единый смысл: «моё, на что надо ответить».',
+      'Таблица <code>tasks(chat_id, source_message_id, title, note, assignee_id, due_at, status, created_by)</code> + сообщение-карточка в ленте, которое обновляется событием; чек-лист — тип сообщения с пунктами и <code>checked_by/at</code> у каждого (одновременные отметки — без конфликтов, по пункту); выборка «мои задачи» по всем чатам; планировщик для напоминания о сроке; права: менять статус — исполнитель и автор.',
+      '1) Нужна ли задача на нескольких исполнителей? Предлагаю нет: это «каждый отметился» — уже есть подтверждение. 2) Повторяющиеся задачи («каждое утро проветрить зал») — для этого лучше чек-лист по расписанию; делать ли? 3) Видят ли задачи чата все участники или только автор и исполнитель? 4) Нужна ли вкладка «Задачи» вместо «Агентов», если агенты будут жить в «Ещё»?'),
+  };
+
+  /* ======================================================================
+     5. СЛОТЫ
+     ====================================================================== */
+  const HALLS = [['big', 'Большой зал'], ['small', 'Малый зал'], ['pool', 'Бассейн']];
+  const DAYS = [['Пн', 16], ['Вт', 17], ['Ср', 18], ['Чт', 19], ['Пт', 20]];
+  const TIMES = ['9:00–13:00', '13:00–17:00'];
+  const seedSlots = () => {
+    const A = { // hall-day-time -> person|null
+      'big-0-0':'СК','big-0-1':'ОБ','big-1-0':'АИ','big-1-1':null,'big-2-0':'ИЛ','big-2-1':'ОЧ','big-3-0':'ПМ','big-3-1':null,'big-4-0':'СК','big-4-1':'ТВ',
+      'small-0-0':'ТВ','small-0-1':'ИЛ','small-1-0':'ОЧ','small-1-1':'НК','small-2-0':null,'small-2-1':'АИ','small-3-0':'ОЧ','small-3-1':'ОБ','small-4-0':'НК','small-4-1':null,
+      'pool-0-0':'АП','pool-0-1':'ПМ','pool-1-0':'АП','pool-1-1':'ТВ','pool-2-0':'АП','pool-2-1':'НК','pool-3-0':'ИЛ','pool-3-1':'АИ','pool-4-0':null,'pool-4-1':'ПМ' };
+    return Object.entries(A).map(([id, who]) => { const [h, d, t] = id.split('-'); return { id, h, d: +d, t: +t, who, offer: null }; });
+  };
+  const hallN = h => HALLS.find(x => x[0] === h)[1];
+  const slotT = x => `${hallN(x.h)} · ${DAYS[x.d][0].toLowerCase()} ${DAYS[x.d][1]}, ${TIMES[x.t]}`;
+  const busyAt = (s, k, d, t) => s.slots.find(x => x.who === k && x.d === d && x.t === t);
+  const slotSheet = (s, ph) => {
+    const x = s.slots.find(x => x.id === s.sheet.id), me = 'ИЛ', head = `<h2><span>${hallN(x.h)}</span></h2><div class="slotbox">${I('cal')}<div><b>${DAYS[x.d][0]}, ${DAYS[x.d][1]} ноября · ${TIMES[x.t]}</b><small>${x.who ? (x.who === me ? 'ваш слот' : 'занят: ' + nm(x.who)) : 'свободно'}</small></div></div>`;
+    if (s.sheet.step === 'give') {
+      const cand = ['__all', 'ОЧ', 'СК', 'АИ', 'ДР'];
+      return sheet(`<h2><button class="ib" data-a="sl-back">${I('back')}</button><span>Отдать слот</span></h2><div class="slotbox">${I('cal')}<div><b>${slotT(x)}</b><small>пока замену не подтвердят, слот ваш</small></div></div>
+        <div class="lbl">Кому предложить</div>${cand.map(k => { if (k === '__all') return `<div class="opt click" data-a="sl-to" data-v="__all">${av(I('users', 'width:17px;height:17px'), 'cag', 'm round')}<div class="g">Всем в чате<small>кто первый нажмёт «Беру»</small></div><span class="cb ${s.sheet.to === '__all' ? 'on' : ''}" style="border-radius:50%">${s.sheet.to === '__all' ? I('check') : ''}</span></div>`;
+          const b = busyAt(s, k, x.d, x.t); return `<div class="opt ${b ? '' : 'click'}" ${b ? 'style="opacity:.5"' : `data-a="sl-to" data-v="${k}"`}>${pa(k, 'm round')}<div class="g">${nm(k)}<small class="${b ? '' : 'okc'}">${b ? 'занят(а): ' + hallN(b.h).toLowerCase() : 'свободен(на) в это время'}</small></div><span class="cb ${s.sheet.to === k ? 'on' : ''}" style="border-radius:50%">${s.sheet.to === k ? I('check') : ''}</span></div>`; }).join('')}
+        <div class="lbl">Комментарий</div><input class="fi" style="width:100%" data-bind="sheet.note" value="${esc(s.sheet.note)}" placeholder="Необязательно">
+        <div class="opt" style="margin-top:6px"><div class="g">Нужно согласие администратора<small>Марина подтвердит замену</small></div>${tg(s.sheet.adm, 'sl-adm')}</div>
+        <button class="btn pri" data-a="sl-offer">${s.sheet.to === '__all' ? 'Предложить всем' : 'Предложить ' + firstDat(s.sheet.to)}</button>`, 'sl-close');
+    }
+    let body;
+    if (!x.who) body = `<div class="cap">Записаться может любой инструктор чата. Администратор увидит запись сразу.</div><button class="btn pri" data-a="sl-take">Записаться</button><button class="btn sec" style="margin-top:8px">Позвать коллегу</button>`;
+    else if (x.who === me && x.offer) body = `<div class="pres" style="background:var(--warning-soft);color:var(--warning)">${I('swap')}Предложено ${x.offer.to === '__all' ? 'всем в чате' : firstDat(x.offer.to)} · ждём ответа</div><button class="btn sec" data-a="sl-recall">Отозвать предложение</button>`;
+    else if (x.who === me) body = `<div class="opt"><div class="g">Напомнить накануне<small>пт, в 18:00 — пуш и сообщение в чат</small></div>${tg(true, 'noop')}</div><button class="btn sec" data-a="sl-give">${I('swap')}Отдать слот</button>`;
+    else body = `<div class="opt">${pa(x.who, 'm round')}<div class="g">${nm(x.who)}<small>${PP[x.who][2]}</small></div></div><button class="btn sec">Написать ${firstDat(x.who)}</button>`;
+    return sheet(head + body, 'sl-close');
+  };
+  const boardHead = s => `${chead('Слоты на неделю', 'Доска · 14 участников', av('СН', 'c2', 'm'), `<button class="ib">${I('more')}</button>`)}<div class="wk"><button class="ib">${I('back')}</button><b>16–20 ноября</b><button class="ib">${I('right')}</button></div>
+    <div class="legend"><span><i style="border:1.5px dashed var(--border-strong)"></i>свободно · ${s.slots.filter(x => !x.who).length}</span><span><i style="background:var(--primary)"></i>мои · ${s.slots.filter(x => x.who === 'ИЛ').length}</span><span><i style="background:var(--warning-soft);border:1.5px dashed var(--warning)"></i>отдаю</span></div>`;
+  const shCell = x => { const me = x.who === 'ИЛ'; const c = !x.who ? 'free' : x.offer ? 'off' : me ? 'mine' : PP[x.who][1]; return `<div class="sh ${c}" data-a="sl-open" data-id="${x.id}" title="${slotT(x)}">${!x.who ? I('plus') : me ? 'Я' : x.who}</div>`; };
+  const t5 = {
+    init: () => ({ slots: seedSlots(), sheet: null, day: 2, oleg: { pre: 'offered', mine: 'none' }, adm: { sheet: false, week: '16–20', called: {} }, demoOffer: { st: 'offered' } }),
+    phones: [
+      { id: 'A', label: 'Вариант А — сетка по дням', cap: '<b>Вся неделя на одном экране.</b> Строки — залы, столбцы — дни, в ячейке утро и день. Пунктир — свободно, синее — ваше, жёлтое — вы отдаёте. Нажмите на ячейку: «Записаться», «Отдать слот» или кто занял. Для администратора и тех, кто планирует неделю.', r: s => `<div class="phone white">${st}${boardHead(s)}
+        <div class="list" data-scroll="l" style="background:var(--canvas)"><div class="sg"><div></div>${DAYS.map(([d, n]) => `<div class="dh">${d}<b>${n}</b></div>`).join('')}
+        ${HALLS.map(([h, hn], hi) => `${hi ? '<div class="sep"></div>' : ''}<div class="hl">${hn}<small>утро<br>день</small></div>${DAYS.map((_, d) => `<div class="sc">${[0, 1].map(t => shCell(s.slots.find(x => x.id === `${h}-${d}-${t}`))).join('')}</div>`).join('')}`).join('')}</div>
+        <div class="sgnote">Утро 9:00–13:00, день 13:00–17:00. Буквы — инициалы занявшего.</div>
+        <div class="sect">Мои слоты</div>${s.slots.filter(x => x.who === 'ИЛ').map(x => `<div class="sc2 mine" data-a="sl-open" data-id="${x.id}"><div class="g"><b>${hallN(x.h)}</b><small>${DAYS[x.d][0]}, ${DAYS[x.d][1]} · ${TIMES[x.t]}${x.offer ? ' · <span class="warnc">отдаю</span>' : ''}</small></div>${I('right', 'color:var(--muted)')}</div>`).join('')}</div>
+        ${s.sheet && s.sheet.ph === 'A' ? slotSheet(s, 'A') : ''}${toastH(s, 'A')}</div>` },
+      { id: 'B', label: 'Вариант Б — лента по дню', cap: '<b>Один день — список карточек</b>, крупно и с кнопкой «Записаться» прямо в карточке. Над списком — дни недели, жёлтая цифра — сколько свободно. Удобнее с телефона «на бегу». Данные общие с вариантом А — записались здесь, видно там.', r: s => {
+        const L = s.slots.filter(x => x.d === s.day).sort((a, b) => a.t - b.t || HALLS.findIndex(h => h[0] === a.h) - HALLS.findIndex(h => h[0] === b.h));
+        const card = x => { const me = x.who === 'ИЛ';
+          if (!x.who) return `<div class="sc2 free" data-a="sl-open" data-id="${x.id}"><span class="hx">${I('door')}</span><div class="g"><b>${hallN(x.h)}</b><small class="warnc">свободно</small></div><button class="btn sm pri" data-a="sl-take1" data-id="${x.id}">Записаться</button></div>`;
+          return `<div class="sc2 ${me ? 'mine' : ''}" data-a="sl-open" data-id="${x.id}">${me ? `<span class="hx" style="background:var(--primary);color:var(--on-primary)">${I('check')}</span>` : pa(x.who, 'm round')}<div class="g"><b>${hallN(x.h)}</b><small>${me ? (x.offer ? 'вы · <span class="warnc">отдаёте</span>' : 'вы') : nm(x.who)}</small></div>${me && !x.offer ? `<button class="btn sm sec" data-a="sl-give1" data-id="${x.id}">Отдать</button>` : ''}</div>`; };
+        return `<div class="phone white">${st}${chead('Слоты на неделю', 'Доска · 14 участников', av('СН', 'c2', 'm'), `<button class="ib">${I('more')}</button>`)}
+          <div class="dys">${DAYS.map(([d, n], i) => { const f = s.slots.filter(x => x.d === i && !x.who).length; return `<div class="dy ${s.day === i ? 'on' : ''}" data-a="sl-day" data-v="${i}">${d}<b>${n}</b>${f ? `<i>${f}</i>` : ''}</div>`; }).join('')}</div>
+          <div class="list" data-scroll="l" style="background:var(--canvas)">${TIMES.map((tm, t) => `<div class="tsec">${t ? 'День' : 'Утро'} · ${tm}</div>${L.filter(x => x.t === t).map(card).join('')}`).join('')}</div>
+          ${s.sheet && s.sheet.ph === 'B' ? slotSheet(s, 'B') : ''}${toastH(s, 'B')}</div>`;
+      } },
+      { id: 'C', label: 'Замена и напоминание · Олег', cap: '<b>Глазами того, кому отдают слот.</b> Карточка-предложение с «Беру / Не могу». Если отдать свой слот Олегу в варианте А или Б — здесь появится ещё одно предложение. Внизу — напоминание накануне: в 18:00 пуш и личная карточка.', r: s => {
+        const me = 'ОЧ';
+        const offerCard = (from, x, key, st, note) => { const head = `<div class="tk-h">${I('swap')}Передача слота${st === 'accepted' ? '<span class="pill ok">Принято</span>' : st === 'waitadm' ? '<span class="pill wr">Ждём Марину</span>' : st === 'declined' ? '<span class="pill">Отказ</span>' : '<span class="pill wr">Вам</span>'}</div>`;
+          return inMsg(from, `${head}<div style="margin:6px 0 2px">${first(from)} предлагает вам слот${note ? `: «${esc(note)}»` : ''}</div><div class="slotbox">${I('cal')}<div><b>${hallN(x.h)}</b><small>${DAYS[x.d][0]}, ${DAYS[x.d][1]} ноября · ${TIMES[x.t]}</small></div></div>
+            ${st === 'offered' ? `<div class="tk-a"><button class="btn sm pri" data-a="ol-acc" data-k="${key}">${I('check', 'width:15px;height:15px;vertical-align:-3px')} Беру</button><button class="btn sm sec" data-a="ol-dec" data-k="${key}">Не могу</button></div>` : st === 'accepted' ? `<div class="ackdone">${I('check')}Слот ваш. ${first(from)} получил(а) уведомление</div>` : st === 'waitadm' ? `<div class="acs">Вы согласились. Слот перейдёт к вам, когда Марина подтвердит.</div>` : `<div class="acs">Вы отказались — ${first(from)} предложит другим</div>`}`, '9:' + (key === 'pre' ? '05' : '41'), { obj: 1 }); };
+        const pre = s.slots.find(x => x.id === 'pool-3-1');
+        const my = s.slots.find(x => x.offer && x.offer.to === 'ОЧ');
+        const accepted = s.slots.find(x => x.acceptedBy === 'ОЧ');
+        return `<div class="phone">${st}${chead('Слоты на неделю', '14 участников · 5 в сети', av('СН', 'c2', 'm'))}<div class="strip">${I('grid')}<span><b>Доска 16–20 ноября</b> · свободно ${s.slots.filter(x => !x.who).length} из 30</span>${I('right', 'color:var(--muted)')}</div>
+          <div class="feed" data-scroll="feed">${day('Пятница')}${inMsg('МС', 'Доска на следующую неделю открыта, записывайтесь до воскресенья.<div class="card"><b>Слоты · 16–20 ноября</b><p>Занято 25 из 30</p><div class="prog"><i style="width:83%"></i></div><div class="acts"><button class="btn sm pri">Открыть доску</button></div></div>', '12:00')}
+          ${offerCard('АИ', pre, 'pre', s.oleg.pre, 'в четверг на выезде')}
+          ${s.oleg.pre === 'accepted' ? sysl('<b>Олег</b> принял слот у <b>Анны</b>: бассейн, чт 19, день') : ''}
+          ${my ? offerCard('ИЛ', my, 'mine', 'offered', my.offer.note) : ''}${accepted ? offerCard('ИЛ', accepted, 'x', accepted.admWait ? 'waitadm' : 'accepted') : ''}
+          ${day('Сегодня')}${inMsg('', `<div class="tk-h">${I('bell')}Напоминание · завтра</div><div style="margin:6px 0 2px">Завтра ваш слот. Ключи — на стойке администратора.</div><div class="slotbox">${I('cal')}<div><b>Малый зал</b><small>вт, 17 ноября · 9:00–13:00</small></div></div><div class="tk-a"><button class="btn sm sec" data-a="ol-ok">Ок</button><button class="btn sm sec">${I('swap', 'width:15px;height:15px;vertical-align:-3px')} Не смогу — отдать</button></div>`, '18:00', { obj: 1, avh: `<div class="av s round" style="background:var(--mascot-plate);border:1px solid var(--border)">${mascot(13, 15)}</div>`, name: 'Coma', color: 'var(--primary)', tag: ' <span class="pill" style="font-size:10px;padding:1px 6px">только вам</span>' })}
+          </div>${composer()}${toastH(s, 'C')}</div>`;
+      } },
+      { id: 'D', label: 'Администратор: незакрытые и шаблон', cap: '<b>Вид администратора.</b> Сводка недели, незакрытые слоты с «Позвать» (пишет в чат с упоминанием свободных) и «Назначить». Передачи, ждущие согласия, — здесь же. «Создать неделю» — шаблон залов и часов, опубликовать одной кнопкой.', r: s => {
+        const free = s.slots.filter(x => !x.who), wait = s.slots.filter(x => x.admWait);
+        const tpl = [['Большой зал', 'пн–пт · 9–13, 13–17', 10, 1], ['Малый зал', 'пн–пт · 9–13, 13–17', 10, 1], ['Бассейн', 'пн–пт · 9–13, 13–17', 10, 1], ['Зал ЛФК 2', 'вт, чт · 9–13', 2, 0]];
+        const n = tpl.filter((x, i) => s.adm['t' + i] ?? x[3]).reduce((a, x) => a + x[2], 0);
+        return `<div class="phone">${st}${chead('Слоты на неделю', 'Управление · вы администратор', av('СН', 'c2', 'm'), `<button class="ib">${I('gear')}</button>`)}
+          <div class="list" data-scroll="l"><div class="wk" style="background:transparent"><button class="ib">${I('back')}</button><b>${s.adm.week === '23–27' ? '23–27 ноября' : '16–20 ноября'}</b><button class="ib">${I('right')}</button></div>
+          ${s.adm.week === '23–27' ? `<div class="stat3"><div><b>30</b>слотов</div><div class="w"><b>30</b>свободно</div><div><b>0</b>передач</div></div><div class="cap" style="padding:0 14px">Доска опубликована в «Слоты на неделю». Запись открыта до воскресенья, 20:00.</div><div style="padding:0 14px"><button class="btn sec" data-a="ad-wk">Вернуться к 16–20 ноября</button></div>` : `
+          <div class="stat3"><div><b>${30 - free.length}</b>из 30 занято</div><div class="w"><b>${free.length}</b>свободно</div><div><b>${wait.length}</b>ждут вас</div></div>
+          ${wait.length ? `<div class="tsec">Ждут вашего согласия</div>${wait.map(x => `<div class="sc2"><span class="hx">${I('swap')}</span><div class="g"><b>${first('ИЛ')} → ${first(x.acceptedBy)}</b><small>${slotT(x)}</small></div><button class="btn sm pri" data-a="ad-ok" data-id="${x.id}">Да</button></div>`).join('')}` : ''}
+          <div class="tsec">Незакрытые слоты</div>${free.map(x => `<div class="sc2 free wrap"><span class="hx">${I('door')}</span><div class="g"><b>${hallN(x.h)}</b><small>${DAYS[x.d][0]}, ${DAYS[x.d][1]} · ${TIMES[x.t]}</small></div><div class="sc2a">${s.adm.called[x.id] ? '<span class="pill ok" style="align-self:center">позвали в чат</span>' : `<button class="btn sm sec" data-a="ad-call" data-id="${x.id}">${I('at', 'width:15px;height:15px;vertical-align:-3px')} Позвать</button>`}<button class="btn sm sec" data-a="ad-assign" data-id="${x.id}">Назначить</button></div></div>`).join('') || '<div class="cap" style="padding:0 16px">Все слоты закрыты 🎉</div>'}
+          <div style="padding:4px 12px 16px"><button class="btn" data-a="ad-new">${I('plus')}Создать неделю 23–27 ноября</button></div>`}</div>
+          ${s.adm.sheet ? sheet(`<h2><span>Неделя 23–27 ноября</span></h2><div class="lbl" style="margin-top:0">Шаблон</div><div class="chips">${chip(true, 'Обычная неделя', 'noop')}${chip(false, 'Короткая (пн–чт)', 'noop')}${chip(false, '+ Новый', 'noop')}</div>
+            <div class="lbl">Залы и часы</div>${tpl.map(([a, b, c, def], i) => { const on = s.adm['t' + i] ?? def; return `<div class="tpl" data-a="ad-t" data-k="${i}">${cb(on)}<div class="g">${a}<small>${b}</small></div><span class="pill">${c}</span></div>`; }).join('')}
+            <div class="opt" style="margin-top:8px"><div class="g">Закрепить постоянные слоты<small>кто ходит каждую неделю — записан сразу</small></div>${tg(s.adm.keep, 'ad-keep')}</div>
+            <div class="opt"><div class="g">Открыть запись<small>сразу после публикации</small></div><span class="pill pr">сейчас ▾</span></div>
+            <button class="btn pri" data-a="ad-pub">Опубликовать ${n} слотов</button>`, 'ad-close') : ''}${toastH(s, 'D')}</div>`;
+      } },
+    ],
+    on: {
+      'sl-open': (s, d, el) => { s.sheet = { ph: el.closest('[data-ph]').dataset.ph, id: d.id, step: 'info', to: 'ОЧ', note: '', adm: false }; },
+      'sl-close': s => s.sheet = null, 'sl-back': s => s.sheet.step = 'info', 'sl-day': (s, d) => s.day = +d.v,
+      'sl-take': s => { const x = s.slots.find(x => x.id === s.sheet.id); x.who = 'ИЛ'; const ph = s.sheet.ph; s.sheet = null; toast(s, ph, 'Вы записаны. Напомним накануне в 18:00'); },
+      'sl-take1': (s, d, el, ev) => { ev.stopPropagation(); const x = s.slots.find(x => x.id === d.id); x.who = 'ИЛ'; toast(s, 'B', 'Вы записаны. Напомним накануне в 18:00'); },
+      'sl-give': s => s.sheet.step = 'give', 'sl-give1': (s, d, el, ev) => { ev.stopPropagation(); s.sheet = { ph: 'B', id: d.id, step: 'give', to: 'ОЧ', note: '', adm: false }; },
+      'sl-to': (s, d) => s.sheet.to = d.v, 'sl-adm': s => s.sheet.adm = !s.sheet.adm,
+      'sl-offer': s => { const x = s.slots.find(x => x.id === s.sheet.id); x.offer = { to: s.sheet.to, note: s.sheet.note, adm: s.sheet.adm }; const ph = s.sheet.ph, to = s.sheet.to; s.sheet = null; toast(s, ph, to === '__all' ? 'Предложили всем в чате. Слот ваш, пока кто-то не возьмёт' : `${first(to)} получит предложение. Слот ваш, пока не согласится`, 'swap'); },
+      'sl-recall': s => { const x = s.slots.find(x => x.id === s.sheet.id); x.offer = null; s.sheet = null; },
+      'ol-acc': (s, d) => { if (d.k === 'pre') { s.oleg.pre = 'accepted'; s.slots.find(x => x.id === 'pool-3-1').who = 'ОЧ'; toast(s, 'C', 'Слот ваш. Анна получила уведомление'); return; }
+        const x = s.slots.find(x => x.offer && x.offer.to === 'ОЧ'); x.acceptedBy = 'ОЧ'; if (x.offer.adm) x.admWait = true; else x.who = 'ОЧ'; x.offer = null; toast(s, 'C', x.admWait ? 'Ждём согласия Марины' : 'Слот ваш. Игорь получил уведомление'); },
+      'ol-dec': (s, d) => { if (d.k === 'pre') s.oleg.pre = 'declined'; else { const x = s.slots.find(x => x.offer && x.offer.to === 'ОЧ'); x.offer = null; } },
+      'ol-ok': s => toast(s, 'C', 'Хорошо, до завтра'),
+      'ad-call': (s, d) => { s.adm.called[d.id] = 1; toast(s, 'D', 'В чат ушло: «Свободен слот…» с упоминанием свободных в это время', 'at'); },
+      'ad-assign': (s, d) => { const x = s.slots.find(x => x.id === d.id); x.who = ['СК', 'ОБ', 'ПМ', 'ТВ', 'НК'].find(k => !busyAt(s, k, x.d, x.t)) || 'СК'; toast(s, 'D', `Назначили: ${nm(x.who)}. Ему(ей) придёт уведомление`); },
+      'ad-ok': (s, d) => { const x = s.slots.find(x => x.id === d.id); x.who = x.acceptedBy; x.admWait = false; toast(s, 'D', 'Замена подтверждена'); },
+      'ad-new': s => s.adm.sheet = true, 'ad-close': s => s.adm.sheet = false, 'ad-t': (s, d) => { const k = 't' + d.k; s.adm[k] = !(s.adm[k] ?? (d.k !== '3')); }, 'ad-keep': s => s.adm.keep = !s.adm.keep,
+      'ad-pub': s => { s.adm.sheet = false; s.adm.week = '23–27'; toast(s, 'D', 'Опубликовано в «Слоты на неделю»'); }, 'ad-wk': s => s.adm.week = '16–20',
+    },
+    notes: notes(
+      'Администратор раз в неделю создаёт доску из шаблона (залы × дни × часы) — она закрепляется в чате «Слоты на неделю». Инструктор записывается одной кнопкой; свой слот может отдать: конкретному свободному коллеге или «всем», с согласием администратора или без. Пока замену не подтвердили, слот за ним. Накануне в 18:00 — пуш и личная карточка «Завтра ваш слот». Администратор видит незакрытые, зовёт в чат или назначает. <b>Вариант А</b> лучше для планирования и администратора, <b>Б</b> — для инструктора с телефона. Можно оба: А по умолчанию у админа, Б у остальных, переключатель в шапке.',
+      'Сущности <code>slot_boards(chat_id, week)</code>, <code>slots(board_id, place, starts_at, ends_at, assignee_id)</code>, <code>slot_offers(slot_id, from, to|all, needs_admin, status)</code>, <code>slot_templates</code>; запись атомарная (двое нажали одновременно — второму «уже занято»); роли в чате (администратор слотов); события по сокету; планировщик напоминаний накануне; системные сообщения в ленте. Самая крупная из шести функций — это уже маленькое расписание.',
+      '1) Нужно ли согласие администратора при передаче всегда, иногда (переключатель) или никогда? 2) Ограничения: максимум слотов в неделю на человека, нельзя два зала одновременно (сейчас — подсказка «занят»)? 3) Слоты разной длины («полдня» и «час») — или всегда фиксированные блоки из шаблона? 4) Кто видит доску — весь чат или только инструкторы? 5) Нужна ли выгрузка недели (табель)? 6) Вариант А, Б или оба?'),
+  };
+
+  /* ======================================================================
+     6. СТАТУС «ОТСУТСТВУЮ»
+     ====================================================================== */
+  const KINDS = { vac: ['🌴', 'В отпуске', 'в отпуске'], recv: ['🩺', 'На приёме', 'на приёме'], out: ['🚗', 'На выезде', 'на выезде'], dnd: ['🔕', 'Не беспокоить', 'не беспокоить'] };
+  const UNT = { vac: ['20 ноября', '30 ноября', 'выбрать дату'], recv: ['14:00', '16:00', 'конец дня'], out: ['13:00', '18:00', 'завтра'], dnd: ['1 час', '18:00', 'завтра 9:00'] };
+  const stLine = a => a ? `${KINDS[a.kind][2]} до ${a.until}` : '';
+  const t6 = {
+    init: () => ({ away: { kind: 'vac', until: '20 ноября', auto: true, text: 'Я в отпуске до 20 ноября. По слотам — к Марине Соколовой.', sub: 'МС', mute: true },
+      draft: null, sheet: false, dm: { text: 'Анна, сможешь в среду подменить в бассейне?', msgs: [] }, mt: { stage: 'suggest', msgs: [] }, pl: 'all' }),
+    phones: [
+      { id: 'A', label: 'Установка статуса · Анна', cap: '<b>Живой.</b> «Ещё» → карточка статуса. Тип, до когда, автоответ в личке и кого предложить вместо себя. «Сохранить» — статус виден везде; «Снять» — и в соседних телефонах статус пропадёт.', r: s => {
+        const a = s.away, d = s.draft;
+        const sh = s.sheet ? sheet(`<h2><span>Статус</span>${s.away ? '<a data-a="aw-clear">Снять</a>' : ''}</h2><div class="q3">${Object.entries(KINDS).map(([k, [e, n]]) => `<div class="qo ${d.kind === k ? 'sel' : ''}" data-a="aw-kind" data-v="${k}" style="cursor:pointer"><span class="e">${e}</span><b>${n}</b></div>`).join('')}</div>
+          <div class="lbl">До</div><div class="chips">${UNT[d.kind].map(v => chip(d.until === v, v, 'aw-until')).join('')}</div>
+          <div class="opt" style="margin-top:10px"><div class="g">Автоответ в личных сообщениях<small>Один раз каждому собеседнику</small></div>${tg(d.auto, 'aw-tg', 'auto')}</div>
+          ${d.auto ? `<textarea class="fi" data-bind="draft.text">${esc(d.text)}</textarea>` : ''}
+          <div class="lbl">Вместо меня</div><div class="chips">${['МС', 'ОЧ', ''].map(k => `<span class="chip ${d.sub === k ? 'on' : ''}" data-a="aw-sub" data-v="${k}">${k ? first(k) + ' ' + PP[k][0].split(' ')[1][0] + '.' : 'Никого'}</span>`).join('')}</div>
+          <div class="opt" style="margin-top:8px"><div class="g">Не присылать уведомления<small>кроме срочных от администратора</small></div>${tg(d.mute, 'aw-tg', 'mute')}</div>
+          <button class="btn pri" data-a="aw-save">Сохранить</button>`, 'aw-close') : '';
+        return `<div class="phone white">${st}<div class="top"><h1>Ещё</h1></div><div class="list" style="background:var(--canvas);padding-top:6px">
+          <div class="prof">${pa('АИ', 'round', a ? `<span class="stx">${KINDS[a.kind][0]}</span>` : '<span class="on"></span>').replace('av c2 round', 'av c2 round')}<div class="g"><b>Анна Иванова</b><small>инструктор · Реабцентр «Опора»</small></div></div>
+          <div class="stbtn" data-a="aw-open"><span class="e ${a ? '' : 'none'}">${a ? KINDS[a.kind][0] : I('moon', 'width:18px;height:18px')}</span><div class="g">${a ? KINDS[a.kind][1] + ' до ' + a.until : 'Установить статус'}<small>${a ? (a.auto ? 'Автоответ включён' : 'Без автоответа') + (a.sub ? ' · вместо меня: ' + first(a.sub) : '') : 'Отпуск, приём, выезд, не беспокоить'}</small></div>${I('right', 'color:var(--muted)')}</div>
+          <div class="mlist"><div class="ili">${I('contact')}<span>Люди</span>${I('right')}</div><div class="ili">${I('clock')}<span>Отложенные</span><small>2</small></div><div class="ili">${I('bell')}<span>Уведомления</span><small>${a && a.mute ? 'выкл. до ' + a.until : 'вкл.'}</small></div><div class="ili">${I('gear')}<span>Настройки</span>${I('right')}</div></div>
+          </div>${tabbar(4)}${sh}${toastH(s, 'A')}</div>`;
+      } },
+      { id: 'B', label: 'Личка: шапка и автоответ', cap: '<b>Живой.</b> В шапке вместо «в сети» — статус. Под шапкой — кто замещает, с переходом в чат. Отправьте сообщение — придёт автоответ (помечен, один раз). Без статуса всё как обычно.', r: s => {
+        const a = s.away;
+        const msgs = s.dm.msgs.map(m => m.auto ? `<div class="msg auto">${pa('АИ')}<div class="bub"><div class="who" style="color:${colf('АИ')}">Анна Иванова <span class="autot">АВТООТВЕТ</span></div>${esc(m.t)}<span class="meta">9:41</span></div></div>` : meMsg(esc(m.t), '9:41')).join('');
+        return `<div class="phone">${st}${chead('Анна Иванова', a ? `<span class="stl">${KINDS[a.kind][0]} ${stLine(a)}</span>` : 'была в сети в 9:30', pa('АИ', 'm round', a ? `<span class="stx">${KINDS[a.kind][0]}</span>` : ''))}
+          ${a && a.sub ? `<div class="strip">${I('swap')}<span>Вместо Анны — <b>${nm(a.sub)}</b></span>${I('right', 'color:var(--muted)')}</div>` : ''}
+          <div class="feed" data-scroll="feed">${day('Вчера')}${inMsg('АИ', 'С понедельника ухожу в отпуск, слоты в бассейне отдала.', '17:40')}${meMsg('Хорошего отдыха!', '17:45')}${day('Сегодня')}${msgs}</div>
+          ${composer({ bind: 'dm.text', value: s.dm.text, send: 'dm-send' })}${toastH(s, 'B')}</div>`;
+      } },
+      { id: 'C', label: '@упоминание в группе', cap: '<b>Живой.</b> Выберите Анну в подсказке — над полем появится «Анна в отпуске — ответит позже» и предложение упомянуть замещающего. Отправьте — под сообщением тихая строка, видна только вам.', r: s => {
+        const a = s.away, m = s.mt;
+        const sug = m.stage === 'suggest' ? `<div class="sug">${[['АИ'], ['АП']].map(([k]) => `<div class="su" data-a="mt-pick" data-v="${k}">${pa(k, 'm round', k === 'АИ' && a ? `<span class="stx">${KINDS[a.kind][0]}</span>` : '')}<div class="g">${nm(k)}${k === 'АИ' && a ? `<small class="aw">${KINDS[a.kind][0]} ${stLine(a)}</small>` : `<small>${PP[k][2]} · в сети</small>`}</div></div>`).join('')}</div>` : '';
+        const txt = m.stage === 'suggest' ? '@А' : m.stage === 'picked' ? `<span class="ment">@${m.who === 'АИ' ? 'Анна' : m.who === 'МС' ? 'Марина' : 'Артём'}</span> сможешь в среду подменить в бассейне?` : '';
+        const hint = m.stage === 'picked' && m.who === 'АИ' && a ? `<div class="hint2"><span class="e">${KINDS[a.kind][0]}</span><span>Анна ${stLine(a)} — ответит позже.${a.sub ? ` <a data-a="mt-sub">Упомянуть ${first(a.sub).replace('Марина', 'Марину')}</a>` : ''}</span></div>` : '';
+        const msgs = m.msgs.map(x => meMsg(`<span class="ment">@${x.n}</span> сможешь в среду подменить в бассейне?`, '9:41') + (x.away ? sysl(`${x.away} Уведомление придёт ей без звука · видно только вам`) : '')).join('');
+        return `<div class="phone">${st}${chead('Инструкторы · зал', '9 участников · 4 в сети', av('ИЗ', 'c1', 'm'))}<div class="feed" data-scroll="feed">${day('Сегодня')}${inMsg('МС', 'В среду в бассейне нужен человек на утро.', '9:30')}${msgs}</div>
+          <div class="cmp">${hint}<div class="cl"><button class="ib soft">${I('plus')}</button><div class="inp"><div class="txt ${txt ? '' : 'phd'}">${txt || 'Сообщение'}</div><button class="ib">${I('smile')}</button></div><button class="ib ${txt ? 'pri' : 'soft'}" data-a="${m.stage === 'picked' ? 'mt-send' : m.stage === 'sent' ? 'mt-reset' : 'noop'}">${I(txt ? 'up' : 'mic')}</button></div>${sug}</div>${toastH(s, 'C')}</div>`;
+      } },
+      { id: 'D', label: 'Люди: кто на месте', cap: '<b>Список людей</b> («Ещё → Люди»): у аватара значок статуса, под именем — до когда. Фильтр «Отсутствуют» — быстро понять, кого нет. Статус Анны берётся из первого телефона.', r: s => {
+        const a = s.away;
+        const P2 = [['АИ', a ? KINDS[a.kind][0] : '', a ? stLine(a) : 'в сети', !!a], ['ДР', '🩺', 'на приёме до 14:00', true], ['ИЛ', '🚗', 'на выезде до 13:00', true], ['ЕГ', '🔕', 'не беспокоить до 18:00', true], ['МС', '', 'в сети', false], ['ОЧ', '', 'в сети', false], ['СК', '', 'был в сети в 8:12', false], ['ОБ', '', 'в сети', false]];
+        const L = P2.filter(x => s.pl === 'all' || (s.pl === 'away' ? x[3] : !x[3]));
+        return `<div class="phone white">${st}${chead('Люди', '16 человек', '', `<button class="ib">${I('search')}</button>`)}
+          <div class="folders" style="background:var(--surface);padding-top:10px">${[['all', 'Все', 16], ['here', 'На месте', 16 - P2.filter(x => x[3]).length], ['away', 'Отсутствуют', P2.filter(x => x[3]).length]].map(([k, n, c]) => `<button class="fd" aria-selected="${s.pl === k}" data-a="pl-f" data-v="${k}">${n}<span class="n">${c}</span></button>`).join('')}</div>
+          <div class="list" data-scroll="l">${L.map(([k, e, t, aw]) => `<div class="row">${pa(k, 'm round', e ? `<span class="stx">${e}</span>` : t === 'в сети' ? '<span class="on"></span>' : '')}<div class="bd"><div class="l1"><span class="nm">${nm(k)}</span></div><div class="l2"><span class="pv" ${aw ? 'style="color:var(--warning)"' : ''}>${PP[k][2]} · ${t}</span></div></div></div>`).join('')}</div></div>`;
+      } },
+    ],
+    on: {
+      'aw-open': s => { s.draft = JSON.parse(JSON.stringify(s.away || { kind: 'vac', until: '20 ноября', auto: true, text: 'Я в отпуске до 20 ноября. По слотам — к Марине Соколовой.', sub: 'МС', mute: true })); s.sheet = true; },
+      'aw-close': s => s.sheet = false, 'aw-kind': (s, d) => { const k = d.v, t = { vac: 'Я в отпуске до 20 ноября. По слотам — к Марине Соколовой.', recv: 'Я на приёме до 14:00, отвечу после.', out: 'Я на выезде до 13:00, отвечу после.', dnd: 'Не беспокоить — отвечу позже.' }; s.draft.kind = k; s.draft.until = UNT[k][0]; s.draft.text = t[k]; s.draft.mute = k !== 'recv'; },
+      'aw-until': (s, d) => s.draft.until = d.v, 'aw-tg': (s, d) => s.draft[d.k] = !s.draft[d.k], 'aw-sub': (s, d) => s.draft.sub = d.v,
+      'aw-save': s => { s.away = s.draft; s.sheet = false; s.dm.msgs = s.dm.msgs.filter(m => !m.auto); toast(s, 'A', 'Статус установлен — его видят коллеги'); },
+      'aw-clear': s => { s.away = null; s.sheet = false; toast(s, 'A', 'Статус снят'); },
+      'dm-send': s => { const t = (s.dm.text || '').trim(); if (!t) return; s.dm.msgs.push({ t }); s.dm.text = ''; s.bottom = 'B';
+        if (s.away && s.away.auto && !s.dm.msgs.some(m => m.auto)) later(s, 800, () => { s.dm.msgs.push({ auto: 1, t: s.away.text }); s.bottom = 'B'; }); },
+      'mt-pick': (s, d) => { s.mt.stage = 'picked'; s.mt.who = d.v; }, 'mt-sub': s => s.mt.who = 'МС',
+      'mt-send': s => { const n = s.mt.who === 'АИ' ? 'Анна' : s.mt.who === 'МС' ? 'Марина' : 'Артём'; s.mt.msgs.push({ n, away: s.mt.who === 'АИ' && s.away ? `${KINDS[s.away.kind][0]} Анна ${stLine(s.away)}.` : '' }); s.mt.stage = 'sent'; s.bottom = 'C'; later(s, 1800, () => s.mt.stage = 'suggest'); },
+      'mt-reset': s => s.mt.stage = 'suggest', 'pl-f': (s, d) => s.pl = d.v,
+    },
+    notes: notes(
+      'Человек ставит статус: «в отпуске до 20 ноября», «на приёме до 14:00», «на выезде», «не беспокоить» — с автоответом и замещающим. Статус виден в шапке лички, в списке людей, в подсказке @упоминания и в строке после отправки. Уведомления ему приглушаются; по сроку статус снимается сам. Это снижает «почему не отвечает?» и переадресует вопросы по слотам замещающему.',
+      'Поле статуса пользователя <code>presence_status(kind, until, autoreply_text, substitute_id, mute)</code> — отдаётся вместе с присутствием (у нас уже есть «в сети» в шапке); снятие по сроку — планировщик; автоответ — серверное сообщение с флагом <code>auto</code>, не чаще раза в сутки одному собеседнику; приглушение пушей на стороне push-relay; подсказка при упоминании — на клиенте по уже пришедшему статусу.',
+      '1) Список типов фиксированный или можно свой текст? (Предлагаю 4 + «свой».) 2) Видят ли все сотрудники причину («в отпуске») или только «нет на месте»? Для врачей «на приёме» уместно, «на больничном» — личное, не включал. 3) Пробивают ли «не беспокоить» сообщения администратора? 4) Может ли администратор ставить статус за сотрудника (график отпусков)?'),
+  };
+
+  /* ======================================================================
+     РЕКОМЕНДАЦИЯ
+     ====================================================================== */
+  const dots = n => `<span class="dots">${'●'.repeat(n)}<s>${'●'.repeat(5 - n)}</s></span>`;
+  const recView = () => `<div class="rec2">
+    <div class="pn wide"><h3>Рекомендация: первая волна — подтверждение, «напомнить мне», слоты (MVP)</h3>
+      <p>Для реабцентра главная организационная боль — <b>слоты</b>: сейчас это сообщение «кто возьмёт?» и ручной учёт у администратора. Но слоты — самая крупная работа, и по ним нужен выбор варианта и ответы на вопросы. Поэтому:</p>
+      <ul><li><b>Волна 1 (2–3 недели):</b> «Подтверждение ознакомления» и «Напомнить мне». Обе маленькие на сервере, опираются на то, что уже есть (сбор отметок у агентов, планировщик отложенных, push-relay). Сразу дают администратору контроль над регламентами, а сотрудникам — личные напоминания. Параллельно показываем клиенту два варианта доски слотов.</li>
+      <li><b>Волна 2 (3–4 недели):</b> «Слоты» MVP — доска, запись, «отдать слот» с согласием коллеги, напоминание накануне, шаблон недели. Без табеля и ограничений — их добавим по отзывам.</li>
+      <li><b>Волна 3:</b> «Опросы» и «Статус „отсутствую“» — дешёвые, но менее срочные.</li>
+      <li><b>Позже, по запросу:</b> «Задачи». Риск превратить мессенджер в таск-трекер; начать можно с одного чек-листа в сообщении — он дешевле и закрывает «подготовить зал».</li></ul>
+      <p>Сквозное решение для всех волн: <b>вкладка «Важные» становится личным ящиком</b> — «Ждут вас» (подтверждения, опросы), «Сохранённые», «Напоминания», «Задачи». Новая вкладка внизу не нужна.</p></div>
+    <div class="pn wide"><h3>Сравнение</h3><div class="tw"><table class="mtx"><tr><th>Функция</th><th>Польза для реабцентра</th><th>Объём (сервер + клиент)</th><th>Опора на готовое</th><th>Волна</th></tr>
+      <tr><td>Подтверждение ознакомления</td><td>${dots(5)}</td><td>${dots(2)}</td><td>сбор отметок агента, сокет</td><td><span class="pill ok">1</span></td></tr>
+      <tr><td>Напомнить мне</td><td>${dots(3)}</td><td>${dots(2)}</td><td>планировщик отложенных, пуши</td><td><span class="pill ok">1</span></td></tr>
+      <tr><td>Слоты</td><td>${dots(5)}</td><td>${dots(5)}</td><td>чат «Слоты на неделю», папки</td><td><span class="pill pr">2</span></td></tr>
+      <tr><td>Опросы</td><td>${dots(3)}</td><td>${dots(3)}</td><td>карточки в ленте</td><td><span class="pill">3</span></td></tr>
+      <tr><td>Статус «отсутствую»</td><td>${dots(3)}</td><td>${dots(2)}</td><td>присутствие в шапке</td><td><span class="pill">3</span></td></tr>
+      <tr><td>Задачи и чек-листы</td><td>${dots(2)}</td><td>${dots(4)}</td><td>—</td><td><span class="pill">позже</span></td></tr></table></div></div>
+    <div class="pn"><h3>Главные открытые вопросы</h3><ul>
+      <li>Слоты: вариант А (сетка), Б (лента) или оба с переключателем?</li>
+      <li>Слоты: согласие администратора при передаче — всегда, по выбору или никогда?</li>
+      <li>Подтверждение: кто может включать и видят ли получатели счётчик?</li>
+      <li>«Важные» как личный ящик — согласны? Тогда вкладка «Агенты» остаётся внизу.</li>
+      <li>Статус: показывать причину отсутствия всем или только «нет на месте»?</li></ul></div>
+    <div class="pn"><h3>Чего сознательно нет</h3><ul>
+      <li>Данных пациентов — ни в слотах, ни в задачах: только залы, время, люди.</li>
+      <li>«Смен» и «заявок» — только слоты.</li>
+      <li>Канбана, проектов, подзадач, трудозатрат — не таск-трекер.</li>
+      <li>Агента в этих функциях: всё работает руками, агент позже может «читать» доску и подтверждения.</li></ul></div>
+  </div>`;
+
+  /* ======================================================================
+     КОМПОНЕНТЫ (новые элементы в дизайн-системе)
+     ====================================================================== */
+  const compView = () => {
+    const pd = mkPoll('Во сколько планёрка?', [['8:30', ['ОЧ', 'АИ', 'ИЛ']], ['13:00', ['СК']], ['17:00', []]], { me: 'ИЛ' });
+    const pn = mkPoll('Во сколько планёрка?', [['8:30', []], ['13:00', []], ['17:00', []]], { me: 'ИЛ', due: 'до пт' });
+    return `<div class="ds on">
+    <div class="pn"><h3>Подтверждение</h3><div class="msg" style="margin:0;max-width:100%"><div class="bub">Текст сообщения<div class="ack"><div class="ackh">${I('clock')}Нужно подтвердить до пт, 18:00</div><button class="ackbtn">${I('check')}Ознакомлен(а)</button><div class="acs">Подтвердили 12 из 15</div></div></div></div>
+      <div class="msg me" style="margin-top:8px"><div class="bub">Своё<div class="ack"><div class="acount">${I('dcheck')}<span class="g">Подтвердили <b>12 из 15</b></span>${I('right')}</div><div class="trk"><i style="width:80%"></i></div></div></div></div>
+      <div class="rw" style="margin-top:10px"><span class="need">${I('dcheck')}до пт</span><span class="ackdone" style="margin:0">${I('check')}Вы подтвердили</span></div>
+      <div class="cap">Жёлтый (--warning) — «от вас ждут действия». Зелёный — «сделано». Синий — действие.</div></div>
+    <div class="pn"><h3>Опрос: до и после</h3><div class="bub" style="border-radius:18px">${pollH(pn, 'x', '')}</div><div class="bub" style="border-radius:18px;margin-top:8px">${pollH(pd, 'x', '')}</div></div>
+    <div class="pn"><h3>Задача, чек-лист, статусы</h3><div class="bub" style="border-radius:18px">${taskCard({ id: 0, title: 'Подготовить большой зал', who: 'ОЧ', due: 'ср, 8:45', st: 'prog' }, 'МС')}</div>
+      <div class="bub" style="border-radius:18px;margin-top:8px"><div class="cli done">${cb(true)}<span>Разложить маты</span><span class="by">${pa('ОЧ', 'round')}</span></div><div class="cli">${cb(false)}<span>Проветрить зал</span></div></div>
+      <div class="rw" style="margin-top:10px"><span class="pill">Открыта</span><span class="pill pr">В работе</span><span class="pill ok">Готово</span><span class="pill dg">Просрочена</span><span class="pill wr">до пт</span></div></div>
+    <div class="pn"><h3>Слоты</h3><div style="display:grid;grid-template-columns:repeat(5,44px);gap:5px;margin-bottom:10px"><div class="sh free">${I('plus')}</div><div class="sh mine">Я</div><div class="sh c1">ОЧ</div><div class="sh c3">ОБ</div><div class="sh off">Я</div></div>
+      <div class="sc2 free" style="margin:0 0 8px"><span class="hx">${I('door')}</span><div class="g"><b>Малый зал</b><small class="warnc">свободно</small></div><button class="btn sm pri">Записаться</button></div>
+      <div class="sc2 mine" style="margin:0"><span class="hx" style="background:var(--primary);color:var(--on-primary)">${I('check')}</span><div class="g"><b>Большой зал</b><small>вы</small></div><button class="btn sm sec">Отдать</button></div></div>
+    <div class="pn"><h3>Статусы людей</h3><div class="rw">${Object.values(KINDS).map(([e, n]) => `<span class="chip">${e} ${n}</span>`).join('')}</div>
+      <div class="rw">${pa('АИ', 'm round', '<span class="stx">🌴</span>')}${pa('ДР', 'm round', '<span class="stx">🩺</span>')}${pa('ИЛ', 'm round', '<span class="stx">🚗</span>')}${pa('ЕГ', 'm round', '<span class="stx">🔕</span>')}</div>
+      <div class="hint2" style="margin:0"><span class="e">🌴</span><span>Анна в отпуске до 20 ноября — ответит позже. <a>Упомянуть Марину</a></span></div></div>
+    <div class="pn"><h3>Переключатель, уведомление, тост</h3><div class="rw">${tg(true, 'noop')}${tg(false, 'noop')}<span class="chip on">до пт, 18:00</span><span class="chip">без срока</span></div>
+      <div style="position:relative;height:56px"><div class="toast" style="position:static;animation:none">${I('bell')}<span>Напомню завтра в 9:00</span></div></div>
+      <div class="cap">Тост — тёмная кнопочная плашка над полем ввода, 2,8 с. Пуш «Напоминание» — системный, с действиями.</div></div></div>`;
+  };
+
+  /* ================= engine ================= */
+  const VIEWS = { 'Подтверждение': t1, 'Опросы': t2, 'Напомнить мне': t3, 'Задачи': t4, 'Слоты': t5, 'Отсутствую': t6 };
+  const names = [...Object.keys(VIEWS), 'Рекомендация', 'Компоненты'];
+  const root = document.getElementById('root'), nav = document.getElementById('nav');
+  let cur = names[0], S = null;
+  const cap = t => `<div class="cap">${t}</div>`;
+  const fit = el => el.querySelectorAll('.inp textarea').forEach(t => { t.style.height = '38px'; t.style.height = Math.min(t.scrollHeight, 98) + 'px'; });
+  function render() {
+    const v = VIEWS[cur];
+    nav.innerHTML = names.map(x => `<button role="tab" aria-selected="${x === cur}">${x}</button>`).join('');
+    if (!v) { root.innerHTML = cur === 'Рекомендация' ? recView() : compView(); return; }
+    root.innerHTML = `<div class="view on">${v.phones.map(p => `<div class="slot">${p.label ? `<div class="vlabel">${p.label}</div>` : ''}<div data-ph="${p.id}">${p.r(S)}</div>${cap(p.cap)}</div>`).join('')}${v.notes}</div>`;
+    root.querySelectorAll('.feed').forEach(f => f.scrollTop = 1e5); fit(root);
+  }
+  function rerender() {
+    const v = VIEWS[cur]; if (!v) return;
+    v.phones.forEach(p => {
+      const box = root.querySelector(`[data-ph="${p.id}"]`); if (!box) return;
+      const sc = {}; box.querySelectorAll('[data-scroll]').forEach(e => sc[e.dataset.scroll] = e.scrollTop);
+      const ae = document.activeElement, bind = ae && box.contains(ae) && ae.dataset.bind, pos = bind && ae.selectionStart;
+      box.innerHTML = p.r(S); fit(box);
+      box.querySelectorAll('[data-scroll]').forEach(e => { if (e.dataset.scroll in sc) e.scrollTop = sc[e.dataset.scroll]; if (e.dataset.scroll === 'feed' && (S.bottom === p.id || !(e.dataset.scroll in sc))) e.scrollTop = 1e5; });
+      if (bind) { const n = box.querySelector(`[data-bind="${bind}"]`); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (e) {} } }
+    });
+    S.bottom = null;
+  }
+  const show = n => { cur = names.includes(n) ? n : names[0]; S = VIEWS[cur] ? VIEWS[cur].init() : {}; render(); };
+  nav.onclick = e => { const b = e.target.closest('button'); if (b) show(b.textContent); };
+  const themeBtn = document.getElementById('theme');
+  const setTheme = d => { root.dataset.theme = d ? 'dark' : 'light'; themeBtn.textContent = d ? 'Светлая тема' : 'Тёмная тема'; document.body.style.background = d ? '#0f0f11' : ''; document.querySelector('.lab').style.color = d ? '#f0f0f2' : ''; document.querySelector('.bar').style.background = d ? '#0f0f11' : ''; };
+  themeBtn.onclick = () => setTheme(root.dataset.theme !== 'dark');
+
+  const setPath = (o, path, val) => { const k = path.split('.'); let x = o; for (let i = 0; i < k.length - 1; i++) x = x[k[i]]; x[k[k.length - 1]] = val; };
+  root.addEventListener('input', e => {
+    const b = e.target.dataset.bind; if (!b || !S) return; setPath(S, b, e.target.value);
+    const btn = e.target.closest('.cmp') && e.target.closest('.cmp').querySelector('[data-sendbtn]');
+    if (btn) { const has = !!e.target.value.trim(); btn.className = 'ib ' + (has ? 'pri' : 'soft'); btn.innerHTML = I(has ? 'up' : 'mic'); }
+    if (e.target.tagName === 'TEXTAREA' && e.target.closest('.inp')) { e.target.style.height = '38px'; e.target.style.height = Math.min(e.target.scrollHeight, 98) + 'px'; }
+  });
+  let hold, held = false;
+  root.addEventListener('pointerdown', e => { held = false; const h = e.target.closest('[data-hold]'); if (!h) return; hold = setTimeout(() => { held = true; const fn = VIEWS[cur].on[h.dataset.hold]; if (fn) { fn(S, h.dataset, h); rerender(); } }, 420); });
+  root.addEventListener('pointerup', () => clearTimeout(hold));
+  root.addEventListener('contextmenu', e => { if (e.target.closest('[data-hold]')) e.preventDefault(); });
+  root.addEventListener('click', e => {
+    const a = e.target.closest('[data-a]'); if (!a || !VIEWS[cur]) return;
+    if (a.dataset.hold && held) { held = false; return; }
+    if (e.target.closest('input,textarea') && a.contains(e.target.closest('input,textarea'))) return;
+    const fn = VIEWS[cur].on[a.dataset.a]; if (!fn) return;
+    fn(S, a.dataset, a, e); rerender();
+  });
+  window.__proto = { show, setTheme, get S() { return S; }, rerender };
+  const q = new URLSearchParams(location.search);
+  if (q.get('theme') === 'dark') setTheme(true);
+  const v = q.get('v'); show(v == null ? names[0] : (isNaN(+v) ? v : names[+v]));
+})();
+</script>
+</body></html>
