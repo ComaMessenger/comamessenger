@@ -3,8 +3,6 @@ import {
   agentAccess,
   approvalText,
   chatTriggersOf,
-  formatCost,
-  formatDuration,
   formatSpending,
   humanStatus,
   humanStatusLabel,
@@ -14,7 +12,6 @@ import {
   runTrigger,
   stepText,
   todayActivity,
-  toolLabel,
   type AgentTranslate,
 } from "./agents";
 import type {
@@ -122,26 +119,6 @@ describe("agent status", () => {
       { agent_id: "a" },
     ] as AgentToolConfirmation[];
     expect(pendingByAgent(approvals).get("a")).toBe(2);
-  });
-});
-
-describe("agent formatting", () => {
-  it("formats durations through the catalog", () => {
-    expect(formatDuration(t, 4.2)).toBe('agentDurationSeconds:{"count":4}');
-    expect(formatDuration(t, 0)).toBe("—");
-  });
-
-  it("uses the reported currency", () => {
-    expect(formatCost("1.5", "EUR", "en")).toBe("€1.50");
-    expect(formatCost("0.0042", "USD", "en")).toBe("$0.0042");
-    expect(formatCost("1", "bogus", "en")).toBe("$1.00");
-  });
-
-  it("names unknown tools in words", () => {
-    expect(toolLabel(t, "post_message")).toBe("Отправить сообщение");
-    expect(toolLabel(t, "get_slots-today")).toBe(
-      'agentToolExternal:{"name":"get slots today"}',
-    );
   });
 });
 
@@ -262,17 +239,21 @@ describe("agent check", () => {
       agentRun: async () => run({ id: "dry", status: states[++call]! }),
     };
     const seen: string[] = [];
-    const last = await runAgentCheck(
-      api as never,
-      { agentID: "a1", chatID: "c1", prompt: "Привет" },
-      new AbortController().signal,
-      (state) => seen.push(state.status),
-      0,
-    );
+    const last = await runAgentCheck({
+      api: api as never,
+      agentID: "a1",
+      chatID: "c1",
+      prompt: "Привет",
+      runID: "r-1",
+      signal: new AbortController().signal,
+      onUpdate: (state) => seen.push(state.status),
+      interval: 0,
+    });
     expect(last?.status).toBe("completed");
     expect(seen).toEqual(["queued", "running", "completed"]);
     expect(invoked[0]).toMatchObject({
       chat_id: "c1",
+      client_run_id: "r-1",
       dry_run: true,
       input: { prompt: "Привет", sandbox: true, publish: false },
     });
@@ -284,13 +265,15 @@ describe("agent check", () => {
       invokeAgent: async () => run({ status: "queued" }),
       agentRun: async () => run({ status: "running" }),
     };
-    const pending = runAgentCheck(
-      api as never,
-      { agentID: "a1", chatID: "c1", prompt: "?" },
-      controller.signal,
-      () => controller.abort(),
-      0,
-    );
+    const pending = runAgentCheck({
+      api: api as never,
+      agentID: "a1",
+      chatID: "c1",
+      prompt: "?",
+      signal: controller.signal,
+      onUpdate: () => controller.abort(),
+      interval: 0,
+    });
     expect(await pending).toBeNull();
   });
 });

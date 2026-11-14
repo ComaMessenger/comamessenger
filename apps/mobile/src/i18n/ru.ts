@@ -1,3 +1,5 @@
+import { agentBuilderRu } from "../agents/builder/i18n";
+
 export const ru = {
   // Server
   serverTitle: "Подключение",
@@ -1472,4 +1474,7 @@ export const ru = {
   agentPausedNotice: "Агент поставлен на паузу",
   agentResumedNotice: "Агент снова работает",
   agentOpenCardButton: "Карточка агента",
+
+  // Agent builder and Architect
+  ...agentBuilderRu,
 } as const;

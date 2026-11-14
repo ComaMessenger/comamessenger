@@ -1,5 +1,12 @@
 import type { MessengerAPI } from "./api";
 import { hasPermission } from "./settings";
+import {
+  agentRunErrorText,
+  chatName,
+  formatCost,
+  toolLabel,
+  type Translate,
+} from "./agentText";
 import type {
   Agent,
   AgentRecipe,
@@ -20,11 +27,8 @@ import type {
  * keys (i18next with ICU).
  */
 
-/** The part of an i18next `t` these helpers need. */
-export type AgentTranslate = (
-  key: string,
-  options?: Record<string, unknown>,
-) => string;
+/** The part of an i18next `t` these helpers need (same as `Translate`). */
+export type AgentTranslate = Translate;
 
 /* ---------- Access ---------- */
 
@@ -130,149 +134,6 @@ export function pendingByAgent(
   for (const approval of approvals)
     counts.set(approval.agent_id, (counts.get(approval.agent_id) ?? 0) + 1);
   return counts;
-}
-
-/* ---------- Formatting ---------- */
-
-export function chatName(chat: Chat): string {
-  return chat.name || chat.direct_peer?.display_name || chat.id;
-}
-
-/** Duration in the current UI language, never from a guessed locale. */
-export function formatDuration(t: AgentTranslate, seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds <= 0) return "—";
-  if (seconds < 60)
-    return t("agentDurationSeconds", {
-      count: Math.max(1, Math.round(seconds)),
-    });
-  if (seconds < 3600)
-    return t("agentDurationMinutes", { count: Math.round(seconds / 60) });
-  return t("agentDurationHours", { count: Math.round(seconds / 3600) });
-}
-
-/** Money in the currency the server reported, formatted for the locale. */
-export function formatCost(
-  amount: string | number | null | undefined,
-  currency: string | null | undefined,
-  locale: string,
-): string {
-  const value = Number(amount ?? 0);
-  const code = /^[A-Z]{3}$/.test(currency ?? "") ? currency! : "USD";
-  const safe = Number.isFinite(value) ? value : 0;
-  try {
-    return new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency: code,
-      maximumFractionDigits: safe > 0 && safe < 1 ? 4 : 2,
-    }).format(safe);
-  } catch {
-    return `${safe} ${code}`;
-  }
-}
-
-export function formatTime(value: string, locale: string): string {
-  return new Date(value).toLocaleTimeString(locale, {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-export function formatDateTime(value: string, locale: string): string {
-  const date = new Date(value);
-  const today = new Date();
-  const sameDay = date.toDateString() === today.toDateString();
-  return sameDay
-    ? formatTime(value, locale)
-    : date.toLocaleString(locale, {
-        day: "numeric",
-        month: "short",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-}
-
-export function userTimezone(preferred?: string | null): string {
-  return preferred || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-}
-
-const knownRunErrors = new Set([
-  "provider_credential_missing",
-  "external_data_sharing_required",
-  "external_data_sharing_not_approved",
-  "budget_exceeded",
-  "agent_provider_rate_limited",
-  "provider_retryable",
-  "provider_output_truncated",
-  "tool_iteration_limit",
-  "empty_provider_output",
-  "run_timeout",
-  "lease_expired",
-  "run_canceled",
-]);
-
-export function agentRunErrorText(t: AgentTranslate, code: string): string {
-  return knownRunErrors.has(code)
-    ? t(`agentRunError_${code}`)
-    : t("agentRunError_unknown");
-}
-
-/** Readable name of a tool, including external tools the client does not know. */
-export function toolLabel(t: AgentTranslate, name: string): string {
-  const key = `agentTool_${name}`;
-  const known = t(key);
-  if (known !== key) return known;
-  const words = name.replace(/[_-]+/g, " ").trim();
-  return t("agentToolExternal", { name: words || name });
-}
-
-/* ---------- Recipes and summaries ---------- */
-
-export function recipeOf(
-  recipes: readonly AgentRecipe[] | undefined,
-  agent: Pick<Agent, "recipe">,
-): AgentRecipe | undefined {
-  if (agent.recipe === "custom") return undefined;
-  return recipes?.find((recipe) => recipe.id === agent.recipe);
-}
-
-/**
- * The task of an agent in one phrase. Built-in recipes left with their stock
- * instruction get the recipe summary from Core; otherwise the first sentence
- * of the instruction, bounded for a card.
- */
-export function agentTask(
-  t: AgentTranslate,
-  agent: Agent,
-  recipes?: readonly AgentRecipe[],
-): string {
-  const description = (agent.description ?? "").trim();
-  const recipe = recipeOf(recipes, agent);
-  if (recipe && (!description || description === recipe.instructions.trim()))
-    return recipe.summary;
-  if (!description) return t("agentNoTask");
-  const first = description.split(/(?<=[.!?…])\s+/)[0] ?? description;
-  return first.length > 160 ? `${first.slice(0, 157).trimEnd()}…` : first;
-}
-
-/** Where the agent works, as short chat names. */
-export function agentPlaces(
-  t: AgentTranslate,
-  agent: Agent,
-  chats: readonly Chat[],
-): string {
-  const names = agent.chat_ids
-    .map((id) => chats.find((chat) => chat.id === id))
-    .filter((chat): chat is Chat => Boolean(chat))
-    .map(chatName);
-  if (names.length === 0)
-    return agent.chat_ids.length
-      ? t("agentPlacesCount", { count: agent.chat_ids.length })
-      : t("agentPlacesNone");
-  if (names.length <= 2) return names.join(", ");
-  return t("agentPlacesMore", {
-    names: names.slice(0, 2).join(", "),
-    count: names.length - 2,
-  });
 }
 
 /* ---------- What an agent reads, does and when it starts ---------- */
@@ -572,7 +433,11 @@ const knownSteps = new Set([
 ]);
 
 /** «Read the chat», «Would send a card»: a tool step in plain words. */
-export function stepText(t: AgentTranslate, call: AgentRunToolCall): string {
+export function stepText(
+  t: AgentTranslate,
+  call: AgentRunToolCall,
+  label: (name: string) => string = (name) => toolLabel(t, name),
+): string {
   const known = knownSteps.has(call.tool_name);
   const text = known
     ? t(
@@ -581,8 +446,8 @@ export function stepText(t: AgentTranslate, call: AgentRunToolCall): string {
           : `agentStep_${call.tool_name}`,
       )
     : call.dry_run
-      ? t("agentStepWouldExternal", { name: toolLabel(t, call.tool_name) })
-      : t("agentStepExternal", { name: toolLabel(t, call.tool_name) });
+      ? t("agentStepWouldExternal", { name: label(call.tool_name) })
+      : t("agentStepExternal", { name: label(call.tool_name) });
   return call.status === "failed" ? t("agentStepFailed", { step: text }) : text;
 }
 
@@ -660,27 +525,38 @@ function pause(ms: number, signal: AbortSignal) {
 /**
  * One dry run of the agent draft in a chat: nothing is sent to chats. Polls
  * until the run finishes (up to ~6 minutes) and reports every state; stops
- * quietly when `signal` aborts. Returns the last state, or null if aborted.
+ * quietly when `signal` aborts (another check started, the screen closed).
+ * Returns the last state, or null if aborted.
  */
-export async function runAgentCheck(
-  api: {
-    invokeAgent: MessengerAPI["invokeAgent"];
-    agentRun: MessengerAPI["agentRun"];
-  },
-  input: { agentID: string; chatID: string; prompt: string },
-  signal: AbortSignal,
-  onUpdate: (run: AgentRun) => void,
-  /** Polling step in milliseconds for the first ten polls; doubled after. */
+export async function runAgentCheck({
+  api,
+  agentID,
+  chatID,
+  prompt,
+  runID = crypto.randomUUID(),
+  signal,
+  onUpdate,
   interval = 1_000,
-): Promise<AgentRun | null> {
-  let state = await api.invokeAgent(input.agentID, {
-    chat_id: input.chatID,
-    client_run_id: crypto.randomUUID(),
+}: {
+  api: Pick<MessengerAPI, "invokeAgent" | "agentRun">;
+  agentID: string;
+  chatID: string;
+  prompt: string;
+  /** Client run id (a UUID) that makes the request idempotent. */
+  runID?: string;
+  signal: AbortSignal;
+  onUpdate(run: AgentRun): void;
+  /** Polling step in milliseconds for the first ten polls; doubled after. */
+  interval?: number;
+}): Promise<AgentRun | null> {
+  let state = await api.invokeAgent(agentID, {
+    chat_id: chatID,
+    client_run_id: runID,
     chain_depth: 0,
     timeout_seconds: 600,
     max_attempts: 1,
     dry_run: true,
-    input: { prompt: input.prompt, sandbox: true, publish: false },
+    input: { prompt, sandbox: true, publish: false },
   });
   if (signal.aborted) return null;
   onUpdate(state);

@@ -378,6 +378,9 @@ function MessageBubble({
 }) {
   const { t } = useTranslation();
   const mine = message.role === "user";
+  // The server sends `assumptions: null` for a message without them.
+  const assumptions = message.assumptions ?? [];
+  const options = message.options ?? [];
   return (
     <li
       className={cx(
@@ -396,19 +399,19 @@ function MessageBubble({
       )}
       <div className="architect-bubble__body">
         <span className="architect-bubble__text">{message.text}</span>
-        {message.assumptions.length > 0 && (
+        {assumptions.length > 0 && (
           <div className="architect-bubble__assumptions">
             <strong>{t("architectAssumptions")}</strong>
             <ul>
-              {message.assumptions.map((item) => (
+              {assumptions.map((item) => (
                 <li key={item}>{item}</li>
               ))}
             </ul>
           </div>
         )}
-        {answerable && message.options.length > 0 && (
+        {answerable && options.length > 0 && (
           <div className="architect-bubble__options">
-            {message.options.map((option) => (
+            {options.map((option) => (
               <Chip key={option} outline onClick={() => onPick(option)}>
                 {option}
               </Chip>

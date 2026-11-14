@@ -1,3 +1,4 @@
+import { agentBuilderEn } from "../agents/builder/i18n";
 import type { ru } from "./ru";
 
 export const en: Record<keyof typeof ru, string> = {
@@ -1440,4 +1441,7 @@ export const en: Record<keyof typeof ru, string> = {
   agentPausedNotice: "Agent paused",
   agentResumedNotice: "Agent resumed",
   agentOpenCardButton: "Agent card",
+
+  // Agent builder and Architect
+  ...agentBuilderEn,
 };

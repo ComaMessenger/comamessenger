@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { checkBlockers, customExampleCount } from "@comamessenger/core";
 import type {
   Agent,
   AgentRecipe,
@@ -18,12 +19,10 @@ import {
 } from "../../ui";
 import type { PublishBlocker } from "../builder/useAgentBuilder";
 import { blockID } from "../builder/BuilderBlock";
-import { checkBlockers } from "@comamessenger/core";
 import { chatName } from "../shared/format";
 import { CheckResult } from "./CheckResult";
 import { useAgentCheck } from "./useAgentCheck";
 
-const customExampleCount = 3;
 /**
  * The «Check» panel: ready examples of the role, the answer of the draft in
  * dry run and a human trace. Nothing is sent to chats.

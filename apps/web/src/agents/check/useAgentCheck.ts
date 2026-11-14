@@ -33,12 +33,14 @@ export function useAgentCheck(api: MessengerAPI, agent: Agent) {
     setError("");
     setRun(null);
     try {
-      await runAgentCheck(
+      await runAgentCheck({
         api,
-        { agentID: agent.id, chatID, prompt },
-        current.signal,
-        setRun,
-      );
+        agentID: agent.id,
+        chatID,
+        prompt,
+        signal: current.signal,
+        onUpdate: setRun,
+      });
     } catch (cause) {
       if (!current.signal.aborted) setError(messageOf(cause));
     } finally {

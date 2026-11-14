@@ -23,6 +23,7 @@ import { useTranslation } from "react-i18next";
 import {
   chatName,
   checkBlockers,
+  customExampleCount,
   formatCost,
   formatDuration,
   recipeOf,
@@ -57,7 +58,6 @@ import {
 } from "./data";
 import { agentHref, canEditAgent } from "./routes";
 
-const customExampleCount = 3;
 
 /**
  * «Проверка»: ready examples of the role, the answer of the agent draft in a
@@ -147,12 +147,14 @@ function CheckPanel({ agent }: { agent: Agent }) {
     setError("");
     setRun(null);
     try {
-      await runAgentCheck(
+      await runAgentCheck({
         api,
-        { agentID: agent.id, chatID: selected.id, prompt: prompt.trim() },
-        current.signal,
-        setRun,
-      );
+        agentID: agent.id,
+        chatID: selected.id,
+        prompt: prompt.trim(),
+        signal: current.signal,
+        onUpdate: setRun,
+      });
     } catch (cause) {
       if (!current.signal.aborted) setError(messageOf(cause));
     } finally {
