@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { assignableTools } from "@comamessenger/core";
 import type {
   AgentMcpBinding,
   McpConnection,
@@ -10,25 +11,7 @@ import { IconButton, SelectField, Switch, Tag } from "../../ui";
 import { externalMode } from "../shared/confirmation";
 import { ModeChoice } from "./SkillsBlock";
 
-type Tool = { name: string; description: string; readOnly: boolean };
-
-/**
- * Tools of a connection an agent may be given: the assignable ones, and once
- * Core knows the catalog only those the server offers. A tool missing from
- * the catalog is treated as changing data, as the server does.
- */
-export function assignableTools(connection: McpConnection): Tool[] {
-  const catalog = connection.tools ?? [];
-  const known = new Map(catalog.map((tool) => [tool.name, tool]));
-  const names = connection.assignable_tools ?? catalog.map((tool) => tool.name);
-  return names
-    .filter((name) => !connection.tools_refreshed_at || known.has(name))
-    .map((name) => ({
-      name,
-      description: known.get(name)?.description ?? "",
-      readOnly: known.get(name)?.read_only === true,
-    }));
-}
+export { assignableTools };
 
 /**
  * External systems in block «Что умеет»: workspace connections released for

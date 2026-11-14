@@ -1,3 +1,4 @@
+import { needDone, recipeNeedPlace } from "@comamessenger/core";
 import type { Agent, AgentRecipe } from "@comamessenger/core";
 import { CheckCircle2, Circle, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -5,30 +6,12 @@ import type { BuilderAnchor } from "../routes";
 import type { Draft } from "../shared/draft";
 import { blockID } from "./BuilderBlock";
 
-type Need = AgentRecipe["needs"][number];
+const needAnchor: Record<
+  AgentRecipe["needs"][number]["kind"],
+  BuilderAnchor
+> = recipeNeedPlace;
 
-const needAnchor: Record<Need["kind"], BuilderAnchor> = {
-  chats: "places",
-  knowledge: "knowledge",
-  schedule: "knowledge",
-};
-
-/** Whether the draft already has what a recipe needs. */
-export function needDone(need: Need, draft: Draft, agent: Agent): boolean {
-  const collections = (draft.knowledge_collection_ids ?? []).length > 0;
-  switch (need.kind) {
-    case "chats":
-      return draft.chat_ids.length > 0;
-    case "knowledge":
-      return collections;
-    case "schedule":
-      // A slot table lives in a bound collection; an accounting system comes
-      // through a workspace integration bound to the agent.
-      return collections || (agent.mcp_bindings ?? []).length > 0;
-    default:
-      return false;
-  }
-}
+export { needDone };
 
 /**
  * The top of a builder opened from a catalog role: what the role does, what

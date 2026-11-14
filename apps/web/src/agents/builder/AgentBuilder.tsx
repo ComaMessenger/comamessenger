@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { loosenedLabels } from "@comamessenger/core";
 import type {
   Agent,
   AgentLlmConnection,
@@ -17,7 +18,6 @@ import {
   IconButton,
   InlineSuccess,
 } from "../../ui";
-import { actionTools, type ConfirmableAction } from "../shared/confirmation";
 import { AgentCheckPanel } from "../check/AgentCheckPanel";
 import type { BuilderAnchor } from "../routes";
 import type { AgentAccess } from "../shared/access";
@@ -157,17 +157,6 @@ export function AgentBuilder({
       })
     : "";
 
-  function loosenedLabel(key: string): string {
-    if (key.startsWith("mcp:")) {
-      const [connection, tool] = key.slice(4).split("/");
-      return t("agentLoosenedExternal", { connection, tool });
-    }
-    const action = (Object.keys(actionTools) as ConfirmableAction[]).find(
-      (item) => actionTools[item].includes(key),
-    );
-    return action ? t(`agentAction_${action}`) : key;
-  }
-
   return (
     <div className="agent-builder">
       {builder.loosened.length > 0 && (
@@ -191,7 +180,7 @@ export function AgentBuilder({
           }
         >
           <ul className="agent-reasons" data-testid="agent-loosened">
-            {[...new Set(builder.loosened.map(loosenedLabel))].map((label) => (
+            {loosenedLabels(t, builder.loosened).map((label) => (
               <li key={label}>{label}</li>
             ))}
           </ul>

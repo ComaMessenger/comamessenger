@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { agentStepText } from "@comamessenger/core";
 import type {
   AgentRun,
   AgentRunToolCall,
@@ -16,40 +17,9 @@ import {
   type Translate,
 } from "../shared/format";
 
-const knownSteps = new Set([
-  "get_chat_messages",
-  "get_thread",
-  "search_messages",
-  "get_file_text",
-  "list_members",
-  "recall",
-  "search_knowledge",
-  "get_reactions",
-  "get_collection",
-  "post_message",
-  "reply_in_thread",
-  "add_reaction",
-  "remember",
-  "post_card",
-  "update_card",
-  "start_collection",
-  "schedule_followup",
-  "send_direct_message",
-]);
-
 /** «Read the chat», «Would send a card»: a tool step in plain words. */
 export function stepText(t: Translate, call: AgentRunToolCall): string {
-  const known = knownSteps.has(call.tool_name);
-  const text = known
-    ? t(
-        call.dry_run
-          ? `agentStepWould_${call.tool_name}`
-          : `agentStep_${call.tool_name}`,
-      )
-    : call.dry_run
-      ? t("agentStepWouldExternal", { name: toolLabel(t, call.tool_name) })
-      : t("agentStepExternal", { name: toolLabel(t, call.tool_name) });
-  return call.status === "failed" ? t("agentStepFailed", { step: text }) : text;
+  return agentStepText(t, call, (name) => toolLabel(t, name));
 }
 
 const terminal = (run: AgentRun) => !["queued", "running"].includes(run.status);

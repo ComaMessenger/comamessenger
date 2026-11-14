@@ -1,62 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import type {
-  Agent,
-  AgentLlmConnection,
-  AgentTrigger,
-  MessengerAPI,
-} from "@comamessenger/core";
-import { APIError } from "@comamessenger/core";
+import type { Agent, MessengerAPI } from "@comamessenger/core";
+import { APIError, loosenedOf } from "@comamessenger/core";
 import { useTranslation } from "react-i18next";
 import { messageOf } from "../../errors";
-import type { BuilderAnchor } from "../routes";
-import { draftChatIDs, draftOf, updateOf, type Draft } from "../shared/draft";
+import { draftOf, updateOf, type Draft } from "../shared/draft";
 
 const snapshot = (draft: Draft) => JSON.stringify(updateOf(draft));
 
-export type PublishBlocker = { key: string; anchor: BuilderAnchor };
-
-/**
- * What stops publishing, computed from the local draft so the reason is
- * visible before saving. Server-only facts (keys of external agents, a legacy
- * provider key) come from the saved readiness.
- */
-export function publishBlockers(
-  agent: Agent,
-  draft: Draft,
-  triggers: AgentTrigger[] | undefined,
-  connections: AgentLlmConnection[],
-): PublishBlocker[] {
-  const result: PublishBlocker[] = [];
-  const serverBlockers = new Set(agent.readiness.blockers);
-  if (draftChatIDs(draft).length === 0)
-    result.push({ key: "chat_required", anchor: "places" });
-  if (agent.kind === "external" && serverBlockers.has("runtime_key_required"))
-    result.push({ key: "runtime_key_required", anchor: "advanced" });
-  if (agent.kind === "builtin") {
-    const connection = connections.find(
-      (item) => item.id === draft.llm_connection_id,
-    );
-    if (draft.llm_connection_id && (!connection || !connection.enabled))
-      result.push({ key: "llm_connection_unavailable", anchor: "model" });
-    else if (
-      !draft.llm_connection_id &&
-      (serverBlockers.has("llm_connection_required") ||
-        serverBlockers.has("provider_credential_required"))
-    )
-      result.push({ key: "llm_connection_required", anchor: "model" });
-    if (!draft.model)
-      result.push({ key: "provider_model_required", anchor: "advanced" });
-    if (!draft.external_data_sharing_approved)
-      result.push({ key: "external_data_approval_required", anchor: "model" });
-  }
-  if (
-    agent.recipe !== "custom" &&
-    triggers !== undefined &&
-    !triggers.some((trigger) => trigger.enabled)
-  )
-    result.push({ key: "trigger_required", anchor: "triggers" });
-  return result;
-}
+export { publishBlockers, type PublishBlocker } from "@comamessenger/core";
 
 /*
  * Builder state of one agent. The page mounts it under `key={agent.id}`, so
@@ -128,11 +79,8 @@ export function useAgentBuilder({
     try {
       await api.publishAgent(agent.id, acknowledge ? { acknowledge_loosened: true } : {});
     } catch (cause) {
-      if (cause instanceof APIError && cause.code === "agent_confirmation_loosened") {
-        const listed = cause.details.loosened;
-        setLoosened(Array.isArray(listed) ? listed.map(String) : []);
-        throw cause;
-      }
+      const loosened = loosenedOf(cause);
+      if (loosened) setLoosened(loosened);
       throw cause;
     }
     setLoosened([]);

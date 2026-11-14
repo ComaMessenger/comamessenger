@@ -1,4 +1,4 @@
-import type { AgentTrigger, Chat } from "@comamessenger/core";
+import type { AgentTrigger, Chat } from "./types";
 import { describe, expect, it } from "vitest";
 import {
   describeRule,
@@ -7,7 +7,7 @@ import {
   keywordsOf,
   ruleProblem,
   triggerRequest,
-} from "./triggers";
+} from "./agentTriggers";
 
 const t = ((key: string, values?: Record<string, unknown>) =>
   values ? `${key}:${JSON.stringify(values)}` : key) as Parameters<
