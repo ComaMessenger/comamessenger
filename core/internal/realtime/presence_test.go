@@ -333,8 +333,7 @@ func TestRealtimeSnapshotAfterHelloAndOfflineOnLastClose(t *testing.T) {
 	if err := wsjson.Write(t.Context(), device, map[string]any{"op": "presence", "state": "active"}); err != nil {
 		t.Fatal(err)
 	}
-	var online presenceEventFrame
-	readJSON(t, watcher, 3*time.Second, &online)
+	online := readPresenceEvent(t, watcher, harness.user.ActorID, "online")
 	if online.Op != "presence" || online.State != "online" {
 		t.Fatalf("online frame = %+v", online)
 	}
@@ -353,6 +352,41 @@ func TestRealtimeSnapshotAfterHelloAndOfflineOnLastClose(t *testing.T) {
 	if offline.Op != "presence" || offline.State != "offline" || offline.ActorID != harness.user.ActorID {
 		t.Fatalf("offline frame = %+v", offline)
 	}
+}
+
+// readPresenceEvent reads the next presence event of a connection that has
+// just received hello. Right after hello the server sends a presence.snapshot
+// whenever anyone is online, and it reads that snapshot on its own schedule:
+// a state change made at the same moment can land both in the snapshot and,
+// later, in its own event. The snapshot may therefore come first; it must
+// already show the actor in the wanted state.
+func readPresenceEvent(t *testing.T, connection *websocket.Conn, actorID, want string) presenceEventFrame {
+	t.Helper()
+	var raw json.RawMessage
+	readJSON(t, connection, 3*time.Second, &raw)
+	var head struct {
+		Op string `json:"op"`
+	}
+	if err := json.Unmarshal(raw, &head); err != nil {
+		t.Fatal(err)
+	}
+	if head.Op == "presence.snapshot" {
+		var snapshot presenceSnapshotFrame
+		if err := json.Unmarshal(raw, &snapshot); err != nil {
+			t.Fatal(err)
+		}
+		for _, entry := range snapshot.Actors {
+			if entry.ActorID == actorID && entry.State != want {
+				t.Fatalf("snapshot before the event = %+v", snapshot)
+			}
+		}
+		readJSON(t, connection, 3*time.Second, &raw)
+	}
+	var frame presenceEventFrame
+	if err := json.Unmarshal(raw, &frame); err != nil {
+		t.Fatal(err)
+	}
+	return frame
 }
 
 func TestRedisPresenceMatchesLocalModel(t *testing.T) {
