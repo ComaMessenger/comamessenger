@@ -197,6 +197,7 @@ function ModelSection() {
             <>
               <Divider />
               <ActionRow
+                testID="agent-model-connect"
                 label={t("agentModelConnect")}
                 onPress={() => router.push(connectionsPaths.newModel)}
               />

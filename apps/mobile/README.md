@@ -68,6 +68,8 @@ Settings flows pass the theme for screenshot names and run as the workspace owne
 
 The knowledge base flow seeds its collections through the API first: `node e2e/seed-knowledge.mjs && maestro test -e THEME=light e2e/knowledge.yaml` (owner; it also writes, previews and deletes a page and creates and deletes a collection).
 
+The walkthrough keeps to its own chat «Обход интерфейса» and appends a fresh set of messages there before each run, so it passes on a clean instance and after other flows: `node e2e/seed-walkthrough.mjs && maestro test -e THEME=light e2e/walkthrough.yaml`.
+
 Maestro needs a JDK; the one bundled with Android Studio works: `export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"`.
 
 ## Checks

@@ -1,0 +1,204 @@
+# The links between the agents tab, the builder, the knowledge base and the
+# model connections, as the owner:
+#   1. «Создать агента» in the agents tab opens the three ways to create;
+#   2. the builder's «Что знает» opens the knowledge base and a collection;
+#   3. with no model connection the builder's «Подключить модель» opens
+#      «Настройки → Модели → новое подключение» (connections are switched
+#      off for this step and back on right after);
+#   4. a document the agent found in a run and the source under its answer
+#      in the chat open the fragment in the knowledge base.
+# Seed first (the second needs the first):
+#   node e2e/seed-knowledge.mjs && node e2e/seed-agents.mjs && \
+#     node e2e/seed-agent-links.mjs
+# Run: maestro test -e THEME=light e2e/agent-links.yaml (dark: switch the
+# simulator appearance, -e THEME=dark).
+appId: com.comamessenger.app
+env:
+  CHAT: Backend
+  COLLECTION: Регламенты центра
+---
+- runScript: scripts/login.js
+- runScript: scripts/reset-preferences.js
+- runFlow: open-app.yaml
+- runFlow:
+    file: tabs.yaml
+    env:
+      TAB: agents
+- extendedWaitUntil:
+    visible:
+      id: agents-home
+    timeout: 15000
+
+# 1. Create from the tab.
+- tapOn:
+    id: agents-create
+- extendedWaitUntil:
+    visible:
+      id: agent-create-screen
+    timeout: 10000
+- takeScreenshot: links-01-create-${THEME}
+- tapOn: Назад
+
+# 2. The builder of «Справка» (a draft without a model): «Что знает».
+- scrollUntilVisible:
+    element:
+      id: agent-row-e2e-spravka
+    timeout: 20000
+- tapOn:
+    id: agent-row-e2e-spravka
+- extendedWaitUntil:
+    visible:
+      id: agent-edit
+    timeout: 10000
+- tapOn:
+    id: agent-edit
+- extendedWaitUntil:
+    visible:
+      id: agent-builder-hub
+    timeout: 15000
+- takeScreenshot: links-02-builder-${THEME}
+- scrollUntilVisible:
+    element:
+      id: agent-hub-step-knowledge
+- tapOn:
+    id: agent-hub-step-knowledge
+- extendedWaitUntil:
+    visible:
+      id: agent-step-knowledge
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      id: agent-knowledge-open
+- takeScreenshot: links-03-builder-knowledge-${THEME}
+- tapOn:
+    id: agent-knowledge-open
+- extendedWaitUntil:
+    visible:
+      id: kb-home
+    timeout: 10000
+- takeScreenshot: links-04-knowledge-from-builder-${THEME}
+- tapOn: Назад
+- extendedWaitUntil:
+    visible:
+      id: agent-step-knowledge
+    timeout: 10000
+
+# 3. «Подключить модель» on the last step with no model connection.
+- runScript: scripts/disable-models.js
+- tapOn:
+    id: agent-step-close
+- extendedWaitUntil:
+    visible:
+      id: agent-builder-hub
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      id: agent-hub-step-review
+- tapOn:
+    id: agent-hub-step-review
+- extendedWaitUntil:
+    visible:
+      id: agent-step-review
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      id: agent-model-connect
+    timeout: 20000
+- takeScreenshot: links-05-builder-no-model-${THEME}
+- tapOn:
+    id: agent-model-connect
+- extendedWaitUntil:
+    visible:
+      id: model-name
+    timeout: 10000
+- takeScreenshot: links-06-model-new-from-builder-${THEME}
+- runScript: scripts/enable-models.js
+- tapOn: Назад
+- extendedWaitUntil:
+    visible:
+      id: agent-step-review
+    timeout: 10000
+- tapOn:
+    id: agent-step-close
+- extendedWaitUntil:
+    visible:
+      id: agent-builder-hub
+    timeout: 10000
+- tapOn: Назад
+- extendedWaitUntil:
+    visible:
+      id: agent-screen
+    timeout: 10000
+- tapOn:
+    id: agent-back
+
+# 4. «Справочная»: the document of its run opens the fragment.
+- scrollUntilVisible:
+    element:
+      id: agent-row-e2e-spravochnaya
+    timeout: 20000
+- tapOn:
+    id: agent-row-e2e-spravochnaya
+- scrollUntilVisible:
+    element:
+      id: agent-run-0
+    timeout: 20000
+- tapOn:
+    id: agent-run-0
+- extendedWaitUntil:
+    visible:
+      id: run-status
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      id: run-document-0
+    timeout: 20000
+- takeScreenshot: links-07-run-documents-${THEME}
+- tapOn:
+    id: run-document-0
+- extendedWaitUntil:
+    visible:
+      id: kb-fragment-focus
+    timeout: 15000
+- takeScreenshot: links-08-fragment-from-run-${THEME}
+- tapOn:
+    id: kb-back
+- tapOn:
+    id: run-back
+- tapOn:
+    id: agent-back
+
+# The source under the answer in the chat.
+- runFlow:
+    file: tabs.yaml
+    env:
+      TAB: chats
+- tapOn: .*${CHAT}.*
+- extendedWaitUntil:
+    visible:
+      id: conversation
+    timeout: 10000
+- runFlow:
+    when:
+      visible: К последнему сообщению
+    commands:
+      - tapOn: К последнему сообщению
+- scrollUntilVisible:
+    element:
+      id: agent-source-0
+    direction: UP
+    timeout: 30000
+- takeScreenshot: links-09-answer-source-${THEME}
+- tapOn:
+    id: agent-source-0
+- extendedWaitUntil:
+    visible:
+      id: kb-fragment-focus
+    timeout: 15000
+- takeScreenshot: links-10-fragment-from-chat-${THEME}
+- tapOn:
+    id: kb-back
+- tapOn:
+    id: conversation-back
+    retryTapIfNoChange: true
+- runScript: scripts/restore-preferences.js

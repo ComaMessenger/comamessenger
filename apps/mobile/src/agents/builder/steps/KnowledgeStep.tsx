@@ -178,6 +178,7 @@ export function KnowledgeStep() {
                 </View>
                 {collection ? (
                   <IconButton
+                    testID={`agent-knowledge-open-${name}`}
                     label={t("agentKnowledgeOpenCollection", { name })}
                     onPress={() => openBase(id)}
                     icon={(color) => <ChevronRight size={18} color={color} />}
@@ -230,6 +231,7 @@ export function KnowledgeStep() {
           <>
             <Divider />
             <NavRow
+              testID="agent-knowledge-open"
               icon={Library}
               label={
                 collections.data.length === 0
