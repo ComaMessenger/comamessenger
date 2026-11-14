@@ -99,7 +99,7 @@ export function AgentsHome() {
   const recipes = useRecipes(canBuild);
   const chats = useKnownChats();
   const runs = useQuery({
-    queryKey: agentKeys.workspaceRuns(""),
+    queryKey: agentKeys.recentRuns,
     queryFn: () => api.workspaceAgentRuns({ limit: recentRuns }),
     enabled: access.canObserve,
     select: (page) => page.runs,
@@ -124,12 +124,12 @@ export function AgentsHome() {
   const refreshing =
     agents.isRefetching || approvals.isRefetching || runs.isRefetching;
 
-  const agentRows = (items: Agent[], prefix: string) =>
+  const agentRows = (items: Agent[]) =>
     items.map((agent, index) => (
       <View key={agent.id}>
         {index > 0 && <Divider />}
         <AgentRow
-          testID={`${prefix}-${index}`}
+          testID={`agent-row-${agent.handle}`}
           agent={agent}
           status={humanStatus(agent, pending.get(agent.id))}
           task={agentTask(t, agent, recipes.data)}
@@ -232,7 +232,7 @@ export function AgentsHome() {
               {mine.length > 0 && (
                 <View style={styles.block}>
                   <SectionTitle title={t("agentsMine")} />
-                  <SettingsGroup>{agentRows(mine, "agent-mine")}</SettingsGroup>
+                  <SettingsGroup>{agentRows(mine)}</SettingsGroup>
                 </View>
               )}
               {others.length > 0 && (
@@ -242,9 +242,7 @@ export function AgentsHome() {
                       mine.length ? t("agentsOthers") : t("agentCatalogTitle")
                     }
                   />
-                  <SettingsGroup>
-                    {agentRows(others, "agent-other")}
-                  </SettingsGroup>
+                  <SettingsGroup>{agentRows(others)}</SettingsGroup>
                 </View>
               )}
             </>

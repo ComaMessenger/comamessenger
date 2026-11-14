@@ -3,8 +3,6 @@
 # least one pending action per run of the seed) and agents.yaml.
 # Run: maestro test -e THEME=light e2e/agents-approve.yaml
 appId: com.comamessenger.app
-env:
-  THEME: light
 ---
 - runFlow: open-app.yaml
 - runFlow:

@@ -18,6 +18,8 @@ export const agentKeys = {
   runs: ["agent-runs"] as const,
   workspaceRuns: (agentID: string) =>
     ["agent-runs", "workspace", agentID] as const,
+  /** The few latest runs of the overview; not paged, so its own key. */
+  recentRuns: ["agent-runs", "recent"] as const,
   agentRuns: (agentID: string) => ["agent-runs", agentID] as const,
   run: (runID: string) => ["agent-run", runID] as const,
   steps: (runID: string) => ["agent-run-steps", runID] as const,

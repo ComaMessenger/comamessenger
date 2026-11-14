@@ -7,8 +7,6 @@
 # Deciding an action is left to agents-approve.yaml, so this flow can be
 # run in both themes on the same seed.
 appId: com.comamessenger.app
-env:
-  THEME: light
 ---
 - runScript: scripts/login.js
 - runScript: scripts/reset-preferences.js
@@ -66,7 +64,12 @@ env:
     id: approvals-back
 
 # Agent card
-- tapOn: "Сводка, .*"
+- scrollUntilVisible:
+    element:
+      id: agent-row-e2e-svodka
+    direction: DOWN
+- tapOn:
+    id: agent-row-e2e-svodka
 - extendedWaitUntil:
     visible:
       id: agent-screen
@@ -119,7 +122,8 @@ env:
       id: composer-input
     timeout: 10000
 - takeScreenshot: agent-direct-chat-${THEME}
-- back
+- tapOn:
+    id: conversation-back
 - tapOn:
     id: agent-back
 
