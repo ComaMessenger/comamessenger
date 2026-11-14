@@ -42,6 +42,7 @@ import {
 } from "@comamessenger/core";
 import { radius, spacing } from "@comamessenger/tokens";
 import { useTheme } from "@/lib/theme";
+import { agentHref } from "@/agents/routes";
 import { openAttachment } from "@/files/open";
 import { Text } from "@/ui/Text";
 import {
@@ -232,6 +233,7 @@ function ConfirmationContent({
   authorName: string;
 }) {
   const { t } = useTranslation();
+  const theme = useTheme();
   const tool = confirmationTool(blocks);
   const status = confirmationStatus(blocks);
   const fields = confirmationFields(blocks);
@@ -278,9 +280,15 @@ function ConfirmationContent({
             />
           ))
         ) : (
-          <Text tone="muted" size={14}>
-            {t("acConfirmHiddenDetails")}
-          </Text>
+          <Pressable
+            testID="agent-confirm-details"
+            accessibilityRole="link"
+            onPress={() => router.push(agentHref.approvals as never)}
+          >
+            <Text size={14} style={{ color: theme.primary }}>
+              {t("acConfirmHiddenDetails")}
+            </Text>
+          </Pressable>
         )}
       </View>
     </>

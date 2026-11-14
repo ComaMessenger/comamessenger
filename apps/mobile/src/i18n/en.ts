@@ -412,7 +412,7 @@ export const en: Record<keyof typeof ru, string> = {
   acConfirmFailed: "Failed",
   acConfirmDenied: "Denied",
   acConfirmExpired: "The decision window expired",
-  acConfirmHiddenDetails: "Details are in Approvals on the web",
+  acConfirmHiddenDetails: "Details are in Approvals",
   acToolPostMessage: "post a message to a chat",
   acToolReplyInThread: "reply in a thread",
   acToolSendDirect: "send someone a direct message",

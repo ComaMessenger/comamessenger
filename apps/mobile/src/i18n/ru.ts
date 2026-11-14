@@ -430,7 +430,7 @@ export const ru = {
   acConfirmFailed: "Не удалось выполнить",
   acConfirmDenied: "Отклонено",
   acConfirmExpired: "Время на решение истекло",
-  acConfirmHiddenDetails: "Подробности — в разделе «Подтверждения» веб-версии",
+  acConfirmHiddenDetails: "Подробности — в разделе «Подтверждения»",
   acToolPostMessage: "отправить сообщение в чат",
   acToolReplyInThread: "ответить в треде",
   acToolSendDirect: "написать человеку в личные сообщения",
