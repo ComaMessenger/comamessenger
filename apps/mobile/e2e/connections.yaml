@@ -4,10 +4,12 @@
 # webhook, see its secret once, open the journal, delete it.
 # The provider key comes from the environment (never this file or a
 # screenshot) and is typed into the revealed field, hidden again before the
-# screenshot. «Вставить» is checked on the edit form with a dummy key that
-# is put into the simulator's clipboard first:
+# screenshot. «Вставить» is checked on the edit form only with
+# -e PASTE_CHECK=1, after a dummy key is put into the simulator's clipboard
+# (which the simulator syncs with the Mac's):
 #   printf sk-e2e-dummy-paste-0000 | xcrun simctl pbcopy <device>
-#   maestro test --device <device> -e THEME=light -e PROVOD_KEY=… e2e/connections.yaml
+#   maestro test --device <device> -e THEME=light -e PROVOD_KEY=… \
+#     -e PASTE_CHECK=1 e2e/connections.yaml
 # Maestro keeps the commands with the key in its output: delete that after.
 # Needs internet on the server: api.provod.ai and mcp.deepwiki.com.
 appId: com.comamessenger.app
@@ -92,20 +94,26 @@ appId: com.comamessenger.app
       id: model-update
     direction: DOWN
 - takeScreenshot: connections-model-edit-${THEME}
-- tapOn:
-    id: model-key-paste
+# «Вставить» only on request (-e PASTE_CHECK=1, after the pbcopy above): the
+# simulator shares its clipboard with the Mac, so a plain run never pastes.
 - runFlow:
     when:
-      visible: (Разрешить вставку|Allow Paste)
+      true: ${typeof PASTE_CHECK !== 'undefined' && PASTE_CHECK == '1'}
     commands:
-      - tapOn: (Разрешить вставку|Allow Paste)
-- extendedWaitUntil:
-    visible: "Вставлено: sk-…0000"
-    timeout: 5000
-- takeScreenshot: connections-model-paste-${THEME}
-- tapOn:
-    id: model-key
-- eraseText: 40
+      - tapOn:
+          id: model-key-paste
+      - runFlow:
+          when:
+            visible: (Разрешить вставку|Allow Paste)
+          commands:
+            - tapOn: (Разрешить вставку|Allow Paste)
+      - extendedWaitUntil:
+          visible: "Вставлено: sk-…0000"
+          timeout: 5000
+      - takeScreenshot: connections-model-paste-${THEME}
+      - tapOn:
+          id: model-key
+      - eraseText: 40
 - tapOn:
     id: model-default
 - eraseText: 20

@@ -4,7 +4,8 @@
 #   2. the builder's «Что знает» opens the knowledge base and a collection;
 #   3. with no model connection the builder's «Подключить модель» opens
 #      «Настройки → Модели → новое подключение» (connections are switched
-#      off for this step and back on right after);
+#      off while the builder is open and back on right after; if the flow
+#      stops in between, run scripts/enable-models.js's PATCH by hand);
 #   4. a document the agent found in a run and the source under its answer
 #      in the chat open the fragment in the knowledge base.
 # Seed first (the second needs the first):
@@ -50,6 +51,9 @@ env:
     visible:
       id: agent-edit
     timeout: 10000
+# The builder reads the connections once: switch them off before it opens
+# (back on after step 3).
+- runScript: scripts/disable-models.js
 - tapOn:
     id: agent-edit
 - extendedWaitUntil:
@@ -84,7 +88,6 @@ env:
     timeout: 10000
 
 # 3. «Подключить модель» on the last step with no model connection.
-- runScript: scripts/disable-models.js
 - tapOn:
     id: agent-step-close
 - extendedWaitUntil:

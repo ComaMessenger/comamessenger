@@ -8,7 +8,8 @@ var items = json(
 var disabled = [];
 for (var i = 0; i < items.length; i++)
   if (items[i].enabled) {
-    http.patch(output.api + "/api/v1/agent-connections/" + items[i].id, {
+    http.request(output.api + "/api/v1/agent-connections/" + items[i].id, {
+      method: "PATCH",
       headers: auth,
       body: JSON.stringify({ enabled: false }),
     });

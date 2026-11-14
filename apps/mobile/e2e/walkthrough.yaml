@@ -14,8 +14,11 @@ appId: com.comamessenger.app
 env:
   PHOTO: photo-square.jpg
   CHAT: Обход интерфейса
-  ROOT: .*Тред обхода. что выпускаем в пятницу.*
 ---
+# The root of the thread this run's seed posted (its tag tells it from the
+# roots of earlier runs above it).
+- runScript: scripts/login.js
+- runScript: scripts/walkthrough-root.js
 - runFlow: open-app.yaml
 - tapOn: .*${CHAT}.*
 - extendedWaitUntil:
@@ -38,7 +41,7 @@ env:
 - runFlow:
     file: message-menu.yaml
     env:
-      TEXT: ${ROOT}
+      TEXT: ${output.walkthroughRoot}
 - tapOn:
     id: message-action-thread
 - extendedWaitUntil:
@@ -57,7 +60,7 @@ env:
 - runFlow:
     file: message-menu.yaml
     env:
-      TEXT: ${ROOT}
+      TEXT: ${output.walkthroughRoot}
 - takeScreenshot: ${THEME}-03-message-menu
 - tapOn:
     id: message-action-forward
@@ -70,7 +73,7 @@ env:
 - runFlow:
     file: message-menu.yaml
     env:
-      TEXT: ${ROOT}
+      TEXT: ${output.walkthroughRoot}
 - tapOn:
     id: message-action-details
 - extendedWaitUntil:

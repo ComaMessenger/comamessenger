@@ -6,7 +6,9 @@
 //   1. «Обход: вопрос для цитаты»;
 //   2. a reply to it that quotes it — «Обход: ответ с цитатой»;
 //   3. a photo (e2e/fixtures/photo-square.jpg);
-//   4. «Тред обхода: что выпускаем в пятницу» with two thread replies and 👍.
+//   4. «Тред обхода <HHMMSS>: что выпускаем в пятницу» with two thread
+//      replies and 👍; the tag makes the root of this run the only match
+//      (scripts/walkthrough-root.js reads it for the flow).
 // The chat becomes the most recent one, the first row of the chat list.
 //
 //   COMA_API=http://localhost:8080 COMA_EMAIL=… COMA_PASSWORD=… \
@@ -116,7 +118,8 @@ const question = await post("Обход: вопрос для цитаты");
 await post("Обход: ответ с цитатой", { reply_to_id: question.id });
 const photo = await upload("photo-square.jpg", "image/jpeg");
 await post("", { file_ids: [photo.id] });
-const root = await post("Тред обхода: что выпускаем в пятницу");
+const tag = new Date().toTimeString().slice(0, 8).replace(/:/g, "");
+const root = await post(`Тред обхода ${tag}: что выпускаем в пятницу`);
 await post("Сборка 1.4 и заметки к выпуску.", { thread_root_id: root.id });
 await post("Проверю на телефоне до обеда.", { thread_root_id: root.id });
 await call(

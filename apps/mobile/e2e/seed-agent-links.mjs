@@ -10,8 +10,9 @@
 // As seed-agents.mjs, the seed is the runtime of an external agent
 // «Справочная» (with its API key): it claims the run it started, searches the
 // knowledge base (full-text search needs no model) and posts a card with the
-// found fragment as its source. Every run adds a fresh answer to the end of
-// the chat and a fresh run; the agent is reused by its handle.
+// found fragment as its source. Every run replaces the answer in the chat
+// (earlier ones are deleted) and adds a fresh run; the agent is reused by
+// its handle.
 const api = (process.env.COMA_API ?? "http://localhost:8080").replace(
   /\/$/,
   "",
@@ -117,6 +118,21 @@ if (agent.has_unpublished_changes || agent.published_version == null)
   );
 if (agent.operational_status === "paused")
   agent = await post(`/api/v1/agents/${agent.id}/resume`, {}, token);
+
+// Earlier answers of the agent are removed, so the chat shows one source
+// (a deleted message keeps no card); a deletion the server refuses is left.
+const { messages } = await call(
+  `/api/v1/chats/${chat.id}/messages?limit=100`,
+  {},
+  token,
+);
+for (const message of messages)
+  if (message.actor_id === agent.id && !message.deleted_at)
+    await call(
+      `/api/v1/messages/${message.id}`,
+      { method: "DELETE" },
+      token,
+    ).catch(() => undefined);
 
 const prompt = "Как оформить отпуск?";
 const started = await post(
