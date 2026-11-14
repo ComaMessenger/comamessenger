@@ -1,11 +1,18 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type {
-  IntegrationWebhook,
-  IntegrationWebhookWithSecret,
-  McpConnection,
-  McpConnectionUsage,
-  MessengerAPI,
+import {
+  createMcpConnectionRequest,
+  emptyMcpConnectionDraft,
+  isMcpToolAssignable,
+  mcpConnectionDraftReady,
+  toggledAssignableTools,
+  webhookURL as webhookAddress,
+  type IntegrationWebhook,
+  type IntegrationWebhookWithSecret,
+  type McpConnection,
+  type McpConnectionDraft,
+  type McpConnectionUsage,
+  type MessengerAPI,
 } from "@comamessenger/core";
 import {
   Cable,
@@ -57,28 +64,6 @@ export function IntegrationsSection({
   );
 }
 
-type McpDraft = {
-  name: string;
-  description: string;
-  endpoint_url: string;
-  header_name: string;
-  header_value: string;
-  allow_private_network: boolean;
-  agent_use_allowed: boolean;
-  writes_require_confirmation: boolean;
-};
-
-const emptyMcpDraft: McpDraft = {
-  name: "",
-  description: "",
-  endpoint_url: "",
-  header_name: "Authorization",
-  header_value: "",
-  allow_private_network: false,
-  agent_use_allowed: false,
-  writes_require_confirmation: true,
-};
-
 function McpConnections({
   api,
   canManage,
@@ -91,7 +76,9 @@ function McpConnections({
     queryKey: ["mcp-connections"],
     queryFn: () => api.mcpConnections(),
   });
-  const [draft, setDraft] = useState<McpDraft>(emptyMcpDraft);
+  const [draft, setDraft] = useState<McpConnectionDraft>(
+    emptyMcpConnectionDraft,
+  );
   const [createOpen, setCreateOpen] = useState(false);
   const [detaching, setDetaching] = useState<McpConnection | null>(null);
   const [pendingID, setPendingID] = useState<string | null>(null);
@@ -113,24 +100,11 @@ function McpConnections({
   }
 
   async function create() {
-    const headers =
-      draft.header_name.trim() && draft.header_value.trim()
-        ? { [draft.header_name.trim()]: draft.header_value.trim() }
-        : undefined;
     const created = await run("new", () =>
-      api.createMcpConnection({
-        name: draft.name.trim(),
-        description: draft.description.trim(),
-        endpoint_url: draft.endpoint_url.trim(),
-        enabled: true,
-        allow_private_network: draft.allow_private_network,
-        agent_use_allowed: draft.agent_use_allowed,
-        writes_require_confirmation: draft.writes_require_confirmation,
-        ...(headers ? { headers } : {}),
-      }),
+      api.createMcpConnection(createMcpConnectionRequest(draft)),
     );
     if (created) {
-      setDraft(emptyMcpDraft);
+      setDraft(emptyMcpConnectionDraft);
       setCreateOpen(false);
     }
   }
@@ -219,9 +193,10 @@ function McpConnections({
                     {connection.tools.length ? (
                       <ul className="integrations__tools">
                         {connection.tools.map((tool) => {
-                          const assignable =
-                            connection.assignable_tools == null ||
-                            connection.assignable_tools.includes(tool.name);
+                          const assignable = isMcpToolAssignable(
+                            connection,
+                            tool.name,
+                          );
                           return (
                             <li key={tool.name} title={tool.description}>
                               {canManage && (
@@ -231,21 +206,18 @@ function McpConnections({
                                   })}
                                   checked={assignable}
                                   disabled={pendingID === connection.id}
-                                  onChange={(value) => {
-                                    const current =
-                                      connection.assignable_tools ??
-                                      connection.tools.map((item) => item.name);
-                                    const next = value
-                                      ? [...current, tool.name]
-                                      : current.filter(
-                                          (name) => name !== tool.name,
-                                        );
+                                  onChange={(value) =>
                                     void run(connection.id, () =>
                                       api.updateMcpConnection(connection.id, {
-                                        assignable_tools: next,
+                                        assignable_tools:
+                                          toggledAssignableTools(
+                                            connection,
+                                            tool.name,
+                                            value,
+                                          ),
                                       }),
-                                    );
-                                  }}
+                                    )
+                                  }
                                 />
                               )}
                               <code>{tool.name}</code>
@@ -511,11 +483,7 @@ function McpConnections({
             </Button>
             <Button
               variant="primary"
-              disabled={
-                pendingID === "new" ||
-                !/^[a-z0-9][a-z0-9_-]{0,39}$/.test(draft.name.trim()) ||
-                !draft.endpoint_url.trim()
-              }
+              disabled={pendingID === "new" || !mcpConnectionDraftReady(draft)}
               onClick={() => void create()}
             >
               {pendingID === "new" ? t("saving") : t("save")}
@@ -619,10 +587,7 @@ function DetachDialog({
 }
 
 export function webhookURL(api: MessengerAPI, id: string): string {
-  return new URL(
-    `/api/v1/hooks/${encodeURIComponent(id)}`,
-    api.apiURL || window.location.origin,
-  ).toString();
+  return webhookAddress(api.apiURL || window.location.origin, id);
 }
 
 function Webhooks({ api }: { api: MessengerAPI }) {
