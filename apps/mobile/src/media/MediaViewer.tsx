@@ -58,6 +58,7 @@ import {
   containSize,
   formatMediaDate,
   indexOfMedia,
+  mediaPosition,
   panBounds,
   type MediaItem,
 } from "./items";
@@ -77,6 +78,7 @@ const dismissVelocity = 900;
  */
 export function MediaViewerHost({
   items,
+  total,
   hasOlder = false,
   onLoadOlder,
   authorName,
@@ -84,6 +86,12 @@ export function MediaViewerHost({
   children,
 }: {
   items: MediaItem[];
+  /**
+   * How many photos and videos the whole chat has, when known (the chat
+   * archive reads it from the server): `items` are then the newest ones and
+   * the counter counts across the chat, not the loaded part.
+   */
+  total?: number;
   hasOlder?: boolean;
   onLoadOlder?(): Promise<void> | void;
   authorName(actorID: string): string;
@@ -116,6 +124,7 @@ export function MediaViewerHost({
           <ViewerBoundary onClose={close}>
             <MediaViewer
               items={items}
+              total={total}
               initialKey={open.key}
               origin={open.origin}
               hasOlder={hasOlder}
@@ -140,6 +149,7 @@ export function MediaViewerHost({
 
 type ViewerProps = {
   items: MediaItem[];
+  total?: number;
   initialKey: string;
   origin: AnchorRect | null;
   hasOlder: boolean;
@@ -151,6 +161,7 @@ type ViewerProps = {
 
 function MediaViewer({
   items,
+  total,
   initialKey,
   origin,
   hasOlder,
@@ -366,7 +377,7 @@ function MediaViewer({
             weight="medium"
             style={[styles.white, styles.counter]}
           >
-            {t("mediaCounter", { current: index + 1, total: items.length })}
+            {t("mediaCounter", mediaPosition(index, items.length, total))}
           </Text>
         </Animated.View>
       )}

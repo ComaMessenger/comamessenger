@@ -16,6 +16,8 @@ import {
   applySavedChange,
   chatEventEffect,
   savedChange,
+  sharedChangedChat,
+  sharedKeys,
   pinnedChatLimit,
   type AgentStatusState,
   type ChatFolder,
@@ -157,6 +159,12 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
             // Members and pins of an open chat info or conversation.
             const chatEffect = applied ? chatEventEffect(event) : null;
             if (chatEffect) invalidateChatDetails(queryClient, chatEffect);
+            // Media, files, voice and links of an open chat info.
+            const sharedChat = applied ? sharedChangedChat(event) : null;
+            if (sharedChat)
+              void queryClient.invalidateQueries({
+                queryKey: sharedKeys.all(sharedChat),
+              });
             if (event.type.startsWith("reaction."))
               void queryClient.invalidateQueries({
                 queryKey: reactionsKey(event.subject_id),

@@ -113,3 +113,13 @@ export function formatMediaDate(
     minute: "2-digit",
   }).format(date);
 }
+
+/**
+ * «3 of 12» in the viewer. `loaded` items are the newest of the chat when
+ * `total` is known (the archive), so the first loaded one is not number 1.
+ */
+export function mediaPosition(index: number, loaded: number, total?: number) {
+  if (total === undefined || total < loaded)
+    return { current: index + 1, total: loaded };
+  return { current: total - loaded + index + 1, total };
+}

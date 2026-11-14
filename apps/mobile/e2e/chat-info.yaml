@@ -1,6 +1,8 @@
 # Package I of phase 6.1: chat info from the conversation header — members,
-# pinned messages, files, notifications and the chat's search.
+# pinned messages, media, files, voice, links, notifications and the chat's search.
 # Run after chat-create.yaml: the first chat is then a group the account owns.
+# Fill its archive first: node e2e/seed-media.mjs, seed-voice.mjs and
+# seed-archive.mjs (COMA_API, COMA_EMAIL, COMA_PASSWORD).
 # maestro test e2e/chat-info.yaml
 appId: com.comamessenger.app
 ---
@@ -50,15 +52,64 @@ appId: com.comamessenger.app
 - takeScreenshot: chat-pinned
 - tapOn:
     id: pinned-back
+# Media, files, voice and links: one screen with tabs, opened at the row's tab.
 - tapOn:
-    id: chat-info-files
+    id: chat-info-media
 - extendedWaitUntil:
     visible:
-      id: chat-files
+      id: chat-shared
     timeout: 10000
-- takeScreenshot: chat-files
+- takeScreenshot: chat-shared-media
+# A tile opens the feed's full-screen viewer, paging through the chat's media
+# from the server: the newest first, «N of N» over the whole chat; a swipe
+# right shows the previous item — the portrait video, in the built-in player.
 - tapOn:
-    id: files-back
+    id: shared-media-tile-0
+- extendedWaitUntil:
+    visible:
+      id: media-viewer-loaded
+    timeout: 15000
+- assertVisible:
+    id: media-viewer-counter
+- takeScreenshot: chat-shared-viewer
+- swipe:
+    start: 15%, 50%
+    end: 90%, 50%
+    duration: 300
+- waitForAnimationToEnd:
+    timeout: 3000
+- extendedWaitUntil:
+    visible:
+      id: media-video-controls
+    timeout: 15000
+- takeScreenshot: chat-shared-viewer-video
+- swipe:
+    start: 50%, 45%
+    end: 50%, 85%
+    duration: 250
+- extendedWaitUntil:
+    notVisible:
+      id: media-viewer
+    timeout: 5000
+- tapOn:
+    id: shared-tab-files
+- takeScreenshot: chat-shared-files
+- tapOn:
+    id: shared-tab-voice
+- takeScreenshot: chat-shared-voice
+- tapOn:
+    id: shared-tab-links
+- takeScreenshot: chat-shared-links
+- tapOn:
+    id: shared-back
+- tapOn:
+    id: chat-info-links
+- extendedWaitUntil:
+    visible:
+      id: shared-links
+    timeout: 10000
+- tapOn:
+    id: shared-back
 
 # A group owner sees members with actions and the add button.
 - scrollUntilVisible:
@@ -101,7 +152,19 @@ appId: com.comamessenger.app
 - tapOn:
     id: edit-chat-back
 
-# Search inside the chat.
+# Search inside the chat: back from the screens above the list scrolled
+# down, the search button is near the top
+# (Maestro counts it as visible under the header, so swipe to the top.)
+- swipe:
+    start: 50%, 35%
+    end: 50%, 90%
+    duration: 300
+- swipe:
+    start: 50%, 35%
+    end: 50%, 90%
+    duration: 300
+- waitForAnimationToEnd:
+    timeout: 2000
 - tapOn:
     id: chat-info-search
 - extendedWaitUntil:

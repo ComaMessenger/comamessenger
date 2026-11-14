@@ -5,6 +5,7 @@ import {
   containSize,
   formatMediaDuration,
   indexOfMedia,
+  mediaPosition,
   panBounds,
 } from "./items";
 import { displayAspect, mediaMosaic, rowCounts } from "./layout";
@@ -200,5 +201,18 @@ describe("sending media", () => {
   it("leaves out files over the server limit", () => {
     const result = withinFileLimit([{ size: 10 }, { size: fileMaxBytes + 1 }]);
     expect(result).toEqual({ accepted: [{ size: 10 }], tooLarge: 1 });
+  });
+});
+
+describe("mediaPosition", () => {
+  it("counts the loaded items when the total is unknown", () => {
+    expect(mediaPosition(2, 12)).toEqual({ current: 3, total: 12 });
+  });
+  it("counts across the whole chat in the archive", () => {
+    // The newest 60 of 140 are loaded, oldest first: the first is №81.
+    expect(mediaPosition(0, 60, 140)).toEqual({ current: 81, total: 140 });
+    expect(mediaPosition(59, 60, 140)).toEqual({ current: 140, total: 140 });
+    // A stale total smaller than what is loaded never shows «70 of 60».
+    expect(mediaPosition(5, 70, 60)).toEqual({ current: 6, total: 70 });
   });
 });

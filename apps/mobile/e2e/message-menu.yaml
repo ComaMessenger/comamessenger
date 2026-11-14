@@ -30,7 +30,8 @@ appId: com.comamessenger.app
 - scrollUntilVisible:
     element: ${TEXT}
     direction: UP
-    timeout: 30000
+    timeout: 60000
+    speed: 80
 # Let the feed stop, or the long press only stops the scroll.
 - waitForAnimationToEnd:
     timeout: 2000
