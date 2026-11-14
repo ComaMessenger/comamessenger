@@ -1,3 +1,5 @@
+import { agentBuilderRu } from "../agents/builder/i18n";
+
 export const ru = {
   // Server
   serverTitle: "Подключение",
@@ -1128,4 +1130,7 @@ export const ru = {
   workspaceLogo: "Логотип",
   workspaceLogoHint:
     "Квадратное изображение; на телефоне уменьшается до 512×512.",
+
+  // Agent builder and Architect
+  ...agentBuilderRu,
 } as const;

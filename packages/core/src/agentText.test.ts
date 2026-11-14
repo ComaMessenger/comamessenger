@@ -4,7 +4,7 @@ import {
   formatDuration,
   toolLabel,
   type Translate,
-} from "./format";
+} from "./agentText";
 
 const t = ((key: string, values?: Record<string, unknown>) =>
   key === "agentTool_post_message"
