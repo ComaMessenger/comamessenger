@@ -14,6 +14,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/config"
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
+	"github.com/comamessenger/comamessenger/core/internal/lastseen"
 	"github.com/comamessenger/comamessenger/core/internal/scheduledreset"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -62,6 +63,9 @@ type Preferences struct {
 	Schedule        *NotificationSchedule `json:"schedule"`
 	SnoozedUntil    *time.Time            `json:"snoozed_until"`
 	EmailDigest     bool                  `json:"email_digest"`
+	// Who sees when this person was last online: everyone they share a
+	// chat with, or nobody (then they see others' time only roughly too).
+	LastSeenVisibility string `json:"last_seen_visibility"`
 }
 type OptionalTime struct {
 	Set   bool
@@ -83,21 +87,22 @@ func (value *OptionalTime) UnmarshalJSON(data []byte) error {
 }
 
 type UpdatePreferences struct {
-	Theme           *string          `json:"theme"`
-	Locale          *string          `json:"locale"`
-	InAppEnabled    *bool            `json:"in_app_enabled"`
-	PushEnabled     *bool            `json:"push_enabled"`
-	PushPreview     *bool            `json:"push_preview"`
-	NotifyMessages  *string          `json:"notify_messages"`
-	NotifyThreads   *string          `json:"notify_threads"`
-	NotifyReactions *bool            `json:"notify_reactions"`
-	NotifyInvites   *bool            `json:"notify_invites"`
-	NotifySystem    *bool            `json:"notify_system"`
-	SoundEnabled    *bool            `json:"sound_enabled"`
-	SoundID         *string          `json:"sound_id"`
-	Schedule        OptionalSchedule `json:"schedule"`
-	SnoozedUntil    OptionalTime     `json:"snoozed_until"`
-	EmailDigest     *bool            `json:"email_digest"`
+	Theme              *string          `json:"theme"`
+	Locale             *string          `json:"locale"`
+	InAppEnabled       *bool            `json:"in_app_enabled"`
+	PushEnabled        *bool            `json:"push_enabled"`
+	PushPreview        *bool            `json:"push_preview"`
+	NotifyMessages     *string          `json:"notify_messages"`
+	NotifyThreads      *string          `json:"notify_threads"`
+	NotifyReactions    *bool            `json:"notify_reactions"`
+	NotifyInvites      *bool            `json:"notify_invites"`
+	NotifySystem       *bool            `json:"notify_system"`
+	SoundEnabled       *bool            `json:"sound_enabled"`
+	SoundID            *string          `json:"sound_id"`
+	Schedule           OptionalSchedule `json:"schedule"`
+	SnoozedUntil       OptionalTime     `json:"snoozed_until"`
+	EmailDigest        *bool            `json:"email_digest"`
+	LastSeenVisibility *string          `json:"last_seen_visibility"`
 }
 type NotificationSchedule struct {
 	Days any    `json:"days"`
@@ -274,6 +279,7 @@ func (s *Service) GetPreferences(ctx context.Context, user identity.User) (Prefe
 	if result.SoundID == "" {
 		result.SoundID = "default"
 	}
+	result.LastSeenVisibility = lastseen.Normalize(result.LastSeenVisibility)
 	// Boolean defaults for rows created before notification preferences existed.
 	var stored map[string]json.RawMessage
 	if json.Unmarshal(raw, &stored) == nil {
@@ -312,6 +318,9 @@ func (s *Service) UpdatePreferences(ctx context.Context, user identity.User, inp
 		return Preferences{}, ErrInvalid
 	}
 	if input.SoundID != nil && *input.SoundID != "default" {
+		return Preferences{}, ErrInvalid
+	}
+	if input.LastSeenVisibility != nil && !lastseen.ValidVisibility(*input.LastSeenVisibility) {
 		return Preferences{}, ErrInvalid
 	}
 	if input.Schedule.Value != nil && !validSchedule(*input.Schedule.Value) {
@@ -369,6 +378,9 @@ func (s *Service) UpdatePreferences(ctx context.Context, user identity.User, inp
 	if input.EmailDigest != nil {
 		payload["email_digest"] = *input.EmailDigest
 	}
+	if input.LastSeenVisibility != nil {
+		payload["last_seen_visibility"] = *input.LastSeenVisibility
+	}
 	encoded, err := json.Marshal(payload)
 	if err != nil {
 		return Preferences{}, err
@@ -408,7 +420,7 @@ func (input UpdatePreferences) empty() bool {
 	return input.Theme == nil && input.Locale == nil && input.InAppEnabled == nil && input.PushEnabled == nil && input.PushPreview == nil &&
 		input.NotifyMessages == nil && input.NotifyThreads == nil && input.NotifyReactions == nil && input.NotifyInvites == nil &&
 		input.NotifySystem == nil && input.SoundEnabled == nil && input.SoundID == nil && !input.Schedule.Set &&
-		!input.SnoozedUntil.Set && input.EmailDigest == nil
+		!input.SnoozedUntil.Set && input.EmailDigest == nil && input.LastSeenVisibility == nil
 }
 
 func validSchedule(schedule NotificationSchedule) bool {

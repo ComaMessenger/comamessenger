@@ -42,6 +42,7 @@ type ProfileDraft = {
   timezone: string;
   theme: UserPreferences["theme"];
   locale: "ru" | "en";
+  lastSeenVisibility: UserPreferences["last_seen_visibility"];
 };
 
 export function ProfileSettingsPage({
@@ -96,6 +97,7 @@ export function ProfileSettingsPage({
           timezone: user.timezone,
           theme: query.data.theme,
           locale: query.data.locale,
+          lastSeenVisibility: query.data.last_seen_visibility ?? "everyone",
         },
     );
   }, [query.data, user]);
@@ -113,6 +115,7 @@ export function ProfileSettingsPage({
         api.updatePreferences({
           theme: snapshot.theme,
           locale: snapshot.locale,
+          last_seen_visibility: snapshot.lastSeenVisibility,
         }),
       ]);
       onUserUpdated(updatedUser);
@@ -274,6 +277,25 @@ export function ProfileSettingsPage({
             >
               <option value="ru">{t("russian")}</option>
               <option value="en">{t("english")}</option>
+            </SelectField>
+          </div>
+        </SettingsSection>
+        <SettingsSection title={t("privacy")} description={t("privacyHint")}>
+          <div className="settings-form-grid">
+            <SelectField
+              label={t("lastSeenVisibility")}
+              name="profile-last-seen"
+              value={draft.lastSeenVisibility}
+              onChange={(event) =>
+                setDraft({
+                  ...draft,
+                  lastSeenVisibility: event.target
+                    .value as UserPreferences["last_seen_visibility"],
+                })
+              }
+            >
+              <option value="everyone">{t("lastSeenEveryone")}</option>
+              <option value="nobody">{t("lastSeenNobody")}</option>
             </SelectField>
           </div>
         </SettingsSection>

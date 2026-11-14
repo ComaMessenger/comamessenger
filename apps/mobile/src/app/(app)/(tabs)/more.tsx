@@ -15,6 +15,7 @@ import {
   Clock,
   ExternalLink,
   LogOut,
+  EyeOff,
   MonitorSmartphone,
   SlidersHorizontal,
   UserRound,
@@ -150,6 +151,12 @@ export default function MoreScreen() {
                 t("settingsNotifications"),
                 SlidersHorizontal,
                 "settings-notifications",
+              ],
+              [
+                "/settings/privacy",
+                t("privacy"),
+                EyeOff,
+                "settings-privacy",
               ],
               [
                 "/settings/sessions",

@@ -15,6 +15,7 @@ import {
   RealtimeCoordinator,
   applySavedChange,
   chatEventEffect,
+  isTypingAction,
   savedChange,
   sharedChangedChat,
   sharedKeys,
@@ -204,6 +205,15 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
                 String(frame.chat_id),
                 String(frame.actor_id),
                 Boolean(frame.active),
+                {
+                  action: isTypingAction(frame.action)
+                    ? frame.action
+                    : "typing",
+                  expiresAt: String(frame.expires_at ?? ""),
+                  threadRootID: frame.thread_root_id
+                    ? String(frame.thread_root_id)
+                    : null,
+                },
               ),
           presence: (frame) =>
             store
@@ -211,7 +221,23 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
               .setPresence(
                 String(frame.actor_id),
                 frame.state as "online" | "away" | "offline",
+                {
+                  expiresAt: String(frame.expires_at ?? ""),
+                  ...(frame.last_seen_at
+                    ? { lastSeenAt: String(frame.last_seen_at) }
+                    : {}),
+                },
               ),
+          presenceSnapshot: (frame) =>
+            store.getState().applyPresenceSnapshot(
+              (Array.isArray(frame.actors) ? frame.actors : []).map(
+                (item: Record<string, unknown>) => ({
+                  actorID: String(item.actor_id),
+                  state: item.state === "away" ? "away" : "online",
+                  expiresAt: String(item.expires_at),
+                }),
+              ),
+            ),
           agentStatus: (frame) =>
             store.getState().setAgentStatus({
               runID: String(frame.run_id),
@@ -238,7 +264,10 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
               done: Boolean(frame.done),
               expiresAt: String(frame.expires_at),
             }),
-          ephemeralReset: () => store.getState().clearAgentEphemeral(),
+          ephemeralReset: () => {
+            store.getState().clearAgentEphemeral();
+            store.getState().clearTyping();
+          },
           passwordChangeRequired: () => void api.me().then(updateUser),
           sessionExpired,
         },
@@ -317,6 +346,9 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
       .preferences()
       .then((preferences) => setLocale(preferences.locale))
       .catch(() => undefined);
+    // The app is in the foreground while it runs; going to the background
+    // closes the socket, which the server reports as offline.
+    coordinator.presence("active");
     coordinator.start();
     void outbox.flush();
     return () => {

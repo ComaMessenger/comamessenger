@@ -10,6 +10,7 @@ import {
   isReadOnly,
   mentionedActorIDs,
   resolvedMentionActorIDs,
+  typingScope,
   updateMentionText,
   type ClientMessage,
   type FileMetadata,
@@ -54,7 +55,11 @@ export function useConversation(
     (state) => state.messages[chatID] ?? noMessages,
   );
   const presence = useStore(store, (state) => state.presence);
-  const typingIDs = useStore(store, (state) => state.typing[chatID]);
+  const typingActions = useStore(
+    store,
+    (state) => state.typingActions[typingScope(chatID, threadRootID)],
+  );
+  const lastSeen = useStore(store, (state) => state.lastSeen);
   const streamsByID = useStore(store, (state) => state.messageStreams);
   const statusesByRun = useStore(store, (state) => state.agentStatuses);
   const membersQuery = useQuery({
@@ -364,7 +369,7 @@ export function useConversation(
     [api, scheduleReload, store],
   );
 
-  const typingNames = (typingIDs ?? [])
+  const typingNames = Object.keys(typingActions ?? {})
     .filter((id) => id !== user.id)
     .map((id) => members.find((member) => member.actor_id === id)?.display_name)
     .filter((name): name is string => Boolean(name));
@@ -413,6 +418,10 @@ export function useConversation(
     remove,
     retryOutbox,
     typingNames,
+    typingActions,
+    presence,
+    lastSeen,
+    agentStatuses: Object.values(statusesByRun),
     readonly: chat ? isReadOnly(chat) : false,
     canModerate:
       user.permissions.includes("chats.moderate") ||

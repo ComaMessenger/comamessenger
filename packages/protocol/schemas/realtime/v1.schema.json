@@ -108,7 +108,8 @@
         "op": { "type": "string", "enum": ["typing"] },
         "chat_id": { "$ref": "#/$defs/UUID" },
         "thread_root_id": { "$ref": "#/$defs/NullableUUID" },
-        "active": { "type": "boolean" }
+        "active": { "type": "boolean" },
+        "action": { "$ref": "#/$defs/TypingAction" }
       }
     },
     "SetPresenceFrame": {
@@ -184,7 +185,13 @@
         "heartbeat_interval_ms": { "type": "integer", "minimum": 1000 },
         "ack_interval_ms": { "type": "integer", "minimum": 100 },
         "ack_batch_size": { "type": "integer", "minimum": 1 },
-        "max_unacked_events": { "type": "integer", "minimum": 1 }
+        "max_unacked_events": { "type": "integer", "minimum": 1 },
+        "features": {
+          "description": "Optional protocol additions this server accepts. typing_actions: the action field on typing frames.",
+          "type": "array",
+          "maxItems": 32,
+          "items": { "type": "string", "maxLength": 64 }
+        }
       }
     },
     "DurableEventFrame": {
@@ -245,8 +252,14 @@
         "chat_id": { "$ref": "#/$defs/UUID" },
         "thread_root_id": { "$ref": "#/$defs/NullableUUID" },
         "active": { "type": "boolean" },
+        "action": { "$ref": "#/$defs/TypingAction" },
         "expires_at": { "type": "string", "format": "date-time" }
       }
+    },
+    "TypingAction": {
+      "description": "What the person is doing in the chat; absent means typing (clients before the field).",
+      "type": "string",
+      "enum": ["typing", "recording_voice", "uploading_photo", "uploading_video", "uploading_file"]
     },
     "PresenceEventFrame": {
       "type": "object",
@@ -256,7 +269,35 @@
         "op": { "type": "string", "enum": ["presence"] },
         "actor_id": { "$ref": "#/$defs/UUID" },
         "state": { "type": "string", "enum": ["online", "away", "offline"] },
-        "expires_at": { "type": "string", "format": "date-time" }
+        "expires_at": { "type": "string", "format": "date-time" },
+        "last_seen_at": {
+          "description": "With away or offline: when the person left, sent only to those who share a chat with them when neither side hides last seen.",
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "PresenceSnapshotFrame": {
+      "description": "Sent once after hello: everyone in the workspace who is online or away right now.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "actors"],
+      "properties": {
+        "op": { "type": "string", "enum": ["presence.snapshot"] },
+        "actors": {
+          "type": "array",
+          "maxItems": 5000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["actor_id", "state", "expires_at"],
+            "properties": {
+              "actor_id": { "$ref": "#/$defs/UUID" },
+              "state": { "type": "string", "enum": ["online", "away"] },
+              "expires_at": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
       }
     },
     "AgentStatusEventFrame": {
@@ -318,6 +359,7 @@
         { "$ref": "#/$defs/ResyncRequiredFrame" },
         { "$ref": "#/$defs/TypingEventFrame" },
         { "$ref": "#/$defs/PresenceEventFrame" },
+        { "$ref": "#/$defs/PresenceSnapshotFrame" },
         { "$ref": "#/$defs/AgentStatusEventFrame" },
         { "$ref": "#/$defs/MessageStreamingEventFrame" },
         { "$ref": "#/$defs/ProtocolErrorFrame" }

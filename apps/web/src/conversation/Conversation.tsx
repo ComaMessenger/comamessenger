@@ -32,14 +32,14 @@ import { MessageRow } from "./MessageRow";
 import { AgentStreamRow } from "./AgentStreamRow";
 import { ChatIntro } from "./ChatIntro";
 import { ThreadPanel } from "./ThreadPanel";
+import { ChatStatusLine } from "./HeaderStatus";
+import { useUploadActivity } from "../composer/useUploadActivity";
 import { useChatAgents } from "../agentchat/useChatAgents";
 import { ScheduledBar } from "../scheduled/ScheduledBar";
 import {
   ComposerScheduleDialog,
   type ScheduleDraft,
 } from "../scheduled/ComposerScheduleDialog";
-
-const emptyActorIDs: string[] = [];
 
 export function Conversation({
   chatID,
@@ -56,7 +56,7 @@ export function Conversation({
   onOpenThread(id: string): void;
   onCloseThread(): void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const isMobile = useIsMobile();
   const {
     api,
@@ -69,11 +69,9 @@ export function Conversation({
     whenReady,
   } = useMessenger();
   const queryClient = useQueryClient();
-  const typing = useStore(
-    store,
-    (state) => state.typing[chatID] ?? emptyActorIDs,
-  );
+  const typingActions = useStore(store, (state) => state.typingActions[chatID]);
   const presence = useStore(store, (state) => state.presence);
+  const lastSeen = useStore(store, (state) => state.lastSeen);
   const messageStreams = useStore(store, (state) => state.messageStreams);
   const agentStatuses = useStore(store, (state) => state.agentStatuses);
   const membersQuery = useQuery({
@@ -98,6 +96,7 @@ export function Conversation({
     [feed.visible, feed.unreadAnchor],
   );
   const attachments = useAttachments(api);
+  useUploadActivity(coordinator, chatID, null, attachments.attachments);
   const [reply, setReply] = useState<Message | null>(null);
   const [body, setBody] = useState(() => getLocalDraft(chatID, null));
   const [info, setInfo] = useState(false);
@@ -171,39 +170,36 @@ export function Conversation({
     });
   }
 
-  const typingNames = typing
-    .filter((id) => id !== user.id)
-    .map((id) => members.find((member) => member.actor_id === id)?.display_name)
-    .filter((name): name is string => Boolean(name));
-  const subtitle = activeAgents.length ? (
-    <span className="conversation-head__agent">
-      <PresenceDot pulse />
-      {activeAgents.length === 1
-        ? t("agentWorking", {
-            name:
-              members.find(
-                (member) => member.actor_id === activeAgents[0]!.actorID,
-              )?.display_name ?? t("agent"),
-          })
-        : t("agentsWorking", { count: activeAgents.length })}
-    </span>
-  ) : typing.length ? (
-    typingNames.length === 1 ? (
-      t("typingOne", { name: typingNames[0] })
+  const subtitle =
+    chat?.kind !== "direct" && activeAgents.length ? (
+      <span className="conversation-head__agent">
+        <PresenceDot pulse />
+        {activeAgents.length === 1
+          ? t("agentWorking", {
+              name:
+                members.find(
+                  (member) => member.actor_id === activeAgents[0]!.actorID,
+                )?.display_name ?? t("agent"),
+            })
+          : t("agentsWorking", { count: activeAgents.length })}
+      </span>
+    ) : chat ? (
+      <ChatStatusLine
+        input={{
+          locale: i18n.language === "en" ? "en" : "ru",
+          viewerID: user.id,
+          chat,
+          members,
+          actions: typingActions,
+          presence,
+          lastSeen,
+          agentStatuses: Object.values(agentStatuses),
+        }}
+        fallback={directPeer ? directPeer.title || `@${directPeer.handle}` : ""}
+      />
     ) : (
-      t("typingMany", { count: typing.length })
-    )
-  ) : directPeer ? (
-    directPeer.status_text ? (
-      `${directPeer.status_emoji} ${directPeer.status_text}`.trim()
-    ) : (
-      directPeer.title || `@${directPeer.handle}`
-    )
-  ) : chat?.topic ? (
-    chat.topic
-  ) : (
-    t("headerMembers", { count: members.length })
-  );
+      ""
+    );
 
   return (
     <div
