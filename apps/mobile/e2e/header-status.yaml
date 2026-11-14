@@ -36,11 +36,13 @@ appId: com.comamessenger.app
     timeout: 60000
 - takeScreenshot: header-last-seen
 
-# The privacy setting lives in More → Privacy.
+# The privacy setting lives in More → Settings → Personal → Privacy.
 - tapOn:
     id: conversation-back
 - tapOn:
     id: tab-more
+- tapOn:
+    id: open-settings
 - tapOn:
     id: settings-privacy
 - extendedWaitUntil:
@@ -48,3 +50,5 @@ appId: com.comamessenger.app
       id: last-seen-everyone
     timeout: 10000
 - takeScreenshot: privacy-settings
+# The hint keeps what the setting does not hide (administrators).
+- assertVisible: ".*Администраторы пространства видят время последнего входа.*"

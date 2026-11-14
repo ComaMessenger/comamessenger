@@ -1,10 +1,14 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type {
-  MessengerAPI,
-  OrganizationMember,
-  Permission,
-  User,
+import {
+  memberRules,
+  ownershipCandidates,
+  roleLabelKey,
+  withPermission,
+  type MessengerAPI,
+  type OrganizationMember,
+  type Permission,
+  type User,
 } from "@comamessenger/core";
 import { MoreHorizontal } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -29,7 +33,6 @@ import {
 } from "../../components/SettingsShell";
 import {
   canAccessSettingsPage,
-  hasPermission,
   permissionLabelKeys,
   permissions,
 } from "../../registry";
@@ -197,13 +200,7 @@ export function WorkspaceMembersPage({
                     )}
                   </span>
                   <span className="organization-member__summary">
-                    <small>
-                      {member.role === "owner"
-                        ? t("roleOwner")
-                        : member.role === "admin"
-                          ? t("roleAdmin")
-                          : t("roleMember")}
-                    </small>
+                    <small>{t(roleLabelKey(member.role))}</small>
                     <small>
                       {member.status === "active"
                         ? t("statusActive")
@@ -220,169 +217,164 @@ export function WorkspaceMembersPage({
               ))}
             </div>
           </SettingsSection>
-          {selectedMember && (
-            <Dialog
-              title={t("manageMember")}
-              className="member-management-dialog"
-              onClose={() => setSelectedMember(null)}
-            >
-              <div className="member-management">
-                <div className="member-management__identity">
-                  <Avatar
-                    name={selectedMember.display_name}
-                    seed={selectedMember.actor_id}
-                    actorID={selectedMember.actor_id}
-                    avatarVersion={selectedMember.avatar_version}
-                    size="lg"
-                    online={selectedMember.status === "active"}
-                  />
-                  <span>
-                    <strong>{selectedMember.display_name}</strong>
-                    <small>
-                      @{selectedMember.handle} · {selectedMember.email}
-                    </small>
-                  </span>
-                </div>
-                <SelectField
-                  label={t("memberRole")}
-                  name="member-role"
-                  value={selectedMember.role}
-                  disabled={
-                    selectedMember.actor_id === user.id ||
-                    (user.role !== "owner" && selectedMember.role !== "member")
-                  }
-                  onChange={(event) =>
-                    void updateMember(selectedMember, {
-                      role: event.target.value as "admin" | "member",
-                    })
-                  }
+          {selectedMember &&
+            (() => {
+              const rules = memberRules(user, selectedMember, {
+                passwordRecoveryAvailable:
+                  branding.data?.password_recovery_available,
+              });
+              return (
+                <Dialog
+                  title={t("manageMember")}
+                  className="member-management-dialog"
+                  onClose={() => setSelectedMember(null)}
                 >
-                  {selectedMember.role === "owner" && (
-                    <option value="owner">{t("roleOwner")}</option>
-                  )}
-                  <option value="admin">{t("roleAdmin")}</option>
-                  <option value="member">{t("roleMember")}</option>
-                </SelectField>
-                <div className="member-management__actions">
-                  <Button
-                    disabled={selectedMember.actor_id === user.id}
-                    onClick={() =>
-                      void updateMember(selectedMember, {
-                        status:
-                          selectedMember.status === "active"
-                            ? "deactivated"
-                            : "active",
-                      })
-                    }
-                  >
-                    {selectedMember.status === "active"
-                      ? t("deactivate")
-                      : t("activate")}
-                  </Button>
-                  <label className="ui-button ui-button--secondary ui-button--md">
-                    {t("changeAvatar")}
-                    <input
-                      hidden
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp"
-                      onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        if (file) void changeMemberAvatar(selectedMember, file);
-                        event.target.value = "";
-                      }}
-                    />
-                  </label>
-                  {selectedMember.avatar_version > 0 && (
-                    <Button
-                      onClick={() =>
-                        void api
-                          .deleteOrganizationMemberAvatar(
-                            selectedMember.actor_id,
-                          )
-                          .then(async (updated) => {
-                            const refreshed = await members.refetch();
-                            const next = refreshed.data?.find(
-                              (item) =>
-                                item.actor_id === selectedMember.actor_id,
-                            );
-                            if (next) setSelectedMember(next);
-                            if (selectedMember.actor_id === user.id)
-                              onUserUpdated({
-                                ...user,
-                                avatar_version: updated.avatar_version,
-                              });
-                          })
-                          .catch((cause) => setMessage(messageOf(cause)))
+                  <div className="member-management">
+                    <div className="member-management__identity">
+                      <Avatar
+                        name={selectedMember.display_name}
+                        seed={selectedMember.actor_id}
+                        actorID={selectedMember.actor_id}
+                        avatarVersion={selectedMember.avatar_version}
+                        size="lg"
+                        online={selectedMember.status === "active"}
+                      />
+                      <span>
+                        <strong>{selectedMember.display_name}</strong>
+                        <small>
+                          @{selectedMember.handle} · {selectedMember.email}
+                        </small>
+                      </span>
+                    </div>
+                    <SelectField
+                      label={t("memberRole")}
+                      name="member-role"
+                      value={selectedMember.role}
+                      disabled={!rules.canChangeRole}
+                      onChange={(event) =>
+                        void updateMember(selectedMember, {
+                          role: event.target.value as "admin" | "member",
+                        })
                       }
                     >
-                      {t("removeAvatar")}
-                    </Button>
-                  )}
-                  <Button
-                    disabled={
-                      selectedMember.actor_id === user.id ||
-                      selectedMember.role === "owner" ||
-                      (user.role !== "owner" &&
-                        selectedMember.role !== "member")
-                    }
-                    onClick={() => void requirePasswordChange(selectedMember)}
-                  >
-                    {t("requirePasswordChange")}
-                  </Button>
-                  {branding.data?.password_recovery_available && (
-                    <Button
-                      disabled={
-                        selectedMember.actor_id === user.id ||
-                        selectedMember.role === "owner" ||
-                        (user.role !== "owner" &&
-                          selectedMember.role !== "member")
-                      }
-                      onClick={() => void issuePasswordReset(selectedMember)}
-                    >
-                      {t("sendPasswordReset")}
-                    </Button>
-                  )}
-                </div>
-                {selectedMember.role === "member" &&
-                  selectedMember.actor_id !== user.id && (
-                    <KnowledgePermission
-                      member={selectedMember}
-                      canGrant={
-                        user.role === "owner" ||
-                        hasPermission(user, "knowledge.manage")
-                      }
-                      onChange={(permissions) =>
-                        void updateMember(selectedMember, { permissions })
-                      }
-                    />
-                  )}
-                {selectedMember.role === "admin" && user.role === "owner" && (
-                  <fieldset className="member-management__permissions">
-                    <legend>{t("administratorPermissions")}</legend>
-                    {permissions.map((code) => (
-                      <SettingsToggle
-                        key={code}
-                        label={t(permissionLabelKeys[code])}
-                        checked={selectedMember.permissions.includes(code)}
-                        onChange={(checked) =>
+                      {selectedMember.role === "owner" && (
+                        <option value="owner">{t("roleOwner")}</option>
+                      )}
+                      <option value="admin">{t("roleAdmin")}</option>
+                      <option value="member">{t("roleMember")}</option>
+                    </SelectField>
+                    <div className="member-management__actions">
+                      <Button
+                        disabled={!rules.canChangeStatus}
+                        onClick={() =>
                           void updateMember(selectedMember, {
-                            permissions: checked
-                              ? [...selectedMember.permissions, code]
-                              : selectedMember.permissions.filter(
-                                  (permission) => permission !== code,
-                                ),
+                            status:
+                              selectedMember.status === "active"
+                                ? "deactivated"
+                                : "active",
                           })
                         }
+                      >
+                        {selectedMember.status === "active"
+                          ? t("deactivate")
+                          : t("activate")}
+                      </Button>
+                      <label className="ui-button ui-button--secondary ui-button--md">
+                        {t("changeAvatar")}
+                        <input
+                          hidden
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            if (file)
+                              void changeMemberAvatar(selectedMember, file);
+                            event.target.value = "";
+                          }}
+                        />
+                      </label>
+                      {selectedMember.avatar_version > 0 && (
+                        <Button
+                          onClick={() =>
+                            void api
+                              .deleteOrganizationMemberAvatar(
+                                selectedMember.actor_id,
+                              )
+                              .then(async (updated) => {
+                                const refreshed = await members.refetch();
+                                const next = refreshed.data?.find(
+                                  (item) =>
+                                    item.actor_id === selectedMember.actor_id,
+                                );
+                                if (next) setSelectedMember(next);
+                                if (selectedMember.actor_id === user.id)
+                                  onUserUpdated({
+                                    ...user,
+                                    avatar_version: updated.avatar_version,
+                                  });
+                              })
+                              .catch((cause) => setMessage(messageOf(cause)))
+                          }
+                        >
+                          {t("removeAvatar")}
+                        </Button>
+                      )}
+                      <Button
+                        disabled={!rules.canRequirePasswordChange}
+                        onClick={() =>
+                          void requirePasswordChange(selectedMember)
+                        }
+                      >
+                        {t("requirePasswordChange")}
+                      </Button>
+                      {branding.data?.password_recovery_available && (
+                        <Button
+                          disabled={!rules.canSendPasswordReset}
+                          onClick={() =>
+                            void issuePasswordReset(selectedMember)
+                          }
+                        >
+                          {t("sendPasswordReset")}
+                        </Button>
+                      )}
+                    </div>
+                    {rules.showsKnowledgePermission && (
+                      <KnowledgePermission
+                        member={selectedMember}
+                        canGrant={rules.canGrantKnowledge}
+                        onChange={(permissions) =>
+                          void updateMember(selectedMember, { permissions })
+                        }
                       />
-                    ))}
-                  </fieldset>
-                )}
-                <small className="member-management__avatar-hint">
-                  {t("avatarValidation")}
-                </small>
-              </div>
-            </Dialog>
-          )}
+                    )}
+                    {rules.showsAdminPermissions && (
+                      <fieldset className="member-management__permissions">
+                        <legend>{t("administratorPermissions")}</legend>
+                        {permissions.map((code) => (
+                          <SettingsToggle
+                            key={code}
+                            label={t(permissionLabelKeys[code])}
+                            checked={selectedMember.permissions.includes(code)}
+                            onChange={(checked) =>
+                              void updateMember(selectedMember, {
+                                permissions: withPermission(
+                                  selectedMember.permissions,
+                                  code,
+                                  checked,
+                                ),
+                              })
+                            }
+                          />
+                        ))}
+                      </fieldset>
+                    )}
+                    <small className="member-management__avatar-hint">
+                      {t("avatarValidation")}
+                    </small>
+                  </div>
+                </Dialog>
+              );
+            })()}
           {user.role === "owner" && (
             <SettingsSection
               title={t("transferOwnership")}
@@ -396,18 +388,13 @@ export function WorkspaceMembersPage({
                   onChange={(event) => setOwnershipTarget(event.target.value)}
                 >
                   <option value="">{t("chooseNewOwner")}</option>
-                  {(members.data ?? [])
-                    .filter(
-                      (member) =>
-                        member.actor_id !== user.id &&
-                        member.status === "active" &&
-                        member.role !== "owner",
-                    )
-                    .map((member) => (
+                  {ownershipCandidates(user, members.data ?? []).map(
+                    (member) => (
                       <option key={member.actor_id} value={member.actor_id}>
                         {member.display_name} (@{member.handle})
                       </option>
-                    ))}
+                    ),
+                  )}
                 </SelectField>
                 <Field
                   label={t("currentPassword")}
@@ -461,12 +448,10 @@ function KnowledgePermission({
         label={t("kbPermissionToggle")}
         hint={canGrant ? t("kbPermissionHint") : t("kbPermissionNeedsOwn")}
         checked={granted}
-        disabled={!canGrant || member.status !== "active"}
+        disabled={!canGrant}
         onChange={(checked) =>
           onChange(
-            checked
-              ? [...member.permissions.filter((code) => code !== "knowledge.manage"), "knowledge.manage"]
-              : member.permissions.filter((code) => code !== "knowledge.manage"),
+            withPermission(member.permissions, "knowledge.manage", checked),
           )
         }
       />

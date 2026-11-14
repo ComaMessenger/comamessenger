@@ -32,7 +32,7 @@ import {
   type SettingsNavigate,
 } from "../components/SettingsShell";
 import { useAutosave } from "../hooks/useAutosave";
-import { sessionLabel } from "../sessionLabel";
+import { sessionLabel, timezoneOptions } from "@comamessenger/core";
 
 type ProfileDraft = {
   displayName: string;
@@ -226,10 +226,7 @@ export function ProfileSettingsPage({
                 setDraft({ ...draft, timezone: event.target.value })
               }
             >
-              {!commonTimezones.some(
-                (timezone) => timezone === draft.timezone,
-              ) && <option value={draft.timezone}>{draft.timezone}</option>}
-              {commonTimezones.map((timezone) => (
+              {timezoneOptions(draft.timezone).map((timezone) => (
                 <option key={timezone} value={timezone}>
                   {timezone}
                 </option>
@@ -313,21 +310,6 @@ export function ProfileSettingsPage({
     </SettingsShell>
   );
 }
-
-const commonTimezones = [
-  "UTC",
-  "Europe/Kaliningrad",
-  "Europe/Moscow",
-  "Europe/Samara",
-  "Asia/Yekaterinburg",
-  "Asia/Omsk",
-  "Asia/Novosibirsk",
-  "Asia/Irkutsk",
-  "Asia/Yakutsk",
-  "Asia/Vladivostok",
-  "Asia/Magadan",
-  "Asia/Kamchatka",
-] as const;
 
 export function NotificationSettingsPage({
   api,

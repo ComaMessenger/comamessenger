@@ -1,8 +1,8 @@
-import { useCallback } from "react";
-import type {
-  MessengerAPI,
-  OrganizationSettings,
-  User,
+import {
+  organizationFields,
+  organizationFingerprint,
+  type MessengerAPI,
+  type User,
 } from "@comamessenger/core";
 import { useTranslation } from "react-i18next";
 import { Field, Skeleton } from "../../../ui";
@@ -23,6 +23,8 @@ import {
   useOrganizationDraft,
 } from "./shared";
 
+const generalFingerprint = organizationFingerprint(organizationFields.general);
+
 export function WorkspaceGeneralPage({
   api,
   user,
@@ -35,15 +37,7 @@ export function WorkspaceGeneralPage({
   const { t } = useTranslation();
   const allowed = canAccessSettingsPage(user, "workspace-general");
   const { query, draft, setDraft } = useOrganizationDraft(api, allowed);
-  const fingerprint = useCallback(
-    (value: OrganizationSettings) =>
-      JSON.stringify({
-        name: value.name,
-        slug: value.slug,
-        default_timezone: value.default_timezone,
-      }),
-    [],
-  );
+  const fingerprint = generalFingerprint;
   const reconcile = useDraftReconciler(setDraft, fingerprint);
   const autosave = useAutosave({
     value: allowed ? draft : null,

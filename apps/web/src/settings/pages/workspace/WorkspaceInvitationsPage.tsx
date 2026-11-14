@@ -1,9 +1,10 @@
-import { useCallback, useState } from "react";
-import type {
-  InvitationSummary,
-  MessengerAPI,
-  OrganizationSettings,
-  User,
+import { useState } from "react";
+import {
+  organizationFields,
+  organizationFingerprint,
+  type InvitationSummary,
+  type MessengerAPI,
+  type User,
 } from "@comamessenger/core";
 import { Copy, RotateCcw, Trash2, UserPlus } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -28,6 +29,10 @@ import {
   useOrganizationDraft,
 } from "./shared";
 
+const invitationsFingerprint = organizationFingerprint(
+  organizationFields.invitations,
+);
+
 export function WorkspaceInvitationsPage({
   api,
   user,
@@ -50,15 +55,7 @@ export function WorkspaceInvitationsPage({
   const [inviteRole, setInviteRole] = useState<"member" | "admin">("member");
   const [inviteURL, setInviteURL] = useState("");
   const [message, setMessage] = useState("");
-  const fingerprint = useCallback(
-    (value: OrganizationSettings) =>
-      JSON.stringify({
-        invitation_default_role: value.invitation_default_role,
-        invitation_ttl_hours: value.invitation_ttl_hours,
-        allow_member_invitations: value.allow_member_invitations,
-      }),
-    [],
-  );
+  const fingerprint = invitationsFingerprint;
   const autosave = useAutosave({
     value: canManage ? draft : null,
     fingerprint,

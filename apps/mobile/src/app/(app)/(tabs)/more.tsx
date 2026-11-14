@@ -15,10 +15,7 @@ import {
   Clock,
   ExternalLink,
   LogOut,
-  EyeOff,
-  MonitorSmartphone,
-  SlidersHorizontal,
-  UserRound,
+  Settings,
   type LucideIcon,
 } from "lucide-react-native";
 import { router } from "expo-router";
@@ -140,30 +137,7 @@ export default function MoreScreen() {
             [
               ["/people", t("people"), Contact, "open-people"],
               ["/scheduled", t("scheduledMoreItem"), Clock, "more-scheduled"],
-              [
-                "/settings/profile",
-                t("profile"),
-                UserRound,
-                "settings-profile",
-              ],
-              [
-                "/settings/notifications",
-                t("settingsNotifications"),
-                SlidersHorizontal,
-                "settings-notifications",
-              ],
-              [
-                "/settings/privacy",
-                t("privacy"),
-                EyeOff,
-                "settings-privacy",
-              ],
-              [
-                "/settings/sessions",
-                t("sessions"),
-                MonitorSmartphone,
-                "settings-sessions",
-              ],
+              ["/settings", t("settingsTitle"), Settings, "open-settings"],
             ] as const
           ).map(
             (

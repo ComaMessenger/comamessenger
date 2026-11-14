@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Permission, User } from "@comamessenger/core";
+import type { Permission, User } from "./types";
 import {
   canAccessSettings,
   canAccessSettingsPage,
@@ -8,7 +8,7 @@ import {
   settingsRegistry,
   visibleChildSettings,
   visibleSettings,
-} from "./registry";
+} from "./settings";
 
 function user(role: User["role"], permissions: Permission[] = []): User {
   return {

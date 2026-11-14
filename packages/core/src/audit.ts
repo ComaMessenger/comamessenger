@@ -1,4 +1,4 @@
-import type { AuditPage } from "@comamessenger/core";
+import type { AuditPage } from "./types";
 
 export type AuditEntry = AuditPage["events"][number];
 

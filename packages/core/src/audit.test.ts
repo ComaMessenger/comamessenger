@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  auditActions,
-  describeAudit,
-  type AuditEntry,
-} from "./auditDescriptions";
+import { auditActions, describeAudit, type AuditEntry } from "./audit";
 
 describe("audit descriptions", () => {
   it("describes every server audit action in Russian and English", () => {

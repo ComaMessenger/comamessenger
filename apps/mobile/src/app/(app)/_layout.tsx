@@ -3,10 +3,10 @@ import { useTranslation } from "react-i18next";
 import { MessengerProvider } from "@/messenger/MessengerProvider";
 import { useSession, useSignedIn } from "@/session/SessionProvider";
 import { useTheme } from "@/lib/theme";
-import { openWebClient } from "@/lib/web";
 import { AuthScreen } from "@/ui/AuthScreen";
 import { PrivacyCover } from "@/ui/PrivacyCover";
 import { Button } from "@/ui/Button";
+import { PasswordForm } from "@/settings/PasswordForm";
 
 export default function AppLayout() {
   const { user, api } = useSignedIn();
@@ -25,31 +25,21 @@ export default function AppLayout() {
   );
 }
 
-// Changing a password needs the full security settings, which live on the web.
+/**
+ * The administrator asked for a new password: nothing else opens until it
+ * is changed here. Scheduled messages were already stopped by that request.
+ */
 function PasswordChangeRequired() {
   const { t } = useTranslation();
-  const { api, user } = useSignedIn();
-  const { updateUser, signOut } = useSession();
+  const { user } = useSignedIn();
+  const { signOut } = useSession();
   return (
     <AuthScreen
       title={t("passwordChangeTitle")}
-      lead={t("passwordChangeText")}
+      lead={t("passwordChangeRequiredLead")}
       markName={user.organization_name}
     >
-      <Button
-        label={t("openWeb")}
-        onPress={() => void openWebClient(api.apiURL, "/settings/security")}
-      />
-      <Button
-        variant="secondary"
-        label={t("checkAgain")}
-        onPress={() =>
-          void api
-            .me()
-            .then(updateUser)
-            .catch(() => undefined)
-        }
-      />
+      <PasswordForm />
       <Button
         variant="ghost"
         label={t("signOut")}

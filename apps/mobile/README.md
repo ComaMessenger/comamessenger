@@ -64,6 +64,8 @@ pnpm --filter @comamessenger/mobile ios   # build and install the development ap
 maestro test e2e/sign-in.yaml
 ```
 
+Settings flows pass the theme for screenshot names and run as the workspace owner: `maestro test -e THEME=light e2e/settings.yaml` (every section; it adds a throwaway member through the API to change role and status on), and last, because it signs out and back in, `maestro test -e THEME=light e2e/settings-password.yaml` (the forced password change and «Сменить пароль» on another throwaway account).
+
 Maestro needs a JDK; the one bundled with Android Studio works: `export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"`.
 
 ## Checks

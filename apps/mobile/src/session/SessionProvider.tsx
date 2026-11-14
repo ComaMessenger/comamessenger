@@ -43,6 +43,8 @@ type SessionValue = {
   sessionExpired(): void;
   forgetServer(): Promise<void>;
   updateUser(user: User): void;
+  /** Reloads the workspace name, accent and logo after they change. */
+  refreshBranding(): void;
   dismissInvite(): void;
 };
 
@@ -189,6 +191,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
+  const refreshBranding = useCallback(() => {
+    void api
+      ?.branding()
+      .then(setBranding)
+      .catch(() => undefined);
+  }, [api]);
+
   const dismissInvite = useCallback(() => {
     setPhase((current) =>
       current.kind === "signed-out"
@@ -209,6 +218,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       sessionExpired,
       forgetServer,
       updateUser,
+      refreshBranding,
       dismissInvite,
     }),
     [
@@ -222,6 +232,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       sessionExpired,
       forgetServer,
       updateUser,
+      refreshBranding,
       dismissInvite,
     ],
   );

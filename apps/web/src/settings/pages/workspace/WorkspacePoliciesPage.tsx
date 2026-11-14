@@ -1,8 +1,8 @@
-import { useCallback } from "react";
-import type {
-  MessengerAPI,
-  OrganizationSettings,
-  User,
+import {
+  organizationFields,
+  organizationFingerprint,
+  type MessengerAPI,
+  type User,
 } from "@comamessenger/core";
 import { useTranslation } from "react-i18next";
 import { Skeleton } from "../../../ui";
@@ -24,6 +24,10 @@ import {
   useOrganizationDraft,
 } from "./shared";
 
+const policiesFingerprint = organizationFingerprint(
+  organizationFields.policies,
+);
+
 export function WorkspacePoliciesPage({
   api,
   user,
@@ -36,14 +40,7 @@ export function WorkspacePoliciesPage({
   const { t } = useTranslation();
   const allowed = canAccessSettingsPage(user, "workspace-policies");
   const { query, draft, setDraft } = useOrganizationDraft(api, allowed);
-  const fingerprint = useCallback(
-    (value: OrganizationSettings) =>
-      JSON.stringify({
-        allow_public_chat_creation: value.allow_public_chat_creation,
-        allow_channel_creation: value.allow_channel_creation,
-      }),
-    [],
-  );
+  const fingerprint = policiesFingerprint;
   const autosave = useAutosave({
     value: allowed ? draft : null,
     fingerprint,
