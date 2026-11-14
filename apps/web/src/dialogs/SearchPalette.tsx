@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { chatAvatarSource } from "@comamessenger/core";
+import { bestFragmentPerDocument, chatAvatarSource } from "@comamessenger/core";
 import { BookOpen, FileText, Hash, Search } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -198,12 +198,7 @@ export function SearchPalette({
     .map((chat) => ({ kind: "directory", chat }));
   const resultRows: Row[] = (results?.results ?? []).map((result) => ({ kind: "result", result }));
   // One row per document: the best fragment represents it.
-  const knowledgeRows: Row[] = knowledge
-    .filter(
-      (fragment, index, all) =>
-        all.findIndex((other) => other.document_id === fragment.document_id) === index,
-    )
-    .map((fragment) => ({ kind: "knowledge", fragment }));
+  const knowledgeRows: Row[] = bestFragmentPerDocument(knowledge).map((fragment) => ({ kind: "knowledge", fragment }));
   const rows: Row[] =
     tab === "people" ? [...peopleRows, ...chatRows, ...directoryRows] : [...knowledgeRows, ...resultRows];
   const count = rows.length;

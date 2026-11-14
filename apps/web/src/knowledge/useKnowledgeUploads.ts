@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { MessengerAPI } from "@comamessenger/core";
+import type { KnowledgeUploadState, MessengerAPI } from "@comamessenger/core";
 import { messageOf } from "../errors";
 import { uploadAttachment } from "../uploads";
 import { documentFormat } from "./format";
@@ -11,7 +11,7 @@ export type KnowledgeUpload = {
   name: string;
   size: number;
   progress: number;
-  state: "uploading" | "adding" | "failed" | "cancelled" | "rejected";
+  state: KnowledgeUploadState;
   error?: string;
 };
 
