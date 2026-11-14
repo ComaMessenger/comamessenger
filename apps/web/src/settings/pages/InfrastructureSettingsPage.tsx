@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type {
-  InfrastructureSettings,
-  MessengerAPI,
-  User,
+import {
+  infrastructureDirty,
+  infrastructureUpdate,
+  normalizeInfrastructure,
+  type InfrastructureSettings,
+  type MessengerAPI,
+  type User,
 } from "@comamessenger/core";
 import { HardDrive, Mail, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -19,37 +22,6 @@ import {
   type SettingsNavigate,
 } from "../components/SettingsShell";
 import { canAccessSettingsPage } from "../registry";
-
-function normalizeInfrastructure(value: InfrastructureSettings) {
-  return {
-    ...value,
-    smtp: {
-      ...value.smtp,
-      security: value.smtp.security || ("starttls" as const),
-      port: value.smtp.port || 587,
-    },
-  };
-}
-
-function infrastructureFingerprint(value: InfrastructureSettings) {
-  return JSON.stringify({
-    s3: {
-      endpoint: value.s3.endpoint,
-      region: value.s3.region,
-      bucket: value.s3.bucket,
-      prefix: value.s3.prefix,
-      force_path_style: value.s3.force_path_style,
-    },
-    smtp: {
-      host: value.smtp.host,
-      port: value.smtp.port,
-      username: value.smtp.username,
-      from_address: value.smtp.from_address,
-      from_name: value.smtp.from_name,
-      security: value.smtp.security,
-    },
-  });
-}
 
 export function InfrastructureSettingsPage({
   api,
@@ -81,44 +53,17 @@ export function InfrastructureSettingsPage({
     setValue(normalized);
     setBaseline(normalized);
   }, [query.data]);
-  const dirty = Boolean(
-    value &&
-      baseline &&
-      (infrastructureFingerprint(value) !==
-        infrastructureFingerprint(baseline) ||
-        s3AccessKey ||
-        s3SecretKey ||
-        smtpPassword),
-  );
+  const secrets = { s3AccessKey, s3SecretKey, smtpPassword };
+  const dirty = infrastructureDirty(value, baseline, secrets);
   async function save() {
     if (!value || !dirty) return;
     setPending(true);
     setError("");
     setMessage("");
     try {
-      const updated = await api.updateInfrastructure({
-        expected_version: value.version,
-        s3: {
-          endpoint: value.s3.endpoint,
-          region: value.s3.region,
-          bucket: value.s3.bucket,
-          prefix: value.s3.prefix,
-          force_path_style: value.s3.force_path_style,
-          access_key: s3AccessKey || null,
-          secret_key: s3SecretKey || null,
-          clear_credentials: false,
-        },
-        smtp: {
-          host: value.smtp.host,
-          port: value.smtp.port,
-          username: value.smtp.username,
-          password: smtpPassword || null,
-          from_address: value.smtp.from_address,
-          from_name: value.smtp.from_name,
-          security: value.smtp.security,
-          clear_credentials: false,
-        },
-      });
+      const updated = await api.updateInfrastructure(
+        infrastructureUpdate(value, secrets),
+      );
       const normalized = normalizeInfrastructure(updated);
       setValue(normalized);
       setBaseline(normalized);

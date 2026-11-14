@@ -15,6 +15,7 @@ import { integrationsCatalog } from "../agents/connections/i18n";
 import { knowledgeCatalog } from "../knowledge/i18n";
 import { agentChatCatalog } from "../agentchat/i18n";
 import { scheduledCatalog } from "../scheduled/i18n";
+import { settingsCatalog } from "../settings/i18n";
 
 const catalogs = mergeCatalogs({ ru, en }, [
   authCatalog,
@@ -28,6 +29,7 @@ const catalogs = mergeCatalogs({ ru, en }, [
   knowledgeCatalog,
   agentChatCatalog,
   scheduledCatalog,
+  settingsCatalog,
 ]);
 
 const pseudo = Object.fromEntries(

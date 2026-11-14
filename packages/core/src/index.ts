@@ -22,3 +22,8 @@ export * from "./uploads";
 export * from "./chatCreation";
 export * from "./chatRights";
 export * from "./people";
+export * from "./audit";
+export * from "./autosave";
+export * from "./sessionLabel";
+export * from "./settings";
+export * from "./workspace";

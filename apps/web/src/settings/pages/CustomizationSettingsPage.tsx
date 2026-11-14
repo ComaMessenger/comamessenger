@@ -6,10 +6,12 @@ import {
   type ReactNode,
 } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type {
-  MessengerAPI,
-  OrganizationSettings,
-  User,
+import {
+  organizationUpdate,
+  reconcileOrganizationDraft,
+  type MessengerAPI,
+  type OrganizationSettings,
+  type User,
 } from "@comamessenger/core";
 import { Image, Trash2, Upload } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -58,24 +60,15 @@ export function CustomizationSettingsPage({
   const autosave = useAutosave({
     value: settings,
     fingerprint: accentFingerprint,
-    save: (snapshot) =>
-      api.updateOrganization({
-        name: snapshot.name,
-        slug: snapshot.slug,
-        expected_version: snapshot.version,
-        invitation_default_role: snapshot.invitation_default_role,
-        invitation_ttl_hours: snapshot.invitation_ttl_hours,
-        default_timezone: snapshot.default_timezone,
-        allow_member_invitations: snapshot.allow_member_invitations,
-        allow_public_chat_creation: snapshot.allow_public_chat_creation,
-        allow_channel_creation: snapshot.allow_channel_creation,
-        accent_color: snapshot.accent_color,
-      }),
+    save: (snapshot) => api.updateOrganization(organizationUpdate(snapshot)),
     onSaved: (updated, snapshot) => {
       setSettings((current) =>
-        current && accentFingerprint(current) !== accentFingerprint(snapshot)
-          ? { ...current, version: updated.version }
-          : updated,
+        reconcileOrganizationDraft(
+          current,
+          updated,
+          snapshot,
+          accentFingerprint,
+        ),
       );
       window.dispatchEvent(new Event("coma-branding-changed"));
     },

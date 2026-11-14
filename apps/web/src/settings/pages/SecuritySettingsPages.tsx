@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
+  auditCategories,
+  passwordChangeError,
   pendingCount,
+  roleLabelKey,
   type MessengerAPI,
   type Session,
   type User,
@@ -24,8 +27,8 @@ import {
   type SettingsNavigate,
 } from "../components/SettingsShell";
 import { canAccessSettingsPage } from "../registry";
-import { sessionLabel } from "../sessionLabel";
-import { describeAudit } from "../auditDescriptions";
+import { sessionLabel } from "@comamessenger/core";
+import { describeAudit } from "@comamessenger/core";
 import { ConfirmDialog } from "../../dialogs/ConfirmDialog";
 import { useScheduledMessages } from "../../scheduled/useScheduled";
 
@@ -71,6 +74,11 @@ export function SecuritySettingsPage({
   const [emailPassword, setEmailPassword] = useState("");
   const [emailPending, setEmailPending] = useState(false);
   const confirmationStarted = useRef(false);
+  const passwordForm = {
+    current: currentPassword,
+    next: newPassword,
+    confirm: confirmPassword,
+  };
   // Every account-wide security event stops the pending scheduled messages:
   // say so before it happens. The count comes from the author's own list.
   const scheduled = useScheduledMessages(
@@ -133,8 +141,7 @@ export function SecuritySettingsPage({
     }
   }
   async function changePassword() {
-    if (!currentPassword || !newPassword || newPassword !== confirmPassword)
-      return;
+    if (passwordChangeError(passwordForm)) return;
     setMessage("");
     setPasswordPending(true);
     try {
@@ -265,10 +272,7 @@ export function SecuritySettingsPage({
           <Button
             variant="primary"
             disabled={
-              passwordPending ||
-              !currentPassword ||
-              newPassword.length < 10 ||
-              newPassword !== confirmPassword
+              passwordPending || passwordChangeError(passwordForm) !== null
             }
             onClick={() => guarded("password", changePassword)}
           >
@@ -431,15 +435,7 @@ export function AuditSettingsPage({
                 }
               >
                 <option value="">{t("auditCategoryAll")}</option>
-                {[
-                  "organization",
-                  "members",
-                  "invitations",
-                  "security",
-                  "chats",
-                  "infrastructure",
-                  "agents",
-                ].map((value) => (
+                {auditCategories.map((value) => (
                   <option key={value} value={value}>
                     {t(`auditCategory_${value}`)}
                   </option>
@@ -487,13 +483,7 @@ export function AuditSettingsPage({
                     <small>
                       {t(`auditCategory_${entry.category}`)} ·{" "}
                       {entry.actor_role
-                        ? t(
-                            entry.actor_role === "owner"
-                              ? "roleOwner"
-                              : entry.actor_role === "admin"
-                                ? "roleAdmin"
-                                : "roleMember",
-                          )
+                        ? t(roleLabelKey(entry.actor_role))
                         : t("systemActor")}
                     </small>
                   </span>
