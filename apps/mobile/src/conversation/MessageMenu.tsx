@@ -1,5 +1,13 @@
 import { Fragment, type ReactNode } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+  useColorScheme,
+} from "react-native";
+import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Copy,
@@ -71,6 +79,7 @@ export function MessageMenu({
 }) {
   const { t } = useTranslation();
   const theme = useTheme();
+  const scheme = useColorScheme();
   const insets = useSafeAreaInsets();
   return (
     <Modal
@@ -80,10 +89,18 @@ export function MessageMenu({
       statusBarTranslucent
       onRequestClose={onClose}
     >
+      <BlurView
+        intensity={24}
+        tint={scheme === "dark" ? "dark" : "light"}
+        style={StyleSheet.absoluteFill}
+      />
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={t("close")}
-        style={[StyleSheet.absoluteFill, { backgroundColor: theme.overlay }]}
+        style={[
+          StyleSheet.absoluteFill,
+          { backgroundColor: theme.overlay, opacity: 0.7 },
+        ]}
         onPress={onClose}
       />
       <View

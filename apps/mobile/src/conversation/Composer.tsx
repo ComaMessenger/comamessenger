@@ -6,12 +6,13 @@ import {
   TextInput,
   View,
   useWindowDimensions,
-  type GestureResponderEvent,
 } from "react-native";
+import type { RefObject } from "react";
 import {
   ArrowUp,
   Check,
   FileText,
+  Play,
   Plus,
   RotateCw,
   X,
@@ -35,9 +36,37 @@ import { IconButton } from "@/ui/IconButton";
 import { Text, fonts, maxTextScale } from "@/ui/Text";
 import type { Attachment } from "@/files/useAttachments";
 import { VoiceActionButton, VoiceRecordingBar } from "@/voice/VoiceComposer";
+import { useMediaFacts, usePoster } from "@/media/facts";
+import { formatMediaDuration } from "@/media/items";
 import { useVoiceRecorder, type VoiceTarget } from "@/voice/useVoiceRecorder";
 
 const lineHeight = 21;
+
+/** A picked video in the composer: its first frame and length. */
+function VideoChip({ id, durationMs }: { id: string; durationMs?: number }) {
+  const poster = usePoster(id);
+  const facts = useMediaFacts(id);
+  const length = durationMs ?? facts.durationMs;
+  return (
+    <>
+      {poster ? (
+        <Image
+          source={poster}
+          contentFit="cover"
+          style={StyleSheet.absoluteFill}
+        />
+      ) : null}
+      <View style={styles.videoBadge}>
+        <Play size={10} color="#ffffff" fill="#ffffff" />
+        {length ? (
+          <Text size={10.5} weight="semibold" style={{ color: "#ffffff" }}>
+            {formatMediaDuration(length)}
+          </Text>
+        ) : null}
+      </View>
+    </>
+  );
+}
 const inputPadding = 9;
 const maxLines = 5;
 
@@ -65,6 +94,7 @@ export function Composer({
   commands = [],
   focusRequest = 0,
   onSendOptions,
+  sendRef,
   voice,
 }: {
   body: string;
@@ -85,7 +115,9 @@ export function Composer({
   /** Raised by the screen to put the cursor in the field, e.g. after a mention was inserted. */
   focusRequest?: number;
   /** Long press on send: «Send later» and «Send without sound» (package E). */
-  onSendOptions?(event?: GestureResponderEvent): void;
+  onSendOptions?(): void;
+  /** The send button, for the menu that hangs from it. */
+  sendRef?: RefObject<View | null>;
   /** Enables voice recording on the microphone while the field is empty. */
   voice?: VoiceTarget;
 }) {
@@ -104,12 +136,16 @@ export function Composer({
   const maxHeight = Math.ceil(lineHeight * maxLines * scale) + inputPadding * 2;
   const showMore = Boolean(onMore) && context?.kind !== "edit";
   const uploading = attachments.some((item) => item.status === "uploading");
+  const failed = attachments.some((item) => item.status === "failed");
+  // A message can go while its files upload: its bubble shows the progress.
+  // A failed file must be retried or removed first.
   const canSend =
-    (Boolean(draft.text.trim()) ||
-      attachments.some((item) => item.status === "ready")) &&
-    !uploading;
+    context?.kind === "edit"
+      ? Boolean(draft.text.trim())
+      : (Boolean(draft.text.trim()) || attachments.length > 0) && !failed;
+  // Sending later needs the files on the server already.
   const sendOptions =
-    canSend && context?.kind !== "edit" && Boolean(onSendOptions);
+    canSend && !uploading && context?.kind !== "edit" && Boolean(onSendOptions);
   // Voice (package F): the microphone takes the send button's place while
   // there is nothing to send; recording replaces the field.
   const recorder = useVoiceRecorder(readonly ? undefined : voice);
@@ -301,6 +337,7 @@ export function Composer({
         >
           {attachments.map((item) => {
             const image = item.local.mime.startsWith("image/");
+            const video = item.local.mime.startsWith("video/");
             return (
               <View
                 key={item.id}
@@ -319,6 +356,8 @@ export function Composer({
                     contentFit="cover"
                     style={StyleSheet.absoluteFill}
                   />
+                ) : video ? (
+                  <VideoChip id={item.id} durationMs={item.local.durationMs} />
                 ) : (
                   <View style={styles.attachmentFile}>
                     <FileText size={18} color={theme.muted} />
@@ -415,23 +454,28 @@ export function Composer({
             ]}
           />
         </View>
-        <IconButton
-          testID="composer-send"
-          variant={canSend ? "accent" : "soft"}
-          label={context?.kind === "edit" ? t("save") : t("send")}
-          disabled={!canSend}
-          onPress={onSend}
-          onLongPress={sendOptions ? onSendOptions : undefined}
-          hint={sendOptions ? t("scheduledSendHint") : undefined}
+        <View
+          ref={sendRef}
+          collapsable={false}
           style={micMode ? styles.hidden : undefined}
-          icon={(color) =>
-            context?.kind === "edit" ? (
-              <Check size={20} color={color} strokeWidth={2.4} />
-            ) : (
-              <ArrowUp size={20} color={color} strokeWidth={2.4} />
-            )
-          }
-        />
+        >
+          <IconButton
+            testID="composer-send"
+            variant={canSend ? "accent" : "soft"}
+            label={context?.kind === "edit" ? t("save") : t("send")}
+            disabled={!canSend}
+            onPress={onSend}
+            onLongPress={sendOptions ? onSendOptions : undefined}
+            hint={sendOptions ? t("scheduledSendHint") : undefined}
+            icon={(color) =>
+              context?.kind === "edit" ? (
+                <Check size={20} color={color} strokeWidth={2.4} />
+              ) : (
+                <ArrowUp size={20} color={color} strokeWidth={2.4} />
+              )
+            }
+          />
+        </View>
         {micMode && <VoiceActionButton voice={recorder} />}
       </View>
     </View>
@@ -523,5 +567,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   center: { textAlign: "center" },
+  videoBadge: {
+    position: "absolute",
+    left: 4,
+    bottom: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 8,
+    backgroundColor: "rgba(0, 0, 0, 0.55)",
+  },
   hidden: { display: "none" },
 });

@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { Alert, Platform, type GestureResponderEvent } from "react-native";
+import { Alert, Platform, type View } from "react-native";
 import * as Haptics from "expo-haptics";
 import { Clock } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
@@ -57,7 +57,8 @@ export function useScheduleComposer({
   const { t } = useTranslation();
   const when = useWhen();
   const { create } = useScheduledActions(noop);
-  const [menuAnchor, setMenuAnchor] = useState<number | null>(null);
+  // The send button: the menu is measured from it, not from the finger.
+  const sendRef = useRef<View>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [pending, setPending] = useState(false);
@@ -73,15 +74,11 @@ export function useScheduleComposer({
   }, [draft]);
 
   /** Long press on the send button. */
-  const openOptions = useCallback(
-    (event?: GestureResponderEvent) => {
-      if (!ready()) return;
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      setMenuAnchor(event?.nativeEvent?.pageY ?? null);
-      setMenuOpen(true);
-    },
-    [ready],
-  );
+  const openOptions = useCallback(() => {
+    if (!ready()) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setMenuOpen(true);
+  }, [ready]);
 
   const openSheet = useCallback(() => {
     if (!ready()) {
@@ -98,8 +95,8 @@ export function useScheduleComposer({
         onSilent();
         return;
       }
-      // iOS cannot present a second modal while the menu is still fading out.
-      setTimeout(() => setSheetOpen(true), Platform.OS === "ios" ? 350 : 0);
+      // The menu fades out first (a modal on Android cannot stack another).
+      setTimeout(() => setSheetOpen(true), Platform.OS === "ios" ? 160 : 350);
     },
     [onSilent],
   );
@@ -177,7 +174,7 @@ export function useScheduleComposer({
     <>
       <SendOptionsMenu
         visible={menuOpen}
-        anchorY={menuAnchor}
+        anchorRef={sendRef}
         onPick={pick}
         onClose={() => setMenuOpen(false)}
       />
@@ -191,5 +188,5 @@ export function useScheduleComposer({
     </>
   );
 
-  return { openOptions, action, layer };
+  return { openOptions, sendRef, action, layer };
 }

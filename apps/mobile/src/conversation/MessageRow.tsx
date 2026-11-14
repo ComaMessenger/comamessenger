@@ -1,4 +1,4 @@
-import { memo, useRef, type ReactNode } from "react";
+import { memo, useMemo, useRef, type ReactNode } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import ReanimatedSwipeable, {
   type SwipeableMethods,
@@ -34,6 +34,8 @@ import { Text } from "@/ui/Text";
 import { Markdown } from "./Markdown";
 import { playableVoice } from "@/voice/model";
 import { MessageFiles } from "./MessageFiles";
+import { isVisualMedia } from "@/media/items";
+import { useMediaMaxWidth, useMediaMosaic } from "@/media/MediaMosaic";
 import { MessageBlocks } from "./MessageBlocks";
 import { AgentWhy } from "./AgentWhy";
 import { useReactions } from "./reactions";
@@ -157,12 +159,18 @@ export function MessageBubble({
     playableVoice(files[0]!) !== null &&
     !blocks &&
     !message.body.trim();
-  const wide = Boolean(blocks) || (files.length > 0 && !voiceOnly);
-  // Photos run edge to edge of the bubble, without a coloured frame; a
-  // message of photos only carries its time on the last one.
-  const images = files.filter(
-    (file) => file.mime.startsWith("image/") && file.status === "ready",
+  // Photos and videos run edge to edge of the bubble, without a coloured
+  // frame, and the bubble takes the width of their mosaic (a caption wraps
+  // under it); a message of media only carries its time on the last one.
+  const images = useMemo(() => files.filter(isVisualMedia), [files]);
+  const mediaWidth = useMediaMaxWidth(
+    placement.avatarColumn ? avatarSize + 7 : 0,
   );
+  const mosaic = useMediaMosaic(images, mediaWidth);
+  const sizedByMedia =
+    images.length > 0 && !blocks && files.length === images.length;
+  const wide =
+    Boolean(blocks) || (files.length > 0 && !voiceOnly && !sizedByMedia);
   const photosOnly =
     images.length > 0 &&
     images.length === files.length &&
@@ -239,7 +247,10 @@ export function MessageBubble({
       {status?.icon}
     </View>
   );
-  const inlineMeta = !wide && !message.agent_provenance && !voiceOnly;
+  // A bubble sized by its photos keeps the time on the last photo or
+  // under the caption, never in a line of its own above the media.
+  const inlineMeta =
+    !wide && !sizedByMedia && !message.agent_provenance && !voiceOnly;
   const photoTop =
     photosOnly &&
     !placement.showName &&
@@ -286,6 +297,7 @@ export function MessageBubble({
       style={[
         styles.bubble,
         wide && styles.wideBubble,
+        sizedByMedia && { width: mosaic.width },
         bubbleCorners(placement, radius.bubble, radius.sm),
         images.length > 0 && styles.clip,
         {
@@ -380,6 +392,8 @@ export function MessageBubble({
           }
           overlay={photoMeta}
           voiceMeta={voiceOnly ? meta : undefined}
+          mosaic={images.length > 0 && !wide ? mosaic : undefined}
+          onLongPress={preview ? undefined : openActions}
         />
       )}
       {!deleted && <AgentWhy provenance={message.agent_provenance} />}
@@ -526,6 +540,9 @@ export function MessageBubble({
           </View>
         ) : (
           <Pressable
+            // With photos or videos each tile is its own element (opens the
+            // viewer, carries the message menu as an action).
+            accessible={images.length === 0}
             accessibilityHint={t("messageActions")}
             accessibilityActions={[
               { name: "longpress", label: t("messageActions") },

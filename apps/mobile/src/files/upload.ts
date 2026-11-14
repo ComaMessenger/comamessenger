@@ -19,6 +19,11 @@ export type LocalFile = {
   name: string;
   mime: string;
   size: number;
+  /** Pixel size of a picked photo or video, when the picker knows it. */
+  width?: number;
+  height?: number;
+  /** Length of a picked video. */
+  durationMs?: number;
 };
 
 const multipartPartBytes = 5 * 1024 * 1024;

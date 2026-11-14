@@ -29,7 +29,7 @@ export function bubblePlacement(
   leading = false,
 ): BubblePlacement {
   const row = rows[index]!;
-  const own = row.message.actor_id === ownID;
+  const own = isOwnMessage(row.message, ownID);
   const first = leading || !row.grouped;
   const last = !rows[index + 1]?.grouped;
   const avatarColumn = groupChat && !own;
@@ -41,6 +41,26 @@ export function bubblePlacement(
     avatarColumn,
     showAvatar: avatarColumn && last,
   };
+}
+
+/**
+ * The reader's own message. A message still in the outbox is always theirs:
+ * one queued by an older build has no author yet, and it must not be drawn
+ * on the other side until the server answers.
+ */
+export function isOwnMessage(
+  message: Pick<FeedRow["message"], "actor_id" | "delivery">,
+  ownID: string,
+): boolean {
+  if (message.actor_id) return message.actor_id === ownID;
+  return message.delivery !== undefined && message.delivery !== "sent";
+}
+
+/** The list key of a message: the same before and after the server answers. */
+export function messageKey(
+  message: Pick<FeedRow["message"], "id" | "client_msg_id">,
+): string {
+  return message.client_msg_id || message.id;
 }
 
 /** Corner radii: the author's side is tucked in below the first bubble of a run. */

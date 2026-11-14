@@ -1,11 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ru } from "../i18n/ru";
 import { en } from "../i18n/en";
-import {
-  confirmationKey,
-  fieldLabels,
-  toolPhrases,
-} from "./blockCopy";
+import { confirmationKey, fieldLabels, toolPhrases } from "./blockCopy";
 
 describe("confirmation card copy", () => {
   it("has Russian and English text for every server tool, field and status", () => {

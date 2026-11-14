@@ -12,6 +12,7 @@ import {
   resolvedMentionActorIDs,
   updateMentionText,
   type ClientMessage,
+  type FileMetadata,
   type Message,
   type MessagePage,
 } from "@comamessenger/core";
@@ -282,34 +283,54 @@ export function useConversation(
     [chatID, coordinator, threadRootID],
   );
 
-  const send = useCallback(
-    async (
-      replyTo: ClientMessage | null,
-      fileIDs: string[] = [],
-      options: { silent?: boolean } = {},
-    ) => {
+  /**
+   * Takes the composer's text (clearing it at once) and returns the step
+   * that queues the message with its files. Media still uploading send
+   * later: their bubble waits in the feed until the files are up.
+   */
+  const takeDraft = useCallback(
+    (replyTo: ClientMessage | null, options: { silent?: boolean } = {}) => {
       const content = body.trim();
-      if ((!content && !fileIDs.length) || (chat && isReadOnly(chat))) return;
       setBody("");
       lastTyping.current = 0;
       coordinator.typing(chatID, false, threadRootID);
-      await outbox.enqueue(chatID, {
-        client_msg_id: crypto.randomUUID(),
-        body: content,
-        body_format: "markdown",
-        reply_to_id: replyTo?.id,
-        thread_root_id: threadRootID ?? undefined,
-        mentioned_actor_ids: resolvedMentionActorIDs(
-          content,
-          members,
-          presence,
-        ),
-        file_ids: fileIDs.length ? fileIDs : undefined,
-        // Recipients are notified as usual, without sound or vibration.
-        ...(options.silent ? { silent: true } : {}),
-      });
+      const mentioned = resolvedMentionActorIDs(content, members, presence);
+      return {
+        content,
+        deliver: async (files: FileMetadata[]) => {
+          if ((!content && !files.length) || (chat && isReadOnly(chat))) return;
+          await outbox.enqueue(
+            chatID,
+            {
+              client_msg_id: crypto.randomUUID(),
+              body: content,
+              body_format: "markdown",
+              reply_to_id: replyTo?.id,
+              thread_root_id: threadRootID ?? undefined,
+              mentioned_actor_ids: mentioned,
+              file_ids: files.length ? files.map((file) => file.id) : undefined,
+              // Recipients are notified as usual, without sound or vibration.
+              ...(options.silent ? { silent: true } : {}),
+            },
+            { files },
+          );
+        },
+      };
     },
     [body, chat, chatID, coordinator, members, outbox, presence, threadRootID],
+  );
+
+  const send = useCallback(
+    async (
+      replyTo: ClientMessage | null,
+      files: FileMetadata[] = [],
+      options: { silent?: boolean } = {},
+    ) => {
+      const content = body.trim();
+      if ((!content && !files.length) || (chat && isReadOnly(chat))) return;
+      await takeDraft(replyTo, options).deliver(files);
+    },
+    [body, chat, takeDraft],
   );
 
   const edit = useCallback(
@@ -387,6 +408,7 @@ export function useConversation(
     changeBody,
     setBody,
     send,
+    takeDraft,
     edit,
     remove,
     retryOutbox,
