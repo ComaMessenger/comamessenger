@@ -214,6 +214,7 @@ func (e *Ephemeral) PresenceSnapshot(ctx context.Context, user identity.User) (*
 // Disconnected forgets a closed connection and tells the workspace when it
 // was the person's last one.
 func (e *Ephemeral) Disconnected(ctx context.Context, user identity.User, connectionID string) {
+	e.markClosed(connectionID)
 	now := frameNow()
 	change, err := e.presence.update(ctx, user.OrgID, user.ActorID, connectionID, "", now)
 	if err != nil {
@@ -223,9 +224,52 @@ func (e *Ephemeral) Disconnected(ctx context.Context, user identity.User, connec
 	if !change.Broadcast {
 		return
 	}
-	e.touchLastSeen(ctx, user, now)
+	if change.State == "offline" {
+		// The moment of leaving is the time people see: store it as is, so
+		// the frame and a later reload agree. Leaving happens once per
+		// session, so this does not need the once-a-minute limit.
+		e.storeLastSeen(ctx, user, now)
+	} else {
+		e.touchLastSeen(ctx, user, now)
+	}
 	if err := e.broadcastPresence(ctx, user, connectionID, change, now); err != nil {
 		e.logger.Warn("broadcast offline presence", "actor_id", user.ActorID, "error", err)
+	}
+}
+
+// closedRetention keeps a closed connection ID long enough for a frame its
+// read loop had already taken in.
+const closedRetention = 2 * time.Minute
+
+func (e *Ephemeral) markClosed(connectionID string) {
+	now := time.Now()
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.closed[connectionID] = now
+	if len(e.closed) > 1024 {
+		for id, at := range e.closed {
+			if now.Sub(at) > closedRetention {
+				delete(e.closed, id)
+			}
+		}
+	}
+}
+
+func (e *Ephemeral) connectionClosed(connectionID string) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	at, ok := e.closed[connectionID]
+	return ok && time.Since(at) <= closedRetention
+}
+
+// storeLastSeen writes the leaving time without the once-a-minute limit and
+// restarts that limit from it.
+func (e *Ephemeral) storeLastSeen(ctx context.Context, user identity.User, now time.Time) {
+	e.mu.Lock()
+	e.lastSeenWrites[user.OrgID+":"+user.ActorID] = now
+	e.mu.Unlock()
+	if _, err := e.pool.Exec(ctx, `UPDATE users SET last_seen_at=$3 WHERE org_id=$1 AND actor_id=$2`, user.OrgID, user.ActorID, now); err != nil {
+		e.logger.Warn("store last seen", "actor_id", user.ActorID, "error", err)
 	}
 }
 
@@ -294,7 +338,17 @@ func (e *Ephemeral) broadcastPresence(ctx context.Context, user identity.User, e
 		return err
 	}
 	if len(without) > 0 {
-		if err := e.publish(ctx, user.OrgID, without, excludeConnectionID, frame); err != nil {
+		// Those without the right to the time get no timestamp derived from
+		// the moment of leaving: expires_at of "offline" means nothing to a
+		// client, so it is put in the future; that of "away" is rounded up
+		// to the minute (receivers drop the state a little later).
+		coarse := frame
+		if change.State == "offline" {
+			coarse.ExpiresAt = now.Truncate(time.Hour).Add(time.Hour)
+		} else {
+			coarse.ExpiresAt = change.ExpiresAt.Truncate(time.Minute).Add(time.Minute)
+		}
+		if err := e.publish(ctx, user.OrgID, without, excludeConnectionID, coarse); err != nil {
 			return err
 		}
 	}

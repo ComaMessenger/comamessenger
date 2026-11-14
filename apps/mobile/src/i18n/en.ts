@@ -333,7 +333,7 @@ export const en: Record<keyof typeof ru, string> = {
   notifyReactions: "Reactions to my messages",
   privacy: "Privacy",
   privacyHint:
-    "If hidden, people see “last seen recently”, and you won't see others' exact time either. Being online is still visible across the workspace.",
+    "If hidden, people see “last seen recently”, and you won't see others' exact time either. Being online is still visible across the workspace. Workspace admins see the last sign-in time in the member list regardless of this setting.",
   lastSeenVisibility: "Who sees my last seen time",
   lastSeenEveryone: "Everyone I share a chat with",
   lastSeenNobody: "Nobody",

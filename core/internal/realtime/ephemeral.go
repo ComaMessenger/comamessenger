@@ -15,6 +15,7 @@ import (
 
 	"github.com/comamessenger/comamessenger/core/internal/access"
 	"github.com/comamessenger/comamessenger/core/internal/agentauthz"
+	"github.com/comamessenger/comamessenger/core/internal/authz"
 	"github.com/comamessenger/comamessenger/core/internal/config"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/google/uuid"
@@ -68,10 +69,11 @@ type Ephemeral struct {
 	localRate      map[string]localRate
 	localLeases    map[string]localLease
 	lastSeenWrites map[string]time.Time
+	closed         map[string]time.Time
 }
 
 func NewEphemeral(logger *slog.Logger, pool *pgxpool.Pool, hub *Hub, realtimeConfig config.RealtimeConfig, redisConfig config.RedisConfig) (*Ephemeral, error) {
-	result := &Ephemeral{logger: logger, pool: pool, hub: hub, config: realtimeConfig, namespace: redisConfig.Namespace, opTimeout: redisConfig.OperationTimeout, localRate: make(map[string]localRate), localLeases: make(map[string]localLease), lastSeenWrites: make(map[string]time.Time), presence: newLocalPresence(realtimeConfig.PresenceTTL)}
+	result := &Ephemeral{logger: logger, pool: pool, hub: hub, config: realtimeConfig, namespace: redisConfig.Namespace, opTimeout: redisConfig.OperationTimeout, localRate: make(map[string]localRate), localLeases: make(map[string]localLease), lastSeenWrites: make(map[string]time.Time), closed: make(map[string]time.Time), presence: newLocalPresence(realtimeConfig.PresenceTTL)}
 	if redisConfig.Mode == "required" {
 		if len(redisConfig.EphemeralSigningKey) < 32 {
 			return nil, fmt.Errorf("REDIS_EPHEMERAL_SIGNING_KEY must be at least 32 bytes")
@@ -259,6 +261,9 @@ func (e *Ephemeral) Typing(ctx context.Context, user identity.User, subscription
 	if err := e.authorizeScope(ctx, user, chatID, threadRootID); err != nil {
 		return err
 	}
+	if err := e.authorizePublish(ctx, user, chatID, threadRootID); err != nil {
+		return err
+	}
 	leaseScope := chatID
 	if threadRootID != nil {
 		leaseScope = *threadRootID
@@ -273,7 +278,32 @@ func (e *Ephemeral) Typing(ctx context.Context, user identity.User, subscription
 		return err
 	}
 	frame := typingEventFrame{Op: "typing", ActorID: user.ActorID, ChatID: chatID, ThreadRootID: threadRootID, Active: active, Action: kind, ExpiresAt: expiresAt}
-	return e.broadcast(ctx, user, subscription.ConnectionID, chatID, false, frame)
+	// Like message events: agents that only write to the chat do not read
+	// it, so they do not see who is typing there either.
+	return e.broadcast(ctx, user, subscription.ConnectionID, chatID, true, frame)
+}
+
+// authorizePublish lets only those who may post where they type say they
+// are typing: a channel subscriber without the right to publish or an agent
+// that only reads this chat cannot announce a message that will not come.
+func (e *Ephemeral) authorizePublish(ctx context.Context, user identity.User, chatID string, threadRootID *string) error {
+	var kind, role string
+	var readOnly bool
+	err := e.pool.QueryRow(ctx, `SELECT c.kind, cm.role,
+		EXISTS(SELECT 1 FROM agents agent WHERE agent.org_id=c.org_id AND agent.actor_id=cm.actor_id AND c.id=ANY(agent.read_only_chat_ids))
+		FROM chats c JOIN chat_members cm ON cm.org_id=c.org_id AND cm.chat_id=c.id AND cm.actor_id=$3
+		WHERE c.org_id=$1 AND c.id=$2`, user.OrgID, chatID, user.ActorID).Scan(&kind, &role, &readOnly)
+	if err != nil {
+		return ErrEphemeralForbidden
+	}
+	action := authz.MessagePublish
+	if threadRootID != nil {
+		action = authz.ThreadReply
+	}
+	if readOnly || !authz.Can(authz.Context{Active: true, OrgRole: authz.Role(user.OrgRole), ChatKind: authz.ChatKind(kind), ChatMember: true, ChatRole: authz.Role(role)}, action) {
+		return ErrEphemeralForbidden
+	}
+	return nil
 }
 
 func (e *Ephemeral) Presence(ctx context.Context, user identity.User, subscription *Subscription, state string) error {
@@ -282,6 +312,11 @@ func (e *Ephemeral) Presence(ctx context.Context, user identity.User, subscripti
 	}
 	if err := e.allow(ctx, user, "presence"); err != nil {
 		return err
+	}
+	// The read loop may still hand over a frame after the connection was
+	// already forgotten; recording it would leave a ghost "online".
+	if e.connectionClosed(subscription.ConnectionID) {
+		return nil
 	}
 	now := frameNow()
 	change, err := e.presence.update(ctx, user.OrgID, user.ActorID, subscription.ConnectionID, state, now)

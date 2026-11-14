@@ -313,12 +313,16 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
       }, delay);
     },
     setPresence: (actorID, value, options = {}) => {
-      set((state) => ({
-        presence: { ...state.presence, [actorID]: value },
-        ...(options.lastSeenAt
-          ? { lastSeen: { ...state.lastSeen, [actorID]: options.lastSeenAt } }
-          : {}),
-      }));
+      set((state) => {
+        const lastSeen = { ...state.lastSeen };
+        if (options.lastSeenAt) lastSeen[actorID] = options.lastSeenAt;
+        // Leaving without a time means the time is no longer ours to see
+        // (the person hid it, or we did): drop the old exact one.
+        else if (value !== "online") delete lastSeen[actorID];
+        return { presence: { ...state.presence, [actorID]: value }, lastSeen };
+      });
+      // expires_at means nothing for "offline": the person is gone until a
+      // new frame says otherwise.
       if (value === "offline" || !options.expiresAt) return;
       const expiresAt = options.expiresAt;
       presenceExpiry.set(actorID, expiresAt);

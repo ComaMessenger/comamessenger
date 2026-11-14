@@ -220,3 +220,29 @@ describe("ACKs after a stop and start", () => {
     coordinator.stop();
   });
 });
+
+describe("store: last seen that is no longer ours", () => {
+  it("is dropped when a leave arrives without a time", () => {
+    const store = createMessengerStore();
+    store.getState().setPresence("oleg", "offline", {
+      lastSeenAt: "2026-11-14T12:00:00Z",
+    });
+    store.getState().setPresence("oleg", "online", {
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+    // Online keeps it: the header shows "online" anyway.
+    expect(store.getState().lastSeen.oleg).toBe("2026-11-14T12:00:00Z");
+    store.getState().setPresence("oleg", "away", {
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+    expect(store.getState().lastSeen.oleg).toBeUndefined();
+    store.getState().setPresence("anna", "offline", {
+      lastSeenAt: "2026-11-14T12:00:00Z",
+    });
+    store.getState().setPresence("anna", "offline", {
+      expiresAt: "2026-11-14T13:00:00Z",
+    });
+    expect(store.getState().lastSeen.anna).toBeUndefined();
+    expect(store.getState().presence.anna).toBe("offline");
+  });
+});

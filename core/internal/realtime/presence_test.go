@@ -405,3 +405,127 @@ func TestEphemeralFrameTimesHaveMillisecondPrecision(t *testing.T) {
 		t.Fatalf("expires_at %q has more than milliseconds", raw.ExpiresAt)
 	}
 }
+
+// exactLeave reports whether a frame carries the moment of leaving: a
+// last_seen_at, or an expires_at that is not the coarse whole hour given
+// to those without the right to the time.
+func exactLeave(frame presenceEventFrame) bool {
+	return frame.LastSeenAt != nil || !frame.ExpiresAt.Equal(frame.ExpiresAt.Truncate(time.Hour))
+}
+
+func TestOfflineFrameHidesTheMomentFromThoseWithoutTheRight(t *testing.T) {
+	world := newLastSeenWorld(t)
+	frames := world.leave(t)
+	left := *frames["owner"].LastSeenAt
+	for _, name := range []string{"stranger", "outsider"} {
+		frame := frames[name]
+		if exactLeave(frame) {
+			t.Fatalf("%s learns the moment of leaving: last_seen_at=%v expires_at=%s (left %s)", name, frame.LastSeenAt, frame.ExpiresAt, left)
+		}
+		if !frame.ExpiresAt.After(left) {
+			t.Fatalf("%s offline expires_at %s is not in the future", name, frame.ExpiresAt)
+		}
+	}
+
+	world = newLastSeenWorld(t)
+	mustExec(t, world.pool, `UPDATE users SET preferences=preferences||'{"last_seen_visibility":"nobody"}' WHERE actor_id=$1`, world.ownerID)
+	frames = world.leave(t)
+	if exactLeave(frames["owner"]) {
+		t.Fatalf("viewer with \"nobody\" learns the moment: %+v", frames["owner"])
+	}
+}
+
+func TestOfflineStoresTheLeavingTimeWithoutTheMinuteLimit(t *testing.T) {
+	world := newLastSeenWorld(t)
+	ctx := t.Context()
+	if err := world.service.Presence(ctx, world.member, world.memberConn, "active"); err != nil {
+		t.Fatal(err)
+	}
+	var first time.Time
+	if err := world.pool.QueryRow(ctx, `SELECT last_seen_at FROM users WHERE actor_id=$1`, world.member.ActorID).Scan(&first); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(30 * time.Millisecond)
+	for _, subscription := range []*Subscription{world.owner, world.stranger, world.helper, world.outsider} {
+		var online presenceEventFrame
+		readEphemeral(t, subscription, &online)
+	}
+	world.service.Disconnected(ctx, world.member, world.memberConn.ConnectionID)
+	var frame presenceEventFrame
+	readEphemeral(t, world.owner, &frame)
+	var stored time.Time
+	if err := world.pool.QueryRow(ctx, `SELECT last_seen_at FROM users WHERE actor_id=$1`, world.member.ActorID).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if !stored.After(first) || frame.LastSeenAt == nil || !stored.Truncate(time.Millisecond).Equal(frame.LastSeenAt.Truncate(time.Millisecond)) {
+		t.Fatalf("stored %s (first %s), frame %v", stored, first, frame.LastSeenAt)
+	}
+}
+
+func TestLatePresenceAfterCloseLeavesNoGhost(t *testing.T) {
+	world := newLastSeenWorld(t)
+	ctx := t.Context()
+	// The socket closes before its read loop hands over a presence frame.
+	world.service.Disconnected(ctx, world.member, world.memberConn.ConnectionID)
+	if err := world.service.Presence(ctx, world.member, world.memberConn, "active"); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := world.service.PresenceSnapshot(ctx, world.member)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Actors) != 0 {
+		t.Fatalf("closed connection left a ghost: %+v", snapshot.Actors)
+	}
+	select {
+	case payload := <-world.owner.Ephemeral():
+		t.Fatalf("closed connection announced itself: %s", payload)
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+func TestTypingNeedsTheRightToPostAndSkipsWriteOnlyAgents(t *testing.T) {
+	pool, service, member, chatID, sender, receiver := typingFixture(t, 100)
+	ctx := t.Context()
+	writerID, readerID := uuid.NewString(), uuid.NewString()
+	var ownerID string
+	if err := pool.QueryRow(ctx, `SELECT id FROM actors WHERE org_id=$1 AND org_role='owner'`, member.OrgID).Scan(&ownerID); err != nil {
+		t.Fatal(err)
+	}
+	mustExec(t, pool, `INSERT INTO actors(id,org_id,type,org_role,display_name,handle) VALUES($1,$3,'agent','member','Writer','typing_writer'),($2,$3,'agent','member','Reader','typing_reader')`, writerID, readerID, member.OrgID)
+	mustExec(t, pool, `INSERT INTO agents(actor_id,org_id,owner_actor_id,kind,enabled,allowed_scopes,write_only_chat_ids) VALUES($1,$2,$3,'builtin',true,ARRAY['messages:read'],ARRAY[$4::uuid])`, writerID, member.OrgID, ownerID, chatID)
+	mustExec(t, pool, `INSERT INTO agents(actor_id,org_id,owner_actor_id,kind,enabled,allowed_scopes,read_only_chat_ids) VALUES($1,$2,$3,'builtin',true,ARRAY['messages:read'],ARRAY[$4::uuid])`, readerID, member.OrgID, ownerID, chatID)
+	mustExec(t, pool, `INSERT INTO chat_members(chat_id,actor_id,org_id,role) VALUES($1,$2,$4,'member'),($1,$3,$4,'member')`, chatID, writerID, readerID, member.OrgID)
+	writer, _ := service.hub.Register(member.OrgID, writerID, "w", uuid.NewString(), 0)
+	t.Cleanup(writer.Close)
+
+	// A member of a group types; a write-only agent does not see it.
+	if err := service.Typing(ctx, member, sender, chatID, nil, true, nil); err != nil {
+		t.Fatal(err)
+	}
+	var event typingEventFrame
+	readEphemeral(t, receiver, &event)
+	select {
+	case payload := <-writer.Ephemeral():
+		t.Fatalf("write-only agent saw typing: %s", payload)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	// An agent that only reads the chat cannot announce a message.
+	reader := identity.User{ActorID: readerID, OrgID: member.OrgID, OrgRole: "member", Status: "active"}
+	readerConn, _ := service.hub.Register(member.OrgID, readerID, "r", uuid.NewString(), 0)
+	t.Cleanup(readerConn.Close)
+	if err := service.SubscribeActive(ctx, reader, readerConn, &chatID, nil); err != nil {
+		t.Fatal(err)
+	}
+	photo := "uploading_photo"
+	if err := service.Typing(ctx, reader, readerConn, chatID, nil, true, &photo); !errors.Is(err, ErrEphemeralForbidden) {
+		t.Fatalf("read-only agent typing error = %v", err)
+	}
+
+	// In a channel only owners and admins post: a subscriber cannot type.
+	mustExec(t, pool, `UPDATE chats SET kind='channel' WHERE id=$1`, chatID)
+	if err := service.Typing(ctx, member, sender, chatID, nil, true, nil); !errors.Is(err, ErrEphemeralForbidden) {
+		t.Fatalf("channel subscriber typing error = %v", err)
+	}
+}
