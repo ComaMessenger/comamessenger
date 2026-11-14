@@ -66,6 +66,8 @@ maestro test e2e/sign-in.yaml
 
 Settings flows pass the theme for screenshot names and run as the workspace owner: `maestro test -e THEME=light e2e/settings.yaml` (every section; it adds a throwaway member through the API to change role and status on), and last, because it signs out and back in, `maestro test -e THEME=light e2e/settings-password.yaml` (the forced password change and «Сменить пароль» on another throwaway account).
 
+The knowledge base flow seeds its collections through the API first: `node e2e/seed-knowledge.mjs && maestro test -e THEME=light e2e/knowledge.yaml` (owner; it also writes, previews and deletes a page and creates and deletes a collection).
+
 Maestro needs a JDK; the one bundled with Android Studio works: `export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"`.
 
 ## Checks

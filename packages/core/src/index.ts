@@ -35,3 +35,4 @@ export * from "./agentCapabilities";
 export * from "./agentConfirmation";
 export * from "./agentTriggers";
 export * from "./agentBuilder";
+export * from "./knowledge";
