@@ -1,3 +1,4 @@
+import type { MessengerAPI } from "./api";
 import { hasPermission } from "./settings";
 import type {
   Agent,
@@ -635,3 +636,72 @@ export function approvalText(
       return { action: toolLabel(t, confirmation.tool_name), quote: "" };
   }
 }
+
+/* ---------- Check (dry run) ---------- */
+
+function pause(ms: number, signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal.aborted) {
+      reject(signal.reason);
+      return;
+    }
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(signal.reason);
+      },
+      { once: true },
+    );
+  });
+}
+
+/**
+ * One dry run of the agent draft in a chat: nothing is sent to chats. Polls
+ * until the run finishes (up to ~6 minutes) and reports every state; stops
+ * quietly when `signal` aborts. Returns the last state, or null if aborted.
+ */
+export async function runAgentCheck(
+  api: {
+    invokeAgent: MessengerAPI["invokeAgent"];
+    agentRun: MessengerAPI["agentRun"];
+  },
+  input: { agentID: string; chatID: string; prompt: string },
+  signal: AbortSignal,
+  onUpdate: (run: AgentRun) => void,
+  /** Polling step in milliseconds for the first ten polls; doubled after. */
+  interval = 1_000,
+): Promise<AgentRun | null> {
+  let state = await api.invokeAgent(input.agentID, {
+    chat_id: input.chatID,
+    client_run_id: crypto.randomUUID(),
+    chain_depth: 0,
+    timeout_seconds: 600,
+    max_attempts: 1,
+    dry_run: true,
+    input: { prompt: input.prompt, sandbox: true, publish: false },
+  });
+  if (signal.aborted) return null;
+  onUpdate(state);
+  for (let attempt = 0; attempt < 180 && !runFinished(state); attempt++) {
+    try {
+      await pause(attempt < 10 ? interval : interval * 2, signal);
+    } catch {
+      return null;
+    }
+    state = await api.agentRun(state.id);
+    if (signal.aborted) return null;
+    onUpdate(state);
+  }
+  return state;
+}
+
+/** Blockers that make a check impossible, not only a publish. */
+export const checkBlockers: ReadonlySet<string> = new Set([
+  "chat_required",
+  "llm_connection_required",
+  "llm_connection_unavailable",
+  "external_data_approval_required",
+  "provider_model_required",
+]);

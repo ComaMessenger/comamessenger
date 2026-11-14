@@ -9,6 +9,7 @@ import {
   humanStatus,
   humanStatusLabel,
   pendingByAgent,
+  runAgentCheck,
   runSentence,
   runTrigger,
   stepText,
@@ -220,7 +221,12 @@ describe("pending actions and rules", () => {
 
   it("turns enabled rules into chat triggers", () => {
     const trigger = (patch: Partial<AgentTrigger>) =>
-      ({ enabled: true, timezone: "UTC", config: {}, ...patch }) as AgentTrigger;
+      ({
+        enabled: true,
+        timezone: "UTC",
+        config: {},
+        ...patch,
+      }) as AgentTrigger;
     expect(
       chatTriggersOf([
         trigger({ type: "mention" }),
@@ -240,5 +246,51 @@ describe("pending actions and rules", () => {
         schedule: { hour: 10, minute: 5, days_of_week: [1], timezone: "UTC" },
       },
     ]);
+  });
+});
+
+describe("agent check", () => {
+  it("polls a dry run until it finishes and reports every state", async () => {
+    const states = ["queued", "running", "completed"] as const;
+    let call = 0;
+    const invoked: unknown[] = [];
+    const api = {
+      invokeAgent: async (_id: string, input: unknown) => {
+        invoked.push(input);
+        return run({ id: "dry", status: states[0] });
+      },
+      agentRun: async () => run({ id: "dry", status: states[++call]! }),
+    };
+    const seen: string[] = [];
+    const last = await runAgentCheck(
+      api as never,
+      { agentID: "a1", chatID: "c1", prompt: "Привет" },
+      new AbortController().signal,
+      (state) => seen.push(state.status),
+      0,
+    );
+    expect(last?.status).toBe("completed");
+    expect(seen).toEqual(["queued", "running", "completed"]);
+    expect(invoked[0]).toMatchObject({
+      chat_id: "c1",
+      dry_run: true,
+      input: { prompt: "Привет", sandbox: true, publish: false },
+    });
+  });
+
+  it("stops quietly when aborted", async () => {
+    const controller = new AbortController();
+    const api = {
+      invokeAgent: async () => run({ status: "queued" }),
+      agentRun: async () => run({ status: "running" }),
+    };
+    const pending = runAgentCheck(
+      api as never,
+      { agentID: "a1", chatID: "c1", prompt: "?" },
+      controller.signal,
+      () => controller.abort(),
+      0,
+    );
+    expect(await pending).toBeNull();
   });
 });
