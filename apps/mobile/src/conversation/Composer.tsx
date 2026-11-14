@@ -39,6 +39,7 @@ import { VoiceActionButton, VoiceRecordingBar } from "@/voice/VoiceComposer";
 import { useMediaFacts, usePoster } from "@/media/facts";
 import { formatMediaDuration } from "@/media/items";
 import { useVoiceRecorder, type VoiceTarget } from "@/voice/useVoiceRecorder";
+import { useChatActivity } from "./useChatActivity";
 
 const lineHeight = 21;
 
@@ -150,6 +151,14 @@ export function Composer({
   // there is nothing to send; recording replaces the field.
   const recorder = useVoiceRecorder(readonly ? undefined : voice);
   const recording = recorder.phase.kind !== "idle";
+  // Holding or locked is recording; review is listening to the take.
+  useChatActivity(
+    voice?.chatID,
+    voice?.threadRootID ?? null,
+    recorder.phase.kind === "holding" || recorder.phase.kind === "locked"
+      ? "recording_voice"
+      : null,
+  );
   const micMode =
     recorder.enabled &&
     (recording ||

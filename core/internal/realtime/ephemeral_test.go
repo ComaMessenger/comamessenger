@@ -46,13 +46,13 @@ func TestLocalEphemeralTypingPresenceAndRateLimit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := service.Typing(context.Background(), member, sender, chatID, nil, true); err != ErrEphemeralForbidden {
+	if err := service.Typing(context.Background(), member, sender, chatID, nil, true, nil); err != ErrEphemeralForbidden {
 		t.Fatalf("typing without active error = %v", err)
 	}
 	if err := service.SubscribeActive(context.Background(), member, sender, &chatID, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := service.Typing(context.Background(), member, sender, chatID, nil, true); err != nil {
+	if err := service.Typing(context.Background(), member, sender, chatID, nil, true, nil); err != nil {
 		t.Fatal(err)
 	}
 	var typing typingEventFrame
@@ -169,15 +169,18 @@ func TestRedisEphemeralCrossCoreFanout(t *testing.T) {
 	go first.Run(ctx)
 	go second.Run(ctx)
 	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		_ = first.Presence(context.Background(), member, sender, "active")
+	// An unchanged state is not re-sent, so alternate until the subscriber
+	// on the other core is listening.
+	states := []string{"active", "away"}
+	for attempt := 0; time.Now().Before(deadline); attempt++ {
+		_ = first.Presence(context.Background(), member, sender, states[attempt%2])
 		select {
 		case payload := <-receiver.Ephemeral():
 			var frame presenceEventFrame
 			if err := json.Unmarshal(payload, &frame); err != nil {
 				t.Fatal(err)
 			}
-			if frame.ActorID != member.ActorID || frame.State != "online" {
+			if frame.ActorID != member.ActorID || (frame.State != "online" && frame.State != "away") {
 				t.Fatalf("cross-core presence = %+v", frame)
 			}
 			return

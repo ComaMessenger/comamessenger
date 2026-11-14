@@ -19,7 +19,7 @@ export type Attachment = UploadJob;
  * uploads themselves live in `uploadJobs`: `detach` hands them to a message
  * being sent without stopping them.
  */
-export function useAttachments(api: MessengerAPI) {
+export function useAttachments(api: MessengerAPI, scope?: string) {
   const [ids, setIDs] = useState<string[]>([]);
   const jobs = useUploadJobs(
     useShallow((state) => ids.map((id) => state.jobs[id])),
@@ -35,11 +35,11 @@ export function useAttachments(api: MessengerAPI) {
       const room = Math.max(0, attachmentLimit - ids.length);
       const accepted = files
         .slice(0, room)
-        .map((local) => startUpload(api, local));
+        .map((local) => startUpload(api, local, scope));
       setIDs((current) => [...current, ...accepted]);
       return files.length - accepted.length;
     },
-    [api, ids.length],
+    [api, ids.length, scope],
   );
 
   const remove = useCallback((id: string) => {

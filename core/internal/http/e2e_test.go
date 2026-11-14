@@ -589,6 +589,15 @@ func TestTwoUserRESTAndWebSocketE2E(t *testing.T) {
 	if preferences.SnoozedUntil != nil {
 		t.Fatalf("snooze was not cleared: %+v", preferences)
 	}
+	if preferences.LastSeenVisibility != "everyone" {
+		t.Fatalf("last seen visibility default = %q", preferences.LastSeenVisibility)
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/preferences", owner.AccessToken, map[string]any{"last_seen_visibility": "nobody"}, standardhttp.StatusOK, &preferences)
+	if preferences.LastSeenVisibility != "nobody" {
+		t.Fatalf("last seen visibility = %q", preferences.LastSeenVisibility)
+	}
+	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/preferences", owner.AccessToken, map[string]any{"last_seen_visibility": "friends"}, standardhttp.StatusUnprocessableEntity, nil)
+	e2eRequest(t, server.Client(), standardhttp.MethodPatch, baseURL+"/api/v1/preferences", owner.AccessToken, map[string]any{"last_seen_visibility": "everyone"}, standardhttp.StatusOK, &preferences)
 	folders := []push.ChatFolder{{ID: "00000000-0000-4000-8000-000000000080", Name: "Work", Icon: "briefcase", Color: "violet", ChatIDs: []string{group.ID}}}
 	e2eRequest(t, server.Client(), standardhttp.MethodPut, baseURL+"/api/v1/preferences/chat-folders", owner.AccessToken, folders, standardhttp.StatusOK, &folders)
 	e2eRequest(t, server.Client(), standardhttp.MethodGet, baseURL+"/api/v1/preferences/chat-folders", owner.AccessToken, nil, standardhttp.StatusOK, &folders)

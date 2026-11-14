@@ -1161,3 +1161,50 @@
     animation: none;
   }
 }
+
+/* Header status: "в сети", last seen, actions with animated dots. */
+.conversation-status {
+  display: inline-flex;
+  align-items: baseline;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.conversation-status--live {
+  color: var(--coma-primary);
+}
+.typing-dots {
+  display: inline-flex;
+  gap: 2px;
+  margin-inline-start: 2px;
+}
+.typing-dots i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: typing-dot 1.2s infinite ease-in-out;
+}
+.typing-dots i:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.typing-dots i:nth-child(3) {
+  animation-delay: 0.4s;
+}
+@keyframes typing-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.25;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .typing-dots i {
+    animation: none;
+    opacity: 0.7;
+  }
+}

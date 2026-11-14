@@ -1,0 +1,54 @@
+# The status line under a direct chat's title, as in Telegram: what the other
+# person is doing, "online", then "last seen". The other person is driven by
+# e2e/peer-presence.mjs; start it right before this flow:
+#   COMA_API=… COMA_EMAIL=… COMA_PASSWORD=… node e2e/peer-presence.mjs &
+#   maestro test e2e/header-status.yaml
+appId: com.comamessenger.app
+---
+- runFlow: open-app.yaml
+- extendedWaitUntil:
+    visible: "Сейчас запишу голосовое|.*Сейчас запишу голосовое.*"
+    timeout: 20000
+- tapOn:
+    id: chat-row-0
+- extendedWaitUntil:
+    visible:
+      id: conversation
+    timeout: 10000
+# The direct chat never says "2 members".
+- assertNotVisible: ".*участник.*|.*members.*"
+- extendedWaitUntil:
+    visible:
+      id: conversation-status
+      text: "записывает голосовое|recording voice"
+    timeout: 30000
+- takeScreenshot: header-recording-voice
+- extendedWaitUntil:
+    visible:
+      id: conversation-status
+      text: "в сети|online"
+    timeout: 40000
+- takeScreenshot: header-online
+- extendedWaitUntil:
+    visible:
+      id: conversation-status
+      text: "был\\(а\\) в сети только что|last seen just now"
+    timeout: 60000
+- takeScreenshot: header-last-seen
+
+# The privacy setting lives in More → Settings → Personal → Privacy.
+- tapOn:
+    id: conversation-back
+- tapOn:
+    id: tab-more
+- tapOn:
+    id: open-settings
+- tapOn:
+    id: settings-privacy
+- extendedWaitUntil:
+    visible:
+      id: last-seen-everyone
+    timeout: 10000
+- takeScreenshot: privacy-settings
+# The hint keeps what the setting does not hide (administrators).
+- assertVisible: ".*Администраторы пространства видят время последнего входа.*"

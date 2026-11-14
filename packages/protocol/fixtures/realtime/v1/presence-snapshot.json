@@ -1,0 +1,10 @@
+{
+  "op": "presence.snapshot",
+  "actors": [
+    {
+      "actor_id": "0198c17d-88ba-7ac2-8867-3f71d7722791",
+      "state": "online",
+      "expires_at": "2026-08-18T12:01:00Z"
+    }
+  ]
+}

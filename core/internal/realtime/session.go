@@ -120,7 +120,7 @@ func (s *session) readLoop(ctx context.Context) error {
 			if decodeStrict(payload, &frame) != nil || s.ephemeral == nil {
 				return s.protocolFailure(ctx, "invalid_frame", "Typing frame is invalid.")
 			}
-			if err := s.ephemeral.Typing(ctx, s.user, s.subscription, frame.ChatID, frame.ThreadRootID, frame.Active); err != nil {
+			if err := s.ephemeral.Typing(ctx, s.user, s.subscription, frame.ChatID, frame.ThreadRootID, frame.Active, frame.Action); err != nil {
 				if reportErr := s.reportEphemeralError(ctx, err); reportErr != nil {
 					return reportErr
 				}
@@ -203,9 +203,19 @@ func (s *session) writeLoop(ctx context.Context) error {
 		HeartbeatIntervalMS: int(s.config.HeartbeatInterval.Milliseconds()),
 		AckIntervalMS:       int(s.config.AckInterval.Milliseconds()), AckBatchSize: int(s.config.AckBatchSize),
 		MaxUnackedEvents: int(s.config.MaxUnackedEvents),
+		Features:         []string{"typing_actions", "presence_snapshot"},
 	}
 	if err := s.write(ctx, hello); err != nil {
 		return err
+	}
+	if s.ephemeral != nil {
+		if snapshot, err := s.ephemeral.PresenceSnapshot(ctx, s.user); err != nil {
+			s.logger.Warn("read presence snapshot", "connection_id", s.connectionID, "error", err)
+		} else if len(snapshot.Actors) > 0 {
+			if err := s.write(ctx, snapshot); err != nil {
+				return err
+			}
+		}
 	}
 
 	deliveredThrough := s.lastSeq

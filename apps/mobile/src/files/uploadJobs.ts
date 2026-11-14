@@ -17,6 +17,8 @@ export type UploadJob = {
   status: "uploading" | "ready" | "failed";
   progress: number;
   file?: FileMetadata;
+  /** Chat (or `chat:thread`) the file goes to: the header there says so. */
+  scope?: string;
 };
 
 export const useUploadJobs = create<{ jobs: Record<string, UploadJob> }>(
@@ -65,12 +67,22 @@ function run(api: MessengerAPI, id: string) {
     });
 }
 
-export function startUpload(api: MessengerAPI, local: LocalFile): string {
+export function startUpload(
+  api: MessengerAPI,
+  local: LocalFile,
+  scope?: string,
+): string {
   const id = crypto.randomUUID();
   useUploadJobs.setState((state) => ({
     jobs: {
       ...state.jobs,
-      [id]: { id, local, status: "uploading", progress: 0 },
+      [id]: {
+        id,
+        local,
+        status: "uploading",
+        progress: 0,
+        ...(scope ? { scope } : {}),
+      },
     },
   }));
   if (local.width && local.height)

@@ -70,6 +70,15 @@ appId: com.comamessenger.app
 - takeScreenshot: settings-notifications-more-${THEME}
 - tapOn: Назад
 - tapOn:
+    id: settings-privacy
+- extendedWaitUntil:
+    visible:
+      id: last-seen-everyone
+    timeout: 10000
+- assertVisible: ".*Администраторы пространства видят время последнего входа.*"
+- takeScreenshot: settings-privacy-${THEME}
+- tapOn: Назад
+- tapOn:
     id: settings-appearance
 - extendedWaitUntil:
     visible:

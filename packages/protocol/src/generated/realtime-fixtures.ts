@@ -40,14 +40,44 @@ export const realtimeV1Fixtures = {
     "heartbeat_interval_ms": 25000,
     "ack_interval_ms": 1000,
     "ack_batch_size": 50,
-    "max_unacked_events": 128
+    "max_unacked_events": 128,
+    "features": [
+      "typing_actions",
+      "presence_snapshot"
+    ]
   } as const satisfies Schemas["RealtimeHelloFrameV1"],
+  "presence-snapshot": {
+    "op": "presence.snapshot",
+    "actors": [
+      {
+        "actor_id": "0198c17d-88ba-7ac2-8867-3f71d7722791",
+        "state": "online",
+        "expires_at": "2026-08-18T12:01:00Z"
+      }
+    ]
+  } as const satisfies Schemas["RealtimePresenceSnapshotFrameV1"],
+  "presence": {
+    "op": "presence",
+    "actor_id": "0198c17d-88ba-7ac2-8867-3f71d7722791",
+    "state": "offline",
+    "expires_at": "2026-08-18T12:00:00Z",
+    "last_seen_at": "2026-08-18T12:00:00Z"
+  } as const satisfies Schemas["RealtimePresenceEventFrameV1"],
   "resync-required": {
     "op": "resync_required",
     "current_seq": 250000,
     "min_retained_seq": 150000,
     "reason": "event_history_expired"
   } as const satisfies Schemas["RealtimeResyncRequiredFrameV1"],
+  "typing-action": {
+    "op": "typing",
+    "actor_id": "0198c17d-88ba-7ac2-8867-3f71d7722791",
+    "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+    "thread_root_id": null,
+    "active": true,
+    "action": "recording_voice",
+    "expires_at": "2026-08-18T12:00:05Z"
+  } as const satisfies Schemas["RealtimeTypingEventFrameV1"],
   "typing": {
     "op": "typing",
     "actor_id": "0198c17d-88ba-7ac2-8867-3f71d7722791",

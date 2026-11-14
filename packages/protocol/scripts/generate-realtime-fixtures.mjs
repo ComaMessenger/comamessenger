@@ -15,6 +15,9 @@ const schemaByFixture = {
   hello: "RealtimeHelloFrameV1",
   "resync-required": "RealtimeResyncRequiredFrameV1",
   typing: "RealtimeTypingEventFrameV1",
+  "typing-action": "RealtimeTypingEventFrameV1",
+  presence: "RealtimePresenceEventFrameV1",
+  "presence-snapshot": "RealtimePresenceSnapshotFrameV1",
 };
 
 const files = (await readdir(fixtureRoot))

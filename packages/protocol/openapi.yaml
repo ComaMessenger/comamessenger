@@ -4643,6 +4643,10 @@ components:
       $ref: "./schemas/realtime/v1.schema.json#/$defs/TypingEventFrame"
     RealtimePresenceEventFrameV1:
       $ref: "./schemas/realtime/v1.schema.json#/$defs/PresenceEventFrame"
+    RealtimePresenceSnapshotFrameV1:
+      $ref: "./schemas/realtime/v1.schema.json#/$defs/PresenceSnapshotFrame"
+    RealtimeTypingActionV1:
+      $ref: "./schemas/realtime/v1.schema.json#/$defs/TypingAction"
     RealtimeAgentStatusEventFrameV1:
       $ref: "./schemas/realtime/v1.schema.json#/$defs/AgentStatusEventFrame"
     RealtimeMessageStreamingEventFrameV1:
@@ -7014,6 +7018,14 @@ components:
         status_text: { type: string, maxLength: 100 }
         status_expires_at: { type: [string, "null"], format: date-time }
         avatar_version: { type: integer, format: int64, minimum: 0 }
+        last_seen_at:
+          type: string
+          format: date-time
+          description: Direct chat peer only — when the person was last online, when neither side hides last seen.
+        last_seen_approx:
+          type: string
+          enum: [recently, within_week, within_month, long_ago]
+          description: Direct chat peer only — rough last seen used instead of last_seen_at when the person or the viewer hides the exact time.
     ActorPage:
       type: object
       additionalProperties: false
@@ -7097,6 +7109,14 @@ components:
         status_text: { type: string, maxLength: 100 }
         status_expires_at: { type: [string, "null"], format: date-time }
         avatar_version: { type: integer, format: int64, minimum: 0 }
+        last_seen_at:
+          type: string
+          format: date-time
+          description: When the person was last online. Present only for people the viewer shares this chat with, when neither of them hides last seen.
+        last_seen_approx:
+          type: string
+          enum: [recently, within_week, within_month, long_ago]
+          description: Rough last seen used instead of last_seen_at when the person or the viewer hides the exact time (recently means within three days).
     ChatAgentList:
       type: object
       additionalProperties: false
@@ -8087,6 +8107,7 @@ components:
           schedule,
           snoozed_until,
           email_digest,
+          last_seen_visibility,
         ]
       properties:
         theme: { type: string, enum: [system, light, dark] }
@@ -8108,6 +8129,10 @@ components:
             - { type: "null" }
         snoozed_until: { type: [string, "null"], format: date-time }
         email_digest: { type: boolean }
+        last_seen_visibility:
+          type: string
+          enum: [everyone, nobody]
+          description: Who sees when this person was last online. "nobody" also hides other people's exact time from them (symmetric, as in Telegram); online status itself stays visible in the workspace.
     UpdatePreferencesRequest:
       type: object
       additionalProperties: false
@@ -8132,6 +8157,10 @@ components:
             - { type: "null" }
         snoozed_until: { type: [string, "null"], format: date-time }
         email_digest: { type: boolean }
+        last_seen_visibility:
+          type: string
+          enum: [everyone, nobody]
+          description: Who sees when this person was last online. "nobody" also hides other people's exact time from them (symmetric, as in Telegram); online status itself stays visible in the workspace.
     NotificationSchedule:
       type: object
       additionalProperties: false

@@ -1,6 +1,7 @@
 import {
   Bell,
   Building2,
+  EyeOff,
   History,
   KeyRound,
   Mail,
@@ -42,6 +43,12 @@ export const personalLinks: SettingsLink[] = [
     href: "/settings/notifications",
     labelKey: "settingsNotifications",
     icon: Bell,
+  },
+  {
+    id: "privacy",
+    href: "/settings/privacy",
+    labelKey: "privacy",
+    icon: EyeOff,
   },
   {
     id: "appearance",
