@@ -30,6 +30,14 @@ export function isTypingAction(value: unknown): value is TypingAction {
   return typingActions.includes(value as TypingAction);
 }
 
+/**
+ * Date.parse that also takes RFC 3339 with more than three fractional digits:
+ * Hermes (the phone) returns NaN for "…16.994263095Z".
+ */
+export function parseInstant(value: string): number {
+  return Date.parse(value.replace(/(\.\d{3})\d+/, "$1"));
+}
+
 export type LastSeenApprox =
   | "recently"
   | "within_week"
@@ -337,7 +345,7 @@ export function conversationStatus(
         live: true,
       };
     if (peer.lastSeenAt) {
-      const at = new Date(peer.lastSeenAt);
+      const at = new Date(parseInstant(peer.lastSeenAt));
       if (!Number.isNaN(at.getTime()))
         return {
           text: formatLastSeen(at, input.now, locale),

@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -391,5 +392,16 @@ func TestRedisPresenceMatchesLocalModel(t *testing.T) {
 				t.Fatalf("snapshot = %+v, %v", entries, err)
 			}
 		}
+	}
+}
+
+func TestEphemeralFrameTimesHaveMillisecondPrecision(t *testing.T) {
+	data, _ := json.Marshal(typingEventFrame{Op: "typing", ExpiresAt: frameNow()})
+	var raw struct {
+		ExpiresAt string `json:"expires_at"`
+	}
+	_ = json.Unmarshal(data, &raw)
+	if _, fraction, ok := strings.Cut(strings.TrimSuffix(raw.ExpiresAt, "Z"), "."); ok && len(fraction) > 3 {
+		t.Fatalf("expires_at %q has more than milliseconds", raw.ExpiresAt)
 	}
 }

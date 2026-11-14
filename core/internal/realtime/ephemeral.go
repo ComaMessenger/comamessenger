@@ -263,7 +263,7 @@ func (e *Ephemeral) Typing(ctx context.Context, user identity.User, subscription
 	if threadRootID != nil {
 		leaseScope = *threadRootID
 	}
-	expiresAt := time.Now().UTC()
+	expiresAt := frameNow()
 	if active {
 		expiresAt = expiresAt.Add(e.config.TypingTTL)
 		if err := e.setLease(ctx, "typing:"+leaseScope, user, subscription.ConnectionID, "1", e.config.TypingTTL); err != nil {
@@ -283,7 +283,7 @@ func (e *Ephemeral) Presence(ctx context.Context, user identity.User, subscripti
 	if err := e.allow(ctx, user, "presence"); err != nil {
 		return err
 	}
-	now := time.Now().UTC()
+	now := frameNow()
 	change, err := e.presence.update(ctx, user.OrgID, user.ActorID, subscription.ConnectionID, state, now)
 	if err != nil {
 		return err
@@ -307,11 +307,11 @@ func (e *Ephemeral) AgentStatus(ctx context.Context, user identity.User, authent
 	if err := e.allow(ctx, agentUser, "agent.status"); err != nil {
 		return err
 	}
-	expiresAt := time.Now().UTC().Add(15 * time.Second)
+	expiresAt := frameNow().Add(15 * time.Second)
 	if input.State == "completed" {
-		expiresAt = time.Now().UTC()
+		expiresAt = frameNow()
 	} else if input.State == "failed" || input.State == "canceled" {
-		expiresAt = time.Now().UTC().Add(8 * time.Second)
+		expiresAt = frameNow().Add(8 * time.Second)
 	}
 	frame := agentStatusEventFrame{Op: input.Op, ActorID: agentID, RunID: input.RunID, ChatID: input.ChatID, ThreadRootID: input.ThreadRootID, State: input.State, ExpiresAt: expiresAt}
 	return e.broadcast(ctx, agentUser, subscription.ConnectionID, input.ChatID, true, frame)
@@ -333,9 +333,9 @@ func (e *Ephemeral) MessageStreaming(ctx context.Context, user identity.User, au
 	if err := e.allowWithLimit(ctx, agentUser, "message.streaming", streamingLimit); err != nil {
 		return err
 	}
-	expiresAt := time.Now().UTC().Add(15 * time.Second)
+	expiresAt := frameNow().Add(15 * time.Second)
 	if input.Done {
-		expiresAt = time.Now().UTC()
+		expiresAt = frameNow()
 	}
 	frame := messageStreamingEventFrame{Op: input.Op, ActorID: agentID, RunID: input.RunID, ChatID: input.ChatID, ThreadRootID: input.ThreadRootID, StreamID: input.StreamID, Index: input.Index, Delta: input.Delta, Reset: input.Reset, Done: input.Done, ExpiresAt: expiresAt}
 	return e.broadcast(ctx, agentUser, subscription.ConnectionID, input.ChatID, true, frame)

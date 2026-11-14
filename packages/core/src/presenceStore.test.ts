@@ -190,3 +190,33 @@ describe("presence after a stop and start", () => {
     coordinator.stop();
   });
 });
+
+describe("ACKs after a stop and start", () => {
+  it("are still sent (a stale timer used to block them)", async () => {
+    const { sent, socket, coordinator, hello } = harness();
+    coordinator.start();
+    await flush();
+    hello();
+    await flush();
+    const event = (seq: number) =>
+      socket.onmessage?.({
+        data: JSON.stringify({
+          op: "event",
+          seq,
+          type: "message.created",
+          data: {},
+        }),
+      });
+    event(1); // schedules a delayed ACK
+    coordinator.stop();
+    coordinator.start();
+    await flush();
+    hello();
+    await flush();
+    vi.useFakeTimers();
+    event(2);
+    await vi.advanceTimersByTimeAsync(1100);
+    expect(sent).toContainEqual({ op: "ack", seq: 2 });
+    coordinator.stop();
+  });
+});

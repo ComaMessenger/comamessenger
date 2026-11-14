@@ -76,6 +76,8 @@ await new Promise((resolve, reject) => {
   socket.onmessage = (event) => {
     const frame = JSON.parse(String(event.data));
     if (frame.op === "hello") resolve(frame);
+    // Unacknowledged events make the server close the socket after 30 s.
+    if (frame.op === "event") send({ op: "ack", seq: frame.seq });
     if (frame.op === "error") console.error("peer socket:", frame);
   };
 });

@@ -60,7 +60,10 @@ export class RealtimeCoordinator {
   stop(): void {
     this.stopped = true;
     this.socket?.close();
+    // Null it too: a stale handle makes scheduleAck skip every later ACK
+    // and the server closes the socket with 4008 ack timeout.
     if (this.ackTimer) clearTimeout(this.ackTimer);
+    this.ackTimer = null;
     if (this.presenceTimer) clearInterval(this.presenceTimer);
     this.presenceTimer = null;
     this.callbacks.ephemeralReset?.();

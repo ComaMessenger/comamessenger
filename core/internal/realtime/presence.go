@@ -204,7 +204,7 @@ func (p *redisPresence) snapshot(ctx context.Context, orgID string, now time.Tim
 
 // PresenceSnapshot lists who is online or away in the user's workspace.
 func (e *Ephemeral) PresenceSnapshot(ctx context.Context, user identity.User) (*presenceSnapshotFrame, error) {
-	entries, err := e.presence.snapshot(ctx, user.OrgID, time.Now().UTC())
+	entries, err := e.presence.snapshot(ctx, user.OrgID, frameNow())
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +214,7 @@ func (e *Ephemeral) PresenceSnapshot(ctx context.Context, user identity.User) (*
 // Disconnected forgets a closed connection and tells the workspace when it
 // was the person's last one.
 func (e *Ephemeral) Disconnected(ctx context.Context, user identity.User, connectionID string) {
-	now := time.Now().UTC()
+	now := frameNow()
 	change, err := e.presence.update(ctx, user.OrgID, user.ActorID, connectionID, "", now)
 	if err != nil {
 		e.logger.Warn("forget presence connection", "actor_id", user.ActorID, "error", err)
@@ -305,3 +305,8 @@ func (e *Ephemeral) broadcastPresence(ctx context.Context, user identity.User, e
 	}
 	return nil
 }
+
+// frameNow is the clock for ephemeral frames, cut to milliseconds: Hermes on
+// the phone does not parse more than three fractional digits, so a
+// nanosecond expires_at reads as NaN and the frame expires at once.
+func frameNow() time.Time { return time.Now().UTC().Truncate(time.Millisecond) }

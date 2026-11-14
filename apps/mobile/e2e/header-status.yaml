@@ -33,7 +33,7 @@ appId: com.comamessenger.app
     visible:
       id: conversation-status
       text: "был\\(а\\) в сети только что|last seen just now"
-    timeout: 40000
+    timeout: 60000
 - takeScreenshot: header-last-seen
 
 # The privacy setting lives in More → Privacy.

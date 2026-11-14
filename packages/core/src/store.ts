@@ -1,6 +1,6 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
 import { completeMessage } from "./messageShape";
-import type { TypingAction } from "./presenceText";
+import { parseInstant, type TypingAction } from "./presenceText";
 import type {
   Chat,
   ClientMessage,
@@ -286,9 +286,8 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
     setActive: (activeChatID) => set({ activeChatID }),
     setTyping: (chatID, actorID, active, options = {}) => {
       const scope = typingScope(chatID, options.threadRootID);
-      const expiresAt = options.expiresAt
-        ? Date.parse(options.expiresAt)
-        : Date.now() + 6_000;
+      const parsed = options.expiresAt ? parseInstant(options.expiresAt) : NaN;
+      const expiresAt = Number.isNaN(parsed) ? Date.now() + 6_000 : parsed;
       set((state) => {
         const values = new Set(state.typing[chatID] ?? []);
         if (active) values.add(actorID);
@@ -356,7 +355,7 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
         const next = { ...state.agentStatuses };
         if (
           value.state === "completed" ||
-          Date.parse(value.expiresAt) <= Date.now()
+          parseInstant(value.expiresAt) <= Date.now()
         )
           delete next[value.runID];
         else next[value.runID] = value;
@@ -382,7 +381,7 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
       set((state) => {
         const next = { ...state.messageStreams };
         const current = next[value.streamID];
-        if (value.done || Date.parse(value.expiresAt) <= Date.now()) {
+        if (value.done || parseInstant(value.expiresAt) <= Date.now()) {
           delete next[value.streamID];
         } else if (!current || value.index > current.index) {
           next[value.streamID] = {
@@ -430,7 +429,9 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
   }));
 }
 function expiryDelay(expiresAt: string, cap = 60_000): number {
-  return Math.max(0, Math.min(cap, Date.parse(expiresAt) - Date.now() + 25));
+  const at = parseInstant(expiresAt);
+  if (Number.isNaN(at)) return cap;
+  return Math.max(0, Math.min(cap, at - Date.now() + 25));
 }
 function uniqueSorted(items: ClientMessage[]): ClientMessage[] {
   const unique = new Map<string, ClientMessage>();

@@ -6,6 +6,7 @@ import {
   formatGroupMembers,
   formatLastSeen,
   formatLastSeenApprox,
+  parseInstant,
   pluralCategory,
   uploadAction,
   type ChatAction,
@@ -379,5 +380,19 @@ describe("uploadAction", () => {
     expect(uploadAction(["video/mp4"])).toBe("uploading_video");
     expect(uploadAction(["image/png", "video/mp4"])).toBe("uploading_file");
     expect(uploadAction(["application/pdf"])).toBe("uploading_file");
+  });
+});
+
+describe("parseInstant", () => {
+  it("reads nanosecond and microsecond RFC 3339 as milliseconds", () => {
+    expect(parseInstant("2026-11-14T09:32:16.994263095Z")).toBe(
+      Date.parse("2026-11-14T09:32:16.994Z"),
+    );
+    expect(parseInstant("2026-11-14T09:32:16.123456+03:00")).toBe(
+      Date.parse("2026-11-14T09:32:16.123+03:00"),
+    );
+    expect(parseInstant("2026-11-14T09:32:16Z")).toBe(
+      Date.parse("2026-11-14T09:32:16Z"),
+    );
   });
 });
