@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Coma — рабочие функции, прототип</title></head><body>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Coma — рабочие функции, прототип v2</title></head><body>
 <!-- Прототип рабочих (не ИИ) функций мобильного Coma. Токены и шаблоны — из design/prototypes/messenger-mobile. ?v=<вкладка или номер>&theme=dark -->
 <style>
   .lab { font-family: var(--font-sans, -apple-system, "Segoe UI", Roboto, sans-serif); color: var(--foreground, #202023); }
@@ -461,6 +461,88 @@
   .tw { overflow-x: auto; }
   .coma .ds.on .pn { background: var(--canvas); }
 
+
+  /* ================= v2 ================= */
+  .att3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .att3 div { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 0 10px; border-radius: 16px; background: var(--selected); font-size: 13px; cursor: pointer; }
+  .att3 .ic { width: 22px; height: 22px; }
+  .arow { display: flex; gap: 12px; align-items: center; padding: 8px 4px; border-radius: 14px; cursor: pointer; }
+  .arow:hover { background: var(--selected); }
+  .arow i { width: 42px; height: 42px; border-radius: 14px; background: var(--primary-soft); color: var(--primary); display: grid; place-items: center; flex: none; }
+  .arow.hi i { box-shadow: 0 0 0 2px var(--primary); }
+  .arow .g { flex: 1; min-width: 0; } .arow b { display: block; font-size: 15.5px; font-weight: 600; } .arow small { color: var(--muted); font-size: 13px; line-height: 1.3; display: block; }
+  .arow.agent i { background: var(--a3); color: var(--a3f); }
+  .rq-to { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .rq-t { font-size: 15px; margin: 4px 0 8px; line-height: 1.35; }
+  .rq-b { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; } .rq-b .btn { flex: 1; margin: 0; min-width: 80px; }
+  .rq-out { margin-top: 8px; font-size: 12.5px; color: var(--muted); background: var(--selected); border-radius: 10px; padding: 7px 10px; display: flex; gap: 7px; align-items: flex-start; line-height: 1.35; }
+  .rq-out .ic { width: 15px; height: 15px; flex: none; margin-top: 1px; }
+  .rsum { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+  .rs { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
+  .rs .lb { width: 92px; flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rs .bar { flex: 1; height: 8px; border-radius: 4px; background: var(--selected); overflow: hidden; }
+  .rs .bar i { display: block; height: 100%; background: var(--primary); border-radius: 4px; transition: width .35s; }
+  .rs.none { color: var(--muted); } .rs.none .bar i { background: var(--border-strong); }
+  .rs b { width: 20px; text-align: right; font-variant-numeric: tabular-nums; }
+  .rcm { font-size: 13px; color: var(--muted); margin-top: 6px; } .rcm b { color: var(--fg); font-weight: 600; }
+  .ackdone a.lnk { font-weight: 600; }
+  .who-to { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-top: 10px; line-height: 1.3; }
+  .prev { display: flex; gap: 6px; padding: 10px; border: 1px dashed var(--border-strong); border-radius: 14px; margin-top: 10px; flex-wrap: wrap; }
+  .prev .btn { flex: 1; margin: 0; display: grid; place-items: center; }
+  .dsq { width: 30px; height: 30px; border-radius: 10px; display: inline-grid; place-items: center; background: var(--primary-soft); color: var(--primary); flex: none; vertical-align: middle; }
+  .dsq .ic { width: 16px; height: 16px; }
+  .dsq.big { width: 72px; height: 72px; border-radius: 24px; margin-bottom: 8px; } .dsq.big .ic { width: 34px; height: 34px; }
+  .opt .dsq { width: 36px; height: 36px; border-radius: 12px; }
+  /* task strips */
+  .swrap { position: relative; z-index: 4; flex: none; }
+  .tstrip { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--surface); border-bottom: 1px solid var(--border); font-size: 13.5px; cursor: pointer; min-height: 38px; }
+  .tstrip > .ic { width: 17px; height: 17px; color: var(--muted); flex: none; }
+  .tstrip .g { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .tstrip b { font-weight: 600; }
+  .tstrip.two { padding: 7px 12px; gap: 10px; }
+  .tstrip.two .g small { display: block; font-size: 11.5px; font-weight: 600; color: var(--primary); }
+  .tstrip.two .g b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+  .tstrip.mine { background: var(--primary-soft); } .tstrip.hot { background: var(--danger-soft); } .tstrip.hot .g small { color: var(--danger); }
+  .tstrip.two .cb { width: 22px; height: 22px; cursor: pointer; flex: none; background: var(--surface); }
+  .tstrip .more { display: flex; align-items: center; gap: 2px; font-size: 12.5px; font-weight: 700; color: var(--muted); flex: none; } .tstrip .more .ic { width: 16px; height: 16px; }
+  .mpill { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 9px; background: var(--danger-soft); color: var(--danger); flex: none; white-space: nowrap; }
+  .mpill .ic { width: 13px; height: 13px; } .mpill.calm { background: var(--primary-soft); color: var(--primary); }
+  .drop { position: absolute; left: 0; right: 0; top: 100%; z-index: 5; background: var(--surface); border-bottom: 1px solid var(--border); box-shadow: var(--shadow); max-height: 400px; overflow-y: auto; border-radius: 0 0 20px 20px; scrollbar-width: none; }
+  .dimx { position: absolute; left: 0; right: 0; top: 100%; height: 700px; background: var(--overlay); z-index: 4; }
+  .drop .trow { border-bottom: 1px solid var(--border); }
+  .trow.minez { box-shadow: inset 3px 0 0 var(--danger); }
+  .dfoot { display: flex; gap: 8px; padding: 10px 14px 12px; }
+  .ustrip { display: flex; align-items: center; gap: 9px; padding: 6px 8px 6px 12px; background: var(--surface); border-bottom: 1px solid var(--border); min-height: 46px; }
+  .ubars { display: flex; flex-direction: column; gap: 2px; flex: none; } .ubars i { width: 3px; height: 9px; border-radius: 2px; background: var(--border-strong); } .ubars i.on { background: var(--primary); }
+  .ustrip .g { flex: 1; min-width: 0; cursor: pointer; } .ustrip .g small { display: block; font-size: 11.5px; font-weight: 600; color: var(--primary); }
+  .ustrip .g small.hot { color: var(--danger); }
+  .ustrip .g > span { display: block; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .uchips { display: flex; gap: 2px; flex: none; }
+  .uc { position: relative; display: flex; align-items: center; gap: 3px; height: 30px; padding: 0 6px; border-radius: 9px; font-size: 12px; font-weight: 700; color: var(--muted); cursor: pointer; }
+  .uc .ic { width: 14px; height: 14px; } .uc.on { background: var(--selected); color: var(--fg); }
+  .uc .dt { position: absolute; top: 4px; right: 3px; width: 6px; height: 6px; border-radius: 50%; background: var(--danger); }
+  /* org */
+  .dhd { display: flex; align-items: center; gap: 10px; padding: 12px 10px 6px 14px; cursor: pointer; }
+  .dhd .g { flex: 1; min-width: 0; } .dhd b { display: block; font-size: 14.5px; } .dhd small { color: var(--muted); font-size: 12px; }
+  .dhd > .ic { width: 16px; height: 16px; color: var(--muted); } .dhd .ib .ic { transition: transform .15s; } .dhd.closed .ib .ic { transform: rotate(-90deg); }
+  .lead { font-size: 10.5px; font-weight: 700; color: var(--primary); background: var(--primary-soft); border-radius: 6px; padding: 1px 6px; margin-left: 6px; vertical-align: 2px; }
+  .tree { padding: 8px 6px 14px; }
+  .tn { display: flex; align-items: center; gap: 4px; padding: 6px 8px 6px 2px; border-radius: 12px; cursor: pointer; }
+  .tn:hover, .tn.sel { background: var(--selected); }
+  .tn .tw2 { width: 22px; height: 22px; flex: none; color: var(--muted); display: grid; place-items: center; }
+  .tn .tw2 .ic { width: 16px; height: 16px; transition: transform .15s; } .tn.closed .tw2 .ic { transform: rotate(-90deg); }
+  .tn .g { flex: 1; min-width: 0; } .tn .g b { display: block; font-size: 14.5px; font-weight: 600; }
+  .tn .g small { color: var(--muted); font-size: 12px; display: flex; gap: 5px; align-items: center; }
+  .tn .cnt { font-size: 12px; font-weight: 700; color: var(--muted); background: var(--selected); border-radius: 8px; padding: 2px 7px; }
+  .tn.sel .cnt { background: var(--surface); }
+  .tkids { margin-left: 12px; border-left: 1.5px solid var(--border); padding-left: 4px; }
+  .kv { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--border); font-size: 15px; cursor: pointer; }
+  .igrp .kv:first-child, .igrp .gh + .kv { border-top: 0; }
+  .kv small { color: var(--muted); font-size: 12.5px; display: block; } .kv .g { flex: 1; min-width: 0; } .kv > .ic { color: var(--muted); width: 18px; height: 18px; }
+  .iacts.three { grid-template-columns: repeat(3, 1fr); }
+  .igrp .row { padding: 8px 14px; }
+  .rnote { font-size: 13px; color: var(--muted); margin: -4px 0 9px; display: flex; gap: 5px; align-items: center; } .rnote .ic { width: 14px; height: 14px; }
+  .push .pn2 { font-size: 13px; opacity: .75; margin-top: 4px; }
+
   .notes code { font-size: 12px; background: var(--selected); padding: 1px 4px; border-radius: 4px; }
 </style>
 
@@ -550,87 +632,163 @@
   const notes = (sc, srv, q) => `<div class="notes"><h4>Сценарий</h4><p>${sc}</p><h4 style="margin-top:10px">Что понадобится на сервере (грубо)</h4><p>${srv}</p><h4 style="margin-top:10px">Вопросы к владельцу</h4><p>${q}</p></div>`;
 
   /* ======================================================================
-     1. ПОДТВЕРЖДЕНИЕ ОЗНАКОМЛЕНИЯ
+     v2 · общие добавки: иконки, должности, оргструктура
      ====================================================================== */
-  const ACKP = ['ИЛ','АИ','ДР','СК','ОБ','ПМ','ЕГ','ТВ','НК','ЮС','АП','ВЛ','ОЧ','КЗ','ГР'];
-  const ackT = ['9:14','9:15','9:15','9:18','9:22','9:30','9:41','9:52','10:05','10:11','10:30','11:02'];
-  const REG = 'С понедельника — новый регламент уборки залов. Прочитайте, пожалуйста, до пятницы.';
-  const DOC = `<div class="doc">${I('file')}<div><b>Регламент уборки залов.pdf</b><small>2 стр. · 180 КБ</small></div></div>`;
-  const whoScr = (n, tab, rem, o, s, ph) => {
-    const yes = ACKP.slice(0, n), no = ACKP.slice(n);
-    const row = (k, sub, rt = '') => `<div class="row">${pa(k, 'm round')}<div class="bd"><div class="l1"><span class="nm">${nm(k)}</span></div><div class="l2"><span class="pv">${sub}</span></div></div>${rt}</div>`;
-    const list = tab === 'no'
-      ? (no.length ? no.map((k, i) => row(k, n >= 12 && i === 0 ? '<span class="warnc">прочитал, не подтвердил</span>' : n >= 12 ? 'не открывал чат' : 'доставлено', n >= 12 && i === 0 ? '<span class="rt">10:47</span>' : '')).join('') : `<div class="cap" style="text-align:center;padding:30px">Все подтвердили 🎉</div>`)
-      : (yes.length ? yes.map((k, i) => row(k, PP[k][2], `<span class="rt">${ackT[i] || '9:41'}</span>`)).join('') : `<div class="cap" style="text-align:center;padding:30px">Пока никто</div>`);
-    return `<div class="phone white">${st}${chead('Подтверждения', 'Общий · срок ' + (o.due || 'до пт, 18:00'), '', `<button class="ib">${I('more')}</button>`, o.back ? `data-a="${o.back}"` : '')}
-      <div class="list" data-scroll="w"><div class="ackq"><small>Марина Соколова · сегодня в 9:10</small>${REG}</div>
-      <div class="bigc"><b>${n}</b>из 15 подтвердили</div><div class="trk big"><i style="width:${n / 15 * 100}%"></i></div>
-      <div class="pseg"><button aria-selected="${tab === 'no'}" data-a="${o.tab}" data-t="no">Не подтвердили · ${15 - n}</button><button aria-selected="${tab === 'yes'}" data-a="${o.tab}" data-t="yes">Подтвердили · ${n}</button></div>${list}</div>
-      <div class="foot">${n >= 15 ? '<button class="btn sec" disabled>Все подтвердили</button>' : rem ? `<button class="btn sec" disabled>Напомнили в 9:41 · повторно — через 2 ч</button>` : `<button class="btn pri" data-a="${o.rem}">${I('bell')}Напомнить неподтвердившим · ${15 - n}</button>`}</div>${toastH(s, ph)}</div>`;
-  };
-  const t1 = {
-    init: () => ({ a: { screen: 'chat', flag: false, due: 'до пт, 18:00', sheet: null, text: 'Новый регламент уборки залов — прочитайте до пятницы.', msgs: [], n: 0, tab: 'no', rem: false, pop: false }, rDone: false, c: { tab: 'no', rem: false }, d: { tab: 2 } }),
+  Object.assign(P, {
+    req: '<path d="M20.5 12a8 8 0 0 1-11.8 7L4 20l1.2-4.3A8 8 0 1 1 20.5 12z"/><path d="m8.5 12 2.5 2.5 4.5-4.5"/>',
+    org: '<rect x="9" y="3" width="6" height="5" rx="1.5"/><rect x="3" y="16" width="6" height="5" rx="1.5"/><rect x="15" y="16" width="6" height="5" rx="1.5"/><path d="M12 8v4M6 16v-2.5h12V16"/>',
+    down: '<path d="m6 9 6 6 6-6"/>', flame: '<path d="M12 21c4 0 6.5-2.6 6.5-6.2 0-3.6-2.8-6-4.3-8.8-.6 2.2-1.8 3.4-3.2 4-.2-2.1-1-3.9-2.4-5.5C8 7.5 5.5 10 5.5 14.8 5.5 18.4 8 21 12 21z"/>',
+    user: '<circle cx="12" cy="8" r="3.8"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/>', note: '<path d="M5 4.5h14v11l-4.5 4.5H5zM14.5 20v-4.5H19"/>',
+  });
+  Object.assign(PP, { 'ИЛ': ['Игорь Лаптев', 'c3', 'старший инструктор ЛФК'], 'ВЛ': ['Вера Лебедева', 'c4', 'директор'], 'ДР': ['Дина Рябова', 'c5', 'главный врач'], 'ЕГ': ['Елена Гусева', 'c4', 'врач ЛФК'], 'АП': ['Артём Попов', 'c1', 'инструктор по плаванию'], 'КЗ': ['Кирилл Зайцев', 'c2', 'инструктор механотерапии'], 'ОЧ': ['Олег Чернов', 'c1', 'инструктор ЛФК'], 'АИ': ['Анна Иванова', 'c2', 'инструктор ЛФК'] });
+  const plw = (n, a, b, c) => { const m = n % 10, h = n % 100; return m === 1 && h !== 11 ? a : m >= 2 && m <= 4 && (h < 10 || h >= 20) ? b : c; };
+  const ORG0 = [
+    { id: 'root', n: 'Реабцентр «Опора»', lead: 'ВЛ', parent: null, people: ['ВЛ'] },
+    { id: 'adm', n: 'Администрация', lead: 'МС', parent: 'root', people: ['МС'] },
+    { id: 'med', n: 'Медицинская служба', lead: 'ДР', parent: 'root', people: ['ДР', 'ЕГ', 'ЮС'] },
+    { id: 'reh', n: 'Реабилитация', lead: 'ИЛ', parent: 'root', people: [] },
+    { id: 'lfk', n: 'Зал ЛФК', lead: 'ИЛ', parent: 'reh', people: ['ИЛ', 'ОЧ', 'АИ', 'СК', 'ОБ', 'ТВ'] },
+    { id: 'pool', n: 'Бассейн', lead: 'АП', parent: 'reh', people: ['АП', 'ПМ', 'НК'] },
+    { id: 'mech', n: 'Механотерапия', lead: 'КЗ', parent: 'reh', people: ['КЗ', 'ГР'] },
+  ];
+  const allIn = (org, id) => { const d = org.find(x => x.id === id); return [...new Set([...d.people, ...org.filter(x => x.parent === id).flatMap(x => allIn(org, x.id))])]; };
+  const deptN = (id, org = ORG0) => org.find(x => x.id === id).n;
+  const CHAT9 = ['ИЛ', 'ОЧ', 'АИ', 'СК', 'ОБ', 'ТВ', 'НК', 'ПМ'];
+  const ROLES = { 'Инструкторы': ['ИЛ', 'ОЧ', 'АИ', 'СК', 'ОБ', 'ТВ', 'НК', 'ПМ', 'АП', 'КЗ', 'ГР'], 'Врачи': ['ДР', 'ЕГ'], 'Руководители отделов': ['МС', 'ДР', 'ИЛ', 'АП', 'КЗ'] };
+  const PHOTOS = '<div class="ph"><b style="background:var(--a1)"></b><b style="background:var(--a2)"></b><b style="background:var(--a5)"></b><b style="background:var(--a3)"></b></div>';
+  const ACTS = [['req', 'Запрос', 'Попросить ответ: «ознакомлен», «да / нет», «приду»…', 'req'], ['poll', 'Опрос', 'Узнать мнение, выбрать из вариантов', 'poll'], ['sq', 'Задача', 'Поручить: ответственный, срок, чек-лист', 'task']];
+  const plusV2 = (act, close, hi) => sheet(`${PHOTOS}<div class="att3">${[['image', 'Фото', 'photo'], ['camera', 'Камера', 'cam'], ['file', 'Файл', 'file']].map(([i, n, k]) => `<div data-a="${act}" data-t="${k}">${I(i)}${n}</div>`).join('')}</div>
+    <div class="lbl">Попросить и поручить</div>${ACTS.map(([i, n, h, k]) => `<div class="arow ${hi === k ? 'hi' : ''}" data-a="${act}" data-t="${k}"><i>${I(i)}</i><div class="g"><b>${n}</b><small>${h}</small></div></div>`).join('')}
+    <div class="lbl">Агенты</div><div class="arow agent" data-a="${act}" data-t="agent"><i>${I('spark')}</i><div class="g"><b>Позвать агента</b><small>Справка, Контроль и другие</small></div></div>`, close);
+  const plusGrid = (act, close) => sheet(`${PHOTOS}<div class="grid4">${[['image', 'Фото', 'photo'], ['camera', 'Камера', 'cam'], ['file', 'Файл', 'file'], ['spark', 'Агент', 'agent'], ['req', 'Запрос', 'req', 1], ['poll', 'Опрос', 'poll', 1], ['sq', 'Задача', 'task', 1]].map(([i, n, k, ac]) => `<div class="tile" data-a="${act}" data-t="${k}" style="cursor:pointer"><i class="${ac ? 'ac' : ''}">${I(i)}</i>${n}</div>`).join('')}</div>`, close);
+  const plusMsg = { req: 'Откроется шторка «Запрос» — вкладка «Запрос»', poll: 'Откроется создание опроса — вкладка «Опросы»', task: 'Откроется новая задача — вкладка «Задачи»', agent: 'Откроется выбор агента', photo: 'Откроется галерея', cam: 'Откроется камера', file: 'Откроется выбор файла' };
+
+  /* ======================================================================
+     0. МЕНЮ «+»
+     ====================================================================== */
+  const t0 = {
+    init: () => ({ a: true, b: true, c: { pop: true } }),
     phones: [
-      { id: 'A', label: 'Автор · администратор', cap: '<b>Живой.</b> «+» → «Подтвердить» (или удержите кнопку отправки) — над полем появится плашка со сроком, срок меняется по нажатию. Отправьте: счётчик под сообщением растёт, нажмите на него — откроется «Кто подтвердил».', r: s => {
-        const a = s.a;
-        if (a.screen === 'who') return whoScr(a.n, a.tab, a.rem, { back: 'a-back', tab: 'a-tab', rem: 'a-rem', due: a.due }, s, 'A');
-        const msgs = a.msgs.map(m => meMsg(esc(m.t) + DOC, '9:41', { after: m.ack ? `<div class="ack"><div class="acount" data-a="a-who">${I('dcheck')}<span class="g">Подтвердили <b>${a.n} из 15</b> · ${a.due}</span>${I('right')}</div><div class="trk"><i style="width:${a.n / 15 * 100}%"></i></div></div>` : '' })).join('');
-        const top = a.flag ? `<div class="flag">${I('dcheck')}<span>Нужно подтвердить</span><button class="chip2" data-a="a-due">${a.due} ▾</button><button class="ib" data-a="a-unflag">${I('x')}</button></div>` : '';
-        const pop = a.pop ? `<div class="pop"><div data-a="a-flagpop">${I('dcheck')}С подтверждением</div><div>${I('clock')}Отправить позже</div><div>${I('belloff')}Отправить без звука</div></div>` : '';
-        let sh = '';
-        if (a.sheet === 'plus') sh = plusSheet('a-tile', 'a-close', 'ack');
-        if (a.sheet === 'due') sh = sheet(`<h2><span>Подтвердить до</span></h2><div class="q2">${[['Без срока','просто отметка'],['Сегодня','до 18:00'],['Завтра','до 12:00'],['До пятницы','20 ноября, 18:00']].map(([b, sm], k) => { const v = ['без срока','сегодня до 18:00','завтра до 12:00','до пт, 18:00'][k]; return `<div class="qo ${a.due === v ? 'sel' : ''}" data-a="a-duepick" data-v="${v}" style="cursor:pointer"><b>${b}</b><small>${sm}</small></div>`; }).join('')}</div>
-          <div class="opt" style="margin-top:10px"><div class="g">Напомнить неподтвердившим за 2 часа до срока<small>Им придёт пуш, вам — итог</small></div>${tg(true, 'noop')}</div>
-          <div class="opt"><div class="g">Показывать получателям, сколько уже подтвердили<small>«Подтвердили 12 из 15» под кнопкой</small></div>${tg(true, 'noop')}</div><button class="btn pri" data-a="a-close">Готово</button>`, 'a-close');
-        return `<div class="phone">${st}${chead('Общий', '15 участников · 6 в сети', av('ОБ', 'c1', 'm'))}<div class="feed" data-scroll="feed">${day('Сегодня')}
-          ${inMsg('ДР', 'Кабинет 2 свободен после 15:00, если кому нужен.', '8:40')}${inMsg('ОЧ', 'Ключи от раздевалки на стойке.', '8:52')}${msgs}</div>
-          ${composer({ top, plus: 'a-plus', bind: 'a.text', value: a.text, send: 'a-send', hold: 'a-hold', pop })}${sh}${toastH(s, 'A')}</div>`;
+      { id: 'A', label: 'Вариант А — группы с подсказками (рекомендую)', cap: '<b>Живой.</b> Сверху — вложения: последние фото и три крупные кнопки. Ниже — действия списком, у каждого строка-подсказка: новичку сразу ясно, чем «Запрос» отличается от «Опроса». Агент — отдельной группой. «Отложить» убран.', r: s => `<div class="phone">${st}${chead('Инструкторы · зал', '9 участников · 4 в сети', av('ИЗ', 'c1', 'm'))}<div class="feed" data-scroll="feed">${day('Сегодня')}${inMsg('ОЧ', 'Маты в малом зале разложил.', '9:02')}</div>${composer({ plus: 'p-a' })}${s.a ? plusV2('p-t', 'p-a') : ''}${toastH(s, 'A')}</div>` },
+      { id: 'B', label: 'Вариант Б — плитки', cap: '<b>Компактно</b>, как в первой версии: первый ряд — вложения и агент, второй — новые действия (синие). Быстрее для тех, кто знает, что где; без подсказок новые пункты читаются хуже.', r: s => `<div class="phone">${st}${chead('Инструкторы · зал', '9 участников · 4 в сети', av('ИЗ', 'c1', 'm'))}<div class="feed" data-scroll="feed">${day('Сегодня')}${inMsg('ОЧ', 'Маты в малом зале разложил.', '9:02')}</div>${composer({ plus: 'p-b' })}${s.b ? plusGrid('p-t', 'p-b') : ''}${toastH(s, 'B')}</div>` },
+      { id: 'C', label: 'Отложенная отправка — только удержанием', cap: '<b>Удерживайте кнопку отправки</b> — всплывает меню «Отправить позже / без звука». В «+» отложенной отправки больше нет: это свойство отправки, а не тип вложения. Список отложенных — по полосе под шапкой (см. «Задачи → общий слот»).', r: s => `<div class="phone">${st}${chead('Инструкторы · зал', '9 участников · 4 в сети', av('ИЗ', 'c1', 'm'))}<div class="feed" data-scroll="feed">${day('Сегодня')}${inMsg('ОЧ', 'Маты в малом зале разложил.', '9:02')}</div>
+        ${composer({ plus: 'p-cplus', bind: 'cmsg', value: s.cmsg ?? 'Напоминаю: в среду мой слот в большом зале', send: 'p-csend', hold: 'p-chold', pop: s.c.pop ? `<div class="pop"><div data-a="p-later">${I('clock')}Отправить позже</div><div data-a="p-later">${I('belloff')}Отправить без звука</div></div>` : '' })}${toastH(s, 'C')}</div>` },
+    ],
+    on: {
+      'p-a': s => s.a = !s.a, 'p-b': s => s.b = !s.b, 'p-t': (s, d, el) => toast(s, el.closest('[data-ph]').dataset.ph, plusMsg[d.t] || '', d.t === 'agent' ? 'spark' : 'check'),
+      'p-chold': s => s.c.pop = true, 'p-csend': s => { if (s.c.pop) { s.c.pop = false; return; } toast(s, 'C', 'Отправлено (удержите кнопку для «позже»)'); },
+      'p-later': s => { s.c.pop = false; toast(s, 'C', 'Откроется шторка «Отправить позже», как в мессенджере', 'clock'); }, 'p-cplus': s => toast(s, 'C', 'Меню «+» — на соседних телефонах', 'plus'),
+    },
+    notes: notes(
+      'Меню «+» делится на две части. <b>Вложения</b> (фото, камера, файл) — то, что прикрепляют к сообщению. <b>Действия</b> — сообщения особого типа, которые ждут реакции: «Запрос» (ответ от людей), «Опрос» (мнение), «Задача» (поручение). Агент — отдельно. <b>«Отложить» убран</b>: отложенная отправка только удержанием «Отправить». <b>Отдельный «Чек-лист» тоже убран</b>: он стал частью задачи (пункты с исполнителями). Пять пунктов вместо восьми, и нет двух способов сделать одно и то же.',
+      'Ничего нового сверх самих функций. Порядок и права пунктов («кто может создавать задачи и запросы») — в общем описании меню в <code>@comamessenger/core</code>, как меню сообщения сейчас, чтобы веб и мобильный совпадали.',
+      '1) Вариант А (с подсказками) или Б (плитки)? Можно А на первое время, а через месяц убрать подсказки. 2) Чек-лист без исполнителя («отметить может любой») — оставить такую настройку внутри задачи или не нужен вовсе? 3) Видно ли «Позвать агента» в чатах, где агентов нет, или скрываем?'),
+  };
+
+  /* ======================================================================
+     1. ЗАПРОС (бывшее «подтверждение»)
+     ====================================================================== */
+  const PRE = [['ack', 'Ознакомлен(а)', ['Ознакомлен(а)']], ['yn', 'Да / Нет', ['Да', 'Нет']], ['come', 'Приду / Не приду', ['Приду', 'Не приду']], ['done', 'Готово', ['Готово']], ['custom', 'Свои кнопки', null]];
+  const rqWho = c => c.to === 'chat' ? CHAT9 : c.to === 'people' ? c.people : c.to === 'dept' ? allIn(ORG0, c.dept).filter(k => k !== 'МС') : ROLES[c.role].filter(k => k !== 'МС');
+  const rqLabel = c => c.to === 'chat' ? 'весь чат' : c.to === 'people' ? (c.people.length === 1 ? nm(c.people[0]) : `${c.people.length} ${plw(c.people.length, 'человек', 'человека', 'человек')}`) : c.to === 'dept' ? `отдел «${deptN(c.dept)}»` : `роль «${c.role}»`;
+  const rqOpts = c => c.preset === 'custom' ? c.custom.map(x => x.trim()).filter(Boolean) : PRE.find(p => p[0] === c.preset)[2];
+  const mkReq = (id, o) => ({ id, ans: {}, rem: false, closed: false, edit: null, draft: '', author: 'МС', comment: true, auto: true, due: 'до пт, 18:00', ...o });
+  const reqCard = (r, v) => {
+    const n = r.who.length, A = r.ans, got = r.who.filter(k => A[k]).length, mine = A[v];
+    const head = `<div class="pk">${I('req')}Запрос${r.closed ? '<span class="pill">Закрыт</span>' : r.due ? `<span class="pill wr">${r.due}</span>` : ''}</div><div class="rq-to">ждём ответа: ${r.label} · ${n}</div><div class="rq-t">${esc(r.text)}</div>`;
+    if (v === r.author) return head + `<div class="rsum">${r.opts.map((o, i) => { const c = r.who.filter(k => A[k] && A[k].i === i).length; return `<div class="rs"><span class="lb">${esc(o)}</span><span class="bar"><i style="width:${n ? c / n * 100 : 0}%"></i></span><b>${c}</b></div>`; }).join('')}<div class="rs none"><span class="lb">Нет ответа</span><span class="bar"><i style="width:${n ? (n - got) / n * 100 : 0}%"></i></span><b>${n - got}</b></div></div>
+      <div class="pfoot"><span>Ответили ${got} из ${n}</span><span class="sp"></span><a data-a="rq-more" data-r="${r.id}">Подробнее</a></div>${n - got && !r.closed ? `<div class="tk-a">${r.rem ? '<span class="pill ok">напомнили в 9:41</span>' : `<button class="btn sm sec" data-a="rq-rem" data-r="${r.id}">${I('bell', 'width:15px;height:15px;vertical-align:-3px')} Напомнить · ${n - got}</button>`}</div>` : ''}`;
+    if (r.who.includes(v)) {
+      let body;
+      if (!mine) body = r.opts.length === 1 ? `<button class="ackbtn" data-a="rq-ans" data-r="${r.id}" data-v="${v}" data-i="0">${I('check')}${esc(r.opts[0])}</button>` : `<div class="rq-b">${r.opts.map((o, i) => `<button class="btn sm ${i ? 'sec' : 'pri'}" data-a="rq-ans" data-r="${r.id}" data-v="${v}" data-i="${i}">${esc(o)}</button>`).join('')}</div>`;
+      else body = `<div class="ackdone">${I('check')}<span>Ваш ответ: ${esc(r.opts[mine.i])}</span>${r.closed ? '' : `<a class="lnk" style="margin-left:auto;font-size:13px" data-a="rq-chg" data-r="${r.id}" data-v="${v}">Изменить</a>`}</div>`
+        + (r.comment ? (r.edit === v ? `<div class="pf" style="margin:8px 0 0"><input class="fi" style="height:38px;font-size:14px" data-bind="R.${r.id}.draft" value="${esc(r.draft)}" placeholder="Комментарий, если нужно"><button class="btn sm pri" data-a="rq-cmsave" data-r="${r.id}" data-v="${v}">ОК</button></div>` : mine.c ? `<div class="rcm">Ваш комментарий: <b>${esc(mine.c)}</b></div>` : `<div class="rcm"><a class="lnk" data-a="rq-cm" data-r="${r.id}" data-v="${v}">+ Комментарий</a></div>`) : '');
+      return head + body + `<div class="acs">Ответили ${got} из ${n}${mine && r.due && !r.closed ? ' · изменить можно ' + r.due : ''}</div>`;
+    }
+    return head + `<div class="rq-out">${I('users')}<span>Ответа ждут не от вас — кнопок нет</span></div><div class="acs">Ответили ${got} из ${n}</div>`;
+  };
+  const sumScr = (r, tab, o, s, ph) => {
+    const n = r.who.length, A = r.ans, none = r.who.filter(k => !A[k]);
+    const row = (k, sub, rt = '') => `<div class="row">${pa(k, 'm round')}<div class="bd"><div class="l1"><span class="nm">${nm(k)}</span></div><div class="l2"><span class="pv">${sub}</span></div></div>${rt}</div>`;
+    const L = tab === 'none' ? none.map((k, i) => row(k, i === 0 ? '<span class="warnc">прочитал(а), не ответил(а)</span>' : 'не открывал(а) чат')) : r.who.filter(k => A[k] && A[k].i === +tab).map(k => row(k, A[k].c ? `<span style="color:var(--fg)">«${esc(A[k].c)}»</span>` : PP[k][2], `<span class="rt">${A[k].t}</span>`));
+    return `<div class="phone white">${st}${chead('Ответы', `Запрос · ${r.label}`, '', r.closed ? '<span class="pill" style="margin-right:10px">Закрыт</span>' : `<a class="lnk" style="margin-right:12px;font-weight:600" data-a="rq-close" data-r="${r.id}">Закрыть</a>`, o.back ? `data-a="${o.back}"` : '')}
+      <div class="list" data-scroll="w"><div class="ackq"><small>Вы · ${r.due || 'без срока'}</small>${esc(r.text)}</div>
+      <div class="folders" style="border-bottom:0;padding-top:10px"><button class="fd" aria-selected="${tab === 'none'}" data-a="${o.tab}" data-t="none">Нет ответа<span class="n">${none.length}</span></button>${r.opts.map((x, i) => `<button class="fd" aria-selected="${tab === String(i)}" data-a="${o.tab}" data-t="${i}">${esc(x)}<span class="n">${r.who.filter(k => A[k] && A[k].i === i).length}</span></button>`).join('')}</div>
+      ${L.join('') || '<div class="cap" style="text-align:center;padding:30px">Пусто</div>'}</div>
+      <div class="foot">${none.length && !r.closed ? (r.rem ? '<button class="btn sec" disabled>Напомнили в 9:41 · повторно — через 2 ч</button>' : `<button class="btn pri" data-a="rq-rem" data-r="${r.id}">${I('bell')}Напомнить не ответившим · ${none.length}</button>`) : '<button class="btn sec" disabled>Все ответили</button>'}
+      ${r.auto && !r.closed ? `<div class="cap" style="text-align:center;margin-top:8px">${I('clock', 'width:13px;height:13px;vertical-align:-2px')} Автонапоминание не ответившим — чт, 18:00</div>` : ''}</div>${toastH(s, ph)}</div>`;
+  };
+  const CRQ = () => ({ screen: 'create', text: 'Планёрка в понедельник в 8:30, большой зал. Будете?', to: 'dept', dept: 'lfk', people: ['ОЧ', 'АИ'], role: 'Инструкторы', preset: 'come', custom: ['Утром', 'Днём', 'Не смогу'], comment: true, due: 'до пт, 18:00', auto: true, tab: 'none' });
+  const t1 = {
+    init: () => ({ cr: CRQ(), R: {
+      b: mkReq('b', { text: 'Планёрка в понедельник в 8:30, большой зал. Будете?', who: allIn(ORG0, 'lfk'), label: 'отдел «Зал ЛФК»', opts: ['Приду', 'Не приду'], ans: { 'ИЛ': { i: 0, t: '9:14' }, 'АИ': { i: 0, t: '9:15' }, 'СК': { i: 1, c: 'на выезде до 13', t: '9:20' }, 'ОБ': { i: 0, t: '9:31' } } }),
+      b2: mkReq('b2', { author: 'ДР', text: 'Журнал осмотров за неделю заполнен?', who: ['ДР', 'ЕГ', 'ЮС'].filter(k => k !== 'ДР'), label: 'отдел «Медицинская служба»', opts: ['Да', 'Нет'], ans: { 'ЕГ': { i: 0, t: '9:02' } }, due: 'сегодня, 17:00' }),
+      c: mkReq('c', { text: 'Субботник в эту субботу, 10:00. Кто придёт?', who: CHAT9, label: 'весь чат', opts: ['Приду', 'Не приду', 'Пока не знаю'], ans: { 'ИЛ': { i: 0, t: '9:10' }, 'ОЧ': { i: 0, t: '9:12' }, 'АИ': { i: 1, c: 'дежурю в бассейне', t: '9:14' }, 'СК': { i: 0, t: '9:20' }, 'ОБ': { i: 2, c: 'скажу в пятницу', t: '9:31' }, 'ПМ': { i: 0, t: '9:40' } } }),
+    }, ctab: 'none', d: { tab: 2 } }),
+    phones: [
+      { id: 'A', label: 'Автор: создание запроса', cap: '<b>Живой.</b> «+» → «Запрос». Кому: весь чат, люди, отдел (из оргструктуры) или роль — ниже сразу видно, от скольких ждём. Ответ: готовый тип или свои 2–4 кнопки, превью «как увидят». Отправьте — ответы приходят по одному; «Подробнее» — сводка.', r: s => {
+        const c = s.cr;
+        if (c.screen === 'sum') return sumScr(s.R.a, c.tab, { back: 'cq-back', tab: 'cq-tab' }, s, 'A');
+        const chatBg = `${st}${chead('Инструкторы · зал', '9 участников · 4 в сети', av('ИЗ', 'c1', 'm'))}<div class="feed" data-scroll="feed">${day('Сегодня')}${inMsg('ОЧ', 'Маты в малом зале разложил.', '9:02')}${s.R.a ? meMsg(reqCard(s.R.a, 'МС'), '9:41', { obj: 1 }) : ''}</div>`;
+        if (c.screen === 'chat') return `<div class="phone">${chatBg}${composer({ plus: 'cq-plus' })}${c.plus ? plusV2('cq-tile', 'cq-plus', 'req') : ''}${toastH(s, 'A')}</div>`;
+        const who = rqWho(c), opts = rqOpts(c);
+        const sub = c.to === 'people' ? `<div class="chips">${CHAT9.map(k => `<span class="chip ${c.people.includes(k) ? 'on' : ''}" data-a="cq-p" data-v="${k}">${first(k)}</span>`).join('')}</div>`
+          : c.to === 'dept' ? ['lfk', 'pool', 'mech', 'reh', 'med'].map(id => `<div class="opt click" data-a="cq-dept" data-v="${id}"><span class="dsq">${I('org')}</span><div class="g">${deptN(id)}<small>${id === 'reh' ? 'со всеми вложенными · ' : ''}${allIn(ORG0, id).length} чел.</small></div><span class="cb ${c.dept === id ? 'on' : ''}" style="border-radius:50%">${c.dept === id ? I('check') : ''}</span></div>`).join('')
+          : c.to === 'role' ? `<div class="chips">${Object.keys(ROLES).map(k => chip(c.role === k, k, 'cq-role')).join('')}</div>` : '<div class="cap" style="margin:0">Все участники чата, кроме вас.</div>';
+        return `<div class="phone">${chatBg}${composer()}<div class="dim"></div><div class="sheet" data-scroll="sh"><div class="grab"></div><h2><button class="ib" data-a="cq-x">${I('x')}</button><span>Запрос</span></h2>
+          <textarea class="fi" data-bind="cr.text" placeholder="О чём просите ответить">${esc(c.text)}</textarea>
+          <div class="lbl">От кого ждём ответа</div><div class="pseg" style="margin:0 0 8px">${[['chat', 'Весь чат'], ['people', 'Люди'], ['dept', 'Отдел'], ['role', 'Роль']].map(([k, n]) => `<button aria-selected="${c.to === k}" data-a="cq-to" data-t="${k}">${n}</button>`).join('')}</div>${sub}
+          <div class="who-to">${stack(who.slice(0, 5))}<span>Ждём от <b style="color:var(--fg)">${who.length} ${plw(who.length, 'человека', 'человек', 'человек')}</b>. Остальные видят запрос без кнопок</span></div>
+          <div class="lbl">Какой ответ</div><div class="chips">${PRE.map(([k, n]) => chip(c.preset === k, n, 'cq-pre', k)).join('')}</div>
+          ${c.preset === 'custom' ? `<div style="margin-top:8px">${c.custom.map((x, i) => `<div class="pf"><input class="fi" data-bind="cr.custom.${i}" value="${esc(x)}" placeholder="Кнопка ${i + 1}">${c.custom.length > 2 ? `<button class="ib" style="width:32px;height:32px;color:var(--muted)" data-a="cq-del" data-i="${i}">${I('x', 'width:17px;height:17px')}</button>` : ''}</div>`).join('')}${c.custom.length < 4 ? `<div class="addo" style="padding-left:2px" data-a="cq-add">${I('plus')}Кнопка</div>` : ''}</div>` : ''}
+          <div class="prev">${opts.map((o, i) => `<span class="btn sm ${i ? 'sec' : 'pri'}">${esc(o)}</span>`).join('')}</div><div class="cap" style="margin-top:4px">Так увидят получатели</div>
+          <div class="opt" style="margin-top:6px"><div class="g">Комментарий к ответу<small>Например, «на выезде до 13»</small></div>${tg(c.comment, 'cq-tg', 'comment')}</div>
+          <div class="lbl">Срок</div><div class="chips">${['без срока', 'сегодня, 18:00', 'завтра, 12:00', 'до пт, 18:00'].map(v => chip(c.due === v, v, 'cq-due')).join('')}</div>
+          <div class="opt" style="margin-top:6px"><div class="g">Напомнить не ответившим накануне срока<small>Вам — итог в тот же момент</small></div>${tg(c.auto && c.due !== 'без срока', 'cq-tg', 'auto')}</div>
+          <button class="btn pri" data-a="cq-send">Отправить запрос · ${who.length} ${plw(who.length, 'человеку', 'людям', 'людям')}</button></div>${toastH(s, 'A')}</div>`;
       } },
-      { id: 'B', label: 'Получатель · инструктор', cap: '<b>У получателя</b> — плашка под шапкой чата и кнопка прямо в сообщении. Одно нажатие, без перехода. После — зелёная отметка с временем; плашка исчезает. Состояние общее с телефоном «Списки и Важные».', r: s => `<div class="phone">${st}${chead('Общий', '15 участников · 6 в сети', av('ОБ', 'c1', 'm'))}
-        ${s.rDone ? '' : `<div class="strip warn" data-a="noop">${I('dcheck')}<span><b>Нужно подтвердить</b> · до пт, 18:00</span></div>`}
-        <div class="feed" data-scroll="feed">${day('Сегодня')}${inMsg('ДР', 'Кабинет 2 свободен после 15:00, если кому нужен.', '8:40')}
-        ${inMsg('МС', REG + DOC, '9:10', { after: `<div class="ack"><div class="ackh">${I('clock')}Нужно подтвердить до пт, 18:00</div>${s.rDone ? `<div class="ackdone">${I('check')}Вы подтвердили в 9:41</div>` : `<button class="ackbtn" data-a="r-ack">${I('check')}Ознакомлен(а)</button>`}<div class="acs">Подтвердили ${s.rDone ? 13 : 12} из 15</div></div>` })}
-        ${inMsg('ОЧ', 'Ключи от раздевалки на стойке.', '9:20')}</div>${composer()}${toastH(s, 'B')}</div>` },
-      { id: 'C', label: 'Кто подтвердил', cap: '<b>Экран автора.</b> Две вкладки: кто ещё нет (сверху — «прочитал, но не подтвердил») и кто да, со временем. «Напомнить» шлёт личный пуш только неподтвердившим; повторно — не чаще раза в 2 часа.', r: s => whoScr(12, s.c.tab, s.c.rem, { tab: 'c-tab', rem: 'c-rem' }, s, 'C') },
-      { id: 'D', label: 'Список чатов и «Важные»', cap: '<b>Переключайте вкладки внизу.</b> В списке чатов — жёлтая метка «подтвердить» вместо обычного счётчика. В «Важных» сверху блок «Ждут вас»: подтверждения, опросы, задачи — с кнопкой прямо в карточке.', r: s => {
-        const need = !s.rDone;
+      { id: 'B', label: 'Получатель · Олег, Зал ЛФК', cap: '<b>Живой.</b> Олег в отделе — у него кнопки; ответ одним нажатием, затем по желанию комментарий. «Изменить» — до срока. Ниже — запрос врачам: Олег его видит, но кнопок нет, есть подпись «вас в списке нет».', r: s => { const r = s.R.b; return `<div class="phone">${st}${chead('Инструкторы · зал', '9 участников · 4 в сети', av('ИЗ', 'c1', 'm'))}
+        ${r.ans['ОЧ'] ? '' : `<div class="strip warn">${I('req')}<span><b>Ждут вашего ответа</b> · до пт, 18:00</span></div>`}
+        <div class="feed" data-scroll="feed">${day('Сегодня')}${inMsg('ДР', reqCard(s.R.b2, 'ОЧ'), '8:55', { obj: 1 })}${inMsg('МС', reqCard(r, 'ОЧ'), '9:10', { obj: 1 })}${inMsg('ИЛ', 'Буду, захвачу распечатки расписания.', '9:14')}</div>${composer()}${toastH(s, 'B')}</div>`; } },
+      { id: 'C', label: 'Автор: сводка ответов', cap: '<b>Живой.</b> Вкладки — по вариантам ответа и «Нет ответа»; у ответивших видны комментарии. «Напомнить» — личный пуш не ответившим, повторно через 2 часа; автонапоминание накануне срока — если включено. «Закрыть» — ответы больше не принимаются.', r: s => sumScr(s.R.c, s.ctab, { tab: 'cc-tab' }, s, 'C') },
+      { id: 'D', label: 'Список чатов и «Ждут вас»', cap: '<b>Переключайте вкладки внизу.</b> В списке чатов — жёлтая метка «ответить до пт». В «Важных → Ждут вас» — запрос с кнопками прямо в карточке: ответ здесь меняет состояние у Олега в соседнем телефоне.', r: s => {
+        const r = s.R.b, need = !r.ans['ОЧ'];
         if (s.d.tab === 0) return `<div class="phone white">${st}<div class="top"><div class="plate">${mascot()}</div><h1>Чаты</h1><button class="ib soft">${I('edit')}</button></div><div class="search">${I('search')}Поиск по чатам и сообщениям</div>
           <div class="list" style="border-top:1px solid var(--border)">
-          <div class="row">${av('ОБ', 'c1')}<div class="bd"><div class="l1"><span class="nm">Общий</span><span class="tm">9:20</span></div><div class="l2"><span class="pv"><em>Марина:</em> С понедельника — новый регламент уборки…</span>${need ? `<span class="need">${I('dcheck')}до пт</span>` : ''}<span class="bdg">2</span></div></div></div>
-          <div class="row">${av('ИЗ', 'c1')}<div class="bd"><div class="l1"><span class="nm">Инструкторы · зал</span><span class="tm">9:24</span></div><div class="l2"><span class="pv"><em>Марина:</em> ${I('poll')} Во сколько удобнее планёрка?</span><span class="need" style="color:var(--primary);background:var(--primary-soft)">опрос</span></div></div></div>
-          <div class="row">${pa('МС', '', '<span class="on"></span>').replace('av c4 ', 'av c4 round ')}<div class="bd"><div class="l1"><span class="nm">Марина Соколова</span><span class="tm">9:12</span></div><div class="l2"><span class="pv">Завтра с 9:00 нужен инструктор в большой зал</span><span class="bdg">1</span></div></div></div>
-          <div class="row">${av('СН', 'c2')}<div class="bd"><div class="l1"><span class="nm">Слоты на неделю</span><span class="tm">8:50</span></div><div class="l2"><span class="pv">Доска на 16–20 ноября · свободно 5</span><span class="bdg at">@</span></div></div></div>
-          <div class="row">${av('ВР', 'c5')}<div class="bd"><div class="l1"><span class="nm">Врачи</span><span class="tm">Вчера</span></div><div class="l2"><span class="pv"><em>Дина:</em> обновила график осмотров</span><span class="mk">${I('belloff')}</span><span class="bdg mute">12</span></div></div></div>
-          </div>${tabbar(0, 'd-tab', { 2: need ? 3 : 2 })}</div>`;
+          <div class="row">${av('ИЗ', 'c1')}<div class="bd"><div class="l1"><span class="nm">Инструкторы · зал</span><span class="tm">9:14</span></div><div class="l2"><span class="pv"><em>Марина:</em> ${I('req')} Планёрка в понедельник…</span>${need ? `<span class="need">${I('req')}ответить до пт</span>` : ''}<span class="bdg">2</span></div></div></div>
+          <div class="row">${av('ОБ', 'c1')}<div class="bd"><div class="l1"><span class="nm">Общий</span><span class="tm">9:05</span></div><div class="l2"><span class="pv"><em>Вера:</em> ${I('poll')} Когда удобнее субботник?</span><span class="need" style="color:var(--primary);background:var(--primary-soft)">опрос</span></div></div></div>
+          <div class="row">${pa('МС', 'round', '<span class="on"></span>')}<div class="bd"><div class="l1"><span class="nm">Марина Соколова</span><span class="tm">8:40</span></div><div class="l2"><span class="pv">Ключи от малого зала у охраны</span></div></div></div>
+          <div class="row">${av('ВР', 'c5')}<div class="bd"><div class="l1"><span class="nm">Медицинская служба</span><span class="tm">Вчера</span></div><div class="l2"><span class="pv"><em>Дина:</em> обновила график осмотров</span><span class="mk">${I('belloff')}</span><span class="bdg mute">4</span></div></div></div></div>${tabbar(0, 'd-tab', { 2: need ? 3 : 2 })}</div>`;
         return `<div class="phone white">${st}<div class="top"><h1>Важные</h1><button class="ib soft">${I('search')}</button></div>
           <div class="folders" style="background:var(--surface)"><span class="fd" aria-selected="true">Ждут вас<span class="n">${need ? 3 : 2}</span></span><span class="fd">Сохранённые</span><span class="fd">Напоминания</span><span class="fd">Задачи</span></div>
-          <div class="list">
-          ${need ? imp(pa('МС', 'm round'), 'Марина Соколова', 'Общий · подтвердить до пт, 18:00', '9:10', REG, `<div style="display:flex;gap:6px;margin-top:8px"><button class="btn sm pri" data-a="r-ack">${I('check', 'width:16px;height:16px;vertical-align:-3px')} Ознакомлен(а)</button><button class="btn sm sec">Открыть</button></div>`) : ''}
-          ${imp(pa('МС', 'm round'), 'Марина Соколова', 'Инструкторы · зал · опрос до пт', '9:24', 'Во сколько удобнее планёрка по понедельникам?', `<div style="margin-top:8px"><button class="btn sm sec">${I('poll', 'width:16px;height:16px;vertical-align:-3px')} Ответить</button></div>`)}
-          ${imp(pa('ДР', 'm round'), 'Задача от Дины Рябовой', 'Инструкторы · зал · срок завтра, 12:00', 'Вчера', 'Проверить аптечку в большом зале, докупить бинты', `<div style="margin-top:8px"><button class="btn sm sec">Готово</button></div>`)}
-          <div class="sect">Сохранённые</div>${imp(pa('МС', 'm round'), 'Марина Соколова', 'Инструкторы · зал', '9:12', 'Коллеги, завтра с 9:00 до 13:00 нужен инструктор в большой зал. Кто возьмёт слот?')}
-          </div>${tabbar(2, 'd-tab', { 2: need ? 3 : 2 })}${toastH(s, 'D')}</div>`;
+          <div class="list">${need ? imp(pa('МС', 'm round'), 'Запрос · Марина Соколова', 'Инструкторы · зал · ответить до пт, 18:00', '9:10', esc(r.text), `<div class="rq-b" style="margin-top:8px">${r.opts.map((o, i) => `<button class="btn sm ${i ? 'sec' : 'pri'}" data-a="rq-ans" data-r="b" data-v="ОЧ" data-i="${i}">${o}</button>`).join('')}</div>`) : ''}
+          ${imp(pa('ВЛ', 'm round'), 'Опрос · Вера Лебедева', 'Общий · до сб', '9:05', 'Когда удобнее субботник?', `<div style="margin-top:8px"><button class="btn sm sec">${I('poll', 'width:16px;height:16px;vertical-align:-3px')} Ответить</button></div>`)}
+          ${imp(pa('МС', 'm round'), 'Задача на вас', 'Инструкторы · зал · срок сегодня, 17:00', '8:40', 'Забрать ключи от малого зала у охраны', `<div style="margin-top:8px"><button class="btn sm sec">Готово</button></div>`)}
+          ${need ? '' : `<div class="sect">Отвечено</div>${imp(pa('МС', 'm round'), 'Запрос · Марина Соколова', 'ваш ответ: ' + r.opts[r.ans['ОЧ'].i], '9:41', esc(r.text))}`}</div>${tabbar(2, 'd-tab', { 2: need ? 3 : 2 })}${toastH(s, 'D')}</div>`;
       } },
     ],
     on: {
-      'a-plus': s => s.a.sheet = 'plus', 'a-close': s => s.a.sheet = null,
-      'a-tile': (s, d) => { s.a.sheet = null; if (d.t === 'ack') s.a.flag = true; else toast(s, 'A', 'Эта функция — на своей вкладке прототипа', 'spark'); },
-      'a-hold': s => s.a.pop = true, 'a-flagpop': s => { s.a.pop = false; s.a.flag = true; },
-      'a-due': s => s.a.sheet = 'due', 'a-duepick': (s, d) => s.a.due = d.v, 'a-unflag': s => s.a.flag = false,
-      'a-send': s => { const a = s.a; a.pop = false; const t = (a.text || '').trim(); if (!t) return; a.msgs.push({ t, ack: a.flag }); a.text = ''; s.bottom = 'A';
-        if (a.flag) { a.n = 0; a.flag = false; const step = () => later(s, 450, () => { if (a.n < 12) { a.n++; step(); } }); step(); } },
-      'a-who': s => { s.a.screen = 'who'; s.a.tab = 'no'; }, 'a-back': s => s.a.screen = 'chat', 'a-tab': (s, d) => s.a.tab = d.t,
-      'a-rem': s => { s.a.rem = true; toast(s, 'A', `Напомнили ${15 - s.a.n} людям — личным пушем`, 'bell'); },
-      'r-ack': s => { s.rDone = true; toast(s, 'B', 'Марина увидит, что вы ознакомились'); },
-      'c-tab': (s, d) => s.c.tab = d.t, 'c-rem': s => { s.c.rem = true; toast(s, 'C', 'Напомнили трём людям — личным пушем', 'bell'); },
+      'cq-x': s => { s.cr.screen = 'chat'; }, 'cq-plus': s => s.cr.plus = !s.cr.plus, 'cq-tile': (s, d) => { s.cr.plus = false; if (d.t === 'req') s.cr.screen = 'create'; else toast(s, 'A', plusMsg[d.t]); },
+      'cq-to': (s, d) => s.cr.to = d.t, 'cq-dept': (s, d) => s.cr.dept = d.v, 'cq-role': (s, d) => s.cr.role = d.v,
+      'cq-p': (s, d) => { const p = s.cr.people, i = p.indexOf(d.v); if (i >= 0) { if (p.length > 1) p.splice(i, 1); } else p.push(d.v); },
+      'cq-pre': (s, d) => s.cr.preset = d.v, 'cq-add': s => s.cr.custom.push(''), 'cq-del': (s, d) => s.cr.custom.splice(+d.i, 1), 'cq-tg': (s, d) => s.cr[d.k] = !s.cr[d.k], 'cq-due': (s, d) => s.cr.due = d.v,
+      'cq-send': s => { const c = s.cr, opts = rqOpts(c); if (!c.text.trim() || !opts.length) { toast(s, 'A', 'Нужны текст и хотя бы одна кнопка', 'x'); return; }
+        const r = s.R.a = mkReq('a', { text: c.text.trim(), who: rqWho(c), label: rqLabel(c), opts, comment: c.comment, due: c.due === 'без срока' ? '' : c.due, auto: c.auto && c.due !== 'без срока' }); c.screen = 'chat'; c.tab = 'none'; s.bottom = 'A';
+        let k = 0; const step = () => later(s, 650, () => { if (s.R.a !== r || k >= r.who.length - 2) return; const who = r.who[k]; r.ans[who] = { i: k === 2 && opts.length > 1 ? 1 : 0, t: '9:4' + (k + 2), c: k === 2 && c.comment ? 'на выезде до 13' : '' }; k++; step(); }); step(); },
+      'cq-back': s => s.cr.screen = 'chat', 'cq-tab': (s, d) => s.cr.tab = d.t, 'cc-tab': (s, d) => s.ctab = d.t,
+      'rq-more': (s, d, el) => { if (el.closest('[data-ph]').dataset.ph === 'A') s.cr.screen = 'sum'; },
+      'rq-rem': (s, d, el) => { const r = s.R[d.r]; r.rem = true; toast(s, el.closest('[data-ph]').dataset.ph, `Напомнили ${r.who.filter(k => !r.ans[k]).length} — личным пушем`, 'bell'); },
+      'rq-close': (s, d, el) => { s.R[d.r].closed = true; toast(s, el.closest('[data-ph]').dataset.ph, 'Запрос закрыт — ответы больше не принимаются'); },
+      'rq-ans': (s, d, el) => { const r = s.R[d.r]; r.ans[d.v] = { i: +d.i, c: '', t: '9:41' }; if (r.comment && el.closest('[data-ph]').dataset.ph !== 'D') r.edit = d.v; toast(s, el.closest('[data-ph]').dataset.ph, `Ответ «${r.opts[+d.i]}» отправлен — ${nm(r.author).split(' ')[0]} увидит`); },
+      'rq-chg': (s, d) => { const r = s.R[d.r]; delete r.ans[d.v]; r.edit = null; }, 'rq-cm': (s, d) => s.R[d.r].edit = d.v,
+      'rq-cmsave': (s, d) => { const r = s.R[d.r]; r.ans[d.v].c = (r.draft || '').trim(); r.edit = null; r.draft = ''; },
       'd-tab': (s, d) => { if (d.t === '0' || d.t === '2') s.d.tab = +d.t; },
     },
     notes: notes(
-      'Администратор отправляет важное (регламент, изменение расписания) с отметкой «Нужно подтвердить» и сроком. Каждый получатель видит кнопку в сообщении, плашку в чате, метку в списке чатов и карточку в «Важных → Ждут вас». Автор видит счётчик, список и может одним нажатием напомнить тем, кто не подтвердил. За 2 часа до срока — автоматическое напоминание.',
-      'Поле у сообщения <code>ack: {due_at, recipients_snapshot}</code> (список получателей фиксируется в момент отправки — новые участники чата не портят счёт); таблица <code>message_acks(message_id, user_id, at)</code>; ручки «подтвердить», «список», «напомнить» (ограничение частоты); счётчик «ждут меня» в данных списка чатов; событие по сокету для живого счётчика; задача планировщика для напоминания до срока (планировщик уже есть у отложенных). Механизм близок к «Сбору отметок» агента — можно переиспользовать карточку и прогресс.',
-      '1) Кто может включать — все или только админы/владельцы чата? 2) Показывать ли получателям «Подтвердили 12 из 15» (давит, но мотивирует)? 3) Текст кнопки: «Ознакомлен(а)» или нейтральное «Подтверждаю»? 4) Нужен ли экспорт списка (для проверок) — это уже «юридическая» функция. 5) Можно ли редактировать сообщение после подтверждений — сбрасывать ли отметки?'),
+      '<b>Название.</b> Варианты: «Запрос», «Ждём ответа», «Отметка». Выбираю <b>«Запрос»</b>: короткое, это действие («запросить ответ»), а не состояние; «Отметка» путается с реакциями и «сбором отметок» агента, «Ждём ответа» — скорее подпись статуса (её и используем в списках). <b>Сценарий:</b> автор пишет, кого спрашивает (весь чат / люди / отдел / роль) и каким ответом (готовый тип или свои 2–4 кнопки), срок и автонапоминание. Получатель отвечает одним нажатием, может добавить комментарий и изменить ответ до срока. Автор видит сводку по вариантам и «нет ответа», напоминает одной кнопкой. <b>Кто не в списке</b> — видит запрос и сколько ответили, но кнопок нет и есть подпись «вас в списке нет»: переписка остаётся прозрачной, и никто не отвечает за другого. Запросы на меня — в «Важных → Ждут вас».',
+      'Сообщение типа <code>request</code>: текст, варианты, флаг комментария, срок, автонапоминание и <b>адресаты как правило</b> (<code>chat | users[] | department_id | role</code>), которое раскрывается в список людей в момент отправки (снимок — чтобы новые сотрудники отдела не портили счёт); <code>request_answers(request_id, user_id, option, comment, at)</code> с правом изменить до срока; ручки «ответить / изменить / напомнить / закрыть»; счётчик «ждут меня» в данных списка чатов; планировщик автонапоминаний (тот же, что у отложенных); событие по сокету на каждый ответ. Старая карточка агента «Отметились 7 из 9» может стать частным случаем запроса.',
+      '1) Название «Запрос» подходит? 2) Кто может отправлять запрос отделу или роли — все или только руководители и администраторы? 3) Показывать ли получателям сводку (кто как ответил) или только «ответили 6 из 9»? Сейчас — только число. 4) Нужен ли экспорт ответов (например, для проверки инструктажа)? 5) Если автор правит текст после ответов — сбрасывать ответы или помечать «текст изменён»?'),
   };
-
   /* ======================================================================
      2. ОПРОСЫ
      ====================================================================== */
@@ -705,14 +863,15 @@
      3. НАПОМНИТЬ МНЕ
      ====================================================================== */
   const M1 = 'Коллеги, завтра с 9:00 до 13:00 нужен инструктор в большой зал. Кто возьмёт слот?';
-  const remSheet = (sel, act, go, close, title = 'Напомнить мне') => sheet(`<h2><span>${title}</span></h2>
-    <div class="q2">${[['Через час', 'в 10:41'], ['Сегодня вечером', 'в 18:00'], ['Завтра утром', 'сб, в 9:00'], ['В понедельник', '16 ноября, 9:00']].map(([b, sm]) => { const v = b === 'Через час' ? 'Сегодня в 10:41' : b === 'Сегодня вечером' ? 'Сегодня в 18:00' : b === 'Завтра утром' ? 'Завтра в 9:00' : 'Пн, 16 ноября, 9:00'; return `<div class="qo ${sel === v ? 'sel' : ''}" data-a="${act}" data-v="${v}" style="cursor:pointer"><b>${b}</b><small>${sm}</small></div>`; }).join('')}</div>
-    <div class="lbl">Своё время</div><div style="display:flex;gap:8px"><div class="field" style="flex:1.4">Сб, 15 ноября</div><div class="field" style="flex:1">9:00</div></div>
+  const remSheet = (sel, act, go, close, title = 'Напомнить мне', nb = '', nv = '', day = '') => sheet(`<h2><span>${title}</span></h2>
+    <div class="q2">${[['Через час', 'в 10:41'], ['Сегодня вечером', 'в 18:00'], ['Завтра утром', 'вс, в 9:00'], ['В понедельник', '16 ноября, 9:00']].map(([b, sm]) => { const v = b === 'Через час' ? 'Сегодня в 10:41' : b === 'Сегодня вечером' ? 'Сегодня в 18:00' : b === 'Завтра утром' ? 'Завтра в 9:00' : 'Пн, 16 ноября, 9:00'; return `<div class="qo ${sel === v ? 'sel' : ''}" data-a="${act}" data-v="${v}" style="cursor:pointer"><b>${b}</b><small>${sm}</small></div>`; }).join('')}</div>
+    <div class="lbl">Своё время</div><div class="chips" style="margin-bottom:8px">${['Вт, 17 ноября', 'Ср, 18 ноября', 'Пт, 20 ноября'].map(v => `<span class="chip ${sel === v + ', 9:00' ? 'on' : ''}" data-a="${act}" data-v="${v}, 9:00">${v.split(', ')[0]}, ${v.split(', ')[1].split(' ')[0]}</span>`).join('')}<span class="chip">${I('cal')}Другая дата</span></div><div style="display:flex;gap:8px"><div class="field" style="flex:1.4">${sel.includes('ноября') ? sel.split(', ').slice(0, 2).join(', ') : sel.startsWith('Завтра') ? 'Вс, 15 ноября' : 'Сб, 14 ноября'}</div><div class="field" style="flex:1">${(sel.match(/\d+:\d+/) || ['9:00'])[0]}</div></div>
+    ${nb ? `<div class="lbl">Заметка для себя</div><input class="fi" style="width:100%" data-bind="${nb}" value="${esc(nv)}" placeholder="Например: позвонить Марине, если никто не взял">` : ''}
     <div class="opt" style="margin-top:8px"><div class="g">Не напоминать, если в треде ответили<small>Удобно для «кто возьмёт слот?»</small></div>${cb(false)}</div>
     <button class="btn pri" data-a="${go}">Напомнить: ${sel.toLowerCase()}</button>`, close);
   const t3 = {
-    init: () => ({ a: { menu: true, sheet: false, when: 'Завтра в 9:00', set: '' }, b: { st: 'idle' }, list: [
-      { id: 1, w: 'Сегодня в 18:00', grp: 'Сегодня', k: 'ДР', ch: 'Врачи', t: 'График осмотров на ноябрь: по вторникам и пятницам с 14:00, кабинет 2.' },
+    init: () => ({ a: { menu: true, sheet: false, when: 'Завтра в 9:00', set: '', note: 'Позвонить Марине, если никто не взял', setNote: '' }, b: { st: 'idle' }, list: [
+      { id: 1, note: 'Сверить с моими слотами', w: 'Сегодня в 18:00', grp: 'Сегодня', k: 'ДР', ch: 'Медицинская служба', t: 'График осмотров на ноябрь: по вторникам и пятницам с 14:00, кабинет 2.' },
       { id: 2, w: 'Пн, 16 ноября, 9:00', grp: 'Понедельник', k: 'ОЧ', ch: 'Общий', t: 'Ключи от раздевалки теперь на стойке, не у охраны.' } ], c: { sheet: null, sel: 'Сегодня в 18:00' } }),
     phones: [
       { id: 'A', label: 'Меню сообщения → шторка', cap: '<b>Живой.</b> Долгое нажатие на сообщение открывает меню: новые пункты «Напомнить мне» и «Сделать задачей» стоят рядом с «В важные». Выберите время — у сообщения появится колокольчик; напоминание видно только вам.', r: s => {
@@ -721,11 +880,11 @@
         const mid = `${mi('reply', 'Ответить')}${mi('threads', 'Ответить в треде')}<div class="md"></div>${mi('star', 'В важные')}${mi('bell', a.set ? 'Изменить напоминание' : 'Напомнить мне', 'ra-open', a.set ? a.set.replace('Завтра в ', 'завтра ') : '', 'hi')}${mi('sq', 'Сделать задачей')}${mi('fwd', 'Переслать')}<div class="md"></div>${mi('link', 'Копировать ссылку')}${mi('copy', 'Копировать текст')}`;
         return `<div class="phone">${st}${chead('Инструкторы · зал', '9 участников · 4 в сети', av('ИЗ', 'c1', 'm'))}<div class="feed" data-scroll="feed">${day('Сегодня')}${m1}
           ${meMsg('<div class="quote"><b>Марина Соколова</b>Завтра с 9:00 до 13:00 нужен инструктор…</div>Посмотрю расписание и отвечу до вечера', '9:20')}${inMsg('ОЧ', 'Я в отпуске со вторника, не смогу.', '9:31')}</div>${composer()}
-          ${a.menu ? ctxMenu(inMsg('МС', M1, '9:12'), mid, 'ra-close') : ''}${a.sheet ? remSheet(a.when, 'ra-pick', 'ra-go', 'ra-sclose') : ''}${toastH(s, 'A')}</div>`;
+          ${a.menu ? ctxMenu(inMsg('МС', M1, '9:12'), mid, 'ra-close') : ''}${a.sheet ? remSheet(a.when, 'ra-pick', 'ra-go', 'ra-sclose', 'Напомнить мне', 'a.note', a.note) : ''}${toastH(s, 'A')}</div>`;
       } },
       { id: 'B', label: 'Пуш на экране блокировки', cap: '<b>Живой.</b> Нажмите на уведомление — раскроются действия: открыть, отложить на час / до завтра, «Готово». Текст уведомления — само сообщение и чат; заголовок «Напоминание», чтобы отличать от новых сообщений.', r: s => {
         const b = s.b;
-        const card = `<div class="push" data-a="rb-tap"><div class="p1"><span class="appi">${mascot(12, 14)}</span>COMA · НАПОМИНАНИЕ<span>сейчас</span></div><b>Марина Соколова · Инструкторы · зал</b>${M1}</div>`;
+        const card = `<div class="push" data-a="rb-tap"><div class="p1"><span class="appi">${mascot(12, 14)}</span>COMA · НАПОМИНАНИЕ<span>сейчас</span></div><b>Марина Соколова · Инструкторы · зал</b>${M1}<div class="pn2">📝 Позвонить Марине, если никто не взял</div></div>`;
         let body = '';
         if (b.st === 'idle') body = card;
         if (b.st === 'menu') body = card + `<div class="pacts"><div data-a="rb-open">Открыть сообщение${I('chat')}</div><div data-a="rb-snooze" data-v="10:00">Напомнить через час${I('clock')}</div><div data-a="rb-snooze" data-v="завтра в 9:00">Напомнить завтра${I('cal')}</div><div data-a="rb-done">Готово${I('check')}</div></div>`;
@@ -733,12 +892,12 @@
         if (b.st === 'done') body = `<div class="lnote">${I('check', 'width:14px;height:14px;vertical-align:-2px')} Напоминание закрыто</div>`;
         if (b.st === 'open') return `<div class="phone">${st}${chead('Инструкторы · зал', '9 участников · 4 в сети', av('ИЗ', 'c1', 'm'))}<div class="feed" data-scroll="feed">${day('Вчера')}${inMsg('МС', M1, '9:12', { attr: 'style="box-shadow:0 0 0 2px var(--primary)"', meta: I('bell', 'width:12px;height:12px;color:var(--primary)') })}${inMsg('ОЧ', 'Я в отпуске со вторника, не смогу.', '9:31')}${day('Сегодня')}${inMsg('ИЛ', 'Беру, если ещё актуально', '9:01')}</div>
           <div class="strip" data-a="rb-reset">${I('bell')}<span><b>Напоминание</b> · сообщение подсвечено</span><a class="lnk" style="font-weight:600">Готово</a></div>${composer()}</div>`;
-        return `<div class="phone"><div class="lock">${st}<div class="lk">${I('lock')}</div><div class="dt">суббота, 15 ноября</div><div class="clk">9:00</div>${body}<div class="bottom"></div></div>${b.st === 'snoozed' || b.st === 'done' ? `<div style="position:absolute;bottom:40px;left:0;right:0;text-align:center;z-index:2"><button class="btn sm sec" data-a="rb-reset">Показать снова</button></div>` : ''}</div>`;
+        return `<div class="phone"><div class="lock">${st}<div class="lk">${I('lock')}</div><div class="dt">воскресенье, 15 ноября</div><div class="clk">9:00</div>${body}<div class="bottom"></div></div>${b.st === 'snoozed' || b.st === 'done' ? `<div style="position:absolute;bottom:40px;left:0;right:0;text-align:center;z-index:2"><button class="btn sm sec" data-a="rb-reset">Показать снова</button></div>` : ''}</div>`;
       } },
       { id: 'C', label: 'Мои напоминания — в «Важных»', cap: '<b>Где видны.</b> В «Важных» фильтр «Напоминания», сгруппировано по времени. Напоминание, поставленное в первом телефоне, появится здесь. «Перенести» — та же шторка, «Готово» — убрать.', r: s => {
-        const L = [...s.list]; if (s.a.set) L.splice(0, 0, { id: 0, w: s.a.set, grp: s.a.set.startsWith('Сегодня') ? 'Сегодня' : s.a.set.startsWith('Завтра') ? 'Завтра' : 'Понедельник', k: 'МС', ch: 'Инструкторы · зал', t: M1 });
-        const order = ['Сегодня', 'Завтра', 'Понедельник'];
-        const groups = order.map(g => { const it = L.filter(x => x.grp === g); return it.length ? `<div class="sect">${g}</div>` + it.map(x => `<div class="sitem"><div class="w">${I('bell')}${x.w.replace(/^(Сегодня|Завтра) в /, '').replace('Пн, 16 ноября, ', '')}<span>${x.ch}</span></div><p><b style="font-weight:600">${first(x.k)}:</b> ${x.t}</p><div class="acts"><button class="btn sm sec" data-a="rc-move" data-id="${x.id}">Перенести</button><button class="btn sm sec">Открыть</button><button class="btn sm pri" data-a="rc-done" data-id="${x.id}" style="margin-left:auto">Готово</button></div></div>`).join('') : ''; }).join('');
+        const L = [...s.list]; if (s.a.set) L.splice(0, 0, { id: 0, note: s.a.setNote, w: s.a.set, grp: s.a.set.startsWith('Сегодня') ? 'Сегодня' : s.a.set.startsWith('Завтра') ? 'Завтра' : 'Позже', k: 'МС', ch: 'Инструкторы · зал', t: M1 });
+        const order = ['Сегодня', 'Завтра', 'Понедельник', 'Позже'];
+        const groups = order.map(g => { const it = L.filter(x => x.grp === g); return it.length ? `<div class="sect">${g}</div>` + it.map(x => `<div class="sitem"><div class="w">${I('bell')}${x.w.replace(/^(Сегодня|Завтра) в /, '').replace('Пн, 16 ноября, ', '')}<span>${x.ch}</span></div><p><b style="font-weight:600">${first(x.k)}:</b> ${x.t}</p>${x.note ? `<div class="rnote">${I('note')}${esc(x.note)}</div>` : ''}<div class="acts"><button class="btn sm sec" data-a="rc-move" data-id="${x.id}">Перенести</button><button class="btn sm sec">Открыть</button><button class="btn sm pri" data-a="rc-done" data-id="${x.id}" style="margin-left:auto">Готово</button></div></div>`).join('') : ''; }).join('');
         return `<div class="phone white">${st}<div class="top"><h1>Важные</h1><button class="ib soft">${I('search')}</button></div>
           <div class="folders" style="background:var(--surface)"><span class="fd">Ждут вас<span class="n">3</span></span><span class="fd">Сохранённые</span><span class="fd" aria-selected="true">Напоминания<span class="n">${L.length}</span></span><span class="fd">Задачи</span></div>
           <div class="list" data-scroll="l" style="background:var(--canvas)">${groups || '<div class="cap" style="text-align:center;padding:40px">Напоминаний нет</div>'}</div>${tabbar(2)}${s.c.sheet != null ? remSheet(s.c.sel, 'rc-pick', 'rc-go', 'rc-close', 'Перенести напоминание') : ''}${toastH(s, 'C')}</div>`;
@@ -747,11 +906,11 @@
     on: {
       'ra-menu': s => s.a.menu = true, 'ra-close': (s, d, e, ev) => { if (ev && ev.target.closest('[data-stop]')) return; s.a.menu = false; },
       'ra-open': s => { s.a.menu = false; s.a.sheet = true; }, 'ra-pick': (s, d) => s.a.when = d.v, 'ra-sclose': s => s.a.sheet = false,
-      'ra-go': s => { s.a.sheet = false; s.a.set = s.a.when; toast(s, 'A', `Напомню ${s.a.when.toLowerCase()}. Список — в «Важных»`, 'bell'); },
+      'ra-go': s => { s.a.sheet = false; s.a.set = s.a.when; s.a.setNote = (s.a.note || '').trim(); toast(s, 'A', `Напомню ${s.a.when.toLowerCase()}. Список — в «Важных»`, 'bell'); },
       'rb-tap': s => { if (s.b.st === 'idle') s.b.st = 'menu'; else if (s.b.st === 'menu') s.b.st = 'idle'; }, 'rb-open': s => s.b.st = 'open',
       'rb-snooze': (s, d) => { s.b.st = 'snoozed'; s.b.v = d.v; }, 'rb-done': s => s.b.st = 'done', 'rb-reset': s => s.b.st = 'idle',
       'rc-move': (s, d) => s.c.sheet = +d.id, 'rc-pick': (s, d) => s.c.sel = d.v, 'rc-close': s => s.c.sheet = null,
-      'rc-go': s => { const id = s.c.sheet, v = s.c.sel, grp = v.startsWith('Сегодня') ? 'Сегодня' : v.startsWith('Завтра') ? 'Завтра' : 'Понедельник';
+      'rc-go': s => { const id = s.c.sheet, v = s.c.sel, grp = v.startsWith('Сегодня') ? 'Сегодня' : v.startsWith('Завтра') ? 'Завтра' : v.startsWith('Пн') ? 'Понедельник' : 'Позже';
         if (id === 0) s.a.set = v; else { const x = s.list.find(x => x.id === id); x.w = v; x.grp = grp; } s.c.sheet = null; toast(s, 'C', 'Перенесено: ' + v.toLowerCase(), 'clock'); },
       'rc-done': (s, d) => { const id = +d.id; if (id === 0) s.a.set = ''; else s.list = s.list.filter(x => x.id !== id); toast(s, 'C', 'Готово — напоминание убрано'); },
     },
@@ -762,201 +921,180 @@
   };
 
   /* ======================================================================
-     4. ЗАДАЧИ В ЧАТЕ
+     4. ЗАДАЧИ (v2: создание с нуля, полоса под шапкой, общий слот)
      ====================================================================== */
   const ST = { open: ['Открыта', ''], prog: ['В работе', 'pr'], done: ['Готово', 'ok'] };
-  const taskCard = (t, viewer) => {
-    const [sl, sc] = ST[t.st], mine = t.who === viewer, od = t.overdue && t.st !== 'done';
+  const CH = 'Инструкторы · зал';
+  const T0 = () => [
+    { id: 1, title: 'Повесить новое расписание бассейна', who: 'ИЛ', due: 'сегодня, 12:00', hot: 1, st: 'open', chat: CH, grp: 'Сегодня', sub: [] },
+    { id: 2, title: 'Подготовить большой зал к слоту в ср, 9:00', who: 'ИЛ', due: 'ср, 8:45', st: 'open', chat: CH, grp: 'Позже', desc: 'Слот Олега, после — группа на растяжку.', sub: [{ t: 'Разложить маты', who: 'ОЧ', by: 'ОЧ' }, { t: 'Достать инвентарь из кладовой', who: 'ИЛ', by: '' }, { t: 'Проветрить зал', who: '', by: '' }] },
+    { id: 3, title: 'Забрать ключи от малого зала у охраны', who: 'ОЧ', due: 'сегодня, 17:00', st: 'prog', chat: CH, grp: 'Сегодня', sub: [] },
+    { id: 4, title: 'Передать график на декабрь', who: 'АИ', due: '', st: 'done', chat: CH, grp: 'Без срока', sub: [] },
+    { id: 5, title: 'Сдать журнал инструктажа по технике безопасности', who: 'ИЛ', due: 'вчера', overdue: 1, st: 'open', chat: 'Общий', grp: 'Просрочено', sub: [] },
+  ];
+  const subH = (t, edit = true) => t.sub.length ? `<div style="margin-top:6px">${t.sub.map((x, i) => `<div class="cli ${x.by ? 'done' : ''}" ${edit ? `data-a="tk-sub" data-id="${t.id}" data-i="${i}"` : ''}>${cb(!!x.by)}<span>${esc(x.t)}</span>${x.who ? `<span class="by">${pa(x.who, 'round')}</span>` : ''}</div>`).join('')}</div>` : '';
+  const taskCard = (t, v) => {
+    const [sl, sc] = ST[t.st], mine = t.who === v, od = (t.overdue || t.hot) && t.st !== 'done', subDone = t.sub.filter(x => x.by).length;
     const acts = mine ? (t.st === 'open' ? `<button class="btn sm sec" data-a="tk-st" data-id="${t.id}" data-v="prog">Взять в работу</button><button class="btn sm pri" data-a="tk-st" data-id="${t.id}" data-v="done">${I('check', 'width:15px;height:15px;vertical-align:-3px')} Готово</button>` : t.st === 'prog' ? `<button class="btn sm pri" data-a="tk-st" data-id="${t.id}" data-v="done">${I('check', 'width:15px;height:15px;vertical-align:-3px')} Готово</button>` : `<button class="btn sm sec" data-a="tk-st" data-id="${t.id}" data-v="open">Вернуть в работу</button>`) : t.st !== 'done' ? `<button class="btn sm sec" data-a="tk-nudge" data-id="${t.id}">${I('bell', 'width:15px;height:15px;vertical-align:-3px')} Напомнить ${firstDat(t.who)}</button>` : '';
-    return `<div class="tk-h">${I('sq')}Задача${od ? '<span class="pill dg">Просрочена</span>' : `<span class="pill ${sc}">${sl}</span>`}</div><div class="tk-t ${t.st === 'done' ? 'done' : ''}">${esc(t.title)}</div>
-      <div class="tk-m"><span>${pa(t.who, 'round')}${mine ? 'Вы' : first(t.who)}</span>${t.due ? `<span class="${od ? 'dngc' : ''}">${I('clock')}${t.due}</span>` : ''}</div>${t.src ? `<div class="tk-src">из сообщения ${t.src}</div>` : ''}${acts ? `<div class="tk-a">${acts}</div>` : ''}`;
+    return `<div class="tk-h">${I('sq')}Задача${t.sub.length ? ` · ${subDone} из ${t.sub.length}` : ''}${t.overdue && t.st !== 'done' ? '<span class="pill dg">Просрочена</span>' : `<span class="pill ${sc}">${sl}</span>`}</div><div class="tk-t ${t.st === 'done' ? 'done' : ''}">${esc(t.title)}</div>
+      ${t.desc ? `<div style="font-size:13.5px;color:var(--muted);margin:-2px 0 6px">${esc(t.desc)}</div>` : ''}<div class="tk-m"><span>${pa(t.who, 'round')}${mine ? 'Вы' : first(t.who)} · отвечает</span>${t.due ? `<span class="${od ? 'dngc' : ''}">${I(t.hot ? 'flame' : 'clock')}${t.due}</span>` : ''}</div>${subH(t)}${t.src ? `<div class="tk-src">из сообщения ${t.src}</div>` : ''}${acts ? `<div class="tk-a">${acts}</div>` : ''}`;
   };
-  const trow = (t, act = 'tk-toggle', showChat = false) => `<div class="trow"><span class="cb ${t.st === 'done' ? 'on' : ''}" data-a="${act}" data-id="${t.id}">${t.st === 'done' ? I('check') : ''}</span><div class="bd"><b class="${t.st === 'done' ? 'done' : ''}">${esc(t.title)}</b><small>${pa(t.who, 'round', '').replace('class="av', 'style="width:18px;height:18px;font-size:8px" class="av')}${first(t.who)}${t.due ? ` · <span class="${t.overdue && t.st !== 'done' ? 'od' : ''}">${t.due}</span>` : ''}${showChat ? ` · ${t.chat}` : ''}${t.st === 'prog' ? ' · <span class="pill pr" style="font-size:10.5px">в работе</span>' : ''}</small></div></div>`;
+  const trow = (t, act = 'tk-toggle', o = {}) => `<div class="trow ${o.mine ? 'minez' : ''}"><span class="cb ${t.st === 'done' ? 'on' : ''}" data-a="${act}" data-id="${t.id}">${t.st === 'done' ? I('check') : ''}</span><div class="bd"><b class="${t.st === 'done' ? 'done' : ''}">${esc(t.title)}</b><small>${pa(t.who, 'round').replace('class="av', 'style="width:18px;height:18px;font-size:8px" class="av')}${o.mine ? 'на вас' : first(t.who)}${t.due ? ` · <span class="${(t.overdue || t.hot) && t.st !== 'done' ? 'od' : ''}">${t.due}</span>` : ''}${t.sub.length ? ` · ${t.sub.filter(x => x.by).length}/${t.sub.length}` : ''}${o.chat ? ` · ${t.chat}` : ''}${t.st === 'prog' ? ' · <span class="pill pr" style="font-size:10.5px">в работе</span>' : ''}</small></div></div>`;
+  const openT = s => s.tasks.filter(t => t.chat === CH && t.st !== 'done');
+  const myT = (s, v) => openT(s).filter(t => t.who === v).sort((a, b) => (b.hot || 0) - (a.hot || 0));
+  const dropT = (s, v, ph) => { const T = openT(s), M = T.filter(t => t.who === v), O = T.filter(t => t.who !== v);
+    return `<div class="dimx" data-a="ts-open" data-p="${ph}"></div><div class="drop" data-scroll="dr">${M.length ? `<div class="tsec" style="color:var(--danger)">На вас · ${M.length}</div>${M.map(t => trow(t, 'tk-toggle', { mine: 1 })).join('')}` : ''}${O.length ? `<div class="tsec">Остальные · ${O.length}</div>${O.map(t => trow(t)).join('')}` : ''}
+      <div class="dfoot"><button class="btn sm sec" style="flex:1">Все задачи чата</button><button class="btn sm pri" data-a="tn-new" data-p="${ph}" style="flex:1">${I('plus', 'width:15px;height:15px;vertical-align:-3px')} Задача</button></div></div>`; };
+  const stripV1 = (s, v, ph) => { const T = openT(s), M = myT(s, v), hot = M.find(t => t.hot || t.overdue);
+    return `<div class="swrap"><div class="tstrip" data-a="ts-open" data-p="${ph}">${I('sq')}<span class="g"><b>Задачи · ${T.length}</b>${M.length ? '' : ' ' + plw(T.length, 'открытая', 'открытые', 'открытых')}</span>${M.length ? `<span class="mpill ${hot ? '' : 'calm'}">${hot ? I('flame') : ''}${M.length} на вас${hot ? ' · ' + hot.due.replace('сегодня, ', 'до ') : ''}</span>` : ''}${I('down', s.open[ph] ? 'transform:rotate(180deg)' : '')}</div>${s.open[ph] ? dropT(s, v, ph) : ''}</div>`; };
+  const stripV2 = (s, v, ph) => { const T = openT(s), M = myT(s, v), m = M[0];
+    const body = m ? `<div class="tstrip two ${m.hot ? 'hot' : 'mine'}"><span class="cb" style="border-radius:50%" data-a="tk-toggle" data-id="${m.id}"></span><span class="g" data-a="ts-open" data-p="${ph}"><small>${m.hot ? I('flame', 'width:12px;height:12px;vertical-align:-1px') + ' горит · ' : ''}на вас · ${m.due}</small><b>${esc(m.title)}</b></span><span class="more" data-a="ts-open" data-p="${ph}">${T.length > 1 ? '+' + (T.length - 1) : ''}${I('down', s.open[ph] ? 'transform:rotate(180deg)' : '')}</span></div>`
+      : `<div class="tstrip" data-a="ts-open" data-p="${ph}">${I('sq')}<span class="g"><b>Задачи · ${T.length} ${plw(T.length, 'открытая', 'открытые', 'открытых')}</b> · на вас нет</span>${I('down')}</div>`;
+    return `<div class="swrap">${body}${s.open[ph] ? dropT(s, v, ph) : ''}</div>`; };
+  const PINS = ['Ключи от раздевалки теперь на стойке администратора', 'Регламент уборки залов.pdf'];
+  const ustrip = (s, v, ph) => { const u = s.u, M = myT(s, v), hot = M.find(t => t.hot), T = openT(s);
+    const kinds = [['pin', 'pin', PINS.length], ['task', 'sq', T.length], ['sched', 'clock', 1]];
+    let small, text, n = 1, idx = 0;
+    if (u.k === 'task') { small = hot ? `<small class="hot">${I('flame', 'width:12px;height:12px;vertical-align:-1px')} На вас · ${hot.due}</small>` : `<small>Задачи · ${T.length} · на вас ${M.length}</small>`; text = esc((hot || M[0] || T[0] || { title: 'Открытых задач нет' }).title); }
+    if (u.k === 'pin') { n = PINS.length; idx = u.pin; small = `<small>Закреплённое ${u.pin + 1} из ${PINS.length}</small>`; text = PINS[u.pin]; }
+    if (u.k === 'sched') { small = '<small>Отложено · завтра в 9:00</small>'; text = 'Напоминаю: в среду мой слот в большом зале'; }
+    return `<div class="swrap"><div class="ustrip"><span class="ubars">${Array.from({ length: Math.min(n, 3) }, (_, i) => `<i class="${i === idx ? 'on' : ''}"></i>`).join('')}</span><span class="g" data-a="us-tap" data-p="${ph}">${small}<span>${text}</span></span>
+      <span class="uchips">${kinds.map(([k, i, c]) => `<span class="uc ${u.k === k ? 'on' : ''}" data-a="us-k" data-v="${k}">${I(i)}${c}${k === 'task' && hot ? '<i class="dt"></i>' : ''}</span>`).join('')}</span></div>${s.open[ph] && u.k === 'task' ? dropT(s, v, ph) : ''}</div>`; };
+  const chatFeed = (s, v) => `<div class="feed" data-scroll="feed">${day('Сегодня')}${inMsg('МС', taskCard(s.tasks[1], v), '8:50', { obj: 1 })}${inMsg('ОЧ', 'Маты разложил, инвентарь на тебе 🙂', '9:02')}${inMsg('МС', taskCard(s.tasks[0], v), '9:05', { obj: 1 })}</div>`;
+  const TN = () => ({ title: '', desc: '', who: 'ИЛ', due: 'завтра, 12:00', sub: ['', ''], subWho: ['', ''], remind: true, src: '' });
   const D4 = 'Нужно до среды проверить аптечку в большом зале и докупить бинты.';
   const t4 = {
-    init: () => ({ tasks: [
-      { id: 1, title: 'Подготовить большой зал к слоту в ср, 9:00', who: 'ИЛ', due: 'ср, 8:45', st: 'open', chat: 'Инструкторы · зал', grp: 'Позже', src: 'Марины Соколовой' },
-      { id: 2, title: 'Забрать ключи от малого зала у охраны', who: 'ОЧ', due: 'сегодня, 17:00', st: 'prog', chat: 'Инструкторы · зал', grp: 'Сегодня' },
-      { id: 3, title: 'Сдать журнал инструктажа по технике безопасности', who: 'ИЛ', due: 'вчера', st: 'open', overdue: 1, chat: 'Общий', grp: 'Просрочено' },
-      { id: 4, title: 'Повесить новое расписание бассейна', who: 'ИЛ', due: 'сегодня, 12:00', st: 'open', chat: 'Слоты на неделю', grp: 'Сегодня' },
-      { id: 5, title: 'Передать график на декабрь', who: 'ДР', due: '', st: 'done', chat: 'Инструкторы · зал', grp: 'Без срока' },
-    ], made: false, a: { menu: true, sheet: false, title: 'Проверить аптечку в большом зале, докупить бинты', who: 'ИЛ', due: 'ср, 9:00', desc: '', remind: true },
-      cl: [{ t: 'Разложить маты', by: 'ОЧ' }, { t: 'Достать инвентарь из кладовой', by: '' }, { t: 'Проветрить зал', by: '' }, { t: 'Включить свет и вентиляцию', by: '' }],
-      c: { screen: 'info', tab: 'open' }, d: { banner: true } }),
+    init: () => ({ tasks: T0(), open: {}, u: { k: 'task', pin: 0 }, a: { screen: 'chat', plus: false, menu: false, n: TN() }, made: false, e: { banner: true } }),
     phones: [
-      { id: 'A', label: 'Сделать задачей из сообщения', cap: '<b>Живой.</b> Меню сообщения Дины → «Сделать задачей». В шторке — что сделать (подставлено из сообщения), кому, срок, пояснение. «Создать» — в ленте карточка задачи со ссылкой на исходное сообщение; исполнителю придёт пуш.', r: s => {
-        const a = s.a;
-        const mid = `${mi('reply', 'Ответить')}${mi('threads', 'Ответить в треде')}<div class="md"></div>${mi('star', 'В важные')}${mi('bell', 'Напомнить мне')}${mi('sq', 'Сделать задачей', 'ta-open', '', 'hi')}${mi('fwd', 'Переслать')}<div class="md"></div>${mi('copy', 'Копировать текст')}`;
-        const nt = s.tasks.find(t => t.id === 9);
-        const sh = a.sheet ? sheet(`<h2><span>Новая задача</span></h2><div class="tk-src" style="margin:-4px 0 8px">из сообщения Дины Рябовой: «${D4}»</div>
-          <div class="lbl" style="margin-top:0">Что сделать</div><input class="fi" style="width:100%" data-bind="a.title" value="${esc(a.title)}">
-          <div class="lbl">Кому</div><div class="chips">${['ИЛ', 'ОЧ', 'АИ', 'МС'].map(k => `<span class="chip ${a.who === k ? 'on' : ''}" data-a="ta-who" data-v="${k}">${pa(k, 'round').replace('class="av', 'style="width:22px;height:22px;font-size:9px;margin-left:-6px" class="av')}${k === 'МС' ? 'Себе' : first(k)}</span>`).join('')}</div>
-          <div class="lbl">Срок</div><div class="chips">${['сегодня, 18:00', 'завтра, 12:00', 'ср, 9:00', 'без срока'].map(v => chip(a.due === v, v, 'ta-due')).join('')}</div>
-          <div class="lbl">Пояснение</div><textarea class="fi" data-bind="a.desc" placeholder="Необязательно">${esc(a.desc)}</textarea>
-          <div class="opt" style="margin-top:6px"><div class="g">Напомнить исполнителю за час до срока</div>${tg(a.remind, 'ta-rem')}</div>
-          <button class="btn pri" data-a="ta-go">Создать задачу</button>`, 'ta-sclose') : '';
-        return `<div class="phone">${st}${chead('Инструкторы · зал', '9 участников · 4 в сети', av('ИЗ', 'c1', 'm'))}${s.made ? `<div class="strip">${I('sq')}<span><b>Задачи: ${s.tasks.filter(t => t.chat === 'Инструкторы · зал' && t.st !== 'done').length} открыто</b> · ближайшая сегодня, 17:00</span>${I('right', 'color:var(--muted)')}</div>` : ''}
-          <div class="feed" data-scroll="feed">${day('Сегодня')}${inMsg('ОЧ', 'Маты в малом зале разложил.', '9:02')}${inMsg('ДР', D4, '9:15', { attr: 'data-a="ta-menu" style="cursor:pointer"', meta: nt ? I('sq', 'width:12px;height:12px;color:var(--primary)') : '' })}
-          ${nt ? meMsg(taskCard(nt, 'МС'), '9:41', { obj: 1 }) : ''}</div>${composer()}${a.menu ? ctxMenu(inMsg('ДР', D4, '9:15'), mid, 'ta-close') : ''}${sh}${toastH(s, 'A')}</div>`;
+      { id: 'A', label: 'Новая задача — из «+» или из сообщения', cap: '<b>Живой.</b> «+» → «Задача» — с нуля; долгое нажатие на сообщение Дины → «Сделать задачей» — с подставленным текстом. Ответственный — один; помощники — через пункты чек-листа, у каждого пункта свой исполнитель (нажмите на кружок у пункта). Создайте — появится карточка и полоса задач под шапкой.', r: s => {
+        const a = s.a, n = a.n, nt = s.tasks.find(t => t.id === 9);
+        const mid = `${mi('reply', 'Ответить')}${mi('threads', 'Ответить в треде')}<div class="md"></div>${mi('star', 'В важные')}${mi('bell', 'Напомнить мне')}${mi('sq', 'Сделать задачей', 'tn-msg', '', 'hi')}${mi('fwd', 'Переслать')}<div class="md"></div>${mi('copy', 'Копировать текст')}`;
+        const sh = a.screen === 'new' ? sheet(`<h2><span>Новая задача</span></h2>${n.src ? `<div class="tk-src" style="margin:-4px 0 8px">из сообщения Дины Рябовой: «${D4}»</div>` : ''}
+          <input class="fi" style="width:100%;font-weight:600" data-bind="a.n.title" value="${esc(n.title)}" placeholder="Что сделать">
+          <textarea class="fi" style="margin-top:8px;height:56px" data-bind="a.n.desc" placeholder="Описание — необязательно">${esc(n.desc)}</textarea>
+          <div class="lbl">Ответственный</div><div class="chips">${['ИЛ', 'ОЧ', 'АИ', 'МС'].map(k => `<span class="chip ${n.who === k ? 'on' : ''}" data-a="tn-who" data-v="${k}">${pa(k, 'round').replace('class="av', 'style="width:22px;height:22px;font-size:9px;margin-left:-6px" class="av')}${k === 'МС' ? 'Я' : first(k)}</span>`).join('')}</div>
+          <div class="lbl">Срок</div><div class="chips">${['сегодня, 18:00', 'завтра, 12:00', 'ср, 9:00', 'без срока'].map(v => chip(n.due === v, v, 'tn-due')).join('')}</div>
+          <div class="lbl">Чек-лист · необязательно</div>${n.sub.map((x, i) => `<div class="pf"><span class="cb" style="width:20px;height:20px"></span><input class="fi" style="height:38px;font-size:14.5px" data-bind="a.n.sub.${i}" value="${esc(x)}" placeholder="Пункт ${i + 1}"><button class="ib" style="width:34px;height:34px" data-a="tn-subwho" data-i="${i}" title="Исполнитель пункта">${n.subWho[i] ? pa(n.subWho[i], 'round').replace('class="av', 'style="width:26px;height:26px;font-size:9.5px" class="av') : I('user', 'width:18px;height:18px;color:var(--muted)')}</button></div>`).join('')}<div class="addo" style="padding-left:2px" data-a="tn-subadd">${I('plus')}Пункт</div>
+          <div class="opt" style="margin-top:6px"><div class="g">Напомнить ответственному за час до срока</div>${tg(n.remind, 'tn-rem')}</div>
+          <button class="btn pri" data-a="tn-go">Создать задачу</button>`, 'tn-close') : '';
+        return `<div class="phone">${st}${chead(CH, '9 участников · 4 в сети', av('ИЗ', 'c1', 'm'))}${s.made ? stripV1(s, 'МС', 'A') : ''}
+          <div class="feed" data-scroll="feed">${day('Сегодня')}${inMsg('ОЧ', 'Маты в малом зале разложил.', '9:02')}${inMsg('ДР', D4, '9:15', { attr: 'data-a="tn-menu" style="cursor:pointer"' })}${nt ? meMsg(taskCard(nt, 'МС'), '9:41', { obj: 1 }) : ''}</div>
+          ${composer({ plus: 'tn-plus' })}${a.plus ? plusV2('tn-tile', 'tn-plus', 'task') : ''}${a.menu ? ctxMenu(inMsg('ДР', D4, '9:15'), mid, 'tn-mclose') : ''}${sh}${toastH(s, 'A')}</div>`;
       } },
-      { id: 'B', label: 'Исполнитель: карточка и чек-лист', cap: '<b>Живой.</b> Исполнитель берёт задачу в работу и закрывает её прямо в ленте — автор видит статус. Ниже — чек-лист в обычном сообщении: отметить пункт может любой участник, рядом аватар отметившего.', r: s => {
-        const done = s.cl.filter(x => x.by).length;
-        const cl = `<div class="cl-h">Подготовить большой зал к 9:00</div>${s.cl.map((x, i) => `<div class="cli ${x.by ? 'done' : ''}" data-a="cl-t" data-i="${i}">${cb(!!x.by)}<span>${x.t}</span>${x.by ? `<span class="by">${pa(x.by, 'round')}</span>` : ''}</div>`).join('')}<div class="pfoot"><span>${done} из ${s.cl.length}</span><span class="sp"></span>${done === s.cl.length ? '<span class="okc" style="font-weight:600">Всё готово</span>' : ''}</div>`;
-        return `<div class="phone">${st}${chead('Инструкторы · зал', '9 участников · 4 в сети', av('ИЗ', 'c1', 'm'))}<div class="feed" data-scroll="feed">${day('Сегодня')}
-          ${inMsg('МС', taskCard(s.tasks[0], 'ИЛ'), '8:50', { obj: 1 })}${inMsg('МС', cl, '8:52', { obj: 1 })}${inMsg('ОЧ', 'Маты разложил, инвентарь на тебе 🙂', '9:02')}</div>${composer()}${toastH(s, 'B')}</div>`;
-      } },
-      { id: 'C', label: 'Задачи чата — из информации о чате', cap: '<b>Живой.</b> В информации о чате — новая кнопка «Задачи» и блок с ближайшими. «Все» открывает список чата: открытые и готовые, кружок — закрыть задачу.', r: s => {
-        const T = s.tasks.filter(t => t.chat === 'Инструкторы · зал'), open = T.filter(t => t.st !== 'done');
-        if (s.c.screen === 'list') { const L = s.c.tab === 'open' ? open : T.filter(t => t.st === 'done');
-          return `<div class="phone white">${st}${chead('Задачи', 'Инструкторы · зал', '', `<button class="ib">${I('plus')}</button>`, 'data-a="tc-back"')}<div class="pseg"><button aria-selected="${s.c.tab === 'open'}" data-a="tc-tab" data-t="open">Открытые · ${open.length}</button><button aria-selected="${s.c.tab === 'done'}" data-a="tc-tab" data-t="done">Готово · ${T.length - open.length}</button></div>
-            <div class="list" data-scroll="l" style="border-top:1px solid var(--border);margin-top:6px">${L.map(t => trow(t)).join('') || '<div class="cap" style="text-align:center;padding:40px">Пусто</div>'}</div>${toastH(s, 'C')}</div>`; }
-        return `<div class="phone">${st}${chead('', '', '', `<button class="ib">${I('edit')}</button>`)}<div class="list" data-scroll="l"><div class="ihead">${av('ИЗ', 'c1')}<b>Инструкторы · зал</b><small>9 участников</small></div>
-          <div class="iacts"><div>${I('search')}Поиск</div><div>${I('belloff')}Звук</div><div data-a="tc-open">${I('sq')}Задачи</div><div>${I('cal')}Слоты</div></div>
-          <div class="igrp"><div class="gh">Задачи · ${open.length} открыто<a data-a="tc-open">Все${I('right')}</a></div>${open.slice(0, 3).map(t => trow(t)).join('')}</div>
-          <div class="igrp"><div class="ili">${I('image')}<span>Медиа и файлы</span><small>48</small></div><div class="ili">${I('pin')}<span>Закреплённые</span><small>2</small></div><div class="ili">${I('users')}<span>Участники</span><small>9</small></div></div></div>${toastH(s, 'C')}</div>`;
-      } },
-      { id: 'D', label: '«Мои задачи» — фильтр в «Важных»', cap: '<b>Все мои задачи из всех чатов</b>, по срокам. Сверху — пуш о приближающемся сроке (нажмите, чтобы скрыть). Кружок закрывает задачу — меняется и в ленте второго телефона.', r: s => {
+      { id: 'B', label: 'Полоса · вариант 1 — тонкая строка', cap: '<b>Живой.</b> Одна строка как у закреплённого: «Задачи · 3 открытых», справа красная метка «2 на вас · до 12:00» — если на вас есть задача со сроком сегодня. Нажмите — выпадает список: сначала ваши (красная черта слева), потом остальные; кружок закрывает задачу.', r: s => `<div class="phone">${st}${chead(CH, '9 участников · 4 в сети', av('ИЗ', 'c1', 'm'))}${stripV1(s, 'ИЛ', 'B')}${chatFeed(s, 'ИЛ')}${composer()}${toastH(s, 'B')}</div>` },
+      { id: 'C', label: 'Полоса · вариант 2 — «ваша ближайшая»', cap: '<b>Живой.</b> Если на вас есть задачи — полоса показывает самую срочную целиком, с кружком «готово» прямо в полосе; горящий срок — красный фон. «+2» и стрелка — раскрыть всё. Если на вас ничего — обычная серая строка. Закройте ваши задачи — увидите переход.', r: s => `<div class="phone">${st}${chead(CH, '9 участников · 4 в сети', av('ИЗ', 'c1', 'm'))}${stripV2(s, 'ИЛ', 'C')}${chatFeed(s, 'ИЛ')}${composer()}${toastH(s, 'C')}</div>` },
+      { id: 'D', label: 'Один слот под шапкой: закреплённое, задачи, отложенное', cap: '<b>Живой.</b> Под шапкой всегда одна полоса. Справа — счётчики: 📌 закреплённое, ☑ задачи, 🕓 отложенное; нажатие переключает, что показано. По умолчанию — самое срочное для вас: горящая задача на вас → закреплённое → задачи чата → отложенное. Нажатие на текст: у закреплённого — следующее, у задач — список.', r: s => `<div class="phone">${st}${chead(CH, '9 участников · 4 в сети', av('ИЗ', 'c1', 'm'))}${ustrip(s, 'ИЛ', 'D')}${chatFeed(s, 'ИЛ')}${composer()}${toastH(s, 'D')}</div>` },
+      { id: 'E', label: '«Мои задачи» — фильтр в «Важных»', cap: '<b>Все мои задачи из всех чатов</b>, по срокам. Сверху — пуш за час до срока. Кружок закрывает задачу — меняется во всех телефонах (полосы тоже).', r: s => {
         const mine = s.tasks.filter(t => t.who === 'ИЛ');
-        const G = ['Просрочено', 'Сегодня', 'Позже', 'Готово'].map(g => { const L = g === 'Готово' ? mine.filter(t => t.st === 'done') : mine.filter(t => t.grp === g && t.st !== 'done'); return L.length ? `<div class="sect" ${g === 'Просрочено' ? 'style="color:var(--danger)"' : ''}>${g} · ${L.length}</div>${L.map(t => trow(t, 'tk-toggle', true)).join('')}` : ''; }).join('');
+        const G = ['Просрочено', 'Сегодня', 'Позже', 'Готово'].map(g => { const L = g === 'Готово' ? mine.filter(t => t.st === 'done') : mine.filter(t => t.grp === g && t.st !== 'done'); return L.length ? `<div class="sect" ${g === 'Просрочено' ? 'style="color:var(--danger)"' : ''}>${g} · ${L.length}</div>${L.map(t => trow(t, 'tk-toggle', { chat: 1 })).join('')}` : ''; }).join('');
         return `<div class="phone white">${st}<div class="top"><h1>Важные</h1><button class="ib soft">${I('search')}</button></div>
           <div class="folders" style="background:var(--surface)"><span class="fd">Ждут вас<span class="n">3</span></span><span class="fd">Сохранённые</span><span class="fd">Напоминания</span><span class="fd" aria-selected="true">Задачи<span class="n">${mine.filter(t => t.st !== 'done').length}</span></span></div>
           <div class="list" data-scroll="l">${G}</div>${tabbar(2)}
-          ${s.d.banner && s.tasks[3].st !== 'done' ? `<div class="ibanner" data-a="td-hide"><span class="appi">${mascot(12, 14)}</span><div class="bd"><b>Через час срок задачи</b>Повесить новое расписание бассейна<small> · Слоты на неделю</small></div></div>` : ''}${toastH(s, 'D')}</div>`;
+          ${s.e.banner && s.tasks[0].st !== 'done' ? `<div class="ibanner" data-a="te-hide"><span class="appi">${mascot(12, 14)}</span><div class="bd"><b>Через час срок задачи</b>Повесить новое расписание бассейна<small> · ${CH}</small></div></div>` : ''}${toastH(s, 'E')}</div>`;
       } },
     ],
     on: {
-      'ta-menu': s => s.a.menu = true, 'ta-close': (s, d, e, ev) => { if (ev && ev.target.closest('[data-stop]')) return; s.a.menu = false; },
-      'ta-open': s => { s.a.menu = false; s.a.sheet = true; }, 'ta-sclose': s => s.a.sheet = false,
-      'ta-who': (s, d) => s.a.who = d.v, 'ta-due': (s, d) => s.a.due = d.v, 'ta-rem': s => s.a.remind = !s.a.remind,
-      'ta-go': s => { const a = s.a; s.tasks = s.tasks.filter(t => t.id !== 9); s.tasks.push({ id: 9, title: a.title.trim() || 'Без названия', who: a.who, due: a.due === 'без срока' ? '' : a.due, st: 'open', chat: 'Инструкторы · зал', grp: a.due.startsWith('сегодня') ? 'Сегодня' : 'Позже', src: 'Дины Рябовой' }); a.sheet = false; s.made = true; s.bottom = 'A';
-        toast(s, 'A', a.who === 'МС' ? 'Задача создана — она в «Важных → Задачи»' : `${first(a.who)} получит уведомление о задаче`, 'sq'); },
-      'tk-st': (s, d, el) => { const t = s.tasks.find(t => t.id === +d.id); t.st = d.v; const ph = el.closest('[data-ph]').dataset.ph; if (d.v === 'done') toast(s, ph, 'Задача закрыта — автор увидит'); },
-      'tk-nudge': (s, d, el) => toast(s, el.closest('[data-ph]').dataset.ph, 'Отправили напоминание исполнителю', 'bell'),
+      'tn-plus': s => s.a.plus = !s.a.plus, 'tn-tile': (s, d) => { s.a.plus = false; if (d.t === 'task') { s.a.n = TN(); s.a.screen = 'new'; } else toast(s, 'A', plusMsg[d.t]); },
+      'tn-menu': s => s.a.menu = true, 'tn-mclose': (s, d, e, ev) => { if (ev && ev.target.closest('[data-stop]')) return; s.a.menu = false; },
+      'tn-msg': s => { s.a.menu = false; s.a.n = { ...TN(), title: 'Проверить аптечку в большом зале, докупить бинты', due: 'ср, 9:00', src: 'Дины Рябовой' }; s.a.screen = 'new'; },
+      'tn-close': s => s.a.screen = 'chat', 'tn-who': (s, d) => s.a.n.who = d.v, 'tn-due': (s, d) => s.a.n.due = d.v, 'tn-rem': s => s.a.n.remind = !s.a.n.remind,
+      'tn-subadd': s => { s.a.n.sub.push(''); s.a.n.subWho.push(''); }, 'tn-subwho': (s, d) => { const o = ['', 'ОЧ', 'АИ', 'ИЛ'], w = s.a.n.subWho; w[+d.i] = o[(o.indexOf(w[+d.i]) + 1) % o.length]; },
+      'tn-go': s => { const n = s.a.n; if (!n.title.trim()) { toast(s, 'A', 'Напишите, что сделать', 'x'); return; }
+        s.tasks = s.tasks.filter(t => t.id !== 9); s.tasks.push({ id: 9, title: n.title.trim(), desc: n.desc.trim(), who: n.who, due: n.due === 'без срока' ? '' : n.due, st: 'open', chat: CH, grp: n.due.startsWith('сегодня') ? 'Сегодня' : 'Позже', src: n.src, sub: n.sub.map((t, i) => ({ t: t.trim(), who: n.subWho[i], by: '' })).filter(x => x.t) });
+        s.a.screen = 'chat'; s.made = true; s.bottom = 'A'; toast(s, 'A', n.who === 'МС' ? 'Задача ваша — она в «Важных → Задачи»' : `${first(n.who)} получит уведомление о задаче`, 'sq'); },
+      'tn-new': (s, d) => { s.open[d.p] = false; if (d.p === 'A') { s.a.n = TN(); s.a.screen = 'new'; } else toast(s, d.p, 'Откроется «Новая задача» — как в первом телефоне', 'sq'); },
+      'ts-open': (s, d) => s.open[d.p] = !s.open[d.p],
+      'us-k': (s, d) => { s.u.k = d.v; s.open.D = false; }, 'us-tap': s => { if (s.u.k === 'pin') s.u.pin = (s.u.pin + 1) % PINS.length; else if (s.u.k === 'task') s.open.D = !s.open.D; else toast(s, 'D', 'Откроется список отложенных', 'clock'); },
+      'tk-st': (s, d, el) => { const t = s.tasks.find(t => t.id === +d.id); t.st = d.v; if (d.v === 'done') toast(s, el.closest('[data-ph]').dataset.ph, 'Задача закрыта — автор увидит'); },
+      'tk-nudge': (s, d, el) => toast(s, el.closest('[data-ph]').dataset.ph, 'Отправили напоминание ответственному', 'bell'),
       'tk-toggle': (s, d) => { const t = s.tasks.find(t => t.id === +d.id); t.st = t.st === 'done' ? 'open' : 'done'; },
-      'cl-t': (s, d) => { const x = s.cl[+d.i]; x.by = x.by ? '' : 'ИЛ'; },
-      'tc-open': s => s.c.screen = 'list', 'tc-back': s => s.c.screen = 'info', 'tc-tab': (s, d) => s.c.tab = d.t, 'td-hide': s => s.d.banner = false,
+      'tk-sub': (s, d) => { const x = s.tasks.find(t => t.id === +d.id).sub[+d.i]; x.by = x.by ? '' : 'ИЛ'; }, 'te-hide': s => s.e.banner = false,
     },
     notes: notes(
-      'Задача рождается из переписки: «Сделать задачей» в меню сообщения или «+ → Задача». У неё один исполнитель, срок и статус «открыта / в работе / готово»; карточка живёт в ленте, ссылается на исходное сообщение. Чек-лист — отдельный тип сообщения, отметить пункт может любой. Мои задачи из всех чатов — в «Важных → Задачи»; за час до срока — пуш. <b>Почему «Важные», а не вкладка:</b> внизу уже пять вкладок (это предел), а «Ещё» прячет то, что требует действия. «Важные» и так личный ящик (сохранённое, напоминания, «ждут вас») — задачи туда естественно ложатся, и вкладка получает единый смысл: «моё, на что надо ответить».',
-      'Таблица <code>tasks(chat_id, source_message_id, title, note, assignee_id, due_at, status, created_by)</code> + сообщение-карточка в ленте, которое обновляется событием; чек-лист — тип сообщения с пунктами и <code>checked_by/at</code> у каждого (одновременные отметки — без конфликтов, по пункту); выборка «мои задачи» по всем чатам; планировщик для напоминания о сроке; права: менять статус — исполнитель и автор.',
-      '1) Нужна ли задача на нескольких исполнителей? Предлагаю нет: это «каждый отметился» — уже есть подтверждение. 2) Повторяющиеся задачи («каждое утро проветрить зал») — для этого лучше чек-лист по расписанию; делать ли? 3) Видят ли задачи чата все участники или только автор и исполнитель? 4) Нужна ли вкладка «Задачи» вместо «Агентов», если агенты будут жить в «Ещё»?'),
+      'Задача создаётся с нуля («+ → Задача») или из сообщения («Сделать задачей»). Поля: название, описание, <b>один ответственный</b>, срок, необязательный чек-лист — у пункта может быть свой исполнитель. <b>Почему один:</b> «2 на вас» и горящий срок должны однозначно означать «отвечаете вы»; при нескольких ответственных задача ничья. Нужно несколько человек — пункты чек-листа на разных людей. Открытые задачи чата — в полосе под шапкой. <b>Общий слот:</b> закреплённое, задачи и отложенное делят одну полосу; показывается самое срочное для вас, остальное — счётчиками справа. Три полосы подряд не бывает. Мои задачи из всех чатов — в «Важных → Задачи».',
+      '<code>tasks(chat_id, source_message_id, title, description, assignee_id, due_at, status, created_by)</code> + <code>task_items(task_id, text, assignee_id, done_by, done_at)</code>; карточка в ленте обновляется событием; в данных чата — сводка для полосы (<code>open_count, mine_count, mine_hot</code>), чтобы не тянуть все задачи при открытии; выборка «мои задачи» по чатам; планировщик напоминаний о сроке; права: статус меняют ответственный и автор, пункт — его исполнитель или ответственный.',
+      '1) Полоса — вариант 1 (тонкая строка) или 2 («ваша ближайшая»)? Предлагаю 1 по умолчанию и 2 — когда на вас горящая задача (это и есть вариант D). 2) Порядок в общем слоте: горящая задача → закреплённое → задачи → отложенное — согласны? 3) Кто может ставить задачи — все или только руководители (по оргструктуре: руководитель — своим людям)? 4) Видят ли задачи все участники чата? 5) Повторяющиеся задачи — не делаем в первой версии?'),
   };
 
   /* ======================================================================
-     5. СЛОТЫ
+     7. ОТДЕЛЫ И ОРГСТРУКТУРА
      ====================================================================== */
-  const HALLS = [['big', 'Большой зал'], ['small', 'Малый зал'], ['pool', 'Бассейн']];
-  const DAYS = [['Пн', 16], ['Вт', 17], ['Ср', 18], ['Чт', 19], ['Пт', 20]];
-  const TIMES = ['9:00–13:00', '13:00–17:00'];
-  const seedSlots = () => {
-    const A = { // hall-day-time -> person|null
-      'big-0-0':'СК','big-0-1':'ОБ','big-1-0':'АИ','big-1-1':null,'big-2-0':'ИЛ','big-2-1':'ОЧ','big-3-0':'ПМ','big-3-1':null,'big-4-0':'СК','big-4-1':'ТВ',
-      'small-0-0':'ТВ','small-0-1':'ИЛ','small-1-0':'ОЧ','small-1-1':'НК','small-2-0':null,'small-2-1':'АИ','small-3-0':'ОЧ','small-3-1':'ОБ','small-4-0':'НК','small-4-1':null,
-      'pool-0-0':'АП','pool-0-1':'ПМ','pool-1-0':'АП','pool-1-1':'ТВ','pool-2-0':'АП','pool-2-1':'НК','pool-3-0':'ИЛ','pool-3-1':'АИ','pool-4-0':null,'pool-4-1':'ПМ' };
-    return Object.entries(A).map(([id, who]) => { const [h, d, t] = id.split('-'); return { id, h, d: +d, t: +t, who, offer: null }; });
-  };
-  const hallN = h => HALLS.find(x => x[0] === h)[1];
-  const slotT = x => `${hallN(x.h)} · ${DAYS[x.d][0].toLowerCase()} ${DAYS[x.d][1]}, ${TIMES[x.t]}`;
-  const busyAt = (s, k, d, t) => s.slots.find(x => x.who === k && x.d === d && x.t === t);
-  const slotSheet = (s, ph) => {
-    const x = s.slots.find(x => x.id === s.sheet.id), me = 'ИЛ', head = `<h2><span>${hallN(x.h)}</span></h2><div class="slotbox">${I('cal')}<div><b>${DAYS[x.d][0]}, ${DAYS[x.d][1]} ноября · ${TIMES[x.t]}</b><small>${x.who ? (x.who === me ? 'ваш слот' : 'занят: ' + nm(x.who)) : 'свободно'}</small></div></div>`;
-    if (s.sheet.step === 'give') {
-      const cand = ['__all', 'ОЧ', 'СК', 'АИ', 'ДР'];
-      return sheet(`<h2><button class="ib" data-a="sl-back">${I('back')}</button><span>Отдать слот</span></h2><div class="slotbox">${I('cal')}<div><b>${slotT(x)}</b><small>пока замену не подтвердят, слот ваш</small></div></div>
-        <div class="lbl">Кому предложить</div>${cand.map(k => { if (k === '__all') return `<div class="opt click" data-a="sl-to" data-v="__all">${av(I('users', 'width:17px;height:17px'), 'cag', 'm round')}<div class="g">Всем в чате<small>кто первый нажмёт «Беру»</small></div><span class="cb ${s.sheet.to === '__all' ? 'on' : ''}" style="border-radius:50%">${s.sheet.to === '__all' ? I('check') : ''}</span></div>`;
-          const b = busyAt(s, k, x.d, x.t); return `<div class="opt ${b ? '' : 'click'}" ${b ? 'style="opacity:.5"' : `data-a="sl-to" data-v="${k}"`}>${pa(k, 'm round')}<div class="g">${nm(k)}<small class="${b ? '' : 'okc'}">${b ? 'занят(а): ' + hallN(b.h).toLowerCase() : 'свободен(на) в это время'}</small></div><span class="cb ${s.sheet.to === k ? 'on' : ''}" style="border-radius:50%">${s.sheet.to === k ? I('check') : ''}</span></div>`; }).join('')}
-        <div class="lbl">Комментарий</div><input class="fi" style="width:100%" data-bind="sheet.note" value="${esc(s.sheet.note)}" placeholder="Необязательно">
-        <div class="opt" style="margin-top:6px"><div class="g">Нужно согласие администратора<small>Марина подтвердит замену</small></div>${tg(s.sheet.adm, 'sl-adm')}</div>
-        <button class="btn pri" data-a="sl-offer">${s.sheet.to === '__all' ? 'Предложить всем' : 'Предложить ' + firstDat(s.sheet.to)}</button>`, 'sl-close');
-    }
-    let body;
-    if (!x.who) body = `<div class="cap">Записаться может любой инструктор чата. Администратор увидит запись сразу.</div><button class="btn pri" data-a="sl-take">Записаться</button><button class="btn sec" style="margin-top:8px">Позвать коллегу</button>`;
-    else if (x.who === me && x.offer) body = `<div class="pres" style="background:var(--warning-soft);color:var(--warning)">${I('swap')}Предложено ${x.offer.to === '__all' ? 'всем в чате' : firstDat(x.offer.to)} · ждём ответа</div><button class="btn sec" data-a="sl-recall">Отозвать предложение</button>`;
-    else if (x.who === me) body = `<div class="opt"><div class="g">Напомнить накануне<small>пт, в 18:00 — пуш и сообщение в чат</small></div>${tg(true, 'noop')}</div><button class="btn sec" data-a="sl-give">${I('swap')}Отдать слот</button>`;
-    else body = `<div class="opt">${pa(x.who, 'm round')}<div class="g">${nm(x.who)}<small>${PP[x.who][2]}</small></div></div><button class="btn sec">Написать ${firstDat(x.who)}</button>`;
-    return sheet(head + body, 'sl-close');
-  };
-  const boardHead = s => `${chead('Слоты на неделю', 'Доска · 14 участников', av('СН', 'c2', 'm'), `<button class="ib">${I('more')}</button>`)}<div class="wk"><button class="ib">${I('back')}</button><b>16–20 ноября</b><button class="ib">${I('right')}</button></div>
-    <div class="legend"><span><i style="border:1.5px dashed var(--border-strong)"></i>свободно · ${s.slots.filter(x => !x.who).length}</span><span><i style="background:var(--primary)"></i>мои · ${s.slots.filter(x => x.who === 'ИЛ').length}</span><span><i style="background:var(--warning-soft);border:1.5px dashed var(--warning)"></i>отдаю</span></div>`;
-  const shCell = x => { const me = x.who === 'ИЛ'; const c = !x.who ? 'free' : x.offer ? 'off' : me ? 'mine' : PP[x.who][1]; return `<div class="sh ${c}" data-a="sl-open" data-id="${x.id}" title="${slotT(x)}">${!x.who ? I('plus') : me ? 'Я' : x.who}</div>`; };
-  const t5 = {
-    init: () => ({ slots: seedSlots(), sheet: null, day: 2, oleg: { pre: 'offered', mine: 'none' }, adm: { sheet: false, week: '16–20', called: {} }, demoOffer: { st: 'offered' } }),
+  const orgCount = (org, id) => allIn(org, id).length;
+  const deptOf = (org, k) => org.find(d => d.id !== 'root' && d.people.includes(k)) || org[0];
+  const pathOf = (org, id) => { const p = []; let d = org.find(x => x.id === id); while (d && d.parent && d.parent !== 'root') { d = org.find(x => x.id === d.parent); p.unshift(d.n); } return p.join(' › '); };
+  const bossOf = (org, k) => { let d = deptOf(org, k); while (d && d.lead === k && d.parent) d = org.find(x => x.id === d.parent); return d ? d.lead : null; };
+  const dsq = (x = '') => `<span class="dsq ${x}">${I('org')}</span>`;
+  const prow = (k, act = 'og-p', extra = '') => `<div class="row" data-a="${act}" data-v="${k}" style="cursor:pointer">${pa(k, 'm round')}<div class="bd"><div class="l1"><span class="nm">${nm(k)}${extra}</span></div><div class="l2"><span class="pv">${PP[k][2]}</span></div></div></div>`;
+  const treeH = (s, id, depth = 0) => { const d = s.org.find(x => x.id === id), kids = s.org.filter(x => x.parent === id), closed = s.tc[id];
+    return `<div class="tn ${closed ? 'closed' : ''} ${s.dept === id ? 'sel' : ''}"><span class="tw2" ${kids.length ? `data-a="og-tw" data-v="${id}"` : ''}>${kids.length ? I('down') : ''}</span><div class="g" data-a="og-dept" data-v="${id}"><b>${d.n}</b><small>${pa(d.lead, 'round').replace('class="av', 'style="width:16px;height:16px;font-size:7px" class="av')}${nm(d.lead)}</small></div><span class="cnt">${orgCount(s.org, id)}</span></div>${kids.length && !closed ? `<div class="tkids">${kids.map(k => treeH(s, k.id, depth + 1)).join('')}</div>` : ''}`; };
+  const t7 = {
+    init: () => ({ org: JSON.parse(JSON.stringify(ORG0)), pf: 'all', pc: {}, dept: 'lfk', person: 'ОЧ', tc: {}, adm: { sheet: false, n: { name: 'Массаж', parent: 'reh', lead: 'ТВ', people: ['ТВ'], chat: true, mention: 'leads' } }, mt: { stage: 'suggest', msgs: [] } }),
     phones: [
-      { id: 'A', label: 'Вариант А — сетка по дням', cap: '<b>Вся неделя на одном экране.</b> Строки — залы, столбцы — дни, в ячейке утро и день. Пунктир — свободно, синее — ваше, жёлтое — вы отдаёте. Нажмите на ячейку: «Записаться», «Отдать слот» или кто занял. Для администратора и тех, кто планирует неделю.', r: s => `<div class="phone white">${st}${boardHead(s)}
-        <div class="list" data-scroll="l" style="background:var(--canvas)"><div class="sg"><div></div>${DAYS.map(([d, n]) => `<div class="dh">${d}<b>${n}</b></div>`).join('')}
-        ${HALLS.map(([h, hn], hi) => `${hi ? '<div class="sep"></div>' : ''}<div class="hl">${hn}<small>утро<br>день</small></div>${DAYS.map((_, d) => `<div class="sc">${[0, 1].map(t => shCell(s.slots.find(x => x.id === `${h}-${d}-${t}`))).join('')}</div>`).join('')}`).join('')}</div>
-        <div class="sgnote">Утро 9:00–13:00, день 13:00–17:00. Буквы — инициалы занявшего.</div>
-        <div class="sect">Мои слоты</div>${s.slots.filter(x => x.who === 'ИЛ').map(x => `<div class="sc2 mine" data-a="sl-open" data-id="${x.id}"><div class="g"><b>${hallN(x.h)}</b><small>${DAYS[x.d][0]}, ${DAYS[x.d][1]} · ${TIMES[x.t]}${x.offer ? ' · <span class="warnc">отдаю</span>' : ''}</small></div>${I('right', 'color:var(--muted)')}</div>`).join('')}</div>
-        ${s.sheet && s.sheet.ph === 'A' ? slotSheet(s, 'A') : ''}${toastH(s, 'A')}</div>` },
-      { id: 'B', label: 'Вариант Б — лента по дню', cap: '<b>Один день — список карточек</b>, крупно и с кнопкой «Записаться» прямо в карточке. Над списком — дни недели, жёлтая цифра — сколько свободно. Удобнее с телефона «на бегу». Данные общие с вариантом А — записались здесь, видно там.', r: s => {
-        const L = s.slots.filter(x => x.d === s.day).sort((a, b) => a.t - b.t || HALLS.findIndex(h => h[0] === a.h) - HALLS.findIndex(h => h[0] === b.h));
-        const card = x => { const me = x.who === 'ИЛ';
-          if (!x.who) return `<div class="sc2 free" data-a="sl-open" data-id="${x.id}"><span class="hx">${I('door')}</span><div class="g"><b>${hallN(x.h)}</b><small class="warnc">свободно</small></div><button class="btn sm pri" data-a="sl-take1" data-id="${x.id}">Записаться</button></div>`;
-          return `<div class="sc2 ${me ? 'mine' : ''}" data-a="sl-open" data-id="${x.id}">${me ? `<span class="hx" style="background:var(--primary);color:var(--on-primary)">${I('check')}</span>` : pa(x.who, 'm round')}<div class="g"><b>${hallN(x.h)}</b><small>${me ? (x.offer ? 'вы · <span class="warnc">отдаёте</span>' : 'вы') : nm(x.who)}</small></div>${me && !x.offer ? `<button class="btn sm sec" data-a="sl-give1" data-id="${x.id}">Отдать</button>` : ''}</div>`; };
-        return `<div class="phone white">${st}${chead('Слоты на неделю', 'Доска · 14 участников', av('СН', 'c2', 'm'), `<button class="ib">${I('more')}</button>`)}
-          <div class="dys">${DAYS.map(([d, n], i) => { const f = s.slots.filter(x => x.d === i && !x.who).length; return `<div class="dy ${s.day === i ? 'on' : ''}" data-a="sl-day" data-v="${i}">${d}<b>${n}</b>${f ? `<i>${f}</i>` : ''}</div>`; }).join('')}</div>
-          <div class="list" data-scroll="l" style="background:var(--canvas)">${TIMES.map((tm, t) => `<div class="tsec">${t ? 'День' : 'Утро'} · ${tm}</div>${L.filter(x => x.t === t).map(card).join('')}`).join('')}</div>
-          ${s.sheet && s.sheet.ph === 'B' ? slotSheet(s, 'B') : ''}${toastH(s, 'B')}</div>`;
+      { id: 'A', label: 'Люди: группировка по отделам', cap: '<b>Живой.</b> «Ещё → Люди». Чипы сверху — фильтр по отделу, ниже — группы, сворачиваются. У руководителя метка «рук.». Нажатие на заголовок отдела открывает его карточку (второй телефон), на человека — карточку человека (третий).', r: s => {
+        const D = s.org.filter(d => d.id !== 'root' && d.id !== 'reh' && (s.pf === 'all' || d.id === s.pf || d.parent === s.pf));
+        return `<div class="phone white">${st}${chead('Люди', '16 человек · 6 отделов', '', `<button class="ib">${I('search')}</button>`)}
+          <div class="folders" style="background:var(--surface);padding-top:10px">${[['all', 'Все'], ...s.org.filter(d => d.id !== 'root' && d.id !== 'reh').map(d => [d.id, d.n])].map(([k, n]) => `<button class="fd" aria-selected="${s.pf === k}" data-a="og-pf" data-v="${k}">${n}</button>`).join('')}</div>
+          <div class="list" data-scroll="l">${s.pf === 'all' ? `<div class="dhd" data-a="og-dept" data-v="root">${dsq()}<div class="g"><b>${s.org[0].n}</b><small>${nm(s.org[0].lead)} · ${PP[s.org[0].lead][2]}</small></div>${I('right')}</div>` : ''}
+          ${D.map(d => `<div class="dhd ${s.pc[d.id] ? 'closed' : ''}"><span data-a="og-dept" data-v="${d.id}" style="display:contents">${dsq()}<div class="g"><b>${d.n}</b><small>${pathOf(s.org, d.id) || 'верхний уровень'} · ${d.people.length} чел.</small></div></span><button class="ib" style="width:32px;height:32px" data-a="og-pc" data-v="${d.id}">${I('down', 'width:16px;height:16px;color:var(--muted)')}</button></div>${s.pc[d.id] ? '' : [d.lead, ...d.people.filter(k => k !== d.lead)].filter(k => d.people.includes(k)).map(k => prow(k, 'og-p', k === d.lead ? '<span class="lead">рук.</span>' : '')).join('')}`).join('')}</div>${toastH(s, 'A')}</div>`;
       } },
-      { id: 'C', label: 'Замена и напоминание · Олег', cap: '<b>Глазами того, кому отдают слот.</b> Карточка-предложение с «Беру / Не могу». Если отдать свой слот Олегу в варианте А или Б — здесь появится ещё одно предложение. Внизу — напоминание накануне: в 18:00 пуш и личная карточка.', r: s => {
-        const me = 'ОЧ';
-        const offerCard = (from, x, key, st, note) => { const head = `<div class="tk-h">${I('swap')}Передача слота${st === 'accepted' ? '<span class="pill ok">Принято</span>' : st === 'waitadm' ? '<span class="pill wr">Ждём Марину</span>' : st === 'declined' ? '<span class="pill">Отказ</span>' : '<span class="pill wr">Вам</span>'}</div>`;
-          return inMsg(from, `${head}<div style="margin:6px 0 2px">${first(from)} предлагает вам слот${note ? `: «${esc(note)}»` : ''}</div><div class="slotbox">${I('cal')}<div><b>${hallN(x.h)}</b><small>${DAYS[x.d][0]}, ${DAYS[x.d][1]} ноября · ${TIMES[x.t]}</small></div></div>
-            ${st === 'offered' ? `<div class="tk-a"><button class="btn sm pri" data-a="ol-acc" data-k="${key}">${I('check', 'width:15px;height:15px;vertical-align:-3px')} Беру</button><button class="btn sm sec" data-a="ol-dec" data-k="${key}">Не могу</button></div>` : st === 'accepted' ? `<div class="ackdone">${I('check')}Слот ваш. ${first(from)} получил(а) уведомление</div>` : st === 'waitadm' ? `<div class="acs">Вы согласились. Слот перейдёт к вам, когда Марина подтвердит.</div>` : `<div class="acs">Вы отказались — ${first(from)} предложит другим</div>`}`, '9:' + (key === 'pre' ? '05' : '41'), { obj: 1 }); };
-        const pre = s.slots.find(x => x.id === 'pool-3-1');
-        const my = s.slots.find(x => x.offer && x.offer.to === 'ОЧ');
-        const accepted = s.slots.find(x => x.acceptedBy === 'ОЧ');
-        return `<div class="phone">${st}${chead('Слоты на неделю', '14 участников · 5 в сети', av('СН', 'c2', 'm'))}<div class="strip">${I('grid')}<span><b>Доска 16–20 ноября</b> · свободно ${s.slots.filter(x => !x.who).length} из 30</span>${I('right', 'color:var(--muted)')}</div>
-          <div class="feed" data-scroll="feed">${day('Пятница')}${inMsg('МС', 'Доска на следующую неделю открыта, записывайтесь до воскресенья.<div class="card"><b>Слоты · 16–20 ноября</b><p>Занято 25 из 30</p><div class="prog"><i style="width:83%"></i></div><div class="acts"><button class="btn sm pri">Открыть доску</button></div></div>', '12:00')}
-          ${offerCard('АИ', pre, 'pre', s.oleg.pre, 'в четверг на выезде')}
-          ${s.oleg.pre === 'accepted' ? sysl('<b>Олег</b> принял слот у <b>Анны</b>: бассейн, чт 19, день') : ''}
-          ${my ? offerCard('ИЛ', my, 'mine', 'offered', my.offer.note) : ''}${accepted ? offerCard('ИЛ', accepted, 'x', accepted.admWait ? 'waitadm' : 'accepted') : ''}
-          ${day('Сегодня')}${inMsg('', `<div class="tk-h">${I('bell')}Напоминание · завтра</div><div style="margin:6px 0 2px">Завтра ваш слот. Ключи — на стойке администратора.</div><div class="slotbox">${I('cal')}<div><b>Малый зал</b><small>вт, 17 ноября · 9:00–13:00</small></div></div><div class="tk-a"><button class="btn sm sec" data-a="ol-ok">Ок</button><button class="btn sm sec">${I('swap', 'width:15px;height:15px;vertical-align:-3px')} Не смогу — отдать</button></div>`, '18:00', { obj: 1, avh: `<div class="av s round" style="background:var(--mascot-plate);border:1px solid var(--border)">${mascot(13, 15)}</div>`, name: 'Coma', color: 'var(--primary)', tag: ' <span class="pill" style="font-size:10px;padding:1px 6px">только вам</span>' })}
-          </div>${composer()}${toastH(s, 'C')}</div>`;
+      { id: 'B', label: 'Карточка отдела', cap: '<b>Живой.</b> Руководитель, к чему относится, подотделы, сотрудники. Кнопки: чат отдела, «Запрос отделу» (адресат — весь отдел), «Задача». Нажмите «Входит в» или подотдел — перейдёте по структуре.', r: s => {
+        const d = s.org.find(x => x.id === s.dept), kids = s.org.filter(x => x.parent === d.id), par = s.org.find(x => x.id === d.parent);
+        return `<div class="phone">${st}${chead('', '', '', `<button class="ib">${I('edit')}</button>`, par ? `data-a="og-dept" data-v="${par.id}"` : '')}<div class="list" data-scroll="l"><div class="ihead"><span class="dsq big">${I('org')}</span><b>${d.n}</b><small>${par ? (pathOf(s.org, d.id) ? pathOf(s.org, d.id) + ' · ' : '') : ''}${orgCount(s.org, d.id)} ${plw(orgCount(s.org, d.id), 'сотрудник', 'сотрудника', 'сотрудников')}</small></div>
+          <div class="iacts three"><div data-a="og-t" data-v="Откроется чат «${d.n}»">${I('chat')}Чат отдела</div><div data-a="og-t" data-v="Запрос с адресатом «отдел ${d.n}»">${I('req')}Запрос</div><div data-a="og-t" data-v="Задача сотруднику отдела">${I('sq')}Задача</div></div>
+          <div class="igrp"><div class="kv" data-a="og-p" data-v="${d.lead}">${pa(d.lead, 'm round')}<div class="g">${nm(d.lead)}<small>руководитель · ${PP[d.lead][2]}</small></div>${I('right')}</div>${par ? `<div class="kv" data-a="og-dept" data-v="${par.id}">${dsq()}<div class="g">${par.n}<small>входит в</small></div>${I('right')}</div>` : ''}</div>
+          ${kids.length ? `<div class="igrp"><div class="gh">Подотделы · ${kids.length}</div>${kids.map(k => `<div class="kv" data-a="og-dept" data-v="${k.id}">${dsq()}<div class="g">${k.n}<small>${nm(k.lead)} · ${orgCount(s.org, k.id)} чел.</small></div>${I('right')}</div>`).join('')}</div>` : ''}
+          ${d.people.filter(k => k !== d.lead).length ? `<div class="igrp"><div class="gh">Сотрудники · ${d.people.filter(k => k !== d.lead).length}</div>${d.people.filter(k => k !== d.lead).map(k => prow(k)).join('')}</div>` : ''}</div>${toastH(s, 'B')}</div>`;
       } },
-      { id: 'D', label: 'Администратор: незакрытые и шаблон', cap: '<b>Вид администратора.</b> Сводка недели, незакрытые слоты с «Позвать» (пишет в чат с упоминанием свободных) и «Назначить». Передачи, ждущие согласия, — здесь же. «Создать неделю» — шаблон залов и часов, опубликовать одной кнопкой.', r: s => {
-        const free = s.slots.filter(x => !x.who), wait = s.slots.filter(x => x.admWait);
-        const tpl = [['Большой зал', 'пн–пт · 9–13, 13–17', 10, 1], ['Малый зал', 'пн–пт · 9–13, 13–17', 10, 1], ['Бассейн', 'пн–пт · 9–13, 13–17', 10, 1], ['Зал ЛФК 2', 'вт, чт · 9–13', 2, 0]];
-        const n = tpl.filter((x, i) => s.adm['t' + i] ?? x[3]).reduce((a, x) => a + x[2], 0);
-        return `<div class="phone">${st}${chead('Слоты на неделю', 'Управление · вы администратор', av('СН', 'c2', 'm'), `<button class="ib">${I('gear')}</button>`)}
-          <div class="list" data-scroll="l"><div class="wk" style="background:transparent"><button class="ib">${I('back')}</button><b>${s.adm.week === '23–27' ? '23–27 ноября' : '16–20 ноября'}</b><button class="ib">${I('right')}</button></div>
-          ${s.adm.week === '23–27' ? `<div class="stat3"><div><b>30</b>слотов</div><div class="w"><b>30</b>свободно</div><div><b>0</b>передач</div></div><div class="cap" style="padding:0 14px">Доска опубликована в «Слоты на неделю». Запись открыта до воскресенья, 20:00.</div><div style="padding:0 14px"><button class="btn sec" data-a="ad-wk">Вернуться к 16–20 ноября</button></div>` : `
-          <div class="stat3"><div><b>${30 - free.length}</b>из 30 занято</div><div class="w"><b>${free.length}</b>свободно</div><div><b>${wait.length}</b>ждут вас</div></div>
-          ${wait.length ? `<div class="tsec">Ждут вашего согласия</div>${wait.map(x => `<div class="sc2"><span class="hx">${I('swap')}</span><div class="g"><b>${first('ИЛ')} → ${first(x.acceptedBy)}</b><small>${slotT(x)}</small></div><button class="btn sm pri" data-a="ad-ok" data-id="${x.id}">Да</button></div>`).join('')}` : ''}
-          <div class="tsec">Незакрытые слоты</div>${free.map(x => `<div class="sc2 free wrap"><span class="hx">${I('door')}</span><div class="g"><b>${hallN(x.h)}</b><small>${DAYS[x.d][0]}, ${DAYS[x.d][1]} · ${TIMES[x.t]}</small></div><div class="sc2a">${s.adm.called[x.id] ? '<span class="pill ok" style="align-self:center">позвали в чат</span>' : `<button class="btn sm sec" data-a="ad-call" data-id="${x.id}">${I('at', 'width:15px;height:15px;vertical-align:-3px')} Позвать</button>`}<button class="btn sm sec" data-a="ad-assign" data-id="${x.id}">Назначить</button></div></div>`).join('') || '<div class="cap" style="padding:0 16px">Все слоты закрыты 🎉</div>'}
-          <div style="padding:4px 12px 16px"><button class="btn" data-a="ad-new">${I('plus')}Создать неделю 23–27 ноября</button></div>`}</div>
-          ${s.adm.sheet ? sheet(`<h2><span>Неделя 23–27 ноября</span></h2><div class="lbl" style="margin-top:0">Шаблон</div><div class="chips">${chip(true, 'Обычная неделя', 'noop')}${chip(false, 'Короткая (пн–чт)', 'noop')}${chip(false, '+ Новый', 'noop')}</div>
-            <div class="lbl">Залы и часы</div>${tpl.map(([a, b, c, def], i) => { const on = s.adm['t' + i] ?? def; return `<div class="tpl" data-a="ad-t" data-k="${i}">${cb(on)}<div class="g">${a}<small>${b}</small></div><span class="pill">${c}</span></div>`; }).join('')}
-            <div class="opt" style="margin-top:8px"><div class="g">Закрепить постоянные слоты<small>кто ходит каждую неделю — записан сразу</small></div>${tg(s.adm.keep, 'ad-keep')}</div>
-            <div class="opt"><div class="g">Открыть запись<small>сразу после публикации</small></div><span class="pill pr">сейчас ▾</span></div>
-            <button class="btn pri" data-a="ad-pub">Опубликовать ${n} слотов</button>`, 'ad-close') : ''}${toastH(s, 'D')}</div>`;
+      { id: 'C', label: 'Карточка человека', cap: '<b>Живой.</b> Должность, отдел и руководитель — ссылками: можно пройти вверх по структуре. У руководителя — его люди. Ниже — общие чаты.', r: s => {
+        const k = s.person, d = deptOf(s.org, k), boss = bossOf(s.org, k), subs = s.org.filter(x => x.lead === k).flatMap(x => x.people).filter(x => x !== k);
+        return `<div class="phone">${st}${chead('', '', '', `<button class="ib">${I('more')}</button>`)}<div class="list" data-scroll="l"><div class="ihead">${pa(k, 'round', '<span class="on"></span>').replace('class="av', 'style="width:72px;height:72px;font-size:24px;margin-bottom:8px" class="av')}<b>${nm(k)}</b><small>${PP[k][2]} · в сети</small></div>
+          <div class="iacts three"><div data-a="og-t" data-v="Откроется личный чат">${I('chat')}Написать</div><div data-a="og-t" data-v="Запрос одному человеку">${I('req')}Запрос</div><div data-a="og-t" data-v="Задача на этого человека">${I('sq')}Задача</div></div>
+          <div class="igrp"><div class="kv" data-a="og-dept" data-v="${d.id}">${dsq()}<div class="g">${d.n}<small>отдел${pathOf(s.org, d.id) ? ' · ' + pathOf(s.org, d.id) : ''}</small></div>${I('right')}</div>${boss ? `<div class="kv" data-a="og-p" data-v="${boss}">${pa(boss, 'm round')}<div class="g">${nm(boss)}<small>руководитель</small></div>${I('right')}</div>` : ''}</div>
+          ${subs.length ? `<div class="igrp"><div class="gh">Подчинённые · ${subs.length}</div>${subs.slice(0, 4).map(x => prow(x)).join('')}</div>` : ''}
+          <div class="igrp"><div class="ili">${I('chat')}<span>Общие чаты</span><small>4</small></div><div class="ili">${I('image')}<span>Файлы в переписке</span><small>12</small></div></div></div>${toastH(s, 'C')}</div>`;
+      } },
+      { id: 'D', label: 'Дерево оргструктуры', cap: '<b>Живой.</b> Компактное дерево: отступ и линия — вложенность, справа — сколько людей (со вложенными), под названием — руководитель. Стрелка сворачивает ветку, нажатие на название открывает карточку отдела.', r: s => `<div class="phone white">${st}${chead('Оргструктура', s.org[0].n, '', `<button class="ib">${I('search')}</button>`)}<div class="list" data-scroll="l"><div class="tree">${treeH(s, 'root')}</div><div class="cap" style="padding:0 16px">Число — сотрудники вместе с подотделами.</div></div>${toastH(s, 'D')}</div>` },
+      { id: 'E', label: 'Администратор: настройки пространства', cap: '<b>Живой.</b> «Ещё → Настройки пространства → Оргструктура». Список отделов с вложенностью; «+ Отдел» — шторка: название, куда входит, руководитель, сотрудники (переносятся из прежнего отдела), чат отдела, кто может упоминать @отдел. Создайте — отдел появится в дереве и в «Людях».', r: s => {
+        const n = s.adm.n, flat = (id, dp) => { const d = s.org.find(x => x.id === id); return [`<div class="kv" style="padding-left:${14 + dp * 18}px">${dsq()}<div class="g">${d.n}<small>${nm(d.lead)} · ${orgCount(s.org, id)} чел.</small></div>${I('drag')}</div>`, ...s.org.filter(x => x.parent === id).flatMap(x => flat(x.id, dp + 1))]; };
+        const sh = s.adm.sheet ? sheet(`<h2><span>Новый отдел</span></h2><input class="fi" style="width:100%" data-bind="adm.n.name" value="${esc(n.name)}" placeholder="Название">
+          <div class="lbl">Входит в</div><div class="chips">${s.org.filter(d => !['lfk', 'pool', 'mech'].includes(d.id)).map(d => chip(n.parent === d.id, d.id === 'root' ? 'верхний уровень' : d.n, 'oa-par', d.id)).join('')}</div>
+          <div class="lbl">Сотрудники</div><div class="chips">${['ТВ', 'НК', 'ГР', 'ЮС'].map(k => `<span class="chip ${n.people.includes(k) ? 'on' : ''}" data-a="oa-pp" data-v="${k}">${first(k)} <small style="opacity:.6">· ${deptOf(s.org, k).n}</small></span>`).join('')}</div>
+          <div class="lbl">Руководитель</div><div class="chips">${n.people.length ? n.people.map(k => chip(n.lead === k, first(k), 'oa-lead', k)).join('') : '<span class="cap" style="margin:0">Сначала добавьте сотрудников</span>'}</div>
+          <div class="opt" style="margin-top:8px"><div class="g">Создать чат отдела<small>участники — по составу отдела, сами обновляются</small></div>${tg(n.chat, 'oa-chat')}</div>
+          <div class="lbl">Кто может упоминать @отдел</div><div class="chips">${[['all', 'все'], ['leads', 'руководители и админы'], ['none', 'никто']].map(([k, l]) => chip(n.mention === k, l, 'oa-men', k)).join('')}</div>
+          <button class="btn pri" data-a="oa-go">Создать отдел</button>`, 'oa-close') : '';
+        return `<div class="phone">${st}${chead('Оргструктура', 'Настройки пространства · вы администратор', '', '')}<div class="list" data-scroll="l"><div class="igrp" style="margin-top:0">${flat('root', 0).join('')}</div>
+          <div style="padding:10px 14px"><button class="btn" data-a="oa-new">${I('plus')}Отдел</button></div><div class="cap" style="padding:0 16px">Перетащите отдел, чтобы поменять вложенность. Человек может быть только в одном отделе.</div></div>${sh}${toastH(s, 'E')}</div>`;
+      } },
+      { id: 'F', label: '@отдел в чате', cap: '<b>Живой.</b> В подсказке после «@» сначала отделы (с числом участников этого чата из отдела), потом люди. Упоминание отдела уведомляет только тех его сотрудников, кто есть в чате. Право упоминать — в настройках отдела.', r: s => {
+        const m = s.mt, lfkHere = allIn(s.org, 'lfk').filter(k => CHAT9.includes(k)).length;
+        const sug = m.stage === 'suggest' ? `<div class="sug"><div class="tsec" style="padding:6px 8px 4px">Отделы</div>${[['lfk', lfkHere], ['pool', 2]].map(([id, c]) => `<div class="su" data-a="om-pick" data-v="${id}">${dsq()}<div class="g">@${deptN(id, s.org)}<small>${c} ${plw(c, 'человек', 'человека', 'человек')} из отдела в этом чате</small></div></div>`).join('')}<div class="tsec" style="padding:6px 8px 4px">Люди</div><div class="su" data-a="om-pick" data-v="АИ">${pa('АИ', 'm round')}<div class="g">Анна Иванова<small>${PP['АИ'][2]}</small></div></div></div>` : '';
+        const label = m.who ? (m.who === 'АИ' ? 'Анна' : deptN(m.who, s.org)) : '';
+        const txt = m.stage === 'picked' ? `<span class="ment">@${label}</span> завтра в 8:30 короткая планёрка` : m.stage === 'suggest' ? '@' : '';
+        return `<div class="phone">${st}${chead(CH, '9 участников · 4 в сети', av('ИЗ', 'c1', 'm'))}<div class="feed" data-scroll="feed">${day('Сегодня')}${inMsg('ОЧ', 'Маты в малом зале разложил.', '9:02')}${m.msgs.map(x => meMsg(`<span class="ment">@${x.l}</span> завтра в 8:30 короткая планёрка`, '9:41') + (x.d ? sysl(`Уведомлены ${x.c} ${plw(x.c, 'человек', 'человека', 'человек')} из отдела «${x.l}» · видно только вам`) : '')).join('')}</div>
+          <div class="cmp"><div class="cl"><button class="ib soft">${I('plus')}</button><div class="inp"><div class="txt ${txt ? '' : 'phd'}">${txt || 'Сообщение'}</div><button class="ib">${I('smile')}</button></div><button class="ib ${txt && m.stage === 'picked' ? 'pri' : 'soft'}" data-a="${m.stage === 'picked' ? 'om-send' : 'om-reset'}">${I(m.stage === 'picked' ? 'up' : 'at')}</button></div>${sug}</div>${toastH(s, 'F')}</div>`;
       } },
     ],
     on: {
-      'sl-open': (s, d, el) => { s.sheet = { ph: el.closest('[data-ph]').dataset.ph, id: d.id, step: 'info', to: 'ОЧ', note: '', adm: false }; },
-      'sl-close': s => s.sheet = null, 'sl-back': s => s.sheet.step = 'info', 'sl-day': (s, d) => s.day = +d.v,
-      'sl-take': s => { const x = s.slots.find(x => x.id === s.sheet.id); x.who = 'ИЛ'; const ph = s.sheet.ph; s.sheet = null; toast(s, ph, 'Вы записаны. Напомним накануне в 18:00'); },
-      'sl-take1': (s, d, el, ev) => { ev.stopPropagation(); const x = s.slots.find(x => x.id === d.id); x.who = 'ИЛ'; toast(s, 'B', 'Вы записаны. Напомним накануне в 18:00'); },
-      'sl-give': s => s.sheet.step = 'give', 'sl-give1': (s, d, el, ev) => { ev.stopPropagation(); s.sheet = { ph: 'B', id: d.id, step: 'give', to: 'ОЧ', note: '', adm: false }; },
-      'sl-to': (s, d) => s.sheet.to = d.v, 'sl-adm': s => s.sheet.adm = !s.sheet.adm,
-      'sl-offer': s => { const x = s.slots.find(x => x.id === s.sheet.id); x.offer = { to: s.sheet.to, note: s.sheet.note, adm: s.sheet.adm }; const ph = s.sheet.ph, to = s.sheet.to; s.sheet = null; toast(s, ph, to === '__all' ? 'Предложили всем в чате. Слот ваш, пока кто-то не возьмёт' : `${first(to)} получит предложение. Слот ваш, пока не согласится`, 'swap'); },
-      'sl-recall': s => { const x = s.slots.find(x => x.id === s.sheet.id); x.offer = null; s.sheet = null; },
-      'ol-acc': (s, d) => { if (d.k === 'pre') { s.oleg.pre = 'accepted'; s.slots.find(x => x.id === 'pool-3-1').who = 'ОЧ'; toast(s, 'C', 'Слот ваш. Анна получила уведомление'); return; }
-        const x = s.slots.find(x => x.offer && x.offer.to === 'ОЧ'); x.acceptedBy = 'ОЧ'; if (x.offer.adm) x.admWait = true; else x.who = 'ОЧ'; x.offer = null; toast(s, 'C', x.admWait ? 'Ждём согласия Марины' : 'Слот ваш. Игорь получил уведомление'); },
-      'ol-dec': (s, d) => { if (d.k === 'pre') s.oleg.pre = 'declined'; else { const x = s.slots.find(x => x.offer && x.offer.to === 'ОЧ'); x.offer = null; } },
-      'ol-ok': s => toast(s, 'C', 'Хорошо, до завтра'),
-      'ad-call': (s, d) => { s.adm.called[d.id] = 1; toast(s, 'D', 'В чат ушло: «Свободен слот…» с упоминанием свободных в это время', 'at'); },
-      'ad-assign': (s, d) => { const x = s.slots.find(x => x.id === d.id); x.who = ['СК', 'ОБ', 'ПМ', 'ТВ', 'НК'].find(k => !busyAt(s, k, x.d, x.t)) || 'СК'; toast(s, 'D', `Назначили: ${nm(x.who)}. Ему(ей) придёт уведомление`); },
-      'ad-ok': (s, d) => { const x = s.slots.find(x => x.id === d.id); x.who = x.acceptedBy; x.admWait = false; toast(s, 'D', 'Замена подтверждена'); },
-      'ad-new': s => s.adm.sheet = true, 'ad-close': s => s.adm.sheet = false, 'ad-t': (s, d) => { const k = 't' + d.k; s.adm[k] = !(s.adm[k] ?? (d.k !== '3')); }, 'ad-keep': s => s.adm.keep = !s.adm.keep,
-      'ad-pub': s => { s.adm.sheet = false; s.adm.week = '23–27'; toast(s, 'D', 'Опубликовано в «Слоты на неделю»'); }, 'ad-wk': s => s.adm.week = '16–20',
+      'og-pf': (s, d) => s.pf = d.v, 'og-pc': (s, d) => s.pc[d.v] = !s.pc[d.v], 'og-tw': (s, d) => s.tc[d.v] = !s.tc[d.v],
+      'og-dept': (s, d, el) => { s.dept = d.v; const ph = el.closest('[data-ph]').dataset.ph; if (ph !== 'B') toast(s, ph, `Открыта карточка «${deptN(d.v, s.org)}» — второй телефон`, 'org'); },
+      'og-p': (s, d, el) => { s.person = d.v; const ph = el.closest('[data-ph]').dataset.ph; if (ph !== 'C') toast(s, ph, `Открыта карточка: ${nm(d.v)} — третий телефон`, 'user'); },
+      'og-t': (s, d, el) => toast(s, el.closest('[data-ph]').dataset.ph, d.v, 'check'),
+      'oa-new': s => s.adm.sheet = true, 'oa-close': s => s.adm.sheet = false, 'oa-par': (s, d) => s.adm.n.parent = d.v, 'oa-lead': (s, d) => s.adm.n.lead = d.v,
+      'oa-pp': (s, d) => { const p = s.adm.n.people, i = p.indexOf(d.v); if (i >= 0) p.splice(i, 1); else p.push(d.v); if (!p.includes(s.adm.n.lead)) s.adm.n.lead = p[0] || ''; },
+      'oa-chat': s => s.adm.n.chat = !s.adm.n.chat, 'oa-men': (s, d) => s.adm.n.mention = d.v,
+      'oa-go': s => { const n = s.adm.n; if (!n.name.trim() || !n.people.length) { toast(s, 'E', 'Нужны название и хотя бы один сотрудник', 'x'); return; }
+        s.org.forEach(d => d.people = d.people.filter(k => !n.people.includes(k))); const id = 'n' + s.org.length; s.org.push({ id, n: n.name.trim(), lead: n.lead || n.people[0], parent: n.parent, people: [...n.people] });
+        s.adm.sheet = false; s.dept = id; toast(s, 'E', `Отдел «${n.name.trim()}» создан${n.chat ? ', чат отдела тоже' : ''}`, 'org'); },
+      'om-pick': (s, d) => { s.mt.stage = 'picked'; s.mt.who = d.v; },
+      'om-send': s => { const w = s.mt.who, dept = w !== 'АИ'; s.mt.msgs.push({ l: dept ? deptN(w, s.org) : 'Анна', d: dept, c: dept ? (w === 'lfk' ? allIn(s.org, 'lfk').filter(k => CHAT9.includes(k)).length : 2) : 0 }); s.mt.stage = 'sent'; s.bottom = 'F'; later(s, 1600, () => s.mt.stage = 'suggest'); },
+      'om-reset': s => s.mt.stage = 'suggest',
     },
     notes: notes(
-      'Администратор раз в неделю создаёт доску из шаблона (залы × дни × часы) — она закрепляется в чате «Слоты на неделю». Инструктор записывается одной кнопкой; свой слот может отдать: конкретному свободному коллеге или «всем», с согласием администратора или без. Пока замену не подтвердили, слот за ним. Накануне в 18:00 — пуш и личная карточка «Завтра ваш слот». Администратор видит незакрытые, зовёт в чат или назначает. <b>Вариант А</b> лучше для планирования и администратора, <b>Б</b> — для инструктора с телефона. Можно оба: А по умолчанию у админа, Б у остальных, переключатель в шапке.',
-      'Сущности <code>slot_boards(chat_id, week)</code>, <code>slots(board_id, place, starts_at, ends_at, assignee_id)</code>, <code>slot_offers(slot_id, from, to|all, needs_admin, status)</code>, <code>slot_templates</code>; запись атомарная (двое нажали одновременно — второму «уже занято»); роли в чате (администратор слотов); события по сокету; планировщик напоминаний накануне; системные сообщения в ленте. Самая крупная из шести функций — это уже маленькое расписание.',
-      '1) Нужно ли согласие администратора при передаче всегда, иногда (переключатель) или никогда? 2) Ограничения: максимум слотов в неделю на человека, нельзя два зала одновременно (сейчас — подсказка «занят»)? 3) Слоты разной длины («полдня» и «час») — или всегда фиксированные блоки из шаблона? 4) Кто видит доску — весь чат или только инструкторы? 5) Нужна ли выгрузка недели (табель)? 6) Вариант А, Б или оба?'),
+      'Администратор задаёт оргструктуру в настройках пространства: отделы с вложенностью, руководитель, сотрудники (человек — в одном отделе), чат отдела с автосоставом. Сотрудники видят отделы в «Людях» (фильтр и группы), в карточке отдела и в карточке человека (отдел, должность, руководитель), дерево — в «Ещё → Оргструктура». Отдел — адресат: «Запрос отделу», задача сотруднику, <b>@отдел</b> в чате. <b>Про @отдел:</b> нужен, но аккуратно — уведомляет только тех сотрудников отдела, кто есть в этом чате; кто может упоминать — настройка отдела (по умолчанию руководители и админы), чтобы не было «@все» на 50 человек.',
+      '<code>departments(id, space_id, parent_id, name, lead_user_id, chat_id, mention_policy)</code>, у пользователя <code>department_id</code>, <code>title</code> (должность); руководитель человека вычисляется: руководитель его отдела, а если он сам руководитель — руководитель родительского. Ручки CRUD для админа, дерево одним запросом; чат отдела синхронизирует участников при переносе; раскрытие адресата «отдел» (со вложенными) для запросов и упоминаний; поиск по отделу и должности. Права «кто чей руководитель» пригодятся для задач и запросов.',
+      '1) Может ли человек быть в двух отделах (совместители)? Сейчас — нет. 2) Чат отдела создавать автоматически или по галочке? 3) @отдел — кто может по умолчанию: все, руководители или только админы? 4) Оргструктуру видят все сотрудники или только руководители? 5) Нужен ли импорт структуры из таблицы для первого заполнения?'),
   };
-
   /* ======================================================================
      6. СТАТУС «ОТСУТСТВУЮ»
      ====================================================================== */
@@ -1027,65 +1165,72 @@
   };
 
   /* ======================================================================
-     РЕКОМЕНДАЦИЯ
+     РЕКОМЕНДАЦИЯ (v2)
      ====================================================================== */
   const dots = n => `<span class="dots">${'●'.repeat(n)}<s>${'●'.repeat(5 - n)}</s></span>`;
   const recView = () => `<div class="rec2">
-    <div class="pn wide"><h3>Рекомендация: первая волна — подтверждение, «напомнить мне», слоты (MVP)</h3>
-      <p>Для реабцентра главная организационная боль — <b>слоты</b>: сейчас это сообщение «кто возьмёт?» и ручной учёт у администратора. Но слоты — самая крупная работа, и по ним нужен выбор варианта и ответы на вопросы. Поэтому:</p>
-      <ul><li><b>Волна 1 (2–3 недели):</b> «Подтверждение ознакомления» и «Напомнить мне». Обе маленькие на сервере, опираются на то, что уже есть (сбор отметок у агентов, планировщик отложенных, push-relay). Сразу дают администратору контроль над регламентами, а сотрудникам — личные напоминания. Параллельно показываем клиенту два варианта доски слотов.</li>
-      <li><b>Волна 2 (3–4 недели):</b> «Слоты» MVP — доска, запись, «отдать слот» с согласием коллеги, напоминание накануне, шаблон недели. Без табеля и ограничений — их добавим по отзывам.</li>
-      <li><b>Волна 3:</b> «Опросы» и «Статус „отсутствую“» — дешёвые, но менее срочные.</li>
-      <li><b>Позже, по запросу:</b> «Задачи». Риск превратить мессенджер в таск-трекер; начать можно с одного чек-листа в сообщении — он дешевле и закрывает «подготовить зал».</li></ul>
-      <p>Сквозное решение для всех волн: <b>вкладка «Важные» становится личным ящиком</b> — «Ждут вас» (подтверждения, опросы), «Сохранённые», «Напоминания», «Задачи». Новая вкладка внизу не нужна.</p></div>
-    <div class="pn wide"><h3>Сравнение</h3><div class="tw"><table class="mtx"><tr><th>Функция</th><th>Польза для реабцентра</th><th>Объём (сервер + клиент)</th><th>Опора на готовое</th><th>Волна</th></tr>
-      <tr><td>Подтверждение ознакомления</td><td>${dots(5)}</td><td>${dots(2)}</td><td>сбор отметок агента, сокет</td><td><span class="pill ok">1</span></td></tr>
+    <div class="pn wide"><h3>Версия 2 · что изменилось по решениям владельца</h3><ul>
+      <li><b>Меню «+»</b> пересобрано: вложения сверху, ниже действия «Запрос», «Опрос», «Задача» с подсказками, агент отдельно. «Отложить» — только удержанием «Отправить». Отдельного «Чек-листа» нет — он внутри задачи.</li>
+      <li><b>«Подтверждение» → «Запрос»</b>: адресаты (чат / люди / отдел / роль), тип ответа (готовый или свои 2–4 кнопки), комментарий, срок, автонапоминание, сводка по вариантам. Не попавшие в список видят запрос без кнопок.</li>
+      <li><b>Задачи</b>: создание с нуля, один ответственный, чек-лист с исполнителями пунктов, полоса задач под шапкой (два варианта) и <b>один общий слот</b> для закреплённого, задач и отложенного.</li>
+      <li><b>«Напомнить мне»</b>: добавлены заметка для себя, своя дата, заметка в пуше и в списке.</li>
+      <li><b>Оргструктура</b> — новая вкладка: отделы в «Людях», карточки отдела и человека, дерево, настройка у администратора, @отдел.</li>
+      <li><b>Слоты</b> убраны (их ведёт отдельный агент). «Отсутствую» — без изменений.</li></ul></div>
+    <div class="pn wide"><h3>Рекомендация: порядок работ</h3><ul>
+      <li><b>Волна 1 (2–3 недели):</b> новое меню «+», «Запрос» с адресатами «весь чат / люди / роль», «Напомнить мне». Обе функции небольшие и опираются на готовое (сбор отметок агента, планировщик отложенных, push-relay). «Важные → Ждут вас» появляется сразу.</li>
+      <li><b>Волна 2 (2–3 недели):</b> оргструктура (отделы, карточки, настройка у админа) — и сразу адресат «отдел» в запросе и @отдел. Это фундамент: руководитель → люди пригодится задачам и правам.</li>
+      <li><b>Волна 3 (3–4 недели):</b> задачи: создание, карточка, полоса под шапкой и общий слот (заодно переделывается полоса «Отложено» и закреплённое), «Мои задачи».</li>
+      <li><b>Волна 4:</b> опросы, статус «отсутствую».</li></ul>
+      <p>Сквозное решение остаётся: <b>«Важные» — личный ящик</b> («Ждут вас», «Сохранённые», «Напоминания», «Задачи»), новой вкладки внизу не нужно.</p></div>
+    <div class="pn wide"><h3>Сравнение</h3><div class="tw"><table class="mtx"><tr><th>Функция</th><th>Польза для реабцентра</th><th>Объём</th><th>Опора на готовое</th><th>Волна</th></tr>
+      <tr><td>Меню «+»</td><td>${dots(3)}</td><td>${dots(1)}</td><td>ComposerSheet</td><td><span class="pill ok">1</span></td></tr>
+      <tr><td>Запрос</td><td>${dots(5)}</td><td>${dots(3)}</td><td>сбор отметок агента, сокет</td><td><span class="pill ok">1</span></td></tr>
       <tr><td>Напомнить мне</td><td>${dots(3)}</td><td>${dots(2)}</td><td>планировщик отложенных, пуши</td><td><span class="pill ok">1</span></td></tr>
-      <tr><td>Слоты</td><td>${dots(5)}</td><td>${dots(5)}</td><td>чат «Слоты на неделю», папки</td><td><span class="pill pr">2</span></td></tr>
-      <tr><td>Опросы</td><td>${dots(3)}</td><td>${dots(3)}</td><td>карточки в ленте</td><td><span class="pill">3</span></td></tr>
-      <tr><td>Статус «отсутствую»</td><td>${dots(3)}</td><td>${dots(2)}</td><td>присутствие в шапке</td><td><span class="pill">3</span></td></tr>
-      <tr><td>Задачи и чек-листы</td><td>${dots(2)}</td><td>${dots(4)}</td><td>—</td><td><span class="pill">позже</span></td></tr></table></div></div>
-    <div class="pn"><h3>Главные открытые вопросы</h3><ul>
-      <li>Слоты: вариант А (сетка), Б (лента) или оба с переключателем?</li>
-      <li>Слоты: согласие администратора при передаче — всегда, по выбору или никогда?</li>
-      <li>Подтверждение: кто может включать и видят ли получатели счётчик?</li>
-      <li>«Важные» как личный ящик — согласны? Тогда вкладка «Агенты» остаётся внизу.</li>
-      <li>Статус: показывать причину отсутствия всем или только «нет на месте»?</li></ul></div>
+      <tr><td>Оргструктура и @отдел</td><td>${dots(4)}</td><td>${dots(3)}</td><td>«Люди», карточки</td><td><span class="pill pr">2</span></td></tr>
+      <tr><td>Задачи + общий слот под шапкой</td><td>${dots(4)}</td><td>${dots(4)}</td><td>полоса «Отложено», закреплённое</td><td><span class="pill pr">3</span></td></tr>
+      <tr><td>Опросы</td><td>${dots(3)}</td><td>${dots(3)}</td><td>карточки в ленте</td><td><span class="pill">4</span></td></tr>
+      <tr><td>Статус «отсутствую»</td><td>${dots(3)}</td><td>${dots(2)}</td><td>присутствие в шапке</td><td><span class="pill">4</span></td></tr></table></div></div>
+    <div class="pn"><h3>Вопросы к владельцу</h3><ul>
+      <li>Меню «+»: вариант А (с подсказками) или Б (плитки)?</li>
+      <li>Название «Запрос» — подходит? Альтернативы: «Ждём ответа», «Отметка».</li>
+      <li>Кто может отправлять запрос отделу или роли и ставить задачи — все или руководители?</li>
+      <li>Полоса задач: вариант 1, 2 или общий слот с приоритетом (рекомендую слот)?</li>
+      <li>Задача — один ответственный + исполнители пунктов. Согласны?</li>
+      <li>Совместители в двух отделах — нужны?</li>
+      <li>@отдел — кто может упоминать по умолчанию?</li>
+      <li>«Важные» как личный ящик — по-прежнему согласны?</li></ul></div>
     <div class="pn"><h3>Чего сознательно нет</h3><ul>
-      <li>Данных пациентов — ни в слотах, ни в задачах: только залы, время, люди.</li>
-      <li>«Смен» и «заявок» — только слоты.</li>
-      <li>Канбана, проектов, подзадач, трудозатрат — не таск-трекер.</li>
-      <li>Агента в этих функциях: всё работает руками, агент позже может «читать» доску и подтверждения.</li></ul></div>
+      <li>Данных пациентов — ни в запросах, ни в задачах.</li>
+      <li>Канбана, проектов, подзадач глубже одного уровня, трудозатрат — не таск-трекер.</li>
+      <li>Совместительства и матричной структуры — один человек, один отдел.</li>
+      <li>Слотов — их прорабатывает отдельный агент.</li></ul></div>
   </div>`;
 
   /* ======================================================================
-     КОМПОНЕНТЫ (новые элементы в дизайн-системе)
+     КОМПОНЕНТЫ (v2)
      ====================================================================== */
   const compView = () => {
-    const pd = mkPoll('Во сколько планёрка?', [['8:30', ['ОЧ', 'АИ', 'ИЛ']], ['13:00', ['СК']], ['17:00', []]], { me: 'ИЛ' });
-    const pn = mkPoll('Во сколько планёрка?', [['8:30', []], ['13:00', []], ['17:00', []]], { me: 'ИЛ', due: 'до пт' });
+    const S2 = { tasks: T0(), open: {}, u: { k: 'task', pin: 0 } };
+    const rq = mkReq('x', { text: 'Планёрка в понедельник в 8:30. Будете?', who: ['ИЛ', 'ОЧ', 'АИ', 'СК'], label: 'отдел «Зал ЛФК»', opts: ['Приду', 'Не приду'], ans: { 'ИЛ': { i: 0, t: '9:14' }, 'СК': { i: 1, t: '9:20', c: 'на выезде' } } });
+    const rqA = { ...rq, ans: { ...rq.ans, 'ОЧ': { i: 0, t: '9:41', c: '' } } };
     return `<div class="ds on">
-    <div class="pn"><h3>Подтверждение</h3><div class="msg" style="margin:0;max-width:100%"><div class="bub">Текст сообщения<div class="ack"><div class="ackh">${I('clock')}Нужно подтвердить до пт, 18:00</div><button class="ackbtn">${I('check')}Ознакомлен(а)</button><div class="acs">Подтвердили 12 из 15</div></div></div></div>
-      <div class="msg me" style="margin-top:8px"><div class="bub">Своё<div class="ack"><div class="acount">${I('dcheck')}<span class="g">Подтвердили <b>12 из 15</b></span>${I('right')}</div><div class="trk"><i style="width:80%"></i></div></div></div></div>
-      <div class="rw" style="margin-top:10px"><span class="need">${I('dcheck')}до пт</span><span class="ackdone" style="margin:0">${I('check')}Вы подтвердили</span></div>
-      <div class="cap">Жёлтый (--warning) — «от вас ждут действия». Зелёный — «сделано». Синий — действие.</div></div>
-    <div class="pn"><h3>Опрос: до и после</h3><div class="bub" style="border-radius:18px">${pollH(pn, 'x', '')}</div><div class="bub" style="border-radius:18px;margin-top:8px">${pollH(pd, 'x', '')}</div></div>
-    <div class="pn"><h3>Задача, чек-лист, статусы</h3><div class="bub" style="border-radius:18px">${taskCard({ id: 0, title: 'Подготовить большой зал', who: 'ОЧ', due: 'ср, 8:45', st: 'prog' }, 'МС')}</div>
-      <div class="bub" style="border-radius:18px;margin-top:8px"><div class="cli done">${cb(true)}<span>Разложить маты</span><span class="by">${pa('ОЧ', 'round')}</span></div><div class="cli">${cb(false)}<span>Проветрить зал</span></div></div>
-      <div class="rw" style="margin-top:10px"><span class="pill">Открыта</span><span class="pill pr">В работе</span><span class="pill ok">Готово</span><span class="pill dg">Просрочена</span><span class="pill wr">до пт</span></div></div>
-    <div class="pn"><h3>Слоты</h3><div style="display:grid;grid-template-columns:repeat(5,44px);gap:5px;margin-bottom:10px"><div class="sh free">${I('plus')}</div><div class="sh mine">Я</div><div class="sh c1">ОЧ</div><div class="sh c3">ОБ</div><div class="sh off">Я</div></div>
-      <div class="sc2 free" style="margin:0 0 8px"><span class="hx">${I('door')}</span><div class="g"><b>Малый зал</b><small class="warnc">свободно</small></div><button class="btn sm pri">Записаться</button></div>
-      <div class="sc2 mine" style="margin:0"><span class="hx" style="background:var(--primary);color:var(--on-primary)">${I('check')}</span><div class="g"><b>Большой зал</b><small>вы</small></div><button class="btn sm sec">Отдать</button></div></div>
+    <div class="pn"><h3>Запрос: получатель, до и после</h3><div class="bub" style="border-radius:18px">${reqCard(rq, 'ОЧ')}</div><div class="bub" style="border-radius:18px;margin-top:8px">${reqCard(rqA, 'ОЧ')}</div></div>
+    <div class="pn"><h3>Запрос: автор и «не в списке»</h3><div class="bub" style="border-radius:18px">${reqCard(rq, 'МС')}</div><div class="bub" style="border-radius:18px;margin-top:8px">${reqCard(rq, 'ДР')}</div></div>
+    <div class="pn"><h3>Меню «+»: строки действий</h3><div class="att3">${[['image', 'Фото'], ['camera', 'Камера'], ['file', 'Файл']].map(([i, n]) => `<div>${I(i)}${n}</div>`).join('')}</div>${ACTS.map(([i, n, h]) => `<div class="arow"><i>${I(i)}</i><div class="g"><b>${n}</b><small>${h}</small></div></div>`).join('')}
+      <div class="cap">Синий квадрат — действие, которое ждёт реакции людей. Фиолетовый — агент.</div></div>
+    <div class="pn" style="padding:0;overflow:hidden"><h3 style="padding:16px 16px 0">Полосы под шапкой</h3><div class="cap" style="padding:0 16px">Вариант 1 · вариант 2 · общий слот</div><div style="margin-top:8px">${stripV1(S2, 'ИЛ', 'x')}<div style="height:8px"></div>${stripV2(S2, 'ИЛ', 'x')}<div style="height:8px"></div>${ustrip(S2, 'ИЛ', 'x')}</div>
+      <div class="rw" style="padding:12px 16px 16px;margin:0"><span class="mpill">${I('flame')}2 на вас · до 12:00</span><span class="mpill calm">1 на вас</span><span class="need">${I('req')}ответить до пт</span></div></div>
+    <div class="pn"><h3>Задача с чек-листом</h3><div class="bub" style="border-radius:18px">${taskCard(T0()[1], 'ИЛ')}</div>
+      <div class="rw" style="margin-top:10px"><span class="pill">Открыта</span><span class="pill pr">В работе</span><span class="pill ok">Готово</span><span class="pill dg">Просрочена</span></div></div>
+    <div class="pn"><h3>Оргструктура</h3><div class="tree" style="padding:0">${treeH({ org: ORG0, tc: { med: 1 }, dept: 'lfk' }, 'root')}</div>
+      <div class="rw" style="margin-top:10px">${dsq()}<span class="lead">рук.</span><span class="chip">${dsq()}@Зал ЛФК</span></div></div>
     <div class="pn"><h3>Статусы людей</h3><div class="rw">${Object.values(KINDS).map(([e, n]) => `<span class="chip">${e} ${n}</span>`).join('')}</div>
-      <div class="rw">${pa('АИ', 'm round', '<span class="stx">🌴</span>')}${pa('ДР', 'm round', '<span class="stx">🩺</span>')}${pa('ИЛ', 'm round', '<span class="stx">🚗</span>')}${pa('ЕГ', 'm round', '<span class="stx">🔕</span>')}</div>
-      <div class="hint2" style="margin:0"><span class="e">🌴</span><span>Анна в отпуске до 20 ноября — ответит позже. <a>Упомянуть Марину</a></span></div></div>
-    <div class="pn"><h3>Переключатель, уведомление, тост</h3><div class="rw">${tg(true, 'noop')}${tg(false, 'noop')}<span class="chip on">до пт, 18:00</span><span class="chip">без срока</span></div>
-      <div style="position:relative;height:56px"><div class="toast" style="position:static;animation:none">${I('bell')}<span>Напомню завтра в 9:00</span></div></div>
-      <div class="cap">Тост — тёмная кнопочная плашка над полем ввода, 2,8 с. Пуш «Напоминание» — системный, с действиями.</div></div></div>`;
+      <div class="rw">${pa('АИ', 'm round', '<span class="stx">🌴</span>')}${pa('ДР', 'm round', '<span class="stx">🩺</span>')}${pa('ИЛ', 'm round', '<span class="stx">🚗</span>')}${pa('ЕГ', 'm round', '<span class="stx">🔕</span>')}</div></div>
+    <div class="pn"><h3>Переключатель, тост</h3><div class="rw">${tg(true, 'noop')}${tg(false, 'noop')}<span class="chip on">до пт, 18:00</span><span class="chip">без срока</span></div>
+      <div style="position:relative;height:56px"><div class="toast" style="position:static;animation:none">${I('bell')}<span>Напомню завтра в 9:00</span></div></div></div></div>`;
   };
-
   /* ================= engine ================= */
-  const VIEWS = { 'Подтверждение': t1, 'Опросы': t2, 'Напомнить мне': t3, 'Задачи': t4, 'Слоты': t5, 'Отсутствую': t6 };
+  const VIEWS = { 'Меню «+»': t0, 'Запрос': t1, 'Опросы': t2, 'Задачи': t4, 'Напомнить мне': t3, 'Оргструктура': t7, 'Отсутствую': t6 };
   const names = [...Object.keys(VIEWS), 'Рекомендация', 'Компоненты'];
   const root = document.getElementById('root'), nav = document.getElementById('nav');
   let cur = names[0], S = null;
