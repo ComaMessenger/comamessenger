@@ -27,6 +27,7 @@ export * from "./autosave";
 export * from "./sessionLabel";
 export * from "./settings";
 export * from "./workspace";
+export * from "./connections";
 export * from "./presenceText";
 export * from "./agents";
 export * from "./agentText";

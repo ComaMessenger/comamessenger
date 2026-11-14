@@ -1,6 +1,17 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { AgentLlmConnection, MessengerAPI } from "@comamessenger/core";
+import {
+  createLlmConnectionRequest,
+  emptyLlmConnectionDraft,
+  llmConnectionDraftReady,
+  llmProviders,
+  providerNeedsEndpoint,
+  withProvider,
+  type AgentLlmConnection,
+  type LlmConnectionDraft,
+  type LlmProvider,
+  type MessengerAPI,
+} from "@comamessenger/core";
 import { Plug, Plus, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { messageOf } from "../../errors";
@@ -15,24 +26,6 @@ import {
   Skeleton,
 } from "../../ui";
 
-type Provider = "openai" | "anthropic" | "openai-compatible";
-
-type ConnectionDraft = {
-  name: string;
-  provider: Provider;
-  endpoint_url: string;
-  default_model: string;
-  api_key: string;
-};
-
-const emptyDraft: ConnectionDraft = {
-  name: "",
-  provider: "openai",
-  endpoint_url: "",
-  default_model: "",
-  api_key: "",
-};
-
 export function AgentConnectionsPage({
   api,
   canManage,
@@ -45,7 +38,9 @@ export function AgentConnectionsPage({
     queryKey: ["agent-llm-connections"],
     queryFn: () => api.agentLlmConnections(),
   });
-  const [draft, setDraft] = useState<ConnectionDraft>(emptyDraft);
+  const [draft, setDraft] = useState<LlmConnectionDraft>(
+    emptyLlmConnectionDraft,
+  );
   const [createOpen, setCreateOpen] = useState(false);
   const [pendingID, setPendingID] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -54,9 +49,9 @@ export function AgentConnectionsPage({
     setPendingID("new");
     setError("");
     try {
-      await api.createAgentLlmConnection({ ...draft, enabled: true });
+      await api.createAgentLlmConnection(createLlmConnectionRequest(draft));
       await connections.refetch();
-      setDraft(emptyDraft);
+      setDraft(emptyLlmConnectionDraft);
       setCreateOpen(false);
     } catch (cause) {
       setError(messageOf(cause));
@@ -225,25 +220,18 @@ export function AgentConnectionsPage({
               name="connection-provider"
               value={draft.provider}
               onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  provider: event.target.value as Provider,
-                  endpoint_url:
-                    event.target.value === "openai-compatible"
-                      ? current.endpoint_url
-                      : "",
-                }))
+                setDraft((current) =>
+                  withProvider(current, event.target.value as LlmProvider),
+                )
               }
             >
-              {(["openai", "anthropic", "openai-compatible"] as const).map(
-                (provider) => (
-                  <option key={provider} value={provider}>
-                    {t(`agentProvider_${provider}`)}
-                  </option>
-                ),
-              )}
+              {llmProviders.map((provider) => (
+                <option key={provider} value={provider}>
+                  {t(`agentProvider_${provider}`)}
+                </option>
+              ))}
             </SelectField>
-            {draft.provider === "openai-compatible" && (
+            {providerNeedsEndpoint(draft.provider) && (
               <Field
                 label="Endpoint"
                 name="connection-endpoint"
@@ -297,13 +285,7 @@ export function AgentConnectionsPage({
             </Button>
             <Button
               variant="primary"
-              disabled={
-                pendingID === "new" ||
-                !draft.name.trim() ||
-                !draft.api_key.trim() ||
-                (draft.provider === "openai-compatible" &&
-                  !draft.endpoint_url.trim())
-              }
+              disabled={pendingID === "new" || !llmConnectionDraftReady(draft)}
               onClick={() => void createConnection()}
             >
               {pendingID === "new" ? t("saving") : t("save")}
