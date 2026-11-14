@@ -1,16 +1,8 @@
 import { useEffect } from "react";
-import type { RealtimeCoordinator, TypingAction } from "@comamessenger/core";
+import { uploadAction, type RealtimeCoordinator } from "@comamessenger/core";
 
 /** Same cadence as typing: the server keeps an action alive for 6 seconds. */
 const repeatMs = 3_000;
-
-/** "Sending photo/video/file" from the kinds of files being uploaded. */
-export function uploadAction(types: readonly string[]): TypingAction | null {
-  if (!types.length) return null;
-  if (types.every((type) => type.startsWith("image/"))) return "uploading_photo";
-  if (types.every((type) => type.startsWith("video/"))) return "uploading_video";
-  return "uploading_file";
-}
 
 /**
  * Tells the chat that files are on their way while the composer uploads

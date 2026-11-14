@@ -462,3 +462,13 @@ export function chatHeaderStatus(input: {
     onlineCount: online > 1 ? online : 0,
   });
 }
+
+/** "Sending photo/video/file" from the MIME types of files on their way. */
+export function uploadAction(types: readonly string[]): TypingAction | null {
+  if (!types.length) return null;
+  if (types.every((type) => type.startsWith("image/")))
+    return "uploading_photo";
+  if (types.every((type) => type.startsWith("video/")))
+    return "uploading_video";
+  return "uploading_file";
+}

@@ -7,6 +7,7 @@ import {
   formatLastSeen,
   formatLastSeenApprox,
   pluralCategory,
+  uploadAction,
   type ChatAction,
 } from "./presenceText";
 
@@ -368,5 +369,15 @@ describe("chatHeaderStatus", () => {
         ],
       }).text,
     ).toBe("агент · выполняет действие");
+  });
+});
+
+describe("uploadAction", () => {
+  it("picks photo, video or file from what is uploading", () => {
+    expect(uploadAction([])).toBeNull();
+    expect(uploadAction(["image/png", "image/jpeg"])).toBe("uploading_photo");
+    expect(uploadAction(["video/mp4"])).toBe("uploading_video");
+    expect(uploadAction(["image/png", "video/mp4"])).toBe("uploading_file");
+    expect(uploadAction(["application/pdf"])).toBe("uploading_file");
   });
 });

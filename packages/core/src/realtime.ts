@@ -100,11 +100,14 @@ export class RealtimeCoordinator {
   presence(state: "active" | "away"): void {
     this.presenceState = state;
     this.send({ op: "presence", state });
-    if (!this.presenceTimer)
-      this.presenceTimer = setInterval(() => {
-        if (this.presenceState)
-          this.send({ op: "presence", state: this.presenceState });
-      }, presenceRefreshMs);
+    this.keepPresence();
+  }
+  private keepPresence(): void {
+    if (this.presenceTimer || this.stopped) return;
+    this.presenceTimer = setInterval(() => {
+      if (this.presenceState)
+        this.send({ op: "presence", state: this.presenceState });
+    }, presenceRefreshMs);
   }
   private async connect(reconnect: boolean): Promise<void> {
     if (this.stopped) return;
@@ -179,8 +182,10 @@ export class RealtimeCoordinator {
       this.features = new Set(
         Array.isArray(frame.features) ? frame.features.map(String) : [],
       );
-      if (this.presenceState)
+      if (this.presenceState) {
         this.send({ op: "presence", state: this.presenceState });
+        this.keepPresence();
+      }
       this.callbacks.state(
         Number(frame.current_seq) > (await this.storage.get())
           ? "backlog"

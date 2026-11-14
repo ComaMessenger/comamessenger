@@ -29,6 +29,7 @@ import {
   applySavedChange,
   chatAvatarSource,
   chatCommands,
+  chatHeaderStatus,
   compactUUID,
   decodeMentions,
   encodeMentions,
@@ -37,6 +38,7 @@ import {
   insertMention,
   messagePlainText,
   savedKeys,
+  typingScope,
   type ActionViewer,
   type ChatMember,
   type ClientMessage,
@@ -78,6 +80,8 @@ import { canPinIn, messageMenu, type MessageMenuAction } from "./menuItems";
 import { reactionsKey, toggleReaction } from "./reactions";
 import { ThreadRoot } from "./ThreadRoot";
 import { useConversation } from "./useConversation";
+import { useUploadActivity } from "./useChatActivity";
+import { HeaderStatus, useNow } from "./HeaderStatus";
 import { useVoiceFeed } from "@/voice/VoiceFeed";
 import { VoiceOutboxStrip } from "@/voice/VoiceOutbox";
 
@@ -125,7 +129,9 @@ export function ConversationView({
   const [agentsOpen, setAgentsOpen] = useState(false);
   const [focusRequest, setFocusRequest] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
-  const attachments = useAttachments(api);
+  const attachments = useAttachments(api, typingScope(chatID, threadRootID));
+  useUploadActivity(chatID, threadRootID);
+  const now = useNow();
   const list = useRef<FlashListRef<FeedRow>>(null);
   const atBottom = useRef(true);
   const title = chat ? chatTitle(chat, t("directChat")) : "";
@@ -538,20 +544,47 @@ export function ConversationView({
         : null;
 
   const agents = conversation.workingAgents;
-  const live = Boolean(agents.length || conversation.typingNames.length);
-  const subtitle = agents.length
-    ? agents.length === 1
-      ? t("agentWorking", { name: authorName(agents[0]!.actorID) })
-      : t("agentsWorking", { count: agents.length })
-    : conversation.typingNames.length
-      ? conversation.typingNames.length === 1
-        ? t("typingOne", { name: conversation.typingNames[0] })
-        : t("typingMany", { count: conversation.typingNames.length })
-      : inThread
-        ? title
-        : members.length
-          ? t("headerMembers", { count: members.length })
-          : "";
+  const status =
+    chat && !inThread
+      ? chatHeaderStatus({
+          locale: i18n.language === "en" ? "en" : "ru",
+          now,
+          viewerID: user.id,
+          chat,
+          members,
+          actions: conversation.typingActions,
+          presence: conversation.presence,
+          lastSeen: conversation.lastSeen,
+          agentStatuses: conversation.agentStatuses,
+        })
+      : null;
+  // Groups keep naming the working agent; a direct chat with an agent says
+  // "agent · thinking" through the status itself.
+  const groupAgents = chat?.kind !== "direct" ? agents : [];
+  const live = Boolean(
+    groupAgents.length || conversation.typingNames.length || status?.live,
+  );
+  const subtitle = groupAgents.length ? (
+    groupAgents.length === 1 ? (
+      t("agentWorking", { name: authorName(groupAgents[0]!.actorID) })
+    ) : (
+      t("agentsWorking", { count: groupAgents.length })
+    )
+  ) : inThread ? (
+    conversation.typingNames.length ? (
+      conversation.typingNames.length === 1 ? (
+        t("typingOne", { name: conversation.typingNames[0] })
+      ) : (
+        t("typingMany", { count: conversation.typingNames.length })
+      )
+    ) : (
+      title
+    )
+  ) : status?.text ? (
+    <HeaderStatus status={status} />
+  ) : (
+    ""
+  );
   const replyCount = Math.max(root?.thread_reply_count ?? 0, feed.length);
 
   const daySeparator = (iso: string) => (
@@ -603,7 +636,9 @@ export function ConversationView({
             ) : undefined
           }
           subtitle={
-            subtitle ? (
+            typeof subtitle !== "string" ? (
+              subtitle
+            ) : subtitle ? (
               <Text
                 tone={live ? "primary" : "muted"}
                 size={12.5}

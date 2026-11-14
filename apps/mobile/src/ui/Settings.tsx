@@ -85,14 +85,17 @@ export function ChoiceRow({
   label,
   selected,
   onPress,
+  testID,
 }: {
   label: string;
   selected: boolean;
   onPress(): void;
+  testID?: string;
 }) {
   const theme = useTheme();
   return (
     <Pressable
+      testID={testID}
       accessibilityRole="radio"
       accessibilityState={{ checked: selected }}
       onPress={onPress}

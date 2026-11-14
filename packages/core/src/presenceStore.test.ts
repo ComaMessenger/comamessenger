@@ -111,12 +111,10 @@ describe("store: typing and presence", () => {
     vi.useFakeTimers();
     const store = createMessengerStore();
     const expiresAt = new Date(Date.now() + 6000).toISOString();
-    store
-      .getState()
-      .setTyping("chat", "anna", true, {
-        action: "recording_voice",
-        expiresAt,
-      });
+    store.getState().setTyping("chat", "anna", true, {
+      action: "recording_voice",
+      expiresAt,
+    });
     store
       .getState()
       .setTyping("chat", "oleg", true, { threadRootID: "root", expiresAt });
@@ -171,5 +169,24 @@ describe("store: typing and presence", () => {
       lastSeenAt: "2026-11-14T12:00:00Z",
     });
     expect(store.getState().lastSeen.oleg).toBe("2026-11-14T12:00:00Z");
+  });
+});
+
+describe("presence after a stop and start", () => {
+  it("keeps confirming once the socket comes back", async () => {
+    const { sent, coordinator, hello } = harness();
+    coordinator.start();
+    await flush();
+    coordinator.presence("active");
+    coordinator.stop();
+    coordinator.start();
+    await flush();
+    vi.useFakeTimers();
+    hello();
+    await vi.advanceTimersByTimeAsync(0);
+    sent.length = 0;
+    await vi.advanceTimersByTimeAsync(presenceRefreshMs);
+    expect(sent).toEqual([{ op: "presence", state: "active" }]);
+    coordinator.stop();
   });
 });

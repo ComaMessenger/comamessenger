@@ -331,6 +331,12 @@ export const en: Record<keyof typeof ru, string> = {
   notifyNone: "None",
   notifyThreads: "Thread replies",
   notifyReactions: "Reactions to my messages",
+  privacy: "Privacy",
+  privacyHint:
+    "If hidden, people see “last seen recently”, and you won't see others' exact time either. Being online is still visible across the workspace.",
+  lastSeenVisibility: "Who sees my last seen time",
+  lastSeenEveryone: "Everyone I share a chat with",
+  lastSeenNobody: "Nobody",
   sessions: "Sessions",
   sessionsHint: "Devices where your account is signed in.",
   thisDevice: "This device",
