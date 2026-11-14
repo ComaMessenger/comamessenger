@@ -1471,4 +1471,5 @@ export const ru = {
   agentStepModeWrite: "действие",
   agentPausedNotice: "Агент поставлен на паузу",
   agentResumedNotice: "Агент снова работает",
+  agentOpenCardButton: "Карточка агента",
 } as const;

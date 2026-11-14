@@ -1,0 +1,42 @@
+# Deciding pending agent actions on the phone: allow the first, deny the
+# next, and the tab counter follows. Run after seed-agents.mjs (it leaves at
+# least one pending action per run of the seed) and agents.yaml.
+# Run: maestro test -e THEME=light e2e/agents-approve.yaml
+appId: com.comamessenger.app
+env:
+  THEME: light
+---
+- runFlow: open-app.yaml
+- runFlow:
+    file: tabs.yaml
+    env:
+      TAB: agents
+- extendedWaitUntil:
+    visible:
+      id: agents-approvals
+    timeout: 10000
+- tapOn:
+    id: agents-approvals
+- extendedWaitUntil:
+    visible:
+      id: approval-0-approve
+    timeout: 10000
+- tapOn:
+    id: approval-0-approve
+- extendedWaitUntil:
+    notVisible:
+      id: approval-0-approve
+    timeout: 10000
+    optional: true
+- takeScreenshot: agents-approved-${THEME}
+- runFlow:
+    when:
+      visible:
+        id: approval-0-deny
+    commands:
+      - tapOn:
+          id: approval-0-deny
+      - waitForAnimationToEnd
+- takeScreenshot: agents-decided-${THEME}
+- tapOn:
+    id: approvals-back

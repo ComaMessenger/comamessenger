@@ -28,6 +28,8 @@ import { Button } from "@/ui/Button";
 import { Notice } from "@/ui/Notice";
 import { ScreenHeader } from "@/ui/ScreenHeader";
 import { Text } from "@/ui/Text";
+import { useAgentAccess } from "@/agents/data";
+import { agentHref } from "@/agents/routes";
 import { useOpenDirect } from "./openDirect";
 import { AgentTag, presenceLabelKey } from "./PersonRow";
 import { directoryKey, findActor } from "./usePeople";
@@ -90,6 +92,7 @@ export function PersonScreen({ actorID }: { actorID: string }) {
   const person = actor.data;
   const agent = person?.type === "agent";
   const self = actorID === user.id;
+  const { canView: canViewAgents } = useAgentAccess();
 
   return (
     <SafeAreaView
@@ -176,6 +179,16 @@ export function PersonScreen({ actorID }: { actorID: string }) {
                   pending={direct.opening === person.actor_id}
                   onPress={() => void direct.open(person.actor_id)}
                 />
+                {agent && canViewAgents ? (
+                  <Button
+                    testID="person-agent-card"
+                    variant="secondary"
+                    label={t("agentOpenCardButton")}
+                    onPress={() =>
+                      router.push(agentHref.agent(person.actor_id) as never)
+                    }
+                  />
+                ) : null}
               </View>
             ) : null}
           </View>
@@ -273,7 +286,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: radius.lg,
   },
-  action: { alignSelf: "stretch", marginTop: spacing[2] },
+  action: { alignSelf: "stretch", marginTop: spacing[2], gap: spacing[2] },
   section: {
     gap: spacing[2],
     padding: spacing[4],

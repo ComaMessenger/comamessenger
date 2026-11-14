@@ -1,0 +1,155 @@
+# The «Агенты» tab as the owner: overview, approvals, agent card, run
+# details, check, the direct chat with an agent and the activity feed.
+# Prerequisites: sign-in.yaml has run, then the agents are seeded:
+#   COMA_API=http://localhost:8080 node apps/mobile/e2e/seed-agents.mjs
+# Run: maestro test -e THEME=light e2e/agents.yaml
+# (dark: xcrun simctl ui <device> appearance dark, then -e THEME=dark).
+# Deciding an action is left to agents-approve.yaml, so this flow can be
+# run in both themes on the same seed.
+appId: com.comamessenger.app
+env:
+  THEME: light
+---
+- runScript: scripts/login.js
+- runScript: scripts/reset-preferences.js
+- runFlow: open-app.yaml
+- runFlow:
+    file: tabs.yaml
+    env:
+      TAB: agents
+- extendedWaitUntil:
+    visible:
+      id: agents-home
+    timeout: 10000
+- extendedWaitUntil:
+    visible:
+      id: agents-attention
+    timeout: 15000
+- takeScreenshot: agents-home-${THEME}
+- scrollUntilVisible:
+    element:
+      id: agents-run-0
+    direction: DOWN
+- takeScreenshot: agents-home-runs-${THEME}
+- scrollUntilVisible:
+    element:
+      id: agents-role-.*
+    direction: DOWN
+- takeScreenshot: agents-home-roles-${THEME}
+- tapOn:
+    id: agents-role-.*
+    index: 0
+- extendedWaitUntil:
+    visible:
+      id: agents-role-sheet
+    timeout: 5000
+- takeScreenshot: agents-role-${THEME}
+- swipe:
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: agents-attention
+    direction: UP
+
+# Approvals
+- tapOn:
+    id: agents-attention-open
+- extendedWaitUntil:
+    visible:
+      id: approval-0
+    timeout: 10000
+- takeScreenshot: agents-approvals-${THEME}
+- tapOn:
+    id: approval-0-details
+- takeScreenshot: agents-approval-details-${THEME}
+- tapOn:
+    id: approvals-back
+
+# Agent card
+- tapOn: "Сводка, .*"
+- extendedWaitUntil:
+    visible:
+      id: agent-screen
+    timeout: 10000
+- assertVisible:
+    id: agent-write
+- takeScreenshot: agent-card-${THEME}
+- scrollUntilVisible:
+    element:
+      id: agent-run-0
+    direction: DOWN
+- takeScreenshot: agent-card-runs-${THEME}
+- tapOn:
+    id: agent-run-0
+- extendedWaitUntil:
+    visible:
+      id: run-status
+    timeout: 10000
+- takeScreenshot: agent-run-${THEME}
+- tapOn:
+    id: run-back
+
+# Check
+- scrollUntilVisible:
+    element:
+      id: agent-check
+    direction: UP
+- tapOn:
+    id: agent-check
+- extendedWaitUntil:
+    visible:
+      id: check-screen
+    timeout: 10000
+- tapOn:
+    id: check-example-0
+- hideKeyboard
+- takeScreenshot: agent-check-${THEME}
+- tapOn:
+    id: check-back
+
+# Direct chat with the agent
+- scrollUntilVisible:
+    element:
+      id: agent-write
+    direction: UP
+- tapOn:
+    id: agent-write
+- extendedWaitUntil:
+    visible:
+      id: composer-input
+    timeout: 10000
+- takeScreenshot: agent-direct-chat-${THEME}
+- back
+- tapOn:
+    id: agent-back
+
+# Activity
+- scrollUntilVisible:
+    element:
+      id: agents-activity
+    direction: UP
+- tapOn:
+    id: agents-activity
+- extendedWaitUntil:
+    visible:
+      id: activity-run-0
+    timeout: 10000
+- takeScreenshot: agents-activity-${THEME}
+- tapOn:
+    id: activity-outcome-failed
+- extendedWaitUntil:
+    visible:
+      id: activity-run-0
+    timeout: 5000
+- takeScreenshot: agents-activity-failed-${THEME}
+- tapOn:
+    id: activity-run-0
+- extendedWaitUntil:
+    visible:
+      id: run-status
+    timeout: 10000
+- takeScreenshot: agents-run-failed-${THEME}
+- tapOn:
+    id: run-back
+- tapOn:
+    id: activity-back

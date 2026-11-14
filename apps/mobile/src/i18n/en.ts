@@ -1439,4 +1439,5 @@ export const en: Record<keyof typeof ru, string> = {
   agentStepModeWrite: "action",
   agentPausedNotice: "Agent paused",
   agentResumedNotice: "Agent resumed",
+  agentOpenCardButton: "Agent card",
 };
