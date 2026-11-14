@@ -1,23 +1,32 @@
-# Acceptance pass over the messenger screens of phase 6.1 on a seeded
-# instance (see sign-in.yaml): the «Backend» chat with thread captions, a
-# reply quote, reactions and a photo; thread, forward, views and reactions,
-# a new folder and «Important» with chat filters. Screenshots are named
-# after THEME so light and dark runs sit side by side:
+# Acceptance pass over the messenger screens of phase 6.1: a chat with a
+# thread caption, a reply quote, reactions and a photo; thread, forward,
+# views and reactions, a new folder and «Important» with chat filters.
+# The flow brings its own data: seed-walkthrough.mjs appends a fresh set to
+# its own chat «Обход интерфейса» (created on the first run), so it passes on
+# a clean instance and after any other flows and seeds. Run the seed right
+# before the flow; screenshots are named after THEME so light and dark runs
+# sit side by side:
+#   node e2e/seed-walkthrough.mjs
 #   xcrun simctl ui booted appearance dark
 #   maestro test -e THEME=dark e2e/walkthrough.yaml
 # THEME has no default here: a flow default would override -e.
 appId: com.comamessenger.app
 env:
-  PHOTO: IMG_0005.jpg
+  PHOTO: photo-square.jpg
+  CHAT: Обход интерфейса
 ---
+# The root of the thread this run's seed posted (its tag tells it from the
+# roots of earlier runs above it).
+- runScript: scripts/login.js
+- runScript: scripts/walkthrough-root.js
 - runFlow: open-app.yaml
-- tapOn: .*Backend.*
+- tapOn: .*${CHAT}.*
 - extendedWaitUntil:
     visible:
       id: conversation
     timeout: 10000
-# The thread caption: avatars of those who replied, «N ответ», time. Other
-# flows post to this chat, so it may be further up.
+# The thread caption: avatars of those who replied, «N ответа», time. The
+# latest set of the seed is at the end of the feed.
 - scrollUntilVisible:
     element:
       id: thread-caption
@@ -32,7 +41,7 @@ env:
 - runFlow:
     file: message-menu.yaml
     env:
-      TEXT: ".*Тред 119147.*"
+      TEXT: ${output.walkthroughRoot}
 - tapOn:
     id: message-action-thread
 - extendedWaitUntil:
@@ -51,7 +60,7 @@ env:
 - runFlow:
     file: message-menu.yaml
     env:
-      TEXT: ".*Тред 119147.*"
+      TEXT: ${output.walkthroughRoot}
 - takeScreenshot: ${THEME}-03-message-menu
 - tapOn:
     id: message-action-forward
@@ -64,7 +73,7 @@ env:
 - runFlow:
     file: message-menu.yaml
     env:
-      TEXT: ".*Тред 119147.*"
+      TEXT: ${output.walkthroughRoot}
 - tapOn:
     id: message-action-details
 - extendedWaitUntil:
@@ -94,8 +103,9 @@ env:
     id: media-viewer-close
 # A reply quotes the message it answers.
 - scrollUntilVisible:
-    element: .*, Тест, .*
+    element: .*Обход. ответ с цитатой.*
     direction: UP
+    centerElement: true
     timeout: 60000
 - takeScreenshot: ${THEME}-07-reply-quote
 - tapOn:

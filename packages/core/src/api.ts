@@ -1283,6 +1283,12 @@ export class MessengerAPI {
       `/api/v1/knowledge/documents/${encodeURIComponent(id)}/file`,
     );
   }
+  /** Link to the original upload of a file document, to download it natively. */
+  knowledgeDocumentFileLink(id: string): Promise<ObjectLink> {
+    return this.request(
+      `/api/v1/knowledge/documents/${encodeURIComponent(id)}/file?delivery=link`,
+    );
+  }
   knowledgeEmbeddingConnections(): Promise<KnowledgeEmbeddingConnection[]> {
     return this.request("/api/v1/knowledge/embedding-connections");
   }

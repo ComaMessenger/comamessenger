@@ -10,6 +10,7 @@ import {
 import Constants from "expo-constants";
 import {
   Bell,
+  BookOpen,
   ChevronRight,
   Contact,
   Clock,
@@ -137,6 +138,7 @@ export default function MoreScreen() {
             [
               ["/people", t("people"), Contact, "open-people"],
               ["/scheduled", t("scheduledMoreItem"), Clock, "more-scheduled"],
+              ["/knowledge", t("knowledgeBase"), BookOpen, "more-knowledge"],
               ["/settings", t("settingsTitle"), Settings, "open-settings"],
             ] as const
           ).map(

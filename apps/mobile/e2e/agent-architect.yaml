@@ -1,0 +1,106 @@
+# The Architect builds an agent by talking: a task in words, answers from its
+# options until the draft is assembled, the passport, and the way on.
+# Needs a model connection (real calls, ~10–40 s an answer).
+# Run after sign-in.yaml: maestro test -e THEME=light e2e/agent-architect.yaml
+appId: com.comamessenger.app
+---
+- runScript: scripts/login.js
+# Follow the simulator appearance (light or dark); restored at the end.
+- runScript: scripts/reset-preferences.js
+- runScript: scripts/delete-e2e-agents.js
+- runFlow: open-app.yaml
+- runFlow:
+    file: agent-link.yaml
+    env:
+      LINK: coma://agents/new/architect
+- extendedWaitUntil:
+    visible:
+      id: architect-screen
+    timeout: 30000
+# Start from a clean conversation.
+- tapOn:
+    id: architect-restart
+- extendedWaitUntil:
+    visible:
+      id: architect-input
+    timeout: 30000
+- takeScreenshot: architect-start-${THEME}
+- tapOn:
+    id: architect-input
+- inputText: "E2E Справка: отвечай в чате Backend на вопросы о регламенте релизов, когда тебя упоминают."
+- tapOn:
+    id: architect-send
+- extendedWaitUntil:
+    visible:
+      id: architect-thinking
+    timeout: 5000
+- takeScreenshot: architect-thinking-${THEME}
+- extendedWaitUntil:
+    notVisible:
+      id: architect-thinking
+    timeout: 180000
+- takeScreenshot: architect-answer-${THEME}
+# Answer with the first option until the draft is assembled.
+- repeat:
+    times: 5
+    while:
+      notVisible:
+        id: architect-finish
+    commands:
+      - runFlow:
+          when:
+            visible:
+              id: architect-option-0
+          commands:
+            - tapOn:
+                id: architect-option-0
+            - extendedWaitUntil:
+                notVisible:
+                  id: architect-thinking
+                timeout: 180000
+      - runFlow:
+          when:
+            notVisible:
+              id: architect-option-0
+          commands:
+            - runFlow:
+                when:
+                  notVisible:
+                    id: architect-finish
+                commands:
+                  - tapOn:
+                      id: architect-input
+                  - inputText: Да, так подходит. Собирай.
+                  - tapOn:
+                      id: architect-send
+                  - extendedWaitUntil:
+                      notVisible:
+                        id: architect-thinking
+                      timeout: 180000
+- scrollUntilVisible:
+    element:
+      id: architect-open-builder
+    direction: DOWN
+    timeout: 20000
+- takeScreenshot: architect-finish-${THEME}
+- tapOn:
+    id: architect-passport-open
+- extendedWaitUntil:
+    visible:
+      id: architect-passport
+    timeout: 5000
+- takeScreenshot: architect-passport-${THEME}
+- tapOn:
+    point: 50%,9%
+- scrollUntilVisible:
+    element:
+      id: architect-open-builder
+    direction: DOWN
+- tapOn:
+    id: architect-open-builder
+- extendedWaitUntil:
+    visible:
+      id: agent-builder-hub|agent-step-review
+    timeout: 10000
+- takeScreenshot: architect-to-builder-${THEME}
+- runScript: scripts/restore-preferences.js

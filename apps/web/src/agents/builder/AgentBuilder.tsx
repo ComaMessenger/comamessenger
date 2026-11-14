@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { agentBuilderState, loosenedLabels } from "@comamessenger/core";
 import type {
   Agent,
   AgentLlmConnection,
@@ -17,7 +18,6 @@ import {
   IconButton,
   InlineSuccess,
 } from "../../ui";
-import { actionTools, type ConfirmableAction } from "../shared/confirmation";
 import { AgentCheckPanel } from "../check/AgentCheckPanel";
 import type { BuilderAnchor } from "../routes";
 import type { AgentAccess } from "../shared/access";
@@ -150,23 +150,7 @@ export function AgentBuilder({
   }
 
   const status = humanStatus(agent);
-  const publishedAt = agent.published_at
-    ? new Date(agent.published_at).toLocaleDateString(i18n.language, {
-        day: "numeric",
-        month: "long",
-      })
-    : "";
-
-  function loosenedLabel(key: string): string {
-    if (key.startsWith("mcp:")) {
-      const [connection, tool] = key.slice(4).split("/");
-      return t("agentLoosenedExternal", { connection, tool });
-    }
-    const action = (Object.keys(actionTools) as ConfirmableAction[]).find(
-      (item) => actionTools[item].includes(key),
-    );
-    return action ? t(`agentAction_${action}`) : key;
-  }
+  const builderState = agentBuilderState(agent, dirty, i18n.language);
 
   return (
     <div className="agent-builder">
@@ -191,7 +175,7 @@ export function AgentBuilder({
           }
         >
           <ul className="agent-reasons" data-testid="agent-loosened">
-            {[...new Set(builder.loosened.map(loosenedLabel))].map((label) => (
+            {loosenedLabels(t, builder.loosened).map((label) => (
               <li key={label}>{label}</li>
             ))}
           </ul>
@@ -215,20 +199,7 @@ export function AgentBuilder({
           <h2>{agent.display_name}</h2>
           <span>
             <AgentStatus status={status} />
-            <small>
-              {dirty
-                ? t("agentStateUnsaved")
-                : agent.published_version
-                  ? agent.has_unpublished_changes
-                    ? t("agentStateDraftDiffers", {
-                        version: agent.published_version,
-                      })
-                    : t("agentStatePublished", {
-                        version: agent.published_version,
-                        date: publishedAt,
-                      })
-                  : t("agentStateNeverPublished")}
-            </small>
+            <small>{t(builderState.key, builderState.values)}</small>
           </span>
         </div>
         <div className="agent-builder__actions">
@@ -372,7 +343,9 @@ export function AgentBuilder({
               <ExternalSystems
                 api={api}
                 bindings={draft.mcp_bindings ?? []}
-                onChange={(mcp_bindings) => setDraft({ ...draft, mcp_bindings })}
+                onChange={(mcp_bindings) =>
+                  setDraft({ ...draft, mcp_bindings })
+                }
               />
             </SkillsBlock>
             <TriggersBlock
@@ -393,7 +366,8 @@ export function AgentBuilder({
                   [
                     ...readChatIDs,
                     ...ids.filter(
-                      (id) => !writeChatIDs.includes(id) && !readChatIDs.includes(id),
+                      (id) =>
+                        !writeChatIDs.includes(id) && !readChatIDs.includes(id),
                     ),
                   ],
                   ids,

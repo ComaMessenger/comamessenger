@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { checkBlockers, customExampleCount } from "@comamessenger/core";
 import type {
   Agent,
   AgentRecipe,
@@ -21,16 +22,6 @@ import { blockID } from "../builder/BuilderBlock";
 import { chatName } from "../shared/format";
 import { CheckResult } from "./CheckResult";
 import { useAgentCheck } from "./useAgentCheck";
-
-const customExampleCount = 3;
-/** Blockers that make a check impossible, not only a publish. */
-const checkBlockers = new Set([
-  "chat_required",
-  "llm_connection_required",
-  "llm_connection_unavailable",
-  "external_data_approval_required",
-  "provider_model_required",
-]);
 
 /**
  * The «Check» panel: ready examples of the role, the answer of the draft in

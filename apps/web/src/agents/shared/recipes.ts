@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { Agent, AgentRecipe, MessengerAPI } from "@comamessenger/core";
+import type { MessengerAPI } from "@comamessenger/core";
 import { useTranslation } from "react-i18next";
 
 /*
@@ -18,10 +18,4 @@ export function useRecipes(api: MessengerAPI, enabled = true) {
   });
 }
 
-export function recipeOf(
-  recipes: readonly AgentRecipe[] | undefined,
-  agent: Pick<Agent, "recipe">,
-): AgentRecipe | undefined {
-  if (agent.recipe === "custom") return undefined;
-  return recipes?.find((recipe) => recipe.id === agent.recipe);
-}
+export { recipeOf } from "@comamessenger/core";
