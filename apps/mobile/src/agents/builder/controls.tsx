@@ -126,8 +126,12 @@ export function Segmented<T extends string>({
             <Text
               size={13.5}
               weight={selected ? "semibold" : "medium"}
-              numberOfLines={1}
-              style={{ color: selected ? theme.foreground : theme.muted }}
+              numberOfLines={2}
+              style={{
+                color: selected ? theme.foreground : theme.muted,
+                textAlign: "center",
+                flexShrink: 1,
+              }}
             >
               {item.label}
             </Text>
@@ -256,14 +260,17 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     padding: 2,
     gap: 2,
-    alignSelf: "flex-start",
+    alignSelf: "stretch",
   },
   segment: {
+    flex: 1,
+    justifyContent: "center",
     minHeight: 34,
     flexDirection: "row",
     alignItems: "center",
     gap: spacing[1],
-    paddingHorizontal: spacing[3],
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[1],
     borderRadius: radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "transparent",

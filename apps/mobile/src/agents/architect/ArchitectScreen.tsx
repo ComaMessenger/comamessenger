@@ -234,7 +234,7 @@ export function ArchitectScreen({ agentID }: { agentID: string | null }) {
           {busy ? <Thinking /> : null}
           {finished && agent ? (
             <AgentBuilderProvider agent={agent} refetchAgents={agents.refetch}>
-              <ArchitectFinish examples={session.test_examples} />
+              <ArchitectFinish examples={session.test_examples ?? []} />
             </AgentBuilderProvider>
           ) : null}
           {problem ? (
@@ -352,6 +352,9 @@ function Bubble({
   const theme = useTheme();
   const mine = message.role === "user";
   const done = message.kind === "done";
+  // Older sessions may carry null lists.
+  const assumptions = message.assumptions ?? [];
+  const options = message.options ?? [];
   return (
     <View
       style={[styles.message, mine && styles.mine]}
@@ -392,12 +395,12 @@ function Bubble({
           >
             {message.text}
           </Text>
-          {message.assumptions.length > 0 ? (
+          {assumptions.length > 0 ? (
             <View style={styles.assumptions}>
               <Text weight="semibold" size={13.5}>
                 {t("architectAssumptions")}
               </Text>
-              {message.assumptions.map((item) => (
+              {assumptions.map((item) => (
                 <Text key={item} tone="muted" size={13.5}>
                   • {item}
                 </Text>
@@ -405,9 +408,9 @@ function Bubble({
             </View>
           ) : null}
         </View>
-        {answerable && message.options.length > 0 ? (
+        {answerable && options.length > 0 ? (
           <ChipRow>
-            {message.options.map((option, index) => (
+            {options.map((option, index) => (
               <Chip
                 key={option}
                 testID={`architect-option-${index}`}

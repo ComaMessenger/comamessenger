@@ -320,7 +320,10 @@ export function NewAgentScreen({ recipeID }: { recipeID: string }) {
                 label={t("agentCreateName")}
                 value={shownName}
                 placeholder={t("agentCreateNamePlaceholder")}
-                onChangeText={setName}
+                onChangeText={(value) => {
+                  setName(value);
+                  setError("");
+                }}
               />
             </GroupBody>
             <Divider />
@@ -356,7 +359,10 @@ export function NewAgentScreen({ recipeID }: { recipeID: string }) {
         chats={chats}
         exclude={[]}
         onClose={() => setPicking(false)}
-        onDone={([id]) => setChatID(id ?? "")}
+        onDone={([id]) => {
+          setChatID(id ?? "");
+          setError("");
+        }}
       />
     </SettingsScreen>
   );

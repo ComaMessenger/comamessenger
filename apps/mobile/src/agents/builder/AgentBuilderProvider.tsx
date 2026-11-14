@@ -208,6 +208,12 @@ export function AgentBuilderProvider({
       if (fingerprint(snapshot) === server.current) return snapshot;
       const updated = await api.updateAgent(agent.id, updateOf(snapshot));
       adopt(updated);
+      // The server may order lists its own way: take its copy unless the
+      // person kept typing meanwhile.
+      const saved = draftOf(updated);
+      setDraft((current) =>
+        fingerprint(current) === fingerprint(snapshot) ? saved : current,
+      );
       return snapshot;
     },
     [adopt, agent.id, api],
