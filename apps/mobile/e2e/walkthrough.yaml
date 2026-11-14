@@ -22,7 +22,8 @@ env:
     element:
       id: thread-caption
     direction: UP
-    timeout: 30000
+    timeout: 60000
+    speed: 80
 - scrollUntilVisible:
     element: .*👍.*
     direction: UP

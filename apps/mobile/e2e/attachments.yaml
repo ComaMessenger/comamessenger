@@ -18,22 +18,26 @@ appId: com.comamessenger.app
 - extendedWaitUntil:
     visible: .*(Photos|Фото|Recents|Недавние).*
     timeout: 15000
-# Second photo of the simulator's sample library.
+# The second photo of the simulator's sample library, by its label: iOS 26
+# picks several (a tap only marks it), and a tap by point could land before
+# the grid is drawn.
 - tapOn:
-    point: 50%,28%
-# Older iOS confirms with «Добавить»; iOS 26 with a check mark top right.
+    text: (Photo|Фотография), .*
+    index: 1
+- waitForAnimationToEnd:
+    timeout: 2000
+# iOS 26 confirms with «Готово» (the check mark), older iOS with «Добавить»;
+# single-pick pickers close by themselves.
+- runFlow:
+    when:
+      visible: (Done|Готово)
+    commands:
+      - tapOn: (Done|Готово)
 - runFlow:
     when:
       visible: (Add|Добавить)
     commands:
       - tapOn: (Add|Добавить)
-- runFlow:
-    when:
-      notVisible:
-        id: composer-send
-    commands:
-      - tapOn:
-          point: 89%,16%
 # The send button becomes enabled once the upload finishes.
 - extendedWaitUntil:
     visible:

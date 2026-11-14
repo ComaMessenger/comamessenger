@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -50,6 +51,8 @@ import { openAttachment } from "@/files/open";
 import { mediaKind, type MediaItem } from "@/media/items";
 import { MediaViewerHost } from "@/media/MediaViewer";
 import { useOpenMedia } from "@/media/MediaViewerContext";
+import { usePoster } from "@/media/facts";
+import { probeVideo } from "@/media/probe";
 import { measureAnchor } from "@/ui/AnchoredMenu";
 import { useFileSource } from "@/files/sources";
 import { Avatar } from "@/ui/Avatar";
@@ -250,6 +253,11 @@ function MediaTab({ chatID }: { chatID: string }) {
       ),
     [items],
   );
+  // Position in the grid, newest first: «shared-media-tile-0» is the newest.
+  const position = useMemo(
+    () => new Map(items.map((item, index) => [sharedItemKey(item), index])),
+    [items],
+  );
   const { width } = useWindowDimensions();
   const size = Math.floor((width - gap * (columns - 1)) / columns);
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = query;
@@ -288,7 +296,12 @@ function MediaTab({ chatID }: { chatID: string }) {
         renderItem={({ item: row }) => (
           <View style={[styles.gridRow, { gap }]}>
             {row.map((item) => (
-              <MediaTile key={sharedItemKey(item)} item={item} size={size} />
+              <MediaTile
+                key={sharedItemKey(item)}
+                item={item}
+                size={size}
+                index={position.get(sharedItemKey(item)) ?? 0}
+              />
             ))}
           </View>
         )}
@@ -336,23 +349,38 @@ function chunk<T>(items: T[], size: number): T[][] {
 function MediaTile({
   item,
   size,
+  index,
 }: {
   item: ChatSharedAttachment;
   size: number;
+  index: number;
 }) {
   const { t } = useTranslation();
   const theme = useTheme();
   const openMedia = useOpenMedia();
   const tile = useRef<View>(null);
   const video = isSharedVideo(item);
-  // A video shows its generated preview; without one, a plain tile.
+  // A photo shows its preview; a video, the poster frame the feed learns on
+  // the phone (the server makes previews of photos only), probed in the
+  // same one-at-a-time queue.
   const source = useFileSource(
     item.file.preview_file_id ?? (video ? undefined : item.file.id),
   );
+  const poster = usePoster(item.file.id);
+  const videoSource = useFileSource(
+    video && !poster ? item.file.id : undefined,
+  );
+  const videoURI = videoSource?.uri;
+  useEffect(() => {
+    if (!video || poster || !videoSource) return;
+    void probeVideo(item.file.id, videoSource);
+    // The source object is rebuilt on every render; one probe per link.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.file.id, poster, video, videoURI]);
   return (
     <Pressable
       ref={tile}
-      testID={`shared-media-${item.file.id}`}
+      testID={`shared-media-tile-${index}`}
       accessibilityRole="imagebutton"
       accessibilityLabel={
         video ? `${t("sharedVideo")}, ${item.file.name}` : item.file.name
@@ -367,14 +395,23 @@ function MediaTile({
         pressed && styles.pressed,
       ]}
     >
-      {source && (
+      {video ? (
+        poster ? (
+          <Image
+            source={poster}
+            contentFit="cover"
+            recyclingKey={item.file.id}
+            style={StyleSheet.absoluteFill}
+          />
+        ) : null
+      ) : source ? (
         <Image
           source={source}
           contentFit="cover"
           cachePolicy="disk"
           style={StyleSheet.absoluteFill}
         />
-      )}
+      ) : null}
       {video && (
         <View style={styles.play}>
           <Play size={14} color="#ffffff" fill="#ffffff" />
