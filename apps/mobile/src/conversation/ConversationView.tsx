@@ -29,7 +29,6 @@ import {
   applySavedChange,
   chatAvatarSource,
   chatCommands,
-  chatHeaderStatus,
   compactUUID,
   decodeMentions,
   encodeMentions,
@@ -81,7 +80,7 @@ import { reactionsKey, toggleReaction } from "./reactions";
 import { ThreadRoot } from "./ThreadRoot";
 import { useConversation } from "./useConversation";
 import { useUploadActivity } from "./useChatActivity";
-import { HeaderStatus, useNow } from "./HeaderStatus";
+import { ChatStatusLine } from "./HeaderStatus";
 import { useVoiceFeed } from "@/voice/VoiceFeed";
 import { VoiceOutboxStrip } from "@/voice/VoiceOutbox";
 
@@ -131,7 +130,6 @@ export function ConversationView({
   const [notice, setNotice] = useState<string | null>(null);
   const attachments = useAttachments(api, typingScope(chatID, threadRootID));
   useUploadActivity(chatID, threadRootID);
-  const now = useNow();
   const list = useRef<FlashListRef<FeedRow>>(null);
   const atBottom = useRef(true);
   const title = chat ? chatTitle(chat, t("directChat")) : "";
@@ -544,26 +542,10 @@ export function ConversationView({
         : null;
 
   const agents = conversation.workingAgents;
-  const status =
-    chat && !inThread
-      ? chatHeaderStatus({
-          locale: i18n.language === "en" ? "en" : "ru",
-          now,
-          viewerID: user.id,
-          chat,
-          members,
-          actions: conversation.typingActions,
-          presence: conversation.presence,
-          lastSeen: conversation.lastSeen,
-          agentStatuses: conversation.agentStatuses,
-        })
-      : null;
   // Groups keep naming the working agent; a direct chat with an agent says
   // "agent · thinking" through the status itself.
   const groupAgents = chat?.kind !== "direct" ? agents : [];
-  const live = Boolean(
-    groupAgents.length || conversation.typingNames.length || status?.live,
-  );
+  const live = Boolean(groupAgents.length || conversation.typingNames.length);
   const subtitle = groupAgents.length ? (
     groupAgents.length === 1 ? (
       t("agentWorking", { name: authorName(groupAgents[0]!.actorID) })
@@ -580,8 +562,19 @@ export function ConversationView({
     ) : (
       title
     )
-  ) : status?.text ? (
-    <HeaderStatus status={status} />
+  ) : chat ? (
+    <ChatStatusLine
+      input={{
+        locale: i18n.language === "en" ? "en" : "ru",
+        viewerID: user.id,
+        chat,
+        members,
+        actions: conversation.typingActions,
+        presence: conversation.presence,
+        lastSeen: conversation.lastSeen,
+        agentStatuses: conversation.agentStatuses,
+      }}
+    />
   ) : (
     ""
   );

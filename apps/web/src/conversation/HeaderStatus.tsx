@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import type { ConversationStatus } from "@comamessenger/core";
+import { useEffect, useState, type ReactNode } from "react";
+import { chatHeaderStatus, type ConversationStatus } from "@comamessenger/core";
 import { cx } from "../ui";
 
 /** Re-render on a slow tick so "5 minutes ago" keeps counting. */
@@ -36,4 +36,20 @@ export function HeaderStatus({ status }: { status: ConversationStatus }) {
       )}
     </span>
   );
+}
+
+/**
+ * The status line with its own clock: only this line re-renders every half
+ * minute, not the conversation around it.
+ */
+export function ChatStatusLine({
+  input,
+  fallback,
+}: {
+  input: Omit<Parameters<typeof chatHeaderStatus>[0], "now">;
+  fallback: ReactNode;
+}) {
+  const now = useNow();
+  const status = chatHeaderStatus({ ...input, now });
+  return status.text ? <HeaderStatus status={status} /> : <>{fallback}</>;
 }

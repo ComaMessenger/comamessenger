@@ -5,7 +5,6 @@ import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import {
   chatAvatarSource,
-  chatHeaderStatus,
   feedRows,
   type Chat,
   type Message,
@@ -33,7 +32,7 @@ import { MessageRow } from "./MessageRow";
 import { AgentStreamRow } from "./AgentStreamRow";
 import { ChatIntro } from "./ChatIntro";
 import { ThreadPanel } from "./ThreadPanel";
-import { HeaderStatus, useNow } from "./HeaderStatus";
+import { ChatStatusLine } from "./HeaderStatus";
 import { useUploadActivity } from "../composer/useUploadActivity";
 import { useChatAgents } from "../agentchat/useChatAgents";
 import { ScheduledBar } from "../scheduled/ScheduledBar";
@@ -41,7 +40,6 @@ import {
   ComposerScheduleDialog,
   type ScheduleDraft,
 } from "../scheduled/ComposerScheduleDialog";
-
 
 export function Conversation({
   chatID,
@@ -60,7 +58,6 @@ export function Conversation({
 }) {
   const { t, i18n } = useTranslation();
   const isMobile = useIsMobile();
-  const now = useNow();
   const {
     api,
     user,
@@ -173,19 +170,6 @@ export function Conversation({
     });
   }
 
-  const headerStatus = chat
-    ? chatHeaderStatus({
-        locale: i18n.language === "en" ? "en" : "ru",
-        now,
-        viewerID: user.id,
-        chat,
-        members,
-        actions: typingActions,
-        presence,
-        lastSeen,
-        agentStatuses: Object.values(agentStatuses),
-      })
-    : null;
   const subtitle =
     chat?.kind !== "direct" && activeAgents.length ? (
       <span className="conversation-head__agent">
@@ -199,10 +183,20 @@ export function Conversation({
             })
           : t("agentsWorking", { count: activeAgents.length })}
       </span>
-    ) : headerStatus?.text ? (
-      <HeaderStatus status={headerStatus} />
-    ) : directPeer ? (
-      directPeer.title || `@${directPeer.handle}`
+    ) : chat ? (
+      <ChatStatusLine
+        input={{
+          locale: i18n.language === "en" ? "en" : "ru",
+          viewerID: user.id,
+          chat,
+          members,
+          actions: typingActions,
+          presence,
+          lastSeen,
+          agentStatuses: Object.values(agentStatuses),
+        }}
+        fallback={directPeer ? directPeer.title || `@${directPeer.handle}` : ""}
+      />
     ) : (
       ""
     );

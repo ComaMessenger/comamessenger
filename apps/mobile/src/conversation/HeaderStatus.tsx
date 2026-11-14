@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, StyleSheet, View } from "react-native";
-import type { ConversationStatus } from "@comamessenger/core";
+import { chatHeaderStatus, type ConversationStatus } from "@comamessenger/core";
 import { useTheme } from "@/lib/theme";
 import { Text } from "@/ui/Text";
 
@@ -78,6 +78,20 @@ export function HeaderStatus({ status }: { status: ConversationStatus }) {
       {status.animated && <TypingDots color={theme.primary} />}
     </View>
   );
+}
+
+/**
+ * The status line with its own clock: only this line re-renders every half
+ * minute, not the feed around it.
+ */
+export function ChatStatusLine({
+  input,
+}: {
+  input: Omit<Parameters<typeof chatHeaderStatus>[0], "now">;
+}) {
+  const now = useNow();
+  const status = chatHeaderStatus({ ...input, now });
+  return status.text ? <HeaderStatus status={status} /> : null;
 }
 
 const styles = StyleSheet.create({
