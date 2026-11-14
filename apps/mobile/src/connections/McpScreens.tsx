@@ -68,6 +68,7 @@ function EndpointField({
   return (
     <TextField
       testID="mcp-endpoint"
+      textContentType="URL"
       label={t("connMcpEndpoint")}
       placeholder="https://mcp.example.com/mcp"
       keyboardType="url"
@@ -140,6 +141,7 @@ export function McpCreateScreen() {
         <GroupBody>
           <TextField
             testID="mcp-name"
+            textContentType="organizationName"
             label={t("connMcpName")}
             placeholder="accounting"
             maxLength={40}
@@ -151,6 +153,7 @@ export function McpCreateScreen() {
           />
           <TextField
             testID="mcp-description"
+            textContentType="organizationName"
             label={t("connMcpDescription")}
             maxLength={500}
             value={draft.description}
@@ -163,6 +166,7 @@ export function McpCreateScreen() {
           />
           <TextField
             testID="mcp-header-name"
+            textContentType="oneTimeCode"
             label={t("connMcpHeaderName")}
             value={draft.header_name}
             onChangeText={(header_name) => set({ header_name })}
@@ -259,6 +263,9 @@ function McpDetails({
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(
     null,
   );
+  // Where the outcome shows: next to «Сохранить» for edits and deletion,
+  // under the status for tests and switches.
+  const [resultAt, setResultAt] = useState<"top" | "bottom">("top");
   const [edit, setEdit] = useState(() => mcpConnectionEdit(connection));
   const [detaching, setDetaching] = useState(false);
   const change = updateMcpConnectionRequest(connection, edit);
@@ -269,6 +276,7 @@ function McpDetails({
     action: () => Promise<McpConnection>,
   ) {
     setBusy(kind);
+    setResultAt(kind === "save" || kind === "delete" ? "bottom" : "top");
     setResult(null);
     try {
       const updated = await action();
@@ -328,6 +336,7 @@ function McpDetails({
           style: "destructive",
           onPress: async () => {
             setBusy("delete");
+            setResultAt("bottom");
             try {
               await api.deleteMcpConnection(connection.id);
               store.remove(mcpKey, connection.id);
@@ -407,7 +416,7 @@ function McpDetails({
           </>
         )}
       </SettingsGroup>
-      {result && (
+      {result && resultAt === "top" && (
         <Notice tone={result.ok ? "success" : "danger"} title={result.text} />
       )}
 
@@ -490,6 +499,7 @@ function McpDetails({
             <GroupBody>
               <TextField
                 testID="mcp-description"
+                textContentType="organizationName"
                 label={t("connMcpDescription")}
                 maxLength={500}
                 value={edit.description}
@@ -523,6 +533,7 @@ function McpDetails({
             {edit.replace_headers && (
               <GroupBody>
                 <TextField
+                  textContentType="oneTimeCode"
                   label={t("connMcpHeaderName")}
                   value={edit.header_name}
                   onChangeText={(header_name) => set({ header_name })}
@@ -562,6 +573,12 @@ function McpDetails({
             </GroupBody>
           </SettingsGroup>
           {dropsSecret && <Notice title={t("connMcpDropsSecret")} />}
+          {result && resultAt === "bottom" && (
+            <Notice
+              tone={result.ok ? "success" : "danger"}
+              title={result.text}
+            />
+          )}
           <Button
             testID="mcp-update"
             label={t("connSave")}

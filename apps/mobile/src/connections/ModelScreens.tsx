@@ -132,7 +132,11 @@ export function ModelsScreen() {
   );
 }
 
-/** Provider, address, model and key fields shared by «new» and «edit». */
+/**
+ * Provider, address, model and key fields shared by «new» and «edit». Every
+ * field names its content type: a form with an untyped field before a secure
+ * one looks like a sign-in to iOS, which then offers to keep the key.
+ */
 function ConnectionFields({
   value,
   onChange,
@@ -150,6 +154,7 @@ function ConnectionFields({
       <GroupBody>
         <TextField
           testID="model-name"
+          textContentType="organizationName"
           label={t("connModelName")}
           placeholder={t("connModelNamePlaceholder")}
           value={value.name}
@@ -169,6 +174,7 @@ function ConnectionFields({
         {providerNeedsEndpoint(value.provider) && (
           <TextField
             testID="model-endpoint"
+            textContentType="URL"
             label={t("connEndpoint")}
             placeholder="https://api.example.com/v1"
             keyboardType="url"
@@ -186,6 +192,7 @@ function ConnectionFields({
         )}
         <TextField
           testID="model-default"
+          textContentType="oneTimeCode"
           label={t("connDefaultModel")}
           hint={t("connDefaultModelHint")}
           placeholder="gpt-4o-mini"
@@ -330,6 +337,9 @@ function ModelDetails({
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(
     null,
   );
+  // Where the outcome shows: next to «Сохранить» for edits and deletion,
+  // under the status for tests and switches.
+  const [resultAt, setResultAt] = useState<"top" | "bottom">("top");
   const [edit, setEdit] = useState(() => llmConnectionEdit(connection));
   const change = updateLlmConnectionRequest(connection, edit);
   const usageParts = [
@@ -344,6 +354,7 @@ function ModelDetails({
     action: () => Promise<T>,
   ): Promise<T | null> {
     setBusy(kind);
+    setResultAt(kind === "save" || kind === "delete" ? "bottom" : "top");
     setResult(null);
     try {
       return await action();
@@ -471,7 +482,7 @@ function ModelDetails({
           </>
         )}
       </SettingsGroup>
-      {result && (
+      {result && resultAt === "top" && (
         <Notice tone={result.ok ? "success" : "danger"} title={result.text} />
       )}
 
@@ -539,6 +550,7 @@ function ModelDetails({
                 <GroupBody>
                   <TextField
                     testID="model-embedding"
+                    textContentType="oneTimeCode"
                     label={t("connEmbeddingModel")}
                     hint={t("connEmbeddingModelHint")}
                     placeholder="text-embedding-3-small"
@@ -570,6 +582,12 @@ function ModelDetails({
               </>
             )}
           </SettingsGroup>
+          {result && resultAt === "bottom" && (
+            <Notice
+              tone={result.ok ? "success" : "danger"}
+              title={result.text}
+            />
+          )}
           <Button
             testID="model-update"
             label={t("connSave")}

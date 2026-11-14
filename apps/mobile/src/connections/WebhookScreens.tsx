@@ -183,6 +183,9 @@ function WebhookDetails({ hook }: { hook: IntegrationWebhook }) {
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(
     null,
   );
+  // Where the outcome shows: next to «Сохранить» for edits and deletion,
+  // under the status for tests and switches.
+  const [resultAt, setResultAt] = useState<"top" | "bottom">("top");
   const [secret, setSecret] = useState<string | null>(null);
   const [journal, setJournal] = useState(false);
   const [name, setName] = useState(hook.name);
@@ -206,6 +209,7 @@ function WebhookDetails({ hook }: { hook: IntegrationWebhook }) {
     action: () => Promise<T>,
   ): Promise<T | null> {
     setBusy(kind);
+    setResultAt(kind === "save" || kind === "delete" ? "bottom" : "top");
     setResult(null);
     try {
       const updated = await action();
@@ -257,6 +261,7 @@ function WebhookDetails({ hook }: { hook: IntegrationWebhook }) {
           style: "destructive",
           onPress: async () => {
             setBusy("delete");
+            setResultAt("bottom");
             try {
               await api.deleteIntegrationWebhook(hook.id);
               store.remove(webhooksKey, hook.id);
@@ -309,7 +314,7 @@ function WebhookDetails({ hook }: { hook: IntegrationWebhook }) {
           onPress={rotate}
         />
       </SettingsGroup>
-      {result && (
+      {result && resultAt === "top" && (
         <Notice tone={result.ok ? "success" : "danger"} title={result.text} />
       )}
 
@@ -392,6 +397,9 @@ function WebhookDetails({ hook }: { hook: IntegrationWebhook }) {
           <RateField value={rate} onChange={setRate} />
         </GroupBody>
       </SettingsGroup>
+      {result && resultAt === "bottom" && (
+        <Notice tone={result.ok ? "success" : "danger"} title={result.text} />
+      )}
       <Button
         testID="webhook-update"
         label={t("connSave")}

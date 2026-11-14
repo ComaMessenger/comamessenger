@@ -3,7 +3,10 @@
 # it; connect an MCP server, switch a tool, delete it; create an incoming
 # webhook, see its secret once, open the journal, delete it.
 # The provider key comes from the environment (never this file or a
-# screenshot): it is put into the clipboard and pasted with «Вставить».
+# screenshot) and is typed into the revealed field, hidden again before the
+# screenshot. «Вставить» is checked on the edit form with a dummy key that
+# is put into the simulator's clipboard first:
+#   printf sk-e2e-dummy-paste-0000 | xcrun simctl pbcopy <device>
 #   maestro test --device <device> -e THEME=light -e PROVOD_KEY=… e2e/connections.yaml
 # Maestro keeps the commands with the key in its output: delete that after.
 # Needs internet on the server: api.provod.ai and mcp.deepwiki.com.
@@ -57,18 +60,14 @@ appId: com.comamessenger.app
 - tapOn:
     id: model-default
 - inputText: gpt-4o-mini
-- hideKeyboard
-- setClipboard: ${PROVOD_KEY}
+- pressKey: Enter
 - tapOn:
-    id: model-key-paste
-- runFlow:
-    when:
-      visible: (Разрешить вставку|Allow Paste)
-    commands:
-      - tapOn: (Разрешить вставку|Allow Paste)
-- extendedWaitUntil:
-    visible: "Вставлено: .*"
-    timeout: 5000
+    id: model-key-reveal
+- tapOn:
+    id: model-key
+- inputText: ${PROVOD_KEY}
+- tapOn:
+    id: model-key-reveal
 - takeScreenshot: connections-model-new-${THEME}
 - tapOn:
     id: model-save
@@ -81,7 +80,7 @@ appId: com.comamessenger.app
     visible:
       id: model-status
     timeout: 30000
-- assertVisible: Работает
+- assertVisible: "Работает.*"
 - takeScreenshot: connections-model-${THEME}
 - tapOn:
     id: model-test
@@ -94,10 +93,28 @@ appId: com.comamessenger.app
     direction: DOWN
 - takeScreenshot: connections-model-edit-${THEME}
 - tapOn:
+    id: model-key-paste
+- runFlow:
+    when:
+      visible: (Разрешить вставку|Allow Paste)
+    commands:
+      - tapOn: (Разрешить вставку|Allow Paste)
+- extendedWaitUntil:
+    visible: "Вставлено: sk-…0000"
+    timeout: 5000
+- takeScreenshot: connections-model-paste-${THEME}
+- tapOn:
+    id: model-key
+- eraseText: 40
+- tapOn:
     id: model-default
 - eraseText: 20
 - inputText: gpt-4.1-mini
-- hideKeyboard
+- pressKey: Enter
+- scrollUntilVisible:
+    element:
+      id: model-update
+    direction: DOWN
 - tapOn:
     id: model-update
 - extendedWaitUntil:
@@ -144,7 +161,7 @@ appId: com.comamessenger.app
 - takeScreenshot: connections-mcp-new-netguard-${THEME}
 - eraseText: 30
 - inputText: https://mcp.deepwiki.com/mcp
-- hideKeyboard
+- pressKey: Enter
 - scrollUntilVisible:
     element:
       id: mcp-agent-use
@@ -203,12 +220,12 @@ appId: com.comamessenger.app
       id: webhook-name
     timeout: 10000
 - tapOn:
-    id: webhook-name
-- inputText: Склад e2e
-- tapOn:
     id: webhook-description
 - inputText: Слот освободился
-- hideKeyboard
+- tapOn:
+    id: webhook-name
+- inputText: Склад e2e
+- pressKey: Enter
 - takeScreenshot: connections-webhook-new-${THEME}
 - tapOn:
     id: webhook-save
@@ -260,6 +277,5 @@ appId: com.comamessenger.app
       id: webhook-add
     timeout: 10000
 - assertNotVisible: Склад e2e
-- setClipboard: " "
 - tapOn: Назад
 - tapOn: Назад
