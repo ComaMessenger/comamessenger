@@ -89,7 +89,10 @@ func cors(allowedOrigin string) func(standardhttp.Handler) standardhttp.Handler 
 			if origin != "" && origin == allowedOrigin {
 				w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
 				w.Header().Set("Access-Control-Allow-Credentials", "true")
-				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Request-ID, X-Coma-Bootstrap-Token")
+				// If-None-Match: GET /api/v1/org is read with the cached version
+				// (ETag "org-N", 304 when unchanged).
+				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, If-None-Match, X-Request-ID, X-Coma-Bootstrap-Token")
+				w.Header().Set("Access-Control-Expose-Headers", "ETag")
 				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS")
 				w.Header().Set("Vary", "Origin")
 			}
