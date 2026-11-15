@@ -35,6 +35,17 @@ const schemaByFixture = {
   "event-message-task": "RealtimeDurableEventFrameV1",
   "event-task-updated": "RealtimeDurableEventFrameV1",
   "event-task-notified": "RealtimeDurableEventFrameV1",
+  "event-message-poll": "RealtimeDurableEventFrameV1",
+  "event-poll-updated": "RealtimeDurableEventFrameV1",
+  "event-poll-updated-open": "RealtimeDurableEventFrameV1",
+  "event-poll-vote-updated": "RealtimeDurableEventFrameV1",
+  "event-poll-vote-updated-anonymous": "RealtimeDurableEventFrameV1",
+  "event-poll-notified": "RealtimeDurableEventFrameV1",
+  "event-actor-away-updated": "RealtimeDurableEventFrameV1",
+  "event-actor-away-cleared": "RealtimeDurableEventFrameV1",
+  "event-away-substitute-assigned": "RealtimeDurableEventFrameV1",
+  "event-away-substitute-removed": "RealtimeDurableEventFrameV1",
+  "event-message-auto-reply": "RealtimeDurableEventFrameV1",
 };
 // Typed data of durable events: the fixture's data must also satisfy it.
 const dataSchemaByEventType = {
@@ -52,6 +63,12 @@ const dataSchemaByEventType = {
   "org.updated": "RealtimeOrgUpdatedEventV1",
   "task.updated": "TaskUpdatedEvent",
   "task.notified": "RealtimeTaskNotifiedEventV1",
+  "poll.updated": "RealtimePollUpdatedEventV1",
+  "poll.vote.updated": "RealtimePollVoteUpdatedEventV1",
+  "poll.notified": "RealtimePollNotifiedEventV1",
+  "actor.away.updated": "RealtimeActorAwayUpdatedEventV1",
+  "away.substitute.assigned": "RealtimeAwaySubstituteAssignedEventV1",
+  "away.substitute.removed": "RealtimeAwaySubstituteRemovedEventV1",
 };
 
 const files = (await readdir(fixtureRoot))

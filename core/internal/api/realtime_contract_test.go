@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -40,6 +41,13 @@ func TestRealtimeV1FixturesMatchSchemaAndGeneratedTypes(t *testing.T) {
 				t.Fatalf("read fixture: %v", err)
 			}
 
+			if strings.HasPrefix(name, "event-") {
+				if err := validateEventFixture(compiler, schema, protocolRoot, payload); err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
+
 			var document any
 			if err := json.Unmarshal(payload, &document); err != nil {
 				t.Fatalf("decode fixture JSON: %v", err)
@@ -53,9 +61,6 @@ func TestRealtimeV1FixturesMatchSchemaAndGeneratedTypes(t *testing.T) {
 			decoder.DisallowUnknownFields()
 			if err := decoder.Decode(target); err != nil {
 				t.Fatalf("decode fixture into generated Go type: %v", err)
-			}
-			if strings.HasPrefix(name, "event-") {
-				checkTypedEventData(t, compiler, protocolRoot, target.(*RealtimeDurableEventFrameV1))
 			}
 		})
 	}
@@ -84,44 +89,104 @@ var typedEventData = map[string]struct {
 	// TaskUpdatedEvent type checks the task inside it.
 	"task.updated":  {"TaskUpdatedEvent", func() any { return &TaskUpdatedEvent{} }},
 	"task.notified": {"TaskNotifiedEvent", func() any { return &RealtimeTaskNotifiedEventV1{} }},
+	// poll.vote.updated is a oneOf: the realtime schema picks the variant,
+	// so an anonymous vote with options fails there.
+	"poll.updated":             {"PollUpdatedEvent", func() any { return &RealtimePollUpdatedEventV1{} }},
+	"poll.vote.updated":        {"PollVoteUpdatedEvent", func() any { return &RealtimePollVoteUpdatedEventV1{} }},
+	"poll.notified":            {"PollNotifiedEvent", func() any { return &RealtimePollNotifiedEventV1{} }},
+	"actor.away.updated":       {"ActorAwayUpdatedEvent", func() any { return &RealtimeActorAwayUpdatedEventV1{} }},
+	"away.substitute.assigned": {"AwaySubstituteAssignedEvent", func() any { return &RealtimeAwaySubstituteAssignedEventV1{} }},
+	"away.substitute.removed":  {"AwaySubstituteRemovedEvent", func() any { return &RealtimeAwaySubstituteRemovedEventV1{} }},
+}
+
+// validateEventFixture checks one event-*.json frame: the frame against the
+// realtime schema, its generated Go type, the typed data and the privacy
+// rules of eventPrivacyProblem.
+func validateEventFixture(compiler *jsonschema.Compiler, schema *jsonschema.Schema, protocolRoot string, payload []byte) error {
+	var document any
+	if err := json.Unmarshal(payload, &document); err != nil {
+		return fmt.Errorf("decode fixture JSON: %w", err)
+	}
+	if err := schema.Validate(document); err != nil {
+		return fmt.Errorf("validate fixture against JSON Schema: %w", err)
+	}
+	var frame RealtimeDurableEventFrameV1
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&frame); err != nil {
+		return fmt.Errorf("decode fixture into generated Go type: %w", err)
+	}
+	if err := checkTypedEventData(compiler, protocolRoot, &frame); err != nil {
+		return err
+	}
+	if problem := eventPrivacyProblem(&frame); problem != "" {
+		return fmt.Errorf("event %s leaks: %s", frame.Type, problem)
+	}
+	return nil
+}
+
+// eventPrivacyProblem catches what the schemas alone allow but a shared frame
+// must never carry: per-reader state (request_viewer, poll_viewer), the counts
+// of an open poll, and the voter behind poll.updated.
+func eventPrivacyProblem(frame *RealtimeDurableEventFrameV1) string {
+	for _, field := range []string{"request_viewer", "poll_viewer"} {
+		if _, ok := frame.Data[field]; ok {
+			return field + " is per reader and never goes into a frame"
+		}
+	}
+	switch {
+	case strings.HasPrefix(frame.Type, "message."):
+		poll, _ := frame.Data["poll"].(map[string]any)
+		if poll != nil && poll["status"] == "open" && poll["final_counts"] != nil {
+			return "an open poll carries final_counts"
+		}
+	case frame.Type == "poll.updated":
+		if frame.ActorId != nil {
+			return "poll.updated names its actor, which would reveal the voter"
+		}
+		if frame.Data["status"] == "open" && frame.Data["final_counts"] != nil {
+			return "an open poll carries final_counts"
+		}
+	}
+	return ""
 }
 
 // checkTypedEventData validates the data of an event-*.json fixture against
 // its own definition and decodes it into the generated Go type, so a field
 // the contract does not describe (a comment, a note) fails the test.
-func checkTypedEventData(t *testing.T, compiler *jsonschema.Compiler, protocolRoot string, frame *RealtimeDurableEventFrameV1) {
-	t.Helper()
+func checkTypedEventData(compiler *jsonschema.Compiler, protocolRoot string, frame *RealtimeDurableEventFrameV1) error {
 	typed, ok := typedEventData[frame.Type]
 	if !ok {
-		t.Fatalf("event fixture of type %s has no typed data mapping", frame.Type)
+		return fmt.Errorf("event fixture of type %s has no typed data mapping", frame.Type)
 	}
 	payload, err := json.Marshal(frame.Data)
 	if err != nil {
-		t.Fatalf("encode event data: %v", err)
+		return fmt.Errorf("encode event data: %w", err)
 	}
 	if typed.definition != "" {
 		schema, err := compiler.Compile(filepath.Join(protocolRoot, "schemas", "realtime", "v1.schema.json") + "#/$defs/" + typed.definition)
 		if err != nil {
-			t.Fatalf("compile %s: %v", typed.definition, err)
+			return fmt.Errorf("compile %s: %w", typed.definition, err)
 		}
 		var document any
 		if err := json.Unmarshal(payload, &document); err != nil {
-			t.Fatalf("decode event data: %v", err)
+			return fmt.Errorf("decode event data: %w", err)
 		}
 		if err := schema.Validate(document); err != nil {
-			t.Fatalf("validate event data against %s: %v", typed.definition, err)
+			return fmt.Errorf("validate event data against %s: %w", typed.definition, err)
 		}
 	}
 	decoder := json.NewDecoder(bytes.NewReader(payload))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(typed.target()); err != nil {
-		t.Fatalf("decode event data into generated Go type: %v", err)
+		return fmt.Errorf("decode event data into generated Go type: %w", err)
 	}
+	return nil
 }
 
 // TestRealtimeV1RequestAndReminderEventsHaveFixtures keeps a typed fixture
-// for every request.*, reminder.*, org.* and task.* event type the protocol
-// knows.
+// for every request.*, reminder.*, org.*, task.*, poll.*, actor.away.* and
+// away.* event type the protocol knows.
 func TestRealtimeV1RequestAndReminderEventsHaveFixtures(t *testing.T) {
 	protocolRoot := protocolPackageRoot(t)
 	raw, err := os.ReadFile(filepath.Join(protocolRoot, "schemas", "realtime", "v1.schema.json"))
@@ -157,7 +222,11 @@ func TestRealtimeV1RequestAndReminderEventsHaveFixtures(t *testing.T) {
 		covered[frame.Type] = true
 	}
 	for _, eventType := range schema.Defs.KnownDurableEventType.Enum {
-		if !strings.HasPrefix(eventType, "request.") && !strings.HasPrefix(eventType, "reminder.") && !strings.HasPrefix(eventType, "org.") && !strings.HasPrefix(eventType, "task.") {
+		typedPrefix := false
+		for _, prefix := range []string{"request.", "reminder.", "org.", "task.", "poll.", "actor.away.", "away."} {
+			typedPrefix = typedPrefix || strings.HasPrefix(eventType, prefix)
+		}
+		if !typedPrefix {
 			continue
 		}
 		if _, ok := typedEventData[eventType]; !ok {

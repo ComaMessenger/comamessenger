@@ -344,6 +344,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/away": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The current person's away status, current or planned, with the settings only they see: the auto-reply, the substitute as saved and mute_push. 204 when there is none. */
+        get: operations["getAway"];
+        /** @description Sets the current person's away status, replacing the whole record: a person has one, current or planned. Only the person sets it for themselves; people only, agents get 403 forbidden. starts_at defaults to now and may be at most 365 days ahead; ends_at is required, later than starts_at and at most 180 days after it (422 away_invalid with details.field otherwise). kind other needs a label of 1–40 characters. An enabled auto-reply needs a text of 1–500 characters. The substitute must be an active person of the workspace who is not the person themselves (422 away_substitute_invalid). When the dates change the period gets a new id and auto-replies start over; editing anything else keeps who already got one. expected_version from AwayStatus.version guards against a concurrent change (409 away_version_conflict). 20 changes a minute (429 rate_limited). */
+        put: operations["setAway"];
+        post?: never;
+        /** @description «Снять»: removes the away status, current or planned, at once. 204 also when there is none. */
+        delete: operations["clearAway"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/substituting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Whom the current person substitutes: active people whose current or planned away status names them, earliest start first. A person who is deactivated is not listed. */
+        get: operations["listSubstituting"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/email/change": {
         parameters: {
             query?: never;
@@ -1686,10 +1722,113 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description «Ждут вас» as one list: open requests waiting for the reader's answer (the same rows as listRequestInbox with state=waiting) and open tasks where the reader is responsible, the assignee of an open item or a candidate of a queue nobody has taken, in chats they can read now. Items with a due date come first (earliest first, overdue on top), then those without one, newest first; the order is stable across kinds, so pages never repeat or skip an item. kind narrows the list; polls are added in wave 4. Servers without message_tasks do not have this route: clients use listRequestInbox there. listRequestInbox stays for older clients and the «Отвечено» tab. */
+        /** @description «Ждут вас» as one list: open requests waiting for the reader's answer (the same rows as listRequestInbox with state=waiting) and open tasks where the reader is responsible, the assignee of an open item or a candidate of a queue nobody has taken, in chats they can read now. With the message_polls feature also open polls with a due date the reader may vote in and has not voted in yet (polls without a due date never wait). Items with a due date come first (earliest first, overdue on top), then those without one, newest first; the order is stable across kinds, so pages never repeat or skip an item. kind narrows the list; kind=polls on a server without message_polls gets 422. Servers without message_tasks do not have this route: clients use listRequestInbox there. listRequestInbox stays for older clients and the «Отвечено» tab. */
         get: operations["listWaitingInbox"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chats/{chat_id}/polls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Sends a poll message to the chat feed (never into a thread). Any member who may write to the chat may send one (the same check as createMessage); a poll obliges nobody, so there is no permission of its own. The server builds body from the question and the options («Опрос: {question}», an empty line, then one line «— {option}» per option) with body_format plain, so search, agents and older clients see the poll as text. The question is 1–300 characters, there are 2–10 options of 1–100 characters without repeats ignoring case (422 poll_invalid with details.field otherwise). due_at is optional: at least 10 minutes and at most 90 days ahead; without it the poll stays open until someone closes it. At most 100 open polls per chat and 200 per author (409 poll_limit_reached), 30 new polls a minute per person (429 rate_limited). An archived chat gets 409 chat_archived. A replay with the same client_msg_id and the same content returns the original message (200); the same key with other content gets 409 idempotency_conflict. */
+        post: operations["createPoll"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/polls/{message_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The poll of a message and the current person's view of it. Anyone who can read the message now (an active member, the chat not archived, the message not deleted) may call it; others get 404 poll_not_found. viewer.counts is set only when the person may see the results (voted, the author, or the poll is closed). */
+        get: operations["getPoll"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/polls/{message_id}/vote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Casts or changes the current person's vote. Only a person who is an active member of the chat (403 not_member otherwise; agents cannot vote), while the poll is open (409 poll_closed) and the chat is not archived (409 chat_archived). options is one index unless the poll allows several answers (422 poll_invalid). In an ordinary poll the call sets or replaces the vote. In an anonymous poll only the first vote is accepted and any other gets 409 poll_vote_final: the server keeps no link between the person and the options, so it cannot change the vote. Repeating the same vote changes nothing and emits no events. The request body is never written to request logs or the audit. 120 votes a minute per person (429 rate_limited). */
+        put: operations["votePoll"];
+        post?: never;
+        /** @description «Отменить голос»: removes the current person's vote from an open ordinary poll. A person who has left the chat cannot change their vote (403 not_member); a closed poll gets 409 poll_closed; an anonymous poll always gets 409 poll_vote_final. Retracting when there is no vote changes nothing and returns 204. */
+        delete: operations["retractPollVote"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/polls/{message_id}/voters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description «Кто голосовал». filter=option:<i> lists who chose the option and needs viewer.can_view_voters (an ordinary poll whose results the person may see). filter=waiting lists active people of the chat who have not voted and needs viewer.can_view_waiting (the author or a chat owner or admin or a workspace moderator with chats.moderate in the chat, ordinary poll only). Everyone else gets 403 forbidden, and in an anonymous poll both filters always get 403. Access and the chat role are checked on every call. Voters are ordered by voted_at, latest first; waiting people by name. */
+        get: operations["listPollVoters"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/polls/{message_id}/remind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description «Напомнить не ответившим»: the author reminds active people of the chat who have not voted, in anonymous polls too (without learning who they are). Not sooner than 2 hours after the previous reminder (429 poll_remind_too_soon with Retry-After) and at most 5 times per poll (409 poll_limit_reached). A person gets at most 10 poll reminders a day from all polls: the rest are not sent but are counted in reminded. A closed poll gets 409 poll_closed, an archived chat 409 chat_archived, anyone but the author 403 forbidden. */
+        post: operations["remindPoll"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/polls/{message_id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Closes the poll for good: no more votes, final_counts become visible to everyone, and in an ordinary poll who voted for what. The author (closed_reason author) or a chat owner or admin or a workspace moderator with chats.moderate in the chat (moderator); others get 403 forbidden. An archived chat gets 409 chat_archived. Closing a closed poll changes nothing and returns its state. No push is sent. */
+        post: operations["closePoll"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3365,7 +3504,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_confirmation_loosened" | "agent_conflict" | "agent_not_ready" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "architect_budget_exceeded" | "architect_busy" | "architect_connection_required" | "architect_model_error" | "architect_session_expired" | "architect_session_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "integration_in_use" | "integration_usage_changed" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "limit_reached" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "saved_limit_reached" | "saved_storage_full" | "scheduled_message_closed" | "scheduled_message_not_found" | "scheduled_message_not_retryable" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "storage_unavailable" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "voice_check_busy" | "voice_check_in_progress" | "webhook_not_found" | "webhook_rejected" | "workspace_not_found" | "chat_archived" | "not_implemented" | "not_member" | "reminder_invalid" | "reminder_limit_reached" | "reminder_not_found" | "request_audience_empty" | "request_audience_unavailable" | "request_change_too_late" | "request_closed" | "request_invalid" | "request_limit_reached" | "request_not_found" | "request_remind_too_soon" | "request_too_many_recipients" | "request_audience_forbidden" | "org_invalid" | "org_name_taken" | "org_cycle" | "org_depth_exceeded" | "org_limit_reached" | "org_version_conflict" | "department_not_found" | "position_not_found" | "department_chat_exists" | "department_chat_invalid" | "task_invalid" | "task_assignee_invalid" | "task_too_many_candidates" | "task_audience_empty" | "task_audience_forbidden" | "task_forbidden" | "task_not_found" | "task_version_conflict" | "task_already_taken" | "task_status_invalid" | "task_limit_reached" | "task_nudge_too_soon";
+        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_confirmation_loosened" | "agent_conflict" | "agent_not_ready" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "architect_budget_exceeded" | "architect_busy" | "architect_connection_required" | "architect_model_error" | "architect_session_expired" | "architect_session_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "integration_in_use" | "integration_usage_changed" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "limit_reached" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "saved_limit_reached" | "saved_storage_full" | "scheduled_message_closed" | "scheduled_message_not_found" | "scheduled_message_not_retryable" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "storage_unavailable" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "voice_check_busy" | "voice_check_in_progress" | "webhook_not_found" | "webhook_rejected" | "workspace_not_found" | "chat_archived" | "not_implemented" | "not_member" | "reminder_invalid" | "reminder_limit_reached" | "reminder_not_found" | "request_audience_empty" | "request_audience_unavailable" | "request_change_too_late" | "request_closed" | "request_invalid" | "request_limit_reached" | "request_not_found" | "request_remind_too_soon" | "request_too_many_recipients" | "request_audience_forbidden" | "org_invalid" | "org_name_taken" | "org_cycle" | "org_depth_exceeded" | "org_limit_reached" | "org_version_conflict" | "department_not_found" | "position_not_found" | "department_chat_exists" | "department_chat_invalid" | "task_invalid" | "task_assignee_invalid" | "task_too_many_candidates" | "task_audience_empty" | "task_audience_forbidden" | "task_forbidden" | "task_not_found" | "task_version_conflict" | "task_already_taken" | "task_status_invalid" | "task_limit_reached" | "task_nudge_too_soon" | "poll_invalid" | "poll_not_found" | "poll_closed" | "poll_vote_final" | "poll_limit_reached" | "poll_remind_too_soon" | "away_invalid" | "away_substitute_invalid" | "away_version_conflict";
         File: {
             /** Format: uuid */
             id: string;
@@ -3634,7 +3773,7 @@ export interface components {
             parts?: components["schemas"]["CompletedFilePart"][];
         };
         /** @enum {string} */
-        DurableEventTypeV1: "message.created" | "message.updated" | "message.deleted" | "message.pinned" | "message.unpinned" | "message.saved" | "message.unsaved" | "reaction.added" | "reaction.removed" | "thread.followed" | "thread.unfollowed" | "read.marked" | "draft.updated" | "draft.deleted" | "chat.created" | "chat.updated" | "chat.archived" | "member.joined" | "member.updated" | "member.removed" | "actor.status.updated" | "actor.avatar.updated" | "scheduled_message.created" | "scheduled_message.updated" | "scheduled_message.deleted" | "scheduled_message.sent" | "scheduled_message.failed" | "request.assigned" | "request.updated" | "request.tally.updated" | "request.answer.updated" | "request.reminded" | "request.auto_reminded" | "reminder.created" | "reminder.updated" | "reminder.deleted" | "reminder.fired" | "org.updated" | "task.updated" | "task.notified";
+        DurableEventTypeV1: "message.created" | "message.updated" | "message.deleted" | "message.pinned" | "message.unpinned" | "message.saved" | "message.unsaved" | "reaction.added" | "reaction.removed" | "thread.followed" | "thread.unfollowed" | "read.marked" | "draft.updated" | "draft.deleted" | "chat.created" | "chat.updated" | "chat.archived" | "member.joined" | "member.updated" | "member.removed" | "actor.status.updated" | "actor.avatar.updated" | "scheduled_message.created" | "scheduled_message.updated" | "scheduled_message.deleted" | "scheduled_message.sent" | "scheduled_message.failed" | "request.assigned" | "request.updated" | "request.tally.updated" | "request.answer.updated" | "request.reminded" | "request.auto_reminded" | "reminder.created" | "reminder.updated" | "reminder.deleted" | "reminder.fired" | "org.updated" | "task.updated" | "task.notified" | "poll.updated" | "poll.vote.updated" | "poll.notified" | "actor.away.updated" | "away.substitute.assigned" | "away.substitute.removed";
         /**
          * Format: int32
          * @enum {integer}
@@ -3731,7 +3870,7 @@ export interface components {
             ack_interval_ms: number;
             ack_batch_size: number;
             max_unacked_events: number;
-            /** @description Optional protocol additions this server accepts. typing_actions: the action field on typing frames. message_requests: requests («Запрос») — the request REST routes, Message.request and the request.* events. message_reminders: personal reminders («Напомнить мне») — the reminder REST routes and the reminder.* events. org_structure: departments and positions («Оргструктура») — the org REST routes, the org fields of ActorSummary, OrganizationMember and Message, mentioned_department_ids in message, request and scheduled message bodies, the department and position request audiences and the org.updated event. message_tasks: tasks («Задача») — the task REST routes, GET /api/v1/inbox/waiting, Message.task, the task fields of the unread snapshot and the task.updated and task.notified events. A client hides a feature the server does not list. */
+            /** @description Optional protocol additions this server accepts. typing_actions: the action field on typing frames. message_requests: requests («Запрос») — the request REST routes, Message.request and the request.* events. message_reminders: personal reminders («Напомнить мне») — the reminder REST routes and the reminder.* events. org_structure: departments and positions («Оргструктура») — the org REST routes, the org fields of ActorSummary, OrganizationMember and Message, mentioned_department_ids in message, request and scheduled message bodies, the department and position request audiences and the org.updated event. message_tasks: tasks («Задача») — the task REST routes, GET /api/v1/inbox/waiting, Message.task, the task fields of the unread snapshot and the task.updated and task.notified events. message_polls: polls («Опрос») — the poll REST routes, Message.poll and Message.poll_viewer, kind=polls of GET /api/v1/inbox/waiting, the poll fields of the unread snapshot and the poll.updated, poll.vote.updated and poll.notified events. actor_away: «Отсутствую» — GET/PUT/DELETE /api/v1/me/away, GET /api/v1/me/substituting, the away field of User, ActorSummary, ChatMember and OrganizationMember, presence on GET /api/v1/actors, Message.auto_reply and the actor.away.updated, away.substitute.assigned and away.substitute.removed events. A client hides a feature the server does not list. */
             features?: string[];
         };
         RealtimeDurableEventFrameV1: {
@@ -3742,13 +3881,16 @@ export interface components {
             type: string;
             /** Format: date-time */
             occurred_at: string;
-            /** Format: uuid */
-            actor_id: string;
+            /**
+             * Format: uuid
+             * @description Who caused the event. null when the server must not or cannot tell: always for poll.updated (a vote must not reveal the voter) and for poll.notified with kind closed_expired, which the server sends by itself. Clients never rely on it being set.
+             */
+            actor_id: string | null;
             /** Format: uuid */
             chat_id?: string | null;
             /** Format: uuid */
             subject_id: string;
-            /** @description Event payload. For message.created, message.updated and message.deleted it is the message in the shape of the REST feed (components/schemas/Message: files with metadata and no links, thread_reply_count, mentioned_actor_ids, blocks, agent_provenance and request when present; never request_viewer, which is per reader), read when the event is delivered, plus silent on message.created and thread_root_reply_count on thread replies. A frame that would exceed the frame limit (WS_MAX_FRAME_BYTES) is never sent as is: its data becomes a stub with truncated: true — for message.* the Message shape with an empty body, no files and no blocks, for other events only their short scalar fields — and the client loads the record by REST. The data of request.* and reminder.* events is described by the RequestAssignedEvent … ReminderFiredEvent definitions: it never carries message text, notes, comments or who answered what. The data of org.updated is OrgUpdatedEvent: only the new version and a reason, never names or people. Frames are encoded without HTML escaping. */
+            /** @description Event payload. For message.created, message.updated and message.deleted it is the message in the shape of the REST feed (components/schemas/Message: files with metadata and no links, thread_reply_count, mentioned_actor_ids, blocks, agent_provenance and request when present; never request_viewer, which is per reader), read when the event is delivered, plus silent on message.created and thread_root_reply_count on thread replies. A frame that would exceed the frame limit (WS_MAX_FRAME_BYTES) is never sent as is: its data becomes a stub with truncated: true — for message.* the Message shape with an empty body, no files and no blocks, for other events only their short scalar fields — and the client loads the record by REST. The data of request.* and reminder.* events is described by the RequestAssignedEvent … ReminderFiredEvent definitions: it never carries message text, notes, comments or who answered what. The data of org.updated is OrgUpdatedEvent: only the new version and a reason, never names or people. message.* frames of a poll carry poll (MessagePoll: never the counts of an open poll) and never poll_viewer; the data of poll.* events is PollUpdatedEvent, PollVoteUpdatedEvent and PollNotifiedEvent: never anyone's choice but the recipient's own, and no choice at all in an anonymous poll. The data of actor.away.updated and away.substitute.* is ActorAwayUpdatedEvent, AwaySubstituteAssignedEvent and AwaySubstituteRemovedEvent: never the auto-reply text or mute_push. Frames are encoded without HTML escaping. */
             data: {
                 [key: string]: unknown;
             };
@@ -3975,6 +4117,117 @@ export interface components {
             /** Format: date-time */
             due_at: string | null;
         };
+        /** @description data of poll.updated, sent to the whole chat (subject_id is the message id; the frame actor_id is always null): a vote or a retraction that changes voter_count, closing, a member joining or leaving that changes member_count. Only the counters every member may see: final_counts is set only once the poll is closed. Clients that may see the results reload getPoll (after about 1 s, only while the card is on screen). */
+        RealtimePollUpdatedEventV1: {
+            /** Format: uuid */
+            message_id: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** @enum {string} */
+            status: "open" | "closed";
+            /** @enum {string|null} */
+            closed_reason: "author" | "moderator" | "expired" | "message_deleted" | null;
+            voter_count: number;
+            member_count: number;
+            /** @description Votes per option of a closed poll; null while it is open. */
+            final_counts: number[] | null;
+            version: number;
+        };
+        /** @description data of poll.vote.updated, sent only to the person who voted, to all their devices (subject_id is the message id): their own vote changed. In an ordinary poll it carries the chosen options (empty after «Отменить голос»); in an anonymous poll only voted: true, because the server does not know the choice. */
+        RealtimePollVoteUpdatedEventV1: {
+            /** Format: uuid */
+            message_id: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** @description The person's choice; empty after the vote was retracted. */
+            options: number[];
+            /** @description MessagePoll.version after the change. */
+            version: number;
+        } | {
+            /** Format: uuid */
+            message_id: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** @constant */
+            voted: true;
+            /** @description MessagePoll.version after the change. */
+            version: number;
+        };
+        /** @description poll.vote.updated of an ordinary poll. */
+        RealtimePollVoteChosenEventV1: {
+            /** Format: uuid */
+            message_id: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** @description The person's choice; empty after the vote was retracted. */
+            options: number[];
+            /** @description MessagePoll.version after the change. */
+            version: number;
+        };
+        /** @description poll.vote.updated of an anonymous poll: no choice at all. */
+        RealtimePollVoteAnonymousEventV1: {
+            /** Format: uuid */
+            message_id: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** @constant */
+            voted: true;
+            /** @description MessagePoll.version after the change. */
+            version: number;
+        };
+        /** @description data of poll.notified, sent to one person only (audience_actor_id; subject_id is the message id): the reason for a push about a poll. Never carries the question, the options or counts. kinds: reminded — a person of the chat who has not voted, «Напомнить не ответившим» by the author (frame actor_id is the author); closed_expired — the author, the poll closed by its due date (frame actor_id null), only when the author is active, still in the chat and the chat is not archived. */
+        RealtimePollNotifiedEventV1: {
+            /** Format: uuid */
+            message_id: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** @enum {string} */
+            kind: "reminded" | "closed_expired";
+        };
+        /** @description data of actor.away.updated, sent to the whole workspace like actor.status.updated (chat_id null, subject_id is the person): the away status was set, changed or removed, a planned one started, or one ended. away is null when there is none any more. */
+        RealtimeActorAwayUpdatedEventV1: {
+            /** Format: uuid */
+            actor_id: string;
+            away: {
+                /** @enum {string} */
+                kind: "vacation" | "appointment" | "trip" | "dnd" | "other";
+                /** @description The own text of kind other; empty for the other kinds. */
+                label: string;
+                /** Format: date-time */
+                starts_at: string;
+                /** Format: date-time */
+                ends_at: string;
+                /** @description starts_at <= now < ends_at at the moment the response or the event was made; clients recheck it against the clock. */
+                active: boolean;
+                /**
+                 * Format: uuid
+                 * @description Whom to write instead; null without one and while the substitute is deactivated or away themselves (checked on every read).
+                 */
+                substitute_id: string | null;
+                /** @description Push is off while the status is active: the mention hint says «уведомление не придёт». */
+                notifications_off: boolean;
+            } | null;
+        };
+        /** @description data of away.substitute.assigned, sent only to the substitute (audience_actor_id; subject_id is the person who is away): they were named substitute or the dates changed. Triggers a push «Вы замещаете …» (category system). */
+        RealtimeAwaySubstituteAssignedEventV1: {
+            /**
+             * Format: uuid
+             * @description The person who is away.
+             */
+            actor_id: string;
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+        };
+        /** @description data of away.substitute.removed, sent only to the former substitute (audience_actor_id; subject_id is the person who was away): another substitute was named, the status was removed or it ended. No push. */
+        RealtimeAwaySubstituteRemovedEventV1: {
+            /**
+             * Format: uuid
+             * @description The person who was away.
+             */
+            actor_id: string;
+        };
         BootstrapStatus: {
             bootstrapped: boolean;
         };
@@ -4056,6 +4309,8 @@ export interface components {
             avatar_version: number;
             /** Format: date-time */
             created_at: string;
+            /** @description The person's own away status as everyone sees it; null without one. Present when the server announces actor_away. Unlike for other people, status_emoji and status_text here are the custom status as set: clients know it is hidden by away.active. The auto-reply and the other private settings are in getAway. */
+            away?: components["schemas"]["AwayPublic"] | null;
         };
         /**
          * @description custom or a recipe id from GET /api/v1/agents/recipes. qa is «Справка», onboarding «Наставник», summarizer «Что я пропустил».
@@ -5387,6 +5642,8 @@ export interface components {
              * @description The primary department (people only); null without one. Present when the server announces org_structure; the rest of the assignment is in getOrgStructure.
              */
             primary_department_id?: string | null;
+            /** @description The person's away status («Отсутствую»), current or planned, as everyone in the workspace sees it; null without one. Present when the server announces actor_away. While it is active the status_emoji and status_text of this object carry it instead of the custom status (🌴 «В отпуске до 30 ноября»), so older clients show it too. */
+            away?: components["schemas"]["AwayPublic"] | null;
         };
         UpdateOrganizationMemberRequest: {
             /** @enum {string|null} */
@@ -5555,6 +5812,8 @@ export interface components {
              * @description The primary department (people only); null without one. Present when the server announces org_structure; the rest of the assignment is in getOrgStructure.
              */
             primary_department_id?: string | null;
+            /** @description The person's away status («Отсутствую»), current or planned, as everyone in the workspace sees it; null without one. Present when the server announces actor_away. While it is active the status_emoji and status_text of this object carry it instead of the custom status (🌴 «В отпуске до 30 ноября»), so older clients show it too. */
+            away?: components["schemas"]["AwayPublic"] | null;
         };
         ActorPage: {
             actors: components["schemas"]["ActorSummary"][];
@@ -5621,6 +5880,8 @@ export interface components {
              * @enum {string}
              */
             last_seen_approx?: "recently" | "within_week" | "within_month" | "long_ago";
+            /** @description The person's away status («Отсутствую»), current or planned, as everyone in the workspace sees it; null without one. Present when the server announces actor_away. While it is active the status_emoji and status_text of this object carry it instead of the custom status (🌴 «В отпуске до 30 ноября»), so older clients show it too. */
+            away?: components["schemas"]["AwayPublic"] | null;
         };
         ChatAgentList: {
             agents: components["schemas"]["ChatAgent"][];
@@ -5679,10 +5940,10 @@ export interface components {
             /** Format: uuid */
             client_msg_id: string;
             /**
-             * @description request — a request for answers («Запрос»); its body is the question and request describes the answers. task — a task («Задача», phase 6.6); its body is built by the server from the title and the description and task describes it. Clients that do not know a type show the body as text.
+             * @description request — a request for answers («Запрос»); its body is the question and request describes the answers. task — a task («Задача», phase 6.6); its body is built by the server from the title and the description and task describes it. poll — a poll («Опрос», phase 6.7); its body is built by the server from the question and the options and poll describes it. Clients that do not know a type show the body as text.
              * @enum {string}
              */
-            type: "text" | "request" | "task";
+            type: "text" | "request" | "task" | "poll";
             body: string;
             /** @enum {string} */
             body_format: "plain" | "markdown";
@@ -5728,6 +5989,12 @@ export interface components {
             request_viewer?: components["schemas"]["MessageRequestViewer"];
             /** @description Present on messages of type task: the whole task, the same for every reader. Also in realtime message.* frames. */
             task?: components["schemas"]["MessageTask"] | null;
+            /** @description Present on messages of type poll: the poll as every reader sees it, without the counts of an open poll or anyone's choice. Also in realtime message.* frames. */
+            poll?: components["schemas"]["MessagePoll"] | null;
+            /** @description REST only (feed pages, create and context responses, «Ждут вас»), next to poll: what the reading person may see and do, with the counts when they may see the results. Never in realtime frames, which the whole chat shares; clients load it with getPoll when needed. */
+            poll_viewer?: components["schemas"]["PollViewer"];
+            /** @description Present and true on an auto-reply («АВТООТВЕТ», phase 6.7): a message the server sent on behalf of its author, who is away, in a direct chat. It comes as silent and does not move the author's read cursor. Absent from servers without actor_away. */
+            auto_reply?: boolean;
         };
         /** @description Why an agent wrote the message. Visible to every reader of the message: it never carries a webhook payload, a follow-up note or text from another chat. */
         MessageAgentProvenance: {
@@ -6646,10 +6913,10 @@ export interface components {
             chat_id: string;
             task: components["schemas"]["MessageTask"];
         };
-        /** @description One item of «Ждут вас». kind request: request and viewer are set, my_role is null; the same data as RequestInboxItem. kind task: the task is message.task, request and viewer are null and my_role says why the reader sees it (never author). */
+        /** @description One item of «Ждут вас». kind request: request and viewer are set, my_role is null; the same data as RequestInboxItem. kind task: the task is message.task, request and viewer are null and my_role says why the reader sees it (never author). kind poll (servers with message_polls): the poll is message.poll and the reader's state is message.poll_viewer; request, viewer and my_role are null. Clients skip kinds they do not know. */
         WaitingInboxItem: {
             /** @enum {string} */
-            kind: "request" | "task";
+            kind: "request" | "task" | "poll";
             message: components["schemas"]["Message"];
             /** Format: uuid */
             chat_id: string;
@@ -6668,6 +6935,193 @@ export interface components {
             items: components["schemas"]["WaitingInboxItem"][];
             /** @description Opaque; pass as cursor to read the next page. */
             next_cursor: string | null;
+        };
+        CreatePollRequest: {
+            /** Format: uuid */
+            client_msg_id: string;
+            question: string;
+            /** @description 1–100 characters each, no repeats ignoring case. */
+            options: string[];
+            /** @description «Несколько ответов» — a vote may choose several options, with no upper limit. */
+            multiple: boolean;
+            /** @description Nobody, the author and workspace admins included, can learn who chose what: the server stores only the counts per option and who has voted. A vote in an anonymous poll cannot be changed or retracted. */
+            anonymous: boolean;
+            /**
+             * Format: date-time
+             * @description When the poll closes by itself; at least 10 minutes and at most 90 days ahead. Absent — open until closed by hand.
+             */
+            due_at?: string;
+        };
+        /** @description The poll part of a message of type poll. The same for every reader: it never carries the counts of an open poll or anyone's choice, so it is also in realtime message.* frames. The counts of an open poll are only in PollViewer.counts of those who may see the results. */
+        MessagePoll: {
+            /** @description The author may edit it after sending (message edited_at); options, flags and due_at never change. */
+            question: string;
+            options: string[];
+            multiple: boolean;
+            anonymous: boolean;
+            /** Format: date-time */
+            due_at: string | null;
+            /** @enum {string} */
+            status: "open" | "closed";
+            /** @enum {string|null} */
+            closed_reason: "author" | "moderator" | "expired" | "message_deleted" | null;
+            /** Format: date-time */
+            closed_at: string | null;
+            /** @description N of «N из M» — people who have voted, including those who have left the chat since. */
+            voter_count: number;
+            /** @description M of «N из M» — active people of the chat now (agents left out) plus voters who have left. */
+            member_count: number;
+            /** @description Votes per option, in option order. Only on a closed poll; always null while it is open. */
+            final_counts: number[] | null;
+            /** @description Grows with every change of the poll (votes, closing, the denominator); poll.updated carries it so stale events are dropped. */
+            version: number;
+        };
+        /** @description What the current person may see and do with a poll. REST only (Message.poll_viewer in feed pages, create and context responses, getPoll, votePoll, closePoll); never in realtime frames, which the whole chat shares. */
+        PollViewer: {
+            voted: boolean;
+            /** @description The person's choice in an ordinary poll; null before the vote and always null in an anonymous poll (clients keep it on the device only). */
+            my_options: number[] | null;
+            /** @description An active person of the chat, the poll open and the chat not archived; in an anonymous poll also not voted yet. */
+            can_vote: boolean;
+            /** @description An ordinary poll the person has voted in, still open; covers both a new choice and «Отменить голос». */
+            can_change: boolean;
+            /** @description Voted, the author, or the poll is closed. There is no way to see the results without voting. */
+            can_view_results: boolean;
+            /** @description can_view_results and the poll is not anonymous — avatars at the options and listPollVoters by option. */
+            can_view_voters: boolean;
+            /** @description The author or a chat owner or admin or a moderator with chats.moderate in the chat, and the poll is not anonymous — listPollVoters with filter=waiting. */
+            can_view_waiting: boolean;
+            /** @description The poll is open and the person is its author still in the chat, or a chat owner or admin or a moderator with chats.moderate in it. */
+            can_close: boolean;
+            /** @description The author, the poll open, someone has not voted, 2 hours passed since the last reminder and fewer than 5 were sent. */
+            can_remind: boolean;
+            /**
+             * Format: date-time
+             * @description When a reminder is allowed again; null when it is allowed now or never again.
+             */
+            next_remind_at: string | null;
+            /** @description Votes per option, in option order. Only with can_view_results, null otherwise. */
+            counts: number[] | null;
+        };
+        PollState: {
+            poll: components["schemas"]["MessagePoll"];
+            viewer: components["schemas"]["PollViewer"];
+        };
+        VotePollRequest: {
+            /** @description Indexes of the chosen options; exactly one unless the poll is multiple. An index beyond the options gets 422 poll_invalid. Use retractPollVote to remove a vote. */
+            options: number[];
+            /** @description MessagePoll.version the change is based on; another one gets 409 version_conflict. Optional. */
+            expected_version?: number;
+        };
+        PollVoter: {
+            /** Format: uuid */
+            actor_id: string;
+            /**
+             * Format: date-time
+             * @description When the person voted; null in the waiting list.
+             */
+            voted_at: string | null;
+            /** @description false — the voter has left the chat since («не в чате»); the vote stays in the count. */
+            in_chat: boolean;
+        };
+        PollVoterPage: {
+            items: components["schemas"]["PollVoter"][];
+            /** @description Opaque; pass as cursor to read the next page. */
+            next_cursor: string | null;
+        };
+        PollRemindResult: {
+            /** @description People without a vote who were reminded, including those over the daily limit who got no push. */
+            reminded: number;
+            /** Format: date-time */
+            next_remind_at: string | null;
+        };
+        /**
+         * @description vacation «В отпуске» 🌴, appointment «На приёме» 🩺, trip «На выезде» 🚗, dnd «Не беспокоить» 🔕, other ⏸ with the person's own label. Clients translate the kinds; only other carries text.
+         * @enum {string}
+         */
+        AwayKind: "vacation" | "appointment" | "trip" | "dnd" | "other";
+        /** @description An away status («Отсутствую», phase 6.7) as everyone in the workspace sees it. Never carries the auto-reply text, mute_push or a substitute others must not see; the owner gets those in AwayStatus (GET /api/v1/me/away). */
+        AwayPublic: {
+            /** @enum {string} */
+            kind: "vacation" | "appointment" | "trip" | "dnd" | "other";
+            /** @description The own text of kind other; empty for the other kinds. */
+            label: string;
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+            /** @description starts_at <= now < ends_at at the moment the response or the event was made; clients recheck it against the clock. */
+            active: boolean;
+            /**
+             * Format: uuid
+             * @description Whom to write instead; null without one and while the substitute is deactivated or away themselves (checked on every read).
+             */
+            substitute_id: string | null;
+            /** @description Push is off while the status is active: the mention hint says «уведомление не придёт». */
+            notifications_off: boolean;
+        };
+        AwayAutoreply: {
+            enabled: boolean;
+            /** @description Sent once to each person who writes to the owner in a direct chat during the period, as the owner's message with auto_reply. Required (1–500 characters) when enabled; kept when disabled. */
+            text: string;
+        };
+        /** @description The away status as its owner sees it (getAway, setAway). Only the owner ever gets autoreply, mute_push and the substitute as saved; everyone else gets AwayPublic. */
+        AwayStatus: {
+            kind: components["schemas"]["AwayKind"];
+            /** @description The own text of kind other; empty for the other kinds. */
+            label: string;
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+            /** @description starts_at <= now < ends_at at the moment of the response. */
+            active: boolean;
+            /**
+             * Format: uuid
+             * @description The substitute as saved, also when others do not see them now (deactivated or away themselves).
+             */
+            substitute_id: string | null;
+            /** @description Equals mute_push; kept so AwayStatus has every AwayPublic field. */
+            notifications_off: boolean;
+            autoreply: components["schemas"]["AwayAutoreply"];
+            /** @description «Не присылать уведомления» while the status is active: no push and no e-mail digest, except the person's own reminders and direct messages from the workspace owner and admins, which come without sound. Badges and counters work as usual. */
+            mute_push: boolean;
+            version: number;
+        };
+        SetAwayRequest: {
+            kind: components["schemas"]["AwayKind"];
+            /** @description Required (1–40 characters) for other; must be absent or empty for the other kinds. */
+            label?: string;
+            /**
+             * Format: date-time
+             * @description Absent — now. At most 365 days ahead; a time in the past is taken as now.
+             */
+            starts_at?: string;
+            /**
+             * Format: date-time
+             * @description Later than starts_at and at most 180 days after it.
+             */
+            ends_at: string;
+            autoreply: components["schemas"]["AwayAutoreply"];
+            /**
+             * Format: uuid
+             * @description An active person of the workspace, not the person themselves and not an agent. Absent or null — no substitute.
+             */
+            substitute_id?: string | null;
+            mute_push: boolean;
+            /** @description AwayStatus.version the change is based on; another one gets 409 away_version_conflict. Optional. */
+            expected_version?: number;
+        };
+        SubstitutingEntry: {
+            /**
+             * Format: uuid
+             * @description The person who is away and named the current person as substitute.
+             */
+            actor_id: string;
+            away: components["schemas"]["AwayPublic"];
+        };
+        SubstitutingList: {
+            items: components["schemas"]["SubstitutingEntry"][];
         };
         /** @description 1–60 characters (Unicode code points) after trimming. */
         OrgName: string;
@@ -6896,6 +7350,11 @@ export interface components {
              * @description The earliest due date among them; null when none has one.
              */
             tasks_mine_next_due_at?: string | null;
+            /**
+             * Format: int64
+             * @description Open polls with a due date in the chat the person may vote in and has not voted in. Absent on servers without message_polls. The chat list shows no mark for them.
+             */
+            polls_waiting?: number;
         };
         ThreadUnread: {
             /** Format: uuid */
@@ -6932,6 +7391,16 @@ export interface components {
              * @description Of tasks_mine_open_total, those overdue or due within 24 hours: the badge of «Важные» counts only these. Absent on servers without message_tasks.
              */
             tasks_mine_hot_total?: number;
+            /**
+             * Format: int64
+             * @description Open polls with a due date in all chats the person may vote in and has not voted in («Ждут вас»). Absent on servers without message_polls.
+             */
+            polls_waiting_total?: number;
+            /**
+             * Format: int64
+             * @description Of polls_waiting_total, those due within 24 hours: the badge of «Важные» counts only these. Absent on servers without message_polls.
+             */
+            polls_hot_total?: number;
         };
         PushConfig: {
             enabled: boolean;
@@ -7709,6 +8178,104 @@ export interface operations {
                     "application/json": components["schemas"]["CustomStatus"];
                 };
             };
+        };
+    };
+    getAway: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The away status. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AwayStatus"];
+                };
+            };
+            /** @description No away status. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            501: components["responses"]["Error"];
+        };
+    };
+    setAway: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetAwayRequest"];
+            };
+        };
+        responses: {
+            /** @description The saved away status. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AwayStatus"];
+                };
+            };
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    clearAway: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The away status is removed or there was none. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    listSubstituting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The people the current person substitutes. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubstitutingList"];
+                };
+            };
+            501: components["responses"]["Error"];
         };
     };
     changeEmail: {
@@ -8973,6 +9540,8 @@ export interface operations {
             query?: {
                 /** @description Matches the name, handle and title; with the org_structure feature also the position name and the names of the person's departments (primary and additional). */
                 q?: string;
+                /** @description «На месте» (here) or «Отсутствуют» (away): people whose away status is active now, or everyone else (agents count as here). Absent lists everyone. Only servers with the actor_away feature know it; clients do not send it to others, which would ignore it. */
+                presence?: "here" | "away";
                 after_id?: string;
                 limit?: number;
             };
@@ -10627,7 +11196,7 @@ export interface operations {
     listWaitingInbox: {
         parameters: {
             query?: {
-                kind?: "all" | "requests" | "tasks";
+                kind?: "all" | "requests" | "tasks" | "polls";
                 /** @description Opaque next_cursor of the previous page; only valid with the same kind. */
                 cursor?: string;
                 limit?: number;
@@ -10648,6 +11217,216 @@ export interface operations {
                 };
             };
             422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    createPoll: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePollRequest"];
+            };
+        };
+        responses: {
+            /** @description The original poll message for an idempotent replay. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            /** @description Poll message created; it carries poll and poll_viewer. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    getPoll: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The poll and the viewer state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PollState"];
+                };
+            };
+            404: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    votePoll: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VotePollRequest"];
+            };
+        };
+        responses: {
+            /** @description The poll and the viewer state after the vote. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PollState"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    retractPollVote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The vote is removed or there was none. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    listPollVoters: {
+        parameters: {
+            query: {
+                /** @description `option:<0-9>` or `waiting`. */
+                filter: string;
+                /** @description Opaque next_cursor of the previous page; only valid with the same filter. */
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of people; next_cursor continues it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PollVoterPage"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    remindPoll: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description How many people were reminded and when the next reminder is allowed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PollRemindResult"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    closePoll: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The closed poll and the viewer state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PollState"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             429: components["responses"]["Error"];
             501: components["responses"]["Error"];
         };

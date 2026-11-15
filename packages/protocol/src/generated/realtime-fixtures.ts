@@ -18,6 +18,96 @@ export const realtimeV1Fixtures = {
     "access_token": "fixture-access-token",
     "last_seq": 1842
   } as const satisfies Schemas["RealtimeAuthFrameV1"],
+  "event-actor-away-cleared": {
+    "op": "event",
+    "seq": 4021,
+    "type": "actor.away.updated",
+    "occurred_at": "2026-12-01T00:00:30+03:00",
+    "actor_id": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+    "chat_id": null,
+    "subject_id": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+    "data": {
+      "actor_id": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+      "away": null
+    }
+  } as const satisfies Schemas["RealtimeDurableEventFrameV1"] & { data: Schemas["RealtimeActorAwayUpdatedEventV1"] },
+  "event-actor-away-updated": {
+    "op": "event",
+    "seq": 4020,
+    "type": "actor.away.updated",
+    "occurred_at": "2026-11-19T18:00:00Z",
+    "actor_id": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+    "chat_id": null,
+    "subject_id": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+    "data": {
+      "actor_id": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+      "away": {
+        "kind": "vacation",
+        "label": "",
+        "starts_at": "2026-11-20T00:00:00+03:00",
+        "ends_at": "2026-12-01T00:00:00+03:00",
+        "active": false,
+        "substitute_id": "0198c180-5e6f-7a8b-8c9d-9e0f1a2b3c45",
+        "notifications_off": true
+      }
+    }
+  } as const satisfies Schemas["RealtimeDurableEventFrameV1"] & { data: Schemas["RealtimeActorAwayUpdatedEventV1"] },
+  "event-away-substitute-assigned": {
+    "op": "event",
+    "seq": 4022,
+    "type": "away.substitute.assigned",
+    "occurred_at": "2026-11-19T18:00:00Z",
+    "actor_id": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+    "chat_id": null,
+    "subject_id": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+    "data": {
+      "actor_id": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+      "starts_at": "2026-11-20T00:00:00+03:00",
+      "ends_at": "2026-12-01T00:00:00+03:00"
+    }
+  } as const satisfies Schemas["RealtimeDurableEventFrameV1"] & { data: Schemas["RealtimeAwaySubstituteAssignedEventV1"] },
+  "event-away-substitute-removed": {
+    "op": "event",
+    "seq": 4023,
+    "type": "away.substitute.removed",
+    "occurred_at": "2026-12-01T00:00:30+03:00",
+    "actor_id": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+    "chat_id": null,
+    "subject_id": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+    "data": {
+      "actor_id": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23"
+    }
+  } as const satisfies Schemas["RealtimeDurableEventFrameV1"] & { data: Schemas["RealtimeAwaySubstituteRemovedEventV1"] },
+  "event-message-auto-reply": {
+    "op": "event",
+    "seq": 4030,
+    "type": "message.created",
+    "occurred_at": "2026-11-21T10:00:01Z",
+    "actor_id": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+    "chat_id": "0198c181-6c7d-7e8f-8a9b-0c1d2e3f4a5b",
+    "subject_id": "0198c181-7d8e-7f90-8a1b-2c3d4e5f6a7b",
+    "data": {
+      "id": "0198c181-7d8e-7f90-8a1b-2c3d4e5f6a7b",
+      "chat_id": "0198c181-6c7d-7e8f-8a9b-0c1d2e3f4a5b",
+      "actor_id": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+      "client_msg_id": "0198c181-8e9f-7a01-8b2c-3d4e5f6a7b8c",
+      "type": "text",
+      "body": "Я в отпуске до 30 ноября. По срочным вопросам — к Марине Соколовой",
+      "body_format": "plain",
+      "reply_to_id": null,
+      "thread_root_id": null,
+      "version": 1,
+      "created_seq": 4030,
+      "created_at": "2026-11-21T10:00:01Z",
+      "edited_at": null,
+      "deleted_at": null,
+      "mentioned_actor_ids": [],
+      "thread_reply_count": 0,
+      "files": [],
+      "silent": true,
+      "auto_reply": true
+    }
+  } as const satisfies Schemas["RealtimeDurableEventFrameV1"] & { data: Schemas["Message"] },
   "event-message-department-mention": {
     "op": "event",
     "seq": 2101,
@@ -56,6 +146,53 @@ export const realtimeV1Fixtures = {
           "notified_count": 2
         }
       ]
+    }
+  } as const satisfies Schemas["RealtimeDurableEventFrameV1"] & { data: Schemas["Message"] },
+  "event-message-poll": {
+    "op": "event",
+    "seq": 4001,
+    "type": "message.created",
+    "occurred_at": "2026-11-18T09:00:00Z",
+    "actor_id": "0198c17d-88ba-7ac2-8867-3f71d7722791",
+    "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+    "subject_id": "0198c181-4a5b-7c6d-8e7f-8091a2b3c4d5",
+    "data": {
+      "id": "0198c181-4a5b-7c6d-8e7f-8091a2b3c4d5",
+      "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+      "actor_id": "0198c17d-88ba-7ac2-8867-3f71d7722791",
+      "client_msg_id": "0198c181-5b6c-7d7e-8f80-91a2b3c4d5e6",
+      "type": "poll",
+      "body": "Опрос: Когда удобнее субботник?\n\n— Среда\n— Четверг\n— Суббота",
+      "body_format": "plain",
+      "reply_to_id": null,
+      "thread_root_id": null,
+      "version": 1,
+      "created_seq": 4001,
+      "created_at": "2026-11-18T09:00:00Z",
+      "edited_at": null,
+      "deleted_at": null,
+      "mentioned_actor_ids": [],
+      "thread_reply_count": 0,
+      "files": [],
+      "silent": false,
+      "poll": {
+        "question": "Когда удобнее субботник?",
+        "options": [
+          "Среда",
+          "Четверг",
+          "Суббота"
+        ],
+        "multiple": false,
+        "anonymous": true,
+        "due_at": "2026-11-20T15:00:00Z",
+        "status": "open",
+        "closed_reason": null,
+        "closed_at": null,
+        "voter_count": 0,
+        "member_count": 9,
+        "final_counts": null,
+        "version": 1
+      }
     }
   } as const satisfies Schemas["RealtimeDurableEventFrameV1"] & { data: Schemas["Message"] },
   "event-message-request-position": {
@@ -237,6 +374,95 @@ export const realtimeV1Fixtures = {
       "reason": "membership"
     }
   } as const satisfies Schemas["RealtimeDurableEventFrameV1"] & { data: Schemas["RealtimeOrgUpdatedEventV1"] },
+  "event-poll-notified": {
+    "op": "event",
+    "seq": 4005,
+    "type": "poll.notified",
+    "occurred_at": "2026-11-19T12:00:00Z",
+    "actor_id": "0198c17d-88ba-7ac2-8867-3f71d7722791",
+    "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+    "subject_id": "0198c181-4a5b-7c6d-8e7f-8091a2b3c4d5",
+    "data": {
+      "message_id": "0198c181-4a5b-7c6d-8e7f-8091a2b3c4d5",
+      "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+      "kind": "reminded"
+    }
+  } as const satisfies Schemas["RealtimeDurableEventFrameV1"] & { data: Schemas["RealtimePollNotifiedEventV1"] },
+  "event-poll-updated-open": {
+    "op": "event",
+    "seq": 4002,
+    "type": "poll.updated",
+    "occurred_at": "2026-11-18T09:05:00Z",
+    "actor_id": null,
+    "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+    "subject_id": "0198c181-4a5b-7c6d-8e7f-8091a2b3c4d5",
+    "data": {
+      "message_id": "0198c181-4a5b-7c6d-8e7f-8091a2b3c4d5",
+      "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+      "status": "open",
+      "closed_reason": null,
+      "voter_count": 1,
+      "member_count": 9,
+      "final_counts": null,
+      "version": 2
+    }
+  } as const satisfies Schemas["RealtimeDurableEventFrameV1"] & { data: Schemas["RealtimePollUpdatedEventV1"] },
+  "event-poll-updated": {
+    "op": "event",
+    "seq": 4010,
+    "type": "poll.updated",
+    "occurred_at": "2026-11-20T15:00:02Z",
+    "actor_id": null,
+    "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+    "subject_id": "0198c181-4a5b-7c6d-8e7f-8091a2b3c4d5",
+    "data": {
+      "message_id": "0198c181-4a5b-7c6d-8e7f-8091a2b3c4d5",
+      "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+      "status": "closed",
+      "closed_reason": "expired",
+      "voter_count": 9,
+      "member_count": 9,
+      "final_counts": [
+        5,
+        1,
+        3
+      ],
+      "version": 11
+    }
+  } as const satisfies Schemas["RealtimeDurableEventFrameV1"] & { data: Schemas["RealtimePollUpdatedEventV1"] },
+  "event-poll-vote-updated-anonymous": {
+    "op": "event",
+    "seq": 4004,
+    "type": "poll.vote.updated",
+    "occurred_at": "2026-11-18T09:05:00Z",
+    "actor_id": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+    "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+    "subject_id": "0198c181-4a5b-7c6d-8e7f-8091a2b3c4d5",
+    "data": {
+      "message_id": "0198c181-4a5b-7c6d-8e7f-8091a2b3c4d5",
+      "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+      "voted": true,
+      "version": 2
+    }
+  } as const satisfies Schemas["RealtimeDurableEventFrameV1"] & { data: Schemas["RealtimePollVoteUpdatedEventV1"] },
+  "event-poll-vote-updated": {
+    "op": "event",
+    "seq": 4003,
+    "type": "poll.vote.updated",
+    "occurred_at": "2026-11-18T09:05:00Z",
+    "actor_id": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+    "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+    "subject_id": "0198c181-9fa0-7b12-8c3d-4e5f6a7b8c9d",
+    "data": {
+      "message_id": "0198c181-9fa0-7b12-8c3d-4e5f6a7b8c9d",
+      "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+      "options": [
+        0,
+        2
+      ],
+      "version": 2
+    }
+  } as const satisfies Schemas["RealtimeDurableEventFrameV1"] & { data: Schemas["RealtimePollVoteUpdatedEventV1"] },
   "event-reminder-created": {
     "op": "event",
     "seq": 2007,

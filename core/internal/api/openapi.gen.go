@@ -869,6 +869,60 @@ func (e AuditEntryCategory) Valid() bool {
 	}
 }
 
+// Defines values for AwayKind.
+const (
+	AwayKindAppointment AwayKind = "appointment"
+	AwayKindDnd         AwayKind = "dnd"
+	AwayKindOther       AwayKind = "other"
+	AwayKindTrip        AwayKind = "trip"
+	AwayKindVacation    AwayKind = "vacation"
+)
+
+// Valid indicates whether the value is a known member of the AwayKind enum.
+func (e AwayKind) Valid() bool {
+	switch e {
+	case AwayKindAppointment:
+		return true
+	case AwayKindDnd:
+		return true
+	case AwayKindOther:
+		return true
+	case AwayKindTrip:
+		return true
+	case AwayKindVacation:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AwayPublicKind.
+const (
+	AwayPublicKindAppointment AwayPublicKind = "appointment"
+	AwayPublicKindDnd         AwayPublicKind = "dnd"
+	AwayPublicKindOther       AwayPublicKind = "other"
+	AwayPublicKindTrip        AwayPublicKind = "trip"
+	AwayPublicKindVacation    AwayPublicKind = "vacation"
+)
+
+// Valid indicates whether the value is a known member of the AwayPublicKind enum.
+func (e AwayPublicKind) Valid() bool {
+	switch e {
+	case AwayPublicKindAppointment:
+		return true
+	case AwayPublicKindDnd:
+		return true
+	case AwayPublicKindOther:
+		return true
+	case AwayPublicKindTrip:
+		return true
+	case AwayPublicKindVacation:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ChatKind.
 const (
 	ChatKindChannel ChatKind = "channel"
@@ -1709,7 +1763,10 @@ func (e DraftBodyFormat) Valid() bool {
 // Defines values for DurableEventTypeV1.
 const (
 	DurableEventTypeV1ActorAvatarUpdated      DurableEventTypeV1 = "actor.avatar.updated"
+	DurableEventTypeV1ActorAwayUpdated        DurableEventTypeV1 = "actor.away.updated"
 	DurableEventTypeV1ActorStatusUpdated      DurableEventTypeV1 = "actor.status.updated"
+	DurableEventTypeV1AwaySubstituteAssigned  DurableEventTypeV1 = "away.substitute.assigned"
+	DurableEventTypeV1AwaySubstituteRemoved   DurableEventTypeV1 = "away.substitute.removed"
 	DurableEventTypeV1ChatArchived            DurableEventTypeV1 = "chat.archived"
 	DurableEventTypeV1ChatCreated             DurableEventTypeV1 = "chat.created"
 	DurableEventTypeV1ChatUpdated             DurableEventTypeV1 = "chat.updated"
@@ -1726,6 +1783,9 @@ const (
 	DurableEventTypeV1MessageUnsaved          DurableEventTypeV1 = "message.unsaved"
 	DurableEventTypeV1MessageUpdated          DurableEventTypeV1 = "message.updated"
 	DurableEventTypeV1OrgUpdated              DurableEventTypeV1 = "org.updated"
+	DurableEventTypeV1PollNotified            DurableEventTypeV1 = "poll.notified"
+	DurableEventTypeV1PollUpdated             DurableEventTypeV1 = "poll.updated"
+	DurableEventTypeV1PollVoteUpdated         DurableEventTypeV1 = "poll.vote.updated"
 	DurableEventTypeV1ReactionAdded           DurableEventTypeV1 = "reaction.added"
 	DurableEventTypeV1ReactionRemoved         DurableEventTypeV1 = "reaction.removed"
 	DurableEventTypeV1ReadMarked              DurableEventTypeV1 = "read.marked"
@@ -1755,7 +1815,13 @@ func (e DurableEventTypeV1) Valid() bool {
 	switch e {
 	case DurableEventTypeV1ActorAvatarUpdated:
 		return true
+	case DurableEventTypeV1ActorAwayUpdated:
+		return true
 	case DurableEventTypeV1ActorStatusUpdated:
+		return true
+	case DurableEventTypeV1AwaySubstituteAssigned:
+		return true
+	case DurableEventTypeV1AwaySubstituteRemoved:
 		return true
 	case DurableEventTypeV1ChatArchived:
 		return true
@@ -1788,6 +1854,12 @@ func (e DurableEventTypeV1) Valid() bool {
 	case DurableEventTypeV1MessageUpdated:
 		return true
 	case DurableEventTypeV1OrgUpdated:
+		return true
+	case DurableEventTypeV1PollNotified:
+		return true
+	case DurableEventTypeV1PollUpdated:
+		return true
+	case DurableEventTypeV1PollVoteUpdated:
 		return true
 	case DurableEventTypeV1ReactionAdded:
 		return true
@@ -1857,6 +1929,9 @@ const (
 	ErrorCodeArchitectModelError          ErrorCode = "architect_model_error"
 	ErrorCodeArchitectSessionExpired      ErrorCode = "architect_session_expired"
 	ErrorCodeArchitectSessionNotFound     ErrorCode = "architect_session_not_found"
+	ErrorCodeAwayInvalid                  ErrorCode = "away_invalid"
+	ErrorCodeAwaySubstituteInvalid        ErrorCode = "away_substitute_invalid"
+	ErrorCodeAwayVersionConflict          ErrorCode = "away_version_conflict"
 	ErrorCodeChatArchived                 ErrorCode = "chat_archived"
 	ErrorCodeChatConflict                 ErrorCode = "chat_conflict"
 	ErrorCodeChatNotFound                 ErrorCode = "chat_not_found"
@@ -1890,6 +1965,12 @@ const (
 	ErrorCodeOriginNotAllowed             ErrorCode = "origin_not_allowed"
 	ErrorCodePasswordChangeRequired       ErrorCode = "password_change_required"
 	ErrorCodePayloadTooLarge              ErrorCode = "payload_too_large"
+	ErrorCodePollClosed                   ErrorCode = "poll_closed"
+	ErrorCodePollInvalid                  ErrorCode = "poll_invalid"
+	ErrorCodePollLimitReached             ErrorCode = "poll_limit_reached"
+	ErrorCodePollNotFound                 ErrorCode = "poll_not_found"
+	ErrorCodePollRemindTooSoon            ErrorCode = "poll_remind_too_soon"
+	ErrorCodePollVoteFinal                ErrorCode = "poll_vote_final"
 	ErrorCodePositionNotFound             ErrorCode = "position_not_found"
 	ErrorCodePushUnavailable              ErrorCode = "push_unavailable"
 	ErrorCodeRateLimited                  ErrorCode = "rate_limited"
@@ -1978,6 +2059,12 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeArchitectSessionNotFound:
 		return true
+	case ErrorCodeAwayInvalid:
+		return true
+	case ErrorCodeAwaySubstituteInvalid:
+		return true
+	case ErrorCodeAwayVersionConflict:
+		return true
 	case ErrorCodeChatArchived:
 		return true
 	case ErrorCodeChatConflict:
@@ -2043,6 +2130,18 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodePasswordChangeRequired:
 		return true
 	case ErrorCodePayloadTooLarge:
+		return true
+	case ErrorCodePollClosed:
+		return true
+	case ErrorCodePollInvalid:
+		return true
+	case ErrorCodePollLimitReached:
+		return true
+	case ErrorCodePollNotFound:
+		return true
+	case ErrorCodePollRemindTooSoon:
+		return true
+	case ErrorCodePollVoteFinal:
 		return true
 	case ErrorCodePositionNotFound:
 		return true
@@ -2533,6 +2632,7 @@ func (e MessageBodyFormat) Valid() bool {
 
 // Defines values for MessageType.
 const (
+	MessageTypePoll    MessageType = "poll"
 	MessageTypeRequest MessageType = "request"
 	MessageTypeTask    MessageType = "task"
 	MessageTypeText    MessageType = "text"
@@ -2541,6 +2641,8 @@ const (
 // Valid indicates whether the value is a known member of the MessageType enum.
 func (e MessageType) Valid() bool {
 	switch e {
+	case MessageTypePoll:
+		return true
 	case MessageTypeRequest:
 		return true
 	case MessageTypeTask:
@@ -2756,6 +2858,51 @@ func (e MessageCardStatusTone) Valid() bool {
 	case MessageCardStatusToneSuccess:
 		return true
 	case MessageCardStatusToneWarning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessagePollClosedReason.
+const (
+	MessagePollClosedReasonAuthor         MessagePollClosedReason = "author"
+	MessagePollClosedReasonExpired        MessagePollClosedReason = "expired"
+	MessagePollClosedReasonLessThannil    MessagePollClosedReason = "<nil>"
+	MessagePollClosedReasonMessageDeleted MessagePollClosedReason = "message_deleted"
+	MessagePollClosedReasonModerator      MessagePollClosedReason = "moderator"
+)
+
+// Valid indicates whether the value is a known member of the MessagePollClosedReason enum.
+func (e MessagePollClosedReason) Valid() bool {
+	switch e {
+	case MessagePollClosedReasonAuthor:
+		return true
+	case MessagePollClosedReasonExpired:
+		return true
+	case MessagePollClosedReasonLessThannil:
+		return true
+	case MessagePollClosedReasonMessageDeleted:
+		return true
+	case MessagePollClosedReasonModerator:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessagePollStatus.
+const (
+	MessagePollStatusClosed MessagePollStatus = "closed"
+	MessagePollStatusOpen   MessagePollStatus = "open"
+)
+
+// Valid indicates whether the value is a known member of the MessagePollStatus enum.
+func (e MessagePollStatus) Valid() bool {
+	switch e {
+	case MessagePollStatusClosed:
+		return true
+	case MessagePollStatusOpen:
 		return true
 	default:
 		return false
@@ -3113,6 +3260,33 @@ func (e RealtimeAckFrameV1Op) Valid() bool {
 	}
 }
 
+// Defines values for RealtimeActorAwayUpdatedEventV1AwayKind.
+const (
+	RealtimeActorAwayUpdatedEventV1AwayKindAppointment RealtimeActorAwayUpdatedEventV1AwayKind = "appointment"
+	RealtimeActorAwayUpdatedEventV1AwayKindDnd         RealtimeActorAwayUpdatedEventV1AwayKind = "dnd"
+	RealtimeActorAwayUpdatedEventV1AwayKindOther       RealtimeActorAwayUpdatedEventV1AwayKind = "other"
+	RealtimeActorAwayUpdatedEventV1AwayKindTrip        RealtimeActorAwayUpdatedEventV1AwayKind = "trip"
+	RealtimeActorAwayUpdatedEventV1AwayKindVacation    RealtimeActorAwayUpdatedEventV1AwayKind = "vacation"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeActorAwayUpdatedEventV1AwayKind enum.
+func (e RealtimeActorAwayUpdatedEventV1AwayKind) Valid() bool {
+	switch e {
+	case RealtimeActorAwayUpdatedEventV1AwayKindAppointment:
+		return true
+	case RealtimeActorAwayUpdatedEventV1AwayKindDnd:
+		return true
+	case RealtimeActorAwayUpdatedEventV1AwayKindOther:
+		return true
+	case RealtimeActorAwayUpdatedEventV1AwayKindTrip:
+		return true
+	case RealtimeActorAwayUpdatedEventV1AwayKindVacation:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RealtimeAgentStatusEventFrameV1Op.
 const (
 	RealtimeAgentStatusEventFrameV1OpAgentStatus RealtimeAgentStatusEventFrameV1Op = "agent.status"
@@ -3326,6 +3500,99 @@ func (e RealtimeOrgUpdatedEventV1Reason) Valid() bool {
 	case RealtimeOrgUpdatedEventV1ReasonPersonStatus:
 		return true
 	case RealtimeOrgUpdatedEventV1ReasonPosition:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimePollNotifiedEventV1Kind.
+const (
+	ClosedExpired RealtimePollNotifiedEventV1Kind = "closed_expired"
+	Reminded      RealtimePollNotifiedEventV1Kind = "reminded"
+)
+
+// Valid indicates whether the value is a known member of the RealtimePollNotifiedEventV1Kind enum.
+func (e RealtimePollNotifiedEventV1Kind) Valid() bool {
+	switch e {
+	case ClosedExpired:
+		return true
+	case Reminded:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimePollUpdatedEventV1ClosedReason.
+const (
+	RealtimePollUpdatedEventV1ClosedReasonAuthor         RealtimePollUpdatedEventV1ClosedReason = "author"
+	RealtimePollUpdatedEventV1ClosedReasonExpired        RealtimePollUpdatedEventV1ClosedReason = "expired"
+	RealtimePollUpdatedEventV1ClosedReasonLessThannil    RealtimePollUpdatedEventV1ClosedReason = "<nil>"
+	RealtimePollUpdatedEventV1ClosedReasonMessageDeleted RealtimePollUpdatedEventV1ClosedReason = "message_deleted"
+	RealtimePollUpdatedEventV1ClosedReasonModerator      RealtimePollUpdatedEventV1ClosedReason = "moderator"
+)
+
+// Valid indicates whether the value is a known member of the RealtimePollUpdatedEventV1ClosedReason enum.
+func (e RealtimePollUpdatedEventV1ClosedReason) Valid() bool {
+	switch e {
+	case RealtimePollUpdatedEventV1ClosedReasonAuthor:
+		return true
+	case RealtimePollUpdatedEventV1ClosedReasonExpired:
+		return true
+	case RealtimePollUpdatedEventV1ClosedReasonLessThannil:
+		return true
+	case RealtimePollUpdatedEventV1ClosedReasonMessageDeleted:
+		return true
+	case RealtimePollUpdatedEventV1ClosedReasonModerator:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimePollUpdatedEventV1Status.
+const (
+	RealtimePollUpdatedEventV1StatusClosed RealtimePollUpdatedEventV1Status = "closed"
+	RealtimePollUpdatedEventV1StatusOpen   RealtimePollUpdatedEventV1Status = "open"
+)
+
+// Valid indicates whether the value is a known member of the RealtimePollUpdatedEventV1Status enum.
+func (e RealtimePollUpdatedEventV1Status) Valid() bool {
+	switch e {
+	case RealtimePollUpdatedEventV1StatusClosed:
+		return true
+	case RealtimePollUpdatedEventV1StatusOpen:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimePollVoteAnonymousEventV1Voted.
+const (
+	RealtimePollVoteAnonymousEventV1VotedTrue RealtimePollVoteAnonymousEventV1Voted = true
+)
+
+// Valid indicates whether the value is a known member of the RealtimePollVoteAnonymousEventV1Voted enum.
+func (e RealtimePollVoteAnonymousEventV1Voted) Valid() bool {
+	switch e {
+	case RealtimePollVoteAnonymousEventV1VotedTrue:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimePollVoteUpdatedEventV11Voted.
+const (
+	RealtimePollVoteUpdatedEventV11VotedTrue RealtimePollVoteUpdatedEventV11Voted = true
+)
+
+// Valid indicates whether the value is a known member of the RealtimePollVoteUpdatedEventV11Voted enum.
+func (e RealtimePollVoteUpdatedEventV11Voted) Valid() bool {
+	switch e {
+	case RealtimePollVoteUpdatedEventV11VotedTrue:
 		return true
 	default:
 		return false
@@ -4678,6 +4945,7 @@ func (e UserPreferencesTheme) Valid() bool {
 
 // Defines values for WaitingInboxItemKind.
 const (
+	WaitingInboxItemKindPoll    WaitingInboxItemKind = "poll"
 	WaitingInboxItemKindRequest WaitingInboxItemKind = "request"
 	WaitingInboxItemKindTask    WaitingInboxItemKind = "task"
 )
@@ -4685,6 +4953,8 @@ const (
 // Valid indicates whether the value is a known member of the WaitingInboxItemKind enum.
 func (e WaitingInboxItemKind) Valid() bool {
 	switch e {
+	case WaitingInboxItemKindPoll:
+		return true
 	case WaitingInboxItemKindRequest:
 		return true
 	case WaitingInboxItemKindTask:
@@ -4718,6 +4988,24 @@ const (
 func (e ObjectDelivery) Valid() bool {
 	switch e {
 	case ObjectDeliveryLink:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListActorsParamsPresence.
+const (
+	ListActorsParamsPresenceAway ListActorsParamsPresence = "away"
+	ListActorsParamsPresenceHere ListActorsParamsPresence = "here"
+)
+
+// Valid indicates whether the value is a known member of the ListActorsParamsPresence enum.
+func (e ListActorsParamsPresence) Valid() bool {
+	switch e {
+	case ListActorsParamsPresenceAway:
+		return true
+	case ListActorsParamsPresenceHere:
 		return true
 	default:
 		return false
@@ -4964,6 +5252,7 @@ func (e DownloadFileParamsDelivery) Valid() bool {
 // Defines values for ListWaitingInboxParamsKind.
 const (
 	ListWaitingInboxParamsKindAll      ListWaitingInboxParamsKind = "all"
+	ListWaitingInboxParamsKindPolls    ListWaitingInboxParamsKind = "polls"
 	ListWaitingInboxParamsKindRequests ListWaitingInboxParamsKind = "requests"
 	ListWaitingInboxParamsKindTasks    ListWaitingInboxParamsKind = "tasks"
 )
@@ -4972,6 +5261,8 @@ const (
 func (e ListWaitingInboxParamsKind) Valid() bool {
 	switch e {
 	case ListWaitingInboxParamsKindAll:
+		return true
+	case ListWaitingInboxParamsKindPolls:
 		return true
 	case ListWaitingInboxParamsKindRequests:
 		return true
@@ -5208,8 +5499,11 @@ type ActorSummary struct {
 	About         string             `json:"about"`
 	ActorId       openapi_types.UUID `json:"actor_id"`
 	AvatarVersion int64              `json:"avatar_version"`
-	DisplayName   string             `json:"display_name"`
-	Handle        string             `json:"handle"`
+
+	// Away The person's away status («Отсутствую»), current or planned, as everyone in the workspace sees it; null without one. Present when the server announces actor_away. While it is active the status_emoji and status_text of this object carry it instead of the custom status (🌴 «В отпуске до 30 ноября»), so older clients show it too.
+	Away        *AwayPublic `json:"away,omitempty"`
+	DisplayName string      `json:"display_name"`
+	Handle      string      `json:"handle"`
 
 	// LastSeenApprox Direct chat peer only — rough last seen used instead of last_seen_at when the person or the viewer hides the exact time.
 	LastSeenApprox *ActorSummaryLastSeenApprox `json:"last_seen_approx,omitempty"`
@@ -5949,6 +6243,63 @@ type AvatarUpdate struct {
 	AvatarVersion int64              `json:"avatar_version"`
 }
 
+// AwayAutoreply defines model for AwayAutoreply.
+type AwayAutoreply struct {
+	Enabled bool `json:"enabled"`
+
+	// Text Sent once to each person who writes to the owner in a direct chat during the period, as the owner's message with auto_reply. Required (1–500 characters) when enabled; kept when disabled.
+	Text string `json:"text"`
+}
+
+// AwayKind vacation «В отпуске» 🌴, appointment «На приёме» 🩺, trip «На выезде» 🚗, dnd «Не беспокоить» 🔕, other ⏸ with the person's own label. Clients translate the kinds; only other carries text.
+type AwayKind string
+
+// AwayPublic An away status («Отсутствую», phase 6.7) as everyone in the workspace sees it. Never carries the auto-reply text, mute_push or a substitute others must not see; the owner gets those in AwayStatus (GET /api/v1/me/away).
+type AwayPublic struct {
+	// Active starts_at <= now < ends_at at the moment the response or the event was made; clients recheck it against the clock.
+	Active bool           `json:"active"`
+	EndsAt time.Time      `json:"ends_at"`
+	Kind   AwayPublicKind `json:"kind"`
+
+	// Label The own text of kind other; empty for the other kinds.
+	Label string `json:"label"`
+
+	// NotificationsOff Push is off while the status is active: the mention hint says «уведомление не придёт».
+	NotificationsOff bool      `json:"notifications_off"`
+	StartsAt         time.Time `json:"starts_at"`
+
+	// SubstituteId Whom to write instead; null without one and while the substitute is deactivated or away themselves (checked on every read).
+	SubstituteId *openapi_types.UUID `json:"substitute_id"`
+}
+
+// AwayPublicKind defines model for AwayPublic.Kind.
+type AwayPublicKind string
+
+// AwayStatus The away status as its owner sees it (getAway, setAway). Only the owner ever gets autoreply, mute_push and the substitute as saved; everyone else gets AwayPublic.
+type AwayStatus struct {
+	// Active starts_at <= now < ends_at at the moment of the response.
+	Active    bool          `json:"active"`
+	Autoreply AwayAutoreply `json:"autoreply"`
+	EndsAt    time.Time     `json:"ends_at"`
+
+	// Kind vacation «В отпуске» 🌴, appointment «На приёме» 🩺, trip «На выезде» 🚗, dnd «Не беспокоить» 🔕, other ⏸ with the person's own label. Clients translate the kinds; only other carries text.
+	Kind AwayKind `json:"kind"`
+
+	// Label The own text of kind other; empty for the other kinds.
+	Label string `json:"label"`
+
+	// MutePush «Не присылать уведомления» while the status is active: no push and no e-mail digest, except the person's own reminders and direct messages from the workspace owner and admins, which come without sound. Badges and counters work as usual.
+	MutePush bool `json:"mute_push"`
+
+	// NotificationsOff Equals mute_push; kept so AwayStatus has every AwayPublic field.
+	NotificationsOff bool      `json:"notifications_off"`
+	StartsAt         time.Time `json:"starts_at"`
+
+	// SubstituteId The substitute as saved, also when others do not see them now (deactivated or away themselves).
+	SubstituteId *openapi_types.UUID `json:"substitute_id"`
+	Version      int                 `json:"version"`
+}
+
 // BootstrapRequest defines model for BootstrapRequest.
 type BootstrapRequest struct {
 	DisplayName      string              `json:"display_name"`
@@ -6086,9 +6437,12 @@ type ChatFolders = []ChatFolder
 type ChatMember struct {
 	ActorId       openapi_types.UUID `json:"actor_id"`
 	AvatarVersion int64              `json:"avatar_version"`
-	DisplayName   string             `json:"display_name"`
-	Handle        string             `json:"handle"`
-	JoinedAt      time.Time          `json:"joined_at"`
+
+	// Away The person's away status («Отсутствую»), current or planned, as everyone in the workspace sees it; null without one. Present when the server announces actor_away. While it is active the status_emoji and status_text of this object carry it instead of the custom status (🌴 «В отпуске до 30 ноября»), so older clients show it too.
+	Away        *AwayPublic `json:"away,omitempty"`
+	DisplayName string      `json:"display_name"`
+	Handle      string      `json:"handle"`
+	JoinedAt    time.Time   `json:"joined_at"`
 
 	// LastSeenApprox Rough last seen used instead of last_seen_at when the person or the viewer hides the exact time (recently means within three days).
 	LastSeenApprox *ChatMemberLastSeenApprox `json:"last_seen_approx,omitempty"`
@@ -6226,6 +6580,9 @@ type ChatUnread struct {
 	ChatId       openapi_types.UUID `json:"chat_id"`
 	LastReadSeq  int64              `json:"last_read_seq"`
 	MentionCount int64              `json:"mention_count"`
+
+	// PollsWaiting Open polls with a due date in the chat the person may vote in and has not voted in. Absent on servers without message_polls. The chat list shows no mark for them.
+	PollsWaiting *int64 `json:"polls_waiting,omitempty"`
 
 	// RequestsNextDueAt The earliest due date among them; null when none has one.
 	RequestsNextDueAt *time.Time `json:"requests_next_due_at,omitempty"`
@@ -6561,6 +6918,23 @@ type CreateMessageRequest struct {
 
 // CreateMessageRequestBodyFormat defines model for CreateMessageRequest.BodyFormat.
 type CreateMessageRequestBodyFormat string
+
+// CreatePollRequest defines model for CreatePollRequest.
+type CreatePollRequest struct {
+	// Anonymous Nobody, the author and workspace admins included, can learn who chose what: the server stores only the counts per option and who has voted. A vote in an anonymous poll cannot be changed or retracted.
+	Anonymous   bool               `json:"anonymous"`
+	ClientMsgId openapi_types.UUID `json:"client_msg_id"`
+
+	// DueAt When the poll closes by itself; at least 10 minutes and at most 90 days ahead. Absent — open until closed by hand.
+	DueAt *time.Time `json:"due_at,omitempty"`
+
+	// Multiple «Несколько ответов» — a vote may choose several options, with no upper limit.
+	Multiple bool `json:"multiple"`
+
+	// Options 1–100 characters each, no repeats ignoring case.
+	Options  []string `json:"options"`
+	Question string   `json:"question"`
+}
 
 // CreatePositionRequest defines model for CreatePositionRequest.
 type CreatePositionRequest struct {
@@ -7239,6 +7613,9 @@ type Message struct {
 	// AgentProvenance Why an agent wrote the message. Visible to every reader of the message: it never carries a webhook payload, a follow-up note or text from another chat.
 	AgentProvenance *MessageAgentProvenance `json:"agent_provenance,omitempty"`
 
+	// AutoReply Present and true on an auto-reply («АВТООТВЕТ», phase 6.7): a message the server sent on behalf of its author, who is away, in a direct chat. It comes as silent and does not move the author's read cursor. Absent from servers without actor_away.
+	AutoReply *bool `json:"auto_reply,omitempty"`
+
 	// Blocks Optional structured part of an agent message. The body always carries a plain-text fallback; clients that do not support the version render the body. Server-managed state (responses, closed, binding) is part of the document so durable events carry the current card.
 	Blocks            *MessageBlocks       `json:"blocks,omitempty"`
 	Body              string               `json:"body"`
@@ -7259,7 +7636,13 @@ type Message struct {
 
 	// MentionedDepartments One entry per mentioned department: how many people it notified. Same for every reader; clients show the note to the author only.
 	MentionedDepartments *[]MessageDepartmentMention `json:"mentioned_departments,omitempty"`
-	ReplyToId            *openapi_types.UUID         `json:"reply_to_id,omitempty"`
+
+	// Poll Present on messages of type poll: the poll as every reader sees it, without the counts of an open poll or anyone's choice. Also in realtime message.* frames.
+	Poll *MessagePoll `json:"poll,omitempty"`
+
+	// PollViewer REST only (feed pages, create and context responses, «Ждут вас»), next to poll: what the reading person may see and do, with the counts when they may see the results. Never in realtime frames, which the whole chat shares; clients load it with getPoll when needed.
+	PollViewer *PollViewer         `json:"poll_viewer,omitempty"`
+	ReplyToId  *openapi_types.UUID `json:"reply_to_id,omitempty"`
 
 	// Request Present on messages of type request: the request as every reader sees it, without recipients or anyone's answers. Also in realtime message.* frames.
 	Request *MessageRequest `json:"request,omitempty"`
@@ -7283,7 +7666,7 @@ type Message struct {
 	// Truncated Realtime message.* events only: the event was larger than the connection's frame limit (WS_MAX_FRAME_BYTES). The payload keeps the Message shape with ids, version, sequence, times, thread and counters but an empty body, no files and no blocks; clients load the message by REST (GET /api/v1/messages/{message_id}/context). Other event types may carry truncated: true with only their short scalar fields.
 	Truncated *bool `json:"truncated,omitempty"`
 
-	// Type request — a request for answers («Запрос»); its body is the question and request describes the answers. task — a task («Задача», phase 6.6); its body is built by the server from the title and the description and task describes it. Clients that do not know a type show the body as text.
+	// Type request — a request for answers («Запрос»); its body is the question and request describes the answers. task — a task («Задача», phase 6.6); its body is built by the server from the title and the description and task describes it. poll — a poll («Опрос», phase 6.7); its body is built by the server from the question and the options and poll describes it. Clients that do not know a type show the body as text.
 	Type    MessageType `json:"type"`
 	Version int         `json:"version"`
 }
@@ -7291,7 +7674,7 @@ type Message struct {
 // MessageBodyFormat defines model for Message.BodyFormat.
 type MessageBodyFormat string
 
-// MessageType request — a request for answers («Запрос»); its body is the question and request describes the answers. task — a task («Задача», phase 6.6); its body is built by the server from the title and the description and task describes it. Clients that do not know a type show the body as text.
+// MessageType request — a request for answers («Запрос»); its body is the question and request describes the answers. task — a task («Задача», phase 6.6); its body is built by the server from the title and the description and task describes it. poll — a poll («Опрос», phase 6.7); its body is built by the server from the question and the options and poll describes it. Clients that do not know a type show the body as text.
 type MessageType string
 
 // MessageAction defines model for MessageAction.
@@ -7428,6 +7811,38 @@ type MessagePin struct {
 type MessagePinList struct {
 	Pins []MessagePin `json:"pins"`
 }
+
+// MessagePoll The poll part of a message of type poll. The same for every reader: it never carries the counts of an open poll or anyone's choice, so it is also in realtime message.* frames. The counts of an open poll are only in PollViewer.counts of those who may see the results.
+type MessagePoll struct {
+	Anonymous    bool                     `json:"anonymous"`
+	ClosedAt     *time.Time               `json:"closed_at"`
+	ClosedReason *MessagePollClosedReason `json:"closed_reason"`
+	DueAt        *time.Time               `json:"due_at"`
+
+	// FinalCounts Votes per option, in option order. Only on a closed poll; always null while it is open.
+	FinalCounts *[]int `json:"final_counts"`
+
+	// MemberCount M of «N из M» — active people of the chat now (agents left out) plus voters who have left.
+	MemberCount int      `json:"member_count"`
+	Multiple    bool     `json:"multiple"`
+	Options     []string `json:"options"`
+
+	// Question The author may edit it after sending (message edited_at); options, flags and due_at never change.
+	Question string            `json:"question"`
+	Status   MessagePollStatus `json:"status"`
+
+	// Version Grows with every change of the poll (votes, closing, the denominator); poll.updated carries it so stale events are dropped.
+	Version int `json:"version"`
+
+	// VoterCount N of «N из M» — people who have voted, including those who have left the chat since.
+	VoterCount int `json:"voter_count"`
+}
+
+// MessagePollClosedReason defines model for MessagePoll.ClosedReason.
+type MessagePollClosedReason string
+
+// MessagePollStatus defines model for MessagePoll.Status.
+type MessagePollStatus string
 
 // MessagePreview defines model for MessagePreview.
 type MessagePreview struct {
@@ -7773,14 +8188,17 @@ type OrgStructure struct {
 
 // OrganizationMember defines model for OrganizationMember.
 type OrganizationMember struct {
-	ActorId       openapi_types.UUID  `json:"actor_id"`
-	AvatarVersion int64               `json:"avatar_version"`
-	CreatedAt     time.Time           `json:"created_at"`
-	DisplayName   string              `json:"display_name"`
-	Email         openapi_types.Email `json:"email"`
-	Handle        string              `json:"handle"`
-	LastSeenAt    *time.Time          `json:"last_seen_at"`
-	Permissions   []Permission        `json:"permissions"`
+	ActorId       openapi_types.UUID `json:"actor_id"`
+	AvatarVersion int64              `json:"avatar_version"`
+
+	// Away The person's away status («Отсутствую»), current or planned, as everyone in the workspace sees it; null without one. Present when the server announces actor_away. While it is active the status_emoji and status_text of this object carry it instead of the custom status (🌴 «В отпуске до 30 ноября»), so older clients show it too.
+	Away        *AwayPublic         `json:"away,omitempty"`
+	CreatedAt   time.Time           `json:"created_at"`
+	DisplayName string              `json:"display_name"`
+	Email       openapi_types.Email `json:"email"`
+	Handle      string              `json:"handle"`
+	LastSeenAt  *time.Time          `json:"last_seen_at"`
+	Permissions []Permission        `json:"permissions"`
 
 	// PositionId The position from the org structure (people only); null without one. Present when the server announces org_structure.
 	PositionId *openapi_types.UUID `json:"position_id,omitempty"`
@@ -7826,6 +8244,76 @@ type Permission string
 
 // PinnedChatIds defines model for PinnedChatIds.
 type PinnedChatIds = []openapi_types.UUID
+
+// PollRemindResult defines model for PollRemindResult.
+type PollRemindResult struct {
+	NextRemindAt *time.Time `json:"next_remind_at"`
+
+	// Reminded People without a vote who were reminded, including those over the daily limit who got no push.
+	Reminded int `json:"reminded"`
+}
+
+// PollState defines model for PollState.
+type PollState struct {
+	// Poll The poll part of a message of type poll. The same for every reader: it never carries the counts of an open poll or anyone's choice, so it is also in realtime message.* frames. The counts of an open poll are only in PollViewer.counts of those who may see the results.
+	Poll MessagePoll `json:"poll"`
+
+	// Viewer What the current person may see and do with a poll. REST only (Message.poll_viewer in feed pages, create and context responses, getPoll, votePoll, closePoll); never in realtime frames, which the whole chat shares.
+	Viewer PollViewer `json:"viewer"`
+}
+
+// PollViewer What the current person may see and do with a poll. REST only (Message.poll_viewer in feed pages, create and context responses, getPoll, votePoll, closePoll); never in realtime frames, which the whole chat shares.
+type PollViewer struct {
+	// CanChange An ordinary poll the person has voted in, still open; covers both a new choice and «Отменить голос».
+	CanChange bool `json:"can_change"`
+
+	// CanClose The poll is open and the person is its author still in the chat, or a chat owner or admin or a moderator with chats.moderate in it.
+	CanClose bool `json:"can_close"`
+
+	// CanRemind The author, the poll open, someone has not voted, 2 hours passed since the last reminder and fewer than 5 were sent.
+	CanRemind bool `json:"can_remind"`
+
+	// CanViewResults Voted, the author, or the poll is closed. There is no way to see the results without voting.
+	CanViewResults bool `json:"can_view_results"`
+
+	// CanViewVoters can_view_results and the poll is not anonymous — avatars at the options and listPollVoters by option.
+	CanViewVoters bool `json:"can_view_voters"`
+
+	// CanViewWaiting The author or a chat owner or admin or a moderator with chats.moderate in the chat, and the poll is not anonymous — listPollVoters with filter=waiting.
+	CanViewWaiting bool `json:"can_view_waiting"`
+
+	// CanVote An active person of the chat, the poll open and the chat not archived; in an anonymous poll also not voted yet.
+	CanVote bool `json:"can_vote"`
+
+	// Counts Votes per option, in option order. Only with can_view_results, null otherwise.
+	Counts *[]int `json:"counts"`
+
+	// MyOptions The person's choice in an ordinary poll; null before the vote and always null in an anonymous poll (clients keep it on the device only).
+	MyOptions *[]int `json:"my_options"`
+
+	// NextRemindAt When a reminder is allowed again; null when it is allowed now or never again.
+	NextRemindAt *time.Time `json:"next_remind_at"`
+	Voted        bool       `json:"voted"`
+}
+
+// PollVoter defines model for PollVoter.
+type PollVoter struct {
+	ActorId openapi_types.UUID `json:"actor_id"`
+
+	// InChat false — the voter has left the chat since («не в чате»); the vote stays in the count.
+	InChat bool `json:"in_chat"`
+
+	// VotedAt When the person voted; null in the waiting list.
+	VotedAt *time.Time `json:"voted_at"`
+}
+
+// PollVoterPage defines model for PollVoterPage.
+type PollVoterPage struct {
+	Items []PollVoter `json:"items"`
+
+	// NextCursor Opaque; pass as cursor to read the next page.
+	NextCursor *string `json:"next_cursor"`
+}
 
 // PositionWrite defines model for PositionWrite.
 type PositionWrite struct {
@@ -7944,6 +8432,30 @@ type RealtimeAckFrameV1 struct {
 // RealtimeAckFrameV1Op defines model for RealtimeAckFrameV1.Op.
 type RealtimeAckFrameV1Op string
 
+// RealtimeActorAwayUpdatedEventV1 data of actor.away.updated, sent to the whole workspace like actor.status.updated (chat_id null, subject_id is the person): the away status was set, changed or removed, a planned one started, or one ended. away is null when there is none any more.
+type RealtimeActorAwayUpdatedEventV1 struct {
+	ActorId openapi_types.UUID `json:"actor_id"`
+	Away    *struct {
+		// Active starts_at <= now < ends_at at the moment the response or the event was made; clients recheck it against the clock.
+		Active bool                                    `json:"active"`
+		EndsAt time.Time                               `json:"ends_at"`
+		Kind   RealtimeActorAwayUpdatedEventV1AwayKind `json:"kind"`
+
+		// Label The own text of kind other; empty for the other kinds.
+		Label string `json:"label"`
+
+		// NotificationsOff Push is off while the status is active: the mention hint says «уведомление не придёт».
+		NotificationsOff bool      `json:"notifications_off"`
+		StartsAt         time.Time `json:"starts_at"`
+
+		// SubstituteId Whom to write instead; null without one and while the substitute is deactivated or away themselves (checked on every read).
+		SubstituteId *openapi_types.UUID `json:"substitute_id"`
+	} `json:"away"`
+}
+
+// RealtimeActorAwayUpdatedEventV1AwayKind defines model for RealtimeActorAwayUpdatedEventV1.Away.Kind.
+type RealtimeActorAwayUpdatedEventV1AwayKind string
+
 // RealtimeAgentStatusEventFrameV1 defines model for RealtimeAgentStatusEventFrameV1.
 type RealtimeAgentStatusEventFrameV1 struct {
 	ActorId      openapi_types.UUID                   `json:"actor_id"`
@@ -7988,15 +8500,30 @@ type RealtimeAuthFrameV1 struct {
 // RealtimeAuthFrameV1Op defines model for RealtimeAuthFrameV1.Op.
 type RealtimeAuthFrameV1Op string
 
+// RealtimeAwaySubstituteAssignedEventV1 data of away.substitute.assigned, sent only to the substitute (audience_actor_id; subject_id is the person who is away): they were named substitute or the dates changed. Triggers a push «Вы замещаете …» (category system).
+type RealtimeAwaySubstituteAssignedEventV1 struct {
+	// ActorId The person who is away.
+	ActorId  openapi_types.UUID `json:"actor_id"`
+	EndsAt   time.Time          `json:"ends_at"`
+	StartsAt time.Time          `json:"starts_at"`
+}
+
+// RealtimeAwaySubstituteRemovedEventV1 data of away.substitute.removed, sent only to the former substitute (audience_actor_id; subject_id is the person who was away): another substitute was named, the status was removed or it ended. No push.
+type RealtimeAwaySubstituteRemovedEventV1 struct {
+	// ActorId The person who was away.
+	ActorId openapi_types.UUID `json:"actor_id"`
+}
+
 // RealtimeCloseCodeV1 defines model for RealtimeCloseCodeV1.
 type RealtimeCloseCodeV1 int32
 
 // RealtimeDurableEventFrameV1 defines model for RealtimeDurableEventFrameV1.
 type RealtimeDurableEventFrameV1 struct {
-	ActorId openapi_types.UUID  `json:"actor_id"`
+	// ActorId Who caused the event. null when the server must not or cannot tell: always for poll.updated (a vote must not reveal the voter) and for poll.notified with kind closed_expired, which the server sends by itself. Clients never rely on it being set.
+	ActorId *openapi_types.UUID `json:"actor_id"`
 	ChatId  *openapi_types.UUID `json:"chat_id,omitempty"`
 
-	// Data Event payload. For message.created, message.updated and message.deleted it is the message in the shape of the REST feed (components/schemas/Message: files with metadata and no links, thread_reply_count, mentioned_actor_ids, blocks, agent_provenance and request when present; never request_viewer, which is per reader), read when the event is delivered, plus silent on message.created and thread_root_reply_count on thread replies. A frame that would exceed the frame limit (WS_MAX_FRAME_BYTES) is never sent as is: its data becomes a stub with truncated: true — for message.* the Message shape with an empty body, no files and no blocks, for other events only their short scalar fields — and the client loads the record by REST. The data of request.* and reminder.* events is described by the RequestAssignedEvent … ReminderFiredEvent definitions: it never carries message text, notes, comments or who answered what. The data of org.updated is OrgUpdatedEvent: only the new version and a reason, never names or people. Frames are encoded without HTML escaping.
+	// Data Event payload. For message.created, message.updated and message.deleted it is the message in the shape of the REST feed (components/schemas/Message: files with metadata and no links, thread_reply_count, mentioned_actor_ids, blocks, agent_provenance and request when present; never request_viewer, which is per reader), read when the event is delivered, plus silent on message.created and thread_root_reply_count on thread replies. A frame that would exceed the frame limit (WS_MAX_FRAME_BYTES) is never sent as is: its data becomes a stub with truncated: true — for message.* the Message shape with an empty body, no files and no blocks, for other events only their short scalar fields — and the client loads the record by REST. The data of request.* and reminder.* events is described by the RequestAssignedEvent … ReminderFiredEvent definitions: it never carries message text, notes, comments or who answered what. The data of org.updated is OrgUpdatedEvent: only the new version and a reason, never names or people. message.* frames of a poll carry poll (MessagePoll: never the counts of an open poll) and never poll_viewer; the data of poll.* events is PollUpdatedEvent, PollVoteUpdatedEvent and PollNotifiedEvent: never anyone's choice but the recipient's own, and no choice at all in an anonymous poll. The data of actor.away.updated and away.substitute.* is ActorAwayUpdatedEvent, AwaySubstituteAssignedEvent and AwaySubstituteRemovedEvent: never the auto-reply text or mute_push. Frames are encoded without HTML escaping.
 	Data       map[string]interface{}        `json:"data"`
 	OccurredAt time.Time                     `json:"occurred_at"`
 	Op         RealtimeDurableEventFrameV1Op `json:"op"`
@@ -8015,7 +8542,7 @@ type RealtimeHelloFrameV1 struct {
 	ConnectionId  openapi_types.UUID `json:"connection_id"`
 	CurrentSeq    int64              `json:"current_seq"`
 
-	// Features Optional protocol additions this server accepts. typing_actions: the action field on typing frames. message_requests: requests («Запрос») — the request REST routes, Message.request and the request.* events. message_reminders: personal reminders («Напомнить мне») — the reminder REST routes and the reminder.* events. org_structure: departments and positions («Оргструктура») — the org REST routes, the org fields of ActorSummary, OrganizationMember and Message, mentioned_department_ids in message, request and scheduled message bodies, the department and position request audiences and the org.updated event. message_tasks: tasks («Задача») — the task REST routes, GET /api/v1/inbox/waiting, Message.task, the task fields of the unread snapshot and the task.updated and task.notified events. A client hides a feature the server does not list.
+	// Features Optional protocol additions this server accepts. typing_actions: the action field on typing frames. message_requests: requests («Запрос») — the request REST routes, Message.request and the request.* events. message_reminders: personal reminders («Напомнить мне») — the reminder REST routes and the reminder.* events. org_structure: departments and positions («Оргструктура») — the org REST routes, the org fields of ActorSummary, OrganizationMember and Message, mentioned_department_ids in message, request and scheduled message bodies, the department and position request audiences and the org.updated event. message_tasks: tasks («Задача») — the task REST routes, GET /api/v1/inbox/waiting, Message.task, the task fields of the unread snapshot and the task.updated and task.notified events. message_polls: polls («Опрос») — the poll REST routes, Message.poll and Message.poll_viewer, kind=polls of GET /api/v1/inbox/waiting, the poll fields of the unread snapshot and the poll.updated, poll.vote.updated and poll.notified events. actor_away: «Отсутствую» — GET/PUT/DELETE /api/v1/me/away, GET /api/v1/me/substituting, the away field of User, ActorSummary, ChatMember and OrganizationMember, presence on GET /api/v1/actors, Message.auto_reply and the actor.away.updated, away.substitute.assigned and away.substitute.removed events. A client hides a feature the server does not list.
 	Features            *[]string              `json:"features,omitempty"`
 	HeartbeatIntervalMs int                    `json:"heartbeat_interval_ms"`
 	MaxUnackedEvents    int                    `json:"max_unacked_events"`
@@ -8070,6 +8597,91 @@ type RealtimeOrgUpdatedEventV1 struct {
 
 // RealtimeOrgUpdatedEventV1Reason defines model for RealtimeOrgUpdatedEventV1.Reason.
 type RealtimeOrgUpdatedEventV1Reason string
+
+// RealtimePollNotifiedEventV1 data of poll.notified, sent to one person only (audience_actor_id; subject_id is the message id): the reason for a push about a poll. Never carries the question, the options or counts. kinds: reminded — a person of the chat who has not voted, «Напомнить не ответившим» by the author (frame actor_id is the author); closed_expired — the author, the poll closed by its due date (frame actor_id null), only when the author is active, still in the chat and the chat is not archived.
+type RealtimePollNotifiedEventV1 struct {
+	ChatId    openapi_types.UUID              `json:"chat_id"`
+	Kind      RealtimePollNotifiedEventV1Kind `json:"kind"`
+	MessageId openapi_types.UUID              `json:"message_id"`
+}
+
+// RealtimePollNotifiedEventV1Kind defines model for RealtimePollNotifiedEventV1.Kind.
+type RealtimePollNotifiedEventV1Kind string
+
+// RealtimePollUpdatedEventV1 data of poll.updated, sent to the whole chat (subject_id is the message id; the frame actor_id is always null): a vote or a retraction that changes voter_count, closing, a member joining or leaving that changes member_count. Only the counters every member may see: final_counts is set only once the poll is closed. Clients that may see the results reload getPoll (after about 1 s, only while the card is on screen).
+type RealtimePollUpdatedEventV1 struct {
+	ChatId       openapi_types.UUID                      `json:"chat_id"`
+	ClosedReason *RealtimePollUpdatedEventV1ClosedReason `json:"closed_reason"`
+
+	// FinalCounts Votes per option of a closed poll; null while it is open.
+	FinalCounts *[]int                           `json:"final_counts"`
+	MemberCount int                              `json:"member_count"`
+	MessageId   openapi_types.UUID               `json:"message_id"`
+	Status      RealtimePollUpdatedEventV1Status `json:"status"`
+	Version     int                              `json:"version"`
+	VoterCount  int                              `json:"voter_count"`
+}
+
+// RealtimePollUpdatedEventV1ClosedReason defines model for RealtimePollUpdatedEventV1.ClosedReason.
+type RealtimePollUpdatedEventV1ClosedReason string
+
+// RealtimePollUpdatedEventV1Status defines model for RealtimePollUpdatedEventV1.Status.
+type RealtimePollUpdatedEventV1Status string
+
+// RealtimePollVoteAnonymousEventV1 poll.vote.updated of an anonymous poll: no choice at all.
+type RealtimePollVoteAnonymousEventV1 struct {
+	ChatId    openapi_types.UUID `json:"chat_id"`
+	MessageId openapi_types.UUID `json:"message_id"`
+
+	// Version MessagePoll.version after the change.
+	Version int                                   `json:"version"`
+	Voted   RealtimePollVoteAnonymousEventV1Voted `json:"voted"`
+}
+
+// RealtimePollVoteAnonymousEventV1Voted defines model for RealtimePollVoteAnonymousEventV1.Voted.
+type RealtimePollVoteAnonymousEventV1Voted bool
+
+// RealtimePollVoteChosenEventV1 poll.vote.updated of an ordinary poll.
+type RealtimePollVoteChosenEventV1 struct {
+	ChatId    openapi_types.UUID `json:"chat_id"`
+	MessageId openapi_types.UUID `json:"message_id"`
+
+	// Options The person's choice; empty after the vote was retracted.
+	Options []int `json:"options"`
+
+	// Version MessagePoll.version after the change.
+	Version int `json:"version"`
+}
+
+// RealtimePollVoteUpdatedEventV1 data of poll.vote.updated, sent only to the person who voted, to all their devices (subject_id is the message id): their own vote changed. In an ordinary poll it carries the chosen options (empty after «Отменить голос»); in an anonymous poll only voted: true, because the server does not know the choice.
+type RealtimePollVoteUpdatedEventV1 struct {
+	union json.RawMessage
+}
+
+// RealtimePollVoteUpdatedEventV10 poll.vote.updated of an ordinary poll.
+type RealtimePollVoteUpdatedEventV10 struct {
+	ChatId    openapi_types.UUID `json:"chat_id"`
+	MessageId openapi_types.UUID `json:"message_id"`
+
+	// Options The person's choice; empty after the vote was retracted.
+	Options []int `json:"options"`
+
+	// Version MessagePoll.version after the change.
+	Version int `json:"version"`
+}
+
+// RealtimePollVoteUpdatedEventV11 poll.vote.updated of an anonymous poll: no choice at all.
+type RealtimePollVoteUpdatedEventV11 struct {
+	ChatId    openapi_types.UUID `json:"chat_id"`
+	MessageId openapi_types.UUID `json:"message_id"`
+
+	// Version MessagePoll.version after the change.
+	Version int                                  `json:"version"`
+	Voted   RealtimePollVoteUpdatedEventV11Voted `json:"voted"`
+}
+
+// RealtimePollVoteUpdatedEventV11Voted defines model for RealtimePollVoteUpdatedEventV1.1.Voted.
+type RealtimePollVoteUpdatedEventV11Voted bool
 
 // RealtimePresenceEventFrameV1 defines model for RealtimePresenceEventFrameV1.
 type RealtimePresenceEventFrameV1 struct {
@@ -8692,6 +9304,30 @@ type Session struct {
 	UserAgent  string             `json:"user_agent"`
 }
 
+// SetAwayRequest defines model for SetAwayRequest.
+type SetAwayRequest struct {
+	Autoreply AwayAutoreply `json:"autoreply"`
+
+	// EndsAt Later than starts_at and at most 180 days after it.
+	EndsAt time.Time `json:"ends_at"`
+
+	// ExpectedVersion AwayStatus.version the change is based on; another one gets 409 away_version_conflict. Optional.
+	ExpectedVersion *int `json:"expected_version,omitempty"`
+
+	// Kind vacation «В отпуске» 🌴, appointment «На приёме» 🩺, trip «На выезде» 🚗, dnd «Не беспокоить» 🔕, other ⏸ with the person's own label. Clients translate the kinds; only other carries text.
+	Kind AwayKind `json:"kind"`
+
+	// Label Required (1–40 characters) for other; must be absent or empty for the other kinds.
+	Label    *string `json:"label,omitempty"`
+	MutePush bool    `json:"mute_push"`
+
+	// StartsAt Absent — now. At most 365 days ahead; a time in the past is taken as now.
+	StartsAt *time.Time `json:"starts_at,omitempty"`
+
+	// SubstituteId An active person of the workspace, not the person themselves and not an agent. Absent or null — no substitute.
+	SubstituteId *openapi_types.UUID `json:"substitute_id,omitempty"`
+}
+
 // SetDepartmentMemberRequest defines model for SetDepartmentMemberRequest.
 type SetDepartmentMemberRequest struct {
 	// KeepPrevious With primary true — keep the previous primary department as an additional one instead of leaving it.
@@ -8776,6 +9412,20 @@ type StartArchitectSessionRequest struct {
 
 // StartArchitectSessionRequestLocale defines model for StartArchitectSessionRequest.Locale.
 type StartArchitectSessionRequestLocale string
+
+// SubstitutingEntry defines model for SubstitutingEntry.
+type SubstitutingEntry struct {
+	// ActorId The person who is away and named the current person as substitute.
+	ActorId openapi_types.UUID `json:"actor_id"`
+
+	// Away An away status («Отсутствую», phase 6.7) as everyone in the workspace sees it. Never carries the auto-reply text, mute_push or a substitute others must not see; the owner gets those in AwayStatus (GET /api/v1/me/away).
+	Away AwayPublic `json:"away"`
+}
+
+// SubstitutingList defines model for SubstitutingList.
+type SubstitutingList struct {
+	Items []SubstitutingEntry `json:"items"`
+}
 
 // TaskAssigneeInput defines model for TaskAssigneeInput.
 type TaskAssigneeInput struct {
@@ -8885,6 +9535,12 @@ type TransferOwnershipRequest struct {
 // UnreadSnapshot defines model for UnreadSnapshot.
 type UnreadSnapshot struct {
 	Chats []ChatUnread `json:"chats"`
+
+	// PollsHotTotal Of polls_waiting_total, those due within 24 hours: the badge of «Важные» counts only these. Absent on servers without message_polls.
+	PollsHotTotal *int64 `json:"polls_hot_total,omitempty"`
+
+	// PollsWaitingTotal Open polls with a due date in all chats the person may vote in and has not voted in («Ждут вас»). Absent on servers without message_polls.
+	PollsWaitingTotal *int64 `json:"polls_waiting_total,omitempty"`
 
 	// RemindersFiredTotal Fired reminders the person has not closed yet. Absent on servers without message_reminders.
 	RemindersFiredTotal *int64 `json:"reminders_fired_total,omitempty"`
@@ -9234,8 +9890,11 @@ type UpdateTaskRequest struct {
 
 // User defines model for User.
 type User struct {
-	About                string              `json:"about"`
-	AvatarVersion        int64               `json:"avatar_version"`
+	About         string `json:"about"`
+	AvatarVersion int64  `json:"avatar_version"`
+
+	// Away The person's own away status as everyone sees it; null without one. Present when the server announces actor_away. Unlike for other people, status_emoji and status_text here are the custom status as set: clients know it is hidden by away.active. The auto-reply and the other private settings are in getAway.
+	Away                 *AwayPublic         `json:"away,omitempty"`
 	CanCreateInvitations bool                `json:"can_create_invitations"`
 	CreatedAt            time.Time           `json:"created_at"`
 	DisplayName          string              `json:"display_name"`
@@ -9309,7 +9968,16 @@ type VoiceInfo struct {
 	Waveform []int `json:"waveform"`
 }
 
-// WaitingInboxItem One item of «Ждут вас». kind request: request and viewer are set, my_role is null; the same data as RequestInboxItem. kind task: the task is message.task, request and viewer are null and my_role says why the reader sees it (never author).
+// VotePollRequest defines model for VotePollRequest.
+type VotePollRequest struct {
+	// ExpectedVersion MessagePoll.version the change is based on; another one gets 409 version_conflict. Optional.
+	ExpectedVersion *int `json:"expected_version,omitempty"`
+
+	// Options Indexes of the chosen options; exactly one unless the poll is multiple. An index beyond the options gets 422 poll_invalid. Use retractPollVote to remove a vote.
+	Options []int `json:"options"`
+}
+
+// WaitingInboxItem One item of «Ждут вас». kind request: request and viewer are set, my_role is null; the same data as RequestInboxItem. kind task: the task is message.task, request and viewer are null and my_role says why the reader sees it (never author). kind poll (servers with message_polls): the poll is message.poll and the reader's state is message.poll_viewer; request, viewer and my_role are null. Clients skip kinds they do not know.
 type WaitingInboxItem struct {
 	Author SavedMessageAuthor `json:"author"`
 	Chat   SavedMessageChat   `json:"chat"`
@@ -9410,10 +10078,16 @@ type Tokens = TokenResponse
 // ListActorsParams defines parameters for ListActors.
 type ListActorsParams struct {
 	// Q Matches the name, handle and title; with the org_structure feature also the position name and the names of the person's departments (primary and additional).
-	Q       *string             `form:"q,omitempty" json:"q,omitempty"`
-	AfterId *openapi_types.UUID `form:"after_id,omitempty" json:"after_id,omitempty"`
-	Limit   *int                `form:"limit,omitempty" json:"limit,omitempty"`
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
+	// Presence «На месте» (here) or «Отсутствуют» (away): people whose away status is active now, or everyone else (agents count as here). Absent lists everyone. Only servers with the actor_away feature know it; clients do not send it to others, which would ignore it.
+	Presence *ListActorsParamsPresence `form:"presence,omitempty" json:"presence,omitempty"`
+	AfterId  *openapi_types.UUID       `form:"after_id,omitempty" json:"after_id,omitempty"`
+	Limit    *int                      `form:"limit,omitempty" json:"limit,omitempty"`
 }
+
+// ListActorsParamsPresence defines parameters for ListActors.
+type ListActorsParamsPresence string
 
 // GetActorAvatarParams defines parameters for GetActorAvatar.
 type GetActorAvatarParams struct {
@@ -9654,6 +10328,16 @@ type DeleteBrandingAssetParamsKind string
 // PutBrandingAssetParamsKind defines parameters for PutBrandingAsset.
 type PutBrandingAssetParamsKind string
 
+// ListPollVotersParams defines parameters for ListPollVoters.
+type ListPollVotersParams struct {
+	// Filter `option:<0-9>` or `waiting`.
+	Filter string `form:"filter" json:"filter"`
+
+	// Cursor Opaque next_cursor of the previous page; only valid with the same filter.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // ListRemindersParams defines parameters for ListReminders.
 type ListRemindersParams struct {
 	State *ListRemindersParamsState `form:"state,omitempty" json:"state,omitempty"`
@@ -9870,6 +10554,9 @@ type CreateMessageJSONRequestBody = CreateMessageRequest
 // UpdateChatNotificationPreferencesJSONRequestBody defines body for UpdateChatNotificationPreferences for application/json ContentType.
 type UpdateChatNotificationPreferencesJSONRequestBody = ChatNotificationPreferences
 
+// CreatePollJSONRequestBody defines body for CreatePoll for application/json ContentType.
+type CreatePollJSONRequestBody = CreatePollRequest
+
 // MarkChatReadJSONRequestBody defines body for MarkChatRead for application/json ContentType.
 type MarkChatReadJSONRequestBody = MarkReadRequest
 
@@ -9935,6 +10622,9 @@ type SearchKnowledgeJSONRequestBody = KnowledgeSearchRequest
 
 // UpdateMeJSONRequestBody defines body for UpdateMe for application/json ContentType.
 type UpdateMeJSONRequestBody = UpdateProfileRequest
+
+// SetAwayJSONRequestBody defines body for SetAway for application/json ContentType.
+type SetAwayJSONRequestBody = SetAwayRequest
 
 // ChangeEmailJSONRequestBody defines body for ChangeEmail for application/json ContentType.
 type ChangeEmailJSONRequestBody = ChangeEmailRequest
@@ -10004,6 +10694,9 @@ type UpdateOrganizationMemberJSONRequestBody = UpdateOrganizationMemberRequest
 
 // TransferOrganizationOwnershipJSONRequestBody defines body for TransferOrganizationOwnership for application/json ContentType.
 type TransferOrganizationOwnershipJSONRequestBody = TransferOwnershipRequest
+
+// VotePollJSONRequestBody defines body for VotePoll for application/json ContentType.
+type VotePollJSONRequestBody = VotePollRequest
 
 // UpdatePreferencesJSONRequestBody defines body for UpdatePreferences for application/json ContentType.
 type UpdatePreferencesJSONRequestBody = UpdatePreferencesRequest
@@ -10099,6 +10792,68 @@ func (t NotificationSchedule_Days) MarshalJSON() ([]byte, error) {
 }
 
 func (t *NotificationSchedule_Days) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsRealtimePollVoteUpdatedEventV10 returns the union data inside the RealtimePollVoteUpdatedEventV1 as a RealtimePollVoteUpdatedEventV10
+func (t RealtimePollVoteUpdatedEventV1) AsRealtimePollVoteUpdatedEventV10() (RealtimePollVoteUpdatedEventV10, error) {
+	var body RealtimePollVoteUpdatedEventV10
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromRealtimePollVoteUpdatedEventV10 overwrites any union data inside the RealtimePollVoteUpdatedEventV1 as the provided RealtimePollVoteUpdatedEventV10
+func (t *RealtimePollVoteUpdatedEventV1) FromRealtimePollVoteUpdatedEventV10(v RealtimePollVoteUpdatedEventV10) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeRealtimePollVoteUpdatedEventV10 performs a merge with any union data inside the RealtimePollVoteUpdatedEventV1, using the provided RealtimePollVoteUpdatedEventV10
+func (t *RealtimePollVoteUpdatedEventV1) MergeRealtimePollVoteUpdatedEventV10(v RealtimePollVoteUpdatedEventV10) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsRealtimePollVoteUpdatedEventV11 returns the union data inside the RealtimePollVoteUpdatedEventV1 as a RealtimePollVoteUpdatedEventV11
+func (t RealtimePollVoteUpdatedEventV1) AsRealtimePollVoteUpdatedEventV11() (RealtimePollVoteUpdatedEventV11, error) {
+	var body RealtimePollVoteUpdatedEventV11
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromRealtimePollVoteUpdatedEventV11 overwrites any union data inside the RealtimePollVoteUpdatedEventV1 as the provided RealtimePollVoteUpdatedEventV11
+func (t *RealtimePollVoteUpdatedEventV1) FromRealtimePollVoteUpdatedEventV11(v RealtimePollVoteUpdatedEventV11) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeRealtimePollVoteUpdatedEventV11 performs a merge with any union data inside the RealtimePollVoteUpdatedEventV1, using the provided RealtimePollVoteUpdatedEventV11
+func (t *RealtimePollVoteUpdatedEventV1) MergeRealtimePollVoteUpdatedEventV11(v RealtimePollVoteUpdatedEventV11) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t RealtimePollVoteUpdatedEventV1) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *RealtimePollVoteUpdatedEventV1) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }
