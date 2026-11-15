@@ -58,6 +58,9 @@ type ChatUnread struct {
 	// chat (see addTaskCounts).
 	TasksMineOpen      int64      `json:"tasks_mine_open"`
 	TasksMineNextDueAt *time.Time `json:"tasks_mine_next_due_at"`
+	// PollsWaiting: open polls with a due date the person may vote in and
+	// has not voted in (see addPollCounts).
+	PollsWaiting int64 `json:"polls_waiting"`
 }
 
 type ThreadUnread struct {
@@ -76,6 +79,8 @@ type UnreadSnapshot struct {
 	RequestsWaitingTotal int64 `json:"requests_waiting_total"`
 	TasksMineOpenTotal   int64 `json:"tasks_mine_open_total"`
 	TasksMineHotTotal    int64 `json:"tasks_mine_hot_total"`
+	PollsWaitingTotal    int64 `json:"polls_waiting_total"`
+	PollsHotTotal        int64 `json:"polls_hot_total"`
 }
 
 type Service struct {
@@ -433,6 +438,9 @@ func (s *Service) Unread(ctx context.Context, user identity.User) (UnreadSnapsho
 		return UnreadSnapshot{}, err
 	}
 	if err := s.addTaskCounts(ctx, user, &snapshot); err != nil {
+		return UnreadSnapshot{}, err
+	}
+	if err := s.addPollCounts(ctx, user, &snapshot); err != nil {
 		return UnreadSnapshot{}, err
 	}
 	return snapshot, nil

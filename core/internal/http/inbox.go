@@ -7,8 +7,8 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// inboxRoutes serve «Ждут вас» as one list of requests and tasks (phase 6.6
-// wave 3; polls join in wave 4). GET /requests/inbox stays for older
+// inboxRoutes serve «Ждут вас» as one list of requests, tasks (phase 6.6
+// wave 3) and polls with a due date (phase 6.7 wave 4). GET /requests/inbox stays for older
 // clients and the «Отвечено» tab. Access to every chat is checked in the
 // query on every read. Without requests and tasks the route answers 501.
 func (h *identityHandlers) inboxRoutes(protected chi.Router) {

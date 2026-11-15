@@ -543,7 +543,7 @@
       }
     },
     "PollUpdatedEvent": {
-      "description": "data of poll.updated, sent to the whole chat (subject_id is the message id; the frame actor_id is always null): a vote or a retraction that changes voter_count, closing, a member joining or leaving that changes member_count. Only the counters every member may see: final_counts is set only once the poll is closed. Clients that may see the results reload getPoll (after about 1 s, only while the card is on screen).",
+      "description": "data of poll.updated, sent to the whole chat (subject_id is the message id; the frame actor_id is always null): a vote or a retraction that changes voter_count, closing, an edit of the question (with message.updated), a member joining or leaving that changes member_count. Only the counters every member may see: final_counts is set only once the poll is closed. Clients that may see the results reload getPoll (after about 1 s, only while the card is on screen).",
       "type": "object",
       "additionalProperties": false,
       "required": ["message_id", "chat_id", "status", "closed_reason", "voter_count", "member_count", "final_counts", "version"],

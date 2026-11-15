@@ -17,7 +17,7 @@ func TestFitShrinksOversizedEventData(t *testing.T) {
 		"chat_id": chatID, "thread_root_id": nil, "version": 3, "body_format": "plain",
 		"body": strings.Repeat("\x01", 4096), "mentions": []string{"a"},
 	})
-	frame := Frame{Op: "event", Seq: 7, Type: "draft.updated", ActorID: chatID, SubjectID: chatID, Data: data}
+	frame := Frame{Op: "event", Seq: 7, Type: "draft.updated", ActorID: &chatID, SubjectID: chatID, Data: data}
 	if err := store.fit(&frame); err != nil {
 		t.Fatal(err)
 	}

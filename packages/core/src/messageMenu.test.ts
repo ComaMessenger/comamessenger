@@ -88,4 +88,21 @@ describe("messageMenu: «Сделать задачей» (wave 3)", () => {
     ).not.toContain("edit");
     expect(messageMenu({ ...base, own: true }).flat()).toContain("edit");
   });
+
+  it("edits the question of one's own poll", () => {
+    expect(
+      messageMenu({ ...base, own: true, messageType: "poll" }).flat(),
+    ).toContain("edit");
+    expect(
+      messageMenu({ ...base, own: false, messageType: "poll" }).flat(),
+    ).not.toContain("edit");
+    expect(
+      messageMenu({
+        ...base,
+        own: true,
+        messageType: "poll",
+        pollClosed: true,
+      }).flat(),
+    ).not.toContain("edit");
+  });
 });

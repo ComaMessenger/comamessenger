@@ -16,6 +16,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/permission"
+	"github.com/comamessenger/comamessenger/core/internal/poll"
 	"github.com/comamessenger/comamessenger/core/internal/reminder"
 	"github.com/comamessenger/comamessenger/core/internal/request"
 	"github.com/comamessenger/comamessenger/core/internal/task"
@@ -77,6 +78,11 @@ type Message struct {
 	// Task: on a message of type task, the whole task, the same for every
 	// reader.
 	Task *task.Task `json:"task,omitempty"`
+	// Poll: on a message of type poll, the poll as every reader sees it,
+	// never the counts of an open poll. PollViewer: REST only, the reading
+	// person's view with the counts when they may see them.
+	Poll       *poll.Poll   `json:"poll,omitempty"`
+	PollViewer *poll.Viewer `json:"poll_viewer,omitempty"`
 }
 
 type ForwardAttribution struct {
@@ -109,6 +115,8 @@ type CreateInput struct {
 	request *requestCreation
 	// task makes the message a task; set only by CreateTask.
 	task *taskCreation
+	// poll makes the message a poll; set only by CreatePoll.
+	poll *pollCreation
 }
 
 // UseLinks attaches links prepared outside the transaction (PrepareLinks).
@@ -160,6 +168,7 @@ type Service struct {
 	betweenBackfillSteps func()
 	requests             *request.Service
 	tasks                *task.Service
+	polls                *poll.Service
 }
 
 func NewService(pool *pgxpool.Pool, maxBodyBytes, maxPageSize int, afterCommit func(orgID string, highWatermark int64)) *Service {
@@ -268,7 +277,7 @@ func (s *Service) createTx(ctx context.Context, tx pgx.Tx, user identity.User, c
 		return Message{}, false, 0, ErrForbidden
 	}
 	// Requests are asked by people.
-	if (input.request != nil || input.task != nil) && (isAgent || provenance != nil) {
+	if (input.request != nil || input.task != nil || input.poll != nil) && (isAgent || provenance != nil) {
 		return Message{}, false, 0, ErrForbidden
 	}
 	// The client_msg_id of a scheduled message's send belongs to it alone:
@@ -296,7 +305,7 @@ func (s *Service) createTx(ctx context.Context, tx pgx.Tx, user identity.User, c
 					}
 				}
 			}
-			if existing.Type == "request" || existing.Type == "task" {
+			if existing.Type == "request" || existing.Type == "task" || existing.Type == "poll" {
 				replayed := []Message{existing}
 				if err := hydrateFiles(ctx, tx, user.OrgID, replayed); err != nil {
 					return Message{}, false, 0, err
@@ -359,6 +368,14 @@ func (s *Service) createTx(ctx context.Context, tx pgx.Tx, user identity.User, c
 		}
 	}
 
+	var preparedPoll poll.Prepared
+	if input.poll != nil {
+		messageType = "poll"
+		if preparedPoll, err = s.preparePollTx(ctx, tx, user, chatID, input); err != nil {
+			return Message{}, false, 0, err
+		}
+	}
+
 	seq, err := nextSequence(ctx, tx, user.OrgID)
 	if err != nil {
 		return Message{}, false, 0, err
@@ -385,6 +402,11 @@ func (s *Service) createTx(ctx context.Context, tx pgx.Tx, user identity.User, c
 	}
 	if input.task != nil {
 		if err := s.tasks.InsertTx(ctx, tx, user, chatID, result.ID, preparedTask); err != nil {
+			return Message{}, false, 0, err
+		}
+	}
+	if input.poll != nil {
+		if err := s.polls.InsertTx(ctx, tx, user, chatID, result.ID, preparedPoll); err != nil {
 			return Message{}, false, 0, err
 		}
 	}
@@ -664,6 +686,10 @@ func (s *Service) Update(ctx context.Context, user identity.User, messageID stri
 	if current.Type == "task" {
 		return Message{}, invalid("a task is edited with updateTask")
 	}
+	// Likewise a poll: updatePoll edits its question.
+	if current.Type == "poll" {
+		return Message{}, invalid("a poll is edited with updatePoll")
+	}
 	if current.Version != input.ExpectedVersion {
 		return Message{}, ErrVersionConflict
 	}
@@ -796,6 +822,9 @@ func (s *Service) Delete(ctx context.Context, user identity.User, messageID stri
 		return Message{}, err
 	}
 	if err := task.OnMessageDeletedTx(ctx, tx, s.tasks, user, result.ID); err != nil {
+		return Message{}, err
+	}
+	if err := poll.OnMessageDeletedTx(ctx, tx, s.polls, user, result.ID); err != nil {
 		return Message{}, err
 	}
 	deleted := []Message{result}
@@ -1138,6 +1167,9 @@ func commandFingerprint(chatID string, input CreateInput) [32]byte {
 	if input.task != nil {
 		silent += input.task.plan.Fingerprint()
 	}
+	if input.poll != nil {
+		silent += input.poll.plan.Fingerprint()
+	}
 	return sha256.Sum256([]byte(chatID + "\x00" + input.Body + "\x00" + input.BodyFormat + "\x00" + replyTo + "\x00" + threadRoot + "\x00" + strings.Join(input.MentionedActorIDs, ",") + "\x00" + strings.Join(input.FileIDs, ",") + blocksFingerprint(input.Blocks) + silent + departmentsFingerprint(input.MentionedDepartmentIDs)))
 }
 
@@ -1309,6 +1341,9 @@ func hydrateFiles(ctx context.Context, tx pgx.Tx, orgID string, messages []Messa
 		return err
 	}
 	if err := hydrateTasks(ctx, tx, orgID, messages); err != nil {
+		return err
+	}
+	if err := hydratePolls(ctx, tx, orgID, messages); err != nil {
 		return err
 	}
 	return hydrateAgentProvenance(ctx, tx, orgID, messages)

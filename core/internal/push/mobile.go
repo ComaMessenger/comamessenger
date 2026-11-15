@@ -249,7 +249,7 @@ func (w *Worker) deliverMobile(ctx context.Context) error {
 		return err
 	}
 	rows, err := w.pool.Query(ctx, `SELECT p.org_id,p.event_seq,p.device_id,d.actor_id,d.relay_handle,d.notification_key,
-		e.type,`+pushEventData+`,e.chat_id,m.thread_root_id,m.body,c.name,a.display_name,
+		e.type,`+pushEventData+`,e.chat_id,m.thread_root_id,m.body,c.name,COALESCE(a.display_name,''),
 		COALESCE((u.preferences->>'push_preview')::boolean,false),COALESCE(NULLIF(d.locale,''),u.preferences->>'locale','ru'),
 		(SELECT f.voice_duration_ms FROM message_files mf JOIN files f ON f.org_id=mf.org_id AND f.id=mf.file_id WHERE mf.message_id=m.id AND f.voice_duration_ms IS NOT NULL LIMIT 1),
 		`+quietNotification+`,`+scheduledStillFailed+` AND `+reminderStillFired+`
@@ -257,7 +257,7 @@ func (w *Worker) deliverMobile(ctx context.Context) error {
 		JOIN events e ON e.org_id=p.org_id AND e.seq=p.event_seq
 		LEFT JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id
 		LEFT JOIN chats c ON c.org_id=e.org_id AND c.id=e.chat_id
-		JOIN actors a ON a.org_id=e.org_id AND a.id=e.actor_id
+		LEFT JOIN actors a ON a.org_id=e.org_id AND a.id=e.actor_id
 		JOIN users u ON u.org_id=d.org_id AND u.actor_id=d.actor_id
 		WHERE p.lease_token=$1 ORDER BY p.event_seq`, leaseToken)
 	if err != nil {
@@ -322,6 +322,9 @@ func (w *Worker) deliverMobile(ctx context.Context) error {
 		}
 		if content.Kind == taskKind {
 			fallbackBody = TaskText("assigned_title", item.locale)
+		}
+		if content.Kind == pollKind {
+			fallbackBody = PollText("title", item.locale)
 		}
 		collapseID := content.ChatID
 		if content.Tag != "" {

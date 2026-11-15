@@ -19,14 +19,16 @@ import (
 var ErrOrganizationNotFound = errors.New("event organization not found")
 
 type Frame struct {
-	Op         string          `json:"op"`
-	Seq        int64           `json:"seq"`
-	Type       string          `json:"type"`
-	OccurredAt time.Time       `json:"occurred_at"`
-	ActorID    string          `json:"actor_id"`
-	ChatID     *string         `json:"chat_id,omitempty"`
-	SubjectID  string          `json:"subject_id"`
-	Data       json.RawMessage `json:"data"`
+	Op         string    `json:"op"`
+	Seq        int64     `json:"seq"`
+	Type       string    `json:"type"`
+	OccurredAt time.Time `json:"occurred_at"`
+	// ActorID is null when the server must not or cannot tell who acted:
+	// always for poll.updated (a vote must not reveal the voter).
+	ActorID   *string         `json:"actor_id"`
+	ChatID    *string         `json:"chat_id,omitempty"`
+	SubjectID string          `json:"subject_id"`
+	Data      json.RawMessage `json:"data"`
 }
 
 // messageContentTypes are the chat events about one message (subject_id):
@@ -36,7 +38,7 @@ type Frame struct {
 // the chat receives them for its own messages only — the rule of message.Get
 // and message.ListReactions. Chat, member, thread-follow, read-mark and draft
 // events carry no message content and stay as they are.
-const messageContentTypes = `('message.created', 'message.updated', 'message.deleted', 'reaction.added', 'reaction.removed', 'message.pinned', 'message.unpinned', 'request.updated', 'task.updated')`
+const messageContentTypes = `('message.created', 'message.updated', 'message.deleted', 'reaction.added', 'reaction.removed', 'message.pinned', 'message.unpinned', 'request.updated', 'task.updated', 'poll.updated')`
 
 type Bounds struct {
 	CurrentSeq     int64
@@ -208,7 +210,7 @@ func (s *Store) Replay(ctx context.Context, user identity.User, sessionID string
 	for index := range result {
 		frame := result[index]
 		switch {
-		case frame.Type == "task.updated" && !person:
+		case (frame.Type == "task.updated" || frame.Type == "poll.updated") && !person:
 			continue
 		case frame.Type == "task.updated":
 			kept = append(kept, frame)
@@ -362,9 +364,16 @@ func (s *Store) Live(ctx context.Context, orgID string, afterSeq, throughSeq int
 	return result, nil
 }
 
-// carriesTask: a message frame with the task of a task message.
+// carriesTask: a message frame with the task of a task message or the poll
+// of a poll message, which agents never get.
 func carriesTask(frame Frame) bool {
-	return strings.HasPrefix(frame.Type, "message.") && bytes.Contains(frame.Data, []byte(`"task":{`))
+	return strings.HasPrefix(frame.Type, "message.") &&
+		(bytes.Contains(frame.Data, []byte(`"task":{`)) || bytes.Contains(frame.Data, []byte(`"poll":{`)))
+}
+
+// agentHidden: an update agents never get (a task or a poll read as text).
+func agentHidden(eventType string) bool {
+	return eventType == "task.updated" || eventType == "poll.updated"
 }
 
 // hideTasksFromAgents keeps tasks from agents among the recipients of a
@@ -374,7 +383,7 @@ func carriesTask(frame Frame) bool {
 func (s *Store) hideTasksFromAgents(ctx context.Context, tx pgx.Tx, orgID string, events []LiveEvent) ([]LiveEvent, error) {
 	candidates := map[string]struct{}{}
 	for _, event := range events {
-		if event.Frame.Type == "task.updated" || carriesTask(event.Frame) {
+		if agentHidden(event.Frame.Type) || carriesTask(event.Frame) {
 			for _, actorID := range event.RecipientActorIDs {
 				candidates[actorID] = struct{}{}
 			}
@@ -409,7 +418,7 @@ func (s *Store) hideTasksFromAgents(ctx context.Context, tx pgx.Tx, orgID string
 	}
 	result := make([]LiveEvent, 0, len(events))
 	for _, event := range events {
-		if event.Frame.Type != "task.updated" && !carriesTask(event.Frame) {
+		if !agentHidden(event.Frame.Type) && !carriesTask(event.Frame) {
 			result = append(result, event)
 			continue
 		}
@@ -423,7 +432,7 @@ func (s *Store) hideTasksFromAgents(ctx context.Context, tx pgx.Tx, orgID string
 		}
 		event.RecipientActorIDs = people
 		result = append(result, event)
-		if len(robots) > 0 && event.Frame.Type != "task.updated" {
+		if len(robots) > 0 && !agentHidden(event.Frame.Type) {
 			copied := event
 			copied.RecipientActorIDs = robots
 			data, err := message.HideTaskFromFrame(event.Frame.Data)

@@ -124,6 +124,9 @@ type identityHandlers struct {
 	taskRate              *ipRateLimiter
 	taskWriteRate         *ipRateLimiter
 	taskReadRate          *ipRateLimiter
+	pollRate              *ipRateLimiter
+	pollVoteRate          *ipRateLimiter
+	pollReadRate          *ipRateLimiter
 	bootstrapToken        string
 	requireBootstrapToken bool
 	trustedProxyCIDRs     []netip.Prefix
@@ -155,6 +158,9 @@ func newIdentityHandlers(logger *slog.Logger, allowedOrigin string, dependencies
 		// Tasks: creating 30 a minute with bursts of 10, changes 120 a
 		// minute, reads like the saved messages.
 		taskRate: newIPRateLimiter(30, 10), taskWriteRate: newIPRateLimiter(120, 30), taskReadRate: newIPRateLimiter(240, 60),
+		// Polls: creating 30 a minute, votes and other changes 120 a minute,
+		// reads (getPoll after poll.updated, voters) like the tasks.
+		pollRate: newIPRateLimiter(30, 10), pollVoteRate: newIPRateLimiter(120, 30), pollReadRate: newIPRateLimiter(240, 60),
 		bootstrapToken: dependencies.BootstrapToken, requireBootstrapToken: dependencies.RequireBootstrapToken,
 		trustedProxyCIDRs: dependencies.TrustedProxyCIDRs, revokeRealtimeSession: dependencies.RevokeRealtimeSession,
 	}

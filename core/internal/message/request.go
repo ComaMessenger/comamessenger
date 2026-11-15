@@ -154,6 +154,9 @@ func (s *Service) hydrateRequestViewers(ctx context.Context, tx pgx.Tx, user ide
 	if err := hideTasksFromAgents(ctx, tx, user, messages); err != nil {
 		return err
 	}
+	if err := s.hydratePollViewers(ctx, tx, user, messages); err != nil {
+		return err
+	}
 	if s.requests == nil {
 		return nil
 	}

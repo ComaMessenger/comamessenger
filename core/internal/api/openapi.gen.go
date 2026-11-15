@@ -7822,16 +7822,16 @@ type MessagePoll struct {
 	// FinalCounts Votes per option, in option order. Only on a closed poll; always null while it is open.
 	FinalCounts *[]int `json:"final_counts"`
 
-	// MemberCount M of «N из M» — active people of the chat now (agents left out) plus voters who have left.
+	// MemberCount M of «N из M». An ordinary poll: active people of the chat now (agents left out) plus voters who have left. An anonymous poll: active people of the chat now, never fewer than voter_count, so a change of M never tells whether the person who left had voted.
 	MemberCount int      `json:"member_count"`
 	Multiple    bool     `json:"multiple"`
 	Options     []string `json:"options"`
 
-	// Question The author may edit it after sending (message edited_at); options, flags and due_at never change.
+	// Question The author may edit it with updatePoll while the poll is open (message edited_at); options, flags and due_at never change.
 	Question string            `json:"question"`
 	Status   MessagePollStatus `json:"status"`
 
-	// Version Grows with every change of the poll (votes, closing, the denominator); poll.updated carries it so stale events are dropped.
+	// Version Grows with every change of the poll (votes, closing, the denominator, an edit of the question); poll.updated carries it so stale events are dropped.
 	Version int `json:"version"`
 
 	// VoterCount N of «N из M» — people who have voted, including those who have left the chat since.
@@ -8608,7 +8608,7 @@ type RealtimePollNotifiedEventV1 struct {
 // RealtimePollNotifiedEventV1Kind defines model for RealtimePollNotifiedEventV1.Kind.
 type RealtimePollNotifiedEventV1Kind string
 
-// RealtimePollUpdatedEventV1 data of poll.updated, sent to the whole chat (subject_id is the message id; the frame actor_id is always null): a vote or a retraction that changes voter_count, closing, a member joining or leaving that changes member_count. Only the counters every member may see: final_counts is set only once the poll is closed. Clients that may see the results reload getPoll (after about 1 s, only while the card is on screen).
+// RealtimePollUpdatedEventV1 data of poll.updated, sent to the whole chat (subject_id is the message id; the frame actor_id is always null): a vote or a retraction that changes voter_count, closing, an edit of the question (with message.updated), a member joining or leaving that changes member_count. Only the counters every member may see: final_counts is set only once the poll is closed. Clients that may see the results reload getPoll (after about 1 s, only while the card is on screen).
 type RealtimePollUpdatedEventV1 struct {
 	ChatId       openapi_types.UUID                      `json:"chat_id"`
 	ClosedReason *RealtimePollUpdatedEventV1ClosedReason `json:"closed_reason"`
@@ -9788,6 +9788,13 @@ type UpdateOrganizationSettingsRequest struct {
 // UpdateOrganizationSettingsRequestInvitationDefaultRole defines model for UpdateOrganizationSettingsRequest.InvitationDefaultRole.
 type UpdateOrganizationSettingsRequestInvitationDefaultRole string
 
+// UpdatePollRequest defines model for UpdatePollRequest.
+type UpdatePollRequest struct {
+	// ExpectedVersion MessagePoll.version the edit is based on; another one gets 409 version_conflict.
+	ExpectedVersion int    `json:"expected_version"`
+	Question        string `json:"question"`
+}
+
 // UpdatePositionRequest defines model for UpdatePositionRequest.
 type UpdatePositionRequest struct {
 	ExpectedVersion int `json:"expected_version"`
@@ -10694,6 +10701,9 @@ type UpdateOrganizationMemberJSONRequestBody = UpdateOrganizationMemberRequest
 
 // TransferOrganizationOwnershipJSONRequestBody defines body for TransferOrganizationOwnership for application/json ContentType.
 type TransferOrganizationOwnershipJSONRequestBody = TransferOwnershipRequest
+
+// UpdatePollJSONRequestBody defines body for UpdatePoll for application/json ContentType.
+type UpdatePollJSONRequestBody = UpdatePollRequest
 
 // VotePollJSONRequestBody defines body for VotePoll for application/json ContentType.
 type VotePollJSONRequestBody = VotePollRequest

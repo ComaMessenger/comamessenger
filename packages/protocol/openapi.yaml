@@ -1897,6 +1897,10 @@ paths:
   /api/v1/messages/{message_id}:
     patch:
       operationId: updateMessage
+      description: >-
+        Edits the body of one's own message. A task message is edited with
+        updateTask and a poll message with updatePoll: both get 422
+        validation_failed here, because the server builds their body.
       security: [{ bearerAuth: [] }]
       parameters:
         - { $ref: "#/components/parameters/MessageId" }
@@ -2953,6 +2957,42 @@ paths:
           content:
             application/json: { schema: { $ref: "#/components/schemas/PollState" } }
         "404": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
+    patch:
+      operationId: updatePoll
+      description: >-
+        Edits the question of a poll (decision 12 of phase 6.7): the server
+        rebuilds body from the new question and the unchanged options,
+        writes a message revision and sets edited_at («изм.» on the card).
+        The options, multiple, anonymous and due_at never change, and the
+        votes stay. Only the author while an active member of the chat (403
+        forbidden otherwise; others who cannot read the poll get 404
+        poll_not_found). An open poll only: a closed poll gets 409
+        poll_closed, because its result answers the question as it was
+        asked. An archived chat gets 409 chat_archived. expected_version is
+        MessagePoll.version; another one gets 409 version_conflict. The same
+        question changes nothing. Emits message.updated and poll.updated
+        with the new version. updateMessage refuses poll messages (422
+        validation_failed). 120 changes a minute per person (429
+        rate_limited).
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/MessageId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            { schema: { $ref: "#/components/schemas/UpdatePollRequest" } }
+      responses:
+        "200":
+          description: The poll message after the edit, with poll and poll_viewer.
+          content:
+            application/json: { schema: { $ref: "#/components/schemas/Message" } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
         "429": { $ref: "#/components/responses/Error" }
         "501": { $ref: "#/components/responses/Error" }
   /api/v1/polls/{message_id}/vote:
@@ -10567,7 +10607,7 @@ components:
           type: string
           minLength: 1
           maxLength: 300
-          description: The author may edit it after sending (message edited_at); options, flags and due_at never change.
+          description: The author may edit it with updatePoll while the poll is open (message edited_at); options, flags and due_at never change.
         options:
           type: array
           minItems: 2
@@ -10588,7 +10628,11 @@ components:
         member_count:
           type: integer
           minimum: 0
-          description: M of «N из M» — active people of the chat now (agents left out) plus voters who have left.
+          description: >-
+            M of «N из M». An ordinary poll: active people of the chat now
+            (agents left out) plus voters who have left. An anonymous poll:
+            active people of the chat now, never fewer than voter_count, so
+            a change of M never tells whether the person who left had voted.
         final_counts:
           type: [array, "null"]
           maxItems: 10
@@ -10597,7 +10641,7 @@ components:
         version:
           type: integer
           minimum: 1
-          description: Grows with every change of the poll (votes, closing, the denominator); poll.updated carries it so stale events are dropped.
+          description: Grows with every change of the poll (votes, closing, the denominator, an edit of the question); poll.updated carries it so stale events are dropped.
     PollViewer:
       type: object
       additionalProperties: false
@@ -10645,6 +10689,16 @@ components:
           maxItems: 10
           items: { type: integer, minimum: 0 }
           description: Votes per option, in option order. Only with can_view_results, null otherwise.
+    UpdatePollRequest:
+      type: object
+      additionalProperties: false
+      required: [question, expected_version]
+      properties:
+        question: { type: string, minLength: 1, maxLength: 300 }
+        expected_version:
+          type: integer
+          minimum: 1
+          description: MessagePoll.version the edit is based on; another one gets 409 version_conflict.
     PollState:
       type: object
       additionalProperties: false

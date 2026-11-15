@@ -50,6 +50,11 @@ export type MessageMenuFacts = {
   tasks?: boolean;
   /** Message.type; only plain text messages become tasks. Absent means text. */
   messageType?: string;
+  /**
+   * A poll that is closed: its question can no longer be edited (the result
+   * answers the question as it was asked). Absent means open.
+   */
+  pollClosed?: boolean;
 };
 
 /**
@@ -79,13 +84,13 @@ export function messageMenu(facts: MessageMenuFacts): MessageMenuAction[][] {
       ...(persisted ? ["copyLink" as const] : []),
       ...(facts.hasText ? ["copyText" as const] : []),
     ],
-    // A task is changed on its own screen («⋯ → Изменить»), not as text;
-    // a poll's body is built by the server from the question and options.
+    // A task is changed on its own screen («⋯ → Изменить»), not as text.
+    // «Изменить» of a poll edits its question only (updatePoll).
     persisted &&
     own &&
     facts.hasText &&
     facts.messageType !== "task" &&
-    facts.messageType !== "poll"
+    !(facts.messageType === "poll" && facts.pollClosed)
       ? ["edit"]
       : [],
     persisted && (own || facts.canModerate) ? ["delete"] : [],
