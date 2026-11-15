@@ -7,6 +7,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/comamessenger/comamessenger/core/internal/authz"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -346,6 +347,11 @@ func (s *Service) Remind(ctx context.Context, user identity.User, messageID stri
 			return 0, ErrForbidden
 		case r.ChatArchived:
 			return 0, ErrChatArchived
+		}
+		if err := requirePublish(ctx, tx, user, r.ChatID); err != nil {
+			return 0, err
+		}
+		switch {
 		case r.Status != StatusOpen:
 			return 0, ErrClosed
 		case r.RemindCount >= s.limits.RemindMax:
@@ -388,15 +394,18 @@ func (s *Service) Remind(ctx context.Context, user identity.User, messageID stri
 			}
 			return 0, nil
 		}
+		// Over the daily limit a person gets nothing, not even an event: a
+		// large chat must not turn reminders into a flood of events.
 		pushed := []string{}
 		var last int64
 		for _, item := range targets {
-			if last, err = emitNotified(ctx, tx, r, "reminded", &user.ActorID, item.actorID, item.push); err != nil {
+			if !item.push {
+				continue
+			}
+			if last, err = emitNotified(ctx, tx, r, "reminded", &user.ActorID, item.actorID, true); err != nil {
 				return 0, err
 			}
-			if item.push {
-				pushed = append(pushed, item.actorID)
-			}
+			pushed = append(pushed, item.actorID)
 		}
 		if len(pushed) > 0 {
 			if _, err := tx.Exec(ctx, `
@@ -456,6 +465,11 @@ func (s *Service) EditTx(ctx context.Context, tx pgx.Tx, user identity.User, mes
 		return nil, false, ErrForbidden
 	case r.ChatArchived:
 		return nil, false, ErrChatArchived
+	}
+	if err := requirePublish(ctx, tx, user, r.ChatID); err != nil {
+		return nil, false, err
+	}
+	switch {
 	case r.Status != StatusOpen:
 		return nil, false, ErrClosed
 	case expectedVersion != r.Version:
@@ -480,4 +494,26 @@ func EmitUpdatedTx(ctx context.Context, tx pgx.Tx, orgID, messageID string) (int
 		return 0, ErrNotFound
 	}
 	return emitUpdated(ctx, tx, r)
+}
+
+// requirePublish: the author still may write to the chat (authz
+// message.publish from the stored workspace and chat roles): in a channel
+// an author demoted to a member no longer edits the question or reminds.
+func requirePublish(ctx context.Context, tx pgx.Tx, user identity.User, chatID string) error {
+	var kind, orgRole, chatRole string
+	err := tx.QueryRow(ctx, `
+		SELECT c.kind, a.org_role, cm.role FROM chats c
+		JOIN chat_members cm ON cm.org_id = c.org_id AND cm.chat_id = c.id AND cm.actor_id = $3
+		JOIN actors a ON a.org_id = c.org_id AND a.id = cm.actor_id
+		WHERE c.org_id = $1 AND c.id = $2`, user.OrgID, chatID, user.ActorID).Scan(&kind, &orgRole, &chatRole)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrForbidden
+	}
+	if err != nil {
+		return fmt.Errorf("check poll author rights: %w", err)
+	}
+	if !authz.Can(authz.Context{Active: true, OrgRole: authz.Role(orgRole), ChatKind: authz.ChatKind(kind), ChatMember: true, ChatRole: authz.Role(chatRole)}, authz.MessagePublish) {
+		return ErrForbidden
+	}
+	return nil
 }

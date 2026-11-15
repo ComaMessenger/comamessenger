@@ -7822,7 +7822,7 @@ type MessagePoll struct {
 	// FinalCounts Votes per option, in option order. Only on a closed poll; always null while it is open.
 	FinalCounts *[]int `json:"final_counts"`
 
-	// MemberCount M of «N из M» — active people of the chat now (agents left out) plus voters who have left.
+	// MemberCount M of «N из M». An ordinary poll: active people of the chat now (agents left out) plus voters who have left. An anonymous poll: active people of the chat now, never fewer than voter_count, so a change of M never tells whether the person who left had voted.
 	MemberCount int      `json:"member_count"`
 	Multiple    bool     `json:"multiple"`
 	Options     []string `json:"options"`

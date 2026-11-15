@@ -66,12 +66,19 @@ func activePerson(alias string) string {
 	return alias + `.type = 'user' AND ` + alias + `.status = 'active' AND ` + alias + `.deleted_at IS NULL`
 }
 
-// memberCountSQL is M of «N из M» for the poll `p`: its voters (those who
-// have left included) plus the active people of the chat who have not voted.
-const memberCountSQL = `(p.voter_count + (SELECT count(*) FROM chat_members mcm
+// memberCountSQL is M of «N из M» for the poll `p`. An ordinary poll: its
+// voters (those who have left included) plus the active people of the chat
+// who have not voted (decision 16). An anonymous poll: the active people of
+// the chat now, never fewer than N. There a voter who leaves lowers M
+// exactly like someone who has not voted, so a change of M never tells
+// whether the person who left had voted.
+const memberCountSQL = `(CASE WHEN p.anonymous THEN GREATEST(p.voter_count, (SELECT count(*) FROM chat_members acm
+	JOIN actors aca ON aca.org_id = acm.org_id AND aca.id = acm.actor_id AND aca.type = 'user' AND aca.status = 'active' AND aca.deleted_at IS NULL
+	WHERE acm.org_id = p.org_id AND acm.chat_id = p.chat_id))
+	ELSE p.voter_count + (SELECT count(*) FROM chat_members mcm
 	JOIN actors mca ON mca.org_id = mcm.org_id AND mca.id = mcm.actor_id AND mca.type = 'user' AND mca.status = 'active' AND mca.deleted_at IS NULL
 	WHERE mcm.org_id = p.org_id AND mcm.chat_id = p.chat_id
-	  AND NOT EXISTS (SELECT 1 FROM message_poll_voters mv WHERE mv.message_id = p.message_id AND mv.actor_id = mcm.actor_id)))::int`
+	  AND NOT EXISTS (SELECT 1 FROM message_poll_voters mv WHERE mv.message_id = p.message_id AND mv.actor_id = mcm.actor_id)) END)::int`
 
 // record is a poll row with its message and chat.
 type record struct {
@@ -541,11 +548,12 @@ func OnMessageDeletedTx(ctx context.Context, tx pgx.Tx, service *Service, user i
 	return err
 }
 
-// OnMembershipChangedTx writes poll.updated for the open polls of a chat
-// whose denominator (M of «N из M») changed because actorID joined or left
-// it: only a person counts, and a voter stays in the count either way. It
-// runs in the transaction of the membership change, before its event, and
-// returns the last sequence it used (0 for none).
+// OnMembershipChangedTx writes poll.updated for every open poll of a chat
+// a person (actorID) joined or left, so M of «N из M» stays live. It goes
+// out for every poll, whether or not the person voted in it and whether or
+// not M changed: an event only where they had not voted would tell the
+// chat who voted. It runs in the transaction of the membership change,
+// before its event, and returns the last sequence it used (0 for none).
 func OnMembershipChangedTx(ctx context.Context, tx pgx.Tx, orgID, chatID, actorID string) (int64, error) {
 	var person bool
 	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM actors a WHERE a.org_id = $1 AND a.id = $2 AND a.type = 'user')`, orgID, actorID).Scan(&person); err != nil {
@@ -560,9 +568,8 @@ func OnMembershipChangedTx(ctx context.Context, tx pgx.Tx, orgID, chatID, actorI
 	rows, err := tx.Query(ctx, `
 		UPDATE message_polls p SET version = version + 1
 		WHERE p.org_id = $1 AND p.chat_id = $2 AND p.status = 'open'
-		  AND NOT EXISTS (SELECT 1 FROM message_poll_voters v WHERE v.message_id = p.message_id AND v.actor_id = $3)
 		  AND EXISTS (SELECT 1 FROM messages m WHERE m.org_id = p.org_id AND m.id = p.message_id AND m.deleted_at IS NULL)
-		RETURNING p.message_id`, orgID, chatID, actorID)
+		RETURNING p.message_id`, orgID, chatID)
 	if err != nil {
 		return 0, fmt.Errorf("bump polls of chat: %w", err)
 	}
@@ -638,9 +645,14 @@ func insertEvent(ctx context.Context, tx pgx.Tx, orgID, eventType string, actorI
 	return seq, nil
 }
 
-// emitUpdated writes poll.updated to the whole chat, without an actor.
+// emitUpdated writes poll.updated to the whole chat, without an actor. A
+// poll closed by deleting its message carries no final counts: the card is
+// gone and those who had not voted never saw them.
 func emitUpdated(ctx context.Context, tx pgx.Tx, r record) (int64, error) {
 	public := r.public()
+	if public.ClosedReason != nil && *public.ClosedReason == ReasonMessageDeleted {
+		public.FinalCounts = nil
+	}
 	return insertEvent(ctx, tx, r.OrgID, "poll.updated", nil, r.ChatID, r.MessageID, nil, updatedEvent{
 		MessageID: r.MessageID, ChatID: r.ChatID, Status: public.Status, ClosedReason: public.ClosedReason,
 		VoterCount: public.VoterCount, MemberCount: public.MemberCount, FinalCounts: public.FinalCounts, Version: public.Version,

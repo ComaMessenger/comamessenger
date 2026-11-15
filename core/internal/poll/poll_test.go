@@ -543,6 +543,10 @@ func TestMessageDeletionClosesPoll(t *testing.T) {
 	if len(w.waiting(t, w.alice, "polls")) != 0 {
 		t.Fatal("deleted poll still waiting")
 	}
+	updated := ofType(w.events(t, created.ID, 0), "poll.updated")
+	if last := updated[len(updated)-1]; last.Data["closed_reason"] != poll.ReasonMessageDeleted || last.Data["final_counts"] != nil {
+		t.Fatalf("poll.updated of a deleted poll = %s", last.Raw)
+	}
 	_, err := w.polls.Get(ctx, w.alice, created.ID)
 	expectErr(t, err, poll.ErrNotFound)
 	_, err = w.polls.Vote(ctx, w.alice, created.ID, poll.VoteInput{Options: []int{0}})
@@ -561,7 +565,9 @@ func TestLeavingTheChat(t *testing.T) {
 	if err := w.chats.RemoveMember(ctx, w.alice, w.chatID, w.alice.ActorID); err != nil {
 		t.Fatal(err)
 	}
-	if n := len(ofType(w.events(t, created.ID, start), "poll.updated")); n != 0 {
+	// The chat gets poll.updated whether or not the person voted: its
+	// absence would tell who voted.
+	if n := len(ofType(w.events(t, created.ID, start), "poll.updated")); n != 1 {
 		t.Fatalf("poll.updated on a voter leaving = %d", n)
 	}
 	state := w.get(t, w.carol, created.ID)
@@ -603,6 +609,47 @@ func TestLeavingTheChat(t *testing.T) {
 	if _, err := w.polls.Close(ctx, w.admin, created.ID); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// In an anonymous poll M never tells whether the person who left had voted:
+// a voter and a non-voter leaving lower it the same way.
+func TestAnonymousDenominatorHidesWhoVoted(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	created := w.create(t, w.author, message.CreatePollInput{Anonymous: ptr(true)})
+	w.vote(t, w.alice, created.ID, 0)
+	if state := w.get(t, w.bob, created.ID); state.Poll.MemberCount != chatPeople || state.Poll.VoterCount != 1 {
+		t.Fatalf("start: %d из %d", state.Poll.VoterCount, state.Poll.MemberCount)
+	}
+	start := w.maxSeq(t)
+	if err := w.chats.RemoveMember(ctx, w.alice, w.chatID, w.alice.ActorID); err != nil {
+		t.Fatal(err)
+	}
+	voterLeft := w.get(t, w.bob, created.ID)
+	voterEvents := len(ofType(w.events(t, created.ID, start), "poll.updated"))
+	start = w.maxSeq(t)
+	if err := w.chats.RemoveMember(ctx, w.carol, w.chatID, w.carol.ActorID); err != nil {
+		t.Fatal(err)
+	}
+	nonVoterLeft := w.get(t, w.bob, created.ID)
+	nonVoterEvents := len(ofType(w.events(t, created.ID, start), "poll.updated"))
+	if voterLeft.Poll.MemberCount != chatPeople-1 || nonVoterLeft.Poll.MemberCount != chatPeople-2 || voterEvents != 1 || nonVoterEvents != 1 ||
+		nonVoterLeft.Poll.VoterCount != 1 {
+		t.Fatalf("voter left: M=%d events=%d; non-voter left: M=%d events=%d", voterLeft.Poll.MemberCount, voterEvents, nonVoterLeft.Poll.MemberCount, nonVoterEvents)
+	}
+}
+
+// An author who may no longer write to the chat (a channel member) neither
+// edits the question nor reminds.
+func TestAuthorWithoutPublishRight(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	created := w.create(t, w.author, message.CreatePollInput{})
+	w.exec(t, `UPDATE chats SET kind = 'channel' WHERE id = $1`, w.chatID)
+	_, err := w.polls.Remind(ctx, w.author, created.ID)
+	expectErr(t, err, poll.ErrForbidden)
+	_, err = w.messages.UpdatePoll(ctx, w.author, created.ID, poll.EditInput{Question: "Новый", ExpectedVersion: ptr(created.Poll.Version)})
+	expectErr(t, err, poll.ErrForbidden)
 }
 
 func TestWaitingInboxAndCounters(t *testing.T) {
@@ -708,6 +755,9 @@ func TestRemind(t *testing.T) {
 	}
 	if n := w.count(t, `SELECT count(*) FROM notification_jobs j JOIN events e ON e.org_id=j.org_id AND e.seq=j.event_seq WHERE e.subject_id=$1 AND e.type='poll.notified'`, third.ID); n != 1 {
 		t.Fatalf("pushes over the daily limit = %d (only alice may get one)", n)
+	}
+	if n := len(ofType(w.events(t, third.ID, start), "poll.notified")); n != 1 {
+		t.Fatalf("events over the daily limit = %d", n)
 	}
 	// At most 5 per poll.
 	for range 4 {

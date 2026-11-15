@@ -23774,7 +23774,7 @@
           "member_count": {
             "type": "integer",
             "minimum": 0,
-            "description": "M of «N из M» — active people of the chat now (agents left out) plus voters who have left."
+            "description": "M of «N из M». An ordinary poll: active people of the chat now (agents left out) plus voters who have left. An anonymous poll: active people of the chat now, never fewer than voter_count, so a change of M never tells whether the person who left had voted."
           },
           "final_counts": {
             "type": [
