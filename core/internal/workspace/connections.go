@@ -2,9 +2,13 @@ package workspace
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/tls"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"io"
+	"mime"
 	"net"
 	"net/mail"
 	"strconv"
@@ -106,25 +110,62 @@ func dialSMTP(ctx context.Context, value SMTPConfig) (*smtp.Client, error) {
 	return client, nil
 }
 
-func sendSMTP(ctx context.Context, value SMTPConfig, recipient, subject, body string) error {
+func sendSMTP(ctx context.Context, value SMTPConfig, recipient, subject, text, html string) error {
+	if strings.ContainsAny(recipient, "\r\n") {
+		return fmt.Errorf("invalid recipient")
+	}
+	message, err := buildMessage(value, recipient, subject, text, html, time.Now())
+	if err != nil {
+		return err
+	}
 	client, err := dialSMTP(ctx, value)
 	if err != nil {
 		return err
 	}
 	defer client.Close()
-	from := (&mail.Address{Name: value.FromName, Address: value.FromAddress}).String()
-	message := strings.Join([]string{
-		"From: " + from,
-		"To: " + recipient,
-		"Subject: " + subject,
-		"MIME-Version: 1.0",
-		"Content-Type: text/plain; charset=UTF-8",
-		"Content-Transfer-Encoding: 8bit",
-		"",
-		body,
-	}, "\r\n")
 	if err := client.SendMail(value.FromAddress, []string{recipient}, io.NopCloser(strings.NewReader(message))); err != nil {
 		return fmt.Errorf("send SMTP message: %w", err)
 	}
 	return client.Quit()
+}
+
+// buildMessage assembles a MIME letter: plain text, plus an HTML
+// alternative when one is given. Header values are encoded per RFC 2047.
+func buildMessage(value SMTPConfig, recipient, subject, text, html string, now time.Time) (string, error) {
+	random := make([]byte, 12)
+	if _, err := rand.Read(random); err != nil {
+		return "", err
+	}
+	from := (&mail.Address{Name: value.FromName, Address: value.FromAddress}).String()
+	domain := value.FromAddress[strings.LastIndex(value.FromAddress, "@")+1:]
+	headers := []string{
+		"From: " + from,
+		"To: " + recipient,
+		"Subject: " + mime.QEncoding.Encode("utf-8", strings.NewReplacer("\r", " ", "\n", " ").Replace(subject)),
+		"Date: " + now.UTC().Format(time.RFC1123Z),
+		"Message-ID: <" + hex.EncodeToString(random) + "@" + domain + ">",
+		"MIME-Version: 1.0",
+	}
+	if html == "" {
+		headers = append(headers, "Content-Type: text/plain; charset=UTF-8", "Content-Transfer-Encoding: base64", "", wrapBase64(text))
+		return strings.Join(headers, "\r\n"), nil
+	}
+	boundary := "coma-" + hex.EncodeToString(random)
+	headers = append(headers, `Content-Type: multipart/alternative; boundary="`+boundary+`"`, "",
+		"--"+boundary, "Content-Type: text/plain; charset=UTF-8", "Content-Transfer-Encoding: base64", "", wrapBase64(text),
+		"--"+boundary, "Content-Type: text/html; charset=UTF-8", "Content-Transfer-Encoding: base64", "", wrapBase64(html),
+		"--"+boundary+"--", "")
+	return strings.Join(headers, "\r\n"), nil
+}
+
+func wrapBase64(value string) string {
+	encoded := base64.StdEncoding.EncodeToString([]byte(value))
+	var builder strings.Builder
+	for len(encoded) > 76 {
+		builder.WriteString(encoded[:76])
+		builder.WriteString("\r\n")
+		encoded = encoded[76:]
+	}
+	builder.WriteString(encoded)
+	return builder.String()
 }

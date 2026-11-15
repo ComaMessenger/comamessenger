@@ -1285,6 +1285,40 @@
         }
       }
     },
+    "/api/v1/mail-relay/challenge": {
+      "get": {
+        "operationId": "getMailRelayChallenge",
+        "description": "Public. The Coma mail relay reads it to confirm that this server answers at PUBLIC_APP_URL (ADR-0013). Holds no secret.",
+        "responses": {
+          "200": {
+            "description": "Pending registration challenge.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "installation_id",
+                    "challenge"
+                  ],
+                  "properties": {
+                    "installation_id": {
+                      "type": "string"
+                    },
+                    "challenge": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/v1/organization/infrastructure": {
       "get": {
         "operationId": "getInfrastructureSettings",
@@ -19015,13 +19049,75 @@
           }
         }
       },
+      "MailDelivery": {
+        "type": "string",
+        "description": "How letters leave the workspace (ADR-0013).",
+        "enum": [
+          "coma",
+          "smtp",
+          "off"
+        ]
+      },
+      "ComaMailStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "state",
+          "per_recipient_limit"
+        ],
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "unavailable",
+              "registering",
+              "active",
+              "revoked",
+              "error"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "description": "relay_disabled, public_https_required or the relay's last error."
+          },
+          "used": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Letters sent through Coma mail in the last 24 hours."
+          },
+          "daily_limit": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "per_recipient_limit": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "MailSettings": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "delivery"
+        ],
+        "properties": {
+          "delivery": {
+            "$ref": "#/components/schemas/MailDelivery"
+          },
+          "coma": {
+            "$ref": "#/components/schemas/ComaMailStatus"
+          }
+        }
+      },
       "InfrastructureSettings": {
         "type": "object",
         "additionalProperties": false,
         "required": [
           "version",
           "s3",
-          "smtp"
+          "smtp",
+          "mail"
         ],
         "properties": {
           "version": {
@@ -19033,6 +19129,9 @@
           },
           "smtp": {
             "$ref": "#/components/schemas/SMTPConfiguration"
+          },
+          "mail": {
+            "$ref": "#/components/schemas/MailSettings"
           }
         }
       },
@@ -19148,6 +19247,16 @@
           },
           "smtp": {
             "$ref": "#/components/schemas/SMTPConfigurationUpdate"
+          },
+          "mail_delivery": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MailDelivery"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },

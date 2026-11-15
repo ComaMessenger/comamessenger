@@ -15,6 +15,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/lastseen"
+	"github.com/comamessenger/comamessenger/core/internal/mailtemplate"
 	"github.com/comamessenger/comamessenger/core/internal/scheduledreset"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -615,10 +616,19 @@ func (s *Service) ListChatOverrides(ctx context.Context, user identity.User) ([]
 }
 
 type ActiveCheck func(orgID, actorID, chatID string) bool
+
+// EmailSender delivers digests. Through the workspace's own SMTP the
+// detailed subject and body are sent; through Coma mail only the counters
+// (ADR-0013), and DigestThroughComa tells the worker to ration them.
 type EmailSender interface {
 	EmailConfigured(context.Context, string) (bool, error)
-	SendEmail(context.Context, string, string, string, string) error
+	SendDigest(ctx context.Context, orgID string, counters mailtemplate.Message, subject, body string) error
+	DigestThroughComa(ctx context.Context, orgID string) (bool, error)
 }
+
+// comaDigestInterval is how often a person gets a digest through Coma mail.
+const comaDigestInterval = 12 * time.Hour
+
 type Worker struct {
 	logger      *slog.Logger
 	pool        *pgxpool.Pool
@@ -627,7 +637,12 @@ type Worker struct {
 	emailSender EmailSender
 	client      *http.Client
 	relay       RelayClient
+	// appURL is the public address digest links point to.
+	appURL string
 }
+
+// SetAppURL sets the public address used in Coma mail digest links.
+func (w *Worker) SetAppURL(value string) { w.appURL = strings.TrimRight(value, "/") }
 
 func NewWorker(logger *slog.Logger, pool *pgxpool.Pool, cfg config.PushConfig, active ActiveCheck, emailSenders ...EmailSender) *Worker {
 	var emailSender EmailSender
@@ -911,7 +926,7 @@ type digestItem struct {
 	eventData                                        []byte
 	chatID, body, chatName                           *string
 	voiceMs                                          *int32
-	preview                                          bool
+	preview, mention, direct                         bool
 }
 
 func (w *Worker) deliverDigests(ctx context.Context) error {
@@ -935,7 +950,8 @@ func (w *Worker) deliverDigests(ctx context.Context) error {
 		SELECT i.org_id,i.event_seq,i.actor_id,u.email,COALESCE(u.preferences->>'locale','ru'),
 		       e.type,`+pushEventData+`,e.chat_id,m.body,c.name,COALESCE(a.display_name,''),
 		       COALESCE((u.preferences->>'push_preview')::boolean,false),
-		       (SELECT f.voice_duration_ms FROM message_files mf JOIN files f ON f.org_id=mf.org_id AND f.id=mf.file_id WHERE mf.message_id=m.id AND f.voice_duration_ms IS NOT NULL LIMIT 1)
+		       (SELECT f.voice_duration_ms FROM message_files mf JOIN files f ON f.org_id=mf.org_id AND f.id=mf.file_id WHERE mf.message_id=m.id AND f.voice_duration_ms IS NOT NULL LIMIT 1),
+		       COALESCE(i.actor_id=ANY(m.mentioned_actor_ids),false),COALESCE(c.kind='direct',false)
 		FROM email_digest_items i
 		JOIN users u ON u.org_id=i.org_id AND u.actor_id=i.actor_id
 		JOIN events e ON e.org_id=i.org_id AND e.seq=i.event_seq
@@ -949,7 +965,7 @@ func (w *Worker) deliverDigests(ctx context.Context) error {
 	items := []digestItem{}
 	for rows.Next() {
 		var item digestItem
-		if err := rows.Scan(&item.orgID, &item.seq, &item.actorID, &item.email, &item.locale, &item.eventType, &item.eventData, &item.chatID, &item.body, &item.chatName, &item.author, &item.preview, &item.voiceMs); err != nil {
+		if err := rows.Scan(&item.orgID, &item.seq, &item.actorID, &item.email, &item.locale, &item.eventType, &item.eventData, &item.chatID, &item.body, &item.chatName, &item.author, &item.preview, &item.voiceMs, &item.mention, &item.direct); err != nil {
 			rows.Close()
 			return err
 		}
@@ -980,8 +996,30 @@ func (w *Worker) deliverDigests(ctx context.Context) error {
 			_, _ = w.pool.Exec(ctx, `UPDATE email_digest_items SET sent_at=now(),last_error='smtp_unavailable',lease_token=NULL,lease_until=NULL WHERE org_id=$1 AND actor_id=$2 AND lease_token=$3`, group[0].orgID, group[0].actorID, leaseToken)
 			continue
 		}
+		throughComa, modeErr := w.emailSender.DigestThroughComa(ctx, group[0].orgID)
+		if modeErr != nil {
+			w.retryDigest(ctx, leaseToken, group, modeErr)
+			continue
+		}
+		if throughComa {
+			// Coma mail allows two digests a day per person; send at most one
+			// every 12 hours and let the rest wait for the next window.
+			var last *time.Time
+			if err := w.pool.QueryRow(ctx, `SELECT max(sent_at) FROM email_digest_items WHERE org_id=$1 AND actor_id=$2 AND last_error IS NULL AND sent_at IS NOT NULL`, group[0].orgID, group[0].actorID).Scan(&last); err != nil {
+				w.retryDigest(ctx, leaseToken, group, err)
+				continue
+			}
+			if last != nil && time.Since(*last) < comaDigestInterval {
+				_, _ = w.pool.Exec(ctx, `UPDATE email_digest_items SET available_at=$4,lease_token=NULL,lease_until=NULL WHERE org_id=$1 AND actor_id=$2 AND lease_token=$3`, group[0].orgID, group[0].actorID, leaseToken, last.Add(comaDigestInterval))
+				continue
+			}
+		}
 		subject, body := digestMessage(group)
-		if sendErr := w.emailSender.SendEmail(ctx, group[0].orgID, group[0].email, subject, body); sendErr != nil {
+		if sendErr := w.emailSender.SendDigest(ctx, group[0].orgID, digestCounters(group, w.appURL), subject, body); sendErr != nil {
+			if errors.Is(sendErr, mailtemplate.ErrLimit) || errors.Is(sendErr, mailtemplate.ErrRejected) || errors.Is(sendErr, mailtemplate.ErrNotConfigured) {
+				_, _ = w.pool.Exec(ctx, `UPDATE email_digest_items SET sent_at=now(),attempts=attempts+1,last_error=$4,lease_token=NULL,lease_until=NULL WHERE org_id=$1 AND actor_id=$2 AND lease_token=$3`, group[0].orgID, group[0].actorID, leaseToken, "mail_"+digestFailure(sendErr))
+				continue
+			}
 			w.retryDigest(ctx, leaseToken, group, sendErr)
 			continue
 		}
@@ -992,6 +1030,40 @@ func (w *Worker) deliverDigests(ctx context.Context) error {
 
 func (w *Worker) retryDigest(ctx context.Context, leaseToken string, group []digestItem, sendErr error) {
 	_, _ = w.pool.Exec(ctx, `UPDATE email_digest_items SET attempts=attempts+1,last_error=$4,available_at=now()+LEAST(interval '6 hours',interval '1 minute'*power(2,LEAST(attempts,8))),lease_token=NULL,lease_until=NULL WHERE org_id=$1 AND actor_id=$2 AND lease_token=$3`, group[0].orgID, group[0].actorID, leaseToken, sendErr.Error())
+}
+
+func digestFailure(err error) string {
+	switch {
+	case errors.Is(err, mailtemplate.ErrLimit):
+		return "limit"
+	case errors.Is(err, mailtemplate.ErrNotConfigured):
+		return "unavailable"
+	}
+	return "rejected"
+}
+
+// digestCounters is the Coma mail digest: numbers and links only, never
+// message text, chat names or authors.
+func digestCounters(items []digestItem, appURL string) mailtemplate.Message {
+	chats := map[string]struct{}{}
+	message := mailtemplate.Message{Kind: mailtemplate.Digest, To: items[0].email, Locale: items[0].locale,
+		Data: mailtemplate.Data{Link: appURL + "/", SettingsLink: appURL + "/settings/notifications", Total: len(items)}}
+	for _, item := range items {
+		if item.chatID != nil {
+			chats[*item.chatID] = struct{}{}
+		}
+		if item.mention {
+			message.Data.Mentions++
+		}
+		if item.direct {
+			message.Data.Direct++
+		}
+	}
+	message.Data.Chats = max(len(chats), 1)
+	if message.Data.Chats > message.Data.Total {
+		message.Data.Chats = message.Data.Total
+	}
+	return message
 }
 
 func digestMessage(items []digestItem) (string, string) {

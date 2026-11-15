@@ -976,3 +976,44 @@
   justify-self: start;
   max-width: 100%;
 }
+.settings-mail__hint {
+  margin: 0;
+  color: var(--coma-muted);
+  font-size: 13px;
+}
+.settings-mail {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--coma-border);
+  border-radius: 10px;
+  background: var(--coma-surface);
+  font-size: 13px;
+}
+.settings-mail__state {
+  font-weight: 600;
+}
+.settings-mail[data-state="active"] .settings-mail__state {
+  color: var(--coma-success);
+}
+.settings-mail[data-state="revoked"] .settings-mail__state,
+.settings-mail[data-state="error"] .settings-mail__state {
+  color: var(--coma-danger);
+}
+.settings-mail__meter {
+  block-size: 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--coma-primary) 14%, transparent);
+  overflow: hidden;
+}
+.settings-mail__meter > span {
+  display: block;
+  block-size: 100%;
+  background: var(--coma-primary);
+}
+.settings-mail__note {
+  color: var(--coma-muted);
+}
+.settings-mail__warning {
+  color: var(--coma-danger);
+}

@@ -22,6 +22,10 @@ services=(core web agent-runtime)
 if grep -Eq '^PUSH_RELAY_KEYS_DIR=.+' .env; then
   services+=(push-relay)
 fi
+# The mail relay runs only on the Coma project's host.
+if grep -Eq '^MAIL_RELAY_SECRETS_DIR=.+' .env; then
+  services+=(mail-relay)
+fi
 
 echo "▶ building images"
 "${compose[@]}" build --pull "${services[@]}"

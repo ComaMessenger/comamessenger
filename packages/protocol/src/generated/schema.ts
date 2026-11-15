@@ -524,6 +524,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/mail-relay/challenge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Public. The Coma mail relay reads it to confirm that this server answers at PUBLIC_APP_URL (ADR-0013). Holds no secret. */
+        get: operations["getMailRelayChallenge"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/organization/infrastructure": {
         parameters: {
             query?: never;
@@ -5568,11 +5585,31 @@ export interface components {
             security: "none" | "starttls" | "tls";
             credentials_configured: boolean;
         };
+        /**
+         * @description How letters leave the workspace (ADR-0013).
+         * @enum {string}
+         */
+        MailDelivery: "coma" | "smtp" | "off";
+        ComaMailStatus: {
+            /** @enum {string} */
+            state: "unavailable" | "registering" | "active" | "revoked" | "error";
+            /** @description relay_disabled, public_https_required or the relay's last error. */
+            reason?: string;
+            /** @description Letters sent through Coma mail in the last 24 hours. */
+            used?: number;
+            daily_limit?: number;
+            per_recipient_limit: number;
+        };
+        MailSettings: {
+            delivery: components["schemas"]["MailDelivery"];
+            coma?: components["schemas"]["ComaMailStatus"];
+        };
         InfrastructureSettings: {
             /** Format: int64 */
             version: number;
             s3: components["schemas"]["S3Configuration"];
             smtp: components["schemas"]["SMTPConfiguration"];
+            mail: components["schemas"]["MailSettings"];
         };
         S3ConfigurationUpdate: {
             endpoint: string;
@@ -5600,6 +5637,7 @@ export interface components {
             expected_version: number;
             s3: components["schemas"]["S3ConfigurationUpdate"];
             smtp: components["schemas"]["SMTPConfigurationUpdate"];
+            mail_delivery?: components["schemas"]["MailDelivery"] | null;
         };
         ConnectionTestRequest: {
             /** @enum {string} */
@@ -8542,6 +8580,30 @@ export interface operations {
                 content?: never;
             };
             403: components["responses"]["Error"];
+        };
+    };
+    getMailRelayChallenge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pending registration challenge. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        installation_id: string;
+                        challenge: string;
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
         };
     };
     getInfrastructureSettings: {

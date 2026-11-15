@@ -1,7 +1,9 @@
 import { APIError } from "./api";
 import { hasPermission } from "./settings";
 import type {
+  ComaMailStatus,
   InfrastructureSettings,
+  MailDelivery,
   OrganizationMember,
   OrganizationSettings,
   Permission,
@@ -390,6 +392,7 @@ export function normalizeInfrastructure(
 ): InfrastructureSettings {
   return {
     ...value,
+    mail: value.mail ?? { delivery: value.smtp.host ? "smtp" : "coma" },
     smtp: {
       ...value.smtp,
       security: value.smtp.security || "starttls",
@@ -400,6 +403,7 @@ export function normalizeInfrastructure(
 
 export function infrastructureFingerprint(value: InfrastructureSettings) {
   return JSON.stringify({
+    mail: value.mail?.delivery,
     s3: {
       endpoint: value.s3.endpoint,
       region: value.s3.region,
@@ -447,6 +451,7 @@ export function infrastructureUpdate(
 ): UpdateInfrastructureSettingsRequest {
   return {
     expected_version: value.version,
+    mail_delivery: value.mail?.delivery ?? null,
     s3: {
       endpoint: value.s3.endpoint,
       region: value.s3.region,
@@ -468,6 +473,68 @@ export function infrastructureUpdate(
       clear_credentials: false,
     },
   };
+}
+
+/* ---------- Mail delivery (ADR-0013) ---------- */
+
+/** The three ways letters can leave a workspace, in the order shown. */
+export const mailDeliveryOptions: MailDelivery[] = ["coma", "smtp", "off"];
+
+/** Why the form cannot be saved yet, as a message key, or null. */
+export function mailDeliveryProblem(
+  value: InfrastructureSettings,
+): "smtpHostRequired" | null {
+  return value.mail?.delivery === "smtp" && !value.smtp.host.trim()
+    ? "smtpHostRequired"
+    : null;
+}
+
+export type ComaMailUsage = {
+  used: number;
+  limit: number;
+  /** 0–100, for a meter. */
+  percent: number;
+  perRecipient: number;
+  exhausted: boolean;
+};
+
+/** Daily spend of Coma mail, or null while the relay has no numbers. */
+export function comaMailUsage(
+  status: ComaMailStatus | undefined,
+): ComaMailUsage | null {
+  if (
+    !status ||
+    status.state !== "active" ||
+    status.used === undefined ||
+    status.daily_limit === undefined
+  ) {
+    return null;
+  }
+  const limit = status.daily_limit;
+  const used = Math.max(0, status.used);
+  return {
+    used,
+    limit,
+    percent: limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 100,
+    perRecipient: status.per_recipient_limit,
+    exhausted: used >= limit,
+  };
+}
+
+/** Message key describing the state of Coma mail. */
+export function comaMailStateKey(status: ComaMailStatus | undefined): string {
+  if (!status) return "comaMailStateUnavailable";
+  if (status.state === "unavailable") {
+    return status.reason === "public_https_required"
+      ? "comaMailStateNeedsHttps"
+      : "comaMailStateDisabled";
+  }
+  return {
+    registering: "comaMailStateRegistering",
+    active: "comaMailStateActive",
+    revoked: "comaMailStateRevoked",
+    error: "comaMailStateError",
+  }[status.state];
 }
 
 /* ---------- Personal ---------- */

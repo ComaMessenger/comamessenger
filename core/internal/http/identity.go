@@ -49,23 +49,25 @@ const refreshCookieName = "comamessenger_refresh"
 const clientKindHeader = "X-Coma-Client"
 
 type Dependencies struct {
-	Identity              *identity.Service
-	Agents                *agent.Service
-	AgentConfig           *agentconfig.Service
-	AgentProvider         *agentprovider.Service
-	AgentTools            *agenttool.Executor
-	AgentRuns             *agentrun.Service
-	AgentTriggers         *agenttrigger.Service
-	Architect             *architect.Service
-	Chats                 *chat.Service
-	Messages              *message.Service
-	Scheduled             *scheduled.Service
-	Reminders             *reminder.Service
-	Away                  *away.Service
-	Requests              *request.Service
-	UserState             *userstate.Service
-	Push                  *push.Service
-	Workspace             *workspace.Service
+	Identity      *identity.Service
+	Agents        *agent.Service
+	AgentConfig   *agentconfig.Service
+	AgentProvider *agentprovider.Service
+	AgentTools    *agenttool.Executor
+	AgentRuns     *agentrun.Service
+	AgentTriggers *agenttrigger.Service
+	Architect     *architect.Service
+	Chats         *chat.Service
+	Messages      *message.Service
+	Scheduled     *scheduled.Service
+	Reminders     *reminder.Service
+	Away          *away.Service
+	Requests      *request.Service
+	UserState     *userstate.Service
+	Push          *push.Service
+	Workspace     *workspace.Service
+	// Mail answers the Coma mail relay's address check (ADR-0013).
+	Mail                  MailChallenger
 	Files                 *files.Service
 	Search                *search.Service
 	Knowledge             *knowledge.Service
@@ -81,7 +83,13 @@ type Dependencies struct {
 	RevokeRealtimeSession func(string)
 }
 
+// MailChallenger publishes the registration challenge of the Coma mail relay.
+type MailChallenger interface {
+	Challenge(ctx context.Context) (installationID, challenge string, ok bool)
+}
+
 type identityHandlers struct {
+	mail                  MailChallenger
 	logger                *slog.Logger
 	service               *identity.Service
 	agents                *agent.Service
@@ -147,6 +155,7 @@ type authenticated struct {
 
 func newIdentityHandlers(logger *slog.Logger, allowedOrigin string, dependencies Dependencies) *identityHandlers {
 	return &identityHandlers{
+		mail:   dependencies.Mail,
 		logger: logger, service: dependencies.Identity, agents: dependencies.Agents, agentConfig: dependencies.AgentConfig, agentProvider: dependencies.AgentProvider, agentTools: dependencies.AgentTools, agentRuns: dependencies.AgentRuns, agentTriggers: dependencies.AgentTriggers, architect: dependencies.Architect, chats: dependencies.Chats, messages: dependencies.Messages, scheduled: dependencies.Scheduled, scheduledRate: newIPRateLimiter(60, 20), reminders: dependencies.Reminders, away: dependencies.Away, awayRate: newIPRateLimiter(20, 10), awayReadRate: newIPRateLimiter(240, 60), requests: dependencies.Requests, userState: dependencies.UserState, push: dependencies.Push, workspace: dependencies.Workspace, files: dependencies.Files, search: dependencies.Search, knowledge: dependencies.Knowledge, org: dependencies.Org, orgWriteRate: newIPRateLimiter(120, 60), interactive: dependencies.Interactive, webhooks: dependencies.Webhooks, webhookRate: newIPRateLimiter(600, 100), webhookFailures: newIPRateLimiter(30, 10), realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
 		cookieSecure: dependencies.CookieSecure, refreshTTL: dependencies.RefreshTokenTTL,
 		bootstrapRate: newIPRateLimiter(5, 5), loginRate: newIPRateLimiter(10, 10),
@@ -179,6 +188,9 @@ func (h *identityHandlers) routes(router chi.Router) {
 	router.With(h.rateLimit("password-forgot", h.loginRate)).Post("/auth/password/forgot", h.forgotPassword)
 	router.With(h.rateLimit("password-reset", h.loginRate)).Post("/auth/password/reset", h.resetPassword)
 	router.With(h.rateLimit("invitation-accept", h.invitationRate)).Post("/invitations/{token}/accept", h.acceptInvitation)
+	if h.mail != nil {
+		router.With(h.rateLimit("mail-relay-challenge", h.loginRate)).Get("/mail-relay/challenge", h.mailRelayChallenge)
+	}
 	if h.workspace != nil {
 		router.Get("/branding", h.publicBranding)
 		router.Get("/branding/{kind}", h.brandingAsset)
@@ -1299,4 +1311,17 @@ func secureTokenEqual(expected, actual string) bool {
 	expectedHash := sha256.Sum256([]byte(expected))
 	actualHash := sha256.Sum256([]byte(actual))
 	return subtle.ConstantTimeCompare(expectedHash[:], actualHash[:]) == 1
+}
+
+// mailRelayChallenge lets the Coma mail relay confirm that this server
+// answers at PUBLIC_APP_URL. It reveals only the installation id and the
+// one-time challenge, never the relay key.
+func (h *identityHandlers) mailRelayChallenge(w standardhttp.ResponseWriter, r *standardhttp.Request) {
+	installationID, challenge, ok := h.mail.Challenge(r.Context())
+	if !ok {
+		h.writeError(w, r, standardhttp.StatusNotFound, "not_found", "No Coma mail registration is pending.")
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(h.logger, w, standardhttp.StatusOK, map[string]string{"installation_id": installationID, "challenge": challenge})
 }

@@ -1,17 +1,29 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
+  comaMailStateKey,
+  comaMailUsage,
   infrastructureDirty,
   infrastructureUpdate,
+  mailDeliveryOptions,
+  mailDeliveryProblem,
   normalizeInfrastructure,
   type InfrastructureSettings,
+  type MailDelivery,
   type MessengerAPI,
   type User,
 } from "@comamessenger/core";
 import { HardDrive, Mail, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { messageOf } from "../../errors";
-import { Button, Field, FormError, SelectField, Skeleton } from "../../ui";
+import {
+  Button,
+  Chip,
+  Field,
+  FormError,
+  SelectField,
+  Skeleton,
+} from "../../ui";
 import {
   SettingsAccessDenied,
   SettingsSection,
@@ -55,8 +67,9 @@ export function InfrastructureSettingsPage({
   }, [query.data]);
   const secrets = { s3AccessKey, s3SecretKey, smtpPassword };
   const dirty = infrastructureDirty(value, baseline, secrets);
+  const problem = value ? mailDeliveryProblem(value) : null;
   async function save() {
-    if (!value || !dirty) return;
+    if (!value || !dirty || problem) return;
     setPending(true);
     setError("");
     setMessage("");
@@ -103,7 +116,7 @@ export function InfrastructureSettingsPage({
           <div className="settings-actions settings-section--wide settings-actions--save">
             <Button
               variant="primary"
-              disabled={!dirty || pending}
+              disabled={!dirty || pending || Boolean(problem)}
               onClick={() => void save()}
             >
               {pending ? t("autosaveSaving") : t("saveInfrastructure")}
@@ -199,111 +212,148 @@ export function InfrastructureSettingsPage({
             </Button>
           </SettingsSection>
           <SettingsSection
-            title={t("smtpDelivery")}
-            description={t("smtpDeliveryHint")}
+            title={t("mailDelivery")}
+            description={t("mailDeliveryHint")}
             icon={<Mail />}
           >
-            <div className="settings-form-grid">
-              <Field
-                label={t("host")}
-                name="smtp-host"
-                value={value.smtp.host}
-                onChange={(event) =>
-                  setValue({
-                    ...value,
-                    smtp: { ...value.smtp, host: event.target.value },
-                  })
-                }
-              />
-              <Field
-                label={t("port")}
-                name="smtp-port"
-                type="number"
-                min={1}
-                max={65535}
-                value={String(value.smtp.port)}
-                onChange={(event) =>
-                  setValue({
-                    ...value,
-                    smtp: { ...value.smtp, port: Number(event.target.value) },
-                  })
-                }
-              />
-              <Field
-                label={t("username")}
-                name="smtp-user"
-                value={value.smtp.username}
-                onChange={(event) =>
-                  setValue({
-                    ...value,
-                    smtp: { ...value.smtp, username: event.target.value },
-                  })
-                }
-              />
-              <Field
-                label={t("password")}
-                name="smtp-password"
-                type="password"
-                placeholder={
-                  value.smtp.credentials_configured
-                    ? "••••••••"
-                    : t("notConfigured")
-                }
-                value={smtpPassword}
-                onChange={(event) => setSMTPPassword(event.target.value)}
-              />
-              <Field
-                label={t("fromAddress")}
-                name="smtp-from"
-                value={value.smtp.from_address}
-                onChange={(event) =>
-                  setValue({
-                    ...value,
-                    smtp: { ...value.smtp, from_address: event.target.value },
-                  })
-                }
-              />
-              <Field
-                label={t("fromName")}
-                name="smtp-name"
-                value={value.smtp.from_name}
-                onChange={(event) =>
-                  setValue({
-                    ...value,
-                    smtp: { ...value.smtp, from_name: event.target.value },
-                  })
-                }
-              />
-              <SelectField
-                label={t("security")}
-                name="smtp-security"
-                value={value.smtp.security}
-                onChange={(event) =>
-                  setValue({
-                    ...value,
-                    smtp: {
-                      ...value.smtp,
-                      security: event.target.value as
-                        | "none"
-                        | "starttls"
-                        | "tls",
-                    },
-                  })
-                }
-              >
-                <option value="starttls">STARTTLS</option>
-                <option value="tls">TLS</option>
-                <option value="none">{t("noEncryption")}</option>
-              </SelectField>
-            </div>
-            <Button
-              disabled={dirty || pending}
-              onClick={() => void test("smtp")}
+            <div
+              className="request-form__chips"
+              role="radiogroup"
+              aria-label={t("mailDelivery")}
             >
-              <RefreshCw />
-              {t("testConnection")}
-            </Button>
+              {mailDeliveryOptions.map((option) => (
+                <Chip
+                  key={option}
+                  role="radio"
+                  aria-checked={value.mail.delivery === option}
+                  active={value.mail.delivery === option}
+                  onClick={() =>
+                    setValue({
+                      ...value,
+                      mail: { ...value.mail, delivery: option },
+                    })
+                  }
+                >
+                  {t(deliveryLabel[option])}
+                </Chip>
+              ))}
+            </div>
+            <p className="settings-mail__hint">
+              {t(deliveryHint[value.mail.delivery])}
+            </p>
+            {value.mail.delivery === "coma" && (
+              <ComaMailState settings={baseline ?? value} />
+            )}
+            {problem && <FormError message={t(problem)} />}
           </SettingsSection>
+          {value.mail.delivery === "smtp" && (
+            <SettingsSection
+              title={t("smtpDelivery")}
+              description={t("smtpDeliveryHint")}
+              icon={<Mail />}
+            >
+              <div className="settings-form-grid">
+                <Field
+                  label={t("host")}
+                  name="smtp-host"
+                  value={value.smtp.host}
+                  onChange={(event) =>
+                    setValue({
+                      ...value,
+                      smtp: { ...value.smtp, host: event.target.value },
+                    })
+                  }
+                />
+                <Field
+                  label={t("port")}
+                  name="smtp-port"
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={String(value.smtp.port)}
+                  onChange={(event) =>
+                    setValue({
+                      ...value,
+                      smtp: { ...value.smtp, port: Number(event.target.value) },
+                    })
+                  }
+                />
+                <Field
+                  label={t("username")}
+                  name="smtp-user"
+                  value={value.smtp.username}
+                  onChange={(event) =>
+                    setValue({
+                      ...value,
+                      smtp: { ...value.smtp, username: event.target.value },
+                    })
+                  }
+                />
+                <Field
+                  label={t("password")}
+                  name="smtp-password"
+                  type="password"
+                  placeholder={
+                    value.smtp.credentials_configured
+                      ? "••••••••"
+                      : t("notConfigured")
+                  }
+                  value={smtpPassword}
+                  onChange={(event) => setSMTPPassword(event.target.value)}
+                />
+                <Field
+                  label={t("fromAddress")}
+                  name="smtp-from"
+                  value={value.smtp.from_address}
+                  onChange={(event) =>
+                    setValue({
+                      ...value,
+                      smtp: { ...value.smtp, from_address: event.target.value },
+                    })
+                  }
+                />
+                <Field
+                  label={t("fromName")}
+                  name="smtp-name"
+                  value={value.smtp.from_name}
+                  onChange={(event) =>
+                    setValue({
+                      ...value,
+                      smtp: { ...value.smtp, from_name: event.target.value },
+                    })
+                  }
+                />
+                <SelectField
+                  label={t("security")}
+                  name="smtp-security"
+                  value={value.smtp.security}
+                  onChange={(event) =>
+                    setValue({
+                      ...value,
+                      smtp: {
+                        ...value.smtp,
+                        security: event.target.value as
+                          | "none"
+                          | "starttls"
+                          | "tls",
+                      },
+                    })
+                  }
+                >
+                  <option value="starttls">STARTTLS</option>
+                  <option value="tls">TLS</option>
+                  <option value="none">{t("noEncryption")}</option>
+                </SelectField>
+              </div>
+              <Button
+                disabled={dirty || pending}
+                onClick={() => void test("smtp")}
+              >
+                <RefreshCw />
+                {t("testConnection")}
+              </Button>
+            </SettingsSection>
+          )}
           {message && (
             <span className="settings-success settings-section--wide">
               {message}
@@ -313,5 +363,60 @@ export function InfrastructureSettingsPage({
         </div>
       )}
     </SettingsShell>
+  );
+}
+
+const deliveryLabel: Record<MailDelivery, string> = {
+  coma: "mailDeliveryComa",
+  smtp: "mailDeliverySMTP",
+  off: "mailDeliveryOff",
+};
+
+const deliveryHint: Record<MailDelivery, string> = {
+  coma: "mailDeliveryComaHint",
+  smtp: "mailDeliverySMTPHint",
+  off: "mailDeliveryOffHint",
+};
+
+/** State and daily spend of Coma mail, as last reported by the server. */
+function ComaMailState({ settings }: { settings: InfrastructureSettings }) {
+  const { t } = useTranslation();
+  const status = settings.mail.coma;
+  const usage = comaMailUsage(status);
+  return (
+    <div className="settings-mail" data-state={status?.state ?? "unavailable"}>
+      <span className="settings-mail__state">
+        {t(comaMailStateKey(status))}
+      </span>
+      {usage && (
+        <>
+          <span className="settings-mail__usage">
+            {t("comaMailUsage", { used: usage.used, limit: usage.limit })}
+          </span>
+          <div
+            className="settings-mail__meter"
+            role="meter"
+            aria-label={t("comaMailUsage", {
+              used: usage.used,
+              limit: usage.limit,
+            })}
+            aria-valuemin={0}
+            aria-valuemax={usage.limit}
+            aria-valuenow={usage.used}
+          >
+            <span style={{ inlineSize: `${usage.percent}%` }} />
+          </div>
+          <span className="settings-mail__note">
+            {t("comaMailPerRecipient", { count: usage.perRecipient })}
+          </span>
+          {usage.exhausted && (
+            <span className="settings-mail__warning">
+              {t("comaMailExhausted")}
+            </span>
+          )}
+        </>
+      )}
+      <span className="settings-mail__note">{t("comaMailPrivacy")}</span>
+    </div>
   );
 }

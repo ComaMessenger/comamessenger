@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/comamessenger/comamessenger/core/internal/mailtemplate"
 	"image"
 	"image/color"
 	"image/png"
@@ -1258,7 +1259,9 @@ func (s *e2eEmailSender) EmailConfigured(context.Context, string) (bool, error) 
 	return s.configured, nil
 }
 
-func (s *e2eEmailSender) SendEmail(_ context.Context, _ string, recipient, subject, body string) error {
-	s.messages = append(s.messages, e2eEmailMessage{recipient: recipient, subject: subject, body: body})
+// Send records the letter type as the subject and the link on the second
+// line of the body, where the tests read it from.
+func (s *e2eEmailSender) Send(_ context.Context, _ string, message mailtemplate.Message) error {
+	s.messages = append(s.messages, e2eEmailMessage{recipient: message.To, subject: string(message.Kind), body: string(message.Kind) + "\n" + message.Data.Link})
 	return nil
 }

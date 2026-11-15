@@ -615,3 +615,10 @@ func uniqueViolation(err error) bool {
 	var value *pgconn.PgError
 	return errors.As(err, &value) && value.Code == "23505"
 }
+
+// OrganizationName is the workspace name letters are signed with.
+func (r *Repository) OrganizationName(ctx context.Context, orgID string) (string, error) {
+	var name string
+	err := r.pool.QueryRow(ctx, `SELECT name FROM organizations WHERE id=$1`, orgID).Scan(&name)
+	return name, err
+}

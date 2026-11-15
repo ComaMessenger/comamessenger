@@ -1442,6 +1442,33 @@ func (e ClaimedAgentRunStatus) Valid() bool {
 	}
 }
 
+// Defines values for ComaMailStatusState.
+const (
+	ComaMailStatusStateActive      ComaMailStatusState = "active"
+	ComaMailStatusStateError       ComaMailStatusState = "error"
+	ComaMailStatusStateRegistering ComaMailStatusState = "registering"
+	ComaMailStatusStateRevoked     ComaMailStatusState = "revoked"
+	ComaMailStatusStateUnavailable ComaMailStatusState = "unavailable"
+)
+
+// Valid indicates whether the value is a known member of the ComaMailStatusState enum.
+func (e ComaMailStatusState) Valid() bool {
+	switch e {
+	case ComaMailStatusStateActive:
+		return true
+	case ComaMailStatusStateError:
+		return true
+	case ComaMailStatusStateRegistering:
+		return true
+	case ComaMailStatusStateRevoked:
+		return true
+	case ComaMailStatusStateUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CompleteAgentRunRequestPriceSource.
 const (
 	CompleteAgentRunRequestPriceSourceConfigured CompleteAgentRunRequestPriceSource = "configured"
@@ -1468,16 +1495,16 @@ func (e CompleteAgentRunRequestPriceSource) Valid() bool {
 
 // Defines values for ConnectionTestRequestKind.
 const (
-	S3   ConnectionTestRequestKind = "s3"
-	Smtp ConnectionTestRequestKind = "smtp"
+	ConnectionTestRequestKindS3   ConnectionTestRequestKind = "s3"
+	ConnectionTestRequestKindSmtp ConnectionTestRequestKind = "smtp"
 )
 
 // Valid indicates whether the value is a known member of the ConnectionTestRequestKind enum.
 func (e ConnectionTestRequestKind) Valid() bool {
 	switch e {
-	case S3:
+	case ConnectionTestRequestKindS3:
 		return true
-	case Smtp:
+	case ConnectionTestRequestKindSmtp:
 		return true
 	default:
 		return false
@@ -2585,6 +2612,27 @@ func (e KnowledgeFragmentMatch) Valid() bool {
 	case KnowledgeFragmentMatchSemantic:
 		return true
 	case KnowledgeFragmentMatchText:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MailDelivery.
+const (
+	MailDeliveryComa MailDelivery = "coma"
+	MailDeliveryOff  MailDelivery = "off"
+	MailDeliverySmtp MailDelivery = "smtp"
+)
+
+// Valid indicates whether the value is a known member of the MailDelivery enum.
+func (e MailDelivery) Valid() bool {
+	switch e {
+	case MailDeliveryComa:
+		return true
+	case MailDeliveryOff:
+		return true
+	case MailDeliverySmtp:
 		return true
 	default:
 		return false
@@ -6645,6 +6693,22 @@ type ClaimedAgentRun struct {
 // ClaimedAgentRunStatus defines model for ClaimedAgentRun.Status.
 type ClaimedAgentRunStatus string
 
+// ComaMailStatus defines model for ComaMailStatus.
+type ComaMailStatus struct {
+	DailyLimit        *int `json:"daily_limit,omitempty"`
+	PerRecipientLimit int  `json:"per_recipient_limit"`
+
+	// Reason relay_disabled, public_https_required or the relay's last error.
+	Reason *string             `json:"reason,omitempty"`
+	State  ComaMailStatusState `json:"state"`
+
+	// Used Letters sent through Coma mail in the last 24 hours.
+	Used *int `json:"used,omitempty"`
+}
+
+// ComaMailStatusState defines model for ComaMailStatus.State.
+type ComaMailStatusState string
+
 // CompleteAgentRunRequest defines model for CompleteAgentRunRequest.
 type CompleteAgentRunRequest struct {
 	Cost          string                             `json:"cost"`
@@ -7247,6 +7311,7 @@ type Health struct {
 
 // InfrastructureSettings defines model for InfrastructureSettings.
 type InfrastructureSettings struct {
+	Mail    MailSettings      `json:"mail"`
 	S3      S3Configuration   `json:"s3"`
 	Smtp    SMTPConfiguration `json:"smtp"`
 	Version int64             `json:"version"`
@@ -7531,6 +7596,17 @@ type LinkDepartmentChatRequest struct {
 type LoginRequest struct {
 	Email    openapi_types.Email `json:"email"`
 	Password string              `json:"password"`
+}
+
+// MailDelivery How letters leave the workspace (ADR-0013).
+type MailDelivery string
+
+// MailSettings defines model for MailSettings.
+type MailSettings struct {
+	Coma *ComaMailStatus `json:"coma,omitempty"`
+
+	// Delivery How letters leave the workspace (ADR-0013).
+	Delivery MailDelivery `json:"delivery"`
 }
 
 // MarkReadRequest defines model for MarkReadRequest.
@@ -9692,6 +9768,7 @@ type UpdateDepartmentRequest struct {
 // UpdateInfrastructureSettingsRequest defines model for UpdateInfrastructureSettingsRequest.
 type UpdateInfrastructureSettingsRequest struct {
 	ExpectedVersion int64                   `json:"expected_version"`
+	MailDelivery    *MailDelivery           `json:"mail_delivery,omitempty"`
 	S3              S3ConfigurationUpdate   `json:"s3"`
 	Smtp            SMTPConfigurationUpdate `json:"smtp"`
 }

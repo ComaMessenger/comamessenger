@@ -3,7 +3,9 @@ package workspace
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/permission"
@@ -123,4 +125,37 @@ func mustJSON(t *testing.T, value any) []byte {
 		t.Fatal(err)
 	}
 	return encoded
+}
+
+func TestMailDeliveryDefaultsAndValidation(t *testing.T) {
+	if got := effectiveMailDelivery(integrationSecrets{}); got != MailDeliveryComa {
+		t.Fatalf("empty settings = %q", got)
+	}
+	if got := effectiveMailDelivery(integrationSecrets{SMTP: SMTPConfig{Host: "smtp.example.com"}}); got != MailDeliverySMTP {
+		t.Fatalf("existing SMTP = %q", got)
+	}
+	if got := effectiveMailDelivery(integrationSecrets{SMTP: SMTPConfig{Host: "smtp.example.com"}, MailDelivery: MailDeliveryOff}); got != MailDeliveryOff {
+		t.Fatalf("explicit off = %q", got)
+	}
+	if err := validateIntegrations(integrationSecrets{MailDelivery: MailDeliverySMTP}); err == nil {
+		t.Fatal("SMTP delivery without a host accepted")
+	}
+	if err := validateIntegrations(integrationSecrets{MailDelivery: "relay"}); err == nil {
+		t.Fatal("unknown delivery accepted")
+	}
+	view := infrastructureView(1, integrationSecrets{})
+	if view.Mail.Delivery != MailDeliveryComa {
+		t.Fatalf("view = %+v", view.Mail)
+	}
+}
+
+func TestBuildMessageEncodesHeaders(t *testing.T) {
+	message, err := buildMessage(SMTPConfig{FromAddress: "coma@example.com", FromName: "Ромашка"}, "a@example.com", "Сброс пароля\r\nBcc: x@y", "текст", "<p>html</p>", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	header := message[:strings.Index(message, "\r\n\r\n")]
+	if strings.Contains(header, "\r\nBcc:") || !strings.Contains(header, "Subject: =?utf-8?q?") || !strings.Contains(message, "multipart/alternative") {
+		t.Fatalf("message:\n%s", message)
+	}
 }

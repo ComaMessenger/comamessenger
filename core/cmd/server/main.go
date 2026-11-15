@@ -32,6 +32,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/interactive"
 	"github.com/comamessenger/comamessenger/core/internal/knowledge"
+	"github.com/comamessenger/comamessenger/core/internal/mailer"
 	"github.com/comamessenger/comamessenger/core/internal/message"
 	"github.com/comamessenger/comamessenger/core/internal/orgstructure"
 	"github.com/comamessenger/comamessenger/core/internal/password"
@@ -118,6 +119,8 @@ func main() {
 		logger.Error("workspace service initialization failed", "error", err)
 		os.Exit(1)
 	}
+	mailService := mailer.New(logger, pool, workspaceService, cfg.MailRelayURL, cfg.PublicAppURL, nil)
+	workspaceService.SetMailStatusSource(mailService)
 	var blobStore storage.BlobStore
 	if cfg.Storage.Driver == "local" {
 		blobStore, err = storage.NewLocalBlobStore(cfg.Storage.LocalPath, cfg.Storage.MinimumFreeBytes)
@@ -151,7 +154,7 @@ func main() {
 	}
 	identityService, err := identity.NewService(
 		identity.NewRepository(pool), passwordHasher, accessManager,
-		cfg.Auth.RefreshTokenTTL, cfg.Auth.InvitationTTL, cfg.PublicAppURL, cfg.AppEnv == "development", workspaceService,
+		cfg.Auth.RefreshTokenTTL, cfg.Auth.InvitationTTL, cfg.PublicAppURL, cfg.AppEnv == "development", mailService,
 	)
 	if err != nil {
 		logger.Error("identity service initialization failed", "error", err)
@@ -352,15 +355,17 @@ func main() {
 	go webhookService.Run(realtimeCtx, time.Hour, logger)
 	userStateService := userstate.NewService(pool, int(cfg.Messaging.MaxBodyBytes), afterCommit)
 	pushService := push.NewService(pool, cfg.Push)
-	pushWorker := push.NewWorker(logger, pool, cfg.Push, realtimeHub.ActorActiveIn, workspaceService)
+	pushWorker := push.NewWorker(logger, pool, cfg.Push, realtimeHub.ActorActiveIn, mailService)
+	pushWorker.SetAppURL(cfg.PublicAppURL)
 	go pushWorker.Run(realtimeCtx)
+	go mailService.Run(realtimeCtx)
 	fileWorker := files.NewWorker(logger, fileService, 10*time.Minute)
 	go fileWorker.Run(realtimeCtx)
 	server := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: serverhttp.NewHandler(logger, cfg.PublicAppURL, pool.Ping, serverhttp.Dependencies{
 			Identity: identityService, Agents: agentService, AgentConfig: agentConfigService, AgentProvider: agentProviderService, AgentTools: agentToolExecutor, AgentRuns: agentRunService, AgentTriggers: agentTriggerService, Architect: architectService, Chats: chatService,
-			Messages: messageService, Scheduled: scheduledService, Reminders: reminderService, Away: awayService, Requests: requestService, UserState: userStateService, Push: pushService, Workspace: workspaceService, Files: fileService, Search: searchService, Knowledge: knowledgeService, Org: orgService, Interactive: interactiveService, Webhooks: webhookService, Realtime: realtimeServer,
+			Messages: messageService, Scheduled: scheduledService, Reminders: reminderService, Away: awayService, Requests: requestService, UserState: userStateService, Push: pushService, Workspace: workspaceService, Mail: mailService, Files: fileService, Search: searchService, Knowledge: knowledgeService, Org: orgService, Interactive: interactiveService, Webhooks: webhookService, Realtime: realtimeServer,
 			CookieSecure: cfg.Auth.CookieSecure, RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
 			BootstrapToken: cfg.BootstrapToken, RequireBootstrapToken: cfg.AppEnv != "development",
 			TrustedProxyCIDRs: cfg.TrustedProxyCIDRs, RevokeRealtimeSession: realtimeServer.RevokeSession,
