@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Pressable, TextInput, View } from "react-native";
-import { Plus, UserRound, X } from "lucide-react-native";
+import { Plus, UserRound } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import {
   emptyTaskDraft,
@@ -549,24 +549,6 @@ export function TaskSheet({
                   <UserRound size={18} color={theme.muted} />
                 )}
               </Pressable>
-              {draft.items.length > 1 ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t("taskItemRemove", {
-                    index: index + 1,
-                  })}
-                  hitSlop={6}
-                  onPress={() =>
-                    update({
-                      items: draft.items.filter(
-                        (other) => other.key !== item.key,
-                      ),
-                    })
-                  }
-                >
-                  <X size={16} color={theme.muted} />
-                </Pressable>
-              ) : null}
             </View>
           ))}
           {draft.items.length < taskLimits.maxItems ? (

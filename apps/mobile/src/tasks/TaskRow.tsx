@@ -82,7 +82,8 @@ export const TaskRow = memo(function TaskRow({
     : assigneeID
       ? assigneeID === viewer.actorID
         ? t("taskYou")
-        : (person(assigneeID)?.display_name ?? t("taskSomeone"))
+        : // First names in lists, as in the prototype («Олег · сегодня, 17:00»).
+          (person(assigneeID)?.display_name.split(/\s+/)[0] ?? t("taskSomeone"))
       : task.assignee.label;
   const parts = [
     task.due_at
@@ -158,7 +159,7 @@ export const TaskRow = memo(function TaskRow({
           <Text
             tone="muted"
             size={12.5}
-            numberOfLines={1}
+            numberOfLines={2}
             style={styles.shrink}
           >
             {who}
