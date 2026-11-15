@@ -197,6 +197,7 @@ type WaitingInboxPage = Schemas["WaitingInboxPage"];
 // grows polls.ts and away.ts and re-exports them from types.ts.
 type CreatePollRequest = Schemas["CreatePollRequest"];
 type VotePollRequest = Schemas["VotePollRequest"];
+type UpdatePollRequest = Schemas["UpdatePollRequest"];
 type PollState = Schemas["PollState"];
 type PollVoterPage = Schemas["PollVoterPage"];
 type PollRemindResult = Schemas["PollRemindResult"];
@@ -1837,6 +1838,17 @@ export class MessengerAPI {
   /** The poll and what the reader may see; 404 poll_not_found for others. */
   messagePoll(messageID: string): Promise<PollState> {
     return this.request(`/api/v1/polls/${encodeURIComponent(messageID)}`);
+  }
+  /**
+   * The author edits the question of an open poll; the options, flags and
+   * due date never change. expected_version is MessagePoll.version. Returns
+   * the whole message (edited_at set, «изм.»).
+   */
+  updatePoll(messageID: string, input: UpdatePollRequest): Promise<Message> {
+    return this.request(`/api/v1/polls/${encodeURIComponent(messageID)}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
   }
   /**
    * Casts or changes the vote. In an anonymous poll only the first vote is

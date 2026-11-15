@@ -134,12 +134,13 @@ func hydrateTasks(ctx context.Context, tx pgx.Tx, orgID string, messages []Messa
 	return nil
 }
 
-// hideTasksFromAgents drops Task from messages read by an agent: agents
-// read a task as its text (body) only, decision 20 of phase 6.6.
+// hideTasksFromAgents drops Task and Poll from messages read by an agent:
+// agents read a task or a poll as its text (body) only, decision 20 of
+// phase 6.6 and the same rule for polls in phase 6.7.
 func hideTasksFromAgents(ctx context.Context, tx pgx.Tx, user identity.User, messages []*Message) error {
 	found := false
 	for _, item := range messages {
-		if item.Task != nil {
+		if item.Task != nil || item.Poll != nil || item.PollViewer != nil {
 			found = true
 			break
 		}
@@ -153,20 +154,20 @@ func hideTasksFromAgents(ctx context.Context, tx pgx.Tx, user identity.User, mes
 	}
 	if !person {
 		for _, item := range messages {
-			item.Task = nil
+			item.Task, item.Poll, item.PollViewer = nil, nil, nil
 		}
 	}
 	return nil
 }
 
-// HideTaskFromFrame removes task from a message.* frame payload, for
-// agents among its recipients.
+// HideTaskFromFrame removes task and poll from a message.* frame payload,
+// for agents among its recipients.
 func HideTaskFromFrame(data json.RawMessage) (json.RawMessage, error) {
 	var message Message
 	if err := json.Unmarshal(data, &message); err != nil {
 		return nil, fmt.Errorf("decode message event: %w", err)
 	}
-	message.Task = nil
+	message.Task, message.Poll, message.PollViewer = nil, nil, nil
 	return wirejson.Marshal(message)
 }
 

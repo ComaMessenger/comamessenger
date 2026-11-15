@@ -741,6 +741,7 @@ func (w *Worker) materialize(ctx context.Context) error {
 			  `+reminderRecipients+`
 			  `+requestRecipients+`
 			  `+taskRecipients+`
+			  `+pollRecipients+`
 			), eligible AS (
 			SELECT e.org_id,e.seq,e.occurred_at,r.*,u.preferences
 			FROM event e JOIN recipients r ON true
@@ -760,6 +761,7 @@ func (w *Worker) materialize(ctx context.Context) error {
 			    WHEN 'reminder' THEN true
 			    `+requestCategories+`
 			    `+taskCategories+`
+			    `+pollCategories+`
 			    ELSE CASE r.notify_level
 			      WHEN 'all' THEN true
 			      WHEN 'mentions' THEN r.recipient_id=ANY(r.mentioned_actor_ids)
@@ -845,7 +847,7 @@ func (w *Worker) deliver(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	rows, err := w.pool.Query(ctx, `SELECT d.org_id,d.event_seq,d.subscription_id,s.actor_id,s.endpoint,s.p256dh,s.auth,e.type,`+pushEventData+`,e.chat_id,m.thread_root_id,m.body,c.name,a.display_name,COALESCE((u.preferences->>'push_preview')::boolean,false),COALESCE(u.preferences->>'locale','ru'),(SELECT f.voice_duration_ms FROM message_files mf JOIN files f ON f.org_id=mf.org_id AND f.id=mf.file_id WHERE mf.message_id=m.id AND f.voice_duration_ms IS NOT NULL LIMIT 1),`+quietNotification+`,`+scheduledStillFailed+` AND `+reminderStillFired+` FROM notification_deliveries d JOIN web_push_subscriptions s ON s.id=d.subscription_id JOIN events e ON e.org_id=d.org_id AND e.seq=d.event_seq LEFT JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id LEFT JOIN chats c ON c.org_id=e.org_id AND c.id=e.chat_id JOIN actors a ON a.org_id=e.org_id AND a.id=e.actor_id JOIN users u ON u.org_id=s.org_id AND u.actor_id=s.actor_id WHERE d.lease_token=$1 ORDER BY d.event_seq`, leaseToken)
+	rows, err := w.pool.Query(ctx, `SELECT d.org_id,d.event_seq,d.subscription_id,s.actor_id,s.endpoint,s.p256dh,s.auth,e.type,`+pushEventData+`,e.chat_id,m.thread_root_id,m.body,c.name,COALESCE(a.display_name,''),COALESCE((u.preferences->>'push_preview')::boolean,false),COALESCE(u.preferences->>'locale','ru'),(SELECT f.voice_duration_ms FROM message_files mf JOIN files f ON f.org_id=mf.org_id AND f.id=mf.file_id WHERE mf.message_id=m.id AND f.voice_duration_ms IS NOT NULL LIMIT 1),`+quietNotification+`,`+scheduledStillFailed+` AND `+reminderStillFired+` FROM notification_deliveries d JOIN web_push_subscriptions s ON s.id=d.subscription_id JOIN events e ON e.org_id=d.org_id AND e.seq=d.event_seq LEFT JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id LEFT JOIN chats c ON c.org_id=e.org_id AND c.id=e.chat_id LEFT JOIN actors a ON a.org_id=e.org_id AND a.id=e.actor_id JOIN users u ON u.org_id=s.org_id AND u.actor_id=s.actor_id WHERE d.lease_token=$1 ORDER BY d.event_seq`, leaseToken)
 	if err != nil {
 		return err
 	}
@@ -922,13 +924,13 @@ func (w *Worker) deliverDigests(ctx context.Context) error {
 	}
 	rows, err := w.pool.Query(ctx, `
 		SELECT i.org_id,i.event_seq,i.actor_id,u.email,COALESCE(u.preferences->>'locale','ru'),
-		       e.type,`+pushEventData+`,e.chat_id,m.body,c.name,a.display_name,
+		       e.type,`+pushEventData+`,e.chat_id,m.body,c.name,COALESCE(a.display_name,''),
 		       COALESCE((u.preferences->>'push_preview')::boolean,false),
 		       (SELECT f.voice_duration_ms FROM message_files mf JOIN files f ON f.org_id=mf.org_id AND f.id=mf.file_id WHERE mf.message_id=m.id AND f.voice_duration_ms IS NOT NULL LIMIT 1)
 		FROM email_digest_items i
 		JOIN users u ON u.org_id=i.org_id AND u.actor_id=i.actor_id
 		JOIN events e ON e.org_id=i.org_id AND e.seq=i.event_seq
-		JOIN actors a ON a.org_id=e.org_id AND a.id=e.actor_id
+		LEFT JOIN actors a ON a.org_id=e.org_id AND a.id=e.actor_id
 		LEFT JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id
 		LEFT JOIN chats c ON c.org_id=e.org_id AND c.id=e.chat_id
 		WHERE i.lease_token=$1 ORDER BY i.org_id,i.actor_id,i.event_seq`, leaseToken)
@@ -1042,6 +1044,9 @@ func buildNotification(eventType string, eventData []byte, author, locale string
 	if content, ok := taskNotification(eventType, eventData, author, locale, preview, chatID, chatName); ok {
 		return content
 	}
+	if content, ok := pollNotification(eventType, eventData, author, locale, preview, chatID, chatName); ok {
+		return content
+	}
 	content := notificationContent{Title: author, Body: "Новое сообщение"}
 	if chatName != nil && *chatName != "" {
 		content.Title += " · " + *chatName
@@ -1070,6 +1075,9 @@ func categoryBody(eventType string, raw []byte, author, locale string) string {
 		return text
 	}
 	if content, ok := taskNotification(eventType, raw, author, locale, false, nil, nil); ok {
+		return content.Title + " · " + content.Body
+	}
+	if content, ok := pollNotification(eventType, raw, author, locale, false, nil, nil); ok {
 		return content.Title + " · " + content.Body
 	}
 	data := map[string]any{}

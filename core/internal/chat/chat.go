@@ -1084,6 +1084,9 @@ func appendDurableEvent(ctx context.Context, tx pgx.Tx, user identity.User, chat
 	if err != nil {
 		return 0, err
 	}
+	if err := pollMembersChanged(ctx, tx, user.OrgID, chatID, eventType, data); err != nil {
+		return 0, err
+	}
 	var seq int64
 	if err := tx.QueryRow(ctx, `UPDATE organizations SET event_seq=event_seq+1 WHERE id=$1 RETURNING event_seq`, user.OrgID).Scan(&seq); err != nil {
 		return 0, fmt.Errorf("advance sequence: %w", err)

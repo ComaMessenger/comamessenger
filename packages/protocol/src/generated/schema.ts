@@ -1235,6 +1235,7 @@ export interface paths {
         delete: operations["deleteMessage"];
         options?: never;
         head?: never;
+        /** @description Edits the body of one's own message. A task message is edited with updateTask and a poll message with updatePoll: both get 422 validation_failed here, because the server builds their body. */
         patch: operations["updateMessage"];
         trace?: never;
     };
@@ -1763,7 +1764,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** @description Edits the question of a poll (decision 12 of phase 6.7): the server rebuilds body from the new question and the unchanged options, writes a message revision and sets edited_at («изм.» on the card). The options, multiple, anonymous and due_at never change, and the votes stay. Only the author while an active member of the chat (403 forbidden otherwise; others who cannot read the poll get 404 poll_not_found). An open poll only: a closed poll gets 409 poll_closed, because its result answers the question as it was asked. An archived chat gets 409 chat_archived. expected_version is MessagePoll.version; another one gets 409 version_conflict. The same question changes nothing. Emits message.updated and poll.updated with the new version. updateMessage refuses poll messages (422 validation_failed). 120 changes a minute per person (429 rate_limited). */
+        patch: operations["updatePoll"];
         trace?: never;
     };
     "/api/v1/polls/{message_id}/vote": {
@@ -4117,7 +4119,7 @@ export interface components {
             /** Format: date-time */
             due_at: string | null;
         };
-        /** @description data of poll.updated, sent to the whole chat (subject_id is the message id; the frame actor_id is always null): a vote or a retraction that changes voter_count, closing, a member joining or leaving that changes member_count. Only the counters every member may see: final_counts is set only once the poll is closed. Clients that may see the results reload getPoll (after about 1 s, only while the card is on screen). */
+        /** @description data of poll.updated, sent to the whole chat (subject_id is the message id; the frame actor_id is always null): a vote or a retraction that changes voter_count, closing, an edit of the question (with message.updated), a member joining or leaving that changes member_count. Only the counters every member may see: final_counts is set only once the poll is closed. Clients that may see the results reload getPoll (after about 1 s, only while the card is on screen). */
         RealtimePollUpdatedEventV1: {
             /** Format: uuid */
             message_id: string;
@@ -6954,7 +6956,7 @@ export interface components {
         };
         /** @description The poll part of a message of type poll. The same for every reader: it never carries the counts of an open poll or anyone's choice, so it is also in realtime message.* frames. The counts of an open poll are only in PollViewer.counts of those who may see the results. */
         MessagePoll: {
-            /** @description The author may edit it after sending (message edited_at); options, flags and due_at never change. */
+            /** @description The author may edit it with updatePoll while the poll is open (message edited_at); options, flags and due_at never change. */
             question: string;
             options: string[];
             multiple: boolean;
@@ -6973,7 +6975,7 @@ export interface components {
             member_count: number;
             /** @description Votes per option, in option order. Only on a closed poll; always null while it is open. */
             final_counts: number[] | null;
-            /** @description Grows with every change of the poll (votes, closing, the denominator); poll.updated carries it so stale events are dropped. */
+            /** @description Grows with every change of the poll (votes, closing, the denominator, an edit of the question); poll.updated carries it so stale events are dropped. */
             version: number;
         };
         /** @description What the current person may see and do with a poll. REST only (Message.poll_viewer in feed pages, create and context responses, getPoll, votePoll, closePoll); never in realtime frames, which the whole chat shares. */
@@ -7002,6 +7004,11 @@ export interface components {
             next_remind_at: string | null;
             /** @description Votes per option, in option order. Only with can_view_results, null otherwise. */
             counts: number[] | null;
+        };
+        UpdatePollRequest: {
+            question: string;
+            /** @description MessagePoll.version the edit is based on; another one gets 409 version_conflict. */
+            expected_version: number;
         };
         PollState: {
             poll: components["schemas"]["MessagePoll"];
@@ -11283,6 +11290,38 @@ export interface operations {
                 };
             };
             404: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    updatePoll: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePollRequest"];
+            };
+        };
+        responses: {
+            /** @description The poll message after the edit, with poll and poll_viewer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
             429: components["responses"]["Error"];
             501: components["responses"]["Error"];
         };

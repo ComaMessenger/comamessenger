@@ -28,6 +28,7 @@ func TestPollAndAwayRoutesAnswerNotImplemented(t *testing.T) {
 	contract := []string{
 		"POST /chats/{chatID}/polls",
 		"GET /polls/{messageID}",
+		"PATCH /polls/{messageID}",
 		"PUT /polls/{messageID}/vote",
 		"DELETE /polls/{messageID}/vote",
 		"GET /polls/{messageID}/voters",

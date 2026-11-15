@@ -131,8 +131,8 @@ describe("composerMenu: «Опрос» (wave 4)", () => {
 });
 
 describe("messageMenu of a poll", () => {
-  it("has no «Изменить» and no «Сделать задачей», keeps «Напомнить мне»", () => {
-    const items = messageMenu({
+  it("edits the question of an open poll, has no «Сделать задачей», keeps «Напомнить мне»", () => {
+    const facts = {
       own: true,
       canModerate: false,
       canPin: false,
@@ -144,11 +144,15 @@ describe("messageMenu of a poll", () => {
       reminders: true,
       tasks: true,
       messageType: "poll",
-    }).flat();
+    };
+    const items = messageMenu(facts).flat();
     expect(items).toContain("remind");
-    expect(items).not.toContain("edit");
+    expect(items).toContain("edit");
     expect(items).not.toContain("makeTask");
     expect(items).toContain("delete");
+    expect(messageMenu({ ...facts, pollClosed: true }).flat()).not.toContain(
+      "edit",
+    );
   });
 });
 

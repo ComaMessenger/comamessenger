@@ -34,6 +34,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/message"
 	"github.com/comamessenger/comamessenger/core/internal/orgstructure"
 	"github.com/comamessenger/comamessenger/core/internal/password"
+	"github.com/comamessenger/comamessenger/core/internal/poll"
 	"github.com/comamessenger/comamessenger/core/internal/push"
 	"github.com/comamessenger/comamessenger/core/internal/realtime"
 	"github.com/comamessenger/comamessenger/core/internal/request"
@@ -274,6 +275,18 @@ func main() {
 	}
 	if err := taskClient.Start(realtimeCtx); err != nil {
 		logger.Error("task job startup failed", "error", err)
+		os.Exit(1)
+	}
+	// Polls («Опрос», phase 6.7 wave 4): their own River client and queue.
+	pollService := poll.NewService(pool, afterCommit)
+	messageService.SetPolls(pollService)
+	pollClient, err := poll.NewClient(pool, pollService, logger)
+	if err != nil {
+		logger.Error("poll job initialization failed", "error", err)
+		os.Exit(1)
+	}
+	if err := pollClient.Start(realtimeCtx); err != nil {
+		logger.Error("poll job startup failed", "error", err)
 		os.Exit(1)
 	}
 	searchService := search.NewService(pool)

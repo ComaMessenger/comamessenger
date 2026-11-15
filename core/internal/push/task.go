@@ -76,7 +76,8 @@ const taskCategories = `
 
 // pushEventData replaces e.data where a push is built: requests add their
 // due date (requestPushEventData); task.notified adds the words of the push
-// while the recipient (u) may still read the task.
+// while the recipient (u) may still read the task; polls add theirs
+// (pollPushEventData).
 const pushEventData = `CASE WHEN e.type='task.notified' THEN e.data||COALESCE((
 	SELECT jsonb_build_object('task',true,'task_title',t.title,'task_assignee_kind',t.assignee_kind,'task_label',t.audience_label,
 	  'task_responsible',resp.display_name,'task_due_at',t.due_at,'task_recipient_author',t.author_id=u.actor_id,
@@ -90,7 +91,7 @@ const pushEventData = `CASE WHEN e.type='task.notified' THEN e.data||COALESCE((
 	JOIN actors ua ON ua.org_id=t.org_id AND ua.id=u.actor_id AND ua.status='active' AND ua.deleted_at IS NULL
 	JOIN organizations o ON o.id=t.org_id
 	LEFT JOIN actors resp ON resp.org_id=t.org_id AND resp.id=t.assignee_id
-	WHERE t.org_id=e.org_id AND t.message_id=e.subject_id),'{}'::jsonb) ELSE ` + requestPushEventData + ` END`
+	WHERE t.org_id=e.org_id AND t.message_id=e.subject_id),'{}'::jsonb) ELSE ` + pollPushEventData + ` END`
 
 type taskPushData struct {
 	MessageID       string     `json:"message_id"`

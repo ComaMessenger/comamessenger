@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/comamessenger/comamessenger/core/internal/identity"
+	"github.com/comamessenger/comamessenger/core/internal/poll"
 	"github.com/comamessenger/comamessenger/core/internal/request"
 	"github.com/comamessenger/comamessenger/core/internal/task"
 	"github.com/jackc/pgx/v5"
@@ -36,11 +37,12 @@ type WaitingInboxOptions struct {
 }
 
 // WaitingInbox is «Ждут вас» as one list: open requests waiting for the
-// reader's answer and open tasks the reader is concerned with, in chats
-// they can read now (checked in the query, on every call). Items with a due
-// date first, earliest first; then without one, newest first. A message is
-// either a request or a task, so (rank, key, message id) orders both kinds
-// together without repeats.
+// reader's answer, open tasks the reader is concerned with and open polls
+// with a due date the reader has not voted in, in chats they can read now
+// (checked in the query, on every call). Items with a due date first,
+// earliest first; then without one, newest first. A message is a request, a
+// task or a poll, so (rank, key, message id) orders the kinds together
+// without repeats.
 func (s *Service) WaitingInbox(ctx context.Context, user identity.User, options WaitingInboxOptions) (WaitingInboxPage, error) {
 	if s.tasks == nil || s.requests == nil {
 		return WaitingInboxPage{}, task.ErrUnavailable
@@ -48,9 +50,11 @@ func (s *Service) WaitingInbox(ctx context.Context, user identity.User, options 
 	if options.Kind == "" {
 		options.Kind = "all"
 	}
-	if options.Kind != "all" && options.Kind != "requests" && options.Kind != "tasks" {
-		return WaitingInboxPage{}, &task.InvalidError{Field: "kind", Message: "kind must be all, requests or tasks"}
+	if options.Kind != "all" && options.Kind != "requests" && options.Kind != "tasks" && (options.Kind != "polls" || s.polls == nil) {
+		return WaitingInboxPage{}, &task.InvalidError{Field: "kind", Message: "kind must be all, requests, tasks or polls"}
 	}
+	// Polls wait only with message_polls (decision 14: with a due date).
+	withPolls := s.polls != nil
 	limit := options.Limit
 	if limit == 0 {
 		limit = 50
@@ -77,17 +81,21 @@ func (s *Service) WaitingInbox(ctx context.Context, user identity.User, options 
 		WITH waiting AS (
 			SELECT 'request'::text AS kind, m.id AS message_id, r.due_at, m.created_at, NULL::text AS role
 			FROM message_request_recipients rr `+request.VisibleRecipientSQL+`
-			WHERE rr.org_id = $1 AND rr.actor_id = $2 AND rr.request_open AND rr.answered_at IS NULL AND $3 <> 'tasks'
+			WHERE rr.org_id = $1 AND rr.actor_id = $2 AND rr.request_open AND rr.answered_at IS NULL AND $3 IN ('all', 'requests')
 			UNION ALL
 			SELECT 'task', mine.message_id, mine.due_at, mine.created_at, mine.role
 			FROM (`+task.MineSQL("$1", "$2")+`) mine
-			WHERE $3 <> 'requests'
+			WHERE $3 IN ('all', 'tasks')
+			UNION ALL
+			SELECT 'poll', pw.message_id, pw.due_at, pw.created_at, NULL
+			FROM (`+poll.WaitingSQL("$1", "$2")+`) pw
+			WHERE $3 IN ('all', 'polls') AND $8::boolean
 		)
 		SELECT `+task.OpenRank("due_at")+`, `+task.OpenKey("due_at", "created_at")+`, message_id, kind, role, due_at
 		FROM waiting
 		WHERE $4::int IS NULL OR (`+task.OpenRank("due_at")+`, `+task.OpenKey("due_at", "created_at")+`, message_id) > ($4::int, $5::bigint, $6::uuid)
 		ORDER BY 1, 2, message_id
-		LIMIT $7`, user.OrgID, user.ActorID, options.Kind, rank, key, cursorID, limit+1)
+		LIMIT $7`, user.OrgID, user.ActorID, options.Kind, rank, key, cursorID, limit+1, withPolls)
 	if err != nil {
 		return WaitingInboxPage{}, fmt.Errorf("list waiting inbox: %w", err)
 	}
@@ -144,12 +152,19 @@ func (s *Service) WaitingInbox(ctx context.Context, user identity.User, options 
 		result := WaitingInboxItem{
 			Kind: item.kind, Message: message, ChatID: message.ChatID, Author: info.author, Chat: info.chat, DueAt: item.due,
 		}
-		if item.kind == "request" {
+		switch item.kind {
+		case "request":
 			if message.Request == nil || message.RequestViewer == nil {
 				continue
 			}
 			result.Request, result.Viewer = message.Request, message.RequestViewer
-		} else {
+		case "poll":
+			// The poll and the reader's view are message.poll and
+			// message.poll_viewer.
+			if message.Poll == nil || message.PollViewer == nil {
+				continue
+			}
+		default:
 			if message.Task == nil {
 				continue
 			}
