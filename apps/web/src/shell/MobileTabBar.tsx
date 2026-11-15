@@ -1,17 +1,20 @@
 import { MessageCircle, MessagesSquare, MoreHorizontal, Star, Users } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { cx } from "../ui";
+import { countLabel, cx } from "../ui";
 import type { PrimarySection } from "./GlobalSidebar";
 
 export function MobileTabBar({
   active,
   compact,
   navigate,
+  importantCount = 0,
 }: {
   active: PrimarySection;
   /** Inside an open conversation the bar shrinks to icons only. */
   compact: boolean;
   navigate(to: string): void;
+  /** Waiting for you and fired reminders. */
+  importantCount?: number;
 }) {
   const { t } = useTranslation();
   const items = [
@@ -41,6 +44,11 @@ export function MobileTabBar({
           >
             <span className="mobile-tabbar__icon">
               <Icon aria-hidden="true" />
+              {item.id === "important" && importantCount > 0 && (
+                <span className="mobile-tabbar__badge tabular">
+                  {countLabel(importantCount)}
+                </span>
+              )}
             </span>
             <span className="mobile-tabbar__label">{item.label}</span>
           </button>

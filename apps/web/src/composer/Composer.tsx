@@ -18,13 +18,16 @@ import {
   Image,
   Link2,
   Megaphone,
-  Paperclip,
+  MessageSquareMore,
+  Plus,
   SendHorizontal,
+  Sparkles,
   Smile,
   X,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
+  composerMenu,
   commandQuery,
   decodeMentions,
   encodeMentions,
@@ -34,6 +37,7 @@ import {
   updateMentionText,
   type ChatCommand,
   type ChatMember,
+  type ComposerMenuItemID,
   type Message,
 } from "@comamessenger/core";
 import {
@@ -43,6 +47,7 @@ import {
   Menu,
   MenuDivider,
   MenuItem,
+  MenuLabel,
   cx,
 } from "../ui";
 import { EmojiPickerPanel } from "../lib/emoji";
@@ -52,6 +57,15 @@ import { AttachmentItem } from "./AttachmentItem";
 import { CommandMenu } from "../agentchat/CommandMenu";
 
 const sendModeKey = "coma-send-on-enter";
+
+const plusIcons: Record<ComposerMenuItemID, ReactNode> = {
+  photo: <Image />,
+  camera: <Image />,
+  file: <FileText />,
+  markdownFile: <Code2 />,
+  request: <MessageSquareMore />,
+  agent: <Sparkles />,
+};
 
 export function Composer({
   members,
@@ -75,6 +89,8 @@ export function Composer({
   commands = [],
   onSchedule,
   onSendSilent,
+  features,
+  onRequest,
 }: {
   members: ChatMember[];
   presence?: PresenceMap;
@@ -101,6 +117,10 @@ export function Composer({
   onSchedule?(): void;
   /** "Send without sound". */
   onSendSilent?(): void;
+  /** HelloFrame.features: Request in + needs `message_requests`. */
+  features?: readonly string[];
+  /** Request from +: opens the request form. */
+  onRequest?(): void;
 }) {
   const { t } = useTranslation();
   const input = useRef<HTMLTextAreaElement>(null);
@@ -112,6 +132,7 @@ export function Composer({
   const fileInput = useRef<HTMLInputElement>(null);
   const markdownInput = useRef<HTMLInputElement>(null);
   const [attachOpen, setAttachOpen] = useState(false);
+  const [plusView, setPlusView] = useState<"menu" | "agents">("menu");
   const [formatOpen, setFormatOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [sendMenuOpen, setSendMenuOpen] = useState(false);
@@ -140,6 +161,18 @@ export function Composer({
     (Boolean(body.trim()) ||
       attachments.some((item) => item.status === "ready")) &&
     !attachments.some((item) => item.status === "uploading");
+
+  const agents = members.filter((member) => member.type === "agent");
+  // Variant A of the prototype: attachments, Ask and assign, agents.
+  // Scheduling stays on the send button's menu.
+  const plusGroups = composerMenu({
+    platform: "web",
+    readonly,
+    hasAgents: !compact && agents.length > 0,
+    features: onRequest ? features : [],
+    inThread: compact,
+  });
+  const atAttachmentLimit = attachments.length >= attachmentLimit;
 
   useEffect(() => {
     const element = input.current;
@@ -293,6 +326,35 @@ export function Composer({
       draft.text.slice(0, mention.index) + replacement,
       mention.index + replacement.length,
     );
+  }
+  function callAgent(agent: ChatMember) {
+    const separator = draft.text && !/\s$/.test(draft.text) ? " " : "";
+    const base = { ...draft, text: draft.text + separator };
+    const next = insertMention(
+      base,
+      base.text.length,
+      base.text.length,
+      agent.actor_id,
+      agent.display_name,
+    );
+    setBody(encodeMentions(next));
+    setAttachOpen(false);
+    requestAnimationFrame(() => {
+      input.current?.focus();
+      input.current?.setSelectionRange(next.text.length, next.text.length);
+    });
+  }
+  function choosePlus(id: ComposerMenuItemID) {
+    if (id === "photo") mediaInput.current?.click();
+    else if (id === "file") fileInput.current?.click();
+    else if (id === "markdownFile") markdownInput.current?.click();
+    else if (id === "request") {
+      setAttachOpen(false);
+      onRequest?.();
+    } else if (id === "agent") {
+      if (agents.length === 1) callAgent(agents[0]!);
+      else setPlusView("agents");
+    }
   }
   function chooseSendMode(value: boolean) {
     setSendOnEnter(value);
@@ -482,16 +544,19 @@ export function Composer({
             <IconButton
               ref={attachAnchor}
               size="icon-sm"
-              label={t("attach")}
-              disabled={!onFiles || attachments.length >= attachmentLimit}
+              className="composer__plus"
+              label={t("composerPlus")}
+              disabled={!onFiles && plusGroups.length <= 1}
+              aria-haspopup="menu"
               aria-expanded={attachOpen}
               onClick={() => {
+                setPlusView("menu");
                 setAttachOpen((open) => !open);
                 setEmojiOpen(false);
                 setSendMenuOpen(false);
               }}
             >
-              <Paperclip />
+              <Plus />
             </IconButton>
             <input
               ref={mediaInput}
@@ -634,29 +699,78 @@ export function Composer({
         <FloatingPopover
           anchorRef={attachAnchor}
           placement="top-start"
-          width={220}
+          width={300}
           onDismiss={() => setAttachOpen(false)}
         >
-          <Menu label={t("attach")}>
-            <MenuItem
-              icon={<Image />}
-              onClick={() => mediaInput.current?.click()}
-            >
-              {t("attachMedia")}
-            </MenuItem>
-            <MenuItem
-              icon={<FileText />}
-              onClick={() => fileInput.current?.click()}
-            >
-              {t("attachFile")}
-            </MenuItem>
-            <MenuItem
-              icon={<Code2 />}
-              onClick={() => markdownInput.current?.click()}
-            >
-              {t("attachMarkdown")}
-            </MenuItem>
-          </Menu>
+          {plusView === "agents" ? (
+            <Menu label={t("composerChooseAgent")} className="composer-plus">
+              <MenuLabel>{t("composerChooseAgent")}</MenuLabel>
+              {agents.map((agent) => (
+                <button
+                  key={agent.actor_id}
+                  type="button"
+                  role="menuitem"
+                  className="composer-plus__agent"
+                  onClick={() => callAgent(agent)}
+                >
+                  <Avatar
+                    name={agent.display_name}
+                    seed={agent.actor_id}
+                    actorID={agent.actor_id}
+                    avatarVersion={agent.avatar_version}
+                    agent
+                    size="sm"
+                  />
+                  <span className="truncate">{agent.display_name}</span>
+                </button>
+              ))}
+            </Menu>
+          ) : (
+            <Menu label={t("composerPlus")} className="composer-plus">
+              {plusGroups.map((group, index) => (
+                <div
+                  key={group.id}
+                  role="group"
+                  aria-label={group.labelKey ? t(group.labelKey) : undefined}
+                  className="composer-plus__group"
+                >
+                  {index > 0 && <MenuDivider />}
+                  {group.labelKey && <MenuLabel>{t(group.labelKey)}</MenuLabel>}
+                  {group.items.map((item) =>
+                    group.id === "attachments" ? (
+                      <MenuItem
+                        key={item.id}
+                        icon={plusIcons[item.id]}
+                        disabled={!onFiles || atAttachmentLimit}
+                        onClick={() => choosePlus(item.id)}
+                      >
+                        {t(item.labelKey)}
+                      </MenuItem>
+                    ) : (
+                      <button
+                        key={item.id}
+                        type="button"
+                        role="menuitem"
+                        className={cx(
+                          "composer-plus__action",
+                          item.id === "agent" && "composer-plus__action--agent",
+                        )}
+                        onClick={() => choosePlus(item.id)}
+                      >
+                        <span className="composer-plus__glyph" aria-hidden="true">
+                          {plusIcons[item.id]}
+                        </span>
+                        <span className="composer-plus__copy">
+                          <strong>{t(item.labelKey)}</strong>
+                          {item.hintKey && <small>{t(item.hintKey)}</small>}
+                        </span>
+                      </button>
+                    ),
+                  )}
+                </div>
+              ))}
+            </Menu>
+          )}
         </FloatingPopover>
       )}
       {emojiOpen && (

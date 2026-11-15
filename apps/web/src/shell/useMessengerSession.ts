@@ -15,6 +15,9 @@ import {
   sharedChangedChat,
   sharedKeys,
   pinnedChatLimit,
+  createUnreadRefresher,
+  refreshesUnread,
+  syncDeviceTimezone,
   type Chat,
   type ChatFolder,
   type DurableEvent,
@@ -38,6 +41,7 @@ import {
   releaseScheduledCache,
   scheduledQueryKey,
 } from "../scheduled/useScheduled";
+import { applyWorkplaceEvent, invalidateWorkplace } from "../requests/realtime";
 
 export type InAppNotification = {
   id: string;
@@ -84,6 +88,8 @@ export function useMessengerSession({
     const created = createMessengerStore();
     // A realtime frame too large to send whole arrives as a stub.
     created.getState().setMessageLoader(restMessageLoader(api));
+    // A comment or answer from another device: the event does not carry it.
+    created.getState().setRequestLoader((id) => api.messageRequest(id));
     return created;
   }, [api]);
   const queryClient = useQueryClient();
@@ -129,6 +135,20 @@ export function useMessengerSession({
       ready.resolve();
     }
   }, [api, ready, store]);
+
+  // Waiting for you, fired reminders and the chat marks come from GET /unread:
+  // a burst of request and reminder events reads it once.
+  const unreadRefresher = useMemo(
+    () =>
+      createUnreadRefresher(() =>
+        api
+          .unread()
+          .then((counts) => store.getState().setUnread(counts))
+          .catch(() => undefined),
+      ),
+    [api, store],
+  );
+  useEffect(() => () => unreadRefresher.cancel(), [unreadRefresher]);
 
   const scheduleReload = useCallback(() => {
     if (reloadTimer.current !== null) window.clearTimeout(reloadTimer.current);
@@ -205,8 +225,14 @@ export function useMessengerSession({
         (url) => new WebSocket(url),
         {
           state: store.getState().setRealtime,
+          features: (list) => store.getState().setFeatures(list),
           event: (event) => {
             const applied = store.getState().apply(event);
+            if (refreshesUnread(event)) unreadRefresher.request();
+            // Requests and reminders: private lists and the reader's own
+            // reminders, which only reach the owner's devices.
+            if (applyWorkplaceEvent(queryClient, user.id, event))
+              return applied || event.type.startsWith("reminder.");
             // Saves are private: these events reach only the saver's devices.
             const saved = savedChange(event);
             if (applied && saved) applySavedChange(queryClient, user.id, saved);
@@ -279,6 +305,7 @@ export function useMessengerSession({
             void queryClient.invalidateQueries({
               queryKey: scheduledQueryKey(user.id),
             });
+            invalidateWorkplace(queryClient, user.id);
             await reload();
             if (active) await loadMessages(api, store, active);
           },
@@ -371,6 +398,7 @@ export function useMessengerSession({
       scheduleReload,
       showInAppNotification,
       store,
+      unreadRefresher,
       user,
     ],
   );
@@ -420,6 +448,15 @@ export function useMessengerSession({
       );
     };
   }, [api]);
+
+  // A profile still on the default zone takes the device's zone, so the
+  // server words reminder and request pushes in local time.
+  useEffect(() => {
+    void syncDeviceTimezone(api, user).then((updated) => {
+      if (updated?.id === user.id) onUserUpdated(updated);
+    });
+    // Once per sign-in: later profile edits are the person's choice.
+  }, [api, user.id]);
 
   useEffect(() => {
     void reload();

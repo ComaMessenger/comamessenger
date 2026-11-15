@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useRouterState } from "@tanstack/react-router";
 import { ArrowUpRight, Star, StarOff } from "lucide-react";
 import {
   useInfiniteQuery,
@@ -8,6 +9,13 @@ import {
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import {
+  defaultImportantTab,
+  importantCounts,
+  importantHref,
+  importantTabLabelKeys,
+  importantTabs,
+  parseImportantTab,
+  type ImportantTab,
   applySavedChange,
   chatAvatarSource,
   messagePlainText,
@@ -38,6 +46,8 @@ import {
   DirectorySplit,
 } from "./DirectoryPage";
 import { useChatMembers } from "./useChatMembers";
+import { WaitingInbox } from "../requests/WaitingInbox";
+import { RemindersList } from "../reminders/RemindersList";
 
 const visibleChatChips = 3;
 
@@ -62,11 +72,102 @@ function useSavedChats() {
   });
 }
 
+const lastTabKey = "coma-important-tab";
+
+function readLastTab(): ImportantTab | null {
+  try {
+    return parseImportantTab(localStorage.getItem(lastTabKey));
+  } catch {
+    return null;
+  }
+}
+
 /**
- * «Important»: messages the reader saved for themselves. Nobody else sees
- * them; chat pins live in the chat's info instead.
+ * Important as the reader's own inbox: Waiting for you (requests waiting for an
+ * answer), Saved and Reminders. Nobody else sees any of it.
+ * Tabs the server cannot serve yet are hidden; with one tab left the row
+ * is not shown at all.
  */
 export function ImportantDirectory({ selectedID }: { selectedID?: string }) {
+  const { t } = useTranslation();
+  const { store, navigate } = useMessenger();
+  const isMobile = useIsMobile();
+  const features = useStore(store, (state) => state.features);
+  const unread = useStore(store, (state) => state.unread);
+  const requested = useRouterState({
+    select: (state) =>
+      parseImportantTab((state.location.search as Record<string, unknown>).tab),
+  });
+  const [last] = useState(readLastTab);
+  const tabs = importantTabs(features);
+  const counts = importantCounts(unread, features);
+  const tab: ImportantTab = selectedID
+    ? "saved"
+    : defaultImportantTab({ tabs, counts, last, requested });
+  useEffect(() => {
+    try {
+      localStorage.setItem(lastTabKey, tab);
+    } catch {
+      // A remembered tab is a convenience only.
+    }
+  }, [tab]);
+  const tabRow =
+    tabs.length > 1 ? (
+      <div
+        className="important-tabs"
+        role="tablist"
+        aria-label={t("importantTabs")}
+      >
+        {tabs.map((id) => {
+          const count =
+            id === "waiting" ? counts.waiting : id === "reminders" ? counts.reminders : 0;
+          return (
+            <Chip
+              key={id}
+              role="tab"
+              aria-selected={tab === id}
+              active={tab === id}
+              size={isMobile ? "lg" : "md"}
+              onClick={() => navigate(importantHref(id))}
+            >
+              {t(importantTabLabelKeys[id])}
+              {count > 0 && (
+                <span className="important-tabs__count tabular">{count}</span>
+              )}
+            </Chip>
+          );
+        })}
+      </div>
+    ) : null;
+  if (tab === "saved")
+    return <SavedDirectory selectedID={selectedID} tabRow={tabRow} />;
+  return (
+    <div className="directory directory--single">
+      <DirectoryList
+        title={t("important")}
+        lead={
+          tab === "waiting" ? t("importantWaitingLead") : t("remindersLead")
+        }
+        toolbar={tabRow}
+        className="important-inbox"
+      >
+        {tab === "waiting" ? <WaitingInbox /> : <RemindersList />}
+      </DirectoryList>
+    </div>
+  );
+}
+
+/**
+ * Saved: messages the reader saved for themselves. Chat pins live
+ * in the chat's info instead.
+ */
+function SavedDirectory({
+  selectedID,
+  tabRow,
+}: {
+  selectedID?: string;
+  tabRow: ReactNode;
+}) {
   const { t } = useTranslation();
   const { user, store, navigate } = useMessenger();
   const isMobile = useIsMobile();
@@ -104,6 +205,7 @@ export function ImportantDirectory({ selectedID }: { selectedID?: string }) {
     <DirectoryList
       title={t("important")}
       lead={t("importantLead")}
+      toolbar={tabRow}
       chips={
         chatFilters.length > 1 && (
           <>

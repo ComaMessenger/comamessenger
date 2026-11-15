@@ -1439,11 +1439,11 @@ test("profile menu, status dialog and attachment picker expose the new flows", a
 
   await chatRow(page, /Объявления/).click();
   await expect(page).toHaveURL(new RegExp(`/chat/${chat.id}$`));
-  await page.getByRole("button", { name: "Прикрепить" }).click();
-  const attachmentMenu = page.getByRole("menu", { name: "Прикрепить" });
-  await expect(attachmentMenu.getByText("Фото или видео")).toBeVisible();
+  await page.getByRole("button", { name: "Добавить", exact: true }).click();
+  const attachmentMenu = page.getByRole("menu", { name: "Добавить" });
+  await expect(attachmentMenu.getByText("Фото и видео")).toBeVisible();
   await expect(attachmentMenu.getByText("Файл", { exact: true })).toBeVisible();
-  await expect(attachmentMenu.getByText("Markdown")).toBeVisible();
+  await expect(attachmentMenu.getByText("Markdown-файл")).toBeVisible();
 });
 
 test("member controls use a dialog and the agent editor scrolls in Russian", async ({
