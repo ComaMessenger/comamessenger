@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -7,7 +7,7 @@
 <meta name="description" content="Запросы, задачи, опросы и ИИ-агенты в телефоне сотрудника. Сервер стоит у вас, код открыт.">
 <!--
   Прототип лендинга coma-chat.com. Один файл, без зависимостей (шрифт Onest из Google Fonts, при его недоступности системный).
-  Параметры адреса: ?hero=1|2 (вариант первого экрана), ?theme=light|dark (тема; по умолчанию системная).
+  Параметры адреса: ?hero=1|2 (вариант первого экрана), ?theme=light|dark|auto (тема; по умолчанию светлая).
   Тексты прошли инфостиль и humanizer-ru. Всё в [квадратных скобках] это плейсхолдеры: заменить до публикации.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -686,7 +686,7 @@ h3 { font-size: 20px; line-height: 1.25; font-weight: 600; letter-spacing: -.01e
       <span class="seg" id="heroSeg"><button type="button" data-hero="1" aria-pressed="true">1 · Телефон сотрудника</button><button type="button" data-hero="2" aria-pressed="false">2 · Свой сервер и агенты</button></span>
     </span>
     <span class="grp"><span class="lbl">Тема:</span>
-      <span class="seg" id="themeSeg"><button type="button" data-theme="auto" aria-pressed="true">Как в системе</button><button type="button" data-theme="light" aria-pressed="false">Светлая</button><button type="button" data-theme="dark" aria-pressed="false">Тёмная</button></span>
+      <span class="seg" id="themeSeg"><button type="button" data-theme="auto" aria-pressed="false">Как в системе</button><button type="button" data-theme="light" aria-pressed="true">Светлая</button><button type="button" data-theme="dark" aria-pressed="false">Тёмная</button></span>
     </span>
   </div>
 </div>
@@ -1720,7 +1720,7 @@ h3 { font-size: 20px; line-height: 1.25; font-weight: 600; letter-spacing: -.01e
   $$('.rv').forEach(el => rio.observe(el));
 
   /* ---------- init ---------- */
-  setTheme(params.get('theme') || store.get('coma-landing-theme') || 'auto', false);
+  setTheme(params.get('theme') || store.get('coma-landing-theme') || 'light', false);
   setHero(params.get('hero') || '1', false);
 })();
 </script>
