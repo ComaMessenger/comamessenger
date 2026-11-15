@@ -44,7 +44,8 @@ test("@department notifies only its people in this chat", async ({ browser }) =>
   await signIn(author, anna);
   await author.goto(`/chat/${chat.id}`);
   const composer = author.getByRole("textbox", { name: /Сообщение|Напишите/ });
-  await composer.fill(`@${team.slice(0, 4)}`);
+  // A space ends the mention query: type the first word only.
+  await composer.fill(`@${team.split(" ")[0]}`);
   const menu = author.getByRole("menu", { name: "Участники" });
   await expect(
     menu.getByRole("menuitem", {
@@ -69,7 +70,7 @@ test("@department notifies only its people in this chat", async ({ browser }) =>
   await signIn(reader, inChat);
   await reader.goto("/chats");
   await expect(
-    reader.locator(".chat-row", { hasText: `Планёрка ${run}` }).locator(".chat-row__mention, [aria-label*='упомин']"),
+    reader.locator(".chat-row", { hasText: `Планёрка ${run}` }).locator(".chat-row__time--mention"),
   ).toBeVisible();
   const other = await api<{ chats: { id: string }[] }>(outside, "/chats");
   expect(other.chats.map((item) => item.id)).not.toContain(chat.id);
