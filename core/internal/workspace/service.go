@@ -361,13 +361,13 @@ func (s *Service) UpdateMember(ctx context.Context, current identity.User, actor
 			return Member{}, ErrForbidden
 		}
 	}
-	var authorize func(currentRole string, previous []permission.Code) bool
+	var authorize func(stored []permission.Code, currentRole string, previous []permission.Code) bool
 	if input.Permissions != nil {
 		next := *input.Permissions
-		authorize = func(currentRole string, previous []permission.Code) bool {
-			// The role stored now, not the one the session resolved.
+		authorize = func(stored []permission.Code, currentRole string, previous []permission.Code) bool {
+			// The role and permissions stored now, not the session's.
 			holder := current
-			holder.OrgRole = currentRole
+			holder.OrgRole, holder.Permissions = currentRole, stored
 			return mayChangeMemberPermissions(holder, previous, next)
 		}
 	}

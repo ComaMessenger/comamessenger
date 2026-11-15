@@ -5,6 +5,9 @@ import (
 	"errors"
 	"fmt"
 
+	"slices"
+	"strings"
+
 	"github.com/comamessenger/comamessenger/core/internal/chat"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/jackc/pgx/v5"
@@ -35,7 +38,14 @@ func authorizeDepartmentChat(ctx context.Context, q departmentQuerier, user iden
 	if err != nil {
 		return fmt.Errorf("read department lead: %w", err)
 	}
-	if CanManage(user) || leadID != nil && *leadID == user.ActorID {
+	if leadID != nil && *leadID == user.ActorID {
+		return nil
+	}
+	caller, err := storedCaller(ctx, q, user)
+	if err != nil {
+		return err
+	}
+	if CanManage(caller) {
 		return nil
 	}
 	return ErrForbidden
@@ -60,44 +70,60 @@ func (s *Service) CreateDepartmentChat(ctx context.Context, user identity.User, 
 	if chatID != nil {
 		return DepartmentChatResult{}, &Error{Kind: ErrChatExists, Message: "The department already has a chat."}
 	}
-	members, err := expandAll(ctx, s.pool, user.OrgID, []string{departmentID})
-	if err != nil {
-		return DepartmentChatResult{}, err
-	}
-	var admins []string
-	if leadID != nil && leadActive {
-		admins = []string{*leadID}
-	}
+	var created chat.Chat
 	var version, seq int64
-	created, err := s.chats.CreateWithin(ctx, user, chat.CreateInput{Kind: "group", Visibility: "private", Name: name, MemberIDs: members}, admins,
-		func(ctx context.Context, tx pgx.Tx, newChatID string) error {
-			if err := requireActiveCaller(ctx, tx, user); err != nil {
+	for attempt := 0; ; attempt++ {
+		members, err := expandAll(ctx, s.pool, user.OrgID, []string{departmentID})
+		if err != nil {
+			return DepartmentChatResult{}, err
+		}
+		var admins []string
+		if leadID != nil && leadActive {
+			admins = []string{*leadID}
+		}
+		created, err = s.chats.CreateWithin(ctx, user, chat.CreateInput{Kind: "group", Visibility: "private", Name: name, MemberIDs: members}, admins,
+			func(ctx context.Context, tx pgx.Tx, newChatID string) error {
+				if err := requireActiveCaller(ctx, tx, user); err != nil {
+					return err
+				}
+				if err := authorizeDepartmentChat(ctx, tx, user, departmentID); err != nil {
+					return err
+				}
+				row, err := lockDepartment(ctx, tx, user.OrgID, departmentID)
+				if err != nil {
+					return err
+				}
+				if row.chatID != nil {
+					return &Error{Kind: ErrChatExists, Message: "The department already has a chat."}
+				}
+				// The members were read before the lock: whoever left the
+				// department meanwhile must not get into its private chat.
+				now, err := expandAll(ctx, tx, user.OrgID, []string{departmentID})
+				if err != nil {
+					return err
+				}
+				if !slices.Equal(now, members) {
+					return errStale
+				}
+				if _, err := tx.Exec(ctx, `
+					UPDATE departments SET chat_id = $3, version = version + 1, updated_at = now()
+					WHERE org_id = $1 AND id = $2`, user.OrgID, row.id, newChatID); err != nil {
+					return translate(err)
+				}
+				if err := writeAudit(ctx, tx, user, auditEntry{action: "org.department_chat.create", targetType: "department", targetID: row.id,
+					metadata: map[string]any{"chat_id": newChatID, "members": len(members)}}); err != nil {
+					return err
+				}
+				version, seq, err = BumpVersion(ctx, tx, user.OrgID, user.ActorID, ReasonDepartment)
 				return err
-			}
-			if err := authorizeDepartmentChat(ctx, tx, user, departmentID); err != nil {
-				return err
-			}
-			row, err := lockDepartment(ctx, tx, user.OrgID, departmentID)
-			if err != nil {
-				return err
-			}
-			if row.chatID != nil {
-				return &Error{Kind: ErrChatExists, Message: "The department already has a chat."}
-			}
-			if _, err := tx.Exec(ctx, `
-				UPDATE departments SET chat_id = $3, version = version + 1, updated_at = now()
-				WHERE org_id = $1 AND id = $2`, user.OrgID, row.id, newChatID); err != nil {
-				return translate(err)
-			}
-			if err := writeAudit(ctx, tx, user, auditEntry{action: "org.department_chat.create", targetType: "department", targetID: row.id,
-				metadata: map[string]any{"chat_id": newChatID, "members": len(members)}}); err != nil {
-				return err
-			}
-			version, seq, err = BumpVersion(ctx, tx, user.OrgID, user.ActorID, ReasonDepartment)
-			return err
-		})
-	if err != nil {
-		return DepartmentChatResult{}, err
+			})
+		if errors.Is(err, errStale) && attempt < writeAttempts-1 {
+			continue
+		}
+		if err != nil {
+			return DepartmentChatResult{}, err
+		}
+		break
 	}
 	_ = seq // chat.Service wakes the dispatcher with the latest sequence.
 	department, err := readDepartment(ctx, s.pool, user, departmentID)
@@ -111,6 +137,7 @@ func (s *Service) LinkDepartmentChat(ctx context.Context, user identity.User, de
 	if validateID("chat_id", input.ChatID) != nil {
 		return DepartmentWrite{}, &Error{Kind: ErrChatInvalid, Field: "chat_id", Message: "chat_id must be a group you manage."}
 	}
+	chatID := strings.ToLower(input.ChatID)
 	var result DepartmentWrite
 	version, err := s.write(ctx, user, writeOptions{authorize: func(ctx context.Context, tx pgx.Tx) error {
 		return authorizeDepartmentChat(ctx, tx, user, departmentID)
@@ -118,9 +145,6 @@ func (s *Service) LinkDepartmentChat(ctx context.Context, user identity.User, de
 		row, err := lockDepartment(ctx, tx, user.OrgID, departmentID)
 		if err != nil {
 			return err
-		}
-		if row.chatID != nil && *row.chatID != input.ChatID {
-			return &Error{Kind: ErrChatExists, Message: "The department already has a chat."}
 		}
 		// The caller must manage the group; any other answer is the same
 		// refusal, so a chat id cannot be probed.
@@ -131,16 +155,21 @@ func (s *Service) LinkDepartmentChat(ctx context.Context, user identity.User, de
 			FROM chats c
 			LEFT JOIN chat_members cm ON cm.org_id = c.org_id AND cm.chat_id = c.id AND cm.actor_id = $3
 			WHERE c.org_id = $1 AND c.id = $2
-			FOR SHARE OF c`, user.OrgID, input.ChatID, user.ActorID).Scan(&kind, &archived, &role)
+			FOR SHARE OF c`, user.OrgID, chatID, user.ActorID).Scan(&kind, &archived, &role)
 		if errors.Is(err, pgx.ErrNoRows) || err == nil && (kind != "group" || archived || role != "owner" && role != "admin") {
 			return &Error{Kind: ErrChatInvalid, Field: "chat_id", Message: "chat_id must be a group you own or administer, not archived."}
 		}
 		if err != nil {
 			return err
 		}
+		// Only after the caller proved they manage the chat: comparing first
+		// would tell an outsider whether a guessed id is the department chat.
+		if row.chatID != nil && *row.chatID != chatID {
+			return &Error{Kind: ErrChatExists, Message: "The department already has a chat."}
+		}
 		if row.chatID == nil {
 			var linked bool
-			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM departments WHERE chat_id = $1)`, input.ChatID).Scan(&linked); err != nil {
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM departments WHERE chat_id = $1)`, chatID).Scan(&linked); err != nil {
 				return err
 			}
 			if linked {
@@ -148,11 +177,11 @@ func (s *Service) LinkDepartmentChat(ctx context.Context, user identity.User, de
 			}
 			if _, err := tx.Exec(ctx, `
 				UPDATE departments SET chat_id = $3, version = version + 1, updated_at = now()
-				WHERE org_id = $1 AND id = $2`, user.OrgID, row.id, input.ChatID); err != nil {
+				WHERE org_id = $1 AND id = $2`, user.OrgID, row.id, chatID); err != nil {
 				return err
 			}
 			work.touch(ReasonDepartment)
-			work.audit("org.department_chat.link", "department", row.id, map[string]any{"chat_id": input.ChatID})
+			work.audit("org.department_chat.link", "department", row.id, map[string]any{"chat_id": chatID})
 		}
 		department, err := readDepartment(ctx, tx, user, row.id)
 		result.Department = department

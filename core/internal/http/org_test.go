@@ -19,6 +19,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/testdb"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Without the service every org route of the contract is registered and
@@ -57,7 +58,10 @@ type orgHTTPFixture struct {
 	orgID                  string
 	org                    *orgstructure.Service
 	chats                  *chat.Service
+	pool                   *pgxpool.Pool
 }
+
+func testdbPoolOf(_ *testing.T, f *orgHTTPFixture) *pgxpool.Pool { return f.pool }
 
 func newOrgHTTPFixture(t *testing.T) *orgHTTPFixture {
 	t.Helper()
@@ -94,7 +98,7 @@ func newOrgHTTPFixture(t *testing.T) *orgHTTPFixture {
 	}
 	chats := chat.NewService(pool)
 	org := orgstructure.NewService(pool, chats, nil)
-	f := &orgHTTPFixture{t: t, owner: user(ids[0], "owner"), hr: user(ids[1], "member", permission.OrgManage), lead: user(ids[2], "member"), plain: user(ids[3], "member"), orgID: orgID, org: org, chats: chats}
+	f := &orgHTTPFixture{t: t, owner: user(ids[0], "owner"), hr: user(ids[1], "member", permission.OrgManage), lead: user(ids[2], "member"), plain: user(ids[3], "member"), orgID: orgID, org: org, chats: chats, pool: pool}
 	h := newIdentityHandlers(slog.New(slog.NewTextHandler(io.Discard, nil)), "", Dependencies{Org: org, Chats: chats})
 	router := chi.NewRouter()
 	router.Use(func(next standardhttp.Handler) standardhttp.Handler {
@@ -321,5 +325,33 @@ func TestListActorsSearchesPositionAndDepartments(t *testing.T) {
 	byPosition := search("%D1%80%D0%B5%D0%B0%D0%B1%D0%B8%D0%BB%D0%B8%D1%82") // «реабилит»
 	if len(byPosition) != 1 || byPosition[f.lead.ActorID].PositionID == nil || *byPosition[f.lead.ActorID].PositionID != position.Position.ID {
 		t.Fatalf("by position = %+v", byPosition)
+	}
+}
+
+// Agents do not see the org structure through /actors either.
+func TestListActorsHidesOrgStructureFromAgents(t *testing.T) {
+	f := newOrgHTTPFixture(t)
+	f.do(f.hr, "POST", "/org/departments", map[string]any{"name": "Бассейн", "members": []map[string]any{{"actor_id": f.plain.ActorID, "primary": true}}})
+	agentID := uuid.NewString()
+	if _, err := f.chats.Create(context.Background(), f.owner, chat.CreateInput{Kind: "group", Name: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	pool := testdbPoolOf(t, f)
+	if _, err := pool.Exec(context.Background(), `INSERT INTO actors(id,org_id,type,org_role,display_name,handle) VALUES($1,$2,'agent','member','Бот','bot')`, agentID, f.orgID); err != nil {
+		t.Fatal(err)
+	}
+	agent := identity.User{ActorID: agentID, OrgID: f.orgID, OrgRole: "member"}
+	page := decodeBody[chat.ActorPage](t, f.do(agent, "GET", "/actors?q=%D0%B1%D0%B0%D1%81%D1%81%D0%B5%D0%B9%D0%BD", nil))
+	if len(page.Actors) != 0 {
+		t.Fatalf("agent found people by department: %+v", page.Actors)
+	}
+	page = decodeBody[chat.ActorPage](t, f.do(agent, "GET", "/actors", nil))
+	for _, actor := range page.Actors {
+		if actor.PositionID != nil || actor.PrimaryDepartmentID != nil {
+			t.Fatalf("agent sees the assignment: %+v", actor)
+		}
+	}
+	if len(page.Actors) == 0 {
+		t.Fatal("agent sees nobody")
 	}
 }

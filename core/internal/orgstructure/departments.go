@@ -508,18 +508,30 @@ func childrenOf(ctx context.Context, tx pgx.Tx, orgID, departmentID string) ([]c
 }
 
 // freeName returns name, or «name (2)», «name (3)»… when a sibling under
-// parentID other than self already has it.
+// parentID other than self already has it. The taken names are read once.
 func freeName(ctx context.Context, tx pgx.Tx, orgID string, parentID *string, name, self string) (string, error) {
-	candidate := name
-	for attempt := 2; attempt < MaxDepartments+2; attempt++ {
-		var taken bool
-		if err := tx.QueryRow(ctx, `
-			SELECT EXISTS (SELECT 1 FROM departments
-			WHERE org_id = $1 AND parent_id IS NOT DISTINCT FROM $2::uuid AND id <> $4
-			  AND lower(btrim(name)) = lower(btrim($3)))`, orgID, parentID, candidate, self).Scan(&taken); err != nil {
+	rows, err := tx.Query(ctx, `
+		SELECT lower(btrim(name)) FROM departments
+		WHERE org_id = $1 AND parent_id IS NOT DISTINCT FROM $2::uuid AND id <> $3`, orgID, parentID, self)
+	if err != nil {
+		return "", err
+	}
+	taken := map[string]bool{}
+	for rows.Next() {
+		var value string
+		if err := rows.Scan(&value); err != nil {
+			rows.Close()
 			return "", err
 		}
-		if !taken {
+		taken[value] = true
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return "", err
+	}
+	candidate := name
+	for attempt := 2; attempt < MaxDepartments+3; attempt++ {
+		if !taken[strings.ToLower(strings.TrimSpace(candidate))] {
 			return candidate, nil
 		}
 		suffix := fmt.Sprintf(" (%d)", attempt)

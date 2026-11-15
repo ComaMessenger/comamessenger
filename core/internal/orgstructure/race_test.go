@@ -5,6 +5,8 @@ import (
 	"errors"
 	"sync"
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 // Concurrent writes serialize on the organization lock: no deadlock, no
@@ -116,5 +118,59 @@ func TestReverseMovesNeverMakeACycle(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
+	}
+}
+
+// Review findings: rights are read from the database inside the write, a
+// guessed chat id is not confirmed, and lifted names are found at once.
+func TestReviewFindings(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	// org.manage revoked after the session was resolved.
+	f.exec(`DELETE FROM actor_permissions WHERE actor_id=$1`, f.hr.ActorID)
+	_, err := f.service.CreateDepartment(ctx, f.hr, CreateDepartmentInput{Name: "После отзыва"})
+	wantErr(t, err, ErrForbidden)
+	_, err = f.service.TitleSuggestions(ctx, f.hr)
+	wantErr(t, err, ErrForbidden)
+	f.exec(`INSERT INTO actor_permissions(org_id,actor_id,permission) VALUES($1,$2,'org.manage')`, f.orgID, f.hr.ActorID)
+
+	anna := f.staff[0]
+	hall := f.department("Зал", nil, primary(anna.ActorID))
+	current := mustDepartment(t, f, hall.ID)
+	if _, err := f.service.UpdateDepartment(ctx, f.hr, hall.ID, UpdateDepartmentInput{LeadActorID: OptionalID{Set: true, Value: &anna.ActorID}, ExpectedVersion: current.Version}); err != nil {
+		t.Fatal(err)
+	}
+	secret, err := f.chats.Create(ctx, f.staff[1], chatInput("Закрытая", []string{f.staff[2].ActorID}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The department chat is the secret group (linked by its owner via SQL).
+	f.exec(`UPDATE departments SET chat_id=$2 WHERE id=$1`, hall.ID, secret.ID)
+	// The lead outside the chat gets the same 422 for the real id and a
+	// random one.
+	for _, guess := range []string{secret.ID, uuid.NewString()} {
+		_, err := f.service.LinkDepartmentChat(ctx, anna, hall.ID, LinkDepartmentChatInput{ChatID: guess})
+		wantErr(t, err, ErrChatInvalid)
+	}
+	f.exec(`UPDATE departments SET chat_id=NULL WHERE id=$1`, hall.ID)
+
+	// Lifting a subdepartment into a parent full of «Утро», «Утро (2)»…
+	root := f.department("Корень", nil)
+	inner := f.department("Середина", &root.ID)
+	for _, name := range []string{"Утро", "Утро (2)", "Утро (3)"} {
+		f.department(name, &root.ID)
+	}
+	f.department("утро", &inner.ID)
+	if err := f.service.DeleteDepartment(ctx, f.hr, inner.ID, "none"); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, department := range f.structure(f.hr).Departments {
+		if department.Name == "утро (4)" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("lifted department not renamed to «утро (4)»")
 	}
 }

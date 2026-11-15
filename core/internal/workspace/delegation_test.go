@@ -233,3 +233,24 @@ func TestMemberPermissionTrigger(t *testing.T) {
 		t.Fatal("unknown code accepted")
 	}
 }
+
+// Review finding: the per-code rule reads the caller's permissions as
+// stored, not as the session resolved them.
+func TestDelegationUsesStoredPermissions(t *testing.T) {
+	f := newDelegationFixture(t)
+	ctx := t.Context()
+	stale := f.admin
+	stale.Permissions = append(append([]permission.Code{}, stale.Permissions...), permission.RequestsAddressGroups)
+	// The session claims requests.address_groups; the database does not.
+	if _, err := f.service.UpdateMember(ctx, stale, f.memberID, UpdateMemberInput{Permissions: codes(permission.RequestsAddressGroups)}); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("stale grant error = %v", err)
+	}
+	// members.manage revoked after the session was resolved.
+	if _, err := f.service.UpdateMember(ctx, f.owner, f.admin.ActorID, UpdateMemberInput{Permissions: codes(permission.KnowledgeManage)}); err != nil {
+		t.Fatal(err)
+	}
+	deactivated := "deactivated"
+	if _, err := f.service.UpdateMember(ctx, f.admin, f.memberID, UpdateMemberInput{Status: &deactivated}); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("revoked members.manage error = %v", err)
+	}
+}

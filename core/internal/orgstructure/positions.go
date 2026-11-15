@@ -177,14 +177,14 @@ func (s *Service) DeletePosition(ctx context.Context, user identity.User, positi
 		return ErrPositionNotFound
 	}
 	// The people who hold it lose it (ON DELETE SET NULL updates their
-	// rows), so their rows are locked first, as in every write of actors.
-	holders, err := s.positionHolders(ctx, user.OrgID, positionID)
-	if err != nil {
-		return err
-	}
-	_, err = s.write(ctx, user, writeOptions{lockActors: holders}, func(ctx context.Context, tx pgx.Tx, work *change) error {
+	// rows): their rows are locked in id order under the organization lock,
+	// where no other write can hand the position out meanwhile.
+	var err error
+	_, err = s.write(ctx, user, writeOptions{lockActorsNow: func(ctx context.Context, tx pgx.Tx) ([]string, error) {
+		return s.positionHolders(ctx, tx, user.OrgID, positionID)
+	}}, func(ctx context.Context, tx pgx.Tx, work *change) error {
 		var name string
-		err := tx.QueryRow(ctx, `DELETE FROM positions WHERE org_id = $1 AND id = $2 RETURNING name`, user.OrgID, positionID).Scan(&name)
+		err = tx.QueryRow(ctx, `DELETE FROM positions WHERE org_id = $1 AND id = $2 RETURNING name`, user.OrgID, positionID).Scan(&name)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrPositionNotFound
 		}
@@ -198,8 +198,8 @@ func (s *Service) DeletePosition(ctx context.Context, user identity.User, positi
 	return err
 }
 
-func (s *Service) positionHolders(ctx context.Context, orgID, positionID string) ([]string, error) {
-	rows, err := s.pool.Query(ctx, `SELECT id FROM actors WHERE org_id = $1 AND position_id = $2 ORDER BY id`, orgID, positionID)
+func (s *Service) positionHolders(ctx context.Context, q Querier, orgID, positionID string) ([]string, error) {
+	rows, err := q.Query(ctx, `SELECT id FROM actors WHERE org_id = $1 AND position_id = $2 ORDER BY id`, orgID, positionID)
 	if err != nil {
 		return nil, fmt.Errorf("read position holders: %w", err)
 	}
@@ -218,7 +218,11 @@ func (s *Service) positionHolders(ctx context.Context, orgID, positionID string)
 // TitleSuggestions lists distinct profile titles of active people that are
 // not positions yet, most frequent first.
 func (s *Service) TitleSuggestions(ctx context.Context, user identity.User) (TitleSuggestionList, error) {
-	if !CanManage(user) {
+	caller, err := storedCaller(ctx, s.pool, user)
+	if err != nil {
+		return TitleSuggestionList{}, err
+	}
+	if !CanManage(caller) {
 		return TitleSuggestionList{}, ErrForbidden
 	}
 	rows, err := s.pool.Query(ctx, `

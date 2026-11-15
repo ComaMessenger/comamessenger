@@ -280,20 +280,26 @@ func (s *Service) ListActors(ctx context.Context, user identity.User, query, aft
 	if limit < 1 || limit > 100 {
 		return ActorPage{}, fmt.Errorf("%w: limit must be between 1 and 100", ErrInvalid)
 	}
-	// q also matches the name of the person's position and of any of their
-	// departments (primary or additional).
+	// For people, q also matches the name of the person's position and of
+	// any of their departments (primary or additional), and the result
+	// carries both. Agents do not see the org structure (phase 6.5): for an
+	// agent caller neither the fields nor that search exist.
+	var person bool
+	if err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM actors WHERE org_id=$1 AND id=$2 AND type='user')`, user.OrgID, user.ActorID).Scan(&person); err != nil {
+		return ActorPage{}, fmt.Errorf("read caller type: %w", err)
+	}
 	rows, err := s.pool.Query(ctx, `SELECT id,display_name,handle::text,title,about,type,
 		CASE WHEN status_expires_at IS NULL OR status_expires_at>now() THEN status_emoji ELSE '' END,
 		CASE WHEN status_expires_at IS NULL OR status_expires_at>now() THEN status_text ELSE '' END,
 		CASE WHEN status_expires_at IS NULL OR status_expires_at>now() THEN status_expires_at END,
-		avatar_version, position_id,
-		(SELECT dm.department_id FROM department_members dm WHERE dm.org_id = actors.org_id AND dm.actor_id = actors.id AND dm.is_primary)
+		avatar_version, CASE WHEN $5::boolean THEN position_id END,
+		CASE WHEN $5 THEN (SELECT dm.department_id FROM department_members dm WHERE dm.org_id = actors.org_id AND dm.actor_id = actors.id AND dm.is_primary) END
 		FROM actors WHERE org_id=$1 AND status='active' AND deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM agents sys WHERE sys.org_id = actors.org_id AND sys.actor_id = actors.id AND sys.system_role IS NOT NULL)
 		  AND ($2='' OR display_name ILIKE '%'||$2||'%' OR handle::text ILIKE '%'||$2||'%' OR title ILIKE '%'||$2||'%'
-		    OR EXISTS (SELECT 1 FROM positions p WHERE p.org_id = actors.org_id AND p.id = actors.position_id AND p.name ILIKE '%'||$2||'%')
-		    OR EXISTS (SELECT 1 FROM department_members dm JOIN departments d ON d.org_id = dm.org_id AND d.id = dm.department_id
+		    OR $5 AND EXISTS (SELECT 1 FROM positions p WHERE p.org_id = actors.org_id AND p.id = actors.position_id AND p.name ILIKE '%'||$2||'%')
+		    OR $5 AND EXISTS (SELECT 1 FROM department_members dm JOIN departments d ON d.org_id = dm.org_id AND d.id = dm.department_id
 		      WHERE dm.org_id = actors.org_id AND dm.actor_id = actors.id AND d.name ILIKE '%'||$2||'%'))
-		  AND (NULLIF($3,'') IS NULL OR id>NULLIF($3,'')::uuid) ORDER BY id LIMIT $4`, user.OrgID, query, afterID, limit+1)
+		  AND (NULLIF($3,'') IS NULL OR id>NULLIF($3,'')::uuid) ORDER BY id LIMIT $4`, user.OrgID, query, afterID, limit+1, person)
 	if err != nil {
 		return ActorPage{}, fmt.Errorf("list actors: %w", err)
 	}

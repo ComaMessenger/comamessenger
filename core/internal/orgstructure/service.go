@@ -2,12 +2,12 @@
 // wave 2): departments with nesting, leads and memberships, the directory of
 // positions, and the expansion of a department or a position into people.
 //
-// Every write runs in one transaction that
+// Every write runs in one transaction that, in the global lock order of the
+// server (the organization row first, as message and scheduled delivery do):
 //
-//  1. locks the actors rows whose own row it changes (position_id), in id
-//     order — the order identity and workspace already use (actor row, then
-//     the organization row);
-//  2. locks the organization row (lockOrganization);
+//  1. locks the organization row (lockOrganization);
+//  2. locks the actors rows whose own row it changes (position_id), in id
+//     order;
 //  3. locks departments / positions rows FOR UPDATE, then writes
 //     department_members and actors;
 //  4. raises organizations.org_version by one and appends one org.updated
@@ -316,6 +316,8 @@ func (c *change) audit(action, targetType, targetID string, metadata map[string]
 type writeOptions struct {
 	// lockActors are actors whose own row the write changes (position_id).
 	lockActors []string
+	// lockActorsNow, when set, reads them under the organization lock.
+	lockActorsNow func(context.Context, pgx.Tx) ([]string, error)
 	// authorize runs first inside the transaction; nil means CanManage.
 	authorize func(context.Context, pgx.Tx) error
 }
@@ -349,14 +351,24 @@ func (s *Service) writeOnce(ctx context.Context, user identity.User, options wri
 		return 0, 0, err
 	}
 	defer tx.Rollback(ctx)
-	if err := lockActors(ctx, tx, user.OrgID, options.lockActors); err != nil {
-		return 0, 0, err
-	}
 	if err := lockOrganization(ctx, tx, user.OrgID); err != nil {
 		return 0, 0, err
 	}
-	if err := requireActiveCaller(ctx, tx, user); err != nil {
+	locked := options.lockActors
+	if options.lockActorsNow != nil {
+		if locked, err = options.lockActorsNow(ctx, tx); err != nil {
+			return 0, 0, err
+		}
+	}
+	if err := lockActors(ctx, tx, user.OrgID, locked); err != nil {
 		return 0, 0, err
+	}
+	caller, err := storedCaller(ctx, tx, user)
+	if err != nil {
+		return 0, 0, err
+	}
+	if options.authorize == nil && !CanManage(caller) {
+		return 0, 0, ErrForbidden
 	}
 	if options.authorize != nil {
 		if err := options.authorize(ctx, tx); err != nil {
@@ -484,20 +496,45 @@ func lockActors(ctx context.Context, tx pgx.Tx, orgID string, actorIDs []string)
 	return rows.Err()
 }
 
-func requireActiveCaller(ctx context.Context, tx pgx.Tx, user identity.User) error {
-	var active bool
-	if err := tx.QueryRow(ctx, `
-		SELECT EXISTS (SELECT 1 FROM actors WHERE org_id = $1 AND id = $2 AND type = 'user' AND status = 'active' AND deleted_at IS NULL)`,
-		user.OrgID, user.ActorID).Scan(&active); err != nil {
-		return err
+// storedCaller reads the caller's role and permissions as stored now; an
+// inactive caller or an agent is refused. Inside a write it runs after the
+// organization lock, so a grant revoked while the request waited no longer
+// counts.
+func storedCaller(ctx context.Context, q departmentQuerier, user identity.User) (identity.User, error) {
+	var role string
+	var stored []string
+	err := q.QueryRow(ctx, `
+		SELECT org_role, ARRAY(SELECT permission FROM actor_permissions WHERE org_id = $1 AND actor_id = $2)
+		FROM actors WHERE org_id = $1 AND id = $2 AND type = 'user' AND status = 'active' AND deleted_at IS NULL`,
+		user.OrgID, user.ActorID).Scan(&role, &stored)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return identity.User{}, ErrForbidden
 	}
-	if !active {
-		return ErrForbidden
+	if err != nil {
+		return identity.User{}, err
 	}
-	return nil
+	granted := make([]permission.Code, len(stored))
+	for index, code := range stored {
+		granted[index] = permission.Code(code)
+	}
+	result := user
+	result.OrgRole, result.Permissions = role, permission.Effective(role, granted)
+	return result, nil
 }
 
+func requireActiveCaller(ctx context.Context, tx pgx.Tx, user identity.User) error {
+	_, err := storedCaller(ctx, tx, user)
+	return err
+}
+
+// errStale asks write to run the transaction again: something read before
+// the locks changed meanwhile.
+var errStale = errors.New("org structure read went stale")
+
 func retryable(err error) bool {
+	if errors.Is(err, errStale) {
+		return true
+	}
 	var databaseError *pgconn.PgError
 	return errors.As(err, &databaseError) && (databaseError.Code == "40001" || databaseError.Code == "40P01")
 }
