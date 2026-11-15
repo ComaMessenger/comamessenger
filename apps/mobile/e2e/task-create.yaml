@@ -33,6 +33,8 @@ appId: com.comamessenger.app
 # A form left by an earlier run comes back as it was: start it clean.
 - eraseText: 200
 - inputText: Подготовить зал к среде ${output.tag}
+# Return puts the keyboard away: the fields below are not under it.
+- pressKey: Enter
 - tapOn:
     id: task-person-oleg_requests
 - takeScreenshot: ${THEME}-task-sheet
@@ -50,6 +52,7 @@ appId: com.comamessenger.app
     id: task-item-input-0
 - eraseText: 100
 - inputText: Разложить маты
+- pressKey: Enter
 - tapOn:
     id: task-item-who-0
 - extendedWaitUntil:
@@ -67,6 +70,7 @@ appId: com.comamessenger.app
     id: task-item-input-1
 - eraseText: 100
 - inputText: Проветрить зал
+- pressKey: Enter
 - tapOn:
     id: task-item-who-1
 - tapOn:

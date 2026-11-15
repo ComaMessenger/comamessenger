@@ -27,6 +27,7 @@ appId: com.comamessenger.app
     id: task-title-input
 - eraseText: 200
 - inputText: Проверить тренажёры ${output.tag}
+- pressKey: Enter
 # Choosing «Отдел» puts the keyboard away: the list of departments is under it.
 - tapOn:
     id: task-assignee-kind-department
