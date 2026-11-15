@@ -63,4 +63,47 @@ describe("notification codec", () => {
       parseNotification(JSON.stringify({ ...base, silent: "true" }))?.silent,
     ).toBe(false);
   });
+
+  it("opens a message, a reminder and «Важные» tabs (phase 6.4)", () => {
+    const message = "0192f0c4-3333-7000-8000-000000000003";
+    const reminder = "0192f0c4-4444-7000-8000-000000000004";
+    const request = `/chat/${chat}?message=${message}`;
+    const remind = `${request}&reminder=${reminder}`;
+    expect(notificationRoute({ url: request })).toBe(request);
+    expect(notificationRoute({ url: remind })).toBe(remind);
+    expect(notificationRoute({ url: "/important?tab=reminders" })).toBe(
+      "/important?tab=reminders",
+    );
+    expect(notificationRoute({ url: "/important" })).toBe("/important");
+    expect(notificationRoute({ url: "/important?tab=evil" })).toBeNull();
+    expect(
+      notificationRoute({ url: `${request}&next=https://evil.test` }),
+    ).toBeNull();
+    expect(notificationRoute({ url: `/chat/${chat}?message=x` })).toBeNull();
+  });
+
+  it("reads the kind and ids of a reminder push", () => {
+    const message = "0192f0c4-3333-7000-8000-000000000003";
+    const reminder = "0192f0c4-4444-7000-8000-000000000004";
+    const base = { v: 1, title: "Напоминание", body: "Hi", event_seq: 1 };
+    expect(
+      parseNotification(
+        JSON.stringify({
+          ...base,
+          kind: "reminder",
+          message_id: message,
+          reminder_id: reminder,
+        }),
+      ),
+    ).toMatchObject({
+      kind: "reminder",
+      messageID: message,
+      reminderID: reminder,
+    });
+    const plain = parseNotification(
+      JSON.stringify({ ...base, kind: "other", message_id: "nope" }),
+    );
+    expect(plain?.kind).toBeUndefined();
+    expect(plain?.messageID).toBeUndefined();
+  });
 });

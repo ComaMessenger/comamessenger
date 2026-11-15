@@ -23,9 +23,16 @@ class NotificationService: UNNotificationServiceExtension {
        let payload = Self.open(sealed) {
       if let title = payload["title"] as? String { content.title = title }
       if let body = payload["body"] as? String { content.body = body }
-      if let url = payload["url"] as? String,
-         url.hasPrefix("/chat/") || url == Self.scheduledRoute {
+      if let url = payload["url"] as? String, Self.allowedRoute(url) {
         content.userInfo["url"] = url
+      }
+      // «Напомнить мне» (phase 6.4): the «Через час / Завтра, 9:00 /
+      // Готово» buttons the app registers under this category, and the ids
+      // they act on.
+      if payload["kind"] as? String == "reminder" {
+        content.categoryIdentifier = Self.reminderCategory
+        if let messageID = payload["message_id"] as? String { content.userInfo["message_id"] = messageID }
+        if let reminderID = payload["reminder_id"] as? String { content.userInfo["reminder_id"] = reminderID }
       }
       if let chatID = payload["chat_id"] as? String { content.threadIdentifier = chatID }
       if let badge = payload["badge"] as? Int, badge >= 0 { content.badge = NSNumber(value: badge) }
@@ -51,6 +58,17 @@ class NotificationService: UNNotificationServiceExtension {
   /// core/internal/push/scheduled.go: scheduledFailedTag and its URL.
   private static let scheduledFailedTag = "scheduled-failed"
   private static let scheduledRoute = "/scheduled"
+  /// apps/mobile/src/reminders/actionQueue.ts: reminderCategory.
+  private static let reminderCategory = "coma.reminder"
+
+  /// The in-app addresses a push may open, as in apps/mobile/src/push/codec.ts:
+  /// a chat (a thread, or a message with `?message=` and `&reminder=`), the
+  /// scheduled list and «Важные» (`/important?tab=…`).
+  static func allowedRoute(_ url: String) -> Bool {
+    if url.hasPrefix("/chat/") || url == scheduledRoute { return true }
+    return ["/important", "/important?tab=waiting", "/important?tab=saved", "/important?tab=reminders"]
+      .contains(url)
+  }
 
   override func serviceExtensionTimeWillExpire() {
     if let handler = contentHandler, let content = bestAttempt { handler(content) }

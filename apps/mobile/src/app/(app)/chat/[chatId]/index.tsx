@@ -6,16 +6,19 @@ import { ScreenError } from "@/ui/ScreenError";
 export { ScreenError as ErrorBoundary };
 
 export default function ChatScreen() {
-  const { chatId, message } = useLocalSearchParams<{
+  const { chatId, message, reminder } = useLocalSearchParams<{
     chatId: string;
     message?: string;
+    /** Opened from a fired «Напомнить мне»: the strip with «Готово». */
+    reminder?: string;
   }>();
   return (
     <ConversationView
-      key={`${chatId}:${message ?? ""}`}
+      key={`${chatId}:${message ?? ""}:${reminder ?? ""}`}
       chatID={chatId}
       threadRootID={null}
       focusMessageID={message ?? null}
+      reminderID={message ? (reminder ?? null) : null}
     />
   );
 }

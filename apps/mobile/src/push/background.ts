@@ -2,6 +2,8 @@ import { Platform } from "react-native";
 import * as Notifications from "expo-notifications";
 import * as TaskManager from "expo-task-manager";
 import { openNotification } from "./keys";
+import { reminderCategory } from "@/reminders/actionQueue";
+import { handleReminderResponse } from "@/reminders/pushActions";
 import {
   ensureMessageChannels,
   messagesChannel,
@@ -10,7 +12,10 @@ import {
 
 const task = "coma-push";
 
-type TaskData = { data?: { dataString?: string; [key: string]: unknown } };
+type TaskData = {
+  data?: { dataString?: string; [key: string]: unknown };
+  actionIdentifier?: string;
+};
 
 function field(data: TaskData["data"], name: string): string | undefined {
   if (!data) return undefined;
@@ -31,7 +36,15 @@ function field(data: TaskData["data"], name: string): string | undefined {
 // decrypts in the Notification Service Extension instead.
 if (Platform.OS === "android")
   TaskManager.defineTask<TaskData>(task, async ({ data, error }) => {
-    if (error || !data?.data) return;
+    if (error) return;
+    // A button of a reminder push pressed with the app in the background.
+    if (data && typeof data.actionIdentifier === "string") {
+      handleReminderResponse(
+        data as unknown as Parameters<typeof handleReminderResponse>[0],
+      );
+      return;
+    }
+    if (!data?.data) return;
     const sealed = field(data.data, "c");
     const content = sealed ? await openNotification(sealed) : null;
     if (content?.badge !== undefined)
@@ -48,8 +61,16 @@ if (Platform.OS === "android")
       content: {
         title: content?.title ?? field(data.data, "title") ?? "Coma",
         body: content?.body ?? field(data.data, "body") ?? "",
-        data: content?.url ? { url: content.url } : {},
+        data: {
+          ...(content?.url ? { url: content.url } : {}),
+          ...(content?.messageID ? { message_id: content.messageID } : {}),
+          ...(content?.reminderID ? { reminder_id: content.reminderID } : {}),
+        },
         ...(quiet ? { sound: false } : {}),
+        // «Напомнить мне»: «Через час», «Завтра, 9:00», «Готово».
+        ...(content?.kind === "reminder"
+          ? { categoryIdentifier: reminderCategory }
+          : {}),
       },
       trigger: { channelId: quiet ? quietMessagesChannel : messagesChannel },
     });

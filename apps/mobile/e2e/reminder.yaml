@@ -1,0 +1,112 @@
+# «Напомнить мне» (phase 6.4): the message menu → «Своё время» and a note,
+# the bell, «Изменить напоминание», «Важные → Напоминания», «Перенести» and
+# «Готово». Starts by removing the account's reminders through the API.
+# Run after sign-in.yaml: maestro test -e THEME=light e2e/reminder.yaml
+# THEME (light or dark) names the screenshots; no default here, a flow
+# default would override -e.
+appId: com.comamessenger.app
+---
+- runScript: scripts/login.js
+- runScript: scripts/clear-reminders.js
+- runFlow: open-app.yaml
+- tapOn:
+    id: chat-row-0
+- evalScript: ${output.tag = String(Date.now()).slice(-6)}
+- runFlow:
+    file: send-message.yaml
+    env:
+      TEXT: "Напомнить ${output.tag}"
+- extendedWaitUntil:
+    visible: .*Напомнить ${output.tag}.*
+    timeout: 15000
+
+# 1. The menu → «Напомнить мне» → a day under «Своё время» and a note.
+- runFlow:
+    file: message-menu.yaml
+    env:
+      TEXT: ".*Напомнить ${output.tag}.*"
+- assertVisible: Напомнить мне
+- takeScreenshot: ${THEME}-reminder-menu
+- tapOn:
+    id: message-action-remind
+- extendedWaitUntil:
+    visible:
+      id: reminder-sheet
+    timeout: 5000
+- tapOn:
+    id: reminder-day-0
+- tapOn:
+    id: reminder-note
+- inputText: Позвонить ${output.tag}
+# A tap outside the field puts the keyboard away inside the sheet.
+- tapOn: ЗАМЕТКА ДЛЯ СЕБЯ
+- takeScreenshot: ${THEME}-reminder-sheet
+- tapOn:
+    id: reminder-confirm
+- extendedWaitUntil:
+    visible: .*Напомню .*
+    timeout: 10000
+# The bell by the time: part of the bubble's accessible label.
+- extendedWaitUntil:
+    visible: .*Напомнить ${output.tag}.*напоминание.*
+    timeout: 10000
+- takeScreenshot: ${THEME}-reminder-bell
+
+# 2. A second «Напомнить мне» changes the same reminder.
+- runFlow:
+    file: message-menu.yaml
+    env:
+      TEXT: ".*Напомнить ${output.tag}.*"
+- assertVisible: Изменить напоминание
+- tapOn:
+    id: message-action-remind
+- extendedWaitUntil:
+    visible: .*Позвонить ${output.tag}.*
+    timeout: 10000
+- swipe:
+    from:
+      id: reminder-sheet-grab
+    direction: DOWN
+    duration: 400
+- extendedWaitUntil:
+    notVisible:
+      id: reminder-sheet
+    timeout: 5000
+- tapOn:
+    id: conversation-back
+    retryTapIfNoChange: true
+
+# 3. «Важные → Напоминания»: «Перенести» to «Через час», then «Готово».
+- runFlow:
+    file: tabs.yaml
+    env:
+      TAB: important
+- tapOn:
+    id: important-section-reminders
+- extendedWaitUntil:
+    visible: .*Позвонить ${output.tag}.*
+    timeout: 15000
+- takeScreenshot: ${THEME}-reminders-list
+- tapOn:
+    id: reminder-move
+- extendedWaitUntil:
+    visible:
+      id: reminder-sheet
+    timeout: 5000
+- tapOn:
+    id: reminder-preset-inHour
+- tapOn:
+    id: reminder-confirm
+- extendedWaitUntil:
+    visible: СЕГОДНЯ
+    timeout: 10000
+- takeScreenshot: ${THEME}-reminders-moved
+- tapOn:
+    id: reminder-done
+- extendedWaitUntil:
+    visible: Напоминаний нет
+    timeout: 10000
+- runFlow:
+    file: tabs.yaml
+    env:
+      TAB: chats

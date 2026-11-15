@@ -1,6 +1,6 @@
 # Scheduled messages and «Send without sound» (phase 6.1, package E):
 # long press on send, the time sheet, the strip under the chat header, the
-# list with edit / time / delete, the «Schedule» tile and the list in «More».
+# list with edit / time / delete, no «Schedule» in "+" and the list in «More».
 # Run after sign-in.yaml (reuses its session): maestro test e2e/scheduled.yaml
 # Starts by deleting the account's scheduled messages through the API.
 appId: com.comamessenger.app
@@ -116,22 +116,38 @@ appId: com.comamessenger.app
     visible: .*Тихо ${output.tag}.*
     timeout: 15000
 
-# 4. The «Schedule» tile of the "+" sheet: empty draft is refused politely,
-# a typed one opens the time sheet.
+# 4. «Отложить» left the "+" sheet (phase 6.4, variant A): sending later is
+# a long press of «Отправить» only. The first tap may only put the
+# keyboard away after the quiet send.
 - tapOn:
     id: composer-attach
-- tapOn:
-    id: composer-action-schedule
+    retryTapIfNoChange: true
 - extendedWaitUntil:
-    visible: "Сначала напишите сообщение.*"
+    visible:
+      id: composer-sheet
+    timeout: 5000
+- assertNotVisible:
+    id: composer-action-schedule
+- swipe:
+    from:
+      id: composer-sheet-grab
+    direction: DOWN
+    duration: 400
+- extendedWaitUntil:
+    notVisible:
+      id: composer-sheet
     timeout: 5000
 - tapOn:
     id: composer-input
 - inputText: Плитка ${output.tag}
+- longPressOn:
+    id: composer-send
+- extendedWaitUntil:
+    visible:
+      id: send-options
+    timeout: 5000
 - tapOn:
-    id: composer-attach
-- tapOn:
-    id: composer-action-schedule
+    id: send-options-later
 - extendedWaitUntil:
     visible:
       id: schedule-sheet

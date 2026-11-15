@@ -13,8 +13,15 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outbox,
   RealtimeCoordinator,
+  applyReminderEvent,
   applySavedChange,
   chatEventEffect,
+  createUnreadRefresher,
+  isRequestEvent,
+  parseReminderEvent,
+  refreshesUnread,
+  requestKeys,
+  syncDeviceTimezone,
   isTypingAction,
   savedChange,
   sharedChangedChat,
@@ -34,6 +41,8 @@ import { usePushNotifications } from "@/push/usePushNotifications";
 import { applyScheduledEvent, scheduledKey } from "@/scheduled/scheduledCache";
 import { isNetworkError, messageOf } from "@/lib/errors";
 import { cacheShell, cachedShell, persistMessages } from "./cache";
+import { flushRequestOutbox } from "@/requests/outbox";
+import { flushReminderActions } from "@/reminders/pushActions";
 import { useSession, useSignedIn } from "@/session/SessionProvider";
 
 export type MessengerStore = ReturnType<typeof createAppStore>;
@@ -135,6 +144,20 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
     }, 120);
   }, [reload]);
 
+  // «Ждут вас», the reminder count and the chat marks come from GET /unread;
+  // a burst of request and reminder events reads it once (phase 6.4).
+  const unreadRefresher = useMemo(
+    () =>
+      createUnreadRefresher(() =>
+        api
+          .unread()
+          .then((value) => store.getState().setUnread(value))
+          .catch(() => undefined),
+      ),
+    [api, store],
+  );
+  useEffect(() => () => unreadRefresher.cancel(), [unreadRefresher]);
+
   const coordinator = useMemo(
     () =>
       new RealtimeCoordinator(
@@ -143,8 +166,38 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
         (url) => new WebSocket(url),
         {
           state: store.getState().setRealtime,
+          // «Запрос» and «Напомнить мне» show only when the server has them.
+          features: (list) => store.getState().setFeatures(list),
           event: (event) => {
             const applied = store.getState().apply(event);
+            if (applied && refreshesUnread(event)) unreadRefresher.request();
+            // Reminders are private: the bells of the chat change at once,
+            // the lists in «Важные» on the next look.
+            if (applied && event.type.startsWith("reminder.")) {
+              const reminder = parseReminderEvent(event);
+              if (reminder) applyReminderEvent(queryClient, user.id, reminder);
+            }
+            // «Ждут вас» and the answers screen read again; the cards in the
+            // feed follow the store.
+            if (applied && isRequestEvent(event.type)) {
+              void queryClient.invalidateQueries({
+                queryKey: [...requestKeys.all(user.id), "inbox"],
+              });
+              if (
+                event.type === "request.updated" ||
+                event.type === "request.tally.updated"
+              )
+                void queryClient.invalidateQueries({
+                  queryKey: [
+                    ...requestKeys.all(user.id),
+                    "answers",
+                    event.subject_id ||
+                      String(
+                        (event.data as { message_id?: unknown }).message_id,
+                      ),
+                  ],
+                });
+            }
             // Scheduled messages reach only the author's devices and carry
             // no text; the cached list fetches what changed.
             if (
@@ -280,6 +333,7 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
       scheduleReload,
       sessionExpired,
       store,
+      unreadRefresher,
       updateUser,
       user.id,
     ],
@@ -355,15 +409,30 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
     coordinator.presence("active");
     coordinator.start();
     void outbox.flush();
+    // Requests sent offline and reminder buttons pressed in a push while the
+    // app could not reach the server go now.
+    void flushRequestOutbox(api, store).catch(() => undefined);
+    void flushReminderActions(api, queryClient, user.id).catch(() => undefined);
     return () => {
       // Signed out: the next account brings its own theme.
       applyThemePreference(null);
       coordinator.stop();
       if (reloadTimer.current !== null) clearTimeout(reloadTimer.current);
     };
-  }, [api, coordinator, outbox, reload]);
+  }, [api, coordinator, outbox, queryClient, reload, store, user.id]);
 
-  usePushNotifications(api, store);
+  // The profile time zone stays «UTC» until someone picks one; the server
+  // writes push times in it, so the device's zone goes there quietly.
+  const timezoneSynced = useRef(false);
+  useEffect(() => {
+    if (timezoneSynced.current) return;
+    timezoneSynced.current = true;
+    void syncDeviceTimezone(api, user).then((updated) => {
+      if (updated) updateUser(updated);
+    });
+  }, [api, updateUser, user]);
+
+  usePushNotifications(api, store, queryClient, user.id);
 
   // iOS suspends a backgrounded app, leaving a socket that looks open but is
   // dead. Close it explicitly and resume from the checkpoint on return.
@@ -378,10 +447,14 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
         coordinator.start();
         void reload();
         void outbox.flush();
+        void flushRequestOutbox(api, store).catch(() => undefined);
+        void flushReminderActions(api, queryClient, user.id).catch(
+          () => undefined,
+        );
       }
     });
     return () => subscription.remove();
-  }, [coordinator, outbox, reload]);
+  }, [api, coordinator, outbox, queryClient, reload, store, user.id]);
 
   const togglePinnedChat = useCallback(
     async (chatID: string) => {

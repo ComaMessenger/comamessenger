@@ -1,0 +1,118 @@
+# «Запрос» by its author (phase 6.4): «+» → «Запрос» to the whole chat with
+# «Приду / Не приду» and a due date, Анна answers through the API, the bars,
+# «Напомнить», «Подробнее» and «Закрыть». Run after sign-in.yaml:
+#   node e2e/seed-requests.mjs && maestro test -e THEME=light e2e/request.yaml
+# THEME (light or dark) names the screenshots; no default here, a flow
+# default would override -e.
+appId: com.comamessenger.app
+---
+- runScript: scripts/login.js
+- runFlow: open-app.yaml
+- tapOn: .*Планёрка · запросы.*
+- extendedWaitUntil:
+    visible:
+      id: conversation
+    timeout: 10000
+- evalScript: ${output.tag = String(Date.now()).slice(-6)}
+
+# 1. The form.
+- tapOn:
+    id: composer-attach
+- tapOn:
+    id: composer-action-request
+- extendedWaitUntil:
+    visible:
+      id: request-sheet
+    timeout: 5000
+- tapOn:
+    id: request-body
+# A form left by an earlier run comes back as it was: start it clean.
+- eraseText: 200
+- inputText: Субботник в субботу, 10:00. Кто придёт? ${output.tag}
+- hideKeyboard
+- assertVisible: .*Ждём от 2 человек.*
+- tapOn:
+    id: request-preset-attend
+- assertVisible:
+    id: request-preview
+- takeScreenshot: ${THEME}-request-sheet
+- scrollUntilVisible:
+    element:
+      id: request-due-tomorrow
+    direction: DOWN
+- tapOn:
+    id: request-due-tomorrow
+- assertVisible:
+    id: request-auto-remind
+- scrollUntilVisible:
+    element:
+      id: request-send
+    direction: DOWN
+    visibilityPercentage: 100
+- takeScreenshot: ${THEME}-request-sheet-due
+- tapOn:
+    id: request-send
+- extendedWaitUntil:
+    notVisible:
+      id: request-sheet
+    timeout: 10000
+
+# 2. The card of the author: bars, then Анна answers.
+- extendedWaitUntil:
+    visible:
+      id: request-card-author
+    timeout: 10000
+- runScript: scripts/answer-request.js
+- assertTrue: ${output.answerStatus == 200}
+- extendedWaitUntil:
+    visible: .*Ответили 1 из 2.*
+    timeout: 10000
+- takeScreenshot: ${THEME}-request-author-card
+
+# 3. «Напомнить» those who have not answered.
+- scrollUntilVisible:
+    element:
+      id: request-remind
+    direction: DOWN
+- tapOn:
+    id: request-remind
+- extendedWaitUntil:
+    visible: .*Напомнили .*
+    timeout: 10000
+- extendedWaitUntil:
+    visible: .*напомнили · снова после.*
+    timeout: 10000
+
+# 4. «Подробнее»: who answered what, and «Закрыть».
+- tapOn:
+    id: request-details
+- extendedWaitUntil:
+    visible:
+      id: request-answers
+    timeout: 10000
+- assertVisible: .*не открывал\(а\) чат.*|.*прочитал\(а\), не ответил\(а\).*
+- takeScreenshot: ${THEME}-request-answers
+- tapOn:
+    id: request-tab-option-0
+- extendedWaitUntil:
+    visible: .*захвачу перчатки.*
+    timeout: 10000
+- assertVisible:
+    id: request-answers-reminded
+- takeScreenshot: ${THEME}-request-answers-option
+- tapOn:
+    id: request-answers-close
+- tapOn:
+    text: Закрыть
+    below: Ответы больше не принимаются.*
+- extendedWaitUntil:
+    notVisible:
+      id: request-answers-close
+    timeout: 10000
+- tapOn:
+    id: request-answers-back
+- extendedWaitUntil:
+    visible:
+      id: request-card-author
+    timeout: 10000
+- assertVisible: .*Закрыт.*

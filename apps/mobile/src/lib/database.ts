@@ -87,6 +87,10 @@ export async function clearUserData(): Promise<void> {
     await tx.runAsync(
       "DELETE FROM meta WHERE key IN ('checkpoint', 'user_id')",
     );
+    // Phase 6.4: request drafts and queue, reminder actions from a push.
+    await tx.runAsync(
+      "DELETE FROM meta WHERE key LIKE 'request_draft:%' OR key IN ('request_outbox', 'reminder_actions', 'important_tab')",
+    );
   });
 }
 
@@ -99,6 +103,25 @@ export async function claimUserData(userID: string): Promise<void> {
   if (owner && owner !== userID) await clearUserData();
   await setMeta("user_id", userID);
 }
+
+/**
+ * Small JSON values of the signed-in account kept on the device: the
+ * «Запрос» form per chat, requests waiting for the network and reminder
+ * buttons pressed in a push. Dropped with the rest on sign-out.
+ */
+export const accountValues = {
+  async get<T>(key: string): Promise<T | null> {
+    const value = await getMeta(key);
+    if (value === null) return null;
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      return null;
+    }
+  },
+  set: (key: string, value: unknown) =>
+    setMeta(key, value === null ? null : JSON.stringify(value)),
+};
 
 export const serverStorage = {
   get: () => getMeta("server_url"),

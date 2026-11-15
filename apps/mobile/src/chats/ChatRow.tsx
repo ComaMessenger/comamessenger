@@ -1,14 +1,17 @@
 import { memo } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import { BellOff, Pin } from "lucide-react-native";
+import { BellOff, MessageCircleCheck, Pin } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import {
   chatAvatarSource,
   chatPreview,
+  chatRequestBadge,
   formatListTime,
+  formatRequestDueDay,
   isChatMuted,
   type Chat,
 } from "@comamessenger/core";
+import { calendarLocale } from "@/requests/locale";
 import { useTheme } from "@/lib/theme";
 import type { Presence } from "@/ui/Avatar";
 import { CountBadge } from "@/ui/CountBadge";
@@ -27,6 +30,8 @@ export const ChatRow = memo(function ChatRow({
   presence,
   pinned,
   draft,
+  requestsWaiting = 0,
+  requestsDueAt = null,
   onOpen,
   onActions,
   testID,
@@ -39,6 +44,10 @@ export const ChatRow = memo(function ChatRow({
   pinned: boolean;
   /** Unsent text of this chat's composer on this phone. */
   draft?: string;
+  /** Requests here wait for the reader: «ответить до пт» or «ждут ответа». */
+  requestsWaiting?: number;
+  /** The earliest due date among them (ChatUnread.requests_next_due_at). */
+  requestsDueAt?: string | null;
   onOpen(chatID: string): void;
   onActions(chatID: string): void;
   testID?: string;
@@ -63,6 +72,21 @@ export const ChatRow = memo(function ChatRow({
     t("yesterday"),
   );
   const mention = mentionCount > 0;
+  const requestBadge = chatRequestBadge({
+    requests_waiting: requestsWaiting,
+    requests_next_due_at: requestsDueAt,
+  });
+  const need = requestBadge
+    ? requestBadge.kind === "due"
+      ? t("requestAnswerByShort", {
+          when: formatRequestDueDay(
+            requestBadge.at,
+            new Date(),
+            calendarLocale(i18n.language),
+          ),
+        })
+      : t("requestWaitingShort")
+    : null;
   const label = [
     title,
     agent ? t("agent") : "",
@@ -71,6 +95,7 @@ export const ChatRow = memo(function ChatRow({
     muted ? t("muted") : "",
     unreadCount > 0 ? t("unreadCount", { count: unreadCount }) : "",
     mention ? t("mentionedYou") : "",
+    need ?? "",
     draftText
       ? `${t("draftLabel")}: ${draftText}`
       : `${preview.sender}${preview.text}`,
@@ -154,6 +179,27 @@ export const ChatRow = memo(function ChatRow({
           </Text>
           {pinned && <Pin size={14} color={theme.muted} />}
           {muted && <BellOff size={14} color={theme.muted} />}
+          {need ? (
+            <View
+              testID="chat-row-request"
+              style={[styles.need, { backgroundColor: theme.warningSoft }]}
+            >
+              <MessageCircleCheck
+                size={13}
+                color={theme.warning}
+                strokeWidth={2.3}
+              />
+              <Text
+                allowFontScaling={false}
+                weight="bold"
+                size={11.5}
+                numberOfLines={1}
+                style={{ color: theme.warning }}
+              >
+                {need}
+              </Text>
+            </View>
+          ) : null}
           {mention && <CountBadge value="@" />}
           {unreadCount > 0 && (
             <CountBadge
@@ -181,5 +227,15 @@ const styles = StyleSheet.create({
   line: { flexDirection: "row", alignItems: "center", gap: 6 },
   grow: { flex: 1 },
   tag: { paddingHorizontal: 5, paddingVertical: 1, borderRadius: 5 },
+  // Prototype `.need`: the yellow «ответить до пт».
+  need: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    flexShrink: 0,
+  },
   tagText: { textTransform: "uppercase", letterSpacing: 0.2, lineHeight: 14 },
 });

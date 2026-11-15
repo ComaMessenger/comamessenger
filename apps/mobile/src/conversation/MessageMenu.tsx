@@ -41,7 +41,7 @@ const items: Record<
   thread: { icon: MessagesSquare, label: "replyInThread" },
   save: { icon: Star, label: "addToImportant" },
   unsave: { icon: StarOff, label: "removeFromImportant" },
-  // Shown once the screen passes `reminders: true` (package M adds the strings).
+  // «Напомнить мне», or «Изменить напоминание» through `labelKeys`.
   remind: { icon: Bell, label: "messageRemindMe" },
   // Shown once the screen passes `tasks: true` (package M3 adds the string).
   makeTask: { icon: CircleCheck, label: "messageMakeTask" },
@@ -69,6 +69,7 @@ export function MessageMenu({
   onReact,
   onAction,
   onClose,
+  labelKeys,
 }: {
   visible: boolean;
   /** Lines the card up with the reader's own bubble on the right. */
@@ -82,6 +83,8 @@ export function MessageMenu({
   onReact(emoji: string): void;
   onAction(action: MessageMenuAction): void;
   onClose(): void;
+  /** Labels that depend on the message, such as «Изменить напоминание». */
+  labelKeys?: Partial<Record<MessageMenuAction, string>>;
 }) {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -200,7 +203,7 @@ export function MessageMenu({
                       tone={item.danger ? "danger" : "default"}
                       style={styles.label}
                     >
-                      {t(item.label)}
+                      {t(labelKeys?.[action] ?? item.label)}
                     </Text>
                   </Pressable>
                 );

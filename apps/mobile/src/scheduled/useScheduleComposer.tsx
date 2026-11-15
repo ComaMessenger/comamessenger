@@ -1,7 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { Alert, Platform, type View } from "react-native";
 import * as Haptics from "expo-haptics";
-import { Clock } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import {
   resolvedMentionActorIDs,
@@ -10,7 +9,6 @@ import {
   type ChatMember,
   type CreateScheduledMessageRequest,
 } from "@comamessenger/core";
-import type { ComposerAction } from "@/conversation/ComposerSheet";
 import { useWhen } from "./clock";
 import { ScheduleSheet } from "./ScheduleSheet";
 import { SendOptionsMenu, type SendMode } from "./SendOptionsMenu";
@@ -79,14 +77,6 @@ export function useScheduleComposer({
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setMenuOpen(true);
   }, [ready]);
-
-  const openSheet = useCallback(() => {
-    if (!ready()) {
-      onNotice(t("scheduledEmptyDraft"));
-      return;
-    }
-    setSheetOpen(true);
-  }, [onNotice, ready, t]);
 
   const pick = useCallback(
     (mode: SendMode) => {
@@ -161,15 +151,6 @@ export function useScheduleComposer({
     ],
   );
 
-  /** The tile of the "+" sheet. */
-  const action: ComposerAction = {
-    key: "schedule",
-    label: t("scheduledAction"),
-    icon: Clock,
-    accent: true,
-    onPress: openSheet,
-  };
-
   const layer = (
     <>
       <SendOptionsMenu
@@ -188,5 +169,7 @@ export function useScheduleComposer({
     </>
   );
 
-  return { openOptions, sendRef, action, layer };
+  // «Отложить» left the «+» sheet (phase 6.4, variant A): sending later is
+  // a long press of «Отправить» only.
+  return { openOptions, sendRef, layer };
 }
