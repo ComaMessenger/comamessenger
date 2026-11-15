@@ -9,10 +9,23 @@ appId: com.comamessenger.app
 ---
 - runFlow: open-app.yaml
 - tapOn: .*Инструкторы · задачи.*
+# The chat list row shows the same text as its preview: wait for the chat.
 - extendedWaitUntil:
-    visible: .*проверить аптечку в большом зале.*
+    visible:
+      id: message-list
     timeout: 10000
-- longPressOn: .*проверить аптечку в большом зале.*
+- scrollUntilVisible:
+    element:
+      text: .*проверить аптечку в большом зале.*
+      childOf:
+        id: message-list
+    direction: DOWN
+    timeout: 15000
+# Within the feed: the chat list under it still holds the same preview.
+- longPressOn:
+    text: .*проверить аптечку в большом зале.*
+    childOf:
+      id: message-list
 - extendedWaitUntil:
     visible:
       id: message-action-makeTask

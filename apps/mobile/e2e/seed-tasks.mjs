@@ -126,7 +126,7 @@ for (const person of [anna, oleg])
       token,
     );
 
-// Tasks and pins of earlier runs go away (the owner may delete any message),
+// Tasks, pins and messages of earlier runs go away (the owner may delete any message),
 // so the flows find only this run's cards.
 const pins = await call(`/api/v1/chats/${chat.id}/pins`, {}, token);
 for (const pin of pins.pins ?? pins)
@@ -135,6 +135,11 @@ for (const pin of pins.pins ?? pins)
     { method: "DELETE" },
     token,
   ).catch(() => undefined);
+// The seed's own messages of earlier runs go too: the flows find them by text.
+const seedTexts = [
+  "Ключи от раздевалки теперь на стойке администратора",
+  "Нужно до среды проверить аптечку в большом зале и докупить бинты.",
+];
 let cursor = "";
 for (let page = 0; page < 5; page++) {
   const { messages } = await call(
@@ -143,7 +148,10 @@ for (let page = 0; page < 5; page++) {
     token,
   );
   for (const message of messages)
-    if (message.type === "task" && !message.deleted_at)
+    if (
+      !message.deleted_at &&
+      (message.type === "task" || seedTexts.includes(message.body))
+    )
       await call(`/api/v1/messages/${message.id}`, { method: "DELETE" }, token);
   if (messages.length < 100) break;
   cursor = `&before=${messages[0].id}`;

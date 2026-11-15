@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Pressable, TextInput, View } from "react-native";
+import { Alert, Keyboard, Pressable, TextInput, View } from "react-native";
 import { Plus, UserRound } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import {
@@ -415,7 +415,10 @@ export function TaskSheet({
                         : "taskAssigneePosition",
                   ),
                 }))}
-                onChange={(kind) =>
+                onChange={(kind) => {
+                  // The list of departments or positions goes under the
+                  // keyboard otherwise.
+                  Keyboard.dismiss();
                   update({
                     assignee:
                       kind === "person"
@@ -423,8 +426,8 @@ export function TaskSheet({
                         : kind === "department"
                           ? { kind, departmentID: null }
                           : { kind, positionID: null },
-                  })
-                }
+                  });
+                }}
               />
             </View>
           ) : null}
