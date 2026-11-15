@@ -100,6 +100,15 @@ appId: com.comamessenger.app
     file: tabs.yaml
     env:
       TAB: important
+# «Важные» opens on «Ждут вас» when a request waits (phase 6.4); saves are
+# the «Сохранённые» tab.
+- runFlow:
+    when:
+      visible:
+        id: important-section-saved
+    commands:
+      - tapOn:
+          id: important-section-saved
 - extendedWaitUntil:
     visible:
       id: important-list

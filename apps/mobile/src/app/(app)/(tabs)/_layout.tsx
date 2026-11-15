@@ -10,7 +10,7 @@ import {
 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
-import { totalUnread } from "@comamessenger/core";
+import { importantCounts, totalUnread } from "@comamessenger/core";
 import { useTheme } from "@/lib/theme";
 import { useMessenger } from "@/messenger/MessengerProvider";
 import {
@@ -33,6 +33,11 @@ export default function TabsLayout() {
   const { store } = useMessenger();
   const unread = useStore(store, (state) =>
     totalUnread(state.unread, state.chats),
+  );
+  // «Важные»: requests waiting for the reader's answer and fired reminders.
+  const important = useStore(
+    store,
+    (state) => importantCounts(state.unread, state.features).badge,
   );
   // Actions waiting for the reader's decision count on the «Агенты» tab.
   const { canApprove } = useAgentAccess();
@@ -88,6 +93,11 @@ export default function TabsLayout() {
         options={{
           title: t("tabImportant"),
           tabBarIcon: tabIcon(Star),
+          tabBarBadge: important > 0 ? countLabel(important) : undefined,
+          tabBarAccessibilityLabel:
+            important > 0
+              ? `${t("tabImportant")}, ${t("importantBadge", { count: important })}`
+              : t("tabImportant"),
           tabBarButtonTestID: "tab-important",
         }}
       />

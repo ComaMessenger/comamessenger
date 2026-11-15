@@ -1,0 +1,83 @@
+# «Запрос» to the reader (phase 6.4): the strip «Ждут вашего ответа» in the
+# chat, an answer from «Важные → Ждут вас», then «Изменить» and a comment in
+# the chat. Run after sign-in.yaml:
+#   node e2e/seed-requests.mjs && maestro test -e THEME=light e2e/request-recipient.yaml
+# THEME (light or dark) names the screenshots; no default here, a flow
+# default would override -e.
+appId: com.comamessenger.app
+---
+- runFlow: open-app.yaml
+- tapOn: .*Планёрка · запросы.*
+- extendedWaitUntil:
+    visible:
+      id: request-waiting-strip
+    timeout: 10000
+- tapOn:
+    id: request-waiting-strip
+- extendedWaitUntil:
+    visible:
+      id: request-answer-0
+    timeout: 10000
+- takeScreenshot: ${THEME}-request-recipient-card
+- tapOn:
+    id: conversation-back
+    retryTapIfNoChange: true
+
+# «Важные → Ждут вас»: the request with its buttons; answer «Да» there.
+- runFlow:
+    file: tabs.yaml
+    env:
+      TAB: important
+- extendedWaitUntil:
+    visible:
+      id: important-waiting
+    timeout: 15000
+- assertVisible:
+    id: important-section-waiting
+- takeScreenshot: ${THEME}-important-waiting
+- tapOn:
+    id: request-answer-0
+    index: 0
+- extendedWaitUntil:
+    visible: ОТВЕЧЕНО
+    timeout: 10000
+- takeScreenshot: ${THEME}-important-answered
+
+# Back in the chat: «Изменить» to «Нет», then a comment.
+- tapOn:
+    id: request-my-answer
+    index: 0
+- extendedWaitUntil:
+    visible:
+      id: conversation
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      id: request-change
+    direction: DOWN
+    timeout: 20000
+- tapOn:
+    id: request-change
+- tapOn:
+    id: request-answer-1
+- extendedWaitUntil:
+    visible: ".*Ваш ответ: Нет.*"
+    timeout: 10000
+- tapOn:
+    id: request-add-comment
+- inputText: на выезде до 13
+- tapOn:
+    id: request-comment-save
+- extendedWaitUntil:
+    visible: .*на выезде до 13.*
+    timeout: 10000
+- hideKeyboard:
+    optional: true
+- takeScreenshot: ${THEME}-request-recipient-answered
+- tapOn:
+    id: conversation-back
+    retryTapIfNoChange: true
+- runFlow:
+    file: tabs.yaml
+    env:
+      TAB: chats

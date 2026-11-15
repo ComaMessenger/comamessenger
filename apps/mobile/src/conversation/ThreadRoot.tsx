@@ -26,6 +26,7 @@ import { MessageBlocks } from "./MessageBlocks";
 import { MessageFiles } from "./MessageFiles";
 import { formatTime } from "./MessageRow";
 import { useReactions } from "./reactions";
+import { RequestCard } from "@/requests/RequestCard";
 
 /** The message a thread grew from, pinned on white above the replies. */
 export function ThreadRoot({
@@ -37,6 +38,7 @@ export function ThreadRoot({
   viewer,
   onActions,
   onUpdated,
+  onNotice,
 }: {
   api: MessengerAPI;
   ownID: string;
@@ -46,6 +48,7 @@ export function ThreadRoot({
   viewer: ActionViewer;
   onActions(message: ClientMessage): void;
   onUpdated(message: Message): void;
+  onNotice?(text: string): void;
 }) {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
@@ -105,6 +108,9 @@ export function ThreadRoot({
               </Text>
             </View>
           </View>
+          {!deleted && message.request ? (
+            <RequestCard message={message} part="header" />
+          ) : null}
           {deleted ? (
             <Text tone="muted" size={15} style={styles.italic}>
               {t("messageDeleted")}
@@ -113,6 +119,9 @@ export function ThreadRoot({
             !blocks?.card &&
             Boolean(message.body.trim()) && <Markdown source={message.body} />
           )}
+          {!deleted && message.request ? (
+            <RequestCard message={message} part="body" onNotice={onNotice} />
+          ) : null}
           {blocks && (
             <MessageBlocks
               api={api}

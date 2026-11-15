@@ -1,0 +1,68 @@
+# The «+» sheet, variant A (phase 6.4): the attachments, «Попросить и
+# поручить» with «Запрос», no «Отложить»; a long press of «Отправить» still
+# offers «Отправить позже». Run after sign-in.yaml and seed-requests.mjs
+# (the server must announce requests):
+#   maestro test -e THEME=light e2e/composer-plus.yaml
+# THEME (light or dark) names the screenshots; no default here, a flow
+# default would override -e.
+appId: com.comamessenger.app
+---
+- runFlow: open-app.yaml
+- tapOn: .*Планёрка · запросы.*
+- extendedWaitUntil:
+    visible:
+      id: conversation
+    timeout: 10000
+- tapOn:
+    id: composer-attach
+- extendedWaitUntil:
+    visible:
+      id: composer-sheet
+    timeout: 5000
+- assertVisible:
+    id: composer-action-photo
+- assertVisible:
+    id: composer-action-camera
+- assertVisible:
+    id: composer-action-file
+- assertVisible: ПОПРОСИТЬ И ПОРУЧИТЬ
+- assertVisible:
+    id: composer-action-request
+- assertNotVisible:
+    id: composer-action-schedule
+- takeScreenshot: ${THEME}-plus-menu
+- swipe:
+    from:
+      id: composer-sheet-grab
+    direction: DOWN
+    duration: 400
+- extendedWaitUntil:
+    notVisible:
+      id: composer-sheet
+    timeout: 5000
+# Sending later stays on a long press of «Отправить».
+- tapOn:
+    id: composer-input
+- inputText: Позже
+- longPressOn:
+    id: composer-send
+- extendedWaitUntil:
+    visible:
+      id: send-options
+    timeout: 5000
+- tapOn:
+    id: send-options-later
+- extendedWaitUntil:
+    visible:
+      id: schedule-sheet
+    timeout: 5000
+- swipe:
+    from:
+      id: schedule-sheet-grab
+    direction: DOWN
+    duration: 400
+- extendedWaitUntil:
+    notVisible:
+      id: schedule-sheet
+    timeout: 5000
+- eraseText: 10

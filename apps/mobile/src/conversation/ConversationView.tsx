@@ -17,19 +17,19 @@ import { router } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  ArrowDown,
-  Camera,
-  FileText,
-  Image as ImageIcon,
-  Sparkles,
-} from "lucide-react-native";
+import { ArrowDown } from "lucide-react-native";
+import { useStore } from "zustand";
 import { useTranslation } from "react-i18next";
 import {
   applySavedChange,
   chatAvatarSource,
   chatCommands,
   compactUUID,
+  composerMenu,
+  remindLabelKey,
+  waitingStrip,
+  workplaceFeatures,
+  type ComposerMenuItemID,
   decodeMentions,
   encodeMentions,
   formatDaySeparator,
@@ -70,7 +70,12 @@ import { AgentPicker } from "./AgentPicker";
 import { AgentStreamRow } from "./AgentStreamRow";
 import { bubblePlacement, messageKey, type BubblePlacement } from "./bubbles";
 import { Composer, type ComposerContext } from "./Composer";
-import { ComposerSheet, type ComposerAction } from "./ComposerSheet";
+import { ComposerSheet } from "./ComposerSheet";
+import { useMessenger } from "@/messenger/MessengerProvider";
+import { RequestSheet } from "@/requests/RequestSheet";
+import { ReminderStrip, WaitingStrip } from "@/requests/WaitingStrip";
+import { ReminderSheet } from "@/reminders/ReminderSheet";
+import { findReminder, useChatReminders } from "@/reminders/useReminders";
 import { ForwardSheet } from "./ForwardSheet";
 import { MessageDetailsSheet } from "./MessageDetailsSheet";
 import { MessageMenu } from "./MessageMenu";
@@ -105,10 +110,13 @@ export function ConversationView({
   chatID,
   threadRootID,
   focusMessageID = null,
+  reminderID = null,
 }: {
   chatID: string;
   threadRootID: string | null;
   focusMessageID?: string | null;
+  /** Opened from a fired reminder: the strip «Напоминание · Готово». */
+  reminderID?: string | null;
 }) {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
@@ -128,6 +136,24 @@ export function ConversationView({
   const [agentsOpen, setAgentsOpen] = useState(false);
   const [focusRequest, setFocusRequest] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
+  const [requestOpen, setRequestOpen] = useState(false);
+  // «Напомнить мне»: the message and, when one is set, its time and note.
+  const [remindFor, setRemindFor] = useState<{
+    message: ClientMessage;
+    initial: { at: Date; note: string } | null;
+    /** The note on the server is unknown: an empty field keeps it. */
+    noteUnknown: boolean;
+  } | null>(null);
+  const [remindPending, setRemindPending] = useState(false);
+  const [reminderOpen, setReminderOpen] = useState(Boolean(reminderID));
+  const { store } = useMessenger();
+  const features = useStore(store, (state) => state.features);
+  const workplace = workplaceFeatures(features);
+  const reminders = useChatReminders(chatID, workplace.reminders);
+  const requestViewers = useStore(store, (state) => state.requestViewers);
+  const chatUnread = useStore(store, (state) =>
+    state.unread.chats.find((item) => item.chat_id === chatID),
+  );
   const attachments = useAttachments(api, typingScope(chatID, threadRootID));
   useUploadActivity(chatID, threadRootID);
   const list = useRef<FlashListRef<FeedRow>>(null);
@@ -237,10 +263,12 @@ export function ConversationView({
     if (openedAt.current !== null && openedAt.current >= 0) setShowJump(true);
   }, [feed.length]);
   useEffect(() => {
-    if (!highlighted) return;
+    // A message opened from a reminder stays outlined until «Готово».
+    if (!highlighted || (reminderOpen && highlighted === focusMessageID))
+      return;
     const timer = setTimeout(() => setHighlighted(null), 2500);
     return () => clearTimeout(timer);
-  }, [highlighted]);
+  }, [focusMessageID, highlighted, reminderOpen]);
 
   // Photos and videos of the loaded feed, for the full-screen viewer.
   const media = useMemo(
@@ -264,6 +292,12 @@ export function ConversationView({
     },
     [feed],
   );
+
+  // «Ждут вашего ответа» under the header: counts from /unread, the
+  // message to scroll to from the loaded feed.
+  const strip = workplace.requests
+    ? waitingStrip(chatUnread, conversation.messages, requestViewers)
+    : null;
 
   function jumpToBottom() {
     if (conversation.hasLater) {
@@ -376,40 +410,31 @@ export function ConversationView({
     setFocusRequest((value) => value + 1);
   }
 
-  // The "+" sheet. Media and files first, conversation actions after; a
-  // feature adds its tile with one entry here.
-  const composerActions: ComposerAction[] = [
-    {
-      key: "photos",
-      label: t("attachPhotos"),
-      icon: ImageIcon,
-      onPress: () => pick("photos"),
-    },
-    {
-      key: "camera",
-      label: t("attachCamera"),
-      icon: Camera,
-      onPress: () => pick("camera"),
-    },
-    {
-      key: "file",
-      label: t("attachFile"),
-      icon: FileText,
-      onPress: () => pick("file"),
-    },
-    ...(agentMembers.length
-      ? [
-          {
-            key: "agent",
-            label: t("callAgent"),
-            icon: Sparkles,
-            accent: true,
-            onPress: () => setAgentsOpen(true),
-          },
-        ]
-      : []),
-    ...(conversation.readonly ? [] : [scheduling.action]),
-  ];
+  // The "+" sheet, variant A: attachments, «Попросить и поручить», agents.
+  // The items and their rules live in @comamessenger/core with the web's;
+  // sending later stays on a long press of «Отправить».
+  const composerGroups = composerMenu({
+    platform: "mobile",
+    readonly: conversation.readonly,
+    hasAgents: agentMembers.length > 0,
+    features,
+    inThread,
+  });
+  function pickComposerItem(id: ComposerMenuItemID) {
+    switch (id) {
+      case "photo":
+        return pick("photos");
+      case "camera":
+        return pick("camera");
+      case "file":
+      case "markdownFile":
+        return pick("file");
+      case "request":
+        return setRequestOpen(true);
+      case "agent":
+        return setAgentsOpen(true);
+    }
+  }
 
   async function setPinned(message: ClientMessage, pin: boolean) {
     try {
@@ -465,6 +490,9 @@ export function ConversationView({
       case "details":
         afterMenu(() => setDetailsFor(message));
         return;
+      case "remind":
+        afterMenu(() => void openReminder(message));
+        return;
       case "copyLink":
         void Clipboard.setStringAsync(
           `${api.apiURL}/m/${compactUUID(message.id)}`,
@@ -483,6 +511,50 @@ export function ConversationView({
       case "delete":
         afterMenu(() => confirmDelete(message));
     }
+  }
+
+  /** «Напомнить мне» or «Изменить напоминание» with the note looked up. */
+  async function openReminder(message: ClientMessage) {
+    const entry = reminders.entryFor(message.id);
+    if (!entry) {
+      setRemindFor({ message, initial: null, noteUnknown: false });
+      return;
+    }
+    setRemindFor({
+      message,
+      initial: { at: new Date(entry.remind_at), note: "" },
+      noteUnknown: true,
+    });
+    const found = await findReminder(api, message.id).catch(() => null);
+    if (found)
+      setRemindFor((current) =>
+        current?.message.id === message.id
+          ? {
+              message,
+              initial: { at: new Date(found.remind_at), note: found.note },
+              noteUnknown: false,
+            }
+          : current,
+      );
+  }
+
+  async function confirmReminder(at: Date, note: string) {
+    if (!remindFor) return;
+    setRemindPending(true);
+    const text = await reminders.set(
+      remindFor.message.id,
+      at,
+      remindFor.noteUnknown && !note ? undefined : note,
+    );
+    setRemindPending(false);
+    setRemindFor(null);
+    setNotice(text);
+  }
+
+  async function removeReminder(messageID: string) {
+    const text = await reminders.remove(messageID);
+    setRemindFor(null);
+    setNotice(text);
   }
 
   function confirmDelete(message: ClientMessage) {
@@ -515,6 +587,8 @@ export function ConversationView({
         inThread,
         hasText: Boolean(messagePlainText(menuFor.body).trim()),
         persisted: menuPersisted,
+        reminders: workplace.reminders,
+        reminded: reminders.reminded.has(menuFor.id),
       })
     : [];
   const placementOf = (message: ClientMessage): BubblePlacement => {
@@ -644,13 +718,30 @@ export function ConversationView({
           }
         />
         <ConnectionBanner />
-        {!inThread && (
+        {!inThread && reminderOpen && focusMessageID ? (
+          <ReminderStrip
+            onDone={() => {
+              setReminderOpen(false);
+              setHighlighted(null);
+              void removeReminder(focusMessageID);
+            }}
+          />
+        ) : !inThread && strip ? (
+          <WaitingStrip
+            strip={strip}
+            onPress={() =>
+              strip.messageID
+                ? goToMessage(strip.messageID)
+                : router.push("/important?tab=waiting")
+            }
+          />
+        ) : !inThread ? (
           <ScheduledStrip
             chatID={chatID}
             items={chatScheduled.items}
             onPress={() => router.push(`/chat/${chatID}/scheduled`)}
           />
-        )}
+        ) : null}
         {inThread && root && (
           <RowBoundary kind="message" resetKey={root}>
             <ThreadRoot
@@ -662,6 +753,7 @@ export function ConversationView({
               viewer={viewer}
               onActions={setMenuFor}
               onUpdated={conversation.applyMessage}
+              onNotice={setNotice}
             />
           </RowBoundary>
         )}
@@ -816,6 +908,8 @@ export function ConversationView({
                           showThread={!inThread}
                           pinned={pinnedIDs.has(message.id)}
                           saved={savedIDs.has(message.id)}
+                          reminded={reminders.reminded.has(message.id)}
+                          onNotice={setNotice}
                           highlighted={message.id === highlighted}
                           onReply={reply}
                           onThread={openThread}
@@ -892,8 +986,38 @@ export function ConversationView({
         </KeyboardAvoidingView>
         <ComposerSheet
           visible={moreOpen}
-          actions={composerActions}
+          groups={composerGroups}
+          onPick={pickComposerItem}
+          onPhoto={(file) => {
+            if (attachments.add([file]) > 0)
+              Alert.alert(t("attachmentLimit", { limit: attachmentLimit }));
+          }}
           onClose={() => setMoreOpen(false)}
+        />
+        {workplace.requests && !inThread ? (
+          <RequestSheet
+            visible={requestOpen}
+            chatID={chatID}
+            members={members}
+            onClose={() => setRequestOpen(false)}
+            onNotice={(text) => {
+              setNotice(text);
+              list.current?.scrollToEnd({ animated: true });
+            }}
+          />
+        ) : null}
+        <ReminderSheet
+          visible={remindFor !== null}
+          title={t(remindLabelKey(Boolean(remindFor?.initial)))}
+          initial={remindFor?.initial ?? null}
+          pending={remindPending}
+          onConfirm={(at, note) => void confirmReminder(at, note)}
+          onRemove={
+            remindFor?.initial
+              ? () => void removeReminder(remindFor.message.id)
+              : undefined
+          }
+          onClose={() => setRemindFor(null)}
         />
         {scheduling.layer}
         <AgentPicker
@@ -958,6 +1082,11 @@ export function ConversationView({
           }}
           onAction={act}
           onClose={() => setMenuFor(null)}
+          labelKeys={{
+            remind: remindLabelKey(
+              menuFor ? reminders.reminded.has(menuFor.id) : false,
+            ),
+          }}
         />
         <ForwardSheet
           message={forwarding}

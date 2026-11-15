@@ -58,10 +58,35 @@ export type NotificationContent = {
   badge?: number;
   /** The author sent it without sound: show it, but play no sound or vibration. */
   silent: boolean;
+  /**
+   * What the push is about (phase 6.4): "reminder" gets the «Через час /
+   * Завтра / Готово» buttons, "request" is a request or its reminder.
+   * Absent for messages and from older servers.
+   */
+  kind?: NotificationKind;
+  /** The message a reminder is about, for its buttons. */
+  messageID?: string;
+  /** The reminder, for its buttons when its message was deleted. */
+  reminderID?: string;
 };
 
-const routePattern =
-  /^(\/chat\/[0-9a-f-]{36}(\/thread\/[0-9a-f-]{36})?|\/scheduled)$/;
+export type NotificationKind = "reminder" | "request";
+
+const uuid = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+
+// In-app addresses a push may open: a chat or thread, a message in a chat
+// (highlighted; with the reminder strip for «Напомнить мне»), the scheduled
+// list and «Важные» on one of its tabs. Anything else is dropped. The iOS
+// notification service extension keeps the same list.
+const routePattern = new RegExp(
+  `^(/chat/${uuid}(/thread/${uuid})?` +
+    `|/chat/${uuid}\\?message=${uuid}(&reminder=${uuid})?` +
+    `|/scheduled` +
+    `|/important(\\?tab=(waiting|saved|reminders))?)$`,
+);
+
+const isUUID = (value: unknown): value is string =>
+  typeof value === "string" && new RegExp(`^${uuid}$`).test(value);
 
 export function parseNotification(json: string): NotificationContent | null {
   let value: Record<string, unknown>;
@@ -91,6 +116,11 @@ export function parseNotification(json: string): NotificationContent | null {
         ? value.badge
         : undefined,
     silent: value.silent === true,
+    ...(value.kind === "reminder" || value.kind === "request"
+      ? { kind: value.kind }
+      : {}),
+    ...(isUUID(value.message_id) ? { messageID: value.message_id } : {}),
+    ...(isUUID(value.reminder_id) ? { reminderID: value.reminder_id } : {}),
   };
 }
 

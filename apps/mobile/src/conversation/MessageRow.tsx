@@ -6,6 +6,7 @@ import ReanimatedSwipeable, {
 import * as Haptics from "expo-haptics";
 import {
   AlertCircle,
+  Bell,
   Check,
   ChevronRight,
   Clock3,
@@ -42,6 +43,7 @@ import { useReactions } from "./reactions";
 import { bubbleCorners, messageMarks, type BubblePlacement } from "./bubbles";
 import { useThreadPreview } from "./useThreadPreview";
 import { replySwipeProps } from "./replySwipe";
+import { RequestCard } from "@/requests/RequestCard";
 
 const avatarSize = 30;
 
@@ -58,6 +60,10 @@ export type MessageBubbleProps = {
   pinned?: boolean;
   /** The reader saved it to their own «Important»: a star by the time. */
   saved?: boolean;
+  /** The reader set a reminder about it («Напомнить мне»): a bell by the time. */
+  reminded?: boolean;
+  /** A short notice from inside the bubble (a request answer that failed). */
+  onNotice?(text: string): void;
   highlighted?: boolean;
   onThread(message: ClientMessage): void;
   onActions(message: ClientMessage): void;
@@ -131,6 +137,7 @@ export function MessageBubble({
   showThread,
   pinned = false,
   saved = false,
+  reminded = false,
   highlighted = false,
   onThread,
   onActions,
@@ -139,12 +146,18 @@ export function MessageBubble({
   members = [],
   viewer,
   onUpdated,
+  onNotice,
   preview = false,
 }: MessageBubbleProps & { onReply?(message: ClientMessage): void }) {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
   const reactions = useReactions(api, message, ownID);
   const own = placement.own;
+  // A request («Запрос») is a card: on the surface even when it is the
+  // reader's own, as wide as cards are (prototype `.bub.obj`).
+  const request =
+    message.request && !message.deleted_at ? message.request : null;
+  const ownColors = own && !request;
   const name =
     author?.display_name ?? (own ? t("previewYou") : t("participant"));
   const agent = author?.type === "agent";
@@ -172,7 +185,9 @@ export function MessageBubble({
   const sizedByMedia =
     images.length > 0 && !blocks && files.length === images.length;
   const wide =
-    Boolean(blocks) || (files.length > 0 && !voiceOnly && !sizedByMedia);
+    Boolean(blocks) ||
+    Boolean(request) ||
+    (files.length > 0 && !voiceOnly && !sizedByMedia);
   const photosOnly =
     images.length > 0 &&
     images.length === files.length &&
@@ -180,9 +195,9 @@ export function MessageBubble({
     !message.body.trim();
   const thread = useThreadPreview(message, showThread);
   const hasThread = showThread && message.thread_reply_count > 0 && !deleted;
-  const muted = own ? theme.ownMuted : theme.muted;
-  const accent = own ? theme.onOwn : theme.primary;
-  const background = own ? theme.own : theme.surface;
+  const muted = ownColors ? theme.ownMuted : theme.muted;
+  const accent = ownColors ? theme.onOwn : theme.primary;
+  const background = ownColors ? theme.own : theme.surface;
   const nameColor = agent
     ? theme.primary
     : avatarColors(theme, message.actor_id).foreground;
@@ -209,7 +224,7 @@ export function MessageBubble({
               icon: (
                 <AlertCircle
                   size={13}
-                  color={own ? theme.onOwn : theme.danger}
+                  color={ownColors ? theme.onOwn : theme.danger}
                 />
               ),
             }
@@ -226,6 +241,7 @@ export function MessageBubble({
       accessibilityLabel={[
         marks.includes("pin") ? t("pinnedMark") : null,
         marks.includes("star") ? t("savedMark") : null,
+        reminded ? t("remindedMark") : null,
         message.edited_at && !deleted ? t("edited") : null,
         time,
         status?.label,
@@ -238,9 +254,12 @@ export function MessageBubble({
       {marks.includes("star") && (
         <Star size={12} color={theme.warning} fill={theme.warning} />
       )}
+      {reminded && !deleted ? (
+        <Bell size={12} color={ownColors ? theme.onOwn : theme.primary} />
+      ) : null}
       {message.edited_at && !deleted ? (
         <Text size={11} style={{ color: muted }}>
-          {t("edited")}
+          {request ? t("requestEdited") : t("edited")}
         </Text>
       ) : null}
       <Text size={11} style={[styles.tabular, { color: muted }]}>
@@ -292,7 +311,7 @@ export function MessageBubble({
       </Text>
     );
   else if (!blocks?.card && message.body.trim())
-    body = <Markdown source={message.body} own={own} />;
+    body = <Markdown source={message.body} own={ownColors} />;
 
   const bubble = (
     <View
@@ -306,7 +325,7 @@ export function MessageBubble({
           backgroundColor: background,
           borderColor: highlighted
             ? theme.primary
-            : own
+            : ownColors
               ? "transparent"
               : theme.border,
         },
@@ -363,6 +382,9 @@ export function MessageBubble({
           </Text>
         </View>
       )}
+      {request ? (
+        <RequestCard message={message} part="header" preview={preview} />
+      ) : null}
       {inlineMeta ? (
         <View style={styles.textWithMeta}>
           {body ? <View style={styles.shrink}>{body}</View> : null}
@@ -371,6 +393,14 @@ export function MessageBubble({
       ) : (
         body
       )}
+      {request ? (
+        <RequestCard
+          message={message}
+          part="body"
+          preview={preview}
+          onNotice={onNotice}
+        />
+      ) : null}
       {blocks && viewer && (
         <MessageBlocks
           api={api}
@@ -418,7 +448,7 @@ export function MessageBubble({
               style={[
                 styles.chip,
                 {
-                  backgroundColor: own
+                  backgroundColor: ownColors
                     ? group.own
                       ? theme.onOwn
                       : theme.ownTrack
@@ -435,7 +465,7 @@ export function MessageBubble({
                 weight="semibold"
                 size={12.5}
                 style={{
-                  color: own
+                  color: ownColors
                     ? group.own
                       ? theme.own
                       : theme.onOwn
@@ -470,7 +500,7 @@ export function MessageBubble({
           onLongPress={openActions}
           style={[
             styles.thread,
-            { borderTopColor: own ? theme.ownTrack : theme.border },
+            { borderTopColor: ownColors ? theme.ownTrack : theme.border },
           ]}
         >
           {thread.participantIDs.length > 0 ? (

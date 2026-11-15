@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -8,17 +8,26 @@ import {
   StyleSheet,
   View,
 } from "react-native";
-import { router, useFocusEffect } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { ArrowUpRight, Star, StarOff } from "lucide-react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import {
   applySavedChange,
+  defaultImportantTab,
+  importantCounts,
+  importantTabLabelKeys,
+  importantTabs,
+  parseImportantTab,
   savedKeys,
   savedMessageHref,
+  type ImportantTab,
   type SavedMessagePage,
 } from "@comamessenger/core";
+import { accountValues } from "@/lib/database";
+import { WaitingList } from "@/important/WaitingList";
+import { ReminderList } from "@/important/ReminderList";
 import { useSignedIn } from "@/session/SessionProvider";
 import { useMessenger } from "@/messenger/MessengerProvider";
 import { useTheme } from "@/lib/theme";
@@ -36,13 +45,68 @@ import { TabChip } from "@/ui/TabChip";
 import { TabHeader } from "@/ui/TabHeader";
 import { Text } from "@/ui/Text";
 
+const lastTabKey = "important_tab";
+
+/**
+ * «Важные» as the reader's own inbox: «Ждут вас» (requests waiting for an
+ * answer), «Сохранённые» (saved messages, by chat) and «Напоминания».
+ * The first two new tabs show only when the server has them. It opens on
+ * «Ждут вас» when something waits, else on the tab chosen last.
+ */
 export default function ImportantScreen() {
   const { t } = useTranslation();
   const theme = useTheme();
   const { api, user } = useSignedIn();
   const { store } = useMessenger();
   const chatMap = useStore(store, (state) => state.chats);
+  const features = useStore(store, (state) => state.features);
+  const unread = useStore(store, (state) => state.unread);
   const queryClient = useQueryClient();
+  const params = useLocalSearchParams<{ tab?: string }>();
+  const tabs = importantTabs(features);
+  const counts = importantCounts(unread, features);
+  const [chosen, setChosen] = useState<ImportantTab | null>(null);
+  const [last, setLast] = useState<ImportantTab | null | undefined>(undefined);
+  const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    void accountValues
+      .get<string>(lastTabKey)
+      .then((value) => setLast(parseImportantTab(value)))
+      .catch(() => setLast(null));
+  }, []);
+  // A push or a link names the tab: it wins once, then the reader chooses.
+  const requested = parseImportantTab(params.tab);
+  useEffect(() => {
+    if (requested) setChosen(requested);
+  }, [requested]);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 2200);
+    return () => clearTimeout(timer);
+  }, [notice]);
+  const active: ImportantTab =
+    chosen && tabs.includes(chosen)
+      ? chosen
+      : defaultImportantTab({ tabs, counts, last: last ?? null });
+  // The tab chosen on opening stays while the screen is in view: answering
+  // the last waiting request must not throw the reader to another tab.
+  const [focused, setFocused] = useState(true);
+  useEffect(() => {
+    if (focused && chosen === null && last !== undefined) setChosen(active);
+  }, [active, chosen, focused, last]);
+  useFocusEffect(
+    useCallback(() => {
+      setFocused(true);
+      return () => {
+        setFocused(false);
+        setChosen(null);
+      };
+    }, []),
+  );
+  function choose(tab: ImportantTab) {
+    setChosen(tab);
+    void accountValues.set(lastTabKey, tab).catch(() => undefined);
+  }
   const [chatFilter, setChatFilter] = useState<string | null>(null);
   const [menuFor, setMenuFor] = useState<ImportantItem | null>(null);
   const { query, chats, items, groups, total } = useImportant(chatFilter);
@@ -102,10 +166,36 @@ export default function ImportantScreen() {
   }
 
   const loading = query.isPending && query.fetchStatus !== "idle";
+  const countOf = (tab: ImportantTab) =>
+    tab === "waiting"
+      ? counts.waiting
+      : tab === "reminders"
+        ? counts.reminders
+        : undefined;
   return (
     <View style={[styles.screen, { backgroundColor: theme.surface }]}>
       <TabHeader title={t("tabImportant")}>
-        {groups.length > 1 && (
+        {tabs.length > 1 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            accessibilityRole="tablist"
+            contentContainerStyle={styles.chips}
+            style={styles.strip}
+          >
+            {tabs.map((tab) => (
+              <TabChip
+                key={tab}
+                testID={`important-section-${tab}`}
+                label={t(importantTabLabelKeys[tab])}
+                count={countOf(tab)}
+                selected={active === tab}
+                onPress={() => choose(tab)}
+              />
+            ))}
+          </ScrollView>
+        )}
+        {active === "saved" && groups.length > 1 && (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -136,68 +226,85 @@ export default function ImportantScreen() {
           </ScrollView>
         )}
       </TabHeader>
-      <FlatList
-        testID="important-list"
-        data={visible}
-        keyExtractor={(item) => item.message.id}
-        renderItem={({ item, index }) => (
-          <RowBoundary kind="message" resetKey={item}>
-            <ImportantRow
-              testID={`important-row-${index}`}
-              item={item}
-              onOpen={open}
-              onActions={setMenuFor}
-            />
-          </RowBoundary>
-        )}
-        onEndReached={() => {
-          if (query.hasNextPage && !query.isFetchingNextPage)
-            void query.fetchNextPage();
-        }}
-        onEndReachedThreshold={0.5}
-        ListFooterComponent={
-          query.isFetchingNextPage ? (
-            <ActivityIndicator style={styles.more} color={theme.muted} />
-          ) : null
-        }
-        refreshControl={
-          <RefreshControl
-            refreshing={query.isRefetching}
-            onRefresh={() => void query.refetch()}
-            tintColor={theme.muted}
-          />
-        }
-        ListEmptyComponent={
-          loading ? (
-            <ActivityIndicator style={styles.loader} color={theme.muted} />
-          ) : query.isError ? (
-            <View style={styles.state}>
-              <Notice
-                title={t("importantLoadFailed")}
-                actionLabel={t("retry")}
-                onAction={() => void query.refetch()}
+      {active === "waiting" ? (
+        <WaitingList onNotice={setNotice} />
+      ) : active === "reminders" ? (
+        <ReminderList onNotice={setNotice} />
+      ) : (
+        <FlatList
+          testID="important-list"
+          data={visible}
+          keyExtractor={(item) => item.message.id}
+          renderItem={({ item, index }) => (
+            <RowBoundary kind="message" resetKey={item}>
+              <ImportantRow
+                testID={`important-row-${index}`}
+                item={item}
+                onOpen={open}
+                onActions={setMenuFor}
               />
-            </View>
-          ) : (
-            <View style={styles.empty}>
-              <View
-                style={[
-                  styles.emptyIcon,
-                  { backgroundColor: theme.surfaceSelected },
-                ]}
-              >
-                <Star size={26} color={theme.muted} />
+            </RowBoundary>
+          )}
+          onEndReached={() => {
+            if (query.hasNextPage && !query.isFetchingNextPage)
+              void query.fetchNextPage();
+          }}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            query.isFetchingNextPage ? (
+              <ActivityIndicator style={styles.more} color={theme.muted} />
+            ) : null
+          }
+          refreshControl={
+            <RefreshControl
+              refreshing={query.isRefetching}
+              onRefresh={() => void query.refetch()}
+              tintColor={theme.muted}
+            />
+          }
+          ListEmptyComponent={
+            loading ? (
+              <ActivityIndicator style={styles.loader} color={theme.muted} />
+            ) : query.isError ? (
+              <View style={styles.state}>
+                <Notice
+                  title={t("importantLoadFailed")}
+                  actionLabel={t("retry")}
+                  onAction={() => void query.refetch()}
+                />
               </View>
-              <Text weight="semibold" size={17} style={styles.center}>
-                {t("importantEmpty")}
-              </Text>
-              <Text tone="muted" size={15} style={styles.center}>
-                {t("importantSavedHint")}
-              </Text>
-            </View>
-          )
-        }
-      />
+            ) : (
+              <View style={styles.empty}>
+                <View
+                  style={[
+                    styles.emptyIcon,
+                    { backgroundColor: theme.surfaceSelected },
+                  ]}
+                >
+                  <Star size={26} color={theme.muted} />
+                </View>
+                <Text weight="semibold" size={17} style={styles.center}>
+                  {t("importantEmpty")}
+                </Text>
+                <Text tone="muted" size={15} style={styles.center}>
+                  {t("importantSavedHint")}
+                </Text>
+              </View>
+            )
+          }
+        />
+      )}
+      {notice ? (
+        <View
+          pointerEvents="none"
+          accessibilityLiveRegion="polite"
+          style={[styles.notice, { backgroundColor: theme.action }]}
+        >
+          <Text size={14} weight="medium" style={{ color: theme.onAction }}>
+            {notice}
+          </Text>
+        </View>
+      ) : null}
       <MenuSheet
         visible={Boolean(menuFor)}
         testID="important-actions"
@@ -249,4 +356,13 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   center: { textAlign: "center" },
+  notice: {
+    position: "absolute",
+    alignSelf: "center",
+    bottom: 16,
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    maxWidth: "90%",
+  },
 });
