@@ -252,6 +252,7 @@ export function DepartmentScreen({ departmentID }: { departmentID: string }) {
           >
             <View style={styles.headTop}>
               <DepartmentIcon size={72} />
+              <View style={styles.iconGap} />
               <Text
                 accessibilityRole="header"
                 weight="bold"
@@ -528,6 +529,8 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   center: { textAlign: "center" },
+  // Prototype: `.dsq.big { margin-bottom: 8px }`.
+  iconGap: { height: 6 },
   missing: {
     flexDirection: "row",
     alignItems: "center",

@@ -12,14 +12,34 @@ appId: com.comamessenger.app
     visible:
       id: person-row-0
     timeout: 15000
-- assertVisible:
-    id: people-filter-online
 - takeScreenshot: people
-- tapOn:
-    id: people-filter-agents
-- takeScreenshot: people-agents
-- tapOn:
-    id: people-filter-all
+# Without departments the chips filter by kind; with the org structure
+# (phase 6.5 wave 2) the chips are departments and the kinds are in the
+# header menu.
+- runFlow:
+    when:
+      visible:
+        id: people-filter-online
+    commands:
+      - tapOn:
+          id: people-filter-agents
+      - takeScreenshot: people-agents
+      - tapOn:
+          id: people-filter-all
+- runFlow:
+    when:
+      visible:
+        id: people-menu
+    commands:
+      - tapOn:
+          id: people-menu
+      - tapOn:
+          id: people-view-agents
+      - takeScreenshot: people-agents
+      - tapOn:
+          id: people-menu
+      - tapOn:
+          id: people-view-all
 - tapOn:
     id: person-row-0
 - extendedWaitUntil:
