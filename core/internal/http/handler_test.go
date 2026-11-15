@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	standardhttp "net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/comamessenger/comamessenger/core/internal/identity"
@@ -69,6 +70,14 @@ func TestCORSAllowsCredentialedWebRequests(t *testing.T) {
 	}
 	if response.Header().Get("Access-Control-Allow-Credentials") != "true" {
 		t.Fatal("credentialed CORS requests are not enabled")
+	}
+	// The web reads GET /api/v1/org with If-None-Match: the preflight must
+	// allow it and the ETag must be readable.
+	if !strings.Contains(response.Header().Get("Access-Control-Allow-Headers"), "If-None-Match") {
+		t.Fatalf("If-None-Match is not allowed: %q", response.Header().Get("Access-Control-Allow-Headers"))
+	}
+	if response.Header().Get("Access-Control-Expose-Headers") != "ETag" {
+		t.Fatalf("ETag is not exposed: %q", response.Header().Get("Access-Control-Expose-Headers"))
 	}
 }
 
