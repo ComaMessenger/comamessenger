@@ -479,7 +479,11 @@ function MemberPermissions({
       {toggles.map((toggle) => (
         <SettingsToggle
           key={toggle.code}
-          label={t(permissionLabelKeys[toggle.code])}
+          label={t(
+            toggle.code === "knowledge.manage"
+              ? "kbPermissionToggle"
+              : permissionLabelKeys[toggle.code],
+          )}
           hint={
             toggle.enabled
               ? permissionHintKeys[toggle.code] &&
