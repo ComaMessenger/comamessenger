@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -9,6 +9,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { MoreHorizontal } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import {
@@ -25,7 +26,12 @@ import { useSignedIn } from "@/session/SessionProvider";
 import { ChatAvatar } from "@/chats/ChatAvatar";
 import { chatTitle } from "@/chats/ChatRow";
 import { Button } from "@/ui/Button";
+import { IconButton } from "@/ui/IconButton";
+import { MenuSheet, afterSheetCloses } from "@/ui/MenuSheet";
 import { Notice } from "@/ui/Notice";
+import { PersonOrgEditor } from "@/org/PersonOrgEditor";
+import { PersonOrgSection, showsOwnTitle } from "@/org/PersonOrgSection";
+import { useOrg } from "@/org/useOrg";
 import { ScreenHeader } from "@/ui/ScreenHeader";
 import { Text } from "@/ui/Text";
 import { useAgentAccess } from "@/agents/data";
@@ -93,6 +99,11 @@ export function PersonScreen({ actorID }: { actorID: string }) {
   const agent = person?.type === "agent";
   const self = actorID === user.id;
   const { canView: canViewAgents } = useAgentAccess();
+  const org = useOrg();
+  const structure = org.structure;
+  const [menu, setMenu] = useState(false);
+  const [editingOrg, setEditingOrg] = useState(false);
+  const editsOrg = org.canManage && person?.type === "user";
 
   return (
     <SafeAreaView
@@ -103,6 +114,16 @@ export function PersonScreen({ actorID }: { actorID: string }) {
       <ScreenHeader
         backTestID="person-back"
         title={agent ? t("agentProfile") : t("personProfile")}
+        trailing={
+          editsOrg ? (
+            <IconButton
+              testID="person-menu"
+              label={t("orgMore")}
+              onPress={() => setMenu(true)}
+              icon={(color) => <MoreHorizontal size={20} color={color} />}
+            />
+          ) : undefined
+        }
       />
       {actor.isLoading ? (
         <ActivityIndicator style={styles.loader} color={theme.muted} />
@@ -151,7 +172,11 @@ export function PersonScreen({ actorID }: { actorID: string }) {
             <Text tone="muted" size={14.5} style={styles.center}>
               {[
                 `@${person.handle}`,
-                person.title,
+                // The position is in the org group below; the caption only
+                // when it says something else (decision 3).
+                showsOwnTitle(person.title, structure, person.actor_id)
+                  ? person.title
+                  : null,
                 agent ? null : t(presenceLabelKey(presence)),
               ]
                 .filter(Boolean)
@@ -192,6 +217,10 @@ export function PersonScreen({ actorID }: { actorID: string }) {
               </View>
             ) : null}
           </View>
+
+          {structure && !agent ? (
+            <PersonOrgSection structure={structure} actorID={person.actor_id} />
+          ) : null}
 
           {person.about ? (
             <View
@@ -257,6 +286,33 @@ export function PersonScreen({ actorID }: { actorID: string }) {
           ) : null}
         </ScrollView>
       )}
+      {editsOrg && person ? (
+        <>
+          <MenuSheet
+            visible={menu}
+            title={person.display_name}
+            testID="person-menu-sheet"
+            onClose={() => setMenu(false)}
+            items={[
+              {
+                key: "org",
+                label: t("orgEditPerson"),
+                testID: "person-edit-org",
+                onPress: () => {
+                  setMenu(false);
+                  afterSheetCloses(() => setEditingOrg(true));
+                },
+              },
+            ]}
+          />
+          <PersonOrgEditor
+            visible={editingOrg}
+            actorID={person.actor_id}
+            name={person.display_name}
+            onClose={() => setEditingOrg(false)}
+          />
+        </>
+      ) : null}
     </SafeAreaView>
   );
 }

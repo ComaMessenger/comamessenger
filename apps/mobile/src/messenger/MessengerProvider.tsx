@@ -23,6 +23,7 @@ import {
   requestKeys,
   syncDeviceTimezone,
   isTypingAction,
+  orgKeys,
   savedChange,
   sharedChangedChat,
   sharedKeys,
@@ -39,6 +40,7 @@ import { reactionsKey } from "@/conversation/reactions";
 import { invalidateChatDetails } from "@/chatinfo/queries";
 import { usePushNotifications } from "@/push/usePushNotifications";
 import { applyScheduledEvent, scheduledKey } from "@/scheduled/scheduledCache";
+import { applyOrgEvent } from "@/org/orgEvents";
 import { isNetworkError, messageOf } from "@/lib/errors";
 import { cacheShell, cachedShell, persistMessages } from "./cache";
 import { flushRequestOutbox } from "@/requests/outbox";
@@ -170,6 +172,8 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
           features: (list) => store.getState().setFeatures(list),
           event: (event) => {
             const applied = store.getState().apply(event);
+            // The org structure changed: read GET /org again (ETag).
+            if (applied && applyOrgEvent(queryClient, event)) return true;
             if (applied && refreshesUnread(event)) unreadRefresher.request();
             // Reminders are private: the bells of the chat change at once,
             // the lists in «Важные» on the next look.
@@ -246,6 +250,8 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
             void queryClient.invalidateQueries({
               queryKey: scheduledKey(user.id),
             });
+            // Lost org.updated events: the structure is read again.
+            void queryClient.invalidateQueries({ queryKey: orgKeys.all });
             await reload();
             if (active) {
               const page = await api.messages(active, { limit: 50 });

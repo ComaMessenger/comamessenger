@@ -7,6 +7,7 @@ import {
   uniquePeople,
   type ActorSummary,
   type MessengerAPI,
+  type OrgStructure,
   type PeopleFilter,
 } from "@comamessenger/core";
 import { useMessenger } from "@/messenger/MessengerProvider";
@@ -24,12 +25,15 @@ export function usePeople({
   filter = "all",
   exclude = [],
   locale,
+  structure,
 }: {
   query: string;
   filter?: PeopleFilter;
   /** Hidden ids besides the reader: chosen people, current members. */
   exclude?: readonly string[];
   locale?: string;
+  /** Search positions and departments too (org_structure). */
+  structure?: OrgStructure | null;
 }) {
   const { api, user } = useSignedIn();
   const { store } = useMessenger();
@@ -67,6 +71,7 @@ export function usePeople({
       filter,
       presence,
       exclude: hidden,
+      structure,
     });
     // Server matches the query its own way; keep them even if the local
     // match disagrees, filtered only by kind.
@@ -79,7 +84,17 @@ export function usePeople({
           })
         : [];
     return sortPeople(uniquePeople([...local, ...remote]), presence, locale);
-  }, [debounced, filter, found.data, hidden, loaded, locale, needle, presence]);
+  }, [
+    debounced,
+    filter,
+    found.data,
+    hidden,
+    loaded,
+    locale,
+    needle,
+    presence,
+    structure,
+  ]);
 
   const counts = useMemo(() => {
     const others = loaded.filter((actor) => actor.actor_id !== user.id);

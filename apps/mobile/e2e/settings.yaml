@@ -198,7 +198,7 @@ appId: com.comamessenger.app
     id: member-role-member
 - tapOn: Сменить роль
 - extendedWaitUntil:
-    visible: База знаний
+    visible: Права участника
     timeout: 10000
 - scrollUntilVisible:
     element:

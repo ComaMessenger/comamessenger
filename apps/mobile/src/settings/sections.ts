@@ -6,6 +6,7 @@ import {
   KeyRound,
   Mail,
   MonitorSmartphone,
+  Network,
   Palette,
   Paintbrush,
   PlugZap,
@@ -117,6 +118,13 @@ const workspacePages: (SettingsLink & { id: SettingsPageID })[] = [
     icon: ShieldCheck,
   },
   {
+    id: "workspace-org",
+    href: "/settings/workspace/org",
+    labelKey: "orgTitle",
+    hintKey: "orgSettingsHint",
+    icon: Network,
+  },
+  {
     id: "customization",
     href: "/settings/customization",
     labelKey: "branding",
@@ -144,14 +152,25 @@ const workspaceChildren = new Set<SettingsPageID>([
   "workspace-members",
   "workspace-invitations",
   "workspace-policies",
+  "workspace-org",
 ]);
 
-/** Workspace pages this user may open; empty hides the whole section. */
-export function workspaceLinks(user: User) {
-  return workspacePages.filter((page) => canAccessSettingsPage(user, page.id));
+/**
+ * Workspace pages this user may open; empty hides the whole section. Pages
+ * of newer server features (the org structure) need `features` of hello.
+ */
+export function workspaceLinks(user: User, features?: Iterable<string> | null) {
+  return workspacePages.filter((page) =>
+    canAccessSettingsPage(user, page.id, features),
+  );
 }
 
 /** The pages listed on the workspace overview (the web's sub-navigation). */
-export function workspaceOverviewLinks(user: User) {
-  return workspaceLinks(user).filter((page) => workspaceChildren.has(page.id));
+export function workspaceOverviewLinks(
+  user: User,
+  features?: Iterable<string> | null,
+) {
+  return workspaceLinks(user, features).filter((page) =>
+    workspaceChildren.has(page.id),
+  );
 }

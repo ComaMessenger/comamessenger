@@ -16,6 +16,7 @@ import {
   Clock,
   ExternalLink,
   LogOut,
+  Network,
   Settings,
   type LucideIcon,
 } from "lucide-react-native";
@@ -33,6 +34,7 @@ import { registerForPush, type PushAvailability } from "@/push/registration";
 import { pickAndUploadAvatar } from "@/files/avatar";
 import { ActionSheet } from "@/ui/ActionSheet";
 import { TabHeader } from "@/ui/TabHeader";
+import { useOrg } from "@/org/useOrg";
 
 export default function MoreScreen() {
   const { t } = useTranslation();
@@ -40,6 +42,9 @@ export default function MoreScreen() {
   const { api, user } = useSignedIn();
   const { signOut, updateUser } = useSession();
   const [photoMenu, setPhotoMenu] = useState(false);
+  // «Оргструктура»: when there is a department or the reader may make one.
+  const org = useOrg();
+  const showsOrg = Boolean(org.structure?.departments.length) || org.canManage;
 
   async function changePhoto(action: "change" | "remove") {
     setPhotoMenu(false);
@@ -137,6 +142,9 @@ export default function MoreScreen() {
           {(
             [
               ["/people", t("people"), Contact, "open-people"],
+              ...(showsOrg
+                ? ([["/org", t("orgTitle"), Network, "open-org"]] as const)
+                : []),
               ["/scheduled", t("scheduledMoreItem"), Clock, "more-scheduled"],
               ["/knowledge", t("knowledgeBase"), BookOpen, "more-knowledge"],
               ["/settings", t("settingsTitle"), Settings, "open-settings"],

@@ -45,6 +45,7 @@ import {
 } from "@comamessenger/core";
 import { spacing } from "@comamessenger/tokens";
 import { useSignedIn } from "@/session/SessionProvider";
+import { DepartmentMentionNotes } from "@/org/mentionNotes";
 import { useTheme } from "@/lib/theme";
 import { chatTitle } from "@/chats/ChatRow";
 import { Avatar } from "@/ui/Avatar";
@@ -932,6 +933,7 @@ export function ConversationView({
                           onUpdated={conversation.applyMessage}
                         />
                       </RowBoundary>
+                      <DepartmentMentionNotes message={message} />
                     </View>
                   );
                 }}

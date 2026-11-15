@@ -3,6 +3,8 @@ import { router } from "expo-router";
 import { ChevronRight } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { radius, spacing } from "@comamessenger/tokens";
+import { useStore } from "zustand";
+import { useMessenger } from "@/messenger/MessengerProvider";
 import { useSignedIn } from "@/session/SessionProvider";
 import { useTheme } from "@/lib/theme";
 import { Avatar } from "@/ui/Avatar";
@@ -30,7 +32,9 @@ export function SettingsHome({
   const { t } = useTranslation();
   const theme = useTheme();
   const { user } = useSignedIn();
-  const own = workspaceLinks(user);
+  const { store } = useMessenger();
+  const features = useStore(store, (state) => state.features);
+  const own = workspaceLinks(user, features);
   const audit = own.findIndex((link) => link.id === "audit");
   const workspace =
     audit < 0
