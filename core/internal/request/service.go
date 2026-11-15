@@ -83,6 +83,9 @@ func (s *Service) ResolveTx(ctx context.Context, tx pgx.Tx, user identity.User, 
 		if err != nil {
 			return Recipients{}, err
 		}
+		if len(group) == 0 {
+			return Recipients{}, ErrAudienceEmpty
+		}
 		// The rows below check membership and status once more.
 		filter, groupLabel = group, label
 	}

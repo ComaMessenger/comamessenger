@@ -99,23 +99,23 @@ func (executor *Executor) confirmationTarget(ctx context.Context, invocation Inv
 		addChat(text("chat_id"))
 		if mentions, _ := arguments["mentioned_actor_ids"].([]any); len(mentions) > maxAutoCardMentions {
 			force = true
-		} else if len(mentions) > 0 {
-			// A department id among the mentions is expanded into its
-			// people by the send path (phase 6.5): it may notify more than
-			// the bound by itself, so a person confirms the card.
-			ids := make([]string, 0, len(mentions))
-			for _, value := range mentions {
-				if id, ok := value.(string); ok && uuid.Validate(id) == nil {
-					ids = append(ids, id)
-				}
-			}
-			var department bool
-			if err := executor.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM departments WHERE org_id=$1 AND id=ANY($2::uuid[]))`,
-				invocation.User.OrgID, ids).Scan(&department); err != nil {
+		}
+	}
+	switch definition.Name {
+	case "post_message", "reply_in_thread", "post_card":
+		// A department id among the mentions is expanded into its people
+		// by the send path (phase 6.5): one id may notify a whole
+		// department, so a person confirms the write.
+		if !force {
+			mentions, _ := arguments["mentioned_actor_ids"].([]any)
+			department, err := executor.mentionsDepartment(ctx, invocation.User.OrgID, mentions)
+			if err != nil {
 				return "", false, err
 			}
 			force = department
 		}
+	}
+	switch definition.Name {
 	case "update_card", "add_reaction":
 		if err := addMessageChat(text("message_id")); err != nil {
 			return "", false, err
@@ -179,4 +179,21 @@ func (executor *Executor) collectionRecipients(ctx context.Context, invocation I
 		JOIN actors a ON a.org_id=cm.org_id AND a.id=cm.actor_id AND a.type='user' AND a.status='active' AND a.deleted_at IS NULL
 		WHERE m.org_id=$1 AND m.id=$2`, invocation.User.OrgID, messageID).Scan(&count)
 	return count, err
+}
+
+// mentionsDepartment reports whether any of the mentioned ids is a
+// department of the workspace.
+func (executor *Executor) mentionsDepartment(ctx context.Context, orgID string, mentions []any) (bool, error) {
+	ids := make([]string, 0, len(mentions))
+	for _, value := range mentions {
+		if id, ok := value.(string); ok && uuid.Validate(id) == nil {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		return false, nil
+	}
+	var department bool
+	err := executor.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM departments WHERE org_id=$1 AND id=ANY($2::uuid[]))`, orgID, ids).Scan(&department)
+	return department, err
 }

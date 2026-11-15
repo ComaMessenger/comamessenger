@@ -192,6 +192,20 @@ func TestWritingToAPersonDirectlyNeedsApprovalWhateverTheTool(t *testing.T) {
 	if err != nil || result.Confirmation == nil {
 		t.Fatalf("card mentioning a department: %+v err=%v", result, err)
 	}
+	if _, err := w.pool.Exec(t.Context(), `UPDATE agents SET confirmation_policy=confirmation_policy || '{"post_message":"auto","reply_in_thread":"auto"}' WHERE actor_id=$1`, w.agentID); err != nil {
+		t.Fatal(err)
+	}
+	result, err = w.invoke(t, scheduled(), "post_message", `{"chat_id":"`+w.groupChat+`","client_msg_id":"`+uuid.NewString()+`","body":"Зал, планёрка","mentioned_actor_ids":["`+departmentID+`"]}`)
+	if err != nil || result.Confirmation == nil {
+		t.Fatalf("message mentioning a department: %+v err=%v", result, err)
+	}
+	result, err = w.invoke(t, scheduled(), "reply_in_thread", `{"chat_id":"`+w.groupChat+`","thread_root_id":"`+w.groupMessage+`","client_msg_id":"`+uuid.NewString()+`","body":"Зал, планёрка","mentioned_actor_ids":["`+departmentID+`"]}`)
+	if err != nil || result.Confirmation == nil {
+		t.Fatalf("thread reply mentioning a department: %+v err=%v", result, err)
+	}
+	if _, err := w.pool.Exec(t.Context(), `UPDATE agents SET confirmation_policy=confirmation_policy || '{"post_message":"confirm"}' WHERE actor_id=$1`, w.agentID); err != nil {
+		t.Fatal(err)
+	}
 	// A card in the run chat with a few mentions still runs by itself.
 	result, err = w.invoke(t, scheduled(), "post_card", `{"chat_id":"`+w.groupChat+`","client_msg_id":"`+uuid.NewString()+`","mentioned_actor_ids":["`+w.veraID+`"],"blocks":{"version":1,"card":{"title":"Слот"}}}`)
 	if err != nil || result.Confirmation != nil {

@@ -289,10 +289,30 @@ func TestDepartmentMentions(t *testing.T) {
 		if err != nil || created || again.ID != first.ID {
 			t.Fatalf("replay: created=%v err=%v", created, err)
 		}
+		if ids, departments := departmentsOf(t, again); !sameIDs(ids, []string{w.hallID}) || len(departments) != 1 {
+			t.Fatalf("replay departments = %v %v", ids, departments)
+		}
 		input.MentionedDepartmentIDs = []string{w.rehabID}
 		if _, _, err := w.service.Create(ctx, w.author, w.chatID, input); !errors.Is(err, ErrIdempotencyConflict) {
 			t.Fatalf("other department: err = %v", err)
 		}
+	})
+
+	t.Run("a department in a thread reply notifies but does not subscribe its people", func(t *testing.T) {
+		root, err := w.send(t, w.owner, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		reply, _, err := w.service.Create(ctx, w.author, w.chatID, CreateInput{ClientMsgID: mustID(t), Body: "в тред", BodyFormat: "plain",
+			ThreadRootID: &root.ID, MentionedActorIDs: []string{w.carol.ActorID}, MentionedDepartmentIDs: []string{w.hallID}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !sameIDs(reply.MentionedActorIDs, []string{w.carol.ActorID, w.boris.ActorID, w.vera.ActorID}) {
+			t.Fatalf("mentioned = %v", reply.MentionedActorIDs)
+		}
+		assertCount(t, w.pool, `SELECT count(*) FROM thread_followers WHERE thread_root_id = $1 AND actor_id = ANY($2::uuid[])`, 0, root.ID, []string{w.boris.ActorID, w.vera.ActorID})
+		assertCount(t, w.pool, `SELECT count(*) FROM thread_followers WHERE thread_root_id = $1 AND actor_id = $2`, 1, root.ID, w.carol.ActorID)
 	})
 
 	t.Run("an agent may mention a department like a person", func(t *testing.T) {

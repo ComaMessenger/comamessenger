@@ -295,6 +295,12 @@ func (s *Service) createTx(ctx context.Context, tx pgx.Tx, user identity.User, c
 					return Message{}, false, 0, err
 				}
 				existing = replayed[0]
+			} else {
+				replayed := []Message{existing}
+				if err := hydrateDepartmentMentions(ctx, tx, user.OrgID, replayed); err != nil {
+					return Message{}, false, 0, err
+				}
+				existing = replayed[0]
 			}
 			return existing, false, 0, nil
 		}
@@ -399,7 +405,7 @@ func (s *Service) createTx(ctx context.Context, tx pgx.Tx, user identity.User, c
 	}
 	highWatermark := seq
 	if input.ThreadRootID != nil {
-		highWatermark, err = autoFollowThread(ctx, tx, user, *input.ThreadRootID, input.MentionedActorIDs, highWatermark)
+		highWatermark, err = autoFollowThread(ctx, tx, user, *input.ThreadRootID, mentions.Explicit, highWatermark)
 		if err != nil {
 			return Message{}, false, 0, err
 		}
