@@ -99,5 +99,6 @@ export function adoptProbe(fromID: string, toID: string) {
   const poster = posterOf(fromID);
   if (poster) recordPoster(toID, poster);
   const facts = mediaFacts(fromID);
-  if (facts.aspect || facts.durationMs) recordMediaFacts(toID, facts);
+  if (facts.aspect || facts.durationMs)
+    recordMediaFacts(toID, facts, facts.aspectFrom ?? "full");
 }

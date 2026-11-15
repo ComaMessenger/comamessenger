@@ -198,7 +198,7 @@ func (s *Service) ProcessFile(ctx context.Context, fileID string) error {
 				s.markProcessingFailed(ctx, fileID)
 				return nil
 			}
-			if err := s.savePreview(ctx, record, preview); err != nil {
+			if err := s.savePreview(ctx, record, preview, nil); err != nil {
 				s.markProcessingFailed(ctx, fileID)
 				return err
 			}
@@ -289,14 +289,22 @@ func makeImagePreview(data []byte) ([]byte, error) {
 	destination := image.NewRGBA(image.Rect(0, 0, width, height))
 	draw.Draw(destination, destination.Bounds(), &image.Uniform{C: color.White}, image.Point{}, draw.Src)
 	xdraw.CatmullRom.Scale(destination, destination.Bounds(), source, source.Bounds(), draw.Over, nil)
+	// Turned after scaling: a quarter turn of 512 px is cheap, of 40 MP is not.
+	// The preview carries no EXIF, so it must be upright in its pixels.
+	upright := applyOrientation(destination, jpegOrientation(data))
 	var encoded bytes.Buffer
-	if err := jpeg.Encode(&encoded, destination, &jpeg.Options{Quality: 82}); err != nil {
+	if err := jpeg.Encode(&encoded, upright, &jpeg.Options{Quality: 82}); err != nil {
 		return nil, err
 	}
 	return encoded.Bytes(), nil
 }
 
-func (s *Service) savePreview(ctx context.Context, parent processRecord, data []byte) error {
+// savePreview stores a preview and points the parent at it. With replace set
+// it swaps out that earlier preview instead; the old preview row is then
+// unattached and the reconciler deletes it (and returns its bytes to the
+// quota) after the upload TTL, so a client holding the old id still loads
+// it meanwhile.
+func (s *Service) savePreview(ctx context.Context, parent processRecord, data []byte, replace *string) error {
 	previewID, err := id.New()
 	if err != nil {
 		return err
@@ -329,7 +337,11 @@ func (s *Service) savePreview(ctx context.Context, parent processRecord, data []
 		_ = s.store.Delete(context.Background(), key)
 		return err
 	}
-	result, err = tx.Exec(ctx, `UPDATE files SET preview_file_id = $2 WHERE id = $1 AND preview_file_id IS NULL`, parent.ID, previewID)
+	if replace == nil {
+		result, err = tx.Exec(ctx, `UPDATE files SET preview_file_id = $2, preview_oriented = true WHERE id = $1 AND preview_file_id IS NULL`, parent.ID, previewID)
+	} else {
+		result, err = tx.Exec(ctx, `UPDATE files SET preview_file_id = $2, preview_oriented = true WHERE id = $1 AND preview_file_id = $3`, parent.ID, previewID, *replace)
+	}
 	if err != nil || result.RowsAffected() != 1 {
 		_ = s.store.Delete(context.Background(), key)
 		if err != nil {

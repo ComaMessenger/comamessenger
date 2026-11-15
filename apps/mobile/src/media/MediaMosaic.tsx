@@ -195,8 +195,13 @@ function PhotoPreview({ file }: { file: FileMetadata }) {
           onLoad={(event) => {
             setState("loaded");
             const { width, height } = event.source;
+            // The server's small copy measures weaker than the photo itself.
             if (width > 0 && height > 0)
-              recordMediaFacts(file.id, { aspect: width / height });
+              recordMediaFacts(
+                file.id,
+                { aspect: width / height },
+                local || !file.preview_file_id ? "full" : "preview",
+              );
           }}
           onError={() => setState("failed")}
         />
