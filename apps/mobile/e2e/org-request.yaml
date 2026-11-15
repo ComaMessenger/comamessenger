@@ -96,5 +96,51 @@ appId: com.comamessenger.app
     visible:
       id: request-sheet
     timeout: 10000
-- assertVisible: .*Ждём от 3 человек.*
+# The department is chosen already; how many depends on the chat picked.
+- assertVisible: .*Ждём от \d+ человек.*
+- assertVisible: "Зал ЛФК, .*"
 - takeScreenshot: org-request-from-department-${THEME}
+
+# «Запрос» on a person card: the direct chat first, one person to wait for.
+- tapOn:
+    point: 50%,8%
+- extendedWaitUntil:
+    notVisible:
+      id: request-sheet
+    timeout: 5000
+- scrollUntilVisible:
+    element: .*Олег Чернов.*
+    direction: DOWN
+- tapOn: .*Олег Чернов.*
+- extendedWaitUntil:
+    visible:
+      id: person-request
+    timeout: 10000
+- tapOn:
+    id: person-request
+- extendedWaitUntil:
+    visible:
+      id: request-chat-picker
+    timeout: 10000
+- takeScreenshot: org-request-person-chats-${THEME}
+- evalScript: ${output.direct = false}
+- runFlow:
+    when:
+      visible:
+        id: request-chat-direct
+    commands:
+      - evalScript: ${output.direct = true}
+      - tapOn:
+          id: request-chat-direct
+- runFlow:
+    when:
+      true: ${!output.direct}
+    commands:
+      - tapOn:
+          id: request-chat-0
+- extendedWaitUntil:
+    visible:
+      id: request-sheet
+    timeout: 15000
+- assertVisible: .*Ждём от 1 человека.*
+- takeScreenshot: org-request-from-person-${THEME}
