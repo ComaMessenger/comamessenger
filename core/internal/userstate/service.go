@@ -50,6 +50,10 @@ type ChatUnread struct {
 	LastReadSeq  int64  `json:"last_read_seq"`
 	UnreadCount  int64  `json:"unread_count"`
 	MentionCount int64  `json:"mention_count"`
+	// RequestsWaiting and RequestsNextDueAt: requests of the chat waiting
+	// for the person's answer (see addRequestCounts).
+	RequestsWaiting   int64      `json:"requests_waiting"`
+	RequestsNextDueAt *time.Time `json:"requests_next_due_at"`
 }
 
 type ThreadUnread struct {
@@ -64,7 +68,8 @@ type UnreadSnapshot struct {
 	Chats   []ChatUnread   `json:"chats"`
 	Threads []ThreadUnread `json:"threads"`
 	// RemindersFiredTotal: fired reminders the person has not closed yet.
-	RemindersFiredTotal int `json:"reminders_fired_total"`
+	RemindersFiredTotal  int   `json:"reminders_fired_total"`
+	RequestsWaitingTotal int64 `json:"requests_waiting_total"`
 }
 
 type Service struct {
@@ -367,7 +372,7 @@ func (s *Service) Unread(ctx context.Context, user identity.User) (UnreadSnapsho
 	chatRows, err := s.pool.Query(ctx, `
 		SELECT c.id,COALESCE(cr.last_read_seq,0),
 			count(m.id) FILTER (WHERE m.created_seq>COALESCE(cr.last_read_seq,0) AND m.actor_id<>$2 AND m.deleted_at IS NULL),
-			count(m.id) FILTER (WHERE m.created_seq>COALESCE(cr.last_read_seq,0) AND m.actor_id<>$2 AND m.deleted_at IS NULL AND $2=ANY(m.mentioned_actor_ids))
+			count(m.id) FILTER (WHERE m.created_seq>COALESCE(cr.last_read_seq,0) AND m.actor_id<>$2 AND m.deleted_at IS NULL AND ($2=ANY(m.mentioned_actor_ids) OR `+requestRecipient+`))
 		FROM chats c JOIN chat_members cm ON cm.org_id=c.org_id AND cm.chat_id=c.id AND cm.actor_id=$2
 		LEFT JOIN chat_reads cr ON cr.org_id=c.org_id AND cr.chat_id=c.id AND cr.actor_id=$2
 		LEFT JOIN messages m ON m.org_id=c.org_id AND m.chat_id=c.id AND m.thread_root_id IS NULL
@@ -416,6 +421,9 @@ func (s *Service) Unread(ctx context.Context, user identity.User) (UnreadSnapsho
 	}
 	snapshot := UnreadSnapshot{Chats: chats, Threads: threads}
 	if err := s.addReminders(ctx, user, &snapshot); err != nil {
+		return UnreadSnapshot{}, err
+	}
+	if err := s.addRequestCounts(ctx, user, &snapshot); err != nil {
 		return UnreadSnapshot{}, err
 	}
 	return snapshot, nil

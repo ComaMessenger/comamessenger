@@ -35,6 +35,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/password"
 	"github.com/comamessenger/comamessenger/core/internal/push"
 	"github.com/comamessenger/comamessenger/core/internal/realtime"
+	"github.com/comamessenger/comamessenger/core/internal/request"
 	"github.com/comamessenger/comamessenger/core/internal/scheduled"
 	"github.com/comamessenger/comamessenger/core/internal/scheduledreset"
 	"github.com/comamessenger/comamessenger/core/internal/search"
@@ -248,6 +249,17 @@ func main() {
 	}
 	go scheduledService.RunCleanup(realtimeCtx, time.Minute)
 	reminderService, stopReminders := startReminders(realtimeCtx, pool, afterCommit, logger)
+	requestService := request.NewService(pool, afterCommit)
+	messageService.SetRequests(requestService)
+	requestClient, err := request.NewClient(pool, requestService, logger)
+	if err != nil {
+		logger.Error("request job initialization failed", "error", err)
+		os.Exit(1)
+	}
+	if err := requestClient.Start(realtimeCtx); err != nil {
+		logger.Error("request job startup failed", "error", err)
+		os.Exit(1)
+	}
 	searchService := search.NewService(pool)
 	knowledgeService := knowledge.NewService(pool, fileService, agentConfigService, knowledge.NewHTTPEmbedder())
 	knowledgeClient, err := knowledge.NewIndexingClient(pool, knowledgeService, logger)
@@ -304,7 +316,7 @@ func main() {
 		Addr: cfg.HTTPAddr,
 		Handler: serverhttp.NewHandler(logger, cfg.PublicAppURL, pool.Ping, serverhttp.Dependencies{
 			Identity: identityService, Agents: agentService, AgentConfig: agentConfigService, AgentProvider: agentProviderService, AgentTools: agentToolExecutor, AgentRuns: agentRunService, AgentTriggers: agentTriggerService, Architect: architectService, Chats: chatService,
-			Messages: messageService, Scheduled: scheduledService, Reminders: reminderService, UserState: userStateService, Push: pushService, Workspace: workspaceService, Files: fileService, Search: searchService, Knowledge: knowledgeService, Interactive: interactiveService, Webhooks: webhookService, Realtime: realtimeServer,
+			Messages: messageService, Scheduled: scheduledService, Reminders: reminderService, Requests: requestService, UserState: userStateService, Push: pushService, Workspace: workspaceService, Files: fileService, Search: searchService, Knowledge: knowledgeService, Interactive: interactiveService, Webhooks: webhookService, Realtime: realtimeServer,
 			CookieSecure: cfg.Auth.CookieSecure, RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
 			BootstrapToken: cfg.BootstrapToken, RequireBootstrapToken: cfg.AppEnv != "development",
 			TrustedProxyCIDRs: cfg.TrustedProxyCIDRs, RevokeRealtimeSession: realtimeServer.RevokeSession,
