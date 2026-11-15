@@ -174,6 +174,15 @@ export const orgRu = {
   orgPersonEditorTitle: "Отдел и должность",
   orgAdditionalLimit: "Не больше 10 дополнительных отделов",
   orgChoose: "Выбрать",
+  orgRequestNested: "со всеми вложенными · {count} чел. в чате",
+  orgRequestInChat: "{count} чел. в чате",
+  orgRequestDepartment: "Отдел",
+  orgRequestPosition: "Должность",
+  orgRequestChatTitle: "Где спросить",
+  orgRequestChatHint:
+    "Запрос увидят в выбранном чате; ответят только люди из адресата.",
+  orgRequestChatPeople: "{count} чел. из адресата в чате",
+  orgRequestDirect: "Личный чат",
   orgMentionDepartments: "Отделы",
   orgMentionPeople: "Люди",
   orgMentionInChat:
@@ -357,6 +366,15 @@ export const orgEn: Record<keyof typeof orgRu, string> = {
   orgPersonEditorTitle: "Department and position",
   orgAdditionalLimit: "At most 10 additional departments",
   orgChoose: "Choose",
+  orgRequestNested: "with subdepartments · {count} in chat",
+  orgRequestInChat: "{count} in chat",
+  orgRequestDepartment: "Department",
+  orgRequestPosition: "Position",
+  orgRequestChatTitle: "Where to ask",
+  orgRequestChatHint:
+    "The chosen chat sees the request; only people of the addressee answer.",
+  orgRequestChatPeople: "{count} of the addressee in the chat",
+  orgRequestDirect: "Direct chat",
   orgMentionDepartments: "Departments",
   orgMentionPeople: "People",
   orgMentionInChat:
