@@ -19,13 +19,18 @@ const sweepBatch = 200
 //     away.substitute.removed for its substitute.
 //
 // It returns the high watermark per organization for the realtime wake-up.
-func (s *Service) Sweep(ctx context.Context, now time.Time) (map[string]int64, error) {
-	now = now.UTC()
+// It goes by the database clock, which every read compares with; the time
+// RunStatusExpiry passes is not used.
+func (s *Service) Sweep(ctx context.Context, _ time.Time) (map[string]int64, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin away sweep: %w", err)
 	}
 	defer tx.Rollback(ctx)
+	var now time.Time
+	if err := tx.QueryRow(ctx, `SELECT now()`).Scan(&now); err != nil {
+		return nil, fmt.Errorf("read the clock: %w", err)
+	}
 	orgRows, err := tx.Query(ctx, `
 		SELECT DISTINCT aw.org_id FROM actor_away aw
 		JOIN actors a ON a.org_id = aw.org_id AND a.id = aw.actor_id

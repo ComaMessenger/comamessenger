@@ -101,8 +101,10 @@ func TestAwayMutesPushExceptRemindersAndAdminDirectMessages(t *testing.T) {
 	if count(`SELECT count(*) FROM email_digest_items WHERE actor_id=$1`, anna) != 1 {
 		t.Fatal("no digest item before the status")
 	}
-	pool.Exec(ctx, `DELETE FROM mobile_push_deliveries`)
-	_ = early
+	// So is its push, queued but not sent yet when the status starts.
+	if deliveriesOf(anna) != 1 {
+		t.Fatal("no push queued before the status")
+	}
 
 	statuses := away.NewService(pool, messages, nil, logger)
 	enabled, text, mute := false, "", true
@@ -131,7 +133,10 @@ func TestAwayMutesPushExceptRemindersAndAdminDirectMessages(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(relay.messages) != 1 {
-		t.Fatalf("relay messages = %d", len(relay.messages))
+		t.Fatalf("relay messages = %d, want only the substitute's", len(relay.messages))
+	}
+	if got := count(`SELECT count(*) FROM mobile_push_deliveries WHERE event_seq=$1 AND last_error='suppressed_away'`, early.CreatedSeq); got != 1 {
+		t.Fatalf("the early push was not suppressed: %d", got)
 	}
 	assigned := openPayload(t, keys[marina], relay.messages[0].Ciphertext)
 	if assigned.Title != "Вы замещаете: Anna" || !strings.HasPrefix(assigned.Body, "с ") || assigned.URL != "/people/"+anna {
@@ -143,8 +148,8 @@ func TestAwayMutesPushExceptRemindersAndAdminDirectMessages(t *testing.T) {
 	send(colleague, group)
 	send(colleague, group, anna)
 	send(colleague, colleagueDirect)
-	if got := deliveriesOf(anna); got != 0 {
-		t.Fatalf("muted deliveries = %d, want 0", got)
+	if got := deliveriesOf(anna); got != 1 {
+		t.Fatalf("muted deliveries = %d, want only the suppressed early one", got)
 	}
 	// A request to her and a task for her: nothing either.
 	requests := request.NewService(pool, nil)
@@ -173,15 +178,15 @@ func TestAwayMutesPushExceptRemindersAndAdminDirectMessages(t *testing.T) {
 		count(`SELECT count(*) FROM message_request_recipients WHERE actor_id=$1`, anna) != 1 {
 		t.Fatal("the request or the task does not concern anna")
 	}
-	if got := deliveriesOf(anna); got != 0 {
-		t.Fatalf("request or task deliveries while muted = %d, want 0", got)
+	if got := deliveriesOf(anna); got != 1 {
+		t.Fatalf("request or task deliveries while muted = %d, want 0 new", got-1)
 	}
 	if got := count(`SELECT count(*) FROM email_digest_items WHERE actor_id=$1 AND sent_at IS NULL`, anna); got != 0 {
 		t.Fatalf("digest items while away = %d", got)
 	}
 	// The owner's direct message: delivered, quietly; still no digest.
 	send(owner, ownerDirect)
-	if got := deliveriesOf(anna); got != 1 {
+	if got := deliveriesOf(anna); got != 2 {
 		t.Fatalf("owner's direct message deliveries = %d, want 1", got)
 	}
 	if got := count(`SELECT count(*) FROM email_digest_items WHERE actor_id=$1 AND sent_at IS NULL`, anna); got != 0 {
@@ -234,7 +239,9 @@ func TestAwayMutesPushExceptRemindersAndAdminDirectMessages(t *testing.T) {
 
 func TestAwayPeriodText(t *testing.T) {
 	moscow, _ := time.LoadLocation("Europe/Moscow")
-	at := func(month time.Month, day, hour int) time.Time { return time.Date(2026, month, day, hour, 0, 0, 0, moscow) }
+	at := func(month time.Month, day, hour int) time.Time {
+		return time.Date(2026, month, day, hour, 0, 0, 0, moscow)
+	}
 	for _, item := range []struct {
 		start, end time.Time
 		locale     string

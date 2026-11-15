@@ -144,7 +144,6 @@ type Service struct {
 	messages    *message.Service
 	scheduler   Scheduler
 	afterCommit func(orgID string, highWatermark int64)
-	now         func() time.Time
 	logger      *slog.Logger
 }
 
@@ -152,13 +151,10 @@ func NewService(pool *pgxpool.Pool, messages *message.Service, afterCommit func(
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Service{pool: pool, messages: messages, afterCommit: afterCommit, now: time.Now, logger: logger}
+	return &Service{pool: pool, messages: messages, afterCommit: afterCommit, logger: logger}
 }
 
 func (s *Service) SetScheduler(scheduler Scheduler) { s.scheduler = scheduler }
-
-// SetClock replaces the clock of Set (tests only).
-func (s *Service) SetClock(now func() time.Time) { s.now = now }
 
 const selectColumns = `aw.id, aw.kind, aw.label, aw.starts_at, aw.ends_at, aw.substitute_id, aw.mute_push,
 	aw.autoreply_enabled, aw.autoreply_text, aw.version`
@@ -333,7 +329,13 @@ func (s *Service) Set(ctx context.Context, user identity.User, input SetInput) (
 	if planned.expectedVersion != nil && (!exists || current.Version != *planned.expectedVersion) {
 		return Status{}, ErrVersionConflict
 	}
-	now := s.now().UTC().Truncate(time.Microsecond)
+	// The database clock, the one every read compares with: a status set
+	// to start now is active for the very next read.
+	var now time.Time
+	if err := tx.QueryRow(ctx, `SELECT now()`).Scan(&now); err != nil {
+		return Status{}, fmt.Errorf("read the clock: %w", err)
+	}
+	now = now.UTC()
 	running := exists && !current.StartsAt.After(now) && current.EndsAt.After(now)
 	startsAt := now
 	switch {

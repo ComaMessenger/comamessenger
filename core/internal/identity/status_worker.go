@@ -2,6 +2,7 @@ package identity
 
 import (
 	"context"
+	"log/slog"
 	"time"
 )
 
@@ -37,9 +38,12 @@ func (s *Service) expireStatusesOnce(ctx context.Context) {
 		s.wake(high)
 	}
 	for _, pass := range s.statusExpiryPasses {
-		if high, err := pass(ctx, s.now().UTC()); err == nil {
-			s.wake(high)
+		high, err := pass(ctx, s.now().UTC())
+		if err != nil {
+			slog.Warn("status expiry pass failed", "error", err)
+			continue
 		}
+		s.wake(high)
 	}
 }
 

@@ -50,6 +50,29 @@ var awayQuiet = `(e.type<>'reminder.fired' AND ` + awayMutedAt("u.org_id", "u.ac
 var awayDigestSuppressed = `UPDATE email_digest_items i SET sent_at=now(),last_error='suppressed_away',lease_token=NULL,lease_until=NULL
 	WHERE i.sent_at IS NULL AND i.available_at<=now() AND (i.lease_until IS NULL OR i.lease_until<now()) AND ` + awayMutedAt("i.org_id", "i.actor_id", "now()")
 
+// awayStillAllowed: the exceptions of awayAllows checked at delivery,
+// against the event alone: the person's own reminder, or a new message of
+// the owner or an administrator in a direct chat.
+const awayStillAllowed = `(e.type='reminder.fired' OR (e.type='message.created' AND EXISTS (
+	SELECT 1 FROM chats dc WHERE dc.org_id=e.org_id AND dc.id=e.chat_id AND dc.kind='direct') AND EXISTS (
+	SELECT 1 FROM actors boss WHERE boss.org_id=e.org_id AND boss.id=e.actor_id AND boss.type='user' AND boss.org_role IN ('owner','admin'))))`
+
+// awayWebSuppressed and awayMobileSuppressed close pending deliveries of
+// people who are away with mute_push now, but the exceptions: a push queued
+// just before the status started, or one waiting for a retry, is not sent
+// during the absence.
+var awayWebSuppressed = `UPDATE notification_deliveries d SET sent_at=now(),last_error='suppressed_away',lease_token=NULL,lease_until=NULL
+	FROM web_push_subscriptions s, events e
+	WHERE s.id=d.subscription_id AND e.org_id=d.org_id AND e.seq=d.event_seq
+	  AND d.sent_at IS NULL AND (d.lease_until IS NULL OR d.lease_until<now())
+	  AND ` + awayMutedAt("s.org_id", "s.actor_id", "now()") + ` AND NOT ` + awayStillAllowed
+
+var awayMobileSuppressed = `UPDATE mobile_push_deliveries p SET sent_at=now(),last_error='suppressed_away',lease_token=NULL,lease_until=NULL
+	FROM mobile_push_devices d, events e
+	WHERE d.id=p.device_id AND e.org_id=p.org_id AND e.seq=p.event_seq
+	  AND p.sent_at IS NULL AND (p.lease_until IS NULL OR p.lease_until<now())
+	  AND ` + awayMutedAt("d.org_id", "d.actor_id", "now()") + ` AND NOT ` + awayStillAllowed
+
 // awayRecipients: away.substitute.assigned goes to the substitute only,
 // while the status still names them.
 const awayRecipients = `

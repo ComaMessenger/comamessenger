@@ -837,6 +837,9 @@ func (w *Worker) deliver(ctx context.Context) error {
 	if _, err := w.pool.Exec(ctx, `DELETE FROM web_push_subscriptions ws WHERE NOT `+liveSubscription); err != nil {
 		return err
 	}
+	if _, err := w.pool.Exec(ctx, awayWebSuppressed); err != nil {
+		return err
+	}
 	leaseToken, err := id.New()
 	if err != nil {
 		return err
