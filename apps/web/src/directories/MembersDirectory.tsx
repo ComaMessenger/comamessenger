@@ -20,7 +20,6 @@ import {
   Button,
   Chip,
   EmptyState,
-  IconButton,
   InlineError,
   SearchField,
   Segmented,
@@ -551,15 +550,24 @@ function GroupedPeople({
             </span>
           </span>
         )}
-        <IconButton
-          size="icon-sm"
+        <button
+          type="button"
           className={cx("org-group__fold", isFolded && "org-group__fold--closed")}
-          label={isFolded ? t("orgUnfold", { name: title }) : t("orgFold", { name: title })}
+          aria-label={
+            isFolded
+              ? t("orgUnfold", { name: title })
+              : t("orgFold", { name: title })
+          }
+          title={
+            isFolded
+              ? t("orgUnfold", { name: title })
+              : t("orgFold", { name: title })
+          }
           aria-expanded={!isFolded}
           onClick={() => onFold(id)}
         >
-          <ChevronDown />
-        </IconButton>
+          <ChevronDown aria-hidden="true" />
+        </button>
       </div>
     );
   };

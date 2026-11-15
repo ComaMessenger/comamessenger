@@ -754,3 +754,23 @@ button.org-group__open:focus-visible {
     flex-wrap: wrap;
   }
 }
+.org-group__fold {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--coma-radius-md);
+  background: transparent;
+  color: var(--coma-muted);
+}
+.org-group__fold:hover,
+.org-group__fold:focus-visible {
+  background: var(--coma-surface-hover);
+  color: var(--coma-foreground);
+}
+.org-group__fold svg {
+  width: 16px;
+  height: 16px;
+}

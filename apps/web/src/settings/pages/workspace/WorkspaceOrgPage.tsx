@@ -203,16 +203,13 @@ async function assignInBatches(
     });
 }
 
-function DepartmentOptions({ structure }: { structure: OrgStructure }) {
-  return (
-    <>
-      {orgIndex(structure).order.map((department) => (
-        <option key={department.id} value={department.id}>
-          {departmentPath(structure, department.id)}
-        </option>
-      ))}
-    </>
-  );
+/** Options for a SelectField: it reads only direct <option> children. */
+function departmentOptions(structure: OrgStructure) {
+  return orgIndex(structure).order.map((department) => (
+    <option key={department.id} value={department.id}>
+      {departmentPath(structure, department.id)}
+    </option>
+  ));
 }
 
 function PersonCheckRow({
@@ -282,7 +279,7 @@ function MassAssignBar({
             onChange={(event) => setDepartment(event.target.value)}
           >
             <option value="">{t("orgChooseDepartment")}</option>
-            <DepartmentOptions structure={structure} />
+            {departmentOptions(structure)}
           </SelectField>
           <Button
             size="sm"
@@ -360,10 +357,13 @@ function DepartmentsTab({
 }) {
   const { t } = useTranslation();
   const index = orgIndex(structure);
+  // Nothing chosen yet: the first department, so the editor is not empty.
   const selected =
     selection?.kind === "department"
       ? index.departments.get(selection.id)
-      : undefined;
+      : selection === null
+        ? index.order[0]
+        : undefined;
 
   return (
     <div className="org-settings__split">
@@ -530,7 +530,7 @@ function NewDepartmentForm({
         onChange={(event) => setParent(event.target.value)}
       >
         <option value="">{t("orgTopLevel")}</option>
-        <DepartmentOptions structure={structure} />
+        {departmentOptions(structure)}
       </SelectField>
       <fieldset className="org-editor__people">
         <legend>{t("orgMembersField")}</legend>
@@ -705,22 +705,18 @@ function DepartmentEditor({
         onChange={(event) => setLead(event.target.value)}
       >
         <option value="">{t("orgNoLead")}</option>
-        <optgroup label={t("orgLeadFromMembers")}>
-          {members.map((membership) => (
-            <option key={membership.actorID} value={membership.actorID}>
-              {actors.get(membership.actorID)?.display_name}
+        {members.map((membership) => (
+          <option key={membership.actorID} value={membership.actorID}>
+            {actors.get(membership.actorID)?.display_name}
+          </option>
+        ))}
+        {people
+          .filter((person) => !memberIDs.has(person.actor_id))
+          .map((person) => (
+            <option key={person.actor_id} value={person.actor_id}>
+              {t("orgLeadOutside", { name: person.display_name })}
             </option>
           ))}
-        </optgroup>
-        <optgroup label={t("orgLeadOthers")}>
-          {people
-            .filter((person) => !memberIDs.has(person.actor_id))
-            .map((person) => (
-              <option key={person.actor_id} value={person.actor_id}>
-                {person.display_name}
-              </option>
-            ))}
-        </optgroup>
       </SelectField>
       {lead && !memberIDs.has(lead) && (
         <p className="org-hint">{t("orgLeadJoins")}</p>

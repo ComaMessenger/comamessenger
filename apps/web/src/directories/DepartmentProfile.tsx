@@ -272,33 +272,35 @@ export function DepartmentProfile({
               </div>
             </section>
           )}
+          {(members.length > 0 || !lead) && (
           <section className="member-profile__card">
-            <h3>{t("orgMembers", { count: members.length })}</h3>
-            {members.length ? (
-              <div className="org-card__list">
-                {members.map((membership) => {
-                  const actor = actors.get(membership.actorID)!;
-                  return (
-                    <OrgPersonLink
-                      key={membership.actorID}
-                      actor={actor}
-                      caption={personOrgLine(actor, structure)}
-                      mark={
-                        !membership.primary && (
-                          <OrgMark kind="additional">
-                            {t("orgMarkAdditional")}
-                          </OrgMark>
-                        )
-                      }
-                      onClick={() => openPerson(membership.actorID)}
-                    />
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="member-profile__muted">{t("orgMembersEmpty")}</p>
-            )}
-          </section>
+              <h3>{t("orgMembers", { count: members.length })}</h3>
+              {members.length ? (
+                <div className="org-card__list">
+                  {members.map((membership) => {
+                    const actor = actors.get(membership.actorID)!;
+                    return (
+                      <OrgPersonLink
+                        key={membership.actorID}
+                        actor={actor}
+                        caption={personOrgLine(actor, structure)}
+                        mark={
+                          !membership.primary && (
+                            <OrgMark kind="additional">
+                              {t("orgMarkAdditional")}
+                            </OrgMark>
+                          )
+                        }
+                        onClick={() => openPerson(membership.actorID)}
+                      />
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="member-profile__muted">{t("orgMembersEmpty")}</p>
+              )}
+            </section>
+          )}
         </div>
       </div>
       {menuOpen && (
