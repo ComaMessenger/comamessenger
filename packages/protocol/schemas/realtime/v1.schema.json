@@ -50,7 +50,17 @@
         "scheduled_message.updated",
         "scheduled_message.deleted",
         "scheduled_message.sent",
-        "scheduled_message.failed"
+        "scheduled_message.failed",
+        "request.assigned",
+        "request.updated",
+        "request.tally.updated",
+        "request.answer.updated",
+        "request.reminded",
+        "request.auto_reminded",
+        "reminder.created",
+        "reminder.updated",
+        "reminder.deleted",
+        "reminder.fired"
       ]
     },
     "CloseCode": {
@@ -187,7 +197,7 @@
         "ack_batch_size": { "type": "integer", "minimum": 1 },
         "max_unacked_events": { "type": "integer", "minimum": 1 },
         "features": {
-          "description": "Optional protocol additions this server accepts. typing_actions: the action field on typing frames.",
+          "description": "Optional protocol additions this server accepts. typing_actions: the action field on typing frames. message_requests: requests («Запрос») — the request REST routes, Message.request and the request.* events. message_reminders: personal reminders («Напомнить мне») — the reminder REST routes and the reminder.* events. A client hides a feature the server does not list.",
           "type": "array",
           "maxItems": 32,
           "items": { "type": "string", "maxLength": 64 }
@@ -211,7 +221,7 @@
         "seq": { "$ref": "#/$defs/Sequence" },
         "type": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$"
+          "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
         },
         "occurred_at": { "type": "string", "format": "date-time" },
         "actor_id": { "$ref": "#/$defs/UUID" },
@@ -220,7 +230,7 @@
         "data": {
           "type": "object",
           "additionalProperties": true,
-          "description": "Event payload. For message.created, message.updated and message.deleted it is the message in the shape of the REST feed (components/schemas/Message: files with metadata and no links, thread_reply_count, mentioned_actor_ids, blocks and agent_provenance when present), read when the event is delivered, plus silent on message.created and thread_root_reply_count on thread replies. A frame that would exceed the frame limit (WS_MAX_FRAME_BYTES) is never sent as is: its data becomes a stub with truncated: true — for message.* the Message shape with an empty body, no files and no blocks, for other events only their short scalar fields — and the client loads the record by REST. Frames are encoded without HTML escaping."
+          "description": "Event payload. For message.created, message.updated and message.deleted it is the message in the shape of the REST feed (components/schemas/Message: files with metadata and no links, thread_reply_count, mentioned_actor_ids, blocks, agent_provenance and request when present; never request_viewer, which is per reader), read when the event is delivered, plus silent on message.created and thread_root_reply_count on thread replies. A frame that would exceed the frame limit (WS_MAX_FRAME_BYTES) is never sent as is: its data becomes a stub with truncated: true — for message.* the Message shape with an empty body, no files and no blocks, for other events only their short scalar fields — and the client loads the record by REST. The data of request.* and reminder.* events is described by the RequestAssignedEvent … ReminderFiredEvent definitions: it never carries message text, notes, comments or who answered what. Frames are encoded without HTML escaping."
         }
       }
     },
@@ -350,6 +360,112 @@
           ]
         },
         "message": { "type": "string" }
+      }
+    },
+    "RequestAssignedEvent": {
+      "description": "data of request.assigned, sent only to one recipient of a new request (subject_id is the message id). Written in the same transaction before message.created so the client knows the request is addressed to it before it shows the card.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["message_id", "chat_id", "due_at"],
+      "properties": {
+        "message_id": { "$ref": "#/$defs/UUID" },
+        "chat_id": { "$ref": "#/$defs/UUID" },
+        "due_at": { "type": ["string", "null"], "format": "date-time" }
+      }
+    },
+    "RequestUpdatedEvent": {
+      "description": "data of request.updated, sent to the whole chat (subject_id is the message id): an answer that changes the count, closing, a recipient leaving. Only counters: never who answered or how.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["message_id", "chat_id", "status", "closed_reason", "answered_count", "waiting_count", "version"],
+      "properties": {
+        "message_id": { "$ref": "#/$defs/UUID" },
+        "chat_id": { "$ref": "#/$defs/UUID" },
+        "status": { "type": "string", "enum": ["open", "closed"] },
+        "closed_reason": { "type": ["string", "null"], "enum": ["author", "moderator", "message_deleted", "expired", null] },
+        "answered_count": { "type": "integer", "minimum": 0 },
+        "waiting_count": { "type": "integer", "minimum": 0 },
+        "version": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "RequestTallyUpdatedEvent": {
+      "description": "data of request.tally.updated, sent only to the author of the request (subject_id is the message id) after any answer. Chat admins who are not the author reload listRequestAnswers on request.updated instead.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["message_id", "chat_id", "tally", "waiting_count", "version"],
+      "properties": {
+        "message_id": { "$ref": "#/$defs/UUID" },
+        "chat_id": { "$ref": "#/$defs/UUID" },
+        "tally": { "type": "array", "maxItems": 4, "items": { "type": "integer", "minimum": 0 } },
+        "waiting_count": { "type": "integer", "minimum": 0 },
+        "version": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "RequestAnswerUpdatedEvent": {
+      "description": "data of request.answer.updated, sent only to the person who answered, to all their devices (subject_id is the message id). Carries no comment text: has_comment tells whether to reload it. version is the version of the person's answer.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["message_id", "chat_id", "option", "has_comment", "late", "version"],
+      "properties": {
+        "message_id": { "$ref": "#/$defs/UUID" },
+        "chat_id": { "$ref": "#/$defs/UUID" },
+        "option": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "has_comment": { "type": "boolean" },
+        "late": { "type": "boolean" },
+        "version": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "RequestRemindedEvent": {
+      "description": "data of request.reminded, sent to each recipient who has not answered (subject_id is the message id): a manual reminder by the author or the automatic one. Triggers a push.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["message_id", "chat_id", "kind"],
+      "properties": {
+        "message_id": { "$ref": "#/$defs/UUID" },
+        "chat_id": { "$ref": "#/$defs/UUID" },
+        "kind": { "type": "string", "enum": ["manual", "auto"] }
+      }
+    },
+    "RequestAutoRemindedEvent": {
+      "description": "data of request.auto_reminded, sent only to the author (subject_id is the message id): the outcome of the automatic reminder, also when everyone has answered (reminded is 0). Triggers a push.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["message_id", "chat_id", "reminded", "answered_count", "waiting_count"],
+      "properties": {
+        "message_id": { "$ref": "#/$defs/UUID" },
+        "chat_id": { "$ref": "#/$defs/UUID" },
+        "reminded": { "type": "integer", "minimum": 0 },
+        "answered_count": { "type": "integer", "minimum": 0 },
+        "waiting_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "ReminderEvent": {
+      "description": "data of reminder.created, reminder.updated and reminder.deleted, sent only to the owner's devices (subject_id is the reminder id). Never carries the note or the message text. reason is present on reminder.deleted only.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "message_id", "chat_id", "remind_at", "state", "version"],
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "message_id": { "$ref": "#/$defs/NullableUUID" },
+        "chat_id": { "$ref": "#/$defs/UUID" },
+        "remind_at": { "type": "string", "format": "date-time" },
+        "state": { "type": "string", "enum": ["pending", "fired"] },
+        "version": { "type": "integer", "minimum": 1 },
+        "reason": { "type": "string", "enum": ["removed", "message_deleted"] }
+      }
+    },
+    "ReminderFiredEvent": {
+      "description": "data of reminder.fired, sent only to the owner's devices (subject_id is the reminder id). late: fired more than 15 minutes after remind_at. Triggers a push unless it is more than 6 hours late.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "message_id", "chat_id", "fired_at", "late", "version"],
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "message_id": { "$ref": "#/$defs/NullableUUID" },
+        "chat_id": { "$ref": "#/$defs/UUID" },
+        "fired_at": { "type": "string", "format": "date-time" },
+        "late": { "type": "boolean" },
+        "version": { "type": "integer", "minimum": 1 }
       }
     },
     "ServerFrame": {

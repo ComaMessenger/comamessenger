@@ -1,0 +1,17 @@
+{
+  "op": "event",
+  "seq": 2010,
+  "type": "reminder.fired",
+  "occurred_at": "2026-11-17T09:00:00Z",
+  "actor_id": "0198c17d-9a31-7d4e-b0f2-5c8e1a7b6d01",
+  "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+  "subject_id": "0198c17d-d2e4-7b19-8c3a-41f6e9a0c7d2",
+  "data": {
+    "id": "0198c17d-d2e4-7b19-8c3a-41f6e9a0c7d2",
+    "message_id": null,
+    "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+    "fired_at": "2026-11-18T07:00:04Z",
+    "late": false,
+    "version": 3
+  }
+}

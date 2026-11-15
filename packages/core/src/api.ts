@@ -151,6 +151,19 @@ import type {
   StartArchitectSessionRequest,
 } from "./types";
 
+type Schemas = components["schemas"];
+// Requests and reminders (phase 6.4 wave 1): named here until packages/core
+// grows their modules (package K) and re-exports them from types.ts.
+type CreateRequestRequest = Schemas["CreateRequestRequest"];
+type AnswerRequestRequest = Schemas["AnswerRequestRequest"];
+type RequestState = Schemas["RequestState"];
+type RequestAnswerPage = Schemas["RequestAnswerPage"];
+type RequestRemindResult = Schemas["RequestRemindResult"];
+type RequestInboxPage = Schemas["RequestInboxPage"];
+type SetReminderRequest = Schemas["SetReminderRequest"];
+type Reminder = Schemas["Reminder"];
+type ReminderPage = Schemas["ReminderPage"];
+type ReminderIdEntry = Schemas["ReminderIdEntry"];
 type APIErrorPayload = components["schemas"]["Error"];
 type APIErrorCode = components["schemas"]["ErrorCode"] | "request_failed";
 export type RefreshStrategy = (
@@ -1501,6 +1514,133 @@ export class MessengerAPI {
   }
   unsaveMessage(id: string): Promise<void> {
     return this.request(`/api/v1/messages/${id}/saved`, { method: "DELETE" });
+  }
+  /**
+   * Sends a request («Запрос») to a chat; replays by client_msg_id return the
+   * original message. Wave 1 servers accept the people and chat audiences only.
+   */
+  createRequest(chatID: string, input: CreateRequestRequest): Promise<Message> {
+    return this.request(
+      `/api/v1/chats/${encodeURIComponent(chatID)}/requests`,
+      { method: "POST", body: JSON.stringify(input) },
+    );
+  }
+  /** A request and what the reader may do with it. */
+  messageRequest(messageID: string): Promise<RequestState> {
+    return this.request(`/api/v1/requests/${encodeURIComponent(messageID)}`);
+  }
+  /** Sets or changes the reader's answer and comment. */
+  answerRequest(
+    messageID: string,
+    input: AnswerRequestRequest,
+  ): Promise<RequestState> {
+    return this.request(
+      `/api/v1/requests/${encodeURIComponent(messageID)}/answer`,
+      { method: "PUT", body: JSON.stringify(input) },
+    );
+  }
+  /** Who answered what: the author and chat admins only. */
+  requestAnswers(
+    messageID: string,
+    options: {
+      filter?: "waiting" | `option:${0 | 1 | 2 | 3}`;
+      cursor?: string;
+      limit?: number;
+    } = {},
+  ): Promise<RequestAnswerPage> {
+    // Built by hand: React Native's URLSearchParams cannot set values.
+    const query = [
+      options.filter && `filter=${encodeURIComponent(options.filter)}`,
+      options.cursor && `cursor=${encodeURIComponent(options.cursor)}`,
+      options.limit && `limit=${options.limit}`,
+    ].filter(Boolean);
+    const suffix = query.length ? `?${query.join("&")}` : "";
+    return this.request(
+      `/api/v1/requests/${encodeURIComponent(messageID)}/answers${suffix}`,
+    );
+  }
+  /** The author reminds those who have not answered; 429 carries Retry-After. */
+  remindRequest(messageID: string): Promise<RequestRemindResult> {
+    return this.request(
+      `/api/v1/requests/${encodeURIComponent(messageID)}/remind`,
+      { method: "POST" },
+    );
+  }
+  /** Closes a request; closing a closed one returns its state. */
+  closeRequest(messageID: string): Promise<RequestState> {
+    return this.request(
+      `/api/v1/requests/${encodeURIComponent(messageID)}/close`,
+      { method: "POST" },
+    );
+  }
+  /** «Ждут вас»: requests waiting for the reader's answer or answered by them. */
+  requestInbox(
+    options: {
+      state?: "waiting" | "answered";
+      cursor?: string;
+      limit?: number;
+    } = {},
+  ): Promise<RequestInboxPage> {
+    const query = [
+      options.state && `state=${options.state}`,
+      options.cursor && `cursor=${encodeURIComponent(options.cursor)}`,
+      options.limit && `limit=${options.limit}`,
+    ].filter(Boolean);
+    const suffix = query.length ? `?${query.join("&")}` : "";
+    return this.request(`/api/v1/requests/inbox${suffix}`);
+  }
+  /** Creates the reader's reminder about a message or moves the existing one. */
+  setMessageReminder(
+    messageID: string,
+    input: SetReminderRequest,
+  ): Promise<Reminder> {
+    return this.request(
+      `/api/v1/messages/${encodeURIComponent(messageID)}/reminder`,
+      { method: "PUT", body: JSON.stringify(input) },
+    );
+  }
+  /** «Готово» or «Убрать»; repeating it is harmless. */
+  deleteMessageReminder(messageID: string): Promise<void> {
+    return this.request(
+      `/api/v1/messages/${encodeURIComponent(messageID)}/reminder`,
+      { method: "DELETE" },
+    );
+  }
+  /** Moves a reminder by id: for reminders whose message was deleted. */
+  updateReminder(id: string, input: SetReminderRequest): Promise<Reminder> {
+    return this.request(`/api/v1/reminders/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    });
+  }
+  deleteReminder(id: string): Promise<void> {
+    return this.request(`/api/v1/reminders/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+  }
+  /** The reader's reminders: pending soonest first, fired latest first. */
+  reminders(
+    options: {
+      state?: "pending" | "fired";
+      cursor?: string;
+      limit?: number;
+    } = {},
+  ): Promise<ReminderPage> {
+    const query = [
+      options.state && `state=${options.state}`,
+      options.cursor && `cursor=${encodeURIComponent(options.cursor)}`,
+      options.limit && `limit=${options.limit}`,
+    ].filter(Boolean);
+    const suffix = query.length ? `?${query.join("&")}` : "";
+    return this.request(`/api/v1/reminders${suffix}`);
+  }
+  /** The reader's reminders in one chat: the bell in the feed. */
+  async reminderIDs(chatID: string): Promise<ReminderIdEntry[]> {
+    return (
+      await this.request<{ reminders: ReminderIdEntry[] }>(
+        `/api/v1/reminders/ids?chat_id=${encodeURIComponent(chatID)}`,
+      )
+    ).reminders;
   }
   forward(id: string, chatID: string, clientMsgID: string): Promise<Message> {
     return this.request(`/api/v1/messages/${id}/forward`, {

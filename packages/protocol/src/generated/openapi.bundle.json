@@ -3345,6 +3345,667 @@
         }
       }
     },
+    "/api/v1/chats/{chat_id}/requests": {
+      "post": {
+        "operationId": "createRequest",
+        "description": "Sends a request message to the chat: a question with answer buttons addressed to some members. Any member who may write to the chat may send one (the same check as createMessage). The audience is turned into a fixed list of people at the moment of sending: the author, agents and deactivated people are left out, and whoever joins the chat later is not asked. Wave 1 accepts only the audiences people and chat; department and position are part of the contract but get 422 request_audience_unavailable until wave 2. Requests go to the main chat feed only, not into threads. A replay with the same client_msg_id and the same content returns the original message (200); the same key with other content gets 409 idempotency_conflict.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ChatId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRequestRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The original request message for an idempotent replay.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Request message created; it carries request and request_viewer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/requests/inbox": {
+      "get": {
+        "operationId": "listRequestInbox",
+        "description": "«Ждут вас»: requests addressed to the current person in chats they can read now (member and active, chat not archived, message not deleted). state=waiting lists open requests without the person's answer: those with a due date first (earliest due first), then the rest, newest first. state=answered lists open requests the person has answered, latest answer first. Closed requests are not listed.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "waiting",
+                "answered"
+              ],
+              "default": "waiting"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque next_cursor of the previous page.",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of the inbox; next_cursor continues it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestInboxPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/requests/{message_id}": {
+      "get": {
+        "operationId": "getRequest",
+        "description": "The request of a message and the current person's view of it. Anyone who can read the message may call it; others get 404.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MessageId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request and the viewer state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestState"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/requests/{message_id}/answer": {
+      "put": {
+        "operationId": "answerRequest",
+        "description": "Sets or changes the current person's answer; the comment is set by the same call. Only a recipient who is still a member may answer (403 not_member otherwise). A first answer after the due date is accepted while the request is open and is marked late. An answer may be changed before the due date, or while the request is open when it has none (409 request_change_too_late otherwise). Repeating the same answer and comment changes nothing and emits no events.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MessageId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerRequestRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The request and the viewer state after the answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestState"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/requests/{message_id}/answers": {
+      "get": {
+        "operationId": "listRequestAnswers",
+        "description": "Who answered what. Only the author and, while they hold the role, a chat owner or admin or a workspace moderator with chats.moderate who is in the chat; everyone else gets 403. Access is checked on every call. Without filter all recipients are listed: waiting first, then answered, latest answer first.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MessageId"
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "description": "`waiting` or `option:<0-3>`; absent lists everyone.",
+            "schema": {
+              "type": "string",
+              "pattern": "^(waiting|option:[0-3])$"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque next_cursor of the previous page.",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of answers with counts for the tabs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestAnswerPage"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/requests/{message_id}/remind": {
+      "post": {
+        "operationId": "remindRequest",
+        "description": "The author reminds recipients who have not answered. Not sooner than 2 hours after the previous manual reminder (429 request_remind_too_soon with Retry-After) and at most 5 times per request (409 request_limit_reached). A person gets at most 10 request reminders a day from all requests: the rest are not sent but are counted in reminded.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MessageId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "How many people were reminded and when the next reminder is allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestRemindResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/requests/{message_id}/close": {
+      "post": {
+        "operationId": "closeRequest",
+        "description": "Closes the request: no more answers. The author or a chat owner or admin (closed_reason author or moderator). Closing a closed request changes nothing and returns its state.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MessageId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The closed request and the viewer state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestState"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/messages/{message_id}/reminder": {
+      "put": {
+        "operationId": "setMessageReminder",
+        "description": "Creates the current person's reminder about a message they can read, or moves the existing one: one reminder per message and person. Moving a fired reminder makes it pending again. remind_at must be at least 1 minute and at most 365 days ahead (422 reminder_invalid). At most 500 pending reminders per person (409 reminder_limit_reached). Nobody else learns about the reminder.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MessageId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetReminderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The existing reminder was moved or its note changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Reminder"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Reminder created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Reminder"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteMessageReminder",
+        "description": "«Готово» or «Убрать»: removes the person's reminder about the message. Repeating it also returns 204.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MessageId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The message has no reminder of the person."
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/reminders": {
+      "get": {
+        "operationId": "listReminders",
+        "description": "The person's reminders. state=pending is ordered by remind_at, soonest first; state=fired by fired_at, latest first. The message is included only while the person can read it.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "fired"
+              ],
+              "default": "pending"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque next_cursor of the previous page.",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of reminders; next_cursor continues it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReminderPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/reminders/ids": {
+      "get": {
+        "operationId": "listReminderIds",
+        "description": "The person's reminders about messages of one chat, for the bell in the feed. Kept apart from Message so the feed stays the same for every reader.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reminders of the person in the chat.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReminderIds"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/reminders/{reminder_id}": {
+      "put": {
+        "operationId": "updateReminder",
+        "description": "Moves a reminder or changes its note by id: for reminders whose message was deleted (message_id is null). Someone else's id gets 404. Same rules as setMessageReminder.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ReminderId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetReminderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The reminder after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Reminder"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteReminder",
+        "description": "Removes a reminder by id. Repeating it, or someone else's id, also returns 204.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ReminderId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The person has no reminder with this id."
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/v1/messages/{message_id}/forward": {
       "post": {
         "operationId": "forwardMessage",
@@ -8619,6 +9280,15 @@
           "format": "uuid"
         }
       },
+      "ReminderId": {
+        "name": "reminder_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
       "UploadId": {
         "name": "upload_id",
         "in": "path",
@@ -8810,7 +9480,22 @@
           "voice_check_in_progress",
           "webhook_not_found",
           "webhook_rejected",
-          "workspace_not_found"
+          "workspace_not_found",
+          "chat_archived",
+          "not_implemented",
+          "not_member",
+          "reminder_invalid",
+          "reminder_limit_reached",
+          "reminder_not_found",
+          "request_audience_empty",
+          "request_audience_unavailable",
+          "request_change_too_late",
+          "request_closed",
+          "request_invalid",
+          "request_limit_reached",
+          "request_not_found",
+          "request_remind_too_soon",
+          "request_too_many_recipients"
         ]
       },
       "File": {
@@ -9792,7 +10477,17 @@
           "scheduled_message.updated",
           "scheduled_message.deleted",
           "scheduled_message.sent",
-          "scheduled_message.failed"
+          "scheduled_message.failed",
+          "request.assigned",
+          "request.updated",
+          "request.tally.updated",
+          "request.answer.updated",
+          "request.reminded",
+          "request.auto_reminded",
+          "reminder.created",
+          "reminder.updated",
+          "reminder.deleted",
+          "reminder.fired"
         ]
       },
       "RealtimeCloseCodeV1": {
@@ -10138,7 +10833,7 @@
             "minimum": 1
           },
           "features": {
-            "description": "Optional protocol additions this server accepts. typing_actions: the action field on typing frames.",
+            "description": "Optional protocol additions this server accepts. typing_actions: the action field on typing frames. message_requests: requests («Запрос») — the request REST routes, Message.request and the request.* events. message_reminders: personal reminders («Напомнить мне») — the reminder REST routes and the reminder.* events. A client hides a feature the server does not list.",
             "type": "array",
             "maxItems": 32,
             "items": {
@@ -10175,7 +10870,7 @@
           },
           "type": {
             "type": "string",
-            "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$"
+            "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
           },
           "occurred_at": {
             "type": "string",
@@ -10199,7 +10894,7 @@
           "data": {
             "type": "object",
             "additionalProperties": true,
-            "description": "Event payload. For message.created, message.updated and message.deleted it is the message in the shape of the REST feed (components/schemas/Message: files with metadata and no links, thread_reply_count, mentioned_actor_ids, blocks and agent_provenance when present), read when the event is delivered, plus silent on message.created and thread_root_reply_count on thread replies. A frame that would exceed the frame limit (WS_MAX_FRAME_BYTES) is never sent as is: its data becomes a stub with truncated: true — for message.* the Message shape with an empty body, no files and no blocks, for other events only their short scalar fields — and the client loads the record by REST. Frames are encoded without HTML escaping."
+            "description": "Event payload. For message.created, message.updated and message.deleted it is the message in the shape of the REST feed (components/schemas/Message: files with metadata and no links, thread_reply_count, mentioned_actor_ids, blocks, agent_provenance and request when present; never request_viewer, which is per reader), read when the event is delivered, plus silent on message.created and thread_root_reply_count on thread replies. A frame that would exceed the frame limit (WS_MAX_FRAME_BYTES) is never sent as is: its data becomes a stub with truncated: true — for message.* the Message shape with an empty body, no files and no blocks, for other events only their short scalar fields — and the client loads the record by REST. The data of request.* and reminder.* events is described by the RequestAssignedEvent … ReminderFiredEvent definitions: it never carries message text, notes, comments or who answered what. Frames are encoded without HTML escaping."
           }
         }
       },
@@ -10546,6 +11241,319 @@
           },
           "message": {
             "type": "string"
+          }
+        }
+      },
+      "RealtimeRequestAssignedEventV1": {
+        "description": "data of request.assigned, sent only to one recipient of a new request (subject_id is the message id). Written in the same transaction before message.created so the client knows the request is addressed to it before it shows the card.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "message_id",
+          "chat_id",
+          "due_at"
+        ],
+        "properties": {
+          "message_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "chat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "due_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "RealtimeRequestUpdatedEventV1": {
+        "description": "data of request.updated, sent to the whole chat (subject_id is the message id): an answer that changes the count, closing, a recipient leaving. Only counters: never who answered or how.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "message_id",
+          "chat_id",
+          "status",
+          "closed_reason",
+          "answered_count",
+          "waiting_count",
+          "version"
+        ],
+        "properties": {
+          "message_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "chat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "closed"
+            ]
+          },
+          "closed_reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "author",
+              "moderator",
+              "message_deleted",
+              "expired",
+              null
+            ]
+          },
+          "answered_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "waiting_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "RealtimeRequestTallyUpdatedEventV1": {
+        "description": "data of request.tally.updated, sent only to the author of the request (subject_id is the message id) after any answer. Chat admins who are not the author reload listRequestAnswers on request.updated instead.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "message_id",
+          "chat_id",
+          "tally",
+          "waiting_count",
+          "version"
+        ],
+        "properties": {
+          "message_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "chat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tally": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "waiting_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "RealtimeRequestAnswerUpdatedEventV1": {
+        "description": "data of request.answer.updated, sent only to the person who answered, to all their devices (subject_id is the message id). Carries no comment text: has_comment tells whether to reload it. version is the version of the person's answer.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "message_id",
+          "chat_id",
+          "option",
+          "has_comment",
+          "late",
+          "version"
+        ],
+        "properties": {
+          "message_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "chat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "option": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          },
+          "has_comment": {
+            "type": "boolean"
+          },
+          "late": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "RealtimeRequestRemindedEventV1": {
+        "description": "data of request.reminded, sent to each recipient who has not answered (subject_id is the message id): a manual reminder by the author or the automatic one. Triggers a push.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "message_id",
+          "chat_id",
+          "kind"
+        ],
+        "properties": {
+          "message_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "chat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "auto"
+            ]
+          }
+        }
+      },
+      "RealtimeRequestAutoRemindedEventV1": {
+        "description": "data of request.auto_reminded, sent only to the author (subject_id is the message id): the outcome of the automatic reminder, also when everyone has answered (reminded is 0). Triggers a push.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "message_id",
+          "chat_id",
+          "reminded",
+          "answered_count",
+          "waiting_count"
+        ],
+        "properties": {
+          "message_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "chat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reminded": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "answered_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "waiting_count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "RealtimeReminderEventV1": {
+        "description": "data of reminder.created, reminder.updated and reminder.deleted, sent only to the owner's devices (subject_id is the reminder id). Never carries the note or the message text. reason is present on reminder.deleted only.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "message_id",
+          "chat_id",
+          "remind_at",
+          "state",
+          "version"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "message_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "chat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "remind_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "fired"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "removed",
+              "message_deleted"
+            ]
+          }
+        }
+      },
+      "RealtimeReminderFiredEventV1": {
+        "description": "data of reminder.fired, sent only to the owner's devices (subject_id is the reminder id). late: fired more than 15 minutes after remind_at. Triggers a push unless it is more than 6 hours late.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "message_id",
+          "chat_id",
+          "fired_at",
+          "late",
+          "version"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "message_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "chat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "fired_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "late": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
           }
         }
       },
@@ -16617,8 +17625,10 @@
           "type": {
             "type": "string",
             "enum": [
-              "text"
-            ]
+              "text",
+              "request"
+            ],
+            "description": "request — a request for answers («Запрос»); its body is the question and request describes the answers. Clients that do not know a type show the body as text."
           },
           "body": {
             "type": "string"
@@ -16721,6 +17731,25 @@
           "truncated": {
             "type": "boolean",
             "description": "Realtime message.* events only: the event was larger than the connection's frame limit (WS_MAX_FRAME_BYTES). The payload keeps the Message shape with ids, version, sequence, times, thread and counters but an empty body, no files and no blocks; clients load the message by REST (GET /api/v1/messages/{message_id}/context). Other event types may carry truncated: true with only their short scalar fields."
+          },
+          "request": {
+            "description": "Present on messages of type request: the request as every reader sees it, without recipients or anyone's answers. Also in realtime message.* frames.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MessageRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "request_viewer": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageRequestViewer"
+              }
+            ],
+            "description": "REST only (feed pages, create and context responses), next to request: what the reading person may do with it. Never in realtime frames, which the whole chat shares; clients load it with getRequest when needed."
           }
         }
       },
@@ -18327,6 +19356,762 @@
           }
         }
       },
+      "RequestAnswerPreset": {
+        "type": "string",
+        "enum": [
+          "ack",
+          "yes_no",
+          "attend",
+          "done",
+          "custom"
+        ],
+        "description": "Ready-made answer types are stored as keys and translated by clients: ack «Ознакомлен(а)», yes_no «Да / Нет», attend «Приду / Не приду», done «Готово». custom carries 2–4 options written by the author."
+      },
+      "RequestAnswerSpec": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "preset"
+        ],
+        "properties": {
+          "preset": {
+            "$ref": "#/components/schemas/RequestAnswerPreset"
+          },
+          "options": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 4,
+            "description": "Only for custom, and then required: 1–32 characters each, no repeats ignoring case. Omitted or empty for ready-made presets.",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32
+            }
+          }
+        }
+      },
+      "RequestAudienceKind": {
+        "type": "string",
+        "enum": [
+          "people",
+          "chat",
+          "department",
+          "position"
+        ],
+        "description": "Whom the request asks. Wave 1 serves people and chat only: department and position get 422 request_audience_unavailable until wave 2 and clients do not offer them."
+      },
+      "RequestAudienceInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/RequestAudienceKind"
+          },
+          "actor_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 500,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Required for people. Intersected with the active members of the chat at the moment of sending, the author left out; an empty result gets 422 request_audience_empty."
+          },
+          "department_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Wave 2. Rejected with 422 request_audience_unavailable in wave 1."
+          },
+          "position_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Wave 2. Rejected with 422 request_audience_unavailable in wave 1."
+          }
+        }
+      },
+      "RequestAudience": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "label",
+          "count"
+        ],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/RequestAudienceKind"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 60,
+            "description": "The name of the only recipient (or, from wave 2, of the department or position) at the moment of sending; empty for chat and for several people. Never lists names."
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Current denominator of «N из M»: recipients who are still active members of the chat plus those who answered. A recipient who left without answering drops out of it."
+          }
+        }
+      },
+      "CreateRequestRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "client_msg_id",
+          "body",
+          "audience",
+          "answer"
+        ],
+        "properties": {
+          "client_msg_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The question; formatting and mentions work as in an ordinary message."
+          },
+          "body_format": {
+            "type": "string",
+            "enum": [
+              "plain",
+              "markdown"
+            ],
+            "default": "plain"
+          },
+          "mentioned_actor_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "uniqueItems": true
+          },
+          "audience": {
+            "$ref": "#/components/schemas/RequestAudienceInput"
+          },
+          "answer": {
+            "$ref": "#/components/schemas/RequestAnswerSpec"
+          },
+          "allow_comment": {
+            "type": "boolean",
+            "default": true
+          },
+          "due_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "At least 10 minutes and at most 90 days ahead."
+          },
+          "auto_remind": {
+            "type": "boolean",
+            "default": false,
+            "description": "Remind those who have not answered once before the due date, at max(due_at − 24 h, created_at + (due_at − created_at) / 2). Needs due_at at least 1 hour ahead (422 request_invalid, field auto_remind, otherwise)."
+          }
+        }
+      },
+      "MessageRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The request part of a message of type request. The same for every reader: it never lists recipients or anyone's answers. Carried by the feed, createMessage-like responses and realtime message.* frames.",
+        "required": [
+          "status",
+          "closed_reason",
+          "answer",
+          "allow_comment",
+          "due_at",
+          "auto_remind_at",
+          "audience",
+          "answered_count",
+          "waiting_count",
+          "version"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "closed"
+            ]
+          },
+          "closed_reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "author",
+              "moderator",
+              "message_deleted",
+              "expired",
+              null
+            ]
+          },
+          "answer": {
+            "$ref": "#/components/schemas/RequestAnswerSpec"
+          },
+          "allow_comment": {
+            "type": "boolean"
+          },
+          "due_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "auto_remind_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When those who have not answered get the automatic reminder; null without one."
+          },
+          "audience": {
+            "$ref": "#/components/schemas/RequestAudience"
+          },
+          "answered_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "waiting_count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "audience.count − answered_count."
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Grows with every change of the request; realtime request.* events carry it so stale ones are dropped."
+          }
+        }
+      },
+      "MessageRequestViewerAnswer": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "option",
+          "comment",
+          "answered_at",
+          "late",
+          "version"
+        ],
+        "properties": {
+          "option": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          },
+          "comment": {
+            "type": "string",
+            "maxLength": 280
+          },
+          "answered_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "late": {
+            "type": "boolean",
+            "description": "The first answer came after the due date («после срока»)."
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Version of the person's answer; AnswerRequestRequest.expected_version and request.answer.updated use it."
+          }
+        }
+      },
+      "MessageRequestViewer": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "What the current person may do with a request. Never in realtime frames, which are shared by the whole chat.",
+        "required": [
+          "role",
+          "answer",
+          "can_answer",
+          "can_change",
+          "can_view_answers",
+          "can_close",
+          "can_remind",
+          "next_remind_at",
+          "tally"
+        ],
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "author",
+              "recipient",
+              "observer"
+            ],
+            "description": "observer sees «Ответа ждут не от вас» and no buttons."
+          },
+          "answer": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MessageRequestViewerAnswer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "can_answer": {
+            "type": "boolean",
+            "description": "A recipient, the request is open, the person is in the chat and it is not archived."
+          },
+          "can_change": {
+            "type": "boolean",
+            "description": "Answered, the request is open and the due date has not passed."
+          },
+          "can_view_answers": {
+            "type": "boolean",
+            "description": "The author, a chat owner or admin, or a moderator with chats.moderate in the chat."
+          },
+          "can_close": {
+            "type": "boolean"
+          },
+          "can_remind": {
+            "type": "boolean",
+            "description": "The author, someone has not answered, 2 hours passed since the last manual reminder and fewer than 5 were sent."
+          },
+          "next_remind_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When a manual reminder is allowed again; null when it is allowed now or never again."
+          },
+          "tally": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "maxItems": 4,
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Answers per option, in option order. Only with can_view_answers, null otherwise."
+          }
+        }
+      },
+      "RequestState": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "request",
+          "viewer"
+        ],
+        "properties": {
+          "request": {
+            "$ref": "#/components/schemas/MessageRequest"
+          },
+          "viewer": {
+            "$ref": "#/components/schemas/MessageRequestViewer"
+          }
+        }
+      },
+      "AnswerRequestRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "option"
+        ],
+        "properties": {
+          "option": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3,
+            "description": "Index of the button; beyond the options of the request gets 422 request_invalid."
+          },
+          "comment": {
+            "type": "string",
+            "maxLength": 280,
+            "description": "Absent keeps the current comment, an empty string removes it. Only when the request allows comments."
+          },
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "MessageRequestViewerAnswer.version the change is based on; another one gets 409 version_conflict."
+          }
+        }
+      },
+      "RequestAnswer": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "actor_id",
+          "state",
+          "option",
+          "comment",
+          "answered_at",
+          "late",
+          "read"
+        ],
+        "properties": {
+          "actor_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "answered",
+              "waiting",
+              "left"
+            ],
+            "description": "left — the recipient answered and has left the chat since."
+          },
+          "option": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 3
+          },
+          "comment": {
+            "type": "string",
+            "maxLength": 280
+          },
+          "answered_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "late": {
+            "type": "boolean"
+          },
+          "read": {
+            "type": "boolean",
+            "description": "The recipient's read cursor reached the message («прочитал(а), не ответил(а)» against «не открывал(а) чат»)."
+          }
+        }
+      },
+      "RequestAnswerCounts": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "waiting",
+          "options"
+        ],
+        "properties": {
+          "waiting": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "options": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      },
+      "RequestAnswerPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "counts",
+          "next_cursor"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RequestAnswer"
+            }
+          },
+          "counts": {
+            "$ref": "#/components/schemas/RequestAnswerCounts"
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Opaque; pass as cursor to read the next page."
+          }
+        }
+      },
+      "RequestRemindResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reminded",
+          "next_remind_at"
+        ],
+        "properties": {
+          "reminded": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Recipients without an answer who were reminded, including those over the daily limit who got no push."
+          },
+          "next_remind_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "RequestInboxItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "message",
+          "chat_id",
+          "author",
+          "chat",
+          "request",
+          "viewer"
+        ],
+        "properties": {
+          "message": {
+            "$ref": "#/components/schemas/Message"
+          },
+          "chat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "author": {
+            "$ref": "#/components/schemas/SavedMessageAuthor"
+          },
+          "chat": {
+            "$ref": "#/components/schemas/SavedMessageChat"
+          },
+          "request": {
+            "$ref": "#/components/schemas/MessageRequest"
+          },
+          "viewer": {
+            "$ref": "#/components/schemas/MessageRequestViewer"
+          }
+        }
+      },
+      "RequestInboxPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RequestInboxItem"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Opaque; pass as cursor to read the next page."
+          }
+        }
+      },
+      "SetReminderRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "remind_at"
+        ],
+        "properties": {
+          "remind_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "At least 1 minute and at most 365 days ahead."
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "A note for oneself. Absent keeps the current note, an empty string removes it."
+          }
+        }
+      },
+      "ReminderMessage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "message",
+          "author",
+          "chat"
+        ],
+        "properties": {
+          "message": {
+            "$ref": "#/components/schemas/Message"
+          },
+          "author": {
+            "$ref": "#/components/schemas/SavedMessageAuthor"
+          },
+          "chat": {
+            "$ref": "#/components/schemas/SavedMessageChat"
+          }
+        }
+      },
+      "Reminder": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "A personal reminder about a message. Only its owner sees it. The message is included only while the owner can read it.",
+        "required": [
+          "id",
+          "message_id",
+          "chat_id",
+          "note",
+          "remind_at",
+          "state",
+          "fired_at",
+          "late",
+          "version",
+          "access",
+          "message"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "message_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "null after the message was deleted; the reminder stays because it has a note."
+          },
+          "chat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "remind_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "fired"
+            ]
+          },
+          "fired_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "late": {
+            "type": "boolean",
+            "description": "Fired more than 15 minutes after remind_at (the server was down); shown as «пропущено»."
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "access": {
+            "type": "string",
+            "enum": [
+              "available",
+              "none",
+              "deleted"
+            ],
+            "description": "available — message is filled; none — the owner cannot read the message now (left the chat, archived chat); deleted — the message was deleted. Without access only the note is shown."
+          },
+          "message": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ReminderMessage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "ReminderPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Reminder"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Opaque; pass as cursor to read the next page."
+          }
+        }
+      },
+      "ReminderIdEntry": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "message_id",
+          "remind_at",
+          "state"
+        ],
+        "properties": {
+          "message_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "remind_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "fired"
+            ]
+          }
+        }
+      },
+      "ReminderIds": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reminders"
+        ],
+        "properties": {
+          "reminders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReminderIdEntry"
+            }
+          }
+        }
+      },
       "ChatUnread": {
         "type": "object",
         "additionalProperties": false,
@@ -18355,6 +20140,20 @@
             "type": "integer",
             "format": "int64",
             "minimum": 0
+          },
+          "requests_waiting": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Open requests in the chat waiting for the person's answer. Absent on servers without message_requests."
+          },
+          "requests_next_due_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "The earliest due date among them; null when none has one."
           }
         }
       },
@@ -18413,6 +20212,18 @@
             "items": {
               "$ref": "#/components/schemas/ThreadUnread"
             }
+          },
+          "requests_waiting_total": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Requests waiting for the person's answer in all chats («Ждут вас»). Absent on servers without message_requests."
+          },
+          "reminders_fired_total": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Fired reminders the person has not closed yet. Absent on servers without message_reminders."
           }
         }
       },

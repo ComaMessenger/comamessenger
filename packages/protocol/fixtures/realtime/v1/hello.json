@@ -10,6 +10,8 @@
   "max_unacked_events": 128,
   "features": [
     "typing_actions",
-    "presence_snapshot"
+    "presence_snapshot",
+    "message_requests",
+    "message_reminders"
   ]
 }

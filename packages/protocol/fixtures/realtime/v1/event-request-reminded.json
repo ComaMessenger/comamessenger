@@ -1,0 +1,14 @@
+{
+  "op": "event",
+  "seq": 2005,
+  "type": "request.reminded",
+  "occurred_at": "2026-11-17T09:00:00Z",
+  "actor_id": "0198c17d-88ba-7ac2-8867-3f71d7722791",
+  "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+  "subject_id": "0198c17d-b55b-78d5-b099-f973dd1f265c",
+  "data": {
+    "message_id": "0198c17d-b55b-78d5-b099-f973dd1f265c",
+    "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+    "kind": "auto"
+  }
+}
