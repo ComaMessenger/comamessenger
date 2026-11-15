@@ -44,6 +44,14 @@ import {
   cx,
 } from "../ui";
 import { calendarLocale, requestErrorText } from "./format";
+import {
+  awayKindEmoji,
+  awayPickerHint,
+  activeAway,
+  visibleSubstitute,
+  withCurrentAway,
+} from "@comamessenger/core";
+import { useAwayLookup } from "../status/useAway";
 
 type DueChoice = "none" | "today" | "tomorrow" | "friday" | "custom";
 
@@ -170,9 +178,23 @@ export function RequestDialog({
     }
   }, [chatID, customDue, draft, due, userID]);
 
-  const people = members.filter(
-    (member) => member.type === "user" && member.actor_id !== userID,
-  );
+  const away = useAwayLookup();
+  const people = members
+    .filter((member) => member.type === "user" && member.actor_id !== userID)
+    .map((member) => withCurrentAway(member, away.overrides));
+  const peopleByID = new Map(people.map((member) => [member.actor_id, member]));
+  /** "on vacation until … · substitute: Marina" and "Choose Marina" (decision 6). */
+  const awayHintOf = (member: (typeof people)[number]) =>
+    awayPickerHint(
+      member,
+      visibleSubstitute(
+        member.away,
+        (id) => peopleByID.get(id) ?? away.lookup(id),
+        opened,
+      ),
+      opened,
+      locale,
+    );
   // A stored draft may name a segment this reader no longer has.
   const audience: RequestDraftAudience = segments.includes(draft.audience.kind)
     ? draft.audience
@@ -462,6 +484,11 @@ export function RequestDialog({
                         });
                       }}
                     >
+                      {activeAway(member.away, opened) && (
+                        <span aria-hidden="true">
+                          {awayKindEmoji[member.away!.kind]}
+                        </span>
+                      )}
                       {member.display_name}
                     </Chip>
                   );
@@ -470,7 +497,44 @@ export function RequestDialog({
             ) : (
               <p className="request-form__hint">{t("requestAudienceNobody")}</p>
             )
-          ) : (
+          ) : null}
+          {audience.kind === "people" &&
+            people
+              .filter((member) => audience.actorIDs.includes(member.actor_id))
+              .map((member) => {
+                const hint = awayHintOf(member);
+                if (!hint) return null;
+                const choose =
+                  hint.choose &&
+                  peopleByID.has(hint.choose.actorID) &&
+                  !audience.actorIDs.includes(hint.choose.actorID)
+                    ? hint.choose
+                    : null;
+                return (
+                  <p key={member.actor_id} className="away-picker-hint">
+                    <span>
+                      <strong>{member.display_name}</strong>: {hint.text}
+                    </span>
+                    {choose && (
+                      <button
+                        type="button"
+                        className="away-choose"
+                        onClick={() =>
+                          update({
+                            audience: {
+                              kind: "people",
+                              actorIDs: [...audience.actorIDs, choose.actorID],
+                            },
+                          })
+                        }
+                      >
+                        {choose.label}
+                      </button>
+                    )}
+                  </p>
+                );
+              })}
+          {audience.kind === "chat" && (
             <p className="request-form__hint">
               {people.length
                 ? t("requestAudienceChatHint")

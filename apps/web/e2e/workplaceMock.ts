@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { createPollServer, type PollRecord } from "./pollsMock";
 
 /*
  * A small stateful server for requests («Запрос») and reminders («Напомнить
@@ -445,6 +446,7 @@ export function fixtures() {
     requests,
     reminders,
     tasks: [] as TaskRecord[],
+    polls: [] as PollRecord[],
     pins: [] as string[],
     scheduled: [] as Array<{
       id: string;
@@ -678,10 +680,12 @@ export async function mockWorkplace(
     };
   };
   const feed = (chat: string) =>
-    [...data.texts, ...data.requests, ...data.tasks]
+    [...data.texts, ...data.requests, ...data.tasks, ...data.polls]
       .filter((item) => item.chat_id === chat)
       .sort((left, right) => left.created_seq - right.created_seq)
-      .map(messageOf);
+      .map((item) =>
+        "question" in item ? polls.messageOf(item) : messageOf(item),
+      );
   const savedAuthor = (actorID: string) => {
     const author = authorOf(actorID);
     return {
@@ -759,6 +763,7 @@ export async function mockWorkplace(
           requests_waiting: waiting.length,
           requests_next_due_at: dues[0] ?? null,
           ...taskUnread(chatID),
+          ...(pollsOn ? polls.chatUnread(chatID) : {}),
         },
         ...(tasksOn
           ? [
@@ -784,6 +789,7 @@ export async function mockWorkplace(
             ).length,
           }
         : {}),
+      ...(pollsOn ? polls.unread() : {}),
       reminders_fired_total: data.reminders.filter(
         (item) => item.state === "fired",
       ).length,
@@ -869,6 +875,20 @@ export async function mockWorkplace(
     r.version += 1;
   };
   let nextID = 200;
+  const pollsOn = features.includes("message_polls");
+  const polls = createPollServer({
+    polls: data.polls,
+    me,
+    peopleOf: (chat) =>
+      (chat === otherChatID ? [people.anna, people.marina] : allMembers)
+        .filter((item) => item.type === "user")
+        .map((item) => item.actor_id),
+    nowISO,
+    nextID: () => id((nextID += 1)),
+    nextSeq: () => 20 + (nextID += 1),
+    chatRef: (chat) => chatRef(chat),
+    authorOf: (actorID) => savedAuthorOf(actorID),
+  });
   const taskRoute = (
     method: string,
     path: string,
@@ -993,8 +1013,12 @@ export async function mockWorkplace(
               due_at: r.due_at,
               my_role: null,
             }));
+      const pollItems =
+        pollsOn && (kind === "all" || kind === "polls")
+          ? polls.waitingItems()
+          : [];
       const tasks =
-        kind === "requests"
+        kind === "requests" || kind === "polls"
           ? []
           : data.tasks.filter(onMe).map((r) => ({
               kind: "task",
@@ -1007,7 +1031,11 @@ export async function mockWorkplace(
               viewer: null,
               my_role: taskRoleOf(r),
             }));
-      const items = [...requests, ...tasks].sort(
+      const items = [
+        ...(kind === "polls" ? [] : requests),
+        ...tasks,
+        ...pollItems,
+      ].sort(
         (left, right) =>
           (left.due_at ? Date.parse(left.due_at) : Infinity) -
           (right.due_at ? Date.parse(right.due_at) : Infinity),
@@ -1125,7 +1153,7 @@ export async function mockWorkplace(
         return null;
       }
     })();
-    if (/request|reminder|task|inbox/.test(path))
+    if (/request|reminder|task|inbox|poll/.test(path))
       calls.push({ method, path, body: input });
     let status = 200;
     let body: unknown = {};
@@ -1222,7 +1250,12 @@ export async function mockWorkplace(
       body = { chat_id: chatID, last_read_seq: 5, last_read_at: nowISO };
     else if (/^\/messages\/[^/]+\/context$/.test(path)) {
       const target = path.split("/")[2];
-      const record = [...data.texts, ...data.requests, ...data.tasks].find(
+      const record = [
+        ...data.texts,
+        ...data.requests,
+        ...data.tasks,
+        ...data.polls,
+      ].find(
         (item) => item.id === target,
       );
       body = { messages: record ? feed(record.chat_id) : [] };
@@ -1353,6 +1386,13 @@ export async function mockWorkplace(
         r.version += 1;
         body = { request: requestOf(r), viewer: viewerOf(r) };
       }
+    } else if (/^\/polls\/|^\/chats\/[^/]+\/polls$/.test(path)) {
+      const result = (pollsOn ? polls.route(method, path, url, input) : null) ?? {
+        status: 501,
+        body: { error: { code: "not_implemented", message: "", details: {} } },
+      };
+      status = result.status;
+      body = result.body;
     } else if (/^\/(tasks|inbox)\b|^\/chats\/[^/]+\/tasks$/.test(path)) {
       const result = taskRoute(method, path, url, input);
       status = result.status;
@@ -1422,6 +1462,7 @@ export async function mockWorkplace(
     calls,
     data,
     taskMessage,
+    polls,
     emit: (frame: { [key: string]: unknown }) =>
       page.evaluate(
         (value) =>

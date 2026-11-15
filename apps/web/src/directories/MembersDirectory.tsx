@@ -4,6 +4,15 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import {
+  awayKeys,
+  awayPresenceFilterLabelKeys,
+  awayPresenceFilters,
+  awayPresenceParam,
+  matchesAwayPresence,
+  personAwayCaption,
+  shownStatus,
+  withCurrentAway,
+  type AwayPresenceFilter,
   departmentPath,
   filterPeople,
   groupPeopleByDepartment,
@@ -16,7 +25,6 @@ import {
 } from "@comamessenger/core";
 import { hasPermission } from "../settings";
 import {
-  Avatar,
   Button,
   Chip,
   EmptyState,
@@ -41,6 +49,9 @@ import {
   useOrgAvailable,
   useOrgStructure,
 } from "../org/useOrg";
+import { calendarLocale } from "../requests/format";
+import { AwayAvatar } from "../status/AwayAvatar";
+import { useAwayNow, useAwayOverrides } from "../status/useAway";
 
 type Filter = "all" | "online" | "people" | "agents";
 type View = "list" | "groups" | "tree";
@@ -72,6 +83,13 @@ export function MembersDirectory({
   const presence = useStore(store, (state) => state.presence);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  // "All · Here · Away" (decision 14), on actor_away servers.
+  const [presenceFilter, setPresenceFilter] =
+    useState<AwayPresenceFilter>("all");
+  const features = useStore(store, (state) => state.features);
+  const presenceFilters = awayPresenceFilters(features);
+  const awayOverrides = useAwayOverrides();
+  const locale = calendarLocale();
   const [storedView, setStoredView] = useState<View>(readView);
   const [department, setDepartment] = useState<DepartmentFilter>(undefined);
   const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
@@ -84,18 +102,36 @@ export function MembersDirectory({
   const everyone = useAllActors(api, hasOrg);
   const actorMap = useActorMap(everyone.data);
 
+  const presenceParam = presenceFilters.length
+    ? awayPresenceParam(presenceFilter)
+    : undefined;
   const query = useInfiniteQuery({
-    queryKey: ["actors", "directory"],
-    queryFn: ({ pageParam }) => api.actors("", pageParam),
+    queryKey: presenceParam
+      ? ["actors", ...awayKeys.people(user.id, presenceFilter)]
+      : ["actors", "directory"],
+    queryFn: ({ pageParam }) => api.actors("", pageParam, presenceParam),
     initialPageParam: "",
     getNextPageParam: (page) => page.next_after_id ?? undefined,
   });
-  const actors = useMemo(
+  const loaded = useMemo(
     () =>
       (query.data?.pages ?? [])
         .flatMap((page) => page.actors)
-        .filter((actor) => actor.actor_id !== user.id),
-    [query.data, user.id],
+        .filter((actor) => actor.actor_id !== user.id)
+        .map((actor) => withCurrentAway(actor, awayOverrides)),
+    [awayOverrides, query.data, user.id],
+  );
+  const now = useAwayNow(loaded.map((actor) => actor.away));
+  // The server filtered by the time of the request; events since then and
+  // the clock decide too.
+  const actors = useMemo(
+    () =>
+      presenceParam
+        ? loaded.filter((actor) =>
+            matchesAwayPresence(actor, presenceFilter, now),
+          )
+        : loaded,
+    [loaded, now, presenceFilter, presenceParam],
   );
   const humans = actors.filter((actor) => actor.type === "user").length;
   const agents = actors.length - humans;
@@ -145,11 +181,20 @@ export function MembersDirectory({
   ) => {
     const isAgent = actor.type === "agent";
     const state = presence[actor.actor_id] ?? "offline";
-    const line =
+    const person = withCurrentAway(actor, awayOverrides);
+    const base =
       options.meta ??
       (orgAvailable
         ? personOrgLine(actor, structure)
         : actor.title || `@${actor.handle}`);
+    // "instructor · on vacation until 30 November", yellow while away.
+    const caption = personAwayCaption(
+      { title: base, away: person.away, type: actor.type },
+      now,
+      locale,
+    );
+    const line = caption.text;
+    const status = shownStatus(person, now, locale);
     return (
       <DirectoryRow
         key={options.key ?? actor.actor_id}
@@ -157,7 +202,9 @@ export function MembersDirectory({
         selected={!isMobile && actor.actor_id === activeID}
         label={t("openProfile", { name: actor.display_name })}
         leading={
-          <Avatar
+          <AwayAvatar
+            away={person.away}
+            now={now}
             name={actor.display_name}
             seed={actor.actor_id}
             actorID={actor.actor_id}
@@ -181,14 +228,18 @@ export function MembersDirectory({
             )}
           </>
         }
-        meta={<span className="truncate">{line}</span>}
+        meta={
+          <span className={cx("truncate", caption.away && "away-note")}>
+            {line}
+          </span>
+        }
         trailing={
-          actor.status_emoji ? (
+          status?.emoji && !status.away ? (
             <span
               className="directory-member__emoji"
-              title={actor.status_text || undefined}
+              title={status.text || undefined}
             >
-              {actor.status_emoji}
+              {status.emoji}
             </span>
           ) : undefined
         }
@@ -240,16 +291,54 @@ export function MembersDirectory({
       </>
     ) : view === "list" && query.data ? (
       <>
-        <Chip active={filter === "all"} onClick={() => setFilter("all")}>
+        <Chip
+          active={filter === "all" && presenceFilter === "all"}
+          onClick={() => {
+            setFilter("all");
+            setPresenceFilter("all");
+          }}
+        >
           {t("membersFilterAll")}
         </Chip>
-        <Chip active={filter === "online"} onClick={() => setFilter("online")}>
+        {presenceFilters
+          .filter((item) => item !== "all")
+          .map((item) => (
+            <Chip
+              key={item}
+              active={presenceFilter === item}
+              onClick={() => {
+                setFilter("all");
+                setPresenceFilter(item);
+              }}
+            >
+              {t(awayPresenceFilterLabelKeys[item])}
+            </Chip>
+          ))}
+        <Chip
+          active={filter === "online" && presenceFilter === "all"}
+          onClick={() => {
+            setFilter("online");
+            setPresenceFilter("all");
+          }}
+        >
           {t("membersFilterOnline", { count: onlineCount })}
         </Chip>
-        <Chip active={filter === "people"} onClick={() => setFilter("people")}>
+        <Chip
+          active={filter === "people" && presenceFilter === "all"}
+          onClick={() => {
+            setFilter("people");
+            setPresenceFilter("all");
+          }}
+        >
           {t("membersFilterPeople")}
         </Chip>
-        <Chip active={filter === "agents"} onClick={() => setFilter("agents")}>
+        <Chip
+          active={filter === "agents" && presenceFilter === "all"}
+          onClick={() => {
+            setFilter("agents");
+            setPresenceFilter("all");
+          }}
+        >
           {t("membersFilterAgents")}
         </Chip>
       </>
@@ -310,13 +399,20 @@ export function MembersDirectory({
       />
     );
   else if (visible.length === 0)
-    body = (
-      <EmptyState
-        icon={<Users />}
-        title={t("membersEmpty")}
-        hint={t("membersEmptyHint")}
-      />
-    );
+    body =
+      presenceFilter === "away" && !needle ? (
+        <EmptyState
+          icon={<Users />}
+          title={t("peopleAwayEmpty")}
+          hint={t("peopleAwayEmptyHint")}
+        />
+      ) : (
+        <EmptyState
+          icon={<Users />}
+          title={t("membersEmpty")}
+          hint={t("membersEmptyHint")}
+        />
+      );
   else
     body = (
       <>

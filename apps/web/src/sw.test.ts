@@ -85,4 +85,17 @@ describe("service worker addresses", () => {
       { url: "/settings/notifications" },
     ]);
   });
+
+  it("opens the card of the person one substitutes for", () => {
+    const worker = loadWorker();
+    const person = "0198a7c2-1c55-7c3e-9c1e-2b1d0d6a1c04";
+    worker.push({ title: "Вы замещаете Анну", url: `/people/${person}` });
+    worker.push({ title: "Coma", url: `/people/${person}/../../settings` });
+    worker.push({ title: "Coma", url: "/people/evil.example" });
+    expect(worker.shown.map((item) => item.options.data)).toEqual([
+      { url: `/members/${person}` },
+      { url: "/chats" },
+      { url: "/chats" },
+    ]);
+  });
 });

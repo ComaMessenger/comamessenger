@@ -47,7 +47,10 @@ import {
 } from "../scheduled/useScheduled";
 import { applyWorkplaceEvent, invalidateWorkplace } from "../requests/realtime";
 import { applyTaskEvent } from "../tasks/realtime";
+import { applyAwayEvent } from "../status/realtime";
 import { taskNotice, taskNoticeAllowed } from "../tasks/notice";
+import { applyPollEvent } from "../polls/realtime";
+import { pollNotice, pollNoticeAllowed } from "../polls/notice";
 
 export type InAppNotification = {
   id: string;
@@ -96,8 +99,13 @@ export function useMessengerSession({
     created.getState().setMessageLoader(restMessageLoader(api));
     // A comment or answer from another device: the event does not carry it.
     created.getState().setRequestLoader((id) => api.messageRequest(id));
+    // Counts of open polls never come in frames: cards on screen read them.
+    created.getState().setPollLoader((id) => api.messagePoll(id));
     return created;
   }, [api]);
+  useEffect(() => {
+    store.getState().setSelfID(user.id);
+  }, [store, user.id]);
   const queryClient = useQueryClient();
   // The list of scheduled messages belongs to this person only: lists left
   // by someone who used this tab before are dropped on sign-in, this
@@ -323,8 +331,39 @@ export function useMessengerSession({
                   url: `/chat/${taskNotified.data.chat_id}?message=${taskNotified.data.message_id}`,
                 });
             }
+            const pollNotified = applyPollEvent(queryClient, user.id, event);
+            if (
+              pollNotified &&
+              document.visibilityState === "visible" &&
+              pollNotified.chat_id !== store.getState().activeChatID
+            ) {
+              const pollChat = store.getState().chats[pollNotified.chat_id];
+              if (
+                pollNoticeAllowed(
+                  pollNotified.kind,
+                  notificationPreferences.current,
+                  pollChat,
+                  new Date(event.occurred_at),
+                )
+              )
+                showInAppNotification(event, pollChat, {
+                  ...pollNotice(
+                    pollNotified.kind,
+                    store
+                      .getState()
+                      .messages[pollNotified.chat_id]?.find(
+                        (item) => item.id === pollNotified.message_id,
+                      )?.poll?.question ?? null,
+                    pollChat?.display_name || user.organization_name,
+                  ),
+                  url: `/chat/${pollNotified.chat_id}?message=${pollNotified.message_id}`,
+                });
+            }
             // Requests and reminders: private lists and the reader's own
             // reminders, which only reach the owner's devices.
+            applyAwayEvent(queryClient, user.id, event, () =>
+              void api.me().then(onUserUpdated),
+            );
             if (applyWorkplaceEvent(queryClient, user.id, event))
               return applied || event.type.startsWith("reminder.");
             // Saves are private: these events reach only the saver's devices.
@@ -400,6 +439,7 @@ export function useMessengerSession({
               queryKey: scheduledQueryKey(user.id),
             });
             invalidateWorkplace(queryClient, user.id);
+            void queryClient.invalidateQueries({ queryKey: ["away", user.id] });
             void queryClient.invalidateQueries({ queryKey: orgKeys.all });
             await reload();
             if (active) await loadMessages(api, store, active);

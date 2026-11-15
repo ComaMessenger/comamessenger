@@ -62,6 +62,7 @@ import type { PresenceMap } from "../lib/mentions";
 import { attachmentLimit, type ComposerAttachment } from "./useAttachments";
 import { AttachmentItem } from "./AttachmentItem";
 import { CommandMenu } from "../agentchat/CommandMenu";
+import { AwayMentionStrip, type AwayMentionHint } from "../status/AwayMentions";
 
 const sendModeKey = "coma-send-on-enter";
 
@@ -103,6 +104,10 @@ export function Composer({
   structure = null,
   authorID = "",
   onTask,
+  onPoll,
+  awayHints = [],
+  mentionAwayNote,
+  onWriteTo,
 }: {
   members: ChatMember[];
   presence?: PresenceMap;
@@ -142,6 +147,17 @@ export function Composer({
   authorID?: string;
   /** Task from + (`message_tasks`): opens New task. */
   onTask?(): void;
+  /** Poll from + (`message_polls`): opens New poll. */
+  onPoll?(): void;
+  /**
+   * "Away" (wave 4): the people away among those mentioned, shown as a
+   * strip over the field with "Mention Marina".
+   */
+  awayHints?: readonly AwayMentionHint[];
+  /** The away mark of a person in the @ menu: "on vacation until 30 November". */
+  mentionAwayNote?(member: ChatMember): string | null;
+  /** A substitute outside the chat: "Write to Marina" opens a direct chat. */
+  onWriteTo?(actorID: string): void;
 }) {
   const { t } = useTranslation();
   const input = useRef<HTMLTextAreaElement>(null);
@@ -190,7 +206,7 @@ export function Composer({
     platform: "web",
     readonly,
     hasAgents: !compact && agents.length > 0,
-    features: onRequest || onTask ? features : [],
+    features: onRequest || onTask || onPoll ? features : [],
     inThread: compact,
   })
     // A screen without the form does not offer its item.
@@ -199,6 +215,7 @@ export function Composer({
       items: group.items.filter(
         (entry) =>
           (entry.id !== "task" || onTask) &&
+          (entry.id !== "poll" || onPoll) &&
           (entry.id !== "request" || onRequest),
       ),
     }))
@@ -394,17 +411,21 @@ export function Composer({
     );
   }
   function callAgent(agent: ChatMember) {
+    appendMention(agent.actor_id, agent.display_name);
+    setAttachOpen(false);
+  }
+  /** A mention at the end of the draft: an agent, or a substitute from the away strip. */
+  function appendMention(actorID: string, name: string) {
     const separator = draft.text && !/\s$/.test(draft.text) ? " " : "";
     const base = { ...draft, text: draft.text + separator };
     const next = insertMention(
       base,
       base.text.length,
       base.text.length,
-      agent.actor_id,
-      agent.display_name,
+      actorID,
+      name,
     );
     setBody(encodeMentions(next));
-    setAttachOpen(false);
     placeCaret(next.text.length);
   }
   function choosePlus(id: ComposerMenuItemID) {
@@ -417,6 +438,9 @@ export function Composer({
     } else if (id === "task") {
       setAttachOpen(false);
       onTask?.();
+    } else if (id === "poll") {
+      setAttachOpen(false);
+      onPoll?.();
     } else if (id === "agent") {
       if (agents.length === 1) callAgent(agents[0]!);
       else setPlusView("agents");
@@ -465,6 +489,11 @@ export function Composer({
       }}
     >
       {banner}
+      <AwayMentionStrip
+        hints={awayHints}
+        onMention={appendMention}
+        onWrite={onWriteTo}
+      />
       <div
         className={cx("composer", focused && "composer--focused")}
         ref={root}
@@ -977,7 +1006,16 @@ export function Composer({
                   size="xs"
                 />
                 <strong className="truncate">{member.display_name}</strong>
-                <span className="mention-menu__meta">@{member.handle}</span>
+                {(() => {
+                  const away = mentionAwayNote?.(member);
+                  return away ? (
+                    <span className="mention-menu__meta mention-menu__meta--away truncate">
+                      {away}
+                    </span>
+                  ) : (
+                    <span className="mention-menu__meta">@{member.handle}</span>
+                  );
+                })()}
               </button>
             ))}
             {showContextMentions && suggestions.length > 0 && <MenuDivider />}

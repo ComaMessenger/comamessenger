@@ -34,6 +34,12 @@ import { canManageChat, isReadOnly } from "../lib/chats";
 import { useIsMobile } from "../lib/useMediaQuery";
 import { useMessenger } from "../shell/MessengerContext";
 import { Composer } from "../composer/Composer";
+import {
+  AwayMentionNote,
+  noteAwaySend,
+  useAwayMentionHints,
+  useMentionAwayNote,
+} from "../status/AwayMentions";
 import { MessageRow } from "./MessageRow";
 import { AgentStreamRow } from "./AgentStreamRow";
 import {
@@ -85,6 +91,8 @@ export function ThreadPanel({
   });
   const [followOverride, setFollowOverride] = useState<boolean | null>(null);
   const [body, setBody] = useState(() => getLocalDraft(chat.id, rootID));
+  const awayHints = useAwayMentionHints(body, members);
+  const mentionAwayNote = useMentionAwayNote();
   const [scheduling, setScheduling] = useState<ScheduleDraft | null>(null);
   const [reply, setReply] = useState<Message | null>(null);
 
@@ -166,6 +174,7 @@ export function ThreadPanel({
     clearComposer();
     const clientMsgID = crypto.randomUUID();
     noteDepartmentSend(clientMsgID, draft.mentioned_department_ids);
+    noteAwaySend(chat.id, clientMsgID, awayHints);
     await outbox.enqueue(chat.id, {
       client_msg_id: clientMsgID,
       ...draft,
@@ -329,8 +338,8 @@ export function ThreadPanel({
             {replies.map((message, index) => {
               const previous = replies[index - 1];
               const row = (
+                <Fragment key={message.id}>
                 <MessageRow
-                  key={message.id}
                   message={message}
                   members={members}
                   replyMessage={messages.find(
@@ -360,6 +369,8 @@ export function ThreadPanel({
                   domIDPrefix="thread-message"
                   showThreadIndicator={false}
                 />
+                <AwayMentionNote message={message} />
+                </Fragment>
               );
               if (message.id !== firstUnreadID) return row;
               return (
@@ -392,6 +403,8 @@ export function ThreadPanel({
       </div>
       <Composer
         compact
+        awayHints={awayHints}
+        mentionAwayNote={mentionAwayNote}
         members={members}
         presence={presence}
         structure={orgStructure}

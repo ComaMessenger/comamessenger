@@ -39,6 +39,13 @@ import {
 import { calendarLocale } from "../requests/format";
 import { taskErrorText } from "./format";
 import { MemberPicker } from "./MemberPicker";
+import {
+  awayPickerHint,
+  visibleSubstitute,
+  withCurrentAway,
+} from "@comamessenger/core";
+import { AwayAvatar } from "../status/AwayAvatar";
+import { useAwayLookup } from "../status/useAway";
 
 export type DueChoice = "none" | TaskDuePresetID | "custom";
 
@@ -182,9 +189,13 @@ export function TaskDialog({
     }
   }, [customDue, draft, due, key]);
 
+  const away = useAwayLookup();
   const people = useMemo(
-    () => members.filter((member) => member.type === "user"),
-    [members],
+    () =>
+      members
+        .filter((member) => member.type === "user")
+        .map((member) => withCurrentAway(member, away.overrides)),
+    [away.overrides, members],
   );
   const nameOf = (id: string) =>
     people.find((member) => member.actor_id === id)?.display_name ?? "";
@@ -388,7 +399,8 @@ export function TaskDialog({
                   className="task-dialog__person"
                   onClick={() => setAssignee({ kind: "person", actorID: id })}
                 >
-                  <Avatar
+                  <AwayAvatar
+                    away={people.find((member) => member.actor_id === id)?.away}
                     name={nameOf(id)}
                     seed={id}
                     actorID={id}
@@ -470,6 +482,49 @@ export function TaskDialog({
               </span>
             </label>
           )}
+          {personID && personID !== userID && (() => {
+            // Nothing passes to the substitute by itself: the author
+            // chooses (decision 6).
+            const chosen = people.find((member) => member.actor_id === personID);
+            if (!chosen) return null;
+            const now = new Date();
+            const hint = awayPickerHint(
+              chosen,
+              visibleSubstitute(
+                chosen.away,
+                (id) =>
+                  people.find((member) => member.actor_id === id) ??
+                  away.lookup(id),
+                now,
+              ),
+              now,
+              calendarLocale(),
+            );
+            if (!hint) return null;
+            const choose =
+              hint.choose &&
+              people.some((member) => member.actor_id === hint.choose!.actorID)
+                ? hint.choose
+                : null;
+            return (
+              <p className="away-picker-hint">
+                <span>
+                  <strong>{chosen.display_name}</strong>: {hint.text}
+                </span>
+                {choose && (
+                  <button
+                    type="button"
+                    className="away-choose"
+                    onClick={() =>
+                      setAssignee({ kind: "person", actorID: choose.actorID })
+                    }
+                  >
+                    {choose.label}
+                  </button>
+                )}
+              </p>
+            );
+          })()}
         </section>
 
         <section className="request-form__section">
