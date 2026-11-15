@@ -70,7 +70,7 @@ type clock struct {
 	now time.Time
 }
 
-func (c *clock) Now() time.Time { c.mu.Lock(); defer c.mu.Unlock(); return c.now }
+func (c *clock) Now() time.Time  { c.mu.Lock(); defer c.mu.Unlock(); return c.now }
 func (c *clock) Set(t time.Time) { c.mu.Lock(); defer c.mu.Unlock(); c.now = t }
 
 type world struct {
@@ -165,8 +165,8 @@ func (w *world) create(t *testing.T, author identity.User, chatID string, s spec
 	}
 	result, _, err := w.messages.CreateRequest(context.Background(), author, chatID, message.CreateRequestInput{
 		ClientMsgID: uuid.NewString(), Body: "Планёрка в понедельник. Будете?",
-		Audience:    request.AudienceInput{Kind: s.audience, ActorIDs: s.people},
-		Answer:      request.AnswerSpec{Preset: s.preset, Options: s.options},
+		Audience:     request.AudienceInput{Kind: s.audience, ActorIDs: s.people},
+		Answer:       request.AnswerSpec{Preset: s.preset, Options: s.options},
 		AllowComment: s.comment, DueAt: s.due, AutoRemind: s.remind,
 	})
 	return result, err
