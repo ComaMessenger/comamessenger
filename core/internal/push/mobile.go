@@ -252,7 +252,7 @@ func (w *Worker) deliverMobile(ctx context.Context) error {
 		e.type,e.data,e.chat_id,m.thread_root_id,m.body,c.name,a.display_name,
 		COALESCE((u.preferences->>'push_preview')::boolean,false),COALESCE(NULLIF(d.locale,''),u.preferences->>'locale','ru'),
 		(SELECT f.voice_duration_ms FROM message_files mf JOIN files f ON f.org_id=mf.org_id AND f.id=mf.file_id WHERE mf.message_id=m.id AND f.voice_duration_ms IS NOT NULL LIMIT 1),
-		`+quietNotification+`,`+scheduledStillFailed+`
+		`+quietNotification+`,`+scheduledStillFailed+` AND `+reminderStillFired+`
 		FROM mobile_push_deliveries p JOIN mobile_push_devices d ON d.id=p.device_id
 		JOIN events e ON e.org_id=p.org_id AND e.seq=p.event_seq
 		LEFT JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id
@@ -298,7 +298,12 @@ func (w *Worker) deliverMobile(ctx context.Context) error {
 			finish(item, `UPDATE mobile_push_deliveries SET sent_at=now(),last_error='suppressed_active',lease_token=NULL,lease_until=NULL WHERE org_id=$1 AND event_seq=$2 AND device_id=$3 AND lease_token=$4`)
 			continue
 		}
-		content := buildNotification(item.eventType, item.eventData, item.author, item.locale, item.preview, item.chatID, item.threadID, messageText(item.body, item.voiceMs, item.locale), item.chatName)
+		content, err := w.reminderNotification(ctx, item.org, item.actor, item.eventType, item.eventData, item.locale, item.preview,
+			buildNotification(item.eventType, item.eventData, item.author, item.locale, item.preview, item.chatID, item.threadID, messageText(item.body, item.voiceMs, item.locale), item.chatName))
+		if err != nil {
+			finish(item, `UPDATE mobile_push_deliveries SET attempts=attempts+1,last_error=$5,available_at=now()+interval '30 seconds',sent_at=CASE WHEN attempts>=8 THEN now() END,lease_token=NULL,lease_until=NULL WHERE org_id=$1 AND event_seq=$2 AND device_id=$3 AND lease_token=$4`, err.Error())
+			continue
+		}
 		var badge int64
 		if err := w.pool.QueryRow(ctx, unreadTotal, item.org, item.actor).Scan(&badge); err != nil {
 			return err
@@ -311,6 +316,9 @@ func (w *Worker) deliverMobile(ctx context.Context) error {
 		fallbackTitle, fallbackBody := "Coma", "Новое сообщение"
 		if item.locale == "en" {
 			fallbackBody = "New message"
+		}
+		if content.Kind == reminderKind {
+			fallbackBody = ReminderText("title", item.locale)
 		}
 		collapseID := content.ChatID
 		if content.Tag != "" {

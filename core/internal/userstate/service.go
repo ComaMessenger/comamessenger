@@ -63,6 +63,8 @@ type ThreadUnread struct {
 type UnreadSnapshot struct {
 	Chats   []ChatUnread   `json:"chats"`
 	Threads []ThreadUnread `json:"threads"`
+	// RemindersFiredTotal: fired reminders the person has not closed yet.
+	RemindersFiredTotal int `json:"reminders_fired_total"`
 }
 
 type Service struct {
@@ -412,7 +414,11 @@ func (s *Service) Unread(ctx context.Context, user identity.User) (UnreadSnapsho
 	if err := threadRows.Err(); err != nil {
 		return UnreadSnapshot{}, fmt.Errorf("iterate thread unread: %w", err)
 	}
-	return UnreadSnapshot{Chats: chats, Threads: threads}, nil
+	snapshot := UnreadSnapshot{Chats: chats, Threads: threads}
+	if err := s.addReminders(ctx, user, &snapshot); err != nil {
+		return UnreadSnapshot{}, err
+	}
+	return snapshot, nil
 }
 
 func validateID(name, value string) error {

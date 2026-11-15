@@ -203,7 +203,11 @@ func (s *session) writeLoop(ctx context.Context) error {
 		HeartbeatIntervalMS: int(s.config.HeartbeatInterval.Milliseconds()),
 		AckIntervalMS:       int(s.config.AckInterval.Milliseconds()), AckBatchSize: int(s.config.AckBatchSize),
 		MaxUnackedEvents: int(s.config.MaxUnackedEvents),
-		Features:         []string{"typing_actions", "presence_snapshot"},
+		Features: []string{
+			"typing_actions",
+			"presence_snapshot",
+			"message_reminders",
+		},
 	}
 	if err := s.write(ctx, hello); err != nil {
 		return err

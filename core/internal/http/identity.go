@@ -31,6 +31,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/knowledge"
 	"github.com/comamessenger/comamessenger/core/internal/message"
 	"github.com/comamessenger/comamessenger/core/internal/push"
+	"github.com/comamessenger/comamessenger/core/internal/reminder"
 	"github.com/comamessenger/comamessenger/core/internal/scheduled"
 	"github.com/comamessenger/comamessenger/core/internal/search"
 	"github.com/comamessenger/comamessenger/core/internal/userstate"
@@ -56,6 +57,7 @@ type Dependencies struct {
 	Chats                 *chat.Service
 	Messages              *message.Service
 	Scheduled             *scheduled.Service
+	Reminders             *reminder.Service
 	UserState             *userstate.Service
 	Push                  *push.Service
 	Workspace             *workspace.Service
@@ -87,6 +89,7 @@ type identityHandlers struct {
 	messages              *message.Service
 	scheduled             *scheduled.Service
 	scheduledRate         *ipRateLimiter
+	reminders             *reminder.Service
 	userState             *userstate.Service
 	push                  *push.Service
 	workspace             *workspace.Service
@@ -126,7 +129,7 @@ type authenticated struct {
 
 func newIdentityHandlers(logger *slog.Logger, allowedOrigin string, dependencies Dependencies) *identityHandlers {
 	return &identityHandlers{
-		logger: logger, service: dependencies.Identity, agents: dependencies.Agents, agentConfig: dependencies.AgentConfig, agentProvider: dependencies.AgentProvider, agentTools: dependencies.AgentTools, agentRuns: dependencies.AgentRuns, agentTriggers: dependencies.AgentTriggers, architect: dependencies.Architect, chats: dependencies.Chats, messages: dependencies.Messages, scheduled: dependencies.Scheduled, scheduledRate: newIPRateLimiter(60, 20), userState: dependencies.UserState, push: dependencies.Push, workspace: dependencies.Workspace, files: dependencies.Files, search: dependencies.Search, knowledge: dependencies.Knowledge, interactive: dependencies.Interactive, webhooks: dependencies.Webhooks, webhookRate: newIPRateLimiter(600, 100), webhookFailures: newIPRateLimiter(30, 10), realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
+		logger: logger, service: dependencies.Identity, agents: dependencies.Agents, agentConfig: dependencies.AgentConfig, agentProvider: dependencies.AgentProvider, agentTools: dependencies.AgentTools, agentRuns: dependencies.AgentRuns, agentTriggers: dependencies.AgentTriggers, architect: dependencies.Architect, chats: dependencies.Chats, messages: dependencies.Messages, scheduled: dependencies.Scheduled, scheduledRate: newIPRateLimiter(60, 20), reminders: dependencies.Reminders, userState: dependencies.UserState, push: dependencies.Push, workspace: dependencies.Workspace, files: dependencies.Files, search: dependencies.Search, knowledge: dependencies.Knowledge, interactive: dependencies.Interactive, webhooks: dependencies.Webhooks, webhookRate: newIPRateLimiter(600, 100), webhookFailures: newIPRateLimiter(30, 10), realtime: dependencies.Realtime, allowedOrigin: allowedOrigin,
 		cookieSecure: dependencies.CookieSecure, refreshTTL: dependencies.RefreshTokenTTL,
 		bootstrapRate: newIPRateLimiter(5, 5), loginRate: newIPRateLimiter(10, 10),
 		refreshRate: newIPRateLimiter(30, 20), invitationRate: newIPRateLimiter(10, 10), websocketRate: newIPRateLimiter(60, 20), actorRate: newIPRateLimiter(1200, 200),
