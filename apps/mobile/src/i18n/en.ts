@@ -1,5 +1,6 @@
 import { agentBuilderEn } from "../agents/builder/i18n";
 import { orgEn } from "../org/i18n";
+import { tasksEn } from "../tasks/i18n";
 import type { ru } from "./ru";
 
 export const en: Record<keyof typeof ru, string> = {
@@ -1793,4 +1794,7 @@ export const en: Record<keyof typeof ru, string> = {
   reminderError_unavailable: "The server does not support reminders yet",
   reminderError_network: "No connection to the server",
   reminderError_other: "Something went wrong. Try again",
+
+  // Tasks and the slot under the chat header (phase 6.6, wave 3)
+  ...tasksEn,
 };

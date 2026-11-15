@@ -1,4 +1,4 @@
-# «Запрос» to the reader (phase 6.4): the strip «Ждут вашего ответа» in the
+# «Запрос» to the reader (phase 6.4): «Ждут вашего ответа» in the slot of the
 # chat, an answer from «Важные → Ждут вас», then «Изменить» and a comment in
 # the chat. Run after sign-in.yaml:
 #   node e2e/seed-requests.mjs && maestro test -e THEME=light e2e/request-recipient.yaml
@@ -8,12 +8,15 @@ appId: com.comamessenger.app
 ---
 - runFlow: open-app.yaml
 - tapOn: .*Планёрка · запросы.*
+# The slot under the header (phase 6.6) leads with the request: burning
+# («hot») when the due date is within 24 hours, else «Ждут вашего ответа».
 - extendedWaitUntil:
     visible:
-      id: request-waiting-strip
+      id: chat-slot-(hot|requests)
     timeout: 10000
+- assertVisible: .*Ждут вашего ответа.*
 - tapOn:
-    id: request-waiting-strip
+    id: chat-slot-(hot|requests)
 - extendedWaitUntil:
     visible:
       id: request-answer-0

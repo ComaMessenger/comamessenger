@@ -44,6 +44,7 @@ import { bubbleCorners, messageMarks, type BubblePlacement } from "./bubbles";
 import { useThreadPreview } from "./useThreadPreview";
 import { replySwipeProps } from "./replySwipe";
 import { RequestCard } from "@/requests/RequestCard";
+import { TaskCard } from "@/tasks/TaskCard";
 
 const avatarSize = 30;
 
@@ -157,7 +158,10 @@ export function MessageBubble({
   // reader's own, as wide as cards are (prototype `.bub.obj`).
   const request =
     message.request && !message.deleted_at ? message.request : null;
-  const ownColors = own && !request;
+  // A task («Задача») is a card too; its body is the server's text copy
+  // for search and old clients, the card draws the task instead.
+  const task = message.task && !message.deleted_at ? message.task : null;
+  const ownColors = own && !request && !task;
   const name =
     author?.display_name ?? (own ? t("previewYou") : t("participant"));
   const agent = author?.type === "agent";
@@ -187,6 +191,7 @@ export function MessageBubble({
   const wide =
     Boolean(blocks) ||
     Boolean(request) ||
+    Boolean(task) ||
     (files.length > 0 && !voiceOnly && !sizedByMedia);
   const photosOnly =
     images.length > 0 &&
@@ -309,6 +314,15 @@ export function MessageBubble({
       <Text size={15} style={[styles.italic, { color: muted }]}>
         {t("messageDeleted")}
       </Text>
+    );
+  else if (task)
+    body = (
+      <TaskCard
+        message={{ ...message, task }}
+        members={members}
+        preview={preview}
+        onNotice={onNotice}
+      />
     );
   else if (!blocks?.card && message.body.trim())
     body = <Markdown source={message.body} own={ownColors} />;

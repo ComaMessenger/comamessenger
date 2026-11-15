@@ -1,0 +1,87 @@
+# A task on the reader (phase 6.6): seed-tasks.mjs has Анна put one on the
+# test account due in two hours, so the slot is red; «Готово» right in the
+# slot; «Важные → Ждут вас → Задачи» with «На мне / Поставил(а) я»; the red
+# mark in the chat list. Run after sign-in.yaml:
+#   node e2e/seed-tasks.mjs && maestro test -e THEME=light e2e/task-assignee.yaml
+# THEME (light or dark) names the screenshots; no default here, a flow
+# default would override -e.
+appId: com.comamessenger.app
+---
+- runFlow: open-app.yaml
+
+# 1. The red mark in the chat list: «задача до …».
+- extendedWaitUntil:
+    visible:
+      id: chat-row-task
+    timeout: 10000
+- assertVisible: .*задача до .*
+- takeScreenshot: ${THEME}-task-chat-mark
+
+# 2. The red slot: burning on the reader, «Готово» in the line.
+- tapOn: .*Инструкторы · задачи.*
+- extendedWaitUntil:
+    visible:
+      id: chat-slot-hot
+    timeout: 10000
+- assertVisible: .*На вас · .*Повесить новое расписание бассейна.*
+- takeScreenshot: ${THEME}-task-slot-hot
+- tapOn:
+    id: chat-slot-hot
+- extendedWaitUntil:
+    visible:
+      id: drop-all
+    timeout: 5000
+- assertVisible: НА ВАС · 2
+- takeScreenshot: ${THEME}-task-drop-mine
+- tapOn:
+    id: chat-slot-hot
+- extendedWaitUntil:
+    notVisible:
+      id: drop-all
+    timeout: 5000
+- tapOn:
+    id: chat-slot-complete
+# The next burning one on the reader is the item of «Подготовить большой зал».
+- extendedWaitUntil:
+    visible: .*На вас · .*Подготовить большой зал.*
+    timeout: 10000
+- assertVisible: .*Готово · Вы, .*
+- takeScreenshot: ${THEME}-task-done
+- tapOn:
+    id: conversation-back
+    retryTapIfNoChange: true
+
+# 3. «Важные → Ждут вас → Задачи»: on me by due date, set by me.
+- runFlow:
+    file: tabs.yaml
+    env:
+      TAB: important
+- extendedWaitUntil:
+    visible:
+      id: important-waiting
+    timeout: 15000
+- tapOn:
+    id: important-section-waiting
+- tapOn:
+    id: waiting-filter-tasks
+- extendedWaitUntil:
+    visible: .*Подготовить большой зал.*
+    timeout: 10000
+- assertVisible: (СЕГОДНЯ|ПОЗЖЕ) · 1
+- assertVisible: ГОТОВО ЗА 7 ДНЕЙ · 1
+- takeScreenshot: ${THEME}-important-tasks
+- tapOn:
+    id: waiting-tasks-role-authored
+- extendedWaitUntil:
+    visible:
+      id: important-waiting
+    timeout: 10000
+- takeScreenshot: ${THEME}-important-tasks-authored
+- tapOn:
+    id: waiting-tasks-role-assigned
+- tapOn:
+    id: waiting-filter-all
+- runFlow:
+    file: tabs.yaml
+    env:
+      TAB: chats

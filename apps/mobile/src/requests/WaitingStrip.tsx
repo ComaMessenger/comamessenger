@@ -1,67 +1,8 @@
 import { Pressable, StyleSheet, View } from "react-native";
-import { Bell, MessageCircleCheck } from "lucide-react-native";
+import { Bell } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
-import {
-  formatRequestDue,
-  type WaitingStrip as Strip,
-} from "@comamessenger/core";
 import { useTheme } from "@/lib/theme";
 import { Text } from "@/ui/Text";
-import { useNow } from "@/scheduled/clock";
-import { calendarLocale } from "./locale";
-
-/**
- * «Ждут вашего ответа · до пт, 18:00» under the chat header (prototype
- * `.strip.warn`). A tap scrolls to the earliest waiting request. It takes
- * the place of «Отложено» while something waits for the reader.
- */
-export function WaitingStrip({
-  strip,
-  onPress,
-}: {
-  strip: Strip;
-  onPress(): void;
-}) {
-  const { t, i18n } = useTranslation();
-  const theme = useTheme();
-  const now = useNow(60_000);
-  const due = strip.dueAt
-    ? t("requestDueBy", {
-        when: formatRequestDue(strip.dueAt, now, calendarLocale(i18n.language)),
-      })
-    : null;
-  const title =
-    strip.count > 1
-      ? t("requestStripMany", { count: strip.count })
-      : t("requestStripOne");
-  return (
-    <Pressable
-      testID="request-waiting-strip"
-      accessibilityRole="button"
-      accessibilityLabel={[title, due].filter(Boolean).join(", ")}
-      accessibilityHint={t("requestStripHint")}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.strip,
-        {
-          backgroundColor: theme.warningSoft,
-          borderBottomColor: theme.border,
-          opacity: pressed ? 0.8 : 1,
-        },
-      ]}
-    >
-      <MessageCircleCheck size={16} color={theme.warning} />
-      <View style={styles.text}>
-        <Text size={13} numberOfLines={1} style={{ color: theme.warning }}>
-          <Text size={13} weight="semibold" style={{ color: theme.warning }}>
-            {title}
-          </Text>
-          {due ? ` · ${due}` : ""}
-        </Text>
-      </View>
-    </Pressable>
-  );
-}
 
 /**
  * «Напоминание · сообщение подсвечено · Готово» when the chat was opened

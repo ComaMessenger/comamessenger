@@ -49,6 +49,8 @@ import { applyOrgEvent } from "@/org/orgEvents";
 import { isNetworkError, messageOf } from "@/lib/errors";
 import { cacheShell, cachedShell, persistMessages } from "./cache";
 import { flushRequestOutbox } from "@/requests/outbox";
+import { flushTaskOutbox } from "@/tasks/outbox";
+import { applyTaskEvent } from "@/tasks/realtime";
 import { flushReminderActions } from "@/reminders/pushActions";
 import { useSession, useSignedIn } from "@/session/SessionProvider";
 
@@ -180,10 +182,34 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
             void cacheStorage.set("features", list).catch(() => undefined);
           },
           event: (event) => {
+            // A task.updated refreshes the counters only when the reader is
+            // on the task before or after it (the store moves it on in apply).
+            const previous =
+              event.type === "task.updated" &&
+              typeof event.data.message_id === "string"
+                ? store
+                    .getState()
+                    .taskOf(
+                      event.data.message_id,
+                      typeof event.data.chat_id === "string"
+                        ? event.data.chat_id
+                        : undefined,
+                    )
+                : undefined;
             const applied = store.getState().apply(event);
             // The org structure changed: read GET /org again (ETag).
             if (applied && applyOrgEvent(queryClient, event)) return true;
-            if (applied && refreshesUnread(event)) unreadRefresher.request();
+            if (
+              applied &&
+              refreshesUnread(event, {
+                me: user.id,
+                previous: previous ?? null,
+              })
+            )
+              unreadRefresher.request();
+            // The open tasks of the chat (the slot), «Ждут вас» and the task
+            // lists follow; the cards in the feed follow the store.
+            if (applied) applyTaskEvent(queryClient, user.id, event);
             // Reminders are private: the bells of the chat change at once,
             // the lists in «Важные» on the next look.
             if (applied && event.type.startsWith("reminder.")) {
@@ -446,6 +472,7 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
     // Requests sent offline and reminder buttons pressed in a push while the
     // app could not reach the server go now.
     void flushRequestOutbox(api, store).catch(() => undefined);
+    void flushTaskOutbox(api, store).catch(() => undefined);
     void flushReminderActions(api, queryClient, user.id).catch(() => undefined);
     return () => {
       // Signed out: the next account brings its own theme.
@@ -482,6 +509,7 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
         void reload();
         void outbox.flush();
         void flushRequestOutbox(api, store).catch(() => undefined);
+        void flushTaskOutbox(api, store).catch(() => undefined);
         void flushReminderActions(api, queryClient, user.id).catch(
           () => undefined,
         );

@@ -1,5 +1,5 @@
 # Scheduled messages and «Send without sound» (phase 6.1, package E):
-# long press on send, the time sheet, the strip under the chat header, the
+# long press on send, the time sheet, the slot under the chat header, the
 # list with edit / time / delete, no «Schedule» in "+" and the list in «More».
 # Run after sign-in.yaml (reuses its session): maestro test e2e/scheduled.yaml
 # Starts by deleting the account's scheduled messages through the API.
@@ -34,13 +34,13 @@ appId: com.comamessenger.app
 - takeScreenshot: scheduled-sheet
 - tapOn:
     id: schedule-confirm
-# The composer is cleared and the strip counts the message.
-- extendedWaitUntil:
-    visible:
-      id: scheduled-strip
-    timeout: 10000
-# The strip is one accessible element: its label, not its inner text, counts.
-- assertVisible: "Отложенные сообщения в этом чате: .*"
+# The composer is cleared and the slot under the header counts the message
+# (phase 6.6: the slot took the place of the «Отложено» strip).
+- runFlow:
+    file: slot-kind.yaml
+    env:
+      KIND: scheduled
+- assertVisible: "Отложено · .*"
 # The feed ends with it as a dashed bubble, only the author sees it.
 - extendedWaitUntil:
     visible:
@@ -161,10 +161,10 @@ appId: com.comamessenger.app
 - takeScreenshot: scheduled-sheet-silent
 - tapOn:
     id: schedule-confirm
-- extendedWaitUntil:
-    visible:
-      id: scheduled-strip
-    timeout: 10000
+- runFlow:
+    file: slot-kind.yaml
+    env:
+      KIND: scheduled
 
 # 5. Every scheduled message, from «More»; clean up after the run.
 - tapOn:

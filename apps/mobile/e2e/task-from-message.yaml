@@ -1,0 +1,63 @@
+# «Сделать задачей» (phase 6.6): a long press on Анна's message, the form
+# with its text as the title and «из сообщения Анна Иванова: «…»», the task
+# on the reader; the card keeps the link to the message. Run after
+# sign-in.yaml:
+#   node e2e/seed-tasks.mjs && maestro test -e THEME=light e2e/task-from-message.yaml
+# THEME (light or dark) names the screenshots; no default here, a flow
+# default would override -e.
+appId: com.comamessenger.app
+---
+- runFlow: open-app.yaml
+- tapOn: .*Инструкторы · задачи.*
+# The chat list row shows the same text as its preview: wait for the chat.
+- extendedWaitUntil:
+    visible:
+      id: message-list
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      text: .*проверить аптечку в большом зале.*
+      childOf:
+        id: message-list
+    direction: DOWN
+    timeout: 15000
+# Within the feed: the chat list under it still holds the same preview.
+- longPressOn:
+    text: .*проверить аптечку в большом зале.*
+    childOf:
+      id: message-list
+- extendedWaitUntil:
+    visible:
+      id: message-action-makeTask
+    timeout: 5000
+- takeScreenshot: ${THEME}-task-message-menu
+- tapOn:
+    id: message-action-makeTask
+- extendedWaitUntil:
+    visible:
+      id: task-sheet
+    timeout: 5000
+- assertVisible: .*из сообщения Анна Иванова.*
+- tapOn:
+    id: task-person-me
+- takeScreenshot: ${THEME}-task-from-message
+- scrollUntilVisible:
+    element:
+      id: task-create
+    direction: DOWN
+    visibilityPercentage: 100
+- tapOn:
+    id: task-create
+- extendedWaitUntil:
+    notVisible:
+      id: task-sheet
+    timeout: 10000
+- extendedWaitUntil:
+    visible:
+      id: task-source
+    timeout: 10000
+- assertVisible: .*Вы · отвечает.*
+- takeScreenshot: ${THEME}-task-from-message-card
+- tapOn:
+    id: conversation-back
+    retryTapIfNoChange: true
