@@ -28,7 +28,8 @@ import {
 } from "../ui";
 import { getLocalDraft, setLocalDraft, syncDraft } from "../lib/drafts";
 import { formatAgePhrase, minuteGap } from "../lib/format";
-import { resolvedMentionActorIDs } from "../lib/mentions";
+import { messageMentionFields } from "@comamessenger/core";
+import { noteDepartmentSend, useMentionStructure } from "../org/mentions";
 import { canManageChat, isReadOnly } from "../lib/chats";
 import { useIsMobile } from "../lib/useMediaQuery";
 import { useMessenger } from "../shell/MessengerContext";
@@ -71,6 +72,7 @@ export function ThreadPanel({
     (state) => state.messages[chat.id] ?? emptyMessages,
   );
   const presence = useStore(store, (state) => state.presence);
+  const orgStructure = useMentionStructure();
   const streams = useStore(store, (state) => state.messageStreams);
   const agentStatuses = useStore(store, (state) => state.agentStatuses);
   const query = useQuery({
@@ -145,7 +147,11 @@ export function ThreadPanel({
       body_format: "markdown",
       reply_to_id: reply?.id,
       thread_root_id: rootID,
-      mentioned_actor_ids: resolvedMentionActorIDs(content, members, presence),
+      ...messageMentionFields(content, {
+        members,
+        presence,
+        structure: orgStructure,
+      }),
     };
   }
   function clearComposer() {
@@ -158,8 +164,10 @@ export function ThreadPanel({
     const draft = composed();
     if (!draft) return;
     clearComposer();
+    const clientMsgID = crypto.randomUUID();
+    noteDepartmentSend(clientMsgID, draft.mentioned_department_ids);
     await outbox.enqueue(chat.id, {
-      client_msg_id: crypto.randomUUID(),
+      client_msg_id: clientMsgID,
       ...draft,
       ...(silent ? { silent: true } : {}),
     });
@@ -386,6 +394,8 @@ export function ThreadPanel({
         compact
         members={members}
         presence={presence}
+        structure={orgStructure}
+        authorID={user.id}
         body={body}
         setBody={(next) => {
           setBody(next);

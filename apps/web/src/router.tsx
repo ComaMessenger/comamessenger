@@ -91,6 +91,11 @@ const routes = [
   }),
   createRoute({
     getParentRoute: () => root,
+    path: "/members/departments/$departmentId",
+    component: marker,
+  }),
+  createRoute({
+    getParentRoute: () => root,
     path: "/agents",
     component: marker,
   }),

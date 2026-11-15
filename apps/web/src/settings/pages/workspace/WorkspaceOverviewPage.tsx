@@ -10,12 +10,14 @@ import {
   type SettingsNavigate,
 } from "../../components/SettingsShell";
 import { canAccessSettingsPage, visibleChildSettings } from "../../registry";
+import { useServerFeatures } from "../../../org/useOrg";
 
 const descriptions: Record<string, string> = {
   "workspace-general": "workspaceGeneralHint",
   "workspace-members": "membersAccessHint",
   "workspace-invitations": "invitationPolicyHint",
   "workspace-policies": "creationPolicyHint",
+  "workspace-org": "orgSettingsHint",
 };
 
 export function WorkspaceOverviewPage({
@@ -29,7 +31,8 @@ export function WorkspaceOverviewPage({
 }) {
   const { t } = useTranslation();
   const allowed = canAccessSettingsPage(user, "workspace");
-  const pages = visibleChildSettings(user, "workspace");
+  const features = useServerFeatures();
+  const pages = visibleChildSettings(user, "workspace", features);
 
   return (
     <SettingsShell

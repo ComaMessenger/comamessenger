@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
+  canManageOrg,
   memberRules,
   ownershipCandidates,
   roleLabelKey,
   withPermission,
   type MessengerAPI,
+  type MemberPermissionToggle,
   type OrganizationMember,
   type Permission,
   type User,
@@ -36,6 +38,12 @@ import {
   permissionLabelKeys,
   permissions,
 } from "../../registry";
+import {
+  useOrgAvailable,
+  useOrgStructure,
+  useServerFeatures,
+} from "../../../org/useOrg";
+import { PersonOrgForm } from "../../../org/PersonOrgDialog";
 
 export function WorkspaceMembersPage({
   api,
@@ -49,7 +57,10 @@ export function WorkspaceMembersPage({
   onUserUpdated(user: User): void;
 }) {
   const { t } = useTranslation();
-  const allowed = canAccessSettingsPage(user, "workspace-members");
+  const features = useServerFeatures();
+  const allowed = canAccessSettingsPage(user, "workspace-members", features);
+  const orgAvailable = useOrgAvailable();
+  const org = useOrgStructure(api, allowed && canManageOrg(user));
   const members = useQuery({
     queryKey: ["organization-members"],
     queryFn: () => api.organizationMembers(),
@@ -222,6 +233,7 @@ export function WorkspaceMembersPage({
               const rules = memberRules(user, selectedMember, {
                 passwordRecoveryAvailable:
                   branding.data?.password_recovery_available,
+                features,
               });
               return (
                 <Dialog
@@ -338,15 +350,29 @@ export function WorkspaceMembersPage({
                         </Button>
                       )}
                     </div>
-                    {rules.showsKnowledgePermission && (
-                      <KnowledgePermission
+                    {rules.memberPermissions.length > 0 && (
+                      <MemberPermissions
                         member={selectedMember}
-                        canGrant={rules.canGrantKnowledge}
+                        toggles={rules.memberPermissions}
                         onChange={(permissions) =>
                           void updateMember(selectedMember, { permissions })
                         }
                       />
                     )}
+                    {orgAvailable &&
+                      org.data &&
+                      selectedMember.status === "active" && (
+                        <fieldset className="member-management__permissions member-management__org">
+                          <legend>{t("orgSection")}</legend>
+                          <PersonOrgForm
+                            key={`${selectedMember.actor_id}:${org.data.version}`}
+                            api={api}
+                            actorID={selectedMember.actor_id}
+                            structure={org.data}
+                            onSaved={() => setMessage(t("changesSaved"))}
+                          />
+                        </fieldset>
+                      )}
                     {rules.showsAdminPermissions && (
                       <fieldset className="member-management__permissions">
                         <legend>{t("administratorPermissions")}</legend>
@@ -425,36 +451,48 @@ export function WorkspaceMembersPage({
   );
 }
 
+/** Hints under each switch a regular member may get. */
+const permissionHintKeys: Partial<Record<Permission, string>> = {
+  "knowledge.manage": "kbPermissionHint",
+  "org.manage": "permissionOrgManageHint",
+  "requests.address_groups": "permissionRequestsAddressGroupsHint",
+};
+
 /**
- * knowledge.manage is the one permission a regular member may hold. The owner
- * and administrators who hold it themselves grant it here; the server
- * enforces the same rule.
+ * The permissions a regular member may hold, one switch each (decision 15):
+ * the owner switches any; an administrator with members.manage only those
+ * they hold themselves. The server compares the old and new sets per code.
  */
-function KnowledgePermission({
+function MemberPermissions({
   member,
-  canGrant,
+  toggles,
   onChange,
 }: {
   member: OrganizationMember;
-  canGrant: boolean;
+  toggles: readonly MemberPermissionToggle[];
   onChange(permissions: Permission[]): void;
 }) {
   const { t } = useTranslation();
-  const granted = member.permissions.includes("knowledge.manage");
   return (
     <fieldset className="member-management__permissions">
-      <legend>{t("kbPermissionTitle")}</legend>
-      <SettingsToggle
-        label={t("kbPermissionToggle")}
-        hint={canGrant ? t("kbPermissionHint") : t("kbPermissionNeedsOwn")}
-        checked={granted}
-        disabled={!canGrant}
-        onChange={(checked) =>
-          onChange(
-            withPermission(member.permissions, "knowledge.manage", checked),
-          )
-        }
-      />
+      <legend>{t("memberPermissionsTitle")}</legend>
+      {toggles.map((toggle) => (
+        <SettingsToggle
+          key={toggle.code}
+          label={t(permissionLabelKeys[toggle.code])}
+          hint={
+            toggle.enabled
+              ? permissionHintKeys[toggle.code] &&
+                t(permissionHintKeys[toggle.code]!)
+              : t("memberPermissionNeedsOwn")
+          }
+          checked={toggle.granted}
+          disabled={!toggle.enabled}
+          onChange={(checked) =>
+            onChange(withPermission(member.permissions, toggle.code, checked))
+          }
+        />
+      ))}
     </fieldset>
   );
 }

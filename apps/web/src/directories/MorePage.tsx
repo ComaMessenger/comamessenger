@@ -20,6 +20,8 @@ import { Logo } from "../shell/Logo";
 import { SnoozeControls } from "../shell/SnoozeControls";
 import { workspaceRoleKey } from "../shell/WorkspaceMenu";
 import { useScheduledMessages } from "../scheduled/useScheduled";
+import { canAccessSettingsPage } from "../settings";
+import { useServerFeatures } from "../org/useOrg";
 
 function MoreRow({
   icon,
@@ -77,7 +79,9 @@ export function MorePage() {
     queryFn: () => api.preferences(),
     staleTime: 60_000,
   });
-  const isAdmin = user.role !== "member";
+  // A member with org.manage opens the org structure from here too.
+  const features = useServerFeatures();
+  const isAdmin = canAccessSettingsPage(user, "workspace", features);
   const scheduled = useScheduledMessages(api, user.id);
   const failedScheduled = (scheduled.data ?? []).filter(
     (item) => item.status === "failed",

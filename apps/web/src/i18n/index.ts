@@ -18,6 +18,7 @@ import { scheduledCatalog } from "../scheduled/i18n";
 import { settingsCatalog } from "../settings/i18n";
 import { requestsCatalog } from "../requests/i18n";
 import { remindersCatalog } from "../reminders/i18n";
+import { orgCatalog } from "../org/i18n";
 
 const catalogs = mergeCatalogs({ ru, en }, [
   authCatalog,
@@ -34,6 +35,7 @@ const catalogs = mergeCatalogs({ ru, en }, [
   settingsCatalog,
   requestsCatalog,
   remindersCatalog,
+  orgCatalog,
 ]);
 
 const pseudo = Object.fromEntries(
