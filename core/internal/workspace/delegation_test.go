@@ -148,3 +148,88 @@ func TestAdministratorDelegationDoesNotWidenPrivileges(t *testing.T) {
 }
 
 func ptr(value string) *string { return &value }
+
+// Decision 15 of phase 6.5: an administrator with members.manage switches on
+// or off, code by code, only the member permissions they hold; codes left
+// as they are need nothing.
+func TestPerCodeDelegation(t *testing.T) {
+	f := newDelegationFixture(t)
+	ctx := t.Context()
+	// The owner grants requests.address_groups, which administrators do not
+	// hold by default.
+	if _, err := f.service.UpdateMember(ctx, f.owner, f.memberID, UpdateMemberInput{Permissions: codes(permission.RequestsAddressGroups)}); err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name    string
+		current identity.User
+		set     *[]permission.Code
+		want    error
+		result  []permission.Code
+	}{
+		{name: "adds knowledge.manage, keeps the owner's grant", current: f.admin, set: codes(permission.RequestsAddressGroups, permission.KnowledgeManage), result: []permission.Code{permission.KnowledgeManage, permission.RequestsAddressGroups}},
+		{name: "cannot revoke requests.address_groups", current: f.admin, set: codes(permission.KnowledgeManage), want: ErrForbidden},
+		{name: "cannot grant org.manage without holding it", current: f.admin, set: codes(permission.RequestsAddressGroups, permission.KnowledgeManage, permission.OrgManage), want: ErrForbidden},
+		{name: "revokes knowledge.manage, keeps the rest", current: f.admin, set: codes(permission.RequestsAddressGroups), result: []permission.Code{permission.RequestsAddressGroups}},
+		{name: "without members.manage nothing", current: f.auditor, set: codes(permission.RequestsAddressGroups, permission.KnowledgeManage), want: ErrForbidden},
+		{name: "the owner revokes", current: f.owner, set: codes(), result: []permission.Code{}},
+		{name: "cannot grant requests.address_groups", current: f.admin, set: codes(permission.RequestsAddressGroups), want: ErrForbidden},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			member, err := f.service.UpdateMember(ctx, test.current, f.memberID, UpdateMemberInput{Permissions: test.set})
+			if !errors.Is(err, test.want) {
+				t.Fatalf("UpdateMember() error = %v, want %v", err, test.want)
+			}
+			if test.want == nil {
+				got := append([]permission.Code{}, member.Permissions...)
+				slices.Sort(got)
+				if !slices.Equal(got, test.result) {
+					t.Fatalf("permissions = %v, want %v", got, test.result)
+				}
+			}
+		})
+	}
+	// An administrator holding org.manage and requests.address_groups may
+	// pass them on.
+	holder := f.admin
+	holder.Permissions = append(append([]permission.Code{}, holder.Permissions...), permission.OrgManage, permission.RequestsAddressGroups)
+	if _, err := f.service.UpdateMember(ctx, f.owner, holder.ActorID, UpdateMemberInput{Permissions: &holder.Permissions}); err != nil {
+		t.Fatal(err)
+	}
+	member, err := f.service.UpdateMember(ctx, holder, f.memberID, UpdateMemberInput{Permissions: codes(permission.OrgManage, permission.RequestsAddressGroups)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(member.Permissions) != 2 {
+		t.Fatalf("member permissions = %v", member.Permissions)
+	}
+	// Administrator-only codes stay out of a member's reach.
+	if _, err := f.service.UpdateMember(ctx, f.owner, f.memberID, UpdateMemberInput{Permissions: codes(permission.AuditRead)}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("audit.read for a member: %v", err)
+	}
+}
+
+// The database trigger lets a member hold exactly the three member codes.
+func TestMemberPermissionTrigger(t *testing.T) {
+	f := newDelegationFixture(t)
+	ctx := t.Context()
+	pool := f.service.repository.pool
+	var orgID string
+	if err := pool.QueryRow(ctx, `SELECT org_id FROM actors WHERE id=$1`, f.memberID).Scan(&orgID); err != nil {
+		t.Fatal(err)
+	}
+	for _, code := range []permission.Code{permission.KnowledgeManage, permission.OrgManage, permission.RequestsAddressGroups} {
+		if _, err := pool.Exec(ctx, `INSERT INTO actor_permissions(org_id,actor_id,permission) VALUES($1,$2,$3)`, orgID, f.memberID, string(code)); err != nil {
+			t.Fatalf("%s for a member: %v", code, err)
+		}
+	}
+	for _, code := range []permission.Code{permission.MembersManage, permission.AuditRead, permission.ChatsModerate} {
+		if _, err := pool.Exec(ctx, `INSERT INTO actor_permissions(org_id,actor_id,permission) VALUES($1,$2,$3)`, orgID, f.memberID, string(code)); err == nil {
+			t.Fatalf("%s accepted for a member", code)
+		}
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO actor_permissions(org_id,actor_id,permission) VALUES($1,$2,'unknown.code')`, orgID, f.memberID); err == nil {
+		t.Fatal("unknown code accepted")
+	}
+}

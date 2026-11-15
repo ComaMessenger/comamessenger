@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/comamessenger/comamessenger/core/internal/id"
+	"github.com/comamessenger/comamessenger/core/internal/orgstructure"
 	"github.com/comamessenger/comamessenger/core/internal/permission"
 	"github.com/comamessenger/comamessenger/core/internal/scheduledreset"
 	"github.com/jackc/pgx/v5"
@@ -15,7 +16,18 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type Repository struct{ pool *pgxpool.Pool }
+type Repository struct {
+	pool        *pgxpool.Pool
+	afterCommit func(string, int64)
+}
+
+// SetAfterCommit wakes realtime delivery after a write appended events.
+func (r *Repository) SetAfterCommit(callback func(string, int64)) { r.afterCommit = callback }
+
+func retryableTransaction(err error) bool {
+	var databaseError *pgconn.PgError
+	return errors.As(err, &databaseError) && (databaseError.Code == "40001" || databaseError.Code == "40P01")
+}
 
 func NewRepository(pool *pgxpool.Pool) *Repository { return &Repository{pool: pool} }
 
@@ -202,7 +214,8 @@ func (r *Repository) Members(ctx context.Context, orgID string) ([]Member, error
 		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_emoji ELSE '' END,
 		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_text ELSE '' END,
 		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_expires_at END,
-		       a.avatar_version
+		       a.avatar_version, a.position_id,
+		       (SELECT dm.department_id FROM department_members dm WHERE dm.org_id=a.org_id AND dm.actor_id=a.id AND dm.is_primary)
 		FROM actors a
 		JOIN users u ON u.actor_id=a.id
 		WHERE a.org_id=$1 AND a.deleted_at IS NULL
@@ -215,7 +228,7 @@ func (r *Repository) Members(ctx context.Context, orgID string) ([]Member, error
 	for rows.Next() {
 		var item Member
 		var stored []string
-		if err := rows.Scan(&item.ActorID, &item.Email, &item.DisplayName, &item.Handle, &item.Title, &item.Role, &item.Status, &item.CreatedAt, &item.LastSeenAt, &stored, &item.StatusEmoji, &item.StatusText, &item.StatusExpiresAt, &item.AvatarVersion); err != nil {
+		if err := rows.Scan(&item.ActorID, &item.Email, &item.DisplayName, &item.Handle, &item.Title, &item.Role, &item.Status, &item.CreatedAt, &item.LastSeenAt, &stored, &item.StatusEmoji, &item.StatusText, &item.StatusExpiresAt, &item.AvatarVersion, &item.PositionID, &item.PrimaryDepartmentID); err != nil {
 			return nil, err
 		}
 		item.Permissions = effectivePermissions(item.Role, stored)
@@ -224,33 +237,88 @@ func (r *Repository) Members(ctx context.Context, orgID string) ([]Member, error
 	return result, rows.Err()
 }
 
-func (r *Repository) UpdateMember(ctx context.Context, orgID, currentActorID, targetActorID string, input UpdateMemberInput) (Member, error) {
-	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
+// UpdateMember changes a member's role, status or permissions. authorize, when
+// set, sees the caller's stored role and the target's stored permissions
+// inside the transaction (after the row lock) and refuses the change with
+// ErrForbidden by returning false, so a per-code permission check cannot race
+// a concurrent grant.
+//
+// A change of status of a person who is in the org structure (membership,
+// position or lead) raises org_version and appends org.updated in the same
+// transaction (phase 6.5, decision 13). Locks: the member row, then the
+// organization row, as in the org structure writes. The serializable
+// transaction is retried when it loses to a concurrent write of the
+// organization row.
+func (r *Repository) UpdateMember(ctx context.Context, orgID, currentActorID, targetActorID string, input UpdateMemberInput, authorize func(currentRole string, previous []permission.Code) bool) (Member, error) {
+	var deactivated bool
+	var seq int64
+	var err error
+	for attempt := 0; ; attempt++ {
+		deactivated, seq, err = r.updateMemberOnce(ctx, orgID, currentActorID, targetActorID, input, authorize)
+		if err == nil || attempt >= 4 || !retryableTransaction(err) {
+			break
+		}
+	}
 	if err != nil {
 		return Member{}, err
+	}
+	if seq > 0 && r.afterCommit != nil {
+		r.afterCommit(orgID, seq)
+	}
+	if deactivated {
+		scheduledreset.ReconcileAfter(ctx, r.pool, orgID, targetActorID)
+	}
+	var result Member
+	var stored []string
+	err = r.pool.QueryRow(ctx, `
+		SELECT a.id,u.email::text,a.display_name,a.handle::text,a.title,a.org_role,a.status,a.created_at,
+		       (SELECT max(s.last_seen_at) FROM sessions s WHERE s.actor_id=a.id),
+		       ARRAY(SELECT ap.permission FROM actor_permissions ap WHERE ap.org_id=a.org_id AND ap.actor_id=a.id ORDER BY ap.permission),
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_emoji ELSE '' END,
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_text ELSE '' END,
+		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_expires_at END,
+		       a.avatar_version, a.position_id,
+		       (SELECT dm.department_id FROM department_members dm WHERE dm.org_id=a.org_id AND dm.actor_id=a.id AND dm.is_primary)
+		FROM actors a
+		JOIN users u ON u.actor_id=a.id
+	WHERE a.id=$1`, targetActorID).Scan(&result.ActorID, &result.Email, &result.DisplayName, &result.Handle, &result.Title, &result.Role, &result.Status, &result.CreatedAt, &result.LastSeenAt, &stored, &result.StatusEmoji, &result.StatusText, &result.StatusExpiresAt, &result.AvatarVersion, &result.PositionID, &result.PrimaryDepartmentID)
+	if err != nil {
+		return Member{}, err
+	}
+	result.Permissions = effectivePermissions(result.Role, stored)
+	return result, nil
+}
+
+func (r *Repository) updateMemberOnce(ctx context.Context, orgID, currentActorID, targetActorID string, input UpdateMemberInput, authorize func(currentRole string, previous []permission.Code) bool) (bool, int64, error) {
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	if err != nil {
+		return false, 0, err
 	}
 	defer tx.Rollback(ctx)
 	var currentRole, targetRole, targetStatus string
 	if err := tx.QueryRow(ctx, `SELECT org_role FROM actors WHERE id=$1 AND org_id=$2 AND status='active'`, currentActorID, orgID).Scan(&currentRole); err != nil {
-		return Member{}, ErrForbidden
+		return false, 0, ErrForbidden
 	}
 	// NO KEY UPDATE: the member's keys never change here, and foreign key
 	// checks (FOR KEY SHARE) of concurrent session and audit writes must
 	// not wait for this lock while we wait for their rows.
 	if err := tx.QueryRow(ctx, `SELECT org_role,status FROM actors WHERE id=$1 AND org_id=$2 AND deleted_at IS NULL FOR NO KEY UPDATE`, targetActorID, orgID).Scan(&targetRole, &targetStatus); errors.Is(err, pgx.ErrNoRows) {
-		return Member{}, ErrNotFound
+		return false, 0, ErrNotFound
 	} else if err != nil {
-		return Member{}, err
+		return false, 0, err
 	}
 	var previousPermissions []string
 	if err := tx.QueryRow(ctx, `SELECT ARRAY(SELECT permission FROM actor_permissions WHERE org_id=$1 AND actor_id=$2 ORDER BY permission)`, orgID, targetActorID).Scan(&previousPermissions); err != nil {
-		return Member{}, fmt.Errorf("load previous actor permissions: %w", err)
+		return false, 0, fmt.Errorf("load previous actor permissions: %w", err)
 	}
 	if currentRole != "owner" && (targetRole != "member" || input.Role != nil && *input.Role != "member") {
-		return Member{}, ErrForbidden
+		return false, 0, ErrForbidden
+	}
+	if authorize != nil && !authorize(currentRole, effectivePermissions(targetRole, previousPermissions)) {
+		return false, 0, ErrForbidden
 	}
 	if targetRole == "owner" {
-		return Member{}, fmt.Errorf("%w: use the ownership transfer operation to change the owner", ErrInvalid)
+		return false, 0, fmt.Errorf("%w: use the ownership transfer operation to change the owner", ErrInvalid)
 	}
 	role, status := targetRole, targetStatus
 	if input.Role != nil {
@@ -260,41 +328,41 @@ func (r *Repository) UpdateMember(ctx context.Context, orgID, currentActorID, ta
 		status = *input.Status
 	}
 	if targetActorID == currentActorID && status != "active" {
-		return Member{}, fmt.Errorf("%w: current user cannot deactivate themselves", ErrInvalid)
+		return false, 0, fmt.Errorf("%w: current user cannot deactivate themselves", ErrInvalid)
 	}
 	if input.Permissions != nil && (status != "active" || role != "admin" && (role != "member" || !memberGrantable(*input.Permissions))) {
-		return Member{}, fmt.Errorf("%w: only active administrators may have explicit permissions; members may only receive knowledge.manage", ErrInvalid)
+		return false, 0, fmt.Errorf("%w: only active administrators may have explicit permissions; members may only receive knowledge.manage, org.manage and requests.address_groups", ErrInvalid)
 	}
 	_, err = tx.Exec(ctx, `UPDATE actors SET org_role=$3,status=$4 WHERE id=$1 AND org_id=$2`, targetActorID, orgID, role, status)
 	if err != nil {
-		return Member{}, fmt.Errorf("update organization member: %w", err)
+		return false, 0, fmt.Errorf("update organization member: %w", err)
 	}
 	// Leaving the active state is a security event: scheduled messages
 	// authorized before it never go out, even after a reactivation.
 	deactivated := targetStatus == "active" && status != "active"
 	if deactivated {
 		if err := scheduledreset.BumpEpochTx(ctx, tx, orgID, targetActorID); err != nil {
-			return Member{}, err
+			return false, 0, err
 		}
 	}
 	if status != "active" || input.Permissions != nil {
 		if _, err := tx.Exec(ctx, `DELETE FROM actor_permissions WHERE org_id=$1 AND actor_id=$2`, orgID, targetActorID); err != nil {
-			return Member{}, fmt.Errorf("clear actor permissions: %w", err)
+			return false, 0, fmt.Errorf("clear actor permissions: %w", err)
 		}
 	} else if role == "member" {
 		if _, err := tx.Exec(ctx, `DELETE FROM actor_permissions WHERE org_id=$1 AND actor_id=$2 AND permission<>ALL($3::text[])`, orgID, targetActorID, memberGrantableCodes()); err != nil {
-			return Member{}, fmt.Errorf("clear administrator permissions: %w", err)
+			return false, 0, fmt.Errorf("clear administrator permissions: %w", err)
 		}
 	} else if role == "admin" && targetRole == "member" {
 		// Promotion grants the permissions administrators hold by default.
 		if _, err := tx.Exec(ctx, `INSERT INTO actor_permissions(org_id,actor_id,permission,granted_by) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`, orgID, targetActorID, string(permission.KnowledgeManage), currentActorID); err != nil {
-			return Member{}, fmt.Errorf("grant default administrator permissions: %w", err)
+			return false, 0, fmt.Errorf("grant default administrator permissions: %w", err)
 		}
 	}
 	if status == "active" && input.Permissions != nil {
 		for _, code := range *input.Permissions {
 			if _, err := tx.Exec(ctx, `INSERT INTO actor_permissions(org_id,actor_id,permission,granted_by) VALUES($1,$2,$3,$4)`, orgID, targetActorID, code, currentActorID); err != nil {
-				return Member{}, fmt.Errorf("grant actor permission: %w", err)
+				return false, 0, fmt.Errorf("grant actor permission: %w", err)
 			}
 		}
 	}
@@ -310,36 +378,28 @@ func (r *Repository) UpdateMember(ctx context.Context, orgID, currentActorID, ta
 		}
 	}
 	if err := insertAudit(ctx, tx, orgID, currentActorID, auditAction, "actor", &targetActorID, auditMetadata); err != nil {
-		return Member{}, err
+		return false, 0, err
+	}
+	seq := int64(0)
+	if status != targetStatus {
+		assigned, err := orgstructure.HasAssignment(ctx, tx, orgID, targetActorID)
+		if err != nil {
+			return false, 0, err
+		}
+		if assigned {
+			if _, seq, err = orgstructure.BumpVersion(ctx, tx, orgID, currentActorID, orgstructure.ReasonPersonStatus); err != nil {
+				return false, 0, err
+			}
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		var databaseError *pgconn.PgError
 		if errors.As(err, &databaseError) && databaseError.Code == "23514" {
-			return Member{}, fmt.Errorf("%w: an organization must keep at least one active owner", ErrInvalid)
+			return false, 0, fmt.Errorf("%w: an organization must keep at least one active owner", ErrInvalid)
 		}
-		return Member{}, fmt.Errorf("commit member update: %w", err)
+		return false, 0, fmt.Errorf("commit member update: %w", err)
 	}
-	if deactivated {
-		scheduledreset.ReconcileAfter(ctx, r.pool, orgID, targetActorID)
-	}
-	var result Member
-	var stored []string
-	err = r.pool.QueryRow(ctx, `
-		SELECT a.id,u.email::text,a.display_name,a.handle::text,a.title,a.org_role,a.status,a.created_at,
-		       (SELECT max(s.last_seen_at) FROM sessions s WHERE s.actor_id=a.id),
-		       ARRAY(SELECT ap.permission FROM actor_permissions ap WHERE ap.org_id=a.org_id AND ap.actor_id=a.id ORDER BY ap.permission),
-		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_emoji ELSE '' END,
-		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_text ELSE '' END,
-		       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at>now() THEN a.status_expires_at END,
-		       a.avatar_version
-		FROM actors a
-		JOIN users u ON u.actor_id=a.id
-	WHERE a.id=$1`, targetActorID).Scan(&result.ActorID, &result.Email, &result.DisplayName, &result.Handle, &result.Title, &result.Role, &result.Status, &result.CreatedAt, &result.LastSeenAt, &stored, &result.StatusEmoji, &result.StatusText, &result.StatusExpiresAt, &result.AvatarVersion)
-	if err != nil {
-		return Member{}, err
-	}
-	result.Permissions = effectivePermissions(result.Role, stored)
-	return result, nil
+	return deactivated, seq, nil
 }
 
 func (r *Repository) RequirePasswordChange(ctx context.Context, orgID, currentActorID, targetActorID, currentRole string, now time.Time) ([]string, error) {

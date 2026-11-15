@@ -208,6 +208,7 @@ func (s *session) writeLoop(ctx context.Context) error {
 			"presence_snapshot",
 			"message_reminders",
 			"message_requests",
+			"org_structure",
 		},
 	}
 	if err := s.write(ctx, hello); err != nil {
