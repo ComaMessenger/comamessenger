@@ -81,7 +81,8 @@ export function TaskRow({
       </span>,
     );
   if (chatName) parts.push(<span key="chat">{chatName}</span>);
-  if (authorName) parts.push(<span key="author">{t("taskFrom", { name: authorName })}</span>);
+  if (authorName)
+    parts.push(<span key="author">{t("taskFrom", { name: authorName })}</span>);
   return (
     <div
       className={cx(
@@ -104,7 +105,9 @@ export function TaskRow({
         {done && <Check aria-hidden="true" />}
       </button>
       <button type="button" className="task-row__body" onClick={onOpen}>
-        <strong className={cx("task-row__title", done && "task-row__title--done")}>
+        <strong
+          className={cx("task-row__title", done && "task-row__title--done")}
+        >
           {task.title}
         </strong>
         <small className="task-row__meta">

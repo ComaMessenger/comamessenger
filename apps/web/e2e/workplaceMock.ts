@@ -10,7 +10,8 @@ import type { Page } from "@playwright/test";
 // Wednesday 11 November 2026, 10:15 in Moscow.
 export const now = new Date("2026-11-11T10:15:00+03:00");
 
-const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+const id = (n: number) =>
+  `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
 export const anna = {
   id: id(1),
@@ -384,7 +385,11 @@ export function fixtures() {
           "дежурю в бассейне",
         ),
       },
-      read: [people.oleg.actor_id, people.marina.actor_id, people.igor.actor_id],
+      read: [
+        people.oleg.actor_id,
+        people.marina.actor_id,
+        people.igor.actor_id,
+      ],
       version: 3,
       next_remind_at: null,
       reminds: 0,
@@ -441,7 +446,12 @@ export function fixtures() {
     reminders,
     tasks: [] as TaskRecord[],
     pins: [] as string[],
-    scheduled: [] as Array<{ id: string; chat_id: string; body: string; send_at: string }>,
+    scheduled: [] as Array<{
+      id: string;
+      chat_id: string;
+      body: string;
+      send_at: string;
+    }>,
   };
 }
 
@@ -459,7 +469,10 @@ export async function mockWorkplace(
   } = {},
 ) {
   const { theme = "light" } = options;
-  const features = options.features ?? ["message_requests", "message_reminders"];
+  const features = options.features ?? [
+    "message_requests",
+    "message_reminders",
+  ];
   const data = options.data ?? fixtures();
   const calls: Array<{ method: string; path: string; body: unknown }> = [];
   const me = people[options.me ?? "anna"].actor_id;
@@ -569,7 +582,8 @@ export async function mockWorkplace(
       can_change: Boolean(mine) && open && beforeDue,
       can_view_answers: author,
       can_close: author && open,
-      can_remind: author && open && waiting > 0 && !r.next_remind_at && r.reminds < 5,
+      can_remind:
+        author && open && waiting > 0 && !r.next_remind_at && r.reminds < 5,
       next_remind_at: author ? r.next_remind_at : null,
       tally: author
         ? optionsOf(r).map(
@@ -677,7 +691,11 @@ export async function mockWorkplace(
       avatar_version: 0,
     };
   };
-  const savedChat = { id: chatID, kind: "group", display_name: "Инструкторы · зал" };
+  const savedChat = {
+    id: chatID,
+    kind: "group",
+    display_name: "Инструкторы · зал",
+  };
   const inboxItem = (r: RequestRecord) => ({
     message: messageOf(r),
     chat_id: r.chat_id,
@@ -788,6 +806,46 @@ export async function mockWorkplace(
     };
   };
 
+  // «Зал ЛФК» with Oleg and Igor; «Инструктор ЛФК» held by Oleg and Anna.
+  const orgStructure = {
+    version: 1,
+    departments: [
+      {
+        id: ids.department,
+        name: "Зал ЛФК",
+        parent_id: null,
+        lead_actor_id: people.igor.actor_id,
+        chat_id: null,
+        has_chat: false,
+        chat_archived: false,
+        sort_key: null,
+        version: 1,
+      },
+    ],
+    positions: [
+      { id: ids.position, name: "Инструктор ЛФК", sort_key: null, version: 1 },
+    ],
+    people: [
+      {
+        actor_id: people.oleg.actor_id,
+        primary_department_id: ids.department,
+        additional_department_ids: [],
+        position_id: ids.position,
+      },
+      {
+        actor_id: people.igor.actor_id,
+        primary_department_id: ids.department,
+        additional_department_ids: [],
+        position_id: null,
+      },
+      {
+        actor_id: anna.id,
+        primary_department_id: null,
+        additional_department_ids: [],
+        position_id: ids.position,
+      },
+    ],
+  };
   const savedAuthorOf = (actorID: string) => savedAuthor(actorID);
   const chatRef = (chat: string) => ({
     id: chat,
@@ -826,7 +884,8 @@ export async function mockWorkplace(
         department_id?: string;
         position_id?: string;
       };
-      const items = (input?.items as { text: string; assignee_id?: string }[]) ?? [];
+      const items =
+        (input?.items as { text: string; assignee_id?: string }[]) ?? [];
       const queue = assignee.kind !== "person";
       const created: TaskRecord = {
         id: id((nextID += 1)),
@@ -840,8 +899,12 @@ export async function mockWorkplace(
           ? {
               kind: assignee.kind,
               actor_id: null,
-              label: assignee.kind === "department" ? "Зал ЛФК" : "Инструктор ЛФК",
-              candidate_ids: [people.oleg.actor_id, me],
+              label:
+                assignee.kind === "department" ? "Зал ЛФК" : "Инструктор ЛФК",
+              candidate_ids:
+                assignee.kind === "department"
+                  ? [people.oleg.actor_id, people.igor.actor_id]
+                  : [people.oleg.actor_id, anna.id],
               department_id: assignee.department_id ?? null,
               position_id: assignee.position_id ?? null,
             }
@@ -871,9 +934,7 @@ export async function mockWorkplace(
       const state = url.searchParams.get("state") ?? "open";
       const list = data.tasks
         .filter((r) => r.chat_id === chatTasks[1])
-        .filter((r) =>
-          state === "open" ? activeTask(r) : r.status === state,
-        )
+        .filter((r) => (state === "open" ? activeTask(r) : r.status === state))
         .sort(byDue);
       const open = data.tasks.filter(
         (r) => r.chat_id === chatTasks[1] && activeTask(r),
@@ -910,7 +971,12 @@ export async function mockWorkplace(
           items: list
             .sort(byDue)
             .map((r) =>
-              myTaskItem(r, role === "authored" ? "author" : (taskRoleOf(r) ?? "responsible")),
+              myTaskItem(
+                r,
+                role === "authored"
+                  ? "author"
+                  : (taskRoleOf(r) ?? "responsible"),
+              ),
             ),
           next_cursor: null,
         },
@@ -949,22 +1015,30 @@ export async function mockWorkplace(
       return { status: 200, body: { items, next_cursor: null } };
     }
     const match =
-      /^\/tasks\/([^/]+)(?:\/(status|take|nudge|items)(?:\/([^/]+))?)?$/.exec(path);
+      /^\/tasks\/([^/]+)(?:\/(status|take|nudge|items)(?:\/([^/]+))?)?$/.exec(
+        path,
+      );
     const r = match ? data.tasks.find((entry) => entry.id === match[1]) : null;
     if (!match || !r) return fail(404, "task_not_found");
     const action = match[2];
-    if (!action && method === "GET") return { status: 200, body: taskMessage(r) };
+    if (!action && method === "GET")
+      return { status: 200, body: taskMessage(r) };
     if (!action && method === "PATCH") {
       if (!canManage(r)) return fail(403, "task_forbidden");
       if (input?.expected_version !== r.version)
         return fail(409, "task_version_conflict", { task: taskOf(r) });
       if (typeof input?.title === "string") r.title = input.title;
-      if (typeof input?.description === "string") r.description = input.description;
-      if (input && "due_at" in input) r.due_at = (input.due_at as string) ?? null;
+      if (typeof input?.description === "string")
+        r.description = input.description;
+      if (input && "due_at" in input)
+        r.due_at = (input.due_at as string) ?? null;
       if (typeof input?.remind_before_due === "boolean")
         r.remind_before_due = input.remind_before_due;
-      const next = input?.assignee as { kind: string; actor_id?: string } | undefined;
-      if (next?.kind === "person" && next.actor_id) r.assignee = person(next.actor_id);
+      const next = input?.assignee as
+        | { kind: string; actor_id?: string }
+        | undefined;
+      if (next?.kind === "person" && next.actor_id)
+        r.assignee = person(next.actor_id);
       bump(r);
       return { status: 200, body: taskMessage(r) };
     }
@@ -987,7 +1061,8 @@ export async function mockWorkplace(
     if (action === "take") {
       if (r.assignee.actor_id)
         return fail(409, "task_already_taken", { task: taskOf(r) });
-      if (!r.assignee.candidate_ids.includes(me)) return fail(403, "task_forbidden");
+      if (!r.assignee.candidate_ids.includes(me))
+        return fail(403, "task_forbidden");
       r.assignee = { ...r.assignee, actor_id: me };
       bump(r);
       return { status: 200, body: taskMessage(r) };
@@ -998,7 +1073,9 @@ export async function mockWorkplace(
       bump(r);
       return {
         status: 200,
-        body: { next_nudge_at: new Date(now.getTime() + 2 * 3600_000).toISOString() },
+        body: {
+          next_nudge_at: new Date(now.getTime() + 2 * 3600_000).toISOString(),
+        },
       };
     }
     if (action === "items") {
@@ -1022,7 +1099,8 @@ export async function mockWorkplace(
         return { status: 204, body: undefined };
       }
       if (typeof input?.done === "boolean") {
-        if (!canWork(r) && entry.assignee_id !== me) return fail(403, "task_forbidden");
+        if (!canWork(r) && entry.assignee_id !== me)
+          return fail(403, "task_forbidden");
         entry.done_at = input.done ? nowISO : null;
         entry.done_by = input.done ? me : null;
       }
@@ -1051,7 +1129,8 @@ export async function mockWorkplace(
       calls.push({ method, path, body: input });
     let status = 200;
     let body: unknown = {};
-    const requestMatch = /^\/requests\/([^/]+)(?:\/(answer|answers|remind|close))?$/.exec(path);
+    const requestMatch =
+      /^\/requests\/([^/]+)(?:\/(answer|answers|remind|close))?$/.exec(path);
     const reminderMatch = /^\/messages\/([^/]+)\/reminder$/.exec(path);
     const reminderByID = /^\/reminders\/([^/]+)$/.exec(path);
     if (path === "/bootstrap/status") body = { bootstrapped: true };
@@ -1092,9 +1171,14 @@ export async function mockWorkplace(
     else if (path === "/preferences/pinned-chats") body = [];
     else if (path === "/chats")
       body = {
-        chats: [chat(chatID, "Инструкторы · зал", 5), chat(otherChatID, "Общий", 1)],
+        chats: [
+          chat(chatID, "Инструкторы · зал", 5),
+          chat(otherChatID, "Общий", 1),
+        ],
       };
     else if (path === "/unread") body = unread();
+    else if (path === "/org" && features.includes("org_structure"))
+      body = orgStructure;
     else if (path === "/drafts") body = { drafts: [] };
     else if (path === "/agents") body = [];
     else if (path === "/scheduled-messages")
@@ -1116,7 +1200,8 @@ export async function mockWorkplace(
           updated_at: "2026-11-11T06:00:00Z",
         })),
       };
-    else if (path === `/chats/${chatID}/members`) body = { members: allMembers };
+    else if (path === `/chats/${chatID}/members`)
+      body = { members: allMembers };
     else if (path === `/chats/${otherChatID}/members`)
       body = { members: [people.anna, people.marina] };
     else if (path === `/chats/${chatID}/pins`)
@@ -1141,19 +1226,24 @@ export async function mockWorkplace(
         (item) => item.id === target,
       );
       body = { messages: record ? feed(record.chat_id) : [] };
-    } else if (/^\/messages\/[^/]+\/reactions$/.test(path)) body = { reactions: [] };
+    } else if (/^\/messages\/[^/]+\/reactions$/.test(path))
+      body = { reactions: [] };
     else if (path.startsWith("/saved-messages/ids")) body = { message_ids: [] };
     else if (path === "/saved-messages/chats") body = { chats: [] };
     else if (path.startsWith("/saved-messages"))
       body = { items: [], next_cursor: null };
     else if (path === `/chats/${chatID}/requests` && method === "POST") {
       const recipients =
-        (input?.audience as { kind: string; actor_ids?: string[] }).kind === "chat"
+        (input?.audience as { kind: string; actor_ids?: string[] }).kind ===
+        "chat"
           ? allMembers
               .filter((item) => item.type === "user" && item.actor_id !== me)
               .map((item) => item.actor_id)
           : ((input?.audience as { actor_ids: string[] }).actor_ids ?? []);
-      const answerSpec = input?.answer as { preset: RequestRecord["preset"]; options?: string[] };
+      const answerSpec = input?.answer as {
+        preset: RequestRecord["preset"];
+        options?: string[];
+      };
       const created: RequestRecord = {
         id: id(90 + data.requests.length),
         chat_id: chatID,
@@ -1164,7 +1254,9 @@ export async function mockWorkplace(
         audience: {
           kind: (input?.audience as { kind: "chat" | "people" }).kind,
           label:
-            recipients.length === 1 ? authorOf(recipients[0]!).display_name : "",
+            recipients.length === 1
+              ? authorOf(recipients[0]!).display_name
+              : "",
         },
         recipients,
         preset: answerSpec.preset,
@@ -1189,7 +1281,10 @@ export async function mockWorkplace(
         state === "waiting"
           ? waitingForMe()
           : data.requests.filter(
-              (r) => r.status === "open" && r.answers[me] && r.recipients.includes(me),
+              (r) =>
+                r.status === "open" &&
+                r.answers[me] &&
+                r.recipients.includes(me),
             );
       body = { items: items.map(inboxItem), next_cursor: null };
     } else if (requestMatch) {

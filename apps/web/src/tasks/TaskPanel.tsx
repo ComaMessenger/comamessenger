@@ -149,7 +149,8 @@ function ChatTaskList({
     getNextPageParam: (page) => page.next_cursor ?? undefined,
   });
   const items = useMemo(
-    () => (query.data?.pages.flatMap((page) => page.items) ?? []).filter(hasTask),
+    () =>
+      (query.data?.pages.flatMap((page) => page.items) ?? []).filter(hasTask),
     [query.data],
   );
   const counts = query.data?.pages[0]?.counts;
@@ -334,7 +335,13 @@ function TaskScreenBody({
   );
 }
 
-type DueChoice = "keep" | "none" | "today" | "tomorrow" | "nextWorkday" | "custom";
+type DueChoice =
+  | "keep"
+  | "none"
+  | "today"
+  | "tomorrow"
+  | "nextWorkday"
+  | "custom";
 
 /** Title, description, due date, the reminder and the responsible person. */
 function TaskEditForm({
@@ -448,7 +455,12 @@ function TaskEditForm({
             onClick={() => setPicking(true)}
           >
             {personID ? (
-              <Avatar name={nameOf(personID)} seed={personID} actorID={personID} size="xs" />
+              <Avatar
+                name={nameOf(personID)}
+                seed={personID}
+                actorID={personID}
+                size="xs"
+              />
             ) : (
               <UserRound aria-hidden="true" />
             )}
@@ -476,7 +488,11 @@ function TaskEditForm({
               selected={personID}
               label={t("taskAssigneeLabel")}
               onPick={(id) => {
-                if (id) setDraft({ ...draft, assignee: { kind: "person", actorID: id } });
+                if (id)
+                  setDraft({
+                    ...draft,
+                    assignee: { kind: "person", actorID: id },
+                  });
                 setPicking(false);
               }}
               onDismiss={() => setPicking(false)}
@@ -487,7 +503,11 @@ function TaskEditForm({
       {canEdit && (
         <section className="request-form__section">
           <span className="request-form__label">{t("taskDueLabel")}</span>
-          <div className="request-form__chips" role="radiogroup" aria-label={t("taskDueLabel")}>
+          <div
+            className="request-form__chips"
+            role="radiogroup"
+            aria-label={t("taskDueLabel")}
+          >
             {task.due_at && (
               <Chip
                 role="radio"
@@ -545,13 +565,17 @@ function TaskEditForm({
             <span>
               <strong>{t("taskRemind")}</strong>
               <small>
-                {remindAvailable ? t("taskRemindShort") : t("taskRemindNeedsDue")}
+                {remindAvailable
+                  ? t("taskRemindShort")
+                  : t("taskRemindNeedsDue")}
               </small>
             </span>
             <Switch
               checked={draft.remindBeforeDue && remindAvailable}
               disabled={!remindAvailable}
-              onChange={(remindBeforeDue) => setDraft({ ...draft, remindBeforeDue })}
+              onChange={(remindBeforeDue) =>
+                setDraft({ ...draft, remindBeforeDue })
+              }
               label={t("taskRemind")}
             />
           </div>
@@ -593,7 +617,8 @@ function TaskItemsEditor({
   const [picking, setPicking] = useState<string | null>(null);
   const refs = useRef<Record<string, HTMLButtonElement | null>>({});
   const nameOf = (id: string) =>
-    members.find((member) => member.actor_id === id)?.display_name ?? t("taskSomeone");
+    members.find((member) => member.actor_id === id)?.display_name ??
+    t("taskSomeone");
   const full = task.items.length >= taskLimits.maxItems;
 
   async function add() {
@@ -617,7 +642,10 @@ function TaskItemsEditor({
       {task.items.map((item) => {
         const done = Boolean(item.done_at);
         return (
-          <div key={item.id} className={cx("task-dialog__item", done && "task-item--done")}>
+          <div
+            key={item.id}
+            className={cx("task-dialog__item", done && "task-item--done")}
+          >
             <button
               type="button"
               role="checkbox"
@@ -724,12 +752,19 @@ function TaskItemsEditor({
               addWho && "task-dialog__item-who--set",
             )}
             aria-label={
-              addWho ? t("taskItemAssignee", { name: nameOf(addWho) }) : t("taskItemAssign")
+              addWho
+                ? t("taskItemAssignee", { name: nameOf(addWho) })
+                : t("taskItemAssign")
             }
             onClick={() => setPicking("new")}
           >
             {addWho ? (
-              <Avatar name={nameOf(addWho)} seed={addWho} actorID={addWho} size="xs" />
+              <Avatar
+                name={nameOf(addWho)}
+                seed={addWho}
+                actorID={addWho}
+                size="xs"
+              />
             ) : (
               <UserRound aria-hidden="true" />
             )}

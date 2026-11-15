@@ -86,9 +86,13 @@ export function taskAssigneeText(
 ): string {
   const assignee = task.assignee;
   if (assignee.actor_id)
-    return assignee.actor_id === selfID ? t("taskYou") : nameOf(assignee.actor_id);
+    return assignee.actor_id === selfID
+      ? t("taskYou")
+      : nameOf(assignee.actor_id);
   return t(
-    assignee.kind === "department" ? "taskQueueDepartment" : "taskQueuePosition",
+    assignee.kind === "department"
+      ? "taskQueueDepartment"
+      : "taskQueuePosition",
     { label: assignee.label },
   );
 }
@@ -323,18 +327,21 @@ export function TaskCard({
             <span>
               {taskAssigneeText(task, nameOf, t, self)}
               {" · "}
-              {t("taskQueueHint", { count: task.assignee.candidate_ids.length })}
+              {t("taskQueueHint", {
+                count: task.assignee.candidate_ids.length,
+              })}
             </span>
           </span>
         )}
         {view.dueAt && (
           <span
-            className={cx(
-              "task-card__due",
-              view.hot && "task-card__due--hot",
-            )}
+            className={cx("task-card__due", view.hot && "task-card__due--hot")}
           >
-            {view.hot ? <Flame aria-hidden="true" /> : <Clock3 aria-hidden="true" />}
+            {view.hot ? (
+              <Flame aria-hidden="true" />
+            ) : (
+              <Clock3 aria-hidden="true" />
+            )}
             {formatTaskDue(view.dueAt, now, locale)}
           </span>
         )}

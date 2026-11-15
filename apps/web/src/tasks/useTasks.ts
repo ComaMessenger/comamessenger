@@ -126,13 +126,7 @@ export function taskCacheFor(
   };
 }
 
-export type TaskBusy =
-  | "status"
-  | "take"
-  | "item"
-  | "nudge"
-  | "update"
-  | null;
+export type TaskBusy = "status" | "take" | "item" | "nudge" | "update" | null;
 
 /**
  * Status buttons, Take it, items, Remind and edits with the
@@ -179,6 +173,9 @@ export function useTaskActions(
           void queryClient.invalidateQueries({
             queryKey: [...taskKeys.all(user.id), "mine"],
           });
+          void queryClient.invalidateQueries({
+            queryKey: [...taskKeys.all(user.id), "chat", message.chat_id],
+          });
           scheduleReload();
         }
         return true;
@@ -189,7 +186,15 @@ export function useTaskActions(
         setBusy(null);
       }
     },
-    [cache, message.task, queryClient, scheduleReload, toast, user.id],
+    [
+      cache,
+      message.chat_id,
+      message.task,
+      queryClient,
+      scheduleReload,
+      toast,
+      user.id,
+    ],
   );
 
   const authorID = message.actor_id;
@@ -219,7 +224,8 @@ export function useTaskActions(
     checkItem: (itemID: string, done: boolean) =>
       run(
         "item",
-        (task) => optimisticTaskItemDone(task, itemID, done, user.id, new Date()),
+        (task) =>
+          optimisticTaskItemDone(task, itemID, done, user.id, new Date()),
         () => api.updateTaskItem(message.id, itemID, { done }),
         { lists: true },
       ),

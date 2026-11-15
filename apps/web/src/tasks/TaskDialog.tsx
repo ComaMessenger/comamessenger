@@ -80,7 +80,9 @@ export function taskProblemText(
             : "taskErrorAudienceTooMany",
       );
     case "dueAt":
-      return t(problem.reason === "past" ? "taskErrorDuePast" : "taskErrorDueTooFar");
+      return t(
+        problem.reason === "past" ? "taskErrorDuePast" : "taskErrorDueTooFar",
+      );
     case "items":
       return problem.reason === "tooMany"
         ? t("taskErrorItemsTooMany", { max: taskLimits.maxItems })
@@ -214,7 +216,9 @@ export function TaskDialog({
       : taskDraftProblem(
           full,
           now,
-          assignee.kind === "person" || !structure ? undefined : candidates.length,
+          assignee.kind === "person" || !structure
+            ? undefined
+            : candidates.length,
         );
   const remindAvailable = remindBeforeDueAvailable(dueAt, now);
 
@@ -225,7 +229,10 @@ export function TaskDialog({
   function setAssignee(next: TaskDraftAssignee) {
     update({ assignee: next });
   }
-  function updateItem(index: number, patch: Partial<TaskDraft["items"][number]>) {
+  function updateItem(
+    index: number,
+    patch: Partial<TaskDraft["items"][number]>,
+  ) {
     update({
       items: draft.items.map((item, at) =>
         at === index ? { ...item, ...patch } : item,
@@ -453,9 +460,11 @@ export function TaskDialog({
                     ))}
               </select>
               <span className="request-form__hint">
-                {(assignee.kind === "department"
-                  ? assignee.departmentID
-                  : assignee.positionID)
+                {(
+                  assignee.kind === "department"
+                    ? assignee.departmentID
+                    : assignee.positionID
+                )
                   ? t("taskQueueWho", { count: candidates.length })
                   : t("taskQueueExplain")}
               </span>
@@ -541,7 +550,10 @@ export function TaskDialog({
             <div className="task-dialog__items">
               {draft.items.map((item, index) => (
                 <div className="task-dialog__item" key={item.key}>
-                  <span className="task-check task-check--static" aria-hidden="true" />
+                  <span
+                    className="task-check task-check--static"
+                    aria-hidden="true"
+                  />
                   <input
                     className="request-input"
                     value={item.text}
@@ -579,11 +591,15 @@ export function TaskDialog({
                     )}
                     aria-label={
                       item.assigneeID
-                        ? t("taskItemAssignee", { name: nameOf(item.assigneeID) })
+                        ? t("taskItemAssignee", {
+                            name: nameOf(item.assigneeID),
+                          })
                         : t("taskItemAssign")
                     }
                     title={
-                      item.assigneeID ? nameOf(item.assigneeID) : t("taskItemAssign")
+                      item.assigneeID
+                        ? nameOf(item.assigneeID)
+                        : t("taskItemAssign")
                     }
                     onClick={() => setPicking(index)}
                   >

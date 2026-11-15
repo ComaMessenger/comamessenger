@@ -78,8 +78,7 @@ export function applyTaskEvent(
     }
   }
   // not in the chat is computed when a list is built: read it again.
-  if (chatID && event.type === "member.removed")
-    lists("chat", chatID);
+  if (chatID && event.type === "member.removed") lists("chat", chatID);
   // The slot shows pinned messages.
   if (
     chatID &&

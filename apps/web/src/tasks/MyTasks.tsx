@@ -46,8 +46,7 @@ export function useMyTasks(
   return useInfiniteQuery({
     queryKey: taskKeys.mine(user.id, role, state),
     initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam }) =>
-      api.myTasks({ role, state, cursor: pageParam }),
+    queryFn: ({ pageParam }) => api.myTasks({ role, state, cursor: pageParam }),
     getNextPageParam: (page) => page.next_cursor ?? undefined,
     enabled,
   });
@@ -114,8 +113,9 @@ export function MyTasks({ mode }: { mode: TaskInboxMode }) {
     })),
   });
   const membersOf = (chatID: string): ChatMember[] =>
-    (memberQueries[chatIDs.indexOf(chatID)]?.data as ChatMember[] | undefined) ??
-    [];
+    (memberQueries[chatIDs.indexOf(chatID)]?.data as
+      | ChatMember[]
+      | undefined) ?? [];
 
   if (openQuery.isLoading)
     return (
@@ -166,7 +166,9 @@ export function MyTasks({ mode }: { mode: TaskInboxMode }) {
               const message = item.message;
               if (!hasTask(message)) return null;
               const members = membersOf(item.chat.id);
-              const member = members.find((entry) => entry.actor_id === user.id);
+              const member = members.find(
+                (entry) => entry.actor_id === user.id,
+              );
               return (
                 <TaskRow
                   key={message.id}

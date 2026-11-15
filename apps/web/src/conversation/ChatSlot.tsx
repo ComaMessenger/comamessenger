@@ -36,7 +36,11 @@ import { calendarLocale } from "../requests/format";
 import { ChatTasksDrop } from "../tasks/ChatTasksDrop";
 import { useChatTasks, useTaskActions } from "../tasks/useTasks";
 
-/** The last slot shown per chat: kept on screen while sources load again. */
+/**
+ * The last slot shown per reader and chat: kept on screen while sources
+ * load again. Keyed by the reader too, so the next person in the tab
+ * never sees the previous one's scheduled messages.
+ */
 const lastSlots = new Map<string, Slot>();
 
 /** Pinned messages with their text, in the order the server gives them. */
@@ -173,7 +177,8 @@ export function ChatSlot({
       taskCounts: tasks.data?.counts,
       pins: pins.isError ? [] : pins.data,
       pinIndex,
-      unread,
+      // Requests count only on servers that have them (wave 1).
+      unread: features.includes("message_requests") ? unread : undefined,
       messages,
       requestViewers,
       scheduled:
@@ -183,8 +188,8 @@ export function ChatSlot({
     },
     now,
   );
-  if (built.complete) lastSlots.set(chatID, built);
-  const slot = built.complete ? built : lastSlots.get(chatID);
+  if (built.complete) lastSlots.set(`${user.id}:${chatID}`, built);
+  const slot = built.complete ? built : lastSlots.get(`${user.id}:${chatID}`);
   if (!slot) return null;
   const item = selectSlotItem(slot, chosen);
   if (!item) return null;
@@ -204,7 +209,9 @@ export function ChatSlot({
       case "pinned":
         if (current.targetMessageId) onJump(current.targetMessageId);
         if (current.position)
-          setPinIndex(nextPinIndex(current.position.index, current.position.total));
+          setPinIndex(
+            nextPinIndex(current.position.index, current.position.total),
+          );
         return;
       case "requests":
         if (current.targetMessageId) onJump(current.targetMessageId);
@@ -235,16 +242,18 @@ export function ChatSlot({
       >
         {item.kind === "pinned" && item.position ? (
           <span className="chat-slot__bars" aria-hidden="true">
-            {Array.from({ length: Math.min(item.position.total, 3) }, (_, index) => (
-              <i
-                key={index}
-                className={cx(
-                  index ===
-                    Math.min(item.position!.index, 2) &&
-                    "chat-slot__bar--on",
-                )}
-              />
-            ))}
+            {Array.from(
+              { length: Math.min(item.position.total, 3) },
+              (_, index) => (
+                <i
+                  key={index}
+                  className={cx(
+                    index === Math.min(item.position!.index, 2) &&
+                      "chat-slot__bar--on",
+                  )}
+                />
+              ),
+            )}
           </span>
         ) : hotTask ? (
           <SlotComplete message={hotTask} />
@@ -289,7 +298,9 @@ export function ChatSlot({
               >
                 {kindIcons[chip.kind]}
                 <span className="tabular">{chip.count}</span>
-                {chip.dot && <i className="chat-slot__dot" aria-hidden="true" />}
+                {chip.dot && (
+                  <i className="chat-slot__dot" aria-hidden="true" />
+                )}
               </button>
             ))}
             {overflow.length > 0 && (

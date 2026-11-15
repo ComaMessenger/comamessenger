@@ -548,7 +548,7 @@ test("a message is scheduled from the composer and shows in the strip", async ({
   const api = await mockScheduled(page, { scheduled: [] });
   await openChat(page);
   // No strip while nothing waits in this chat.
-  await expect(page.locator(".scheduled-bar")).toHaveCount(0);
+  await expect(page.locator(".chat-slot")).toHaveCount(0);
   const composer = page.getByRole("textbox", { name: /Сообщение|Напишите/ });
   await composer.fill("Доброе утро, команда!");
   await openSendMenu(page);
@@ -578,12 +578,12 @@ test("a message is scheduled from the composer and shows in the strip", async ({
     send_at: "2026-11-12T06:00:00.000Z",
     silent: false,
   });
-  const bar = page.getByRole("button", {
-    name: /Открыть отложенные сообщения этого чата/,
-  });
-  await expect(bar).toHaveText(/Отложено: 1 · ближайшее завтра в 09:00/);
+  // Scheduled messages live in the one slot under the header.
+  const slot = page.locator('.chat-slot[data-slot-kind="scheduled"]');
+  await expect(slot).toContainText("Отложено · завтра, 9:00");
+  await expect(slot).toContainText("Доброе утро, команда!");
   await expect(page).toHaveScreenshot("scheduled-strip.png", shot);
-  await bar.click();
+  await slot.locator(".chat-slot__main").click();
   await expect(page).toHaveURL(new RegExp(`/scheduled\\?chat=${chatID}`));
   await expect(page.getByText("Доброе утро, команда!")).toBeVisible();
 });
@@ -994,7 +994,9 @@ test("the next person in the tab never sees the previous one's scheduled message
   const api = await mockScheduled(page, { switchUser: true });
   await openChat(page);
   // Anna has a message waiting here, failures in the sidebar and warnings.
-  await expect(page.locator(".scheduled-bar")).toBeVisible();
+  await expect(
+    page.locator('.chat-slot[data-slot-kind="scheduled"]'),
+  ).toBeVisible();
   await expect(
     page
       .getByRole("navigation", { name: "Основная навигация" })
@@ -1019,7 +1021,7 @@ test("the next person in the tab never sees the previous one's scheduled message
       api.requests.some((item) => item.path === "second:/scheduled-messages"),
     )
     .toBe(true);
-  await expect(page.locator(".scheduled-bar")).toHaveCount(0);
+  await expect(page.locator(".chat-slot")).toHaveCount(0);
   await expect(
     page
       .getByRole("navigation", { name: "Основная навигация" })

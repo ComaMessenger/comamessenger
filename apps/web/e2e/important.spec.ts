@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { ids, mockWorkplace } from "./workplaceMock";
+import { fixtures, ids, mockWorkplace, taskFixtures } from "./workplaceMock";
 
 test.use({ timezoneId: "Europe/Moscow", locale: "ru-RU" });
 
@@ -71,3 +71,74 @@ test("the chat list marks chats where an answer is awaited", async ({ page }) =>
     page.getByRole("navigation", { name: "Основная навигация" }).getByRole("button", { name: /Важные/ }),
   ).toContainText("2");
 });
+
+const taskFeatures = ["message_requests", "message_reminders", "message_tasks"];
+function withTasks() {
+  const data = fixtures();
+  data.tasks = taskFixtures();
+  return data;
+}
+
+for (const theme of ["light", "dark"] as const) {
+  test(`«Ждут вас» puts requests and tasks in one list and filters «Задачи» (${theme})`, async ({
+    page,
+  }) => {
+    const api = await mockWorkplace(page, {
+      theme,
+      features: taskFeatures,
+      data: withTasks(),
+    });
+    await page.goto("/important");
+    const tabs = page.getByRole("tablist", { name: "Разделы «Важных»" });
+    await expect(tabs.getByRole("tab", { name: /Ждут вас/ })).toHaveText(/Ждут вас\s*4/);
+    const filters = page.getByRole("group", { name: "Что ждёт" });
+    await expect(filters.getByRole("button")).toHaveText([
+      /Всё\s*4/,
+      /Запросы\s*1/,
+      /Задачи\s*3/,
+    ]);
+    // By due date: the overdue task, today's, Friday's task, the request.
+    await expect(page.locator(".inbox > .inbox-task, .inbox > .inbox-card")).toHaveCount(4);
+    await expect(page.locator(".inbox-task").first()).toContainText(
+      "Сдать журнал инструктажа по технике безопасности",
+    );
+    await expect(page.locator(".inbox-task").first()).toContainText("вчера, 18:00");
+
+    await filters.getByRole("button", { name: /Задачи/ }).click();
+    await expect(page).toHaveURL(/\/important\?tab=waiting&kind=tasks$/);
+    await expect(page.getByRole("heading", { level: 2 })).toHaveText([
+      "Просрочено · 1",
+      "Сегодня · 1",
+      "Позже · 1",
+      "Готово за 7 дней · 1",
+    ]);
+    await expect(page).toHaveScreenshot(`important-tasks-${theme}.png`, shot);
+    if (theme === "light") {
+      const axe = await new AxeBuilder({ page }).include(".inbox").analyze();
+      expect(axe.violations).toEqual([]);
+    }
+
+    // The round «Готово» closes the task right in the list.
+    await page
+      .getByRole("checkbox", { name: "Готово: Повесить новое расписание бассейна" })
+      .click();
+    await expect(page.getByRole("heading", { level: 2 })).toHaveText([
+      "Просрочено · 1",
+      "Позже · 1",
+      "Готово за 7 дней · 2",
+    ]);
+    expect(api.calls.filter((call) => call.method === "PUT").at(-1)).toMatchObject({
+      path: `/tasks/${ids.pool}/status`,
+      body: { status: "done" },
+    });
+
+    await page.getByRole("radio", { name: "Поставил(а) я" }).click();
+    await expect(page).toHaveURL(/kind=tasks&role=authored$/);
+    const authored = page.locator(".task-row");
+    await expect(authored).toHaveCount(1);
+    await expect(authored).toContainText("Забрать ключи от малого зала у охраны");
+    await expect(authored).toContainText("Олег Чернов");
+    await authored.locator(".task-row__body").click();
+    await expect(page).toHaveURL(new RegExp(`/chat/.+\\?message=${ids.keys}`));
+  });
+}

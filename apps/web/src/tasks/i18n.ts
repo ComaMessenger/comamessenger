@@ -124,7 +124,8 @@ export const tasksCatalog = defineCatalog(
     taskErrorDescriptionTooLong: "Описание — не длиннее 4000 символов",
     taskErrorAssignee: "Выберите ответственного",
     taskErrorAudienceEmpty: "В этом чате нет никого из выбранной группы",
-    taskErrorAudienceTooMany: "В очереди больше 100 человек — выберите группу поменьше",
+    taskErrorAudienceTooMany:
+      "В очереди больше 100 человек — выберите группу поменьше",
     taskErrorDuePast: "Срок — не раньше чем через 5 минут",
     taskErrorDueTooFar: "Срок — не дальше чем через год",
     taskErrorItemsTooMany: "Пунктов не больше {max}",
@@ -160,9 +161,25 @@ export const tasksCatalog = defineCatalog(
     taskRowReopen: "Вернуть в работу: {title}",
     taskFrom: "поставил(а) {name}",
     taskMineEmpty: "На вас нет задач",
-    taskMineEmptyHint: "Задачи, где вы ответственный или исполнитель пункта, появятся здесь.",
+    taskMineEmptyHint:
+      "Задачи, где вы ответственный или исполнитель пункта, появятся здесь.",
     taskAuthoredEmpty: "Вы ещё не ставили задач",
-    taskAuthoredEmptyHint: "Поставить задачу можно в любом чате: «+» → «Задача».",
+    taskAuthoredEmptyHint:
+      "Поставить задачу можно в любом чате: «+» → «Задача».",
+
+    taskNoticeTitle: "Задача · {chat}",
+    taskNoticeNoTitle: "задача",
+    taskNoticeAssigned: "Вам поставили задачу: {title}",
+    taskNoticeItemAssigned: "Вам назначили пункт задачи «{title}»",
+    taskNoticeOffered:
+      "Задача для вашего отдела: {title}. Возьмите, если можете",
+    taskNoticeTaken: "Задачу взяли: {title}",
+    taskNoticeNudged: "Напоминание о задаче: {title}",
+    taskNoticeDueSoon: "Через час срок: {title}",
+    taskNoticeOverdue: "Срок прошёл: {title}",
+    taskNoticeDueChanged: "Новый срок задачи: {title}",
+    taskNoticeCompleted: "Готово: {title}",
+    taskNoticeReopened: "Задачу вернули в работу: {title}",
 
     taskBadgeDue: "задача до {when}",
     taskBadgeOverdue: "задача просрочена",
@@ -248,7 +265,8 @@ export const tasksCatalog = defineCatalog(
     taskSource: "from a message by {name}: “{excerpt}”",
     taskSourceDeleted: "from a message · the message was deleted",
     taskQueueEmpty: "Nobody of the queue is left — assign someone",
-    taskAssigneeAwayHint: "The responsible person left the chat — assign someone else",
+    taskAssigneeAwayHint:
+      "The responsible person left the chat — assign someone else",
     taskSuggestComplete: "All items are done — close the task?",
     taskClosedBy: "Done · {name}, {time}",
     taskCanceledBy: "Canceled · {name}, {time}",
@@ -309,13 +327,15 @@ export const tasksCatalog = defineCatalog(
     taskCreate: "Create task",
     taskCreated: "Task created — the assignee will be notified",
     taskCreatedMine: "The task is yours — it’s in Important → Waiting for you",
-    taskCreatedQueue: "The task is in the queue — everyone who can take it sees it",
+    taskCreatedQueue:
+      "The task is in the queue — everyone who can take it sees it",
     taskErrorTitle: "Write what to do",
     taskErrorTitleTooLong: "The title is 200 characters at most",
     taskErrorDescriptionTooLong: "The description is 4000 characters at most",
     taskErrorAssignee: "Choose who is responsible",
     taskErrorAudienceEmpty: "Nobody of the chosen group is in this chat",
-    taskErrorAudienceTooMany: "Over 100 people in the queue — choose a smaller group",
+    taskErrorAudienceTooMany:
+      "Over 100 people in the queue — choose a smaller group",
     taskErrorDuePast: "The due date must be at least 5 minutes ahead",
     taskErrorDueTooFar: "The due date must be within a year",
     taskErrorItemsTooMany: "At most {max} items",
@@ -351,9 +371,24 @@ export const tasksCatalog = defineCatalog(
     taskRowReopen: "Reopen: {title}",
     taskFrom: "set by {name}",
     taskMineEmpty: "No tasks on you",
-    taskMineEmptyHint: "Tasks where you are responsible or own an item show up here.",
+    taskMineEmptyHint:
+      "Tasks where you are responsible or own an item show up here.",
     taskAuthoredEmpty: "You haven’t set any tasks yet",
     taskAuthoredEmptyHint: "Set a task in any chat: “+” → “Task”.",
+
+    taskNoticeTitle: "Task · {chat}",
+    taskNoticeNoTitle: "a task",
+    taskNoticeAssigned: "You got a task: {title}",
+    taskNoticeItemAssigned: "You got an item of the task “{title}”",
+    taskNoticeOffered:
+      "A task for your department: {title}. Take it if you can",
+    taskNoticeTaken: "The task was taken: {title}",
+    taskNoticeNudged: "A reminder about the task: {title}",
+    taskNoticeDueSoon: "Due in an hour: {title}",
+    taskNoticeOverdue: "Past due: {title}",
+    taskNoticeDueChanged: "New due date: {title}",
+    taskNoticeCompleted: "Done: {title}",
+    taskNoticeReopened: "The task is back in work: {title}",
 
     taskBadgeDue: "task by {when}",
     taskBadgeOverdue: "task overdue",
@@ -373,12 +408,15 @@ export const tasksCatalog = defineCatalog(
       "This person can’t be assigned: not in the chat or inactive",
     taskFailTooManyCandidates: "Over 100 people in the queue",
     taskFailAudienceEmpty: "Nobody of the chosen group is in this chat",
-    taskFailAudienceForbidden: "You may not set tasks for departments and positions",
-    taskFailAudienceGone: "The department or position was deleted — choose another",
+    taskFailAudienceForbidden:
+      "You may not set tasks for departments and positions",
+    taskFailAudienceGone:
+      "The department or position was deleted — choose another",
     taskFailNotMember: "You are no longer a member of this chat",
     taskFailForbidden: "You can’t do this with the task",
     taskFailGone: "The task was deleted",
-    taskFailConflict: "Someone just changed the task — showing the fresh version",
+    taskFailConflict:
+      "Someone just changed the task — showing the fresh version",
     taskFailAlreadyTaken: "Someone else already took the task",
     taskFailStatusInvalid: "The task status has already changed",
     taskFailLimit: "Too many open tasks — close some first",
