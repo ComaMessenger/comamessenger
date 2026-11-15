@@ -10,6 +10,7 @@ import {
   Image as ImageIcon,
   MessageCircleCheck,
   Sparkles,
+  SquareCheck,
   type LucideIcon,
 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
@@ -28,6 +29,7 @@ const icons: Record<ComposerMenuItemID, LucideIcon> = {
   file: FileText,
   markdownFile: FileText,
   request: MessageCircleCheck,
+  task: SquareCheck,
   agent: Sparkles,
 };
 
