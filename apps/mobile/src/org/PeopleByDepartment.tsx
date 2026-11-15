@@ -174,6 +174,13 @@ export function PeopleByDepartment({
                   ? personOrgLine(item.person, structure)
                   : undefined
               }
+              tagsLabel={
+                item.lead
+                  ? t("orgLeadTagLabel")
+                  : item.additional
+                    ? t("orgAdditionalTagLabel")
+                    : undefined
+              }
               tags={
                 item.lead ? (
                   <OrgTag kind="lead" />

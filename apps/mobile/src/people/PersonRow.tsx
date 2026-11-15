@@ -57,6 +57,7 @@ export const PersonRow = memo(function PersonRow({
   presence,
   meta,
   tags,
+  tagsLabel,
   selected,
   busy,
   trailing,
@@ -71,6 +72,8 @@ export const PersonRow = memo(function PersonRow({
   meta?: string;
   /** After the name: «рук.», «совм.» of the org structure. */
   tags?: ReactNode;
+  /** What the tags say, for the row's accessibility label. */
+  tagsLabel?: string;
   selected?: boolean;
   busy?: boolean;
   trailing?: ReactNode;
@@ -88,6 +91,7 @@ export const PersonRow = memo(function PersonRow({
   const label = [
     person.display_name,
     agent ? t("agent") : null,
+    tagsLabel,
     line,
     state === "online" ? t("online") : null,
   ]

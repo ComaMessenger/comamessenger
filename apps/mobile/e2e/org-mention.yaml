@@ -8,7 +8,7 @@ appId: com.comamessenger.app
 ---
 - runFlow: open-app.yaml
 - extendedWaitUntil:
-    visible: Планёрка ЛФК
+    visible: ".*Планёрка ЛФК.*"
     timeout: 15000
 - tapOn:
     id: chat-row-0

@@ -16,17 +16,17 @@ appId: com.comamessenger.app
       id: org-tree-list
     timeout: 15000
 - extendedWaitUntil:
-    visible: Зал ЛФК
+    visible: ".*Зал ЛФК.*"
     timeout: 10000
-- assertVisible: Ирина Лебедева
+- assertVisible: ".*Ирина Лебедева.*"
 - assertVisible: .*сотрудники вместе с подотделами.*
 - takeScreenshot: org-tree-${THEME}
 
-# The arrow of «Реабилитация» hides «Зал ЛФК» and «Бассейн» and survives
+# The arrow of «Реабилитация» (second: «Медицинская служба» goes first) hides «Зал ЛФК» and «Бассейн» and survives
 # reopening the screen.
 - tapOn:
-    id: org-tree-toggle-0
-- assertNotVisible: Зал ЛФК
+    id: org-tree-toggle-1
+- assertNotVisible: ".*Зал ЛФК.*"
 - takeScreenshot: org-tree-collapsed-${THEME}
 - tapOn:
     id: org-tree-back
@@ -36,11 +36,11 @@ appId: com.comamessenger.app
     visible:
       id: org-tree-list
     timeout: 15000
-- assertNotVisible: Зал ЛФК
+- assertNotVisible: ".*Зал ЛФК.*"
 - tapOn:
-    id: org-tree-toggle-0
+    id: org-tree-toggle-1
 - extendedWaitUntil:
-    visible: Зал ЛФК
+    visible: ".*Зал ЛФК.*"
     timeout: 5000
 
 # Search in the header: departments, positions and people.
@@ -51,7 +51,7 @@ appId: com.comamessenger.app
     visible:
       id: org-found-department-0
     timeout: 5000
-- assertVisible: Пётр Морозов
+- assertVisible: ".*Пётр Морозов.*"
 - takeScreenshot: org-tree-search-${THEME}
 - tapOn:
     id: org-found-department-0
@@ -59,5 +59,5 @@ appId: com.comamessenger.app
     visible:
       id: department
     timeout: 10000
-- assertVisible: Бассейн
+- assertVisible: ".*Бассейн.*"
 - takeScreenshot: org-tree-department-${THEME}

@@ -25,7 +25,7 @@ appId: com.comamessenger.app
     visible:
       id: org-settings-add-department
     timeout: 15000
-- assertVisible: Медицинская служба
+- assertVisible: ".*Медицинская служба.*"
 - takeScreenshot: org-admin-${THEME}
 
 # A new department inside «Реабилитация» with Нина Ковалёва as its lead.
@@ -44,7 +44,7 @@ appId: com.comamessenger.app
     visible:
       id: department-parent-picker
     timeout: 5000
-- tapOn: Реабилитация
+- tapOn: ".*Реабилитация.*"
 - tapOn:
     id: department-editor-add-people
 - extendedWaitUntil:
@@ -63,7 +63,7 @@ appId: com.comamessenger.app
 - tapOn:
     id: department-people-picker-done
 - extendedWaitUntil:
-    visible: Нина Ковалёва
+    visible: ".*Нина Ковалёва.*"
     timeout: 5000
 - scrollUntilVisible:
     element:
@@ -75,7 +75,7 @@ appId: com.comamessenger.app
 - tapOn:
     id: department-editor-save
 - extendedWaitUntil:
-    visible: E2E Массаж ${output.memberTag}
+    visible: ".*E2E Массаж ${output.memberTag}.*"
     timeout: 10000
 - takeScreenshot: org-admin-created-${THEME}
 
@@ -90,7 +90,7 @@ appId: com.comamessenger.app
     visible:
       id: org-position-add
     timeout: 10000
-- assertVisible: Инструктор
+- assertVisible: ".*Инструктор.*"
 - tapOn:
     id: org-position-add
 - extendedWaitUntil:
@@ -101,7 +101,7 @@ appId: com.comamessenger.app
 - tapOn:
     id: org-position-save
 - extendedWaitUntil:
-    visible: E2E Массажист ${output.memberTag}
+    visible: ".*E2E Массажист ${output.memberTag}.*"
     timeout: 10000
 - takeScreenshot: org-admin-positions-${THEME}
 - tapOn:
@@ -122,9 +122,9 @@ appId: com.comamessenger.app
       id: settings-org-unassigned
     timeout: 10000
 - scrollUntilVisible:
-    element: ${output.memberName}
+    element: ".*${output.memberName}.*"
     direction: DOWN
-- tapOn: ${output.memberName}
+- tapOn: ".*${output.memberName}.*"
 - extendedWaitUntil:
     visible:
       id: org-unassigned-department
@@ -136,19 +136,21 @@ appId: com.comamessenger.app
     visible:
       id: org-assign-department
     timeout: 5000
-- tapOn: E2E Массаж ${output.memberTag}
+- tapOn: ".*E2E Массаж ${output.memberTag}.*"
 - extendedWaitUntil:
-    visible: Назначено.*
+    visible: ".*Назначено.*.*"
     timeout: 10000
-- tapOn: OK
-- assertNotVisible: ${output.memberName}
+# The alert's only button: Maestro does not find it by text on iOS 26.
+- tapOn:
+    point: 50%,54%
+- assertNotVisible: ".*${output.memberName}.*"
 - tapOn: Назад
 
 # Deleting: its people go to «Реабилитация» by default.
 - scrollUntilVisible:
-    element: E2E Массаж ${output.memberTag}
+    element: ".*E2E Массаж ${output.memberTag}.*"
     direction: DOWN
-- tapOn: E2E Массаж ${output.memberTag}
+- tapOn: ".*E2E Массаж ${output.memberTag}.*"
 - extendedWaitUntil:
     visible:
       id: department-editor
@@ -168,7 +170,7 @@ appId: com.comamessenger.app
 - tapOn:
     id: department-delete-confirm
 - extendedWaitUntil:
-    notVisible: E2E Массаж ${output.memberTag}
+    notVisible: ".*E2E Массаж ${output.memberTag}.*"
     timeout: 10000
 - tapOn: Назад
 
@@ -187,7 +189,7 @@ appId: com.comamessenger.app
     id: members-search
 - inputText: ${output.memberName}
 - extendedWaitUntil:
-    visible: ${output.memberName}
+    visible: ".*${output.memberName}.*"
     timeout: 5000
 - tapOn:
     id: member-row-0

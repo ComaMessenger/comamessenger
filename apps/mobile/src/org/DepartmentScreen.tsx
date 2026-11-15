@@ -400,6 +400,11 @@ export function DepartmentScreen({ departmentID }: { departmentID: string }) {
                     tags={
                       membership.primary ? null : <OrgTag kind="additional" />
                     }
+                    tagsLabel={
+                      membership.primary
+                        ? undefined
+                        : t("orgAdditionalTagLabel")
+                    }
                     hint={t("openProfileHint")}
                     onPress={() => router.push(`/people/${person.actor_id}`)}
                   />

@@ -14,11 +14,11 @@ appId: com.comamessenger.app
     id: open-people
 # Groups appear once the structure and every directory page are loaded.
 - extendedWaitUntil:
-    visible: Зал ЛФК
+    visible: "Зал ЛФК, .*"
     timeout: 20000
 - assertVisible:
     id: people-dept-all
-- assertVisible: рук.
+- assertVisible: ".*руководитель отдела.*"
 - takeScreenshot: org-people-${THEME}
 
 # The department chips: «Бассейн» leaves its own group only.
@@ -30,9 +30,9 @@ appId: com.comamessenger.app
     text: Бассейн
     index: 0
 - extendedWaitUntil:
-    visible: Пётр Морозов
+    visible: ".*Пётр Морозов.*"
     timeout: 5000
-- assertNotVisible: Олег Чернов
+- assertNotVisible: ".*Олег Чернов.*"
 - takeScreenshot: org-people-filter-${THEME}
 - scrollUntilVisible:
     element:
@@ -65,7 +65,7 @@ appId: com.comamessenger.app
     id: people-search
 - inputText: Врач
 - extendedWaitUntil:
-    visible: Дарья Романова
+    visible: ".*Дарья Романова.*"
     timeout: 10000
 - assertVisible: .*Медицинская служба.*
 - takeScreenshot: org-people-search-${THEME}
@@ -75,18 +75,19 @@ appId: com.comamessenger.app
 - hideKeyboard
 
 # The department card from a group header.
+# A group header is one accessible element: «Зал ЛФК, Реабилитация · 4 чел.».
 - scrollUntilVisible:
-    element: Зал ЛФК
+    element: "Зал ЛФК, .*"
     direction: DOWN
-- tapOn: Зал ЛФК
+- tapOn: "Зал ЛФК, .*"
 - extendedWaitUntil:
     visible:
       id: department
     timeout: 10000
 - assertVisible:
     id: department-lead
-- assertVisible: Ирина Лебедева
-- assertVisible: совм.
+- assertVisible: ".*Ирина Лебедева.*"
+- assertVisible: ".*совместитель.*"
 # No chat yet: whoever runs the structure may create it.
 - assertVisible:
     id: department-create-chat
@@ -99,11 +100,11 @@ appId: com.comamessenger.app
     visible:
       id: department-children
     timeout: 10000
-- assertVisible: Бассейн
+- assertVisible: ".*Бассейн.*"
 - takeScreenshot: org-department-parent-${THEME}
 
 # «Бассейн» has a chat without Анна Иванова: «В чате нет 1 сотрудника».
-- tapOn: Бассейн
+- tapOn: ".*Бассейн.*"
 - extendedWaitUntil:
     visible:
       id: department-missing
@@ -114,9 +115,11 @@ appId: com.comamessenger.app
 - tapOn:
     id: department-missing-add
 - extendedWaitUntil:
-    visible: Добавлен 1 сотрудник
+    visible: ".*Добавлен 1 сотрудник.*"
     timeout: 10000
-- tapOn: OK
+# The alert's only button: Maestro does not find it by text on iOS 26.
+- tapOn:
+    point: 50%,54%
 - assertNotVisible:
     id: department-missing
 - tapOn:
@@ -125,19 +128,19 @@ appId: com.comamessenger.app
     id: department-back
 
 # A member: the person card with the org group and the manager.
-- tapOn: Олег Чернов
+- tapOn: ".*Олег Чернов.*"
 - extendedWaitUntil:
     visible:
       id: person-org
     timeout: 10000
 - assertVisible:
     id: person-department
-- assertVisible: Инструктор
+- assertVisible: ".*Инструктор.*"
 - takeScreenshot: org-person-${THEME}
 - tapOn:
     id: person-manager
 - extendedWaitUntil:
-    visible: Ирина Лебедева
+    visible: ".*Ирина Лебедева.*"
     timeout: 10000
 - extendedWaitUntil:
     visible:
