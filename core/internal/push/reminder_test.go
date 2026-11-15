@@ -190,22 +190,17 @@ func TestReminderPushShowsOnlyWhatTheOwnerMaySee(t *testing.T) {
 	secrets(t, payload)
 	w.exec(t, `UPDATE chats SET archived_at=NULL WHERE id=$1`, w.chatID)
 
-	// Message deleted, the note kept: the note only.
+	// Message deleted after firing, the note kept: the alarm still rings,
+	// with the note only.
 	w.closeAll(t)
-	item, seq := w.fired(t, "ask about it", time.Minute)
+	_, seq := w.fired(t, "ask about it", time.Minute)
 	if _, err := w.messages.Delete(context.Background(), w.other.User, w.target.ID); err != nil {
 		t.Fatal(err)
 	}
-	// The deletion changed the reminder's version: this firing is old news.
 	w.materialize(t)
-	if web, mobile := w.deliveries(t, seq); len(web)+len(mobile) != 0 {
-		t.Fatalf("stale firing pushed: %v %v", web, mobile)
+	if web, mobile := w.deliveries(t, seq); len(web) != 1 || len(mobile) != 1 {
+		t.Fatalf("deleted message: deliveries %v %v", web, mobile)
 	}
-	w.exec(t, `UPDATE message_reminders SET remind_at=now()-interval '1 minute', state='pending', fired_at=NULL WHERE id=$1`, item.ID)
-	if err := w.reminders.Fire(context.Background(), item.ID, 0); err != nil {
-		t.Fatal(err)
-	}
-	w.materialize(t)
 	payload = w.deliverOne(t)
 	if payload.Body != "📝 ask about it" || payload.URL != "/important?tab=reminders" {
 		t.Fatalf("deleted message: %+v", payload)
@@ -256,6 +251,11 @@ func TestReminderPushFollowsTheReminder(t *testing.T) {
 	w.materialize(t)
 	if web, mobile := w.deliveries(t, seq); len(web) != 1 || len(mobile) != 1 {
 		t.Fatalf("a 5-hour-late alarm: %v %v", web, mobile)
+	}
+	// Held up past six hours before delivery (the worker was down): dropped.
+	w.exec(t, `UPDATE message_reminders SET remind_at = remind_at - interval '2 hours', fired_at = fired_at WHERE state = 'fired'`)
+	if err := w.worker.deliverMobile(ctx); err != nil || len(w.relay.messages) != 0 {
+		t.Fatalf("an alarm held up past six hours rang: %d, %v", len(w.relay.messages), err)
 	}
 }
 

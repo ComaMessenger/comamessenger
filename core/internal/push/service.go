@@ -867,7 +867,7 @@ func (w *Worker) deliver(ctx context.Context) error {
 		content, contentErr := w.reminderNotification(ctx, org, actor, eventType, eventData, locale, preview,
 			buildNotification(eventType, eventData, author, locale, preview, chatID, threadID, messageText(body, voiceMs, locale), name))
 		if contentErr != nil {
-			_, _ = w.pool.Exec(ctx, `UPDATE notification_deliveries SET attempts=attempts+1,last_error=$4,available_at=now()+interval '30 seconds',lease_token=NULL,lease_until=NULL WHERE org_id=$1 AND event_seq=$2 AND subscription_id=$3 AND lease_token=$5`, org, seq, subID, contentErr.Error(), leaseToken)
+			_, _ = w.pool.Exec(ctx, `UPDATE notification_deliveries SET attempts=attempts+1,last_error=$4,available_at=now()+interval '30 seconds',sent_at=CASE WHEN attempts>=8 THEN now() END,lease_token=NULL,lease_until=NULL WHERE org_id=$1 AND event_seq=$2 AND subscription_id=$3 AND lease_token=$5`, org, seq, subID, contentErr.Error(), leaseToken)
 			continue
 		}
 		encoded := webPushPayload(content, silent)

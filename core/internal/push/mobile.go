@@ -301,7 +301,7 @@ func (w *Worker) deliverMobile(ctx context.Context) error {
 		content, err := w.reminderNotification(ctx, item.org, item.actor, item.eventType, item.eventData, item.locale, item.preview,
 			buildNotification(item.eventType, item.eventData, item.author, item.locale, item.preview, item.chatID, item.threadID, messageText(item.body, item.voiceMs, item.locale), item.chatName))
 		if err != nil {
-			finish(item, `UPDATE mobile_push_deliveries SET attempts=attempts+1,last_error=$5,available_at=now()+interval '30 seconds',lease_token=NULL,lease_until=NULL WHERE org_id=$1 AND event_seq=$2 AND device_id=$3 AND lease_token=$4`, err.Error())
+			finish(item, `UPDATE mobile_push_deliveries SET attempts=attempts+1,last_error=$5,available_at=now()+interval '30 seconds',sent_at=CASE WHEN attempts>=8 THEN now() END,lease_token=NULL,lease_until=NULL WHERE org_id=$1 AND event_seq=$2 AND device_id=$3 AND lease_token=$4`, err.Error())
 			continue
 		}
 		var badge int64

@@ -2,6 +2,7 @@ package reminder_test
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -247,6 +248,7 @@ func TestListOrderAndPages(t *testing.T) {
 	}
 	for name, options := range map[string]reminder.ListOptions{
 		"state": {State: "all"}, "limit": {Limit: 101}, "cursor": {Cursor: ptr("@@@")},
+		"cursor out of range": {Cursor: ptr(base64.RawURLEncoding.EncodeToString([]byte("-300000000000000000." + uuid.NewString())))},
 	} {
 		if _, err := w.service.List(ctx, w.member, options); !errors.Is(err, reminder.ErrInvalid) {
 			t.Errorf("%s: %v", name, err)
@@ -531,5 +533,38 @@ func TestEventsMatchTheContract(t *testing.T) {
 		if !seen[eventType] {
 			t.Errorf("no %s checked", eventType)
 		}
+	}
+}
+
+// Fired reminders the owner never closes are capped: firing one more drops
+// the oldest, with an event, so the owner's devices follow.
+func TestFiredCap(t *testing.T) {
+	w := newWorld(t)
+	target := w.post(t, w.chatID, "x")
+	w.exec(t, `
+		INSERT INTO message_reminders (id, org_id, actor_id, chat_id, note, remind_at, state, fired_at)
+		SELECT gen_random_uuid(), $1, $2, $3, 'old', now() - make_interval(hours => n + 1), 'fired', now() - make_interval(hours => n)
+		FROM generate_series(1, $4::int) AS n`, w.member.OrgID, w.member.ActorID, w.chatID, reminder.MaxFired)
+	var oldest string
+	if err := w.pool.QueryRow(context.Background(), `SELECT id FROM message_reminders WHERE actor_id = $1 ORDER BY fired_at LIMIT 1`, w.member.ActorID).Scan(&oldest); err != nil {
+		t.Fatal(err)
+	}
+	item := w.set(t, w.member, target.ID, time.Hour, nil)
+	w.due(t, item.ID, time.Minute)
+	before := w.seq(t)
+	w.fire(t, item.ID)
+	if got := w.count(t, `SELECT count(*) FROM message_reminders WHERE actor_id = $1 AND state = 'fired'`, w.member.ActorID); got != reminder.MaxFired {
+		t.Fatalf("fired kept = %d", got)
+	}
+	if _, _, _, ok := w.load(t, oldest); ok {
+		t.Fatal("the oldest fired reminder is kept")
+	}
+	events := w.eventsAfter(t, before)
+	if len(events) != 2 || events[0].Type != reminder.EventFired || events[1].Type != reminder.EventDeleted || events[1].Data["id"] != oldest {
+		t.Fatalf("events = %+v", events)
+	}
+	// Someone else's fired reminders are not touched.
+	if got := w.count(t, `SELECT count(*) FROM message_reminders WHERE actor_id <> $1`, w.member.ActorID); got != 0 {
+		t.Fatalf("others = %d", got)
 	}
 }

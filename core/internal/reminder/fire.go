@@ -101,6 +101,11 @@ func (s *Service) Fire(ctx context.Context, reminderID string, jobID int64) erro
 	if err != nil {
 		return err
 	}
+	if trimmed, err := trimFired(ctx, tx, result); err != nil {
+		return err
+	} else if trimmed > seq {
+		seq = trimmed
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit fire reminder: %w", err)
 	}
@@ -150,9 +155,13 @@ func (s *Service) Cleanup(ctx context.Context) (int64, error) {
 	// Removed silently: after three months the alarm is long irrelevant, and
 	// the owner's devices drop it on the next list read. Repeated in the
 	// outer WHERE so a reminder moved meanwhile (pending again) is kept.
+	// Rows locked by someone else (a message deletion, a move) are skipped
+	// rather than waited for: this pass holds no organization lock, so
+	// waiting could close a cycle with them.
 	command, err := s.pool.Exec(ctx, `
 		DELETE FROM message_reminders r WHERE r.id IN (
-			SELECT id FROM message_reminders WHERE state = 'fired' AND fired_at < now() - $1::interval LIMIT 1000)
+			SELECT id FROM message_reminders WHERE state = 'fired' AND fired_at < now() - $1::interval
+			ORDER BY id LIMIT 1000 FOR UPDATE SKIP LOCKED)
 		  AND r.state = 'fired' AND r.fired_at < now() - $1::interval`, FiredRetention.String())
 	if err != nil {
 		problems = append(problems, fmt.Errorf("clean up fired reminders: %w", err))
@@ -177,4 +186,43 @@ func (s *Service) RunCleanup(ctx context.Context, interval time.Duration) {
 			}
 		}
 	}
+}
+
+// trimFired keeps at most MaxFired fired reminders of the owner: firing one
+// more removes the oldest beyond that, each with reminder.deleted. The
+// organization row is locked by the caller. It returns the last event
+// number, or 0.
+func trimFired(ctx context.Context, tx pgx.Tx, fired Reminder) (int64, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT `+selectColumns+` FROM message_reminders r
+		WHERE r.org_id = $1 AND r.actor_id = $2 AND r.state = 'fired'
+		ORDER BY r.fired_at DESC, r.id DESC OFFSET $3 FOR UPDATE`, fired.orgID, fired.actorID, MaxFired)
+	if err != nil {
+		return 0, fmt.Errorf("find excess fired reminders: %w", err)
+	}
+	var excess []Reminder
+	for rows.Next() {
+		var item Reminder
+		if err := scan(rows, &item); err != nil {
+			rows.Close()
+			return 0, fmt.Errorf("scan excess fired reminder: %w", err)
+		}
+		excess = append(excess, item)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("iterate excess fired reminders: %w", err)
+	}
+	var last int64
+	for _, item := range excess {
+		if _, err := tx.Exec(ctx, `DELETE FROM message_reminders WHERE id = $1`, item.ID); err != nil {
+			return 0, fmt.Errorf("drop excess fired reminder: %w", err)
+		}
+		seq, err := insertEvent(ctx, tx, item, EventDeleted, ReasonRemoved)
+		if err != nil {
+			return 0, err
+		}
+		last = seq
+	}
+	return last, nil
 }

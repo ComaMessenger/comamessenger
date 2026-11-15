@@ -25,12 +25,16 @@ const reminderFiredEvent = "reminder.fired"
 // coma.reminder on iOS) after decrypting the payload.
 const reminderKind = "reminder"
 
-// reminderFiredCurrent: the reminder is still this very firing.
+// reminderFiredCurrent: the reminder is still this very firing — fired at
+// the moment the event says (moving it clears fired_at, firing again sets a
+// new one; losing its message to a deletion keeps it, so the alarm still
+// rings with the note) — and its time is at most six hours ago, as of now:
+// a push held up by a stopped worker or long retries is not sent at night.
 const reminderFiredCurrent = `EXISTS (
 	SELECT 1 FROM message_reminders mr
 	WHERE mr.org_id=e.org_id AND mr.id=e.subject_id AND mr.actor_id=e.audience_actor_id
-	  AND mr.state='fired' AND mr.version=(e.data->>'version')::int
-	  AND mr.fired_at-mr.remind_at <= interval '6 hours')`
+	  AND mr.state='fired' AND mr.fired_at=(e.data->>'fired_at')::timestamptz
+	  AND now()-mr.remind_at <= interval '6 hours')`
 
 // reminderStillFired is false for a reminder push that is no longer
 // current; every other event is current.

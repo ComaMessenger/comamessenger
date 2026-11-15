@@ -75,6 +75,9 @@ const (
 	FiredRetention = 90 * 24 * time.Hour
 	// DefaultPendingLimit bounds pending reminders of one person.
 	DefaultPendingLimit = 500
+	// MaxFired bounds fired reminders a person keeps without closing them:
+	// beyond it the oldest fired ones go, as retention would.
+	MaxFired = 1000
 )
 
 // Scheduler places and removes fire jobs inside the caller's transaction, so
@@ -727,7 +730,11 @@ func decodeCursor(value string) (time.Time, string, error) {
 	if !ok || parseErr != nil || validID("cursor", reminderID) != nil {
 		return time.Time{}, "", fmt.Errorf("%w: cursor is malformed", ErrInvalid)
 	}
-	return time.UnixMicro(value64).UTC(), reminderID, nil
+	at := time.UnixMicro(value64).UTC()
+	if at.Year() < 2000 || at.Year() > 3000 {
+		return time.Time{}, "", fmt.Errorf("%w: cursor is malformed", ErrInvalid)
+	}
+	return at, reminderID, nil
 }
 
 func validID(name, value string) error {
