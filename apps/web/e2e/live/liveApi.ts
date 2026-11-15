@@ -56,8 +56,17 @@ export async function api<T = unknown>(
 
 type AuthAnswer = { access_token: string; user: { id: string; display_name: string } };
 
-/** The owner of the live workspace, bootstrapped on the very first run. */
-export async function owner(): Promise<LiveUser> {
+let cachedOwner: Promise<LiveUser> | null = null;
+/**
+ * The owner of the live workspace, bootstrapped on the very first run. One
+ * sign-in per worker: the server limits sign-ins per address.
+ */
+export function owner(): Promise<LiveUser> {
+  cachedOwner ??= signInOwner();
+  return cachedOwner;
+}
+
+async function signInOwner(): Promise<LiveUser> {
   const status = await call<{ bootstrapped: boolean }>("/bootstrap/status");
   if (!status.body.bootstrapped) {
     const created = await call<AuthAnswer>("/bootstrap", {
@@ -88,6 +97,7 @@ export async function login(email: string, password: string): Promise<LiveUser> 
   };
 }
 
+let sequence = 0;
 /** A new member of the workspace, invited by the owner. */
 export async function member(
   inviter: LiveUser,
@@ -95,7 +105,9 @@ export async function member(
   handle: string,
   title = "",
 ): Promise<LiveUser> {
-  const email = `${handle}-${run}@w2-org.test`;
+  sequence += 1;
+  const tag = `${run}${sequence}`;
+  const email = `${handle}-${tag}@w2-org.test`;
   const invite = await api<{ accept_url: string }>(inviter, "/invitations", {
     body: { email, role: "member" },
   });
@@ -104,13 +116,20 @@ export async function member(
   const accepted = await call<AuthAnswer>(`/invitations/${token}/accept`, {
     body: {
       display_name: name,
-      handle: `${handle}${run}`,
+      handle: `${handle}${tag}`,
       password,
       timezone: "Europe/Moscow",
     },
   });
   expect(accepted.status, `accept ${handle}`).toBeLessThan(300);
-  const user = await login(email, password);
+  // The accepted invitation signs the person in: no extra sign-in.
+  const user: LiveUser = {
+    id: accepted.body.user.id,
+    email,
+    password,
+    token: accepted.body.access_token,
+    name,
+  };
   if (title) await api(user, "/me", { method: "PATCH", body: { title } });
   return user;
 }
