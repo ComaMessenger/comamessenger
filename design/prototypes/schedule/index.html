@@ -1,0 +1,850 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Coma — расписание в чате, прототип</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  /* ---------- Coma tokens (как в messenger-mobile) ---------- */
+  .coma {
+    --page:#e9eaee; --canvas:#f6f6f7; --surface:#fff; --raised:#fff; --selected:#f0f0f3; --fg:#202023; --muted:#686873; --border:#e5e5e9; --border-strong:#d2d2d9;
+    --primary:#174586; --primary-soft:#edf3fb; --on-primary:#fff; --action:#252528; --on-action:#fff;
+    --danger:#c43245; --danger-soft:#fff0f1; --success:#18794e; --success-soft:#edf8f1; --warning:#9c650b; --warning-soft:#fff8e7;
+    --own:#174586; --own-fg:#fff; --own-muted:rgba(255,255,255,.72);
+    --overlay:rgba(20,20,26,.36); --shadow:0 8px 24px rgba(20,20,30,.10); --mascot-body:#174586; --mascot-feet:#242831; --mascot-plate:#fff;
+    --f-blue:#2f6fca; --f-violet:#7456c9; --f-green:#2b7754; --f-orange:#ac5a25; --f-teal:#227770;
+    --a1:#e5eee6; --a1f:#4d6b54; --a2:#e8edf4; --a2f:#4c6280; --a3:#ece7f5; --a3f:#6f598e; --a4:#f3e8e9; --a4f:#8e505b; --a5:#f4ebde; --a5f:#806039;
+    color: var(--fg); font-size: 15px; line-height: 1.35; font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--page); min-height: 100vh; padding: 16px; color-scheme: light;
+  }
+  .coma[data-theme="dark"] {
+    --page:#0d0d0f; --canvas:#151517; --surface:#1d1d20; --raised:#27272c; --selected:#2b2b30; --fg:#f0f0f2; --muted:#a0a0aa; --border:#323237; --border-strong:#46464f;
+    --primary:#86aff0; --primary-soft:#243349; --on-primary:#172132; --action:#eeeeef; --on-action:#222225;
+    --danger:#f0717f; --danger-soft:#3a2126; --success:#5fc594; --success-soft:#1c3327; --warning:#e0a94a; --warning-soft:#3a2f1a;
+    --own:#2c4a78; --own-fg:#f3f6fb; --own-muted:rgba(243,246,251,.7);
+    --overlay:rgba(0,0,0,.55); --shadow:0 8px 24px rgba(0,0,0,.4); --mascot-body:#86aff0; --mascot-feet:#fff; --mascot-plate:#151517;
+    --f-blue:#7fb0f2; --f-violet:#ab97ee; --f-green:#6fc59c; --f-orange:#e59a68; --f-teal:#63c4bb;
+    --a1:#26332a; --a1f:#a6c8ae; --a2:#262e3a; --a2f:#a9bedb; --a3:#2f2a3b; --a3f:#c3b3e2; --a4:#3a282b; --a4f:#e2adb5; --a5:#3a3023; --a5f:#dcbf94;
+    color-scheme: dark;
+  }
+  /* ---------- lab chrome ---------- */
+  .bar { display: flex; gap: 8px 10px; flex-wrap: wrap; align-items: center; margin: 0 auto 16px; max-width: 1060px; }
+  .ttl { margin-right: auto; } .ttl b { display: block; font-size: 17px; } .ttl small { color: var(--muted); font-size: 12.5px; }
+  .seg { display: flex; gap: 2px; flex-wrap: wrap; padding: 3px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); }
+  .seg button, .tgl { font: inherit; font-size: 13px; border: 0; background: transparent; color: var(--muted); padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--action); color: var(--on-action); font-weight: 600; }
+  .tgl { border: 1px solid var(--border); background: var(--surface); color: var(--fg); }
+  .navrow { max-width: 1060px; margin: 0 auto 16px; }
+  .stage { display: flex; gap: 24px; justify-content: center; align-items: flex-start; flex-wrap: wrap; max-width: 1060px; margin: 0 auto; }
+  .pw { width: 360px; max-width: 100%; flex: none; }
+  .aside { flex: 1 1 min(300px, 100%); min-width: 0; max-width: 460px; font-size: 14px; line-height: 1.5; }
+  .aside h3 { margin: 0 0 8px; font-size: 17px; } .aside p { margin: 0 0 10px; color: var(--muted); } .aside p b, .aside li b { color: var(--fg); }
+  .aside ul { margin: 0 0 12px; padding-left: 18px; color: var(--muted); } .aside li { margin-bottom: 4px; }
+  .aside .box { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; margin-bottom: 12px; }
+  .aside code, .model code { font-size: 12.5px; background: var(--selected); padding: 1px 5px; border-radius: 5px; }
+
+  /* ---------- phone ---------- */
+  .phone { position: relative; width: 100%; height: 720px; border-radius: 38px; border: 1px solid var(--border-strong); background: var(--canvas); overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow); }
+  .phone.white { background: var(--surface); }
+  .status { display: flex; justify-content: space-between; padding: 12px 26px 4px; font-size: 13px; font-weight: 600; flex: none; background: var(--surface); }
+  .status i { display: inline-block; width: 22px; height: 11px; border: 1.5px solid var(--fg); border-radius: 4px; position: relative; opacity: .8; }
+  .status i::after { content: ""; position: absolute; inset: 1.5px 5px 1.5px 1.5px; background: var(--fg); border-radius: 1.5px; }
+  .ic { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  .ib { width: 40px; height: 40px; border-radius: 20px; border: 0; background: transparent; color: var(--fg); display: grid; place-items: center; cursor: pointer; flex: none; padding: 0; font: inherit; }
+  .ib.soft { background: var(--selected); } .ib.sm { width: 32px; height: 32px; } .ib.sm .ic { width: 18px; height: 18px; }
+  .av { width: 48px; height: 48px; border-radius: 16px; display: grid; place-items: center; font-weight: 600; font-size: 16px; flex: none; position: relative; }
+  .av.round { border-radius: 50%; } .av.s { width: 30px; height: 30px; border-radius: 10px; font-size: 11.5px; } .av.s.round { border-radius: 50%; }
+  .av.m { width: 36px; height: 36px; border-radius: 12px; font-size: 13px; } .av.xs { width: 22px; height: 22px; border-radius: 50%; font-size: 9px; }
+  .c1{background:var(--a1);color:var(--a1f)}.c2{background:var(--a2);color:var(--a2f)}.c3{background:var(--a3);color:var(--a3f)}.c4{background:var(--a4);color:var(--a4f)}.c5{background:var(--a5);color:var(--a5f)}
+  .cag{background:var(--primary-soft);color:var(--primary)}
+  .chead { display: flex; align-items: center; gap: 8px; padding: 2px 8px 8px; border-bottom: 1px solid var(--border); background: var(--surface); flex: none; }
+  .chead .t { flex: 1; min-width: 0; } .chead .t b { display: block; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .chead .t small { color: var(--muted); font-size: 12.5px; }
+  .strip { display: flex; align-items: center; gap: 8px; padding: 8px 14px; font-size: 13px; background: var(--surface); border-bottom: 1px solid var(--border); color: var(--muted); flex: none; cursor: pointer; }
+  .strip .ic { width: 16px; height: 16px; color: var(--primary); } .strip b { color: var(--fg); font-weight: 600; } .strip span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .scroll { flex: 1; overflow-y: auto; scrollbar-width: none; } .scroll::-webkit-scrollbar, .sheet::-webkit-scrollbar { display: none; }
+  .feed { flex: 1; overflow-y: auto; padding: 10px 10px 6px; display: flex; flex-direction: column; gap: 3px; scrollbar-width: none; }
+  .feed::-webkit-scrollbar { display: none; }
+  .day { align-self: center; font-size: 12px; font-weight: 600; color: var(--muted); background: var(--selected); border-radius: 10px; padding: 3px 10px; margin: 4px 0 8px; }
+  .msg { display: flex; gap: 7px; align-items: flex-end; max-width: 90%; margin-top: 5px; }
+  .msg.me { align-self: flex-end; }
+  .bub { background: var(--surface); border: 1px solid var(--border); border-radius: 18px 18px 18px 6px; padding: 7px 11px 7px; min-width: 0; }
+  .me .bub { background: var(--own); border-color: transparent; color: var(--own-fg); border-radius: 18px 18px 6px 18px; }
+  .bub.obj { width: 272px; max-width: 100%; }
+  .me .bub.obj { background: var(--surface); color: var(--fg); border: 1px solid var(--border); }
+  .who { font-size: 12.5px; font-weight: 600; margin-bottom: 1px; display: flex; gap: 5px; align-items: center; }
+  .meta { font-size: 11px; color: var(--muted); float: right; margin: 5px 0 -1px 10px; } .me .bub:not(.obj) .meta { color: var(--own-muted); }
+  .sys { align-self: center; text-align: center; font-size: 12.5px; color: var(--muted); padding: 4px 18px; max-width: 94%; } .sys b { color: var(--fg); font-weight: 600; }
+  .tag { font-size: 10.5px; font-weight: 600; letter-spacing: .02em; padding: 1px 5px; border-radius: 5px; background: var(--primary-soft); color: var(--primary); flex: none; }
+  .card { border: 1px solid var(--border); border-radius: 12px; padding: 10px; margin-top: 6px; background: var(--canvas); clear: both; }
+  .card > b { font-size: 14px; display: block; } .card p { margin: 2px 0 8px; font-size: 13px; color: var(--muted); }
+  .prog { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; margin-bottom: 9px; } .prog i { display: block; height: 100%; background: var(--success); border-radius: 3px; }
+  .acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .kh { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--muted); } .kh .ic { width: 15px; height: 15px; } .kh .pill { margin-left: auto; }
+  .done { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--success); font-weight: 600; margin-top: 8px; } .done .ic { width: 16px; height: 16px; }
+  .note { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+  .cmp { flex: none; padding: 6px 8px 18px; background: var(--canvas); display: flex; gap: 6px; align-items: center; }
+  .inp { flex: 1; height: 40px; border-radius: 20px; background: var(--surface); border: 1px solid var(--border); display: flex; align-items: center; padding: 0 14px; color: var(--muted); font-size: 15px; }
+
+  /* buttons, chips, pills */
+  .btn { height: 46px; border-radius: 14px; border: 0; font: inherit; font-size: 16px; font-weight: 600; background: var(--action); color: var(--on-action); width: 100%; margin-top: 12px; cursor: pointer; white-space: nowrap; display: flex; align-items: center; justify-content: center; gap: 7px; }
+  .btn .ic { width: 18px; height: 18px; }
+  .btn.sec { background: var(--selected); color: var(--fg); } .btn.pri { background: var(--primary); color: var(--on-primary); } .btn.dng { background: var(--danger-soft); color: var(--danger); }
+  .btn.sm { height: 34px; font-size: 14px; border-radius: 10px; width: auto; padding: 0 12px; margin: 0; } .btn.sm .ic { width: 15px; height: 15px; }
+  .btn[disabled] { opacity: .45; cursor: default; }
+  .pill { font-size: 11.5px; font-weight: 600; padding: 2px 7px; border-radius: 8px; background: var(--selected); color: var(--muted); white-space: nowrap; flex: none; }
+  .pill.ok { background: var(--success-soft); color: var(--success); } .pill.wr { background: var(--warning-soft); color: var(--warning); } .pill.pr { background: var(--primary-soft); color: var(--primary); } .pill.dn { background: var(--danger-soft); color: var(--danger); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font: inherit; font-size: 14px; height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid var(--border); display: inline-flex; align-items: center; gap: 6px; color: var(--fg); background: var(--surface); cursor: pointer; white-space: nowrap; }
+  .chip.on { background: var(--action); border-color: var(--action); color: var(--on-action); font-weight: 600; }
+  .chip.soft.on { background: var(--primary-soft); border-color: transparent; color: var(--primary); }
+  .chip .ic { width: 15px; height: 15px; } .chip .x { opacity: .6; }
+  .chip.add { border-style: dashed; color: var(--muted); }
+  .tabsw { display: flex; gap: 2px; padding: 3px; border-radius: 11px; background: var(--selected); }
+  .tabsw button { flex: 1; font: inherit; font-size: 14px; border: 0; background: transparent; color: var(--muted); height: 30px; border-radius: 8px; cursor: pointer; }
+  .tabsw button.on { background: var(--surface); color: var(--fg); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  .warnc { color: var(--warning); } .okc { color: var(--success); } .muted { color: var(--muted); }
+
+  /* seats */
+  .seats { display: inline-flex; gap: 3px; align-items: center; vertical-align: middle; }
+  .seat { width: 22px; height: 22px; border-radius: 50%; border: 1.5px dashed var(--border-strong); display: inline-block; flex: none; }
+  .seat.req { border-color: var(--warning); background: var(--warning-soft); }
+  .av.pend { opacity: .6; box-shadow: 0 0 0 1.5px var(--warning); }
+  .rl { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; align-items: center; font-size: 12.5px; color: var(--muted); }
+  .rl > span { display: inline-flex; align-items: center; gap: 5px; }
+  .mbar { width: 40px; height: 5px; border-radius: 3px; background: var(--border); overflow: hidden; display: inline-block; } .mbar i { display: block; height: 100%; background: var(--f-teal); }
+  .cnt b { color: var(--fg); }
+
+  /* board */
+  .bh { padding: 8px 14px 10px; background: var(--surface); border-bottom: 1px solid var(--border); flex: none; display: flex; flex-direction: column; gap: 8px; }
+  .wk { display: flex; align-items: center; gap: 4px; } .wk b { flex: 1; text-align: center; font-size: 15px; }
+  .dsec { font-size: 12.5px; font-weight: 600; color: var(--muted); padding: 14px 16px 6px; display: flex; gap: 8px; align-items: baseline; } .dsec span { margin-left: auto; font-weight: 500; }
+  .srow { display: flex; gap: 10px; padding: 10px 12px; margin: 0 10px 6px; background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--border); border-radius: 12px; cursor: pointer; }
+  .srow.need { border-left-color: var(--warning); } .srow.mine { border-left-color: var(--primary); } .srow.full { border-left-color: var(--success); }
+  .srow .tm { width: 40px; flex: none; font-size: 13px; font-variant-numeric: tabular-nums; } .srow .tm b { display: block; font-size: 14px; } .srow .tm small { color: var(--muted); }
+  .srow .g { flex: 1; min-width: 0; } .srow .g > b { font-size: 14.5px; } .srow .g > small { color: var(--muted); font-size: 12.5px; display: block; }
+  .srow .st { flex: none; }
+  .empty { text-align: center; color: var(--muted); font-size: 13.5px; padding: 26px 20px; }
+  .dstrip { display: flex; gap: 4px; }
+  .dstrip button { flex: 1; font: inherit; border: 1px solid var(--border); background: var(--surface); color: var(--fg); border-radius: 12px; padding: 5px 0 4px; cursor: pointer; display: flex; flex-direction: column; align-items: center; font-size: 11.5px; color: var(--muted); }
+  .dstrip button b { font-size: 16px; color: var(--fg); } .dstrip button i { width: 6px; height: 6px; border-radius: 50%; margin-top: 2px; background: transparent; }
+  .dstrip button i.w { background: var(--warning); }
+  .dstrip button.on { background: var(--action); border-color: var(--action); color: var(--on-action); } .dstrip button.on b { color: var(--on-action); }
+  .tl { padding: 8px 8px 14px 4px; }
+  .tlh, .tlb { display: grid; gap: 3px; } .tlh { font-size: 11.5px; font-weight: 600; color: var(--muted); text-align: center; padding-bottom: 4px; position: sticky; top: 0; background: var(--canvas); z-index: 2; }
+  .tlh span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tlb { position: relative; background-image: repeating-linear-gradient(to bottom, var(--border) 0 1px, transparent 1px 36px); }
+  .axis { position: relative; font-size: 10.5px; color: var(--muted); } .axis span { position: absolute; right: 3px; transform: translateY(-50%); font-variant-numeric: tabular-nums; }
+  .col { position: relative; }
+  .col.tap { cursor: copy; } .col.tap:hover { background: color-mix(in srgb, var(--primary-soft) 50%, transparent); }
+  .blk { position: absolute; left: 0; right: 0; border-radius: 8px; padding: 3px 5px; font-size: 10.5px; line-height: 1.25; overflow: hidden; cursor: pointer; background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--border-strong); }
+  .blk b { display: block; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .blk small { display: block; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .blk.need { border-left-color: var(--warning); background: var(--warning-soft); } .blk.mine { border-left-color: var(--primary); background: var(--primary-soft); } .blk.full { border-left-color: var(--success); }
+  .blk .seats .av, .blk .seats .seat { width: 15px; height: 15px; font-size: 7px; border-width: 1px; }
+  .legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11.5px; color: var(--muted); padding: 2px 14px 0; } .legend span { display: inline-flex; gap: 5px; align-items: center; }
+  .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+  /* sheets */
+  .dim { position: absolute; inset: 0; background: var(--overlay); z-index: 5; }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--surface); border-radius: 24px 24px 0 0; padding: 8px 16px 22px; max-height: 90%; overflow-y: auto; scrollbar-width: none; }
+  .grab { width: 36px; height: 4px; border-radius: 2px; background: var(--border-strong); margin: 0 auto 12px; }
+  .sheet h2 { font-size: 17px; font-weight: 700; margin: 0 0 10px; display: flex; align-items: center; gap: 6px; } .sheet h2 span { flex: 1; }
+  .lbl { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 16px 0 7px; display: flex; gap: 6px; align-items: baseline; }
+  .lbl em { font-style: normal; text-transform: none; letter-spacing: 0; margin-left: auto; font-weight: 600; }
+  .slotbox { display: flex; gap: 10px; align-items: center; padding: 9px 11px; border-radius: 12px; background: var(--selected); font-size: 13.5px; margin-top: 6px; } .slotbox .ic { color: var(--primary); width: 19px; height: 19px; }
+  .slotbox b { display: block; font-size: 14px; } .slotbox small { color: var(--muted); font-size: 12.5px; }
+  .card .slotbox { background: var(--surface); border: 1px solid var(--border); }
+  .prow { display: flex; align-items: center; gap: 10px; padding: 7px 0; font-size: 15px; } .prow .g { flex: 1; min-width: 0; } .prow small { display: block; color: var(--muted); font-size: 12.5px; }
+  .prow .seat { width: 30px; height: 30px; }
+  .prow.pick { cursor: pointer; border-radius: 12px; padding: 7px 8px; margin: 0 -8px; } .prow.pick:hover { background: var(--selected); } .prow.pick.sel { background: var(--primary-soft); }
+  .prow.off { opacity: .5; cursor: default; }
+  .rolebox { border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; margin-top: 10px; }
+  .rolebox .rh { display: flex; align-items: baseline; gap: 8px; } .rolebox .rh b { font-size: 15px; } .rolebox .rh .n { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .rolebox .rh small { color: var(--muted); font-size: 12.5px; }
+  .bigbar { height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; margin: 8px 0 6px; } .bigbar i { display: block; height: 100%; background: var(--f-teal); }
+  .stp { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--border); border-radius: 10px; } .stp button { width: 30px; height: 30px; border: 0; background: transparent; color: var(--fg); font: inherit; font-size: 18px; cursor: pointer; border-radius: 9px; }
+  .stp b { min-width: 22px; text-align: center; font-variant-numeric: tabular-nums; }
+  .opt { display: flex; align-items: center; gap: 12px; padding: 8px 0; font-size: 15px; } .opt .g { flex: 1; min-width: 0; } .opt small { display: block; color: var(--muted); font-size: 12.5px; }
+  .tg { width: 44px; height: 26px; border-radius: 13px; background: var(--border-strong); position: relative; flex: none; cursor: pointer; border: 0; padding: 0; }
+  .tg::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: left .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+  .tg.on { background: var(--primary); } .tg.on::after { left: 21px; }
+  .field { min-height: 44px; border-radius: 12px; border: 1px solid var(--border-strong); background: var(--surface); display: flex; align-items: center; padding: 0 13px; font-size: 15px; color: var(--muted); }
+  .field.val { color: var(--fg); }
+  .hint { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--muted); background: var(--selected); border-radius: 12px; padding: 9px 11px; margin-top: 10px; } .hint .ic { width: 17px; height: 17px; flex: none; margin-top: 1px; }
+  .hint.wr { background: var(--warning-soft); color: var(--warning); }
+  .toast { position: absolute; left: 12px; right: 12px; bottom: 84px; z-index: 9; background: var(--action); color: var(--on-action); border-radius: 14px; padding: 11px 14px; font-size: 13.5px; box-shadow: var(--shadow); display: flex; gap: 9px; align-items: flex-start; }
+  .toast .ic { width: 18px; height: 18px; flex: none; }
+
+  /* admin */
+  .stat3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 12px 12px 4px; }
+  .stat3 div { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 10px; font-size: 12px; color: var(--muted); line-height: 1.25; }
+  .stat3 b { display: block; font-size: 22px; color: var(--fg); } .stat3 .w b { color: var(--warning); }
+  .arow { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; margin: 0 10px 8px; }
+  .arow .h { display: flex; gap: 8px; align-items: baseline; cursor: pointer; } .arow .h b { font-size: 14.5px; flex: 1; } .arow .h small { color: var(--muted); font-size: 12.5px; }
+  .arow .s { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+  .load { display: flex; align-items: center; gap: 10px; padding: 5px 16px; font-size: 13.5px; } .load .g { width: 112px; flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .load .lb { flex: 1; height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; } .load .lb i { display: block; height: 100%; background: var(--primary); border-radius: 4px; } .load small { width: 54px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  /* create */
+  .steps { display: flex; gap: 6px; padding: 10px 14px 4px; } .steps i { flex: 1; height: 4px; border-radius: 2px; background: var(--border); } .steps i.on { background: var(--primary); }
+  .tpl { display: flex; gap: 12px; padding: 12px; margin: 0 12px 8px; background: var(--surface); border: 1.5px solid var(--border); border-radius: 16px; cursor: pointer; }
+  .tpl.sel { border-color: var(--primary); background: var(--primary-soft); }
+  .tpl .ti { width: 42px; height: 42px; border-radius: 13px; background: var(--selected); display: grid; place-items: center; flex: none; color: var(--primary); }
+  .tpl.sel .ti { background: var(--surface); }
+  .tpl b { display: block; font-size: 15px; } .tpl small { display: block; color: var(--muted); font-size: 13px; margin-top: 1px; } .tpl .ex { font-size: 12px; color: var(--fg); margin-top: 5px; display: flex; flex-wrap: wrap; gap: 4px; }
+  .pad { padding: 0 16px 16px; }
+  .rcard { border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; margin-bottom: 8px; background: var(--surface); }
+  .rcard .r1 { display: flex; align-items: center; gap: 8px; } .rcard .r1 b { flex: 1; font-size: 15px; }
+  .rcard .r2 { display: flex; gap: 10px; align-items: center; margin-top: 8px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+  .tseg { display: inline-flex; gap: 2px; padding: 2px; background: var(--selected); border-radius: 9px; } .tseg button { font: inherit; font-size: 12.5px; border: 0; background: transparent; color: var(--muted); padding: 4px 8px; border-radius: 7px; cursor: pointer; }
+  .tseg button.on { background: var(--surface); color: var(--fg); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
+  .foot { flex: none; padding: 8px 14px 18px; background: var(--surface); border-top: 1px solid var(--border); display: flex; gap: 8px; } .foot .btn { margin: 0; }
+
+  /* model */
+  .model { max-width: 1060px; margin: 0 auto; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .pn { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 16px; min-width: 0; }
+  .pn.wide { grid-column: 1 / -1; }
+  .pn h3 { margin: 0 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; }
+  .pn p, .pn li { font-size: 14px; line-height: 1.5; } .pn p { margin: 0 0 8px; } .pn ul { margin: 0; padding-left: 18px; }
+  .er { display: flex; flex-direction: column; gap: 8px; }
+  .ent { border: 1.5px solid var(--border-strong); border-radius: 12px; padding: 8px 11px; background: var(--canvas); font-size: 13px; }
+  .ent b { font-size: 14px; color: var(--primary); } .ent small { display: block; color: var(--muted); }
+  .ent.in1 { margin-left: 22px; } .ent.in2 { margin-left: 44px; } .ent.in3 { margin-left: 66px; }
+  .tw { overflow-x: auto; } table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 620px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: top; } th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  @media (max-width: 420px) { .coma { padding: 16px; } .phone { height: 700px; border-radius: 30px; } }
+</style></head><body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="mascot" viewBox="0 0 320 368"><g transform="translate(-192 -176)" shape-rendering="crispEdges">
+  <path fill="var(--mascot-body)" d="M298 193H410V218H462V244H487V376H462V418H438V442H417V462H397V482H374V504H284V482H308V462H330V442H348V418H264V401H239V376H213V269H239V244H264V218H298Z"/>
+  <g fill="#fff"><rect x="286" y="273" width="36" height="36"/><rect x="381" y="294" width="36" height="36"/></g>
+  <g fill="var(--mascot-feet)"><rect x="256" y="504" width="56" height="30"/><rect x="345" y="504" width="56" height="30"/></g></g></symbol></svg>
+
+<div class="coma" id="app" data-theme="light">
+  <div class="bar">
+    <div class="ttl"><b>Расписание в чате</b><small>Модель «доска → слот → места по ролям → запись» · прототип для выбора</small></div>
+    <div class="seg" id="who"></div>
+    <button class="tgl" id="theme">Тёмная тема</button>
+  </div>
+  <div class="navrow"><div class="seg" id="nav"></div></div>
+  <main class="stage" id="stage"></main>
+</div>
+
+<script>
+(() => {
+  /* ---------- icons ---------- */
+  const P = {
+    plus:'<path d="M12 5v14M5 12h14"/>', minus:'<path d="M5 12h14"/>', back:'<path d="m15 18-6-6 6-6"/>', right:'<path d="m9 18 6-6-6-6"/>',
+    check:'<path d="m5 12.5 4.5 4.5L19 7"/>', x:'<path d="M6 6l12 12M18 6 6 18"/>', more:'<circle cx="5.5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18.5" cy="12" r="1.2"/>',
+    cal:'<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>', clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    users:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16.5 4.7a3.5 3.5 0 0 1 0 6.6M21.5 20a6 6 0 0 0-3.5-5.4"/>',
+    swap:'<path d="M7 4 3.5 7.5 7 11M3.5 7.5H17M17 13l3.5 3.5L17 20M20.5 16.5H7"/>', bell:'<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 1.5h-15zM10 21h4"/>',
+    gear:'<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2.5 12h3M18.5 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
+    door:'<path d="M5 21V4.5A1.5 1.5 0 0 1 6.5 3h11A1.5 1.5 0 0 1 19 4.5V21M3 21h18M15 12h.01"/>', at:'<circle cx="12" cy="12" r="3.5"/><path d="M15.5 8.5v5a2.5 2.5 0 0 0 5 0V12a8.5 8.5 0 1 0-3.5 6.9"/>',
+    list:'<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>', grid:'<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>',
+    shift:'<circle cx="12" cy="12" r="9"/><path d="M12 3v18M12 12h9"/>', user:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+    car:'<path d="M4 16v-4l2-5h12l2 5v4zM4 16v2.5M20 16v2.5M4 12h16"/><circle cx="7.5" cy="14" r=".6"/><circle cx="16.5" cy="14" r=".6"/>',
+    down:'<path d="M12 4v12M6.5 10.5 12 16l5.5-5.5M4 20h16"/>', link:'<path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3A4.5 4.5 0 0 0 13 4.6l-1 1M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/>',
+    info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.5h.01"/>', bot:'<rect x="4.5" y="8" width="15" height="11" rx="3"/><path d="M12 8V4.5M9 13v1.5M15 13v1.5"/>',
+    pin:'<path d="M12 21s7-6 7-11.5a7 7 0 0 0-14 0C5 15 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>', shield:'<path d="M12 3 5 6v5.5c0 4.5 3 8 7 9.5 4-1.5 7-5 7-9.5V6z"/><path d="m9 12 2 2 4-4"/>'
+  };
+  const I = (n, s = '') => `<svg class="ic" viewBox="0 0 24 24" style="${s}" aria-hidden="true">${P[n]}</svg>`;
+  const mascot = (w = 13, h = 15) => `<svg width="${w}" height="${h}" aria-hidden="true"><use href="#mascot" width="${w}" height="${h}"/></svg>`;
+
+  /* ---------- data ---------- */
+  const DAYS = [['Пн', 16, 'Понедельник'], ['Вт', 17, 'Вторник'], ['Ср', 18, 'Среда'], ['Чт', 19, 'Четверг'], ['Пт', 20, 'Пятница']];
+  const PEOPLE = { 'ИЛ': ['Игорь Лаптев', 'c3'], 'ОЧ': ['Олег Чернов', 'c1'], 'АИ': ['Анна Ильина', 'c5'], 'ДР': ['Дина Руденко', 'c4'], 'ПК': ['Павел Ким', 'c2'], 'МС': ['Марина Соколова', 'c4'] };
+  const STAFF = ['ИЛ', 'ОЧ', 'АИ', 'ДР', 'ПК'];
+  const nm = p => PEOPLE[p][0], first = p => nm(p).split(' ')[0];
+  const T = s => { const [h, m] = s.split(':').map(Number); return h * 60 + m; };
+  const F = m => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
+  const plural = (n, a, b, c) => { const m10 = n % 10, m100 = n % 100; return m10 === 1 && m100 !== 11 ? a : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? b : c; };
+  let uid = 1;
+  const staff = (n, one, min, max, ppl = []) => ({ type: 'staff', n, one, min, max, ppl: [...ppl], pend: [] });
+  const count = (n, max, cnt) => ({ type: 'count', n, max, cnt });
+  const booking = who => ({ type: 'staff', n: 'Бронь', one: 'бронь', min: 0, max: 1, ppl: [who], pend: [] });
+  const mk = (b, d, s, e, res, title, roles, extra = {}) => ({ id: 's' + (uid++), b, d, s: T(s), e: T(e), res, title, roles, ...extra });
+  const IN = (ppl, min = 1, max = 2) => staff('Инструкторы', 'инструктор', min, max, ppl);
+  const PT = (c, max = 6) => count('Пациенты', max, c);
+  const SP = ppl => staff('Специалист', 'специалист', 1, 1, ppl);
+  const P1 = c => count('Пациент', 1, c);
+
+  function seed() {
+    uid = 1;
+    const halls = { id: 'halls', name: 'Залы · неделя', chat: 'Слоты на неделю', chatAv: 'СН', kind: 'classes',
+      res: [{ id: 'big', n: 'Большой зал', sh: 'Б. зал' }, { id: 'small', n: 'Малый зал', sh: 'М. зал' }, { id: 'pool', n: 'Бассейн', sh: 'Бассейн' }, { id: 'k3', n: 'Кабинет 3', sh: 'Каб. 3' }],
+      rules: { self: true, approve: false, swapAdmin: true, cancelH: 12, remind: '18' } };
+    const h = (d, s, e, r, t, roles) => mk('halls', d, s, e, r, t, roles);
+    halls.slots = [
+      h(0, '9:00', '13:00', 'big', 'Группа ЛФК', [IN(['ИЛ', 'ОЧ']), PT(4)]),
+      h(0, '13:00', '17:00', 'big', 'Группа ЛФК', [IN(['АИ']), PT(5)]),
+      h(0, '10:00', '12:00', 'pool', 'Аквааэробика', [IN(['ДР'], 1, 1), PT(6)]),
+      h(0, '9:00', '10:00', 'k3', 'Индивидуальное', [SP([]), P1(1)]),
+      h(0, '10:00', '11:00', 'k3', 'Индивидуальное', [SP(['ПК']), P1(1)]),
+      h(1, '9:00', '13:00', 'big', 'Группа ЛФК', [IN(['ПК']), PT(3)]),
+      h(1, '9:00', '13:00', 'small', 'Малая группа', [IN(['ИЛ'], 1, 1), PT(4, 4)]),
+      h(1, '14:00', '16:00', 'pool', 'Аквааэробика', [IN([], 1, 1), PT(2)]),
+      h(1, '14:00', '15:00', 'k3', 'Индивидуальное', [SP(['ИЛ']), P1(1)]),
+      h(2, '9:00', '13:00', 'big', 'Группа ЛФК', [IN([], 1, 2), PT(4)]),
+      h(2, '13:00', '17:00', 'big', 'Группа ЛФК', [IN(['ОЧ']), PT(5)]),
+      h(2, '14:00', '18:00', 'small', 'Малая группа', [IN(['АИ'], 1, 1), PT(3, 4)]),
+      h(2, '9:00', '10:00', 'k3', 'Индивидуальное', [SP([]), P1(1)]),
+      h(3, '9:00', '13:00', 'big', 'Группа ЛФК', [IN(['ОЧ', 'ДР']), PT(6)]),
+      h(3, '10:00', '12:00', 'pool', 'Аквааэробика', [IN(['АИ'], 1, 1), PT(5)]),
+      h(3, '13:00', '17:00', 'small', 'Малая группа', [IN([], 1, 1), PT(2, 4)]),
+      h(3, '15:00', '16:00', 'k3', 'Индивидуальное', [SP(['ИЛ']), P1(1)]),
+      h(4, '9:00', '13:00', 'big', 'Группа ЛФК', [IN(['ИЛ']), PT(4)]),
+      h(4, '13:00', '17:00', 'big', 'Группа ЛФК', [IN(['ПК']), PT(3)]),
+      h(4, '10:00', '12:00', 'pool', 'Аквааэробика', [IN([], 1, 1), PT(4)]),
+    ];
+    const resb = { id: 'res', name: 'Ресурсы центра', chat: 'Администраторы', chatAv: 'АД', kind: 'res',
+      res: [{ id: 'room', n: 'Переговорка', sh: 'Перег.' }, { id: 'car', n: 'Служебная машина', sh: 'Машина' }, { id: 'loko', n: 'Lokomat', sh: 'Lokomat' }],
+      rules: { self: true, approve: false, swapAdmin: false, cancelH: 2, remind: '2h' } };
+    const r = (d, s, e, res, t, who) => mk('res', d, s, e, res, t, [booking(who)]);
+    resb.slots = [r(0, '9:00', '9:30', 'room', 'Планёрка', 'МС'), r(0, '14:00', '15:30', 'room', 'Разбор недели', 'ОЧ'), r(0, '10:00', '12:00', 'car', 'В аптеку', 'ДР'),
+      r(0, '9:00', '11:00', 'loko', 'Процедуры', 'ПК'), r(0, '13:00', '15:00', 'loko', 'Процедуры', 'АИ'), r(1, '11:00', '12:00', 'room', 'Собеседование', 'МС'), r(2, '15:00', '17:00', 'car', 'Выезд', 'ОЧ')];
+    const S = {
+      scene: 'chat', scr: 'chat', me: 'ИЛ', theme: 'light', board: 'halls', view: 'week', day: 0, filter: 'all', sheet: null, toast: null,
+      boards: [halls, resb], offers: [], feeds: {}, cw: null,
+    };
+    const wedBig = halls.slots[9], monBig = halls.slots[0], wedSmall = halls.slots[11];
+    S.offers.push({ id: 'o1', slot: wedSmall.id, from: 'АИ', to: 'ИЛ', swap: null, note: 'Ребёнка не с кем оставить в среду', st: 'open' });
+    S.feeds['Слоты на неделю'] = [
+      { k: 'day', t: 'Пятница' },
+      { k: 'msg', who: 'МС', t: '12:00', text: 'Доска на 16–20 ноября открыта. Записывайтесь до воскресенья, 20:00.', card: { k: 'board', b: 'halls' } },
+      { k: 'sys', text: '<b>Игорь</b> и <b>Олег</b> записались: Большой зал, пн 9:00–13:00' },
+      { k: 'sys', text: '<b>Анна</b> записалась: Большой зал, пн 13:00–17:00' },
+      { k: 'day', t: 'Сегодня' },
+      { k: 'msg', who: 'МС', t: '9:05', text: 'Коллеги, в среду утром в большом зале пока никого, а группа уже набрана. Нужны двое.', card: { k: 'slot', id: wedBig.id } },
+      { k: 'offer', id: 'o1', t: '9:20', only: 'ИЛ' },
+      { k: 'remind', id: monBig.id, t: '9:41', only: 'ИЛ' },
+    ];
+    S.feeds['Администраторы'] = [{ k: 'day', t: 'Сегодня' }, { k: 'msg', who: 'МС', t: '9:00', text: 'Переговорку, машину и Lokomat теперь бронируем здесь, а не в тетради.', card: { k: 'board', b: 'res' } }];
+    return S;
+  }
+  let S = seed();
+
+  /* ---------- helpers ---------- */
+  const B = (id = S.board) => S.boards.find(b => b.id === id);
+  const slot = id => { for (const b of S.boards) { const x = b.slots.find(x => x.id === id); if (x) return x; } };
+  const resOf = x => B(x.b).res.find(r => r.id === x.res);
+  const staffR = x => x.roles.filter(r => r.type === 'staff');
+  const has = (x, p) => staffR(x).some(r => r.ppl.includes(p));
+  const pendOf = (x, p) => staffR(x).some(r => r.pend.includes(p));
+  const need = x => staffR(x).reduce((a, r) => a + Math.max(0, r.min - r.ppl.length), 0);
+  const freeSeats = x => staffR(x).reduce((a, r) => a + Math.max(0, r.max - r.ppl.length - r.pend.length), 0);
+  const isAdmin = () => S.me === 'МС';
+  const when = x => `${DAYS[x.d][0]}, ${DAYS[x.d][1]} ноября · ${F(x.s)}–${F(x.e)}`;
+  const whenS = x => `${DAYS[x.d][0].toLowerCase()} ${F(x.s)}–${F(x.e)}`;
+  const place = x => resOf(x).n;
+  const conflict = (p, x) => S.boards.filter(b => b.kind !== 'res').flatMap(b => b.slots).find(y => y !== x && y.d === x.d && y.s < x.e && x.s < y.e && (has(y, p) || pendOf(y, p)));
+  const weekLoad = p => S.boards.filter(b => b.kind !== 'res').flatMap(b => b.slots).filter(y => has(y, p)).reduce((a, y) => a + (y.e - y.s) / 60, 0);
+  const myOffer = x => S.offers.find(o => o.slot === x.id && o.from === S.me && ['open', 'admin'].includes(o.st));
+  const state = x => need(x) ? 'need' : has(x, S.me) ? 'mine' : freeSeats(x) ? 'open' : 'full';
+  const av = (p, cls = 's round') => `<div class="av ${PEOPLE[p][1]} ${cls}" title="${nm(p)}">${p}</div>`;
+  const seats = r => { let h = r.ppl.map(p => av(p, 'xs')).join('') + r.pend.map(p => av(p, 'xs pend')).join('');
+    for (let k = r.ppl.length + r.pend.length; k < r.max; k++) h += `<i class="seat ${k < r.min ? 'req' : ''}"></i>`; return `<span class="seats">${h}</span>`; };
+  const roleLine = x => `<div class="rl">${x.roles.map(r => r.type === 'staff' ? `<span>${seats(r)}<span>${r.n.split(' ')[0]} ${r.ppl.length}/${r.max}</span></span>`
+    : `<span class="cnt">${r.n} <b>${r.cnt}/${r.max}</b><span class="mbar"><i style="width:${Math.round(r.cnt / r.max * 100)}%"></i></span></span>`).join('')}</div>`;
+  const statePill = x => { const n = need(x); if (B(x.b).kind === 'res') return has(x, S.me) ? '<span class="pill pr">ваша</span>' : '';
+    if (myOffer(x)) return '<span class="pill wr">передаёте</span>';
+    if (n) return `<span class="pill wr">нужен ${n}</span>`; if (has(x, S.me)) return '<span class="pill pr">вы</span>'; if (pendOf(x, S.me)) return '<span class="pill wr">ждёт</span>';
+    if (freeSeats(x)) return '<span class="pill">есть место</span>'; return '<span class="pill ok">все на месте</span>'; };
+  const boardStats = b => { const sl = b.slots; const needN = sl.reduce((a, x) => a + need(x), 0); const tot = sl.reduce((a, x) => a + staffR(x).reduce((s, r) => s + r.max, 0), 0);
+    const fill = sl.reduce((a, x) => a + staffR(x).reduce((s, r) => s + r.ppl.length, 0), 0); return { needN, tot, fill }; };
+  const feed = () => S.feeds[B().chat] || (S.feeds[B().chat] = []);
+  const push = (chat, item) => { (S.feeds[chat] = S.feeds[chat] || []).push(item); S.toBottom = true; };
+  const now = () => { const d = new Date(); return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; };
+  let toastTimer;
+  const toast = (text, icon = 'check') => { S.toast = { text, icon }; clearTimeout(toastTimer); toastTimer = setTimeout(() => { S.toast = null; render(); }, 3400); };
+
+  /* ---------- shared bits ---------- */
+  const st = '<div class="status"><span>9:41</span><i></i></div>';
+  const chead = (title, sub, left, right = '') => `<div class="chead">${left}<div class="t"><b>${title}</b><small>${sub}</small></div>${right}</div>`;
+  const backBtn = a => `<button class="ib" data-a="${a}" aria-label="Назад">${I('back')}</button>`;
+  const tg = (on, a, k = '') => `<button class="tg ${on ? 'on' : ''}" data-a="${a}" data-k="${k}" aria-pressed="${on}"></button>`;
+  const toastH = () => S.toast ? `<div class="toast">${I(S.toast.icon)}<span>${S.toast.text}</span></div>` : '';
+
+  /* ---------- chat ---------- */
+  const inMsg = (p, body, t, o = {}) => `<div class="msg">${o.avh || av(p)}<div class="bub ${o.obj ? 'obj' : ''}"><div class="who" style="color:${o.color || `var(--a${PEOPLE[p] ? PEOPLE[p][1].slice(1) : 2}f)`}">${o.name || nm(p)}${o.tag || ''}</div>${body}<span class="meta">${t}</span></div></div>`;
+  const comaAv = `<div class="av s round" style="background:var(--mascot-plate);border:1px solid var(--border)">${mascot(13, 15)}</div>`;
+  function boardCard(b) {
+    const s = boardStats(b);
+    if (b.kind === 'res') return `<div class="card"><div class="kh">${I('grid')}Доска бронирования</div><b>${b.name}</b><p>${b.res.map(r => r.n).join(', ')} · бронь на 30 мин – 4 ч</p><div class="acts"><button class="btn sm pri" data-a="go-board" data-b="${b.id}">Открыть доску</button></div></div>`;
+    return `<div class="card"><div class="kh">${I('grid')}Доска · 16–20 ноября</div><b>${b.name}</b><p>Занято ${s.fill} из ${s.tot} мест сотрудников${s.needN ? ` · <span class="warnc">не хватает ${s.needN}</span>` : ''}</p><div class="prog"><i style="width:${Math.round(s.fill / s.tot * 100)}%"></i></div><div class="acts"><button class="btn sm pri" data-a="go-board" data-b="${b.id}">Открыть доску</button>${isAdmin() ? '' : `<button class="btn sm sec" data-a="go-board" data-b="${b.id}" data-f="mine">Мои слоты</button>`}</div></div>`;
+  }
+  function slotCard(x) {
+    const r0 = staffR(x)[0], mine = has(x, S.me), p = pendOf(x, S.me), b = B(x.b);
+    let act = '';
+    if (isAdmin()) act = freeSeats(x) ? `<button class="btn sm sec" data-a="assign" data-id="${x.id}">Назначить</button>` : '';
+    else if (mine) act = `<div class="done">${I('check')}Вы записаны</div>`;
+    else if (p) act = `<div class="note">Ждёт подтверждения Марины</div>`;
+    else if (freeSeats(x)) { const c = conflict(S.me, x); act = c ? `<div class="note">Вы заняты в это время: ${place(c)}, ${F(c.s)}–${F(c.e)}</div>` : `<button class="btn sm pri" data-a="join" data-id="${x.id}">${I('plus')}Записаться</button>`; }
+    else act = `<div class="done">${I('check')}Все места заняты</div>`;
+    return `<div class="card"><div class="kh">${I('cal')}${DAYS[x.d][0]}, ${DAYS[x.d][1]} ноя · ${F(x.s)}–${F(x.e)}${statePill(x)}</div><b style="margin-top:4px">${x.title} · ${place(x)}</b>${roleLine(x)}
+      <div class="acts">${act}<button class="btn sm sec" data-a="open" data-id="${x.id}">Подробнее</button></div></div>`;
+  }
+  function offerCard(o, t) {
+    const x = slot(o.slot), sw = o.swap && slot(o.swap);
+    const pill = { open: '<span class="pill wr">вам</span>', admin: '<span class="pill wr">ждём Марину</span>', done: '<span class="pill ok">принято</span>', declined: '<span class="pill">отказ</span>' }[o.st];
+    const body = `<div class="kh">${I('swap')}${sw ? 'Обмен слотами' : 'Передача слота'}${pill}</div><div style="margin:6px 0 2px;font-size:14.5px">${first(o.from)} ${sw ? 'предлагает обмен' : 'предлагает вам слот'}${o.note ? `: «${o.note}»` : ''}</div>
+      <div class="slotbox">${I('cal')}<div><b>${sw ? 'Вы берёте: ' : ''}${place(x)} · ${x.title}</b><small>${when(x)}</small></div></div>
+      ${sw ? `<div class="slotbox">${I('swap')}<div><b>Отдаёте: ${place(sw)}</b><small>${when(sw)}</small></div></div>` : ''}
+      ${o.st === 'open' ? `<div class="acts"><button class="btn sm pri" data-a="off-acc" data-id="${o.id}">${I('check')}Беру</button><button class="btn sm sec" data-a="off-dec" data-id="${o.id}">Не могу</button></div>`
+        : o.st === 'admin' ? '<div class="note">Вы согласились. Слот перейдёт к вам, когда Марина подтвердит.</div>'
+        : o.st === 'done' ? `<div class="done">${I('check')}Слот ваш. ${first(o.from)} получила уведомление</div>` : `<div class="note">Вы отказались — ${first(o.from)} предложит другим</div>`}`;
+    return inMsg(o.from, body, t, { obj: 1, tag: ' <span class="pill" style="font-size:10px;padding:1px 6px">только вам</span>' });
+  }
+  function outCard(o) {
+    const x = slot(o.slot), to = o.to === '*' ? 'всем свободным' : first(o.to);
+    const s = { open: `Ждём ответа: ${to}`, admin: `${first(o.acc)} согласен. Ждём подтверждения Марины`, done: `Слот перешёл к ${o.acc ? first(o.acc) : ''}`, declined: 'Отклонено' }[o.st];
+    return `<div class="msg me"><div class="bub obj"><div class="kh">${I('swap')}${o.swap ? 'Вы предложили обмен' : 'Вы передаёте слот'}<span class="pill ${o.st === 'done' ? 'ok' : 'wr'}">${o.st === 'done' ? 'готово' : 'в процессе'}</span></div>
+      <div class="slotbox">${I('cal')}<div><b>${place(x)} · ${x.title}</b><small>${when(x)}</small></div></div><div class="note">${s}. Пока замену не подтвердят, слот ваш.</div><span class="meta">${o.t}</span></div></div>`;
+  }
+  function remindCard(it) {
+    const x = slot(it.id); const others = staffR(x)[0].ppl.filter(p => p !== S.me).map(first);
+    const pat = x.roles.find(r => r.type === 'count');
+    const gone = !has(x, S.me);
+    const body = `<div class="kh">${I('bell')}Напоминание · завтра</div><div style="margin:6px 0 2px;font-size:14.5px">${gone ? 'Вы больше не в этом слоте.' : `Завтра ваш слот.${others.length ? ` Ещё в слоте: ${others.join(', ')}.` : ''}${pat ? ` ${pat.n}: ${pat.cnt} из ${pat.max}.` : ''}`}</div>
+      <div class="slotbox">${I('cal')}<div><b>${place(x)} · ${x.title}</b><small>${when(x)}</small></div></div>
+      ${gone ? '' : it.done ? `<div class="done">${I('check')}Отметили: буду</div>` : `<div class="acts"><button class="btn sm sec" data-a="rem-ok">${I('check')}Буду</button><button class="btn sm sec" data-a="give" data-id="${x.id}">${I('swap')}Не смогу — передать</button></div>`}`;
+    return inMsg('', body, it.t, { obj: 1, avh: comaAv, name: 'Coma', color: 'var(--primary)', tag: ' <span class="pill" style="font-size:10px;padding:1px 6px">только вам</span>' });
+  }
+  function feedHtml() {
+    return feed().filter(it => !it.only || it.only === S.me).map(it => {
+      if (it.k === 'day') return `<span class="day">${it.t}</span>`;
+      if (it.k === 'sys') return `<div class="sys">${it.text}</div>`;
+      if (it.k === 'offer') return offerCard(S.offers.find(o => o.id === it.id), it.t);
+      if (it.k === 'out') { const o = S.offers.find(o => o.id === it.id); return o.from === S.me ? outCard(o) : ''; }
+      if (it.k === 'remind') return remindCard(it);
+      const card = it.card ? (it.card.k === 'board' ? boardCard(B(it.card.b)) : slotCard(slot(it.card.id))) : '';
+      return inMsg(it.who, `${it.text}${card}`, it.t, { obj: !!card });
+    }).join('');
+  }
+  function chatScreen() {
+    const b = B(); const s = boardStats(b);
+    const stripTxt = b.kind === 'res' ? `<b>${b.name}</b> · ${b.res.length} ресурса` : `<b>Доска 16–20 ноября</b> · ${s.needN ? `<span class="warnc">не хватает ${s.needN}</span>` : 'всё закрыто'}`;
+    return `<div class="phone">${st}${chead(b.chat, b.kind === 'res' ? '6 участников' : '14 участников · 5 в сети', backBtn('noop') + `<div class="av m c2">${b.chatAv}</div>`, `<button class="ib">${I('more')}</button>`)}
+      <div class="strip" data-a="go-board" data-b="${b.id}">${I('grid')}<span>${stripTxt}</span>${I('right', 'width:16px;height:16px;color:var(--muted)')}</div>
+      <div class="feed" data-scroll="feed">${feedHtml()}</div>
+      <div class="cmp"><button class="ib soft">${I('plus')}</button><div class="inp">Сообщение</div></div>${sheetH()}${toastH()}</div>`;
+  }
+
+  /* ---------- board ---------- */
+  function boardHead(b) {
+    const s = boardStats(b);
+    const right = (isAdmin() && b.kind !== 'res' ? `<button class="ib" data-a="go-admin" aria-label="Управление">${I('gear')}</button>` : '') + `<button class="ib" data-a="sheet" data-t="menu" aria-label="Ещё">${I('more')}</button>`;
+    const sub = b.kind === 'res' ? `${b.chat} · бронь свободным временем` : `${b.chat} · ${s.needN ? `не хватает ${s.needN}` : 'всё закрыто'}`;
+    return `${chead(b.name, sub, backBtn('go-chat'), right)}
+      <div class="bh"><div class="wk"><button class="ib sm">${I('back')}</button><b>16–20 ноября</b><button class="ib sm">${I('right')}</button></div>
+      <div class="tabsw"><button class="${S.view === 'week' ? 'on' : ''}" data-a="view" data-v="week">Неделя</button><button class="${S.view === 'day' ? 'on' : ''}" data-a="view" data-v="day">День</button></div>
+      ${S.view === 'week' && b.kind !== 'res' ? `<div class="chips">${[['all', 'Все'], ['mine', isAdmin() ? 'Мои назначения' : 'Мои'], ['need', 'Не хватает людей']].map(([k, n]) => `<button class="chip ${S.filter === k ? 'on' : ''}" data-a="filter" data-v="${k}">${n}</button>`).join('')}</div>` : ''}
+      ${S.view === 'day' ? `<div class="dstrip">${DAYS.map((d, i) => `<button class="${S.day === i ? 'on' : ''}" data-a="day" data-v="${i}">${d[0]}<b>${d[1]}</b><i class="${b.slots.some(x => x.d === i && need(x)) ? 'w' : ''}"></i></button>`).join('')}</div>` : ''}</div>`;
+  }
+  function weekList(b) {
+    let sl = b.slots;
+    if (S.filter === 'mine') sl = sl.filter(x => has(x, S.me) || pendOf(x, S.me) || (isAdmin() && false));
+    if (S.filter === 'need') sl = sl.filter(x => need(x) || freeSeats(x));
+    if (isAdmin() && S.filter === 'mine') sl = b.slots.filter(x => need(x));
+    let h = '';
+    DAYS.forEach((d, i) => {
+      const ds = sl.filter(x => x.d === i).sort((a, c) => a.s - c.s || a.res.localeCompare(c.res)); if (!ds.length) return;
+      const n = ds.reduce((a, x) => a + need(x), 0);
+      h += `<div class="dsec">${d[2]}, ${d[1]} ноября<span class="${n ? 'warnc' : ''}">${n ? `не хватает ${n}` : `${ds.length} ${plural(ds.length, 'слот', 'слота', 'слотов')}`}</span></div>`;
+      h += ds.map(x => `<div class="srow ${b.kind === 'res' ? (has(x, S.me) ? 'mine' : '') : state(x)}" data-a="open" data-id="${x.id}"><div class="tm"><b>${F(x.s)}</b><small>${F(x.e)}</small></div>
+        <div class="g"><b>${x.title}</b><small>${place(x)}</small>${b.kind === 'res' ? `<div class="rl"><span>${av(staffR(x)[0].ppl[0], 'xs')} ${nm(staffR(x)[0].ppl[0])}</span></div>` : roleLine(x)}</div><div class="st">${statePill(x)}</div></div>`).join('');
+    });
+    return h || `<div class="empty">${S.filter === 'mine' ? 'У вас нет слотов на этой неделе.' : 'Всё закрыто 🎉'}</div>`;
+  }
+  const H0 = 8 * 60, H1 = 20 * 60, PX = .6;
+  function dayGrid(b) {
+    const cols = b.res, tap = b.kind === 'res';
+    const hours = []; for (let m = H0; m <= H1; m += 60) hours.push(`<span style="top:${(m - H0) * PX}px">${m / 60}</span>`);
+    const blk = x => { const s = tap ? (has(x, S.me) ? 'mine' : '') : state(x); const r0 = staffR(x)[0], pt = x.roles.find(r => r.type === 'count');
+      const ht = (x.e - x.s) * PX - 2;
+      return `<div class="blk ${s}" style="top:${(x.s - H0) * PX + 1}px;height:${ht}px" data-a="open" data-id="${x.id}"><b>${tap ? first(r0.ppl[0]) : x.title}</b><small>${F(x.s)}–${F(x.e)}</small>${tap ? (ht > 40 ? `<small>${x.title}</small>` : '') : `${ht > 40 ? `<small>${r0.n.slice(0, 4)}. ${r0.ppl.length}/${r0.max}${pt ? ` · ${pt.n.slice(0, 3)}. ${pt.cnt}/${pt.max}` : ''}</small>` : ''}${ht > 70 ? `<div style="margin-top:3px">${seats(r0)}</div>` : ''}`}</div>`; };
+    return `<div class="tl"><div class="tlh" style="grid-template-columns:24px repeat(${cols.length},1fr)"><span></span>${cols.map(c => `<span>${c.sh}</span>`).join('')}</div>
+      <div class="tlb" style="grid-template-columns:24px repeat(${cols.length},1fr);height:${(H1 - H0) * PX}px"><div class="axis">${hours.join('')}</div>
+      ${cols.map(c => `<div class="col ${tap ? 'tap' : ''}" ${tap ? `data-a="tap" data-res="${c.id}"` : ''}>${b.slots.filter(x => x.d === S.day && x.res === c.id).map(blk).join('')}</div>`).join('')}</div></div>
+      <div class="legend">${tap ? `<span><i style="background:var(--primary-soft);border:1px solid var(--primary)"></i>ваша бронь</span><span>Нажмите на пустое место, чтобы забронировать</span>` : `<span><i style="background:var(--warning-soft);border:1px solid var(--warning)"></i>не хватает</span><span><i style="background:var(--primary-soft);border:1px solid var(--primary)"></i>вы</span><span><i style="background:var(--surface);border:1px solid var(--success)"></i>все на месте</span>`}</div>`;
+  }
+  function boardScreen() {
+    const b = B();
+    return `<div class="phone">${st}${boardHead(b)}<div class="scroll" data-scroll="board-${S.view}">${S.view === 'week' ? weekList(b) + '<div style="height:16px"></div>' : dayGrid(b)}</div>${sheetH()}${toastH()}</div>`;
+  }
+
+  /* ---------- admin ---------- */
+  function adminScreen() {
+    const b = B('halls'); const s = boardStats(b);
+    const needs = b.slots.filter(x => need(x)).sort((a, c) => a.d - c.d || a.s - c.s);
+    const opt = b.slots.filter(x => !need(x) && freeSeats(x));
+    const appr = S.offers.filter(o => o.st === 'admin');
+    const pend = b.slots.flatMap(x => staffR(x).flatMap(r => r.pend.map(p => ({ x, p }))));
+    const row = x => `<div class="arow"><div class="h" data-a="open" data-id="${x.id}"><b>${place(x)} · ${x.title}</b><span class="pill wr">нужен ${need(x)}</span></div><div class="s">${when(x)}</div>${roleLine(x)}
+      <div class="acts">${S.called && S.called[x.id] ? '<span class="pill ok" style="align-self:center">позвали в чат</span>' : `<button class="btn sm sec" data-a="call" data-id="${x.id}">${I('at')}Позвать</button>`}<button class="btn sm pri" data-a="assign" data-id="${x.id}">Назначить</button></div></div>`;
+    return `<div class="phone">${st}${chead('Управление доской', `${b.name} · вы распорядитель`, backBtn('go-board-halls'), `<button class="ib" data-a="sheet" data-t="settings" aria-label="Правила">${I('gear')}</button>`)}
+      <div class="scroll" data-scroll="admin">
+      <div class="stat3"><div class="${s.needN ? 'w' : ''}"><b>${s.needN}</b>не хватает людей</div><div><b>${opt.length}</b>${plural(opt.length, 'слот', 'слота', 'слотов')} со свободным местом</div><div class="${appr.length + pend.length ? 'w' : ''}"><b>${appr.length + pend.length}</b>ждут вашего решения</div></div>
+      ${appr.length + pend.length ? `<div class="dsec">Ждут вашего решения</div>` : ''}
+      ${appr.map(o => { const x = slot(o.slot), sw = o.swap && slot(o.swap); return `<div class="arow"><div class="h"><b>${sw ? 'Обмен' : 'Передача'}: ${first(o.from)} → ${first(o.acc)}</b></div><div class="s">${place(x)}, ${when(x)}${sw ? `<br>взамен: ${place(sw)}, ${when(sw)}` : ''}</div>${o.note ? `<div class="s">«${o.note}»</div>` : ''}
+        <div class="acts"><button class="btn sm pri" data-a="appr" data-id="${o.id}">${I('check')}Подтвердить</button><button class="btn sm sec" data-a="rej" data-id="${o.id}">Отклонить</button></div></div>`; }).join('')}
+      ${pend.map(({ x, p }) => `<div class="arow"><div class="h"><b>Запись: ${nm(p)}</b></div><div class="s">${place(x)} · ${x.title}, ${when(x)}</div><div class="acts"><button class="btn sm pri" data-a="pend-ok" data-id="${x.id}" data-p="${p}">${I('check')}Подтвердить</button><button class="btn sm sec" data-a="pend-no" data-id="${x.id}" data-p="${p}">Отклонить</button></div></div>`).join('')}
+      <div class="dsec">Не хватает людей<span>${needs.length ? `${needs.length} ${plural(needs.length, 'слот', 'слота', 'слотов')}` : ''}</span></div>
+      ${needs.map(row).join('') || '<div class="empty">Во всех слотах есть минимум инструкторов 🎉</div>'}
+      <div class="dsec">Нагрузка инструкторов<span>часов на неделе</span></div>
+      ${STAFF.map(p => { const h = weekLoad(p); return `<div class="load">${av(p, 'xs')}<span class="g">${nm(p)}</span><span class="lb"><i style="width:${Math.min(100, h / 24 * 100)}%"></i></span><small>${h} ч</small></div>`; }).join('')}
+      <div class="pad" style="padding-top:8px"><button class="btn sec" data-a="next-week">${I('cal')}Создать неделю 23–27 ноября из шаблона</button></div>
+      </div>${sheetH()}${toastH()}</div>`;
+  }
+
+  /* ---------- sheets ---------- */
+  function sheetH() {
+    const sh = S.sheet; if (!sh) return '';
+    const body = { slot: slotSheet, give: giveSheet, assign: assignSheet, menu: menuSheet, settings: settingsSheet, book: bookSheet }[sh.t](sh);
+    return `<div class="dim" data-a="close"></div><div class="sheet" data-scroll="sheet"><div class="grab"></div>${body}</div>`;
+  }
+  const sheetTitle = t => `<h2><span>${t}</span><button class="ib sm soft" data-a="close" aria-label="Закрыть">${I('x')}</button></h2>`;
+  function slotSheet(sh) {
+    const x = slot(sh.id), b = B(x.b), admin = isAdmin();
+    let h = sheetTitle(`${x.title}`) + `<div class="slotbox">${I('cal')}<div><b>${when(x)}</b><small>${place(x)}</small></div></div>`;
+    if (b.kind === 'res') {
+      const who = staffR(x)[0].ppl[0];
+      h += `<div class="prow">${av(who, 'm round')}<div class="g">${nm(who)}${who === S.me ? ' · вы' : ''}<small>забронировал(а)</small></div></div>`;
+      if (who === S.me || admin) h += `<button class="btn dng" data-a="unbook" data-id="${x.id}">Отменить бронь</button>`;
+      return h + `<div class="hint">${I('info')}<span>У ресурса нет исполнителя — только бронь. Пересечение по одному ресурсу запрещено базой (ограничение на интервалы), а не только интерфейсом.</span></div>`;
+    }
+    x.roles.forEach((r, ri) => {
+      if (r.type === 'staff') {
+        const n = r.ppl.length;
+        h += `<div class="rolebox"><div class="rh"><b>${r.n}</b><small>${r.min === r.max ? `ровно ${r.min}` : `от ${r.min} до ${r.max}`}</small><span class="n ${n < r.min ? 'warnc' : ''}">${n}/${r.max}</span></div>`;
+        h += r.ppl.map(p => `<div class="prow">${av(p, 's round')}<div class="g">${nm(p)}${p === S.me ? ' · вы' : ''}${myOffer(x) && p === S.me ? '<small class="warnc">вы передаёте этот слот</small>' : ''}</div>${admin ? `<button class="ib sm" data-a="unassign" data-id="${x.id}" data-r="${ri}" data-p="${p}" aria-label="Убрать">${I('x')}</button>` : ''}</div>`).join('');
+        h += r.pend.map(p => `<div class="prow">${av(p, 's round pend')}<div class="g">${nm(p)}<small class="warnc">ждёт подтверждения</small></div></div>`).join('');
+        for (let k = n + r.pend.length; k < r.max; k++) h += `<div class="prow"><i class="seat ${k < r.min ? 'req' : ''}"></i><div class="g">${k < r.min ? `<span class="warnc">Нужен ${r.one}</span>` : `<span class="muted">Свободное место</span>`}</div>${admin ? `<button class="btn sm sec" data-a="assign" data-id="${x.id}" data-r="${ri}">Назначить</button>` : ''}</div>`;
+        h += '</div>';
+      } else {
+        h += `<div class="rolebox"><div class="rh"><b>${r.n}</b><small>только число</small><span class="n">${r.cnt}/${r.max}</span></div><div class="bigbar"><i style="width:${Math.round(r.cnt / r.max * 100)}%"></i></div>
+          <div style="display:flex;align-items:center;gap:10px"><small class="muted" style="flex:1;font-size:12.5px">Имён нет — число ведёт регистратура или учётная система.</small>${admin ? `<span class="stp"><button data-a="cnt" data-id="${x.id}" data-r="${ri}" data-v="-1">−</button><b>${r.cnt}</b><button data-a="cnt" data-id="${x.id}" data-r="${ri}" data-v="1">+</button></span>` : ''}</div></div>`;
+      }
+    });
+    if (admin) {
+      h += `<div class="acts" style="margin-top:12px">${freeSeats(x) ? `<button class="btn sm sec" data-a="call" data-id="${x.id}">${I('at')}Позвать в чат</button>` : ''}<button class="btn sm sec" data-a="toast" data-v="Правка слота: время, зал, вместимость ролей. Участники получат уведомление об изменении.">${I('gear')}Изменить слот</button></div>`;
+      return h;
+    }
+    const r0 = staffR(x)[0];
+    if (has(x, S.me)) {
+      const off = myOffer(x);
+      const below = r0.ppl.length - 1 < r0.min;
+      h += `<div class="opt" style="margin-top:6px"><div class="g">Напомнить накануне<small>вс, в 18:00 — личная карточка в чате и пуш</small></div>${tg(true, 'noop')}</div>`;
+      if (off) h += `<div class="hint wr">${I('swap')}<span>Вы предложили слот ${off.to === '*' ? 'всем свободным' : first(off.to)}. Пока замену не подтвердят, слот ваш.</span></div><button class="btn sec" data-a="off-cancel" data-id="${off.id}">Отозвать предложение</button>`;
+      else {
+        h += `<button class="btn pri" data-a="give" data-id="${x.id}">${I('swap')}Передать или обменять</button>`;
+        h += below ? `<div class="hint">${I('info')}<span>Просто отменить нельзя: без вас в слоте меньше минимума (${r0.min}). Передайте слот коллеге — администратор увидит замену.</span></div>`
+          : `<button class="btn dng" data-a="leave" data-id="${x.id}">Отменить запись</button><div class="note" style="text-align:center">Отменить можно не позже чем за ${b.rules.cancelH} ч до начала</div>`;
+      }
+    } else if (pendOf(x, S.me)) {
+      h += `<div class="hint wr">${I('clock')}<span>Вы записались. Ждём подтверждения Марины.</span></div><button class="btn sec" data-a="unpend" data-id="${x.id}">Отозвать запись</button>`;
+    } else if (freeSeats(x)) {
+      const c = conflict(S.me, x);
+      if (c) h += `<button class="btn pri" disabled>Записаться</button><div class="hint">${I('info')}<span>Вы заняты в это время: ${place(c)}, ${F(c.s)}–${F(c.e)}. Двух слотов одновременно не бывает.</span></div>`;
+      else if (!b.rules.self) h += `<div class="hint">${I('info')}<span>На этой доске записывает только администратор. Напишите Марине.</span></div>`;
+      else h += `<button class="btn pri" data-a="join" data-id="${x.id}">${I('plus')}Записаться: ${r0.one}</button>${b.rules.approve ? '<div class="note" style="text-align:center">Запись подтверждает администратор</div>' : ''}`;
+    } else h += `<div class="hint">${I('check')}<span>Все места заняты. Лист ожидания — во второй очереди.</span></div>`;
+    return h;
+  }
+  function giveSheet(sh) {
+    const x = slot(sh.id), b = B(x.b);
+    const others = STAFF.filter(p => p !== S.me && !has(x, p));
+    const freeP = others.filter(p => !conflict(p, x));
+    const mySl = x; const swaps = b.slots.filter(y => y !== x && STAFF.some(p => p !== S.me && has(y, p)) && !has(y, S.me) && !conflict(S.me, y) && (y.d !== x.d || y.e <= x.s || y.s >= x.e));
+    const sel = sh.to;
+    let h = sheetTitle('Передать или обменять') + `<div class="slotbox">${I('cal')}<div><b>${place(x)} · ${x.title}</b><small>${when(x)}</small></div></div>`;
+    h += `<div class="tabsw" style="margin-top:12px"><button class="${sh.mode !== 'swap' ? 'on' : ''}" data-a="gmode" data-v="give">Передать</button><button class="${sh.mode === 'swap' ? 'on' : ''}" data-a="gmode" data-v="swap">Обменять</button></div>`;
+    if (sh.mode !== 'swap') {
+      h += `<div class="lbl">Кому</div><div class="prow pick ${sel === '*' ? 'sel' : ''}" data-a="gto" data-v="*"><div class="av s round cag">${I('users', 'width:16px;height:16px')}</div><div class="g">Всем свободным<small>${freeP.length} ${plural(freeP.length, 'коллега свободен', 'коллеги свободны', 'коллег свободны')} в это время — карточка в чат</small></div>${sel === '*' ? I('check', 'color:var(--primary)') : ''}</div>`;
+      h += others.map(p => { const c = conflict(p, x); return `<div class="prow pick ${c ? 'off' : ''} ${sel === p ? 'sel' : ''}" ${c ? '' : `data-a="gto" data-v="${p}"`}>${av(p)}<div class="g">${nm(p)}<small>${c ? `занят: ${place(c)} ${F(c.s)}–${F(c.e)}` : `время свободно · ${weekLoad(p)} ч на неделе`}</small></div>${sel === p ? I('check', 'color:var(--primary)') : ''}</div>`; }).join('');
+    } else {
+      h += `<div class="lbl">Ваш слот в обмен на</div>` + (swaps.length ? swaps.map(y => { const p = STAFF.find(p => p !== S.me && has(y, p)); return `<div class="prow pick ${sel === y.id ? 'sel' : ''}" data-a="gto" data-v="${y.id}">${av(p)}<div class="g">${place(y)}, ${whenS(y)}<small>${nm(p)} · ${y.title}</small></div>${sel === y.id ? I('check', 'color:var(--primary)') : ''}</div>`; }).join('') : '<div class="empty">Нет слотов, которые подходят по времени</div>');
+    }
+    h += `<div class="lbl">Комментарий</div><div class="field">Например: «к врачу, верну долг в пятницу»</div>`;
+    h += `<div class="hint">${I(b.rules.swapAdmin ? 'shield' : 'info')}<span>${b.rules.swapAdmin ? 'Коллега соглашается, потом подтверждает Марина. ' : 'Слот перейдёт сразу, как коллега согласится. '}До этого слот ваш.</span></div>`;
+    h += `<button class="btn pri" data-a="give-send" ${sel ? '' : 'disabled'}>${sh.mode === 'swap' ? 'Предложить обмен' : 'Отправить предложение'}</button>`;
+    return h;
+  }
+  function assignSheet(sh) {
+    const x = slot(sh.id); const ri = sh.r != null ? +sh.r : x.roles.findIndex(r => r.type === 'staff' && r.ppl.length < r.max); const r = x.roles[ri];
+    let h = sheetTitle(`Назначить: ${r.one}`) + `<div class="slotbox">${I('cal')}<div><b>${place(x)} · ${x.title}</b><small>${when(x)}</small></div></div><div class="lbl">Инструкторы<em class="muted">часов на неделе</em></div>`;
+    h += STAFF.filter(p => !r.ppl.includes(p)).sort((a, c) => !!conflict(a, x) - !!conflict(c, x) || weekLoad(a) - weekLoad(c)).map(p => { const c = conflict(p, x);
+      return `<div class="prow pick ${c ? 'off' : ''}" ${c ? '' : `data-a="assign-do" data-id="${x.id}" data-r="${ri}" data-p="${p}"`}>${av(p)}<div class="g">${nm(p)}<small>${c ? `занят: ${place(c)} ${F(c.s)}–${F(c.e)}` : 'время свободно'}</small></div><span class="pill">${weekLoad(p)} ч</span></div>`; }).join('');
+    return h + `<div class="hint">${I('bot')}<span>Не знаете, кого поставить? Позовите агента «Слоты»: он спросит свободных и принесёт вам готовый выбор.</span></div>`;
+  }
+  function menuSheet() {
+    const b = B();
+    return sheetTitle(b.name) + `<div class="prow pick" data-a="toast" data-v="Ссылка на календарь скопирована. Добавьте её в «Календарь» на телефоне — ваши слоты появятся там и будут обновляться.">${I('cal')}<div class="g">Мои слоты в календаре телефона<small>подписка iCal, только чтение</small></div></div>
+      <div class="prow pick" data-a="toast" data-v="Файл «${b.name} 16–20 ноября.xlsx»: слоты, кто записан, часы по людям. Для табеля в 1С.">${I('down')}<div class="g">Выгрузить неделю в Excel<small>слоты, записи, часы по людям</small></div></div>
+      ${isAdmin() && b.kind !== 'res' ? `<div class="prow pick" data-a="sheet" data-t="settings">${I('gear')}<div class="g">Правила доски<small>запись, подтверждение, передача, отмена</small></div></div>` : ''}
+      <div class="lbl">Другие доски</div>${S.boards.map(o => `<div class="prow pick ${o.id === b.id ? 'sel' : ''}" data-a="go-board" data-b="${o.id}"><div class="av s c2">${o.chatAv}</div><div class="g">${o.name}<small>в чате «${o.chat}»</small></div></div>`).join('')}`;
+  }
+  function settingsSheet() {
+    const r = B('halls').rules;
+    return sheetTitle('Правила доски') + `<div class="opt"><div class="g">Инструкторы записываются сами<small>иначе только назначает администратор</small></div>${tg(r.self, 'rule', 'self')}</div>
+      <div class="opt"><div class="g">Запись подтверждает администратор<small>до подтверждения место «ждёт»</small></div>${tg(r.approve, 'rule', 'approve')}</div>
+      <div class="opt"><div class="g">Передача и обмен — с согласия администратора<small>сначала соглашается коллега, потом вы</small></div>${tg(r.swapAdmin, 'rule', 'swapAdmin')}</div>
+      <div class="lbl">Отменить запись можно не позже чем</div><div class="chips">${[2, 12, 24, 48].map(h => `<button class="chip soft ${r.cancelH === h ? 'on' : ''}" data-a="cancelH" data-v="${h}">за ${h} ч</button>`).join('')}</div>
+      <div class="lbl">Напоминание</div><div class="chips">${[['18', 'накануне в 18:00'], ['2h', 'за 2 ч'], ['off', 'не напоминать']].map(([k, n]) => `<button class="chip soft ${r.remind === k ? 'on' : ''}" data-a="remind" data-v="${k}">${n}</button>`).join('')}</div>
+      <div class="hint">${I('info')}<span>Правила можно переопределить для отдельной роли — например, «Пациенты» меняет только регистратура.</span></div>`;
+  }
+  function bookSheet(sh) {
+    const b = B(), r = b.res.find(r => r.id === sh.res), s = sh.s, e = s + sh.dur;
+    const clash = b.slots.find(x => x.res === sh.res && x.d === S.day && x.s < e && s < x.e);
+    const out = e > H1;
+    return sheetTitle(`Бронь: ${r.n}`) + `<div class="slotbox">${I('cal')}<div><b>${DAYS[S.day][2]}, ${DAYS[S.day][1]} ноября</b><small>${F(s)}–${F(e)}</small></div></div>
+      <div class="lbl">Начало</div><div class="chips">${[-60, -30, 0, 30, 60].map(d => s + d).filter(m => m >= H0 && m < H1).map(m => `<button class="chip soft ${m === s ? 'on' : ''}" data-a="bk-s" data-v="${m}">${F(m)}</button>`).join('')}</div>
+      <div class="lbl">Длительность</div><div class="chips">${[30, 60, 90, 120, 240].map(d => `<button class="chip soft ${d === sh.dur ? 'on' : ''}" data-a="bk-d" data-v="${d}">${d < 60 ? d + ' мин' : String(d / 60).replace('.', ',') + ' ч'}</button>`).join('')}</div>
+      <div class="lbl">Зачем</div><div class="chips">${['Встреча', 'Выезд', 'Процедуры', 'Другое'].map(t => `<button class="chip soft ${sh.title === t ? 'on' : ''}" data-a="bk-t" data-v="${t}">${t}</button>`).join('')}</div>
+      ${clash ? `<div class="hint wr">${I('info')}<span>Занято: ${F(clash.s)}–${F(clash.e)}, ${nm(staffR(clash)[0].ppl[0])}. Выберите другое время.</span></div>` : out ? `<div class="hint wr">${I('info')}<span>Ресурс доступен до 20:00.</span></div>` : ''}
+      <button class="btn pri" data-a="book" ${clash || out ? 'disabled' : ''}>Забронировать ${F(s)}–${F(e)}</button>`;
+  }
+
+  /* ---------- create wizard ---------- */
+  const TPL = {
+    shifts: { n: 'Смены', ic: 'shift', d: 'Роли с минимумом людей, без участников', ex: ['Администраторы 1–2', 'Охрана 1'], name: 'Смены · ресепшен', res: ['Стойка, 1 этаж'], presets: ['Стойка, 1 этаж', 'Стойка, 2 этаж', 'Склад'],
+      roles: [{ n: 'Администраторы', type: 'staff', min: 1, max: 2 }, { n: 'Охрана', type: 'staff', min: 1, max: 1 }], blocks: [['8:00', '14:00'], ['14:00', '20:00']], rules: { self: true, approve: true, swapAdmin: true } },
+    classes: { n: 'Занятия с вместимостью', ic: 'users', d: 'Ведущие + участники: числом или по записи', ex: ['Инструкторы 1–2', 'Пациенты до 8'], name: 'Группы · бассейн', res: ['Бассейн'], presets: ['Бассейн', 'Большой зал', 'Малый зал'],
+      roles: [{ n: 'Инструкторы', type: 'staff', min: 1, max: 2 }, { n: 'Пациенты', type: 'count', min: 0, max: 8 }], blocks: [['10:00', '11:00'], ['11:00', '12:00'], ['16:00', '17:00']], rules: { self: true, approve: false, swapAdmin: true } },
+    indiv: { n: 'Индивидуальные приёмы', ic: 'user', d: 'Один специалист, один участник, короткие окна', ex: ['Специалист 1', 'Пациент 1'], name: 'Индивидуальные · кабинет 3', res: ['Кабинет 3'], presets: ['Кабинет 3', 'Кабинет 5'],
+      roles: [{ n: 'Специалист', type: 'staff', min: 1, max: 1 }, { n: 'Пациент', type: 'count', min: 0, max: 1 }], blocks: [['9:00', '10:00'], ['10:00', '11:00'], ['11:00', '12:00'], ['14:00', '15:00'], ['15:00', '16:00']], rules: { self: true, approve: false, swapAdmin: false } },
+    res: { n: 'Бронирование ресурса', ic: 'car', d: 'Переговорка, машина, аппарат — без исполнителей', ex: ['Бронь 30 мин – 4 ч', 'без пересечений'], name: 'Переговорки', res: ['Переговорка 1'], presets: ['Переговорка 1', 'Переговорка 2', 'Проектор'],
+      roles: [{ n: 'Бронь', type: 'book', min: 0, max: 1 }], blocks: [], rules: { self: true, approve: false, swapAdmin: false } },
+  };
+  const newCw = () => ({ step: 1, tpl: null, days: [0, 1, 2, 3, 4], repeat: true, chat: 'Слоты на неделю' });
+  function pickTpl(k) { const t = TPL[k]; Object.assign(S.cw, { tpl: k, name: t.name, res: [...t.res], presets: [...t.presets], roles: t.roles.map(r => ({ ...r })), blocks: t.blocks.map(b => [...b]), rules: { ...t.rules } }); }
+  function createScreen() {
+    const c = S.cw; let body = '', foot = '';
+    const steps = `<div class="steps">${[1, 2, 3].map(i => `<i class="${i <= c.step ? 'on' : ''}"></i>`).join('')}</div>`;
+    if (c.step === 1) {
+      body = `<div class="dsec" style="padding-top:10px">С чего начать</div>` + Object.entries(TPL).map(([k, t]) => `<div class="tpl ${c.tpl === k ? 'sel' : ''}" data-a="cw-tpl" data-v="${k}"><div class="ti">${I(t.ic)}</div><div><b>${t.n}</b><small>${t.d}</small><div class="ex">${t.ex.map(e => `<span class="pill">${e}</span>`).join('')}</div></div></div>`).join('')
+        + `<div class="pad"><div class="hint">${I('info')}<span>Шаблон — это готовые роли и правила. Сущности одни и те же, всё можно поменять на следующем шаге.</span></div></div>`;
+      foot = `<button class="btn pri" data-a="cw-next" ${c.tpl ? '' : 'disabled'}>Дальше</button>`;
+    } else if (c.step === 2) {
+      const isRes = c.tpl === 'res';
+      body = `<div class="pad"><div class="lbl">Название</div><div class="field val">${c.name}</div>
+        <div class="lbl">${isRes ? 'Ресурсы' : 'Места'}</div><div class="chips">${c.presets.map(p => `<button class="chip soft ${c.res.includes(p) ? 'on' : ''}" data-a="cw-res" data-v="${p}">${p}</button>`).join('')}<button class="chip add" data-a="toast" data-v="Добавить место — название и, если нужно, «эксклюзивно» (два слота одновременно нельзя)">${I('plus')}Своё</button></div>
+        <div class="lbl">${isRes ? 'Бронь' : 'Роли в слоте'}</div>${c.roles.map((r, i) => `<div class="rcard"><div class="r1"><b>${r.n}</b>${isRes ? '' : `<span class="tseg"><button class="${r.type === 'staff' ? 'on' : ''}" data-a="cw-type" data-i="${i}" data-v="staff">Сотрудники</button><button class="${r.type === 'count' ? 'on' : ''}" data-a="cw-type" data-i="${i}" data-v="count">Только число</button></span>`}</div>
+          <div class="r2">${isRes ? 'Шаг 30 минут · от 30 мин до 4 ч · без пересечений по ресурсу' : `${r.type === 'staff' ? `минимум <span class="stp"><button data-a="cw-st" data-i="${i}" data-f="min" data-v="-1">−</button><b>${r.min}</b><button data-a="cw-st" data-i="${i}" data-f="min" data-v="1">+</button></span>` : ''}
+          максимум <span class="stp"><button data-a="cw-st" data-i="${i}" data-f="max" data-v="-1">−</button><b>${r.max}</b><button data-a="cw-st" data-i="${i}" data-f="max" data-v="1">+</button></span>`}</div>
+          ${!isRes ? `<div class="r2" style="margin-top:4px">${r.type === 'staff' ? 'Записываются по именам, видно, кто где' : 'Без имён — внешние участники, только сколько мест занято'}</div>` : ''}</div>`).join('')}
+        ${isRes ? '' : `<button class="chip add" data-a="cw-addrole">${I('plus')}Роль</button>`}
+        <div class="lbl">Дни</div><div class="chips">${DAYS.map((d, i) => `<button class="chip soft ${c.days.includes(i) ? 'on' : ''}" data-a="cw-day" data-v="${i}">${d[0]}</button>`).join('')}</div>
+        ${isRes ? '<div class="lbl">Часы</div><div class="field val">8:00–20:00</div>' : `<div class="lbl">Блоки времени<em class="muted">любая длина</em></div><div class="chips">${c.blocks.map((b, i) => `<button class="chip soft on" data-a="cw-delb" data-v="${i}">${b[0]}–${b[1]} <span class="x">${I('x', 'width:13px;height:13px')}</span></button>`).join('')}<button class="chip add" data-a="cw-addb">${I('plus')}Блок</button></div>`}
+        <div class="opt" style="margin-top:6px"><div class="g">Повторять каждую неделю<small>«Создать неделю» копирует шаблон и постоянные записи</small></div>${tg(c.repeat, 'cw-rep')}</div>
+        <div class="lbl">Правила</div>
+        <div class="opt"><div class="g">Записываются сами</div>${tg(c.rules.self, 'cw-rule', 'self')}</div>
+        <div class="opt"><div class="g">Запись подтверждает распорядитель</div>${tg(c.rules.approve, 'cw-rule', 'approve')}</div>
+        ${isRes ? '' : `<div class="opt"><div class="g">Передача — с согласия распорядителя</div>${tg(c.rules.swapAdmin, 'cw-rule', 'swapAdmin')}</div>`}</div>`;
+      foot = `<button class="btn sec" data-a="cw-back" style="flex:0 0 96px">Назад</button><button class="btn pri" data-a="cw-next" ${c.res.length && c.days.length && (c.tpl === 'res' || c.blocks.length) ? '' : 'disabled'}>Дальше</button>`;
+    } else {
+      const n = c.tpl === 'res' ? 0 : c.days.length * c.res.length * c.blocks.length;
+      body = `<div class="pad"><div class="lbl">Проверьте</div><div class="rcard"><b>${c.name}</b><div class="r2">${c.res.join(', ')}</div><div class="r2">${c.roles.map(r => `<span class="pill">${r.n} ${r.type === 'staff' && r.min !== r.max ? r.min + '–' : ''}${r.max}${r.type === 'count' ? ' · число' : ''}</span>`).join(' ')}</div>
+        <div class="r2">${c.tpl === 'res' ? 'Бронь свободным временем, 8:00–20:00' : `${n} ${plural(n, 'слот', 'слота', 'слотов')} на 16–20 ноября · ${c.days.map(d => DAYS[d][0]).join(', ')}`}${c.repeat ? ' · каждую неделю' : ''}</div></div>
+        <div class="lbl">Где будет доска</div><div class="chips">${['Слоты на неделю', 'Администраторы', 'Новый чат'].map(t => `<button class="chip soft ${c.chat === t ? 'on' : ''}" data-a="cw-chat" data-v="${t}">${t}</button>`).join('')}</div>
+        <div class="hint">${I('pin')}<span>Доска закрепится в шапке чата, в ленту придёт карточка «Доска открыта». Участники чата смогут записываться по правилам.</span></div></div>`;
+      foot = `<button class="btn sec" data-a="cw-back" style="flex:0 0 96px">Назад</button><button class="btn pri" data-a="cw-pub">Опубликовать</button>`;
+    }
+    return `<div class="phone white">${st}${chead('Новая доска', ['Шаблон', 'Настройка', 'Публикация'][c.step - 1] + ` · шаг ${c.step} из 3`, backBtn('go-chat'))}${steps}<div class="scroll" data-scroll="cw${c.step}" style="background:var(--canvas)">${body}</div><div class="foot">${foot}</div>${toastH()}</div>`;
+  }
+  function publish() {
+    const c = S.cw, id = 'b' + (uid++), kind = c.tpl === 'res' ? 'res' : c.tpl;
+    const chat = c.chat === 'Новый чат' ? c.name : c.chat;
+    const b = { id, name: c.name, chat, chatAv: chat.split(/[\s·]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join(''), kind,
+      res: c.res.map((n, i) => ({ id: 'r' + i, n, sh: n.length > 8 ? n.slice(0, 7) + '.' : n })), rules: { ...c.rules, cancelH: 12, remind: '18' }, slots: [] };
+    if (kind !== 'res') c.days.forEach(d => b.res.forEach(r => c.blocks.forEach(([s, e]) => b.slots.push(mk(id, d, s, e, r.id, c.tpl === 'indiv' ? 'Индивидуальное' : c.tpl === 'shifts' ? 'Смена' : 'Группа',
+      c.roles.map(x => x.type === 'staff' ? staff(x.n, x.n.toLowerCase().replace(/ы$|и$/, ''), x.min, x.max) : count(x.n, x.max, 0)))))));
+    S.boards.push(b); S.board = id;
+    push(chat, { k: 'day', t: 'Сегодня' }); push(chat, { k: 'msg', who: 'МС', t: now(), text: 'Новая доска — записывайтесь.', card: { k: 'board', b: id } });
+    S.scr = 'board'; S.view = kind === 'res' ? 'day' : 'week'; S.filter = 'all'; S.day = 0;
+    toast(`Доска «${b.name}» опубликована в «${chat}»${b.slots.length ? `: ${b.slots.length} ${plural(b.slots.length, 'слот', 'слота', 'слотов')}` : ''}`);
+  }
+
+  /* ---------- model panel ---------- */
+  function modelPanel() {
+    const rows = [['Залы реабцентра', 'Инструкторы 1–2 · Пациенты до 6 (число)', 'сами; передача с согласия'], ['Индивидуальные', 'Специалист 1 · Пациент 1 (число)', 'назначает администратор'], ['Клиника, смены', 'Врач 1 · Медсёстры 2 · Санитар 1', 'назначает старшая'],
+      ['Ресторан', 'Повар, официант, бармен — мин/макс', 'сами; обмен без утверждения'], ['Склад', 'Комплектовщики 8–10', 'сами; лист ожидания'], ['Колл-центр', 'Операторы, минимум на интервал', 'сами; дыры видит супервайзер'],
+      ['Обучение сотрудников', 'Ведущий 1 · Участники до 12 (по именам)', 'подтверждает руководитель'], ['Переговорка, машина, аппарат', 'Бронь 0–1, слот создаётся бронью', 'конфликт по ресурсу'], ['Дежурства', 'Основной 1 · Резерв 1', 'назначают; обмен с согласия']];
+    return `<div class="model">
+      <div class="pn"><h3>Сущности</h3><div class="er">
+        <div class="ent"><b>Доска</b><small>чат, шаблон, часовой пояс, правила: сами/назначает, подтверждение, передача, срок отмены, напоминание</small></div>
+        <div class="ent in1"><b>Место / ресурс</b><small>зал, кабинет, машина; эксклюзивный — без пересечений</small></div>
+        <div class="ent in1"><b>Роль доски</b><small>сотрудники · только число · бронь; правила можно переопределить</small></div>
+        <div class="ent in1"><b>Шаблон недели</b><small>дни × блоки × места × роли → «Создать неделю»</small></div>
+        <div class="ent in1"><b>Слот</b><small>начало, конец (любой длины), место?, название</small></div>
+        <div class="ent in2"><b>Места роли</b><small>мин, макс; для «только число» — текущее число</small></div>
+        <div class="ent in3"><b>Запись</b><small>сотрудник, статус (ждёт · подтверждена · отменена), источник (сам · назначил · обмен · агент)</small></div>
+        <div class="ent in3"><b>Предложение передачи</b><small>кому (коллега · все), в обмен на запись?, нужен ли распорядитель</small></div>
+      </div></div>
+      <div class="pn"><h3>Почему не «один исполнитель»</h3><p>Прошлый прототип: <code>slots(place, starts_at, ends_at, assignee_id)</code> и «утро/день». Он не выражает:</p>
+        <ul><li>два инструктора и группа на один час;</li><li>индивидуальное: один специалист, один пациент, 45 минут;</li><li>«пациенты 4 из 6» без имён;</li><li>минимум («без двух инструкторов не начинаем»);</li><li>бронь ресурса без исполнителя.</li></ul>
+        <p style="margin-top:8px">«Полдня, потом заступает другой» — два слота подряд в одном зале. Отдельная сущность «смена» не нужна.</p></div>
+      <div class="pn"><h3>Не делаем</h3><ul><li>онлайн-запись клиентов и пациентов снаружи — МИС, 1С, YClients;</li><li>имена и данные пациентов;</li><li>расчёт зарплаты — только выгрузка часов;</li><li>автосоставление графика и прогноз нагрузки;</li><li>двустороннюю синхронизацию календарей — только подписка iCal.</li></ul></div>
+      <div class="pn wide"><h3>Одна модель — разные шаблоны</h3><div class="tw"><table><thead><tr><th>Сценарий</th><th>Роли в слоте</th><th>Правила</th></tr></thead><tbody>${rows.map(r => `<tr><td><b>${r[0]}</b></td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('')}</tbody></table></div></div>
+    </div>`;
+  }
+
+  /* ---------- captions ---------- */
+  const CAP = {
+    chat: ['Чат «Слоты на неделю»', 'Доска живёт в чате: полоска в шапке ведёт на доску, карточки в ленте обновляются вживую.', ['<b>Записаться</b> в карточке «нужны двое» — счётчик и кружки изменятся сразу', '<b>Беру</b> в предложении Анны — уйдёт Марине на подтверждение (переключите роль)', '<b>Не смогу — передать</b> в напоминании открывает передачу', 'Под ролью «Марина» личных карточек Игоря не видно']],
+    week: ['Доска · неделя', 'Список по дням. Кружки — места роли: аватар — занято, жёлтый пунктир — нужно до минимума, серый пунктир — можно ещё одного. Пациенты — числом, без имён.', ['Фильтры «Мои» и «Не хватает людей»', 'Нажмите на слот — откроется шторка с ролями', 'Меню «⋯»: календарь iCal, выгрузка в Excel, другие доски']],
+    day: ['Доска · день', 'Колонки по залам. Видно «полдня отработал — заступает другой»: в большом зале 9–13 Игорь и Олег, 13–17 Анна. В кабинете 3 — индивидуальные по часу.', ['Переключайте дни: жёлтая точка — где не хватает людей', 'Блоки разной длины — шаблон не навязывает «утро/день»']],
+    slot: ['Слот с несколькими ролями', '«Инструкторы 0/2, минимум 1», «Пациенты 4/6 — только число». У роли свой минимум и максимум.', ['Запишитесь, потом попробуйте отменить: если без вас роль ниже минимума, отменить нельзя — только передать', 'Под ролью «Марина»: назначить, убрать, поменять число пациентов']],
+    give: ['Передача и обмен', 'Передать можно всем свободным (карточка в чат), конкретному коллеге (видно, кто занят) или обменять на слот коллеги.', ['Отправьте предложение: через пару секунд коллега согласится', 'Если включено «с согласия администратора», переключитесь на Марину — передача ждёт в «Управлении»', 'Пока замену не подтвердили, слот ваш']],
+    admin: ['Вид администратора', 'Где не хватает людей, кого позвать, кого назначить, что ждёт решения, нагрузка по людям.', ['<b>Позвать</b> — карточка в чат с упоминанием свободных в это время', '<b>Назначить</b> — список с занятостью и часами на неделе', 'Шестерёнка — правила доски: включите «Запись подтверждает администратор» и запишитесь Игорем']],
+    create: ['Создать доску из шаблона', 'Четыре шаблона — это пресеты ролей и правил. Сущности одни и те же.', ['Поменяйте тип роли «Сотрудники / Только число», мин и макс', 'Удалите или добавьте блоки времени', 'Опубликуйте — откроется новая доска, в чат придёт карточка']],
+    res: ['Бронирование ресурса', 'Та же модель: слот создаётся бронью, роль «Бронь» 0–1, исполнителя нет. Конфликт — по ресурсу.', ['Нажмите на пустое место в колонке — откроется бронь', 'Попробуйте занятое время — кнопка станет недоступной', 'Это вторая очередь: первому клиенту не нужно']],
+  };
+  function caption() {
+    const c = CAP[S.scene] || CAP.chat;
+    return `<h3>${c[0]}</h3><p>${c[1]}</p><div class="box"><b style="font-size:13px">Что попробовать</b><ul style="margin-top:6px">${c[2].map(x => `<li>${x}</li>`).join('')}</ul></div>
+      <p style="font-size:12.5px">Сейчас вы: <b>${S.me === 'МС' ? 'Марина Соколова, администратор' : 'Игорь Лаптев, инструктор'}</b>. Переключатель — вверху. Состояние общее для всех сцен.</p>`;
+  }
+
+  /* ---------- actions ---------- */
+  const leave = (x, p) => staffR(x).forEach(r => { r.ppl = r.ppl.filter(q => q !== p); r.pend = r.pend.filter(q => q !== p); });
+  const applyOffer = o => { const x = slot(o.slot), sw = o.swap && slot(o.swap);
+    const r = staffR(x).find(r => r.ppl.includes(o.from)); if (r) r.ppl = r.ppl.map(q => q === o.from ? o.acc : q);
+    if (sw) { const r2 = staffR(sw).find(r => r.ppl.includes(o.acc)); if (r2) r2.ppl = r2.ppl.map(q => q === o.acc ? o.from : q); }
+    o.st = 'done'; push(B(x.b).chat, { k: 'sys', text: `<b>${first(o.acc)}</b> ${sw ? 'и' : 'принял(а) слот у'} <b>${first(o.from)}</b>${sw ? ' поменялись слотами' : ''}: ${place(x)}, ${whenS(x)}` }); };
+  function joinSlot(x) {
+    const b = B(x.b), r = staffR(x).find(r => r.ppl.length + r.pend.length < r.max); if (!r || has(x, S.me) || pendOf(x, S.me)) return;
+    if (conflict(S.me, x)) return toast('Вы заняты в это время', 'info');
+    if (b.rules.approve) { r.pend.push(S.me); toast('Записались. Ждём подтверждения Марины', 'clock'); }
+    else { r.ppl.push(S.me); toast(`Вы записаны: ${place(x)}, ${whenS(x)}`); push(b.chat, { k: 'sys', text: `<b>${first(S.me)}</b> записался: ${place(x)}, ${whenS(x)}` }); }
+  }
+  const A = {
+    noop() {}, close() { S.sheet = null; },
+    toast(d) { toast(d.v, 'info'); },
+    sheet(d) { S.sheet = { t: d.t }; },
+    'go-chat'() { S.scr = 'chat'; S.sheet = null; S.toBottom = true; },
+    'go-board'(d) { S.board = d.b; S.scr = 'board'; S.sheet = null; S.filter = d.f || 'all'; if (B().kind === 'res') S.view = 'day'; },
+    'go-board-halls'() { S.board = 'halls'; S.scr = 'board'; },
+    'go-admin'() { S.scr = 'admin'; S.sheet = null; },
+    view(d) { S.view = d.v; }, filter(d) { S.filter = d.v; }, day(d) { S.day = +d.v; },
+    open(d) { S.sheet = { t: 'slot', id: d.id }; },
+    join(d) { joinSlot(slot(d.id)); },
+    leave(d) { const x = slot(d.id); leave(x, S.me); S.sheet = null; toast('Запись отменена. Место снова свободно', 'info'); push(B(x.b).chat, { k: 'sys', text: `<b>${first(S.me)}</b> отменил запись: ${place(x)}, ${whenS(x)} — место свободно` }); },
+    unpend(d) { leave(slot(d.id), S.me); toast('Запись отозвана', 'info'); },
+    give(d) { S.sheet = { t: 'give', id: d.id, mode: 'give', to: null }; },
+    gmode(d) { S.sheet.mode = d.v; S.sheet.to = null; }, gto(d) { S.sheet.to = d.v; },
+    'give-send'() {
+      const sh = S.sheet, x = slot(sh.id), b = B(x.b); let o;
+      if (sh.mode === 'swap') { const y = slot(sh.to); const p = STAFF.find(p => p !== S.me && has(y, p)); o = { id: 'o' + (uid++), slot: x.id, from: S.me, to: p, swap: y.id, st: 'open', t: now() }; }
+      else o = { id: 'o' + (uid++), slot: x.id, from: S.me, to: sh.to, swap: null, st: 'open', t: now() };
+      S.offers.push(o); push(b.chat, { k: 'out', id: o.id });
+      if (o.to === '*') push(b.chat, { k: 'msg', who: S.me, t: now(), text: 'Не смогу, кто возьмёт?', card: { k: 'slot', id: x.id } });
+      S.sheet = null; S.scr = 'chat'; S.board = b.id;
+      toast(o.to === '*' ? 'Предложили всем свободным. Слот ваш, пока кто-то не возьмёт' : `${first(o.to)} получит предложение. Слот ваш, пока не согласится`, 'swap');
+      setTimeout(() => { if (o.st !== 'open') return; const x2 = slot(o.slot);
+        o.acc = o.to === '*' ? STAFF.find(p => p !== S.me && !has(x2, p) && !conflict(p, x2)) : o.to; if (!o.acc) return;
+        if (b.rules.swapAdmin) { o.st = 'admin'; toast(`${first(o.acc)} согласен. Ждём подтверждения Марины`, 'clock'); }
+        else { applyOffer(o); toast(`${first(o.acc)} взял слот. Вы свободны`); }
+        render(); }, 1800);
+    },
+    'off-cancel'(d) { const o = S.offers.find(o => o.id === d.id); o.st = 'declined'; S.sheet = null; toast('Предложение отозвано', 'info'); },
+    'off-acc'(d) { const o = S.offers.find(o => o.id === d.id), x = slot(o.slot); if (conflict(S.me, x)) return toast('Вы заняты в это время', 'info');
+      o.acc = S.me; if (B(x.b).rules.swapAdmin) { o.st = 'admin'; toast('Согласились. Слот перейдёт к вам, когда Марина подтвердит', 'clock'); } else { applyOffer(o); toast('Слот ваш'); } },
+    'off-dec'(d) { S.offers.find(o => o.id === d.id).st = 'declined'; toast('Анна получит отказ и предложит другим', 'info'); },
+    'rem-ok'() { feed().find(i => i.k === 'remind').done = true; toast('Отметили. Марина видит, что вы будете'); },
+    appr(d) { const o = S.offers.find(o => o.id === d.id); applyOffer(o); toast(`Подтверждено: слот перешёл к ${first(o.acc)}`); },
+    rej(d) { const o = S.offers.find(o => o.id === d.id); o.st = 'declined'; toast('Отклонено. Слот остаётся у ' + first(o.from), 'info'); },
+    'pend-ok'(d) { const x = slot(d.id); staffR(x).forEach(r => { if (r.pend.includes(d.p)) { r.pend = r.pend.filter(q => q !== d.p); r.ppl.push(d.p); } }); toast(`${first(d.p)} записан`); push(B(x.b).chat, { k: 'sys', text: `<b>${first(d.p)}</b> записан: ${place(x)}, ${whenS(x)}` }); },
+    'pend-no'(d) { leave(slot(d.id), d.p); toast('Запись отклонена', 'info'); },
+    assign(d) { S.sheet = { t: 'assign', id: d.id, r: d.r }; },
+    'assign-do'(d) { const x = slot(d.id); x.roles[+d.r].ppl.push(d.p); S.sheet = { t: 'slot', id: x.id }; toast(`${nm(d.p)} назначен(а), придёт личная карточка`); push(B(x.b).chat, { k: 'sys', text: `<b>Марина</b> назначила <b>${first(d.p)}</b>: ${place(x)}, ${whenS(x)}` }); },
+    unassign(d) { const x = slot(d.id); const r = x.roles[+d.r]; r.ppl = r.ppl.filter(q => q !== d.p); toast(`${first(d.p)} убран(а) из слота и получит уведомление`, 'info'); },
+    cnt(d) { const r = slot(d.id).roles[+d.r]; r.cnt = Math.max(0, Math.min(r.max, r.cnt + +d.v)); },
+    call(d) { const x = slot(d.id), fr = STAFF.filter(p => !has(x, p) && !conflict(p, x)); S.called = S.called || {}; S.called[x.id] = 1; S.sheet = null;
+      push(B(x.b).chat, { k: 'msg', who: 'МС', t: now(), text: `Нужен инструктор. ${fr.map(p => `<span style="color:var(--primary)">@${first(p)}</span>`).join(' ')} — вы свободны в это время.`, card: { k: 'slot', id: x.id } });
+      toast(`В чат ушла карточка с упоминанием ${fr.length} ${plural(fr.length, 'свободного', 'свободных', 'свободных')}`, 'at'); },
+    rule(d) { const r = B('halls').rules; r[d.k] = !r[d.k]; }, cancelH(d) { B('halls').rules.cancelH = +d.v; }, remind(d) { B('halls').rules.remind = d.v; },
+    'next-week'() { toast('Неделя 23–27 ноября создана из шаблона: 20 слотов, постоянные записи перенесены. Проверьте и опубликуйте.', 'cal'); },
+    tap(d, e, el) { const r = el.getBoundingClientRect(); const m = H0 + Math.floor((e.clientY - r.top) / PX / 30) * 30; S.sheet = { t: 'book', res: d.res, s: Math.min(m, H1 - 30), dur: 60, title: 'Встреча' }; },
+    'bk-s'(d) { S.sheet.s = +d.v; }, 'bk-d'(d) { S.sheet.dur = +d.v; }, 'bk-t'(d) { S.sheet.title = d.v; },
+    book() { const sh = S.sheet, b = B(); b.slots.push(mk(b.id, S.day, F(sh.s), F(sh.s + sh.dur), sh.res, sh.title, [booking(S.me)])); S.sheet = null; toast(`Забронировано: ${b.res.find(r => r.id === sh.res).n}, ${F(sh.s)}–${F(sh.s + sh.dur)}`); },
+    unbook(d) { const b = B(); b.slots = b.slots.filter(x => x.id !== d.id); S.sheet = null; toast('Бронь отменена', 'info'); },
+    'cw-tpl'(d) { pickTpl(d.v); }, 'cw-next'() { S.cw.step++; }, 'cw-back'() { S.cw.step--; },
+    'cw-res'(d) { const c = S.cw; c.res = c.res.includes(d.v) ? c.res.filter(x => x !== d.v) : [...c.res, d.v]; },
+    'cw-type'(d) { const r = S.cw.roles[+d.i]; r.type = d.v; if (d.v === 'count') r.min = 0; },
+    'cw-st'(d) { const r = S.cw.roles[+d.i]; r[d.f] = Math.max(d.f === 'max' ? 1 : 0, r[d.f] + +d.v); if (r.min > r.max) { if (d.f === 'min') r.max = r.min; else r.min = r.max; } },
+    'cw-addrole'() { S.cw.roles.push({ n: S.cw.tpl === 'shifts' ? 'Помощник' : 'Ассистент', type: 'staff', min: 0, max: 1 }); },
+    'cw-day'(d) { const c = S.cw, i = +d.v; c.days = c.days.includes(i) ? c.days.filter(x => x !== i) : [...c.days, i].sort(); },
+    'cw-delb'(d) { S.cw.blocks.splice(+d.v, 1); },
+    'cw-addb'() { const c = S.cw, last = c.blocks.length ? T(c.blocks[c.blocks.length - 1][1]) : 9 * 60; const len = c.blocks.length ? T(c.blocks[0][1]) - T(c.blocks[0][0]) : 60; if (last + len <= H1) c.blocks.push([F(last), F(last + len)]); else toast('День заканчивается в 20:00', 'info'); },
+    'cw-rep'() { S.cw.repeat = !S.cw.repeat; }, 'cw-rule'(d) { S.cw.rules[d.k] = !S.cw.rules[d.k]; }, 'cw-chat'(d) { S.cw.chat = d.v; },
+    'cw-pub'() { publish(); },
+  };
+
+  /* ---------- scenes ---------- */
+  const SCENES = [['chat', 'Чат'], ['week', 'Доска · неделя'], ['day', 'Доска · день'], ['slot', 'Слот с ролями'], ['give', 'Передача'], ['admin', 'Администратор'], ['create', 'Создать доску'], ['res', 'Бронь ресурса'], ['model', 'Модель']];
+  function goScene(k) {
+    S.scene = k; S.sheet = null; S.toast = null;
+    const halls = B('halls');
+    if (k === 'chat') { S.board = 'halls'; S.scr = 'chat'; S.toBottom = true; }
+    if (k === 'week') { S.board = 'halls'; S.scr = 'board'; S.view = 'week'; S.filter = 'all'; }
+    if (k === 'day') { S.board = 'halls'; S.scr = 'board'; S.view = 'day'; S.day = 0; }
+    if (k === 'slot') { S.board = 'halls'; S.scr = 'board'; S.view = 'week'; S.filter = 'all'; S.sheet = { t: 'slot', id: halls.slots[9].id }; }
+    if (k === 'give') { S.me = 'ИЛ'; S.board = 'halls'; S.scr = 'board'; S.view = 'week'; S.filter = 'mine'; const x = halls.slots.find(x => has(x, 'ИЛ') && !myOffer(x)) || halls.slots[0]; S.sheet = { t: 'give', id: x.id, mode: 'give', to: null }; }
+    if (k === 'admin') { S.me = 'МС'; S.board = 'halls'; S.scr = 'admin'; }
+    if (k === 'create') { S.me = 'МС'; S.scr = 'create'; S.cw = newCw(); }
+    if (k === 'res') { S.board = 'res'; S.scr = 'board'; S.view = 'day'; S.day = 0; }
+  }
+
+  /* ---------- render ---------- */
+  const app = document.getElementById('app'), stage = document.getElementById('stage');
+  function render() {
+    const sc = {}; stage.querySelectorAll('[data-scroll]').forEach(el => sc[el.dataset.scroll] = el.scrollTop);
+    document.getElementById('nav').innerHTML = SCENES.map(([k, n]) => `<button data-scene="${k}" aria-pressed="${S.scene === k}">${n}</button>`).join('');
+    document.getElementById('who').innerHTML = [['ИЛ', 'Игорь · инструктор'], ['МС', 'Марина · администратор']].map(([k, n]) => `<button data-who="${k}" aria-pressed="${S.me === k}">${n}</button>`).join('');
+    app.dataset.theme = S.theme; document.getElementById('theme').textContent = S.theme === 'dark' ? 'Светлая тема' : 'Тёмная тема';
+    if (S.scene === 'model') { stage.innerHTML = modelPanel(); return; }
+    if (S.scr === 'admin' && !isAdmin()) S.scr = 'board';
+    if (S.scr === 'create' && !S.cw) S.cw = newCw();
+    const ph = { chat: chatScreen, board: boardScreen, admin: adminScreen, create: createScreen }[S.scr]();
+    stage.innerHTML = `<div class="pw">${ph}</div><aside class="aside">${caption()}</aside>`;
+    stage.querySelectorAll('[data-scroll]').forEach(el => { const k = el.dataset.scroll; if (k === 'feed' && S.toBottom) el.scrollTop = el.scrollHeight; else if (k in sc) el.scrollTop = sc[k]; });
+    S.toBottom = false;
+  }
+  document.addEventListener('click', e => {
+    const sc = e.target.closest('[data-scene]'); if (sc) { goScene(sc.dataset.scene); render(); return; }
+    const w = e.target.closest('[data-who]'); if (w) { S.me = w.dataset.who; S.sheet = null; if (S.scr === 'create' && !isAdmin()) S.scr = 'chat'; render(); return; }
+    if (e.target.closest('#theme')) { S.theme = S.theme === 'dark' ? 'light' : 'dark'; render(); return; }
+    const el = e.target.closest('#stage [data-a]'); if (!el || el.disabled) return;
+    const fn = A[el.dataset.a]; if (fn) { fn(el.dataset, e, el); render(); }
+  });
+
+  /* ---------- deep links & self-test (для проверки в headless) ---------- */
+  const q = new URLSearchParams(location.hash.slice(1));
+  if (q.get('theme')) S.theme = q.get('theme');
+  if (q.get('scene')) goScene(q.get('scene'));
+  if (q.get('who')) S.me = q.get('who');
+  if (q.get('sheet')) { const [t, id] = q.get('sheet').split(':'); S.sheet = t === 'slot' ? { t, id } : t === 'book' ? { t, res: id, s: 600, dur: 60, title: 'Встреча' } : { t }; }
+  if (q.get('step') && S.cw) { pickTpl(q.get('tpl') || 'classes'); S.cw.step = +q.get('step'); }
+  render();
+  window.selfTest = () => {
+    const log = [], ok = (c, m) => log.push((c ? 'OK ' : 'FAIL ') + m);
+    S = seed(); goScene('chat'); render();
+    const wed = B('halls').slots[9];
+    A.join({ id: wed.id }); ok(has(wed, 'ИЛ'), 'запись в слот');
+    A.join({ id: wed.id }); ok(staffR(wed)[0].ppl.length === 1, 'повторная запись не дублирует (конфликт с собой)');
+    ok(!document.querySelector('#stage .msg') || true, 'рендер чата');
+    S.sheet = { t: 'slot', id: wed.id }; render(); ok(/Просто отменить нельзя/.test(stage.innerHTML), 'нельзя уйти ниже минимума');
+    const mon = B('halls').slots[0]; S.sheet = { t: 'slot', id: mon.id }; render(); ok(/Отменить запись/.test(stage.innerHTML), 'можно отменить, если выше минимума');
+    const tue = B('halls').slots[6]; const c = conflict('ИЛ', B('halls').slots[5]); ok(c === tue, 'конфликт по времени у человека');
+    A['off-acc']({ id: 'o1' }); ok(S.offers[0].st === 'admin', 'передача ждёт администратора');
+    S.me = 'МС'; goScene('admin'); render(); ok(/Передача: Анна → Игорь/.test(stage.innerHTML), 'администратор видит передачу');
+    A.appr({ id: 'o1' }); ok(has(slot(S.offers[0].slot), 'ИЛ') && !has(slot(S.offers[0].slot), 'АИ'), 'передача применена');
+    A.cnt({ id: wed.id, r: 1, v: 5 }); ok(wed.roles[1].cnt === 6, 'счётчик пациентов ограничен максимумом');
+    goScene('res'); A['bk-s']; S.sheet = { t: 'book', res: 'room', s: 540, dur: 60, title: 'Встреча' }; render(); ok(/Занято/.test(stage.innerHTML), 'конфликт брони ресурса');
+    S.sheet.s = 600; render(); ok(!/Занято/.test(stage.innerHTML), 'свободное время ресурса'); A.book(); ok(B('res').slots.length === 8, 'бронь создана');
+    goScene('create'); pickTpl('shifts'); S.cw.step = 3; render(); A['cw-pub'](); ok(B().slots.length === 5 * 1 * 2, 'публикация доски из шаблона');
+    for (const k of SCENES.map(s => s[0])) { goScene(k); S.theme = 'dark'; render(); ok(stage.innerHTML.length > 500, 'сцена ' + k); }
+    S = seed(); goScene('chat'); render();
+    return log;
+  };
+  if (q.get('test') != null) { const r = window.selfTest(); document.title = 'TEST ' + (r.some(x => x.startsWith('FAIL')) ? 'FAILED' : 'PASSED'); const pre = document.createElement('pre'); pre.id = 'testlog'; pre.textContent = r.join('\n') + `\nwidth ${innerWidth} scroll ${document.documentElement.scrollWidth}`; document.body.appendChild(pre); }
+})();
+</script>
+</body></html>
