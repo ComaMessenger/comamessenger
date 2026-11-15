@@ -197,7 +197,43 @@ export function roleLabelKey(role: MemberRole | string): string {
 /** Permissions a regular member may hold; the rest are administrators' only. */
 export const memberGrantablePermissions: readonly Permission[] = [
   "knowledge.manage",
+  "org.manage",
+  "requests.address_groups",
 ];
+
+/**
+ * Permissions that exist only on servers announcing a feature; on older
+ * servers the switch is hidden.
+ */
+export const permissionFeatures: Partial<Record<Permission, string>> = {
+  "org.manage": "org_structure",
+  "requests.address_groups": "org_structure",
+};
+
+export type MemberPermissionToggle = {
+  code: Permission;
+  /** The member holds it now. */
+  granted: boolean;
+  /** The viewer may switch it (decision 15). */
+  enabled: boolean;
+};
+
+/**
+ * Whether the viewer may switch one permission of a workspace member
+ * (decision 15): the owner may switch any; an administrator with
+ * members.manage only those they hold themselves, one by one; only for an
+ * active member they manage.
+ */
+export function canToggleMemberPermission(
+  actor: User,
+  member: OrganizationMember,
+  code: Permission,
+): boolean {
+  if (member.status !== "active" || member.actor_id === actor.id) return false;
+  if (actor.role === "owner") return member.role !== "owner";
+  if (member.role !== "member") return false;
+  return hasPermission(actor, "members.manage") && hasPermission(actor, code);
+}
 
 /**
  * What the current user may do with a workspace member. The server checks
@@ -207,8 +243,13 @@ export const memberGrantablePermissions: readonly Permission[] = [
 export function memberRules(
   actor: User,
   member: OrganizationMember,
-  options: { passwordRecoveryAvailable?: boolean } = {},
+  options: {
+    passwordRecoveryAvailable?: boolean;
+    /** HelloFrame.features: switches of newer permissions need them. */
+    features?: Iterable<string> | null;
+  } = {},
 ) {
+  const features = new Set(options.features ?? []);
   const self = member.actor_id === actor.id;
   const owner = actor.role === "owner";
   const manageable =
@@ -230,8 +271,30 @@ export function memberRules(
     canChangeAvatar: true,
     /** The «knowledge base» switch is shown (regular members, not oneself). */
     showsKnowledgePermission: member.role === "member" && !self,
-    canGrantKnowledge:
-      (owner || hasPermission(actor, "knowledge.manage")) && active,
+    canGrantKnowledge: canToggleMemberPermission(
+      actor,
+      member,
+      "knowledge.manage",
+    ),
+    /**
+     * One switch per permission a regular member may hold (not oneself),
+     * enabled by decision 15. Supersedes the knowledge-only fields above.
+     */
+    memberPermissions:
+      member.role === "member" && !self
+        ? memberGrantablePermissions
+            .filter((code) => {
+              const feature = permissionFeatures[code];
+              return !feature || features.has(feature);
+            })
+            .map(
+              (code): MemberPermissionToggle => ({
+                code,
+                granted: member.permissions.includes(code),
+                enabled: canToggleMemberPermission(actor, member, code),
+              }),
+            )
+        : [],
     /** Administrator permissions are shown and edited by the owner only. */
     showsAdminPermissions: member.role === "admin" && owner,
   };

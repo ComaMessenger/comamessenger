@@ -223,8 +223,10 @@ describe("member rules", () => {
     expect(regular.canGrantKnowledge).toBe(false);
     expect(regular.showsAdminPermissions).toBe(false);
     expect(
-      memberRules(user("admin", ["knowledge.manage"]), member("cat", "member"))
-        .canGrantKnowledge,
+      memberRules(
+        user("admin", ["members.manage", "knowledge.manage"]),
+        member("cat", "member"),
+      ).canGrantKnowledge,
     ).toBe(true);
   });
 

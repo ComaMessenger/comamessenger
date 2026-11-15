@@ -14,6 +14,11 @@ export const serverFeature = {
   requests: "message_requests",
   /** «Напомнить мне», the bell, «Напоминания». */
   reminders: "message_reminders",
+  /**
+   * Phase 6.5 wave 2: «Оргструктура», grouping of «Люди», @отдел, the
+   * «Отдел» and «Должность» request segments and the settings page.
+   */
+  orgStructure: "org_structure",
 } as const;
 
 /** True when the server announced the feature; false before hello. */

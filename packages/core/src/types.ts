@@ -327,3 +327,14 @@ export type RequestAutoRemindedEvent =
 export type ReminderEvent = components["schemas"]["RealtimeReminderEventV1"];
 export type ReminderFiredEvent =
   components["schemas"]["RealtimeReminderFiredEventV1"];
+
+// Org structure (phase 6.5 wave 2): departments, positions, who is where.
+export type OrgStructure = components["schemas"]["OrgStructure"];
+export type OrgDepartment = components["schemas"]["OrgDepartment"];
+export type OrgPosition = components["schemas"]["OrgPosition"];
+export type OrgPerson = components["schemas"]["OrgPerson"];
+export type MessageDepartmentMention =
+  components["schemas"]["MessageDepartmentMention"];
+/** data of org.updated: the new org_version and why; no content. */
+export type OrgUpdatedEvent =
+  components["schemas"]["RealtimeOrgUpdatedEventV1"];

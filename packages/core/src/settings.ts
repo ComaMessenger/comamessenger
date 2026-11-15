@@ -20,6 +20,8 @@ export const workspacePermissions = [
   "audit.read",
   "chats.moderate",
   "knowledge.manage",
+  "org.manage",
+  "requests.address_groups",
 ] as const satisfies readonly Permission[];
 
 export const permissionLabelKeys: Record<Permission, string> = {
@@ -50,6 +52,7 @@ export type SettingsPageID =
   | "workspace-members"
   | "workspace-invitations"
   | "workspace-policies"
+  | "workspace-org"
   | "customization"
   | "infrastructure"
   | "audit";
@@ -65,6 +68,11 @@ export type SettingsEntry = {
     anyOf?: readonly Permission[];
     ownerOnly?: boolean;
   };
+  /**
+   * Shown only when the server announced this HelloFrame feature; callers
+   * that pass no features never see the entry.
+   */
+  feature?: string;
 };
 
 export const settingsRegistry: readonly SettingsEntry[] = [
@@ -97,6 +105,7 @@ export const settingsRegistry: readonly SettingsEntry[] = [
         "invitations.manage",
         "workspace.settings",
         "workspace.policies",
+        "org.manage",
       ],
     },
   },
@@ -133,6 +142,15 @@ export const settingsRegistry: readonly SettingsEntry[] = [
     access: { permission: "workspace.policies" },
   },
   {
+    id: "workspace-org",
+    path: "/settings/workspace/org",
+    group: "workspace",
+    parent: "workspace",
+    labelKey: "orgStructure",
+    access: { anyOf: ["org.manage", "members.manage"] },
+    feature: "org_structure",
+  },
+  {
     id: "customization",
     path: "/settings/customization",
     group: "workspace",
@@ -159,7 +177,12 @@ export function permissionsOf(user: User): ReadonlySet<Permission> {
   return new Set(user.permissions);
 }
 
-export function canAccessSettings(user: User, entry: SettingsEntry): boolean {
+export function canAccessSettings(
+  user: User,
+  entry: SettingsEntry,
+  features?: Iterable<string> | null,
+): boolean {
+  if (entry.feature && !hasFeature(features, entry.feature)) return false;
   if (user.role === "owner") return true;
   if (
     (entry.id === "workspace" || entry.id === "workspace-invitations") &&
@@ -189,26 +212,41 @@ export function hasPermission(user: User, required: Permission): boolean {
   );
 }
 
+function hasFeature(
+  features: Iterable<string> | null | undefined,
+  name: string,
+): boolean {
+  if (!features) return false;
+  for (const feature of features) if (feature === name) return true;
+  return false;
+}
+
 export function canAccessSettingsPage(
   user: User,
   pageID: SettingsPageID,
+  features?: Iterable<string> | null,
 ): boolean {
   const entry = settingsRegistry.find((item) => item.id === pageID);
-  return entry ? canAccessSettings(user, entry) : false;
+  return entry ? canAccessSettings(user, entry, features) : false;
 }
 
-export function visibleSettings(user: User): readonly SettingsEntry[] {
+export function visibleSettings(
+  user: User,
+  features?: Iterable<string> | null,
+): readonly SettingsEntry[] {
   return settingsRegistry.filter(
-    (entry) => !entry.parent && canAccessSettings(user, entry),
+    (entry) => !entry.parent && canAccessSettings(user, entry, features),
   );
 }
 
 export function visibleChildSettings(
   user: User,
   parent: SettingsPageID,
+  features?: Iterable<string> | null,
 ): readonly SettingsEntry[] {
   return settingsRegistry.filter(
-    (entry) => entry.parent === parent && canAccessSettings(user, entry),
+    (entry) =>
+      entry.parent === parent && canAccessSettings(user, entry, features),
   );
 }
 

@@ -39,6 +39,7 @@ export * from "./agentBuilder";
 export * from "./knowledge";
 export * from "./calendar";
 export * from "./composerMenu";
+export * from "./org";
 export * from "./requests";
 export * from "./reminders";
 export * from "./importantInbox";
