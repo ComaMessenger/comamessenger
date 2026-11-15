@@ -27,6 +27,8 @@ const requestFailKeys: Record<RequestErrorKind, string> = {
   audienceEmpty: "requestFailAudienceEmpty",
   tooManyRecipients: "requestFailTooManyRecipients",
   audienceUnavailable: "requestFailAudienceUnavailable",
+  audienceForbidden: "requestFailAudienceForbidden",
+  audienceGone: "requestFailAudienceGone",
   limit: "requestFailLimit",
   remindTooSoon: "requestFailRemindTooSoon",
   invalid: "requestFailInvalid",

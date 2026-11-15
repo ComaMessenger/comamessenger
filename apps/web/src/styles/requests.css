@@ -929,3 +929,9 @@ button.request-button--primary:hover:not(:disabled) {
 .inbox-card .request-card__to {
   display: none;
 }
+
+/* A message opened by a link, a push or a reminder. */
+.message.message--highlight {
+  background: var(--coma-primary-soft);
+  transition: background var(--coma-motion) var(--coma-ease);
+}

@@ -2557,39 +2557,46 @@ test("utility screens are master-detail on desktop and list-only on phones", asy
   await expect(page.getByText("Нет важных сообщений")).toBeVisible();
 });
 
-test("Interface Lab utility headers remain inside the visible workspace", async ({
-  page,
-}) => {
-  await mockMessenger(page);
-  for (const path of [
-    "/settings/profile",
-    "/settings/notifications",
-    "/settings/security",
-    "/agents",
-  ]) {
-    await page.goto(path);
-    const heading = page.locator(".workspace h1").first();
-    await expect(heading).toBeVisible();
-    const box = await heading.boundingBox();
-    expect(box).not.toBeNull();
-    expect(box!.y).toBeGreaterThanOrEqual(0);
-    expect(box!.y + box!.height).toBeLessThanOrEqual(
-      page.viewportSize()!.height,
-    );
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth),
-    ).toBeLessThanOrEqual(page.viewportSize()!.width);
-    if (path === "/settings/profile") {
-      await expect(page).toHaveScreenshot("settings-profile.png", {
-        animations: "disabled",
-      });
+test.describe("utility headers on a device in UTC", () => {
+  // After sign-in a profile on the default zone (UTC) takes the device's
+  // zone; on a UTC device it stays, so the profile snapshot does not depend
+  // on where the tests run.
+  test.use({ timezoneId: "UTC" });
+
+  test("Interface Lab utility headers remain inside the visible workspace", async ({
+    page,
+  }) => {
+    await mockMessenger(page);
+    for (const path of [
+      "/settings/profile",
+      "/settings/notifications",
+      "/settings/security",
+      "/agents",
+    ]) {
+      await page.goto(path);
+      const heading = page.locator(".workspace h1").first();
+      await expect(heading).toBeVisible();
+      const box = await heading.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.y).toBeGreaterThanOrEqual(0);
+      expect(box!.y + box!.height).toBeLessThanOrEqual(
+        page.viewportSize()!.height,
+      );
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth),
+      ).toBeLessThanOrEqual(page.viewportSize()!.width);
+      if (path === "/settings/profile") {
+        await expect(page).toHaveScreenshot("settings-profile.png", {
+          animations: "disabled",
+        });
+      }
+      if (path === "/agents") {
+        await expect(page).toHaveScreenshot("agents-overview.png", {
+          animations: "disabled",
+        });
+      }
     }
-    if (path === "/agents") {
-      await expect(page).toHaveScreenshot("agents-overview.png", {
-        animations: "disabled",
-      });
-    }
-  }
+  });
 });
 
 test("tablet thread details and narrow agent hints keep usable widths", async ({

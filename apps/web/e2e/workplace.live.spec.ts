@@ -276,7 +276,7 @@ test("a reminder about a message fires, shows in «Важные» and is done", 
       time: `${pad(value.getHours())}:${pad(value.getMinutes())}`,
     };
   });
-  await picker.getByLabel("День", { exact: true }).fill(at.day);
+  await picker.locator("input[type=date]").fill(at.day);
   await picker.getByLabel("Время", { exact: true }).fill(at.time);
   await picker.getByLabel("Заметка для себя").fill("позвонить Марине");
   await picker.getByRole("button", { name: /^Напомнить: / }).click();
