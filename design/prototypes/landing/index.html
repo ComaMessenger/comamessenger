@@ -289,7 +289,8 @@ h3 { font-size: 20px; line-height: 1.25; font-weight: 600; letter-spacing: -.01e
 .step:not(:last-child)::before { content: ""; position: absolute; left: 14.5px; top: 29px; bottom: -9px; width: 1.5px; background: var(--border); }
 .step small { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
 .step.run { color: var(--fg); background: var(--primary-soft); }
-.step.run .mk { border-color: var(--primary); color: var(--primary); border-top-color: transparent; animation: spin .9s linear infinite; }
+.step.run .mk { border-color: transparent; color: var(--primary); }
+.step.run .mk::after { content: ""; position: absolute; inset: -1.5px; border-radius: 50%; border: 1.5px solid var(--primary); border-top-color: transparent; animation: spin .9s linear infinite; }
 .step.done { color: var(--fg); }
 .step.done .mk { background: var(--success); border-color: var(--success); color: #fff; }
 :root[data-theme="dark"] .step.done .mk { color: #10261a; }
