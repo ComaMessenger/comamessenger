@@ -163,6 +163,11 @@ export const orgCatalog = defineCatalog(
     orgPositionsCreated:
       "{count, plural, one {Создана # должность} few {Созданы # должности} many {Созданы # должностей} other {Созданы # должности}}",
 
+    requestAudienceDepartment: "Отдел",
+    requestAudiencePosition: "Должность",
+    requestDepartmentMeta: "со всеми вложенными · {count} чел.",
+    requestInChat: "в этом чате: {count}",
+
     orgMentionDepartments: "Отделы",
     orgMentionPeople: "Люди",
     orgMentionInChat:
@@ -349,6 +354,11 @@ export const orgCatalog = defineCatalog(
       "{count, plural, =0 {Create positions} other {Create positions · #}}",
     orgPositionsCreated:
       "{count, plural, one {# position created} other {# positions created}}",
+
+    requestAudienceDepartment: "Department",
+    requestAudiencePosition: "Position",
+    requestDepartmentMeta: "with subdepartments · {count} ppl",
+    requestInChat: "in this chat: {count}",
 
     orgMentionDepartments: "Departments",
     orgMentionPeople: "People",

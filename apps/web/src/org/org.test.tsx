@@ -26,6 +26,8 @@ import { ToastProvider } from "../shell/ToastProvider";
 import { OrgTree } from "../directories/OrgTree";
 import { DepartmentProfile } from "../directories/DepartmentProfile";
 import { WorkspaceOrgPage } from "../settings/pages/workspace/WorkspaceOrgPage";
+import { RequestDialog } from "../requests/RequestDialog";
+import type { ChatMember, Message } from "@comamessenger/core";
 
 const id = (prefix: string, n: number) =>
   `${prefix}-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -355,5 +357,73 @@ describe("WorkspaceOrgPage", () => {
       { user: member },
     );
     expect(screen.queryByRole("tab", { name: "Departments" })).toBeNull();
+  });
+});
+
+describe("RequestDialog addressees from the structure", () => {
+  const chatMember = (actorID: string): ChatMember =>
+    ({
+      ...actorMap.get(actorID)!,
+      role: "member",
+      joined_at: "2026-08-19T00:00:00Z",
+    }) as unknown as ChatMember;
+  const members = [anna, oleg, boris].map(chatMember);
+
+  it("has no group segments without the right", () => {
+    render(
+      <RequestDialog
+        chatID="c1"
+        userID={anna}
+        members={members}
+        createRequest={vi.fn()}
+        onSent={() => undefined}
+        onClose={() => undefined}
+      />,
+    );
+    expect(screen.getAllByRole("radio").map((item) => item.textContent)).toEqual(
+      expect.arrayContaining(["Whole chat", "People"]),
+    );
+    expect(screen.queryByRole("radio", { name: "Department" })).toBeNull();
+  });
+
+  it("sends to a department with its subdepartments", async () => {
+    sessionStorage.clear();
+    const createRequest = vi.fn(
+      async (_chatID: string, input: { client_msg_id: string }) =>
+        ({ id: "m1", client_msg_id: input.client_msg_id }) as unknown as Message,
+    );
+    render(
+      <RequestDialog
+        chatID="c1"
+        userID={anna}
+        members={members}
+        segments={["chat", "people", "department", "position"]}
+        structure={structure()}
+        createRequest={createRequest}
+        onSent={() => undefined}
+        onClose={() => undefined}
+      />,
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: "Question" }), {
+      target: { value: "Read the schedule" },
+    });
+    fireEvent.click(screen.getByRole("radio", { name: "Department" }));
+    const list = screen.getByRole("radiogroup", { name: "Department" });
+    // The first department in tree order is preselected: Office has
+    // nobody of this chat.
+    expect(within(list).getByRole("radio", { name: /^Office/ })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    expect(
+      within(list).getByRole("radio", { name: /^Rehabilitation/ }),
+    ).toHaveTextContent("with subdepartments · 3 ppl · in this chat: 2");
+    fireEvent.click(within(list).getByRole("radio", { name: /^Rehabilitation/ }));
+    const send = screen.getByRole("button", { name: "Send request · 2 people" });
+    fireEvent.click(send);
+    await waitFor(() => expect(createRequest).toHaveBeenCalled());
+    expect(createRequest.mock.calls[0]![1]).toMatchObject({
+      audience: { kind: "department", department_id: rehab },
+    });
   });
 });

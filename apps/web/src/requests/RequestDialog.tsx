@@ -4,6 +4,11 @@ import { useTranslation } from "react-i18next";
 import {
   autoRemindAt,
   autoRemindAvailable,
+  departmentCount,
+  departmentPath,
+  expandDepartment,
+  expandPosition,
+  orgIndex,
   emptyRequestDraft,
   formatRequestDue,
   fromLocalInputValue,
@@ -20,7 +25,10 @@ import {
   toLocalInputValue,
   type ChatMember,
   type Message,
+  type OrgStructure,
+  type RequestAudienceSegment,
   type RequestDraft,
+  type RequestDraftAudience,
   type RequestDraftProblem,
 } from "@comamessenger/core";
 import {
@@ -100,10 +108,19 @@ export function RequestDialog({
   createRequest,
   onSent,
   onClose,
+  segments = ["chat", "people"],
+  structure = null,
 }: {
   chatID: string;
   userID: string;
   members: ChatMember[];
+  /**
+   * "To": the whole chat and people, plus a department and a position for those
+   * who may address groups on org_structure servers (audienceSegments).
+   */
+  segments?: readonly RequestAudienceSegment[];
+  /** The org structure for the department and position segments. */
+  structure?: OrgStructure | null;
   createRequest(chatID: string, input: ReturnType<typeof toCreateRequestInput>): Promise<Message>;
   onSent(message: Message): void;
   onClose(): void;
@@ -156,7 +173,13 @@ export function RequestDialog({
   const people = members.filter(
     (member) => member.type === "user" && member.actor_id !== userID,
   );
-  const recipients = requestRecipientIDs(draft.audience, members, userID);
+  // A stored draft may name a segment this reader no longer has.
+  const audience: RequestDraftAudience = segments.includes(draft.audience.kind)
+    ? draft.audience
+    : { kind: "chat" };
+  const recipients = requestRecipientIDs(audience, members, userID, structure);
+  const chatPeopleIDs = people.map((member) => member.actor_id);
+  const index = structure ? orgIndex(structure) : null;
   const dueAt =
     due === "none"
       ? null
@@ -164,7 +187,7 @@ export function RequestDialog({
         ? fromLocalInputValue(customDue)
         : (duePresets.find((preset) => preset.id === due)?.at ?? null);
   const now = new Date();
-  const full: RequestDraft = { ...draft, dueAt };
+  const full: RequestDraft = { ...draft, audience, dueAt };
   const problem =
     due === "custom" && !dueAt
       ? ({ field: "dueAt", reason: "past" } as const)
@@ -277,27 +300,125 @@ export function RequestDialog({
           </span>
           <Segmented
             label={t("requestAudienceLabel")}
-            value={draft.audience.kind}
+            value={audience.kind}
             onChange={(kind) =>
               update({
                 audience:
                   kind === "chat"
                     ? { kind: "chat" }
-                    : {
-                        kind: "people",
-                        actorIDs:
-                          draft.audience.kind === "people"
-                            ? draft.audience.actorIDs
-                            : [],
-                      },
+                    : kind === "people"
+                      ? {
+                          kind: "people",
+                          actorIDs:
+                            audience.kind === "people" ? audience.actorIDs : [],
+                        }
+                      : kind === "department"
+                        ? {
+                            kind: "department",
+                            departmentID:
+                              audience.kind === "department"
+                                ? audience.departmentID
+                                : (index?.order[0]?.id ?? ""),
+                          }
+                        : {
+                            kind: "position",
+                            positionID:
+                              audience.kind === "position"
+                                ? audience.positionID
+                                : (index?.positionOrder[0]?.id ?? ""),
+                          },
               })
             }
-            items={[
-              { id: "chat", label: t("requestAudienceChat") },
-              { id: "people", label: t("requestAudiencePeople") },
-            ]}
+            items={segments.map((id) => ({
+              id,
+              label: t(
+                {
+                  chat: "requestAudienceChat",
+                  people: "requestAudiencePeople",
+                  department: "requestAudienceDepartment",
+                  position: "requestAudiencePosition",
+                }[id],
+              ),
+            }))}
           />
-          {draft.audience.kind === "people" ? (
+          {audience.kind === "department" && index ? (
+            <div
+              className="request-form__groups"
+              role="radiogroup"
+              aria-label={t("requestAudienceDepartment")}
+            >
+              {index.order.map((department) => {
+                const inChat = expandDepartment(structure!, department.id, {
+                  chatMemberIDs: chatPeopleIDs,
+                  excludeActorID: userID,
+                }).inChat.length;
+                const path = departmentPath(structure!, department.id, {
+                  includeSelf: false,
+                });
+                return (
+                  <button
+                    key={department.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={audience.departmentID === department.id}
+                    className="request-form__group"
+                    onClick={() =>
+                      update({
+                        audience: {
+                          kind: "department",
+                          departmentID: department.id,
+                        },
+                      })
+                    }
+                  >
+                    <strong>{department.name}</strong>
+                    <small>
+                      {[
+                        path,
+                        t("requestDepartmentMeta", {
+                          count: departmentCount(structure!, department.id),
+                        }),
+                        t("requestInChat", { count: inChat }),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </small>
+                  </button>
+                );
+              })}
+            </div>
+          ) : audience.kind === "position" && index ? (
+            <div
+              className="request-form__groups"
+              role="radiogroup"
+              aria-label={t("requestAudiencePosition")}
+            >
+              {index.positionOrder.map((position) => (
+                <button
+                  key={position.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={audience.positionID === position.id}
+                  className="request-form__group"
+                  onClick={() =>
+                    update({
+                      audience: { kind: "position", positionID: position.id },
+                    })
+                  }
+                >
+                  <strong>{position.name}</strong>
+                  <small>
+                    {t("requestInChat", {
+                      count: expandPosition(structure!, position.id, {
+                        chatMemberIDs: chatPeopleIDs,
+                        excludeActorID: userID,
+                      }).inChat.length,
+                    })}
+                  </small>
+                </button>
+              ))}
+            </div>
+          ) : audience.kind === "people" ? (
             people.length ? (
               <div
                 className="request-form__chips"
@@ -306,15 +427,15 @@ export function RequestDialog({
               >
                 {people.map((member) => {
                   const chosen =
-                    draft.audience.kind === "people" &&
-                    draft.audience.actorIDs.includes(member.actor_id);
+                    audience.kind === "people" &&
+                    audience.actorIDs.includes(member.actor_id);
                   return (
                     <Chip
                       key={member.actor_id}
                       active={chosen}
                       onClick={() => {
-                        if (draft.audience.kind !== "people") return;
-                        const ids = draft.audience.actorIDs;
+                        if (audience.kind !== "people") return;
+                        const ids = audience.actorIDs;
                         update({
                           audience: {
                             kind: "people",

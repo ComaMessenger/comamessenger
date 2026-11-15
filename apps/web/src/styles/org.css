@@ -774,3 +774,44 @@ button.org-group__open:focus-visible {
   width: 16px;
   height: 16px;
 }
+
+/* Request: «Отдел» and «Должность» addressees ---------------------------- */
+.request-form__groups {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--coma-border);
+  border-radius: var(--coma-radius-md);
+}
+.request-form__group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--coma-radius-sm);
+  background: transparent;
+  color: var(--coma-foreground);
+  text-align: start;
+}
+.request-form__group:hover,
+.request-form__group:focus-visible {
+  background: var(--coma-surface-hover);
+}
+.request-form__group[aria-checked="true"] {
+  background: var(--coma-primary-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--coma-primary) 30%, transparent);
+}
+.request-form__group strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.request-form__group small {
+  color: var(--coma-muted);
+  font-size: 12px;
+}

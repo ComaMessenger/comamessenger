@@ -20,7 +20,7 @@ import {
 } from "../ui";
 import { getLocalDraft, setLocalDraft, syncDraft } from "../lib/drafts";
 import { formatDaySeparator } from "../lib/format";
-import { messageMentionFields } from "@comamessenger/core";
+import { audienceSegments, messageMentionFields } from "@comamessenger/core";
 import { noteDepartmentSend, useMentionStructure } from "../org/mentions";
 import { DepartmentMentionNote } from "../org/DepartmentMentionNote";
 import { canManageChat, chatGlyph, isReadOnly, titleOf } from "../lib/chats";
@@ -492,6 +492,8 @@ export function Conversation({
           chatID={chatID}
           userID={user.id}
           members={members}
+          segments={audienceSegments(user, features, orgStructure)}
+          structure={orgStructure}
           createRequest={(id, input) => api.createRequest(id, input)}
           onSent={(message) => {
             setRequesting(false);
