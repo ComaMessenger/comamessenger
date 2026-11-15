@@ -59,6 +59,7 @@
 7. [Фаза 5.2. Продуктовый опыт агентской платформы](05.2-agent-product-experience.md)
 8. [Фаза 5.3. Понятные агенты, база знаний и интеграции](05.3-agent-experience-knowledge.md)
 9. [Фаза 6. Мобильный клиент](06-mobile.md)
+   - [6.4. Рабочие функции, волна 1: меню «+», «Запрос», «Напомнить мне»](06.4-requests-and-reminders.md) — план
 10. [Фаза 7. Production readiness](07-production-readiness.md)
 11. [Фаза 8. Публичный релиз v1.0](08-public-release.md)
 
