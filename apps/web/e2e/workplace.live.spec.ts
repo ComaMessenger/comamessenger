@@ -188,7 +188,7 @@ test("a request goes from the author to recipients, reminds and closes", async (
     anna.locator(".chat-row", { hasText: "Инструкторы · зал" }).locator(".chat-row__need"),
   ).toHaveText("ждут ответа");
   await openChat(anna);
-  await expect(anna.getByRole("button", { name: /Ждут вашего ответа/ })).toBeVisible();
+  await expect(anna.locator(".chat-slot")).toContainText("Ждут вашего ответа");
   const annaCard = requestCard(anna);
   await annaCard.getByRole("button", { name: "Приду", exact: true }).click();
   await expect(annaCard).toContainText("Ваш ответ: Приду");
@@ -196,7 +196,7 @@ test("a request goes from the author to recipients, reminds and closes", async (
   await annaCard.getByRole("textbox", { name: "Комментарий к ответу" }).fill("буду к 8:20");
   await annaCard.getByRole("button", { name: "Сохранить" }).click();
   await expect(annaCard).toContainText("Ваш комментарий: буду к 8:20");
-  await expect(anna.getByRole("button", { name: /Ждут вашего ответа/ })).toHaveCount(0);
+  await expect(anna.locator(".chat-slot")).toHaveCount(0);
 
   // The author sees it live: the count and the bars.
   await expect(authorCard).toContainText("Ответили 1 из 2");

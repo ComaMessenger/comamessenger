@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import {
   chatRequestBadge,
+  chatTaskBadge,
   toggleChatInFolder,
   type Chat,
 } from "@comamessenger/core";
@@ -269,6 +270,9 @@ export function ChatListPane({
                   mentionCount={counts?.mention_count ?? 0}
                   requestBadge={
                     features.requests ? chatRequestBadge(counts) : null
+                  }
+                  taskBadge={
+                    features.tasks ? chatTaskBadge(counts, new Date()) : null
                   }
                   pinned={pinnedChatIDs.includes(chat.id)}
                   pinnedCount={pinnedChatIDs.length}

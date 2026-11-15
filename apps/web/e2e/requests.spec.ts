@@ -150,8 +150,10 @@ for (const theme of ["light", "dark"] as const) {
   }) => {
     const api = await mockWorkplace(page, { theme });
     await openChat(page);
-    const strip = page.getByRole("button", { name: /Ждут вашего ответа/ });
-    await expect(strip).toHaveText(/Ждут вашего ответа · до пт, 18:00/);
+    // The one slot under the header shows the request waiting for me.
+    const strip = page.locator('.chat-slot[data-slot-kind="requests"]');
+    await expect(strip).toContainText("Ждут вашего ответа · пт, 18:00");
+    await expect(strip).toContainText("Планёрка в понедельник в 8:30");
     await expect(page).toHaveScreenshot(`request-feed-${theme}.png`, shot);
 
     const planning = card(page, ids.planning);
@@ -301,7 +303,7 @@ test("an older server keeps the menus as they were", async ({ page }) => {
   await expect(menu.getByRole("menuitem", { name: /Запрос/ })).toHaveCount(0);
   await expect(menu.getByRole("menuitem", { name: /Позвать агента/ })).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("button", { name: /Ждут вашего ответа/ })).toHaveCount(0);
+  await expect(page.locator(".chat-slot")).toHaveCount(0);
   await page.goto("/important");
   await expect(page.getByRole("tablist", { name: "Разделы «Важных»" })).toHaveCount(0);
 });

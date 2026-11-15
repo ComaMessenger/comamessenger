@@ -611,21 +611,6 @@ button.request-button--primary:hover:not(:disabled) {
   flex: 1;
   min-width: 0;
 }
-.chat-strip--waiting {
-  background: var(--coma-warning-soft);
-  color: var(--coma-warning);
-  cursor: pointer;
-}
-.chat-strip--waiting strong {
-  font-weight: 600;
-}
-.chat-strip--waiting:hover {
-  background: var(--coma-surface-hover);
-}
-.chat-strip--waiting:focus-visible {
-  outline: 2px solid var(--coma-primary);
-  outline-offset: -2px;
-}
 .chat-strip__chevron {
   opacity: 0.7;
 }

@@ -1,71 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouterState } from "@tanstack/react-router";
-import { Bell, Check, ChevronRight, MessageSquareMore } from "lucide-react";
+import { Bell, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useStore } from "zustand";
-import {
-  formatRequestDue,
-  reminderKeys,
-  waitingStrip,
-  type Message,
-} from "@comamessenger/core";
+import { reminderKeys } from "@comamessenger/core";
 import { Button } from "../ui";
 import { useMessenger } from "../shell/MessengerContext";
 import { useReminderActions } from "../reminders/useReminders";
-import { calendarLocale, useWorkplaceFeatures } from "./format";
-
-/**
- * “Waiting for your answer · by Fri, 18:00” under the chat header. Counts come from
- * GET /unread; a click scrolls to the earliest waiting request, or opens
- * Important → Waiting for you when it is not loaded. Returns null when nothing waits,
- * so the Scheduled strip may show instead.
- */
-export function WaitingStrip({
-  chatID,
-  messages,
-  onJump,
-}: {
-  chatID: string;
-  messages: readonly Pick<Message, "id" | "request" | "created_seq">[];
-  onJump(messageID: string): void;
-}) {
-  const { t } = useTranslation();
-  const { store, navigate } = useMessenger();
-  const { requests } = useWorkplaceFeatures();
-  const chat = useStore(store, (state) =>
-    state.unread.chats.find((item) => item.chat_id === chatID),
-  );
-  const viewers = useStore(store, (state) => state.requestViewers);
-  if (!requests) return null;
-  const strip = waitingStrip(chat, messages, viewers);
-  if (!strip) return null;
-  const parts = [
-    strip.dueAt
-      ? t("requestDueBy", {
-          when: formatRequestDue(strip.dueAt, new Date(), calendarLocale()),
-        })
-      : null,
-    strip.count > 1 ? t("requestStripCount", { count: strip.count }) : null,
-  ].filter(Boolean);
-  return (
-    <button
-      type="button"
-      className="chat-strip chat-strip--waiting"
-      onClick={() =>
-        strip.messageID
-          ? onJump(strip.messageID)
-          : navigate("/important?tab=waiting")
-      }
-    >
-      <MessageSquareMore aria-hidden="true" />
-      <span className="truncate">
-        <strong>{t("requestStrip")}</strong>
-        {parts.length > 0 && ` · ${parts.join(" · ")}`}
-      </span>
-      <ChevronRight aria-hidden="true" className="chat-strip__chevron" />
-    </button>
-  );
-}
+import { useWorkplaceFeatures } from "./format";
 
 /**
  * “Reminder · note · Done” when the chat was opened from a fired

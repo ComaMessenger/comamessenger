@@ -18,6 +18,7 @@ import {
   orgKeys,
   pinnedChatLimit,
   createUnreadRefresher,
+  parseTaskEvent,
   refreshesUnread,
   syncDeviceTimezone,
   type Chat,
@@ -45,6 +46,8 @@ import {
   scheduledQueryKey,
 } from "../scheduled/useScheduled";
 import { applyWorkplaceEvent, invalidateWorkplace } from "../requests/realtime";
+import { applyTaskEvent } from "../tasks/realtime";
+import { taskNotice, taskNoticeAllowed } from "../tasks/notice";
 
 export type InAppNotification = {
   id: string;
@@ -171,7 +174,11 @@ export function useMessengerSession({
   }, []);
 
   const showInAppNotification = useCallback(
-    (event: DurableEvent, chat: Chat | undefined) => {
+    (
+      event: DurableEvent,
+      chat: Chat | undefined,
+      content?: { title: string; body: string; url: string },
+    ) => {
       const id = `${event.seq}:${event.type}`;
       const messageBody =
         typeof event.data.body === "string"
@@ -192,7 +199,15 @@ export function useMessengerSession({
       const mentioned = Array.isArray(event.data.mentioned_actor_ids)
         ? (event.data.mentioned_actor_ids as string[]).includes(user.id)
         : false;
-      const notification: InAppNotification = {
+      const notification: InAppNotification = content
+        ? {
+            id,
+            ...content,
+            avatarName: contextName,
+            avatarSeed: chat?.avatar_seed || chat?.id || user.org_id,
+            mention: true,
+          }
+        : {
         id,
         title,
         body,
@@ -205,7 +220,7 @@ export function useMessengerSession({
         avatarName: contextName,
         avatarSeed: chat?.avatar_seed || chat?.id || user.org_id,
         mention: mentioned,
-      };
+          };
       setInAppNotifications((current) => [
         ...current.filter((item) => item.id !== id).slice(-2),
         notification,
@@ -259,8 +274,55 @@ export function useMessengerSession({
               if (org.kind === "refetch") scheduleOrgRefetch(org.delayMs);
               return true;
             }
+            // The reader's part in a task before the update: losing it
+            // changes Waiting for you and the counters as much as gaining it.
+            const previousTask =
+              event.type === "task.updated" &&
+              typeof event.data.message_id === "string"
+                ? (store.getState().taskOf(event.data.message_id) ??
+                  undefined)
+                : undefined;
             const applied = store.getState().apply(event);
-            if (refreshesUnread(event)) unreadRefresher.request();
+            if (
+              refreshesUnread(
+                event,
+                previousTask !== undefined
+                  ? { me: user.id, previous: previousTask }
+                  : undefined,
+              )
+            )
+              unreadRefresher.request();
+            applyTaskEvent(queryClient, user.id, event);
+            const taskNotified =
+              event.type === "task.notified" ? parseTaskEvent(event) : null;
+            if (
+              taskNotified?.type === "task.notified" &&
+              document.visibilityState === "visible" &&
+              taskNotified.data.chat_id !== store.getState().activeChatID
+            ) {
+              const taskChat = store.getState().chats[taskNotified.data.chat_id];
+              if (
+                taskNoticeAllowed(
+                  taskNotified.data.kind,
+                  notificationPreferences.current,
+                  taskChat,
+                  new Date(event.occurred_at),
+                )
+              )
+                showInAppNotification(event, taskChat, {
+                  ...taskNotice(
+                    taskNotified.data.kind,
+                    store
+                      .getState()
+                      .taskOf(
+                        taskNotified.data.message_id,
+                        taskNotified.data.chat_id,
+                      )?.title ?? null,
+                    taskChat?.display_name || user.organization_name,
+                  ),
+                  url: `/chat/${taskNotified.data.chat_id}?message=${taskNotified.data.message_id}`,
+                });
+            }
             // Requests and reminders: private lists and the reader's own
             // reminders, which only reach the owner's devices.
             if (applyWorkplaceEvent(queryClient, user.id, event))

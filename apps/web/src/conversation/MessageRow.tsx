@@ -10,6 +10,7 @@ import {
   Eye,
   Forward,
   Link2,
+  ListChecks,
   MessagesSquare,
   MoreHorizontal,
   Pencil,
@@ -23,6 +24,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
+  canMakeTask,
   compactUUID,
   decodeMentions,
   encodeMentions,
@@ -31,6 +33,7 @@ import {
   messagePlainText,
   orgKeys,
   renderableBlocks,
+  taskDraftFromMessage,
   updateMentionText,
   type ChatMember,
   type ClientMessage,
@@ -62,6 +65,10 @@ import { saveFailureKey, useSaveMessage, useSavedIDs } from "./useSaved";
 import { MessageBlocksView } from "../agentchat/MessageBlocksView";
 import { AgentWhy } from "../agentchat/AgentWhy";
 import { RequestMessage } from "../requests/RequestMessage";
+import { TaskMessage } from "../tasks/TaskMessage";
+import { CreateTaskDialog } from "../tasks/CreateTask";
+import { isReadOnly } from "../lib/chats";
+import { useStore } from "zustand";
 import { useWorkplaceFeatures } from "../requests/format";
 import { ReminderPicker } from "../reminders/ReminderPicker";
 import {
@@ -120,6 +127,11 @@ export function MessageRow({
   const { t } = useTranslation();
   const { api, user, store } = useMessenger();
   const queryClient = useQueryClient();
+  const chatReadonly = useStore(store, (state) => {
+    const chat = state.chats[message.chat_id];
+    return chat ? isReadOnly(chat) : false;
+  });
+  const [makingTask, setMakingTask] = useState(false);
   const { toast } = useToast();
   const [menuOpen, setMenuOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -156,6 +168,13 @@ export function MessageRow({
   const [reminding, setReminding] = useState(false);
   const [reminderBusy, setReminderBusy] = useState(false);
   const request = message.request && !message.deleted_at ? message.request : null;
+  const task = message.task && !message.deleted_at ? message.task : null;
+  const makeTaskShown = canMakeTask({
+    tasks: features.tasks && !chatReadonly,
+    persisted,
+    hasText: Boolean(messagePlainText(message.body).trim()),
+    messageType: message.type,
+  });
   const resolvedReply =
     replyMessage ?? replyQuery.data?.messages.find((item) => item.id === message.reply_to_id);
   const replyAuthor = members.find((item) => item.actor_id === resolvedReply?.actor_id);
@@ -399,7 +418,7 @@ export function MessageRow({
             <time dateTime={message.created_at}>
               {formatTime(message.created_at)}
             </time>
-            {message.edited_at && !message.deleted_at && !request && (
+            {message.edited_at && !message.deleted_at && !request && !task && (
               <span className="message__edited">{t("edited")}</span>
             )}
           </header>
@@ -443,6 +462,13 @@ export function MessageRow({
               </button>
             </div>
           </div>
+        ) : task ? (
+          <TaskMessage
+            message={{ ...message, task }}
+            members={members}
+            onThread={showThreadIndicator ? onThread : undefined}
+            onJump={onJump}
+          />
         ) : request ? (
           <RequestMessage
             message={message}
@@ -665,6 +691,17 @@ export function MessageRow({
                 {reminder ? t("messageEditReminder") : t("messageRemindMe")}
               </MenuItem>
             )}
+            {makeTaskShown && (
+              <MenuItem
+                icon={<ListChecks />}
+                onClick={() => {
+                  closeOverlays();
+                  setMakingTask(true);
+                }}
+              >
+                {t("messageMakeTask")}
+              </MenuItem>
+            )}
             {canPin && (
               <MenuItem
                 icon={<Pin />}
@@ -687,7 +724,7 @@ export function MessageRow({
             <MenuItem icon={<Copy />} onClick={() => void copy("text")}>
               {t("copyText")}
             </MenuItem>
-            {own && (
+            {own && !task && (
               <>
                 <MenuDivider />
                 <MenuItem icon={<Pencil />} onClick={startEdit}>
@@ -732,6 +769,18 @@ export function MessageRow({
               .finally(() => setReminderBusy(false));
           }}
           onClose={() => setReminding(false)}
+        />
+      )}
+      {makingTask && (
+        <CreateTaskDialog
+          chatID={message.chat_id}
+          members={members}
+          initial={taskDraftFromMessage(message)}
+          source={{
+            authorName: name,
+            excerpt: messagePlainText(message.body).trim().slice(0, 140),
+          }}
+          onClose={() => setMakingTask(false)}
         />
       )}
       {forwarding && (
