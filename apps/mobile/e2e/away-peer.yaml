@@ -20,20 +20,30 @@ appId: com.comamessenger.app
     timeout: 10000
 - assertVisible:
     id: conversation-away-badge
-- runFlow:
-    when:
-      visible:
-        id: chat-slot
-    commands:
-      - assertVisible: .*Вместо Анны — Марина Соколова.*
+- assertVisible:
+    id: chat-slot-away
+- assertVisible: .*Вместо Анны — Марина Соколова.*
 - tapOn:
     id: composer-input
+# A draft left by an earlier run goes first.
+- eraseText: 120
 - inputText: Анна, сможешь в среду подменить в бассейне? ${output.tag}
+- extendedWaitUntil:
+    visible:
+      id: composer-send
+      enabled: true
+    timeout: 5000
 - tapOn:
     id: composer-send
 - extendedWaitUntil:
+    visible: .*подменить в бассейне\? ${output.tag}.*
+    timeout: 10000
+# The auto-reply comes once to this message (seed-away.mjs starts a new
+# period every run).
+- extendedWaitUntil:
     visible:
       id: auto-reply-tag
+      below: .*подменить в бассейне\? ${output.tag}.*
     timeout: 20000
 - hideKeyboard:
     optional: true
@@ -120,3 +130,23 @@ appId: com.comamessenger.app
 - assertVisible:
     id: person-away-substitute
 - takeScreenshot: ${THEME}-away-person
+
+# 4. The slot opens the direct chat with the substitute.
+- tapOn:
+    id: person-back
+- tapOn:
+    id: people-back
+- tapOn:
+    id: tab-chats
+- tapOn: "Анна Иванова, .*"
+- extendedWaitUntil:
+    visible:
+      id: chat-slot-away
+    timeout: 10000
+- tapOn:
+    id: chat-slot-away
+- extendedWaitUntil:
+    visible: .*Марина Соколова.*
+    timeout: 15000
+- assertNotVisible:
+    id: chat-slot-away

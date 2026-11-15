@@ -6,7 +6,21 @@
 appId: com.comamessenger.app
 ---
 - runFlow: open-app.yaml
-- tapOn: .*Опросы · зал.*
+
+# 0. «Важные → Ждут вас → Опросы»: the poll with a due date waits.
+- tapOn:
+    id: tab-important
+- tapOn:
+    id: important-section-waiting
+- tapOn:
+    id: waiting-filter-polls
+- extendedWaitUntil:
+    visible: .*Какой день удобнее для выездного занятия\?.*
+    timeout: 10000
+- assertVisible: .*Опрос · Анна Иванова.*
+- takeScreenshot: ${THEME}-poll-waiting
+- tapOn:
+    id: waiting-poll-waiting-0-open
 - extendedWaitUntil:
     visible:
       id: conversation
@@ -34,6 +48,12 @@ appId: com.comamessenger.app
 - takeScreenshot: ${THEME}-poll-voted
 
 # 3. «Отменить голос», then «Вторник».
+# The vote is on its way while the buttons are disabled.
+- extendedWaitUntil:
+    visible:
+      id: poll-retract
+      enabled: true
+    timeout: 10000
 - tapOn:
     id: poll-retract
 - extendedWaitUntil:
@@ -53,3 +73,16 @@ appId: com.comamessenger.app
     timeout: 10000
 - assertVisible: 100%
 - takeScreenshot: ${THEME}-poll-anonymous
+
+# 5. Voted: the poll is no longer waiting.
+- tapOn:
+    id: conversation-back
+- tapOn:
+    id: tab-important
+- tapOn:
+    id: important-section-waiting
+- tapOn:
+    id: waiting-filter-polls
+- extendedWaitUntil:
+    notVisible: .*Какой день удобнее для выездного занятия\?.*
+    timeout: 10000
