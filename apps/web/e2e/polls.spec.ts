@@ -395,7 +395,7 @@ test("the author of an anonymous poll sees counts and no names", async ({
   await expect(anon.getByRole("button", { name: "Кто голосовал" })).toHaveCount(0);
   await expect(anon.locator(".poll-option__faces")).toHaveCount(0);
   await expect(
-    anon.getByRole("button", { name: "Напомнить не ответившим · 2" }),
+    anon.getByRole("button", { name: "Напомнить не ответившим · 1" }),
   ).toBeVisible();
 });
 
