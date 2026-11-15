@@ -4,6 +4,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/comamessenger/comamessenger/core/internal/awayview"
 	"github.com/comamessenger/comamessenger/core/internal/permission"
 )
 
@@ -166,6 +167,9 @@ type Member struct {
 	// The org structure assignment (phase 6.5), left out without one.
 	PositionID          *string `json:"position_id,omitempty"`
 	PrimaryDepartmentID *string `json:"primary_department_id,omitempty"`
+	// Away is the member's away status as everyone sees it («Отсутствую»,
+	// phase 6.7); null without one.
+	Away *awayview.Public `json:"away"`
 }
 
 type UpdateMemberInput struct {

@@ -294,10 +294,10 @@ func (s *Service) DepartmentChatMissing(ctx context.Context, user identity.User,
 	if len(missing) > 0 {
 		rows, err := tx.Query(ctx, `
 			SELECT a.id, a.display_name, a.handle::text, a.title, a.about, a.type,
-			       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at > now() THEN a.status_emoji ELSE '' END,
-			       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at > now() THEN a.status_text ELSE '' END,
-			       CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at > now() THEN a.status_expires_at END,
-			       a.avatar_version, a.position_id,
+			       actor_shown_status_emoji(a.org_id, a.id, now(), CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at > now() THEN a.status_emoji ELSE '' END),
+			       actor_shown_status_text(a.org_id, a.id, now(), CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at > now() THEN a.status_text ELSE '' END),
+			       actor_shown_status_expires_at(a.org_id, a.id, now(), CASE WHEN a.status_expires_at IS NULL OR a.status_expires_at > now() THEN a.status_expires_at END),
+			       a.avatar_version, actor_away_public(a.org_id, a.id, now()), a.position_id,
 			       (SELECT dm.department_id FROM department_members dm WHERE dm.org_id = a.org_id AND dm.actor_id = a.id AND dm.is_primary)
 			FROM actors a WHERE a.org_id = $1 AND a.id = ANY($2::uuid[])
 			ORDER BY a.display_name, a.id`, user.OrgID, missing)
@@ -306,7 +306,7 @@ func (s *Service) DepartmentChatMissing(ctx context.Context, user identity.User,
 		}
 		for rows.Next() {
 			var actor chat.Actor
-			if err := rows.Scan(&actor.ID, &actor.DisplayName, &actor.Handle, &actor.Title, &actor.About, &actor.Type, &actor.StatusEmoji, &actor.StatusText, &actor.StatusExpiresAt, &actor.AvatarVersion, &actor.PositionID, &actor.PrimaryDepartmentID); err != nil {
+			if err := rows.Scan(&actor.ID, &actor.DisplayName, &actor.Handle, &actor.Title, &actor.About, &actor.Type, &actor.StatusEmoji, &actor.StatusText, &actor.StatusExpiresAt, &actor.AvatarVersion, &actor.Away, &actor.PositionID, &actor.PrimaryDepartmentID); err != nil {
 				rows.Close()
 				return DepartmentChatMissing{}, err
 			}
