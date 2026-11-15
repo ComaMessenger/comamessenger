@@ -11,7 +11,6 @@ import DateTimePicker, {
   DateTimePickerAndroid,
   type DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
-import { useQuery } from "@tanstack/react-query";
 import { useStore } from "zustand";
 import {
   CalendarDays,
@@ -26,8 +25,6 @@ import {
   expandPosition,
   formatTaskDue,
   orgIndex,
-  orgKeys,
-  orgStructureAvailable,
   taskDuePresets,
   taskLimits,
   type ChatMember,
@@ -55,24 +52,6 @@ import { TaskCheck } from "./parts";
 /** People of the chat who may answer for a task: active people, no agents. */
 export function taskPeople(members: readonly ChatMember[]): ChatMember[] {
   return members.filter((member) => member.type === "user");
-}
-
-/**
- * The org structure for «Отдел» and «Должность» (wave 2), read only when the
- * server has it. The same cache key as the rest of the app.
- */
-export function useTaskOrg(enabled: boolean): OrgStructure | null {
-  const { api } = useSignedIn();
-  const { store } = useMessenger();
-  const features = useStore(store, (state) => state.features);
-  const available = orgStructureAvailable(features) && enabled;
-  const query = useQuery({
-    queryKey: orgKeys.all,
-    queryFn: async () => (await api.orgStructure()) as OrgStructure,
-    enabled: available,
-    staleTime: 60_000,
-  });
-  return available ? (query.data ?? null) : null;
 }
 
 /**

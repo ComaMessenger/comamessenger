@@ -39,8 +39,8 @@ import {
   PersonChips,
   fieldStyles,
   taskPeople,
-  useTaskOrg,
 } from "./fields";
+import { useOrg } from "@/org/useOrg";
 import { taskFailKey } from "./format";
 import { sendTask } from "./outbox";
 import { TaskCheck } from "./parts";
@@ -220,7 +220,9 @@ export function TaskSheet({
 
   const segments = taskAssigneeSegments(user, features, undefined);
   const groups = segments.length > 1;
-  const structure = useTaskOrg(groups);
+  // The org structure of wave 2 (GET /org with ETag, cached for an offline start).
+  const org = useOrg();
+  const structure = groups ? org.structure : null;
   const shownSegments: TaskAssigneeSegment[] = taskAssigneeSegments(
     user,
     features,
