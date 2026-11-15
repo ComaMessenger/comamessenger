@@ -1,0 +1,1728 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Coma: рабочий мессенджер на вашем сервере</title>
+<meta name="description" content="Запросы, задачи, опросы и ИИ-агенты в телефоне сотрудника. Сервер стоит у вас, код открыт.">
+<!--
+  Прототип лендинга coma-chat.com. Один файл, без зависимостей (шрифт Onest из Google Fonts, при его недоступности системный).
+  Параметры адреса: ?hero=1|2 (вариант первого экрана), ?theme=light|dark|auto (тема; по умолчанию светлая).
+  Тексты прошли инфостиль и humanizer-ru. Всё в [квадратных скобках] это плейсхолдеры: заменить до публикации.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: light;
+  --font: "Onest", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --bg: #ffffff; --canvas: #f6f6f7; --surface: #ffffff; --raised: #ffffff; --selected: #f0f0f3; --hover: #f1f1f3;
+  --fg: #202023; --muted: #686873; --border: #e5e5e9; --border-strong: #d2d2d9;
+  --primary: #174586; --primary-hover: #12386f; --primary-soft: #edf3fb; --on-primary: #ffffff;
+  --action: #252528; --on-action: #ffffff;
+  --own: #174586; --on-own: #ffffff; --own-muted: rgba(255,255,255,.72);
+  --danger: #c43245; --danger-soft: #fff0f1; --success: #18794e; --success-soft: #edf8f1; --warning: #9c650b; --warning-soft: #fff8e7;
+  --agent: #174586;
+  --deep: #174586; --deep-2: #12386f; --on-deep: #ffffff; --deep-muted: rgba(255,255,255,.74); --deep-line: rgba(255,255,255,.16); --deep-surface: rgba(255,255,255,.08); --deep-accent: #a7c7f7;
+  --frame: #1c1c20; --frame-edge: #3a3a40;
+  --shadow: 0 1px 2px rgba(20,20,30,.05), 0 8px 24px rgba(20,20,30,.08);
+  --shadow-lg: 0 30px 80px rgba(20,30,60,.18), 0 8px 24px rgba(20,20,30,.08);
+  --a1: #e5eee6; --a1f: #4d6b54; --a2: #e8edf4; --a2f: #4c6280; --a3: #ece7f5; --a3f: #6f598e; --a4: #f3e8e9; --a4f: #8e505b; --a5: #f4ebde; --a5f: #806039;
+  --mascot-body: #174586; --mascot-eyes: #ffffff; --mascot-feet: #242831;
+  --placeholder: #9c650b; --placeholder-soft: #fff8e7;
+  --wrap: 1200px; --gutter: 20px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #151517; --canvas: #1b1b1e; --surface: #1d1d20; --raised: #27272c; --selected: #2b2b30; --hover: #2b2b30;
+    --fg: #f0f0f2; --muted: #a0a0aa; --border: #323237; --border-strong: #46464f;
+    --primary: #86aff0; --primary-hover: #a3c3f5; --primary-soft: #243349; --on-primary: #172132;
+    --action: #eeeeef; --on-action: #222225;
+    --own: #2c4a78; --on-own: #f3f6fb; --own-muted: rgba(243,246,251,.7);
+    --danger: #ff98a3; --danger-soft: #40262b; --success: #79cf9b; --success-soft: #20372a; --warning: #e6bf72; --warning-soft: #3b3121;
+    --agent: #a6c7ff;
+    --deep: #10284d; --deep-2: #0c1f3d; --on-deep: #f0f0f2; --deep-muted: rgba(240,240,242,.72); --deep-line: rgba(255,255,255,.12); --deep-surface: rgba(255,255,255,.06); --deep-accent: #a7c7f7;
+    --frame: #0b0b0d; --frame-edge: #3a3a40;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.3);
+    --shadow-lg: 0 30px 80px rgba(0,0,0,.5), 0 8px 24px rgba(0,0,0,.35);
+    --a1: #26332a; --a1f: #a6c8ae; --a2: #262e3a; --a2f: #a9bedb; --a3: #2f2a3b; --a3f: #c3b3e2; --a4: #3a282b; --a4f: #e2adb5; --a5: #3a3023; --a5f: #dcbf94;
+    --mascot-body: #86aff0; --mascot-eyes: #ffffff; --mascot-feet: #ffffff;
+    --placeholder: #e6bf72; --placeholder-soft: #3b3121;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #151517; --canvas: #1b1b1e; --surface: #1d1d20; --raised: #27272c; --selected: #2b2b30; --hover: #2b2b30;
+  --fg: #f0f0f2; --muted: #a0a0aa; --border: #323237; --border-strong: #46464f;
+  --primary: #86aff0; --primary-hover: #a3c3f5; --primary-soft: #243349; --on-primary: #172132;
+  --action: #eeeeef; --on-action: #222225;
+  --own: #2c4a78; --on-own: #f3f6fb; --own-muted: rgba(243,246,251,.7);
+  --danger: #ff98a3; --danger-soft: #40262b; --success: #79cf9b; --success-soft: #20372a; --warning: #e6bf72; --warning-soft: #3b3121;
+  --agent: #a6c7ff;
+  --deep: #10284d; --deep-2: #0c1f3d; --on-deep: #f0f0f2; --deep-muted: rgba(240,240,242,.72); --deep-line: rgba(255,255,255,.12); --deep-surface: rgba(255,255,255,.06); --deep-accent: #a7c7f7;
+  --frame: #0b0b0d; --frame-edge: #3a3a40;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.3);
+  --shadow-lg: 0 30px 80px rgba(0,0,0,.5), 0 8px 24px rgba(0,0,0,.35);
+  --a1: #26332a; --a1f: #a6c8ae; --a2: #262e3a; --a2f: #a9bedb; --a3: #2f2a3b; --a3f: #c3b3e2; --a4: #3a282b; --a4f: #e2adb5; --a5: #3a3023; --a5f: #dcbf94;
+  --mascot-body: #86aff0; --mascot-eyes: #ffffff; --mascot-feet: #ffffff;
+  --placeholder: #e6bf72; --placeholder-soft: #3b3121;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 76px; -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 var(--font); -webkit-font-smoothing: antialiased; overflow-x: clip; }
+img, svg { max-width: 100%; }
+a { color: inherit; }
+button { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+.wrap { max-width: var(--wrap); margin: 0 auto; padding-inline: var(--gutter); }
+.ic { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.ph { color: var(--placeholder); background: var(--placeholder-soft); border: 1px dashed currentColor; border-radius: 6px; padding: 0 6px; font-weight: 500; white-space: nowrap; }
+
+/* ---------- prototype bar ---------- */
+.proto[hidden] { display: none; }
+.proto { background: var(--canvas); border-bottom: 1px dashed var(--border-strong); font-size: 13px; }
+.proto .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding-block: 8px; }
+.proto b { font-weight: 600; }
+.proto .lbl { color: var(--muted); }
+.seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--selected); }
+.seg button { border: 0; background: transparent; color: var(--muted); padding: 5px 10px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--fg); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.14); }
+.proto .grp { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- header ---------- */
+.hdr { position: sticky; top: 0; z-index: 40; background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: saturate(1.6) blur(14px); -webkit-backdrop-filter: saturate(1.6) blur(14px); border-bottom: 1px solid transparent; transition: border-color .2s; padding-top: env(safe-area-inset-top, 0px); }
+.hdr.scrolled { border-bottom-color: var(--border); }
+.hdr .wrap { display: flex; align-items: center; gap: 24px; height: 64px; }
+.logo { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 700; font-size: 20px; letter-spacing: -.01em; }
+.logo svg { width: 24px; height: 30px; }
+.nav { display: flex; gap: 4px; margin-left: 12px; }
+.nav a { text-decoration: none; color: var(--muted); padding: 8px 10px; border-radius: 8px; font-size: 15px; }
+.nav a:hover { color: var(--fg); background: var(--hover); }
+.hdr .sp { flex: 1; }
+.hdr .gh { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none; font-size: 15px; padding: 8px 10px; border-radius: 8px; }
+.hdr .gh:hover { color: var(--fg); background: var(--hover); }
+.burger { display: none; width: 40px; height: 40px; border: 0; background: transparent; border-radius: 10px; cursor: pointer; place-items: center; }
+.burger:hover { background: var(--hover); }
+.mnav { display: none; }
+
+/* ---------- buttons ---------- */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 48px; padding: 0 22px; border-radius: 14px; border: 1px solid transparent; font-weight: 600; font-size: 16px; text-decoration: none; cursor: pointer; transition: background .15s, border-color .15s, transform .15s; white-space: nowrap; }
+.btn:active { transform: translateY(1px); }
+.btn.pri { background: var(--primary); color: var(--on-primary); }
+.btn.pri:hover { background: var(--primary-hover); }
+.btn.sec { background: var(--surface); color: var(--fg); border-color: var(--border-strong); }
+.btn.sec:hover { background: var(--hover); }
+.btn.sm { height: 38px; padding: 0 16px; font-size: 15px; border-radius: 12px; }
+.btn.light { background: #fff; color: #174586; }
+.btn.light:hover { background: #eef3fb; }
+.btn.ghost-deep { background: transparent; color: var(--on-deep); border-color: rgba(255,255,255,.34); }
+.btn.ghost-deep:hover { background: rgba(255,255,255,.08); }
+.cta-row { display: flex; flex-wrap: wrap; gap: 14px 16px; align-items: flex-start; }
+.cta { display: flex; flex-direction: column; gap: 6px; }
+.cta small { font-size: 13px; color: var(--muted); padding-left: 4px; }
+.link-arrow { display: inline-flex; align-items: center; gap: 6px; color: var(--primary); font-weight: 600; text-decoration: none; }
+.link-arrow:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* ---------- section scaffolding ---------- */
+section { padding-block: 104px; }
+.eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--primary); margin: 0 0 14px; }
+h1, h2, h3 { margin: 0; letter-spacing: -.02em; text-wrap: balance; }
+h1 { font-size: clamp(38px, 4.8vw, 62px); line-height: 1.04; font-weight: 700; }
+h2 { font-size: clamp(30px, 3.6vw, 46px); line-height: 1.1; font-weight: 700; }
+h3 { font-size: 20px; line-height: 1.25; font-weight: 600; letter-spacing: -.01em; }
+.lead { font-size: clamp(17px, 1.5vw, 20px); line-height: 1.5; color: var(--muted); margin: 18px 0 0; max-width: 680px; text-wrap: pretty; }
+.sec-head { max-width: 760px; margin-bottom: 56px; }
+.sec-head.center { margin-inline: auto; text-align: center; }
+.sec-head.center .lead { margin-inline: auto; }
+.alt { background: var(--canvas); }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; }
+
+/* ---------- mascot ---------- */
+
+/* ---------- phone ---------- */
+.phone { --w: 320px; width: var(--w); max-width: 100%; aspect-ratio: 320 / 660; border-radius: 48px; background: var(--frame); padding: 10px; box-shadow: var(--shadow-lg), inset 0 0 0 1.5px var(--frame-edge); position: relative; flex: none; }
+.phone .scr { position: relative; height: 100%; border-radius: 38px; overflow: hidden; background: var(--canvas); display: flex; flex-direction: column; font-size: 14.5px; line-height: 1.35; color: var(--fg); isolation: isolate; }
+.phone .notch { position: absolute; top: 9px; left: 50%; translate: -50% 0; width: 92px; height: 26px; border-radius: 14px; background: var(--frame); z-index: 6; }
+.st { display: flex; justify-content: space-between; align-items: center; padding: 13px 26px 4px; font-size: 13px; font-weight: 600; flex: none; }
+.st i { display: inline-block; width: 22px; height: 11px; border: 1.5px solid var(--fg); border-radius: 4px; position: relative; opacity: .8; }
+.st i::after { content: ""; position: absolute; inset: 1.5px 5px 1.5px 1.5px; background: var(--fg); border-radius: 1.5px; }
+.ch { display: flex; align-items: center; gap: 10px; padding: 6px 12px 10px; background: var(--surface); border-bottom: 1px solid var(--border); flex: none; }
+.ch .back { width: 22px; height: 22px; color: var(--fg); }
+.ch .t { font-weight: 600; font-size: 15.5px; line-height: 1.2; }
+.ch .s { font-size: 12px; color: var(--muted); }
+.av { width: 38px; height: 38px; border-radius: 13px; display: grid; place-items: center; font-weight: 600; font-size: 13px; flex: none; }
+.av.s { width: 28px; height: 28px; border-radius: 10px; font-size: 10.5px; }
+.c1{background:var(--a1);color:var(--a1f)}.c2{background:var(--a2);color:var(--a2f)}.c3{background:var(--a3);color:var(--a3f)}.c4{background:var(--a4);color:var(--a4f)}.c5{background:var(--a5);color:var(--a5f)}
+.cag{background:var(--primary-soft);color:var(--primary)}
+.feed { flex: 1; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 8px; padding: 10px 10px 8px; }
+.row { display: flex; gap: 6px; align-items: flex-end; }
+.row.me { justify-content: flex-end; }
+.bub { background: var(--surface); border: 1px solid var(--border); border-radius: 18px 18px 18px 6px; padding: 7px 11px 6px; max-width: 84%; font-size: 14px; }
+.row.me .bub { background: var(--own); color: var(--on-own); border-color: transparent; border-radius: 18px 18px 6px 18px; }
+.bub .n { font-size: 12px; font-weight: 600; margin-bottom: 1px; }
+.bub .tm { float: right; font-size: 10.5px; color: var(--muted); margin: 6px 0 -2px 8px; }
+.row.me .bub .tm { color: var(--own-muted); }
+.n.c1{background:none}.n.c4{background:none}.n.c3{background:none}.n.c2{background:none}.n.c5{background:none}
+.tag { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--muted); font-weight: 500; }
+.tag .ic { width: 14px; height: 14px; }
+.pill { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 6px; }
+.pill.warn { background: var(--warning-soft); color: var(--warning); }
+.pill.ok { background: var(--success-soft); color: var(--success); }
+.pill.dng { background: var(--danger-soft); color: var(--danger); }
+.pill.ag { background: var(--primary-soft); color: var(--primary); letter-spacing: .04em; font-size: 10px; }
+.card-msg { background: var(--surface); border: 1px solid var(--border); border-radius: 18px 18px 18px 6px; padding: 9px 11px 8px; width: 84%; font-size: 14px; }
+.card-msg .hd { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin: 2px 0 4px; }
+.card-msg .q { font-size: 14.5px; margin-bottom: 8px; }
+.card-msg .ttl { font-size: 15px; font-weight: 600; margin: 2px 0 6px; line-height: 1.25; }
+.card-msg > .tag { display: flex; }
+.card-msg .meta { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.btns2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.pbtn { height: 34px; border-radius: 10px; border: 0; background: var(--selected); font-weight: 600; font-size: 13.5px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; transition: background .2s, color .2s, transform .15s; }
+.pbtn.pri { background: var(--primary); color: var(--on-primary); }
+.pbtn.chosen { background: var(--primary); color: var(--on-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent); }
+.pbtn.dim { opacity: .5; }
+.pbtn.tap { transform: scale(.95); }
+.src { margin-top: 7px; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--primary); background: var(--primary-soft); border-radius: 8px; padding: 5px 8px; font-weight: 500; }
+.src .ic { width: 14px; height: 14px; }
+.steps-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--muted); margin-top: 6px; }
+.steps-chip .ic { width: 13px; height: 13px; }
+.typing { display: inline-flex; gap: 3px; padding: 4px 0; }
+.typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); opacity: .4; animation: blink 1.2s infinite; }
+.typing i:nth-child(2) { animation-delay: .2s; } .typing i:nth-child(3) { animation-delay: .4s; }
+@keyframes blink { 0%, 60%, 100% { opacity: .25; } 30% { opacity: .9; } }
+.slot { display: flex; align-items: center; gap: 8px; padding: 7px 12px; background: var(--danger-soft); border-bottom: 1px solid var(--border); font-size: 12.5px; flex: none; }
+.slot .k { color: var(--danger); font-weight: 600; font-size: 11px; display: flex; align-items: center; gap: 4px; }
+.slot .k .ic { width: 13px; height: 13px; }
+.slot .v { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.slot .ring { width: 18px; height: 18px; border-radius: 50%; border: 1.8px solid var(--danger); flex: none; }
+.composer { display: flex; align-items: center; gap: 8px; padding: 8px 10px 20px; flex: none; }
+.composer .f { flex: 1; height: 38px; border-radius: 19px; background: var(--surface); border: 1px solid var(--border); display: flex; align-items: center; padding: 0 14px; color: var(--muted); font-size: 14px; white-space: nowrap; overflow: hidden; }
+.composer .f.typed { color: var(--fg); }
+.composer .pl { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: var(--muted); }
+.anim-in { animation: msgIn .38s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes msgIn { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
+.toast-in { position: absolute; left: 12px; right: 12px; top: 44px; z-index: 5; background: var(--raised); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow); padding: 10px 12px; font-size: 13px; animation: drop .45s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes drop { from { opacity: 0; transform: translateY(-16px); } to { opacity: 1; transform: none; } }
+.toast-in .app { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); margin-bottom: 4px; }
+.toast-in .app svg { width: 14px; height: 17px; }
+.toast-in b { font-weight: 600; }
+.tabbar { display: flex; justify-content: space-around; padding: 8px 6px 20px; border-top: 1px solid var(--border); background: var(--surface); flex: none; font-size: 10.5px; color: var(--muted); }
+.tabbar span { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.tabbar span.on { color: var(--primary); }
+.tabbar .ic { width: 21px; height: 21px; }
+.clist { flex: 1; overflow: hidden; background: var(--surface); }
+.ci { display: flex; gap: 10px; padding: 9px 12px; align-items: center; }
+.ci .m { flex: 1; min-width: 0; }
+.ci .r1 { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; font-size: 14.5px; }
+.ci .r1 span:last-child { font-weight: 400; font-size: 11.5px; color: var(--muted); }
+.ci .r2 { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.badge { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--primary); color: var(--on-primary); font-size: 11px; font-weight: 700; display: inline-grid; place-items: center; }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--surface); border-radius: 24px 24px 0 0; padding: 8px 16px 24px; box-shadow: 0 -10px 30px rgba(0,0,0,.12); z-index: 4; }
+.sheet .grab { width: 36px; height: 4px; border-radius: 2px; background: var(--border-strong); margin: 2px auto 12px; }
+.sheet h4 { margin: 0 0 10px; font-size: 17px; font-weight: 600; }
+.opt { display: flex; align-items: center; justify-content: space-between; padding: 10px 2px; border-bottom: 1px solid var(--border); font-size: 14.5px; }
+.opt:last-child { border-bottom: 0; }
+.opt .ic { color: var(--primary); }
+.opt .mut { color: var(--muted); font-size: 13px; }
+.scrim { position: absolute; inset: 0; background: rgba(20,20,26,.36); z-index: 3; }
+.field { border: 1px solid var(--border-strong); border-radius: 12px; padding: 9px 12px; font-size: 14px; margin: 8px 0 4px; }
+.switch { width: 40px; height: 24px; border-radius: 12px; background: var(--border-strong); position: relative; flex: none; transition: background .2s; border: 0; cursor: pointer; padding: 0; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .2s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+.switch[aria-checked="true"] { background: var(--primary); }
+.switch[aria-checked="true"]::after { transform: translateX(16px); }
+:root[data-theme="dark"] .switch[aria-checked="true"]::after { background: var(--on-primary); }
+
+/* ---------- hero (shared) ---------- */
+.hero { padding-block: 64px 96px; position: relative; overflow: hidden; }
+.hero .grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: 48px; align-items: center; }
+.hero .lead { max-width: 560px; }
+.hero .cta-row { margin-top: 32px; }
+.hero .more { margin-top: 22px; }
+.stage { position: relative; display: flex; justify-content: center; align-items: center; min-height: 560px; }
+
+/* hero 1 */
+.hero1 { background: radial-gradient(1100px 520px at 78% 40%, var(--primary-soft), transparent 70%), var(--bg); }
+.hero1 .eyebrow { color: var(--primary); }
+.callouts { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.callout { position: absolute; max-width: 184px; white-space: normal; line-height: 1.3; display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 8px 12px; font-size: 14px; font-weight: 600; box-shadow: var(--shadow); color: var(--muted); transition: color .35s, transform .35s, border-color .35s; }
+.callout .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border-strong); transition: background .3s; }
+.callout.on { color: var(--fg); transform: scale(1.04); border-color: var(--primary); }
+.callout.on .dot { background: var(--primary); }
+.callout.l { right: calc(50% + 112px); }
+.callout.r { left: calc(50% + 112px); }
+.callout .dot { flex: none; }
+.play { position: absolute; bottom: 4px; right: 4px; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); display: grid; place-items: center; cursor: pointer; color: var(--muted); z-index: 2; }
+.play:hover { color: var(--fg); }
+.play .ic { width: 16px; height: 16px; }
+
+/* hero 2 */
+.hero2 { background: radial-gradient(900px 500px at 85% 20%, rgba(134,175,240,.22), transparent 70%), linear-gradient(180deg, var(--deep), var(--deep-2)); color: var(--on-deep); }
+.hero2 .eyebrow { color: var(--deep-accent); }
+.hero2 .lead, .hero2 .cta small { color: var(--deep-muted); }
+.hero2 .link-arrow { color: var(--deep-accent); }
+.hero2 .stage { gap: 0; justify-content: flex-start; padding-left: 24px; }
+.hero2 .phone { --w: 292px; }
+.log { position: absolute; right: 0; bottom: 36px; width: 320px; background: var(--surface); color: var(--fg); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow-lg); padding: 14px 14px 12px; z-index: 3; }
+.log .lh { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+.log .lh .av { width: 26px; height: 26px; border-radius: 9px; }
+.log .lh .ic { width: 15px; height: 15px; }
+.log .lh .sp { flex: 1; }
+.log .lh .live { font-size: 11px; color: var(--muted); font-weight: 500; display: inline-flex; align-items: center; gap: 5px; }
+.log .lh .live::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+.srvcard { margin-top: 36px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 560px; border: 1px solid var(--deep-line); border-radius: 16px; background: var(--deep-surface); font-size: 14px; color: var(--on-deep); }
+.srvcard > div { padding: 12px 16px; }
+.srvcard > div + div { border-left: 1px solid var(--deep-line); }
+.srvcard .k { color: var(--deep-muted); font-size: 13px; display: flex; align-items: center; gap: 6px; }
+.srvcard .k .ic { width: 15px; height: 15px; color: var(--deep-accent); }
+.srvcard b { font-weight: 600; }
+
+/* step timeline (agent log) */
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.step { display: grid; grid-template-columns: 24px 1fr; gap: 10px; padding: 7px 4px; border-radius: 10px; font-size: 13.5px; line-height: 1.35; color: var(--muted); transition: color .3s, background .3s; position: relative; }
+.step .mk { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--border-strong); display: grid; place-items: center; font-size: 11px; font-weight: 700; background: var(--surface); position: relative; z-index: 1; transition: all .3s; }
+.step .mk .ic { width: 13px; height: 13px; stroke-width: 2.4; display: none; }
+.step:not(:last-child)::before { content: ""; position: absolute; left: 14.5px; top: 29px; bottom: -9px; width: 1.5px; background: var(--border); }
+.step small { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+.step.run { color: var(--fg); background: var(--primary-soft); }
+.step.run .mk { border-color: transparent; color: var(--primary); }
+.step.run .mk::after { content: ""; position: absolute; inset: -1.5px; border-radius: 50%; border: 1.5px solid var(--primary); border-top-color: transparent; animation: spin .9s linear infinite; }
+.step.done { color: var(--fg); }
+.step.done .mk { background: var(--success); border-color: var(--success); color: #fff; }
+:root[data-theme="dark"] .step.done .mk { color: #10261a; }
+.step.done .mk .ic { display: block; } .step.done .mk b { display: none; }
+.step.wait { color: var(--fg); background: var(--warning-soft); }
+.step.wait .mk { border-color: var(--warning); color: var(--warning); }
+.step .acts { display: flex; gap: 6px; margin-top: 8px; }
+.step .acts button { height: 30px; font-size: 12.5px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- trust ---------- */
+.trust { padding-block: 32px; border-bottom: 1px solid var(--border); }
+.trust .facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.trust .fact { display: flex; align-items: center; gap: 12px; font-size: 15px; font-weight: 500; }
+.trust .fact .ic { width: 22px; height: 22px; color: var(--primary); }
+.trust .logos { margin-top: 26px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.trust .logos .lbl { font-size: 13px; color: var(--muted); margin-right: 6px; }
+.logo-ph { height: 40px; min-width: 132px; border: 1px dashed var(--border-strong); border-radius: 10px; display: grid; place-items: center; color: var(--muted); font-size: 12.5px; padding: 0 12px; }
+
+/* ---------- pain ---------- */
+.pain-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.pain { padding: 24px; display: flex; flex-direction: column; gap: 14px; }
+.pain .mock { background: var(--canvas); border-radius: 14px; padding: 12px; display: grid; gap: 6px; min-height: 148px; align-content: end; }
+.pain .mock .m { background: var(--surface); border: 1px solid var(--border); border-radius: 14px 14px 14px 4px; padding: 6px 10px; font-size: 13px; max-width: 88%; }
+.pain .mock .m.dim { opacity: .55; }
+.pain .mock .m.em { border-color: var(--danger); }
+.pain .mock .m small { display: block; font-size: 11px; color: var(--muted); }
+.pain .mock .sys { font-size: 12px; color: var(--muted); text-align: center; }
+.pain p { margin: 0; color: var(--muted); }
+.pain .fix { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--border); display: flex; gap: 10px; font-size: 15px; color: var(--fg); }
+.pain .fix .ic { color: var(--success); margin-top: 2px; }
+
+/* ---------- phone-first ---------- */
+.pf { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 64px; align-items: center; }
+.day { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.day button { width: 100%; text-align: left; display: grid; grid-template-columns: 64px 1fr; gap: 14px; padding: 16px 18px; border-radius: 16px; border: 1px solid transparent; background: transparent; cursor: pointer; transition: background .2s, border-color .2s; position: relative; overflow: hidden; }
+.day button:hover { background: var(--hover); }
+.day button[aria-selected="true"] { background: var(--surface); border-color: var(--border); box-shadow: var(--shadow); }
+.day .tm { font-family: var(--mono); font-size: 15px; color: var(--muted); padding-top: 1px; }
+.day button[aria-selected="true"] .tm { color: var(--primary); font-weight: 600; }
+.day b { display: block; font-size: 17px; font-weight: 600; margin-bottom: 2px; }
+.day span.d { color: var(--muted); font-size: 15px; }
+.day .bar { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--primary); width: 0; }
+.day button[aria-selected="true"] .bar.go { animation: fill 6s linear forwards; }
+@keyframes fill { to { width: 100%; } }
+.pf-phone { display: grid; place-items: center; }
+.pf .screen { position: absolute; inset: 0; display: flex; flex-direction: column; opacity: 0; transition: opacity .35s; pointer-events: none; }
+.pf .screen.on { opacity: 1; pointer-events: auto; }
+.facts-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 56px; }
+.facts-row div { display: flex; gap: 10px; font-size: 14.5px; color: var(--muted); }
+.facts-row .ic { color: var(--primary); margin-top: 1px; }
+.stores { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; align-items: center; }
+.store { display: inline-flex; align-items: center; gap: 10px; height: 52px; padding: 0 18px; border-radius: 14px; background: var(--action); color: var(--on-action); text-decoration: none; font-size: 13px; line-height: 1.15; }
+.store b { display: block; font-size: 16px; }
+.store .ic { width: 22px; height: 22px; }
+.qr { width: 52px; height: 52px; border: 1px dashed var(--border-strong); border-radius: 10px; display: grid; place-items: center; font-size: 10px; color: var(--muted); text-align: center; line-height: 1.1; }
+
+/* ---------- features ---------- */
+.feat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.feat { padding: 22px; display: flex; flex-direction: column; gap: 10px; }
+.feat .fi { width: 40px; height: 40px; border-radius: 12px; background: var(--primary-soft); color: var(--primary); display: grid; place-items: center; }
+.feat p { margin: 0; color: var(--muted); font-size: 15px; }
+.feat .demo { margin-top: auto; padding-top: 14px; }
+.mini { background: var(--canvas); border-radius: 14px; padding: 12px; font-size: 13.5px; }
+.mini .q { font-weight: 500; margin-bottom: 8px; }
+.mini .meta { font-size: 12px; color: var(--muted); margin-top: 8px; display: flex; justify-content: space-between; gap: 8px; }
+.prog { height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; margin-top: 8px; }
+.prog i { display: block; height: 100%; background: var(--primary); transition: width .4s; }
+.chk { display: flex; align-items: center; gap: 8px; padding: 5px 2px; cursor: pointer; border: 0; background: transparent; width: 100%; text-align: left; font-size: 13.5px; }
+.chk .bx { width: 18px; height: 18px; border-radius: 6px; border: 1.6px solid var(--border-strong); display: grid; place-items: center; flex: none; transition: all .2s; }
+.chk .bx .ic { width: 12px; height: 12px; stroke-width: 3; opacity: 0; color: var(--on-primary); }
+.chk[aria-checked="true"] .bx { background: var(--primary); border-color: var(--primary); }
+.chk[aria-checked="true"] .bx .ic { opacity: 1; }
+.chk[aria-checked="true"] span { text-decoration: line-through; color: var(--muted); }
+.chk .who { margin-left: auto; }
+.pollopt { position: relative; display: flex; justify-content: space-between; width: 100%; padding: 7px 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); margin-top: 5px; cursor: pointer; overflow: hidden; font-size: 13.5px; text-align: left; }
+.pollopt i { position: absolute; inset: 0 auto 0 0; background: var(--primary-soft); width: 0; transition: width .5s; z-index: 0; }
+.pollopt span { position: relative; z-index: 1; }
+.pollopt .pc { color: var(--muted); font-variant-numeric: tabular-nums; }
+.pollopt[aria-pressed="true"] { border-color: var(--primary); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--border-strong); background: var(--surface); border-radius: 999px; padding: 5px 11px; font-size: 13px; cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.note { margin-top: 8px; font-size: 12.5px; color: var(--success); display: flex; align-items: center; gap: 6px; min-height: 18px; }
+.note .ic { width: 14px; height: 14px; }
+.tree { display: grid; gap: 4px; }
+.tree .nd { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 8px; transition: background .25s; font-size: 13.5px; }
+.tree .nd.sub { margin-left: 22px; }
+.tree .nd .ic { width: 15px; height: 15px; color: var(--muted); }
+.tree .nd .cnt { margin-left: auto; font-size: 12px; color: var(--muted); }
+.tree .nd.hl { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+.tree .nd.hl .ic, .tree .nd.hl .cnt { color: var(--primary); }
+.mention { margin-top: 8px; display: flex; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 6px 10px; font-size: 13px; }
+.mention .at { color: var(--primary); font-weight: 600; cursor: pointer; border: 0; background: none; padding: 0; font-size: 13px; }
+.away { display: flex; align-items: center; gap: 10px; }
+.away .st2 { font-size: 12.5px; color: var(--muted); }
+.away .st2.on { color: var(--warning); font-weight: 600; }
+.awaybox { margin-top: 10px; font-size: 12.5px; background: var(--warning-soft); color: var(--fg); border-radius: 10px; padding: 8px 10px; transition: opacity .3s; }
+
+/* ---------- agents ---------- */
+.ag-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+.ag-tabs button { border: 1px solid var(--border-strong); background: var(--surface); border-radius: 999px; padding: 9px 16px; font-size: 15px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+.ag-tabs button[aria-selected="true"] { background: var(--action); color: var(--on-action); border-color: var(--action); }
+.ag-wrap { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 20px; }
+.ag-chat { display: flex; flex-direction: column; overflow: hidden; min-height: 470px; }
+.ag-chat .ch { border-radius: 20px 20px 0 0; padding: 14px 16px; }
+.ag-chat .feed { background: var(--canvas); padding: 16px; justify-content: flex-start; gap: 10px; }
+.ag-chat .bub, .ag-chat .card-msg { max-width: 78%; }
+.ag-chat .card-msg { width: auto; }
+.ag-side { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+.ag-side .lh { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.ag-side .lh .sp { flex: 1; }
+.ag-side .desc { color: var(--muted); font-size: 15px; margin: 0; }
+.ag-side .step { font-size: 14.5px; padding: 9px 6px; }
+.ag-side .step small { font-size: 13px; }
+.replay { border: 0; background: transparent; color: var(--primary); font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; padding: 4px; }
+.replay .ic { width: 16px; height: 16px; }
+.arch { margin-top: 20px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 20px; align-items: center; padding: 22px 24px; }
+.arch .fi { width: 48px; height: 48px; border-radius: 14px; background: var(--primary-soft); color: var(--primary); display: grid; place-items: center; }
+.arch p { margin: 4px 0 0; color: var(--muted); }
+.arch .ex { font-size: 13.5px; background: var(--canvas); border-radius: 14px; padding: 10px 12px; max-width: 320px; }
+.arch .ex b { font-weight: 600; display: block; font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+
+/* ---------- control ---------- */
+.ctl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 440px); gap: 48px; align-items: start; }
+.rules { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 32px; }
+.rule .ic { color: var(--primary); width: 24px; height: 24px; margin-bottom: 10px; }
+.rule h3 { font-size: 17px; margin-bottom: 6px; }
+.rule p { margin: 0; color: var(--muted); font-size: 15px; }
+.agcard { padding: 20px; position: sticky; top: 88px; }
+.agcard .top { display: flex; align-items: center; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+.agcard .top .av { width: 44px; height: 44px; border-radius: 14px; }
+.agcard .top .t { font-weight: 600; font-size: 17px; }
+.agcard .top .s { font-size: 13px; color: var(--muted); }
+.agcard .top .sp { flex: 1; }
+.agcard h4 { margin: 16px 0 6px; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.perm { display: flex; align-items: center; gap: 10px; padding: 7px 0; font-size: 14.5px; }
+.perm .ic { width: 17px; height: 17px; color: var(--muted); }
+.perm .sp { flex: 1; }
+.perm.off { color: var(--muted); }
+.agcard .sum { margin-top: 14px; padding: 10px 12px; border-radius: 12px; background: var(--primary-soft); color: var(--primary); font-size: 13.5px; font-weight: 500; transition: background .2s, color .2s; }
+.agcard.paused .sum { background: var(--warning-soft); color: var(--warning); }
+.agcard.paused .perm, .agcard.paused h4 { opacity: .5; }
+.radio { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--selected); }
+.radio button { border: 0; background: transparent; padding: 5px 10px; font-size: 13px; border-radius: 8px; cursor: pointer; color: var(--muted); }
+.radio button[aria-pressed="true"] { background: var(--surface); color: var(--fg); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.14); }
+
+/* ---------- server ---------- */
+.srv-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.srv { padding: 24px; }
+.srv .fi { width: 44px; height: 44px; border-radius: 13px; background: var(--primary-soft); color: var(--primary); display: grid; place-items: center; margin-bottom: 16px; }
+.srv p { margin: 8px 0 0; color: var(--muted); font-size: 15px; }
+.srv ul { margin: 14px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 14px; }
+.srv li { display: flex; gap: 8px; }
+.srv li .ic { width: 16px; height: 16px; color: var(--success); margin-top: 2px; }
+.term { margin-top: 20px; background: #16161a; color: #e9e9ee; border-radius: 20px; overflow: hidden; border: 1px solid #2a2a30; }
+.term .tb { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid #2a2a30; font-size: 13px; color: #9a9aa6; }
+.term .tb i { width: 10px; height: 10px; border-radius: 50%; background: #3a3a42; }
+.term .tb .sp { flex: 1; }
+.term .tb button { border: 1px solid #3a3a42; background: transparent; color: #d0d0d8; border-radius: 8px; padding: 4px 10px; font-size: 12.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.term .tb button .ic { width: 14px; height: 14px; }
+.term pre { margin: 0; padding: 18px 20px; font: 14px/1.7 var(--mono); overflow-x: auto; }
+.term .c { color: #7d7d8a; }
+.term .p { color: #86aff0; user-select: none; }
+.term-cap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 12px; color: var(--muted); font-size: 14px; }
+
+/* ---------- open source ---------- */
+.os { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px; align-items: center; }
+.os ul { list-style: none; margin: 28px 0 0; padding: 0; display: grid; gap: 14px; }
+.os li { display: flex; gap: 12px; font-size: 16px; }
+.os li .ic { color: var(--primary); margin-top: 2px; }
+.repo { padding: 22px; font-size: 14px; }
+.repo .rt { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600; }
+.repo .rt .ic { width: 22px; height: 22px; }
+.repo .rd { color: var(--muted); margin: 8px 0 14px; }
+.repo .badges { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.repo .bd { font-size: 12.5px; border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; display: inline-flex; gap: 6px; align-items: center; }
+.repo .bd .ic { width: 14px; height: 14px; }
+.tree-files { font-family: var(--mono); font-size: 13px; display: grid; gap: 2px; background: var(--canvas); border-radius: 12px; padding: 12px 14px; overflow-x: auto; }
+.tree-files div { display: grid; grid-template-columns: 170px 1fr; gap: 10px; white-space: nowrap; }
+.tree-files span:last-child { color: var(--muted); font-family: var(--font); font-size: 13px; }
+.lic { display: inline-block; font-family: var(--mono); font-size: 13px; background: var(--selected); border-radius: 6px; padding: 1px 6px; }
+
+/* ---------- migration ---------- */
+.mig { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; counter-reset: s; position: relative; }
+.mig li { list-style: none; padding: 22px; position: relative; }
+.mig .num { width: 36px; height: 36px; border-radius: 50%; background: var(--primary); color: var(--on-primary); display: grid; place-items: center; font-weight: 700; margin-bottom: 14px; }
+.mig p { margin: 6px 0 0; color: var(--muted); font-size: 15px; }
+.mig-foot { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: center; justify-content: space-between; margin-top: 28px; }
+.mig-foot .term-len { font-size: 17px; }
+
+/* ---------- case ---------- */
+.case { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr); overflow: hidden; }
+.case .l { padding: 36px; }
+.case .r { padding: 36px; background: var(--canvas); border-left: 1px solid var(--border); display: flex; flex-direction: column; gap: 18px; }
+.case .lab { display: inline-flex; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--border-strong); border-radius: 999px; padding: 3px 10px; margin-bottom: 16px; }
+.case dl { margin: 24px 0 0; display: grid; gap: 16px; }
+.case dt { font-weight: 600; margin-bottom: 4px; }
+.case dd { margin: 0; color: var(--muted); }
+.case .agents-used { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.case .agents-used span { font-size: 13px; background: var(--primary-soft); color: var(--primary); border-radius: 999px; padding: 3px 10px; font-weight: 500; }
+.metric { padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
+.metric b { display: block; font-size: 28px; font-weight: 700; letter-spacing: -.02em; }
+.metric span { color: var(--muted); font-size: 14px; }
+.quote { margin: 0; padding: 18px; border-radius: 14px; border: 1px dashed var(--border-strong); font-size: 16px; }
+.quote footer { margin-top: 10px; font-size: 13.5px; color: var(--muted); }
+
+/* ---------- pricing ---------- */
+.price-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; align-items: stretch; }
+.price { padding: 28px; display: flex; flex-direction: column; gap: 10px; }
+.price.hl { border: 2px solid var(--primary); }
+.price .amt { font-size: 40px; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; margin: 6px 0 2px; }
+.price .amt.sm { font-size: 28px; }
+.price p { margin: 0; color: var(--muted); }
+.price ul { list-style: none; margin: 8px 0 18px; padding: 0; display: grid; gap: 8px; font-size: 15px; }
+.price li { display: flex; gap: 8px; }
+.price li .ic { width: 17px; height: 17px; color: var(--success); margin-top: 3px; }
+.price .btn { margin-top: auto; }
+
+/* ---------- form ---------- */
+.lead-grid { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 48px; align-items: start; }
+.form { padding: 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.form label { display: grid; gap: 6px; font-size: 14px; font-weight: 500; }
+.form label.full { grid-column: 1 / -1; }
+.form input, .form select, .form textarea { font: inherit; font-size: 16px; color: var(--fg); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 12px; padding: 11px 14px; width: 100%; }
+.form textarea { min-height: 96px; resize: vertical; }
+.form input:focus, .form select:focus, .form textarea:focus { outline: 2px solid var(--primary); outline-offset: 0; border-color: transparent; }
+.form .opt-l { color: var(--muted); font-weight: 400; }
+.form .legal { grid-column: 1 / -1; font-size: 13px; color: var(--muted); margin: 0; }
+.form .send { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.form .err { color: var(--danger); font-size: 13.5px; }
+.ok-box { grid-column: 1 / -1; display: flex; gap: 12px; padding: 16px; border-radius: 14px; background: var(--success-soft); }
+.ok-box .ic { color: var(--success); width: 24px; height: 24px; }
+.contacts { margin-top: 28px; display: grid; gap: 12px; color: var(--muted); }
+.contacts div { display: flex; gap: 10px; align-items: center; }
+.contacts .ic { color: var(--primary); }
+
+/* ---------- faq ---------- */
+.faq { max-width: 860px; margin: 0 auto; }
+.faq details { border-bottom: 1px solid var(--border); }
+.faq summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; gap: 16px; padding: 20px 4px; font-size: 18px; font-weight: 600; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary .ic { transition: transform .25s; color: var(--muted); margin-top: 3px; }
+.faq details[open] summary .ic { transform: rotate(45deg); }
+.faq details p { margin: -6px 4px 22px; color: var(--muted); font-size: 16px; max-width: 720px; }
+
+/* ---------- final ---------- */
+.final { background: linear-gradient(180deg, var(--deep), var(--deep-2)); color: var(--on-deep); text-align: center; position: relative; overflow: hidden; }
+.final .lead { color: var(--deep-muted); margin-inline: auto; }
+.final .cta-row { justify-content: center; margin-top: 32px; }
+.final .cta small { color: var(--deep-muted); }
+.final .big-m { width: 76px; height: 94px; margin: 0 auto 26px; display: block; }
+.final .big-m { --mascot-body: #ffffff; --mascot-eyes: var(--deep); --mascot-feet: #ffffff; }
+.final .big-m { animation: hop 2.6s ease-in-out infinite; }
+@keyframes hop { 0%, 70%, 100% { transform: translateY(0); } 80% { transform: translateY(-8px); } 90% { transform: translateY(0); } }
+
+/* ---------- footer ---------- */
+.ftr { padding-block: 40px calc(40px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--border); font-size: 14px; color: var(--muted); }
+.ftr .wrap { display: flex; flex-wrap: wrap; gap: 16px 32px; justify-content: space-between; align-items: center; }
+.ftr nav { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.ftr a { text-decoration: none; }
+.ftr a:hover { color: var(--fg); }
+
+/* ---------- toast ---------- */
+.toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); translate: -50% 20px; opacity: 0; background: var(--action); color: var(--on-action); padding: 12px 18px; border-radius: 14px; font-size: 14.5px; z-index: 100; transition: opacity .25s, translate .25s; pointer-events: none; max-width: calc(100% - 32px); box-shadow: var(--shadow-lg); }
+.toast.on { opacity: 1; translate: -50% 0; }
+
+/* ---------- reveal ---------- */
+.js .rv { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s cubic-bezier(.2,.8,.2,1); }
+.js .rv.in { opacity: 1; transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  .js .rv { opacity: 1; transform: none; }
+}
+
+/* ---------- responsive ---------- */
+@media (max-width: 1180px) {
+  .callouts { display: none; }
+  .log { right: -8px; width: 290px; }
+}
+@media (max-width: 1024px) {
+  .nav, .hdr .gh { display: none; }
+  .burger { display: grid; }
+  .mnav { position: absolute; left: 0; right: 0; top: 100%; background: var(--bg); border-bottom: 1px solid var(--border); padding: 8px var(--gutter) 16px; box-shadow: var(--shadow); }
+  .mnav.open { display: grid; gap: 2px; }
+  .mnav a { text-decoration: none; padding: 12px 8px; border-radius: 10px; font-size: 17px; }
+  .mnav a:hover { background: var(--hover); }
+  .hero .grid, .pf, .ctl, .os, .lead-grid, .ag-wrap { grid-template-columns: minmax(0, 1fr); }
+  .hero .grid { gap: 40px; }
+  .stage { min-height: 0; }
+  .hero2 .stage { flex-direction: column; gap: 16px; }
+  .hero2 .stage { justify-content: center; padding-left: 0; }
+  .log { position: relative; inset: auto; width: min(420px, 100%); }
+  .pain-grid, .feat-grid, .srv-grid, .price-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .mig { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .trust .facts, .facts-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .case { grid-template-columns: minmax(0, 1fr); }
+  .case .r { border-left: 0; border-top: 1px solid var(--border); }
+  .agcard { position: static; }
+  .pf-phone { order: -1; }
+  .arch { grid-template-columns: auto minmax(0, 1fr); }
+  .arch .ex { grid-column: 1 / -1; max-width: none; }
+}
+@media (max-width: 680px) {
+  :root { --gutter: 16px; }
+  section { padding-block: 64px; }
+  .sec-head { margin-bottom: 36px; }
+  .hero { padding-block: 36px 64px; }
+  .hdr .wrap { height: 58px; gap: 12px; }
+  .hdr .btn.sm { padding: 0 12px; font-size: 14px; }
+  .pain-grid, .feat-grid, .srv-grid, .price-grid, .mig, .rules, .form { grid-template-columns: minmax(0, 1fr); }
+  .trust .facts, .facts-row { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .cta-row, .cta, .cta .btn { width: 100%; }
+  .btn { white-space: normal; text-align: center; height: auto; min-height: 48px; padding-block: 10px; }
+  h1 { font-size: 36px; }
+  .lead { font-size: 17px; }
+  .proto .lbl { display: none; }
+  .proto .wrap { gap: 6px; }
+  .srvcard { grid-template-columns: minmax(0, 1fr); }
+  .srvcard > div + div { border-left: 0; border-top: 1px solid var(--deep-line); }
+  .phone { --w: 300px; }
+  .hero2 .phone { --w: 280px; }
+  .case .l, .case .r, .price, .form { padding: 22px; }
+  .faq summary { font-size: 16.5px; }
+  .day button { grid-template-columns: 52px 1fr; padding: 14px; }
+  .ag-chat { min-height: 420px; }
+  .ag-chat .bub, .ag-chat .card-msg { max-width: 92%; }
+  .tree-files div { grid-template-columns: 150px 1fr; }
+  .arch { grid-template-columns: minmax(0, 1fr); }
+  .proto .grp { width: 100%; }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="mascot" viewBox="213 193 274 337"><path style="fill:var(--mascot-body)" d="M298 193H410V218H462V244H487V376H462V418H438V442H417V462H397V482H374V504H284V482H308V462H330V442H348V418H264V401H239V376H213V269H239V244H264V218H298Z"/><rect style="fill:var(--mascot-eyes)" x="286" y="273" width="36" height="36"/><rect style="fill:var(--mascot-eyes)" x="381" y="294" width="36" height="36"/><rect style="fill:var(--mascot-feet)" x="260" y="504" width="48" height="26"/><rect style="fill:var(--mascot-feet)" x="349" y="504" width="48" height="26"/></symbol>
+    <symbol id="mascot-b" viewBox="213 193 274 357"><path style="fill:var(--mascot-body)" d="M298 193H410V218H462V244H487V376H462V418H438V442H417V462H397V482H374V504H284V482H308V462H330V442H348V418H264V401H239V376H213V269H239V244H264V218H298Z"/><rect style="fill:var(--mascot-eyes)" x="286" y="273" width="36" height="36"/><rect style="fill:var(--mascot-eyes)" x="381" y="294" width="36" height="36"/><rect style="fill:var(--mascot-feet)" x="252" y="504" width="62" height="46"/><rect style="fill:var(--mascot-feet)" x="343" y="504" width="62" height="46"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+    <symbol id="i-req" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></symbol>
+    <symbol id="i-task" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="m8 12 3 3 5-6"/></symbol>
+    <symbol id="i-poll" viewBox="0 0 24 24"><path d="M6 20V11M12 20V5M18 20v-6"/></symbol>
+    <symbol id="i-org" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="6" rx="1.5"/><rect x="2" y="16" width="6" height="6" rx="1.5"/><rect x="16" y="16" width="6" height="6" rx="1.5"/><path d="M5 16v-3h14v3M12 13V8"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9Z"/><path d="M19 15v4M21 17h-4"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="8" rx="2"/><rect x="3" y="13" width="18" height="8" rx="2"/><path d="M7 7h.01M7 17h.01"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.8-9.8M16 7l3 3M18.5 4.5l2 2"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/></symbol>
+    <symbol id="i-gh" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.7 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A11.5 11.5 0 0 0 23.5 12C23.5 5.7 18.3.5 12 .5Z"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5Z"/><path d="M4 19.5V21h16"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></symbol>
+    <symbol id="i-okc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></symbol>
+    <symbol id="i-gauge" viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.3 19a10 10 0 1 1 17.4 0"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5Z"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M14 3v6h6"/></symbol>
+    <symbol id="i-msg" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3 2.7 5.6 6.1.8-4.5 4.2 1.2 6L12 16.7 6.5 19.6l1.2-6L3.2 9.4l6.1-.8Z"/></symbol>
+    <symbol id="i-thr" viewBox="0 0 24 24"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2Z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></symbol>
+    <symbol id="i-dots" viewBox="0 0 24 24"><path d="M5 12h.01M12 12h.01M19 12h.01"/></symbol>
+    <symbol id="i-replay" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></symbol>
+    <symbol id="i-mail" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 6-10 7L2 6"/></symbol>
+    <symbol id="i-term" viewBox="0 0 24 24"><path d="m4 17 6-6-6-6M12 19h8"/></symbol>
+    <symbol id="i-hand" viewBox="0 0 24 24"><path d="M9 11V5a1.5 1.5 0 0 1 3 0v5M12 10V4a1.5 1.5 0 0 1 3 0v6M15 10V6a1.5 1.5 0 0 1 3 0v8a7 7 0 0 1-7 7h-.5a6 6 0 0 1-5-2.7L3 14.5a1.6 1.6 0 0 1 2.6-1.8L9 15V8a1.5 1.5 0 0 1 3 0"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10a7 7 0 0 1-14 0M12 17v4"/></symbol>
+    <symbol id="i-smile" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></symbol>
+    <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  </defs>
+</svg>
+
+<!-- ============ прототипная панель (не часть лендинга) ============ -->
+<div class="proto" hidden role="region" aria-label="Настройки прототипа">
+  <div class="wrap">
+    <b>Прототип лендинга</b>
+    <span class="grp"><span class="lbl">Первый экран:</span>
+      <span class="seg" id="heroSeg"><button type="button" data-hero="1" aria-pressed="true">1 · Телефон сотрудника</button><button type="button" data-hero="2" aria-pressed="false">2 · Свой сервер и агенты</button></span>
+    </span>
+    <span class="grp"><span class="lbl">Тема:</span>
+      <span class="seg" id="themeSeg"><button type="button" data-theme="auto" aria-pressed="false">Как в системе</button><button type="button" data-theme="light" aria-pressed="true">Светлая</button><button type="button" data-theme="dark" aria-pressed="false">Тёмная</button></span>
+    </span>
+  </div>
+</div>
+
+<!-- ============ шапка ============ -->
+<header class="hdr" id="hdr">
+  <div class="wrap">
+    <a class="logo" href="#top" aria-label="Coma, наверх"><svg class="mascot" aria-hidden="true"><use href="#mascot-b"/></svg>Coma</a>
+    <nav class="nav" aria-label="Разделы">
+      <a href="#features">Возможности</a>
+      <a href="#agents">Агенты</a>
+      <a href="#server">Свой сервер</a>
+      <a href="#pricing">Цены</a>
+      <a href="#faq">Вопросы</a>
+    </nav>
+    <span class="sp"></span>
+    <a class="gh" href="https://github.com/ComaMessenger/comamessenger" target="_blank" rel="noopener"><svg class="ic"><use href="#i-gh"/></svg>GitHub</a>
+    <a class="btn pri sm" href="#demo" data-demo>Демо скоро</a>
+    <button class="burger" id="burger" type="button" aria-expanded="false" aria-controls="mnav" aria-label="Меню"><svg class="ic"><use href="#i-menu"/></svg></button>
+  </div>
+  <nav class="mnav" id="mnav" aria-label="Разделы">
+    <a href="#features">Возможности</a>
+    <a href="#agents">Агенты</a>
+    <a href="#server">Свой сервер</a>
+    <a href="#pricing">Цены</a>
+    <a href="#faq">Вопросы</a>
+    <a href="https://github.com/ComaMessenger/comamessenger" target="_blank" rel="noopener">GitHub</a>
+  </nav>
+</header>
+
+<main id="top">
+
+<!-- ============ ПЕРВЫЙ ЭКРАН, ВАРИАНТ 1: телефон сотрудника ============ -->
+<section class="hero hero1" id="hero1" aria-labelledby="h1a">
+  <div class="wrap grid">
+    <div>
+      <p class="eyebrow">Рабочий мессенджер для команд, которые работают не за столом</p>
+      <h1 id="h1a">Запросы, задачи и регламенты в телефоне сотрудника</h1>
+      <p class="lead">Инструктор, медсестра или мастер на выезде отвечает на запросы, закрывает задачи и получает напоминания в одном приложении. ИИ-агент отвечает на вопросы по вашим регламентам. Сервер стоит у вас, код открыт.</p>
+      <div class="cta-row">
+        <div class="cta"><a class="btn pri" href="#demo" data-demo>Демо скоро</a><small>Готовим публичное демо в браузере</small></div>
+        <div class="cta"><a class="btn sec" href="https://github.com/ComaMessenger/comamessenger" target="_blank" rel="noopener"><svg class="ic"><use href="#i-gh"/></svg>Развернуть у себя</a><small>Бесплатно, код на GitHub</small></div>
+      </div>
+      <p class="more"><a class="link-arrow" href="#lead">Обсудить внедрение <svg class="ic"><use href="#i-arrow"/></svg></a></p>
+    </div>
+    <div class="stage" id="stage1">
+      <div class="callouts" aria-hidden="true">
+        <span class="callout l" data-co="0" style="top:30%"><i class="dot"></i>Ответ одним нажатием</span>
+        <span class="callout r" data-co="1" style="top:14%"><i class="dot"></i>Задача со сроком</span>
+        <span class="callout r" data-co="2" style="top:62%"><i class="dot"></i>Агент отвечает со ссылкой на регламент</span>
+      </div>
+      <div class="phone" aria-label="Живой пример: чат инструкторов в Coma" role="img">
+        <i class="notch"></i>
+        <div class="scr">
+          <div class="st"><span>9:41</span><i></i></div>
+          <div class="ch"><svg class="ic back"><use href="#i-back"/></svg><span class="av c1">ИЗ</span><div><div class="t">Инструкторы · зал</div><div class="s">9 участников · 4 в сети</div></div></div>
+          <div class="slot" id="h1slot" hidden><span class="ring"></span><div style="min-width:0"><div class="k"><svg class="ic"><use href="#i-clock"/></svg>На вас · сегодня, 12:00</div><div class="v">Повесить новое расписание бассейна</div></div></div>
+          <div class="feed" id="h1feed"></div>
+          <div class="composer"><span class="pl"><svg class="ic"><use href="#i-plus"/></svg></span><span class="f" id="h1comp">Сообщение</span><span class="pl"><svg class="ic"><use href="#i-mic"/></svg></span></div>
+        </div>
+      </div>
+      <button class="play" id="h1play" type="button" aria-label="Пауза"><svg class="ic"><use href="#i-pause"/></svg></button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ПЕРВЫЙ ЭКРАН, ВАРИАНТ 2: свой сервер и агенты ============ -->
+<section class="hero hero2" id="hero2" aria-labelledby="h1b" hidden>
+  <div class="wrap grid">
+    <div>
+      <p class="eyebrow">Открытый код · Ваш сервер · Модели на выбор</p>
+      <h1 id="h1b">Мессенджер и ИИ-агенты на вашем сервере</h1>
+      <p class="lead">Переписка, база знаний, модели и ключи доступа хранятся у компании. Агент делает только то, что вы разрешили, а каждый его шаг записан в журнал.</p>
+      <div class="cta-row">
+        <div class="cta"><a class="btn light" href="#demo" data-demo>Демо скоро</a><small>Готовим публичное демо в браузере</small></div>
+        <div class="cta"><a class="btn ghost-deep" href="https://github.com/ComaMessenger/comamessenger" target="_blank" rel="noopener"><svg class="ic"><use href="#i-gh"/></svg>Развернуть у себя</a><small>Бесплатно, код на GitHub</small></div>
+      </div>
+      <p class="more"><a class="link-arrow" href="#lead">Обсудить внедрение <svg class="ic"><use href="#i-arrow"/></svg></a></p>
+      <div class="srvcard">
+        <div><div class="k"><svg class="ic"><use href="#i-server"/></svg>Данные</div><b>на вашем сервере</b></div>
+        <div><div class="k"><svg class="ic"><use href="#i-spark"/></svg>Модель</div><b>на ваш выбор</b></div>
+        <div><div class="k"><svg class="ic"><use href="#i-key"/></svg>Ключи</div><b>у компании</b></div>
+      </div>
+    </div>
+    <div class="stage" id="stage2">
+      <div class="phone" role="img" aria-label="Живой пример: агент «Справка» отвечает в чате">
+        <i class="notch"></i>
+        <div class="scr">
+          <div class="st"><span>9:41</span><i></i></div>
+          <div class="ch"><svg class="ic back"><use href="#i-back"/></svg><span class="av cag"><svg class="ic" style="width:18px;height:18px"><use href="#i-spark"/></svg></span><div><div class="t">Справка <span class="pill ag">АГЕНТ</span></div><div class="s">отвечает по регламентам</div></div></div>
+          <div class="feed" id="h2feed"></div>
+          <div class="composer"><span class="pl"><svg class="ic"><use href="#i-plus"/></svg></span><span class="f">Сообщение</span><span class="pl"><svg class="ic"><use href="#i-mic"/></svg></span></div>
+        </div>
+      </div>
+      <div class="log" aria-live="polite">
+        <div class="lh"><span class="av cag"><svg class="ic"><use href="#i-spark"/></svg></span>Что сделал агент<span class="sp"></span><span class="live">журнал</span></div>
+        <ol class="steps" id="h2steps">
+          <li class="step"><span class="mk"><b>1</b><svg class="ic"><use href="#i-check"/></svg></span><div>Получил вопрос в чате «Справка»</div></li>
+          <li class="step"><span class="mk"><b>2</b><svg class="ic"><use href="#i-check"/></svg></span><div>Нашёл ответ в базе знаний<small>«Регламент зала ЛФК, п. 4»</small></div></li>
+          <li class="step"><span class="mk"><b>3</b><svg class="ic"><use href="#i-check"/></svg></span><div>Ответил в чате и приложил источник</div></li>
+          <li class="step"><span class="mk"><b>4</b><svg class="ic"><use href="#i-check"/></svg></span><div><span class="s4t">Хочет написать администратору и ждёт вашего подтверждения</span></div></li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ доверие ============ -->
+<div class="trust" aria-label="Коротко о Coma">
+  <div class="wrap">
+    <div class="facts">
+      <div class="fact"><svg class="ic"><use href="#i-code"/></svg>Открытый код: AGPL-3.0 и Apache-2.0</div>
+      <div class="fact"><svg class="ic"><use href="#i-server"/></svg>Разворачивается через Docker Compose</div>
+      <div class="fact"><svg class="ic"><use href="#i-phone"/></svg>Приложение для iPhone в TestFlight</div>
+      <div class="fact"><svg class="ic"><use href="#i-spark"/></svg>Модели: Anthropic, OpenAI или своя</div>
+    </div>
+    <div class="logos"><span class="lbl">Работают в Coma:</span><span class="logo-ph">[логотип клиента]</span><span class="logo-ph">[логотип клиента]</span><span class="logo-ph">[логотип клиента]</span><span class="logo-ph">[логотип клиента]</span></div>
+  </div>
+</div>
+
+<!-- ============ боль ============ -->
+<section id="pain" aria-labelledby="pain-h">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <h2 id="pain-h">Рабочие вопросы тонут в WhatsApp и Telegram</h2>
+      <p class="lead">Если сотрудник работает с телефона, рабочий чат живёт рядом с семейным. Из-за этого возникают три проблемы.</p>
+    </div>
+    <div class="pain-grid">
+      <article class="card pain rv">
+        <div class="mock" aria-hidden="true">
+          <div class="m dim"><small>Мама</small>Фото с дачи 🌻</div>
+          <div class="m em"><small>Начальник смены</small>Завтра с 8:00 нужен человек в малый зал</div>
+          <div class="m dim"><small>Скидки рядом</small>Только сегодня −30%</div>
+        </div>
+        <h3>Личное вперемешку с рабочим</h3>
+        <p>Распоряжение начальника лежит между фото с дачи и рекламой.</p>
+        <div class="fix"><svg class="ic"><use href="#i-check"/></svg><span>В Coma только рабочие чаты, каналы и отделы компании.</span></div>
+      </article>
+      <article class="card pain rv">
+        <div class="mock" aria-hidden="true">
+          <div class="m"><small>Администратор</small>Планёрка в 8:30, будете?</div>
+          <div class="m dim">👍</div><div class="m dim">Буду</div><div class="m dim">+</div>
+          <div class="sys">ответили 3 из 12</div>
+        </div>
+        <h3>Непонятно, кто прочитал и согласился</h3>
+        <p>На вопрос «Планёрка в 8:30, будете?» ответили трое из двенадцати, остальные молчат.</p>
+        <div class="fix"><svg class="ic"><use href="#i-check"/></svg><span>Запрос показывает, кто ответил, а кто нет, и напоминает молчащим.</span></div>
+      </article>
+      <article class="card pain rv">
+        <div class="mock" aria-hidden="true">
+          <div class="sys">Ольга покинула компанию</div>
+          <div class="m em"><small>Рабочий чат «Смена»</small>…остался в её телефоне</div>
+          <div class="sys">сервер мессенджера: другая страна</div>
+        </div>
+        <h3>Переписка принадлежит не вам</h3>
+        <p>Сотрудник уволился, а рабочие чаты остались у него в телефоне. Сервер мессенджера стоит в другой стране.</p>
+        <div class="fix"><svg class="ic"><use href="#i-check"/></svg><span>Coma работает на вашем сервере. Администратор отключает аккаунт уволенного сотрудника.</span></div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============ телефон ============ -->
+<section class="alt" id="phone" aria-labelledby="pf-h">
+  <div class="wrap">
+    <div class="pf">
+      <div>
+        <div class="sec-head rv" style="margin-bottom:32px">
+          <p class="eyebrow"><svg class="ic"><use href="#i-phone"/></svg>Один день инструктора</p>
+          <h2 id="pf-h">Телефон и есть рабочее место</h2>
+          <p class="lead">Coma сделан для сотрудников, которые весь день на ногах. Ответить, поручить, проголосовать и спросить агента про регламент можно с телефона. Компьютер нужен только администратору, чтобы настроить пространство.</p>
+        </div>
+        <ul class="day" role="tablist" aria-label="Сценарии дня" id="day">
+          <li><button role="tab" aria-selected="true" aria-controls="pfscr" data-i="0"><span class="tm">8:10</span><span><b>Запрос</b><span class="d">Администратор спрашивает: «Планёрка в понедельник в 8:30. Будете?» Инструктор отвечает кнопкой прямо из уведомления.</span></span><i class="bar"></i></button></li>
+          <li><button role="tab" aria-selected="false" aria-controls="pfscr" data-i="1"><span class="tm">9:00</span><span><b>Задача</b><span class="d">Под шапкой чата строка «2 задачи на вас · до 12:00». Отметить «Готово» можно одним нажатием.</span></span><i class="bar"></i></button></li>
+          <li><button role="tab" aria-selected="false" aria-controls="pfscr" data-i="2"><span class="tm">13:00</span><span><b>Отсутствую</b><span class="d">Врач уходит на выезд и ставит статус до 16:00 с заместителем. Коллеги видят, кому писать.</span></span><i class="bar"></i></button></li>
+          <li><button role="tab" aria-selected="false" aria-controls="pfscr" data-i="3"><span class="tm">17:40</span><span><b>Напомнить мне</b><span class="d">Сообщение, на которое нет времени сейчас, вернётся уведомлением в нужный час.</span></span><i class="bar"></i></button></li>
+        </ul>
+      </div>
+      <div class="pf-phone rv">
+        <div class="phone" id="pfscr" role="tabpanel" aria-label="Экран телефона">
+          <i class="notch"></i>
+          <div class="scr">
+            <!-- 0: запрос из уведомления -->
+            <div class="screen on" data-s="0">
+              <div class="st"><span>8:10</span><i></i></div>
+              <div style="display:flex;align-items:center;gap:8px;padding:6px 14px 10px;background:var(--surface)"><svg class="mascot" style="width:22px;height:28px"><use href="#mascot-b"/></svg><b style="font-size:22px;flex:1">Чаты</b></div>
+              <div class="clist">
+                <div class="ci"><span class="av c1">ИЗ</span><div class="m"><div class="r1"><span>Инструкторы · зал</span><span>8:10</span></div><div class="r2">Марина: Запрос · Планёрка в понедел…</div></div><span class="badge">1</span></div>
+                <div class="ci"><span class="av c4">МС</span><div class="m"><div class="r1"><span>Марина Соколова</span><span>7:52</span></div><div class="r2">Спасибо, увидела</div></div></div>
+                <div class="ci"><span class="av cag"><svg class="ic" style="width:18px;height:18px"><use href="#i-spark"/></svg></span><div class="m"><div class="r1"><span>Справка</span><span>Вчера</span></div><div class="r2">Регламент уборки зала, пункт 4</div></div></div>
+                <div class="ci"><span class="av c2">СН</span><div class="m"><div class="r1"><span>Слоты на неделю</span><span>Вчера</span></div><div class="r2">Олег: беру среду 15:00</div></div></div>
+                <div class="ci"><span class="av c5">ВР</span><div class="m"><div class="r1"><span>Врачи</span><span>Пн</span></div><div class="r2">Дина: обновила график осмотров</div></div></div>
+              </div>
+              <div class="toast-in" id="pfpush">
+                <div class="app"><svg class="mascot"><use href="#mascot-b"/></svg>COMA · сейчас</div>
+                <b>Марина Соколова · Инструкторы · зал</b>
+                <div style="margin:2px 0 8px">Запрос: Планёрка в понедельник в 8:30, большой зал. Будете?</div>
+                <div class="btns2"><button class="pbtn" type="button" data-ans="Приду">Приду</button><button class="pbtn" type="button" data-ans="Не приду">Не приду</button></div>
+                <div class="note" id="pfnote" style="margin-top:6px"></div>
+              </div>
+              <div class="tabbar"><span class="on"><svg class="ic"><use href="#i-msg"/></svg>Чаты</span><span><svg class="ic"><use href="#i-thr"/></svg>Треды</span><span><svg class="ic"><use href="#i-star"/></svg>Важные</span><span><svg class="ic"><use href="#i-spark"/></svg>Агенты</span><span><svg class="ic"><use href="#i-dots"/></svg>Ещё</span></div>
+            </div>
+            <!-- 1: задача -->
+            <div class="screen" data-s="1">
+              <div class="st"><span>9:00</span><i></i></div>
+              <div class="ch"><svg class="ic back"><use href="#i-back"/></svg><span class="av c1">ИЗ</span><div><div class="t">Инструкторы · зал</div><div class="s">9 участников · 4 в сети</div></div></div>
+              <div class="slot"><span class="ring"></span><div style="min-width:0"><div class="k"><svg class="ic"><use href="#i-clock"/></svg>2 задачи на вас · до 12:00</div><div class="v">Повесить новое расписание бассейна</div></div></div>
+              <div class="feed">
+                <div class="row"><span class="av s c1">ОЧ</span><div class="bub"><div class="n" style="color:var(--a1f)">Олег Чернов</div>Маты разложил, инвентарь на тебе<span class="tm">8:52</span></div></div>
+                <div class="row"><span class="av s c4">МС</span><div class="card-msg"><div class="n" style="color:var(--a4f);font-size:12px;font-weight:600">Марина Соколова</div><div class="hd"><span class="tag"><svg class="ic"><use href="#i-task"/></svg>Задача</span><span class="pill warn" id="pftaskst">Открыта</span></div><div class="ttl">Повесить новое расписание бассейна</div><div class="tag"><span class="av s c3" style="width:18px;height:18px;font-size:8px;border-radius:6px">ИЛ</span>Вы · отвечаете</div><div class="tag" style="color:var(--danger);margin-top:4px"><svg class="ic"><use href="#i-clock"/></svg>сегодня, 12:00</div><div style="margin-top:8px"><button class="pbtn pri" type="button" id="pfdone"><svg class="ic" style="width:16px;height:16px"><use href="#i-check"/></svg>Готово</button></div><span class="tm" style="display:block;text-align:right;font-size:10.5px;color:var(--muted)">8:55</span></div></div>
+              </div>
+              <div class="composer"><span class="pl"><svg class="ic"><use href="#i-plus"/></svg></span><span class="f">Сообщение</span><span class="pl"><svg class="ic"><use href="#i-mic"/></svg></span></div>
+            </div>
+            <!-- 2: отсутствую -->
+            <div class="screen" data-s="2">
+              <div class="st"><span>13:00</span><i></i></div>
+              <div class="ch"><svg class="ic back"><use href="#i-back"/></svg><span class="av c5">ДР</span><div><div class="t">Дина Рябова</div><div class="s" style="color:var(--warning)">Отсутствует до 16:00 · выезд</div></div></div>
+              <div class="feed">
+                <div class="row me"><div class="bub">Дина, подпишешь направление для Ковалёва?<span class="tm">12:58</span></div></div>
+                <div class="row"><span class="av s c5">ДР</span><div class="bub" style="background:var(--warning-soft);border-color:transparent"><div class="n" style="color:var(--warning)">Автоответ</div>Я на выезде до 16:00. По срочным вопросам пишите Олегу Чернову.<span class="tm">12:58</span></div></div>
+              </div>
+              <div class="scrim"></div>
+              <div class="sheet">
+                <div class="grab"></div>
+                <h4>Отсутствую</h4>
+                <div class="opt"><span>До</span><span class="mut">сегодня, 16:00</span></div>
+                <div class="opt"><span>Причина</span><span class="mut">Выезд</span></div>
+                <div class="opt"><span>Замещает</span><span class="mut">Олег Чернов</span></div>
+                <div class="opt"><span>Автоответ в личке</span><button class="switch" type="button" role="switch" aria-checked="true" aria-label="Автоответ"></button></div>
+                <div class="opt"><span>Приглушить уведомления</span><button class="switch" type="button" role="switch" aria-checked="false" aria-label="Приглушить"></button></div>
+              </div>
+            </div>
+            <!-- 3: напомнить мне -->
+            <div class="screen" data-s="3">
+              <div class="st"><span>17:40</span><i></i></div>
+              <div class="ch"><svg class="ic back"><use href="#i-back"/></svg><span class="av c1">ИЗ</span><div><div class="t">Инструкторы · зал</div><div class="s">9 участников</div></div></div>
+              <div class="feed">
+                <div class="row"><span class="av s c5">ДР</span><div class="bub"><div class="n" style="color:var(--a5f)">Дина Рябова</div>Нужно до среды проверить аптечку в большом зале и докупить бинты.<span class="tm">17:38</span></div></div>
+              </div>
+              <div class="scrim"></div>
+              <div class="sheet">
+                <div class="grab"></div>
+                <h4>Напомнить мне</h4>
+                <div class="chips" id="remChips"><button class="chip" type="button" aria-pressed="false">Через 1 час</button><button class="chip" type="button" aria-pressed="false">Сегодня в 20:00</button><button class="chip" type="button" aria-pressed="true">Завтра в 9:00</button><button class="chip" type="button" aria-pressed="false">Выбрать время</button></div>
+                <div class="field">Проверить аптечку, заказать бинты</div>
+                <div style="font-size:12px;color:var(--muted)">Напоминание видите только вы</div>
+                <button class="pbtn pri" type="button" style="width:100%;margin-top:12px;height:40px" id="remSave">Напомнить завтра в 9:00</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="facts-row rv">
+      <div><svg class="ic"><use href="#i-phone"/></svg>iOS 16.4+ и Android 8.0+</div>
+      <div><svg class="ic"><use href="#i-lock"/></svg>Уведомления зашифрованы: сервис доставки не видит текст</div>
+      <div><svg class="ic"><use href="#i-eye"/></svg>Текст на заблокированном экране по умолчанию скрыт</div>
+      <div><svg class="ic"><use href="#i-send"/></svg>Сообщения отправятся, когда появится связь</div>
+    </div>
+    <div class="stores">
+      <a class="store" href="#lead"><svg class="ic"><use href="#i-phone"/></svg><span>iPhone, по приглашению<b>TestFlight</b></span></a>
+      <span class="store" aria-disabled="true"><svg class="ic"><use href="#i-phone"/></svg><span>Android<b>Скоро</b></span></span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ рабочие функции ============ -->
+<section id="features" aria-labelledby="ft-h">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <p class="eyebrow">Рабочие функции</p>
+      <h2 id="ft-h">Договорились и сделали, не выходя из чата</h2>
+      <p class="lead">Шесть функций для ежедневной работы. Работают в телефоне и в браузере. Нажмите на кнопки в карточках: они работают так же, как в приложении.</p>
+    </div>
+    <div class="feat-grid">
+      <article class="card feat rv">
+        <span class="fi"><svg class="ic"><use href="#i-req"/></svg></span>
+        <h3>Запрос</h3>
+        <p>Попросите ответ у людей, отдела или всего чата: «ознакомлен», «да / нет» или свои варианты. Видно, кто ответил.</p>
+        <div class="demo"><div class="mini">
+          <div class="q">Планёрка в понедельник в 8:30, большой зал. Будете?</div>
+          <div class="btns2" id="fReq"><button class="pbtn" type="button">Приду</button><button class="pbtn" type="button">Не приду</button></div>
+          <div class="prog"><i id="fReqBar" style="width:66%"></i></div>
+          <div class="meta"><span id="fReqTxt">Ответили 4 из 6</span><span>до пт, 18:00</span></div>
+        </div></div>
+      </article>
+      <article class="card feat rv">
+        <span class="fi"><svg class="ic"><use href="#i-task"/></svg></span>
+        <h3>Задачи</h3>
+        <p>Ответственный, срок, чек-лист. Coma напомнит за час до срока, автор узнает, что задача выполнена.</p>
+        <div class="demo"><div class="mini">
+          <div class="q">Подготовить зал к осмотру</div>
+          <div id="fTask">
+            <button class="chk" type="button" role="checkbox" aria-checked="true"><span class="bx"><svg class="ic"><use href="#i-check"/></svg></span><span>Проветрить зал</span><i class="av s c1 who" style="width:20px;height:20px;font-size:8px;border-radius:6px">ОЧ</i></button>
+            <button class="chk" type="button" role="checkbox" aria-checked="false"><span class="bx"><svg class="ic"><use href="#i-check"/></svg></span><span>Разложить маты</span><i class="av s c3 who" style="width:20px;height:20px;font-size:8px;border-radius:6px">ИЛ</i></button>
+            <button class="chk" type="button" role="checkbox" aria-checked="false"><span class="bx"><svg class="ic"><use href="#i-check"/></svg></span><span>Проверить аптечку</span><i class="av s c5 who" style="width:20px;height:20px;font-size:8px;border-radius:6px">ДР</i></button>
+          </div>
+          <div class="prog"><i id="fTaskBar" style="width:33%"></i></div>
+          <div class="meta"><span id="fTaskTxt">1 из 3</span><span style="color:var(--danger)">сегодня, 12:00</span></div>
+        </div></div>
+      </article>
+      <article class="card feat rv">
+        <span class="fi"><svg class="ic"><use href="#i-poll"/></svg></span>
+        <h3>Опросы</h3>
+        <p>От 2 до 10 вариантов, анонимно или открыто, со сроком. Тем, кто не голосовал, можно напомнить одной кнопкой.</p>
+        <div class="demo"><div class="mini" id="fPoll">
+          <div class="q">Когда удобнее субботник?</div>
+          <button class="pollopt" type="button" aria-pressed="false" data-v="3"><i></i><span>Суббота, 10:00</span><span class="pc"></span></button>
+          <button class="pollopt" type="button" aria-pressed="false" data-v="2"><i></i><span>Суббота, 14:00</span><span class="pc"></span></button>
+          <button class="pollopt" type="button" aria-pressed="false" data-v="1"><i></i><span>Воскресенье, 11:00</span><span class="pc"></span></button>
+          <div class="meta"><span id="fPollTxt">Проголосовали 6 · анонимно</span><span>до сб</span></div>
+        </div></div>
+      </article>
+      <article class="card feat rv">
+        <span class="fi"><svg class="ic"><use href="#i-bell"/></svg></span>
+        <h3>Напомнить мне</h3>
+        <p>Любое сообщение вернётся в нужное время с вашей заметкой. Остальные об этом не узнают.</p>
+        <div class="demo"><div class="mini">
+          <div class="q" style="font-weight:400">«Нужно до среды проверить аптечку в большом зале»</div>
+          <div class="chips" id="fRem"><button class="chip" type="button" aria-pressed="false" data-t="через 1 час">Через 1 час</button><button class="chip" type="button" aria-pressed="false" data-t="сегодня в 20:00">Вечером</button><button class="chip" type="button" aria-pressed="false" data-t="завтра в 9:00">Завтра в 9:00</button></div>
+          <div class="note" id="fRemTxt"></div>
+        </div></div>
+      </article>
+      <article class="card feat rv">
+        <span class="fi"><svg class="ic"><use href="#i-org"/></svg></span>
+        <h3>Оргструктура</h3>
+        <p>Отделы, должности и руководители. Сообщение для «@Зал ЛФК» получат только сотрудники зала.</p>
+        <div class="demo"><div class="mini">
+          <div class="tree" id="fTree">
+            <div class="nd"><svg class="ic"><use href="#i-org"/></svg>Реабилитация<span class="cnt">11 чел.</span></div>
+            <div class="nd sub" data-d="lfk"><svg class="ic"><use href="#i-users"/></svg>Зал ЛФК<span class="cnt">6 чел.</span></div>
+            <div class="nd sub" data-d="pool"><svg class="ic"><use href="#i-users"/></svg>Бассейн<span class="cnt">3 чел.</span></div>
+            <div class="nd sub" data-d="mech"><svg class="ic"><use href="#i-users"/></svg>Механотерапия<span class="cnt">2 чел.</span></div>
+          </div>
+          <div class="mention"><span style="color:var(--muted)">Кому:</span><button class="at" type="button" data-d="lfk">@Зал ЛФК</button><button class="at" type="button" data-d="pool">@Бассейн</button></div>
+          <div class="note" id="fTreeTxt"></div>
+        </div></div>
+      </article>
+      <article class="card feat rv">
+        <span class="fi"><svg class="ic"><use href="#i-moon"/></svg></span>
+        <h3>Отсутствую</h3>
+        <p>До какого числа, кто замещает, автоответ в личке. Коллеги видят статус ещё до того, как напишут.</p>
+        <div class="demo"><div class="mini">
+          <div class="away"><span class="av c5">ДР</span><div style="flex:1"><div style="font-weight:600">Дина Рябова</div><div class="st2" id="fAwayTxt">На месте</div></div><button class="switch" type="button" role="switch" aria-checked="false" id="fAway" aria-label="Отсутствую"></button></div>
+          <div class="awaybox" id="fAwayBox" style="opacity:.35">Автоответ: «Я в отпуске до 24 ноября. Пишите Олегу Чернову».</div>
+        </div></div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============ агенты ============ -->
+<section class="alt" id="agents" aria-labelledby="ag-h">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <p class="eyebrow"><svg class="ic"><use href="#i-spark"/></svg>ИИ-агенты</p>
+      <h2 id="ag-h">ИИ-агент работает в чате и показывает каждый шаг</h2>
+      <p class="lead">Агент участвует в чате как сотрудник. Его зовут через @, он отвечает в ленте и показывает, что прочитал, где нашёл ответ и что собирается сделать.</p>
+    </div>
+    <div class="ag-tabs" role="tablist" aria-label="Сценарии агентов" id="agTabs">
+      <button role="tab" type="button" aria-selected="true" data-k="help">Справка</button>
+      <button role="tab" type="button" aria-selected="false" data-k="control">Контроль</button>
+      <button role="tab" type="button" aria-selected="false" data-k="slots">Слоты</button>
+      <button role="tab" type="button" aria-selected="false" data-k="missed">Что я пропустил</button>
+    </div>
+    <div class="ag-wrap rv">
+      <div class="card ag-chat">
+        <div class="ch" id="agHead"></div>
+        <div class="feed" id="agFeed" aria-live="polite"></div>
+      </div>
+      <div class="card ag-side">
+        <div class="lh"><span class="av cag" style="width:30px;height:30px;border-radius:10px"><svg class="ic" style="width:16px;height:16px"><use href="#i-spark"/></svg></span><span id="agName">Справка</span><span class="sp"></span><button class="replay" type="button" id="agReplay"><svg class="ic"><use href="#i-replay"/></svg>Ещё раз</button></div>
+        <p class="desc" id="agDesc"></p>
+        <ol class="steps" id="agSteps"></ol>
+      </div>
+    </div>
+    <div class="card arch rv">
+      <span class="fi"><svg class="ic" style="width:24px;height:24px"><use href="#i-spark"/></svg></span>
+      <div>
+        <h3>Архитектор собирает агента из описания</h3>
+        <p>Программист для агента не нужен. Опишите задачу словами. Архитектор задаст уточняющие вопросы, соберёт черновик агента и проверит его на примерах до запуска.</p>
+      </div>
+      <div class="ex"><b>Например</b>«Каждое утро в 9:00 проверяй, все ли инструкторы отметились под инструктажем, и напоминай остальным»</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ контроль ============ -->
+<section id="control" aria-labelledby="ctl-h">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <p class="eyebrow"><svg class="ic"><use href="#i-shield"/></svg>Контроль</p>
+      <h2 id="ctl-h">ИИ делает только то, что вы разрешили</h2>
+      <p class="lead">У каждого агента два списка прав: что он может видеть и кто может его позвать. Остальное ему недоступно.</p>
+    </div>
+    <div class="ctl">
+      <div class="rules">
+        <div class="rule rv"><svg class="ic"><use href="#i-eye"/></svg><h3>Видит только свои чаты</h3><p>Агент читает только чаты, куда его добавили, и только выбранные разделы базы знаний.</p></div>
+        <div class="rule rv"><svg class="ic"><use href="#i-users"/></svg><h3>Зовут только те, кому разрешено</h3><p>Администратор решает, кто может обращаться к агенту.</p></div>
+        <div class="rule rv"><svg class="ic"><use href="#i-hand"/></svg><h3>Важное только после подтверждения</h3><p>Написать человеку в личку и другие отмеченные действия агент выполнит только после нажатия «Подтвердить».</p></div>
+        <div class="rule rv"><svg class="ic"><use href="#i-list"/></svg><h3>Каждое действие в журнале</h3><p>Что агент прочитал, что ответил, сколько потратил.</p></div>
+        <div class="rule rv"><svg class="ic"><use href="#i-gauge"/></svg><h3>Лимит расходов</h3><p>Бюджет на модель задаётся на агента и на всё пространство.</p></div>
+        <div class="rule rv"><svg class="ic"><use href="#i-pause"/></svg><h3>Пауза в одно нажатие</h3><p>Остановленный агент ничего не делает, его напоминания отменяются.</p></div>
+      </div>
+      <div class="card agcard rv" id="agCard">
+        <div class="top"><span class="av cag"><svg class="ic"><use href="#i-spark"/></svg></span><div><div class="t">Справка</div><div class="s">Отвечает по регламентам</div></div><span class="sp"></span><span style="font-size:13px;color:var(--muted)" id="pauseLbl">Работает</span><button class="switch" type="button" role="switch" aria-checked="true" id="agRun" aria-label="Агент работает"></button></div>
+        <h4>Что видит</h4>
+        <div class="perm" data-p><svg class="ic"><use href="#i-msg"/></svg>Чат «Инструкторы · зал»<span class="sp"></span><button class="switch" type="button" role="switch" aria-checked="true" aria-label="Чат Инструкторы"></button></div>
+        <div class="perm off" data-p><svg class="ic"><use href="#i-msg"/></svg>Чат «Врачи»<span class="sp"></span><button class="switch" type="button" role="switch" aria-checked="false" aria-label="Чат Врачи"></button></div>
+        <div class="perm" data-p><svg class="ic"><use href="#i-book"/></svg>База знаний «Регламенты зала»<span class="sp"></span><button class="switch" type="button" role="switch" aria-checked="true" aria-label="Регламенты зала"></button></div>
+        <div class="perm off" data-p><svg class="ic"><use href="#i-book"/></svg>База знаний «Кадровые документы»<span class="sp"></span><button class="switch" type="button" role="switch" aria-checked="false" aria-label="Кадровые документы"></button></div>
+        <h4>Кто может позвать</h4>
+        <div class="radio" id="agWho"><button type="button" aria-pressed="true" data-w="участники чата">Участники чата</button><button type="button" aria-pressed="false" data-w="только администраторы">Только администраторы</button></div>
+        <h4>Спрашивает подтверждение</h4>
+        <div class="perm" data-p><svg class="ic"><use href="#i-send"/></svg>Написать человеку в личку<span class="sp"></span><button class="switch" type="button" role="switch" aria-checked="true" aria-label="Подтверждение для лички"></button></div>
+        <h4>Лимит расходов</h4>
+        <div class="perm"><svg class="ic"><use href="#i-gauge"/></svg><span><span class="ph">[сумма]</span> ₽ в месяц</span></div>
+        <div class="sum" id="agSum"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ свой сервер ============ -->
+<section class="alt" id="server" aria-labelledby="srv-h">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <p class="eyebrow"><svg class="ic"><use href="#i-server"/></svg>Свой сервер</p>
+      <h2 id="srv-h">Данные, модели и ключи у компании</h2>
+      <p class="lead">Coma ставится на сервер компании или на арендованный виртуальный сервер. Вашей переписки у нас нет: она хранится только у вас.</p>
+    </div>
+    <div class="srv-grid">
+      <article class="card srv rv"><span class="fi"><svg class="ic"><use href="#i-server"/></svg></span><h3>Данные</h3><p>Переписка, файлы и база знаний лежат в вашей базе PostgreSQL. Соединения защищены TLS, ключи доступа к моделям хранятся зашифрованными.</p></article>
+      <article class="card srv rv"><span class="fi"><svg class="ic"><use href="#i-spark"/></svg></span><h3>Модели</h3><p>Подключите Anthropic, OpenAI, совместимый с OpenAI шлюз или свою модель через Ollama или vLLM.</p></article>
+      <article class="card srv rv"><span class="fi"><svg class="ic"><use href="#i-key"/></svg></span><h3>Доступ</h3><p>Администратор приглашает сотрудников по ссылке, видит сессии и журнал аудита, отключает уволенных.</p></article>
+    </div>
+    <div class="term rv">
+      <div class="tb"><i></i><i></i><i></i><span style="margin-left:6px">Терминал вашего сервера</span><span class="sp"></span><button type="button" id="copyCmd"><svg class="ic"><use href="#i-copy"/></svg><span>Скопировать</span></button></div>
+<pre id="cmd"><span class="c"># скачать код</span>
+<span class="p">$ </span>git clone https://github.com/ComaMessenger/comamessenger.git && cd comamessenger
+<span class="c"># создать .env со случайными секретами</span>
+<span class="p">$ </span>./deploy/generate-env.sh
+<span class="c"># поднять сервер, базу и агентов</span>
+<span class="p">$ </span>docker compose --env-file .env -f deploy/compose.yaml --profile agents up -d</pre>
+    </div>
+    <div class="term-cap"><span>Три команды: скачать код, создать секреты, запустить сервер с базой и агентами.</span><a class="link-arrow" href="https://github.com/ComaMessenger/comamessenger#readme" target="_blank" rel="noopener">Инструкция по установке <svg class="ic"><use href="#i-arrow"/></svg></a></div>
+  </div>
+</section>
+
+<!-- ============ открытый код ============ -->
+<section id="opensource" aria-labelledby="os-h">
+  <div class="wrap os">
+    <div class="rv">
+      <p class="eyebrow"><svg class="ic"><use href="#i-code"/></svg>Открытый код</p>
+      <h2 id="os-h">Открытый код: вы не зависите от разработчика</h2>
+      <p class="lead">Весь код Coma лежит на GitHub. Ваши специалисты могут проверить его, доработать и развернуть без нас.</p>
+      <ul>
+        <li><svg class="ic"><use href="#i-check"/></svg><span>Сервер и агенты под <span class="lic">AGPL-3.0</span>, приложения и документация под <span class="lic">Apache-2.0</span></span></li>
+        <li><svg class="ic"><use href="#i-check"/></svg><span>Наши приложения работают через тот же открытый API, что доступен вам</span></li>
+        <li><svg class="ic"><use href="#i-check"/></svg><span>Своего агента можно подключить через этот же API</span></li>
+      </ul>
+      <div class="cta-row" style="margin-top:28px"><a class="btn sec" href="https://github.com/ComaMessenger/comamessenger" target="_blank" rel="noopener"><svg class="ic"><use href="#i-gh"/></svg>Открыть на GitHub</a></div>
+    </div>
+    <div class="card repo rv">
+      <div class="rt"><svg class="ic"><use href="#i-gh"/></svg>ComaMessenger / comamessenger</div>
+      <p class="rd">Open-source self-hosted corporate messenger with chats, read-only channels, threads and an agent-first architecture.</p>
+      <div class="badges"><span class="bd"><svg class="ic"><use href="#i-star"/></svg><span class="ph">[звёзды]</span></span><span class="bd">AGPL-3.0 · Apache-2.0</span><span class="bd">Go · TypeScript</span></div>
+      <div class="tree-files">
+        <div><span>core/</span><span>сервер на Go</span></div>
+        <div><span>apps/web/</span><span>веб-клиент</span></div>
+        <div><span>apps/mobile/</span><span>приложение для iOS и Android</span></div>
+        <div><span>apps/agent-runtime/</span><span>среда выполнения агентов</span></div>
+        <div><span>packages/protocol/</span><span>открытый API (OpenAPI)</span></div>
+        <div><span>deploy/</span><span>установка через Docker Compose</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ переезд ============ -->
+<section class="alt" id="migration" aria-labelledby="mg-h">
+  <div class="wrap">
+    <div class="sec-head rv">
+      <p class="eyebrow">Внедрение</p>
+      <h2 id="mg-h">Как компании перейти на Coma</h2>
+    </div>
+    <ol class="mig" style="padding:0;margin:0">
+      <li class="card rv"><span class="num">1</span><h3>Сервер</h3><p>Разворачиваем Coma на вашем сервере или в облаке, настраиваем домен и уведомления.</p></li>
+      <li class="card rv"><span class="num">2</span><h3>Структура</h3><p>Заводим отделы, должности и рабочие чаты.</p></li>
+      <li class="card rv"><span class="num">3</span><h3>Сотрудники</h3><p>Рассылаем приглашения по ссылке, сотрудники ставят приложение и входят.</p></li>
+      <li class="card rv"><span class="num">4</span><h3>Агенты</h3><p>Загружаем регламенты в базу знаний и включаем первых агентов.</p></li>
+    </ol>
+    <div class="mig-foot">
+      <span class="term-len">Срок: <span class="ph">[число]</span> дней</span>
+      <a class="btn sec" href="#presentation" data-ph="Презентация для руководителя готовится"><svg class="ic"><use href="#i-down"/></svg>Скачать презентацию для руководителя</a>
+    </div>
+  </div>
+</section>
+
+<!-- ============ кейс ============ -->
+<section id="case" aria-labelledby="cs-h">
+  <div class="wrap">
+    <article class="card case rv">
+      <div class="l">
+        <span class="lab">Кейс</span>
+        <h2 id="cs-h">Реабилитационный центр перешёл на Coma</h2>
+        <p class="lead">В центре работают инструкторы, врачи и администраторы. Пишут в рабочие чаты с телефона, между занятиями.</p>
+        <dl>
+          <div><dt>Что было</dt><dd>Вопросы по расписанию и регламентам терялись в общих чатах.</dd></div>
+          <div><dt>Что сделали</dt><dd>Чаты по залам и агенты:<div class="agents-used"><span>Справка: ответы по регламентам</span><span>Контроль: отметки под инструктажами</span><span>Передача: дела между слотами</span></div></dd></div>
+        </dl>
+      </div>
+      <div class="r">
+        <div class="metric"><b class="ph">[число]</b><span>сотрудников</span></div>
+        <div class="metric"><b class="ph">[число]</b><span>недель на переезд</span></div>
+        <div class="metric"><b class="ph">[число]</b><span>запросов в неделю</span></div>
+        <blockquote class="quote"><span class="ph">[цитата руководителя центра]</span><footer><span class="ph">[имя, должность]</span></footer></blockquote>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ============ цены ============ -->
+<section class="alt" id="pricing" aria-labelledby="pr-h">
+  <div class="wrap">
+    <div class="sec-head center rv">
+      <p class="eyebrow">Цены</p>
+      <h2 id="pr-h">Бесплатно на своём сервере</h2>
+      <p class="lead">Облачной версии нет, Coma работает только на вашем сервере. Платите только за помощь с внедрением и поддержкой, если она нужна.</p>
+    </div>
+    <div class="price-grid">
+      <article class="card price hl rv">
+        <h3>Свой сервер</h3>
+        <div class="amt">0 ₽</div>
+        <p>Устанавливаете сами по инструкции.</p>
+        <ul><li><svg class="ic"><use href="#i-check"/></svg>Все функции</li><li><svg class="ic"><use href="#i-check"/></svg>Без ограничений по числу сотрудников</li><li><svg class="ic"><use href="#i-check"/></svg>Приложение для телефона</li></ul>
+        <a class="btn pri" href="https://github.com/ComaMessenger/comamessenger" target="_blank" rel="noopener">Развернуть у себя</a>
+      </article>
+      <article class="card price rv">
+        <h3>Внедрение</h3>
+        <div class="amt sm">По запросу</div>
+        <p>Развернём сервер, заведём структуру, подключим модели и настроим первых агентов.</p>
+        <ul><li><svg class="ic"><use href="#i-check"/></svg>Установка на ваш сервер</li><li><svg class="ic"><use href="#i-check"/></svg>Отделы, должности, чаты</li><li><svg class="ic"><use href="#i-check"/></svg>Регламенты в базе знаний</li></ul>
+        <a class="btn sec" href="#lead" data-plan="Внедрение">Оставить заявку</a>
+      </article>
+      <article class="card price rv">
+        <h3>Поддержка</h3>
+        <div class="amt sm">По запросу</div>
+        <p>Обновления, резервные копии, помощь администратору.</p>
+        <ul><li><svg class="ic"><use href="#i-check"/></svg>Обновления версий</li><li><svg class="ic"><use href="#i-check"/></svg>Резервные копии</li><li><svg class="ic"><use href="#i-check"/></svg>Ответы на вопросы администратора</li></ul>
+        <a class="btn sec" href="#lead" data-plan="Поддержка">Оставить заявку</a>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============ заявка ============ -->
+<section id="lead" aria-labelledby="ld-h">
+  <div class="wrap lead-grid">
+    <div class="rv">
+      <p class="eyebrow">Заявка</p>
+      <h2 id="ld-h">Обсудим внедрение</h2>
+      <p class="lead">Расскажите о компании. Мы ответим и покажем Coma на ваших задачах.</p>
+      <div class="contacts">
+        <div><svg class="ic"><use href="#i-mail"/></svg><span class="ph">[почта для заявок]</span></div>
+        <div><svg class="ic"><use href="#i-msg"/></svg><span class="ph">[телефон или мессенджер]</span></div>
+      </div>
+    </div>
+    <form class="card form rv" id="leadForm" novalidate>
+      <label>Имя<input name="name" autocomplete="name" required></label>
+      <label>Компания<input name="company" autocomplete="organization" required></label>
+      <label>Телефон или почта<input name="contact" autocomplete="email" required></label>
+      <label>Сколько сотрудников<select name="size"><option>до 50</option><option>50–200</option><option>200–1000</option><option>больше 1000</option></select></label>
+      <label class="full">Что хотите решить <span class="opt-l">(необязательно)</span><textarea name="goal" id="goal"></textarea></label>
+      <p class="legal">Нажимая кнопку, вы соглашаетесь с <span class="ph">[политикой обработки персональных данных]</span>.</p>
+      <div class="send"><button class="btn pri" type="submit">Отправить заявку</button><span class="err" id="formErr" role="alert"></span></div>
+      <div class="ok-box" id="formOk" hidden><svg class="ic"><use href="#i-okc"/></svg><div><b>Заявка отправлена.</b><br>Ответим в течение <span class="ph">[срок]</span>. <span style="color:var(--muted)">В прототипе данные никуда не уходят.</span></div></div>
+    </form>
+  </div>
+</section>
+
+<!-- ============ вопросы ============ -->
+<section class="alt" id="faq" aria-labelledby="fq-h">
+  <div class="wrap">
+    <div class="sec-head center rv"><h2 id="fq-h">Вопросы и ответы</h2></div>
+    <div class="faq">
+      <details><summary>Где хранятся данные?<svg class="ic"><use href="#i-plus"/></svg></summary><p>На вашем сервере: в базе PostgreSQL и файловом хранилище. У разработчиков Coma доступа к ним нет.</p></details>
+      <details><summary>Куда уходят данные, когда работает ИИ-агент?<svg class="ic"><use href="#i-plus"/></svg></summary><p>Туда, куда вы их отправите. Если подключить внешнюю модель, текст запроса уходит её провайдеру. Если поставить свою модель через Ollama или vLLM, данные не покидают ваш сервер.</p></details>
+      <details><summary>Есть ли звонки и видеосвязь?<svg class="ic"><use href="#i-plus"/></svg></summary><p>Нет. Coma нужен для переписки и рабочих задач, звонков и видеосвязи в нём нет. Для звонков оставьте сервис, которым пользуетесь сейчас.</p></details>
+      <details><summary>Нужен ли свой программист?<svg class="ic"><use href="#i-plus"/></svg></summary><p>Чтобы развернуть самостоятельно, нужен человек, который умеет работать с Docker. Если такого нет, развернём и поддержим сами.</p></details>
+      <details><summary>Видит ли сервис уведомлений текст сообщений?<svg class="ic"><use href="#i-plus"/></svg></summary><p>Нет. Уведомление шифруется ключом устройства, сервис доставки передаёт его, не видя текста.</p></details>
+      <details><summary>Есть ли Coma в реестре российского ПО?<svg class="ic"><use href="#i-plus"/></svg></summary><p>Пока нет.</p></details>
+      <details><summary>Есть ли приложение для компьютера?<svg class="ic"><use href="#i-plus"/></svg></summary><p>Coma работает в браузере. Приложение для iPhone сейчас в TestFlight, доступ по приглашению. Версию для Android готовим.</p></details>
+      <details><summary>Почему Coma?<svg class="ic"><use href="#i-plus"/></svg></summary><p>От английского comma, запятая. Запятая ставится там, где разговор продолжается: «человек, агент, коллега». Поэтому и маскот у нас в виде запятой.</p></details>
+      <details><summary>Чем Coma отличается от Telegram?<svg class="ic"><use href="#i-plus"/></svg></summary><p>Рабочие чаты принадлежат компании, у сотрудников есть запросы, задачи и оргструктура, а ИИ-агенты работают по вашим правилам.</p></details>
+    </div>
+  </div>
+</section>
+
+<!-- ============ финальный призыв ============ -->
+<section class="final" id="demo" aria-labelledby="fn-h">
+  <div class="wrap rv">
+    <svg class="mascot big-m" aria-hidden="true"><use href="#mascot"/></svg>
+    <h2 id="fn-h">Посмотрите Coma на своих задачах</h2>
+    <p class="lead">Разверните Coma на своём сервере или оставьте заявку, поможем с внедрением.</p>
+    <div class="cta-row">
+      <div class="cta"><a class="btn light" href="#demo" data-demo>Демо скоро</a><small>Готовим публичное демо в браузере</small></div>
+      <div class="cta"><a class="btn ghost-deep" href="https://github.com/ComaMessenger/comamessenger" target="_blank" rel="noopener"><svg class="ic"><use href="#i-gh"/></svg>Развернуть у себя</a><small>Бесплатно, код на GitHub</small></div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="ftr">
+  <div class="wrap">
+    <a class="logo" href="#top" style="font-size:17px"><svg class="mascot" aria-hidden="true" style="width:20px;height:26px"><use href="#mascot-b"/></svg>Coma</a>
+    <span>Открытый рабочий мессенджер · coma-chat.com</span>
+    <nav aria-label="Ссылки в подвале"><a href="https://github.com/ComaMessenger/comamessenger" target="_blank" rel="noopener">GitHub</a><a href="https://github.com/ComaMessenger/comamessenger/tree/main/docs" target="_blank" rel="noopener">Документация</a><a href="#lead">Внедрение</a><span class="ph">[контакты]</span></nav>
+  </div>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script>
+(() => {
+  'use strict';
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const root = document.documentElement;
+  root.classList.add('js');
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* storage blocked */ } }
+  };
+  const icon = (id, style = '') => `<svg class="ic"${style ? ` style="${style}"` : ''}><use href="#${id}"/></svg>`;
+  const plural = (n, one, few, many) => {
+    const a = n % 10, b = n % 100;
+    return a === 1 && b !== 11 ? one : a >= 2 && a <= 4 && (b < 12 || b > 14) ? few : many;
+  };
+
+  /* ---------- toast ---------- */
+  const toastEl = $('#toast');
+  let toastT;
+  function toast(text) {
+    toastEl.textContent = text;
+    toastEl.classList.add('on');
+    clearTimeout(toastT);
+    toastT = setTimeout(() => toastEl.classList.remove('on'), 3200);
+  }
+
+  /* ---------- prototype controls: hero variant & theme ---------- */
+  const params = new URLSearchParams(location.search);
+  if (params.has('proto')) document.querySelector('.proto').hidden = false;
+  function setParam(k, v) {
+    const p = new URLSearchParams(location.search);
+    if (v == null) p.delete(k); else p.set(k, v);
+    const q = p.toString();
+    try { history.replaceState(null, '', location.pathname + (q ? '?' + q : '') + location.hash); } catch (e) { /* file:// in some browsers */ }
+  }
+  function setHero(n, push) {
+    n = n === '2' ? '2' : '1';
+    $('#hero1').hidden = n !== '1';
+    $('#hero2').hidden = n !== '2';
+    $$('#heroSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.hero === n)));
+    if (push) setParam('hero', n);
+    if (n === '1') { hero2.stop(); hero1.start(); } else { hero1.stop(); hero2.start(); }
+  }
+  function setTheme(t, persist) {
+    if (t === 'light' || t === 'dark') root.setAttribute('data-theme', t); else root.removeAttribute('data-theme');
+    $$('#themeSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.theme === (t || 'auto'))));
+    if (persist) { store.set('coma-landing-theme', t); setParam('theme', t === 'auto' ? null : t); }
+  }
+  $$('#heroSeg button').forEach(b => b.addEventListener('click', () => setHero(b.dataset.hero, true)));
+  $$('#themeSeg button').forEach(b => b.addEventListener('click', () => setTheme(b.dataset.theme, true)));
+
+  /* ---------- header ---------- */
+  const hdr = $('#hdr');
+  const onScroll = () => hdr.classList.toggle('scrolled', scrollY > 8);
+  addEventListener('scroll', onScroll, { passive: true }); onScroll();
+  const burger = $('#burger'), mnav = $('#mnav');
+  burger.addEventListener('click', () => {
+    const open = !mnav.classList.contains('open');
+    mnav.classList.toggle('open', open);
+    burger.setAttribute('aria-expanded', String(open));
+    burger.innerHTML = icon(open ? 'i-x' : 'i-menu');
+  });
+  $$('a', mnav).forEach(a => a.addEventListener('click', () => { mnav.classList.remove('open'); burger.setAttribute('aria-expanded', 'false'); burger.innerHTML = icon('i-menu'); }));
+
+  /* ---------- placeholder links ---------- */
+  $$('[data-demo]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); toast('Демо скоро откроем. А пока можно развернуть Coma у себя или оставить заявку.'); }));
+  $$('[data-ph]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); toast(a.dataset.ph); }));
+  $$('[data-plan]').forEach(a => a.addEventListener('click', () => {
+    const g = $('#goal');
+    if (!g.value) g.value = 'Интересует: ' + a.dataset.plan.toLowerCase();
+  }));
+
+  /* ---------- runner helper (cancellable timelines) ---------- */
+  function makeRunner(script) {
+    let token = 0, running = false;
+    const api = {
+      get running() { return running; },
+      start() { if (running) return; running = true; const my = ++token; script(ctx(my)).catch(() => {}); },
+      stop() { running = false; token++; },
+      restart() { api.stop(); api.start(); }
+    };
+    function ctx(my) {
+      return {
+        alive: () => my === token,
+        wait: ms => new Promise((res, rej) => setTimeout(() => (my === token ? res() : rej(new Error('stop'))), reduced ? 0 : ms))
+      };
+    }
+    return api;
+  }
+  function add(feed, html, cls = '') {
+    const d = document.createElement('div');
+    d.className = 'row' + (cls ? ' ' + cls : '') + (reduced ? '' : ' anim-in');
+    d.innerHTML = html;
+    feed.appendChild(d);
+    while (feed.children.length > 12) feed.firstElementChild.remove();
+    if (feed.scrollHeight > feed.clientHeight) feed.scrollTop = feed.scrollHeight;
+    return d;
+  }
+  const typingHtml = `<span class="av s cag">${icon('i-spark', 'width:14px;height:14px')}</span><div class="bub"><span class="typing"><i></i><i></i><i></i></span></div>`;
+
+  /* ---------- HERO 1: live chat ---------- */
+  const h1feed = $('#h1feed'), h1slot = $('#h1slot'), h1comp = $('#h1comp');
+  const callouts = $$('.callout');
+  const co = i => callouts.forEach(c => c.classList.toggle('on', +c.dataset.co === i));
+  const hero1 = makeRunner(async c => {
+    do {
+      h1feed.innerHTML = ''; h1slot.hidden = true; co(-1);
+      h1comp.textContent = 'Сообщение'; h1comp.classList.remove('typed');
+      add(h1feed, `<span class="av s c1">ОЧ</span><div class="bub"><div class="n" style="color:var(--a1f)">Олег Чернов</div>Маты в малом зале разложил.<span class="tm">8:52</span></div>`);
+      await c.wait(900);
+      co(0);
+      const req = add(h1feed, `<span class="av s c4">МС</span><div class="card-msg"><div class="n" style="color:var(--a4f);font-size:12px;font-weight:600">Марина Соколова</div><div class="hd"><span class="tag">${icon('i-req')}Запрос</span><span class="pill warn">до пт, 18:00</span></div><div class="q">Планёрка в понедельник в 8:30, большой зал. Будете?</div><div class="btns2"><button class="pbtn" type="button" tabindex="-1">Приду</button><button class="pbtn" type="button" tabindex="-1">Не приду</button></div><div class="meta">Ответили 4 из 6</div></div>`);
+      await c.wait(1600);
+      const [yes, no] = $$('.pbtn', req);
+      yes.classList.add('tap'); await c.wait(160); yes.classList.remove('tap');
+      yes.classList.add('chosen'); no.classList.add('dim');
+      $('.meta', req).textContent = 'Ответили 5 из 6 · вы: «Приду»';
+      await c.wait(1800);
+      co(1);
+      add(h1feed, `<span class="av s c4">МС</span><div class="card-msg"><div class="hd"><span class="tag">${icon('i-task')}Задача</span><span class="pill warn">Открыта</span></div><div class="ttl">Повесить новое расписание бассейна</div><div class="tag">Вы · отвечаете</div><div class="tag" style="color:var(--danger);margin-top:3px">${icon('i-clock')}сегодня, 12:00</div></div>`);
+      h1slot.hidden = false;
+      await c.wait(2200);
+      co(2);
+      const q = '@Справка как готовить зал после групповой ЛФК?';
+      h1comp.classList.add('typed');
+      for (let i = 1; i <= q.length; i += 2) { h1comp.textContent = q.slice(0, i); await c.wait(28); }
+      h1comp.textContent = q; await c.wait(350);
+      h1comp.textContent = 'Сообщение'; h1comp.classList.remove('typed');
+      add(h1feed, `<div class="bub"><b style="font-weight:600">@Справка</b> как готовить зал после групповой ЛФК?<span class="tm">9:03</span></div>`, 'me');
+      await c.wait(500);
+      const t = add(h1feed, typingHtml);
+      await c.wait(1500);
+      t.innerHTML = `<span class="av s cag">${icon('i-spark', 'width:14px;height:14px')}</span><div class="bub"><div class="n" style="color:var(--agent)">Справка <span class="pill ag">АГЕНТ</span></div>Проветрить 10 минут, протереть маты дезраствором, инвентарь убрать на стеллаж.<div class="src">${icon('i-file')}Регламент уборки зала, п. 4</div><div class="steps-chip">${icon('i-list')}3 шага · база знаний «Регламенты зала»</div></div>`;
+      await c.wait(4200);
+    } while (!reduced && c.alive());
+  });
+  const playBtn = $('#h1play');
+  playBtn.addEventListener('click', () => {
+    if (hero1.running) { hero1.stop(); playBtn.innerHTML = icon('i-play'); playBtn.setAttribute('aria-label', 'Продолжить'); }
+    else { hero1.start(); playBtn.innerHTML = icon('i-pause'); playBtn.setAttribute('aria-label', 'Пауза'); }
+  });
+  if (reduced) playBtn.hidden = true;
+
+  /* ---------- HERO 2: agent with step log ---------- */
+  const h2feed = $('#h2feed'), h2steps = $$('#h2steps .step'), s4t = $('#h2steps .s4t');
+  const S4_WAIT = s4t.textContent;
+  let h2confirm = null;
+  const setStep = (list, i, state) => { list[i].classList.remove('run', 'done', 'wait'); if (state) list[i].classList.add(state); };
+  const hero2 = makeRunner(async c => {
+    do {
+      h2feed.innerHTML = ''; h2steps.forEach(s => s.className = 'step'); s4t.textContent = S4_WAIT;
+      await c.wait(500);
+      add(h2feed, `<div class="bub">Как готовить зал ЛФК после групповой тренировки? И дезраствор закончился.<span class="tm">9:03</span></div>`, 'me');
+      setStep(h2steps, 0, 'run'); await c.wait(800); setStep(h2steps, 0, 'done');
+      setStep(h2steps, 1, 'run');
+      const t = add(h2feed, typingHtml);
+      await c.wait(1500); setStep(h2steps, 1, 'done');
+      setStep(h2steps, 2, 'run'); await c.wait(400);
+      t.innerHTML = `<span class="av s cag">${icon('i-spark', 'width:14px;height:14px')}</span><div class="bub"><div class="n" style="color:var(--agent)">Справка</div>Проветрить 10 минут, протереть маты дезраствором, инвентарь убрать на стеллаж.<div class="src">${icon('i-file')}Регламент зала ЛФК, п. 4</div></div>`;
+      await c.wait(900); setStep(h2steps, 2, 'done');
+      setStep(h2steps, 3, 'wait');
+      const card = add(h2feed, `<span class="av s cag">${icon('i-spark', 'width:14px;height:14px')}</span><div class="card-msg"><div class="hd"><span class="tag">${icon('i-hand')}Нужно подтверждение</span></div><div class="q" style="font-size:13.5px">Написать администратору Марине Соколовой: «В зале ЛФК закончился дезраствор»?</div><div class="btns2"><button class="pbtn pri" type="button">Подтвердить</button><button class="pbtn" type="button">Отклонить</button></div></div>`);
+      const [ok, nope] = $$('.pbtn', card);
+      const decided = await new Promise(res => {
+        h2confirm = res;
+        ok.addEventListener('click', () => res('ok'));
+        nope.addEventListener('click', () => res('no'));
+        c.wait(3600).then(() => res('auto'), () => res('stop'));
+      });
+      h2confirm = null;
+      if (decided === 'stop' || !c.alive()) return;
+      if (decided !== 'no') {
+        if (decided === 'auto') { ok.classList.add('tap'); await c.wait(160); ok.classList.remove('tap'); }
+        $('.btns2', card).outerHTML = `<div class="pill ok" style="margin-top:2px">${icon('i-check', 'width:12px;height:12px')}Отправлено после подтверждения</div>`;
+        s4t.textContent = 'Написал администратору после вашего подтверждения';
+      } else {
+        $('.btns2', card).outerHTML = `<div class="pill dng" style="margin-top:2px">Отклонено, ничего не отправлено</div>`;
+        s4t.textContent = 'Вы отклонили действие, агент ничего не отправил';
+      }
+      setStep(h2steps, 3, 'done');
+      await c.wait(4500);
+    } while (!reduced && c.alive());
+  });
+
+  /* ---------- phone-first day tabs ---------- */
+  const dayBtns = $$('#day button'), screens = $$('#pfscr .screen');
+  let dayI = 0, dayAuto = !reduced, dayTimer = null, dayVisible = false;
+  function showDay(i, fromUser) {
+    dayI = i;
+    dayBtns.forEach((b, k) => {
+      b.setAttribute('aria-selected', String(k === i));
+      const bar = $('.bar', b); bar.classList.remove('go'); void bar.offsetWidth;
+      if (k === i && dayAuto && dayVisible) bar.classList.add('go');
+    });
+    screens.forEach((s, k) => s.classList.toggle('on', k === i));
+    if (fromUser) { dayAuto = false; clearTimeout(dayTimer); $$('#day .bar').forEach(b => b.classList.remove('go')); }
+    else scheduleDay();
+  }
+  function scheduleDay() { clearTimeout(dayTimer); if (dayAuto && dayVisible) dayTimer = setTimeout(() => showDay((dayI + 1) % 4), 6000); }
+  dayBtns.forEach((b, i) => b.addEventListener('click', () => showDay(i, true)));
+  $('#day').addEventListener('keydown', e => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    e.preventDefault(); const n = (dayI + (e.key === 'ArrowDown' ? 1 : 3)) % 4; showDay(n, true); dayBtns[n].focus();
+  });
+  $$('#pfpush .pbtn').forEach(b => b.addEventListener('click', () => {
+    $$('#pfpush .pbtn').forEach(x => x.classList.toggle('chosen', x === b));
+    $('#pfnote').innerHTML = `${icon('i-check')}Ответ «${b.dataset.ans}» отправлен`;
+  }));
+  $('#pfdone').addEventListener('click', e => {
+    const st = $('#pftaskst'); st.className = 'pill ok'; st.textContent = 'Выполнена';
+    e.currentTarget.innerHTML = `${icon('i-check', 'width:16px;height:16px')}Сделано`; e.currentTarget.classList.add('chosen');
+  });
+  $$('#remChips .chip').forEach(ch => ch.addEventListener('click', () => {
+    $$('#remChips .chip').forEach(x => x.setAttribute('aria-pressed', String(x === ch)));
+    $('#remSave').textContent = ch.textContent === 'Выбрать время' ? 'Выбрать дату и время' : 'Напомнить ' + ch.textContent.charAt(0).toLowerCase() + ch.textContent.slice(1);
+  }));
+  $('#remSave').addEventListener('click', e => toast(e.currentTarget.textContent.replace('Напомнить', 'Напомню') + '. Об этом знаете только вы.'));
+  $$('#pfscr .switch').forEach(s => s.addEventListener('click', () => s.setAttribute('aria-checked', String(s.getAttribute('aria-checked') !== 'true'))));
+
+  /* ---------- feature mini-demos ---------- */
+  $$('#fReq .pbtn').forEach((b, i) => b.addEventListener('click', () => {
+    $$('#fReq .pbtn').forEach(x => { x.classList.toggle('chosen', x === b); x.classList.toggle('dim', x !== b); });
+    $('#fReqBar').style.width = '83%';
+    $('#fReqTxt').textContent = 'Ответили 5 из 6 · вы: «' + b.textContent + '»';
+  }));
+  function taskProgress() {
+    const all = $$('#fTask .chk'), done = all.filter(x => x.getAttribute('aria-checked') === 'true').length;
+    $('#fTaskBar').style.width = Math.round(done / all.length * 100) + '%';
+    $('#fTaskTxt').textContent = done === all.length ? 'Готово, автор получил уведомление' : `${done} из ${all.length}`;
+  }
+  $$('#fTask .chk').forEach(b => b.addEventListener('click', () => { b.setAttribute('aria-checked', String(b.getAttribute('aria-checked') !== 'true')); taskProgress(); }));
+  const pollOpts = $$('#fPoll .pollopt');
+  pollOpts.forEach(b => b.addEventListener('click', () => {
+    pollOpts.forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    const votes = pollOpts.map(x => +x.dataset.v + (x === b ? 1 : 0));
+    const total = votes.reduce((s, v) => s + v, 0);
+    pollOpts.forEach((x, k) => { const pc = Math.round(votes[k] / total * 100); $('i', x).style.width = pc + '%'; $('.pc', x).textContent = pc + '%'; });
+    $('#fPollTxt').textContent = `Проголосовали ${total} · ваш голос учтён`;
+  }));
+  $$('#fRem .chip').forEach(ch => ch.addEventListener('click', () => {
+    $$('#fRem .chip').forEach(x => x.setAttribute('aria-pressed', String(x === ch)));
+    $('#fRemTxt').innerHTML = `${icon('i-bell')}Напомню ${ch.dataset.t}. Другие не узнают.`;
+  }));
+  const counts = { lfk: 6, pool: 3, mech: 2 };
+  const names = { lfk: 'Зал ЛФК', pool: 'Бассейн', mech: 'Механотерапия' };
+  $$('#fTree [data-d], .mention .at').forEach(el => el.addEventListener('click', () => pickDept(el.dataset.d)));
+  function pickDept(d) {
+    $$('#fTree .nd').forEach(n => n.classList.toggle('hl', n.dataset.d === d));
+    $('#fTreeTxt').innerHTML = `${icon('i-users')}@${names[d]}: уведомление получат ${counts[d]} ${plural(counts[d], 'человек', 'человека', 'человек')}`;
+  }
+  $$('#fTree [data-d]').forEach(n => { n.style.cursor = 'pointer'; });
+  $('#fAway').addEventListener('click', e => {
+    const on = e.currentTarget.getAttribute('aria-checked') !== 'true';
+    e.currentTarget.setAttribute('aria-checked', String(on));
+    const t = $('#fAwayTxt'); t.classList.toggle('on', on); t.textContent = on ? 'Отсутствует до 24 ноября · замещает Олег Чернов' : 'На месте';
+    $('#fAwayBox').style.opacity = on ? '1' : '.35';
+  });
+
+  /* ---------- agents section ---------- */
+  const AG = {
+    help: {
+      name: 'Справка', desc: 'Отвечает по регламентам и прикладывает источник.',
+      head: ['c1', 'ИЗ', 'Инструкторы · зал', '9 участников · агент «Справка»'],
+      steps: [
+        { t: 'Получил вопрос', s: 'упоминание @Справка в чате', msg: ['row', `<span class="av s c3">ИЛ</span><div class="bub"><div class="n" style="color:var(--a3f)">Игорь Лаптев</div><b style="font-weight:600;color:var(--primary)">@Справка</b> как готовить зал после групповой ЛФК?<span class="tm">10:14</span></div>`] },
+        { t: 'Искал в базе знаний', s: 'раздел «Регламенты зала»' },
+        { t: 'Нашёл ответ', s: '«Регламент уборки зала», п. 4' },
+        { t: 'Ответил в чате с источником', agent: true, msg: ['row', `AGENT<div class="bub"><div class="n" style="color:var(--agent)">Справка <span class="pill ag">АГЕНТ</span></div>Проветрить 10 минут, протереть маты дезраствором, инвентарь убрать на стеллаж.<div class="src">${icon('i-file')}Регламент уборки зала, п. 4</div><span class="tm">10:14</span></div>`] }
+      ]
+    },
+    control: {
+      name: 'Контроль', desc: 'Проверяет, все ли отметились под сообщением.',
+      head: ['c1', 'ИЗ', 'Инструкторы · зал', '9 участников · агент «Контроль»'],
+      steps: [
+        { t: 'Запустился по расписанию', s: 'каждый будний день в 9:00' },
+        { t: 'Открыл сообщение', s: '«Инструктаж по технике безопасности»', msg: ['row', `<span class="av s c4">МС</span><div class="bub"><div class="n" style="color:var(--a4f)">Марина Соколова</div>Инструктаж по технике безопасности во вложении. Прочитайте и поставьте ✅<span class="tm">8:30</span></div>`] },
+        { t: 'Посчитал отметки', s: 'отметились 7 из 9' },
+        { t: 'Написал двум оставшимся', s: 'и поставил напоминание на 12:00', agent: true, msg: ['row', `AGENT<div class="card-msg"><div class="n" style="color:var(--agent);font-size:12px;font-weight:600">Контроль <span class="pill ag">АГЕНТ</span></div><div class="hd"><span class="tag">${icon('i-okc')}Отметились 7 из 9</span></div><div class="q" style="font-size:13.5px;margin-bottom:4px">Ещё не отметились: Игорь Лаптев, Татьяна Волкова. Напомню в 12:00.</div><div class="prog"><i style="width:78%"></i></div></div>`] }
+      ]
+    },
+    slots: {
+      name: 'Слоты', desc: 'Находит инструктора на свободный слот.',
+      head: ['c2', 'СН', 'Слоты на неделю', '14 участников · агент «Слоты»'],
+      steps: [
+        { t: 'Получил просьбу', s: 'нужна замена на 15:00', msg: ['row', `<span class="av s c4">МС</span><div class="bub"><div class="n" style="color:var(--a4f)">Марина Соколова</div><b style="font-weight:600;color:var(--primary)">@Слоты</b> нужна замена в малом зале сегодня на 15:00<span class="tm">11:20</span></div>`] },
+        { t: 'Разослал запрос', s: 'инструкторам зала ЛФК, 6 человек', agent: true, msg: ['row', `AGENT<div class="card-msg"><div class="hd"><span class="tag">${icon('i-req')}Запрос · зал ЛФК</span><span class="pill warn">до 13:00</span></div><div class="q" style="font-size:13.5px">Кто возьмёт малый зал сегодня в 15:00?</div><div class="btns2"><button class="pbtn" type="button" tabindex="-1">Возьму</button><button class="pbtn" type="button" tabindex="-1">Не могу</button></div></div>`] },
+        { t: 'Получил ответ', s: 'первым ответил Олег Чернов', msg: ['row', `<span class="av s c1">ОЧ</span><div class="bub"><div class="n" style="color:var(--a1f)">Олег Чернов</div>Возьму<span class="tm">11:26</span></div>`] },
+        { t: 'Ждёт подтверждения администратора', s: 'закрепить слот за Олегом Черновым?', confirm: { ok: 'Слот 15:00, малый зал: Олег Чернов. Запрос остальным закрыт.', okStep: 'Закрепил слот после подтверждения' } }
+      ]
+    },
+    missed: {
+      name: 'Что я пропустил', desc: 'Присылает личную сводку за время отсутствия.',
+      head: ['cag', 'ICON', 'Что я пропустил', 'личный чат с агентом'],
+      steps: [
+        { t: 'Вы вернулись после выезда', s: 'статус «Отсутствую» снят в 16:02' },
+        { t: 'Прочитал 4 чата', s: 'где вас упоминали' },
+        { t: 'Нашёл 3 пункта', s: 'где ждут вашего ответа' },
+        { t: 'Прислал сводку в личку', agent: true, msg: ['row', `AGENT<div class="card-msg"><div class="n" style="color:var(--agent);font-size:12px;font-weight:600">Что я пропустил <span class="pill ag">АГЕНТ</span></div><div class="q" style="font-size:13.5px;margin:4px 0 0">Пока вас не было:<br>1. Марина ждёт ответа на запрос о планёрке, до пт, 18:00.<br>2. Олег просит подписать направление для Ковалёва.<br>3. Новая задача: проверить аптечку, срок в среду.</div></div>`] }
+      ]
+    }
+  };
+  const agFeed = $('#agFeed'), agStepsEl = $('#agSteps');
+  let agKey = 'help', agVisible = false;
+  const agentAv = `<span class="av s cag">${icon('i-spark', 'width:14px;height:14px')}</span>`;
+  function renderAgent(k) {
+    const a = AG[k];
+    $('#agName').textContent = a.name;
+    $('#agDesc').textContent = a.desc;
+    const [cls, ini, title, sub] = a.head;
+    $('#agHead').innerHTML = `<span class="av ${cls}">${ini === 'ICON' ? icon('i-spark', 'width:18px;height:18px') : ini}</span><div><div class="t">${title}</div><div class="s">${sub}</div></div>`;
+    agStepsEl.innerHTML = a.steps.map((s, i) => `<li class="step"><span class="mk"><b>${i + 1}</b>${icon('i-check')}</span><div><span class="tt">${s.t}</span>${s.s ? `<small>${s.s}</small>` : ''}<div class="slot-acts"></div></div></li>`).join('');
+    agFeed.innerHTML = '';
+  }
+  const agRun = makeRunner(async c => {
+    const a = AG[agKey];
+    renderAgent(agKey);
+    const steps = $$('.step', agStepsEl);
+    await c.wait(400);
+    for (let i = 0; i < a.steps.length; i++) {
+      const s = a.steps[i];
+      setStep(steps, i, s.confirm ? 'wait' : 'run');
+      let typing = null;
+      if (s.agent) typing = add(agFeed, typingHtml);
+      await c.wait(s.confirm ? 300 : 1100);
+      if (s.msg) {
+        const html = s.msg[1].replace('AGENT', agentAv);
+        if (typing) { typing.innerHTML = html; } else add(agFeed, html);
+      } else if (typing) typing.remove();
+      if (s.confirm) {
+        const box = $('.slot-acts', steps[i]);
+        box.className = 'acts';
+        box.innerHTML = `<button class="pbtn pri" type="button">Подтвердить</button><button class="pbtn" type="button">Отклонить</button>`;
+        const [ok, no] = $$('button', box);
+        const r = await new Promise(res => { ok.addEventListener('click', () => res('ok')); no.addEventListener('click', () => res('no')); c.wait(60000).then(() => res('timeout'), () => res('stop')); });
+        if (r === 'stop' || r === 'timeout' || !c.alive()) return;
+        box.remove();
+        if (r === 'ok') { $('.tt', steps[i]).textContent = s.confirm.okStep; add(agFeed, `${agentAv}<div class="bub"><div class="n" style="color:var(--agent)">Слоты <span class="pill ag">АГЕНТ</span></div>${s.confirm.ok}</div>`); }
+        else { $('.tt', steps[i]).textContent = 'Администратор отклонил, слот не закреплён'; add(agFeed, `${agentAv}<div class="bub"><div class="n" style="color:var(--agent)">Слоты <span class="pill ag">АГЕНТ</span></div>Понял, слот не закрепляю. Запрос остаётся открытым.</div>`); }
+      }
+      setStep(steps, i, 'done');
+      await c.wait(500);
+    }
+  });
+  $$('#agTabs button').forEach(b => b.addEventListener('click', () => {
+    $$('#agTabs button').forEach(x => x.setAttribute('aria-selected', String(x === b)));
+    agKey = b.dataset.k; agRun.restart();
+  }));
+  $('#agReplay').addEventListener('click', () => agRun.restart());
+  renderAgent('help');
+
+  /* ---------- agent permissions card ---------- */
+  const agCard = $('#agCard');
+  function agSummary() {
+    const perms = $$('.perm[data-p]', agCard);
+    const on = p => $('.switch', p).getAttribute('aria-checked') === 'true';
+    perms.forEach(p => p.classList.toggle('off', !on(p)));
+    if ($('#agRun').getAttribute('aria-checked') !== 'true') {
+      agCard.classList.add('paused'); $('#pauseLbl').textContent = 'На паузе';
+      $('#agSum').textContent = 'Агент на паузе: ничего не читает и не отвечает, его напоминания отменены.';
+      return;
+    }
+    agCard.classList.remove('paused'); $('#pauseLbl').textContent = 'Работает';
+    const chats = perms.slice(0, 2).filter(on).length, kb = perms.slice(2, 4).filter(on).length;
+    const who = $('#agWho [aria-pressed="true"]').dataset.w;
+    const dm = on(perms[4]);
+    const sees = chats + kb === 0 ? 'Агент ничего не видит' : `Агент видит ${chats} ${plural(chats, 'чат', 'чата', 'чатов')} и ${kb} ${plural(kb, 'раздел', 'раздела', 'разделов')} базы знаний`;
+    $('#agSum').textContent = `${sees}. Позвать могут ${who}. ${dm ? 'Пишет в личку только после подтверждения.' : 'Пишет в личку без подтверждения.'}`;
+  }
+  $$('.switch', agCard).forEach(s => s.addEventListener('click', () => { s.setAttribute('aria-checked', String(s.getAttribute('aria-checked') !== 'true')); agSummary(); }));
+  $$('#agWho button').forEach(b => b.addEventListener('click', () => { $$('#agWho button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); agSummary(); }));
+  agSummary();
+
+  /* ---------- copy command ---------- */
+  $('#copyCmd').addEventListener('click', async () => {
+    const text = $('#cmd').innerText.split('\n').filter(l => l.startsWith('$ ')).map(l => l.slice(2)).join('\n');
+    let ok = false;
+    try { await navigator.clipboard.writeText(text); ok = true; } catch (e) {
+      try { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); ok = document.execCommand('copy'); ta.remove(); } catch (e2) { ok = false; }
+    }
+    toast(ok ? 'Команды скопированы' : 'Не удалось скопировать, выделите команды вручную');
+  });
+
+  /* ---------- lead form ---------- */
+  $('#leadForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const f = e.currentTarget, err = $('#formErr');
+    const bad = $$('[required]', f).filter(i => !i.value.trim());
+    if (bad.length) { err.textContent = 'Заполните имя, компанию и контакт'; bad[0].focus(); return; }
+    err.textContent = '';
+    $('#formOk').hidden = false;
+    $('button[type="submit"]', f).disabled = true;
+  });
+
+  /* ---------- visibility-driven animation ---------- */
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(en => {
+      const id = en.target.id;
+      if (id === 'stage1') { if (en.isIntersecting) { if (!$('#hero1').hidden && playBtn.getAttribute('aria-label') === 'Пауза') hero1.start(); } else hero1.stop(); }
+      if (id === 'stage2') { if (en.isIntersecting) { if (!$('#hero2').hidden) hero2.start(); } else hero2.stop(); }
+      if (id === 'pfscr') { dayVisible = en.isIntersecting; if (dayVisible) showDay(dayI); else clearTimeout(dayTimer); }
+      if (id === 'agFeed') { if (en.isIntersecting && !agVisible) { agVisible = true; agRun.start(); } }
+    });
+  }, { threshold: 0.25 });
+  ['#stage1', '#stage2', '#pfscr', '#agFeed'].forEach(s => io.observe($(s)));
+  const rio = new IntersectionObserver(entries => entries.forEach(en => { if (en.isIntersecting) { en.target.classList.add('in'); rio.unobserve(en.target); } }), { rootMargin: '0px 0px -8% 0px' });
+  $$('.rv').forEach(el => rio.observe(el));
+
+  /* ---------- init ---------- */
+  setTheme(params.get('theme') || store.get('coma-landing-theme') || 'light', false);
+  setHero(params.get('hero') || '1', false);
+})();
+</script>
+</body>
+</html>
