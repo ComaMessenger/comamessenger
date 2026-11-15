@@ -501,12 +501,17 @@ export type PollView = {
  */
 export function pollRemindState(
   poll: Pick<MessagePoll, "status" | "voter_count" | "member_count">,
-  viewer: Pick<PollViewer, "can_remind" | "next_remind_at"> | null,
+  viewer: Pick<PollViewer, "can_remind" | "next_remind_at" | "voted"> | null,
   isAuthor: boolean,
   now: Date,
 ): PollRemindState {
   if (!isAuthor || !viewer || poll.status !== "open") return { kind: "hidden" };
-  const waiting = Math.max(0, poll.member_count - poll.voter_count);
+  // The server never reminds the author, so an author who has not voted is
+  // not among the people the button reaches.
+  const waiting = Math.max(
+    0,
+    poll.member_count - poll.voter_count - (viewer.voted ? 0 : 1),
+  );
   if (waiting === 0) return { kind: "allAnswered" };
   if (viewer.can_remind) return { kind: "ready", count: waiting };
   const until = viewer.next_remind_at ? Date.parse(viewer.next_remind_at) : NaN;
