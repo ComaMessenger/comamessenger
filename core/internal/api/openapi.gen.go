@@ -118,16 +118,16 @@ func (e AgentOperationalStatus) Valid() bool {
 
 // Defines values for AgentConfirmationMode.
 const (
-	Auto    AgentConfirmationMode = "auto"
-	Confirm AgentConfirmationMode = "confirm"
+	AgentConfirmationModeAuto    AgentConfirmationMode = "auto"
+	AgentConfirmationModeConfirm AgentConfirmationMode = "confirm"
 )
 
 // Valid indicates whether the value is a known member of the AgentConfirmationMode enum.
 func (e AgentConfirmationMode) Valid() bool {
 	switch e {
-	case Auto:
+	case AgentConfirmationModeAuto:
 		return true
-	case Confirm:
+	case AgentConfirmationModeConfirm:
 		return true
 	default:
 		return false
@@ -328,31 +328,31 @@ func (e AgentReadinessState) Valid() bool {
 
 // Defines values for AgentRecipeId.
 const (
-	Control    AgentRecipeId = "control"
-	Custom     AgentRecipeId = "custom"
-	Handoff    AgentRecipeId = "handoff"
-	Onboarding AgentRecipeId = "onboarding"
-	Qa         AgentRecipeId = "qa"
-	Slots      AgentRecipeId = "slots"
-	Summarizer AgentRecipeId = "summarizer"
+	AgentRecipeIdControl    AgentRecipeId = "control"
+	AgentRecipeIdCustom     AgentRecipeId = "custom"
+	AgentRecipeIdHandoff    AgentRecipeId = "handoff"
+	AgentRecipeIdOnboarding AgentRecipeId = "onboarding"
+	AgentRecipeIdQa         AgentRecipeId = "qa"
+	AgentRecipeIdSlots      AgentRecipeId = "slots"
+	AgentRecipeIdSummarizer AgentRecipeId = "summarizer"
 )
 
 // Valid indicates whether the value is a known member of the AgentRecipeId enum.
 func (e AgentRecipeId) Valid() bool {
 	switch e {
-	case Control:
+	case AgentRecipeIdControl:
 		return true
-	case Custom:
+	case AgentRecipeIdCustom:
 		return true
-	case Handoff:
+	case AgentRecipeIdHandoff:
 		return true
-	case Onboarding:
+	case AgentRecipeIdOnboarding:
 		return true
-	case Qa:
+	case AgentRecipeIdQa:
 		return true
-	case Slots:
+	case AgentRecipeIdSlots:
 		return true
-	case Summarizer:
+	case AgentRecipeIdSummarizer:
 		return true
 	default:
 		return false
@@ -1634,6 +1634,24 @@ func (e CreateMessageRequestBodyFormat) Valid() bool {
 	}
 }
 
+// Defines values for CreateRequestRequestBodyFormat.
+const (
+	CreateRequestRequestBodyFormatMarkdown CreateRequestRequestBodyFormat = "markdown"
+	CreateRequestRequestBodyFormatPlain    CreateRequestRequestBodyFormat = "plain"
+)
+
+// Valid indicates whether the value is a known member of the CreateRequestRequestBodyFormat enum.
+func (e CreateRequestRequestBodyFormat) Valid() bool {
+	switch e {
+	case CreateRequestRequestBodyFormatMarkdown:
+		return true
+	case CreateRequestRequestBodyFormatPlain:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CreateScheduledMessageRequestBodyFormat.
 const (
 	CreateScheduledMessageRequestBodyFormatMarkdown CreateScheduledMessageRequestBodyFormat = "markdown"
@@ -1690,91 +1708,121 @@ func (e DraftBodyFormat) Valid() bool {
 
 // Defines values for DurableEventTypeV1.
 const (
-	ActorAvatarUpdated      DurableEventTypeV1 = "actor.avatar.updated"
-	ActorStatusUpdated      DurableEventTypeV1 = "actor.status.updated"
-	ChatArchived            DurableEventTypeV1 = "chat.archived"
-	ChatCreated             DurableEventTypeV1 = "chat.created"
-	ChatUpdated             DurableEventTypeV1 = "chat.updated"
-	DraftDeleted            DurableEventTypeV1 = "draft.deleted"
-	DraftUpdated            DurableEventTypeV1 = "draft.updated"
-	MemberJoined            DurableEventTypeV1 = "member.joined"
-	MemberRemoved           DurableEventTypeV1 = "member.removed"
-	MemberUpdated           DurableEventTypeV1 = "member.updated"
-	MessageCreated          DurableEventTypeV1 = "message.created"
-	MessageDeleted          DurableEventTypeV1 = "message.deleted"
-	MessagePinned           DurableEventTypeV1 = "message.pinned"
-	MessageSaved            DurableEventTypeV1 = "message.saved"
-	MessageUnpinned         DurableEventTypeV1 = "message.unpinned"
-	MessageUnsaved          DurableEventTypeV1 = "message.unsaved"
-	MessageUpdated          DurableEventTypeV1 = "message.updated"
-	ReactionAdded           DurableEventTypeV1 = "reaction.added"
-	ReactionRemoved         DurableEventTypeV1 = "reaction.removed"
-	ReadMarked              DurableEventTypeV1 = "read.marked"
-	ScheduledMessageCreated DurableEventTypeV1 = "scheduled_message.created"
-	ScheduledMessageDeleted DurableEventTypeV1 = "scheduled_message.deleted"
-	ScheduledMessageFailed  DurableEventTypeV1 = "scheduled_message.failed"
-	ScheduledMessageSent    DurableEventTypeV1 = "scheduled_message.sent"
-	ScheduledMessageUpdated DurableEventTypeV1 = "scheduled_message.updated"
-	ThreadFollowed          DurableEventTypeV1 = "thread.followed"
-	ThreadUnfollowed        DurableEventTypeV1 = "thread.unfollowed"
+	DurableEventTypeV1ActorAvatarUpdated      DurableEventTypeV1 = "actor.avatar.updated"
+	DurableEventTypeV1ActorStatusUpdated      DurableEventTypeV1 = "actor.status.updated"
+	DurableEventTypeV1ChatArchived            DurableEventTypeV1 = "chat.archived"
+	DurableEventTypeV1ChatCreated             DurableEventTypeV1 = "chat.created"
+	DurableEventTypeV1ChatUpdated             DurableEventTypeV1 = "chat.updated"
+	DurableEventTypeV1DraftDeleted            DurableEventTypeV1 = "draft.deleted"
+	DurableEventTypeV1DraftUpdated            DurableEventTypeV1 = "draft.updated"
+	DurableEventTypeV1MemberJoined            DurableEventTypeV1 = "member.joined"
+	DurableEventTypeV1MemberRemoved           DurableEventTypeV1 = "member.removed"
+	DurableEventTypeV1MemberUpdated           DurableEventTypeV1 = "member.updated"
+	DurableEventTypeV1MessageCreated          DurableEventTypeV1 = "message.created"
+	DurableEventTypeV1MessageDeleted          DurableEventTypeV1 = "message.deleted"
+	DurableEventTypeV1MessagePinned           DurableEventTypeV1 = "message.pinned"
+	DurableEventTypeV1MessageSaved            DurableEventTypeV1 = "message.saved"
+	DurableEventTypeV1MessageUnpinned         DurableEventTypeV1 = "message.unpinned"
+	DurableEventTypeV1MessageUnsaved          DurableEventTypeV1 = "message.unsaved"
+	DurableEventTypeV1MessageUpdated          DurableEventTypeV1 = "message.updated"
+	DurableEventTypeV1ReactionAdded           DurableEventTypeV1 = "reaction.added"
+	DurableEventTypeV1ReactionRemoved         DurableEventTypeV1 = "reaction.removed"
+	DurableEventTypeV1ReadMarked              DurableEventTypeV1 = "read.marked"
+	DurableEventTypeV1ReminderCreated         DurableEventTypeV1 = "reminder.created"
+	DurableEventTypeV1ReminderDeleted         DurableEventTypeV1 = "reminder.deleted"
+	DurableEventTypeV1ReminderFired           DurableEventTypeV1 = "reminder.fired"
+	DurableEventTypeV1ReminderUpdated         DurableEventTypeV1 = "reminder.updated"
+	DurableEventTypeV1RequestAnswerUpdated    DurableEventTypeV1 = "request.answer.updated"
+	DurableEventTypeV1RequestAssigned         DurableEventTypeV1 = "request.assigned"
+	DurableEventTypeV1RequestAutoReminded     DurableEventTypeV1 = "request.auto_reminded"
+	DurableEventTypeV1RequestReminded         DurableEventTypeV1 = "request.reminded"
+	DurableEventTypeV1RequestTallyUpdated     DurableEventTypeV1 = "request.tally.updated"
+	DurableEventTypeV1RequestUpdated          DurableEventTypeV1 = "request.updated"
+	DurableEventTypeV1ScheduledMessageCreated DurableEventTypeV1 = "scheduled_message.created"
+	DurableEventTypeV1ScheduledMessageDeleted DurableEventTypeV1 = "scheduled_message.deleted"
+	DurableEventTypeV1ScheduledMessageFailed  DurableEventTypeV1 = "scheduled_message.failed"
+	DurableEventTypeV1ScheduledMessageSent    DurableEventTypeV1 = "scheduled_message.sent"
+	DurableEventTypeV1ScheduledMessageUpdated DurableEventTypeV1 = "scheduled_message.updated"
+	DurableEventTypeV1ThreadFollowed          DurableEventTypeV1 = "thread.followed"
+	DurableEventTypeV1ThreadUnfollowed        DurableEventTypeV1 = "thread.unfollowed"
 )
 
 // Valid indicates whether the value is a known member of the DurableEventTypeV1 enum.
 func (e DurableEventTypeV1) Valid() bool {
 	switch e {
-	case ActorAvatarUpdated:
+	case DurableEventTypeV1ActorAvatarUpdated:
 		return true
-	case ActorStatusUpdated:
+	case DurableEventTypeV1ActorStatusUpdated:
 		return true
-	case ChatArchived:
+	case DurableEventTypeV1ChatArchived:
 		return true
-	case ChatCreated:
+	case DurableEventTypeV1ChatCreated:
 		return true
-	case ChatUpdated:
+	case DurableEventTypeV1ChatUpdated:
 		return true
-	case DraftDeleted:
+	case DurableEventTypeV1DraftDeleted:
 		return true
-	case DraftUpdated:
+	case DurableEventTypeV1DraftUpdated:
 		return true
-	case MemberJoined:
+	case DurableEventTypeV1MemberJoined:
 		return true
-	case MemberRemoved:
+	case DurableEventTypeV1MemberRemoved:
 		return true
-	case MemberUpdated:
+	case DurableEventTypeV1MemberUpdated:
 		return true
-	case MessageCreated:
+	case DurableEventTypeV1MessageCreated:
 		return true
-	case MessageDeleted:
+	case DurableEventTypeV1MessageDeleted:
 		return true
-	case MessagePinned:
+	case DurableEventTypeV1MessagePinned:
 		return true
-	case MessageSaved:
+	case DurableEventTypeV1MessageSaved:
 		return true
-	case MessageUnpinned:
+	case DurableEventTypeV1MessageUnpinned:
 		return true
-	case MessageUnsaved:
+	case DurableEventTypeV1MessageUnsaved:
 		return true
-	case MessageUpdated:
+	case DurableEventTypeV1MessageUpdated:
 		return true
-	case ReactionAdded:
+	case DurableEventTypeV1ReactionAdded:
 		return true
-	case ReactionRemoved:
+	case DurableEventTypeV1ReactionRemoved:
 		return true
-	case ReadMarked:
+	case DurableEventTypeV1ReadMarked:
 		return true
-	case ScheduledMessageCreated:
+	case DurableEventTypeV1ReminderCreated:
 		return true
-	case ScheduledMessageDeleted:
+	case DurableEventTypeV1ReminderDeleted:
 		return true
-	case ScheduledMessageFailed:
+	case DurableEventTypeV1ReminderFired:
 		return true
-	case ScheduledMessageSent:
+	case DurableEventTypeV1ReminderUpdated:
 		return true
-	case ScheduledMessageUpdated:
+	case DurableEventTypeV1RequestAnswerUpdated:
 		return true
-	case ThreadFollowed:
+	case DurableEventTypeV1RequestAssigned:
 		return true
-	case ThreadUnfollowed:
+	case DurableEventTypeV1RequestAutoReminded:
+		return true
+	case DurableEventTypeV1RequestReminded:
+		return true
+	case DurableEventTypeV1RequestTallyUpdated:
+		return true
+	case DurableEventTypeV1RequestUpdated:
+		return true
+	case DurableEventTypeV1ScheduledMessageCreated:
+		return true
+	case DurableEventTypeV1ScheduledMessageDeleted:
+		return true
+	case DurableEventTypeV1ScheduledMessageFailed:
+		return true
+	case DurableEventTypeV1ScheduledMessageSent:
+		return true
+	case DurableEventTypeV1ScheduledMessageUpdated:
+		return true
+	case DurableEventTypeV1ThreadFollowed:
+		return true
+	case DurableEventTypeV1ThreadUnfollowed:
 		return true
 	default:
 		return false
@@ -1800,6 +1848,7 @@ const (
 	ErrorCodeArchitectModelError          ErrorCode = "architect_model_error"
 	ErrorCodeArchitectSessionExpired      ErrorCode = "architect_session_expired"
 	ErrorCodeArchitectSessionNotFound     ErrorCode = "architect_session_not_found"
+	ErrorCodeChatArchived                 ErrorCode = "chat_archived"
 	ErrorCodeChatConflict                 ErrorCode = "chat_conflict"
 	ErrorCodeChatNotFound                 ErrorCode = "chat_not_found"
 	ErrorCodeEmailTaken                   ErrorCode = "email_taken"
@@ -1818,12 +1867,26 @@ const (
 	ErrorCodeKnowledgeNotFound            ErrorCode = "knowledge_not_found"
 	ErrorCodeLimitReached                 ErrorCode = "limit_reached"
 	ErrorCodeMessageNotFound              ErrorCode = "message_not_found"
+	ErrorCodeNotImplemented               ErrorCode = "not_implemented"
+	ErrorCodeNotMember                    ErrorCode = "not_member"
 	ErrorCodeOriginNotAllowed             ErrorCode = "origin_not_allowed"
 	ErrorCodePasswordChangeRequired       ErrorCode = "password_change_required"
 	ErrorCodePayloadTooLarge              ErrorCode = "payload_too_large"
 	ErrorCodePushUnavailable              ErrorCode = "push_unavailable"
 	ErrorCodeRateLimited                  ErrorCode = "rate_limited"
 	ErrorCodeReauthenticationFailed       ErrorCode = "reauthentication_failed"
+	ErrorCodeReminderInvalid              ErrorCode = "reminder_invalid"
+	ErrorCodeReminderLimitReached         ErrorCode = "reminder_limit_reached"
+	ErrorCodeReminderNotFound             ErrorCode = "reminder_not_found"
+	ErrorCodeRequestAudienceEmpty         ErrorCode = "request_audience_empty"
+	ErrorCodeRequestAudienceUnavailable   ErrorCode = "request_audience_unavailable"
+	ErrorCodeRequestChangeTooLate         ErrorCode = "request_change_too_late"
+	ErrorCodeRequestClosed                ErrorCode = "request_closed"
+	ErrorCodeRequestInvalid               ErrorCode = "request_invalid"
+	ErrorCodeRequestLimitReached          ErrorCode = "request_limit_reached"
+	ErrorCodeRequestNotFound              ErrorCode = "request_not_found"
+	ErrorCodeRequestRemindTooSoon         ErrorCode = "request_remind_too_soon"
+	ErrorCodeRequestTooManyRecipients     ErrorCode = "request_too_many_recipients"
 	ErrorCodeSavedLimitReached            ErrorCode = "saved_limit_reached"
 	ErrorCodeSavedStorageFull             ErrorCode = "saved_storage_full"
 	ErrorCodeScheduledMessageClosed       ErrorCode = "scheduled_message_closed"
@@ -1883,6 +1946,8 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeArchitectSessionNotFound:
 		return true
+	case ErrorCodeChatArchived:
+		return true
 	case ErrorCodeChatConflict:
 		return true
 	case ErrorCodeChatNotFound:
@@ -1919,6 +1984,10 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeMessageNotFound:
 		return true
+	case ErrorCodeNotImplemented:
+		return true
+	case ErrorCodeNotMember:
+		return true
 	case ErrorCodeOriginNotAllowed:
 		return true
 	case ErrorCodePasswordChangeRequired:
@@ -1930,6 +1999,30 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeRateLimited:
 		return true
 	case ErrorCodeReauthenticationFailed:
+		return true
+	case ErrorCodeReminderInvalid:
+		return true
+	case ErrorCodeReminderLimitReached:
+		return true
+	case ErrorCodeReminderNotFound:
+		return true
+	case ErrorCodeRequestAudienceEmpty:
+		return true
+	case ErrorCodeRequestAudienceUnavailable:
+		return true
+	case ErrorCodeRequestChangeTooLate:
+		return true
+	case ErrorCodeRequestClosed:
+		return true
+	case ErrorCodeRequestInvalid:
+		return true
+	case ErrorCodeRequestLimitReached:
+		return true
+	case ErrorCodeRequestNotFound:
+		return true
+	case ErrorCodeRequestRemindTooSoon:
+		return true
+	case ErrorCodeRequestTooManyRecipients:
 		return true
 	case ErrorCodeSavedLimitReached:
 		return true
@@ -2362,12 +2455,15 @@ func (e MessageBodyFormat) Valid() bool {
 
 // Defines values for MessageType.
 const (
-	MessageTypeText MessageType = "text"
+	MessageTypeRequest MessageType = "request"
+	MessageTypeText    MessageType = "text"
 )
 
 // Valid indicates whether the value is a known member of the MessageType enum.
 func (e MessageType) Valid() bool {
 	switch e {
+	case MessageTypeRequest:
+		return true
 	case MessageTypeText:
 		return true
 	default:
@@ -2579,6 +2675,72 @@ func (e MessageCardStatusTone) Valid() bool {
 	case MessageCardStatusToneSuccess:
 		return true
 	case MessageCardStatusToneWarning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageRequestClosedReason.
+const (
+	MessageRequestClosedReasonAuthor         MessageRequestClosedReason = "author"
+	MessageRequestClosedReasonExpired        MessageRequestClosedReason = "expired"
+	MessageRequestClosedReasonLessThannil    MessageRequestClosedReason = "<nil>"
+	MessageRequestClosedReasonMessageDeleted MessageRequestClosedReason = "message_deleted"
+	MessageRequestClosedReasonModerator      MessageRequestClosedReason = "moderator"
+)
+
+// Valid indicates whether the value is a known member of the MessageRequestClosedReason enum.
+func (e MessageRequestClosedReason) Valid() bool {
+	switch e {
+	case MessageRequestClosedReasonAuthor:
+		return true
+	case MessageRequestClosedReasonExpired:
+		return true
+	case MessageRequestClosedReasonLessThannil:
+		return true
+	case MessageRequestClosedReasonMessageDeleted:
+		return true
+	case MessageRequestClosedReasonModerator:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageRequestStatus.
+const (
+	MessageRequestStatusClosed MessageRequestStatus = "closed"
+	MessageRequestStatusOpen   MessageRequestStatus = "open"
+)
+
+// Valid indicates whether the value is a known member of the MessageRequestStatus enum.
+func (e MessageRequestStatus) Valid() bool {
+	switch e {
+	case MessageRequestStatusClosed:
+		return true
+	case MessageRequestStatusOpen:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageRequestViewerRole.
+const (
+	MessageRequestViewerRoleAuthor    MessageRequestViewerRole = "author"
+	MessageRequestViewerRoleObserver  MessageRequestViewerRole = "observer"
+	MessageRequestViewerRoleRecipient MessageRequestViewerRole = "recipient"
+)
+
+// Valid indicates whether the value is a known member of the MessageRequestViewerRole enum.
+func (e MessageRequestViewerRole) Valid() bool {
+	switch e {
+	case MessageRequestViewerRoleAuthor:
+		return true
+	case MessageRequestViewerRoleObserver:
+		return true
+	case MessageRequestViewerRoleRecipient:
 		return true
 	default:
 		return false
@@ -2809,13 +2971,13 @@ func (e PutDraftRequestBodyFormat) Valid() bool {
 
 // Defines values for RealtimeAckFrameV1Op.
 const (
-	Ack RealtimeAckFrameV1Op = "ack"
+	RealtimeAckFrameV1OpAck RealtimeAckFrameV1Op = "ack"
 )
 
 // Valid indicates whether the value is a known member of the RealtimeAckFrameV1Op enum.
 func (e RealtimeAckFrameV1Op) Valid() bool {
 	switch e {
-	case Ack:
+	case RealtimeAckFrameV1OpAck:
 		return true
 	default:
 		return false
@@ -3128,6 +3290,105 @@ func (e RealtimeProtocolErrorFrameV1Op) Valid() bool {
 	}
 }
 
+// Defines values for RealtimeReminderEventV1Reason.
+const (
+	RealtimeReminderEventV1ReasonMessageDeleted RealtimeReminderEventV1Reason = "message_deleted"
+	RealtimeReminderEventV1ReasonRemoved        RealtimeReminderEventV1Reason = "removed"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeReminderEventV1Reason enum.
+func (e RealtimeReminderEventV1Reason) Valid() bool {
+	switch e {
+	case RealtimeReminderEventV1ReasonMessageDeleted:
+		return true
+	case RealtimeReminderEventV1ReasonRemoved:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimeReminderEventV1State.
+const (
+	RealtimeReminderEventV1StateFired   RealtimeReminderEventV1State = "fired"
+	RealtimeReminderEventV1StatePending RealtimeReminderEventV1State = "pending"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeReminderEventV1State enum.
+func (e RealtimeReminderEventV1State) Valid() bool {
+	switch e {
+	case RealtimeReminderEventV1StateFired:
+		return true
+	case RealtimeReminderEventV1StatePending:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimeRequestRemindedEventV1Kind.
+const (
+	RealtimeRequestRemindedEventV1KindAuto   RealtimeRequestRemindedEventV1Kind = "auto"
+	RealtimeRequestRemindedEventV1KindManual RealtimeRequestRemindedEventV1Kind = "manual"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeRequestRemindedEventV1Kind enum.
+func (e RealtimeRequestRemindedEventV1Kind) Valid() bool {
+	switch e {
+	case RealtimeRequestRemindedEventV1KindAuto:
+		return true
+	case RealtimeRequestRemindedEventV1KindManual:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimeRequestUpdatedEventV1ClosedReason.
+const (
+	RealtimeRequestUpdatedEventV1ClosedReasonAuthor         RealtimeRequestUpdatedEventV1ClosedReason = "author"
+	RealtimeRequestUpdatedEventV1ClosedReasonExpired        RealtimeRequestUpdatedEventV1ClosedReason = "expired"
+	RealtimeRequestUpdatedEventV1ClosedReasonLessThannil    RealtimeRequestUpdatedEventV1ClosedReason = "<nil>"
+	RealtimeRequestUpdatedEventV1ClosedReasonMessageDeleted RealtimeRequestUpdatedEventV1ClosedReason = "message_deleted"
+	RealtimeRequestUpdatedEventV1ClosedReasonModerator      RealtimeRequestUpdatedEventV1ClosedReason = "moderator"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeRequestUpdatedEventV1ClosedReason enum.
+func (e RealtimeRequestUpdatedEventV1ClosedReason) Valid() bool {
+	switch e {
+	case RealtimeRequestUpdatedEventV1ClosedReasonAuthor:
+		return true
+	case RealtimeRequestUpdatedEventV1ClosedReasonExpired:
+		return true
+	case RealtimeRequestUpdatedEventV1ClosedReasonLessThannil:
+		return true
+	case RealtimeRequestUpdatedEventV1ClosedReasonMessageDeleted:
+		return true
+	case RealtimeRequestUpdatedEventV1ClosedReasonModerator:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimeRequestUpdatedEventV1Status.
+const (
+	RealtimeRequestUpdatedEventV1StatusClosed RealtimeRequestUpdatedEventV1Status = "closed"
+	RealtimeRequestUpdatedEventV1StatusOpen   RealtimeRequestUpdatedEventV1Status = "open"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeRequestUpdatedEventV1Status enum.
+func (e RealtimeRequestUpdatedEventV1Status) Valid() bool {
+	switch e {
+	case RealtimeRequestUpdatedEventV1StatusClosed:
+		return true
+	case RealtimeRequestUpdatedEventV1StatusOpen:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RealtimeResyncRequiredFrameV1Op.
 const (
 	RealtimeResyncRequiredFrameV1OpResyncRequired RealtimeResyncRequiredFrameV1Op = "resync_required"
@@ -3311,6 +3572,135 @@ const (
 func (e RealtimeTypingFrameV1Op) Valid() bool {
 	switch e {
 	case RealtimeTypingFrameV1OpTyping:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReminderAccess.
+const (
+	ReminderAccessAvailable ReminderAccess = "available"
+	ReminderAccessDeleted   ReminderAccess = "deleted"
+	ReminderAccessNone      ReminderAccess = "none"
+)
+
+// Valid indicates whether the value is a known member of the ReminderAccess enum.
+func (e ReminderAccess) Valid() bool {
+	switch e {
+	case ReminderAccessAvailable:
+		return true
+	case ReminderAccessDeleted:
+		return true
+	case ReminderAccessNone:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReminderState.
+const (
+	ReminderStateFired   ReminderState = "fired"
+	ReminderStatePending ReminderState = "pending"
+)
+
+// Valid indicates whether the value is a known member of the ReminderState enum.
+func (e ReminderState) Valid() bool {
+	switch e {
+	case ReminderStateFired:
+		return true
+	case ReminderStatePending:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReminderIdEntryState.
+const (
+	ReminderIdEntryStateFired   ReminderIdEntryState = "fired"
+	ReminderIdEntryStatePending ReminderIdEntryState = "pending"
+)
+
+// Valid indicates whether the value is a known member of the ReminderIdEntryState enum.
+func (e ReminderIdEntryState) Valid() bool {
+	switch e {
+	case ReminderIdEntryStateFired:
+		return true
+	case ReminderIdEntryStatePending:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RequestAnswerState.
+const (
+	RequestAnswerStateAnswered RequestAnswerState = "answered"
+	RequestAnswerStateLeft     RequestAnswerState = "left"
+	RequestAnswerStateWaiting  RequestAnswerState = "waiting"
+)
+
+// Valid indicates whether the value is a known member of the RequestAnswerState enum.
+func (e RequestAnswerState) Valid() bool {
+	switch e {
+	case RequestAnswerStateAnswered:
+		return true
+	case RequestAnswerStateLeft:
+		return true
+	case RequestAnswerStateWaiting:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RequestAnswerPreset.
+const (
+	RequestAnswerPresetAck    RequestAnswerPreset = "ack"
+	RequestAnswerPresetAttend RequestAnswerPreset = "attend"
+	RequestAnswerPresetCustom RequestAnswerPreset = "custom"
+	RequestAnswerPresetDone   RequestAnswerPreset = "done"
+	RequestAnswerPresetYesNo  RequestAnswerPreset = "yes_no"
+)
+
+// Valid indicates whether the value is a known member of the RequestAnswerPreset enum.
+func (e RequestAnswerPreset) Valid() bool {
+	switch e {
+	case RequestAnswerPresetAck:
+		return true
+	case RequestAnswerPresetAttend:
+		return true
+	case RequestAnswerPresetCustom:
+		return true
+	case RequestAnswerPresetDone:
+		return true
+	case RequestAnswerPresetYesNo:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RequestAudienceKind.
+const (
+	RequestAudienceKindChat       RequestAudienceKind = "chat"
+	RequestAudienceKindDepartment RequestAudienceKind = "department"
+	RequestAudienceKindPeople     RequestAudienceKind = "people"
+	RequestAudienceKindPosition   RequestAudienceKind = "position"
+)
+
+// Valid indicates whether the value is a known member of the RequestAudienceKind enum.
+func (e RequestAudienceKind) Valid() bool {
+	switch e {
+	case RequestAudienceKindChat:
+		return true
+	case RequestAudienceKindDepartment:
+		return true
+	case RequestAudienceKindPeople:
+		return true
+	case RequestAudienceKindPosition:
 		return true
 	default:
 		return false
@@ -4364,6 +4754,42 @@ func (e PutBrandingAssetParamsKind) Valid() bool {
 	}
 }
 
+// Defines values for ListRemindersParamsState.
+const (
+	ListRemindersParamsStateFired   ListRemindersParamsState = "fired"
+	ListRemindersParamsStatePending ListRemindersParamsState = "pending"
+)
+
+// Valid indicates whether the value is a known member of the ListRemindersParamsState enum.
+func (e ListRemindersParamsState) Valid() bool {
+	switch e {
+	case ListRemindersParamsStateFired:
+		return true
+	case ListRemindersParamsStatePending:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListRequestInboxParamsState.
+const (
+	ListRequestInboxParamsStateAnswered ListRequestInboxParamsState = "answered"
+	ListRequestInboxParamsStateWaiting  ListRequestInboxParamsState = "waiting"
+)
+
+// Valid indicates whether the value is a known member of the ListRequestInboxParamsState enum.
+func (e ListRequestInboxParamsState) Valid() bool {
+	switch e {
+	case ListRequestInboxParamsStateAnswered:
+		return true
+	case ListRequestInboxParamsStateWaiting:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SearchMessagesAndFilesParamsType.
 const (
 	SearchMessagesAndFilesParamsTypeAll     SearchMessagesAndFilesParamsType = "all"
@@ -5006,6 +5432,18 @@ type AgentVersion struct {
 	Version     int                `json:"version"`
 }
 
+// AnswerRequestRequest defines model for AnswerRequestRequest.
+type AnswerRequestRequest struct {
+	// Comment Absent keeps the current comment, an empty string removes it. Only when the request allows comments.
+	Comment *string `json:"comment,omitempty"`
+
+	// ExpectedVersion MessageRequestViewerAnswer.version the change is based on; another one gets 409 version_conflict.
+	ExpectedVersion *int `json:"expected_version,omitempty"`
+
+	// Option Index of the button; beyond the options of the request gets 422 request_invalid.
+	Option int `json:"option"`
+}
+
 // ArchitectMessage defines model for ArchitectMessage.
 type ArchitectMessage struct {
 	Assumptions []string  `json:"assumptions"`
@@ -5362,7 +5800,13 @@ type ChatUnread struct {
 	ChatId       openapi_types.UUID `json:"chat_id"`
 	LastReadSeq  int64              `json:"last_read_seq"`
 	MentionCount int64              `json:"mention_count"`
-	UnreadCount  int64              `json:"unread_count"`
+
+	// RequestsNextDueAt The earliest due date among them; null when none has one.
+	RequestsNextDueAt *time.Time `json:"requests_next_due_at,omitempty"`
+
+	// RequestsWaiting Open requests in the chat waiting for the person's answer. Absent on servers without message_requests.
+	RequestsWaiting *int64 `json:"requests_waiting,omitempty"`
+	UnreadCount     int64  `json:"unread_count"`
 }
 
 // ClaimAgentRunRequest defines model for ClaimAgentRunRequest.
@@ -5670,6 +6114,28 @@ type CreateMessageRequest struct {
 
 // CreateMessageRequestBodyFormat defines model for CreateMessageRequest.BodyFormat.
 type CreateMessageRequestBodyFormat string
+
+// CreateRequestRequest defines model for CreateRequestRequest.
+type CreateRequestRequest struct {
+	AllowComment *bool                `json:"allow_comment,omitempty"`
+	Answer       RequestAnswerSpec    `json:"answer"`
+	Audience     RequestAudienceInput `json:"audience"`
+
+	// AutoRemind Remind those who have not answered once before the due date, at max(due_at − 24 h, created_at + (due_at − created_at) / 2). Needs due_at at least 1 hour ahead (422 request_invalid, field auto_remind, otherwise).
+	AutoRemind *bool `json:"auto_remind,omitempty"`
+
+	// Body The question; formatting and mentions work as in an ordinary message.
+	Body        string                          `json:"body"`
+	BodyFormat  *CreateRequestRequestBodyFormat `json:"body_format,omitempty"`
+	ClientMsgId openapi_types.UUID              `json:"client_msg_id"`
+
+	// DueAt At least 10 minutes and at most 90 days ahead.
+	DueAt             *time.Time            `json:"due_at,omitempty"`
+	MentionedActorIds *[]openapi_types.UUID `json:"mentioned_actor_ids,omitempty"`
+}
+
+// CreateRequestRequestBodyFormat defines model for CreateRequestRequest.BodyFormat.
+type CreateRequestRequestBodyFormat string
 
 // CreateScheduledMessageRequest defines model for CreateScheduledMessageRequest.
 type CreateScheduledMessageRequest struct {
@@ -6255,6 +6721,12 @@ type Message struct {
 	MentionedActorIds []openapi_types.UUID `json:"mentioned_actor_ids"`
 	ReplyToId         *openapi_types.UUID  `json:"reply_to_id,omitempty"`
 
+	// Request Present on messages of type request: the request as every reader sees it, without recipients or anyone's answers. Also in realtime message.* frames.
+	Request *MessageRequest `json:"request,omitempty"`
+
+	// RequestViewer REST only (feed pages, create and context responses), next to request: what the reading person may do with it. Never in realtime frames, which the whole chat shares; clients load it with getRequest when needed.
+	RequestViewer *MessageRequestViewer `json:"request_viewer,omitempty"`
+
 	// Silent Present and true when the author asked for quiet notifications: recipients are notified as usual (push, e-mail digest, their own notification settings apply) but clients play no sound or vibration for it. Carried by the create response and realtime events; history pages omit it.
 	Silent *bool `json:"silent,omitempty"`
 
@@ -6266,15 +6738,17 @@ type Message struct {
 	ThreadRootReplyCount *int64 `json:"thread_root_reply_count,omitempty"`
 
 	// Truncated Realtime message.* events only: the event was larger than the connection's frame limit (WS_MAX_FRAME_BYTES). The payload keeps the Message shape with ids, version, sequence, times, thread and counters but an empty body, no files and no blocks; clients load the message by REST (GET /api/v1/messages/{message_id}/context). Other event types may carry truncated: true with only their short scalar fields.
-	Truncated *bool       `json:"truncated,omitempty"`
-	Type      MessageType `json:"type"`
-	Version   int         `json:"version"`
+	Truncated *bool `json:"truncated,omitempty"`
+
+	// Type request — a request for answers («Запрос»); its body is the question and request describes the answers. Clients that do not know a type show the body as text.
+	Type    MessageType `json:"type"`
+	Version int         `json:"version"`
 }
 
 // MessageBodyFormat defines model for Message.BodyFormat.
 type MessageBodyFormat string
 
-// MessageType defines model for Message.Type.
+// MessageType request — a request for answers («Запрос»); its body is the question and request describes the answers. Clients that do not know a type show the body as text.
 type MessageType string
 
 // MessageAction defines model for MessageAction.
@@ -6427,6 +6901,75 @@ type MessageReceipt struct {
 // MessageReceiptList defines model for MessageReceiptList.
 type MessageReceiptList struct {
 	Receipts []MessageReceipt `json:"receipts"`
+}
+
+// MessageRequest The request part of a message of type request. The same for every reader: it never lists recipients or anyone's answers. Carried by the feed, createMessage-like responses and realtime message.* frames.
+type MessageRequest struct {
+	AllowComment  bool              `json:"allow_comment"`
+	Answer        RequestAnswerSpec `json:"answer"`
+	AnsweredCount int               `json:"answered_count"`
+	Audience      RequestAudience   `json:"audience"`
+
+	// AutoRemindAt When those who have not answered get the automatic reminder; null without one.
+	AutoRemindAt *time.Time                  `json:"auto_remind_at"`
+	ClosedReason *MessageRequestClosedReason `json:"closed_reason"`
+	DueAt        *time.Time                  `json:"due_at"`
+	Status       MessageRequestStatus        `json:"status"`
+
+	// Version Grows with every change of the request; realtime request.* events carry it so stale ones are dropped.
+	Version int `json:"version"`
+
+	// WaitingCount audience.count − answered_count.
+	WaitingCount int `json:"waiting_count"`
+}
+
+// MessageRequestClosedReason defines model for MessageRequest.ClosedReason.
+type MessageRequestClosedReason string
+
+// MessageRequestStatus defines model for MessageRequest.Status.
+type MessageRequestStatus string
+
+// MessageRequestViewer What the current person may do with a request. Never in realtime frames, which are shared by the whole chat.
+type MessageRequestViewer struct {
+	Answer *MessageRequestViewerAnswer `json:"answer"`
+
+	// CanAnswer A recipient, the request is open, the person is in the chat and it is not archived.
+	CanAnswer bool `json:"can_answer"`
+
+	// CanChange Answered, the request is open and the due date has not passed.
+	CanChange bool `json:"can_change"`
+	CanClose  bool `json:"can_close"`
+
+	// CanRemind The author, someone has not answered, 2 hours passed since the last manual reminder and fewer than 5 were sent.
+	CanRemind bool `json:"can_remind"`
+
+	// CanViewAnswers The author, a chat owner or admin, or a moderator with chats.moderate in the chat.
+	CanViewAnswers bool `json:"can_view_answers"`
+
+	// NextRemindAt When a manual reminder is allowed again; null when it is allowed now or never again.
+	NextRemindAt *time.Time `json:"next_remind_at"`
+
+	// Role observer sees «Ответа ждут не от вас» and no buttons.
+	Role MessageRequestViewerRole `json:"role"`
+
+	// Tally Answers per option, in option order. Only with can_view_answers, null otherwise.
+	Tally *[]int `json:"tally"`
+}
+
+// MessageRequestViewerRole observer sees «Ответа ждут не от вас» and no buttons.
+type MessageRequestViewerRole string
+
+// MessageRequestViewerAnswer defines model for MessageRequestViewerAnswer.
+type MessageRequestViewerAnswer struct {
+	AnsweredAt time.Time `json:"answered_at"`
+	Comment    string    `json:"comment"`
+
+	// Late The first answer came after the due date («после срока»).
+	Late   bool `json:"late"`
+	Option int  `json:"option"`
+
+	// Version Version of the person's answer; AnswerRequestRequest.expected_version and request.answer.updated use it.
+	Version int `json:"version"`
 }
 
 // MessageSource defines model for MessageSource.
@@ -6720,7 +7263,7 @@ type RealtimeDurableEventFrameV1 struct {
 	ActorId openapi_types.UUID  `json:"actor_id"`
 	ChatId  *openapi_types.UUID `json:"chat_id,omitempty"`
 
-	// Data Event payload. For message.created, message.updated and message.deleted it is the message in the shape of the REST feed (components/schemas/Message: files with metadata and no links, thread_reply_count, mentioned_actor_ids, blocks and agent_provenance when present), read when the event is delivered, plus silent on message.created and thread_root_reply_count on thread replies. A frame that would exceed the frame limit (WS_MAX_FRAME_BYTES) is never sent as is: its data becomes a stub with truncated: true — for message.* the Message shape with an empty body, no files and no blocks, for other events only their short scalar fields — and the client loads the record by REST. Frames are encoded without HTML escaping.
+	// Data Event payload. For message.created, message.updated and message.deleted it is the message in the shape of the REST feed (components/schemas/Message: files with metadata and no links, thread_reply_count, mentioned_actor_ids, blocks, agent_provenance and request when present; never request_viewer, which is per reader), read when the event is delivered, plus silent on message.created and thread_root_reply_count on thread replies. A frame that would exceed the frame limit (WS_MAX_FRAME_BYTES) is never sent as is: its data becomes a stub with truncated: true — for message.* the Message shape with an empty body, no files and no blocks, for other events only their short scalar fields — and the client loads the record by REST. The data of request.* and reminder.* events is described by the RequestAssignedEvent … ReminderFiredEvent definitions: it never carries message text, notes, comments or who answered what. Frames are encoded without HTML escaping.
 	Data       map[string]interface{}        `json:"data"`
 	OccurredAt time.Time                     `json:"occurred_at"`
 	Op         RealtimeDurableEventFrameV1Op `json:"op"`
@@ -6739,7 +7282,7 @@ type RealtimeHelloFrameV1 struct {
 	ConnectionId  openapi_types.UUID `json:"connection_id"`
 	CurrentSeq    int64              `json:"current_seq"`
 
-	// Features Optional protocol additions this server accepts. typing_actions: the action field on typing frames.
+	// Features Optional protocol additions this server accepts. typing_actions: the action field on typing frames. message_requests: requests («Запрос») — the request REST routes, Message.request and the request.* events. message_reminders: personal reminders («Напомнить мне») — the reminder REST routes and the reminder.* events. A client hides a feature the server does not list.
 	Features            *[]string              `json:"features,omitempty"`
 	HeartbeatIntervalMs int                    `json:"heartbeat_interval_ms"`
 	MaxUnackedEvents    int                    `json:"max_unacked_events"`
@@ -6833,6 +7376,95 @@ type RealtimeProtocolErrorFrameV1Code string
 // RealtimeProtocolErrorFrameV1Op defines model for RealtimeProtocolErrorFrameV1.Op.
 type RealtimeProtocolErrorFrameV1Op string
 
+// RealtimeReminderEventV1 data of reminder.created, reminder.updated and reminder.deleted, sent only to the owner's devices (subject_id is the reminder id). Never carries the note or the message text. reason is present on reminder.deleted only.
+type RealtimeReminderEventV1 struct {
+	ChatId    openapi_types.UUID             `json:"chat_id"`
+	Id        openapi_types.UUID             `json:"id"`
+	MessageId *openapi_types.UUID            `json:"message_id"`
+	Reason    *RealtimeReminderEventV1Reason `json:"reason,omitempty"`
+	RemindAt  time.Time                      `json:"remind_at"`
+	State     RealtimeReminderEventV1State   `json:"state"`
+	Version   int                            `json:"version"`
+}
+
+// RealtimeReminderEventV1Reason defines model for RealtimeReminderEventV1.Reason.
+type RealtimeReminderEventV1Reason string
+
+// RealtimeReminderEventV1State defines model for RealtimeReminderEventV1.State.
+type RealtimeReminderEventV1State string
+
+// RealtimeReminderFiredEventV1 data of reminder.fired, sent only to the owner's devices (subject_id is the reminder id). late: fired more than 15 minutes after remind_at. Triggers a push unless it is more than 6 hours late.
+type RealtimeReminderFiredEventV1 struct {
+	ChatId    openapi_types.UUID  `json:"chat_id"`
+	FiredAt   time.Time           `json:"fired_at"`
+	Id        openapi_types.UUID  `json:"id"`
+	Late      bool                `json:"late"`
+	MessageId *openapi_types.UUID `json:"message_id"`
+	Version   int                 `json:"version"`
+}
+
+// RealtimeRequestAnswerUpdatedEventV1 data of request.answer.updated, sent only to the person who answered, to all their devices (subject_id is the message id). Carries no comment text: has_comment tells whether to reload it. version is the version of the person's answer.
+type RealtimeRequestAnswerUpdatedEventV1 struct {
+	ChatId     openapi_types.UUID `json:"chat_id"`
+	HasComment bool               `json:"has_comment"`
+	Late       bool               `json:"late"`
+	MessageId  openapi_types.UUID `json:"message_id"`
+	Option     int                `json:"option"`
+	Version    int                `json:"version"`
+}
+
+// RealtimeRequestAssignedEventV1 data of request.assigned, sent only to one recipient of a new request (subject_id is the message id). Written in the same transaction before message.created so the client knows the request is addressed to it before it shows the card.
+type RealtimeRequestAssignedEventV1 struct {
+	ChatId    openapi_types.UUID `json:"chat_id"`
+	DueAt     *time.Time         `json:"due_at"`
+	MessageId openapi_types.UUID `json:"message_id"`
+}
+
+// RealtimeRequestAutoRemindedEventV1 data of request.auto_reminded, sent only to the author (subject_id is the message id): the outcome of the automatic reminder, also when everyone has answered (reminded is 0). Triggers a push.
+type RealtimeRequestAutoRemindedEventV1 struct {
+	AnsweredCount int                `json:"answered_count"`
+	ChatId        openapi_types.UUID `json:"chat_id"`
+	MessageId     openapi_types.UUID `json:"message_id"`
+	Reminded      int                `json:"reminded"`
+	WaitingCount  int                `json:"waiting_count"`
+}
+
+// RealtimeRequestRemindedEventV1 data of request.reminded, sent to each recipient who has not answered (subject_id is the message id): a manual reminder by the author or the automatic one. Triggers a push.
+type RealtimeRequestRemindedEventV1 struct {
+	ChatId    openapi_types.UUID                 `json:"chat_id"`
+	Kind      RealtimeRequestRemindedEventV1Kind `json:"kind"`
+	MessageId openapi_types.UUID                 `json:"message_id"`
+}
+
+// RealtimeRequestRemindedEventV1Kind defines model for RealtimeRequestRemindedEventV1.Kind.
+type RealtimeRequestRemindedEventV1Kind string
+
+// RealtimeRequestTallyUpdatedEventV1 data of request.tally.updated, sent only to the author of the request (subject_id is the message id) after any answer. Chat admins who are not the author reload listRequestAnswers on request.updated instead.
+type RealtimeRequestTallyUpdatedEventV1 struct {
+	ChatId       openapi_types.UUID `json:"chat_id"`
+	MessageId    openapi_types.UUID `json:"message_id"`
+	Tally        []int              `json:"tally"`
+	Version      int                `json:"version"`
+	WaitingCount int                `json:"waiting_count"`
+}
+
+// RealtimeRequestUpdatedEventV1 data of request.updated, sent to the whole chat (subject_id is the message id): an answer that changes the count, closing, a recipient leaving. Only counters: never who answered or how.
+type RealtimeRequestUpdatedEventV1 struct {
+	AnsweredCount int                                        `json:"answered_count"`
+	ChatId        openapi_types.UUID                         `json:"chat_id"`
+	ClosedReason  *RealtimeRequestUpdatedEventV1ClosedReason `json:"closed_reason"`
+	MessageId     openapi_types.UUID                         `json:"message_id"`
+	Status        RealtimeRequestUpdatedEventV1Status        `json:"status"`
+	Version       int                                        `json:"version"`
+	WaitingCount  int                                        `json:"waiting_count"`
+}
+
+// RealtimeRequestUpdatedEventV1ClosedReason defines model for RealtimeRequestUpdatedEventV1.ClosedReason.
+type RealtimeRequestUpdatedEventV1ClosedReason string
+
+// RealtimeRequestUpdatedEventV1Status defines model for RealtimeRequestUpdatedEventV1.Status.
+type RealtimeRequestUpdatedEventV1Status string
+
 // RealtimeResyncRequiredFrameV1 defines model for RealtimeResyncRequiredFrameV1.
 type RealtimeResyncRequiredFrameV1 struct {
 	CurrentSeq     int64                               `json:"current_seq"`
@@ -6909,6 +7541,176 @@ type RealtimeTypingFrameV1Op string
 // RefreshRequest defines model for RefreshRequest.
 type RefreshRequest struct {
 	RefreshToken string `json:"refresh_token"`
+}
+
+// Reminder A personal reminder about a message. Only its owner sees it. The message is included only while the owner can read it.
+type Reminder struct {
+	// Access available — message is filled; none — the owner cannot read the message now (left the chat, archived chat); deleted — the message was deleted. Without access only the note is shown.
+	Access  ReminderAccess     `json:"access"`
+	ChatId  openapi_types.UUID `json:"chat_id"`
+	FiredAt *time.Time         `json:"fired_at"`
+	Id      openapi_types.UUID `json:"id"`
+
+	// Late Fired more than 15 minutes after remind_at (the server was down); shown as «пропущено».
+	Late    bool             `json:"late"`
+	Message *ReminderMessage `json:"message"`
+
+	// MessageId null after the message was deleted; the reminder stays because it has a note.
+	MessageId *openapi_types.UUID `json:"message_id"`
+	Note      string              `json:"note"`
+	RemindAt  time.Time           `json:"remind_at"`
+	State     ReminderState       `json:"state"`
+	Version   int                 `json:"version"`
+}
+
+// ReminderAccess available — message is filled; none — the owner cannot read the message now (left the chat, archived chat); deleted — the message was deleted. Without access only the note is shown.
+type ReminderAccess string
+
+// ReminderState defines model for Reminder.State.
+type ReminderState string
+
+// ReminderIdEntry defines model for ReminderIdEntry.
+type ReminderIdEntry struct {
+	MessageId openapi_types.UUID   `json:"message_id"`
+	RemindAt  time.Time            `json:"remind_at"`
+	State     ReminderIdEntryState `json:"state"`
+}
+
+// ReminderIdEntryState defines model for ReminderIdEntry.State.
+type ReminderIdEntryState string
+
+// ReminderIds defines model for ReminderIds.
+type ReminderIds struct {
+	Reminders []ReminderIdEntry `json:"reminders"`
+}
+
+// ReminderMessage defines model for ReminderMessage.
+type ReminderMessage struct {
+	Author  SavedMessageAuthor `json:"author"`
+	Chat    SavedMessageChat   `json:"chat"`
+	Message Message            `json:"message"`
+}
+
+// ReminderPage defines model for ReminderPage.
+type ReminderPage struct {
+	Items []Reminder `json:"items"`
+
+	// NextCursor Opaque; pass as cursor to read the next page.
+	NextCursor *string `json:"next_cursor"`
+}
+
+// RequestAnswer defines model for RequestAnswer.
+type RequestAnswer struct {
+	ActorId    openapi_types.UUID `json:"actor_id"`
+	AnsweredAt *time.Time         `json:"answered_at"`
+	Comment    string             `json:"comment"`
+	Late       bool               `json:"late"`
+	Option     *int               `json:"option"`
+
+	// Read The recipient's read cursor reached the message («прочитал(а), не ответил(а)» against «не открывал(а) чат»).
+	Read bool `json:"read"`
+
+	// State left — the recipient answered and has left the chat since.
+	State RequestAnswerState `json:"state"`
+}
+
+// RequestAnswerState left — the recipient answered and has left the chat since.
+type RequestAnswerState string
+
+// RequestAnswerCounts defines model for RequestAnswerCounts.
+type RequestAnswerCounts struct {
+	Options []int `json:"options"`
+	Waiting int   `json:"waiting"`
+}
+
+// RequestAnswerPage defines model for RequestAnswerPage.
+type RequestAnswerPage struct {
+	Counts RequestAnswerCounts `json:"counts"`
+	Items  []RequestAnswer     `json:"items"`
+
+	// NextCursor Opaque; pass as cursor to read the next page.
+	NextCursor *string `json:"next_cursor"`
+}
+
+// RequestAnswerPreset Ready-made answer types are stored as keys and translated by clients: ack «Ознакомлен(а)», yes_no «Да / Нет», attend «Приду / Не приду», done «Готово». custom carries 2–4 options written by the author.
+type RequestAnswerPreset string
+
+// RequestAnswerSpec defines model for RequestAnswerSpec.
+type RequestAnswerSpec struct {
+	// Options Only for custom, and then required: 1–32 characters each, no repeats ignoring case. Omitted or empty for ready-made presets.
+	Options *[]string `json:"options,omitempty"`
+
+	// Preset Ready-made answer types are stored as keys and translated by clients: ack «Ознакомлен(а)», yes_no «Да / Нет», attend «Приду / Не приду», done «Готово». custom carries 2–4 options written by the author.
+	Preset RequestAnswerPreset `json:"preset"`
+}
+
+// RequestAudience defines model for RequestAudience.
+type RequestAudience struct {
+	// Count Current denominator of «N из M»: recipients who are still active members of the chat plus those who answered. A recipient who left without answering drops out of it.
+	Count int `json:"count"`
+
+	// Kind Whom the request asks. Wave 1 serves people and chat only: department and position get 422 request_audience_unavailable until wave 2 and clients do not offer them.
+	Kind RequestAudienceKind `json:"kind"`
+
+	// Label The name of the only recipient (or, from wave 2, of the department or position) at the moment of sending; empty for chat and for several people. Never lists names.
+	Label string `json:"label"`
+}
+
+// RequestAudienceInput defines model for RequestAudienceInput.
+type RequestAudienceInput struct {
+	// ActorIds Required for people. Intersected with the active members of the chat at the moment of sending, the author left out; an empty result gets 422 request_audience_empty.
+	ActorIds *[]openapi_types.UUID `json:"actor_ids,omitempty"`
+
+	// DepartmentId Wave 2. Rejected with 422 request_audience_unavailable in wave 1.
+	DepartmentId *openapi_types.UUID `json:"department_id,omitempty"`
+
+	// Kind Whom the request asks. Wave 1 serves people and chat only: department and position get 422 request_audience_unavailable until wave 2 and clients do not offer them.
+	Kind RequestAudienceKind `json:"kind"`
+
+	// PositionId Wave 2. Rejected with 422 request_audience_unavailable in wave 1.
+	PositionId *openapi_types.UUID `json:"position_id,omitempty"`
+}
+
+// RequestAudienceKind Whom the request asks. Wave 1 serves people and chat only: department and position get 422 request_audience_unavailable until wave 2 and clients do not offer them.
+type RequestAudienceKind string
+
+// RequestInboxItem defines model for RequestInboxItem.
+type RequestInboxItem struct {
+	Author  SavedMessageAuthor `json:"author"`
+	Chat    SavedMessageChat   `json:"chat"`
+	ChatId  openapi_types.UUID `json:"chat_id"`
+	Message Message            `json:"message"`
+
+	// Request The request part of a message of type request. The same for every reader: it never lists recipients or anyone's answers. Carried by the feed, createMessage-like responses and realtime message.* frames.
+	Request MessageRequest `json:"request"`
+
+	// Viewer What the current person may do with a request. Never in realtime frames, which are shared by the whole chat.
+	Viewer MessageRequestViewer `json:"viewer"`
+}
+
+// RequestInboxPage defines model for RequestInboxPage.
+type RequestInboxPage struct {
+	Items []RequestInboxItem `json:"items"`
+
+	// NextCursor Opaque; pass as cursor to read the next page.
+	NextCursor *string `json:"next_cursor"`
+}
+
+// RequestRemindResult defines model for RequestRemindResult.
+type RequestRemindResult struct {
+	NextRemindAt *time.Time `json:"next_remind_at"`
+
+	// Reminded Recipients without an answer who were reminded, including those over the daily limit who got no push.
+	Reminded int `json:"reminded"`
+}
+
+// RequestState defines model for RequestState.
+type RequestState struct {
+	// Request The request part of a message of type request. The same for every reader: it never lists recipients or anyone's answers. Carried by the feed, createMessage-like responses and realtime message.* frames.
+	Request MessageRequest `json:"request"`
+
+	// Viewer What the current person may do with a request. Never in realtime frames, which are shared by the whole chat.
+	Viewer MessageRequestViewer `json:"viewer"`
 }
 
 // ResetPasswordRequest defines model for ResetPasswordRequest.
@@ -7126,6 +7928,15 @@ type Session struct {
 	UserAgent  string             `json:"user_agent"`
 }
 
+// SetReminderRequest defines model for SetReminderRequest.
+type SetReminderRequest struct {
+	// Note A note for oneself. Absent keeps the current note, an empty string removes it.
+	Note *string `json:"note,omitempty"`
+
+	// RemindAt At least 1 minute and at most 365 days ahead.
+	RemindAt time.Time `json:"remind_at"`
+}
+
 // SetStatusRequest defines model for SetStatusRequest.
 type SetStatusRequest struct {
 	Emoji     string     `json:"emoji"`
@@ -7224,8 +8035,14 @@ type TransferOwnershipRequest struct {
 
 // UnreadSnapshot defines model for UnreadSnapshot.
 type UnreadSnapshot struct {
-	Chats   []ChatUnread   `json:"chats"`
-	Threads []ThreadUnread `json:"threads"`
+	Chats []ChatUnread `json:"chats"`
+
+	// RemindersFiredTotal Fired reminders the person has not closed yet. Absent on servers without message_reminders.
+	RemindersFiredTotal *int64 `json:"reminders_fired_total,omitempty"`
+
+	// RequestsWaitingTotal Requests waiting for the person's answer in all chats («Ждут вас»). Absent on servers without message_requests.
+	RequestsWaitingTotal *int64         `json:"requests_waiting_total,omitempty"`
+	Threads              []ThreadUnread `json:"threads"`
 }
 
 // UpdateAgentLlmConnectionRequest defines model for UpdateAgentLlmConnectionRequest.
@@ -7636,6 +8453,9 @@ type MessageId = openapi_types.UUID
 // ObjectDelivery defines model for ObjectDelivery.
 type ObjectDelivery string
 
+// ReminderId defines model for ReminderId.
+type ReminderId = openapi_types.UUID
+
 // ScheduledMessageId defines model for ScheduledMessageId.
 type ScheduledMessageId = openapi_types.UUID
 
@@ -7847,6 +8667,45 @@ type DeleteBrandingAssetParamsKind string
 // PutBrandingAssetParamsKind defines parameters for PutBrandingAsset.
 type PutBrandingAssetParamsKind string
 
+// ListRemindersParams defines parameters for ListReminders.
+type ListRemindersParams struct {
+	State *ListRemindersParamsState `form:"state,omitempty" json:"state,omitempty"`
+
+	// Cursor Opaque next_cursor of the previous page.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListRemindersParamsState defines parameters for ListReminders.
+type ListRemindersParamsState string
+
+// ListReminderIdsParams defines parameters for ListReminderIds.
+type ListReminderIdsParams struct {
+	ChatId openapi_types.UUID `form:"chat_id" json:"chat_id"`
+}
+
+// ListRequestInboxParams defines parameters for ListRequestInbox.
+type ListRequestInboxParams struct {
+	State *ListRequestInboxParamsState `form:"state,omitempty" json:"state,omitempty"`
+
+	// Cursor Opaque next_cursor of the previous page.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListRequestInboxParamsState defines parameters for ListRequestInbox.
+type ListRequestInboxParamsState string
+
+// ListRequestAnswersParams defines parameters for ListRequestAnswers.
+type ListRequestAnswersParams struct {
+	// Filter `waiting` or `option:<0-3>`; absent lists everyone.
+	Filter *string `form:"filter,omitempty" json:"filter,omitempty"`
+
+	// Cursor Opaque next_cursor of the previous page.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // ListSavedMessagesParams defines parameters for ListSavedMessages.
 type ListSavedMessagesParams struct {
 	ChatId *openapi_types.UUID `form:"chat_id,omitempty" json:"chat_id,omitempty"`
@@ -8011,6 +8870,9 @@ type UpdateChatNotificationPreferencesJSONRequestBody = ChatNotificationPreferen
 // MarkChatReadJSONRequestBody defines body for MarkChatRead for application/json ContentType.
 type MarkChatReadJSONRequestBody = MarkReadRequest
 
+// CreateRequestJSONRequestBody defines body for CreateRequest for application/json ContentType.
+type CreateRequestJSONRequestBody = CreateRequestRequest
+
 // CreateScheduledMessageJSONRequestBody defines body for CreateScheduledMessage for application/json ContentType.
 type CreateScheduledMessageJSONRequestBody = CreateScheduledMessageRequest
 
@@ -8086,6 +8948,9 @@ type UpdateMessageJSONRequestBody = UpdateMessageRequest
 // ForwardMessageJSONRequestBody defines body for ForwardMessage for application/json ContentType.
 type ForwardMessageJSONRequestBody = ForwardMessageRequest
 
+// SetMessageReminderJSONRequestBody defines body for SetMessageReminder for application/json ContentType.
+type SetMessageReminderJSONRequestBody = SetReminderRequest
+
 // MarkThreadReadJSONRequestBody defines body for MarkThreadRead for application/json ContentType.
 type MarkThreadReadJSONRequestBody = MarkReadRequest
 
@@ -8118,6 +8983,12 @@ type PutMobilePushDeviceJSONRequestBody = MobilePushDeviceRequest
 
 // PutPushSubscriptionJSONRequestBody defines body for PutPushSubscription for application/json ContentType.
 type PutPushSubscriptionJSONRequestBody = PushSubscriptionRequest
+
+// UpdateReminderJSONRequestBody defines body for UpdateReminder for application/json ContentType.
+type UpdateReminderJSONRequestBody = SetReminderRequest
+
+// AnswerRequestJSONRequestBody defines body for AnswerRequest for application/json ContentType.
+type AnswerRequestJSONRequestBody = AnswerRequestRequest
 
 // UpdateScheduledMessageJSONRequestBody defines body for UpdateScheduledMessage for application/json ContentType.
 type UpdateScheduledMessageJSONRequestBody = UpdateScheduledMessageRequest

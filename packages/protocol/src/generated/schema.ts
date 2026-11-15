@@ -1108,6 +1108,195 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chats/{chat_id}/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Sends a request message to the chat: a question with answer buttons addressed to some members. Any member who may write to the chat may send one (the same check as createMessage). The audience is turned into a fixed list of people at the moment of sending: the author, agents and deactivated people are left out, and whoever joins the chat later is not asked. Wave 1 accepts only the audiences people and chat; department and position are part of the contract but get 422 request_audience_unavailable until wave 2. Requests go to the main chat feed only, not into threads. A replay with the same client_msg_id and the same content returns the original message (200); the same key with other content gets 409 idempotency_conflict. */
+        post: operations["createRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requests/inbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description «Ждут вас»: requests addressed to the current person in chats they can read now (member and active, chat not archived, message not deleted). state=waiting lists open requests without the person's answer: those with a due date first (earliest due first), then the rest, newest first. state=answered lists open requests the person has answered, latest answer first. Closed requests are not listed. */
+        get: operations["listRequestInbox"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requests/{message_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The request of a message and the current person's view of it. Anyone who can read the message may call it; others get 404. */
+        get: operations["getRequest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requests/{message_id}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Sets or changes the current person's answer; the comment is set by the same call. Only a recipient who is still a member may answer (403 not_member otherwise). A first answer after the due date is accepted while the request is open and is marked late. An answer may be changed before the due date, or while the request is open when it has none (409 request_change_too_late otherwise). Repeating the same answer and comment changes nothing and emits no events. */
+        put: operations["answerRequest"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requests/{message_id}/answers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Who answered what. Only the author and, while they hold the role, a chat owner or admin or a workspace moderator with chats.moderate who is in the chat; everyone else gets 403. Access is checked on every call. Without filter all recipients are listed: waiting first, then answered, latest answer first. */
+        get: operations["listRequestAnswers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requests/{message_id}/remind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The author reminds recipients who have not answered. Not sooner than 2 hours after the previous manual reminder (429 request_remind_too_soon with Retry-After) and at most 5 times per request (409 request_limit_reached). A person gets at most 10 request reminders a day from all requests: the rest are not sent but are counted in reminded. */
+        post: operations["remindRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requests/{message_id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Closes the request: no more answers. The author or a chat owner or admin (closed_reason author or moderator). Closing a closed request changes nothing and returns its state. */
+        post: operations["closeRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/messages/{message_id}/reminder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Creates the current person's reminder about a message they can read, or moves the existing one: one reminder per message and person. Moving a fired reminder makes it pending again. remind_at must be at least 1 minute and at most 365 days ahead (422 reminder_invalid). At most 500 pending reminders per person (409 reminder_limit_reached). Nobody else learns about the reminder. */
+        put: operations["setMessageReminder"];
+        post?: never;
+        /** @description «Готово» or «Убрать»: removes the person's reminder about the message. Repeating it also returns 204. */
+        delete: operations["deleteMessageReminder"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reminders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The person's reminders. state=pending is ordered by remind_at, soonest first; state=fired by fired_at, latest first. The message is included only while the person can read it. */
+        get: operations["listReminders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reminders/ids": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The person's reminders about messages of one chat, for the bell in the feed. Kept apart from Message so the feed stays the same for every reader. */
+        get: operations["listReminderIds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reminders/{reminder_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Moves a reminder or changes its note by id: for reminders whose message was deleted (message_id is null). Someone else's id gets 404. Same rules as setMessageReminder. */
+        put: operations["updateReminder"];
+        post?: never;
+        /** @description Removes a reminder by id. Repeating it, or someone else's id, also returns 204. */
+        delete: operations["deleteReminder"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/messages/{message_id}/forward": {
         parameters: {
             query?: never;
@@ -2777,7 +2966,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_confirmation_loosened" | "agent_conflict" | "agent_not_ready" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "architect_budget_exceeded" | "architect_busy" | "architect_connection_required" | "architect_model_error" | "architect_session_expired" | "architect_session_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "integration_in_use" | "integration_usage_changed" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "limit_reached" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "saved_limit_reached" | "saved_storage_full" | "scheduled_message_closed" | "scheduled_message_not_found" | "scheduled_message_not_retryable" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "storage_unavailable" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "voice_check_busy" | "voice_check_in_progress" | "webhook_not_found" | "webhook_rejected" | "workspace_not_found";
+        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_confirmation_loosened" | "agent_conflict" | "agent_not_ready" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "architect_budget_exceeded" | "architect_busy" | "architect_connection_required" | "architect_model_error" | "architect_session_expired" | "architect_session_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "integration_in_use" | "integration_usage_changed" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "limit_reached" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "saved_limit_reached" | "saved_storage_full" | "scheduled_message_closed" | "scheduled_message_not_found" | "scheduled_message_not_retryable" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "storage_unavailable" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "voice_check_busy" | "voice_check_in_progress" | "webhook_not_found" | "webhook_rejected" | "workspace_not_found" | "chat_archived" | "not_implemented" | "not_member" | "reminder_invalid" | "reminder_limit_reached" | "reminder_not_found" | "request_audience_empty" | "request_audience_unavailable" | "request_change_too_late" | "request_closed" | "request_invalid" | "request_limit_reached" | "request_not_found" | "request_remind_too_soon" | "request_too_many_recipients";
         File: {
             /** Format: uuid */
             id: string;
@@ -3046,7 +3235,7 @@ export interface components {
             parts?: components["schemas"]["CompletedFilePart"][];
         };
         /** @enum {string} */
-        DurableEventTypeV1: "message.created" | "message.updated" | "message.deleted" | "message.pinned" | "message.unpinned" | "message.saved" | "message.unsaved" | "reaction.added" | "reaction.removed" | "thread.followed" | "thread.unfollowed" | "read.marked" | "draft.updated" | "draft.deleted" | "chat.created" | "chat.updated" | "chat.archived" | "member.joined" | "member.updated" | "member.removed" | "actor.status.updated" | "actor.avatar.updated" | "scheduled_message.created" | "scheduled_message.updated" | "scheduled_message.deleted" | "scheduled_message.sent" | "scheduled_message.failed";
+        DurableEventTypeV1: "message.created" | "message.updated" | "message.deleted" | "message.pinned" | "message.unpinned" | "message.saved" | "message.unsaved" | "reaction.added" | "reaction.removed" | "thread.followed" | "thread.unfollowed" | "read.marked" | "draft.updated" | "draft.deleted" | "chat.created" | "chat.updated" | "chat.archived" | "member.joined" | "member.updated" | "member.removed" | "actor.status.updated" | "actor.avatar.updated" | "scheduled_message.created" | "scheduled_message.updated" | "scheduled_message.deleted" | "scheduled_message.sent" | "scheduled_message.failed" | "request.assigned" | "request.updated" | "request.tally.updated" | "request.answer.updated" | "request.reminded" | "request.auto_reminded" | "reminder.created" | "reminder.updated" | "reminder.deleted" | "reminder.fired";
         /**
          * Format: int32
          * @enum {integer}
@@ -3143,7 +3332,7 @@ export interface components {
             ack_interval_ms: number;
             ack_batch_size: number;
             max_unacked_events: number;
-            /** @description Optional protocol additions this server accepts. typing_actions: the action field on typing frames. */
+            /** @description Optional protocol additions this server accepts. typing_actions: the action field on typing frames. message_requests: requests («Запрос») — the request REST routes, Message.request and the request.* events. message_reminders: personal reminders («Напомнить мне») — the reminder REST routes and the reminder.* events. A client hides a feature the server does not list. */
             features?: string[];
         };
         RealtimeDurableEventFrameV1: {
@@ -3160,7 +3349,7 @@ export interface components {
             chat_id?: string | null;
             /** Format: uuid */
             subject_id: string;
-            /** @description Event payload. For message.created, message.updated and message.deleted it is the message in the shape of the REST feed (components/schemas/Message: files with metadata and no links, thread_reply_count, mentioned_actor_ids, blocks and agent_provenance when present), read when the event is delivered, plus silent on message.created and thread_root_reply_count on thread replies. A frame that would exceed the frame limit (WS_MAX_FRAME_BYTES) is never sent as is: its data becomes a stub with truncated: true — for message.* the Message shape with an empty body, no files and no blocks, for other events only their short scalar fields — and the client loads the record by REST. Frames are encoded without HTML escaping. */
+            /** @description Event payload. For message.created, message.updated and message.deleted it is the message in the shape of the REST feed (components/schemas/Message: files with metadata and no links, thread_reply_count, mentioned_actor_ids, blocks, agent_provenance and request when present; never request_viewer, which is per reader), read when the event is delivered, plus silent on message.created and thread_root_reply_count on thread replies. A frame that would exceed the frame limit (WS_MAX_FRAME_BYTES) is never sent as is: its data becomes a stub with truncated: true — for message.* the Message shape with an empty body, no files and no blocks, for other events only their short scalar fields — and the client loads the record by REST. The data of request.* and reminder.* events is described by the RequestAssignedEvent … ReminderFiredEvent definitions: it never carries message text, notes, comments or who answered what. Frames are encoded without HTML escaping. */
             data: {
                 [key: string]: unknown;
             };
@@ -3271,6 +3460,98 @@ export interface components {
             /** @enum {string} */
             code: "invalid_frame" | "not_authenticated" | "forbidden" | "rate_limited" | "service_unavailable";
             message: string;
+        };
+        /** @description data of request.assigned, sent only to one recipient of a new request (subject_id is the message id). Written in the same transaction before message.created so the client knows the request is addressed to it before it shows the card. */
+        RealtimeRequestAssignedEventV1: {
+            /** Format: uuid */
+            message_id: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: date-time */
+            due_at: string | null;
+        };
+        /** @description data of request.updated, sent to the whole chat (subject_id is the message id): an answer that changes the count, closing, a recipient leaving. Only counters: never who answered or how. */
+        RealtimeRequestUpdatedEventV1: {
+            /** Format: uuid */
+            message_id: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** @enum {string} */
+            status: "open" | "closed";
+            /** @enum {string|null} */
+            closed_reason: "author" | "moderator" | "message_deleted" | "expired" | null;
+            answered_count: number;
+            waiting_count: number;
+            version: number;
+        };
+        /** @description data of request.tally.updated, sent only to the author of the request (subject_id is the message id) after any answer. Chat admins who are not the author reload listRequestAnswers on request.updated instead. */
+        RealtimeRequestTallyUpdatedEventV1: {
+            /** Format: uuid */
+            message_id: string;
+            /** Format: uuid */
+            chat_id: string;
+            tally: number[];
+            waiting_count: number;
+            version: number;
+        };
+        /** @description data of request.answer.updated, sent only to the person who answered, to all their devices (subject_id is the message id). Carries no comment text: has_comment tells whether to reload it. version is the version of the person's answer. */
+        RealtimeRequestAnswerUpdatedEventV1: {
+            /** Format: uuid */
+            message_id: string;
+            /** Format: uuid */
+            chat_id: string;
+            option: number;
+            has_comment: boolean;
+            late: boolean;
+            version: number;
+        };
+        /** @description data of request.reminded, sent to each recipient who has not answered (subject_id is the message id): a manual reminder by the author or the automatic one. Triggers a push. */
+        RealtimeRequestRemindedEventV1: {
+            /** Format: uuid */
+            message_id: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** @enum {string} */
+            kind: "manual" | "auto";
+        };
+        /** @description data of request.auto_reminded, sent only to the author (subject_id is the message id): the outcome of the automatic reminder, also when everyone has answered (reminded is 0). Triggers a push. */
+        RealtimeRequestAutoRemindedEventV1: {
+            /** Format: uuid */
+            message_id: string;
+            /** Format: uuid */
+            chat_id: string;
+            reminded: number;
+            answered_count: number;
+            waiting_count: number;
+        };
+        /** @description data of reminder.created, reminder.updated and reminder.deleted, sent only to the owner's devices (subject_id is the reminder id). Never carries the note or the message text. reason is present on reminder.deleted only. */
+        RealtimeReminderEventV1: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            message_id: string | null;
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: date-time */
+            remind_at: string;
+            /** @enum {string} */
+            state: "pending" | "fired";
+            version: number;
+            /** @enum {string} */
+            reason?: "removed" | "message_deleted";
+        };
+        /** @description data of reminder.fired, sent only to the owner's devices (subject_id is the reminder id). late: fired more than 15 minutes after remind_at. Triggers a push unless it is more than 6 hours late. */
+        RealtimeReminderFiredEventV1: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            message_id: string | null;
+            /** Format: uuid */
+            chat_id: string;
+            /** Format: date-time */
+            fired_at: string;
+            late: boolean;
+            version: number;
         };
         BootstrapStatus: {
             bootstrapped: boolean;
@@ -4955,8 +5236,11 @@ export interface components {
             actor_id: string;
             /** Format: uuid */
             client_msg_id: string;
-            /** @enum {string} */
-            type: "text";
+            /**
+             * @description request — a request for answers («Запрос»); its body is the question and request describes the answers. Clients that do not know a type show the body as text.
+             * @enum {string}
+             */
+            type: "text" | "request";
             body: string;
             /** @enum {string} */
             body_format: "plain" | "markdown";
@@ -4992,6 +5276,10 @@ export interface components {
             thread_root_reply_count?: number;
             /** @description Realtime message.* events only: the event was larger than the connection's frame limit (WS_MAX_FRAME_BYTES). The payload keeps the Message shape with ids, version, sequence, times, thread and counters but an empty body, no files and no blocks; clients load the message by REST (GET /api/v1/messages/{message_id}/context). Other event types may carry truncated: true with only their short scalar fields. */
             truncated?: boolean;
+            /** @description Present on messages of type request: the request as every reader sees it, without recipients or anyone's answers. Also in realtime message.* frames. */
+            request?: components["schemas"]["MessageRequest"] | null;
+            /** @description REST only (feed pages, create and context responses), next to request: what the reading person may do with it. Never in realtime frames, which the whole chat shares; clients load it with getRequest when needed. */
+            request_viewer?: components["schemas"]["MessageRequestViewer"];
         };
         /** @description Why an agent wrote the message. Visible to every reader of the message: it never carries a webhook payload, a follow-up note or text from another chat. */
         MessageAgentProvenance: {
@@ -5445,6 +5733,242 @@ export interface components {
         ScheduledMessageList: {
             scheduled_messages: components["schemas"]["ScheduledMessage"][];
         };
+        /**
+         * @description Ready-made answer types are stored as keys and translated by clients: ack «Ознакомлен(а)», yes_no «Да / Нет», attend «Приду / Не приду», done «Готово». custom carries 2–4 options written by the author.
+         * @enum {string}
+         */
+        RequestAnswerPreset: "ack" | "yes_no" | "attend" | "done" | "custom";
+        RequestAnswerSpec: {
+            preset: components["schemas"]["RequestAnswerPreset"];
+            /** @description Only for custom, and then required: 1–32 characters each, no repeats ignoring case. Omitted or empty for ready-made presets. */
+            options?: string[];
+        };
+        /**
+         * @description Whom the request asks. Wave 1 serves people and chat only: department and position get 422 request_audience_unavailable until wave 2 and clients do not offer them.
+         * @enum {string}
+         */
+        RequestAudienceKind: "people" | "chat" | "department" | "position";
+        RequestAudienceInput: {
+            kind: components["schemas"]["RequestAudienceKind"];
+            /** @description Required for people. Intersected with the active members of the chat at the moment of sending, the author left out; an empty result gets 422 request_audience_empty. */
+            actor_ids?: string[];
+            /**
+             * Format: uuid
+             * @description Wave 2. Rejected with 422 request_audience_unavailable in wave 1.
+             */
+            department_id?: string;
+            /**
+             * Format: uuid
+             * @description Wave 2. Rejected with 422 request_audience_unavailable in wave 1.
+             */
+            position_id?: string;
+        };
+        RequestAudience: {
+            kind: components["schemas"]["RequestAudienceKind"];
+            /** @description The name of the only recipient (or, from wave 2, of the department or position) at the moment of sending; empty for chat and for several people. Never lists names. */
+            label: string;
+            /** @description Current denominator of «N из M»: recipients who are still active members of the chat plus those who answered. A recipient who left without answering drops out of it. */
+            count: number;
+        };
+        CreateRequestRequest: {
+            /** Format: uuid */
+            client_msg_id: string;
+            /** @description The question; formatting and mentions work as in an ordinary message. */
+            body: string;
+            /**
+             * @default plain
+             * @enum {string}
+             */
+            body_format: "plain" | "markdown";
+            mentioned_actor_ids?: string[];
+            audience: components["schemas"]["RequestAudienceInput"];
+            answer: components["schemas"]["RequestAnswerSpec"];
+            /** @default true */
+            allow_comment: boolean;
+            /**
+             * Format: date-time
+             * @description At least 10 minutes and at most 90 days ahead.
+             */
+            due_at?: string;
+            /**
+             * @description Remind those who have not answered once before the due date, at max(due_at − 24 h, created_at + (due_at − created_at) / 2). Needs due_at at least 1 hour ahead (422 request_invalid, field auto_remind, otherwise).
+             * @default false
+             */
+            auto_remind: boolean;
+        };
+        /** @description The request part of a message of type request. The same for every reader: it never lists recipients or anyone's answers. Carried by the feed, createMessage-like responses and realtime message.* frames. */
+        MessageRequest: {
+            /** @enum {string} */
+            status: "open" | "closed";
+            /** @enum {string|null} */
+            closed_reason: "author" | "moderator" | "message_deleted" | "expired" | null;
+            answer: components["schemas"]["RequestAnswerSpec"];
+            allow_comment: boolean;
+            /** Format: date-time */
+            due_at: string | null;
+            /**
+             * Format: date-time
+             * @description When those who have not answered get the automatic reminder; null without one.
+             */
+            auto_remind_at: string | null;
+            audience: components["schemas"]["RequestAudience"];
+            answered_count: number;
+            /** @description audience.count − answered_count. */
+            waiting_count: number;
+            /** @description Grows with every change of the request; realtime request.* events carry it so stale ones are dropped. */
+            version: number;
+        };
+        MessageRequestViewerAnswer: {
+            option: number;
+            comment: string;
+            /** Format: date-time */
+            answered_at: string;
+            /** @description The first answer came after the due date («после срока»). */
+            late: boolean;
+            /** @description Version of the person's answer; AnswerRequestRequest.expected_version and request.answer.updated use it. */
+            version: number;
+        };
+        /** @description What the current person may do with a request. Never in realtime frames, which are shared by the whole chat. */
+        MessageRequestViewer: {
+            /**
+             * @description observer sees «Ответа ждут не от вас» and no buttons.
+             * @enum {string}
+             */
+            role: "author" | "recipient" | "observer";
+            answer: components["schemas"]["MessageRequestViewerAnswer"] | null;
+            /** @description A recipient, the request is open, the person is in the chat and it is not archived. */
+            can_answer: boolean;
+            /** @description Answered, the request is open and the due date has not passed. */
+            can_change: boolean;
+            /** @description The author, a chat owner or admin, or a moderator with chats.moderate in the chat. */
+            can_view_answers: boolean;
+            can_close: boolean;
+            /** @description The author, someone has not answered, 2 hours passed since the last manual reminder and fewer than 5 were sent. */
+            can_remind: boolean;
+            /**
+             * Format: date-time
+             * @description When a manual reminder is allowed again; null when it is allowed now or never again.
+             */
+            next_remind_at: string | null;
+            /** @description Answers per option, in option order. Only with can_view_answers, null otherwise. */
+            tally: number[] | null;
+        };
+        RequestState: {
+            request: components["schemas"]["MessageRequest"];
+            viewer: components["schemas"]["MessageRequestViewer"];
+        };
+        AnswerRequestRequest: {
+            /** @description Index of the button; beyond the options of the request gets 422 request_invalid. */
+            option: number;
+            /** @description Absent keeps the current comment, an empty string removes it. Only when the request allows comments. */
+            comment?: string;
+            /** @description MessageRequestViewerAnswer.version the change is based on; another one gets 409 version_conflict. */
+            expected_version?: number;
+        };
+        RequestAnswer: {
+            /** Format: uuid */
+            actor_id: string;
+            /**
+             * @description left — the recipient answered and has left the chat since.
+             * @enum {string}
+             */
+            state: "answered" | "waiting" | "left";
+            option: number | null;
+            comment: string;
+            /** Format: date-time */
+            answered_at: string | null;
+            late: boolean;
+            /** @description The recipient's read cursor reached the message («прочитал(а), не ответил(а)» against «не открывал(а) чат»). */
+            read: boolean;
+        };
+        RequestAnswerCounts: {
+            waiting: number;
+            options: number[];
+        };
+        RequestAnswerPage: {
+            items: components["schemas"]["RequestAnswer"][];
+            counts: components["schemas"]["RequestAnswerCounts"];
+            /** @description Opaque; pass as cursor to read the next page. */
+            next_cursor: string | null;
+        };
+        RequestRemindResult: {
+            /** @description Recipients without an answer who were reminded, including those over the daily limit who got no push. */
+            reminded: number;
+            /** Format: date-time */
+            next_remind_at: string | null;
+        };
+        RequestInboxItem: {
+            message: components["schemas"]["Message"];
+            /** Format: uuid */
+            chat_id: string;
+            author: components["schemas"]["SavedMessageAuthor"];
+            chat: components["schemas"]["SavedMessageChat"];
+            request: components["schemas"]["MessageRequest"];
+            viewer: components["schemas"]["MessageRequestViewer"];
+        };
+        RequestInboxPage: {
+            items: components["schemas"]["RequestInboxItem"][];
+            /** @description Opaque; pass as cursor to read the next page. */
+            next_cursor: string | null;
+        };
+        SetReminderRequest: {
+            /**
+             * Format: date-time
+             * @description At least 1 minute and at most 365 days ahead.
+             */
+            remind_at: string;
+            /** @description A note for oneself. Absent keeps the current note, an empty string removes it. */
+            note?: string;
+        };
+        ReminderMessage: {
+            message: components["schemas"]["Message"];
+            author: components["schemas"]["SavedMessageAuthor"];
+            chat: components["schemas"]["SavedMessageChat"];
+        };
+        /** @description A personal reminder about a message. Only its owner sees it. The message is included only while the owner can read it. */
+        Reminder: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: uuid
+             * @description null after the message was deleted; the reminder stays because it has a note.
+             */
+            message_id: string | null;
+            /** Format: uuid */
+            chat_id: string;
+            note: string;
+            /** Format: date-time */
+            remind_at: string;
+            /** @enum {string} */
+            state: "pending" | "fired";
+            /** Format: date-time */
+            fired_at: string | null;
+            /** @description Fired more than 15 minutes after remind_at (the server was down); shown as «пропущено». */
+            late: boolean;
+            version: number;
+            /**
+             * @description available — message is filled; none — the owner cannot read the message now (left the chat, archived chat); deleted — the message was deleted. Without access only the note is shown.
+             * @enum {string}
+             */
+            access: "available" | "none" | "deleted";
+            message: components["schemas"]["ReminderMessage"] | null;
+        };
+        ReminderPage: {
+            items: components["schemas"]["Reminder"][];
+            /** @description Opaque; pass as cursor to read the next page. */
+            next_cursor: string | null;
+        };
+        ReminderIdEntry: {
+            /** Format: uuid */
+            message_id: string;
+            /** Format: date-time */
+            remind_at: string;
+            /** @enum {string} */
+            state: "pending" | "fired";
+        };
+        ReminderIds: {
+            reminders: components["schemas"]["ReminderIdEntry"][];
+        };
         ChatUnread: {
             /** Format: uuid */
             chat_id: string;
@@ -5454,6 +5978,16 @@ export interface components {
             unread_count: number;
             /** Format: int64 */
             mention_count: number;
+            /**
+             * Format: int64
+             * @description Open requests in the chat waiting for the person's answer. Absent on servers without message_requests.
+             */
+            requests_waiting?: number;
+            /**
+             * Format: date-time
+             * @description The earliest due date among them; null when none has one.
+             */
+            requests_next_due_at?: string | null;
         };
         ThreadUnread: {
             /** Format: uuid */
@@ -5470,6 +6004,16 @@ export interface components {
         UnreadSnapshot: {
             chats: components["schemas"]["ChatUnread"][];
             threads: components["schemas"]["ThreadUnread"][];
+            /**
+             * Format: int64
+             * @description Requests waiting for the person's answer in all chats («Ждут вас»). Absent on servers without message_requests.
+             */
+            requests_waiting_total?: number;
+            /**
+             * Format: int64
+             * @description Fired reminders the person has not closed yet. Absent on servers without message_reminders.
+             */
+            reminders_fired_total?: number;
         };
         PushConfig: {
             enabled: boolean;
@@ -5652,6 +6196,7 @@ export interface components {
         ActorId: string;
         ScheduledMessageId: string;
         MessageId: string;
+        ReminderId: string;
         UploadId: string;
         FileId: string;
         AgentId: string;
@@ -7885,6 +8430,389 @@ export interface operations {
             };
             404: components["responses"]["Error"];
             422: components["responses"]["Error"];
+        };
+    };
+    createRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRequestRequest"];
+            };
+        };
+        responses: {
+            /** @description The original request message for an idempotent replay. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            /** @description Request message created; it carries request and request_viewer. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    listRequestInbox: {
+        parameters: {
+            query?: {
+                state?: "waiting" | "answered";
+                /** @description Opaque next_cursor of the previous page. */
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of the inbox; next_cursor continues it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestInboxPage"];
+                };
+            };
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    getRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request and the viewer state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestState"];
+                };
+            };
+            404: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    answerRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerRequestRequest"];
+            };
+        };
+        responses: {
+            /** @description The request and the viewer state after the answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestState"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    listRequestAnswers: {
+        parameters: {
+            query?: {
+                /** @description `waiting` or `option:<0-3>`; absent lists everyone. */
+                filter?: string;
+                /** @description Opaque next_cursor of the previous page. */
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of answers with counts for the tabs. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestAnswerPage"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    remindRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description How many people were reminded and when the next reminder is allowed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestRemindResult"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    closeRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The closed request and the viewer state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestState"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    setMessageReminder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetReminderRequest"];
+            };
+        };
+        responses: {
+            /** @description The existing reminder was moved or its note changed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reminder"];
+                };
+            };
+            /** @description Reminder created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reminder"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    deleteMessageReminder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The message has no reminder of the person. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    listReminders: {
+        parameters: {
+            query?: {
+                state?: "pending" | "fired";
+                /** @description Opaque next_cursor of the previous page. */
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of reminders; next_cursor continues it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReminderPage"];
+                };
+            };
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    listReminderIds: {
+        parameters: {
+            query: {
+                chat_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reminders of the person in the chat. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReminderIds"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    updateReminder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reminder_id: components["parameters"]["ReminderId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetReminderRequest"];
+            };
+        };
+        responses: {
+            /** @description The reminder after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Reminder"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    deleteReminder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reminder_id: components["parameters"]["ReminderId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The person has no reminder with this id. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
         };
     };
     forwardMessage: {
