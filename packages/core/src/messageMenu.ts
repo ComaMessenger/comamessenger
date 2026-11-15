@@ -79,8 +79,13 @@ export function messageMenu(facts: MessageMenuFacts): MessageMenuAction[][] {
       ...(persisted ? ["copyLink" as const] : []),
       ...(facts.hasText ? ["copyText" as const] : []),
     ],
-    // A task is changed on its own screen («⋯ → Изменить»), not as text.
-    persisted && own && facts.hasText && facts.messageType !== "task"
+    // A task is changed on its own screen («⋯ → Изменить»), not as text;
+    // a poll's body is built by the server from the question and options.
+    persisted &&
+    own &&
+    facts.hasText &&
+    facts.messageType !== "task" &&
+    facts.messageType !== "poll"
       ? ["edit"]
       : [],
     persisted && (own || facts.canModerate) ? ["delete"] : [],

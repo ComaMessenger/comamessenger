@@ -3,6 +3,14 @@ import {
   type RequestEvent,
   type RequestViewers,
 } from "./requests";
+import {
+  isPollWaiting,
+  mergePollViewer,
+  newerPoll,
+  reducePoll,
+  type PollCacheEntry,
+  type PollEvent,
+} from "./polls";
 import { hasServerFeature, serverFeature } from "./realtime";
 import {
   chatTaskBadge,
@@ -15,8 +23,10 @@ import type {
   ChatUnread,
   Message,
   MessageRequest,
+  MessagePoll,
   MessageTask,
   MyTaskItem,
+  PollViewer,
   RequestInboxItem,
   UnreadSnapshot,
   WaitingInboxItem,
@@ -24,7 +34,8 @@ import type {
 
 /**
  * «Важные» as the reader's own inbox: what waits for them («Ждут вас»:
- * requests to answer and, with message_tasks, tasks on them), saved
+ * requests to answer and, with message_tasks, tasks on them; with
+ * message_polls also polls with a due date to vote in), saved
  * messages («Сохранённые») and reminders («Напоминания», fired ones
  * first). Nobody else sees any of it. Tabs the server cannot serve yet are
  * hidden.
@@ -55,20 +66,24 @@ export function importantTabs(
       tab === "saved" ||
       (tab === "waiting" &&
         (hasServerFeature(list, serverFeature.requests) ||
-          hasServerFeature(list, serverFeature.tasks))) ||
+          hasServerFeature(list, serverFeature.tasks) ||
+          hasServerFeature(list, serverFeature.polls))) ||
       (tab === "reminders" && hasServerFeature(list, serverFeature.reminders)),
   );
 }
 
 export type ImportantCounts = {
-  /** «Ждут вас · n»: requests to answer and open tasks on the reader. */
+  /**
+   * «Ждут вас · n»: requests to answer, open tasks on the reader and polls
+   * with a due date not voted in.
+   */
   waiting: number;
   /** «Напоминания · n»: fired and not closed. */
   reminders: number;
   /**
    * The «Важные» tab of the phone's bottom bar: requests, burning tasks
-   * only (a task without a due date must not light it forever) and fired
-   * reminders.
+   * only (a task without a due date must not light it forever), polls due
+   * within 24 hours and fired reminders.
    */
   badge: number;
 };
@@ -81,6 +96,8 @@ export function importantCounts(
     | "reminders_fired_total"
     | "tasks_mine_open_total"
     | "tasks_mine_hot_total"
+    | "polls_waiting_total"
+    | "polls_hot_total"
   >,
   features: Iterable<string> | null | undefined,
 ): ImportantCounts {
@@ -91,13 +108,16 @@ export function importantCounts(
   const tasks = hasServerFeature(list, serverFeature.tasks);
   const tasksOpen = tasks ? Math.max(0, unread.tasks_mine_open_total ?? 0) : 0;
   const tasksHot = tasks ? Math.max(0, unread.tasks_mine_hot_total ?? 0) : 0;
+  const polls = hasServerFeature(list, serverFeature.polls);
+  const pollsWaiting = polls ? Math.max(0, unread.polls_waiting_total ?? 0) : 0;
+  const pollsHot = polls ? Math.max(0, unread.polls_hot_total ?? 0) : 0;
   const reminders = hasServerFeature(list, serverFeature.reminders)
     ? Math.max(0, unread.reminders_fired_total ?? 0)
     : 0;
   return {
-    waiting: requests + tasksOpen,
+    waiting: requests + tasksOpen + pollsWaiting,
     reminders,
-    badge: requests + tasksHot + reminders,
+    badge: requests + tasksHot + pollsHot + reminders,
   };
 }
 
@@ -339,8 +359,8 @@ export const waitingFilterLabelKeys: Record<WaitingFilter, string> = {
 
 /**
  * The chips the server can serve. None before message_tasks: «Ждут вас»
- * is then a list of requests as in wave 1. «Опросы» joins with
- * message_polls (wave 4).
+ * is then a list of requests as in wave 1 (listWaitingInbox, which polls
+ * need too, came with tasks). «Опросы» joins with message_polls (wave 4).
  */
 export function waitingFilters(
   features: Iterable<string> | null | undefined,
@@ -366,8 +386,8 @@ export const taskInboxModeLabelKeys: Record<TaskInboxMode, string> = {
 export type WaitingSource =
   /** Servers without message_tasks: listRequestInbox as in wave 1. */
   | { source: "requestInbox"; state: "waiting" | "answered" }
-  /** listWaitingInbox: requests and tasks in one order. */
-  | { source: "waitingInbox"; kind: "all" | "requests" | "tasks" }
+  /** listWaitingInbox: requests, tasks and polls in one order. */
+  | { source: "waitingInbox"; kind: "all" | "requests" | "tasks" | "polls" }
   /** listMyTasks: «Поставил(а) я» and «Готово за 7 дней». */
   | {
       source: "myTasks";
@@ -413,20 +433,28 @@ export function waitingSources(
             { source: "myTasks", role: "authored", state: "done" },
           ];
     case "polls":
-      // Wave 4 adds kind=polls; until then the chip is never offered.
-      return [];
+      return hasServerFeature(list, serverFeature.polls)
+        ? [{ source: "waitingInbox", kind: "polls" }]
+        : [];
   }
 }
 
 /** A task row of «Ждут вас» and «Мои задачи», the shape of listMyTasks. */
 export type WaitingTaskRow = { kind: "task"; item: MyTaskItem };
 export type WaitingRequestRow = { kind: "request"; item: RequestInboxItem };
-export type WaitingRow = WaitingRequestRow | WaitingTaskRow;
+/** A poll of «Ждут вас»: vote right in the list. */
+export type WaitingPollItem = Pick<WaitingInboxItem, "author" | "chat"> & {
+  message: Message & { poll: MessagePoll };
+  viewer: PollViewer;
+};
+export type WaitingPollRow = { kind: "poll"; item: WaitingPollItem };
+export type WaitingRow = WaitingRequestRow | WaitingTaskRow | WaitingPollRow;
 
 /**
  * A waitingInbox item in the shape the wave 1 rows and the task rows draw:
- * a request as RequestInboxItem, a task as MyTaskItem. Null for kinds this
- * client does not know (polls from a newer server) or broken items.
+ * a request as RequestInboxItem, a task as MyTaskItem, a poll with its
+ * viewer (from message.poll_viewer). Null for kinds this client does not
+ * know or broken items.
  */
 export function waitingRow(item: WaitingInboxItem): WaitingRow | null {
   if (item.kind === "request") {
@@ -455,6 +483,20 @@ export function waitingRow(item: WaitingInboxItem): WaitingRow | null {
       },
     };
   }
+  if (item.kind === "poll") {
+    const poll = item.message.poll;
+    const viewer = item.message.poll_viewer;
+    if (!poll || !viewer) return null;
+    return {
+      kind: "poll",
+      item: {
+        message: { ...item.message, poll },
+        author: item.author,
+        chat: item.chat,
+        viewer,
+      },
+    };
+  }
   return null;
 }
 
@@ -470,15 +512,18 @@ const rowDue = (row: WaitingRow) => {
   const due =
     row.kind === "request"
       ? row.item.request.due_at
-      : row.item.message.task?.due_at;
+      : row.kind === "poll"
+        ? row.item.message.poll.due_at
+        : row.item.message.task?.due_at;
   return due ? Date.parse(due) : Infinity;
 };
 
 /**
  * «Ждут вас» from waitingInbox pages (and «Отвечено» pages): requests go
  * through waitingSections (answered ones move to «Отвечено», the store's
- * viewers win), tasks are kept while they are on the reader. `tasks` are
- * fresher copies from the store by message id: the newer version wins.
+ * viewers win), tasks are kept while they are on the reader, polls while
+ * the reader may vote and has not. `tasks` and `polls` are fresher copies
+ * from the store by message id: the newer version wins.
  */
 export function waitingList(
   pages: readonly WaitingInboxItem[],
@@ -487,6 +532,7 @@ export function waitingList(
   options: {
     viewers?: RequestViewers;
     tasks?: Readonly<Record<string, MessageTask | null | undefined>>;
+    polls?: Readonly<Record<string, PollCacheEntry | null | undefined>>;
   } = {},
 ): WaitingList {
   const rows = pages
@@ -518,10 +564,25 @@ export function waitingList(
       continue;
     tasks.set(rowID(current), current);
   }
+  const polls = new Map<string, WaitingPollRow>();
+  for (const row of rows) {
+    if (row.kind !== "poll") continue;
+    const current = freshPollRow(row, options.polls?.[rowID(row)]);
+    const seen = polls.get(rowID(current));
+    if (
+      seen &&
+      seen.item.message.poll.version >= current.item.message.poll.version
+    )
+      continue;
+    polls.set(rowID(current), current);
+  }
   const waiting: WaitingRow[] = [
     ...requests.waiting.map((item) => ({ kind: "request" as const, item })),
     ...[...tasks.values()].filter((row) =>
       row.item.message.task ? isTaskOnMe(row.item.message.task, me) : false,
+    ),
+    ...[...polls.values()].filter((row) =>
+      isPollWaiting(row.item.message.poll, row.item.viewer),
     ),
   ];
   waiting.sort(
@@ -532,7 +593,29 @@ export function waitingList(
   return { waiting, answered: requests.answered };
 }
 
-/** Rows of one chip: «Запросы» keeps requests, «Задачи» tasks. */
+/** A poll row with the store's fresher poll and viewer put in. */
+function freshPollRow(
+  row: WaitingPollRow,
+  known: PollCacheEntry | null | undefined,
+): WaitingPollRow {
+  if (!known) return row;
+  const poll =
+    newerPoll(row.item.message.poll, known.poll) ?? row.item.message.poll;
+  const viewer = known.viewer
+    ? mergePollViewer(
+        { viewer: row.item.viewer, version: row.item.message.poll.version },
+        known.viewer.viewer,
+        known.viewer.version,
+      ).viewer
+    : row.item.viewer;
+  if (poll === row.item.message.poll && viewer === row.item.viewer) return row;
+  return {
+    kind: "poll",
+    item: { ...row.item, message: { ...row.item.message, poll }, viewer },
+  };
+}
+
+/** Rows of one chip: «Запросы» keeps requests, «Задачи» tasks, «Опросы» polls. */
 export function filterWaitingRows(
   rows: readonly WaitingRow[],
   filter: WaitingFilter,
@@ -541,34 +624,43 @@ export function filterWaitingRows(
   if (filter === "requests")
     return rows.filter((row) => row.kind === "request");
   if (filter === "tasks") return rows.filter((row) => row.kind === "task");
-  return [];
+  return rows.filter((row) => row.kind === "poll");
 }
 
 /** Counters on the chips from the rows loaded. */
 export function waitingFilterCounts(
   rows: readonly WaitingRow[],
 ): Record<WaitingFilter, number> {
-  const requests = rows.filter((row) => row.kind === "request").length;
+  const count = (kind: WaitingRow["kind"]) =>
+    rows.filter((row) => row.kind === kind).length;
   return {
     all: rows.length,
-    requests,
-    tasks: rows.length - requests,
-    polls: 0,
+    requests: count("request"),
+    tasks: count("task"),
+    polls: count("poll"),
   };
 }
 
 /**
- * Applies a request or task event to waitingInbox items. A task that is no
- * longer on the reader (closed, taken by another candidate, reassigned)
- * leaves; request events go through reduceRequestInbox. `stale` asks to
- * read the list again: something new may be waiting.
+ * Applies a request, task or poll event to waitingInbox items. A task that
+ * is no longer on the reader (closed, taken by another candidate,
+ * reassigned) leaves; request events go through reduceRequestInbox; a poll
+ * leaves once the reader voted (poll.vote.updated from any device) or it
+ * closed. `stale` asks to read the list again: something new may be
+ * waiting (a reminder about a poll not in the list).
  */
 export function reduceWaitingInbox(
   items: readonly WaitingInboxItem[],
-  event: RequestEvent | TaskEvent,
+  event: RequestEvent | TaskEvent | PollEvent,
   me: string,
   now: Date,
 ): { items: WaitingInboxItem[]; changed: boolean; stale: boolean } {
+  if (
+    event.type === "poll.updated" ||
+    event.type === "poll.vote.updated" ||
+    event.type === "poll.notified"
+  )
+    return reducePollWaiting(items, event);
   if (event.type === "task.notified")
     return {
       items: [...items],
@@ -645,4 +737,47 @@ export function chatWorkBadge(
   if (task) return { kind: "task", badge: task };
   const request = chatRequestBadge(chat);
   return request ? { kind: "request", badge: request } : null;
+}
+
+function reducePollWaiting(
+  items: readonly WaitingInboxItem[],
+  event: PollEvent,
+): { items: WaitingInboxItem[]; changed: boolean; stale: boolean } {
+  const index = items.findIndex(
+    (item) => item.message.id === event.data.message_id,
+  );
+  if (index < 0)
+    return {
+      items: [...items],
+      changed: false,
+      stale: event.type === "poll.notified" && event.data.kind === "reminded",
+    };
+  const item = items[index]!;
+  const poll = item.message.poll;
+  const viewer = item.message.poll_viewer;
+  if (!poll || event.type === "poll.notified")
+    return { items: [...items], changed: false, stale: false };
+  const reduced = reducePoll(
+    {
+      poll,
+      viewer: viewer ? { viewer, version: poll.version } : null,
+    },
+    event,
+  );
+  if (!reduced.changed)
+    return { items: [...items], changed: false, stale: false };
+  const next = [...items];
+  if (!isPollWaiting(reduced.poll, reduced.viewer?.viewer)) {
+    next.splice(index, 1);
+    return { items: next, changed: true, stale: false };
+  }
+  next[index] = {
+    ...item,
+    message: {
+      ...item.message,
+      poll: reduced.poll,
+      ...(reduced.viewer ? { poll_viewer: reduced.viewer.viewer } : {}),
+    },
+  };
+  return { items: next, changed: true, stale: false };
 }

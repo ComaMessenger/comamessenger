@@ -90,6 +90,8 @@ describe("features", () => {
       requests: true,
       reminders: false,
       tasks: false,
+      polls: false,
+      away: false,
     });
     expect(
       workplaceFeatures(
@@ -99,6 +101,8 @@ describe("features", () => {
       requests: true,
       reminders: true,
       tasks: true,
+      polls: false,
+      away: false,
     });
   });
 

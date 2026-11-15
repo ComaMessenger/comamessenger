@@ -69,8 +69,15 @@ export type SlotItem = {
   tone: SlotTone;
   /** The message a tap leads to, when there is one. */
   targetMessageId?: string;
-  /** What the target is: a task opens the list, a request scrolls to it. */
-  targetType?: "task" | "request" | "pinned";
+  /**
+   * What the target is: a task opens the list, a request scrolls to it;
+   * «substitute» opens the direct chat with targetActorId.
+   */
+  targetType?: "task" | "request" | "pinned" | "substitute";
+  /** «away»: the substitute a tap opens a direct chat with. */
+  targetActorId?: string;
+  /** «away»: the kind's emoji for the icon. */
+  emoji?: string;
   /** «tasks»: open tasks of the chat on the reader («N на вас»). */
   mine?: number;
   /** «tasks»: the accent dot on the icon — the reader is on open tasks. */
@@ -94,8 +101,18 @@ export type SlotTaskMessage = Pick<
 /** A pinned message with its text, in the order the client shows them. */
 export type SlotPin = { messageID: string; text: string };
 
-/** «Отсутствует», wave 4: the other person of a direct chat is away. */
-export type SlotAway = { title: string; caption: string };
+/**
+ * «Отсутствует», wave 4: the other person of a direct chat is away — build
+ * it with awaySlot(peer, substitute, now, locale) and pass it in direct
+ * chats only.
+ */
+export type SlotAway = {
+  title: string;
+  caption: string;
+  emoji?: string;
+  /** A tap opens the direct chat with the substitute. */
+  substituteID?: string | null;
+};
 
 export type ChatSlotInput = {
   /** The reader and their role in the chat (for «Готово» in the line). */
@@ -276,6 +293,13 @@ export function buildChatSlot(input: ChatSlotInput, now: Date): ChatSlot {
       title: input.away.title,
       caption: input.away.caption,
       tone: "neutral",
+      ...(input.away.emoji ? { emoji: input.away.emoji } : {}),
+      ...(input.away.substituteID
+        ? {
+            targetType: "substitute" as const,
+            targetActorId: input.away.substituteID,
+          }
+        : {}),
     });
 
   const pins = input.pins ?? [];

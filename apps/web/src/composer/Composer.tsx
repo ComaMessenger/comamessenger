@@ -14,6 +14,7 @@ import {
   BellOff,
   ChevronDown,
   Clock3,
+  BarChartHorizontal,
   Code2,
   FileText,
   Image,
@@ -70,6 +71,7 @@ const plusIcons: Record<ComposerMenuItemID, ReactNode> = {
   file: <FileText />,
   markdownFile: <Code2 />,
   request: <MessageSquareMore />,
+  poll: <BarChartHorizontal />,
   task: <ListChecks />,
   agent: <Sparkles />,
 };
