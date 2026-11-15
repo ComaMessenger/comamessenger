@@ -1,11 +1,21 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
 import { completeMessage } from "./messageShape";
 import { parseInstant, type TypingAction } from "./presenceText";
+import {
+  isRequestEvent,
+  mergeRequestViewer,
+  parseRequestEvent,
+  reduceRequest,
+  type RequestCacheEntry,
+  type RequestEvent,
+  type RequestViewers,
+} from "./requests";
 import type {
   Chat,
   ClientMessage,
   DurableEvent,
   RealtimeState,
+  RequestState,
   UnreadSnapshot,
 } from "./types";
 
@@ -27,6 +37,15 @@ export type MessengerState = {
   checkpoint: number;
   realtime: RealtimeState;
   activeChatID: string | null;
+  /** HelloFrame.features of the current connection; empty before hello. */
+  features: readonly string[];
+  /**
+   * The reader's part in each request, by message id: the one source for
+   * request cards. Filled from REST (`request_viewer` of feed pages is moved
+   * here and dropped from the message), request.assigned and the reader's
+   * own answer events.
+   */
+  requestViewers: RequestViewers;
   replaceChats(chats: Chat[]): void;
   replaceMessages(chatID: string, messages: ClientMessage[]): void;
   prependMessages(chatID: string, messages: ClientMessage[]): void;
@@ -40,6 +59,34 @@ export type MessengerState = {
    * came as a stub (`truncated: true`). Without a loader the stub is kept.
    */
   setMessageLoader(loader: MessageLoader | null): void;
+  /**
+   * Reads a request again (getRequest) when an event says the reader's state
+   * changed in a way it does not carry, such as a comment from another
+   * device. Without a loader the cache keeps what it knows.
+   */
+  setRequestLoader(loader: RequestLoader | null): void;
+  setFeatures(value: readonly string[]): void;
+  /** The request and viewer of one message, as the cache has them. */
+  requestEntry(messageID: string, chatID?: string): RequestCacheEntry;
+  /**
+   * Puts a request read by REST (getRequest, answerRequest, closeRequest,
+   * an inbox item) into the cache: the message's request if it is loaded,
+   * and the viewer map.
+   */
+  setRequestState(
+    messageID: string,
+    state: RequestState,
+    chatID?: string,
+  ): void;
+  /**
+   * Writes an entry as it is: an optimistic answer (optimisticAnswer) or the
+   * entry kept to roll it back. A null viewer removes the reader's state.
+   */
+  setRequestEntry(
+    messageID: string,
+    entry: RequestCacheEntry,
+    chatID?: string,
+  ): void;
   setUnread(value: UnreadSnapshot): void;
   setRealtime(value: RealtimeState): void;
   setActive(chatID: string | null): void;
@@ -107,6 +154,7 @@ export type MessageLoader = (
 ) => Promise<ClientMessage | null>;
 
 /** The loader every client uses: the message's context window by REST. */
+export type RequestLoader = (messageID: string) => Promise<RequestState>;
 export function restMessageLoader(api: {
   messageContext(
     messageID: string,
@@ -121,6 +169,7 @@ export function restMessageLoader(api: {
 const emptyUnread: UnreadSnapshot = { chats: [], threads: [] };
 export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
   let loader: MessageLoader | null = null;
+  let requestLoader: RequestLoader | null = null;
   // Highest version requested per message: one request per stub, however
   // often the frame is replayed.
   const requested = new Map<string, number>();
@@ -139,21 +188,27 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
     checkpoint,
     realtime: "idle",
     activeChatID: null,
+    features: [],
+    requestViewers: {},
     replaceChats: (items) =>
       set({ chats: Object.fromEntries(items.map((item) => [item.id, item])) }),
     replaceMessages: (chatID, items) =>
       set((state) => ({
+        requestViewers: absorbViewers(state.requestViewers, items),
         messages: {
           ...state.messages,
-          [chatID]: uniqueSorted(items.map((item) => completeMessage(item))),
+          [chatID]: uniqueSorted(
+            items.map((item) => withoutViewer(completeMessage(item))),
+          ),
         },
       })),
     prependMessages: (chatID, items) =>
       set((state) => ({
+        requestViewers: absorbViewers(state.requestViewers, items),
         messages: {
           ...state.messages,
           [chatID]: uniqueSorted([
-            ...items.map((item) => completeMessage(item)),
+            ...items.map((item) => withoutViewer(completeMessage(item))),
             ...(state.messages[chatID] ?? []),
           ]),
         },
@@ -169,7 +224,10 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
         },
       })),
     reconcile: (message) =>
-      set((state) => ({ messages: reconcileMessage(state.messages, message) })),
+      set((state) => ({
+        requestViewers: absorbViewers(state.requestViewers, [message]),
+        messages: reconcileMessage(state.messages, withoutViewer(message)),
+      })),
     retrying: (clientMsgID) =>
       set((state) => ({
         messages: mapMessages(state.messages, (item) =>
@@ -189,8 +247,56 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
     setMessageLoader: (value) => {
       loader = value;
     },
+    setRequestLoader: (value) => {
+      requestLoader = value;
+    },
+    setFeatures: (features) => set({ features: [...features] }),
+    requestEntry: (messageID, chatID) => readEntry(get(), messageID, chatID),
+    setRequestState: (messageID, value, chatID) =>
+      set((state) => {
+        const current = readEntry(state, messageID, chatID);
+        const request =
+          current.request && current.request.version > value.request.version
+            ? current.request
+            : value.request;
+        return writeEntry(
+          state,
+          messageID,
+          {
+            request,
+            viewer: mergeRequestViewer(
+              state.requestViewers[messageID],
+              value.viewer,
+              value.request.version,
+            ),
+          },
+          chatID,
+        );
+      }),
+    setRequestEntry: (messageID, entry, chatID) =>
+      set((state) => writeEntry(state, messageID, entry, chatID)),
     apply: (event) => {
       if (event.seq <= get().checkpoint) return false;
+      if (isRequestEvent(event.type)) {
+        const parsed = parseRequestEvent(event);
+        let refetch = false;
+        set((state) => {
+          if (!parsed) return { checkpoint: event.seq };
+          const result = applyRequestEvent(state, parsed);
+          refetch = result.refetch;
+          return { ...result.patch, checkpoint: event.seq };
+        });
+        if (refetch && parsed && requestLoader) {
+          const messageID = parsed.data.message_id;
+          const chatID = parsed.data.chat_id;
+          void requestLoader(messageID)
+            .then((value) => get().setRequestState(messageID, value, chatID))
+            .catch(() => {
+              // The card keeps what the event said; the next load fixes it.
+            });
+        }
+        return true;
+      }
       const stub =
         (event.type === "message.created" ||
           event.type === "message.updated" ||
@@ -428,6 +534,7 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
         unread: emptyUnread,
         agentStatuses: {},
         messageStreams: {},
+        requestViewers: {},
         checkpoint: value,
       }),
   }));
@@ -485,7 +592,110 @@ export function mergeMessage(
 ): ClientMessage {
   const merged: ClientMessage = { ...current, ...incoming };
   if (incoming.blocks === undefined) delete merged.blocks;
+  // request.updated may have run ahead of a frame or page with the message.
+  if (
+    current.request &&
+    incoming.request &&
+    current.request.version > incoming.request.version
+  )
+    merged.request = current.request;
   return merged;
+}
+
+/** The message without its REST-only viewer: the store keeps viewers apart. */
+function withoutViewer<T extends ClientMessage>(message: T): T {
+  if (!("request_viewer" in message)) return message;
+  const rest = { ...message };
+  delete rest.request_viewer;
+  return rest;
+}
+
+function absorbViewers(
+  viewers: RequestViewers,
+  messages: readonly ClientMessage[],
+): RequestViewers {
+  let next = viewers;
+  for (const message of messages) {
+    if (!message.request || !message.request_viewer) continue;
+    if (next === viewers) next = { ...viewers };
+    next[message.id] = mergeRequestViewer(
+      next[message.id],
+      message.request_viewer,
+      message.request.version,
+    );
+  }
+  return next;
+}
+
+function findMessage(
+  messages: Record<string, ClientMessage[]>,
+  messageID: string,
+  chatID?: string,
+): { chatID: string; index: number } | null {
+  const chats = chatID ? [chatID] : Object.keys(messages);
+  for (const key of chats) {
+    const index = (messages[key] ?? []).findIndex(
+      (item) => item.id === messageID,
+    );
+    if (index >= 0) return { chatID: key, index };
+  }
+  return null;
+}
+
+function readEntry(
+  state: Pick<MessengerState, "messages" | "requestViewers">,
+  messageID: string,
+  chatID?: string,
+): RequestCacheEntry {
+  const found = findMessage(state.messages, messageID, chatID);
+  return {
+    request: found
+      ? (state.messages[found.chatID]![found.index]!.request ?? null)
+      : null,
+    viewer: state.requestViewers[messageID] ?? null,
+  };
+}
+
+function writeEntry(
+  state: Pick<MessengerState, "messages" | "requestViewers">,
+  messageID: string,
+  entry: RequestCacheEntry,
+  chatID?: string,
+): Pick<MessengerState, "messages" | "requestViewers"> {
+  let { messages, requestViewers } = state;
+  const found = entry.request ? findMessage(messages, messageID, chatID) : null;
+  if (found && entry.request) {
+    const list = [...messages[found.chatID]!];
+    list[found.index] = { ...list[found.index]!, request: entry.request };
+    messages = { ...messages, [found.chatID]: list };
+  }
+  if (entry.viewer)
+    requestViewers = { ...requestViewers, [messageID]: entry.viewer };
+  else if (requestViewers[messageID]) {
+    requestViewers = { ...requestViewers };
+    delete requestViewers[messageID];
+  }
+  return { messages, requestViewers };
+}
+
+function applyRequestEvent(
+  state: Pick<MessengerState, "messages" | "requestViewers">,
+  event: RequestEvent,
+): {
+  patch: Partial<Pick<MessengerState, "messages" | "requestViewers">>;
+  refetch: boolean;
+} {
+  const messageID = event.data.message_id;
+  const result = reduceRequest(
+    readEntry(state, messageID, event.data.chat_id),
+    event,
+    new Date(),
+  );
+  if (!result.changed) return { patch: {}, refetch: result.refetch };
+  return {
+    patch: writeEntry(state, messageID, result, event.data.chat_id),
+    refetch: result.refetch,
+  };
 }
 
 /**

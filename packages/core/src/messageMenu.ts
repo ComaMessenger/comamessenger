@@ -7,6 +7,8 @@ export type MessageMenuAction =
   | "thread"
   | "save"
   | "unsave"
+  /** «Напомнить мне», or «Изменить напоминание» when one is set. */
+  | "remind"
   | "pin"
   | "unpin"
   | "forward"
@@ -32,12 +34,20 @@ export type MessageMenuFacts = {
   hasText: boolean;
   /** The server has the message; unsent ones have no id to act on. */
   persisted: boolean;
+  /**
+   * The server has personal reminders (`message_reminders` in hello).
+   * Absent means no: older callers keep their menu.
+   */
+  reminders?: boolean;
+  /** The reader has a reminder about this message: the item reads «Изменить напоминание». */
+  reminded?: boolean;
 };
 
 /**
- * Sections of the menu, separated by dividers: reply | important, pin,
- * forward, views | links and text | edit | delete. Every member may save a
- * message for themselves; pinning is for chat owners and admins. Edit own
+ * Sections of the menu, separated by dividers: reply | important, remind,
+ * pin, forward, views | links and text | edit | delete. Every member may
+ * save a message and set a reminder about it for themselves, right after
+ * saving as in the prototype; pinning is for chat owners and admins. Edit own
  * messages only, delete own or as a moderator.
  */
 export function messageMenu(facts: MessageMenuFacts): MessageMenuAction[][] {
@@ -47,6 +57,7 @@ export function messageMenu(facts: MessageMenuFacts): MessageMenuAction[][] {
     persisted
       ? [
           facts.saved ? "unsave" : "save",
+          ...(facts.reminders ? ["remind" as const] : []),
           ...(facts.canPin
             ? [facts.pinned ? ("unpin" as const) : ("pin" as const)]
             : []),
@@ -67,4 +78,9 @@ export function messageMenu(facts: MessageMenuFacts): MessageMenuAction[][] {
 /** Chat roles that may pin: the server's `chat.manage` action. */
 export function canPinIn(chatRole: string | undefined) {
   return chatRole === "owner" || chatRole === "admin";
+}
+
+/** Translation key of the «remind» item: set one or change the one set. */
+export function remindLabelKey(reminded: boolean | undefined): string {
+  return reminded ? "messageEditReminder" : "messageRemindMe";
 }

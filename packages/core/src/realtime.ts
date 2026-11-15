@@ -4,6 +4,86 @@ import type { TypingAction } from "./presenceText";
 
 /** How often a connected client confirms it is still here (TTL is 60s). */
 export const presenceRefreshMs = 25_000;
+
+/**
+ * Optional protocol additions a server announces in HelloFrame.features. A
+ * client connected to an older server hides what the server lacks.
+ */
+export const serverFeature = {
+  /** «Запрос» in «+», request cards, «Ждут вас». */
+  requests: "message_requests",
+  /** «Напомнить мне», the bell, «Напоминания». */
+  reminders: "message_reminders",
+} as const;
+
+/** True when the server announced the feature; false before hello. */
+export function hasServerFeature(
+  features: Iterable<string> | null | undefined,
+  name: string,
+): boolean {
+  if (!features) return false;
+  for (const feature of features) if (feature === name) return true;
+  return false;
+}
+
+/** The phase 6.4 features the server announced. */
+export type WorkplaceFeatures = { requests: boolean; reminders: boolean };
+
+export function workplaceFeatures(
+  features: Iterable<string> | null | undefined,
+): WorkplaceFeatures {
+  const list = features ? [...features] : [];
+  return {
+    requests: hasServerFeature(list, serverFeature.requests),
+    reminders: hasServerFeature(list, serverFeature.reminders),
+  };
+}
+
+/**
+ * Events after which «Ждут вас», the reminder count and the chat marks may
+ * have changed: GET /unread should be read again. request.updated counts
+ * only when the request closed, other updates do not change what waits for
+ * the reader.
+ */
+export function refreshesUnread(
+  event: Pick<DurableEvent, "type" | "data">,
+): boolean {
+  if (
+    event.type === "request.assigned" ||
+    event.type === "request.answer.updated" ||
+    event.type.startsWith("reminder.")
+  )
+    return true;
+  return event.type === "request.updated" && event.data.status === "closed";
+}
+
+/** How long a burst of events is gathered before reading /unread once. */
+export const unreadRefreshDelayMs = 500;
+
+/**
+ * Glues a burst of events into one read of GET /unread: `request()` after
+ * every such event, `load` runs once, unreadRefreshDelayMs after the last
+ * one. `cancel()` on sign-out.
+ */
+export function createUnreadRefresher(
+  load: () => unknown,
+  delayMs = unreadRefreshDelayMs,
+): { request(): void; cancel(): void } {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  return {
+    request() {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        void load();
+      }, delayMs);
+    },
+    cancel() {
+      if (timer) clearTimeout(timer);
+      timer = null;
+    },
+  };
+}
 export interface CheckpointStorage {
   get(): Promise<number>;
   set(value: number): Promise<void>;
@@ -49,6 +129,11 @@ export class RealtimeCoordinator {
       agentStatus?(value: Record<string, unknown>): void;
       messageStreaming?(value: Record<string, unknown>): void;
       ephemeralReset?(): void;
+      /**
+       * What the server announced in hello, after every (re)connect. Hide
+       * requests and reminders until it lists them.
+       */
+      features?(value: readonly string[]): void;
       passwordChangeRequired?(): void;
       sessionExpired?(): void;
     },
@@ -56,6 +141,13 @@ export class RealtimeCoordinator {
   start(): void {
     this.stopped = false;
     void this.connect(false);
+  }
+  /** The features of the current connection; empty before hello. */
+  serverFeatures(): readonly string[] {
+    return [...this.features];
+  }
+  hasFeature(name: string): boolean {
+    return this.features.has(name);
   }
   stop(): void {
     this.stopped = true;
@@ -185,6 +277,7 @@ export class RealtimeCoordinator {
       this.features = new Set(
         Array.isArray(frame.features) ? frame.features.map(String) : [],
       );
+      this.callbacks.features?.([...this.features]);
       if (this.presenceState) {
         this.send({ op: "presence", state: this.presenceState });
         this.keepPresence();

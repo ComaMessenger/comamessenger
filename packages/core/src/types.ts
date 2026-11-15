@@ -53,7 +53,8 @@ export type Reaction = components["schemas"]["Reaction"];
 export type MessageReceipt = components["schemas"]["MessageReceipt"];
 export type MessagePin = components["schemas"]["MessagePin"];
 export type ChatSharedCounts = components["schemas"]["ChatSharedCounts"];
-export type ChatSharedAttachment = components["schemas"]["ChatSharedAttachment"];
+export type ChatSharedAttachment =
+  components["schemas"]["ChatSharedAttachment"];
 export type ChatSharedAttachmentPage =
   components["schemas"]["ChatSharedAttachmentPage"];
 export type ChatSharedLink = components["schemas"]["ChatSharedLink"];
@@ -279,3 +280,50 @@ export type RealtimeState =
   | "resync_required"
   | "password_change_required"
   | "session_expired";
+
+// Requests («Запрос») and personal reminders («Напомнить мне»), phase 6.4.
+export type MessageRequest = components["schemas"]["MessageRequest"];
+export type MessageRequestViewer =
+  components["schemas"]["MessageRequestViewer"];
+export type MessageRequestViewerAnswer =
+  components["schemas"]["MessageRequestViewerAnswer"];
+export type RequestState = components["schemas"]["RequestState"];
+export type RequestAnswerPreset = components["schemas"]["RequestAnswerPreset"];
+export type RequestAnswerSpec = components["schemas"]["RequestAnswerSpec"];
+export type RequestAudience = components["schemas"]["RequestAudience"];
+export type RequestAudienceKind = components["schemas"]["RequestAudienceKind"];
+export type RequestAudienceInput =
+  components["schemas"]["RequestAudienceInput"];
+export type CreateRequestRequest =
+  components["schemas"]["CreateRequestRequest"];
+export type AnswerRequestRequest =
+  components["schemas"]["AnswerRequestRequest"];
+export type RequestAnswer = components["schemas"]["RequestAnswer"];
+export type RequestAnswerCounts = components["schemas"]["RequestAnswerCounts"];
+export type RequestAnswerPage = components["schemas"]["RequestAnswerPage"];
+export type RequestRemindResult = components["schemas"]["RequestRemindResult"];
+export type RequestInboxItem = components["schemas"]["RequestInboxItem"];
+export type RequestInboxPage = components["schemas"]["RequestInboxPage"];
+export type SetReminderRequest = components["schemas"]["SetReminderRequest"];
+export type Reminder = components["schemas"]["Reminder"];
+export type ReminderMessage = components["schemas"]["ReminderMessage"];
+export type ReminderPage = components["schemas"]["ReminderPage"];
+export type ReminderIdEntry = components["schemas"]["ReminderIdEntry"];
+export type ChatUnread = components["schemas"]["ChatUnread"];
+/** data of request.* realtime events: counts and versions, never text. */
+export type RequestAssignedEvent =
+  components["schemas"]["RealtimeRequestAssignedEventV1"];
+export type RequestUpdatedEvent =
+  components["schemas"]["RealtimeRequestUpdatedEventV1"];
+export type RequestTallyUpdatedEvent =
+  components["schemas"]["RealtimeRequestTallyUpdatedEventV1"];
+export type RequestAnswerUpdatedEvent =
+  components["schemas"]["RealtimeRequestAnswerUpdatedEventV1"];
+export type RequestRemindedEvent =
+  components["schemas"]["RealtimeRequestRemindedEventV1"];
+export type RequestAutoRemindedEvent =
+  components["schemas"]["RealtimeRequestAutoRemindedEventV1"];
+/** data of reminder.created/updated/deleted: no note, no text. */
+export type ReminderEvent = components["schemas"]["RealtimeReminderEventV1"];
+export type ReminderFiredEvent =
+  components["schemas"]["RealtimeReminderFiredEventV1"];
