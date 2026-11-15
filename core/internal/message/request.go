@@ -3,6 +3,7 @@ package message
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -47,10 +48,21 @@ func (s *Service) CreateRequest(ctx context.Context, user identity.User, chatID 
 	if s.requests == nil {
 		return Message{}, false, request.ErrUnavailable
 	}
-	plan, err := request.Normalize(request.CreateSpec{
+	spec := request.CreateSpec{
 		Audience: input.Audience, Answer: input.Answer, AllowComment: input.AllowComment,
 		DueAt: input.DueAt, AutoRemind: input.AutoRemind,
-	}, s.requests.Now())
+	}
+	plan, err := request.Normalize(spec, s.requests.Now())
+	if errors.Is(err, request.ErrInvalid) {
+		// A replay that arrives after its times went stale is checked
+		// against the moment it was first accepted; createTx then returns
+		// the original message, or a conflict if the content differs.
+		var createdAt time.Time
+		if lookupErr := s.pool.QueryRow(ctx, `SELECT created_at FROM messages WHERE actor_id = $1 AND client_msg_id = $2 AND type = 'request'`,
+			user.ActorID, input.ClientMsgID).Scan(&createdAt); lookupErr == nil {
+			plan, err = request.Normalize(spec, createdAt)
+		}
+	}
 	if err != nil {
 		return Message{}, false, err
 	}
@@ -274,7 +286,7 @@ func (s *Service) RequestInbox(ctx context.Context, user identity.User, options 
 			WHERE other.org_id = c.org_id AND other.chat_id = c.id AND other.actor_id <> rr.actor_id
 			LIMIT 1
 		) peer ON c.kind = 'direct'
-		WHERE rr.org_id = $1 AND rr.actor_id = $2
+		WHERE rr.org_id = $1 AND rr.actor_id = $2 AND rr.request_open
 		  AND (rr.answered_at IS NOT NULL) = ($3 = 'answered')
 		  AND ($4::int IS NULL OR (`+rankExpr+`, `+keyExpr+`, m.id) > ($4::int, $5::bigint, $6::uuid))
 		ORDER BY `+rankExpr+`, `+keyExpr+`, m.id

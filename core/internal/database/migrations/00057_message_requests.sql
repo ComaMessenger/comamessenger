@@ -70,6 +70,9 @@ CREATE TABLE message_request_recipients (
     changed_at timestamptz,
     last_reminded_at timestamptz,
     reminded_count smallint NOT NULL DEFAULT 0 CHECK (reminded_count >= 0),
+    -- Copy of the request's status (false once closed), so the «Ждут вас»
+    -- indexes keep only open requests and do not grow with history.
+    request_open boolean NOT NULL DEFAULT true,
     version integer NOT NULL DEFAULT 1 CHECK (version > 0),
     PRIMARY KEY (message_id, actor_id),
     CHECK ((option_index IS NULL) = (answered_at IS NULL)),
@@ -77,16 +80,25 @@ CREATE TABLE message_request_recipients (
     FOREIGN KEY (org_id, message_id) REFERENCES message_requests(org_id, message_id) ON DELETE CASCADE,
     FOREIGN KEY (org_id, actor_id) REFERENCES actors(org_id, id) ON DELETE CASCADE
 );
--- «Ждут вас»: my requests without an answer, then answered ones.
+-- «Ждут вас»: my open requests without an answer, then answered ones.
 CREATE INDEX message_request_recipients_inbox_idx
-    ON message_request_recipients(org_id, actor_id, (answered_at IS NOT NULL), message_id DESC);
+    ON message_request_recipients(org_id, actor_id, (answered_at IS NOT NULL), message_id DESC) WHERE request_open;
 CREATE INDEX message_request_recipients_chat_idx
-    ON message_request_recipients(org_id, actor_id, chat_id) WHERE answered_at IS NULL;
--- The daily limit of request reminders one person gets.
-CREATE INDEX message_request_recipients_reminded_idx
-    ON message_request_recipients(org_id, actor_id, last_reminded_at) WHERE last_reminded_at IS NOT NULL;
+    ON message_request_recipients(org_id, actor_id, chat_id) WHERE answered_at IS NULL AND request_open;
+
+-- Every request reminder a person got, for the limit of 10 a day from all
+-- requests. Entries older than a day are removed when the person is
+-- reminded again; nothing here names the request.
+CREATE TABLE message_request_reminder_log (
+    org_id uuid NOT NULL,
+    actor_id uuid NOT NULL,
+    reminded_at timestamptz NOT NULL,
+    FOREIGN KEY (org_id, actor_id) REFERENCES actors(org_id, id) ON DELETE CASCADE
+);
+CREATE INDEX message_request_reminder_log_actor_idx ON message_request_reminder_log(org_id, actor_id, reminded_at);
 
 -- +goose Down
+DROP TABLE IF EXISTS message_request_reminder_log;
 DROP TABLE IF EXISTS message_request_recipients;
 DROP TABLE IF EXISTS message_requests;
 UPDATE messages SET type = 'text' WHERE type = 'request';

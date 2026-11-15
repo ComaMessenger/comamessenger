@@ -182,7 +182,7 @@ func (w *world) mustCreate(t *testing.T, s spec) message.Message {
 }
 
 func (w *world) answer(user identity.User, messageID string, option int, comment *string) (request.State, error) {
-	return w.requests.Answer(context.Background(), user, messageID, request.AnswerInput{Option: option, Comment: comment})
+	return w.requests.Answer(context.Background(), user, messageID, request.AnswerInput{Option: &option, Comment: comment})
 }
 
 func (w *world) seq(t *testing.T) int64 {
@@ -327,6 +327,28 @@ func TestCreateRequest(t *testing.T) {
 		}
 	})
 
+	t.Run("a replay after the due date went stale returns the original", func(t *testing.T) {
+		due := w.clock.Now().Add(15 * time.Minute)
+		input := message.CreateRequestInput{
+			ClientMsgID: uuid.NewString(), Body: "Скоро?", Audience: request.AudienceInput{Kind: "chat"},
+			Answer: request.AnswerSpec{Preset: "ack"}, DueAt: &due,
+		}
+		first, _, err := w.messages.CreateRequest(ctx, w.author, w.chatID, input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w.clock.Set(w.clock.Now().Add(20 * time.Minute))
+		defer w.clock.Set(time.Now().UTC())
+		again, created, err := w.messages.CreateRequest(ctx, w.author, w.chatID, input)
+		if err != nil || created || again.ID != first.ID {
+			t.Fatalf("stale replay = %+v, %v, %v", again.ID, created, err)
+		}
+		input.ClientMsgID = uuid.NewString()
+		if _, _, err := w.messages.CreateRequest(ctx, w.author, w.chatID, input); !errors.Is(err, request.ErrInvalid) {
+			t.Fatalf("new request with a past due err = %v", err)
+		}
+	})
+
 	t.Run("agents and non-members cannot ask", func(t *testing.T) {
 		agent := identity.User{ActorID: w.agentID, OrgID: w.orgID, OrgRole: "member", Status: "active"}
 		if _, err := w.create(t, agent, w.chatID, spec{}); !errors.Is(err, message.ErrForbidden) {
@@ -359,6 +381,13 @@ func TestAnswers(t *testing.T) {
 		if err != nil || changed.Viewer.Answer.Option != 1 || changed.Viewer.Answer.Comment != "буду" || changed.Request.AnsweredCount != 1 {
 			t.Fatalf("changed = %+v, %v", changed, err)
 		}
+		// A changed answer is not visible to the chat: no shared version bump.
+		if changed.Request.Version != state.Request.Version {
+			t.Fatalf("shared version moved on a change: %d → %d", state.Request.Version, changed.Request.Version)
+		}
+		if _, err := w.requests.Answer(ctx, w.alice, req.ID, request.AnswerInput{Comment: ptr("x")}); !errors.Is(err, request.ErrInvalid) {
+			t.Fatalf("answer without option err = %v", err)
+		}
 		before := w.seq(t)
 		if _, err := w.answer(w.alice, req.ID, 1, ptr("буду")); err != nil {
 			t.Fatal(err)
@@ -366,7 +395,7 @@ func TestAnswers(t *testing.T) {
 		if w.seq(t) != before {
 			t.Fatal("repeating the answer wrote events")
 		}
-		if _, err := w.requests.Answer(ctx, w.alice, req.ID, request.AnswerInput{Option: 0, ExpectedVersion: ptr(1)}); !errors.Is(err, request.ErrVersionConflict) {
+		if _, err := w.requests.Answer(ctx, w.alice, req.ID, request.AnswerInput{Option: ptr(0), ExpectedVersion: ptr(1)}); !errors.Is(err, request.ErrVersionConflict) {
 			t.Fatalf("stale version err = %v", err)
 		}
 	})
@@ -533,6 +562,21 @@ func TestAnswersStayPrivate(t *testing.T) {
 		}
 	})
 
+	t.Run("an agent, even a chat admin, gets no view of answers", func(t *testing.T) {
+		if _, err := w.pool.Exec(ctx, `UPDATE chat_members SET role='admin' WHERE chat_id=$1 AND actor_id=$2`, w.chatID, w.agentID); err != nil {
+			t.Fatal(err)
+		}
+		agent := identity.User{ActorID: w.agentID, OrgID: w.orgID, OrgRole: "member", Status: "active"}
+		page, err := w.messages.List(ctx, agent, w.chatID, message.ListOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, _ := json.Marshal(page)
+		if strings.Contains(string(raw), "request_viewer") || strings.Contains(string(raw), secret) {
+			t.Fatalf("agent feed = %s", raw)
+		}
+	})
+
 	t.Run("answers: author and current chat admins only", func(t *testing.T) {
 		for _, user := range []identity.User{w.author, w.admin, w.owner} {
 			page, err := w.requests.Answers(ctx, user, req.ID, request.AnswerListOptions{})
@@ -662,8 +706,10 @@ func TestDenominatorAndInbox(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if n := w.count(t, `SELECT count(*) FROM events WHERE type='request.updated' AND subject_id=$1 AND seq>$2`, first.ID, before); n != 1 {
-		t.Fatalf("request.updated on leave = %d, want 1 (bob only)", n)
+	// No chat-wide event on leaving: it would tell the chat that bob was
+	// asked and had not answered. The count is recomputed on reading.
+	if n := w.count(t, `SELECT count(*) FROM events WHERE type LIKE 'request.%' AND subject_id=$1 AND seq>$2`, first.ID, before); n != 0 {
+		t.Fatalf("request events on leave = %d, want 0", n)
 	}
 	state, err := w.requests.Get(ctx, w.carol, first.ID)
 	if err != nil || state.Request.Audience.Count != 2 || state.Request.AnsweredCount != 1 || state.Request.WaitingCount != 1 {
@@ -823,11 +869,20 @@ func TestManualRemindAndDailyLimit(t *testing.T) {
 		t.Fatalf("sixth remind err = %v", err)
 	}
 
-	// Ten reminders a day per person from all requests; the rest are
-	// counted but not sent.
-	w.clock.Set(time.Now().UTC().Add(48 * time.Hour))
+	// Ten reminders a day per person from all requests, every reminder
+	// counted; the rest are counted in reminded but not sent.
+	start := time.Now().UTC().Add(48 * time.Hour)
+	w.clock.Set(start)
 	sent := 0
-	for range 12 {
+	repeated := w.mustCreate(t, spec{audience: "people", people: []string{w.bob.ActorID}})
+	for range 5 {
+		if _, err := w.requests.Remind(ctx, w.author, repeated.ID); err != nil {
+			t.Fatal(err)
+		}
+		w.clock.Set(w.clock.Now().Add(2 * time.Hour))
+	}
+	sent += w.count(t, `SELECT count(*) FROM events WHERE type='request.reminded' AND subject_id=$1`, repeated.ID)
+	for range 7 {
 		other := w.mustCreate(t, spec{audience: "people", people: []string{w.bob.ActorID}})
 		result, err := w.requests.Remind(ctx, w.author, other.ID)
 		if err != nil || result.Reminded != 1 {
@@ -837,6 +892,15 @@ func TestManualRemindAndDailyLimit(t *testing.T) {
 	}
 	if sent != 10 {
 		t.Fatalf("sent %d reminders to bob, want 10", sent)
+	}
+	// A day after the first ones, the window has room again.
+	w.clock.Set(start.Add(25 * time.Hour))
+	later := w.mustCreate(t, spec{audience: "people", people: []string{w.bob.ActorID}})
+	if _, err := w.requests.Remind(ctx, w.author, later.ID); err != nil {
+		t.Fatal(err)
+	}
+	if n := w.count(t, `SELECT count(*) FROM events WHERE type='request.reminded' AND subject_id=$1`, later.ID); n != 1 {
+		t.Fatalf("reminder after the window = %d", n)
 	}
 }
 
@@ -943,7 +1007,7 @@ func TestConcurrentChangesUseVersions(t *testing.T) {
 		wait.Add(1)
 		go func() {
 			defer wait.Done()
-			_, results[index] = w.requests.Answer(ctx, w.alice, req.ID, request.AnswerInput{Option: option, ExpectedVersion: &version})
+			_, results[index] = w.requests.Answer(ctx, w.alice, req.ID, request.AnswerInput{Option: &option, ExpectedVersion: &version})
 		}()
 	}
 	wait.Wait()

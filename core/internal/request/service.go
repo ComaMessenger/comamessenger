@@ -197,6 +197,9 @@ func OnMessageDeletedTx(ctx context.Context, tx pgx.Tx, service *Service, user i
 		WHERE message_id=$1 RETURNING version`, messageID, user.ActorID).Scan(&current.Version); err != nil {
 		return fmt.Errorf("close request of deleted message: %w", err)
 	}
+	if err := closeRecipientsTx(ctx, tx, messageID); err != nil {
+		return err
+	}
 	if service != nil {
 		if err := service.cancelJobs(ctx, tx, current); err != nil {
 			return err
@@ -219,38 +222,6 @@ func (s *Service) cancelJobs(ctx context.Context, tx pgx.Tx, r lockedRequest) er
 		}
 	}
 	return nil
-}
-
-// OnMemberLeftTx tells the chat that the «N из M» of its open requests
-// changed when actorID left or was removed: a recipient who has not answered
-// drops out of the denominator. The caller holds the organization lock.
-func OnMemberLeftTx(ctx context.Context, tx pgx.Tx, orgID, chatID, actorID string) (int64, error) {
-	rows, err := tx.Query(ctx, `
-		SELECT r.message_id FROM message_requests r
-		JOIN message_request_recipients rr ON rr.message_id = r.message_id AND rr.actor_id = $3
-		WHERE r.org_id = $1 AND r.chat_id = $2 AND r.status = 'open' AND rr.answered_at IS NULL
-		ORDER BY r.message_id`, orgID, chatID, actorID)
-	if err != nil {
-		return 0, fmt.Errorf("find requests of leaving member: %w", err)
-	}
-	messageIDs, err := pgx.CollectRows(rows, pgx.RowTo[string])
-	if err != nil {
-		return 0, fmt.Errorf("scan requests of leaving member: %w", err)
-	}
-	var seq int64
-	for _, messageID := range messageIDs {
-		current, err := lockRequest(ctx, tx, orgID, messageID)
-		if err != nil {
-			return 0, err
-		}
-		if err := bumpVersion(ctx, tx, &current); err != nil {
-			return 0, err
-		}
-		if seq, err = emitUpdated(ctx, tx, current); err != nil {
-			return 0, err
-		}
-	}
-	return seq, nil
 }
 
 // lockedRequest is a request row under FOR UPDATE with its message and chat.
@@ -301,9 +272,11 @@ func lockRequest(ctx context.Context, tx pgx.Tx, orgID, messageID string) (locke
 	return r, nil
 }
 
-func bumpVersion(ctx context.Context, tx pgx.Tx, r *lockedRequest) error {
-	if err := tx.QueryRow(ctx, `UPDATE message_requests SET version=version+1 WHERE message_id=$1 RETURNING version`, r.MessageID).Scan(&r.Version); err != nil {
-		return fmt.Errorf("bump request version: %w", err)
+// closeRecipientsTx takes the recipients of a closed request out of the
+// «Ждут вас» indexes.
+func closeRecipientsTx(ctx context.Context, tx pgx.Tx, messageID string) error {
+	if _, err := tx.Exec(ctx, `UPDATE message_request_recipients SET request_open = false WHERE message_id = $1 AND request_open`, messageID); err != nil {
+		return fmt.Errorf("close request recipients: %w", err)
 	}
 	return nil
 }

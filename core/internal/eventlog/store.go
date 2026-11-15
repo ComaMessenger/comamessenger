@@ -28,11 +28,12 @@ type Frame struct {
 }
 
 // messageContentTypes are the chat events about one message (subject_id):
-// the message itself, its reactions and pins. An agent that only writes to
+// the message itself, its reactions and pins, and the counters of a request
+// (request.updated; other request events go to people only). An agent that only writes to
 // the chat receives them for its own messages only — the rule of message.Get
 // and message.ListReactions. Chat, member, thread-follow, read-mark and draft
 // events carry no message content and stay as they are.
-const messageContentTypes = `('message.created', 'message.updated', 'message.deleted', 'reaction.added', 'reaction.removed', 'message.pinned', 'message.unpinned')`
+const messageContentTypes = `('message.created', 'message.updated', 'message.deleted', 'reaction.added', 'reaction.removed', 'message.pinned', 'message.unpinned', 'request.updated')`
 
 type Bounds struct {
 	CurrentSeq     int64

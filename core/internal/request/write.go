@@ -21,7 +21,9 @@ import (
 
 // AnswerInput sets or changes the person's answer.
 type AnswerInput struct {
-	Option int `json:"option"`
+	// Option is required: nil gets request_invalid, so an update of the
+	// comment alone never overwrites the choice.
+	Option *int `json:"option"`
 	// Comment nil keeps the current comment; "" removes it.
 	Comment *string `json:"comment"`
 	// ExpectedVersion is the answer version the change is based on.
@@ -56,7 +58,11 @@ func (s *Service) Answer(ctx context.Context, user identity.User, messageID stri
 	if err := validUUID("message_id", messageID); err != nil {
 		return State{}, err
 	}
-	if input.Option < 0 || input.Option > 3 {
+	if input.Option == nil {
+		return State{}, invalid("option", "option is required")
+	}
+	option := *input.Option
+	if option < 0 || option > 3 {
 		return State{}, invalid("option", "option must be between 0 and 3")
 	}
 	if input.Comment != nil && (utf8.RuneCountInString(*input.Comment) > MaxCommentRunes || !utf8.ValidString(*input.Comment)) {
@@ -110,7 +116,7 @@ func (s *Service) Answer(ctx context.Context, user identity.User, messageID stri
 		return State{}, ErrForbidden
 	case current.Status != "open":
 		return State{}, ErrClosed
-	case input.Option >= current.OptionCount:
+	case option >= current.OptionCount:
 		return State{}, invalid("option", "the request has no such option")
 	case input.Comment != nil && *input.Comment != "" && !current.AllowComment:
 		return State{}, invalid("comment", "the request does not take comments")
@@ -121,11 +127,11 @@ func (s *Service) Answer(ctx context.Context, user identity.User, messageID stri
 	if input.Comment != nil {
 		comment = *input.Comment
 	}
+	if input.ExpectedVersion != nil && *input.ExpectedVersion != recipient.version {
+		return State{}, ErrVersionConflict
+	}
 	if !first {
-		if input.ExpectedVersion != nil && *input.ExpectedVersion != recipient.version {
-			return State{}, ErrVersionConflict
-		}
-		if int(*recipient.option) == input.Option && comment == recipient.comment {
+		if int(*recipient.option) == option && comment == recipient.comment {
 			state, err := s.stateTx(ctx, tx, user, messageID)
 			if err != nil {
 				return State{}, err
@@ -146,9 +152,12 @@ func (s *Service) Answer(ctx context.Context, user identity.User, messageID stri
 			answered_at = COALESCE(answered_at, $5), answered_late = $6,
 			changed_at = CASE WHEN answered_at IS NULL THEN NULL ELSE $5 END, version = version + 1
 		WHERE message_id = $1 AND actor_id = $2 RETURNING version`,
-		messageID, user.ActorID, input.Option, comment, now, late).Scan(&version); err != nil {
+		messageID, user.ActorID, option, comment, now, late).Scan(&version); err != nil {
 		return State{}, fmt.Errorf("record request answer: %w", err)
 	}
+	// Only a first answer changes what everyone sees: the count and the
+	// shared version. A changed answer moves the author's tally alone, so
+	// the chat does not learn that somebody changed their mind.
 	countChanged := 0
 	if first {
 		countChanged = 1
@@ -160,7 +169,7 @@ func (s *Service) Answer(ctx context.Context, user identity.User, messageID stri
 		expireAt = now.Add(s.limits.ExpireIdle)
 	}
 	if err := tx.QueryRow(ctx, `
-		UPDATE message_requests SET answered_count = answered_count + $2, last_answer_at = $3, expire_at = $4, version = version + 1
+		UPDATE message_requests SET answered_count = answered_count + $2, last_answer_at = $3, expire_at = $4, version = version + $2
 		WHERE message_id = $1 RETURNING answered_count, version`, messageID, countChanged, now, expireAt).Scan(&current.AnsweredCount, &current.Version); err != nil {
 		return State{}, fmt.Errorf("update request after answer: %w", err)
 	}
@@ -193,7 +202,7 @@ func (s *Service) Answer(ctx context.Context, user identity.User, messageID stri
 	}
 	answerer := user.ActorID
 	if err := insertEvent(ctx, tx, user.OrgID, seq, "request.answer.updated", user.ActorID, current.ChatID, messageID, &answerer, answerEvent{
-		MessageID: messageID, ChatID: current.ChatID, Option: input.Option, HasComment: comment != "", Late: late, Version: version,
+		MessageID: messageID, ChatID: current.ChatID, Option: option, HasComment: comment != "", Late: late, Version: version,
 	}); err != nil {
 		return State{}, err
 	}
@@ -251,6 +260,9 @@ func (s *Service) Close(ctx context.Context, user identity.User, messageID strin
 				version=version+1, auto_remind_job_id=NULL, expire_job_id=NULL
 			WHERE message_id=$1 RETURNING version`, messageID, reason, user.ActorID, s.Now()).Scan(&current.Version); err != nil {
 			return State{}, fmt.Errorf("close request: %w", err)
+		}
+		if err := closeRecipientsTx(ctx, tx, messageID); err != nil {
+			return State{}, err
 		}
 		if err := s.cancelJobs(ctx, tx, current); err != nil {
 			return State{}, err
@@ -346,11 +358,12 @@ func (s *Service) Remind(ctx context.Context, user identity.User, messageID stri
 // Everyone above the limit is counted in reminded but gets nothing.
 func (s *Service) remindWaitingTx(ctx context.Context, tx pgx.Tx, current lockedRequest, kind string, now time.Time) (int, int64, error) {
 	rows, err := tx.Query(ctx, `
-		SELECT rr.actor_id,
-			(SELECT count(*) FROM message_request_recipients other
-			 WHERE other.org_id = rr.org_id AND other.actor_id = rr.actor_id
-			   AND other.last_reminded_at > $3::timestamptz - interval '24 hours') < $4
+		SELECT rr.actor_id, recent.count < $4
 		FROM message_request_recipients rr `+recipientInChat+`
+		CROSS JOIN LATERAL (
+			SELECT count(*) FROM message_request_reminder_log log
+			WHERE log.org_id = rr.org_id AND log.actor_id = rr.actor_id AND log.reminded_at > $3::timestamptz - interval '24 hours'
+		) recent
 		WHERE rr.org_id = $1 AND rr.message_id = $2 AND rr.answered_at IS NULL
 		ORDER BY rr.actor_id
 		FOR UPDATE OF rr`, current.OrgID, current.MessageID, now, s.limits.DailyRemindersPerPerson)
@@ -384,6 +397,17 @@ func (s *Service) remindWaitingTx(ctx context.Context, tx pgx.Tx, current locked
 			UPDATE message_request_recipients SET last_reminded_at = $3, reminded_count = reminded_count + 1
 			WHERE message_id = $1 AND actor_id = ANY($2::uuid[])`, current.MessageID, sent, now); err != nil {
 			return 0, 0, fmt.Errorf("record request reminders: %w", err)
+		}
+		// The daily limit counts every reminder a person got in the last 24
+		// hours, from all requests; older entries of these people go.
+		if _, err := tx.Exec(ctx, `
+			WITH expired AS (
+				DELETE FROM message_request_reminder_log
+				WHERE org_id = $1 AND actor_id = ANY($2::uuid[]) AND reminded_at <= $3::timestamptz - interval '24 hours'
+			)
+			INSERT INTO message_request_reminder_log (org_id, actor_id, reminded_at)
+			SELECT $1, recipient, $3 FROM unnest($2::uuid[]) AS recipient`, current.OrgID, sent, now); err != nil {
+			return 0, 0, fmt.Errorf("log request reminders: %w", err)
 		}
 	}
 	return len(targets), seq, nil
@@ -519,6 +543,9 @@ func (s *Service) Expire(ctx context.Context, messageID string, jobID int64) err
 			auto_remind_job_id=NULL, expire_job_id=NULL
 		WHERE message_id=$1 RETURNING version`, messageID, now).Scan(&current.Version); err != nil {
 		return fmt.Errorf("expire request: %w", err)
+	}
+	if err := closeRecipientsTx(ctx, tx, messageID); err != nil {
+		return err
 	}
 	if current.AutoRemindJobID != nil && s.jobs != nil {
 		if err := s.jobs.CancelTx(ctx, tx, *current.AutoRemindJobID); err != nil {

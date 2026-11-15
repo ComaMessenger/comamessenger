@@ -72,7 +72,8 @@ type viewerRow struct {
 // Viewers computes the reader's view of the requests among messageIDs:
 // two queries for the whole batch (the view and, for those who may see it,
 // the tally). Access is derived from the current membership and chat role
-// of user on every call; nothing about it is stored.
+// of user on every call; nothing about it is stored. Only active people get
+// a view: agents read requests as plain text (wave 1), even as chat admins.
 func Viewers(ctx context.Context, q querier, user identity.User, now time.Time, limits Limits, messageIDs []string) (map[string]*Viewer, error) {
 	result := make(map[string]*Viewer, len(messageIDs))
 	if len(messageIDs) == 0 {
@@ -82,7 +83,7 @@ func Viewers(ctx context.Context, q querier, user identity.User, now time.Time, 
 		SELECT r.message_id, r.author_id, r.status, r.due_at, r.last_manual_remind_at, r.answer_preset,
 			cardinality(r.custom_options), r.manual_remind_count,
 			m.deleted_at IS NOT NULL, c.archived_at IS NOT NULL,
-			cm.actor_id IS NOT NULL AND viewer.id IS NOT NULL, COALESCE(cm.role, ''),
+			cm.actor_id IS NOT NULL, COALESCE(cm.role, ''),
 			mine.actor_id IS NOT NULL, mine.option_index, mine.comment, mine.answered_at, COALESCE(mine.answered_late, false),
 			COALESCE(mine.version, 0),
 			CASE WHEN r.author_id = $3 THEN
@@ -93,7 +94,8 @@ func Viewers(ctx context.Context, q querier, user identity.User, now time.Time, 
 		JOIN messages m ON m.org_id = r.org_id AND m.id = r.message_id
 		JOIN chats c ON c.org_id = r.org_id AND c.id = r.chat_id
 		LEFT JOIN chat_members cm ON cm.org_id = r.org_id AND cm.chat_id = r.chat_id AND cm.actor_id = $3
-		LEFT JOIN actors viewer ON viewer.org_id = r.org_id AND viewer.id = $3 AND viewer.status = 'active' AND viewer.deleted_at IS NULL
+		JOIN actors viewer ON viewer.org_id = r.org_id AND viewer.id = $3 AND viewer.type = 'user'
+			AND viewer.status = 'active' AND viewer.deleted_at IS NULL
 		LEFT JOIN message_request_recipients mine ON mine.message_id = r.message_id AND mine.actor_id = $3
 		WHERE r.org_id = $1 AND r.message_id = ANY($2::uuid[])`, user.OrgID, messageIDs, user.ActorID)
 	if err != nil {
@@ -517,7 +519,7 @@ func WaitingByChat(ctx context.Context, q querier, user identity.User) (map[stri
 	rows, err := q.Query(ctx, `
 		SELECT rr.chat_id, count(*), min(r.due_at)
 		FROM message_request_recipients rr `+VisibleRecipientSQL+`
-		WHERE rr.org_id = $1 AND rr.actor_id = $2 AND rr.answered_at IS NULL
+		WHERE rr.org_id = $1 AND rr.actor_id = $2 AND rr.answered_at IS NULL AND rr.request_open
 		GROUP BY rr.chat_id`, user.OrgID, user.ActorID)
 	if err != nil {
 		return nil, fmt.Errorf("count waiting requests: %w", err)

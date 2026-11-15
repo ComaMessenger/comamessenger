@@ -15,7 +15,6 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/lastseen"
 	"github.com/comamessenger/comamessenger/core/internal/permission"
-	"github.com/comamessenger/comamessenger/core/internal/request"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -852,9 +851,6 @@ func (s *Service) RemoveMember(ctx context.Context, user identity.User, chatID, 
 		return ErrNotFound
 	}
 	if err := audit(ctx, tx, auditID, user, "chat.member.remove", "actor", actorID); err != nil {
-		return err
-	}
-	if _, err := request.OnMemberLeftTx(ctx, tx, user.OrgID, chatID, actorID); err != nil {
 		return err
 	}
 	seq, err := appendDurableEvent(ctx, tx, user, chatID, "member.removed", nil, map[string]any{"actor_id": actorID})
