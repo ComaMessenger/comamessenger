@@ -4,6 +4,9 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
+    # Parameters of statements never reach the server log: poll counters and
+    # other private values must not be recoverable from it (06.7, risks).
+    command: ["postgres", "-c", "log_parameter_max_length=0", "-c", "log_parameter_max_length_on_error=0"]
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-comamessenger}
       POSTGRES_USER: ${POSTGRES_USER:-comamessenger}
