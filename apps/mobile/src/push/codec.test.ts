@@ -124,4 +124,41 @@ describe("notification codec", () => {
     expect(content).toMatchObject({ kind: "task", url, messageID: message });
     expect(notificationRoute({ url })).toBe(url);
   });
+
+  it("opens the card of a person: «Вы замещаете …» (phase 6.7)", () => {
+    const person = "0192f0c4-5555-7000-8000-000000000005";
+    const payload = {
+      v: 1,
+      title: "Вы замещаете: Анна Иванова",
+      body: "с 20 по 30 ноября",
+      url: `/people/${person}`,
+      event_seq: 7,
+    };
+    expect(parseNotification(JSON.stringify(payload))?.url).toBe(
+      `/people/${person}`,
+    );
+    expect(notificationRoute({ url: `/people/${person}` })).toBe(
+      `/people/${person}`,
+    );
+    expect(notificationRoute({ url: "/people/anna" })).toBeNull();
+    expect(notificationRoute({ url: `/people/${person}/edit` })).toBeNull();
+    expect(notificationRoute({ url: "/people" })).toBeNull();
+  });
+
+  it("opens a poll message from its push (phase 6.7)", () => {
+    const message = "0192f0c4-6666-7000-8000-000000000006";
+    const payload = {
+      v: 1,
+      title: "Напоминание: опрос",
+      body: "Марина Соколова · Инструкторы · до пт, 18:00",
+      url: `/chat/${chat}?message=${message}`,
+      chat_id: chat,
+      kind: "poll",
+      event_seq: 8,
+    };
+    const parsed = parseNotification(JSON.stringify(payload));
+    expect(parsed?.url).toBe(`/chat/${chat}?message=${message}`);
+    // No buttons for a poll: only reminders and requests have a kind.
+    expect(parsed?.kind).toBeUndefined();
+  });
 });

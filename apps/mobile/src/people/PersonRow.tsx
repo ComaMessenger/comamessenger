@@ -8,12 +8,21 @@ import {
 } from "react-native";
 import { Check, Search } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
-import type { ActorSummary } from "@comamessenger/core";
+import {
+  activeAway,
+  avatarBadge,
+  awayLine,
+  currentAway,
+  type ActorSummary,
+} from "@comamessenger/core";
 import { radius } from "@comamessenger/tokens";
 import { useTheme } from "@/lib/theme";
 import { ChatAvatar } from "@/chats/ChatAvatar";
 import type { Presence } from "@/ui/Avatar";
 import { Text, fonts, maxTextScale } from "@/ui/Text";
+import { AwayBadge } from "@/ui/AwayBadge";
+import { useAwayNow, useAwayOverrides } from "@/status/useAway";
+import { calendarLocale } from "@/requests/locale";
 
 type PersonLike = Pick<
   ActorSummary,
@@ -24,7 +33,7 @@ type PersonLike = Pick<
   | "type"
   | "avatar_version"
   | "status_emoji"
->;
+> & { away?: ActorSummary["away"] };
 
 export function presenceLabelKey(presence: Presence | undefined) {
   return presence === "online"
@@ -82,18 +91,31 @@ export const PersonRow = memo(function PersonRow({
   testID?: string;
   hint?: string;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const theme = useTheme();
   const agent = person.type === "agent";
   const checkable = selected !== undefined;
-  const line = meta ?? (person.title || `@${person.handle}`);
+  // «Отсутствую» (phase 6.7): the kind on the avatar instead of the green
+  // dot, «инструктор · в отпуске до 30 ноября» in the warning colour.
+  const overrides = useAwayOverrides();
+  const known = agent
+    ? null
+    : currentAway(person.actor_id, person.away, overrides);
+  const now = useAwayNow([known]);
+  const away = activeAway(known, now);
+  const base = meta ?? (person.title || `@${person.handle}`);
+  const line = away
+    ? [base, awayLine(away, now, calendarLocale(i18n.language))]
+        .filter(Boolean)
+        .join(" · ")
+    : base;
   const state = agent ? undefined : presence;
   const label = [
     person.display_name,
     agent ? t("agent") : null,
     tagsLabel,
     line,
-    state === "online" ? t("online") : null,
+    state === "online" && !away ? t("online") : null,
   ]
     .filter(Boolean)
     .join(", ");
@@ -114,17 +136,19 @@ export const PersonRow = memo(function PersonRow({
         pressed && { backgroundColor: theme.surfaceSelected },
       ]}
     >
-      <ChatAvatar
-        name={person.display_name}
-        seed={person.actor_id}
-        actorID={person.actor_id}
-        avatarVersion={person.avatar_version}
-        size={44}
-        shape="circle"
-        agent={agent}
-        online={state === "online"}
-        ringColor={theme.surface}
-      />
+      <AwayBadge badge={avatarBadge(state, away, now)} size={44}>
+        <ChatAvatar
+          name={person.display_name}
+          seed={person.actor_id}
+          actorID={person.actor_id}
+          avatarVersion={person.avatar_version}
+          size={44}
+          shape="circle"
+          agent={agent}
+          online={state === "online" && !away}
+          ringColor={theme.surface}
+        />
+      </AwayBadge>
       <View style={styles.body}>
         <View style={styles.line}>
           <Text
@@ -137,13 +161,18 @@ export const PersonRow = memo(function PersonRow({
           </Text>
           {agent ? <AgentTag /> : null}
           {tags}
-          {person.status_emoji ? (
+          {person.status_emoji && !away ? (
             <Text size={14} accessibilityElementsHidden>
               {person.status_emoji}
             </Text>
           ) : null}
         </View>
-        <Text tone="muted" size={13.5} numberOfLines={1}>
+        <Text
+          tone="muted"
+          size={13.5}
+          numberOfLines={1}
+          style={away ? { color: theme.warning } : undefined}
+        >
           {line}
         </Text>
       </View>

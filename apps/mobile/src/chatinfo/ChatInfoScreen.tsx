@@ -33,6 +33,8 @@ import {
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import {
+  currentAway,
+  shownStatus,
   chatAvatarSource,
   chatRights,
   isChatMuted,
@@ -65,6 +67,7 @@ import { Notice } from "@/ui/Notice";
 import { ScreenHeader } from "@/ui/ScreenHeader";
 import { useSharedCounts } from "./SharedScreen";
 import { Text } from "@/ui/Text";
+import { useAwayNow, useAwayOverrides } from "@/status/useAway";
 import {
   chatKeys,
   useChatMembers,
@@ -234,6 +237,8 @@ export function ChatInfoScreen({ chatID }: { chatID: string }) {
     [i18n.language, members],
   );
   const direct = useOpenDirect((id) => router.push(`/chat/${id}`));
+  const awayOverrides = useAwayOverrides();
+  const awayNow = useAwayNow();
 
   if (!chat)
     return (
@@ -256,6 +261,17 @@ export function ChatInfoScreen({ chatID }: { chatID: string }) {
   const title = chatTitle(chat, t("directChat"));
   const peer = chat.kind === "direct" ? chat.direct_peer : null;
   const agentPeer = peer?.type === "agent";
+  // The away line while it is in effect (phase 6.7), else the custom status.
+  const peerStatus = peer
+    ? shownStatus(
+        {
+          ...peer,
+          away: currentAway(peer.actor_id, peer.away, awayOverrides),
+        },
+        awayNow,
+        i18n.language === "en" ? "en" : "ru",
+      )
+    : null;
   const muted = isChatMuted(chat);
   const isPinned = pinnedChatIDs.includes(chat.id);
   const channel = chat.kind === "channel";
@@ -536,9 +552,9 @@ export function ChatInfoScreen({ chatID }: { chatID: string }) {
               {kindLine}
             </Text>
           ) : null}
-          {peer && (peer.status_emoji || peer.status_text) ? (
-            <Text size={14} style={styles.center}>
-              {[peer.status_emoji, peer.status_text].filter(Boolean).join(" ")}
+          {peerStatus ? (
+            <Text testID="chat-info-status" size={14} style={styles.center}>
+              {[peerStatus.emoji, peerStatus.text].filter(Boolean).join(" ")}
             </Text>
           ) : null}
           {chat.topic ? (

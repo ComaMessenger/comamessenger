@@ -35,6 +35,8 @@ import { Avatar } from "@/ui/Avatar";
 import { Notice } from "@/ui/Notice";
 import { ScreenHeader } from "@/ui/ScreenHeader";
 import { TabChip } from "@/ui/TabChip";
+import { useAwayAvailable } from "@/status/useAway";
+import { AwayNote } from "@/status/AwayNote";
 import { Text } from "@/ui/Text";
 import { useClock, useNow } from "@/scheduled/clock";
 import { formatTime } from "@/scheduled/format";
@@ -143,6 +145,8 @@ export function RequestAnswersScreen({
     ]);
   }
 
+  // «Отсутствую» (phase 6.7 decision 6): an away recipient is marked.
+  const awayOn = useAwayAvailable();
   const memberOf = (actorID: string) =>
     members.find((member) => member.actor_id === actorID);
 
@@ -279,6 +283,9 @@ export function RequestAnswersScreen({
                   <Text weight="semibold" size={15} numberOfLines={1}>
                     {member?.display_name ?? t("participant")}
                   </Text>
+                  {member && awayOn ? (
+                    <AwayNote member={member} />
+                  ) : null}
                   <Text
                     size={13.5}
                     numberOfLines={3}

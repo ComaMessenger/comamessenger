@@ -44,12 +44,19 @@ import { Segmented } from "@/requests/parts";
 import { TaskRow } from "@/tasks/TaskRow";
 import { phoneInboxFeatures } from "./features";
 import { WaitingRow, useInbox } from "./WaitingList";
+import { WaitingPollRow } from "@/polls/WaitingPollRow";
 
 /** One list of «Ждут вас», page by page. */
-function useWaitingInbox(kind: "all" | "requests" | "tasks", enabled: boolean) {
+function useWaitingInbox(
+  kind: "all" | "requests" | "tasks" | "polls",
+  enabled: boolean,
+) {
   const { api, user } = useSignedIn();
   return useInfiniteQuery({
-    queryKey: taskKeys.waiting(user.id, kind),
+    queryKey:
+      kind === "polls"
+        ? [...taskKeys.all(user.id), "waiting", kind]
+        : taskKeys.waiting(user.id, kind),
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) => api.waitingInbox({ kind, cursor: pageParam }),
     getNextPageParam: (page) => page.next_cursor ?? undefined,
@@ -113,6 +120,8 @@ export function WaitingWithTasks({
   const features = useStore(store, (state) => state.features);
   const unread = useStore(store, (state) => state.unread);
   const viewers = useStore(store, (state) => state.requestViewers);
+  // A vote here or on another device: the poll leaves at once (wave 4).
+  const pollViewers = useStore(store, (state) => state.pollViewers);
   const messages = useStore(store, (state) => state.messages);
   const chats = useStore(store, (state) => state.chats);
   const [filter, setFilter] = useState<WaitingFilter>("all");
@@ -122,12 +131,16 @@ export function WaitingWithTasks({
     all: counts.waiting,
     requests: Math.max(0, unread.requests_waiting_total ?? 0),
     tasks: Math.max(0, unread.tasks_mine_open_total ?? 0),
-    polls: 0,
+    polls: Math.max(0, unread.polls_waiting_total ?? 0),
   };
   const tasksOnly = filter === "tasks";
   const assigned = mode === "assigned";
   const waiting = useWaitingInbox(
-    filter === "requests" ? "requests" : tasksOnly ? "tasks" : "all",
+    filter === "requests" || filter === "polls"
+      ? filter
+      : tasksOnly
+        ? "tasks"
+        : "all",
     !tasksOnly || assigned,
   );
   const answered = useInbox("answered", !tasksOnly);
@@ -181,10 +194,16 @@ export function WaitingWithTasks({
           return task ? [[item.message.id, task]] : [];
         }),
       ),
+      polls: Object.fromEntries(
+        pageItems
+          .filter((item) => item.kind === "poll")
+          .map((item) => [
+            item.message.id,
+            store.getState().pollEntry(item.message.id, item.chat_id),
+          ]),
+      ),
     });
-    const rows = filterWaitingRows(list.waiting, filter).filter(
-      (row) => row.kind !== "poll",
-    );
+    const rows = filterWaitingRows(list.waiting, filter);
     return [
       ...(rows.length ? [{ key: "waiting", title: null, data: rows }] : []),
       ...(list.answered.length
@@ -208,6 +227,8 @@ export function WaitingWithTasks({
     filter,
     fresh,
     pageItems,
+    pollViewers,
+    store,
     t,
     tasksOnly,
     user.id,
@@ -235,18 +256,16 @@ export function WaitingWithTasks({
         accessibilityLabel={t("importantFilters")}
         contentContainerStyle={styles.chips}
       >
-        {filters
-          .filter((id) => id !== "polls")
-          .map((id) => (
-            <TabChip
-              key={id}
-              testID={`waiting-filter-${id}`}
-              label={t(waitingFilterLabelKeys[id])}
-              count={chipCounts[id] > 0 ? chipCounts[id] : undefined}
-              selected={filter === id}
-              onPress={() => setFilter(id)}
-            />
-          ))}
+        {filters.map((id) => (
+          <TabChip
+            key={id}
+            testID={`waiting-filter-${id}`}
+            label={t(waitingFilterLabelKeys[id])}
+            count={chipCounts[id] > 0 ? chipCounts[id] : undefined}
+            selected={filter === id}
+            onPress={() => setFilter(id)}
+          />
+        ))}
       </ScrollView>
       {tasksOnly ? (
         <View style={styles.mode}>
@@ -297,6 +316,12 @@ export function WaitingWithTasks({
             item={row.item}
             testID={`waiting-task-${section.key}-${index}`}
             chatName={chatName(row.item.chat.id, row.item.chat.display_name)}
+            onNotice={onNotice}
+          />
+        ) : row.kind === "poll" ? (
+          <WaitingPollRow
+            item={row.item}
+            testID={`waiting-poll-${section.key}-${index}`}
             onNotice={onNotice}
           />
         ) : null
@@ -354,7 +379,9 @@ export function WaitingWithTasks({
                 ? assigned
                   ? t("taskMineEmptyHint")
                   : t("taskAuthoredEmptyHint")
-                : t("importantWaitingEmptyHintTasks")}
+                : filter === "polls"
+                  ? t("importantWaitingEmptyHintPolls")
+                  : t("importantWaitingEmptyHintTasks")}
             </Text>
           </View>
         )

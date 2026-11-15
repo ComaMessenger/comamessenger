@@ -27,6 +27,9 @@ import {
   matchCommands,
   mentionSuggestions,
   updateMentionText,
+  avatarBadge,
+  currentAway,
+  type AwayOverrides,
   type ChatCommand,
   type ChatMember,
   type OrgDepartment,
@@ -45,6 +48,7 @@ import { DepartmentIcon } from "@/org/parts";
 import { useOrg } from "@/org/useOrg";
 import { useSignedIn } from "@/session/SessionProvider";
 import { useChatActivity } from "./useChatActivity";
+import { AwayBadge } from "@/ui/AwayBadge";
 
 const lineHeight = 21;
 
@@ -102,6 +106,8 @@ export function Composer({
   onSendOptions,
   sendRef,
   voice,
+  memberNote,
+  awayOverrides,
 }: {
   body: string;
   onChangeBody(body: string): void;
@@ -126,6 +132,13 @@ export function Composer({
   sendRef?: RefObject<View | null>;
   /** Enables voice recording on the microphone while the field is empty. */
   voice?: VoiceTarget;
+  /**
+   * «в отпуске до 30 ноября» under a name in the @ menu (phase 6.7,
+   * prototype «Отсутствую», phone C); null when the person is here.
+   */
+  memberNote?(member: ChatMember): string | null;
+  /** Fresher away statuses, for the badge on the avatars of the @ menu. */
+  awayOverrides?: AwayOverrides;
 }) {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -331,42 +344,61 @@ export function Composer({
               {t("orgMentionPeople").toLocaleUpperCase()}
             </Text>
           )}
-          {suggestions.map((member) => (
-            <Pressable
-              key={member.actor_id}
-              accessibilityRole="button"
-              onPress={() => pick(member)}
-              style={({ pressed }) => [
-                styles.suggestion,
-                pressed && { backgroundColor: theme.surfaceSelected },
-              ]}
-            >
-              <Avatar
-                name={member.display_name}
-                seed={member.actor_id}
-                size={28}
-                agent={member.type === "agent"}
-                actorID={member.actor_id}
-                avatarVersion={member.avatar_version}
-              />
-              <Text
-                weight="medium"
-                size={15}
-                numberOfLines={1}
-                style={styles.grow}
+          {suggestions.map((member) => {
+            const note = memberNote?.(member) ?? null;
+            const away = note
+              ? currentAway(member.actor_id, member.away, awayOverrides ?? {})
+              : null;
+            return (
+              <Pressable
+                key={member.actor_id}
+                testID={`mention-person-${member.handle}`}
+                accessibilityRole="button"
+                accessibilityLabel={[member.display_name, note]
+                  .filter(Boolean)
+                  .join(", ")}
+                onPress={() => pick(member)}
+                style={({ pressed }) => [
+                  styles.suggestion,
+                  pressed && { backgroundColor: theme.surfaceSelected },
+                ]}
               >
-                {member.display_name}
-              </Text>
-              <Text
-                tone="subtle"
-                size={14}
-                numberOfLines={1}
-                style={styles.handle}
-              >
-                @{member.handle}
-              </Text>
-            </Pressable>
-          ))}
+                <AwayBadge badge={avatarBadge(null, away, new Date())} size={28}>
+                  <Avatar
+                    name={member.display_name}
+                    seed={member.actor_id}
+                    size={28}
+                    agent={member.type === "agent"}
+                    actorID={member.actor_id}
+                    avatarVersion={member.avatar_version}
+                  />
+                </AwayBadge>
+                <View style={styles.grow}>
+                  <Text weight="medium" size={15} numberOfLines={1}>
+                    {member.display_name}
+                  </Text>
+                  {note ? (
+                    <Text
+                      testID="mention-away-note"
+                      size={12.5}
+                      numberOfLines={1}
+                      style={{ color: theme.warning }}
+                    >
+                      {note}
+                    </Text>
+                  ) : null}
+                </View>
+                <Text
+                  tone="subtle"
+                  size={14}
+                  numberOfLines={1}
+                  style={styles.handle}
+                >
+                  @{member.handle}
+                </Text>
+              </Pressable>
+            );
+          })}
         </ScrollView>
       )}
       {context && (

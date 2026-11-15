@@ -1,0 +1,55 @@
+# «Опрос» of a colleague (phase 6.7): before the vote only «N из M
+# ответили», a tap votes at once and opens the results, «Отменить голос»
+# takes it back, a vote again; the anonymous poll warns that the vote is
+# final and keeps no «Отменить голос». Run after sign-in.yaml:
+#   node e2e/seed-polls.mjs && maestro test -e THEME=light e2e/poll-voter.yaml
+appId: com.comamessenger.app
+---
+- runFlow: open-app.yaml
+- tapOn: .*Опросы · зал.*
+- extendedWaitUntil:
+    visible:
+      id: conversation
+    timeout: 10000
+
+# 1. The ordinary poll: Олег voted, the results stay hidden before mine.
+- extendedWaitUntil:
+    visible: .*Какой день удобнее для выездного занятия\?.*
+    timeout: 10000
+- extendedWaitUntil:
+    visible: 1 из 4 ответили
+    timeout: 10000
+- assertNotVisible: 100%
+- assertVisible: .*Анонимно · голос нельзя изменить.*
+- takeScreenshot: ${THEME}-poll-before
+
+# 2. A tap on «Среда» votes: Олег and I — 100 %.
+- tapOn: Среда
+- extendedWaitUntil:
+    visible: 100%
+    timeout: 10000
+- assertVisible: 2 из 4 ответили
+- assertVisible:
+    id: poll-retract
+- takeScreenshot: ${THEME}-poll-voted
+
+# 3. «Отменить голос», then «Вторник».
+- tapOn:
+    id: poll-retract
+- extendedWaitUntil:
+    notVisible: 100%
+    timeout: 10000
+- assertVisible: 1 из 4 ответили
+- tapOn: Вторник
+- extendedWaitUntil:
+    visible: 50%
+    timeout: 10000
+- takeScreenshot: ${THEME}-poll-revoted
+
+# 4. The anonymous poll: the vote is final.
+- tapOn: Неудобно утро
+- extendedWaitUntil:
+    notVisible: .*Анонимно · голос нельзя изменить.*
+    timeout: 10000
+- assertVisible: 100%
+- takeScreenshot: ${THEME}-poll-anonymous

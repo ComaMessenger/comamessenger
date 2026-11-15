@@ -1,0 +1,178 @@
+# «Опрос» by its author (phase 6.7): «+» → «Опрос», the sheet (question,
+# options moved by the handle, a due date), the card of the author with
+# results from the start, two colleagues vote through the API, «Кто
+# голосовал», «Напомнить не ответившим», «Изменить вопрос» and «Закрыть»
+# with the result. Run after sign-in.yaml:
+#   node e2e/seed-polls.mjs && maestro test -e THEME=light e2e/poll.yaml
+# THEME (light or dark) names the screenshots; no default here, a flow
+# default would override -e.
+appId: com.comamessenger.app
+---
+- runScript: scripts/login.js
+- runFlow: open-app.yaml
+- tapOn: .*Опросы · планёрка.*
+- extendedWaitUntil:
+    visible:
+      id: conversation
+    timeout: 10000
+- evalScript: ${output.tag = String(Date.now()).slice(-6)}
+
+# 1. «+» has «Опрос» between «Запрос» and «Задача».
+- tapOn:
+    id: composer-attach
+- extendedWaitUntil:
+    visible:
+      id: composer-action-poll
+    timeout: 5000
+- takeScreenshot: ${THEME}-poll-plus
+- tapOn:
+    id: composer-action-poll
+- extendedWaitUntil:
+    visible:
+      id: poll-sheet
+    timeout: 5000
+
+# 2. The sheet. A form left by an earlier run comes back: start it clean.
+- tapOn:
+    id: poll-question-input
+- eraseText: 300
+- inputText: Во сколько удобнее планёрка? ${output.tag}
+- tapOn:
+    id: poll-option-input-0
+- eraseText: 100
+- inputText: "8:30"
+- tapOn:
+    id: poll-option-input-1
+- eraseText: 100
+- inputText: "13:00"
+- tapOn:
+    id: poll-option-add
+- tapOn:
+    id: poll-option-input-2
+- eraseText: 100
+- inputText: "17:00"
+- tapOn: ВАРИАНТЫ
+- takeScreenshot: ${THEME}-poll-sheet
+# The handle moves «17:00» to the top.
+- swipe:
+    from:
+      id: poll-option-handle-2
+    direction: UP
+    duration: 1200
+- waitForAnimationToEnd
+- assertVisible:
+    id: poll-option-input-0
+    text: "17:00"
+- takeScreenshot: ${THEME}-poll-sheet-moved
+- scrollUntilVisible:
+    element:
+      id: poll-due-tomorrow
+    direction: DOWN
+- tapOn:
+    id: poll-due-tomorrow
+- scrollUntilVisible:
+    element:
+      id: poll-send
+    direction: DOWN
+    visibilityPercentage: 100
+- takeScreenshot: ${THEME}-poll-sheet-due
+- tapOn:
+    id: poll-send
+- extendedWaitUntil:
+    notVisible:
+      id: poll-sheet
+    timeout: 10000
+
+# 3. The author sees results at once: nobody voted yet.
+- extendedWaitUntil:
+    visible: .*Во сколько удобнее планёрка\? ${output.tag}.*
+    timeout: 10000
+- extendedWaitUntil:
+    visible: 0 из 4 ответили
+    timeout: 10000
+- assertVisible:
+    id: poll-remind
+- takeScreenshot: ${THEME}-poll-author
+
+# 4. Анна and Олег vote; the card follows by itself.
+- runScript: scripts/vote-poll.js
+- extendedWaitUntil:
+    visible: 2 из 4 ответили
+    timeout: 15000
+- extendedWaitUntil:
+    visible: 50%
+    timeout: 10000
+- takeScreenshot: ${THEME}-poll-author-votes
+
+# 5. «Кто голосовал»: by option and who has not voted.
+- tapOn:
+    id: poll-who-voted
+- extendedWaitUntil:
+    visible:
+      id: poll-voters
+    timeout: 5000
+- extendedWaitUntil:
+    visible: Анна Иванова
+    timeout: 10000
+- assertVisible: Олег Чернов
+- scrollUntilVisible:
+    element: "(?i).*не ответили · 2.*"
+    direction: DOWN
+- takeScreenshot: ${THEME}-poll-voters
+- tapOn:
+    id: poll-voters-action
+- extendedWaitUntil:
+    notVisible:
+      id: poll-voters
+    timeout: 5000
+
+# 6. «Напомнить не ответившим»: Игорь (the author is not reminded).
+- tapOn:
+    id: poll-remind
+- extendedWaitUntil:
+    visible: Напомнили 1 человеку
+    timeout: 10000
+- extendedWaitUntil:
+    visible:
+      id: poll-remind-cooldown
+    timeout: 5000
+
+# 7. «Изменить вопрос»: only the question, the card says «изм.».
+- runFlow:
+    file: message-menu.yaml
+    env:
+      TEXT: ".*Во сколько удобнее планёрка\\? ${output.tag}.*"
+- tapOn: Изменить вопрос
+- extendedWaitUntil:
+    visible:
+      id: poll-edit
+    timeout: 5000
+- tapOn:
+    id: poll-edit-question
+- eraseText: 300
+- inputText: Во сколько удобнее планёрка по понедельникам? ${output.tag}
+- takeScreenshot: ${THEME}-poll-edit
+- tapOn:
+    id: poll-edit-save
+- extendedWaitUntil:
+    visible: .*по понедельникам\? ${output.tag}.*
+    timeout: 10000
+- assertVisible: .*2 из 4 ответили · изм\..*
+
+# 8. «Закрыть»: the result, voting is over.
+- tapOn:
+    id: poll-close
+- extendedWaitUntil:
+    visible: Закрыть опрос?
+    timeout: 5000
+# The alert's «Закрыть» (the cards have links with the same word).
+- tapOn:
+    point: 68%,57%
+- extendedWaitUntil:
+    visible:
+      id: poll-result
+    timeout: 10000
+- assertVisible: ".*Итог: .*"
+- assertNotVisible:
+    id: poll-close
+- takeScreenshot: ${THEME}-poll-closed

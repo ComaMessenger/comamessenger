@@ -36,6 +36,7 @@ import { useTheme } from "@/lib/theme";
 import { useMessenger } from "@/messenger/MessengerProvider";
 import { useSignedIn } from "@/session/SessionProvider";
 import { Avatar } from "@/ui/Avatar";
+import { AwayNote } from "@/status/AwayNote";
 import { Text, fonts, maxTextScale } from "@/ui/Text";
 import { useClock } from "@/scheduled/clock";
 import { combine, formatDate, formatTime } from "@/scheduled/format";
@@ -239,7 +240,10 @@ function ChoiceLine({
 }: {
   label: string;
   caption?: string;
-  avatar?: Pick<ChatMember, "actor_id" | "display_name" | "avatar_version">;
+  avatar?: Pick<
+    ChatMember,
+    "actor_id" | "display_name" | "avatar_version" | "type" | "away"
+  >;
   selected: boolean;
   disabled?: boolean;
   testID?: string;
@@ -278,6 +282,8 @@ function ChoiceLine({
             {caption}
           </Text>
         ) : null}
+        {/* «Отсутствую» (phase 6.7): «🌴 в отпуске до 30 ноября». */}
+        {avatar ? <AwayNote member={avatar} /> : null}
       </View>
       <TaskCheck checked={selected} round size={22} label={label} disabled />
     </Pressable>

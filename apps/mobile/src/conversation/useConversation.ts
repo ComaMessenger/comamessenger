@@ -309,11 +309,13 @@ export function useConversation(
         presence,
         structure,
       });
+      // Known before sending: «видно только вам» under the message keys on it.
+      const clientMsgID = crypto.randomUUID();
       return {
         content,
+        clientMsgID,
         deliver: async (files: FileMetadata[]) => {
           if ((!content && !files.length) || (chat && isReadOnly(chat))) return;
-          const clientMsgID = crypto.randomUUID();
           // «Уведомлены N человек из отдела …» under messages of this session.
           if (mentioned.mentioned_department_ids?.length)
             noteSentMessage(clientMsgID);

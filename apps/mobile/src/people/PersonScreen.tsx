@@ -13,7 +13,10 @@ import { MoreHorizontal } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import {
+  avatarBadge,
   chatAvatarSource,
+  currentAway,
+  shownStatus,
   hasServerFeature,
   serverFeature,
   type ActorPage,
@@ -41,6 +44,9 @@ import { useAgentAccess } from "@/agents/data";
 import { agentHref } from "@/agents/routes";
 import { useOpenDirect } from "./openDirect";
 import { AgentTag, presenceLabelKey } from "./PersonRow";
+import { AwayBadge } from "@/ui/AwayBadge";
+import { PersonAwaySection } from "@/status/PersonAwaySection";
+import { useAwayNow, useAwayOverrides } from "@/status/useAway";
 import { directoryKey, findActor } from "./usePeople";
 
 const sharedChatLimit = 40;
@@ -74,7 +80,7 @@ function useSharedChats(actorID: string) {
 
 /** Card of a person or an agent: who they are, their status and «Написать». */
 export function PersonScreen({ actorID }: { actorID: string }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const theme = useTheme();
   const { api, user } = useSignedIn();
   const { store } = useMessenger();
@@ -101,6 +107,24 @@ export function PersonScreen({ actorID }: { actorID: string }) {
   const person = actor.data;
   const agent = person?.type === "agent";
   const self = actorID === user.id;
+  // «Отсутствую» (phase 6.7): the kind on the avatar, the away line in the
+  // status pill while it is in effect, the custom status otherwise.
+  const overrides = useAwayOverrides();
+  const away =
+    person && !agent
+      ? currentAway(person.actor_id, person.away, overrides)
+      : null;
+  const awayNow = useAwayNow([away]);
+  const badge = agent
+    ? null
+    : avatarBadge(presence ?? null, away, awayNow);
+  const status = person
+    ? shownStatus(
+        { ...person, away },
+        awayNow,
+        i18n.language === "en" ? "en" : "ru",
+      )
+    : null;
   const { canView: canViewAgents } = useAgentAccess();
   const org = useOrg();
   const structure = org.structure;
@@ -157,17 +181,19 @@ export function PersonScreen({ actorID }: { actorID: string }) {
               { backgroundColor: theme.surface, borderColor: theme.border },
             ]}
           >
-            <ChatAvatar
-              name={person.display_name}
-              seed={person.actor_id}
-              actorID={person.actor_id}
-              avatarVersion={person.avatar_version}
-              size={88}
-              shape="circle"
-              agent={agent}
-              online={!agent && presence === "online"}
-              ringColor={theme.surface}
-            />
+            <AwayBadge badge={badge} size={88} testID="person-away-badge">
+              <ChatAvatar
+                name={person.display_name}
+                seed={person.actor_id}
+                actorID={person.actor_id}
+                avatarVersion={person.avatar_version}
+                size={88}
+                shape="circle"
+                agent={agent}
+                online={badge?.kind === "online"}
+                ringColor={theme.surface}
+              />
+            </AwayBadge>
             <View style={styles.nameLine}>
               <Text
                 accessibilityRole="header"
@@ -192,17 +218,19 @@ export function PersonScreen({ actorID }: { actorID: string }) {
                 .filter(Boolean)
                 .join(" · ")}
             </Text>
-            {person.status_text || person.status_emoji ? (
+            {status ? (
               <View
                 style={[
                   styles.status,
-                  { backgroundColor: theme.surfaceSelected },
+                  {
+                    backgroundColor: status.away
+                      ? theme.warningSoft
+                      : theme.surfaceSelected,
+                  },
                 ]}
               >
-                <Text size={14}>
-                  {[person.status_emoji, person.status_text]
-                    .filter(Boolean)
-                    .join(" ")}
+                <Text testID="person-status" size={14}>
+                  {[status.emoji, status.text].filter(Boolean).join(" ")}
                 </Text>
               </View>
             ) : null}
@@ -235,6 +263,8 @@ export function PersonScreen({ actorID }: { actorID: string }) {
               </View>
             ) : null}
           </View>
+
+          <PersonAwaySection person={person} />
 
           {structure && !agent ? (
             <PersonOrgSection structure={structure} actorID={person.actor_id} />

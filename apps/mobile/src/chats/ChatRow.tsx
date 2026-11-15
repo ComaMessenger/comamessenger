@@ -8,6 +8,9 @@ import {
 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import {
+  activeAway,
+  avatarBadge,
+  currentAway,
   chatAvatarSource,
   chatPreview,
   chatRequestBadge,
@@ -25,6 +28,8 @@ import type { Presence } from "@/ui/Avatar";
 import { CountBadge } from "@/ui/CountBadge";
 import { Text } from "@/ui/Text";
 import { ChatAvatar } from "./ChatAvatar";
+import { AwayBadge } from "@/ui/AwayBadge";
+import { useAwayOverrides } from "@/status/useAway";
 
 export function chatTitle(chat: Chat, fallback: string): string {
   return chat.display_name || chat.name || fallback;
@@ -72,7 +77,17 @@ export const ChatRow = memo(function ChatRow({
   const muted = isChatMuted(chat);
   const peer = chat.direct_peer;
   const agent = chat.kind === "direct" && peer?.type === "agent";
-  const online = chat.kind === "direct" && !agent && presence === "online";
+  // «Отсутствую» (phase 6.7): the kind on the avatar of a direct chat.
+  const overrides = useAwayOverrides();
+  const away =
+    chat.kind === "direct" && peer && !agent
+      ? activeAway(
+          currentAway(peer.actor_id, peer.away, overrides),
+          new Date(),
+        )
+      : null;
+  const online =
+    chat.kind === "direct" && !agent && presence === "online" && !away;
   const preview = chatPreview(chat, ownID, {
     you: t("previewYou"),
     deleted: t("previewDeleted"),
@@ -153,15 +168,17 @@ export const ChatRow = memo(function ChatRow({
         pressed && { backgroundColor: theme.surfaceSelected },
       ]}
     >
-      <ChatAvatar
-        name={title}
-        seed={chat.avatar_seed || chat.id}
-        size={48}
-        shape={chat.kind === "direct" ? "circle" : "square"}
-        agent={agent && !(peer?.avatar_version ?? 0)}
-        online={online}
-        {...chatAvatarSource(chat)}
-      />
+      <AwayBadge badge={avatarBadge(null, away, new Date())} size={48}>
+        <ChatAvatar
+          name={title}
+          seed={chat.avatar_seed || chat.id}
+          size={48}
+          shape={chat.kind === "direct" ? "circle" : "square"}
+          agent={agent && !(peer?.avatar_version ?? 0)}
+          online={online}
+          {...chatAvatarSource(chat)}
+        />
+      </AwayBadge>
       <View style={styles.body}>
         <View style={styles.line}>
           <Text

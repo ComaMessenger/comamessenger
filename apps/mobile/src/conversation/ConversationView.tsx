@@ -22,7 +22,14 @@ import { useStore } from "zustand";
 import { useTranslation } from "react-i18next";
 import {
   applySavedChange,
+  activeAway,
+  avatarBadge,
+  awaySlot,
+  visibleSubstitute,
+  withCurrentAway,
   chatAvatarSource,
+  currentAway,
+  mentionSuggestionAway,
   chatCommands,
   compactUUID,
   composerMenu,
@@ -81,6 +88,8 @@ import { useTaskViewer } from "@/tasks/format";
 import { TaskJumpContext } from "@/tasks/parts";
 import { TaskSheet, type TaskSource } from "@/tasks/TaskSheet";
 import { ChatSlotBar, useChatSlot } from "./ChatSlot";
+import { PollSheet } from "@/polls/PollSheet";
+import { PollEditSheet } from "@/polls/PollEditSheet";
 import { ReminderSheet } from "@/reminders/ReminderSheet";
 import { findReminder, useChatReminders } from "@/reminders/useReminders";
 import { ForwardSheet } from "./ForwardSheet";
@@ -94,6 +103,16 @@ import { useConversation } from "./useConversation";
 import { useUploadActivity } from "./useChatActivity";
 import { ChatStatusLine } from "./HeaderStatus";
 import { useVoiceFeed } from "@/voice/VoiceFeed";
+import { AwayBadge } from "@/ui/AwayBadge";
+import {
+  AwayMentionNote,
+  AwayMentionStrip,
+  noteAwaySend,
+  useAwayMentionHints,
+  useForgetAwayNotes,
+} from "@/status/AwayMentions";
+import { useAwayNow, useWorkspacePeople } from "@/status/useAway";
+import { useOpenDirect } from "@/people/openDirect";
 import { VoiceOutboxStrip } from "@/voice/VoiceOutbox";
 
 type Context =
@@ -148,6 +167,9 @@ export function ConversationView({
   const [taskSheet, setTaskSheet] = useState<{
     source: TaskSource | null;
   } | null>(null);
+  const [pollOpen, setPollOpen] = useState(false);
+  // «Изменить» of the author's own open poll: the question only.
+  const [pollEditFor, setPollEditFor] = useState<ClientMessage | null>(null);
   // «Напомнить мне»: the message and, when one is set, its time and note.
   const [remindFor, setRemindFor] = useState<{
     message: ClientMessage;
@@ -161,6 +183,9 @@ export function ConversationView({
   const features = useStore(store, (state) => state.features);
   const workplace = workplaceFeatures(features);
   const reminders = useChatReminders(chatID, workplace.reminders);
+  // «Отсутствую» (phase 6.7): the header of a direct chat, the badge on its
+  // avatar, the @ menu and the lines over the composer.
+  const awayOverrides = useStore(store, (state) => state.awayOverrides);
   const attachments = useAttachments(api, typingScope(chatID, threadRootID));
   useUploadActivity(chatID, threadRootID);
   const list = useRef<FlashListRef<FeedRow>>(null);
@@ -168,6 +193,39 @@ export function ConversationView({
   const title = chat ? chatTitle(chat, t("directChat")) : "";
   const inThread = threadRootID !== null;
   const groupChat = chat ? chat.kind !== "direct" : members.length > 2;
+  const peer = chat?.kind === "direct" ? chat.direct_peer : null;
+  const peerAway =
+    peer && peer.type === "user"
+      ? currentAway(peer.actor_id, peer.away, awayOverrides)
+      : null;
+  const awayNow = useAwayNow([peerAway]);
+  const awayHints = useAwayMentionHints(
+    context?.kind === "edit" ? "" : conversation.body,
+    members,
+  );
+  useForgetAwayNotes(chatID);
+  const writeTo = useOpenDirect((id) => router.push(`/chat/${id}`));
+  // «Вместо Анны — Марина» in the slot of a direct chat (decision 10); the
+  // substitute may be outside the chat, so the directory is read while the
+  // peer is away.
+  const peerAwayNow = activeAway(peerAway, awayNow);
+  const directory = useWorkspacePeople(Boolean(peerAwayNow));
+  const awaySlotLine =
+    peer && peerAwayNow
+      ? awaySlot(
+          { ...peer, away: peerAwayNow },
+          visibleSubstitute(
+            peerAwayNow,
+            (actorID) => {
+              const found = directory.byID.get(actorID);
+              return found ? withCurrentAway(found, awayOverrides) : null;
+            },
+            awayNow,
+          ),
+          awayNow,
+          i18n.language === "en" ? "en" : "ru",
+        )
+      : null;
 
   // In a thread the root is pinned above the list; the list holds replies.
   const root = inThread
@@ -348,7 +406,10 @@ export function ConversationView({
     const replyTo = context?.kind === "reply" ? context.message : null;
     setContext(null);
     const taken = attachments.detach();
+    const hints = awayHints;
     const draft = conversation.takeDraft(replyTo, options);
+    // «Анна в отпуске … · видно только вам» under the sent message.
+    noteAwaySend(chatID, draft.clientMsgID, hints);
     if (taken.some((item) => item.status !== "ready")) {
       // Still uploading: the message waits in the feed as a bubble with
       // the upload progress and goes out once every file is up.
@@ -408,6 +469,11 @@ export function ConversationView({
   /** «Позвать агента»: puts a mention of the agent at the end of the draft. */
   function callAgent(agent: ChatMember) {
     setAgentsOpen(false);
+    appendMention(agent.actor_id, agent.display_name);
+  }
+
+  /** A mention at the end of the draft: an agent, or a substitute («Упомянуть Марину»). */
+  function appendMention(actorID: string, name: string) {
     const draft = decodeMentions(conversation.body);
     const spaced =
       draft.text && !/\s$/.test(draft.text)
@@ -415,9 +481,7 @@ export function ConversationView({
         : draft;
     const end = spaced.text.length;
     conversation.changeBody(
-      encodeMentions(
-        insertMention(spaced, end, end, agent.actor_id, agent.display_name),
-      ),
+      encodeMentions(insertMention(spaced, end, end, actorID, name)),
     );
     setFocusRequest((value) => value + 1);
   }
@@ -425,20 +489,13 @@ export function ConversationView({
   // The "+" sheet, variant A: attachments, «Попросить и поручить», agents.
   // The items and their rules live in @comamessenger/core with the web's;
   // sending later stays on a long press of «Отправить».
-  // «Опрос» (wave 4) has no phone screens yet: it stays out of the menu
-  // until they come, a dead item would be a stub.
   const composerGroups = composerMenu({
     platform: "mobile",
     readonly: conversation.readonly,
     hasAgents: agentMembers.length > 0,
     features,
     inThread,
-  })
-    .map((group) => ({
-      ...group,
-      items: group.items.filter((item) => item.id !== "poll"),
-    }))
-    .filter((group) => group.items.length > 0);
+  }).filter((group) => group.items.length > 0);
   // Tasks (wave 3): «Задача» in «+», «Сделать задачей», the task kinds of
   // the slot. Only with message_tasks on the server and the right to post.
   const tasksOn = tasksAvailable(features);
@@ -452,6 +509,7 @@ export function ConversationView({
     scheduledLoaded:
       chatScheduled.query.data !== undefined || chatScheduled.query.isError,
     enabled: !inThread,
+    away: awaySlotLine,
   });
   function openSlot(item: SlotItem) {
     switch (item.kind) {
@@ -475,6 +533,7 @@ export function ConversationView({
         router.push(`/chat/${chatID}/scheduled`);
         return;
       case "away":
+        if (item.targetActorId) void writeTo.open(item.targetActorId);
         return;
     }
   }
@@ -492,7 +551,7 @@ export function ConversationView({
       case "task":
         return setTaskSheet({ source: null });
       case "poll":
-        return;
+        return setPollOpen(true);
       case "agent":
         return setAgentsOpen(true);
     }
@@ -578,6 +637,12 @@ export function ConversationView({
         );
         return;
       case "edit":
+        // A poll's body is written by the server; its question is edited
+        // in a sheet of its own (updatePoll).
+        if (message.poll) {
+          afterMenu(() => setPollEditFor(message));
+          return;
+        }
         setEditBody(message.body);
         setContext({ kind: "edit", message });
         setFocusRequest((value) => value + 1);
@@ -665,6 +730,7 @@ export function ConversationView({
         reminded: reminders.reminded.has(menuFor.id),
         tasks: canCreateTask,
         messageType: menuFor.type,
+        pollClosed: menuFor.poll ? menuFor.poll.status === "closed" : undefined,
       })
     : [];
   const placementOf = (message: ClientMessage): BubblePlacement => {
@@ -723,6 +789,7 @@ export function ConversationView({
         presence: conversation.presence,
         lastSeen: conversation.lastSeen,
         agentStatuses: conversation.agentStatuses,
+        away: awayOverrides,
       }}
     />
   ) : (
@@ -768,14 +835,20 @@ export function ConversationView({
           titleTestID="conversation-title"
           leading={
             chat && !inThread ? (
-              <Avatar
-                name={title}
-                seed={chat.avatar_seed || chat.id}
+              <AwayBadge
+                badge={avatarBadge(null, peerAway, awayNow)}
                 size={36}
-                shape={chat.kind === "direct" ? "circle" : "square"}
-                agent={chat.direct_peer?.type === "agent"}
-                {...chatAvatarSource(chat)}
-              />
+                testID="conversation-away-badge"
+              >
+                <Avatar
+                  name={title}
+                  seed={chat.avatar_seed || chat.id}
+                  size={36}
+                  shape={chat.kind === "direct" ? "circle" : "square"}
+                  agent={chat.direct_peer?.type === "agent"}
+                  {...chatAvatarSource(chat)}
+                />
+              </AwayBadge>
             ) : undefined
           }
           subtitle={
@@ -982,6 +1055,9 @@ export function ConversationView({
                           viewer={viewer}
                           onUpdated={conversation.applyMessage}
                         />
+                        {message.actor_id === user.id ? (
+                          <AwayMentionNote message={message} />
+                        ) : null}
                       </RowBoundary>
                       <DepartmentMentionNotes message={message} />
                     </View>
@@ -1043,7 +1119,28 @@ export function ConversationView({
               </View>
             )}
           </View>
+          {!conversation.readonly ? (
+            <AwayMentionStrip
+              hints={awayHints}
+              onMention={(actorID, name) => {
+                appendMention(actorID, name);
+                setFocusRequest((value) => value + 1);
+              }}
+              onWrite={(actorID) => void writeTo.open(actorID)}
+            />
+          ) : null}
           <Composer
+            memberNote={(member) =>
+              workplace.away
+                ? mentionSuggestionAway(
+                    member,
+                    awayNow,
+                    i18n.language === "en" ? "en" : "ru",
+                    awayOverrides,
+                  )
+                : null
+            }
+            awayOverrides={awayOverrides}
             body={context?.kind === "edit" ? editBody : conversation.body}
             onChangeBody={
               context?.kind === "edit" ? setEditBody : conversation.changeBody
@@ -1108,6 +1205,24 @@ export function ConversationView({
             }}
           />
         ) : null}
+        {workplace.polls && !inThread ? (
+          <PollSheet
+            visible={pollOpen}
+            chatID={chatID}
+            onClose={() => setPollOpen(false)}
+            onNotice={(text) => {
+              setNotice(text);
+              list.current?.scrollToEnd({ animated: true });
+            }}
+          />
+        ) : null}
+        <PollEditSheet
+          message={
+            pollEditFor?.poll ? { ...pollEditFor, poll: pollEditFor.poll } : null
+          }
+          onClose={() => setPollEditFor(null)}
+          onNotice={setNotice}
+        />
         <ReminderSheet
           visible={remindFor !== null}
           title={t(remindLabelKey(Boolean(remindFor?.initial)))}
@@ -1188,6 +1303,7 @@ export function ConversationView({
             remind: remindLabelKey(
               menuFor ? reminders.reminded.has(menuFor.id) : false,
             ),
+            ...(menuFor?.poll ? { edit: "pollEditTitle" } : {}),
           }}
         />
         <ForwardSheet

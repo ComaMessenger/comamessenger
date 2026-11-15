@@ -47,6 +47,7 @@ import { combine, formatDate, formatTime } from "@/scheduled/format";
 import { RequestGroupChoice } from "@/org/RequestGroupChoice";
 import { useOrg } from "@/org/useOrg";
 import { calendarLocale } from "./locale";
+import { AwayPickerHints } from "@/status/AwayPickerHints";
 import { sendRequest } from "./outbox";
 import { useRequestErrorText } from "./useRequestActions";
 import {
@@ -420,6 +421,26 @@ export function RequestSheet({
             );
           })}
         </View>
+      ) : null}
+      {draft.audience.kind === "people" ? (
+        <AwayPickerHints
+          chosen={chosen}
+          people={people}
+          withinPeople
+          onChoose={(away, substitute) =>
+            update({
+              audience: {
+                kind: "people",
+                actorIDs: [
+                  ...chosen.filter(
+                    (id) => id !== away && id !== substitute,
+                  ),
+                  substitute,
+                ],
+              },
+            })
+          }
+        />
       ) : null}
       <View style={styles.summary}>
         {recipients.length > 0 ? (

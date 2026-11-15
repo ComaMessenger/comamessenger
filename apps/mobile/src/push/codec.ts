@@ -77,11 +77,13 @@ const uuid = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 
 // In-app addresses a push may open: a chat or thread, a message in a chat
 // (highlighted; with the reminder strip for «Напомнить мне»), the scheduled
-// list and «Важные» on one of its tabs. Anything else is dropped. The iOS
-// notification service extension keeps the same list.
+// list, «Важные» on one of its tabs and the card of a person («Вы
+// замещаете …», phase 6.7). Anything else is dropped. The iOS notification
+// service extension keeps the same list.
 const routePattern = new RegExp(
   `^(/chat/${uuid}(/thread/${uuid})?` +
     `|/chat/${uuid}\\?message=${uuid}(&reminder=${uuid})?` +
+    `|/people/${uuid}` +
     `|/scheduled` +
     `|/important(\\?tab=(waiting|saved|reminders))?)$`,
 );
