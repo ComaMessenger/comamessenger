@@ -36,6 +36,7 @@ type Service struct {
 	now                 func() time.Time
 	emailSender         EmailSender
 	afterCommit         func(string, int64)
+	statusExpiryPasses  []StatusExpiryPass
 	bearerAuthenticator func(context.Context, string) (User, access.Identity, error)
 }
 

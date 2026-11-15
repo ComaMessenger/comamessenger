@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/comamessenger/comamessenger/core/internal/awayview"
 	"github.com/comamessenger/comamessenger/core/internal/permission"
 )
 
@@ -60,6 +61,9 @@ type User struct {
 	StatusText           string            `json:"status_text"`
 	StatusExpiresAt      *time.Time        `json:"status_expires_at"`
 	AvatarVersion        int64             `json:"avatar_version"`
+	// Away is the person's own away status as everyone sees it («Отсутствую»,
+	// phase 6.7); null without one. The custom status above stays as set.
+	Away *awayview.Public `json:"away"`
 }
 
 type Session struct {

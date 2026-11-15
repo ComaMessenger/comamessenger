@@ -21,6 +21,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/agenttool"
 	"github.com/comamessenger/comamessenger/core/internal/agenttrigger"
 	"github.com/comamessenger/comamessenger/core/internal/architect"
+	"github.com/comamessenger/comamessenger/core/internal/away"
 	"github.com/comamessenger/comamessenger/core/internal/chat"
 	"github.com/comamessenger/comamessenger/core/internal/config"
 	"github.com/comamessenger/comamessenger/core/internal/coordination"
@@ -230,7 +231,6 @@ func main() {
 	identityService.SetAfterCommit(afterCommit)
 	scheduledreset.SetAfterCommit(afterCommit)
 	fileService.SetAfterCommit(afterCommit)
-	go identityService.RunStatusExpiry(realtimeCtx, time.Minute)
 	messageService := message.NewService(
 		pool, int(cfg.Messaging.MaxBodyBytes), int(cfg.Messaging.MaxPageSize), afterCommit,
 	)
@@ -289,6 +289,16 @@ func main() {
 		logger.Error("poll job startup failed", "error", err)
 		os.Exit(1)
 	}
+	// «Отсутствую» (phase 6.7 wave 4): auto-replies on their own River
+	// queue, starts and ends in the status expiry loop.
+	awayService, stopAway, err := away.Start(realtimeCtx, pool, messageService, afterCommit, logger)
+	if err != nil {
+		logger.Error("away status initialization failed", "error", err)
+		os.Exit(1)
+	}
+	messageService.SetAwayHook(awayService.OnDirectMessageTx)
+	identityService.AddStatusExpiryPass(awayService.Sweep)
+	go identityService.RunStatusExpiry(realtimeCtx, time.Minute)
 	searchService := search.NewService(pool)
 	knowledgeService := knowledge.NewService(pool, fileService, agentConfigService, knowledge.NewHTTPEmbedder())
 	knowledgeClient, err := knowledge.NewIndexingClient(pool, knowledgeService, logger)
@@ -345,7 +355,7 @@ func main() {
 		Addr: cfg.HTTPAddr,
 		Handler: serverhttp.NewHandler(logger, cfg.PublicAppURL, pool.Ping, serverhttp.Dependencies{
 			Identity: identityService, Agents: agentService, AgentConfig: agentConfigService, AgentProvider: agentProviderService, AgentTools: agentToolExecutor, AgentRuns: agentRunService, AgentTriggers: agentTriggerService, Architect: architectService, Chats: chatService,
-			Messages: messageService, Scheduled: scheduledService, Reminders: reminderService, Requests: requestService, UserState: userStateService, Push: pushService, Workspace: workspaceService, Files: fileService, Search: searchService, Knowledge: knowledgeService, Org: orgService, Interactive: interactiveService, Webhooks: webhookService, Realtime: realtimeServer,
+			Messages: messageService, Scheduled: scheduledService, Reminders: reminderService, Away: awayService, Requests: requestService, UserState: userStateService, Push: pushService, Workspace: workspaceService, Files: fileService, Search: searchService, Knowledge: knowledgeService, Org: orgService, Interactive: interactiveService, Webhooks: webhookService, Realtime: realtimeServer,
 			CookieSecure: cfg.Auth.CookieSecure, RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
 			BootstrapToken: cfg.BootstrapToken, RequireBootstrapToken: cfg.AppEnv != "development",
 			TrustedProxyCIDRs: cfg.TrustedProxyCIDRs, RevokeRealtimeSession: realtimeServer.RevokeSession,
@@ -389,6 +399,9 @@ func main() {
 		logger.Error("scheduled message shutdown failed", "error", err)
 	}
 	stopReminders(ctx)
+	if err := stopAway(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		logger.Error("away status shutdown failed", "error", err)
+	}
 	if err := server.Shutdown(ctx); err != nil {
 		logger.Error("graceful shutdown failed", "error", err)
 		os.Exit(1)

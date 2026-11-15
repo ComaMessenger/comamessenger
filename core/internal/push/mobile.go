@@ -235,6 +235,9 @@ func (w *Worker) deliverMobile(ctx context.Context) error {
 	if _, err := w.pool.Exec(ctx, `DELETE FROM mobile_push_devices d WHERE NOT `+liveFamily); err != nil {
 		return err
 	}
+	if _, err := w.pool.Exec(ctx, awayMobileSuppressed); err != nil {
+		return err
+	}
 	leaseToken, err := id.New()
 	if err != nil {
 		return err
