@@ -56,11 +56,14 @@ func TestAwayMutesPushExceptRemindersAndAdminDirectMessages(t *testing.T) {
 	}
 	cfg := config.PushConfig{RelayURL: "https://relay.example.test", PollInterval: time.Second}
 	keys := map[string][]byte{}
-	for actor, session := range sessions {
-		key := []byte(strings.Repeat(actor[:1], 32))
-		keys[actor] = key
-		if _, err := NewService(pool, cfg).RegisterMobileDevice(ctx, identity.User{OrgID: orgID, ActorID: actor}, session, MobileDeviceInput{
-			Platform: "ios", RelayHandle: strings.Repeat(actor[:1], 43), NotificationKey: base64.StdEncoding.EncodeToString(key), AppVersion: "0.1.0",
+	// Fixed, distinct handles: a handle taken from the actor's random id
+	// collided whenever two ids shared a first character, and registering the
+	// same handle again moves the device to the other account.
+	for _, device := range []struct{ actor, handle string }{{anna, "a"}, {marina, "m"}} {
+		key := []byte(strings.Repeat(device.handle, 32))
+		keys[device.actor] = key
+		if _, err := NewService(pool, cfg).RegisterMobileDevice(ctx, identity.User{OrgID: orgID, ActorID: device.actor}, sessions[device.actor], MobileDeviceInput{
+			Platform: "ios", RelayHandle: strings.Repeat(device.handle, 43), NotificationKey: base64.StdEncoding.EncodeToString(key), AppVersion: "0.1.0",
 		}); err != nil {
 			t.Fatal(err)
 		}
