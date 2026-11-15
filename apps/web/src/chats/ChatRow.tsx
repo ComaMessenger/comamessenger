@@ -1,7 +1,15 @@
 import { useRef, useState, type MouseEvent, type PointerEvent } from "react";
-import { BellOff, Pin } from "lucide-react";
+import { BellOff, MessageSquareMore, Pin } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { chatAvatarSource, chatPreview as corePreview, type Chat, type ChatFolder } from "@comamessenger/core";
+import {
+  chatAvatarSource,
+  chatPreview as corePreview,
+  formatRequestDueDay,
+  type Chat,
+  type ChatFolder,
+  type ChatRequestBadge,
+} from "@comamessenger/core";
+import { calendarLocale } from "../requests/format";
 import { Avatar, Badge, countLabel, cx, type Presence } from "../ui";
 import { formatListTime } from "../lib/format";
 import { chatGlyph, isChatMuted, titleOf } from "../lib/chats";
@@ -26,6 +34,7 @@ export function ChatRow({
   selected,
   unreadCount,
   mentionCount,
+  requestBadge = null,
   pinned,
   pinnedCount,
   presence,
@@ -42,6 +51,8 @@ export function ChatRow({
   selected: boolean;
   unreadCount: number;
   mentionCount: number;
+  /** answer by Fri or awaiting answer: requests wait for the reader here. */
+  requestBadge?: ChatRequestBadge | null;
   pinned: boolean;
   pinnedCount: number;
   presence?: Presence;
@@ -140,6 +151,20 @@ export function ChatRow({
               {preview.sender && <span className="chat-row__sender">{preview.sender}</span>}
               {preview.text}
             </span>
+            {requestBadge && (
+              <span className="chat-row__need">
+                <MessageSquareMore aria-hidden="true" />
+                {requestBadge.kind === "due"
+                  ? t("requestBadgeDue", {
+                      when: formatRequestDueDay(
+                        requestBadge.at,
+                        new Date(),
+                        calendarLocale(),
+                      ),
+                    })
+                  : t("requestBadgeWaiting")}
+              </span>
+            )}
             {unreadCount > 0 ? (
               <Badge tone={mentionCount > 0 ? "primary" : "neutral"}>
                 {countLabel(unreadCount)}

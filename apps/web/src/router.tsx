@@ -43,6 +43,11 @@ const routes = [
   }),
   createRoute({
     getParentRoute: () => root,
+    path: "/chat/$chatId/requests/$messageId",
+    component: marker,
+  }),
+  createRoute({
+    getParentRoute: () => root,
     path: "/threads",
     component: marker,
   }),
@@ -55,6 +60,14 @@ const routes = [
     getParentRoute: () => root,
     path: "/important",
     component: marker,
+    validateSearch: (search: Record<string, unknown>) => ({
+      tab:
+        search.tab === "waiting" ||
+        search.tab === "saved" ||
+        search.tab === "reminders"
+          ? search.tab
+          : undefined,
+    }),
   }),
   createRoute({
     getParentRoute: () => root,

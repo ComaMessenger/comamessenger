@@ -1,5 +1,9 @@
 import { useCallback, useMemo, useState } from "react";
-import type { MessengerAPI, User } from "@comamessenger/core";
+import {
+  importantCounts,
+  type MessengerAPI,
+  type User,
+} from "@comamessenger/core";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import {
@@ -82,6 +86,13 @@ export function Messenger({
     onUserUpdated,
   });
   const { store, selectedID, threadID } = session;
+  const importantBadge = useStore(
+    store,
+    (state) => importantCounts(state.unread, state.features).badge,
+  );
+  const requestID = selectedID
+    ? (/^\/chat\/[^/]+\/requests\/([^/]+)/.exec(path)?.[1] ?? null)
+    : null;
   const selectedChat = useStore(store, (state) =>
     selectedID ? state.chats[selectedID] : undefined,
   );
@@ -181,6 +192,8 @@ export function Messenger({
       chatID={selectedID}
       chat={selectedChat}
       threadID={threadID}
+      requestID={requestID}
+      onOpenRequest={(id) => navigate(`/chat/${selectedID}/requests/${id}`)}
       onBack={() => navigate("/chats")}
       onOpenThread={(id) => navigate(`/chat/${selectedID}/thread/${id}`)}
       onCloseThread={() => navigate(`/chat/${selectedID}`)}
@@ -271,7 +284,7 @@ export function Messenger({
             (directory?.id || knowledge?.collectionID) &&
               "messenger--detail-open",
             selectedID && "messenger--chat-open",
-            threadID && "messenger--thread-open",
+            (threadID || requestID) && "messenger--thread-open",
             (showAgents || activeSettings || user.must_change_password) &&
               "messenger--settings",
           )}
@@ -315,6 +328,7 @@ export function Messenger({
               }
               compact={Boolean(selectedID)}
               navigate={navigate}
+              importantCount={importantBadge}
             />
           )}
           {!isMobile && !selectedID && section !== "chats" && (

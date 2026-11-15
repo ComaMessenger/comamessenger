@@ -2,6 +2,8 @@ import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertCircle,
+  Bell,
+  BellRing,
   Clock3,
   Copy,
   CornerUpLeft,
@@ -56,6 +58,14 @@ import { useThreadPreview } from "./useThreadPreview";
 import { saveFailureKey, useSaveMessage, useSavedIDs } from "./useSaved";
 import { MessageBlocksView } from "../agentchat/MessageBlocksView";
 import { AgentWhy } from "../agentchat/AgentWhy";
+import { RequestMessage } from "../requests/RequestMessage";
+import { useWorkplaceFeatures } from "../requests/format";
+import { ReminderPicker } from "../reminders/ReminderPicker";
+import {
+  reminderWhenText,
+  useMessageReminder,
+  useReminderActions,
+} from "../reminders/useReminders";
 
 export type MessageRowProps = {
   message: ClientMessage;
@@ -78,6 +88,8 @@ export type MessageRowProps = {
   domIDPrefix?: string;
   showThreadIndicator?: boolean;
   compact?: boolean;
+  /** Details on a request: the answers panel. */
+  onOpenRequest?(messageID: string): void;
 };
 
 export function MessageRow({
@@ -100,6 +112,7 @@ export function MessageRow({
   domIDPrefix = "message",
   showThreadIndicator = true,
   compact = false,
+  onOpenRequest,
 }: MessageRowProps) {
   const { t } = useTranslation();
   const { api, user } = useMessenger();
@@ -130,12 +143,21 @@ export function MessageRow({
   const savedIDs = useSavedIDs(persisted ? message.chat_id : undefined);
   const saved = persisted && savedIDs.has(message.id);
   const setSaved = useSaveMessage();
+  const features = useWorkplaceFeatures();
+  const reminder = useMessageReminder(
+    persisted && features.reminders ? message.chat_id : undefined,
+    message.id,
+  );
+  const reminderActions = useReminderActions();
+  const [reminding, setReminding] = useState(false);
+  const [reminderBusy, setReminderBusy] = useState(false);
+  const request = message.request && !message.deleted_at ? message.request : null;
   const resolvedReply =
     replyMessage ?? replyQuery.data?.messages.find((item) => item.id === message.reply_to_id);
   const replyAuthor = members.find((item) => item.actor_id === resolvedReply?.actor_id);
   const name = author?.display_name ?? (own ? t("you") : t("participant"));
   const isAgent = author?.type === "agent";
-  const overlayOpen = menuOpen || pickerOpen;
+  const overlayOpen = menuOpen || pickerOpen || reminding;
   // Unknown block versions and deleted messages fall back to the body text.
   const blocks = renderableBlocks(message);
   // With a card the body is the server-generated text fallback of that card.
@@ -275,14 +297,45 @@ export function MessageRow({
   // for the reader's own saves (only they see it).
   const shownPin = pinned && !message.deleted_at;
   const shownStar = saved && !message.deleted_at;
+  // The reader's own reminder: a bell only they see.
+  const shownBell = Boolean(reminder) && !message.deleted_at;
   const marks =
-    shownPin || shownStar ? (
+    shownPin || shownStar || shownBell ? (
       <>
         {shownPin && (
           <Pin className="message__pinned" role="img" aria-label={t("pinnedMark")} />
         )}
         {shownStar && (
           <Star className="message__saved" role="img" aria-label={t("savedMark")} />
+        )}
+        {shownBell && reminder && (
+          <button
+            type="button"
+            className={cx(
+              "message__reminder",
+              reminder.state === "fired" && "message__reminder--fired",
+            )}
+            title={
+              reminder.state === "fired"
+                ? t("reminderBellFired")
+                : t("reminderBell", { when: reminderWhenText(reminder.remind_at) })
+            }
+            aria-label={
+              reminder.state === "fired"
+                ? t("reminderBellFired")
+                : t("reminderBell", { when: reminderWhenText(reminder.remind_at) })
+            }
+            onClick={() => {
+              closeOverlays();
+              setReminding(true);
+            }}
+          >
+            {reminder.state === "fired" ? (
+              <BellRing aria-hidden="true" />
+            ) : (
+              <Bell aria-hidden="true" />
+            )}
+          </button>
         )}
       </>
     ) : null;
@@ -328,7 +381,7 @@ export function MessageRow({
             <time dateTime={message.created_at}>
               {formatTime(message.created_at)}
             </time>
-            {message.edited_at && !message.deleted_at && (
+            {message.edited_at && !message.deleted_at && !request && (
               <span className="message__edited">{t("edited")}</span>
             )}
           </header>
@@ -372,6 +425,13 @@ export function MessageRow({
               </button>
             </div>
           </div>
+        ) : request ? (
+          <RequestMessage
+            message={message}
+            onOpenAnswers={
+              onOpenRequest ? () => onOpenRequest(message.id) : undefined
+            }
+          />
         ) : (
           !hideBody && (
             <div className={cx("message__body", message.deleted_at && "message__body--deleted")}>
@@ -576,6 +636,17 @@ export function MessageRow({
                 {saved ? t("unsaveMessage") : t("saveMessage")}
               </MenuItem>
             )}
+            {persisted && features.reminders && (
+              <MenuItem
+                icon={<Bell />}
+                onClick={() => {
+                  closeOverlays();
+                  setReminding(true);
+                }}
+              >
+                {reminder ? t("messageEditReminder") : t("messageRemindMe")}
+              </MenuItem>
+            )}
             {canPin && (
               <MenuItem
                 icon={<Pin />}
@@ -616,6 +687,34 @@ export function MessageRow({
             )}
           </Menu>
         </FloatingPopover>
+      )}
+      {reminding && (
+        <ReminderPicker
+          initial={
+            reminder?.state === "pending" ? new Date(reminder.remind_at) : undefined
+          }
+          editing={Boolean(reminder)}
+          pending={reminderBusy}
+          onConfirm={(at, note) => {
+            setReminderBusy(true);
+            void reminderActions
+              .set({ chatID: message.chat_id, messageID: message.id }, at, note)
+              .then((saved) => {
+                if (saved) setReminding(false);
+              })
+              .finally(() => setReminderBusy(false));
+          }}
+          onRemove={() => {
+            setReminderBusy(true);
+            void reminderActions
+              .remove({ chatID: message.chat_id, messageID: message.id })
+              .then((done) => {
+                if (done) setReminding(false);
+              })
+              .finally(() => setReminderBusy(false));
+          }}
+          onClose={() => setReminding(false)}
+        />
       )}
       {forwarding && (
         <ForwardMessageDialog

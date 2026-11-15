@@ -56,3 +56,33 @@ describe("service worker notifications", () => {
     expect(worker.shown[2]!.options.data).toEqual({ url: "/scheduled" });
   });
 });
+
+describe("service worker addresses", () => {
+  it("opens requests, reminders and «Важные» and nothing foreign", () => {
+    const worker = loadWorker();
+    const chat = "0198a7c2-1c55-7c3e-9c1e-2b1d0d6a1c01";
+    const message = "0198a7c2-1c55-7c3e-9c1e-2b1d0d6a1c02";
+    const reminder = "0198a7c2-1c55-7c3e-9c1e-2b1d0d6a1c03";
+    worker.push({ title: "Запрос · Анна", chat_id: chat, url: `/chat/${chat}?message=${message}` });
+    worker.push({
+      title: "Напоминание",
+      chat_id: chat,
+      kind: "reminder",
+      url: `/chat/${chat}?message=${message}&reminder=${reminder}`,
+    });
+    worker.push({ title: "Напоминание", kind: "reminder", url: "/important?tab=reminders" });
+    worker.push({ title: "Напоминание", kind: "reminder" });
+    worker.push({ title: "Coma", url: "https://evil.example/" });
+    worker.push({ title: "Coma", chat_id: chat, url: "//evil.example/chat" });
+    worker.push({ title: "Coma", url: "/settings/notifications" });
+    expect(worker.shown.map((item) => item.options.data)).toEqual([
+      { url: `/chat/${chat}?message=${message}` },
+      { url: `/chat/${chat}?message=${message}&reminder=${reminder}` },
+      { url: "/important?tab=reminders" },
+      { url: "/important?tab=reminders" },
+      { url: "/chats" },
+      { url: `/chat/${chat}` },
+      { url: "/settings/notifications" },
+    ]);
+  });
+});

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
+import { importantCounts } from "@comamessenger/core";
 import { hasPermission } from "../settings";
 import { Avatar, Badge, IconButton, Kbd, countLabel, cx } from "../ui";
 import { useDismissable } from "../lib/useDismissable";
@@ -52,6 +53,9 @@ export function GlobalSidebar({
     (item) => item.status === "failed",
   ).length;
   const unread = useStore(store, (state) => state.unread);
+  const features = useStore(store, (state) => state.features);
+  // Waiting for you and fired reminders: the reader's own inbox.
+  const importantBadge = importantCounts(unread, features).badge;
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const workspaceRoot = useRef<HTMLDivElement>(null);
@@ -86,7 +90,13 @@ export function GlobalSidebar({
       icon: MessagesSquare,
       count: unreadThreads,
     },
-    { id: "important", path: "/important", label: t("important"), icon: Star },
+    {
+      id: "important",
+      path: "/important",
+      label: t("important"),
+      icon: Star,
+      count: importantBadge,
+    },
     // Only messages that failed need attention; waiting ones do not.
     {
       id: "scheduled",

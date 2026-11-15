@@ -10,6 +10,15 @@ const emptyMessages: ClientMessage[] = [];
  * Loads history for a chat, keeps the scroll anchored (read boundary on open,
  * bottom while following), marks messages read and paginates upwards.
  */
+/** Scrolls to a message opened by a link, a push or a reminder and marks it briefly. */
+function highlight(messageID: string) {
+  const element = document.getElementById(`message-${messageID}`);
+  if (!element) return;
+  element.scrollIntoView({ block: "center" });
+  element.classList.add("message--highlight");
+  window.setTimeout(() => element.classList.remove("message--highlight"), 2400);
+}
+
 export function useMessageFeed({
   api,
   store,
@@ -183,9 +192,7 @@ export function useMessageFeed({
     if (!target) return;
     void api.messageContext(target).then((window) => {
       store.getState().replaceMessages(chatID, window.messages);
-      requestAnimationFrame(() =>
-        document.getElementById(`message-${target}`)?.scrollIntoView({ block: "center" }),
-      );
+      requestAnimationFrame(() => highlight(target));
     });
   }, [api, chatID, store]);
 

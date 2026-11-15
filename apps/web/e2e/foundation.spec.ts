@@ -1439,11 +1439,11 @@ test("profile menu, status dialog and attachment picker expose the new flows", a
 
   await chatRow(page, /Объявления/).click();
   await expect(page).toHaveURL(new RegExp(`/chat/${chat.id}$`));
-  await page.getByRole("button", { name: "Прикрепить" }).click();
-  const attachmentMenu = page.getByRole("menu", { name: "Прикрепить" });
-  await expect(attachmentMenu.getByText("Фото или видео")).toBeVisible();
+  await page.getByRole("button", { name: "Добавить", exact: true }).click();
+  const attachmentMenu = page.getByRole("menu", { name: "Добавить" });
+  await expect(attachmentMenu.getByText("Фото и видео")).toBeVisible();
   await expect(attachmentMenu.getByText("Файл", { exact: true })).toBeVisible();
-  await expect(attachmentMenu.getByText("Markdown")).toBeVisible();
+  await expect(attachmentMenu.getByText("Markdown-файл")).toBeVisible();
 });
 
 test("member controls use a dialog and the agent editor scrolls in Russian", async ({
@@ -2557,39 +2557,46 @@ test("utility screens are master-detail on desktop and list-only on phones", asy
   await expect(page.getByText("Нет важных сообщений")).toBeVisible();
 });
 
-test("Interface Lab utility headers remain inside the visible workspace", async ({
-  page,
-}) => {
-  await mockMessenger(page);
-  for (const path of [
-    "/settings/profile",
-    "/settings/notifications",
-    "/settings/security",
-    "/agents",
-  ]) {
-    await page.goto(path);
-    const heading = page.locator(".workspace h1").first();
-    await expect(heading).toBeVisible();
-    const box = await heading.boundingBox();
-    expect(box).not.toBeNull();
-    expect(box!.y).toBeGreaterThanOrEqual(0);
-    expect(box!.y + box!.height).toBeLessThanOrEqual(
-      page.viewportSize()!.height,
-    );
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth),
-    ).toBeLessThanOrEqual(page.viewportSize()!.width);
-    if (path === "/settings/profile") {
-      await expect(page).toHaveScreenshot("settings-profile.png", {
-        animations: "disabled",
-      });
+test.describe("utility headers on a device in UTC", () => {
+  // After sign-in a profile on the default zone (UTC) takes the device's
+  // zone; on a UTC device it stays, so the profile snapshot does not depend
+  // on where the tests run.
+  test.use({ timezoneId: "UTC" });
+
+  test("Interface Lab utility headers remain inside the visible workspace", async ({
+    page,
+  }) => {
+    await mockMessenger(page);
+    for (const path of [
+      "/settings/profile",
+      "/settings/notifications",
+      "/settings/security",
+      "/agents",
+    ]) {
+      await page.goto(path);
+      const heading = page.locator(".workspace h1").first();
+      await expect(heading).toBeVisible();
+      const box = await heading.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.y).toBeGreaterThanOrEqual(0);
+      expect(box!.y + box!.height).toBeLessThanOrEqual(
+        page.viewportSize()!.height,
+      );
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth),
+      ).toBeLessThanOrEqual(page.viewportSize()!.width);
+      if (path === "/settings/profile") {
+        await expect(page).toHaveScreenshot("settings-profile.png", {
+          animations: "disabled",
+        });
+      }
+      if (path === "/agents") {
+        await expect(page).toHaveScreenshot("agents-overview.png", {
+          animations: "disabled",
+        });
+      }
     }
-    if (path === "/agents") {
-      await expect(page).toHaveScreenshot("agents-overview.png", {
-        animations: "disabled",
-      });
-    }
-  }
+  });
 });
 
 test("tablet thread details and narrow agent hints keep usable widths", async ({

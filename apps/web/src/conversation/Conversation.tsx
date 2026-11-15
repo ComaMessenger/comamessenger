@@ -40,21 +40,30 @@ import {
   ComposerScheduleDialog,
   type ScheduleDraft,
 } from "../scheduled/ComposerScheduleDialog";
+import { RequestDialog } from "../requests/RequestDialog";
+import { RequestAnswersPanel } from "../requests/RequestAnswersPanel";
+import { ReminderStrip, WaitingStrip } from "../requests/ChatStrips";
+import { useToast } from "../shell/ToastProvider";
 
 export function Conversation({
   chatID,
   chat,
   threadID,
+  requestID = null,
   onBack,
   onOpenThread,
   onCloseThread,
+  onOpenRequest,
 }: {
   chatID: string;
   chat?: Chat;
   threadID: string | null;
+  /** The request whose answers panel is open. */
+  requestID?: string | null;
   onBack(): void;
   onOpenThread(id: string): void;
   onCloseThread(): void;
+  onOpenRequest?(messageID: string): void;
 }) {
   const { t, i18n } = useTranslation();
   const isMobile = useIsMobile();
@@ -69,6 +78,9 @@ export function Conversation({
     whenReady,
   } = useMessenger();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const features = useStore(store, (state) => state.features);
+  const [requesting, setRequesting] = useState(false);
   const typingActions = useStore(store, (state) => state.typingActions[chatID]);
   const presence = useStore(store, (state) => state.presence);
   const lastSeen = useStore(store, (state) => state.lastSeen);
@@ -103,6 +115,14 @@ export function Conversation({
   const [scheduling, setScheduling] = useState<ScheduleDraft | null>(null);
 
   const title = titleOf(chat, members, user.id);
+  // One strip under the header: “Waiting for your answer” wins over Scheduled.
+  const waitingStripShown = useStore(
+    store,
+    (state) =>
+      (state.unread.chats.find((item) => item.chat_id === chatID)
+        ?.requests_waiting ?? 0) > 0 &&
+      state.features.includes("message_requests"),
+  );
   const directPeer =
     chat?.kind === "direct"
       ? (chat.direct_peer ??
@@ -203,7 +223,10 @@ export function Conversation({
 
   return (
     <div
-      className={cx("conversation", threadID && "conversation--thread-open")}
+      className={cx(
+        "conversation",
+        (threadID || requestID) && "conversation--thread-open",
+      )}
     >
       <div className="conversation__main">
         <header className="conversation-head">
@@ -261,7 +284,16 @@ export function Conversation({
             </IconButton>
           </div>
         </header>
-        <ScheduledBar chatID={chatID} />
+        <ReminderStrip chatID={chatID} />
+        {waitingStripShown ? (
+          <WaitingStrip
+            chatID={chatID}
+            messages={feed.messages}
+            onJump={(id) => void feed.jump(id)}
+          />
+        ) : (
+          <ScheduledBar chatID={chatID} />
+        )}
 
         <div className="conversation__stream">
           <div
@@ -340,6 +372,7 @@ export function Conversation({
                         grouped={grouped}
                         chatName={title}
                         pinned={pinnedIDs.has(message.id)}
+                        onOpenRequest={onOpenRequest}
                         onReply={() => setReply(message)}
                         onJump={(id) => void feed.jump(id)}
                         onRetry={() => void outbox.flush()}
@@ -425,9 +458,35 @@ export function Conversation({
           onRetryFile={attachments.retry}
           commands={commands}
           placeholder={commands.length ? t("acComposerPlaceholder") : undefined}
+          features={features}
+          onRequest={() => setRequesting(true)}
         />
       </div>
 
+      {requestID && !threadID && (
+        <RequestAnswersPanel
+          chatID={chatID}
+          messageID={requestID}
+          members={members}
+          onClose={onCloseThread}
+        />
+      )}
+      {requesting && (
+        <RequestDialog
+          chatID={chatID}
+          userID={user.id}
+          members={members}
+          createRequest={(id, input) => api.createRequest(id, input)}
+          onSent={(message) => {
+            setRequesting(false);
+            store.getState().reconcile(message);
+            scheduleReload();
+            toast({ message: t("requestSent") });
+            requestAnimationFrame(feed.scrollToBottom);
+          }}
+          onClose={() => setRequesting(false)}
+        />
+      )}
       {threadID && chat && (
         <ThreadPanel
           chat={chat}

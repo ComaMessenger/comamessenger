@@ -2,7 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { FolderPlus, MessageCircle, Plus, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
-import { toggleChatInFolder, type Chat } from "@comamessenger/core";
+import {
+  chatRequestBadge,
+  toggleChatInFolder,
+  type Chat,
+} from "@comamessenger/core";
+import { useWorkplaceFeatures } from "../requests/format";
 import {
   Button,
   Chip,
@@ -56,6 +61,7 @@ export function ChatListPane({
   onRetry(): void;
 }) {
   const { t } = useTranslation();
+  const features = useWorkplaceFeatures();
   const isMobile = useIsMobile();
   const {
     api,
@@ -261,6 +267,9 @@ export function ChatListPane({
                   selected={chat.id === selectedID}
                   unreadCount={counts?.unread_count ?? 0}
                   mentionCount={counts?.mention_count ?? 0}
+                  requestBadge={
+                    features.requests ? chatRequestBadge(counts) : null
+                  }
                   pinned={pinnedChatIDs.includes(chat.id)}
                   pinnedCount={pinnedChatIDs.length}
                   presence={
