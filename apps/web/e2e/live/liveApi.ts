@@ -121,8 +121,8 @@ export async function signIn(page: Page, user: LiveUser) {
     localStorage.setItem("coma-locale", "ru");
   });
   await page.goto("/");
-  await page.getByRole("textbox", { name: "Email" }).fill(user.email);
-  await page.getByLabel("Пароль").fill(user.password);
+  await page.getByRole("textbox", { name: "Почта" }).fill(user.email);
+  await page.getByRole("textbox", { name: "Пароль" }).fill(user.password);
   await page.getByRole("button", { name: "Войти" }).click();
   await expect(page.getByRole("navigation").first()).toBeVisible();
 }
