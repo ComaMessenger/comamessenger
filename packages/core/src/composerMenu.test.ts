@@ -91,3 +91,62 @@ describe("composerMenu", () => {
     ).toContain("request");
   });
 });
+
+describe("composerMenu: «Задача» (wave 3)", () => {
+  const withTasks = [...features, "message_tasks"];
+  it("follows «Запрос» in «Попросить и поручить» with its hint", () => {
+    const groups = composerMenu({
+      platform: "mobile",
+      readonly: false,
+      hasAgents: false,
+      features: withTasks,
+    });
+    expect(groups[1]!.items).toEqual([
+      {
+        id: "request",
+        labelKey: "composerRequest",
+        hintKey: "composerRequestHint",
+      },
+      { id: "task", labelKey: "composerTask", hintKey: "composerTaskHint" },
+    ]);
+  });
+
+  it("comes only with message_tasks, also without requests", () => {
+    expect(
+      composerMenuItems({
+        platform: "web",
+        readonly: false,
+        hasAgents: false,
+        features: ["message_tasks"],
+      }),
+    ).toEqual(["photo", "file", "markdownFile", "task"]);
+    expect(
+      composerMenuItems({
+        platform: "web",
+        readonly: false,
+        hasAgents: false,
+        features,
+      }),
+    ).not.toContain("task");
+  });
+
+  it("is not offered in a thread or a read-only chat", () => {
+    expect(
+      composerMenuItems({
+        platform: "mobile",
+        readonly: false,
+        hasAgents: false,
+        features: withTasks,
+        inThread: true,
+      }),
+    ).toEqual(["photo", "camera", "file"]);
+    expect(
+      composerMenuItems({
+        platform: "mobile",
+        readonly: true,
+        hasAgents: false,
+        features: withTasks,
+      }),
+    ).toEqual([]);
+  });
+});

@@ -1,5 +1,6 @@
 import { APIError, type MessengerAPI } from "./api";
-import type { DurableEvent, RealtimeState } from "./types";
+import type { DurableEvent, MessageTask, RealtimeState } from "./types";
+import { parseMessageTask, taskUpdateRefreshesUnread } from "./tasks";
 import type { TypingAction } from "./presenceText";
 
 /** How often a connected client confirms it is still here (TTL is 60s). */
@@ -19,6 +20,13 @@ export const serverFeature = {
    * «Отдел» and «Должность» request segments and the settings page.
    */
   orgStructure: "org_structure",
+  /**
+   * Phase 6.6 wave 3: «Задача» in «+», «Сделать задачей», task cards, the
+   * tasks of the header slot, the «Задачи» filter of «Ждут вас».
+   */
+  tasks: "message_tasks",
+  /** Phase 6.7 wave 4: «Опрос» and the «Опросы» filter of «Ждут вас». */
+  polls: "message_polls",
 } as const;
 
 /** True when the server announced the feature; false before hello. */
@@ -31,8 +39,12 @@ export function hasServerFeature(
   return false;
 }
 
-/** The phase 6.4 features the server announced. */
-export type WorkplaceFeatures = { requests: boolean; reminders: boolean };
+/** The workplace features (phases 6.4–6.6) the server announced. */
+export type WorkplaceFeatures = {
+  requests: boolean;
+  reminders: boolean;
+  tasks: boolean;
+};
 
 export function workplaceFeatures(
   features: Iterable<string> | null | undefined,
@@ -41,6 +53,7 @@ export function workplaceFeatures(
   return {
     requests: hasServerFeature(list, serverFeature.requests),
     reminders: hasServerFeature(list, serverFeature.reminders),
+    tasks: hasServerFeature(list, serverFeature.tasks),
   };
 }
 
@@ -48,17 +61,28 @@ export function workplaceFeatures(
  * Events after which «Ждут вас», the reminder count and the chat marks may
  * have changed: GET /unread should be read again. request.updated counts
  * only when the request closed, other updates do not change what waits for
- * the reader.
+ * the reader. Every task.notified counts. A task.updated counts when the
+ * reader is on the task before or after it (`task` — the reader's id and
+ * the task the cache had before the event); without them it counts always.
  */
 export function refreshesUnread(
   event: Pick<DurableEvent, "type" | "data">,
+  task?: { me: string; previous: MessageTask | null | undefined },
 ): boolean {
   if (
     event.type === "request.assigned" ||
     event.type === "request.answer.updated" ||
+    event.type === "task.notified" ||
     event.type.startsWith("reminder.")
   )
     return true;
+  if (event.type === "task.updated") {
+    if (!task) return true;
+    const next = parseMessageTask(event.data.task);
+    return next
+      ? taskUpdateRefreshesUnread(task.previous, next, task.me)
+      : false;
+  }
   return event.type === "request.updated" && event.data.status === "closed";
 }
 

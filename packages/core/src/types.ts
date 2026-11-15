@@ -338,3 +338,33 @@ export type MessageDepartmentMention =
 /** data of org.updated: the new org_version and why; no content. */
 export type OrgUpdatedEvent =
   components["schemas"]["RealtimeOrgUpdatedEventV1"];
+
+// Tasks («Задача»), phase 6.6 wave 3.
+export type MessageTask = components["schemas"]["MessageTask"];
+export type MessageTaskAssignee = components["schemas"]["MessageTaskAssignee"];
+export type MessageTaskItem = components["schemas"]["MessageTaskItem"];
+export type MessageTaskSource = components["schemas"]["MessageTaskSource"];
+export type TaskStatus = components["schemas"]["TaskStatus"];
+export type TaskAssigneeKind = components["schemas"]["TaskAssigneeKind"];
+export type TaskAssigneeInput = components["schemas"]["TaskAssigneeInput"];
+export type TaskItemInput = components["schemas"]["TaskItemInput"];
+export type CreateTaskRequest = components["schemas"]["CreateTaskRequest"];
+export type UpdateTaskRequest = components["schemas"]["UpdateTaskRequest"];
+export type SetTaskStatusRequest =
+  components["schemas"]["SetTaskStatusRequest"];
+export type AddTaskItemRequest = components["schemas"]["AddTaskItemRequest"];
+export type UpdateTaskItemRequest =
+  components["schemas"]["UpdateTaskItemRequest"];
+export type TaskRole = components["schemas"]["TaskRole"];
+export type ChatTaskCounts = components["schemas"]["ChatTaskCounts"];
+export type ChatTaskPage = components["schemas"]["ChatTaskPage"];
+export type MyTaskItem = components["schemas"]["MyTaskItem"];
+export type MyTaskPage = components["schemas"]["MyTaskPage"];
+export type TaskNudgeResult = components["schemas"]["TaskNudgeResult"];
+export type WaitingInboxItem = components["schemas"]["WaitingInboxItem"];
+export type WaitingInboxPage = components["schemas"]["WaitingInboxPage"];
+/** data of task.updated: the whole task, the same for everyone. */
+export type TaskUpdatedEvent = components["schemas"]["TaskUpdatedEvent"];
+/** data of task.notified: a reason for push and toast, no task text. */
+export type TaskNotifiedEvent =
+  components["schemas"]["RealtimeTaskNotifiedEventV1"];

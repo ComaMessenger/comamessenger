@@ -51,3 +51,41 @@ describe("messageMenu: remind", () => {
     expect(remindLabelKey(true)).toBe("messageEditReminder");
   });
 });
+
+describe("messageMenu: «Сделать задачей» (wave 3)", () => {
+  it("stands right after «Напомнить мне»", () => {
+    expect(
+      messageMenu({ ...base, reminders: true, tasks: true, canPin: true })[1],
+    ).toEqual(["save", "remind", "makeTask", "pin", "forward", "details"]);
+    expect(messageMenu({ ...base, tasks: true })[1]).toEqual([
+      "save",
+      "makeTask",
+      "forward",
+      "details",
+    ]);
+  });
+
+  it("is only for saved text messages, with tasks on the server", () => {
+    const has = (facts: Partial<MessageMenuFacts>) =>
+      messageMenu({ ...base, tasks: true, ...facts })
+        .flat()
+        .includes("makeTask");
+    expect(has({})).toBe(true);
+    expect(has({ messageType: "text" })).toBe(true);
+    expect(has({ inThread: true })).toBe(true);
+    expect(has({ tasks: false })).toBe(false);
+    expect(has({ tasks: undefined })).toBe(false);
+    expect(has({ messageType: "task" })).toBe(false);
+    expect(has({ messageType: "request" })).toBe(false);
+    expect(has({ messageType: "poll" })).toBe(false);
+    expect(has({ hasText: false })).toBe(false);
+    expect(has({ persisted: false })).toBe(false);
+  });
+
+  it("does not edit a task as text", () => {
+    expect(
+      messageMenu({ ...base, own: true, messageType: "task" }).flat(),
+    ).not.toContain("edit");
+    expect(messageMenu({ ...base, own: true }).flat()).toContain("edit");
+  });
+});

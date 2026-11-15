@@ -1,0 +1,965 @@
+{
+  "description": "Who may do what with a task: decision 5 of docs/phases/06.6-tasks.md. Read by packages/core (vitest) and by the server's Go test; both must give the same answers. author_id is the task message's author. A viewer with chat_role null is not a member of the chat.",
+  "cases": [
+    {
+      "name": "author, open task on someone",
+      "author_id": "00000000-0000-7000-8000-00000000000a",
+      "viewer": {
+        "actor_id": "00000000-0000-7000-8000-00000000000a",
+        "chat_role": "member",
+        "moderator": false
+      },
+      "task": {
+        "status": "open",
+        "assignee": {
+          "kind": "person",
+          "actor_id": "00000000-0000-7000-8000-00000000000b",
+          "candidate_ids": []
+        },
+        "items": [
+          {
+            "id": "00000000-0000-7000-8000-0000000000a1",
+            "assignee_id": "00000000-0000-7000-8000-00000000000c"
+          },
+          {
+            "id": "00000000-0000-7000-8000-0000000000a2",
+            "assignee_id": null
+          }
+        ],
+        "nudge_count": 0
+      },
+      "expect": {
+        "edit": true,
+        "reassign": true,
+        "start": true,
+        "stop": false,
+        "complete": true,
+        "reopen": false,
+        "cancel": true,
+        "restore": false,
+        "manage_items": true,
+        "check_items": [
+          "00000000-0000-7000-8000-0000000000a1",
+          "00000000-0000-7000-8000-0000000000a2"
+        ],
+        "nudge": true,
+        "take": false
+      }
+    },
+    {
+      "name": "author, in progress",
+      "author_id": "00000000-0000-7000-8000-00000000000a",
+      "viewer": {
+        "actor_id": "00000000-0000-7000-8000-00000000000a",
+        "chat_role": "member",
+        "moderator": false
+      },
+      "task": {
+        "status": "in_progress",
+        "assignee": {
+          "kind": "person",
+          "actor_id": "00000000-0000-7000-8000-00000000000b",
+          "candidate_ids": []
+        },
+        "items": [
+          {
+            "id": "00000000-0000-7000-8000-0000000000a1",
+            "assignee_id": "00000000-0000-7000-8000-00000000000c"
+          },
+          {
+            "id": "00000000-0000-7000-8000-0000000000a2",
+            "assignee_id": null
+          }
+        ],
+        "nudge_count": 0
+      },
+      "expect": {
+        "edit": true,
+        "reassign": true,
+        "start": false,
+        "stop": true,
+        "complete": true,
+        "reopen": false,
+        "cancel": true,
+        "restore": false,
+        "manage_items": true,
+        "check_items": [
+          "00000000-0000-7000-8000-0000000000a1",
+          "00000000-0000-7000-8000-0000000000a2"
+        ],
+        "nudge": true,
+        "take": false
+      }
+    },
+    {
+      "name": "author, done: only «Вернуть в работу»",
+      "author_id": "00000000-0000-7000-8000-00000000000a",
+      "viewer": {
+        "actor_id": "00000000-0000-7000-8000-00000000000a",
+        "chat_role": "member",
+        "moderator": false
+      },
+      "task": {
+        "status": "done",
+        "assignee": {
+          "kind": "person",
+          "actor_id": "00000000-0000-7000-8000-00000000000b",
+          "candidate_ids": []
+        },
+        "items": [
+          {
+            "id": "00000000-0000-7000-8000-0000000000a1",
+            "assignee_id": "00000000-0000-7000-8000-00000000000c"
+          },
+          {
+            "id": "00000000-0000-7000-8000-0000000000a2",
+            "assignee_id": null
+          }
+        ],
+        "nudge_count": 0
+      },
+      "expect": {
+        "edit": false,
+        "reassign": false,
+        "start": false,
+        "stop": false,
+        "complete": false,
+        "reopen": true,
+        "cancel": false,
+        "restore": false,
+        "manage_items": false,
+        "check_items": [],
+        "nudge": false,
+        "take": false
+      }
+    },
+    {
+      "name": "author, canceled: only «Вернуть»",
+      "author_id": "00000000-0000-7000-8000-00000000000a",
+      "viewer": {
+        "actor_id": "00000000-0000-7000-8000-00000000000a",
+        "chat_role": "member",
+        "moderator": false
+      },
+      "task": {
+        "status": "canceled",
+        "assignee": {
+          "kind": "person",
+          "actor_id": "00000000-0000-7000-8000-00000000000b",
+          "candidate_ids": []
+        },
+        "items": [
+          {
+            "id": "00000000-0000-7000-8000-0000000000a1",
+            "assignee_id": "00000000-0000-7000-8000-00000000000c"
+          },
+          {
+            "id": "00000000-0000-7000-8000-0000000000a2",
+            "assignee_id": null
+          }
+        ],
+        "nudge_count": 0
+      },
+      "expect": {
+        "edit": false,
+        "reassign": false,
+        "start": false,
+        "stop": false,
+        "complete": false,
+        "reopen": false,
+        "cancel": false,
+        "restore": true,
+        "manage_items": false,
+        "check_items": [],
+        "nudge": false,
+        "take": false
+      }
+    },
+    {
+      "name": "author, nudges used up",
+      "author_id": "00000000-0000-7000-8000-00000000000a",
+      "viewer": {
+        "actor_id": "00000000-0000-7000-8000-00000000000a",
+        "chat_role": "member",
+        "moderator": false
+      },
+      "task": {
+        "status": "open",
+        "assignee": {
+          "kind": "person",
+          "actor_id": "00000000-0000-7000-8000-00000000000b",
+          "candidate_ids": []
+        },
+        "items": [
+          {
+            "id": "00000000-0000-7000-8000-0000000000a1",
+            "assignee_id": "00000000-0000-7000-8000-00000000000c"
+          },
+          {
+            "id": "00000000-0000-7000-8000-0000000000a2",
+            "assignee_id": null
+          }
+        ],
+        "nudge_count": 5
+      },
+      "expect": {
+        "edit": true,
+        "reassign": true,
+        "start": true,
+        "stop": false,
+        "complete": true,
+        "reopen": false,
+        "cancel": true,
+        "restore": false,
+        "manage_items": true,
+        "check_items": [
+          "00000000-0000-7000-8000-0000000000a1",
+          "00000000-0000-7000-8000-0000000000a2"
+        ],
+        "nudge": false,
+        "take": false
+      }
+    },
+    {
+      "name": "author on oneself: nobody to nudge",
+      "author_id": "00000000-0000-7000-8000-00000000000a",
+      "viewer": {
+        "actor_id": "00000000-0000-7000-8000-00000000000a",
+        "chat_role": "member",
+        "moderator": false
+      },
+      "task": {
+        "status": "open",
+        "assignee": {
+          "kind": "person",
+          "actor_id": "00000000-0000-7000-8000-00000000000a",
+          "candidate_ids": []
+        },
+        "items": [
+          {
+            "id": "00000000-0000-7000-8000-0000000000a1",
+            "assignee_id": "00000000-0000-7000-8000-00000000000c"
+          },
+          {
+            "id": "00000000-0000-7000-8000-0000000000a2",
+            "assignee_id": null
+          }
+        ],
+        "nudge_count": 0
+      },
+      "expect": {
+        "edit": true,
+        "reassign": true,
+        "start": true,
+        "stop": false,
+        "complete": true,
+        "reopen": false,
+        "cancel": true,
+        "restore": false,
+        "manage_items": true,
+        "check_items": [
+          "00000000-0000-7000-8000-0000000000a1",
+          "00000000-0000-7000-8000-0000000000a2"
+        ],
+        "nudge": false,
+        "take": false
+      }
+    },
+    {
+      "name": "author left the chat",
+      "author_id": "00000000-0000-7000-8000-00000000000a",
+      "viewer": {
+        "actor_id": "00000000-0000-7000-8000-00000000000a",
+        "chat_role": null,
+        "moderator": false
+      },
+      "task": {
+        "status": "open",
+        "assignee": {
+          "kind": "person",
+          "actor_id": "00000000-0000-7000-8000-00000000000b",
+          "candidate_ids": []
+        },
+        "items": [
+          {
+            "id": "00000000-0000-7000-8000-0000000000a1",
+            "assignee_id": "00000000-0000-7000-8000-00000000000c"
+          },
+          {
+            "id": "00000000-0000-7000-8000-0000000000a2",
+            "assignee_id": null
+          }
+        ],
+        "nudge_count": 0
+      },
+      "expect": {
+        "edit": false,
+        "reassign": false,
+        "start": false,
+        "stop": false,
+        "complete": false,
+        "reopen": false,
+        "cancel": false,
+        "restore": false,
+        "manage_items": false,
+        "check_items": [],
+        "nudge": false,
+        "take": false
+      }
+    },
+    {
+      "name": "responsible, open",
+      "author_id": "00000000-0000-7000-8000-00000000000a",
+      "viewer": {
+        "actor_id": "00000000-0000-7000-8000-00000000000b",
+        "chat_role": "member",
+        "moderator": false
+      },
+      "task": {
+        "status": "open",
+        "assignee": {
+          "kind": "person",
+          "actor_id": "00000000-0000-7000-8000-00000000000b",
+          "candidate_ids": []
+        },
+        "items": [
+          {
+            "id": "00000000-0000-7000-8000-0000000000a1",
+            "assignee_id": "00000000-0000-7000-8000-00000000000c"
+          },
+          {
+            "id": "00000000-0000-7000-8000-0000000000a2",
+            "assignee_id": null
+          }
+        ],
+        "nudge_count": 0
+      },
+      "expect": {
+        "edit": false,
+        "reassign": false,
+        "start": true,
+        "stop": false,
+        "complete": true,
+        "reopen": false,
+        "cancel": false,
+        "restore": false,
+        "manage_items": true,
+        "check_items": [
+          "00000000-0000-7000-8000-0000000000a1",
+          "00000000-0000-7000-8000-0000000000a2"
+        ],
+        "nudge": false,
+        "take": false
+      }
+    },
+    {
+      "name": "responsible, in progress",
+      "author_id": "00000000-0000-7000-8000-00000000000a",
+      "viewer": {
+        "actor_id": "00000000-0000-7000-8000-00000000000b",
+        "chat_role": "member",
+        "moderator": false
+      },
+      "task": {
+        "status": "in_progress",
+        "assignee": {
+          "kind": "person",
+          "actor_id": "00000000-0000-7000-8000-00000000000b",
+          "candidate_ids": []
+        },
+        "items": [
+          {
+            "id": "00000000-0000-7000-8000-0000000000a1",
+            "assignee_id": "00000000-0000-7000-8000-00000000000c"
+          },
+          {
+            "id": "00000000-0000-7000-8000-0000000000a2",
+            "assignee_id": null
+          }
+        ],
+        "nudge_count": 0
+      },
+      "expect": {
+        "edit": false,
+        "reassign": false,
+        "start": false,
+        "stop": true,
+        "complete": true,
+        "reopen": false,
+        "cancel": false,
+        "restore": false,
+        "manage_items": true,
+        "check_items": [
+          "00000000-0000-7000-8000-0000000000a1",
+          "00000000-0000-7000-8000-0000000000a2"
+        ],
+        "nudge": false,
+        "take": false
+      }
+    },
+    {
+      "name": "responsible, done",
+      "author_id": "00000000-0000-7000-8000-00000000000a",
+      "viewer": {
+        "actor_id": "00000000-0000-7000-8000-00000000000b",
+        "chat_role": "member",
+        "moderator": false
+      },
+      "task": {
+        "status": "done",
+        "assignee": {
+          "kind": "person",
+          "actor_id": "00000000-0000-7000-8000-00000000000b",
+          "candidate_ids": []
+        },
+        "items": [
+          {
+            "id": "00000000-0000-7000-8000-0000000000a1",
+            "assignee_id": "00000000-0000-7000-8000-00000000000c"
+          },
+          {
+            "id": "00000000-0000-7000-8000-0000000000a2",
+            "assignee_id": null
+          }
+        ],
+        "nudge_count": 0
+      },
+      "expect": {
+        "edit": false,
+        "reassign": false,
+        "start": false,
+        "stop": false,
+        "complete": false,
+        "reopen": true,
+        "cancel": false,
+        "restore": false,
+        "manage_items": false,
+        "check_items": [],
+        "nudge": false,
+        "take": false
+      }
+    },
+    {
+      "name": "responsible, canceled: cannot restore",
+      "author_id": "00000000-0000-7000-8000-00000000000a",
+      "viewer": {
+        "actor_id": "00000000-0000-7000-8000-00000000000b",
+        "chat_role": "member",
+        "moderator": false
+      },
+      "task": {
+        "status": "canceled",
+        "assignee": {
+          "kind": "person",
+          "actor_id": "00000000-0000-7000-8000-00000000000b",
+          "candidate_ids": []
+        },
+        "items": [
+          {
+            "id": "00000000-0000-7000-8000-0000000000a1",
+            "assignee_id": "00000000-0000-7000-8000-00000000000c"
+          },
+          {
+            "id": "00000000-0000-7000-8000-0000000000a2",
+            "assignee_id": null
+          }
+        ],
+        "nudge_count": 0
+      },
+      "expect": {
+        "edit": false,
+        "reassign": false,
+        "start": false,
+        "stop": false,
+        "complete": false,
+        "reopen": false,
+        "cancel": false,
+        "restore": false,
+        "manage_items": false,
+        "check_items": [],
+        "nudge": false,
+        "take": false
+      }
+    },
+    {
+      "name": "item assignee: only their own item",
+      "author_id": "00000000-0000-7000-8000-00000000000a",
+      "viewer": {
+        "actor_id": "00000000-0000-7000-8000-00000000000c",
+        "chat_role": "member",
+        "moderator": false
+      },
+      "task": {
+        "status": "open",
+        "assignee": {
+          "kind": "person",
+          "actor_id": "00000000-0000-7000-8000-00000000000b",
+          "candidate_ids": []
+        },
+        "items": [
+          {
+            "id": "00000000-0000-7000-8000-0000000000a1",
+            "assignee_id": "00000000-0000-7000-8000-00000000000c"
+          },
+          {
+            "id": "00000000-0000-7000-8000-0000000000a2",
+            "assignee_id": null
+          }
+        ],
+        "nudge_count": 0
+      },
+      "expect": {
+        "edit": false,
+        "reassign": false,
+        "start": false,
+        "stop": false,
+        "complete": false,
+        "reopen": false,
+        "cancel": false,
+        "restore": false,
+        "manage_items": false,
+        "check_items": ["00000000-0000-7000-8000-0000000000a1"],
+        "nudge": false,
+        "take": false
+      }
+    },
+    {
+      "name": "item assignee, done task: nothing",
+      "author_id": "00000000-0000-7000-8000-00000000000a",
+      "viewer": {
+        "actor_id": "00000000-0000-7000-8000-00000000000c",
+        "chat_role": "member",
+        "moderator": false
+      },
+      "task": {
+        "status": "done",
+        "assignee": {
+          "kind": "person",
+          "actor_id": "00000000-0000-7000-8000-00000000000b",
+          "candidate_ids": []
+        },
+        "items": [
+          {
+            "id": "00000000-0000-7000-8000-0000000000a1",
+            "assignee_id": "00000000-0000-7000-8000-00000000000c"
+          },
+          {
+            "id": "00000000-0000-7000-8000-0000000000a2",
+            "assignee_id": null
+          }
+        ],
+        "nudge_count": 0
+      },
+      "expect": {
+        "edit": false,
+        "reassign": false,
+        "start": false,
+        "stop": false,
+        "complete": false,
+        "reopen": false,
+        "cancel": false,
+        "restore": false,
+        "manage_items": false,
+        "check_items": [],
+        "nudge": false,
+        "take": false
+      }
+    },
+    {
+      "name": "other member: nothing",
+      "author_id": "00000000-0000-7000-8000-00000000000a",
+      "viewer": {
+        "actor_id": "00000000-0000-7000-8000-000000000010",
+        "chat_role": "member",
+        "moderator": false
+      },
+      "task": {
+        "status": "open",
+        "assignee": {
+          "kind": "person",
+          "actor_id": "00000000-0000-7000-8000-00000000000b",
+          "candidate_ids": []
+        },
+        "items": [
+          {
+            "id": "00000000-0000-7000-8000-0000000000a1",
+            "assignee_id": "00000000-0000-7000-8000-00000000000c"
+          },
+          {
+            "id": "00000000-0000-7000-8000-0000000000a2",
+            "assignee_id": null
+          }
+        ],
+        "nudge_count": 0
+      },
+      "expect": {
+        "edit": false,
+        "reassign": false,
+        "start": false,
+        "stop": false,
+        "complete": false,
+        "reopen": false,
+        "cancel": false,
+        "restore": false,
+        "manage_items": false,
+        "check_items": [],
+        "nudge": false,
+        "take": false
+      }
+    },
+    {
+      "name": "chat admin",
+      "author_id": "00000000-0000-7000-8000-00000000000a",
+      "viewer": {
+        "actor_id": "00000000-0000-7000-8000-00000000000f",
+        "chat_role": "admin",
+        "moderator": false
+      },
+      "task": {
+        "status": "open",
+        "assignee": {
+          "kind": "person",
+          "actor_id": "00000000-0000-7000-8000-00000000000b",
+          "candidate_ids": []
+        },
+        "items": [
+          {
+            "id": "00000000-0000-7000-8000-0000000000a1",
+            "assignee_id": "00000000-0000-7000-8000-00000000000c"
+          },
+          {
+            "id": "00000000-0000-7000-8000-0000000000a2",
+            "assignee_id": null
+          }
+        ],
+        "nudge_count": 0
+      },
+      "expect": {
+        "edit": true,
+        "reassign": true,
+        "start": true,
+        "stop": false,
+        "complete": true,
+        "reopen": false,
+        "cancel": true,
+        "restore": false,
+        "manage_items": true,
+        "check_items": [
+          "00000000-0000-7000-8000-0000000000a1",
+          "00000000-0000-7000-8000-0000000000a2"
+        ],
+        "nudge": true,
+        "take": false
+      }
+    },
+    {
+      "name": "chat owner, canceled",
+      "author_id": "00000000-0000-7000-8000-00000000000a",
+      "viewer": {
+        "actor_id": "00000000-0000-7000-8000-00000000000f",
+        "chat_role": "owner",
+        "moderator": false
+      },
+      "task": {
+        "status": "canceled",
+        "assignee": {
+          "kind": "person",
+          "actor_id": "00000000-0000-7000-8000-00000000000b",
+          "candidate_ids": []
+        },
+        "items": [
+          {
+            "id": "00000000-0000-7000-8000-0000000000a1",
+            "assignee_id": "00000000-0000-7000-8000-00000000000c"
+          },
+          {
+            "id": "00000000-0000-7000-8000-0000000000a2",
+            "assignee_id": null
+          }
+        ],
+        "nudge_count": 0
+      },
+      "expect": {
+        "edit": false,
+        "reassign": false,
+        "start": false,
+        "stop": false,
+        "complete": false,
+        "reopen": false,
+        "cancel": false,
+        "restore": true,
+        "manage_items": false,
+        "check_items": [],
+        "nudge": false,
+        "take": false
+      }
+    },
+    {
+      "name": "workspace moderator in the chat",
+      "author_id": "00000000-0000-7000-8000-00000000000a",
+      "viewer": {
+        "actor_id": "00000000-0000-7000-8000-000000000011",
+        "chat_role": "member",
+        "moderator": true
+      },
+      "task": {
+        "status": "open",
+        "assignee": {
+          "kind": "person",
+          "actor_id": "00000000-0000-7000-8000-00000000000b",
+          "candidate_ids": []
+        },
+        "items": [
+          {
+            "id": "00000000-0000-7000-8000-0000000000a1",
+            "assignee_id": "00000000-0000-7000-8000-00000000000c"
+          },
+          {
+            "id": "00000000-0000-7000-8000-0000000000a2",
+            "assignee_id": null
+          }
+        ],
+        "nudge_count": 0
+      },
+      "expect": {
+        "edit": true,
+        "reassign": true,
+        "start": true,
+        "stop": false,
+        "complete": true,
+        "reopen": false,
+        "cancel": true,
+        "restore": false,
+        "manage_items": true,
+        "check_items": [
+          "00000000-0000-7000-8000-0000000000a1",
+          "00000000-0000-7000-8000-0000000000a2"
+        ],
+        "nudge": true,
+        "take": false
+      }
+    },
+    {
+      "name": "workspace moderator not in the chat",
+      "author_id": "00000000-0000-7000-8000-00000000000a",
+      "viewer": {
+        "actor_id": "00000000-0000-7000-8000-000000000011",
+        "chat_role": null,
+        "moderator": true
+      },
+      "task": {
+        "status": "open",
+        "assignee": {
+          "kind": "person",
+          "actor_id": "00000000-0000-7000-8000-00000000000b",
+          "candidate_ids": []
+        },
+        "items": [
+          {
+            "id": "00000000-0000-7000-8000-0000000000a1",
+            "assignee_id": "00000000-0000-7000-8000-00000000000c"
+          },
+          {
+            "id": "00000000-0000-7000-8000-0000000000a2",
+            "assignee_id": null
+          }
+        ],
+        "nudge_count": 0
+      },
+      "expect": {
+        "edit": false,
+        "reassign": false,
+        "start": false,
+        "stop": false,
+        "complete": false,
+        "reopen": false,
+        "cancel": false,
+        "restore": false,
+        "manage_items": false,
+        "check_items": [],
+        "nudge": false,
+        "take": false
+      }
+    },
+    {
+      "name": "candidate of an untaken queue",
+      "author_id": "00000000-0000-7000-8000-00000000000a",
+      "viewer": {
+        "actor_id": "00000000-0000-7000-8000-00000000000d",
+        "chat_role": "member",
+        "moderator": false
+      },
+      "task": {
+        "status": "open",
+        "assignee": {
+          "kind": "department",
+          "actor_id": null,
+          "candidate_ids": [
+            "00000000-0000-7000-8000-00000000000d",
+            "00000000-0000-7000-8000-00000000000e"
+          ]
+        },
+        "items": [],
+        "nudge_count": 0
+      },
+      "expect": {
+        "edit": false,
+        "reassign": false,
+        "start": false,
+        "stop": false,
+        "complete": false,
+        "reopen": false,
+        "cancel": false,
+        "restore": false,
+        "manage_items": false,
+        "check_items": [],
+        "nudge": false,
+        "take": true
+      }
+    },
+    {
+      "name": "candidate after another took it",
+      "author_id": "00000000-0000-7000-8000-00000000000a",
+      "viewer": {
+        "actor_id": "00000000-0000-7000-8000-00000000000e",
+        "chat_role": "member",
+        "moderator": false
+      },
+      "task": {
+        "status": "open",
+        "assignee": {
+          "kind": "department",
+          "actor_id": "00000000-0000-7000-8000-00000000000d",
+          "candidate_ids": [
+            "00000000-0000-7000-8000-00000000000d",
+            "00000000-0000-7000-8000-00000000000e"
+          ]
+        },
+        "items": [],
+        "nudge_count": 0
+      },
+      "expect": {
+        "edit": false,
+        "reassign": false,
+        "start": false,
+        "stop": false,
+        "complete": false,
+        "reopen": false,
+        "cancel": false,
+        "restore": false,
+        "manage_items": false,
+        "check_items": [],
+        "nudge": false,
+        "take": false
+      }
+    },
+    {
+      "name": "candidate who took it is responsible",
+      "author_id": "00000000-0000-7000-8000-00000000000a",
+      "viewer": {
+        "actor_id": "00000000-0000-7000-8000-00000000000d",
+        "chat_role": "member",
+        "moderator": false
+      },
+      "task": {
+        "status": "in_progress",
+        "assignee": {
+          "kind": "department",
+          "actor_id": "00000000-0000-7000-8000-00000000000d",
+          "candidate_ids": [
+            "00000000-0000-7000-8000-00000000000d",
+            "00000000-0000-7000-8000-00000000000e"
+          ]
+        },
+        "items": [],
+        "nudge_count": 0
+      },
+      "expect": {
+        "edit": false,
+        "reassign": false,
+        "start": false,
+        "stop": true,
+        "complete": true,
+        "reopen": false,
+        "cancel": false,
+        "restore": false,
+        "manage_items": true,
+        "check_items": [],
+        "nudge": false,
+        "take": false
+      }
+    },
+    {
+      "name": "author of an untaken queue: nudge the candidates",
+      "author_id": "00000000-0000-7000-8000-00000000000a",
+      "viewer": {
+        "actor_id": "00000000-0000-7000-8000-00000000000a",
+        "chat_role": "member",
+        "moderator": false
+      },
+      "task": {
+        "status": "open",
+        "assignee": {
+          "kind": "department",
+          "actor_id": null,
+          "candidate_ids": [
+            "00000000-0000-7000-8000-00000000000d",
+            "00000000-0000-7000-8000-00000000000e"
+          ]
+        },
+        "items": [],
+        "nudge_count": 0
+      },
+      "expect": {
+        "edit": true,
+        "reassign": true,
+        "start": true,
+        "stop": false,
+        "complete": true,
+        "reopen": false,
+        "cancel": true,
+        "restore": false,
+        "manage_items": true,
+        "check_items": [],
+        "nudge": true,
+        "take": false
+      }
+    },
+    {
+      "name": "candidate of a closed queue",
+      "author_id": "00000000-0000-7000-8000-00000000000a",
+      "viewer": {
+        "actor_id": "00000000-0000-7000-8000-00000000000d",
+        "chat_role": "member",
+        "moderator": false
+      },
+      "task": {
+        "status": "canceled",
+        "assignee": {
+          "kind": "department",
+          "actor_id": null,
+          "candidate_ids": [
+            "00000000-0000-7000-8000-00000000000d",
+            "00000000-0000-7000-8000-00000000000e"
+          ]
+        },
+        "items": [],
+        "nudge_count": 0
+      },
+      "expect": {
+        "edit": false,
+        "reassign": false,
+        "start": false,
+        "stop": false,
+        "complete": false,
+        "reopen": false,
+        "cancel": false,
+        "restore": false,
+        "manage_items": false,
+        "check_items": [],
+        "nudge": false,
+        "take": false
+      }
+    }
+  ]
+}
