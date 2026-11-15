@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   chatRequestBadge,
+  chatWorkBadge,
+  filterWaitingRows,
+  reduceWaitingInbox,
+  waitingFilterCounts,
+  waitingFilters,
+  waitingList,
+  waitingRow,
+  waitingSources,
   defaultImportantTab,
   importantCounts,
   importantHref,
@@ -11,9 +19,12 @@ import {
   waitingStrip,
 } from "./importantInbox";
 import { parseRequestEvent, type RequestEvent } from "./requests";
+import { makeTask, makeTaskMessage } from "./taskFixtures";
 import type {
   Message,
   MessageRequest,
+  MessageTask,
+  WaitingInboxItem,
   MessageRequestViewer,
   RequestInboxItem,
 } from "./types";
@@ -317,5 +328,269 @@ describe("chat list and chat", () => {
     });
     expect(waitingStrip({ requests_waiting: 0 }, messages, {})).toBeNull();
     expect(waitingStrip({ requests_waiting: 1 }, [], {})?.messageID).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Wave 3: tasks in «Ждут вас»
+
+const withTasks = [...both, "message_tasks"];
+
+function waitingTask(
+  id: string,
+  task: MessageTask,
+  seq = 1,
+  role: WaitingInboxItem["my_role"] = "responsible",
+): WaitingInboxItem {
+  return {
+    kind: "task",
+    message: makeTaskMessage(id, task, { created_seq: seq }),
+    chat_id: "c1",
+    author: {
+      actor_id: "author",
+      display_name: "Марина",
+      type: "user",
+      avatar_version: 0,
+    } as WaitingInboxItem["author"],
+    chat: { id: "c1", kind: "group", display_name: "Зал" },
+    due_at: task.due_at,
+    request: null,
+    viewer: null,
+    my_role: role,
+  };
+}
+
+function waitingRequest(
+  id: string,
+  due: string | null,
+  seq = 1,
+): WaitingInboxItem {
+  const source = item(id, { request: { due_at: due }, seq });
+  return {
+    kind: "request",
+    message: source.message,
+    chat_id: source.chat_id,
+    author: source.author,
+    chat: source.chat,
+    due_at: due,
+    request: source.request,
+    viewer: source.viewer,
+    my_role: null,
+  };
+}
+
+const mine = (overrides: Partial<MessageTask> = {}) =>
+  makeTask({
+    assignee: { ...makeTask().assignee, actor_id: "me" },
+    ...overrides,
+  });
+
+describe("«Ждут вас» with tasks", () => {
+  it("counts open tasks in the chip and burning ones in the badge", () => {
+    expect(
+      importantCounts(
+        {
+          requests_waiting_total: 2,
+          reminders_fired_total: 1,
+          tasks_mine_open_total: 5,
+          tasks_mine_hot_total: 2,
+        },
+        withTasks,
+      ),
+    ).toEqual({ waiting: 7, reminders: 1, badge: 5 });
+    expect(
+      importantCounts(
+        {
+          requests_waiting_total: 2,
+          tasks_mine_open_total: 5,
+          tasks_mine_hot_total: 2,
+        },
+        both,
+      ),
+    ).toEqual({ waiting: 2, reminders: 0, badge: 2 });
+    expect(importantTabs(["message_tasks"])).toEqual(["waiting", "saved"]);
+  });
+
+  it("offers the chips with tasks only", () => {
+    expect(waitingFilters(both)).toEqual([]);
+    expect(waitingFilters(withTasks)).toEqual(["all", "requests", "tasks"]);
+    expect(waitingFilters(["message_tasks"])).toEqual(["all", "tasks"]);
+    expect(waitingFilters([...withTasks, "message_polls"])).toEqual([
+      "all",
+      "requests",
+      "tasks",
+      "polls",
+    ]);
+  });
+
+  it("chooses the endpoint by the server's features", () => {
+    expect(waitingSources(both)).toEqual([
+      { source: "requestInbox", state: "waiting" },
+      { source: "requestInbox", state: "answered" },
+    ]);
+    expect(waitingSources([])).toEqual([]);
+    expect(waitingSources(withTasks)).toEqual([
+      { source: "waitingInbox", kind: "all" },
+      { source: "requestInbox", state: "answered" },
+    ]);
+    expect(waitingSources(withTasks, "requests")).toEqual([
+      { source: "waitingInbox", kind: "requests" },
+      { source: "requestInbox", state: "answered" },
+    ]);
+    expect(waitingSources(withTasks, "tasks")).toEqual([
+      { source: "waitingInbox", kind: "tasks" },
+      { source: "myTasks", role: "assigned", state: "done" },
+    ]);
+    expect(waitingSources(withTasks, "tasks", "authored")).toEqual([
+      { source: "myTasks", role: "authored", state: "open" },
+      { source: "myTasks", role: "authored", state: "done" },
+    ]);
+    expect(waitingSources(withTasks, "polls")).toEqual([]);
+  });
+
+  it("merges requests and tasks in one order and filters them", () => {
+    const list = waitingList(
+      [
+        waitingTask("t-none", mine(), 9),
+        waitingRequest("r-late", "2026-11-12T09:00:00Z", 2),
+        waitingTask("t-soon", mine({ due_at: "2026-11-12T12:00:00Z" }), 3),
+        waitingRequest("r-none", null, 4),
+        waitingTask("t-closed", mine({ status: "done" }), 5),
+        waitingTask("t-taken", makeTask(), 6, "candidate"),
+        { ...waitingRequest("poll", null, 7), kind: "poll" as "request" },
+      ],
+      [],
+      "me",
+    );
+    expect(list.waiting.map((row) => row.item.message.id)).toEqual([
+      "r-late",
+      "t-soon",
+      "t-none",
+      "r-none",
+    ]);
+    expect(
+      filterWaitingRows(list.waiting, "tasks").map(
+        (row) => row.item.message.id,
+      ),
+    ).toEqual(["t-soon", "t-none"]);
+    expect(filterWaitingRows(list.waiting, "requests")).toHaveLength(2);
+    expect(waitingFilterCounts(list.waiting)).toEqual({
+      all: 4,
+      requests: 2,
+      tasks: 2,
+      polls: 0,
+    });
+  });
+
+  it("takes fresher tasks from the store", () => {
+    const list = waitingList(
+      [waitingTask("t1", mine({ version: 1 }))],
+      [],
+      "me",
+      { tasks: { t1: mine({ version: 2, status: "done" }) } },
+    );
+    expect(list.waiting).toEqual([]);
+    expect(waitingRow(waitingTask("t2", mine()))).toMatchObject({
+      kind: "task",
+      item: { my_role: "responsible" },
+    });
+  });
+
+  it("applies task and request events to the list", () => {
+    const items = [
+      waitingTask("t1", mine({ version: 1 })),
+      waitingRequest("m1", null),
+    ];
+    const taken = reduceWaitingInbox(
+      items,
+      {
+        type: "task.updated",
+        occurredAt: "",
+        data: {
+          message_id: "t1",
+          chat_id: "c1",
+          task: makeTask({ version: 2 }),
+        },
+      },
+      "me",
+      now,
+    );
+    expect(taken.items.map((entry) => entry.message.id)).toEqual(["m1"]);
+    const moved = reduceWaitingInbox(
+      items,
+      {
+        type: "task.updated",
+        occurredAt: "",
+        data: {
+          message_id: "t1",
+          chat_id: "c1",
+          task: mine({ version: 2, due_at: "2026-11-13T10:00:00Z" }),
+        },
+      },
+      "me",
+      now,
+    );
+    expect(moved.items[0]!.due_at).toBe("2026-11-13T10:00:00Z");
+    expect(
+      reduceWaitingInbox(
+        items,
+        {
+          type: "task.updated",
+          occurredAt: "",
+          data: { message_id: "t9", chat_id: "c1", task: mine() },
+        },
+        "me",
+        now,
+      ).stale,
+    ).toBe(true);
+    expect(
+      reduceWaitingInbox(
+        items,
+        {
+          type: "task.notified",
+          occurredAt: "",
+          data: {
+            message_id: "t9",
+            chat_id: "c1",
+            kind: "offered",
+            by_actor_id: "a",
+            due_at: null,
+          },
+        },
+        "me",
+        now,
+      ).stale,
+    ).toBe(true);
+    const closed = reduceWaitingInbox(
+      items,
+      event("request.updated", {
+        message_id: "m1",
+        status: "closed",
+        closed_reason: "author",
+        answered_count: 0,
+        waiting_count: 3,
+        version: 2,
+      }),
+      "me",
+      now,
+    );
+    expect(closed.items.map((entry) => entry.message.id)).toEqual(["t1"]);
+  });
+
+  it("marks a chat with a burning task over a waiting request", () => {
+    const chat = {
+      requests_waiting: 1,
+      requests_next_due_at: "2026-11-13T10:00:00Z",
+      tasks_mine_open: 1,
+      tasks_mine_next_due_at: "2026-11-12T12:00:00Z",
+    };
+    expect(chatWorkBadge(chat, now)).toEqual({
+      kind: "task",
+      badge: { kind: "due", at: new Date("2026-11-12T12:00:00Z") },
+    });
+    expect(
+      chatWorkBadge({ ...chat, tasks_mine_next_due_at: null }, now),
+    ).toMatchObject({ kind: "request" });
+    expect(chatWorkBadge(undefined, now)).toBe(null);
   });
 });

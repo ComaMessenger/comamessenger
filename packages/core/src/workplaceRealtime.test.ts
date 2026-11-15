@@ -10,6 +10,7 @@ import {
 } from "./realtime";
 import { optimisticAnswer, requestView } from "./requests";
 import { createMessengerStore } from "./store";
+import { makeTask } from "./taskFixtures";
 import type {
   ClientMessage,
   DurableEvent,
@@ -88,12 +89,16 @@ describe("features", () => {
     expect(workplaceFeatures(["message_requests"])).toEqual({
       requests: true,
       reminders: false,
+      tasks: false,
     });
     expect(
-      workplaceFeatures(new Set(["message_requests", "message_reminders"])),
+      workplaceFeatures(
+        new Set(["message_requests", "message_reminders", "message_tasks"]),
+      ),
     ).toEqual({
       requests: true,
       reminders: true,
+      tasks: true,
     });
   });
 
@@ -188,18 +193,16 @@ describe("unread refresh", () => {
 describe("messenger store: requests", () => {
   it("moves request_viewer of feed pages into the viewer map", () => {
     const store = createMessengerStore();
-    store
-      .getState()
-      .replaceMessages("c1", [
-        message({ request_viewer: { ...recipient, can_close: true } }),
-        message({
-          id: "plain",
-          client_msg_id: "p",
-          type: "text",
-          request: null,
-          created_seq: 11,
-        }),
-      ]);
+    store.getState().replaceMessages("c1", [
+      message({ request_viewer: { ...recipient, can_close: true } }),
+      message({
+        id: "plain",
+        client_msg_id: "p",
+        type: "text",
+        request: null,
+        created_seq: 11,
+      }),
+    ]);
     const state = store.getState();
     expect(state.messages.c1?.[0]).not.toHaveProperty("request_viewer");
     expect(state.requestViewers.m1).toMatchObject({
@@ -212,15 +215,13 @@ describe("messenger store: requests", () => {
 
   it("shows buttons when request.assigned comes before the message", () => {
     const store = createMessengerStore(100);
-    store
-      .getState()
-      .apply(
-        durable("request.assigned", {
-          message_id: "m1",
-          chat_id: "c1",
-          due_at: null,
-        }),
-      );
+    store.getState().apply(
+      durable("request.assigned", {
+        message_id: "m1",
+        chat_id: "c1",
+        due_at: null,
+      }),
+    );
     store
       .getState()
       .apply(
@@ -360,5 +361,31 @@ describe("messenger store: requests", () => {
     expect(store.getState().features).toEqual(["message_requests"]);
     store.getState().resetDurable(0);
     expect(store.getState().requestViewers).toEqual({});
+  });
+});
+
+describe("tasks and /unread", () => {
+  const task = (actor: string) =>
+    makeTask({
+      assignee: { ...makeTask().assignee, actor_id: actor },
+    });
+  it("re-reads after task.notified and task.updated that concern the reader", () => {
+    expect(
+      refreshesUnread({ type: "task.notified", data: { kind: "assigned" } }),
+    ).toBe(true);
+    const updated = { type: "task.updated", data: { task: task("me") } };
+    expect(refreshesUnread(updated)).toBe(true);
+    expect(refreshesUnread(updated, { me: "me", previous: null })).toBe(true);
+    const others = { type: "task.updated", data: { task: task("x") } };
+    expect(refreshesUnread(others, { me: "me", previous: null })).toBe(false);
+    expect(refreshesUnread(others, { me: "me", previous: task("me") })).toBe(
+      true,
+    );
+    expect(
+      refreshesUnread(
+        { type: "task.updated", data: { task: { broken: true } } },
+        { me: "me", previous: null },
+      ),
+    ).toBe(false);
   });
 });

@@ -10,10 +10,19 @@ import {
   type RequestEvent,
   type RequestViewers,
 } from "./requests";
+import {
+  absorbEarlyTasks,
+  parseTaskEvent,
+  reduceTask,
+  rememberTaskUpdate,
+  type EarlyTaskUpdates,
+  type TaskCacheAccess,
+} from "./tasks";
 import type {
   Chat,
   ClientMessage,
   DurableEvent,
+  MessageTask,
   RealtimeState,
   RequestState,
   UnreadSnapshot,
@@ -46,6 +55,11 @@ export type MessengerState = {
    * own answer events.
    */
   requestViewers: RequestViewers;
+  /**
+   * task.updated that ran ahead of its message (a page still loading,
+   * message.created behind), by message id: put in when the message comes.
+   */
+  earlyTasks: EarlyTaskUpdates;
   replaceChats(chats: Chat[]): void;
   replaceMessages(chatID: string, messages: ClientMessage[]): void;
   prependMessages(chatID: string, messages: ClientMessage[]): void;
@@ -87,6 +101,14 @@ export type MessengerState = {
     entry: RequestCacheEntry,
     chatID?: string,
   ): void;
+  /** Message.task of a cached message; null when it is not loaded. */
+  taskOf(messageID: string, chatID?: string): MessageTask | null;
+  /**
+   * Writes a task as it is, older or not: an optimistic one, a rollback or
+   * a REST reply (performTaskAction checks versions itself). A message not
+   * loaded yet gets it when it comes, if it is newer.
+   */
+  setTask(messageID: string, task: MessageTask, chatID?: string): void;
   setUnread(value: UnreadSnapshot): void;
   setRealtime(value: RealtimeState): void;
   setActive(chatID: string | null): void;
@@ -190,29 +212,48 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
     activeChatID: null,
     features: [],
     requestViewers: {},
+    earlyTasks: {},
     replaceChats: (items) =>
       set({ chats: Object.fromEntries(items.map((item) => [item.id, item])) }),
     replaceMessages: (chatID, items) =>
-      set((state) => ({
-        requestViewers: absorbViewers(state.requestViewers, items),
-        messages: {
-          ...state.messages,
-          [chatID]: uniqueSorted(
+      set((state) => {
+        const early = absorbEarlyTasks(
+          state.earlyTasks,
+          keepNewerTasks(
+            state.messages[chatID] ?? [],
             items.map((item) => withoutViewer(completeMessage(item))),
           ),
-        },
-      })),
+        );
+        return {
+          requestViewers: absorbViewers(state.requestViewers, items),
+          earlyTasks: early.early,
+          messages: {
+            ...state.messages,
+            [chatID]: uniqueSorted([...early.messages]),
+          },
+        };
+      }),
     prependMessages: (chatID, items) =>
-      set((state) => ({
-        requestViewers: absorbViewers(state.requestViewers, items),
-        messages: {
-          ...state.messages,
-          [chatID]: uniqueSorted([
-            ...items.map((item) => withoutViewer(completeMessage(item))),
-            ...(state.messages[chatID] ?? []),
-          ]),
-        },
-      })),
+      set((state) => {
+        const early = absorbEarlyTasks(
+          state.earlyTasks,
+          keepNewerTasks(
+            state.messages[chatID] ?? [],
+            items.map((item) => withoutViewer(completeMessage(item))),
+          ),
+        );
+        return {
+          requestViewers: absorbViewers(state.requestViewers, items),
+          earlyTasks: early.early,
+          messages: {
+            ...state.messages,
+            [chatID]: uniqueSorted([
+              ...early.messages,
+              ...(state.messages[chatID] ?? []),
+            ]),
+          },
+        };
+      }),
     optimistic: (message) =>
       set((state) => ({
         messages: {
@@ -224,10 +265,16 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
         },
       })),
     reconcile: (message) =>
-      set((state) => ({
-        requestViewers: absorbViewers(state.requestViewers, [message]),
-        messages: reconcileMessage(state.messages, withoutViewer(message)),
-      })),
+      set((state) => {
+        const early = absorbEarlyTasks(state.earlyTasks, [
+          withoutViewer(message),
+        ]);
+        return {
+          requestViewers: absorbViewers(state.requestViewers, [message]),
+          earlyTasks: early.early,
+          messages: reconcileMessage(state.messages, early.messages[0]!),
+        };
+      }),
     retrying: (clientMsgID) =>
       set((state) => ({
         messages: mapMessages(state.messages, (item) =>
@@ -275,8 +322,57 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
       }),
     setRequestEntry: (messageID, entry, chatID) =>
       set((state) => writeEntry(state, messageID, entry, chatID)),
+    taskOf: (messageID, chatID) => {
+      const state = get();
+      const found = findMessage(state.messages, messageID, chatID);
+      return found
+        ? (state.messages[found.chatID]![found.index]!.task ?? null)
+        : null;
+    },
+    setTask: (messageID, task, chatID) =>
+      set((state) => {
+        const found = findMessage(state.messages, messageID, chatID);
+        if (!found)
+          return {
+            earlyTasks: rememberTaskUpdate(state.earlyTasks, {
+              message_id: messageID,
+              task,
+            }),
+          };
+        const list = [...state.messages[found.chatID]!];
+        list[found.index] = { ...list[found.index]!, task };
+        return { messages: { ...state.messages, [found.chatID]: list } };
+      }),
     apply: (event) => {
       if (event.seq <= get().checkpoint) return false;
+      if (event.type === "task.updated" || event.type === "task.notified") {
+        const parsed = parseTaskEvent(event);
+        set((state) => {
+          if (parsed?.type !== "task.updated") return { checkpoint: event.seq };
+          const update = parsed.data;
+          const found = findMessage(
+            state.messages,
+            update.message_id,
+            update.chat_id,
+          );
+          if (!found)
+            return {
+              earlyTasks: rememberTaskUpdate(state.earlyTasks, update),
+              checkpoint: event.seq,
+            };
+          const list = state.messages[found.chatID]!;
+          const current = list[found.index]!;
+          const next = reduceTask(current, update);
+          if (next === current) return { checkpoint: event.seq };
+          const copy = [...list];
+          copy[found.index] = next;
+          return {
+            messages: { ...state.messages, [found.chatID]: copy },
+            checkpoint: event.seq,
+          };
+        });
+        return true;
+      }
       if (isRequestEvent(event.type)) {
         const parsed = parseRequestEvent(event);
         let refetch = false;
@@ -306,12 +402,23 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
           : null;
       set((state) => {
         let messages = state.messages;
+        let earlyTasks = state.earlyTasks;
         if (
           event.type === "message.created" ||
           event.type === "message.updated" ||
           event.type === "message.deleted"
         ) {
-          const incoming = event.data as unknown as ClientMessage;
+          let incoming = event.data as unknown as ClientMessage;
+          const early = state.earlyTasks[incoming.id];
+          if (early) {
+            if (incoming.task)
+              incoming = reduceTask(incoming, {
+                message_id: incoming.id,
+                task: early,
+              });
+            earlyTasks = { ...state.earlyTasks };
+            delete earlyTasks[incoming.id];
+          }
           const chatID = incoming.chat_id ?? event.chat_id;
           if (chatID) {
             const current = messages[chatID] ?? [];
@@ -366,7 +473,7 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
             };
           }
         }
-        return { messages, checkpoint: event.seq };
+        return { messages, earlyTasks, checkpoint: event.seq };
       });
       if (stub && loader && (requested.get(stub.id) ?? 0) < stub.version) {
         requested.set(stub.id, stub.version);
@@ -535,6 +642,7 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
         agentStatuses: {},
         messageStreams: {},
         requestViewers: {},
+        earlyTasks: {},
         checkpoint: value,
       }),
   }));
@@ -599,7 +707,49 @@ export function mergeMessage(
     current.request.version > incoming.request.version
   )
     merged.request = current.request;
+  // task.updated may have run ahead too.
+  if (
+    current.task &&
+    incoming.task &&
+    current.task.version > incoming.task.version
+  )
+    merged.task = current.task;
   return merged;
+}
+
+/**
+ * A page read by REST may be older than a task.updated applied meanwhile:
+ * the cached task stays when its version is higher.
+ */
+function keepNewerTasks(
+  cached: readonly ClientMessage[],
+  incoming: ClientMessage[],
+): ClientMessage[] {
+  if (!cached.some((item) => item.task)) return incoming;
+  const tasks = new Map(
+    cached
+      .filter((item) => item.task)
+      .map((item) => [item.id, item.task!] as const),
+  );
+  return incoming.map((item) => {
+    const task = tasks.get(item.id);
+    return task ? reduceTask(item, { message_id: item.id, task }) : item;
+  });
+}
+
+/**
+ * The cache access performTaskAction works through, over the messenger
+ * store: the task of one cached message.
+ */
+export function storeTaskCache(
+  store: StoreApi<MessengerState>,
+  messageID: string,
+  chatID?: string,
+): TaskCacheAccess {
+  return {
+    read: () => store.getState().taskOf(messageID, chatID),
+    write: (task) => store.getState().setTask(messageID, task, chatID),
+  };
 }
 
 /** The message without its REST-only viewer: the store keeps viewers apart. */

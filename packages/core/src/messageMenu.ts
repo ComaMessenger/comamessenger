@@ -9,6 +9,8 @@ export type MessageMenuAction =
   | "unsave"
   /** «Напомнить мне», or «Изменить напоминание» when one is set. */
   | "remind"
+  /** «Сделать задачей»: the task form with the title from the text. */
+  | "makeTask"
   | "pin"
   | "unpin"
   | "forward"
@@ -41,14 +43,21 @@ export type MessageMenuFacts = {
   reminders?: boolean;
   /** The reader has a reminder about this message: the item reads «Изменить напоминание». */
   reminded?: boolean;
+  /**
+   * The server has tasks (`message_tasks` in hello) and the reader may
+   * post in the chat. Absent means no.
+   */
+  tasks?: boolean;
+  /** Message.type; only plain text messages become tasks. Absent means text. */
+  messageType?: string;
 };
 
 /**
  * Sections of the menu, separated by dividers: reply | important, remind,
  * pin, forward, views | links and text | edit | delete. Every member may
  * save a message and set a reminder about it for themselves, right after
- * saving as in the prototype; pinning is for chat owners and admins. Edit own
- * messages only, delete own or as a moderator.
+ * saving as in the prototype, then «Сделать задачей»; pinning is for chat
+ * owners and admins. Edit own messages only, delete own or as a moderator.
  */
 export function messageMenu(facts: MessageMenuFacts): MessageMenuAction[][] {
   const { own, persisted } = facts;
@@ -58,6 +67,7 @@ export function messageMenu(facts: MessageMenuFacts): MessageMenuAction[][] {
       ? [
           facts.saved ? "unsave" : "save",
           ...(facts.reminders ? ["remind" as const] : []),
+          ...(canMakeTask(facts) ? ["makeTask" as const] : []),
           ...(facts.canPin
             ? [facts.pinned ? ("unpin" as const) : ("pin" as const)]
             : []),
@@ -69,10 +79,32 @@ export function messageMenu(facts: MessageMenuFacts): MessageMenuAction[][] {
       ...(persisted ? ["copyLink" as const] : []),
       ...(facts.hasText ? ["copyText" as const] : []),
     ],
-    persisted && own && facts.hasText ? ["edit"] : [],
+    // A task is changed on its own screen («⋯ → Изменить»), not as text.
+    persisted && own && facts.hasText && facts.messageType !== "task"
+      ? ["edit"]
+      : [],
     persisted && (own || facts.canModerate) ? ["delete"] : [],
   ];
   return sections.filter((section) => section.length > 0);
+}
+
+/**
+ * «Сделать задачей»: a text message the server has, not a task, request or
+ * poll, with tasks on the server and the right to post. In a thread too:
+ * the task goes to the chat's feed with a link to its source.
+ */
+export function canMakeTask(
+  facts: Pick<
+    MessageMenuFacts,
+    "tasks" | "persisted" | "hasText" | "messageType"
+  >,
+): boolean {
+  return Boolean(
+    facts.tasks &&
+      facts.persisted &&
+      facts.hasText &&
+      (facts.messageType ?? "text") === "text",
+  );
 }
 
 /** Chat roles that may pin: the server's `chat.manage` action. */

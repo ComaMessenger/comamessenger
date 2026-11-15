@@ -11,6 +11,7 @@ import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Bell,
+  CircleCheck,
   Copy,
   CornerUpLeft,
   Eye,
@@ -42,6 +43,8 @@ const items: Record<
   unsave: { icon: StarOff, label: "removeFromImportant" },
   // Shown once the screen passes `reminders: true` (package M adds the strings).
   remind: { icon: Bell, label: "messageRemindMe" },
+  // Shown once the screen passes `tasks: true` (package M3 adds the string).
+  makeTask: { icon: CircleCheck, label: "messageMakeTask" },
   pin: { icon: Pin, label: "pinMessage" },
   unpin: { icon: PinOff, label: "unpinMessage" },
   forward: { icon: Forward, label: "forwardMessage" },

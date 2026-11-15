@@ -44,3 +44,5 @@ export * from "./requests";
 export * from "./reminders";
 export * from "./importantInbox";
 export * from "./timezone";
+export * from "./tasks";
+export * from "./chatSlot";
