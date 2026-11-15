@@ -99,6 +99,22 @@ func (executor *Executor) confirmationTarget(ctx context.Context, invocation Inv
 		addChat(text("chat_id"))
 		if mentions, _ := arguments["mentioned_actor_ids"].([]any); len(mentions) > maxAutoCardMentions {
 			force = true
+		} else if len(mentions) > 0 {
+			// A department id among the mentions is expanded into its
+			// people by the send path (phase 6.5): it may notify more than
+			// the bound by itself, so a person confirms the card.
+			ids := make([]string, 0, len(mentions))
+			for _, value := range mentions {
+				if id, ok := value.(string); ok && uuid.Validate(id) == nil {
+					ids = append(ids, id)
+				}
+			}
+			var department bool
+			if err := executor.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM departments WHERE org_id=$1 AND id=ANY($2::uuid[]))`,
+				invocation.User.OrgID, ids).Scan(&department); err != nil {
+				return "", false, err
+			}
+			force = department
 		}
 	case "update_card", "add_reaction":
 		if err := addMessageChat(text("message_id")); err != nil {

@@ -249,9 +249,9 @@ func TestCreateRequest(t *testing.T) {
 		}
 	})
 
-	t.Run("department and position wait for wave 2", func(t *testing.T) {
+	t.Run("department and position need their id", func(t *testing.T) {
 		for _, kind := range []string{"department", "position"} {
-			if _, err := w.create(t, w.author, w.chatID, spec{audience: kind}); !errors.Is(err, request.ErrAudienceUnavailable) {
+			if _, err := w.create(t, w.author, w.chatID, spec{audience: kind}); !errors.Is(err, request.ErrInvalid) {
 				t.Fatalf("%s err = %v", kind, err)
 			}
 		}

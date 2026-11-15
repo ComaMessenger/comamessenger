@@ -57,6 +57,8 @@ func CompleteEventMessages(ctx context.Context, tx pgx.Tx, orgID string, items [
 		message.ThreadReplyCount = full.ThreadReplyCount
 		message.Files = full.Files
 		message.AgentProvenance = full.AgentProvenance
+		message.MentionedDepartmentIDs = full.MentionedDepartmentIDs
+		message.MentionedDepartments = full.MentionedDepartments
 		// The shared request summary only: the per-reader view never goes
 		// into a frame the whole chat receives.
 		message.Request = full.Request

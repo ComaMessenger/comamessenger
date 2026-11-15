@@ -50,9 +50,12 @@ type Message struct {
 	DeletedAt         *time.Time          `json:"deleted_at"`
 	ForwardedFrom     *ForwardAttribution `json:"forwarded_from,omitempty"`
 	MentionedActorIDs []string            `json:"mentioned_actor_ids"`
-	ThreadReplyCount  int64               `json:"thread_reply_count"`
-	Files             []filemodel.File    `json:"files"`
-	Blocks            *Blocks             `json:"blocks,omitempty"`
+	// MentionedDepartmentIDs and MentionedDepartments: set by hydrateFiles.
+	MentionedDepartmentIDs *[]string            `json:"mentioned_department_ids,omitempty"`
+	MentionedDepartments   *[]DepartmentMention `json:"mentioned_departments,omitempty"`
+	ThreadReplyCount       int64                `json:"thread_reply_count"`
+	Files                  []filemodel.File     `json:"files"`
+	Blocks                 *Blocks              `json:"blocks,omitempty"`
 	// AgentProvenance says why an agent wrote the message; absent otherwise.
 	AgentProvenance *Provenance `json:"agent_provenance,omitempty"`
 	// Silent: notifications for this message play no sound. Set in create
@@ -79,15 +82,16 @@ type ForwardAttribution struct {
 }
 
 type CreateInput struct {
-	ClientMsgID       string   `json:"client_msg_id"`
-	Body              string   `json:"body"`
-	BodyFormat        string   `json:"body_format"`
-	ReplyToID         *string  `json:"reply_to_id"`
-	ThreadRootID      *string  `json:"thread_root_id"`
-	MentionedActorIDs []string `json:"mentioned_actor_ids"`
-	FileIDs           []string `json:"file_ids"`
-	RunID             *string  `json:"run_id,omitempty"`
-	Blocks            *Blocks  `json:"blocks,omitempty"`
+	ClientMsgID            string   `json:"client_msg_id"`
+	Body                   string   `json:"body"`
+	BodyFormat             string   `json:"body_format"`
+	ReplyToID              *string  `json:"reply_to_id"`
+	ThreadRootID           *string  `json:"thread_root_id"`
+	MentionedActorIDs      []string `json:"mentioned_actor_ids"`
+	MentionedDepartmentIDs []string `json:"mentioned_department_ids,omitempty"`
+	FileIDs                []string `json:"file_ids"`
+	RunID                  *string  `json:"run_id,omitempty"`
+	Blocks                 *Blocks  `json:"blocks,omitempty"`
 	// Silent notifies recipients without sound or vibration. People only.
 	Silent bool `json:"silent,omitempty"`
 	// systemBlocks allows server-managed action bindings; set only by Core.
@@ -110,10 +114,11 @@ type AgentProvenance struct {
 }
 
 type UpdateInput struct {
-	Body              string    `json:"body"`
-	BodyFormat        string    `json:"body_format"`
-	ExpectedVersion   int       `json:"expected_version"`
-	MentionedActorIDs *[]string `json:"mentioned_actor_ids"`
+	Body                   string    `json:"body"`
+	BodyFormat             string    `json:"body_format"`
+	ExpectedVersion        int       `json:"expected_version"`
+	MentionedActorIDs      *[]string `json:"mentioned_actor_ids"`
+	MentionedDepartmentIDs *[]string `json:"mentioned_department_ids"`
 }
 
 type ListOptions struct {
@@ -301,9 +306,11 @@ func (s *Service) createTx(ctx context.Context, tx pgx.Tx, user identity.User, c
 	if err := validateReferences(ctx, tx, user.OrgID, chatID, input.ReplyToID, input.ThreadRootID); err != nil {
 		return Message{}, false, 0, err
 	}
-	if err := validateMentions(ctx, tx, user.OrgID, chatID, input.MentionedActorIDs); err != nil {
+	mentions, err := resolveMentions(ctx, tx, user.OrgID, user.ActorID, chatID, input.MentionedActorIDs, input.MentionedDepartmentIDs)
+	if err != nil {
 		return Message{}, false, 0, err
 	}
+	input.MentionedActorIDs = mentions.ActorIDs
 	if err := validateFiles(ctx, tx, user, input.FileIDs); err != nil {
 		return Message{}, false, 0, err
 	}
@@ -347,6 +354,9 @@ func (s *Service) createTx(ctx context.Context, tx pgx.Tx, user identity.User, c
 		input.ReplyToID, input.ThreadRootID, seq, input.MentionedActorIDs, blocksParam(input.Blocks), input.Silent, messageType), &result)
 	if err != nil {
 		return Message{}, false, 0, fmt.Errorf("insert message: %w", err)
+	}
+	if err := storeDepartmentMentions(ctx, tx, user.OrgID, result.ID, mentions, true); err != nil {
+		return Message{}, false, 0, err
 	}
 	if input.request != nil {
 		if err := s.requests.InsertTx(ctx, tx, user, chatID, result.ID, input.request.plan, recipients); err != nil {
@@ -628,15 +638,20 @@ func (s *Service) Update(ctx context.Context, user identity.User, messageID stri
 		return Message{}, ErrVersionConflict
 	}
 	mentions := current.MentionedActorIDs
-	if input.MentionedActorIDs != nil {
-		normalized, err := normalizeActorIDs(*input.MentionedActorIDs)
+	var resolved *mentionSet
+	if input.MentionedActorIDs != nil || input.MentionedDepartmentIDs != nil {
+		var actorIDs, departmentIDs []string
+		if input.MentionedActorIDs != nil {
+			actorIDs = *input.MentionedActorIDs
+		}
+		if input.MentionedDepartmentIDs != nil {
+			departmentIDs = *input.MentionedDepartmentIDs
+		}
+		set, err := s.resolveEditedMentions(ctx, tx, user, current.ChatID, actorIDs, departmentIDs)
 		if err != nil {
 			return Message{}, err
 		}
-		if err := validateMentions(ctx, tx, user.OrgID, current.ChatID, normalized); err != nil {
-			return Message{}, err
-		}
-		mentions = normalized
+		mentions, resolved = set.ActorIDs, &set
 	}
 	revisionID, err := id.New()
 	if err != nil {
@@ -647,8 +662,8 @@ func (s *Service) Update(ctx context.Context, user identity.User, messageID stri
 		return Message{}, err
 	}
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO message_revisions (id, org_id, message_id, version, body, body_format, edited_by, mentioned_actor_ids)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, revisionID, user.OrgID, messageID, current.Version,
+		INSERT INTO message_revisions (id, org_id, message_id, version, body, body_format, edited_by, mentioned_actor_ids, mentioned_department_ids)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, (SELECT mentioned_department_ids FROM messages WHERE org_id = $2 AND id = $3))`, revisionID, user.OrgID, messageID, current.Version,
 		current.Body, current.BodyFormat, user.ActorID, current.MentionedActorIDs); err != nil {
 		return Message{}, fmt.Errorf("insert message revision: %w", err)
 	}
@@ -664,6 +679,11 @@ func (s *Service) Update(ctx context.Context, user identity.User, messageID stri
 	}
 	if err != nil {
 		return Message{}, fmt.Errorf("update message: %w", err)
+	}
+	if resolved != nil {
+		if err := storeDepartmentMentions(ctx, tx, user.OrgID, result.ID, *resolved, false); err != nil {
+			return Message{}, err
+		}
 	}
 	if err := insertEvent(ctx, tx, user, result.ChatID, result.ID, seq, "message.updated"); err != nil {
 		return Message{}, err
@@ -804,6 +824,9 @@ func (s *Service) validateCreate(chatID string, input *CreateInput) error {
 		return err
 	}
 	input.MentionedActorIDs = normalized
+	if input.MentionedDepartmentIDs, err = normalizeDepartmentIDs(input.MentionedDepartmentIDs); err != nil {
+		return err
+	}
 	input.FileIDs, err = normalizeFileIDs(input.FileIDs)
 	if err != nil {
 		return err
@@ -1079,7 +1102,7 @@ func commandFingerprint(chatID string, input CreateInput) [32]byte {
 	if input.request != nil {
 		silent += input.request.plan.Fingerprint()
 	}
-	return sha256.Sum256([]byte(chatID + "\x00" + input.Body + "\x00" + input.BodyFormat + "\x00" + replyTo + "\x00" + threadRoot + "\x00" + strings.Join(input.MentionedActorIDs, ",") + "\x00" + strings.Join(input.FileIDs, ",") + blocksFingerprint(input.Blocks) + silent))
+	return sha256.Sum256([]byte(chatID + "\x00" + input.Body + "\x00" + input.BodyFormat + "\x00" + replyTo + "\x00" + threadRoot + "\x00" + strings.Join(input.MentionedActorIDs, ",") + "\x00" + strings.Join(input.FileIDs, ",") + blocksFingerprint(input.Blocks) + silent + departmentsFingerprint(input.MentionedDepartmentIDs)))
 }
 
 type rowScanner interface {
@@ -1241,8 +1264,11 @@ func hydrateFiles(ctx context.Context, tx pgx.Tx, orgID string, messages []Messa
 		return fmt.Errorf("iterate message files: %w", err)
 	}
 	rows.Close()
-	// Every reader that loads files also shows why an agent wrote a message
-	// and the shared part of a request.
+	// Every reader that loads files also shows why an agent wrote a message,
+	// the shared part of a request and the mentioned departments.
+	if err := hydrateDepartmentMentions(ctx, tx, orgID, messages); err != nil {
+		return err
+	}
 	if err := hydrateRequests(ctx, tx, orgID, messages); err != nil {
 		return err
 	}

@@ -36,7 +36,7 @@ func (s *Service) AuthorizeCreateTx(ctx context.Context, tx pgx.Tx, user identit
 	if err := validateReferences(ctx, tx, user.OrgID, chatID, input.ReplyToID, input.ThreadRootID); err != nil {
 		return err
 	}
-	if err := validateMentions(ctx, tx, user.OrgID, chatID, input.MentionedActorIDs); err != nil {
+	if _, err := resolveMentions(ctx, tx, user.OrgID, user.ActorID, chatID, input.MentionedActorIDs, input.MentionedDepartmentIDs); err != nil {
 		return err
 	}
 	return validateFiles(ctx, tx, user, input.FileIDs)

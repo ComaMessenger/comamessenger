@@ -356,7 +356,11 @@ func (h *identityHandlers) pressMessageAction(w standardhttp.ResponseWriter, r *
 }
 
 func (h *identityHandlers) messageError(w standardhttp.ResponseWriter, r *standardhttp.Request, err error) {
+	var invalidField *message.FieldError
 	switch {
+	case errors.As(err, &invalidField):
+		details := map[string]any{"field": invalidField.Field}
+		writeJSON(h.logger, w, standardhttp.StatusUnprocessableEntity, apiError(r, "validation_failed", err.Error(), &details))
 	case errors.Is(err, message.ErrForbidden):
 		h.writeError(w, r, standardhttp.StatusForbidden, "forbidden", "You do not have permission to perform this message action.")
 	case errors.Is(err, message.ErrNotFound):

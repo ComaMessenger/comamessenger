@@ -74,8 +74,17 @@ func (s *Service) ResolveTx(ctx context.Context, tx pgx.Tx, user identity.User, 
 		return Recipients{}, ErrLimitReached
 	}
 	var filter []string
-	if plan.AudienceKind == "people" {
+	var groupLabel string
+	switch plan.AudienceKind {
+	case "people":
 		filter = plan.ActorIDs
+	case "department", "position":
+		group, label, err := resolveGroupTx(ctx, tx, user, chatID, plan)
+		if err != nil {
+			return Recipients{}, err
+		}
+		// The rows below check membership and status once more.
+		filter, groupLabel = group, label
 	}
 	rows, err := tx.Query(ctx, `
 		SELECT a.id, a.display_name
@@ -112,6 +121,9 @@ func (s *Service) ResolveTx(ctx context.Context, tx pgx.Tx, user identity.User, 
 	if plan.AudienceKind == "people" && len(result.ActorIDs) == 1 {
 		result.Label = truncateRunes(onlyName, MaxLabelRunes)
 	}
+	if groupLabel != "" {
+		result.Label = groupLabel
+	}
 	return result, nil
 }
 
@@ -139,11 +151,11 @@ func (s *Service) InsertTx(ctx context.Context, tx pgx.Tx, user identity.User, c
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO message_requests (org_id, message_id, chat_id, author_id, audience_kind, audience_label,
 			answer_preset, custom_options, allow_comment, due_at, auto_remind, auto_remind_at,
-			recipient_count, expire_at, created_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+			recipient_count, expire_at, created_at, audience_department_id, audience_position_id)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NULLIF($16, '')::uuid,NULLIF($17, '')::uuid)`,
 		user.OrgID, messageID, chatID, user.ActorID, plan.AudienceKind, recipients.Label,
 		plan.Answer.Preset, options, plan.AllowComment, plan.DueAt, plan.AutoRemindAt != nil, plan.AutoRemindAt,
-		len(recipients.ActorIDs), expireAt, now); err != nil {
+		len(recipients.ActorIDs), expireAt, now, plan.DepartmentID, plan.PositionID); err != nil {
 		return fmt.Errorf("insert request: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `

@@ -182,6 +182,16 @@ func TestWritingToAPersonDirectlyNeedsApprovalWhateverTheTool(t *testing.T) {
 	if err != nil || result.Confirmation == nil {
 		t.Fatalf("collection of 51 people: %+v err=%v", result, err)
 	}
+	// One department among the mentions may notify more people than the
+	// bound: a person confirms it (phase 6.5).
+	departmentID := uuid.NewString()
+	if _, err := w.pool.Exec(t.Context(), `INSERT INTO departments (org_id, id, name) SELECT org_id, $2, 'Зал ЛФК' FROM actors WHERE id = $1`, w.agentID, departmentID); err != nil {
+		t.Fatal(err)
+	}
+	result, err = w.invoke(t, scheduled(), "post_card", `{"chat_id":"`+w.groupChat+`","client_msg_id":"`+uuid.NewString()+`","mentioned_actor_ids":["`+departmentID+`"],"blocks":{"version":1,"card":{"title":"Зал"}}}`)
+	if err != nil || result.Confirmation == nil {
+		t.Fatalf("card mentioning a department: %+v err=%v", result, err)
+	}
 	// A card in the run chat with a few mentions still runs by itself.
 	result, err = w.invoke(t, scheduled(), "post_card", `{"chat_id":"`+w.groupChat+`","client_msg_id":"`+uuid.NewString()+`","mentioned_actor_ids":["`+w.veraID+`"],"blocks":{"version":1,"card":{"title":"Слот"}}}`)
 	if err != nil || result.Confirmation != nil {
