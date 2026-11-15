@@ -4913,6 +4913,673 @@
         }
       }
     },
+    "/api/v1/chats/{chat_id}/tasks": {
+      "post": {
+        "operationId": "createTask",
+        "description": "Creates a task message in the chat feed (never in a thread). Any member who may write to the chat may create one (the same check as createMessage). The server builds body from the title and the description (title, then an empty line and the description when it is not empty) with body_format markdown, so search, agents and older clients see the task as text. The responsible person and the assignees of items must be active people who are members of the chat (422 task_assignee_invalid); a task may be set on oneself. The department and position assignees need requests.address_groups (403 task_audience_forbidden) and the org_structure feature (422 task_invalid, field assignee.kind, otherwise); they become a queue of candidates: a snapshot of the active people of the department (with subdepartments, primary and additional members) or of the position who are members of the chat, the author included. No candidates gets 422 task_audience_empty, more than 100 gets 422 task_too_many_candidates. source_message_id must be a message of the same chat, in the feed or in a thread (422 task_invalid otherwise). At most 300 open tasks per chat and 500 open tasks per author (409 task_limit_reached). A replay with the same client_msg_id and the same content returns the original message (200); the same key with other content gets 409 idempotency_conflict.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ChatId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTaskRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The original task message for an idempotent replay.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Task message created; it carries task.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "get": {
+        "operationId": "listChatTasks",
+        "description": "Tasks of the chat for members of the chat (403 not_member otherwise). state=open lists open and in_progress tasks: those with a due date first (earliest first), then those without, newest first. state=done and state=canceled are ordered by status_changed_at, latest first. counts are the same for every state and page: open tasks of the chat, open tasks of the reader (responsible, assignee of an open item or candidate of an open queue) and those of them that are hot (overdue or due within 24 hours).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ChatId"
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "open",
+                "done",
+                "canceled"
+              ],
+              "default": "open"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque next_cursor of the previous page.",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of task messages with the counts of the chat.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatTaskPage"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/mine": {
+      "get": {
+        "operationId": "listMyTasks",
+        "description": "The reader's tasks from all chats they can read now (member and active, chat not archived, message not deleted). role=assigned: tasks where the reader is responsible, the assignee of an open item or a candidate of a queue nobody has taken. role=authored: tasks the reader created. state=open lists open and in_progress tasks, due date first (earliest first, overdue on top), then without one, newest first; state=done lists tasks done or canceled in the last 7 days, latest first («Готово за 7 дней»). Older closed tasks are in listChatTasks.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "role",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "assigned",
+                "authored"
+              ],
+              "default": "assigned"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "open",
+                "done"
+              ],
+              "default": "open"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque next_cursor of the previous page.",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of the reader's tasks.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyTaskPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/{message_id}": {
+      "get": {
+        "operationId": "getTask",
+        "description": "The task message. Anyone who can read the message may call it; others, and messages that are not tasks, get 404 task_not_found.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MessageId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The task message with task.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateTask",
+        "description": "Changes the title, the description, the due date, the reminder before it or the responsible person. The author while a member of the chat, or a chat owner or admin or a workspace moderator with chats.moderate who is in the chat (403 task_forbidden otherwise). A new title or description rebuilds body and sets edited_at (message.updated); other changes emit task.updated. A canceled or done task cannot be changed (409 task_status_invalid). Another expected_version gets 409 task_version_conflict with the current task in details.task.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MessageId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTaskRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The task message after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/{message_id}/status": {
+      "put": {
+        "operationId": "setTaskStatus",
+        "description": "Moves the task between open, in_progress, done and canceled. Allowed moves: open ↔ in_progress, open or in_progress → done, done → open, open or in_progress → canceled, canceled → open; any other gets 409 task_status_invalid. in_progress, done and done → open: the author, the responsible person and chat admins; canceled and canceled → open: the author and chat admins (403 task_forbidden otherwise). Setting the current status again changes nothing and emits no events.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MessageId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetTaskStatusRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The task message after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/{message_id}/take": {
+      "post": {
+        "operationId": "takeTask",
+        "description": "«Взять себе»: a candidate of a queue who is still an active member of the chat becomes the responsible person (403 not_member for one who left, 403 task_forbidden for someone who is not a candidate). When somebody has taken it already: 409 task_already_taken with the current task in details.task.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MessageId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The task message with the reader as the responsible person.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/{message_id}/items": {
+      "post": {
+        "operationId": "addTaskItem",
+        "description": "Adds a checklist item: the author, the responsible person and chat admins. At most 30 items (409 task_limit_reached). Without position the item goes last; with it the items from that position move down.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MessageId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddTaskItemRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The task after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageTask"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/{message_id}/items/{item_id}": {
+      "patch": {
+        "operationId": "updateTaskItem",
+        "description": "Changes the text, the assignee or the position of an item, or marks it done or not done. The author, the responsible person and chat admins may do everything; the assignee of the item may only change done of their own item (403 task_forbidden otherwise).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MessageId"
+          },
+          {
+            "$ref": "#/components/parameters/TaskItemId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTaskItemRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The task after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageTask"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteTaskItem",
+        "description": "Removes an item: the author, the responsible person and chat admins. Repeating it also returns 204.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MessageId"
+          },
+          {
+            "$ref": "#/components/parameters/TaskItemId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The task has no item with this id."
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/{message_id}/nudge": {
+      "post": {
+        "operationId": "nudgeTask",
+        "description": "«Напомнить»: the author or a chat admin reminds the responsible person (the candidates of a queue nobody has taken). Not sooner than 2 hours after the previous one (429 task_nudge_too_soon with Retry-After) and at most 5 times per task (409 task_limit_reached). A person gets at most 10 such reminders a day from all tasks; the rest are recorded but send no push.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MessageId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "When the next reminder is allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskNudgeResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/inbox/waiting": {
+      "get": {
+        "operationId": "listWaitingInbox",
+        "description": "«Ждут вас» as one list: open requests waiting for the reader's answer (the same rows as listRequestInbox with state=waiting) and open tasks where the reader is responsible, the assignee of an open item or a candidate of a queue nobody has taken, in chats they can read now. Items with a due date come first (earliest first, overdue on top), then those without one, newest first; the order is stable across kinds, so pages never repeat or skip an item. kind narrows the list; polls are added in wave 4. Servers without message_tasks do not have this route: clients use listRequestInbox there. listRequestInbox stays for older clients and the «Отвечено» tab.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "requests",
+                "tasks"
+              ],
+              "default": "all"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque next_cursor of the previous page; only valid with the same kind.",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of the inbox; next_cursor continues it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WaitingInboxPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          },
+          "501": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
     "/api/v1/messages/{message_id}/forward": {
       "post": {
         "operationId": "forwardMessage",
@@ -10196,6 +10863,15 @@
           "format": "uuid"
         }
       },
+      "TaskItemId": {
+        "name": "item_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
       "DepartmentId": {
         "name": "department_id",
         "in": "path",
@@ -10431,7 +11107,19 @@
           "department_not_found",
           "position_not_found",
           "department_chat_exists",
-          "department_chat_invalid"
+          "department_chat_invalid",
+          "task_invalid",
+          "task_assignee_invalid",
+          "task_too_many_candidates",
+          "task_audience_empty",
+          "task_audience_forbidden",
+          "task_forbidden",
+          "task_not_found",
+          "task_version_conflict",
+          "task_already_taken",
+          "task_status_invalid",
+          "task_limit_reached",
+          "task_nudge_too_soon"
         ]
       },
       "File": {
@@ -11424,7 +12112,9 @@
           "reminder.updated",
           "reminder.deleted",
           "reminder.fired",
-          "org.updated"
+          "org.updated",
+          "task.updated",
+          "task.notified"
         ]
       },
       "RealtimeCloseCodeV1": {
@@ -11770,7 +12460,7 @@
             "minimum": 1
           },
           "features": {
-            "description": "Optional protocol additions this server accepts. typing_actions: the action field on typing frames. message_requests: requests («Запрос») — the request REST routes, Message.request and the request.* events. message_reminders: personal reminders («Напомнить мне») — the reminder REST routes and the reminder.* events. org_structure: departments and positions («Оргструктура») — the org REST routes, the org fields of ActorSummary, OrganizationMember and Message, mentioned_department_ids in message, request and scheduled message bodies, the department and position request audiences and the org.updated event. A client hides a feature the server does not list.",
+            "description": "Optional protocol additions this server accepts. typing_actions: the action field on typing frames. message_requests: requests («Запрос») — the request REST routes, Message.request and the request.* events. message_reminders: personal reminders («Напомнить мне») — the reminder REST routes and the reminder.* events. org_structure: departments and positions («Оргструктура») — the org REST routes, the org fields of ActorSummary, OrganizationMember and Message, mentioned_department_ids in message, request and scheduled message bodies, the department and position request audiences and the org.updated event. message_tasks: tasks («Задача») — the task REST routes, GET /api/v1/inbox/waiting, Message.task, the task fields of the unread snapshot and the task.updated and task.notified events. A client hides a feature the server does not list.",
             "type": "array",
             "maxItems": 32,
             "items": {
@@ -12516,6 +13206,59 @@
               "membership",
               "person_status"
             ]
+          }
+        }
+      },
+      "RealtimeTaskNotifiedEventV1": {
+        "description": "data of task.notified, sent to one person only (audience_actor_id; subject_id is the message id): the reason for a push or a toast about a task. Never carries the title, the description or item texts. kinds: assigned — the new responsible person (creation, change); unassigned — the former responsible person, no push, removes the task from «Ждут вас» on every device; item_assigned — the assignee of an item; offered — each candidate of a new queue; taken — the author, a candidate took the task; nudged — the responsible person or the candidates, «Напомнить»; due_soon — the same, one hour before due_at; overdue — the responsible person and the author; due_changed — the responsible person; completed — the author, done by someone else; reopened — the responsible person, done → open by someone else. Not written for the person who acted. On creation every task.notified is written before message.created in the same transaction.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "message_id",
+          "chat_id",
+          "kind",
+          "by_actor_id",
+          "due_at"
+        ],
+        "properties": {
+          "message_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "chat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "assigned",
+              "unassigned",
+              "item_assigned",
+              "offered",
+              "taken",
+              "nudged",
+              "due_soon",
+              "overdue",
+              "due_changed",
+              "completed",
+              "reopened"
+            ]
+          },
+          "by_actor_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Who acted; null for due_soon and overdue, which the server sends by itself."
+          },
+          "due_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
           }
         }
       },
@@ -18622,9 +19365,10 @@
             "type": "string",
             "enum": [
               "text",
-              "request"
+              "request",
+              "task"
             ],
-            "description": "request — a request for answers («Запрос»); its body is the question and request describes the answers. Clients that do not know a type show the body as text."
+            "description": "request — a request for answers («Запрос»); its body is the question and request describes the answers. task — a task («Задача», phase 6.6); its body is built by the server from the title and the description and task describes it. Clients that do not know a type show the body as text."
           },
           "body": {
             "type": "string"
@@ -18764,6 +19508,17 @@
               }
             ],
             "description": "REST only (feed pages, create and context responses), next to request: what the reading person may do with it. Never in realtime frames, which the whole chat shares; clients load it with getRequest when needed."
+          },
+          "task": {
+            "description": "Present on messages of type task: the whole task, the same for every reader. Also in realtime message.* frames.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MessageTask"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },
@@ -21167,6 +21922,732 @@
           }
         }
       },
+      "TaskStatus": {
+        "type": "string",
+        "enum": [
+          "open",
+          "in_progress",
+          "done",
+          "canceled"
+        ],
+        "description": "«Открыта», «В работе», «Готово», «Отменена». «Просрочена» is not a status: clients mark open and in_progress tasks with due_at in the past."
+      },
+      "TaskAssigneeKind": {
+        "type": "string",
+        "enum": [
+          "person",
+          "department",
+          "position"
+        ],
+        "description": "person: one responsible person. department and position: a queue; nobody is responsible until a candidate takes the task."
+      },
+      "TaskAssigneeInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/TaskAssigneeKind"
+          },
+          "actor_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Required for person; an active person who is a member of the chat, the author included."
+          },
+          "department_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Required for department. 404 department_not_found for an unknown department."
+          },
+          "position_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Required for position. 404 position_not_found for an unknown position."
+          }
+        }
+      },
+      "TaskItemInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "assignee_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "An active person who is a member of the chat."
+          }
+        }
+      },
+      "CreateTaskRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "client_msg_id",
+          "title",
+          "assignee",
+          "remind_before_due"
+        ],
+        "properties": {
+          "client_msg_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 4000,
+            "default": "",
+            "description": "Markdown. Mentions in it notify nobody."
+          },
+          "assignee": {
+            "$ref": "#/components/schemas/TaskAssigneeInput"
+          },
+          "due_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "At least 5 minutes and at most 365 days ahead. Absent — no due date."
+          },
+          "remind_before_due": {
+            "type": "boolean",
+            "description": "Remind the responsible person (the candidates of a queue) one hour before due_at. Needs due_at more than 1 hour ahead (422 task_invalid, field remind_before_due, otherwise)."
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 30,
+            "items": {
+              "$ref": "#/components/schemas/TaskItemInput"
+            }
+          },
+          "source_message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "«Сделать задачей»: a message of the same chat the task is made from."
+          }
+        }
+      },
+      "UpdateTaskRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expected_version"
+        ],
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "MessageTask.version the change is based on."
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "due_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "null removes the due date. A new one follows the rules of CreateTaskRequest.due_at."
+          },
+          "remind_before_due": {
+            "type": "boolean"
+          },
+          "assignee": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TaskAssigneeInput"
+              }
+            ],
+            "description": "A new responsible person or queue. A person may be anyone who may be responsible, a queue candidate or not. A department or position needs requests.address_groups and builds a new queue."
+          }
+        }
+      },
+      "SetTaskStatusRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/TaskStatus"
+          },
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "When present, another MessageTask.version gets 409 task_version_conflict."
+          }
+        }
+      },
+      "AddTaskItemRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "assignee_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 29
+          }
+        }
+      },
+      "UpdateTaskItemRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "assignee_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "null removes the assignee."
+          },
+          "done": {
+            "type": "boolean"
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 29
+          }
+        }
+      },
+      "MessageTaskAssignee": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "actor_id",
+          "label",
+          "candidate_ids",
+          "in_chat"
+        ],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/TaskAssigneeKind"
+          },
+          "actor_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "The responsible person; null while a queue is not taken."
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 60,
+            "description": "The name of the department or position at the moment of creation; empty for person. Kept when it is renamed or deleted."
+          },
+          "candidate_ids": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Queue only: the snapshot of candidates taken at creation (or at the last change to a queue). Empty for person. Stays after the task is taken."
+          },
+          "in_chat": {
+            "type": "boolean",
+            "description": "The responsible person is an active member of the chat now; false while nobody is responsible. Computed when the frame or response is built."
+          },
+          "department_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "department only; null once the department is deleted. Absent for other kinds."
+          },
+          "position_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "position only; null once the position is deleted. Absent for other kinds."
+          }
+        }
+      },
+      "MessageTaskItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "text",
+          "assignee_id",
+          "assignee_in_chat",
+          "done_at",
+          "done_by"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "assignee_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "assignee_in_chat": {
+            "type": "boolean",
+            "description": "The assignee is an active member of the chat now; false without an assignee."
+          },
+          "done_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "done_by": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "MessageTaskSource": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "message_id",
+          "author_id",
+          "excerpt",
+          "deleted"
+        ],
+        "properties": {
+          "message_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "author_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "excerpt": {
+            "type": "string",
+            "maxLength": 140,
+            "description": "The start of the source text; empty once the source is deleted."
+          },
+          "deleted": {
+            "type": "boolean"
+          }
+        }
+      },
+      "MessageTask": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The task part of a message of type task. The same for every reader: a task has no private part. Carried by the feed, getTask, getMessageContext and realtime message.* and task.updated frames. Clients work out what the reader may do from it and their chat role; the server checks again.",
+        "required": [
+          "title",
+          "description",
+          "status",
+          "canceled_reason",
+          "status_changed_at",
+          "status_changed_by",
+          "assignee",
+          "due_at",
+          "remind_before_due",
+          "items",
+          "items_done",
+          "source",
+          "last_nudge_at",
+          "nudge_count",
+          "version"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 4000,
+            "description": "Markdown"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TaskStatus"
+          },
+          "canceled_reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "author",
+              "moderator",
+              "message_deleted",
+              null
+            ]
+          },
+          "status_changed_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "status_changed_by": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "assignee": {
+            "$ref": "#/components/schemas/MessageTaskAssignee"
+          },
+          "due_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "remind_before_due": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 30,
+            "description": "In checklist order.",
+            "items": {
+              "$ref": "#/components/schemas/MessageTaskItem"
+            }
+          },
+          "items_done": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 30
+          },
+          "source": {
+            "description": "«из сообщения»; null when the task was made from scratch or the source was deleted for good.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MessageTaskSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_nudge_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "nudge_count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Grows with every change of the task; task.updated carries it so stale events are dropped."
+          }
+        }
+      },
+      "TaskRole": {
+        "type": "string",
+        "enum": [
+          "responsible",
+          "item",
+          "candidate",
+          "author"
+        ],
+        "description": "Why the task is in the reader's list: responsible person, assignee of an open item, candidate of a queue, author. When several apply the first in this order wins."
+      },
+      "ChatTaskCounts": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "open",
+          "mine",
+          "mine_hot"
+        ],
+        "properties": {
+          "open": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "mine": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Open tasks where the reader is responsible, the assignee of an open item or a candidate of a queue nobody has taken."
+          },
+          "mine_hot": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Of mine, overdue or due within 24 hours."
+          }
+        }
+      },
+      "ChatTaskPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "counts",
+          "next_cursor"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            }
+          },
+          "counts": {
+            "$ref": "#/components/schemas/ChatTaskCounts"
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Opaque; pass as cursor to read the next page."
+          }
+        }
+      },
+      "MyTaskItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "message",
+          "author",
+          "chat",
+          "my_role"
+        ],
+        "properties": {
+          "message": {
+            "$ref": "#/components/schemas/Message"
+          },
+          "author": {
+            "$ref": "#/components/schemas/SavedMessageAuthor"
+          },
+          "chat": {
+            "$ref": "#/components/schemas/SavedMessageChat"
+          },
+          "my_role": {
+            "$ref": "#/components/schemas/TaskRole"
+          }
+        }
+      },
+      "MyTaskPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MyTaskItem"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Opaque; pass as cursor to read the next page."
+          }
+        }
+      },
+      "TaskNudgeResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "next_nudge_at"
+        ],
+        "properties": {
+          "next_nudge_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When «Напомнить» is allowed again; null when the limit of 5 is reached."
+          }
+        }
+      },
+      "TaskUpdatedEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "data of the realtime task.updated event (the realtime schema keeps its top level, this type describes task). Sent to the whole chat on every change of a task except its title and description (message.updated): status, due date, responsible person, items, taking, nudges, the overdue mark. Clients replace the cached task when version is greater.",
+        "required": [
+          "message_id",
+          "chat_id",
+          "task"
+        ],
+        "properties": {
+          "message_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "chat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "task": {
+            "$ref": "#/components/schemas/MessageTask"
+          }
+        }
+      },
+      "WaitingInboxItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "One item of «Ждут вас». kind request: request and viewer are set, my_role is null; the same data as RequestInboxItem. kind task: the task is message.task, request and viewer are null and my_role says why the reader sees it (never author).",
+        "required": [
+          "kind",
+          "message",
+          "chat_id",
+          "author",
+          "chat",
+          "due_at",
+          "request",
+          "viewer",
+          "my_role"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "request",
+              "task"
+            ]
+          },
+          "message": {
+            "$ref": "#/components/schemas/Message"
+          },
+          "chat_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "author": {
+            "$ref": "#/components/schemas/SavedMessageAuthor"
+          },
+          "chat": {
+            "$ref": "#/components/schemas/SavedMessageChat"
+          },
+          "due_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "The due date the list is ordered by."
+          },
+          "request": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MessageRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "viewer": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MessageRequestViewer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "my_role": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TaskRole"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "WaitingInboxPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WaitingInboxItem"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Opaque; pass as cursor to read the next page."
+          }
+        }
+      },
       "OrgName": {
         "type": "string",
         "minLength": 1,
@@ -21867,6 +23348,20 @@
             ],
             "format": "date-time",
             "description": "The earliest due date among them; null when none has one."
+          },
+          "tasks_mine_open": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Open tasks in the chat where the person is responsible, the assignee of an open item or a candidate of a queue nobody has taken. Absent on servers without message_tasks."
+          },
+          "tasks_mine_next_due_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "The earliest due date among them; null when none has one."
           }
         }
       },
@@ -21937,6 +23432,18 @@
             "format": "int64",
             "minimum": 0,
             "description": "Fired reminders the person has not closed yet. Absent on servers without message_reminders."
+          },
+          "tasks_mine_open_total": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Open tasks of the person in all chats («Ждут вас»): responsible, assignee of an open item or candidate of a queue nobody has taken. Absent on servers without message_tasks."
+          },
+          "tasks_mine_hot_total": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Of tasks_mine_open_total, those overdue or due within 24 hours: the badge of «Важные» counts only these. Absent on servers without message_tasks."
           }
         }
       },

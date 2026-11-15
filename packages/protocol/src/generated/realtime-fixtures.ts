@@ -151,6 +151,79 @@ export const realtimeV1Fixtures = {
       }
     }
   } as const satisfies Schemas["RealtimeDurableEventFrameV1"] & { data: Schemas["Message"] },
+  "event-message-task": {
+    "op": "event",
+    "seq": 3001,
+    "type": "message.created",
+    "occurred_at": "2026-11-18T09:00:00Z",
+    "actor_id": "0198c17d-88ba-7ac2-8867-3f71d7722791",
+    "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+    "subject_id": "0198c180-1a2b-7c3d-8e4f-5a6b7c8d9e01",
+    "data": {
+      "id": "0198c180-1a2b-7c3d-8e4f-5a6b7c8d9e01",
+      "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+      "actor_id": "0198c17d-88ba-7ac2-8867-3f71d7722791",
+      "client_msg_id": "0198c180-2b3c-7d4e-8f5a-6b7c8d9e0f12",
+      "type": "task",
+      "body": "Подготовить комнату для новой группы\n\nКровати, бельё, проверить замки.",
+      "body_format": "markdown",
+      "reply_to_id": null,
+      "thread_root_id": null,
+      "version": 1,
+      "created_seq": 3001,
+      "created_at": "2026-11-18T09:00:00Z",
+      "edited_at": null,
+      "deleted_at": null,
+      "mentioned_actor_ids": [],
+      "thread_reply_count": 0,
+      "files": [],
+      "task": {
+        "title": "Подготовить комнату для новой группы",
+        "description": "Кровати, бельё, проверить замки.",
+        "status": "open",
+        "canceled_reason": null,
+        "status_changed_at": null,
+        "status_changed_by": null,
+        "assignee": {
+          "kind": "person",
+          "actor_id": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+          "label": "",
+          "candidate_ids": [],
+          "in_chat": true
+        },
+        "due_at": "2026-11-19T15:00:00Z",
+        "remind_before_due": true,
+        "items": [
+          {
+            "id": "0198c180-4d5e-7f6a-8b7c-8d9e0f1a2b34",
+            "text": "Застелить кровати",
+            "assignee_id": "0198c180-5e6f-7a8b-8c9d-9e0f1a2b3c45",
+            "assignee_in_chat": true,
+            "done_at": null,
+            "done_by": null
+          },
+          {
+            "id": "0198c180-6f7a-7b8c-8d9e-0f1a2b3c4d56",
+            "text": "Проверить замки",
+            "assignee_id": null,
+            "assignee_in_chat": false,
+            "done_at": null,
+            "done_by": null
+          }
+        ],
+        "items_done": 0,
+        "source": {
+          "message_id": "0198c180-7a8b-7c9d-8e0f-1a2b3c4d5e67",
+          "author_id": "0198c180-5e6f-7a8b-8c9d-9e0f1a2b3c45",
+          "excerpt": "В пятницу заезжает новая группа, комната ещё не готова",
+          "deleted": false
+        },
+        "last_nudge_at": null,
+        "nudge_count": 0,
+        "version": 1
+      }
+    }
+  } as const satisfies Schemas["RealtimeDurableEventFrameV1"] & { data: Schemas["Message"] },
   "event-org-updated": {
     "op": "event",
     "seq": 2103,
@@ -331,6 +404,62 @@ export const realtimeV1Fixtures = {
       "version": 6
     }
   } as const satisfies Schemas["RealtimeDurableEventFrameV1"] & { data: Schemas["RealtimeRequestUpdatedEventV1"] },
+  "event-task-notified": {
+    "op": "event",
+    "seq": 3002,
+    "type": "task.notified",
+    "occurred_at": "2026-11-18T09:00:00Z",
+    "actor_id": "0198c17d-88ba-7ac2-8867-3f71d7722791",
+    "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+    "subject_id": "0198c180-1a2b-7c3d-8e4f-5a6b7c8d9e01",
+    "data": {
+      "message_id": "0198c180-1a2b-7c3d-8e4f-5a6b7c8d9e01",
+      "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+      "kind": "assigned",
+      "by_actor_id": "0198c17d-88ba-7ac2-8867-3f71d7722791",
+      "due_at": "2026-11-19T15:00:00Z"
+    }
+  } as const satisfies Schemas["RealtimeDurableEventFrameV1"] & { data: Schemas["RealtimeTaskNotifiedEventV1"] },
+  "event-task-updated": {
+    "op": "event",
+    "seq": 3010,
+    "type": "task.updated",
+    "occurred_at": "2026-11-18T10:30:00Z",
+    "actor_id": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+    "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+    "subject_id": "0198c180-8b9c-7d0e-8f1a-2b3c4d5e6f78",
+    "data": {
+      "message_id": "0198c180-8b9c-7d0e-8f1a-2b3c4d5e6f78",
+      "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+      "task": {
+        "title": "Отвезти документы в соцзащиту",
+        "description": "",
+        "status": "in_progress",
+        "canceled_reason": null,
+        "status_changed_at": "2026-11-18T10:30:00Z",
+        "status_changed_by": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+        "assignee": {
+          "kind": "department",
+          "actor_id": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+          "label": "Социальная служба",
+          "candidate_ids": [
+            "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+            "0198c180-5e6f-7a8b-8c9d-9e0f1a2b3c45"
+          ],
+          "in_chat": true,
+          "department_id": "0198c180-9cad-7e1f-8a2b-3c4d5e6f7a89"
+        },
+        "due_at": "2026-11-18T16:00:00Z",
+        "remind_before_due": false,
+        "items": [],
+        "items_done": 0,
+        "source": null,
+        "last_nudge_at": null,
+        "nudge_count": 0,
+        "version": 3
+      }
+    }
+  } as const satisfies Schemas["RealtimeDurableEventFrameV1"] & { data: Schemas["TaskUpdatedEvent"] },
   "event": {
     "op": "event",
     "seq": 1901,

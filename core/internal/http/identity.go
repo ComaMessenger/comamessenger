@@ -350,6 +350,8 @@ func (h *identityHandlers) routes(router chi.Router) {
 		h.requestRoutes(protected)
 		h.reminderRoutes(protected)
 		h.orgRoutes(protected)
+		h.taskRoutes(protected)
+		h.inboxRoutes(protected)
 		if h.files != nil {
 			protected.Put("/me/avatar", h.putMyAvatar)
 			protected.Delete("/me/avatar", h.deleteMyAvatar)

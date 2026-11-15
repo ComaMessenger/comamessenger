@@ -80,6 +80,10 @@ var typedEventData = map[string]struct {
 	"reminder.deleted":       {"ReminderEvent", func() any { return &RealtimeReminderEventV1{} }},
 	"reminder.fired":         {"ReminderFiredEvent", func() any { return &RealtimeReminderFiredEventV1{} }},
 	"org.updated":            {"OrgUpdatedEvent", func() any { return &RealtimeOrgUpdatedEventV1{} }},
+	// task.updated: the realtime schema checks the top level, the OpenAPI
+	// TaskUpdatedEvent type checks the task inside it.
+	"task.updated":  {"TaskUpdatedEvent", func() any { return &TaskUpdatedEvent{} }},
+	"task.notified": {"TaskNotifiedEvent", func() any { return &RealtimeTaskNotifiedEventV1{} }},
 }
 
 // checkTypedEventData validates the data of an event-*.json fixture against
@@ -116,7 +120,8 @@ func checkTypedEventData(t *testing.T, compiler *jsonschema.Compiler, protocolRo
 }
 
 // TestRealtimeV1RequestAndReminderEventsHaveFixtures keeps a typed fixture
-// for every request.*, reminder.* and org.* event type the protocol knows.
+// for every request.*, reminder.*, org.* and task.* event type the protocol
+// knows.
 func TestRealtimeV1RequestAndReminderEventsHaveFixtures(t *testing.T) {
 	protocolRoot := protocolPackageRoot(t)
 	raw, err := os.ReadFile(filepath.Join(protocolRoot, "schemas", "realtime", "v1.schema.json"))
@@ -152,7 +157,7 @@ func TestRealtimeV1RequestAndReminderEventsHaveFixtures(t *testing.T) {
 		covered[frame.Type] = true
 	}
 	for _, eventType := range schema.Defs.KnownDurableEventType.Enum {
-		if !strings.HasPrefix(eventType, "request.") && !strings.HasPrefix(eventType, "reminder.") && !strings.HasPrefix(eventType, "org.") {
+		if !strings.HasPrefix(eventType, "request.") && !strings.HasPrefix(eventType, "reminder.") && !strings.HasPrefix(eventType, "org.") && !strings.HasPrefix(eventType, "task.") {
 			continue
 		}
 		if _, ok := typedEventData[eventType]; !ok {
