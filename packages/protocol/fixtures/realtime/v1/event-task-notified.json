@@ -1,0 +1,16 @@
+{
+  "op": "event",
+  "seq": 3002,
+  "type": "task.notified",
+  "occurred_at": "2026-11-18T09:00:00Z",
+  "actor_id": "0198c17d-88ba-7ac2-8867-3f71d7722791",
+  "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+  "subject_id": "0198c180-1a2b-7c3d-8e4f-5a6b7c8d9e01",
+  "data": {
+    "message_id": "0198c180-1a2b-7c3d-8e4f-5a6b7c8d9e01",
+    "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+    "kind": "assigned",
+    "by_actor_id": "0198c17d-88ba-7ac2-8867-3f71d7722791",
+    "due_at": "2026-11-19T15:00:00Z"
+  }
+}

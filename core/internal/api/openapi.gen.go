@@ -1744,6 +1744,8 @@ const (
 	DurableEventTypeV1ScheduledMessageFailed  DurableEventTypeV1 = "scheduled_message.failed"
 	DurableEventTypeV1ScheduledMessageSent    DurableEventTypeV1 = "scheduled_message.sent"
 	DurableEventTypeV1ScheduledMessageUpdated DurableEventTypeV1 = "scheduled_message.updated"
+	DurableEventTypeV1TaskNotified            DurableEventTypeV1 = "task.notified"
+	DurableEventTypeV1TaskUpdated             DurableEventTypeV1 = "task.updated"
 	DurableEventTypeV1ThreadFollowed          DurableEventTypeV1 = "thread.followed"
 	DurableEventTypeV1ThreadUnfollowed        DurableEventTypeV1 = "thread.unfollowed"
 )
@@ -1822,6 +1824,10 @@ func (e DurableEventTypeV1) Valid() bool {
 	case DurableEventTypeV1ScheduledMessageSent:
 		return true
 	case DurableEventTypeV1ScheduledMessageUpdated:
+		return true
+	case DurableEventTypeV1TaskNotified:
+		return true
+	case DurableEventTypeV1TaskUpdated:
 		return true
 	case DurableEventTypeV1ThreadFollowed:
 		return true
@@ -1911,6 +1917,18 @@ const (
 	ErrorCodeSmtpNotConfigured            ErrorCode = "smtp_not_configured"
 	ErrorCodeStorageFull                  ErrorCode = "storage_full"
 	ErrorCodeStorageUnavailable           ErrorCode = "storage_unavailable"
+	ErrorCodeTaskAlreadyTaken             ErrorCode = "task_already_taken"
+	ErrorCodeTaskAssigneeInvalid          ErrorCode = "task_assignee_invalid"
+	ErrorCodeTaskAudienceEmpty            ErrorCode = "task_audience_empty"
+	ErrorCodeTaskAudienceForbidden        ErrorCode = "task_audience_forbidden"
+	ErrorCodeTaskForbidden                ErrorCode = "task_forbidden"
+	ErrorCodeTaskInvalid                  ErrorCode = "task_invalid"
+	ErrorCodeTaskLimitReached             ErrorCode = "task_limit_reached"
+	ErrorCodeTaskNotFound                 ErrorCode = "task_not_found"
+	ErrorCodeTaskNudgeTooSoon             ErrorCode = "task_nudge_too_soon"
+	ErrorCodeTaskStatusInvalid            ErrorCode = "task_status_invalid"
+	ErrorCodeTaskTooManyCandidates        ErrorCode = "task_too_many_candidates"
+	ErrorCodeTaskVersionConflict          ErrorCode = "task_version_conflict"
 	ErrorCodeTokenInvalid                 ErrorCode = "token_invalid"
 	ErrorCodeUnauthorized                 ErrorCode = "unauthorized"
 	ErrorCodeUnsupportedFormat            ErrorCode = "unsupported_format"
@@ -2079,6 +2097,30 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeStorageFull:
 		return true
 	case ErrorCodeStorageUnavailable:
+		return true
+	case ErrorCodeTaskAlreadyTaken:
+		return true
+	case ErrorCodeTaskAssigneeInvalid:
+		return true
+	case ErrorCodeTaskAudienceEmpty:
+		return true
+	case ErrorCodeTaskAudienceForbidden:
+		return true
+	case ErrorCodeTaskForbidden:
+		return true
+	case ErrorCodeTaskInvalid:
+		return true
+	case ErrorCodeTaskLimitReached:
+		return true
+	case ErrorCodeTaskNotFound:
+		return true
+	case ErrorCodeTaskNudgeTooSoon:
+		return true
+	case ErrorCodeTaskStatusInvalid:
+		return true
+	case ErrorCodeTaskTooManyCandidates:
+		return true
+	case ErrorCodeTaskVersionConflict:
 		return true
 	case ErrorCodeTokenInvalid:
 		return true
@@ -2492,6 +2534,7 @@ func (e MessageBodyFormat) Valid() bool {
 // Defines values for MessageType.
 const (
 	MessageTypeRequest MessageType = "request"
+	MessageTypeTask    MessageType = "task"
 	MessageTypeText    MessageType = "text"
 )
 
@@ -2499,6 +2542,8 @@ const (
 func (e MessageType) Valid() bool {
 	switch e {
 	case MessageTypeRequest:
+		return true
+	case MessageTypeTask:
 		return true
 	case MessageTypeText:
 		return true
@@ -2798,6 +2843,30 @@ func (e MessageSourceKind) Valid() bool {
 	case MessageSourceKindFile:
 		return true
 	case MessageSourceKindMessage:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageTaskCanceledReason.
+const (
+	MessageTaskCanceledReasonAuthor         MessageTaskCanceledReason = "author"
+	MessageTaskCanceledReasonLessThannil    MessageTaskCanceledReason = "<nil>"
+	MessageTaskCanceledReasonMessageDeleted MessageTaskCanceledReason = "message_deleted"
+	MessageTaskCanceledReasonModerator      MessageTaskCanceledReason = "moderator"
+)
+
+// Valid indicates whether the value is a known member of the MessageTaskCanceledReason enum.
+func (e MessageTaskCanceledReason) Valid() bool {
+	switch e {
+	case MessageTaskCanceledReasonAuthor:
+		return true
+	case MessageTaskCanceledReasonLessThannil:
+		return true
+	case MessageTaskCanceledReasonMessageDeleted:
+		return true
+	case MessageTaskCanceledReasonModerator:
 		return true
 	default:
 		return false
@@ -3551,6 +3620,51 @@ func (e RealtimeSubscribeActiveFrameV1Op) Valid() bool {
 	}
 }
 
+// Defines values for RealtimeTaskNotifiedEventV1Kind.
+const (
+	RealtimeTaskNotifiedEventV1KindAssigned     RealtimeTaskNotifiedEventV1Kind = "assigned"
+	RealtimeTaskNotifiedEventV1KindCompleted    RealtimeTaskNotifiedEventV1Kind = "completed"
+	RealtimeTaskNotifiedEventV1KindDueChanged   RealtimeTaskNotifiedEventV1Kind = "due_changed"
+	RealtimeTaskNotifiedEventV1KindDueSoon      RealtimeTaskNotifiedEventV1Kind = "due_soon"
+	RealtimeTaskNotifiedEventV1KindItemAssigned RealtimeTaskNotifiedEventV1Kind = "item_assigned"
+	RealtimeTaskNotifiedEventV1KindNudged       RealtimeTaskNotifiedEventV1Kind = "nudged"
+	RealtimeTaskNotifiedEventV1KindOffered      RealtimeTaskNotifiedEventV1Kind = "offered"
+	RealtimeTaskNotifiedEventV1KindOverdue      RealtimeTaskNotifiedEventV1Kind = "overdue"
+	RealtimeTaskNotifiedEventV1KindReopened     RealtimeTaskNotifiedEventV1Kind = "reopened"
+	RealtimeTaskNotifiedEventV1KindTaken        RealtimeTaskNotifiedEventV1Kind = "taken"
+	RealtimeTaskNotifiedEventV1KindUnassigned   RealtimeTaskNotifiedEventV1Kind = "unassigned"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeTaskNotifiedEventV1Kind enum.
+func (e RealtimeTaskNotifiedEventV1Kind) Valid() bool {
+	switch e {
+	case RealtimeTaskNotifiedEventV1KindAssigned:
+		return true
+	case RealtimeTaskNotifiedEventV1KindCompleted:
+		return true
+	case RealtimeTaskNotifiedEventV1KindDueChanged:
+		return true
+	case RealtimeTaskNotifiedEventV1KindDueSoon:
+		return true
+	case RealtimeTaskNotifiedEventV1KindItemAssigned:
+		return true
+	case RealtimeTaskNotifiedEventV1KindNudged:
+		return true
+	case RealtimeTaskNotifiedEventV1KindOffered:
+		return true
+	case RealtimeTaskNotifiedEventV1KindOverdue:
+		return true
+	case RealtimeTaskNotifiedEventV1KindReopened:
+		return true
+	case RealtimeTaskNotifiedEventV1KindTaken:
+		return true
+	case RealtimeTaskNotifiedEventV1KindUnassigned:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RealtimeTypingActionV1.
 const (
 	RealtimeTypingActionV1RecordingVoice RealtimeTypingActionV1 = "recording_voice"
@@ -4034,6 +4148,75 @@ func (e StartArchitectSessionRequestLocale) Valid() bool {
 	}
 }
 
+// Defines values for TaskAssigneeKind.
+const (
+	TaskAssigneeKindDepartment TaskAssigneeKind = "department"
+	TaskAssigneeKindPerson     TaskAssigneeKind = "person"
+	TaskAssigneeKindPosition   TaskAssigneeKind = "position"
+)
+
+// Valid indicates whether the value is a known member of the TaskAssigneeKind enum.
+func (e TaskAssigneeKind) Valid() bool {
+	switch e {
+	case TaskAssigneeKindDepartment:
+		return true
+	case TaskAssigneeKindPerson:
+		return true
+	case TaskAssigneeKindPosition:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TaskRole.
+const (
+	TaskRoleAuthor      TaskRole = "author"
+	TaskRoleCandidate   TaskRole = "candidate"
+	TaskRoleItem        TaskRole = "item"
+	TaskRoleResponsible TaskRole = "responsible"
+)
+
+// Valid indicates whether the value is a known member of the TaskRole enum.
+func (e TaskRole) Valid() bool {
+	switch e {
+	case TaskRoleAuthor:
+		return true
+	case TaskRoleCandidate:
+		return true
+	case TaskRoleItem:
+		return true
+	case TaskRoleResponsible:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TaskStatus.
+const (
+	TaskStatusCanceled   TaskStatus = "canceled"
+	TaskStatusDone       TaskStatus = "done"
+	TaskStatusInProgress TaskStatus = "in_progress"
+	TaskStatusOpen       TaskStatus = "open"
+)
+
+// Valid indicates whether the value is a known member of the TaskStatus enum.
+func (e TaskStatus) Valid() bool {
+	switch e {
+	case TaskStatusCanceled:
+		return true
+	case TaskStatusDone:
+		return true
+	case TaskStatusInProgress:
+		return true
+	case TaskStatusOpen:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UpdateAgentLlmConnectionRequestProvider.
 const (
 	UpdateAgentLlmConnectionRequestProviderAnthropic        UpdateAgentLlmConnectionRequestProvider = "anthropic"
@@ -4493,6 +4676,24 @@ func (e UserPreferencesTheme) Valid() bool {
 	}
 }
 
+// Defines values for WaitingInboxItemKind.
+const (
+	WaitingInboxItemKindRequest WaitingInboxItemKind = "request"
+	WaitingInboxItemKindTask    WaitingInboxItemKind = "task"
+)
+
+// Valid indicates whether the value is a known member of the WaitingInboxItemKind enum.
+func (e WaitingInboxItemKind) Valid() bool {
+	switch e {
+	case WaitingInboxItemKindRequest:
+		return true
+	case WaitingInboxItemKindTask:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ClientKind.
 const (
 	ClientKindNative ClientKind = "native"
@@ -4724,6 +4925,27 @@ func (e ListChatSharedAttachmentsParamsKind) Valid() bool {
 	}
 }
 
+// Defines values for ListChatTasksParamsState.
+const (
+	ListChatTasksParamsStateCanceled ListChatTasksParamsState = "canceled"
+	ListChatTasksParamsStateDone     ListChatTasksParamsState = "done"
+	ListChatTasksParamsStateOpen     ListChatTasksParamsState = "open"
+)
+
+// Valid indicates whether the value is a known member of the ListChatTasksParamsState enum.
+func (e ListChatTasksParamsState) Valid() bool {
+	switch e {
+	case ListChatTasksParamsStateCanceled:
+		return true
+	case ListChatTasksParamsStateDone:
+		return true
+	case ListChatTasksParamsStateOpen:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DownloadFileParamsDelivery.
 const (
 	DownloadFileParamsDeliveryLink DownloadFileParamsDelivery = "link"
@@ -4733,6 +4955,27 @@ const (
 func (e DownloadFileParamsDelivery) Valid() bool {
 	switch e {
 	case DownloadFileParamsDeliveryLink:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListWaitingInboxParamsKind.
+const (
+	ListWaitingInboxParamsKindAll      ListWaitingInboxParamsKind = "all"
+	ListWaitingInboxParamsKindRequests ListWaitingInboxParamsKind = "requests"
+	ListWaitingInboxParamsKindTasks    ListWaitingInboxParamsKind = "tasks"
+)
+
+// Valid indicates whether the value is a known member of the ListWaitingInboxParamsKind enum.
+func (e ListWaitingInboxParamsKind) Valid() bool {
+	switch e {
+	case ListWaitingInboxParamsKindAll:
+		return true
+	case ListWaitingInboxParamsKindRequests:
+		return true
+	case ListWaitingInboxParamsKindTasks:
 		return true
 	default:
 		return false
@@ -4910,6 +5153,42 @@ func (e SearchMessagesAndFilesParamsType) Valid() bool {
 	}
 }
 
+// Defines values for ListMyTasksParamsRole.
+const (
+	ListMyTasksParamsRoleAssigned ListMyTasksParamsRole = "assigned"
+	ListMyTasksParamsRoleAuthored ListMyTasksParamsRole = "authored"
+)
+
+// Valid indicates whether the value is a known member of the ListMyTasksParamsRole enum.
+func (e ListMyTasksParamsRole) Valid() bool {
+	switch e {
+	case ListMyTasksParamsRoleAssigned:
+		return true
+	case ListMyTasksParamsRoleAuthored:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListMyTasksParamsState.
+const (
+	ListMyTasksParamsStateDone ListMyTasksParamsState = "done"
+	ListMyTasksParamsStateOpen ListMyTasksParamsState = "open"
+)
+
+// Valid indicates whether the value is a known member of the ListMyTasksParamsState enum.
+func (e ListMyTasksParamsState) Valid() bool {
+	switch e {
+	case ListMyTasksParamsStateDone:
+		return true
+	case ListMyTasksParamsStateOpen:
+		return true
+	default:
+		return false
+	}
+}
+
 // AcceptInvitationRequest defines model for AcceptInvitationRequest.
 type AcceptInvitationRequest struct {
 	DisplayName string  `json:"display_name"`
@@ -4964,6 +5243,13 @@ type AddChatMemberRequest struct {
 
 // AddChatMemberRequestRole defines model for AddChatMemberRequest.Role.
 type AddChatMemberRequestRole string
+
+// AddTaskItemRequest defines model for AddTaskItemRequest.
+type AddTaskItemRequest struct {
+	AssigneeId *openapi_types.UUID `json:"assignee_id,omitempty"`
+	Position   *int                `json:"position,omitempty"`
+	Text       string              `json:"text"`
+}
 
 // Agent defines model for Agent.
 type Agent struct {
@@ -5916,6 +6202,25 @@ type ChatSharedLinkPage struct {
 	NextCursor *string `json:"next_cursor"`
 }
 
+// ChatTaskCounts defines model for ChatTaskCounts.
+type ChatTaskCounts struct {
+	// Mine Open tasks where the reader is responsible, the assignee of an open item or a candidate of a queue nobody has taken.
+	Mine int `json:"mine"`
+
+	// MineHot Of mine, overdue or due within 24 hours.
+	MineHot int `json:"mine_hot"`
+	Open    int `json:"open"`
+}
+
+// ChatTaskPage defines model for ChatTaskPage.
+type ChatTaskPage struct {
+	Counts ChatTaskCounts `json:"counts"`
+	Items  []Message      `json:"items"`
+
+	// NextCursor Opaque; pass as cursor to read the next page.
+	NextCursor *string `json:"next_cursor"`
+}
+
 // ChatUnread defines model for ChatUnread.
 type ChatUnread struct {
 	ChatId       openapi_types.UUID `json:"chat_id"`
@@ -5927,7 +6232,13 @@ type ChatUnread struct {
 
 	// RequestsWaiting Open requests in the chat waiting for the person's answer. Absent on servers without message_requests.
 	RequestsWaiting *int64 `json:"requests_waiting,omitempty"`
-	UnreadCount     int64  `json:"unread_count"`
+
+	// TasksMineNextDueAt The earliest due date among them; null when none has one.
+	TasksMineNextDueAt *time.Time `json:"tasks_mine_next_due_at,omitempty"`
+
+	// TasksMineOpen Open tasks in the chat where the person is responsible, the assignee of an open item or a candidate of a queue nobody has taken. Absent on servers without message_tasks.
+	TasksMineOpen *int64 `json:"tasks_mine_open,omitempty"`
+	UnreadCount   int64  `json:"unread_count"`
 }
 
 // ClaimAgentRunRequest defines model for ClaimAgentRunRequest.
@@ -6320,6 +6631,26 @@ type CreateScheduledMessageRequest struct {
 
 // CreateScheduledMessageRequestBodyFormat defines model for CreateScheduledMessageRequest.BodyFormat.
 type CreateScheduledMessageRequestBodyFormat string
+
+// CreateTaskRequest defines model for CreateTaskRequest.
+type CreateTaskRequest struct {
+	Assignee    TaskAssigneeInput  `json:"assignee"`
+	ClientMsgId openapi_types.UUID `json:"client_msg_id"`
+
+	// Description Markdown. Mentions in it notify nobody.
+	Description *string `json:"description,omitempty"`
+
+	// DueAt At least 5 minutes and at most 365 days ahead. Absent — no due date.
+	DueAt *time.Time       `json:"due_at,omitempty"`
+	Items *[]TaskItemInput `json:"items,omitempty"`
+
+	// RemindBeforeDue Remind the responsible person (the candidates of a queue) one hour before due_at. Needs due_at more than 1 hour ahead (422 task_invalid, field remind_before_due, otherwise).
+	RemindBeforeDue bool `json:"remind_before_due"`
+
+	// SourceMessageId «Сделать задачей»: a message of the same chat the task is made from.
+	SourceMessageId *openapi_types.UUID `json:"source_message_id,omitempty"`
+	Title           string              `json:"title"`
+}
 
 // CreatedAgentApiKey defines model for CreatedAgentApiKey.
 type CreatedAgentApiKey struct {
@@ -6939,6 +7270,9 @@ type Message struct {
 	// Silent Present and true when the author asked for quiet notifications: recipients are notified as usual (push, e-mail digest, their own notification settings apply) but clients play no sound or vibration for it. Carried by the create response and realtime events; history pages omit it.
 	Silent *bool `json:"silent,omitempty"`
 
+	// Task Present on messages of type task: the whole task, the same for every reader. Also in realtime message.* frames.
+	Task *MessageTask `json:"task,omitempty"`
+
 	// ThreadReplyCount Number of non-deleted replies when this message is a thread root.
 	ThreadReplyCount int64               `json:"thread_reply_count"`
 	ThreadRootId     *openapi_types.UUID `json:"thread_root_id,omitempty"`
@@ -6949,7 +7283,7 @@ type Message struct {
 	// Truncated Realtime message.* events only: the event was larger than the connection's frame limit (WS_MAX_FRAME_BYTES). The payload keeps the Message shape with ids, version, sequence, times, thread and counters but an empty body, no files and no blocks; clients load the message by REST (GET /api/v1/messages/{message_id}/context). Other event types may carry truncated: true with only their short scalar fields.
 	Truncated *bool `json:"truncated,omitempty"`
 
-	// Type request — a request for answers («Запрос»); its body is the question and request describes the answers. Clients that do not know a type show the body as text.
+	// Type request — a request for answers («Запрос»); its body is the question and request describes the answers. task — a task («Задача», phase 6.6); its body is built by the server from the title and the description and task describes it. Clients that do not know a type show the body as text.
 	Type    MessageType `json:"type"`
 	Version int         `json:"version"`
 }
@@ -6957,7 +7291,7 @@ type Message struct {
 // MessageBodyFormat defines model for Message.BodyFormat.
 type MessageBodyFormat string
 
-// MessageType request — a request for answers («Запрос»); its body is the question and request describes the answers. Clients that do not know a type show the body as text.
+// MessageType request — a request for answers («Запрос»); its body is the question and request describes the answers. task — a task («Задача», phase 6.6); its body is built by the server from the title and the description and task describes it. Clients that do not know a type show the body as text.
 type MessageType string
 
 // MessageAction defines model for MessageAction.
@@ -7207,6 +7541,84 @@ type MessageSource struct {
 // MessageSourceKind defines model for MessageSource.Kind.
 type MessageSourceKind string
 
+// MessageTask The task part of a message of type task. The same for every reader: a task has no private part. Carried by the feed, getTask, getMessageContext and realtime message.* and task.updated frames. Clients work out what the reader may do from it and their chat role; the server checks again.
+type MessageTask struct {
+	Assignee       MessageTaskAssignee        `json:"assignee"`
+	CanceledReason *MessageTaskCanceledReason `json:"canceled_reason"`
+
+	// Description Markdown
+	Description string     `json:"description"`
+	DueAt       *time.Time `json:"due_at"`
+
+	// Items In checklist order.
+	Items           []MessageTaskItem `json:"items"`
+	ItemsDone       int               `json:"items_done"`
+	LastNudgeAt     *time.Time        `json:"last_nudge_at"`
+	NudgeCount      int               `json:"nudge_count"`
+	RemindBeforeDue bool              `json:"remind_before_due"`
+
+	// Source «из сообщения»; null when the task was made from scratch or the source was deleted for good.
+	Source *MessageTaskSource `json:"source"`
+
+	// Status «Открыта», «В работе», «Готово», «Отменена». «Просрочена» is not a status: clients mark open and in_progress tasks with due_at in the past.
+	Status          TaskStatus          `json:"status"`
+	StatusChangedAt *time.Time          `json:"status_changed_at"`
+	StatusChangedBy *openapi_types.UUID `json:"status_changed_by"`
+	Title           string              `json:"title"`
+
+	// Version Grows with every change of the task; task.updated carries it so stale events are dropped.
+	Version int `json:"version"`
+}
+
+// MessageTaskCanceledReason defines model for MessageTask.CanceledReason.
+type MessageTaskCanceledReason string
+
+// MessageTaskAssignee defines model for MessageTaskAssignee.
+type MessageTaskAssignee struct {
+	// ActorId The responsible person; null while a queue is not taken.
+	ActorId *openapi_types.UUID `json:"actor_id"`
+
+	// CandidateIds Queue only: the snapshot of candidates taken at creation (or at the last change to a queue). Empty for person. Stays after the task is taken.
+	CandidateIds []openapi_types.UUID `json:"candidate_ids"`
+
+	// DepartmentId department only; null once the department is deleted. Absent for other kinds.
+	DepartmentId *openapi_types.UUID `json:"department_id,omitempty"`
+
+	// InChat The responsible person is an active member of the chat now; false while nobody is responsible. Computed when the frame or response is built.
+	InChat bool `json:"in_chat"`
+
+	// Kind person: one responsible person. department and position: a queue; nobody is responsible until a candidate takes the task.
+	Kind TaskAssigneeKind `json:"kind"`
+
+	// Label The name of the department or position at the moment of creation; empty for person. Kept when it is renamed or deleted.
+	Label string `json:"label"`
+
+	// PositionId position only; null once the position is deleted. Absent for other kinds.
+	PositionId *openapi_types.UUID `json:"position_id,omitempty"`
+}
+
+// MessageTaskItem defines model for MessageTaskItem.
+type MessageTaskItem struct {
+	AssigneeId *openapi_types.UUID `json:"assignee_id"`
+
+	// AssigneeInChat The assignee is an active member of the chat now; false without an assignee.
+	AssigneeInChat bool                `json:"assignee_in_chat"`
+	DoneAt         *time.Time          `json:"done_at"`
+	DoneBy         *openapi_types.UUID `json:"done_by"`
+	Id             openapi_types.UUID  `json:"id"`
+	Text           string              `json:"text"`
+}
+
+// MessageTaskSource defines model for MessageTaskSource.
+type MessageTaskSource struct {
+	AuthorId openapi_types.UUID `json:"author_id"`
+	Deleted  bool               `json:"deleted"`
+
+	// Excerpt The start of the source text; empty once the source is deleted.
+	Excerpt   string             `json:"excerpt"`
+	MessageId openapi_types.UUID `json:"message_id"`
+}
+
 // MessageWindow defines model for MessageWindow.
 type MessageWindow struct {
 	HasEarlier bool               `json:"has_earlier"`
@@ -7247,6 +7659,24 @@ type MoveDepartmentRequest struct {
 
 // MoveDepartmentRequestDirection defines model for MoveDepartmentRequest.Direction.
 type MoveDepartmentRequestDirection string
+
+// MyTaskItem defines model for MyTaskItem.
+type MyTaskItem struct {
+	Author  SavedMessageAuthor `json:"author"`
+	Chat    SavedMessageChat   `json:"chat"`
+	Message Message            `json:"message"`
+
+	// MyRole Why the task is in the reader's list: responsible person, assignee of an open item, candidate of a queue, author. When several apply the first in this order wins.
+	MyRole TaskRole `json:"my_role"`
+}
+
+// MyTaskPage defines model for MyTaskPage.
+type MyTaskPage struct {
+	Items []MyTaskItem `json:"items"`
+
+	// NextCursor Opaque; pass as cursor to read the next page.
+	NextCursor *string `json:"next_cursor"`
+}
 
 // NotificationSchedule defines model for NotificationSchedule.
 type NotificationSchedule struct {
@@ -7585,7 +8015,7 @@ type RealtimeHelloFrameV1 struct {
 	ConnectionId  openapi_types.UUID `json:"connection_id"`
 	CurrentSeq    int64              `json:"current_seq"`
 
-	// Features Optional protocol additions this server accepts. typing_actions: the action field on typing frames. message_requests: requests («Запрос») — the request REST routes, Message.request and the request.* events. message_reminders: personal reminders («Напомнить мне») — the reminder REST routes and the reminder.* events. org_structure: departments and positions («Оргструктура») — the org REST routes, the org fields of ActorSummary, OrganizationMember and Message, mentioned_department_ids in message, request and scheduled message bodies, the department and position request audiences and the org.updated event. A client hides a feature the server does not list.
+	// Features Optional protocol additions this server accepts. typing_actions: the action field on typing frames. message_requests: requests («Запрос») — the request REST routes, Message.request and the request.* events. message_reminders: personal reminders («Напомнить мне») — the reminder REST routes and the reminder.* events. org_structure: departments and positions («Оргструктура») — the org REST routes, the org fields of ActorSummary, OrganizationMember and Message, mentioned_department_ids in message, request and scheduled message bodies, the department and position request audiences and the org.updated event. message_tasks: tasks («Задача») — the task REST routes, GET /api/v1/inbox/waiting, Message.task, the task fields of the unread snapshot and the task.updated and task.notified events. A client hides a feature the server does not list.
 	Features            *[]string              `json:"features,omitempty"`
 	HeartbeatIntervalMs int                    `json:"heartbeat_interval_ms"`
 	MaxUnackedEvents    int                    `json:"max_unacked_events"`
@@ -7812,6 +8242,19 @@ type RealtimeSubscribeActiveFrameV1 struct {
 
 // RealtimeSubscribeActiveFrameV1Op defines model for RealtimeSubscribeActiveFrameV1.Op.
 type RealtimeSubscribeActiveFrameV1Op string
+
+// RealtimeTaskNotifiedEventV1 data of task.notified, sent to one person only (audience_actor_id; subject_id is the message id): the reason for a push or a toast about a task. Never carries the title, the description or item texts. kinds: assigned — the new responsible person (creation, change); unassigned — the former responsible person, no push, removes the task from «Ждут вас» on every device; item_assigned — the assignee of an item; offered — each candidate of a new queue; taken — the author, a candidate took the task; nudged — the responsible person or the candidates, «Напомнить»; due_soon — the same, one hour before due_at; overdue — the responsible person and the author; due_changed — the responsible person; completed — the author, done by someone else; reopened — the responsible person, done → open by someone else. Not written for the person who acted. On creation every task.notified is written before message.created in the same transaction.
+type RealtimeTaskNotifiedEventV1 struct {
+	// ByActorId Who acted; null for due_soon and overdue, which the server sends by itself.
+	ByActorId *openapi_types.UUID             `json:"by_actor_id"`
+	ChatId    openapi_types.UUID              `json:"chat_id"`
+	DueAt     *time.Time                      `json:"due_at"`
+	Kind      RealtimeTaskNotifiedEventV1Kind `json:"kind"`
+	MessageId openapi_types.UUID              `json:"message_id"`
+}
+
+// RealtimeTaskNotifiedEventV1Kind defines model for RealtimeTaskNotifiedEventV1.Kind.
+type RealtimeTaskNotifiedEventV1Kind string
 
 // RealtimeTypingActionV1 What the person is doing in the chat; absent means typing (clients before the field).
 type RealtimeTypingActionV1 string
@@ -8282,6 +8725,15 @@ type SetStatusRequest struct {
 	Text      string     `json:"text"`
 }
 
+// SetTaskStatusRequest defines model for SetTaskStatusRequest.
+type SetTaskStatusRequest struct {
+	// ExpectedVersion When present, another MessageTask.version gets 409 task_version_conflict.
+	ExpectedVersion *int `json:"expected_version,omitempty"`
+
+	// Status «Открыта», «В работе», «Готово», «Отменена». «Просрочена» is not a status: clients mark open and in_progress tasks with due_at in the past.
+	Status TaskStatus `json:"status"`
+}
+
 // SignFilePartsRequest defines model for SignFilePartsRequest.
 type SignFilePartsRequest struct {
 	PartNumbers []int `json:"part_numbers"`
@@ -8324,6 +8776,52 @@ type StartArchitectSessionRequest struct {
 
 // StartArchitectSessionRequestLocale defines model for StartArchitectSessionRequest.Locale.
 type StartArchitectSessionRequestLocale string
+
+// TaskAssigneeInput defines model for TaskAssigneeInput.
+type TaskAssigneeInput struct {
+	// ActorId Required for person; an active person who is a member of the chat, the author included.
+	ActorId *openapi_types.UUID `json:"actor_id,omitempty"`
+
+	// DepartmentId Required for department. 404 department_not_found for an unknown department.
+	DepartmentId *openapi_types.UUID `json:"department_id,omitempty"`
+
+	// Kind person: one responsible person. department and position: a queue; nobody is responsible until a candidate takes the task.
+	Kind TaskAssigneeKind `json:"kind"`
+
+	// PositionId Required for position. 404 position_not_found for an unknown position.
+	PositionId *openapi_types.UUID `json:"position_id,omitempty"`
+}
+
+// TaskAssigneeKind person: one responsible person. department and position: a queue; nobody is responsible until a candidate takes the task.
+type TaskAssigneeKind string
+
+// TaskItemInput defines model for TaskItemInput.
+type TaskItemInput struct {
+	// AssigneeId An active person who is a member of the chat.
+	AssigneeId *openapi_types.UUID `json:"assignee_id,omitempty"`
+	Text       string              `json:"text"`
+}
+
+// TaskNudgeResult defines model for TaskNudgeResult.
+type TaskNudgeResult struct {
+	// NextNudgeAt When «Напомнить» is allowed again; null when the limit of 5 is reached.
+	NextNudgeAt *time.Time `json:"next_nudge_at"`
+}
+
+// TaskRole Why the task is in the reader's list: responsible person, assignee of an open item, candidate of a queue, author. When several apply the first in this order wins.
+type TaskRole string
+
+// TaskStatus «Открыта», «В работе», «Готово», «Отменена». «Просрочена» is not a status: clients mark open and in_progress tasks with due_at in the past.
+type TaskStatus string
+
+// TaskUpdatedEvent data of the realtime task.updated event (the realtime schema keeps its top level, this type describes task). Sent to the whole chat on every change of a task except its title and description (message.updated): status, due date, responsible person, items, taking, nudges, the overdue mark. Clients replace the cached task when version is greater.
+type TaskUpdatedEvent struct {
+	ChatId    openapi_types.UUID `json:"chat_id"`
+	MessageId openapi_types.UUID `json:"message_id"`
+
+	// Task The task part of a message of type task. The same for every reader: a task has no private part. Carried by the feed, getTask, getMessageContext and realtime message.* and task.updated frames. Clients work out what the reader may do from it and their chat role; the server checks again.
+	Task MessageTask `json:"task"`
+}
 
 // ThreadFollow defines model for ThreadFollow.
 type ThreadFollow struct {
@@ -8392,8 +8890,14 @@ type UnreadSnapshot struct {
 	RemindersFiredTotal *int64 `json:"reminders_fired_total,omitempty"`
 
 	// RequestsWaitingTotal Requests waiting for the person's answer in all chats («Ждут вас»). Absent on servers without message_requests.
-	RequestsWaitingTotal *int64         `json:"requests_waiting_total,omitempty"`
-	Threads              []ThreadUnread `json:"threads"`
+	RequestsWaitingTotal *int64 `json:"requests_waiting_total,omitempty"`
+
+	// TasksMineHotTotal Of tasks_mine_open_total, those overdue or due within 24 hours: the badge of «Важные» counts only these. Absent on servers without message_tasks.
+	TasksMineHotTotal *int64 `json:"tasks_mine_hot_total,omitempty"`
+
+	// TasksMineOpenTotal Open tasks of the person in all chats («Ждут вас»): responsible, assignee of an open item or candidate of a queue nobody has taken. Absent on servers without message_tasks.
+	TasksMineOpenTotal *int64         `json:"tasks_mine_open_total,omitempty"`
+	Threads            []ThreadUnread `json:"threads"`
 }
 
 // UpdateAgentLlmConnectionRequest defines model for UpdateAgentLlmConnectionRequest.
@@ -8704,6 +9208,30 @@ type UpdateScheduledMessageRequest struct {
 // UpdateScheduledMessageRequestBodyFormat defines model for UpdateScheduledMessageRequest.BodyFormat.
 type UpdateScheduledMessageRequestBodyFormat string
 
+// UpdateTaskItemRequest defines model for UpdateTaskItemRequest.
+type UpdateTaskItemRequest struct {
+	// AssigneeId null removes the assignee.
+	AssigneeId *openapi_types.UUID `json:"assignee_id,omitempty"`
+	Done       *bool               `json:"done,omitempty"`
+	Position   *int                `json:"position,omitempty"`
+	Text       *string             `json:"text,omitempty"`
+}
+
+// UpdateTaskRequest defines model for UpdateTaskRequest.
+type UpdateTaskRequest struct {
+	// Assignee A new responsible person or queue. A person may be anyone who may be responsible, a queue candidate or not. A department or position needs requests.address_groups and builds a new queue.
+	Assignee    *TaskAssigneeInput `json:"assignee,omitempty"`
+	Description *string            `json:"description,omitempty"`
+
+	// DueAt null removes the due date. A new one follows the rules of CreateTaskRequest.due_at.
+	DueAt *time.Time `json:"due_at,omitempty"`
+
+	// ExpectedVersion MessageTask.version the change is based on.
+	ExpectedVersion int     `json:"expected_version"`
+	RemindBeforeDue *bool   `json:"remind_before_due,omitempty"`
+	Title           *string `json:"title,omitempty"`
+}
+
 // User defines model for User.
 type User struct {
 	About                string              `json:"about"`
@@ -8781,6 +9309,32 @@ type VoiceInfo struct {
 	Waveform []int `json:"waveform"`
 }
 
+// WaitingInboxItem One item of «Ждут вас». kind request: request and viewer are set, my_role is null; the same data as RequestInboxItem. kind task: the task is message.task, request and viewer are null and my_role says why the reader sees it (never author).
+type WaitingInboxItem struct {
+	Author SavedMessageAuthor `json:"author"`
+	Chat   SavedMessageChat   `json:"chat"`
+	ChatId openapi_types.UUID `json:"chat_id"`
+
+	// DueAt The due date the list is ordered by.
+	DueAt   *time.Time            `json:"due_at"`
+	Kind    WaitingInboxItemKind  `json:"kind"`
+	Message Message               `json:"message"`
+	MyRole  *TaskRole             `json:"my_role"`
+	Request *MessageRequest       `json:"request"`
+	Viewer  *MessageRequestViewer `json:"viewer"`
+}
+
+// WaitingInboxItemKind defines model for WaitingInboxItem.Kind.
+type WaitingInboxItemKind string
+
+// WaitingInboxPage defines model for WaitingInboxPage.
+type WaitingInboxPage struct {
+	Items []WaitingInboxItem `json:"items"`
+
+	// NextCursor Opaque; pass as cursor to read the next page.
+	NextCursor *string `json:"next_cursor"`
+}
+
 // WebhookReceipt defines model for WebhookReceipt.
 type WebhookReceipt struct {
 	DeliveryId  *string `json:"delivery_id,omitempty"`
@@ -8843,6 +9397,9 @@ type ReminderId = openapi_types.UUID
 
 // ScheduledMessageId defines model for ScheduledMessageId.
 type ScheduledMessageId = openapi_types.UUID
+
+// TaskItemId defines model for TaskItemId.
+type TaskItemId = openapi_types.UUID
 
 // UploadId defines model for UploadId.
 type UploadId = openapi_types.UUID
@@ -8980,6 +9537,18 @@ type ListChatSharedLinksParams struct {
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// ListChatTasksParams defines parameters for ListChatTasks.
+type ListChatTasksParams struct {
+	State *ListChatTasksParamsState `form:"state,omitempty" json:"state,omitempty"`
+
+	// Cursor Opaque next_cursor of the previous page.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListChatTasksParamsState defines parameters for ListChatTasks.
+type ListChatTasksParamsState string
+
 // DeleteDraftParams defines parameters for DeleteDraft.
 type DeleteDraftParams struct {
 	ThreadRootId *openapi_types.UUID `form:"thread_root_id,omitempty" json:"thread_root_id,omitempty"`
@@ -9004,6 +9573,18 @@ type ReceiveIntegrationWebhookParams struct {
 	XComaEvent     *string `json:"X-Coma-Event,omitempty"`
 	XComaSignature string  `json:"X-Coma-Signature"`
 }
+
+// ListWaitingInboxParams defines parameters for ListWaitingInbox.
+type ListWaitingInboxParams struct {
+	Kind *ListWaitingInboxParamsKind `form:"kind,omitempty" json:"kind,omitempty"`
+
+	// Cursor Opaque next_cursor of the previous page; only valid with the same kind.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListWaitingInboxParamsKind defines parameters for ListWaitingInbox.
+type ListWaitingInboxParamsKind string
 
 // AcceptInvitationParams defines parameters for AcceptInvitation.
 type AcceptInvitationParams struct {
@@ -9147,6 +9728,22 @@ type SearchMessagesAndFilesParams struct {
 // SearchMessagesAndFilesParamsType defines parameters for SearchMessagesAndFiles.
 type SearchMessagesAndFilesParamsType string
 
+// ListMyTasksParams defines parameters for ListMyTasks.
+type ListMyTasksParams struct {
+	Role  *ListMyTasksParamsRole  `form:"role,omitempty" json:"role,omitempty"`
+	State *ListMyTasksParamsState `form:"state,omitempty" json:"state,omitempty"`
+
+	// Cursor Opaque next_cursor of the previous page.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListMyTasksParamsRole defines parameters for ListMyTasks.
+type ListMyTasksParamsRole string
+
+// ListMyTasksParamsState defines parameters for ListMyTasks.
+type ListMyTasksParamsState string
+
 // ListFollowedThreadsParams defines parameters for ListFollowedThreads.
 type ListFollowedThreadsParams struct {
 	BeforeSeq *int64 `form:"before_seq,omitempty" json:"before_seq,omitempty"`
@@ -9281,6 +9878,9 @@ type CreateRequestJSONRequestBody = CreateRequestRequest
 
 // CreateScheduledMessageJSONRequestBody defines body for CreateScheduledMessage for application/json ContentType.
 type CreateScheduledMessageJSONRequestBody = CreateScheduledMessageRequest
+
+// CreateTaskJSONRequestBody defines body for CreateTask for application/json ContentType.
+type CreateTaskJSONRequestBody = CreateTaskRequest
 
 // PutDraftJSONRequestBody defines body for PutDraft for application/json ContentType.
 type PutDraftJSONRequestBody = PutDraftRequest
@@ -9428,6 +10028,18 @@ type AnswerRequestJSONRequestBody = AnswerRequestRequest
 
 // UpdateScheduledMessageJSONRequestBody defines body for UpdateScheduledMessage for application/json ContentType.
 type UpdateScheduledMessageJSONRequestBody = UpdateScheduledMessageRequest
+
+// UpdateTaskJSONRequestBody defines body for UpdateTask for application/json ContentType.
+type UpdateTaskJSONRequestBody = UpdateTaskRequest
+
+// AddTaskItemJSONRequestBody defines body for AddTaskItem for application/json ContentType.
+type AddTaskItemJSONRequestBody = AddTaskItemRequest
+
+// UpdateTaskItemJSONRequestBody defines body for UpdateTaskItem for application/json ContentType.
+type UpdateTaskItemJSONRequestBody = UpdateTaskItemRequest
+
+// SetTaskStatusJSONRequestBody defines body for SetTaskStatus for application/json ContentType.
+type SetTaskStatusJSONRequestBody = SetTaskStatusRequest
 
 // AsNotificationScheduleDays0 returns the union data inside the NotificationSchedule_Days as a NotificationScheduleDays0
 func (t NotificationSchedule_Days) AsNotificationScheduleDays0() (NotificationScheduleDays0, error) {

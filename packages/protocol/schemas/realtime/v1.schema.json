@@ -61,7 +61,9 @@
         "reminder.updated",
         "reminder.deleted",
         "reminder.fired",
-        "org.updated"
+        "org.updated",
+        "task.updated",
+        "task.notified"
       ]
     },
     "CloseCode": {
@@ -198,7 +200,7 @@
         "ack_batch_size": { "type": "integer", "minimum": 1 },
         "max_unacked_events": { "type": "integer", "minimum": 1 },
         "features": {
-          "description": "Optional protocol additions this server accepts. typing_actions: the action field on typing frames. message_requests: requests («Запрос») — the request REST routes, Message.request and the request.* events. message_reminders: personal reminders («Напомнить мне») — the reminder REST routes and the reminder.* events. org_structure: departments and positions («Оргструктура») — the org REST routes, the org fields of ActorSummary, OrganizationMember and Message, mentioned_department_ids in message, request and scheduled message bodies, the department and position request audiences and the org.updated event. A client hides a feature the server does not list.",
+          "description": "Optional protocol additions this server accepts. typing_actions: the action field on typing frames. message_requests: requests («Запрос») — the request REST routes, Message.request and the request.* events. message_reminders: personal reminders («Напомнить мне») — the reminder REST routes and the reminder.* events. org_structure: departments and positions («Оргструктура») — the org REST routes, the org fields of ActorSummary, OrganizationMember and Message, mentioned_department_ids in message, request and scheduled message bodies, the department and position request audiences and the org.updated event. message_tasks: tasks («Задача») — the task REST routes, GET /api/v1/inbox/waiting, Message.task, the task fields of the unread snapshot and the task.updated and task.notified events. A client hides a feature the server does not list.",
           "type": "array",
           "maxItems": 32,
           "items": { "type": "string", "maxLength": 64 }
@@ -480,6 +482,40 @@
           "type": "string",
           "enum": ["department", "position", "membership", "person_status"]
         }
+      }
+    },
+    "TaskUpdatedEvent": {
+      "description": "data of task.updated, sent to the whole chat (subject_id is the message id) on every change of a task except its title and description, which come as message.updated: status, due date, responsible person, items, taking, nudges, the overdue mark. task is MessageTask of openapi.yaml (the TaskUpdatedEvent schema there describes it in full); it is the same for every member, so the frame is shared. Clients replace the cached task when task.version is greater.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["message_id", "chat_id", "task"],
+      "properties": {
+        "message_id": { "$ref": "#/$defs/UUID" },
+        "chat_id": { "$ref": "#/$defs/UUID" },
+        "task": {
+          "type": "object",
+          "required": ["status", "version"],
+          "properties": { "version": { "type": "integer", "minimum": 1 } }
+        }
+      }
+    },
+    "TaskNotifiedEvent": {
+      "description": "data of task.notified, sent to one person only (audience_actor_id; subject_id is the message id): the reason for a push or a toast about a task. Never carries the title, the description or item texts. kinds: assigned — the new responsible person (creation, change); unassigned — the former responsible person, no push, removes the task from «Ждут вас» on every device; item_assigned — the assignee of an item; offered — each candidate of a new queue; taken — the author, a candidate took the task; nudged — the responsible person or the candidates, «Напомнить»; due_soon — the same, one hour before due_at; overdue — the responsible person and the author; due_changed — the responsible person; completed — the author, done by someone else; reopened — the responsible person, done → open by someone else. Not written for the person who acted. On creation every task.notified is written before message.created in the same transaction.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["message_id", "chat_id", "kind", "by_actor_id", "due_at"],
+      "properties": {
+        "message_id": { "$ref": "#/$defs/UUID" },
+        "chat_id": { "$ref": "#/$defs/UUID" },
+        "kind": {
+          "type": "string",
+          "enum": ["assigned", "unassigned", "item_assigned", "offered", "taken", "nudged", "due_soon", "overdue", "due_changed", "completed", "reopened"]
+        },
+        "by_actor_id": {
+          "$ref": "#/$defs/NullableUUID",
+          "description": "Who acted; null for due_soon and overdue, which the server sends by itself."
+        },
+        "due_at": { "type": ["string", "null"], "format": "date-time" }
       }
     },
     "ServerFrame": {

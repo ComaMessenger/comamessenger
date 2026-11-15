@@ -181,6 +181,18 @@ type UpdatePositionRequest = Schemas["UpdatePositionRequest"];
 type TitleSuggestion = Schemas["TitleSuggestion"];
 type ActorSummary = Schemas["ActorSummary"];
 type DepartmentChatResult = Schemas["DepartmentChatResult"];
+// Tasks (phase 6.6 wave 3): named here until package K3 grows tasks.ts and
+// re-exports them from types.ts.
+type CreateTaskRequest = Schemas["CreateTaskRequest"];
+type UpdateTaskRequest = Schemas["UpdateTaskRequest"];
+type SetTaskStatusRequest = Schemas["SetTaskStatusRequest"];
+type AddTaskItemRequest = Schemas["AddTaskItemRequest"];
+type UpdateTaskItemRequest = Schemas["UpdateTaskItemRequest"];
+type MessageTask = Schemas["MessageTask"];
+type TaskNudgeResult = Schemas["TaskNudgeResult"];
+type ChatTaskPage = Schemas["ChatTaskPage"];
+type MyTaskPage = Schemas["MyTaskPage"];
+type WaitingInboxPage = Schemas["WaitingInboxPage"];
 type APIErrorPayload = components["schemas"]["Error"];
 type APIErrorCode = components["schemas"]["ErrorCode"] | "request_failed";
 export type RefreshStrategy = (
@@ -1656,6 +1668,139 @@ export class MessengerAPI {
         `/api/v1/reminders/ids?chat_id=${encodeURIComponent(chatID)}`,
       )
     ).reminders;
+  }
+  /**
+   * Creates a task («Задача») in the chat feed; replays by client_msg_id
+   * return the original message. The server builds body from the title and
+   * the description.
+   */
+  createTask(chatID: string, input: CreateTaskRequest): Promise<Message> {
+    return this.request(`/api/v1/chats/${encodeURIComponent(chatID)}/tasks`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+  /** The task message; 404 task_not_found for others and non-tasks. */
+  messageTask(messageID: string): Promise<Message> {
+    return this.request(`/api/v1/tasks/${encodeURIComponent(messageID)}`);
+  }
+  /**
+   * Title, description, due date, the reminder before it or the responsible
+   * person; 409 task_version_conflict carries the current task in
+   * details.task.
+   */
+  updateTask(messageID: string, input: UpdateTaskRequest): Promise<Message> {
+    return this.request(`/api/v1/tasks/${encodeURIComponent(messageID)}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+  }
+  /** «Взять в работу», «Готово», «Вернуть в работу», «Отменить», «Вернуть». */
+  setTaskStatus(
+    messageID: string,
+    input: SetTaskStatusRequest,
+  ): Promise<Message> {
+    return this.request(
+      `/api/v1/tasks/${encodeURIComponent(messageID)}/status`,
+      { method: "PUT", body: JSON.stringify(input) },
+    );
+  }
+  /** «Взять себе» from a queue; 409 task_already_taken when someone was first. */
+  takeTask(messageID: string): Promise<Message> {
+    return this.request(`/api/v1/tasks/${encodeURIComponent(messageID)}/take`, {
+      method: "POST",
+    });
+  }
+  addTaskItem(
+    messageID: string,
+    input: AddTaskItemRequest,
+  ): Promise<MessageTask> {
+    return this.request(
+      `/api/v1/tasks/${encodeURIComponent(messageID)}/items`,
+      { method: "POST", body: JSON.stringify(input) },
+    );
+  }
+  /** Text, assignee (null removes it), position, or done. */
+  updateTaskItem(
+    messageID: string,
+    itemID: string,
+    input: UpdateTaskItemRequest,
+  ): Promise<MessageTask> {
+    return this.request(
+      `/api/v1/tasks/${encodeURIComponent(messageID)}/items/${encodeURIComponent(itemID)}`,
+      { method: "PATCH", body: JSON.stringify(input) },
+    );
+  }
+  /** Repeating it is harmless. */
+  deleteTaskItem(messageID: string, itemID: string): Promise<void> {
+    return this.request(
+      `/api/v1/tasks/${encodeURIComponent(messageID)}/items/${encodeURIComponent(itemID)}`,
+      { method: "DELETE" },
+    );
+  }
+  /** «Напомнить» the responsible person; 429 task_nudge_too_soon carries Retry-After. */
+  nudgeTask(messageID: string): Promise<TaskNudgeResult> {
+    return this.request(
+      `/api/v1/tasks/${encodeURIComponent(messageID)}/nudge`,
+      { method: "POST" },
+    );
+  }
+  /** Tasks of a chat with the counts for the header slot. */
+  chatTasks(
+    chatID: string,
+    options: {
+      state?: "open" | "done" | "canceled";
+      cursor?: string;
+      limit?: number;
+    } = {},
+  ): Promise<ChatTaskPage> {
+    // Built by hand: React Native's URLSearchParams cannot set values.
+    const query = [
+      options.state && `state=${options.state}`,
+      options.cursor && `cursor=${encodeURIComponent(options.cursor)}`,
+      options.limit && `limit=${options.limit}`,
+    ].filter(Boolean);
+    const suffix = query.length ? `?${query.join("&")}` : "";
+    return this.request(
+      `/api/v1/chats/${encodeURIComponent(chatID)}/tasks${suffix}`,
+    );
+  }
+  /** «На мне» (assigned) or «Поставил(а) я» (authored) from all chats. */
+  myTasks(
+    options: {
+      role?: "assigned" | "authored";
+      state?: "open" | "done";
+      cursor?: string;
+      limit?: number;
+    } = {},
+  ): Promise<MyTaskPage> {
+    const query = [
+      options.role && `role=${options.role}`,
+      options.state && `state=${options.state}`,
+      options.cursor && `cursor=${encodeURIComponent(options.cursor)}`,
+      options.limit && `limit=${options.limit}`,
+    ].filter(Boolean);
+    const suffix = query.length ? `?${query.join("&")}` : "";
+    return this.request(`/api/v1/tasks/mine${suffix}`);
+  }
+  /**
+   * «Ждут вас» as one list of requests and tasks. Only on servers that
+   * announce message_tasks; older ones keep requestInbox.
+   */
+  waitingInbox(
+    options: {
+      kind?: "all" | "requests" | "tasks";
+      cursor?: string;
+      limit?: number;
+    } = {},
+  ): Promise<WaitingInboxPage> {
+    const query = [
+      options.kind && `kind=${options.kind}`,
+      options.cursor && `cursor=${encodeURIComponent(options.cursor)}`,
+      options.limit && `limit=${options.limit}`,
+    ].filter(Boolean);
+    const suffix = query.length ? `?${query.join("&")}` : "";
+    return this.request(`/api/v1/inbox/waiting${suffix}`);
   }
   /**
    * The org structure. With the version of the cached structure the server

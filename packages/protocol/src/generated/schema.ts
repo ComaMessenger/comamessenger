@@ -1540,6 +1540,162 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chats/{chat_id}/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Tasks of the chat for members of the chat (403 not_member otherwise). state=open lists open and in_progress tasks: those with a due date first (earliest first), then those without, newest first. state=done and state=canceled are ordered by status_changed_at, latest first. counts are the same for every state and page: open tasks of the chat, open tasks of the reader (responsible, assignee of an open item or candidate of an open queue) and those of them that are hot (overdue or due within 24 hours). */
+        get: operations["listChatTasks"];
+        put?: never;
+        /** @description Creates a task message in the chat feed (never in a thread). Any member who may write to the chat may create one (the same check as createMessage). The server builds body from the title and the description (title, then an empty line and the description when it is not empty) with body_format markdown, so search, agents and older clients see the task as text. The responsible person and the assignees of items must be active people who are members of the chat (422 task_assignee_invalid); a task may be set on oneself. The department and position assignees need requests.address_groups (403 task_audience_forbidden) and the org_structure feature (422 task_invalid, field assignee.kind, otherwise); they become a queue of candidates: a snapshot of the active people of the department (with subdepartments, primary and additional members) or of the position who are members of the chat, the author included. No candidates gets 422 task_audience_empty, more than 100 gets 422 task_too_many_candidates. source_message_id must be a message of the same chat, in the feed or in a thread (422 task_invalid otherwise). At most 300 open tasks per chat and 500 open tasks per author (409 task_limit_reached). A replay with the same client_msg_id and the same content returns the original message (200); the same key with other content gets 409 idempotency_conflict. */
+        post: operations["createTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The reader's tasks from all chats they can read now (member and active, chat not archived, message not deleted). role=assigned: tasks where the reader is responsible, the assignee of an open item or a candidate of a queue nobody has taken. role=authored: tasks the reader created. state=open lists open and in_progress tasks, due date first (earliest first, overdue on top), then without one, newest first; state=done lists tasks done or canceled in the last 7 days, latest first («Готово за 7 дней»). Older closed tasks are in listChatTasks. */
+        get: operations["listMyTasks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{message_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The task message. Anyone who can read the message may call it; others, and messages that are not tasks, get 404 task_not_found. */
+        get: operations["getTask"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description Changes the title, the description, the due date, the reminder before it or the responsible person. The author while a member of the chat, or a chat owner or admin or a workspace moderator with chats.moderate who is in the chat (403 task_forbidden otherwise). A new title or description rebuilds body and sets edited_at (message.updated); other changes emit task.updated. A canceled or done task cannot be changed (409 task_status_invalid). Another expected_version gets 409 task_version_conflict with the current task in details.task. */
+        patch: operations["updateTask"];
+        trace?: never;
+    };
+    "/api/v1/tasks/{message_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Moves the task between open, in_progress, done and canceled. Allowed moves: open ↔ in_progress, open or in_progress → done, done → open, open or in_progress → canceled, canceled → open; any other gets 409 task_status_invalid. in_progress, done and done → open: the author, the responsible person and chat admins; canceled and canceled → open: the author and chat admins (403 task_forbidden otherwise). Setting the current status again changes nothing and emits no events. */
+        put: operations["setTaskStatus"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{message_id}/take": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description «Взять себе»: a candidate of a queue who is still an active member of the chat becomes the responsible person (403 not_member for one who left, 403 task_forbidden for someone who is not a candidate). When somebody has taken it already: 409 task_already_taken with the current task in details.task. */
+        post: operations["takeTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{message_id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Adds a checklist item: the author, the responsible person and chat admins. At most 30 items (409 task_limit_reached). Without position the item goes last; with it the items from that position move down. */
+        post: operations["addTaskItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{message_id}/items/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Removes an item: the author, the responsible person and chat admins. Repeating it also returns 204. */
+        delete: operations["deleteTaskItem"];
+        options?: never;
+        head?: never;
+        /** @description Changes the text, the assignee or the position of an item, or marks it done or not done. The author, the responsible person and chat admins may do everything; the assignee of the item may only change done of their own item (403 task_forbidden otherwise). */
+        patch: operations["updateTaskItem"];
+        trace?: never;
+    };
+    "/api/v1/tasks/{message_id}/nudge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description «Напомнить»: the author or a chat admin reminds the responsible person (the candidates of a queue nobody has taken). Not sooner than 2 hours after the previous one (429 task_nudge_too_soon with Retry-After) and at most 5 times per task (409 task_limit_reached). A person gets at most 10 such reminders a day from all tasks; the rest are recorded but send no push. */
+        post: operations["nudgeTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inbox/waiting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description «Ждут вас» as one list: open requests waiting for the reader's answer (the same rows as listRequestInbox with state=waiting) and open tasks where the reader is responsible, the assignee of an open item or a candidate of a queue nobody has taken, in chats they can read now. Items with a due date come first (earliest first, overdue on top), then those without one, newest first; the order is stable across kinds, so pages never repeat or skip an item. kind narrows the list; polls are added in wave 4. Servers without message_tasks do not have this route: clients use listRequestInbox there. listRequestInbox stays for older clients and the «Отвечено» tab. */
+        get: operations["listWaitingInbox"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/messages/{message_id}/forward": {
         parameters: {
             query?: never;
@@ -3209,7 +3365,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_confirmation_loosened" | "agent_conflict" | "agent_not_ready" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "architect_budget_exceeded" | "architect_busy" | "architect_connection_required" | "architect_model_error" | "architect_session_expired" | "architect_session_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "integration_in_use" | "integration_usage_changed" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "limit_reached" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "saved_limit_reached" | "saved_storage_full" | "scheduled_message_closed" | "scheduled_message_not_found" | "scheduled_message_not_retryable" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "storage_unavailable" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "voice_check_busy" | "voice_check_in_progress" | "webhook_not_found" | "webhook_rejected" | "workspace_not_found" | "chat_archived" | "not_implemented" | "not_member" | "reminder_invalid" | "reminder_limit_reached" | "reminder_not_found" | "request_audience_empty" | "request_audience_unavailable" | "request_change_too_late" | "request_closed" | "request_invalid" | "request_limit_reached" | "request_not_found" | "request_remind_too_soon" | "request_too_many_recipients" | "request_audience_forbidden" | "org_invalid" | "org_name_taken" | "org_cycle" | "org_depth_exceeded" | "org_limit_reached" | "org_version_conflict" | "department_not_found" | "position_not_found" | "department_chat_exists" | "department_chat_invalid";
+        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_confirmation_loosened" | "agent_conflict" | "agent_not_ready" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "architect_budget_exceeded" | "architect_busy" | "architect_connection_required" | "architect_model_error" | "architect_session_expired" | "architect_session_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "integration_in_use" | "integration_usage_changed" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "limit_reached" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "saved_limit_reached" | "saved_storage_full" | "scheduled_message_closed" | "scheduled_message_not_found" | "scheduled_message_not_retryable" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "storage_unavailable" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "voice_check_busy" | "voice_check_in_progress" | "webhook_not_found" | "webhook_rejected" | "workspace_not_found" | "chat_archived" | "not_implemented" | "not_member" | "reminder_invalid" | "reminder_limit_reached" | "reminder_not_found" | "request_audience_empty" | "request_audience_unavailable" | "request_change_too_late" | "request_closed" | "request_invalid" | "request_limit_reached" | "request_not_found" | "request_remind_too_soon" | "request_too_many_recipients" | "request_audience_forbidden" | "org_invalid" | "org_name_taken" | "org_cycle" | "org_depth_exceeded" | "org_limit_reached" | "org_version_conflict" | "department_not_found" | "position_not_found" | "department_chat_exists" | "department_chat_invalid" | "task_invalid" | "task_assignee_invalid" | "task_too_many_candidates" | "task_audience_empty" | "task_audience_forbidden" | "task_forbidden" | "task_not_found" | "task_version_conflict" | "task_already_taken" | "task_status_invalid" | "task_limit_reached" | "task_nudge_too_soon";
         File: {
             /** Format: uuid */
             id: string;
@@ -3478,7 +3634,7 @@ export interface components {
             parts?: components["schemas"]["CompletedFilePart"][];
         };
         /** @enum {string} */
-        DurableEventTypeV1: "message.created" | "message.updated" | "message.deleted" | "message.pinned" | "message.unpinned" | "message.saved" | "message.unsaved" | "reaction.added" | "reaction.removed" | "thread.followed" | "thread.unfollowed" | "read.marked" | "draft.updated" | "draft.deleted" | "chat.created" | "chat.updated" | "chat.archived" | "member.joined" | "member.updated" | "member.removed" | "actor.status.updated" | "actor.avatar.updated" | "scheduled_message.created" | "scheduled_message.updated" | "scheduled_message.deleted" | "scheduled_message.sent" | "scheduled_message.failed" | "request.assigned" | "request.updated" | "request.tally.updated" | "request.answer.updated" | "request.reminded" | "request.auto_reminded" | "reminder.created" | "reminder.updated" | "reminder.deleted" | "reminder.fired" | "org.updated";
+        DurableEventTypeV1: "message.created" | "message.updated" | "message.deleted" | "message.pinned" | "message.unpinned" | "message.saved" | "message.unsaved" | "reaction.added" | "reaction.removed" | "thread.followed" | "thread.unfollowed" | "read.marked" | "draft.updated" | "draft.deleted" | "chat.created" | "chat.updated" | "chat.archived" | "member.joined" | "member.updated" | "member.removed" | "actor.status.updated" | "actor.avatar.updated" | "scheduled_message.created" | "scheduled_message.updated" | "scheduled_message.deleted" | "scheduled_message.sent" | "scheduled_message.failed" | "request.assigned" | "request.updated" | "request.tally.updated" | "request.answer.updated" | "request.reminded" | "request.auto_reminded" | "reminder.created" | "reminder.updated" | "reminder.deleted" | "reminder.fired" | "org.updated" | "task.updated" | "task.notified";
         /**
          * Format: int32
          * @enum {integer}
@@ -3575,7 +3731,7 @@ export interface components {
             ack_interval_ms: number;
             ack_batch_size: number;
             max_unacked_events: number;
-            /** @description Optional protocol additions this server accepts. typing_actions: the action field on typing frames. message_requests: requests («Запрос») — the request REST routes, Message.request and the request.* events. message_reminders: personal reminders («Напомнить мне») — the reminder REST routes and the reminder.* events. org_structure: departments and positions («Оргструктура») — the org REST routes, the org fields of ActorSummary, OrganizationMember and Message, mentioned_department_ids in message, request and scheduled message bodies, the department and position request audiences and the org.updated event. A client hides a feature the server does not list. */
+            /** @description Optional protocol additions this server accepts. typing_actions: the action field on typing frames. message_requests: requests («Запрос») — the request REST routes, Message.request and the request.* events. message_reminders: personal reminders («Напомнить мне») — the reminder REST routes and the reminder.* events. org_structure: departments and positions («Оргструктура») — the org REST routes, the org fields of ActorSummary, OrganizationMember and Message, mentioned_department_ids in message, request and scheduled message bodies, the department and position request audiences and the org.updated event. message_tasks: tasks («Задача») — the task REST routes, GET /api/v1/inbox/waiting, Message.task, the task fields of the unread snapshot and the task.updated and task.notified events. A client hides a feature the server does not list. */
             features?: string[];
         };
         RealtimeDurableEventFrameV1: {
@@ -3802,6 +3958,22 @@ export interface components {
             version: number;
             /** @enum {string} */
             reason: "department" | "position" | "membership" | "person_status";
+        };
+        /** @description data of task.notified, sent to one person only (audience_actor_id; subject_id is the message id): the reason for a push or a toast about a task. Never carries the title, the description or item texts. kinds: assigned — the new responsible person (creation, change); unassigned — the former responsible person, no push, removes the task from «Ждут вас» on every device; item_assigned — the assignee of an item; offered — each candidate of a new queue; taken — the author, a candidate took the task; nudged — the responsible person or the candidates, «Напомнить»; due_soon — the same, one hour before due_at; overdue — the responsible person and the author; due_changed — the responsible person; completed — the author, done by someone else; reopened — the responsible person, done → open by someone else. Not written for the person who acted. On creation every task.notified is written before message.created in the same transaction. */
+        RealtimeTaskNotifiedEventV1: {
+            /** Format: uuid */
+            message_id: string;
+            /** Format: uuid */
+            chat_id: string;
+            /** @enum {string} */
+            kind: "assigned" | "unassigned" | "item_assigned" | "offered" | "taken" | "nudged" | "due_soon" | "overdue" | "due_changed" | "completed" | "reopened";
+            /**
+             * Format: uuid
+             * @description Who acted; null for due_soon and overdue, which the server sends by itself.
+             */
+            by_actor_id: string | null;
+            /** Format: date-time */
+            due_at: string | null;
         };
         BootstrapStatus: {
             bootstrapped: boolean;
@@ -5507,10 +5679,10 @@ export interface components {
             /** Format: uuid */
             client_msg_id: string;
             /**
-             * @description request — a request for answers («Запрос»); its body is the question and request describes the answers. Clients that do not know a type show the body as text.
+             * @description request — a request for answers («Запрос»); its body is the question and request describes the answers. task — a task («Задача», phase 6.6); its body is built by the server from the title and the description and task describes it. Clients that do not know a type show the body as text.
              * @enum {string}
              */
-            type: "text" | "request";
+            type: "text" | "request" | "task";
             body: string;
             /** @enum {string} */
             body_format: "plain" | "markdown";
@@ -5554,6 +5726,8 @@ export interface components {
             request?: components["schemas"]["MessageRequest"] | null;
             /** @description REST only (feed pages, create and context responses), next to request: what the reading person may do with it. Never in realtime frames, which the whole chat shares; clients load it with getRequest when needed. */
             request_viewer?: components["schemas"]["MessageRequestViewer"];
+            /** @description Present on messages of type task: the whole task, the same for every reader. Also in realtime message.* frames. */
+            task?: components["schemas"]["MessageTask"] | null;
         };
         /** @description Why an agent wrote the message. Visible to every reader of the message: it never carries a webhook payload, a follow-up note or text from another chat. */
         MessageAgentProvenance: {
@@ -6260,6 +6434,241 @@ export interface components {
         ReminderIds: {
             reminders: components["schemas"]["ReminderIdEntry"][];
         };
+        /**
+         * @description «Открыта», «В работе», «Готово», «Отменена». «Просрочена» is not a status: clients mark open and in_progress tasks with due_at in the past.
+         * @enum {string}
+         */
+        TaskStatus: "open" | "in_progress" | "done" | "canceled";
+        /**
+         * @description person: one responsible person. department and position: a queue; nobody is responsible until a candidate takes the task.
+         * @enum {string}
+         */
+        TaskAssigneeKind: "person" | "department" | "position";
+        TaskAssigneeInput: {
+            kind: components["schemas"]["TaskAssigneeKind"];
+            /**
+             * Format: uuid
+             * @description Required for person; an active person who is a member of the chat, the author included.
+             */
+            actor_id?: string;
+            /**
+             * Format: uuid
+             * @description Required for department. 404 department_not_found for an unknown department.
+             */
+            department_id?: string;
+            /**
+             * Format: uuid
+             * @description Required for position. 404 position_not_found for an unknown position.
+             */
+            position_id?: string;
+        };
+        TaskItemInput: {
+            text: string;
+            /**
+             * Format: uuid
+             * @description An active person who is a member of the chat.
+             */
+            assignee_id?: string;
+        };
+        CreateTaskRequest: {
+            /** Format: uuid */
+            client_msg_id: string;
+            title: string;
+            /**
+             * @description Markdown. Mentions in it notify nobody.
+             * @default
+             */
+            description: string;
+            assignee: components["schemas"]["TaskAssigneeInput"];
+            /**
+             * Format: date-time
+             * @description At least 5 minutes and at most 365 days ahead. Absent — no due date.
+             */
+            due_at?: string;
+            /** @description Remind the responsible person (the candidates of a queue) one hour before due_at. Needs due_at more than 1 hour ahead (422 task_invalid, field remind_before_due, otherwise). */
+            remind_before_due: boolean;
+            items?: components["schemas"]["TaskItemInput"][];
+            /**
+             * Format: uuid
+             * @description «Сделать задачей»: a message of the same chat the task is made from.
+             */
+            source_message_id?: string;
+        };
+        UpdateTaskRequest: {
+            /** @description MessageTask.version the change is based on. */
+            expected_version: number;
+            title?: string;
+            description?: string;
+            /**
+             * Format: date-time
+             * @description null removes the due date. A new one follows the rules of CreateTaskRequest.due_at.
+             */
+            due_at?: string | null;
+            remind_before_due?: boolean;
+            /** @description A new responsible person or queue. A person may be anyone who may be responsible, a queue candidate or not. A department or position needs requests.address_groups and builds a new queue. */
+            assignee?: components["schemas"]["TaskAssigneeInput"];
+        };
+        SetTaskStatusRequest: {
+            status: components["schemas"]["TaskStatus"];
+            /** @description When present, another MessageTask.version gets 409 task_version_conflict. */
+            expected_version?: number;
+        };
+        AddTaskItemRequest: {
+            text: string;
+            /** Format: uuid */
+            assignee_id?: string;
+            position?: number;
+        };
+        UpdateTaskItemRequest: {
+            text?: string;
+            /**
+             * Format: uuid
+             * @description null removes the assignee.
+             */
+            assignee_id?: string | null;
+            done?: boolean;
+            position?: number;
+        };
+        MessageTaskAssignee: {
+            kind: components["schemas"]["TaskAssigneeKind"];
+            /**
+             * Format: uuid
+             * @description The responsible person; null while a queue is not taken.
+             */
+            actor_id: string | null;
+            /** @description The name of the department or position at the moment of creation; empty for person. Kept when it is renamed or deleted. */
+            label: string;
+            /** @description Queue only: the snapshot of candidates taken at creation (or at the last change to a queue). Empty for person. Stays after the task is taken. */
+            candidate_ids: string[];
+            /** @description The responsible person is an active member of the chat now; false while nobody is responsible. Computed when the frame or response is built. */
+            in_chat: boolean;
+            /**
+             * Format: uuid
+             * @description department only; null once the department is deleted. Absent for other kinds.
+             */
+            department_id?: string | null;
+            /**
+             * Format: uuid
+             * @description position only; null once the position is deleted. Absent for other kinds.
+             */
+            position_id?: string | null;
+        };
+        MessageTaskItem: {
+            /** Format: uuid */
+            id: string;
+            text: string;
+            /** Format: uuid */
+            assignee_id: string | null;
+            /** @description The assignee is an active member of the chat now; false without an assignee. */
+            assignee_in_chat: boolean;
+            /** Format: date-time */
+            done_at: string | null;
+            /** Format: uuid */
+            done_by: string | null;
+        };
+        MessageTaskSource: {
+            /** Format: uuid */
+            message_id: string;
+            /** Format: uuid */
+            author_id: string;
+            /** @description The start of the source text; empty once the source is deleted. */
+            excerpt: string;
+            deleted: boolean;
+        };
+        /** @description The task part of a message of type task. The same for every reader: a task has no private part. Carried by the feed, getTask, getMessageContext and realtime message.* and task.updated frames. Clients work out what the reader may do from it and their chat role; the server checks again. */
+        MessageTask: {
+            title: string;
+            /** @description Markdown */
+            description: string;
+            status: components["schemas"]["TaskStatus"];
+            /** @enum {string|null} */
+            canceled_reason: "author" | "moderator" | "message_deleted" | null;
+            /** Format: date-time */
+            status_changed_at: string | null;
+            /** Format: uuid */
+            status_changed_by: string | null;
+            assignee: components["schemas"]["MessageTaskAssignee"];
+            /** Format: date-time */
+            due_at: string | null;
+            remind_before_due: boolean;
+            /** @description In checklist order. */
+            items: components["schemas"]["MessageTaskItem"][];
+            items_done: number;
+            /** @description «из сообщения»; null when the task was made from scratch or the source was deleted for good. */
+            source: components["schemas"]["MessageTaskSource"] | null;
+            /** Format: date-time */
+            last_nudge_at: string | null;
+            nudge_count: number;
+            /** @description Grows with every change of the task; task.updated carries it so stale events are dropped. */
+            version: number;
+        };
+        /**
+         * @description Why the task is in the reader's list: responsible person, assignee of an open item, candidate of a queue, author. When several apply the first in this order wins.
+         * @enum {string}
+         */
+        TaskRole: "responsible" | "item" | "candidate" | "author";
+        ChatTaskCounts: {
+            open: number;
+            /** @description Open tasks where the reader is responsible, the assignee of an open item or a candidate of a queue nobody has taken. */
+            mine: number;
+            /** @description Of mine, overdue or due within 24 hours. */
+            mine_hot: number;
+        };
+        ChatTaskPage: {
+            items: components["schemas"]["Message"][];
+            counts: components["schemas"]["ChatTaskCounts"];
+            /** @description Opaque; pass as cursor to read the next page. */
+            next_cursor: string | null;
+        };
+        MyTaskItem: {
+            message: components["schemas"]["Message"];
+            author: components["schemas"]["SavedMessageAuthor"];
+            chat: components["schemas"]["SavedMessageChat"];
+            my_role: components["schemas"]["TaskRole"];
+        };
+        MyTaskPage: {
+            items: components["schemas"]["MyTaskItem"][];
+            /** @description Opaque; pass as cursor to read the next page. */
+            next_cursor: string | null;
+        };
+        TaskNudgeResult: {
+            /**
+             * Format: date-time
+             * @description When «Напомнить» is allowed again; null when the limit of 5 is reached.
+             */
+            next_nudge_at: string | null;
+        };
+        /** @description data of the realtime task.updated event (the realtime schema keeps its top level, this type describes task). Sent to the whole chat on every change of a task except its title and description (message.updated): status, due date, responsible person, items, taking, nudges, the overdue mark. Clients replace the cached task when version is greater. */
+        TaskUpdatedEvent: {
+            /** Format: uuid */
+            message_id: string;
+            /** Format: uuid */
+            chat_id: string;
+            task: components["schemas"]["MessageTask"];
+        };
+        /** @description One item of «Ждут вас». kind request: request and viewer are set, my_role is null; the same data as RequestInboxItem. kind task: the task is message.task, request and viewer are null and my_role says why the reader sees it (never author). */
+        WaitingInboxItem: {
+            /** @enum {string} */
+            kind: "request" | "task";
+            message: components["schemas"]["Message"];
+            /** Format: uuid */
+            chat_id: string;
+            author: components["schemas"]["SavedMessageAuthor"];
+            chat: components["schemas"]["SavedMessageChat"];
+            /**
+             * Format: date-time
+             * @description The due date the list is ordered by.
+             */
+            due_at: string | null;
+            request: components["schemas"]["MessageRequest"] | null;
+            viewer: components["schemas"]["MessageRequestViewer"] | null;
+            my_role: components["schemas"]["TaskRole"] | null;
+        };
+        WaitingInboxPage: {
+            items: components["schemas"]["WaitingInboxItem"][];
+            /** @description Opaque; pass as cursor to read the next page. */
+            next_cursor: string | null;
+        };
         /** @description 1–60 characters (Unicode code points) after trimming. */
         OrgName: string;
         OrgDepartment: {
@@ -6477,6 +6886,16 @@ export interface components {
              * @description The earliest due date among them; null when none has one.
              */
             requests_next_due_at?: string | null;
+            /**
+             * Format: int64
+             * @description Open tasks in the chat where the person is responsible, the assignee of an open item or a candidate of a queue nobody has taken. Absent on servers without message_tasks.
+             */
+            tasks_mine_open?: number;
+            /**
+             * Format: date-time
+             * @description The earliest due date among them; null when none has one.
+             */
+            tasks_mine_next_due_at?: string | null;
         };
         ThreadUnread: {
             /** Format: uuid */
@@ -6503,6 +6922,16 @@ export interface components {
              * @description Fired reminders the person has not closed yet. Absent on servers without message_reminders.
              */
             reminders_fired_total?: number;
+            /**
+             * Format: int64
+             * @description Open tasks of the person in all chats («Ждут вас»): responsible, assignee of an open item or candidate of a queue nobody has taken. Absent on servers without message_tasks.
+             */
+            tasks_mine_open_total?: number;
+            /**
+             * Format: int64
+             * @description Of tasks_mine_open_total, those overdue or due within 24 hours: the badge of «Важные» counts only these. Absent on servers without message_tasks.
+             */
+            tasks_mine_hot_total?: number;
         };
         PushConfig: {
             enabled: boolean;
@@ -6686,6 +7115,7 @@ export interface components {
         ScheduledMessageId: string;
         MessageId: string;
         ReminderId: string;
+        TaskItemId: string;
         DepartmentId: string;
         PositionId: string;
         UploadId: string;
@@ -9854,6 +10284,370 @@ export interface operations {
                 };
                 content?: never;
             };
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    listChatTasks: {
+        parameters: {
+            query?: {
+                state?: "open" | "done" | "canceled";
+                /** @description Opaque next_cursor of the previous page. */
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of task messages with the counts of the chat. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatTaskPage"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    createTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: components["parameters"]["ChatId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTaskRequest"];
+            };
+        };
+        responses: {
+            /** @description The original task message for an idempotent replay. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            /** @description Task message created; it carries task. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    listMyTasks: {
+        parameters: {
+            query?: {
+                role?: "assigned" | "authored";
+                state?: "open" | "done";
+                /** @description Opaque next_cursor of the previous page. */
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of the reader's tasks. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyTaskPage"];
+                };
+            };
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    getTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The task message with task. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            404: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    updateTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTaskRequest"];
+            };
+        };
+        responses: {
+            /** @description The task message after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    setTaskStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetTaskStatusRequest"];
+            };
+        };
+        responses: {
+            /** @description The task message after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    takeTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The task message with the reader as the responsible person. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    addTaskItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddTaskItemRequest"];
+            };
+        };
+        responses: {
+            /** @description The task after the change. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageTask"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    deleteTaskItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+                item_id: components["parameters"]["TaskItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The task has no item with this id. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    updateTaskItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+                item_id: components["parameters"]["TaskItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTaskItemRequest"];
+            };
+        };
+        responses: {
+            /** @description The task after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageTask"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    nudgeTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: components["parameters"]["MessageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description When the next reminder is allowed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskNudgeResult"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    listWaitingInbox: {
+        parameters: {
+            query?: {
+                kind?: "all" | "requests" | "tasks";
+                /** @description Opaque next_cursor of the previous page; only valid with the same kind. */
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of the inbox; next_cursor continues it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitingInboxPage"];
+                };
+            };
+            422: components["responses"]["Error"];
             429: components["responses"]["Error"];
             501: components["responses"]["Error"];
         };

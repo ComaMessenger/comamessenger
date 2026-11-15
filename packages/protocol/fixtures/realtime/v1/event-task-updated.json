@@ -1,0 +1,40 @@
+{
+  "op": "event",
+  "seq": 3010,
+  "type": "task.updated",
+  "occurred_at": "2026-11-18T10:30:00Z",
+  "actor_id": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+  "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+  "subject_id": "0198c180-8b9c-7d0e-8f1a-2b3c4d5e6f78",
+  "data": {
+    "message_id": "0198c180-8b9c-7d0e-8f1a-2b3c4d5e6f78",
+    "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+    "task": {
+      "title": "Отвезти документы в соцзащиту",
+      "description": "",
+      "status": "in_progress",
+      "canceled_reason": null,
+      "status_changed_at": "2026-11-18T10:30:00Z",
+      "status_changed_by": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+      "assignee": {
+        "kind": "department",
+        "actor_id": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+        "label": "Социальная служба",
+        "candidate_ids": [
+          "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+          "0198c180-5e6f-7a8b-8c9d-9e0f1a2b3c45"
+        ],
+        "in_chat": true,
+        "department_id": "0198c180-9cad-7e1f-8a2b-3c4d5e6f7a89"
+      },
+      "due_at": "2026-11-18T16:00:00Z",
+      "remind_before_due": false,
+      "items": [],
+      "items_done": 0,
+      "source": null,
+      "last_nudge_at": null,
+      "nudge_count": 0,
+      "version": 3
+    }
+  }
+}
