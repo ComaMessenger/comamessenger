@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useLayoutEffect,
   useId,
   useMemo,
   useRef,
@@ -34,12 +35,15 @@ import {
   encodeMentions,
   matchCommands,
   insertMention,
+  mentionSuggestions,
   messagePlainText,
   updateMentionText,
   type ChatCommand,
   type ChatMember,
   type ComposerMenuItemID,
+  type DepartmentMentionSuggestion,
   type Message,
+  type OrgStructure,
 } from "@comamessenger/core";
 import {
   Avatar,
@@ -51,6 +55,7 @@ import {
   MenuLabel,
   cx,
 } from "../ui";
+import { DepartmentIcon } from "../org/DepartmentIcon";
 import { EmojiPickerPanel } from "../lib/emoji";
 import type { PresenceMap } from "../lib/mentions";
 import { attachmentLimit, type ComposerAttachment } from "./useAttachments";
@@ -93,6 +98,8 @@ export function Composer({
   onSendSilent,
   features,
   onRequest,
+  structure = null,
+  authorID = "",
 }: {
   members: ChatMember[];
   presence?: PresenceMap;
@@ -123,6 +130,13 @@ export function Composer({
   features?: readonly string[];
   /** Request from +: opens the request form. */
   onRequest?(): void;
+  /**
+   * The org structure when the server announced org_structure: @ offers
+   * departments that have someone of this chat besides the author.
+   */
+  structure?: OrgStructure | null;
+  /** The author, left out of the department counts. */
+  authorID?: string;
 }) {
   const { t } = useTranslation();
   const input = useRef<HTMLTextAreaElement>(null);
@@ -210,6 +224,11 @@ export function Composer({
         )
         .slice(0, 6)
     : [];
+  const departmentSuggestions: DepartmentMentionSuggestion[] =
+    mention && structure
+      ? mentionSuggestions(mentionQuery, { members, authorID, structure })
+          .departments
+      : [];
   const showContextMentions =
     Boolean(mention) &&
     members.length > 1 &&
@@ -218,12 +237,30 @@ export function Composer({
     (member) => presence[member.actor_id] === "online",
   ).length;
 
+  // The caret goes where an insertion ends right after React writes the new
+  // text, before the next key press: a frame later, a fast typist's first
+  // letter would already have landed at the old caret position.
+  const pendingCaret = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const cursor = pendingCaret.current;
+    if (cursor === null || !input.current) return;
+    pendingCaret.current = null;
+    input.current.focus();
+    input.current.setSelectionRange(cursor, cursor);
+  });
+  function placeCaret(cursor: number) {
+    pendingCaret.current = cursor;
+    // The text may not change (nothing to re-render): apply it anyway.
+    requestAnimationFrame(() => {
+      if (pendingCaret.current !== cursor || !input.current) return;
+      pendingCaret.current = null;
+      input.current.focus();
+      input.current.setSelectionRange(cursor, cursor);
+    });
+  }
   function setVisibleText(nextText: string, cursor: number) {
     setBody(encodeMentions(updateMentionText(draft, nextText)));
-    requestAnimationFrame(() => {
-      input.current?.focus();
-      input.current?.setSelectionRange(cursor, cursor);
-    });
+    placeCaret(cursor);
   }
   function insertCommand(command: ChatCommand) {
     const text = `/${command.command} `;
@@ -322,10 +359,22 @@ export function Composer({
     const cursor =
       (next.mentions.find((item) => item.start === mention.index)?.end ??
         mention.index) + 1;
-    requestAnimationFrame(() => {
-      input.current?.focus();
-      input.current?.setSelectionRange(cursor, cursor);
-    });
+    placeCaret(cursor);
+  }
+  function insertDepartment(department: DepartmentMentionSuggestion) {
+    if (!mention) return;
+    const next = insertMention(
+      draft,
+      mention.index,
+      draft.text.length,
+      department.department.id,
+      department.department.name,
+    );
+    setBody(encodeMentions(next));
+    const cursor =
+      (next.mentions.find((item) => item.start === mention.index)?.end ??
+        mention.index) + 1;
+    placeCaret(cursor);
   }
   function insertContextual(value: "all" | "here") {
     if (!mention) return;
@@ -347,10 +396,7 @@ export function Composer({
     );
     setBody(encodeMentions(next));
     setAttachOpen(false);
-    requestAnimationFrame(() => {
-      input.current?.focus();
-      input.current?.setSelectionRange(next.text.length, next.text.length);
-    });
+    placeCaret(next.text.length);
   }
   function choosePlus(id: ComposerMenuItemID) {
     if (id === "photo") mediaInput.current?.click();
@@ -388,7 +434,9 @@ export function Composer({
   const showMentionMenu =
     focused &&
     Boolean(mention) &&
-    (suggestions.length > 0 || showContextMentions);
+    (suggestions.length > 0 ||
+      departmentSuggestions.length > 0 ||
+      showContextMentions);
 
   return (
     <div
@@ -867,10 +915,38 @@ export function Composer({
         <FloatingPopover
           anchorRef={root}
           placement="top-start"
-          width={250}
+          width={departmentSuggestions.length ? 300 : 250}
           onDismiss={() => undefined}
         >
           <Menu label={t("participants")} className="mention-menu">
+            {departmentSuggestions.length > 0 && (
+              <>
+                <MenuLabel>{t("orgMentionDepartments")}</MenuLabel>
+                {departmentSuggestions.map((item) => (
+                  <button
+                    type="button"
+                    key={item.department.id}
+                    role="menuitem"
+                    className="mention-menu__item mention-menu__item--department"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => insertDepartment(item)}
+                  >
+                    <DepartmentIcon size="sm" />
+                    <span className="mention-menu__stack">
+                      <strong className="truncate">
+                        @{item.department.name}
+                      </strong>
+                      <span className="mention-menu__meta">
+                        {t("orgMentionInChat", { count: item.inChatCount })}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+                {suggestions.length > 0 && (
+                  <MenuLabel>{t("orgMentionPeople")}</MenuLabel>
+                )}
+              </>
+            )}
             {suggestions.map((member) => (
               <button
                 type="button"

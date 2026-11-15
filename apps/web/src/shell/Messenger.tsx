@@ -16,6 +16,7 @@ import {
   WorkspaceGeneralPage,
   WorkspaceInvitationsPage,
   WorkspaceMembersPage,
+  WorkspaceOrgPage,
   WorkspaceOverviewPage,
   WorkspacePoliciesPage,
   settingForPath,
@@ -29,6 +30,7 @@ import { ThreadDirectory } from "../directories/ThreadDirectory";
 import { ImportantDirectory } from "../directories/ImportantDirectory";
 import { MembersDirectory } from "../directories/MembersDirectory";
 import { MemberProfilePage } from "../directories/MemberProfilePage";
+import { DepartmentProfilePage } from "../directories/DepartmentProfilePage";
 import { directoryFromPath } from "../directories/routes";
 import { MorePage } from "../directories/MorePage";
 import { ScheduledPage } from "../scheduled/ScheduledPage";
@@ -203,10 +205,15 @@ export function Messenger({
   ) : directory?.kind === "important" ? (
     <ImportantDirectory selectedID={directory.id} />
   ) : directory?.kind === "members" ? (
-    isMobile && directory.id ? (
+    isMobile && directory.departmentID ? (
+      <DepartmentProfilePage departmentID={directory.departmentID} />
+    ) : isMobile && directory.id ? (
       <MemberProfilePage actorID={directory.id} />
     ) : (
-      <MembersDirectory selectedID={directory.id} />
+      <MembersDirectory
+        selectedID={directory.id}
+        selectedDepartmentID={directory.departmentID}
+      />
     )
   ) : scheduledPage ? (
     <ScheduledPage />
@@ -248,6 +255,8 @@ export function Messenger({
     />
   ) : activeSettings?.id === "workspace-invitations" ? (
     <WorkspaceInvitationsPage api={api} user={user} navigate={navigate} />
+  ) : activeSettings?.id === "workspace-org" ? (
+    <WorkspaceOrgPage api={api} user={user} navigate={navigate} />
   ) : activeSettings?.id === "workspace-policies" ? (
     <WorkspacePoliciesPage api={api} user={user} navigate={navigate} />
   ) : activeSettings?.id === "customization" ? (

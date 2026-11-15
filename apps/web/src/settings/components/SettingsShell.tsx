@@ -9,6 +9,7 @@ import {
   visibleSettings,
   type SettingsPageID,
 } from "../registry";
+import { useServerFeatures } from "../../org/useOrg";
 
 export type SettingsNavigate = (to: string) => void;
 
@@ -26,8 +27,9 @@ export function SettingsShell({
   children: ReactNode;
 }) {
   const { t } = useTranslation();
+  const features = useServerFeatures();
   const primaryActive = parentSettingsPage(active);
-  const childPages = visibleChildSettings(user, primaryActive);
+  const childPages = visibleChildSettings(user, primaryActive, features);
 
   return (
     <section
@@ -44,7 +46,7 @@ export function SettingsShell({
         <h1>{title}</h1>
       </header>
       <nav className="settings-navigation" aria-label={t("settingsNavigation")}>
-        {visibleSettings(user).map((item) => (
+        {visibleSettings(user, features).map((item) => (
           <button
             key={item.id}
             className={primaryActive === item.id ? "active" : ""}

@@ -14,6 +14,8 @@ import {
   messagePlainText,
   sharedChangedChat,
   sharedKeys,
+  orgEventEffect,
+  orgKeys,
   pinnedChatLimit,
   createUnreadRefresher,
   refreshesUnread,
@@ -21,6 +23,7 @@ import {
   type Chat,
   type ChatFolder,
   type DurableEvent,
+  type OrgStructure,
   type ScheduledMessageEvent,
   type User,
   type UserPreferences,
@@ -217,6 +220,25 @@ export function useMessengerSession({
     [dismissInAppNotification, user.id, user.org_id, user.organization_name],
   );
 
+  const orgRefetchTimer = useRef<number | null>(null);
+  const scheduleOrgRefetch = useCallback(
+    (delayMs: number) => {
+      if (orgRefetchTimer.current !== null) return;
+      orgRefetchTimer.current = window.setTimeout(() => {
+        orgRefetchTimer.current = null;
+        void queryClient.invalidateQueries({ queryKey: orgKeys.all });
+      }, delayMs);
+    },
+    [queryClient],
+  );
+  useEffect(
+    () => () => {
+      if (orgRefetchTimer.current !== null)
+        window.clearTimeout(orgRefetchTimer.current);
+    },
+    [],
+  );
+
   const coordinator = useMemo(
     () =>
       new RealtimeCoordinator(
@@ -227,6 +249,16 @@ export function useMessengerSession({
           state: store.getState().setRealtime,
           features: (list) => store.getState().setFeatures(list),
           event: (event) => {
+            // org.updated carries no content: read GET /org again after a
+            // short pause that gathers a burst of writes.
+            const org = orgEventEffect(
+              event,
+              queryClient.getQueryData<OrgStructure>(orgKeys.all)?.version,
+            );
+            if (org) {
+              if (org.kind === "refetch") scheduleOrgRefetch(org.delayMs);
+              return true;
+            }
             const applied = store.getState().apply(event);
             if (refreshesUnread(event)) unreadRefresher.request();
             // Requests and reminders: private lists and the reader's own
@@ -306,6 +338,7 @@ export function useMessengerSession({
               queryKey: scheduledQueryKey(user.id),
             });
             invalidateWorkplace(queryClient, user.id);
+            void queryClient.invalidateQueries({ queryKey: orgKeys.all });
             await reload();
             if (active) await loadMessages(api, store, active);
           },
@@ -396,6 +429,7 @@ export function useMessengerSession({
       queryClient,
       reload,
       scheduleReload,
+      scheduleOrgRefetch,
       showInAppNotification,
       store,
       unreadRefresher,

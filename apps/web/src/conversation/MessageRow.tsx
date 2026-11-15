@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   Bell,
@@ -27,12 +27,15 @@ import {
   decodeMentions,
   encodeMentions,
   mentionedActorIDs,
+  mentionedDepartmentIDs,
   messagePlainText,
+  orgKeys,
   renderableBlocks,
   updateMentionText,
   type ChatMember,
   type ClientMessage,
   type Message,
+  type OrgStructure,
 } from "@comamessenger/core";
 import {
   Avatar,
@@ -115,7 +118,8 @@ export function MessageRow({
   onOpenRequest,
 }: MessageRowProps) {
   const { t } = useTranslation();
-  const { api, user } = useMessenger();
+  const { api, user, store } = useMessenger();
+  const queryClient = useQueryClient();
   const { toast } = useToast();
   const [menuOpen, setMenuOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -255,6 +259,20 @@ export function MessageRow({
     setEditText(decodeMentions(message.body).text);
     setEditing(true);
   }
+  /** People and, on org_structure servers, departments of an edited body. */
+  function editMentionFields(body: string) {
+    const structure = store.getState().features.includes("org_structure")
+      ? queryClient.getQueryData<OrgStructure>(orgKeys.all)
+      : undefined;
+    const departmentIDs = structure?.departments.map((item) => item.id);
+    const departments = departmentIDs
+      ? mentionedDepartmentIDs(body, departmentIDs)
+      : [];
+    return {
+      mentioned_actor_ids: mentionedActorIDs(body, departmentIDs),
+      ...(departments.length ? { mentioned_department_ids: departments } : {}),
+    };
+  }
   async function saveEdit() {
     const original = decodeMentions(message.body);
     if (!editText.trim() || editText === original.text) {
@@ -269,7 +287,7 @@ export function MessageRow({
           body,
           body_format: "markdown",
           expected_version: message.version,
-          mentioned_actor_ids: mentionedActorIDs(body),
+          ...editMentionFields(body),
         }),
       );
       setEditing(false);

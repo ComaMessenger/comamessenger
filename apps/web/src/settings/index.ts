@@ -37,6 +37,7 @@ export {
   WorkspaceGeneralPage,
   WorkspaceInvitationsPage,
   WorkspaceMembersPage,
+  WorkspaceOrgPage,
   WorkspaceOverviewPage,
   WorkspacePoliciesPage,
 } from "./pages/workspace";

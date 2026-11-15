@@ -20,7 +20,9 @@ import {
 } from "../ui";
 import { getLocalDraft, setLocalDraft, syncDraft } from "../lib/drafts";
 import { formatDaySeparator } from "../lib/format";
-import { resolvedMentionActorIDs } from "../lib/mentions";
+import { audienceSegments, messageMentionFields } from "@comamessenger/core";
+import { noteDepartmentSend, useMentionStructure } from "../org/mentions";
+import { DepartmentMentionNote } from "../org/DepartmentMentionNote";
 import { canManageChat, chatGlyph, isReadOnly, titleOf } from "../lib/chats";
 import { useIsMobile } from "../lib/useMediaQuery";
 import { useMessenger } from "../shell/MessengerContext";
@@ -83,6 +85,7 @@ export function Conversation({
   const [requesting, setRequesting] = useState(false);
   const typingActions = useStore(store, (state) => state.typingActions[chatID]);
   const presence = useStore(store, (state) => state.presence);
+  const orgStructure = useMentionStructure();
   const lastSeen = useStore(store, (state) => state.lastSeen);
   const messageStreams = useStore(store, (state) => state.messageStreams);
   const agentStatuses = useStore(store, (state) => state.agentStatuses);
@@ -166,7 +169,11 @@ export function Conversation({
       body: content,
       body_format: "markdown",
       reply_to_id: reply?.id,
-      mentioned_actor_ids: resolvedMentionActorIDs(content, members, presence),
+      ...messageMentionFields(content, {
+        members,
+        presence,
+        structure: orgStructure,
+      }),
       file_ids: uploaded.map((item) => item.file!.id),
     };
   }
@@ -183,8 +190,10 @@ export function Conversation({
     const draft = composed();
     if (!draft) return;
     clearComposer();
+    const clientMsgID = crypto.randomUUID();
+    noteDepartmentSend(clientMsgID, draft.mentioned_department_ids);
     await outbox.enqueue(chatID, {
-      client_msg_id: crypto.randomUUID(),
+      client_msg_id: clientMsgID,
       ...draft,
       ...(silent ? { silent: true } : {}),
     });
@@ -401,6 +410,11 @@ export function Conversation({
                           scheduleReload();
                         }}
                       />
+                      <DepartmentMentionNote
+                        message={message}
+                        viewerID={user.id}
+                        structure={orgStructure}
+                      />
                     </div>
                   );
                 })}
@@ -436,6 +450,8 @@ export function Conversation({
         <Composer
           members={members}
           presence={presence}
+          structure={orgStructure}
+          authorID={user.id}
           body={body}
           setBody={(next) => {
             setBody(next);
@@ -476,6 +492,8 @@ export function Conversation({
           chatID={chatID}
           userID={user.id}
           members={members}
+          segments={audienceSegments(user, features, orgStructure)}
+          structure={orgStructure}
           createRequest={(id, input) => api.createRequest(id, input)}
           onSent={(message) => {
             setRequesting(false);
