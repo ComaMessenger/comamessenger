@@ -289,7 +289,7 @@ describe("pollView", () => {
     expect(view.isAuthor).toBe(true);
     expect(view.showResults).toBe(true);
     expect(view.canClose).toBe(true);
-    expect(view.remind).toEqual({ kind: "ready", count: 7 });
+    expect(view.remind).toEqual({ kind: "ready", count: 6 }); // the author has not voted and is never reminded;
     expect(view.canViewWaiting).toBe(true);
   });
 
@@ -393,7 +393,24 @@ describe("«Напомнить» and «Кто голосовал»", () => {
         true,
         now,
       ),
+    ).toEqual({ kind: "cooldown", until: new Date(later), count: 5 });
+    expect(
+      pollRemindState(
+        poll,
+        makePollViewer({ next_remind_at: later, voted: true }),
+        true,
+        now,
+      ),
     ).toEqual({ kind: "cooldown", until: new Date(later), count: 6 });
+    // The author is the only one left: nobody to remind.
+    expect(
+      pollRemindState(
+        makePoll({ voter_count: 8 }),
+        makePollViewer({ can_remind: false }),
+        true,
+        now,
+      ),
+    ).toEqual({ kind: "allAnswered" });
     expect(pollRemindState(poll, makePollViewer(), true, now)).toEqual({
       kind: "hidden",
     });

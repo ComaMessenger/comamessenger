@@ -92,7 +92,7 @@ test("an ordinary poll: create, vote, change, who voted, remind, close", async (
   await expect(thirdCard).not.toContainText("%");
   await expect(mine.getByRole("radio", { name: "Четверг: 100 %" })).toBeVisible();
   // «Напомнить не ответившим»: the third one has not voted yet.
-  await mine.getByRole("button", { name: /Напомнить не ответившим · 2/ }).click();
+  await mine.getByRole("button", { name: /Напомнить не ответившим · 1/ }).click();
   await expect(author.getByText("Напомнили 1 человеку")).toBeVisible();
   await expect(mine).toContainText("Напомнили · повторно");
 

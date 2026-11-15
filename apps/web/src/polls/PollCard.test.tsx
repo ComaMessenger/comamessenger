@@ -251,7 +251,7 @@ describe("PollCard", () => {
     expect(screen.getByRole("radio", { name: "Вторник: 50 %" })).toBeInTheDocument();
     expect(screen.getByText("изм.")).toBeInTheDocument();
     fireEvent.click(
-      screen.getByRole("button", { name: "Напомнить не ответившим · 2" }),
+      screen.getByRole("button", { name: "Напомнить не ответившим · 1" }),
     );
     expect(handlers.remind).toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Закрыть" }));
