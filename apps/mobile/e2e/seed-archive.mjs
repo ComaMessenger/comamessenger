@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Fills the chat archive for chat-info.yaml: links (with a markdown label, a
 // Cyrillic domain and a look-alike one shown in punycode) and a document, on
-// top of seed-media.mjs (photos, videos) and seed-voice.mjs (voice). Run all
-// three after chat-create.yaml, so they land in the group it made:
+// top of seed-media.mjs (photos, videos) and seed-voice.mjs (voice).
+// seed-chat-info.mjs runs all three in the group of chat-info.yaml:
 //
 //   COMA_API=http://localhost:8080 COMA_EMAIL=… COMA_PASSWORD=… \
 //     [COMA_CHAT_ID=…] node apps/mobile/e2e/seed-archive.mjs

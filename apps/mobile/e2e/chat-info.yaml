@@ -1,9 +1,8 @@
 # Package I of phase 6.1: chat info from the conversation header — members,
 # pinned messages, media, files, voice, links, notifications and the chat's search.
-# Run after chat-create.yaml: the first chat is then a group the account owns.
-# Fill its archive first: node e2e/seed-media.mjs, seed-voice.mjs and
-# seed-archive.mjs (COMA_API, COMA_EMAIL, COMA_PASSWORD).
-# maestro test e2e/chat-info.yaml
+# Seed before every run: the group «Сведения о чате» the account owns, with
+# photos, videos, voice, links and a document, becomes the first chat.
+# node e2e/seed-chat-info.mjs && maestro test e2e/chat-info.yaml
 appId: com.comamessenger.app
 ---
 - runFlow: open-app.yaml
